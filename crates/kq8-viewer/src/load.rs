@@ -540,7 +540,19 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         // (animation lists, movements) belong to it.
         if let Some(s) = file.first() {
             let Some(mut p) = Placement::from_load(s, load) else {
-                log.detail(format!("skip {label} ({} line {}): no position in the line or the file", load.from, load.line));
+                log.detail(format!(
+                    "skip {label} ({} line {}): no position in the line or the file; sections: {}",
+                    load.from,
+                    load.line,
+                    file.iter()
+                        .map(|x| format!(
+                            "[{}] {}",
+                            x.name,
+                            x.entries.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ")
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                ));
                 *skipped.entry("no position".into()).or_default() += 1;
                 continue;
             };

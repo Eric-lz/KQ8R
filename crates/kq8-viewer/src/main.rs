@@ -198,7 +198,7 @@ fn main() -> ExitCode {
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(terrain_view::Fly::new())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (terrain_view::fly_input, terrain_view::toggle_markers, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (terrain_view::fly_input, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

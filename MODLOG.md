@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Viewer: camera position on screen
+
+**Changed:** `crates/kq8-viewer/src/terrain_view.rs` (bottom-left text, updated every frame; the log's camera lines use the same conversion), `crates/kq8-viewer/src/main.rs` (registers it).
+**Why:** The user asked to see the camera's X, Y, Z in the window.
+**Tested how:** Built without warnings; `kq8-viewer --terrain --frames 10` runs and closes normally. The text itself is **not tested** (needs eyes).
+**Result:** "Camera X … Y … Z …   ground …" in game units (Z up, same numbers as the `.kq` files and the log), plus the ground height under the camera.
+**Still broken / not tested:** Ground view only.
+**Next:** User's eye check.
+
+## 2026-10-11 Barren's missing hilltop building: question Q19
+
+**Changed:** `crates/kq8-viewer/src/load.rs` (a skipped "no position" object now logs its sections and keys), `docs/behaviour/QUESTIONS.md` (Q19).
+**Why:** The user saw a big building missing on a hill in Barren, near where they closed the viewer: game (74236, 101580).
+**Tested how:** Read the viewer log for Barren; ran all 12 worlds and listed objects skipped for having no position.
+**Result:** It is `lookout2` (`lookout4.dig`) at (71571, 108848), and nearby `lookout` (`lookout.dig`) at (78812, 124815). Both files have `locX` and `locY` but no `locZ`, so we skip them. They are the only two such objects in the game. The notes do not say what a missing `locZ` means, so not guessed: asked as Q19. Later the user gave the exact spot of the missing building and bridge (74394, 93402, z 12137). It lies inside `lookout4.dig` placed at lookout2's x, y and turned 180° (the model reaches about 22,000 units south of its position), which confirms lookout2. Added to Q19.
+**Still broken / not tested:** Both lookouts are still missing until Q19 is answered.
+**Next:** Wait for Q19.
+
+## 2026-10-11 Viewer: wider field of view in the ground view
+
+**Changed:** `crates/kq8-viewer/src/terrain_view.rs` (camera field of view 70 degrees vertical, was Bevy's default 45).
+**Why:** The user asked for a wider view.
+**Tested how:** Built; `kq8-viewer --terrain --frames 10` runs and closes normally. The look is **not tested** (needs eyes).
+**Result:** About 100 degrees horizontally on a 16:9 window.
+**Still broken / not tested:** Only the ground view; the single-model view keeps its old field of view.
+**Next:** User's eye check.
+
 ## 2026-10-11 Viewer: H shows invisible objects
 
 **Changed:** `Cargo.toml` (Bevy UI features, for the text), `crates/kq8-viewer/src/load.rs` (collects objects with a position but nothing to draw; logs `hidden=` values), `crates/kq8-viewer/src/terrain_view.rs` (cubes + H key), `crates/kq8-viewer/src/main.rs` (registers the key; fixes the help text: it is the left mouse button), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q18), `README.md`.

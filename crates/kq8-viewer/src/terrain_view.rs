@@ -76,8 +76,9 @@ pub fn setup_ground(
     ));
     commands.spawn((
         Camera3d::default(),
-        // The whole ground must stay inside the view distance.
-        Projection::Perspective(PerspectiveProjection { far: extent * 2.0, ..default() }),
+        // The whole ground must stay inside the view distance. Field of
+        // view 70 degrees vertically (Bevy's default is 45; user's choice).
+        Projection::Perspective(PerspectiveProjection { fov: 70f32.to_radians(), far: extent * 2.0, ..default() }),
         Transform::from_translation(Vec3::from(to_bevy(start, [0.0; 3]))),
     ));
     commands.insert_resource(GroundLookup(ground.terrain));
@@ -196,6 +197,42 @@ pub fn setup_h_label(mut commands: Commands) {
         Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
         HLabel,
     ));
+    commands.spawn((
+        Text::new(""),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(Color::WHITE),
+        Node { position_type: PositionType::Absolute, bottom: Val::Px(8.0), left: Val::Px(10.0), ..default() },
+        CameraLabel,
+    ));
+}
+
+/// The on-screen camera position (bottom left).
+#[derive(Component)]
+pub struct CameraLabel;
+
+/// Every frame: camera position in game units (same as the log's
+/// `camera game=(...)` lines) and the ground height below it.
+pub fn update_camera_label(
+    lookup: Option<Res<GroundLookup>>,
+    camera: Single<&Transform, With<Camera3d>>,
+    mut label: Single<&mut Text, With<CameraLabel>>,
+) {
+    let game = game_position(camera.translation);
+    let below = lookup.and_then(|l| l.0.height_at(game[0], game[1]));
+    label.0 = format!(
+        "Camera X {:.0}  Y {:.0}  Z {:.0}   ground {}",
+        game[0],
+        game[1],
+        game[2],
+        below.map_or("none".into(), |g| format!("{:.0}", g.height))
+    );
+}
+
+/// Bevy position -> game units: Bevy (x, y, z) -> game (x, -z, y), the
+/// inverse of `to_bevy`.
+fn game_position(bevy: Vec3) -> [f32; 3] {
+    let p = bevy * UNITS_PER_METRE;
+    [p.x, -p.z, p.y]
 }
 
 /// H shows or hides everything marked `ShownWithH`.
@@ -283,9 +320,7 @@ pub fn report_camera(
         return;
     }
     fly.last_report = Some(Instant::now());
-    let p = camera.translation * UNITS_PER_METRE;
-    // Bevy (x, y, z) -> game (x, -z, y), the inverse of `to_bevy`.
-    let game = [p.x, -p.z, p.y];
+    let game = game_position(camera.translation);
     let below = lookup.and_then(|l| l.0.height_at(game[0], game[1]));
     shared.log.lock().unwrap().detail(format!(
         "camera game=({:.0}, {:.0}, {:.0}) heading_deg={:.0} pitch_deg={:.0} ground_below={}",
