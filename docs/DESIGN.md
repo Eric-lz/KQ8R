@@ -404,6 +404,18 @@ Rules from `docs/behaviour/objects.md` "Script variables, `getLoc` and
   object not found, not applied and why). Tests: substitution, quotes,
   `$1`, `getLoc` → `loadKQ`, 4-number lines, `move` flags.
 
+#### M1 step 3f — hidden objects (planned 2026-10-11)
+
+Rules from `docs/behaviour/objects.md` "Hidden objects" (Q18). Small fix.
+- `hidden=<n>`: any whole number other than 0 = hidden. Scripts switch it
+  with `KQObject::setHidden <name> 0|1`; the start-up scripts' lines are
+  followed.
+- A hidden object is not drawn at the start, unless its `groupsAlways`
+  (default 6) has bit 0x40 (the "drawn" bit; inferred by session A, not
+  traced). In the viewer, such objects are shown with the H key, like
+  unused objects.
+- Log: hidden objects, `setHidden` lines, objects drawn although hidden.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,

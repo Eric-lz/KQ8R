@@ -43,6 +43,8 @@ The code is written with an AI coding agent (Claude Code); see
   H also shows 16 unused objects: in the game's files but not loaded at
   the start (pictures `tap01/02/04`, `pubart1`, the potion, the pyramid...).
   A small text in the top-left corner says whether they are shown.
+  H also shows objects the game hides at the start (`hidden=1`, e.g. the
+  wizard's chest in Daventry, Barren's docks and lava tiles).
 - Start-up scripts' variables, `getLoc` and `move` are followed (Barren's
   forge objects, DeadCity's torch flames). Checked by eye.
 - The other 11 worlds open the same way (`--world <name>`) and their

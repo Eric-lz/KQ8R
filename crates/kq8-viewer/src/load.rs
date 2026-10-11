@@ -614,6 +614,10 @@ impl kq8_data::world_script::Host for Placer<'_> {
         self.located.get(&name.to_ascii_lowercase()).map(|l| (l.position, l.angles))
     }
 
+    fn set_hidden(&mut self, name: &str, hidden: bool, at: &str) {
+        self.hide(name, hidden, at);
+    }
+
     /// `move <who> <flags> x y z [rx ry rz]` (objects.md Q20 d).
     fn move_object(&mut self, m: &kq8_data::world_script::Move) {
         let at = format!("{} line {}", m.from, m.line);
@@ -682,6 +686,21 @@ impl kq8_data::world_script::Host for Placer<'_> {
 }
 
 impl Placer<'_> {
+    /// `KQObject::setHidden` from the scripts (objects.md Q18).
+    fn hide(&mut self, name: &str, hidden: bool, at: &str) {
+        let drawn = self.located.get(&name.to_ascii_lowercase()).map(|l| l.drawn);
+        let what = match drawn {
+            Some(Drawn::Model(i)) => {
+                self.placed[i].0.hidden = hidden;
+                "applied"
+            }
+            Some(_) => "object has no model (nothing to hide)",
+            None => "object not loaded",
+        };
+        *self.hidden_values.entry(format!("setHidden {}: {what}", u8::from(hidden))).or_default() += 1;
+        self.log.detail(format!("setHidden {name} {} ({at}): {what}", u8::from(hidden)));
+    }
+
     /// One object from a `loadKQ` line (or an unused `.kq` file).
     fn place(
         &mut self,
@@ -765,10 +784,10 @@ impl Placer<'_> {
         } else {
             self.sections += 1;
         }
-        if let Some(h) = s.get("hidden") {
+        if let Some(h) = s.get("hidden").filter(|_| !unused) {
             let with = if p.shape.is_some() || s.get("animLoops").is_some() { "with a model" } else { "no model" };
-            *self.hidden_values.entry(format!("{h} ({with})")).or_default() += 1;
-            self.log.detail(format!("[{}] hidden={h}", p.name));
+            *self.hidden_values.entry(format!("hidden={h} in the file ({with})")).or_default() += 1;
+            self.log.detail(format!("[{}] hidden={h} groupsAlways={} -> drawn at the start: {}", p.name, p.groups_always, p.drawn()));
         }
         if load.inside_if {
             self.log.summary(format!("  NOTE {label}: loaded inside an if-block ({} line {}); placed anyway", load.from, load.line));
@@ -993,7 +1012,13 @@ impl Placer<'_> {
             self.unused_placed, self.unused_skipped
         ));
         log.summary(format!("  placed per class: {:?}", self.by_class));
-        log.summary(format!("  'hidden' values (not used yet): {:?}", self.hidden_values));
+        let hidden: Vec<&str> =
+            self.placed.iter().filter(|(p, _, unused)| !unused && !p.drawn()).map(|(p, _, _)| p.name.as_str()).collect();
+        log.summary(format!(
+            "  hidden (Q18): {:?}; placed but hidden at the start (shown with key H): {} {hidden:?}",
+            self.hidden_values,
+            hidden.len()
+        ));
         log.summary(format!("  loaded objects with position keys missing (taken as 0, Q19): {:?}", self.missing_loc_counts));
         log.summary(format!(
             "  .kq values that are $variables: {:?}; loadKQ lines with extra numbers ignored (Q20 e): {}; move lines: {:?}",

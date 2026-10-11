@@ -124,6 +124,9 @@ pub trait Host {
     /// Current position and angles of a named object.
     fn locate(&self, name: &str) -> Option<([f32; 3], [f32; 3])>;
     fn move_object(&mut self, m: &Move);
+    /// `KQObject::setHidden <name> 0|1` (objects.md Q18); `at` names the
+    /// script line, for the log.
+    fn set_hidden(&mut self, name: &str, hidden: bool, at: &str);
 }
 
 #[derive(Debug, Clone, Default)]
@@ -147,6 +150,8 @@ pub struct ScriptRun {
     pub getloc_not_found: Vec<String>,
     /// `move` lines passed to the caller.
     pub moves: usize,
+    /// `KQObject::setHidden` lines passed to the caller.
+    pub set_hidden: usize,
     /// The variables at the end.
     pub vars: Vars,
 }
@@ -242,7 +247,7 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
                 *out.other_commands.entry("set (alone)".into()).or_default() += 1;
                 continue;
             }
-            "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" => {}
+            "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
             c if c.ends_with(".cs") => {}
             // Not run: counted without looking at its variables.
             _ => {
@@ -305,6 +310,13 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
                     }
                 }
                 None => out.bad_lines.push(format!("{at}: getLoc without a name")),
+            },
+            "kqobject::sethidden" => match (words.get(1), words.get(2).map(|v| v.parse::<i64>())) {
+                (Some(who), Some(Ok(v))) => {
+                    out.set_hidden += 1;
+                    host.set_hidden(who, v != 0, &at);
+                }
+                _ => out.bad_lines.push(format!("{at}: setHidden needs a name and a whole number: '{line}'")),
             },
             "move" => match parse_move(&words[1..]) {
                 Ok((who, flags, position, turn)) => {
@@ -371,11 +383,12 @@ mod tests {
         placed: Vec<(String, [f32; 3], [f32; 3])>,
         moves: Vec<Move>,
         kq_values: Vec<String>,
+        hidden: Vec<(String, bool)>,
     }
 
     impl TestHost {
         fn new(files: Vec<(&'static str, &'static str)>) -> Self {
-            TestHost { files, placed: Vec::new(), moves: Vec::new(), kq_values: Vec::new() }
+            TestHost { files, placed: Vec::new(), moves: Vec::new(), kq_values: Vec::new(), hidden: Vec::new() }
         }
     }
 
@@ -396,6 +409,9 @@ mod tests {
         }
         fn move_object(&mut self, m: &Move) {
             self.moves.push(m.clone());
+        }
+        fn set_hidden(&mut self, name: &str, hidden: bool, _at: &str) {
+            self.hidden.push((name.to_string(), hidden));
         }
     }
 
@@ -452,13 +468,14 @@ mod tests {
             ("worldvar.cs", "set Seller::xPos 144476 # comment\nset ChestX 279587\nset Pos $ChestX 2 3 0 0 -2.9\n"),
             (
                 "newworld.cs",
-                "worldvar.cs\nloadKQ tw_weird.kq Weirdling 144476 131239 1744 0 0 -1.43\ngetLoc Weirdling\nloadKQ anvil.kq same $KQObject::loc\nKQObject::getLoc nobody\nloadKQ chest.kq chest $Pos\nmove chest 3 0 0 2000\nmove chest 0 $KQObject::locOnly\nloadKQ grass.kq swmp.01 166759 68128 -2 -1\nsub.cs hello.kq\nloadKQ q.kq \"$Pos\"\n",
+                "worldvar.cs\nloadKQ tw_weird.kq Weirdling 144476 131239 1744 0 0 -1.43\ngetLoc Weirdling\nloadKQ anvil.kq same $KQObject::loc\nKQObject::getLoc nobody\nloadKQ chest.kq chest $Pos\nKQObject::setHidden chest 1\nmove chest 3 0 0 2000\nmove chest 0 $KQObject::locOnly\nloadKQ grass.kq swmp.01 166759 68128 -2 -1\nsub.cs hello.kq\nloadKQ q.kq \"$Pos\"\n",
             ),
             ("sub.cs", "loadKQ $1\n"),
         ]);
         let r = run("newWorld.cs", &mut host);
         assert!(r.bad_lines.is_empty(), "{:?}", r.bad_lines);
-        assert_eq!((r.sets, r.getlocs, r.moves), (3, 2, 2));
+        assert_eq!((r.sets, r.getlocs, r.moves, r.set_hidden), (3, 2, 2, 1));
+        assert_eq!(host.hidden, [("chest".to_string(), true)]);
         assert_eq!(r.getloc_not_found.len(), 1, "{:?}", r.getloc_not_found);
         // getLoc -> six numbers -> position and angles.
         let anvil = &r.loads[1];

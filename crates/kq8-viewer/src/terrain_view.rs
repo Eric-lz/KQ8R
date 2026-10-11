@@ -147,7 +147,8 @@ pub fn setup_objects(
                 material.clone()
             };
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform));
-            if *unused {
+            // Unused objects, and hidden ones (objects.md Q18): only with H.
+            if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
             }
         }
@@ -169,9 +170,9 @@ pub fn setup_objects(
         ));
     }
     log.summary(format!(
-        "spawned objects: {} copies ({} of them unused, shown with H) of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
+        "spawned objects: {} copies ({} of them unused or hidden, shown with H) of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
         objects.placed.len(),
-        objects.placed.iter().filter(|x| x.2).count(),
+        objects.placed.iter().filter(|x| x.2 || !x.0.drawn()).count(),
         built.len()
     ));
 }

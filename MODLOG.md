@@ -58,6 +58,15 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 M1 step 3f: hidden objects (Q18)
+
+**Changed:** `crates/kq8-data/src/objects.rs` (`hidden`, `groupsAlways`, `drawn()`; unit test), `crates/kq8-data/src/world_script.rs` (`KQObject::setHidden`; test), `crates/kq8-viewer/src/load.rs` (applies `setHidden`, logs), `crates/kq8-viewer/src/terrain_view.rs` (hidden objects shown only with H), `docs/DESIGN.md` (plan 3f), `docs/provenance/README.md`, `README.md`.
+**Why:** Rule from `objects.md` "Hidden objects" (Q18): `wizchest1` should not be drawn at the start.
+**Tested how:** `cargo test -p kq8-data` (40 pass). Ran the viewer on all 12 worlds.
+**Result:** Placed counts unchanged; objects hidden at the start, now drawn only with H: Daventry 1 (`wizchest1`), Gnome 20 (bridges and gem lights), Barren 50 (docks, rails, lava tiles), Snowexit 1 (`portal4`). Other worlds 0. No start-up script un-hides anything.
+**Still broken / not tested:** Not checked by eye. That bit 0x40 of `groupsAlways` means "drawn" is inferred, not traced (no object we place uses it). Daventry's `KQObject::setHidden $NewInvItem 1` is not run (the variable comes from an inventory command we do not run; the item has no position).
+**Next:** User's eye check.
+
 ## 2026-10-11 M1 step 3e: script variables, getLoc and move (Q20)
 
 **Changed:** `crates/kq8-data/src/world_script.rs` (variables, `set`, `$1`, quotes, `getLoc`, `move`, 4–5-number `loadKQ`; the runner now calls the viewer as it goes, through a small "host" interface; tests), `crates/kq8-data/src/objects.rs` (tests), `crates/kq8-viewer/src/load.rs` (objects placed while the scripts run, by a new `Placer`; `.kq` values that are variables; `move`; logs), `docs/DESIGN.md` (plan 3e), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q21), `README.md`.

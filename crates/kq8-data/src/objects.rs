@@ -43,6 +43,11 @@ pub struct Placement {
     pub z_on_ground: bool,
     /// Which of `locX`, `locY`, `locZ` the section left out (taken as 0).
     pub missing_loc: [bool; 3],
+    /// `hidden`: any value other than 0 (objects.md Q18). Scripts can
+    /// change it (`KQObject::setHidden`).
+    pub hidden: bool,
+    /// `groupsAlways` bit mask, default 6 (Q18).
+    pub groups_always: u32,
 }
 
 impl Placement {
@@ -65,6 +70,8 @@ impl Placement {
             // A `.kq` file's own locZ never takes the -1/-2 rule (Q17 rule 4).
             z_on_ground: false,
             missing_loc: loc.map(|v| v.is_none()),
+            hidden: s.number("hidden").and_then(Result::ok).is_some_and(|v| v as i64 != 0),
+            groups_always: s.number("groupsAlways").and_then(Result::ok).map_or(6, |v| v as u32),
         }
     }
 
@@ -94,6 +101,13 @@ impl Placement {
             LoadName::Rename(n) => p.name = n.clone(),
         }
         p
+    }
+
+    /// Drawn at the start: not hidden, or hidden but `groupsAlways` keeps
+    /// bit 0x40, which session A infers is "drawn" (objects.md Q18 rule 3,
+    /// not traced).
+    pub fn drawn(&self) -> bool {
+        !self.hidden || self.groups_always & 0x40 != 0
     }
 
     /// Opacity 0..1 from `translucency` (1 = solid).
@@ -330,6 +344,17 @@ translucency=200
         let none = &crate::kq_text::parse(b"[x]\nclassType=KQObject\n")[0];
         let p = Placement::from_section(none);
         assert_eq!((p.position, p.missing_loc), ([0.0; 3], [true; 3]));
+    }
+
+    #[test]
+    fn hidden_objects_are_not_drawn_unless_groups_always_has_0x40() {
+        let parse = |t: &str| Placement::from_section(&crate::kq_text::parse(t.as_bytes())[0]);
+        assert!(parse("[a]\nlocX=1\n").drawn());
+        assert!(!parse("[a]\nhidden=1\n").drawn());
+        assert!(!parse("[a]\nhidden=2\n").drawn());
+        assert!(parse("[a]\nhidden=0\n").drawn());
+        assert!(parse("[a]\nhidden=1\ngroupsAlways=1097\n").drawn());
+        assert_eq!(parse("[a]\n").groups_always, 6);
     }
 
     #[test]
