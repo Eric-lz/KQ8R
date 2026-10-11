@@ -46,6 +46,26 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 Fix: hide the back sides of model triangles
+
+**Changed:** `crates/kq8-viewer/src/main.rs`: each triangle's corners
+are given to Bevy in reverse order, and both-sided drawing is switched
+off (Bevy's default hides back faces). The viewer logs how many triangles
+face away from the model's centre. `docs/provenance/README.md`,
+`docs/DESIGN.md`, `README.md`. Session B, from behaviour note
+`docs/behaviour/models-and-textures.md` (Q2).
+**Why:** The original hides back faces, and its front faces have clockwise
+corners. Bevy's front faces are counter-clockwise, hence the reversal.
+**Tested how:** `kq8-viewer` with `smlchest.KQS`, `broom.KQS`,
+`alcmsign.KQS` (`--frames 30` each), read the log. `cargo clippy`.
+**Result:** Chest: 30 of 32 triangles face outward (the old order would
+give 2 of 32). Broom 12 of 22, sign 49 of 66. Those two are not box-shaped,
+so this test says little about them.
+**Checked by eye:** You turned the chest and the sign all the way around:
+both look good (nothing missing, no insides showing).
+**Still broken / not tested:** Only these two models checked by eye.
+**Next:** Step 2b.
+
 ## 2026-10-11 M1 step 2a: read the terrain, height lookup
 
 **Changed:** `kq8-data`: new `kq_text.rs` (reader for `[section]` /

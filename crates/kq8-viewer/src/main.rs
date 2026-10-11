@@ -10,7 +10,8 @@
 //! Keys: arrows turn, R resets the view, Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
-//! no lighting, both sides of every triangle drawn, no animation.
+//! no lighting, no animation. Back faces are hidden as in the original
+//! (docs/behaviour/models-and-textures.md, Q2).
 
 mod load;
 mod log;
@@ -197,14 +198,26 @@ fn setup(
     let centre: [f32; 3] = std::array::from_fn(|i| 0.5 * (model.min[i] + model.max[i]));
     let mut log = shared.log.lock().unwrap();
     let mut vertices = 0;
+    let (mut outward, mut triangles) = (0, 0);
     for group in model.groups {
         let mut positions = Vec::with_capacity(group.triangles.len() * 3);
         let mut uvs = Vec::with_capacity(group.triangles.len() * 3);
         for t in &group.triangles {
-            for k in 0..3 {
-                positions.push(to_bevy(t.positions[k], centre));
+            // The game's front faces list their corners clockwise; Bevy's
+            // are counter-clockwise, so the corners go in reverse order
+            // (models-and-textures.md, Q2). The axis change in `to_bevy`
+            // is a rotation, so it does not change the corner order.
+            let corners = [0, 2, 1].map(|k| to_bevy(t.positions[k], centre));
+            for (k, p) in [0, 2, 1].into_iter().zip(corners) {
+                positions.push(p);
                 uvs.push(t.uvs[k]);
             }
+            // Check from the numbers: does the front face point away from
+            // the model's centre? (Expected for most triangles of a
+            // box-like model such as the chest.)
+            let [a, b, c] = corners.map(Vec3::from);
+            triangles += 1;
+            outward += ((b - a).cross(c - a).dot((a + b + c) / 3.0) > 0.0) as usize;
         }
         vertices += positions.len();
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
@@ -212,12 +225,8 @@ fn setup(
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.compute_flat_normals();
 
-        let base = StandardMaterial {
-            unlit: true,
-            cull_mode: None,
-            double_sided: true,
-            ..default()
-        };
+        // Bevy's default: counter-clockwise is the front, back faces hidden.
+        let base = StandardMaterial { unlit: true, ..default() };
         let material = match group.look {
             Look::Texture { width, height, rgba, .. } => {
                 let mut image = Image::new(
@@ -240,6 +249,9 @@ fn setup(
         commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
     }
+    log.summary(format!(
+        "front faces pointing away from the model centre: {outward} of {triangles} triangles"
+    ));
     log.summary(format!(
         "spawned: vertices={vertices} centre_moved_to_origin=({:.1}, {:.1}, {:.1}) game units",
         centre[0], centre[1], centre[2]

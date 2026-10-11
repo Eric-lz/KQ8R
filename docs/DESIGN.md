@@ -178,9 +178,9 @@ notes `kq8kqs.txt`, `kq8dml.txt`, `kq8pers.txt` (facts only, see
 - Textures use the world palette (`resource/<world>.ppl`) by default.
   Reason: measured on 3 Daventry textures, `daventry.ppl` gives the
   smoothest pictures (same as `8bit/daventry.pal`; `daventr1.pal` is worse).
-- Drawn without lighting (texture colours as they are) and from both sides,
-  because the lighting rules and which side of a triangle is the front are
-  not known yet.
+- Drawn without lighting (texture colours as they are), because the
+  lighting rules are not known yet. Back faces hidden, front = clockwise
+  corners (answer to Q2, `docs/behaviour/models-and-textures.md`).
 - The game's axes are converted to Bevy's (Bevy has Y up). Which game axis
   is up is decided from the `shape-verify` numbers.
 - Logs to `kq8-artifacts/logs/viewer.log`: vertex/triangle counts, the

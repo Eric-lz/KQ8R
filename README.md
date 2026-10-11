@@ -37,8 +37,8 @@ The code is written with an AI coding agent (Claude Code); see
 ## What doesn't work yet
 
 Everything else. There is nothing to play yet: no terrain, no lighting,
-no animation, no sound, no game logic. Models are drawn without lighting
-and from both sides, because those rules are not known yet.
+no animation, no sound, no game logic. Models are drawn without lighting,
+because those rules are not known yet.
 
 ## Try it
 

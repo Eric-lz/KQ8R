@@ -83,7 +83,8 @@ come from `kq8 shape-verify` on the GOG 1.03 install
 | Model at rest = first sequence of first loop | Our choice | `alcmsign.KQS` (alchemist's sign): its loop is 31 sequences over 2.0 s. The sign tilts 10° in sequence 0, 0° in sequence 6, 10° in 15, 0° in 23, i.e. it swings. So the first sequence is not always a resting pose; the user saw the sign tilted, as expected from this |
 | Textures use the world palette `<World>.ppl`; Windows-BMP textures use their own colour table | Measured | Viewer log: in `ITEMS22`, `HAY`, `alchy`, `TORCHY` (Daventry) every used colour of the own table equals `DAVENTRY.PPL`, so both give the same picture |
 | Textures not in the current world are taken from another world | Our choice (question Q4) | Logged per texture when it happens |
-| No lighting, both triangle sides drawn, linear filtering, texture repeats | Our choice while Q2/Q5 are open | — |
+| Front faces are the clockwise ones; back faces hidden; no mirror | Behaviour note `models-and-textures.md`, Q2 (session A: 98.9% of 1.49M triangles clockwise seen from the front; back-face removal on in the Glide renderer) | Viewer reverses each triangle's corners (Bevy's front is counter-clockwise) and keeps Bevy's back-face hiding. Observed: 30 of 32 chest triangles then face away from its centre (old order would give 2 of 32). Checked by eye by the user 2026-10-11: `smlchest.KQS` and `alcmsign.KQS` look right from all sides |
+| No lighting, linear filtering, texture repeats | Our choice while lighting is not studied | — |
 
 ## Terrain — `crates/kq8-data/src/{kq_text,terrain}.rs`
 
