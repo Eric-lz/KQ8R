@@ -277,9 +277,25 @@ use `.dig`/`.dil` files instead of `.kqs`.
   model's rest pose at its position on the ground in the `--terrain` view.
 - Log: objects placed, skipped (no model, model missing, unknown class),
   and per class counts.
-- Blocked on a study answer: what `dirY`/`dirZ` (and any other direction
-  or scale fields) mean, in which units and order. Until then objects are
-  drawn unrotated, and the log says so. Question to add to `QUESTIONS.md`.
+- Placement rules from `docs/behaviour/objects.md` (answers Q9, Q10):
+  angles `dirX/Y/Z` in radians, right-hand rule, turned about Y first,
+  then X, then Z (row vectors: `RotY × RotX × RotZ`); no scale; position
+  `locX/Y/Z` used exactly as written (`isGroundRelative` is never read,
+  `keepOnGround` only matters for moving objects). A model point is
+  placed as: mesh node transform, then that rotation, then the position.
+- `kq8-data/objects.rs`: read placements from every `.kq` section, build
+  the rotation, unit tests for each axis and the order.
+- Viewer `--terrain` also draws the objects: each different model is
+  built once and reused. Skipped and counted: sections at (0, 0, 0)
+  (probably templates), buildings (`.dig`, step 3b), missing models.
+- Check from the numbers: for each object, log the gap between the
+  placed model's lowest point and the ground under it; most objects
+  outdoors should rest on the ground.
+- Added while building (observed in the data): animated objects (doors,
+  chests, portals, `KQAnimObject`) name their model through
+  `animLoops`/`currAnimName`; shown in their first frame until Q12 says
+  which frame is right. Monsters (`.anm`) and emitters wait for M2/M3.
+  (Built 2026-10-11.)
 
 **3b. Buildings** (`KQInterior`, `.dig`/`.dil`)
 

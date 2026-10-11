@@ -109,6 +109,20 @@ Behaviour note = `docs/behaviour/terrain.md` (session A, answers Q6/Q7).
 | Ground textures coloured with the palette `world.cs` names in `KQWorld::terrainPalette` | Behaviour note `models-and-textures.md` Q3 | Read from `world.cs` in the world's archives: Daventry gives `daventry.ppl` |
 | Ground textures stop at the square's edge (no repeat); mipmaps not used; no lighting | Our choice (display only) | — |
 
+## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
+
+Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Position `locX/Y/Z` used as written; `isGroundRelative` and `keepOnGround` do not affect placement | Behaviour note (Q10) | Viewer log: of 104 placed Daventry objects, 21 rest within 50 units of the ground, 81 are higher (tables, hanging, inside buildings not drawn yet), 2 lower: `millwheel` 601 below (dips into the stream), `keg` 422 below |
+| Angles `dirX/Y/Z` in radians, right-hand rule, turned about Y, then X, then Z (`RotY × RotX × RotZ`, row vectors); no scale | Behaviour note (Q9) | Unit tests: each axis and the order. Viewer self-check: Bevy transform vs the game's rule agree to 0.035 game units for all 104 objects |
+| Bevy rotation = C · Rᵀ · Cᵀ (C = the axis change of `to_bevy`) | Our derivation | Same self-check |
+| Sections at (0, 0, 0) are skipped | Our choice (91 in Daventry; probably templates) | — |
+| Animated objects: `animLoops` → `[list]` `MovementK` names → `[movementK]` `loop=<model> ...`; model of the `currAnimName` movement | Observed in the data (e.g. `alchdoor.kq`) | Unit test; 30 Daventry objects found this way (17 doors, 8 animated objects, 3 chests, 2 portals) |
+| Animated objects drawn in their model's first frame | Our choice, **not verified** (Q12). By eye: most doors look closed, user not sure | 51 objects with `animLoops` but no `currAnimName` are skipped until Q12 is answered |
+| Object palette from `KQWorld::objectPalette` in `world.cs` | Behaviour note `models-and-textures.md` (Q3) | Daventry: `daventry.ppl` |
+
 ## Formats read but not yet implemented
 
 `libkq8fpc/doc/*.txt`: notes on `.msg`, `.kqs`, `.pba`, `.pft` and others

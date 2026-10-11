@@ -42,6 +42,21 @@ impl World {
             Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
         })
     }
+
+    /// Every archive entry whose name ends with `ext` (any case), unpacked,
+    /// as (label, bytes). Entries that fail to unpack are returned as errors.
+    pub fn entries_ending(&self, ext: &str) -> Vec<(String, Result<Vec<u8>, String>)> {
+        let ext = ext.to_ascii_lowercase();
+        self.vols
+            .iter()
+            .flat_map(|(v, a)| {
+                a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
+                    let label = format!("vol:{}/{v}/{}", self.name, e.name);
+                    (label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
+                })
+            })
+            .collect()
+    }
 }
 
 /// Everything the window needs, already converted.
@@ -309,7 +324,7 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         None => log.summary("  no direction table: every texture drawn as stored (code 0)"),
     }
 
-    let palette_name = terrain_palette_name(world).unwrap_or_else(|| {
+    let palette_name = world_palette_name(world, "terrainPalette").unwrap_or_else(|| {
         let fallback = format!("{}.ppl", world.name);
         log.summary(format!("  world.cs names no KQWorld::terrainPalette; using {fallback}"));
         fallback
@@ -354,16 +369,175 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
     Ok(Ground { terrain, groups })
 }
 
-/// `set KQWorld::terrainPalette <name>` in the world's `world.cs`
-/// (models-and-textures.md, Q3). The first such line is used; Daventry's
-/// 8-bit and high-colour branches name the same file.
-fn terrain_palette_name(world: &World) -> Option<String> {
+/// `set KQWorld::<setting> <name>` in the world's `world.cs`, e.g.
+/// `terrainPalette` or `objectPalette` (models-and-textures.md, Q3). The
+/// first such line is used; Daventry's 8-bit and high-colour branches name
+/// the same file.
+fn world_palette_name(world: &World, setting: &str) -> Option<String> {
     let (_, bytes) = world.load("world.cs")?.ok()?;
     let text: String = bytes.iter().map(|&b| b as char).collect();
+    let key = format!("KQWorld::{setting}");
     text.lines().find_map(|l| {
         let mut w = l.split_whitespace();
-        (w.next()?.eq_ignore_ascii_case("set") && w.next()?.eq_ignore_ascii_case("KQWorld::terrainPalette"))
+        (w.next()?.eq_ignore_ascii_case("set") && w.next()?.eq_ignore_ascii_case(&key))
             .then(|| w.next().map(str::to_string))
             .flatten()
     })
+}
+
+/// Daventry's (or any world's) placed objects: each different model once,
+/// plus where each copy goes.
+pub struct Objects {
+    /// (shape name as first written, model in model space).
+    pub shapes: Vec<(String, Model)>,
+    /// A placement and the index of its model in `shapes`.
+    pub placed: Vec<(kq8_data::objects::Placement, usize)>,
+}
+
+/// Reads every `.kq` section with a position from the world's archives
+/// and loads the models they name (rules: docs/behaviour/objects.md).
+/// `terrain` is only used for the log: how far each placed model's lowest
+/// point is from the ground under it.
+pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log) -> Objects {
+    use kq8_data::kq_text;
+    use kq8_data::objects::Placement;
+
+    let palette_name = world_palette_name(world, "objectPalette").unwrap_or_else(|| {
+        let fallback = format!("{}.ppl", world.name);
+        log.summary(format!("objects: world.cs names no KQWorld::objectPalette; using {fallback}"));
+        fallback
+    });
+    log.summary(format!("objects: palette {palette_name} (KQWorld::objectPalette)"));
+
+    let mut shapes: Vec<(String, Model)> = Vec::new();
+    let mut index_of: BTreeMap<String, Option<usize>> = BTreeMap::new();
+    let mut placed = Vec::new();
+    let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
+    let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
+    let mut sections = 0;
+    for (label, bytes) in world.entries_ending(".kq") {
+        let Ok(bytes) = bytes else {
+            *skipped.entry("file failed to unpack".into()).or_default() += 1;
+            continue;
+        };
+        let file = kq_text::parse(&bytes);
+        for s in &file {
+            let Some(mut p) = Placement::from_section(s) else { continue };
+            sections += 1;
+            // Animated objects name their model through their current
+            // animation; shown in its first frame (which frame the game
+            // shows is open, QUESTIONS.md Q12).
+            let mut animated = false;
+            if p.shape.is_none() {
+                match kq8_data::objects::current_loop_shape(&file, s) {
+                    Ok(Some(sh)) => {
+                        p.shape = Some(sh);
+                        animated = true;
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        log.detail(format!("skip {label}[{}]: animation lookup failed: {e}", p.name));
+                        *skipped.entry("animation lookup failed".into()).or_default() += 1;
+                        continue;
+                    }
+                }
+            }
+            let reason = if p.position == [0.0; 3] {
+                Some("position (0, 0, 0), probably a template".to_string())
+            } else if p.has_matrix_key {
+                Some("uses an RMat key (not supported)".to_string())
+            } else {
+                match &p.shape {
+                    None => Some(format!(
+                        "no model ({})",
+                        if s.get("animFile").is_some() { "uses an .anm file" } else { "no shapeName or animLoops" }
+                    )),
+                    Some(sh) if sh.to_ascii_lowercase().ends_with(".dig") => Some("building (.dig, step 3b)".to_string()),
+                    Some(sh) if !sh.to_ascii_lowercase().ends_with(".kqs") => {
+                        Some(format!("shapeName is not a .kqs ({})", sh.rsplit('.').next().unwrap_or("")))
+                    }
+                    Some(_) => None,
+                }
+            };
+            if let Some(r) = reason {
+                log.detail(format!("skip {label}[{}]: {r}", p.name));
+                *skipped.entry(r).or_default() += 1;
+                continue;
+            }
+            let shape = p.shape.clone().unwrap();
+            let key = shape.to_ascii_lowercase();
+            let slot = *index_of.entry(key).or_insert_with(|| {
+                // Per-model lines go to the file only.
+                log.quiet = true;
+                let r = load_model(game, world, &shape, Some(&palette_name), log);
+                log.quiet = false;
+                match r {
+                    Ok(m) => {
+                        shapes.push((shape.clone(), m));
+                        Some(shapes.len() - 1)
+                    }
+                    Err(e) => {
+                        log.detail(format!("model {shape} failed: {e}"));
+                        None
+                    }
+                }
+            });
+            let Some(i) = slot else {
+                log.detail(format!("skip {label}[{}]: model {shape} could not be loaded", p.name));
+                *skipped.entry("model could not be loaded".into()).or_default() += 1;
+                continue;
+            };
+            let class = p.class.clone().unwrap_or("?".into());
+            *by_class.entry(if animated { format!("{class} (animated, first frame)") } else { class }).or_default() += 1;
+            placed.push((p, i));
+        }
+    }
+
+    // Check from the numbers: lowest point of each placed model vs ground.
+    let mut gaps = Vec::new();
+    for (p, i) in &placed {
+        let t = p.transform();
+        let lowest = shapes[*i]
+            .1
+            .groups
+            .iter()
+            .flat_map(|g| g.triangles.iter().flat_map(|tri| tri.positions))
+            .map(|v| t.apply(v)[2])
+            .fold(f32::INFINITY, f32::min);
+        let ground = terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
+        let gap = ground.map(|h| lowest - h);
+        log.detail(format!(
+            "object [{}] class={} shape={} at ({:.0}, {:.0}, {:.0}) angles=({:.2}, {:.2}, {:.2}) lowest_point={lowest:.0} ground={} gap={}",
+            p.name,
+            p.class.as_deref().unwrap_or("?"),
+            shapes[*i].0,
+            p.position[0],
+            p.position[1],
+            p.position[2],
+            p.angles[0],
+            p.angles[1],
+            p.angles[2],
+            ground.map_or("none".into(), |h| format!("{h:.0}")),
+            gap.map_or("-".into(), |g| format!("{g:.0}"))
+        ));
+        if let Some(g) = gap {
+            gaps.push(g);
+        }
+    }
+    let count = |f: &dyn Fn(f32) -> bool| gaps.iter().filter(|g| f(**g)).count();
+    log.summary(format!(
+        "objects: {sections} sections with a position, {} placed using {} different models; skipped: {skipped:?}",
+        placed.len(),
+        shapes.len()
+    ));
+    log.summary(format!("  placed per class: {by_class:?}"));
+    log.summary(format!(
+        "  lowest point minus ground: within 50 units={} 50..500 above={} more than 500 above={} 50..500 below={} more than 500 below={}",
+        count(&|g| g.abs() <= 50.0),
+        count(&|g| g > 50.0 && g <= 500.0),
+        count(&|g| g > 500.0),
+        count(&|g| (-500.0..-50.0).contains(&g)),
+        count(&|g| g < -500.0)
+    ));
+    Objects { shapes, placed }
 }

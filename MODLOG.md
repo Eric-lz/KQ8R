@@ -46,6 +46,43 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 3a: place Daventry's objects
+
+**Changed:** `kq8-data`: new `objects.rs` (placements, rotation, the
+current animation's model), 4 new tests. `kq8-viewer`: `--terrain` now
+also draws objects (`load.rs`: `load_objects`, `World::entries_ending`,
+palette lookup for any `KQWorld::...Palette`; `terrain_view.rs`:
+`setup_objects`, `bevy_transform`; `log.rs`: quiet mode; `main.rs`).
+Also corrected the fly-speed comment after your speed change. Docs:
+`docs/DESIGN.md`, `docs/provenance/README.md`, `README.md`, new
+question Q12. Session B, from behaviour note `docs/behaviour/objects.md`
+(Q9, Q10) and the data.
+**Why:** M1 step 3a: see Daventry's objects in place.
+**Tested how:** `cargo test` (27 pass), `cargo clippy` (0 warnings),
+`kq8-viewer --terrain --frames 120`, then read `viewer.log`.
+**Result:** 355 sections with a position: 104 placed (74 `KQObject`, 17
+doors, 8 animated objects, 3 chests, 2 portals) using 90 models. Bevy's
+placement equals the game's rule to 0.035 units. 21 rest on the ground
+(±50), 81 are higher, 2 lower (mill wheel 601 below, keg 422 below).
+Skipped: 91 at (0, 0, 0), 58 with no model, 51 animated without
+`currAnimName` (Q12), 33 buildings (step 3b), 15 monsters (`.anm`), 2 whose
+first frame is empty (`map1.kqs`, `Ug_Cut5b.kqs`), 1 with `shapeName=stop`.
+Loading 224 ms; first frame after ~2.4 s; average frame 6.0 ms.
+**Not in the plan, added:** The plan only covered `shapeName`, but only
+`KQObject` sections have one. Doors, chests and so on name their model
+through their animation list. That is plain file layout, so I added it.
+Which frame to show is not in the data, so they show their first frame
+(Q12).
+**Checked by eye:** You flew around: many objects in place, including
+doors, paintings and the mill wheel. The keg stands where the pub should
+be. Inside an expected house, items float where a table should be: the
+table is probably part of the building (step 3b). Most doors look closed,
+but you are not sure. So "closed" is not confirmed (Q12).
+**Still broken / not tested:** No buildings, so Daventry still looks
+mostly empty. Also missing: monsters, emitters, the 51 animated objects
+without `currAnimName`.
+**Next:** Step 3b (buildings) needs Q11; door frames need Q12.
+
 ## 2026-10-11 M1 step 2b: draw Daventry's ground with textures
 
 **Changed:** `kq8-data/src/terrain.rs`: `ground_triangles()` and

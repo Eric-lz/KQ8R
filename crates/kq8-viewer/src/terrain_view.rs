@@ -1,5 +1,6 @@
-//! `kq8-viewer --terrain`: the world's ground with a flying camera
-//! (M1 step 2b). Rules from docs/behaviour/terrain.md.
+//! `kq8-viewer --terrain`: the world's ground (M1 step 2b) and its
+//! objects (M1 step 3a) with a flying camera. Rules from
+//! docs/behaviour/terrain.md and docs/behaviour/objects.md.
 
 use std::time::Instant;
 
@@ -8,7 +9,7 @@ use bevy::image::ImageAddressMode;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 
-use crate::load::Ground;
+use crate::load::{Ground, Objects};
 use crate::{material_for, mesh_from, to_bevy, Shared, UNITS_PER_METRE};
 
 #[derive(Resource)]
@@ -82,6 +83,75 @@ pub fn setup_ground(
     commands.insert_resource(GroundLookup(ground.terrain));
 }
 
+#[derive(Resource)]
+pub struct LoadedObjects(pub Option<Objects>);
+
+/// Builds each different model once and places every copy
+/// (docs/behaviour/objects.md).
+pub fn setup_objects(
+    mut commands: Commands,
+    mut loaded: ResMut<LoadedObjects>,
+    shared: Res<Shared>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let Some(objects) = loaded.0.take() else { return };
+    let mut log = shared.log.lock().unwrap();
+    // One (mesh, material) list per model, shared by all its copies.
+    let mut built: Vec<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> = Vec::new();
+    let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
+    for (_, model) in objects.shapes {
+        let mut parts = Vec::new();
+        first_corner.push(model.groups.first().and_then(|g| g.triangles.first()).map(|t| t.positions[0]));
+        for group in model.groups {
+            let mut positions = Vec::with_capacity(group.triangles.len() * 3);
+            let mut uvs = Vec::with_capacity(group.triangles.len() * 3);
+            for t in &group.triangles {
+                // Clockwise front (the game) -> counter-clockwise (Bevy).
+                for k in [0, 2, 1] {
+                    positions.push(to_bevy(t.positions[k], [0.0; 3]));
+                    uvs.push(t.uvs[k]);
+                }
+            }
+            let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
+            parts.push((meshes.add(mesh_from(positions, uvs)), materials.add(material)));
+        }
+        built.push(parts);
+    }
+    let mut worst = 0.0f32;
+    for (p, i) in &objects.placed {
+        let transform = bevy_transform(p);
+        // Self-check: the game's rule (point x rotation + position, then
+        // converted) and Bevy's transform must put a corner at the same spot.
+        if let Some(corner) = first_corner[*i] {
+            let game = Vec3::from(to_bevy(p.transform().apply(corner), [0.0; 3]));
+            let bevy = transform.transform_point(Vec3::from(to_bevy(corner, [0.0; 3])));
+            worst = worst.max((game - bevy).length() * UNITS_PER_METRE);
+        }
+        for (mesh, material) in &built[*i] {
+            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform));
+        }
+    }
+    log.summary(format!(
+        "spawned objects: {} copies of {} models; largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
+        objects.placed.len(),
+        built.len()
+    ));
+}
+
+/// A placement as a Bevy transform. The game moves a point as
+/// `point × R + position` (row vectors, Z up); in Bevy's Y-up space the
+/// same turn is `C · Rᵀ · Cᵀ`, where C is the axis change of `to_bevy`.
+fn bevy_transform(p: &kq8_data::objects::Placement) -> Transform {
+    // Columns of a glam matrix built from R's rows = Rᵀ.
+    let r_t = Mat3::from_cols_array_2d(&p.transform().m);
+    // to_bevy: (x, y, z) -> (x, z, -y), as columns.
+    let c = Mat3::from_cols(Vec3::X, Vec3::NEG_Z, Vec3::Y);
+    let rotation = Quat::from_mat3(&(c * r_t * c.transpose()));
+    Transform { translation: Vec3::from(to_bevy(p.position, [0.0; 3])), rotation, scale: Vec3::ONE }
+}
+
 pub fn fly_input(
     mut fly: ResMut<Fly>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -111,7 +181,7 @@ pub fn fly_input(
             step += dir;
         }
     }
-    // About one grid square (4,096 game units) per second; Shift x5.
+    // About three grid squares (4,096 game units each) per second; Shift x5.
     let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 600.0 } else { 120.0 };
     camera.translation += step.normalize_or_zero() * speed * time.delta_secs();
     if keys.just_pressed(KeyCode::Escape) {

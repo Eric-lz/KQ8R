@@ -8,6 +8,7 @@ pub mod chunks;
 pub mod game_dir;
 pub mod kq_text;
 pub mod material;
+pub mod objects;
 pub mod palette;
 pub mod pers;
 pub mod shape;

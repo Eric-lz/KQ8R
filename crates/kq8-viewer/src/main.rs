@@ -144,7 +144,7 @@ fn main() -> ExitCode {
     log.summary(format!("log file: {}", log.path().display()));
     enum Scene {
         Model(Model),
-        Ground(load::Ground),
+        Ground(load::Ground, load::Objects),
     }
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
@@ -152,7 +152,9 @@ fn main() -> ExitCode {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
             if args.terrain {
-                load::load_ground(&game, &world, &mut log).map(Scene::Ground)
+                let ground = load::load_ground(&game, &world, &mut log)?;
+                let objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
+                Ok(Scene::Ground(ground, objects))
             } else {
                 load::load_model(&game, &world, &args.model, args.palette.as_deref(), &mut log).map(Scene::Model)
             }
@@ -170,7 +172,7 @@ fn main() -> ExitCode {
     let shared = Shared { log: Arc::new(Mutex::new(log)), stats: Arc::new(Mutex::new(Stats::default())) };
     let title = match &scene {
         Scene::Model(m) => format!("KQ8 viewer - {}", m.label),
-        Scene::Ground(_) => format!("KQ8 viewer - {} ground", args.world),
+        Scene::Ground(..) => format!("KQ8 viewer - {} ground", args.world),
     };
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -189,11 +191,12 @@ fn main() -> ExitCode {
                 .add_systems(Startup, setup)
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
-        Scene::Ground(ground) => {
+        Scene::Ground(ground, objects) => {
             app.insert_resource(terrain_view::LoadedGround(Some(ground)))
+                .insert_resource(terrain_view::LoadedObjects(Some(objects)))
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(terrain_view::Fly::new())
-                .add_systems(Startup, terrain_view::setup_ground)
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects))
                 .add_systems(Update, (terrain_view::fly_input, terrain_view::report_camera, frame_stats).chain());
         }
     }

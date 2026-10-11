@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 pub struct Log {
     file: File,
     path: PathBuf,
+    /// While set, summary lines go to the file only (used while loading
+    /// hundreds of object models).
+    pub quiet: bool,
 }
 
 impl Log {
@@ -17,7 +20,7 @@ impl Log {
         let dir = Path::new("kq8-artifacts").join("logs");
         fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{name}.log"));
-        Ok(Log { file: File::create(&path)?, path })
+        Ok(Log { file: File::create(&path)?, path, quiet: false })
     }
 
     pub fn path(&self) -> &Path {
@@ -29,7 +32,9 @@ impl Log {
     }
 
     pub fn summary(&mut self, line: impl AsRef<str>) {
-        println!("{}", line.as_ref());
+        if !self.quiet {
+            println!("{}", line.as_ref());
+        }
         self.detail(line);
     }
 }
