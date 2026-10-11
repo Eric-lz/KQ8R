@@ -91,7 +91,7 @@ pub fn fly_input(
     mut camera: Single<&mut Transform, With<Camera3d>>,
     mut commands: Commands,
 ) {
-    if buttons.pressed(MouseButton::Right) {
+    if buttons.pressed(MouseButton::Left) {
         fly.yaw -= motion.delta.x * 0.003;
         fly.pitch = (fly.pitch - motion.delta.y * 0.003).clamp(-1.55, 1.55);
     }
@@ -111,8 +111,8 @@ pub fn fly_input(
             step += dir;
         }
     }
-    // About one grid square (4,096 game units) per second; Shift x8.
-    let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 320.0 } else { 40.0 };
+    // About one grid square (4,096 game units) per second; Shift x5.
+    let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 600.0 } else { 120.0 };
     camera.translation += step.normalize_or_zero() * speed * time.delta_secs();
     if keys.just_pressed(KeyCode::Escape) {
         commands.write_message(AppExit::Success);
