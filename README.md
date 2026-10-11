@@ -43,6 +43,9 @@ The code is written with an AI coding agent (Claude Code); see
   H also shows 16 unused objects: in the game's files but not loaded at
   the start (pictures `tap01/02/04`, `pubart1`, the potion, the pyramid...).
   A small text in the top-left corner says whether they are shown.
+- The other 11 worlds open the same way (`--world <name>`) and their
+  objects load by the same rules; only Barren's lookouts were looked at
+  by eye so far (not yet after the fix that places them).
   Not checked by eye yet. Checked by eye (before the last fixes, 104 objects):
   objects are where expected (the pub's keg, the mill wheel, doors,
   paintings; then the sign, bell, baskets and closed doors). Buildings and

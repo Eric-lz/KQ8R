@@ -5,7 +5,8 @@
 //! answers Q9/Q10); key names observed in the data:
 //!
 //! - Position `locX`, `locY`, `locZ` in game units (`isGroundRelative` is
-//!   never read by the game). `keepOnGround` is on unless the section says
+//!   never read by the game). Each key is read on its own; a missing one is
+//!   0 (objects.md "Missing locX / locY / locZ", Q19). `keepOnGround` is on unless the section says
 //!   `keepOnGround=0`; then an object below the ground is raised onto it,
 //!   never lowered (docs/behaviour/buildings.md, Q10 follow-up).
 //! - Angles `dirX`, `dirY`, `dirZ` in radians, right-hand rule (positive
@@ -40,15 +41,18 @@ pub struct Placement {
     /// True if a `loadKQ` line gave z = -1 or -2: "on the ground", whatever
     /// `keepOnGround` says (objects.md "Ground heights -1 and -2", Q17).
     pub z_on_ground: bool,
+    /// Which of `locX`, `locY`, `locZ` the section left out (taken as 0).
+    pub missing_loc: [bool; 3],
 }
 
 impl Placement {
-    /// `None` if the section has no position at all.
-    pub fn from_section(s: &Section) -> Option<Self> {
+    /// Missing position or angle keys are 0 (Q19).
+    pub fn from_section(s: &Section) -> Self {
         let num = |k: &str| s.number(k).and_then(Result::ok).map(|v| v as f32);
-        let position = [num("locX")?, num("locY")?, num("locZ")?];
+        let loc = [num("locX"), num("locY"), num("locZ")];
+        let position = loc.map(|v| v.unwrap_or(0.0));
         let angles = [num("dirX").unwrap_or(0.0), num("dirY").unwrap_or(0.0), num("dirZ").unwrap_or(0.0)];
-        Some(Placement {
+        Placement {
             name: s.name.clone(),
             class: s.get("classType").map(str::to_string),
             shape: s.get("shapeName").filter(|v| !v.is_empty()).map(str::to_string),
@@ -60,14 +64,14 @@ impl Placement {
             translucency: s.number("translucency").and_then(Result::ok).map_or(256.0, |v| v as f32),
             // A `.kq` file's own locZ never takes the -1/-2 rule (Q17 rule 4).
             z_on_ground: false,
-        })
+            missing_loc: loc.map(|v| v.is_none()),
+        }
     }
 
     /// The object a `loadKQ` line creates from `section` (objects.md Q16
     /// rule 2): name kept, removed or replaced; with a position, it
     /// replaces `locX/Y/Z` and the angles are the given ones or 0 0 0.
-    /// `None` if neither the line nor the section gives a position.
-    pub fn from_load(section: &Section, load: &crate::world_script::LoadKq) -> Option<Self> {
+    pub fn from_load(section: &Section, load: &crate::world_script::LoadKq) -> Self {
         use crate::world_script::LoadName;
         let mut p = match load.position {
             Some(position) => {
@@ -77,19 +81,19 @@ impl Placement {
                 for (k, v) in ["locX", "locY", "locZ"].iter().zip(position) {
                     with_loc.entries.push((k.to_string(), v.to_string()));
                 }
-                let mut p = Self::from_section(&with_loc)?;
+                let mut p = Self::from_section(&with_loc);
                 p.angles = load.angles_or_zero();
                 p.z_on_ground = position[2] == -1.0 || position[2] == -2.0;
                 p
             }
-            None => Self::from_section(section)?,
+            None => Self::from_section(section),
         };
         match &load.name {
             LoadName::Keep => {}
             LoadName::None => p.name = String::new(),
             LoadName::Rename(n) => p.name = n.clone(),
         }
-        Some(p)
+        p
     }
 
     /// Opacity 0..1 from `translucency` (1 = solid).
@@ -258,14 +262,14 @@ mod tests {
     #[test]
     fn keep_on_ground_raises_never_lowers() {
         let on = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\n")[0];
-        let p = Placement::from_section(on).unwrap();
+        let p = Placement::from_section(on);
         assert!(p.keep_on_ground);
         assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
         assert_eq!(p.grounded_position(None), [1.0, 2.0, -1.0]);
         let high = Placement { position: [1.0, 2.0, 900.0], ..p.clone() };
         assert_eq!(high.grounded_position(Some(500.0)), [1.0, 2.0, 900.0]);
         let off = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\nkeeponground=0\n")[0];
-        assert_eq!(Placement::from_section(off).unwrap().grounded_position(Some(500.0)), [1.0, 2.0, -1.0]);
+        assert_eq!(Placement::from_section(off).grounded_position(Some(500.0)), [1.0, 2.0, -1.0]);
     }
 
     #[test]
@@ -282,13 +286,13 @@ translucency=200
         let load = |name, position, angles| LoadKq {
             file: "stool.kq".into(), name, position, angles, from: "permwrld.cs".into(), line: 1, inside_if: false,
         };
-        let p = Placement::from_load(s, &load(LoadName::Rename("stool.02".into()), Some([1.0, 2.0, 3.0]), Some([0.0, 0.0, -0.81]))).unwrap();
+        let p = Placement::from_load(s, &load(LoadName::Rename("stool.02".into()), Some([1.0, 2.0, 3.0]), Some([0.0, 0.0, -0.81])));
         assert_eq!((p.name.as_str(), p.position, p.angles), ("stool.02", [1.0, 2.0, 3.0], [0.0, 0.0, -0.81]));
         // Position without angles: angles 0 0 0, not the section's dirZ.
-        let p = Placement::from_load(s, &load(LoadName::Keep, Some([1.0, 2.0, 3.0]), None)).unwrap();
+        let p = Placement::from_load(s, &load(LoadName::Keep, Some([1.0, 2.0, 3.0]), None));
         assert_eq!((p.name.as_str(), p.angles), ("stool", [0.0; 3]));
         // File name only: the section's own position and angles.
-        let p = Placement::from_load(s, &load(LoadName::None, None, None)).unwrap();
+        let p = Placement::from_load(s, &load(LoadName::None, None, None));
         assert_eq!((p.name.as_str(), p.position, p.angles), ("", [0.0; 3], [0.0, 0.0, 1.0]));
         assert!((p.opacity() - 200.0 / 255.0).abs() < 1e-6);
     }
@@ -303,27 +307,39 @@ translucency=200
         };
         // -1 and -2 move the object onto the ground, up or down, even with keepOnGround off.
         for z in [-1.0, -2.0] {
-            let p = Placement::from_load(s, &load(z)).unwrap();
+            let p = Placement::from_load(s, &load(z));
             assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
             assert_eq!(p.grounded_position(Some(-800.0)), [1.0, 2.0, -800.0]);
         }
         // Any other value is used as written (keepOnGround is off here).
-        let p = Placement::from_load(s, &load(-3.0)).unwrap();
+        let p = Placement::from_load(s, &load(-3.0));
         assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, -3.0]);
         // A .kq file's own locZ=-1 does not take this rule.
-        let p = Placement::from_section(s).unwrap();
+        let p = Placement::from_section(s);
         assert_eq!(p.grounded_position(Some(500.0)), [0.0, 0.0, -1.0]);
     }
 
     #[test]
     fn reads_a_section() {
         let s = &crate::kq_text::parse(b"[barn]\nclassType=KQInterior\nshapeName=barn.dig\nlocX=1\nlocY=2\nlocZ=3\ndirZ=3.14\n")[0];
-        let p = Placement::from_section(s).unwrap();
+        let p = Placement::from_section(s);
         assert_eq!(p.position, [1.0, 2.0, 3.0]);
         assert_eq!(p.angles, [0.0, 0.0, 3.14]);
         assert_eq!(p.shape.as_deref(), Some("barn.dig"));
         assert!(!p.has_matrix_key);
         let none = &crate::kq_text::parse(b"[x]\nclassType=KQObject\n")[0];
-        assert!(Placement::from_section(none).is_none());
+        let p = Placement::from_section(none);
+        assert_eq!((p.position, p.missing_loc), ([0.0; 3], [true; 3]));
+    }
+
+    #[test]
+    fn missing_loc_z_is_0_then_lifted_to_the_ground() {
+        // Barren's lookout2 (objects.md Q19): locX, locY, no locZ.
+        let s = &crate::kq_text::parse(b"[lookout2]\nshapeName=lookout4.dig\nlocX=71571\nlocY=108848\ndirZ=3.14\n")[0];
+        let p = Placement::from_section(s);
+        assert_eq!((p.position, p.missing_loc), ([71571.0, 108848.0, 0.0], [false, false, true]));
+        assert_eq!(p.grounded_position(Some(11592.0)), [71571.0, 108848.0, 11592.0]);
+        // Below-zero ground: z 0 stays (raise only), i.e. max(0, ground).
+        assert_eq!(p.grounded_position(Some(-300.0)), [71571.0, 108848.0, 0.0]);
     }
 }

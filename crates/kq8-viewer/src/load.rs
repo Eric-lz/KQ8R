@@ -463,6 +463,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut flag_values: BTreeMap<String, usize> = BTreeMap::new();
     let mut hidden_values: BTreeMap<String, usize> = BTreeMap::new();
+    let mut missing_loc_counts: BTreeMap<String, usize> = BTreeMap::new();
     let (mut sections, mut raised, mut fell_back, mut on_ground_marker) = (0, 0, 0, 0);
     // Buildings use KQWorld::interiorPalette (buildings.md); loaded on first use.
     let mut interior_palette: Option<Result<[Rgb; 256], String>> = None;
@@ -539,23 +540,15 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         // The object is the file's first section; the other sections
         // (animation lists, movements) belong to it.
         if let Some(s) = file.first() {
-            let Some(mut p) = Placement::from_load(s, load) else {
-                log.detail(format!(
-                    "skip {label} ({} line {}): no position in the line or the file; sections: {}",
-                    load.from,
-                    load.line,
-                    file.iter()
-                        .map(|x| format!(
-                            "[{}] {}",
-                            x.name,
-                            x.entries.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ")
-                        ))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                ));
-                *skipped.entry("no position".into()).or_default() += 1;
-                continue;
-            };
+            let mut p = Placement::from_load(s, load);
+            // Missing locX/locY/locZ are 0 (objects.md Q19); only the
+            // file's own position can have gaps.
+            if load.position.is_none() && p.missing_loc.contains(&true) {
+                let missing: Vec<&str> =
+                    ["locX", "locY", "locZ"].iter().zip(p.missing_loc).filter(|(_, m)| *m).map(|(k, _)| *k).collect();
+                log.detail(format!("{label}[{}]: no {} in the file, taken as 0", p.name, missing.join("/")));
+                *missing_loc_counts.entry(missing.join("/")).or_default() += usize::from(!unused);
+            }
             if unused {
                 // Templates for script copies sit at (0, 0, 0): nothing to see there.
                 if p.position == [0.0; 3] {
@@ -762,7 +755,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     }
     let count = |f: &dyn Fn(f32) -> bool| gaps.iter().filter(|g| f(**g)).count();
     log.summary(format!(
-        "objects: {sections} loaded objects with a position, {} placed using {} different models; skipped: {skipped:?}",
+        "objects: {sections} loaded objects, {} placed using {} different models; skipped: {skipped:?}",
         placed.len() - unused_placed,
         shapes.len()
     ));
@@ -771,6 +764,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     ));
     log.summary(format!("  placed per class: {by_class:?}"));
     log.summary(format!("  'hidden' values (not used yet): {hidden_values:?}"));
+    log.summary(format!("  loaded objects with position keys missing (taken as 0, Q19): {missing_loc_counts:?}"));
     log.summary(format!("  files where several sections have a position (first used): {several_positions}"));
     log.summary(format!(
         "  put on the ground by a loadKQ z of -1/-2: {on_ground_marker}; raised onto the ground (keepOnGround): {raised}; animated objects without a usable currAnimName (movement 0 used): {fell_back}; 'flags' values: {flag_values:?}"

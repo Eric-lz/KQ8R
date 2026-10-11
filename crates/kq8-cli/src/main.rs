@@ -7,6 +7,7 @@
 //!   kq8 shape-verify [--game DIR]
 //!   kq8 terrain-verify [--game DIR]
 //!   kq8 building-verify [--game DIR]
+//!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
 //!
 //! `<file>` is a path in the game folder (`GAME/8Gui/daventry.pbm`) or an
 //! archive entry (`vol:Daventry/8bit/NAME.BMP`).
@@ -33,7 +34,8 @@ const USAGE: &str = "usage:
   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
   kq8 shape-verify [--game DIR]
   kq8 terrain-verify [--game DIR]
-  kq8 building-verify [--game DIR]";
+  kq8 building-verify [--game DIR]
+  kq8 text <file> [--game DIR]";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -72,6 +74,20 @@ fn main() -> ExitCode {
         (Some("shape-verify"), []) => shape_verify::run(&game),
         (Some("terrain-verify"), []) => terrain_verify::run(&game),
         (Some("building-verify"), []) => building_verify::run(&game),
+        (Some("text"), [file]) => match source::load(&game, file) {
+            // Printed only (never written into the repo), with line numbers.
+            Ok(bytes) => {
+                let text: String = bytes.iter().map(|&b| b as char).collect();
+                for (n, line) in text.lines().enumerate() {
+                    println!("{:4}  {line}", n + 1);
+                }
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
         _ => usage(),
     }
 }

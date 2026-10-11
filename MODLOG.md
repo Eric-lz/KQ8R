@@ -30,6 +30,15 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 Barren's shed objects: question Q20; `kq8 text`
+
+**Changed:** `crates/kq8-cli/src/main.rs` (new command `kq8 text <file>`: prints a game text file with line numbers; nothing is saved), `docs/behaviour/QUESTIONS.md` (Q20).
+**Why:** The user saw an anvil, a coal container and a grinding wheel missing from a shed in Barren at about (145447, 132566, 2139).
+**Tested how:** `cargo run -- text vol:Barren/kq/NEWWORLD.CS` and the same for DeadCity's `PERMWRLD.CS` and Barren's `TW_WEIRD.KQ`.
+**Result:** They are `anvil.kq`, `coals.kq`, `grinder.kq`, loaded with the position `$KQObject::loc`, which the line before sets with `getLoc Weirdling` (the weapon seller stands at 144476, 131239, 1744, next to the user's spot). DeadCity uses the same pattern 65 times (torch flames), followed by `move <flame> 3 0 0 <n>`. The notes do not cover `getLoc`, script variables or `move`, so not guessed: asked as Q20.
+**Still broken / not tested:** These objects stay missing until Q20 is answered (Barren 3, DeadCity 184 lines, IceWorld 1 with `$IceWorld::ChestPos`). Swamp's 2 unreadable lines are a different case (4 numbers on a `loadKQ` line), added to Q20 as (e).
+**Next:** Wait for Q20.
+
 ## 2026-10-11 M1: missing locX/locY/locZ are 0 (Q19); Barren's lookouts drawn
 
 **Changed:** `crates/kq8-data/src/objects.rs` (each position key read on its own, missing = 0; `from_section`/`from_load` always give a placement; unit test), `crates/kq8-viewer/src/load.rs` (no more "no position" skip; logs which keys were missing), `docs/provenance/README.md`, `README.md`.
