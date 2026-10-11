@@ -16,14 +16,14 @@
 use crate::mover::GroundLookup;
 
 /// The camera aims this far above the followed object's base.
-pub const AIM_HEIGHT: f32 = 1400.0;
+pub const AIM_HEIGHT: f32 = 800.0;  // modified manually to what feels more natural, but could be wrong
 /// The camera stays at least this far above the terrain under it and above
 /// the followed object's base.
 pub const MIN_HEIGHT: f32 = 1400.0;
 /// Within this of its wanted height the camera jumps to it...
 pub const HEIGHT_SNAP: f32 = 100.0;
 /// ...otherwise it closes this share of the gap per update.
-pub const HEIGHT_RATE: f32 = 0.1;
+pub const HEIGHT_RATE: f32 = 0.5;   // modified manually to what feels more natural, but could be wrong
 /// Swing per mouse unit (radians).
 pub const SWING_PER_UNIT: f32 = 3.0 * std::f32::consts::FRAC_PI_4;
 /// Zoom per mouse unit (normal mode).

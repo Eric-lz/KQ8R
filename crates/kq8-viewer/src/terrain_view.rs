@@ -78,7 +78,8 @@ pub fn setup_ground(
         Camera3d::default(),
         // The whole ground must stay inside the view distance. Field of
         // view 70 degrees vertically (Bevy's default is 45; user's choice).
-        Projection::Perspective(PerspectiveProjection { fov: 70f32.to_radians(), far: extent * 2.0, ..default() }),
+        // modified manually to what feels more natural, but could be wrong
+        Projection::Perspective(PerspectiveProjection { fov: 50f32.to_radians(), far: extent * 2.0, ..default() }),
         Transform::from_translation(Vec3::from(to_bevy(start, [0.0; 3]))),
     ));
     commands.insert_resource(GroundLookup(ground.terrain));

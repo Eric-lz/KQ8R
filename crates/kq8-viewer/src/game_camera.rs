@@ -18,7 +18,7 @@ use crate::terrain_view::{Fly, GroundLookup};
 use crate::{to_bevy, Shared, UNITS_PER_METRE};
 
 /// Stand-in until Q27 (a): this many screen pixels make one mouse unit.
-const PIXELS_PER_MOUSE_UNIT: f32 = 600.0;
+const PIXELS_PER_MOUSE_UNIT: f32 = 800.0; // modified manually to what feels more natural, but could be wrong
 
 /// Which camera draws the view: the game camera or the free one.
 #[derive(Resource)]
