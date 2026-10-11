@@ -29,6 +29,29 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 Fix: frame transforms are not used to draw model parts
+
+**Changed:** `kq8-data/src/shape.rs`: `Shape::geometry` no longer applies
+the sequence's frame transform, only each part's mesh node transform; doc
+comments and the unit test updated (the test now gives frame 0 a 50-unit
+step and checks it is ignored). `kq8-cli/src/shape_verify.rs`: the matrix
+test no longer transposes frame transforms (they are not drawn).
+`docs/provenance/README.md`. Session B, from behaviour note
+`docs/behaviour/models-and-textures.md` (Q1 b).
+**Why:** The study session found frame transforms are the step the whole
+object makes during an animation (Connor's walk steps ~70–81 units per
+frame; doors turn ~11–13° per frame). Drawing them would make Connor
+lurch and doors never open past 13°.
+**Tested how:** `cargo test` (14 pass), `cargo clippy` (0 warnings),
+`kq8 shape-verify` before and after, compared line by line;
+`kq8-viewer smlchest.KQS --frames 60`.
+**Result:** No difference in any number: all 4,573 rest poses identical,
+because frame 0 always has a zero step. The chest looks the same
+(same bounds in the viewer log).
+**Still broken / not tested:** Nothing visible changes until animation is
+added (M2/M3); that is when the frame steps will be used, to move objects.
+**Next:** M1 step 2 (terrain), after your go-ahead.
+
 ## 2026-10-11 M1 step 1b checked by eye
 
 **Changed:** Docs only (`README.md`, `docs/provenance/README.md`). No code.

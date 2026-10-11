@@ -407,9 +407,6 @@ fn convention_check(label: &str, s: &Shape, log: &mut Log, t: &mut Tally) {
     for n in &mut transposed.nodes {
         n.transform.m = transpose(n.transform.m);
     }
-    for q in &mut transposed.sequences {
-        q.transform.m = transpose(q.transform.m);
-    }
     let col = touching(&transposed.geometry(rest).triangles);
     t.convention_shapes += 1;
     t.convention_touching.0 += row;

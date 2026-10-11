@@ -10,7 +10,10 @@
 //!   origin. A mesh can hold several *frames* (vertex animation).
 //! - A *mesh node* places one frame of one mesh with a transform.
 //! - A *sub-sequence* is a run of mesh nodes that are visible together.
-//! - A *sequence* is one animation frame: a transform plus a sub-sequence.
+//! - A *sequence* is one animation frame: a sub-sequence plus a frame
+//!   transform. The frame transform is the step the whole object makes
+//!   when the animation reaches that frame; it is not used to draw parts
+//!   (docs/behaviour/models-and-textures.md, Q1 b).
 //! - A *loop* is one animation: a run of sequences.
 //!
 //! The game's own normal table (256 directions that each vertex points
@@ -74,6 +77,8 @@ pub struct SubSequence {
 
 #[derive(Debug, Clone)]
 pub struct Sequence {
+    /// Step the whole object makes on reaching this frame (zero for the
+    /// first frame of a loop). Not used by `Shape::geometry`.
     pub transform: Transform,
     /// -1 = nothing visible.
     pub mesh_subsequence: i16,
@@ -385,7 +390,8 @@ impl Shape {
     }
 
     /// Builds the triangles visible in sequence `index`, in model space:
-    /// mesh vertex -> node transform -> sequence transform.
+    /// mesh vertex -> node transform. The sequence's frame transform is
+    /// deliberately left out (docs/behaviour/models-and-textures.md, Q1 b).
     pub fn geometry(&self, index: usize) -> Geometry {
         let mut g = Geometry::default();
         let Some(seq) = self.sequences.get(index) else {
@@ -423,7 +429,7 @@ impl Shape {
                 let mut ok = true;
                 for (k, &(vi, ti)) in face.corners.iter().enumerate() {
                     match mesh.position(frame, vi) {
-                        Some(p) => positions[k] = seq.transform.apply(node.transform.apply(p)),
+                        Some(p) => positions[k] = node.transform.apply(p),
                         None => ok = false,
                     }
                     if let Some(base) = uv_base {
@@ -495,8 +501,9 @@ mod tests {
         d.extend(transform(2.0, [0.0, 0.0, 100.0]));
         d.extend(i16s(&[0, 0, 0, 0]));
         d.extend(i16s(&[0, 1]));
-        for _ in 0..2 {
-            d.extend(transform(1.0, [0.0; 3]));
+        // Sequence 0 has a step of 50 along X; drawing must ignore it.
+        for step in [[50.0, 0.0, 0.0], [0.0; 3]] {
+            d.extend(transform(1.0, step));
             d.extend(i16s(&[0, -1]));
         }
         d.extend(f32s(&[0.0]));
@@ -523,7 +530,8 @@ mod tests {
         let g = s.geometry(s.rest_sequence());
         assert!(g.problems.is_empty(), "{:?}", g.problems);
         let t = &g.triangles[0];
-        // vertex (2,0,0) -> *0.5 + 1 = (2,1,1) -> node *2 + (0,0,100)
+        // vertex (2,0,0) -> *0.5 + 1 = (2,1,1) -> node *2 + (0,0,100);
+        // the sequence's step of 50 along X is not applied.
         assert_eq!(t.positions[1], [4.0, 2.0, 102.0]);
         assert_eq!(t.uvs[2], [0.0, 1.0]);
     }
