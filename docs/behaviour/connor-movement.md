@@ -2,7 +2,8 @@
 
 Study session A, 2026-10-11. Sources: game data files (observed) and
 `Mask.exe` (studied, described here in our own words). Jumping, falling,
-slopes, water, ropes, collisions and the camera are **not** covered yet.
+slopes, steps and walls are in `connor-physics.md`; the camera is in
+`camera.md`. Water, ropes and pushing are **not** covered yet.
 
 ## Purpose
 
@@ -184,8 +185,6 @@ phases (nearest, next one reached, or first match) is open question 2.
    blended between frames? Affects smoothness, not average speed.
 2. Which transition is used when several have "from" phases, and what
    happens if the stop is requested between them?
-3. Jumping (`Jump`, `runJump`, `backJump`), falling, slopes (the game has a
-   walkable-slope limit, apparently about 35°), water (`waterwalk`), ropes
-   and pushing are not studied yet. The manual (`MASK/Manual.pdf`) says: running
-   straight into an object stops Connor; hitting it at an angle makes him
-   glance off and keep moving in roughly the same direction.
+3. Jumping, falling, slopes and walls: answered in `connor-physics.md`
+   (walkable limit is 36.9°, not 35°). Water (`waterwalk`), ropes and
+   pushing are not studied yet.

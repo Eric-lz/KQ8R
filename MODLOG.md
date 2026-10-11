@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: M2 physics (gravity, steps, slopes, walls, jump, fall)
+
+**Changed:** New `docs/behaviour/connor-physics.md`; pointer in `docs/behaviour/connor-movement.md`. No code.
+**Why:** M2 needs Connor held on the ground, stopped by walls, and able to jump and fall.
+**Tested how:** Traced in `Mask.exe`: the mover's three-pass move, gravity, the ground check, Connor's collision response, the Jump and Fall states, the jump permission check, and the monster/Connor constructors. Measured the jump arcs from `C_jump`, `C_rnjmp` and `C_bkjmp.kqs`.
+**Result:** Step up and step down are 325 per update. Gravity is 5,000 units/s², with the timer advancing 0.06 s per update. Ground is walkable when the normal's z is above 0.8 (36.9°); steeper ground makes Connor slide. A jump's arc comes from its animation, with gravity off. After a jump comes the Fall state. A fall kills Connor if he drops more than 3,840 (5,120 after a jump). Walls hit within about 20° of head-on make him stop when walking and crash when running; at other angles he slides along them.
+**Still broken / not tested:** Whether Connor's gravity is on at the start of a world is not traced; the recommendation is on. The collision shape used against buildings is not traced, and `MaxSlopeDot` is unused for Connor. Nothing has been checked in the running game.
+**Next:** Answer session B's M2 questions; water, ropes and pushing later.
+
 ## 2026-10-11 Study session: Q20 (script variables, getLoc, move)
 
 **Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
@@ -39,6 +48,15 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Result:** A missing position value stays at 0, then the ground rule lifts the object onto the ground (11,592 for both lookouts).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
+
+## 2026-10-11 M1 step 3e: script variables, getLoc and move (Q20)
+
+**Changed:** `crates/kq8-data/src/world_script.rs` (variables, `set`, `$1`, quotes, `getLoc`, `move`, 4–5-number `loadKQ`; the runner now calls the viewer as it goes, through a small "host" interface; tests), `crates/kq8-data/src/objects.rs` (tests), `crates/kq8-viewer/src/load.rs` (objects placed while the scripts run, by a new `Placer`; `.kq` values that are variables; `move`; logs), `docs/DESIGN.md` (plan 3e), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q21), `README.md`.
+**Why:** Barren's anvil, coal box and grinding wheel (seen missing by the user), DeadCity's torch flames and others are placed through script variables. Rules from `objects.md` "Script variables, getLoc and move" (Q20).
+**Tested how:** `cargo test -p kq8-data` (39 pass). Ran the viewer on all 12 worlds and compared placed counts with the previous run.
+**Result:** 0 unreadable script lines in every world (DeadCity had 184). Placed: Barren 287 → 290 (anvil, coals, grinder at the Weirdling's spot 144476, 131239, 1744, turned −1.43), DeadCity 953 → 1137 (184 `move` lines run, e.g. flame `flamelh.1a` lifted 2,000 above its torch), Swamp 645 → 647 (grass with 4 numbers), IceWorld 99 → 100 (the chest-room henchman figure `Icehench`). The other 8 worlds unchanged. Commands we do not run are no longer reported as unreadable.
+**Still broken / not tested:** Not checked by eye. 17 DeadCity relative moves of turned objects use world axes (not traced, asked as Q21). IceWorld's `move Henchman` comes before Henchman is loaded, so it does nothing. `$KQGame::runOptimal` is never set (passed to `permwrld.cs`, unused there as far as we load). Q18 (`hidden`) is answered but not applied yet: next small step.
+**Next:** User's eye check in Barren (shed) and DeadCity (lighthouse flames).
 
 ## 2026-10-11 Barren's shed objects: question Q20; `kq8 text`
 
