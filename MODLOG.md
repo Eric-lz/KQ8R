@@ -3,6 +3,32 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: behaviour notes for Connor's movement and the camera
+
+**Changed:** `docs/behaviour/connor-movement.md`, `docs/behaviour/camera.md`,
+`docs/behaviour/QUESTIONS.md` (new). Outside git: Ghidra labels, a Ghidra
+script that turns table-only code into functions
+(`re/ghidra_scripts/CreateTableFunctions.java`: 531 candidates, 520
+created, 11 failed), throwaway analysis scripts and scratch notes in `re/`.
+No code in the repo.
+**Why:** M2 (walk Connor around Daventry) needs both behaviours.
+**Tested how:** Traced the behaviour in `Mask.exe` with Ghidra; measured
+animation steps from `GAME/Common/C_walk.kqs` and `C_run.kqs`; checked the
+camera controls against the game's manual (`MASK/Manual.pdf`).
+**Result:** Walk ≈ 1,127 units/s and run ≈ 2,518 units/s, taken from the
+animations' per-frame steps; turning 1.75 rad/s; banking into turns when
+running, up to 0.15 rad. The camera trails Connor inside a min/max distance
+range set by the walk/run scripts, stays at least 1,400 above the ground,
+and has the mouse/Shift/F11/F2 controls. The manual agrees with what the
+code does.
+**Mistakes caught:** First drafts claimed things not yet traced (who uses
+"turn to face target", when turning is disabled, a zoom formula). These
+are corrected or marked as open questions in the notes. `Camera.sae` is
+the real camera key map, not only a debug map as I first assumed.
+**Still broken / not tested:** Nothing checked against the running game.
+Open questions are listed at the end of each note.
+**Next:** Terrain height, slopes and collisions.
+
 ## 2026-10-11 M1 step 1b checked by eye
 
 **Changed:** Docs only (`README.md`, `docs/provenance/README.md`). No code.
