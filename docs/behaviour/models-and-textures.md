@@ -2,8 +2,8 @@
 
 Study session A, 2026-10-11. Answers to `QUESTIONS.md` Q1, Q2, Q3 and Q4
 (partly). Sources: game data files (observed, with throwaway measurements)
-and `Mask.exe` (studied, described in our own words). Q5 is still
-being studied.
+and `Mask.exe` (studied, described in our own words). Q5 partly
+answered ("Material flags").
 
 ## Transforms (Q1)
 
@@ -131,6 +131,29 @@ missing in the original too.
 Still open: which archive wins when a name exists in several loaded ones
 (front of the list first is the likely reading of "move to front"), and what
 the game does when a name is not found anywhere (29 names).
+
+## Material flags (Q5, partly)
+
+Traced in the model drawing code of `Mask.exe`; meanings of the names are
+ours. The flags word is split into parts:
+
+| Bits | Meaning | Confidence |
+| --- | --- | --- |
+| `0x000F` | Kind of material. 3 = textured (the drawing code only sets up a texture for 3). 0 = nothing to draw (all 31 `0xF000` and 192 `0x0` materials) | traced for 3; 0 = "nothing" is likely, not traced |
+| `0x0F00` | Lighting: `0x100` = none (full brightness), `0x200` = flat (one light value per triangle, from its facing), `0x400` = smooth (light per corner) | traced |
+| `0x1000` | Turns on a drawing option and **forces lighting to "none"** | traced; the option itself not identified |
+| `0x2000` | Turns on another drawing option (value 3 instead of 0) and also forces lighting to "none" | traced; option not identified. Only appears inside `0xF000` |
+| `0x10000` | **Halves the opacity**: the object is drawn 50% see-through | traced |
+
+What the data says about `0x1000` (`0x1403`, 20 materials): the textures
+are `nightsky`, `11gnd`, `Plstrwl1/2` (plaster walls), `Srwroof` (straw
+roof) and similar: things that should not be shaded, not see-through
+things. **No texture in the game uses colour index 0** (checked in the
+textures of all 1,398 world material-list entries whose image was found), so "index 0 is see-through"
+is not how these files work. **Open:** whether any colour is see-through,
+and which renderer option `0x1000`/`0x2000` switch on. For now: draw
+`0x1000` materials at full brightness and fully solid; draw `0x10000` ones
+at 50% opacity.
 
 ## Do not reproduce
 
