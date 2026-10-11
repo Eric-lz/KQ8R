@@ -106,6 +106,24 @@ eye). What `loadingPalette` is used for is open.
 Whether the first/last 8 system colours are forced for textures is **not
 answered yet** (still being studied).
 
+### System colours (Q3, answered 2026-10-11)
+
+- In the palette files, entries **0–9 and 246–255 already hold the
+  standard Windows system colours** (e.g. `daventry.ppl`: 1 = dark red,
+  7 = light grey, 8 = (192, 220, 192), 9 = (166, 202, 240), 246 = cream,
+  255 = white). The one exception is **entry 0, stored as pure blue
+  (0, 0, 255)** where Windows has black. (Measured.)
+- The game replaces these **20 entries** (10 at each end, not 8) with the
+  computer's real system colours **only when the display runs in
+  256-colour mode**. (Traced: it asks Windows for the system palette and
+  copies it in, only for an 8-bit screen.) In any other mode the palette is
+  used as stored.
+- So for a modern display: **use the palette exactly as stored**. The
+  current "force 8 system colours at each end" rule (from libkq8fpc notes)
+  is not what this game does on a normal screen. It only matters for
+  textures that use those entries (e.g. `Teleport.BMP`), and for entry 0
+  (blue as stored, black on a 256-colour screen).
+
 ## Where texture names are looked up (Q4, partly)
 
 When a world is entered, `MASK/mask.cs` loads that world's archives in this
@@ -167,8 +185,8 @@ ours. The flags word is split into parts:
 | --- | --- | --- |
 | `0x000F` | Kind of material. 3 = textured (the drawing code only sets up a texture for 3). 0 = nothing to draw (all 31 `0xF000` and 192 `0x0` materials) | traced for 3; 0 = "nothing" is likely, not traced |
 | `0x0F00` | Lighting: `0x100` = none (full brightness), `0x200` = flat (one light value per triangle, from its facing), `0x400` = smooth (light per corner) | traced |
-| `0x1000` | Turns on a drawing option and **forces lighting to "none"** | traced; the option itself not identified |
-| `0x2000` | Turns on another drawing option (value 3 instead of 0) and also forces lighting to "none" | traced; option not identified. Only appears inside `0xF000` |
+| `0x1000` | **Colour key on**: in the Glide renderer, texels whose final colour is pure black (0, 0, 0) are not drawn. Also **forces lighting to "none"**, so black stays exactly black | traced (Glide `grChromakeyMode(on)`, `grChromakeyValue(0)`); D3D path not checked |
+| `0x2000` | **Alpha blending from the texture's alpha** (Glide blend mode 3) and lighting "none" | traced; only appears inside `0xF000` materials, which have nothing to draw |
 | `0x10000` | **Halves the haze** (distance fog) on that material, so it stays clearer far away. Not see-through. (Corrected 2026-10-11: the first version said "halves the opacity"; the value it halves is the haze amount, which grows with distance from the camera.) | traced |
 
 What the data says about `0x1000` (`0x1403`, 20 materials): the textures
@@ -176,11 +194,14 @@ are `nightsky`, `11gnd`, `Plstrwl1/2` (plaster walls), `Srwroof` (straw
 roof) and similar: things that should not be shaded, not see-through
 things. **No texture in the game uses colour index 0** (checked in the
 textures of all 1,398 world material-list entries whose image was found), so "index 0 is see-through"
-is not how these files work. **Open:** whether any colour is see-through,
-and which renderer option `0x1000`/`0x2000` switch on. For now: draw
-`0x1000` materials at full brightness and fully solid; draw `0x10000`
-materials fully solid (they only get less fog). See-through objects come
-from the object's `translucency` key instead (`objects.md`, Q14).
+is not how these files work. **Answer (2026-10-11):** the see-through colour for `0x1000` is
+**pure black after palette lookup** (in `daventry.ppl` that is index 10,
+plus index 0, which the engine sets to the system colour black). Measured:
+the 20 `0x1403` textures in the worlds use neither, so in this data the
+key changes nothing visible. Draw `0x1000` materials at full brightness and
+treat black texels as see-through. Draw `0x10000` materials fully solid
+(they only get less fog). See-through objects otherwise come from the
+object's `translucency` key (`objects.md`, Q14).
 
 ## Do not reproduce
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q5 and Q3 answered
+
+**Changed:** `docs/behaviour/models-and-textures.md`, `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** The last open texture questions.
+**Tested how:** Traced the Glide renderer's function table: the colour-key switch and the blend modes. Traced the palette set-up that copies the Windows system palette. Measured palette entries and texture colour use.
+**Result:** 0x1000 = colour key (pure black is see-through) plus full brightness; 0x2000 = alpha blending (only in materials with nothing to draw). Palettes already contain the system colours; the game replaces 10 entries at each end only on a 256-colour screen.
+**Still broken / not tested:** The Direct3D path is not checked. The teleport pad's see-through look (Q14b) is still unexplained. What happens to missing texture names is still open.
+**Next:** M2 study (slopes, collisions, jumping).
+
 ## 2026-10-11 Study session: Q18 (hidden), Q4 (lookup order)
 
 **Changed:** `docs/behaviour/objects.md` (Hidden objects), `docs/behaviour/models-and-textures.md` (Q4), `docs/behaviour/QUESTIONS.md` (Q4, Q18, stale Q5 row). No code.
