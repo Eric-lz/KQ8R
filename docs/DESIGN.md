@@ -262,6 +262,33 @@ Rules from `docs/behaviour/terrain.md` ("Ground textures") and
 Not in this step: lighting/shadow maps, haze, holes, `terrh2.dib`, the
 buildings (`.dig`/`.dil`) and objects (step 3). (Built 2026-10-11.)
 
+#### M1 step 3 — Daventry's objects (planned 2026-10-11, not started)
+
+Known from the data (observed while checking the terrain): Daventry's
+`kq.vol` holds ~430 `.kq` files; 249 sections have a non-zero position
+(`locX/locY/locZ`, game units). Classes include `KQObject` (153),
+`KQAnimObject`, `KQTrap`, `KQInterior` (33, the buildings), `KQMonster`,
+`KQDoor`, `KQChest`. Objects name their model in `shapeName`; buildings
+use `.dig`/`.dil` files instead of `.kqs`.
+
+**3a. Place models** (no new format needed)
+
+- Read every `.kq` section with a position and a `shapeName`; draw that
+  model's rest pose at its position on the ground in the `--terrain` view.
+- Log: objects placed, skipped (no model, model missing, unknown class),
+  and per class counts.
+- Blocked on a study answer: what `dirY`/`dirZ` (and any other direction
+  or scale fields) mean, in which units and order. Until then objects are
+  drawn unrotated, and the log says so. Question to add to `QUESTIONS.md`.
+
+**3b. Buildings** (`KQInterior`, `.dig`/`.dil`)
+
+- New format, no community notes known. First survey the files (like
+  `shape-verify`), then ask the study session for whatever the data does
+  not explain before drawing anything.
+
+Not in this step: animation, doors opening, monsters moving (M2/M3).
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,
