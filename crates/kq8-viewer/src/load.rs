@@ -214,7 +214,8 @@ fn load_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log
     };
     let pal = Palette::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
     log.summary(format!("palette: {label} ({:?}, {} entries)", pal.format, pal.entry_count));
-    Ok(pal.engine_colors())
+    // Used exactly as stored (models-and-textures.md Q3).
+    Ok(pal.shown_colors())
 }
 
 /// Textures are looked up in the current world first, then in every other
@@ -243,7 +244,10 @@ fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256],
     };
     let rgba = to_rgba(&bmp, palette);
     let histogram = bmp.index_histogram();
-    let edge = histogram.map(|h| h[..8].iter().chain(&h[248..]).sum::<u32>());
+    // Pixels using the 20 entries a 256-colour screen would swap (0-9,
+    // 246-255; Q3), and entry 0 alone (stored blue in the world palettes).
+    let edge = histogram.map(|h| h[..10].iter().chain(&h[246..]).sum::<u32>());
+    let index0 = histogram.map_or(0, |h| h[0]);
     // For images with their own colour table: how many of the colours the
     // image actually uses differ from the world palette (0 = no difference).
     let own_vs_world = match (&bmp.embedded_palette, histogram) {
@@ -255,7 +259,7 @@ fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256],
         _ => " own_palette=no".into(),
     };
     log.summary(format!(
-        "  texture {label}: {:?} {}x{} {}-bit mipmaps={} flags=0x{:X} pixels_using_system_colours={}{own_vs_world}",
+        "  texture {label}: {:?} {}x{} {}-bit mipmaps={} flags=0x{:X} pixels_using_entries_0-9_246-255={} pixels_using_entry_0={index0}{own_vs_world}",
         bmp.format,
         bmp.width,
         bmp.height,
@@ -428,6 +432,8 @@ pub struct Objects {
     /// Loaded objects that have a position but nothing we can draw: shown
     /// as markers on request (viewer only, not a game rule).
     pub markers: Vec<Marker>,
+    /// Connor, if the world script loads him: placement and standing model.
+    pub connor: Option<(kq8_data::objects::Placement, Model)>,
 }
 
 pub struct Marker {
@@ -470,6 +476,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         index_of: BTreeMap::new(),
         placed: Vec::new(),
         markers: Vec::new(),
+        connor: None,
         located: BTreeMap::new(),
         skipped: BTreeMap::new(),
         unused_skipped: BTreeMap::new(),
@@ -579,6 +586,7 @@ struct Placer<'a> {
     index_of: BTreeMap<String, Option<usize>>,
     placed: Vec<(kq8_data::objects::Placement, usize, bool)>,
     markers: Vec<Marker>,
+    connor: Option<(kq8_data::objects::Placement, Model)>,
     /// Loaded objects by lower-case name (the last one loaded wins).
     located: BTreeMap<String, Located>,
     skipped: BTreeMap<String, usize>,
@@ -637,8 +645,8 @@ impl kq8_data::world_script::Host for Placer<'_> {
         let (old_position, old_angles, drawn) = (l.position, l.angles, l.drawn);
         let position = if relative_position {
             if old_angles != [0.0; 3] {
-                // Along the world axes or the object's own: not traced.
-                note(self, "relative move of a turned object (world axes used, not traced)", String::new());
+                // Along the world axes, not the object's own (objects.md Q21).
+                note(self, "relative move of a turned object (along the world axes, Q21)", String::new());
             }
             [old_position[0] + m.position[0], old_position[1] + m.position[1], old_position[2] + m.position[2]]
         } else {
@@ -686,6 +694,58 @@ impl kq8_data::world_script::Host for Placer<'_> {
 }
 
 impl Placer<'_> {
+    /// Connor (M2 step 2a, docs/DESIGN.md): the world script loads
+    /// `connor.kq`, which is not in the world archives but in
+    /// `GAME/Kq/Connor.kq` (connor-physics.md "Data used"). Placed by the
+    /// script line with the usual ground rules, drawn in the first frame of
+    /// his `stop` movement from `GAME/Kq/Conner.anm`, coloured with
+    /// `KQWorld::connorPalette`.
+    fn place_connor(&mut self, load: &kq8_data::world_script::LoadKq) {
+        use kq8_data::kq_text;
+        let at = format!("{} line {}", load.from, load.line);
+        let read = |rel: &str| -> Result<Vec<u8>, String> {
+            let path = self.game.find(rel).ok_or(format!("{rel} not found in the game folder"))?;
+            std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))
+        };
+        let result = (|| -> Result<(kq8_data::objects::Placement, Model, String), String> {
+            let file = kq_text::parse(&read("GAME/Kq/Connor.kq")?);
+            let section = file.first().ok_or("GAME/Kq/Connor.kq has no section")?;
+            let mut p = kq8_data::objects::Placement::from_load(section, load);
+            let ground = self.terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
+            p.position = p.grounded_position(ground);
+            // The standing pose: movement `stop` of his animation list.
+            let mut anm = kq_text::parse(&read("GAME/Kq/Conner.anm")?);
+            let list = anm.first().map(|s| s.name.clone()).ok_or("Conner.anm has no section")?;
+            let asks = kq_text::parse(format!("[ConnorStanding]\nanimLoops={list}\ncurrAnimName=stop\n").as_bytes());
+            anm.extend(asks);
+            let c = kq8_data::objects::current_loop(&anm, anm.last().unwrap())?.ok_or("no animation list")?;
+            if c.fell_back {
+                return Err("Conner.anm has no movement called stop".into());
+            }
+            let palette = world_palette_name(self.world, "connorPalette").unwrap_or_else(|| format!("{}.ppl", self.world.name));
+            self.log.quiet = true;
+            let model =
+                load_model(self.game, self.world, &c.shape, Some(&palette), Some((c.sequence.as_str(), 0.0, true)), self.log);
+            self.log.quiet = false;
+            let note = format!("movement {} = {} {} (palette {palette})", c.movement, c.shape, c.sequence);
+            Ok((p, model?, note))
+        })();
+        match result {
+            Ok((p, model, note)) => {
+                self.log.summary(format!(
+                    "connor: loaded by {at} at ({:.0}, {:.0}, {:.0}) angles ({:.2}, {:.2}, {:.2}); standing model {note}",
+                    p.position[0], p.position[1], p.position[2], p.angles[0], p.angles[1], p.angles[2]
+                ));
+                self.located.insert(
+                    p.name.to_ascii_lowercase(),
+                    Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing },
+                );
+                self.connor = Some((p, model));
+            }
+            Err(e) => self.log.summary(format!("connor: not loaded ({at}): {e}")),
+        }
+    }
+
     /// `KQObject::setHidden` from the scripts (objects.md Q18).
     fn hide(&mut self, name: &str, hidden: bool, at: &str) {
         let drawn = self.located.get(&name.to_ascii_lowercase()).map(|l| l.drawn);
@@ -713,6 +773,10 @@ impl Placer<'_> {
         use kq8_data::objects::Placement;
 
         let base = load.file.rsplit(['/', '\\']).next().unwrap_or(&load.file);
+        if !unused && base.eq_ignore_ascii_case("connor.kq") && self.world.load(base).is_none() {
+            self.place_connor(load);
+            return;
+        }
         let (label, bytes) = match preloaded.map(Ok).or_else(|| self.world.load(base)) {
             Some(Ok(x)) => x,
             _ => {
@@ -1048,7 +1112,7 @@ impl Placer<'_> {
                 m.name, m.class, m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
             ));
         }
-        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers }
+        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor }
     }
 }
 

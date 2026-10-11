@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/kq8-data", "crates/kq8-cli", "crates/kq8-viewer"]
+members = ["crates/kq8-data", "crates/kq8-game", "crates/kq8-cli", "crates/kq8-viewer"]
 # Plain `cargo run` / `cargo test` use these, so `cargo run -- vol-verify`
 # keeps working. The viewer is built with `-p kq8-viewer`.
-default-members = ["crates/kq8-data", "crates/kq8-cli"]
+default-members = ["crates/kq8-data", "crates/kq8-game", "crates/kq8-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ publish = false
 
 [workspace.dependencies]
 kq8-data = { path = "crates/kq8-data" }
+kq8-game = { path = "crates/kq8-game" }
 explode = "0.1.2"
 png = "0.18.1"
 # Only the 3D parts; no audio.

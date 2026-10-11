@@ -1,0 +1,9 @@
+[package]
+name = "kq8-game"
+description = "Game rules for the KQ8 rewrite (Connor's mover first); no drawing"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+kq8-data.workspace = true

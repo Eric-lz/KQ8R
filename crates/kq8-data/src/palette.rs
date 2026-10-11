@@ -31,18 +31,6 @@ pub struct Palette {
     pub extra_chunks: Vec<(String, usize)>,
 }
 
-/// The 8 colours the engine forces at each end of a chunked palette,
-/// i.e. the standard Windows system colours. Source: libkq8fpc notes
-/// (documented, not yet checked against Mask.exe; see provenance).
-const SYSTEM_FIRST: [Rgb; 8] = [
-    [0x00, 0x00, 0x00], [0x80, 0x00, 0x00], [0x00, 0x80, 0x00], [0x80, 0x80, 0x00],
-    [0x00, 0x00, 0x80], [0x80, 0x00, 0x80], [0x00, 0x80, 0x80], [0xC0, 0xC0, 0xC0],
-];
-const SYSTEM_LAST: [Rgb; 8] = [
-    [0x80, 0x80, 0x80], [0xFF, 0x00, 0x00], [0x00, 0xFF, 0x00], [0xFF, 0xFF, 0x00],
-    [0x00, 0x00, 0xFF], [0xFF, 0x00, 0xFF], [0x00, 0xFF, 0xFF], [0xFF, 0xFF, 0xFF],
-];
-
 impl Palette {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         if bytes.starts_with(b"RIFF") {
@@ -131,21 +119,12 @@ impl Palette {
         })
     }
 
-    /// The colours as the engine shows them: for chunked palettes the
-    /// first and last 8 entries are replaced by the Windows system colours.
-    pub fn engine_colors(&self) -> [Rgb; 256] {
-        let mut c = self.colors;
-        if self.format == PaletteFormat::Chunked {
-            c[..8].copy_from_slice(&SYSTEM_FIRST);
-            c[248..].copy_from_slice(&SYSTEM_LAST);
-        }
-        c
-    }
-
-    /// Indices whose stored colour differs from what `engine_colors` shows.
-    pub fn overridden_differences(&self) -> Vec<usize> {
-        let shown = self.engine_colors();
-        (0..256).filter(|&i| shown[i] != self.colors[i]).collect()
+    /// The colours as the game shows them on a modern display: exactly as
+    /// stored. (Only on a 256-colour screen does the game swap entries 0–9
+    /// and 246–255 for the computer's system colours;
+    /// models-and-textures.md "System colours", Q3.)
+    pub fn shown_colors(&self) -> [Rgb; 256] {
+        self.colors
     }
 }
 
@@ -182,8 +161,8 @@ mod tests {
         assert_eq!(p.colors[100], [1, 2, 3]);
         assert_eq!(p.declared_chunks, Some(1));
         assert_eq!(p.extra_chunks, vec![("pcmt".to_string(), 32)]);
-        assert_eq!(p.engine_colors()[0], [0, 0, 0]);
-        assert_eq!(p.overridden_differences().first(), Some(&0));
+        // Stored colours are used as they are (Q3), including entry 0.
+        assert_eq!(p.shown_colors()[0], [9, 9, 9]);
     }
 
     #[test]
@@ -199,6 +178,6 @@ mod tests {
         assert_eq!(p.format, PaletteFormat::Riff);
         assert_eq!(p.entry_count, 2);
         assert_eq!(p.colors[1], [40, 50, 60]);
-        assert_eq!(p.engine_colors()[0], [10, 20, 30]);
+        assert_eq!(p.shown_colors()[0], [10, 20, 30]);
     }
 }

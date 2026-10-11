@@ -97,8 +97,11 @@ pub fn setup_objects(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let Some(objects) = loaded.0.take() else { return };
+    let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
+    if let Some(connor) = objects.connor.take() {
+        crate::connor_view::spawn_connor(&mut commands, connor, &mut meshes, &mut materials, &mut images, &mut log);
+    }
     // One (mesh, material) list per model, shared by all its copies.
     let mut built: Vec<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> = Vec::new();
     let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
@@ -264,7 +267,7 @@ pub fn toggle_markers(
 /// A placement as a Bevy transform. The game moves a point as
 /// `point × R + position` (row vectors, Z up); in Bevy's Y-up space the
 /// same turn is `C · Rᵀ · Cᵀ`, where C is the axis change of `to_bevy`.
-fn bevy_transform(p: &kq8_data::objects::Placement) -> Transform {
+pub fn bevy_transform(p: &kq8_data::objects::Placement) -> Transform {
     // Columns of a glam matrix built from R's rows = Rᵀ.
     let r_t = Mat3::from_cols_array_2d(&p.transform().m);
     // to_bevy: (x, y, z) -> (x, z, -y), as columns.

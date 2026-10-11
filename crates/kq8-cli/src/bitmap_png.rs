@@ -62,13 +62,8 @@ fn convert(game: &GameDir, image: &str, palette: Option<&str>, log: &mut Log) ->
             "palette: {spec} format={:?} entries={} head_says_following={:?} chunks={:?}",
             pal.format, pal.entry_count, pal.declared_chunks, pal.chunk_tags
         ));
-        let changed = pal.overridden_differences();
-        log.summary(format!(
-            "  system-colour override changes {} entries: {:?}",
-            changed.len(),
-            changed
-        ));
-        Some(pal.engine_colors())
+        // Used exactly as stored (models-and-textures.md Q3).
+        Some(pal.shown_colors())
     } else if let Some(embedded) = &bmp.embedded_palette {
         log.summary(format!("palette: embedded in image ({} entries)", embedded.len()));
         let mut c = [[0u8; 3]; 256];

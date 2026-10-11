@@ -47,6 +47,11 @@ The code is written with an AI coding agent (Claude Code); see
   wizard's chest in Daventry, Barren's docks and lava tiles).
 - Start-up scripts' variables, `getLoc` and `move` are followed (Barren's
   forge objects, DeadCity's torch flames). Checked by eye.
+- M2 started: Connor stands at his start point by the cottage in his
+  standing pose, with gravity on (15 updates per second). Test keys: C
+  puts the camera behind him, G / B lift him 5,000 / 2,000 to watch him
+  fall (5,000 kills him; the log says so). He cannot walk yet. Checked by
+  eye.
 - The other 11 worlds open the same way (`--world <name>`) and their
   objects load by the same rules; only Barren's lookouts were looked at
   by eye so far (not yet after the fix that places them).

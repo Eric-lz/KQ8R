@@ -4,19 +4,22 @@
 //! Usage:
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
-//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N]
+//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
 //! palette. `--frames N` closes the window by itself after N frames.
 //! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
 //! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
 //! hold the left mouse button to look around, H shows/hides invisible
-//! objects (green: no model, orange: .anm character). Esc quits.
+//! objects (green: no model, orange: .anm character). Connor (M2): C puts
+//! the camera behind him, G / B lift him 5,000 / 2,000 to test falling.
+//! Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no lighting, no animation. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
+mod connor_view;
 mod load;
 mod log;
 mod terrain_view;
@@ -55,6 +58,8 @@ struct Args {
     palette: Option<String>,
     game: PathBuf,
     frames: Option<u64>,
+    /// Test: lift Connor this much at the start (like the G/B keys).
+    lift: Option<f32>,
     terrain: bool,
 }
 
@@ -65,6 +70,7 @@ fn parse_args() -> Result<Args, String> {
         palette: None,
         game: std::env::var_os("KQ8_GAME_DIR").map(PathBuf::from).unwrap_or_else(|| "MASK".into()),
         frames: None,
+        lift: None,
         terrain: false,
     };
     let mut it = std::env::args().skip(1);
@@ -76,6 +82,7 @@ fn parse_args() -> Result<Args, String> {
             "--palette" => a.palette = Some(value()?),
             "--game" => a.game = value()?.into(),
             "--terrain" => a.terrain = true,
+            "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => positional.push(arg),
@@ -130,7 +137,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N]");
             return ExitCode::FAILURE;
         }
     };
@@ -197,8 +204,13 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::LoadedObjects(Some(objects)))
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(terrain_view::Fly::new())
+                .insert_resource(connor_view::StartLift(args.lift))
+                // Game logic at the original's 15 updates per second
+                // (docs/DESIGN.md, M2 "Physics rate").
+                .insert_resource(Time::<Fixed>::from_hz(kq8_game::UPDATES_PER_SECOND))
+                .add_systems(FixedUpdate, connor_view::connor_step)
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (terrain_view::fly_input, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

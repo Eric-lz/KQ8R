@@ -58,6 +58,34 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 M2 step 2a: Connor stands in Daventry, gravity on
+
+**Changed:** new crate `crates/kq8-game` (`mover.rs`: Connor's mover, unit tests), `Cargo.toml` (workspace), `crates/kq8-viewer/Cargo.toml`, `crates/kq8-viewer/src/connor_view.rs` (new: draw Connor, run the mover at 15 updates per second, test keys), `crates/kq8-viewer/src/load.rs` (`place_connor`), `crates/kq8-viewer/src/terrain_view.rs`, `crates/kq8-viewer/src/main.rs` (`--lift N`, fixed 15 Hz schedule), `docs/DESIGN.md` (M2 plan, physics rate), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q23), `README.md`.
+**Why:** Start of M2, as asked: Connor's gravity on, logged. Rules from `connor-physics.md`.
+**Tested how:** `cargo test` (5 new mover tests pass, 45 in all). Viewer runs: standing (300 frames), `--lift 2000` and `--lift 5000` (700 frames); read `kq8-artifacts/logs/connor.log`.
+**Result:** Connor loaded from `GAME/Kq/Connor.kq` at (277744, 199295, 13633) with `c_stop.kqs`. Standing: z stays 13,633.5, on ground every update. Lift 2,000: Fall starts at update 5, safe landing at update 14 (fell 1,856). Lift 5,000: dies at update 22 (fell 4,856 > 3,840).
+**Checked by eye** by the user 2026-10-11: Connor looks right (textures, standing pose); B lifts him a bit, G more; he falls naturally.
+**Still broken / not tested:** He cannot walk; no fall animations; steep ground only logged. The update rule hovers with gravity off, which contradicts the note: asked as Q23.
+**Next:** User's eye check; then 2b (walking).
+
+## 2026-10-11 Palettes used as stored (Q3)
+
+**Changed:** `crates/kq8-data/src/palette.rs` (`engine_colors` with its forced system colours removed; `shown_colors` returns the stored colours; tests), `crates/kq8-cli/src/bitmap_png.rs`, `crates/kq8-viewer/src/load.rs` (use it; texture log counts pixels on entries 0–9/246–255 and on entry 0), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q22).
+**Why:** `models-and-textures.md` "System colours" (Q3): the game swaps in system colours only on a 256-colour screen; on a normal screen it uses the palette as stored.
+**Tested how:** `cargo test` (40 pass). Viewer on all 12 worlds; counted textures (coloured by the world palette) that use the affected entries.
+**Result:** None in 11 worlds. Swamp: `STN1.BMP` (35 pixels on edge entries) and `WIRLPOOL.BMP` (16,512 pixels on entry 0); `Teleport.BMP` (3,961 pixels on entry 0). Entry 0 is stored pure blue, so those pixels are now blue instead of black. The Q5 answer says the engine sets entry 0 to black, which conflicts: asked as Q22.
+**Still broken / not tested:** Not checked by eye. Entry 0's colour depends on Q22.
+**Next:** User's eye check (Swamp whirlpool), Q22.
+
+## 2026-10-11 Q21 answered: relative moves use the world axes
+
+**Changed:** `crates/kq8-viewer/src/load.rs` (log wording only), `docs/DESIGN.md`, `docs/provenance/README.md`.
+**Why:** `objects.md` Q20 (d), answer to Q21: a relative `move` is along the world axes, which is what the code already did.
+**Tested how:** Built; no behaviour change.
+**Result:** The 17 DeadCity cases are now logged as following Q21 instead of "not traced".
+**Still broken / not tested:** Nothing new.
+**Next:** —
+
 ## 2026-10-11 M1 step 3f: hidden objects (Q18)
 
 **Changed:** `crates/kq8-data/src/objects.rs` (`hidden`, `groupsAlways`, `drawn()`; unit test), `crates/kq8-data/src/world_script.rs` (`KQObject::setHidden`; test), `crates/kq8-viewer/src/load.rs` (applies `setHidden`, logs), `crates/kq8-viewer/src/terrain_view.rs` (hidden objects shown only with H), `docs/DESIGN.md` (plan 3f), `docs/provenance/README.md`, `README.md`.

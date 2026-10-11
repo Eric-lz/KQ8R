@@ -392,8 +392,8 @@ Rules from `docs/behaviour/objects.md` "Script variables, `getLoc` and
   with no model, like the Weirdling). `move` changes the remembered
   object, then what is drawn:
   - flags 0 to 3 as in the note (absolute or relative position and turn);
-  - a relative position on an object that is turned: world axes. This is
-    **not traced**, so these moves are counted and logged;
+  - a relative position on an object that is turned: world axes (Q21);
+    these moves are counted in the log;
   - a relative turn: when the object and the turn are both only about
     the vertical axis, the two angles add up (true in any order; all 9
     cases in the game). Any other relative turn is not applied (not
@@ -407,6 +407,7 @@ Rules from `docs/behaviour/objects.md` "Script variables, `getLoc` and
 #### M1 step 3f — hidden objects (planned 2026-10-11)
 
 Rules from `docs/behaviour/objects.md` "Hidden objects" (Q18). Small fix.
+
 - `hidden=<n>`: any whole number other than 0 = hidden. Scripts switch it
   with `KQObject::setHidden <name> 0|1`; the start-up scripts' lines are
   followed.
@@ -425,6 +426,61 @@ not falling through the ground or walking through walls.
 - A: Connor's movement (speeds, turning, jumping, slopes), camera behaviour,
   collision rules, controls of the original.
 - B: implement from those notes.
+
+Notes: `docs/behaviour/connor-movement.md`, `connor-physics.md`,
+`camera.md`.
+
+**Physics rate (decided 2026-10-11).** The game logic runs at a **fixed
+15 updates per second**, as the original does (`KQGame::FPSLimit 15`).
+Every per-update value is then used exactly as traced: the fall timer
+grows by 0.06 s per update, step up/down are 325 per update, the air
+counter counts updates. This is the simplest way to match the original's
+jumps, falls and steps (including its gravity running at 0.9 × real time;
+see `connor-physics.md` "Do not reproduce"). Drawing runs at the screen's
+rate: Connor is drawn **between his last two updates** (blended by the time
+since the last update), so motion looks smooth. The blend is display only
+and never changes the logic. If a higher rate is wanted later, it is a
+separate, logged change.
+
+**Where the code goes.** A new crate `crates/kq8-game` (no Bevy) holds the
+game rules: Connor's mover first. It asks the world for the ground under a
+point through a small interface, so it can be unit-tested without the
+game files. The viewer runs it at 15 updates per second.
+
+Steps (each separately revertable, each stopped for an eye check):
+
+- **2a — Connor stands in Daventry, gravity on (planned 2026-10-11).**
+  Connor is read from `GAME/Kq/Connor.kq` when the world script loads
+  `connor.kq` (it is not in the world archives), placed by that line
+  (Daventry: 277744, 199295, z −1 = on the ground), drawn in the first frame
+  of his `stop` movement (`Conner.anm` → `c_stop.kqs`), coloured with
+  `KQWorld::connorPalette`. The mover runs at 15 updates per second with
+  **gravity on** (`connor-physics.md` "Is gravity on at the start?":
+  recommendation) and only the ground (terrain), no buildings or objects
+  yet:
+  - each update: up pass (step up 325), across (no movement yet), down pass
+    (gravity drop + step down 325), ground check (`keepOnGround`) with the
+    0.8 walkable test;
+  - gravity: fall timer +0.06 per update, drop `5000 × (t² − t_prev²) / 2`,
+    at most 5,000 per update; timer back to 0 on walkable ground;
+  - air counter, the Fall state (start at 5 updates in the air, timer
+    0.36, the "stuck" count, end rules) and the death test (more than
+    3,840 below the start). Animations for falling come in a later step;
+    here they are logged only.
+  - Steep ground (normal z ≤ 0.8): logged as steep; sliding comes in 2c.
+  - Test keys: **G** lifts Connor 5,000 above where he is (should die on
+    landing), **B** lifts him 2,000 (safe landing). **C** puts the camera
+    behind Connor.
+  - Log (`kq8-artifacts/logs/connor.log`), one line per update: time,
+    position, on ground, gravity, fall timer, air counter, state, ground
+    height and normal; state changes and deaths also in the main log.
+- **2b** — walk, run, back and turn from the keys in `Connor.sae`, with
+  speeds from the animation steps; his animations play.
+- **2c** — slopes: sliding on steep ground, climbing up to 36.9°.
+- **2d** — walls: buildings and objects stop him or let him slide along
+  (collision shapes need a question: `connor-physics.md` open question 2).
+- **2e** — jumping, falling with its animations, crash, death animation.
+- **2f** — the following camera (`camera.md`).
 
 ### M3 — Daventry comes alive
 
