@@ -156,7 +156,7 @@ fn main() -> ExitCode {
                 let objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
                 Ok(Scene::Ground(ground, objects))
             } else {
-                load::load_model(&game, &world, &args.model, args.palette.as_deref(), &mut log).map(Scene::Model)
+                load::load_model(&game, &world, &args.model, args.palette.as_deref(), None, &mut log).map(Scene::Model)
             }
         });
     let scene = match loaded {
@@ -252,7 +252,7 @@ fn setup(
             outward += ((b - a).cross(c - a).dot((a + b + c) / 3.0) > 0.0) as usize;
         }
         vertices += positions.len();
-        let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
+        let material = material_for(group.look, ImageAddressMode::Repeat, group.see_through, &mut images);
         commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
     }
@@ -277,8 +277,14 @@ fn mesh_from(positions: Vec<[f32; 3]>, uvs: Vec<[f32; 2]>) -> Mesh {
 
 /// Unlit material for a texture, colour or missing material (magenta).
 /// Bevy's default: counter-clockwise is the front, back faces hidden.
-fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image>) -> StandardMaterial {
-    let base = StandardMaterial { unlit: true, ..default() };
+/// `see_through`: material flag 0x10000, drawn at 50% opacity
+/// (models-and-textures.md "Material flags").
+fn material_for(look: Look, address: ImageAddressMode, see_through: bool, images: &mut Assets<Image>) -> StandardMaterial {
+    let base = if see_through {
+        StandardMaterial { unlit: true, base_color: Color::srgba(1.0, 1.0, 1.0, 0.5), alpha_mode: AlphaMode::Blend, ..default() }
+    } else {
+        StandardMaterial { unlit: true, ..default() }
+    };
     match look {
         Look::Texture { width, height, rgba, .. } => {
             let mut image = Image::new(
@@ -295,7 +301,7 @@ fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image
             });
             StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
         }
-        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },
+        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b).with_alpha(base.base_color.alpha()), ..base },
         Look::Missing(_) => StandardMaterial { base_color: Color::srgb(1.0, 0.0, 1.0), ..base },
     }
 }

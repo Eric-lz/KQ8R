@@ -29,11 +29,13 @@ The code is written with an AI coding agent (Claude Code); see
 - Showing a world's ground with its textures (`kq8-viewer --terrain`), with
   a camera you can fly around. Checked by eye (2026-10-11): Daventry's
   ground looks right (shape, textures, joins between squares).
-- Placing Daventry's objects on the ground (104 of them: furniture, doors,
-  chests, signs...), turned the way the game turns them. Checked by eye:
+- Placing Daventry's objects on the ground (140 of them: furniture, doors,
+  chests, signs...), turned the way the game turns them, animated ones at
+  their starting frame. Checked by eye (before the last fixes, 104 objects):
   objects are where expected (the pub's keg, the mill wheel, doors,
-  paintings). Buildings, monsters and some animated objects are missing,
-  so the village still looks mostly empty.
+  paintings; then the sign, bell, baskets and closed doors). Buildings and
+  monsters are missing, so the village still looks mostly empty, and
+  waterfalls/streams are drawn solid instead of see-through.
 - Showing one model in a window with its textures (`kq8-viewer`), with a
   camera you can turn with the mouse. Tested: the window opens and draws
   (about 6 ms per frame). Checked by eye (2026-10-11) on two models: the

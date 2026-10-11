@@ -82,6 +82,43 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 3a fixes: ground rule, start frames, see-through
+
+**Changed:** `kq8-data/objects.rs`: `keepOnGround` and the ground rule,
+`current_loop()` (all six `loop=` values, movement 0 when there is no
+usable `currAnimName`), replacing `current_loop_shape`. `kq8-data/shape.rs`:
+`start_sequence()` (start frame). 3 new tests, 1 updated. `kq8-viewer`:
+objects use their start frame and the ground rule; materials with flag
+0x10000 drawn at 50% opacity; more log lines. Docs:
+`docs/provenance/README.md`, `README.md`, new question Q13. Session B,
+from behaviour notes `objects.md` (Q12), `buildings.md` (Q10 follow-up),
+`models-and-textures.md` (Q5 partly).
+**Why:** The study session answered Q12 and part of Q5, and refined Q10.
+**Tested how:** `cargo test` (30 pass), `cargo clippy` (0 warnings),
+`kq8-viewer --terrain --frames 120`, then read `viewer.log`.
+**Result:** 140 objects placed (was 104), 120 models. 35 animated objects
+now start in movement 0 (the sign, bell, baskets...). Raised onto the
+ground: 0 (the mill wheel and the keg say `keepOnGround=0`). Only 2 start
+past frame 0: `Pyramid` (frame 63/70) and `telepad1` (frame 5/16).
+`Pyramid`'s earlier frames move it; those steps are not applied (Q13 a).
+20 `loop=` lines name a sequence the model does not have; the first loop
+is used (Q13 b). 2 materials drawn see-through. Placement self-check
+still 0.035 units.
+**Problem met:** Your viewer window was open, so Windows would not let
+the build replace `kq8-viewer.exe`. I did not close it. I built a second
+copy in `target/side/` (git ignores it) and tested with that.
+**Checked by eye:** The alchemist's sign is right, including its tilt in
+the starting frame. The bell and the baskets look right. Doors are closed.
+**Found by eye:** The waterfalls and the teleport pad should be
+see-through but are solid. The cause is in the data: their materials do
+not have flag 0x10000. The waterfalls' object files say
+`translucency=200` (22 Daventry objects have such a key, values 50–256
+across the game). The teleport pad has no such key. Meaning not known, so
+not guessed: question Q14.
+**Still broken / not tested:** Waterfalls, streams, teleport pad etc.
+drawn solid (Q14). Buildings still missing (step 3b).
+**Next:** Step 3b (buildings).
+
 ## 2026-10-11 M1 step 3a: place Daventry's objects
 
 **Changed:** `kq8-data`: new `objects.rs` (placements, rotation, the

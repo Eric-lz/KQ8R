@@ -389,6 +389,31 @@ impl Shape {
             .unwrap_or(0)
     }
 
+    /// The sequence an animation starts on (objects.md "Animated objects at
+    /// load" rule 2): in the loop called `name`, frame
+    /// `round(start × frame count)`; a repeating loop wraps round, one
+    /// that plays once stops at its last frame. If no loop has that name,
+    /// the first loop is used and `fell_back` is true.
+    pub fn start_sequence(&self, name: &str, start: f32, repeat: bool) -> Option<StartFrame> {
+        let named = self
+            .loops
+            .iter()
+            .position(|l| usize::try_from(l.name).ok().and_then(|n| self.names.get(n)).is_some_and(|n| n.eq_ignore_ascii_case(name)));
+        let (index, fell_back) = match named {
+            Some(i) => (i, false),
+            None => (0, true),
+        };
+        let l = self.loops.get(index)?;
+        let count = l.sequence_count.max(0) as usize;
+        if count == 0 {
+            return None;
+        }
+        let raw = (start * count as f32).round().max(0.0) as usize;
+        let frame = if repeat { raw % count } else { raw.min(count - 1) };
+        let sequence = l.first_sequence.max(0) as usize + frame;
+        (sequence < self.sequences.len()).then_some(StartFrame { sequence, frame, frames: count, fell_back })
+    }
+
     /// Builds the triangles visible in sequence `index`, in model space:
     /// mesh vertex -> node transform. The sequence's frame transform is
     /// deliberately left out (docs/behaviour/models-and-textures.md, Q1 b).
@@ -448,6 +473,19 @@ impl Shape {
         }
         g
     }
+}
+
+/// Result of `Shape::start_sequence`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StartFrame {
+    /// Index into `Shape::sequences`.
+    pub sequence: usize,
+    /// Frame number within the loop.
+    pub frame: usize,
+    /// Frames in the loop.
+    pub frames: usize,
+    /// True if the loop name was not found and the first loop was used.
+    pub fell_back: bool,
 }
 
 /// Smallest and largest corner of a set of triangles.
@@ -534,6 +572,21 @@ mod tests {
         // the sequence's step of 50 along X is not applied.
         assert_eq!(t.positions[1], [4.0, 2.0, 102.0]);
         assert_eq!(t.uvs[2], [0.0, 1.0]);
+    }
+
+    #[test]
+    fn start_frame_rules() {
+        // The test shape has one loop "body" with 2 sequences.
+        let s = Shape::parse(&shape()).unwrap();
+        let at = |start, repeat| s.start_sequence("body", start, repeat).map(|f| (f.sequence, f.fell_back));
+        assert_eq!(at(0.0, false), Some((0, false)));
+        assert_eq!(at(0.5, false), Some((1, false)));
+        // Plays once: 1.0 and beyond show the last frame.
+        assert_eq!(at(1.0, false), Some((1, false)));
+        // Repeats: 1.0 wraps round to the first frame.
+        assert_eq!(at(1.0, true), Some((0, false)));
+        // Unknown loop name: first loop, reported.
+        assert_eq!(s.start_sequence("nope", 0.0, false).map(|f| f.fell_back), Some(true));
     }
 
     #[test]

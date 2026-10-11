@@ -67,13 +67,21 @@ pub struct Model {
     /// Model-space bounds in game units (Z up).
     pub min: [f32; 3],
     pub max: [f32; 3],
+    /// Which sequence was drawn and why, for the log.
+    pub frame_note: String,
 }
 
 pub struct Group {
     pub material: i32,
     pub triangles: Vec<Triangle>,
     pub look: Look,
+    /// Material flag 0x10000: drawn 50% see-through
+    /// (models-and-textures.md "Material flags").
+    pub see_through: bool,
 }
+
+/// Which animation frame to draw: (sequence/loop name, start 0..1, repeats).
+pub type StartAt<'a> = Option<(&'a str, f32, bool)>;
 
 pub enum Look {
     Texture { name: String, width: u32, height: u32, rgba: Vec<u8> },
@@ -87,12 +95,38 @@ pub fn load_model(
     world: &World,
     model: &str,
     palette_spec: Option<&str>,
+    start: StartAt,
     log: &mut Log,
 ) -> Result<Model, String> {
     let (label, bytes) = find_model(game, world, model)?;
     log.summary(format!("model: {label} ({} bytes)", bytes.len()));
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
-    let rest = shape.rest_sequence();
+    let (rest, frame_note) = match start {
+        None => (shape.rest_sequence(), "first frame".to_string()),
+        Some((name, at, repeat)) => match shape.start_sequence(name, at, repeat) {
+            Some(f) => {
+                // Frame transforms are steps the whole object makes during
+                // an animation (models-and-textures.md Q1 b). Starting past
+                // frame 0 would mean the earlier steps have been taken;
+                // they are not applied here, so say whether there are any.
+                let first = f.sequence - f.frame;
+                let moving = (first + 1..=f.sequence).any(|q| {
+                    shape.sequences.get(q).is_some_and(|s| s.transform.p != [0.0; 3] || s.transform.rotates())
+                });
+                (
+                    f.sequence,
+                    format!(
+                        "frame {} of {} in loop '{name}'{}{}",
+                        f.frame,
+                        f.frames,
+                        if f.fell_back { " (no loop by that name; first loop used)" } else { "" },
+                        if moving { " WARNING: earlier frames move the object; those steps are not applied" } else { "" }
+                    ),
+                )
+            }
+            None => (shape.rest_sequence(), format!("loop '{name}' has no frames; first frame")),
+        },
+    };
     let geometry = shape.geometry(rest);
     log.summary(format!(
         "shape: v{} nodes={} sequences={} loops={} meshes={} lights={} rest_sequence={}",
@@ -107,7 +141,7 @@ pub fn load_model(
     for p in &geometry.problems {
         log.summary(format!("  geometry problem: {p}"));
     }
-    let (min, max) = bounds(&geometry.triangles).ok_or(format!("{label}: rest sequence {rest} has no triangles"))?;
+    let (min, max) = bounds(&geometry.triangles).ok_or(format!("{label}: sequence {rest} ({frame_note}) has no triangles"))?;
     log.summary(format!(
         "rest pose: triangles={} min=({:.1}, {:.1}, {:.1}) max=({:.1}, {:.1}, {:.1}) (game units, Z up)",
         geometry.triangles.len(),
@@ -141,9 +175,13 @@ pub fn load_model(
             flags.map_or("-".into(), |f| format!("0x{f:X}")),
             triangles.len()
         ));
-        groups.push(Group { material: index, triangles, look });
+        let see_through = flags.is_some_and(|f| f & 0x10000 != 0);
+        if see_through {
+            log.summary(format!("  material {index}: drawn 50% see-through (flag 0x10000)"));
+        }
+        groups.push(Group { material: index, triangles, look, see_through });
     }
-    Ok(Model { label, groups, min, max })
+    Ok(Model { label, groups, min, max, frame_note })
 }
 
 /// A model name is looked up in the world's archives, then in
@@ -414,7 +452,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut placed = Vec::new();
     let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
-    let mut sections = 0;
+    let mut flag_values: BTreeMap<String, usize> = BTreeMap::new();
+    let (mut sections, mut raised, mut fell_back) = (0, 0, 0);
     for (label, bytes) in world.entries_ending(".kq") {
         let Ok(bytes) = bytes else {
             *skipped.entry("file failed to unpack".into()).or_default() += 1;
@@ -425,14 +464,14 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
             let Some(mut p) = Placement::from_section(s) else { continue };
             sections += 1;
             // Animated objects name their model through their current
-            // animation; shown in its first frame (which frame the game
-            // shows is open, QUESTIONS.md Q12).
-            let mut animated = false;
+            // animation, shown at its start frame (objects.md "Animated
+            // objects at load").
+            let mut animation = None;
             if p.shape.is_none() {
-                match kq8_data::objects::current_loop_shape(&file, s) {
-                    Ok(Some(sh)) => {
-                        p.shape = Some(sh);
-                        animated = true;
+                match kq8_data::objects::current_loop(&file, s) {
+                    Ok(Some(c)) => {
+                        p.shape = Some(c.shape.clone());
+                        animation = Some(c);
                     }
                     Ok(None) => {}
                     Err(e) => {
@@ -465,11 +504,16 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                 continue;
             }
             let shape = p.shape.clone().unwrap();
-            let key = shape.to_ascii_lowercase();
+            // One model per (file, start frame) combination.
+            let key = match &animation {
+                Some(c) => format!("{}|{}|{}|{}", shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase(), c.start, c.repeat),
+                None => shape.to_ascii_lowercase(),
+            };
+            let start = animation.as_ref().map(|c| (c.sequence.as_str(), c.start, c.repeat));
             let slot = *index_of.entry(key).or_insert_with(|| {
                 // Per-model lines go to the file only.
                 log.quiet = true;
-                let r = load_model(game, world, &shape, Some(&palette_name), log);
+                let r = load_model(game, world, &shape, Some(&palette_name), start, log);
                 log.quiet = false;
                 match r {
                     Ok(m) => {
@@ -488,7 +532,37 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                 continue;
             };
             let class = p.class.clone().unwrap_or("?".into());
-            *by_class.entry(if animated { format!("{class} (animated, first frame)") } else { class }).or_default() += 1;
+            if let Some(c) = &animation {
+                log.detail(format!(
+                    "animated {label}[{}]: movement {}{} loop={} {} start={} speed={} repeat={} fourth={} -> {}{}",
+                    p.name,
+                    c.movement,
+                    if c.fell_back { " (no usable currAnimName: movement 0)" } else { "" },
+                    c.shape,
+                    c.sequence,
+                    c.start,
+                    c.speed,
+                    c.repeat,
+                    c.unknown,
+                    shapes[i].1.frame_note,
+                    p.flags.as_ref().map_or(String::new(), |f| format!(" flags={f} (random start not applied)"))
+                ));
+                if c.fell_back {
+                    fell_back += 1;
+                }
+            }
+            if p.flags.is_some() {
+                *flag_values.entry(p.flags.clone().unwrap()).or_default() += 1;
+            }
+            // Ground rule (buildings.md, Q10): raise, never lower.
+            let ground = terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
+            let grounded = p.grounded_position(ground);
+            if grounded != p.position {
+                log.detail(format!("raised [{}] from z={:.0} to the ground at z={:.0}", p.name, p.position[2], grounded[2]));
+                raised += 1;
+                p.position = grounded;
+            }
+            *by_class.entry(if animation.is_some() { format!("{class} (animated)") } else { class }).or_default() += 1;
             placed.push((p, i));
         }
     }
@@ -531,6 +605,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         shapes.len()
     ));
     log.summary(format!("  placed per class: {by_class:?}"));
+    log.summary(format!(
+        "  raised onto the ground (keepOnGround): {raised}; animated objects without a usable currAnimName (movement 0 used): {fell_back}; 'flags' values: {flag_values:?}"
+    ));
     log.summary(format!(
         "  lowest point minus ground: within 50 units={} 50..500 above={} more than 500 above={} 50..500 below={} more than 500 below={}",
         count(&|g| g.abs() <= 50.0),

@@ -4,8 +4,10 @@
 //! Rules from the behaviour note `docs/behaviour/objects.md` (session A,
 //! answers Q9/Q10); key names observed in the data:
 //!
-//! - Position `locX`, `locY`, `locZ` in game units, used exactly as written
-//!   (`isGroundRelative` is never read by the game).
+//! - Position `locX`, `locY`, `locZ` in game units (`isGroundRelative` is
+//!   never read by the game). `keepOnGround` is on unless the section says
+//!   `keepOnGround=0`; then an object below the ground is raised onto it,
+//!   never lowered (docs/behaviour/buildings.md, Q10 follow-up).
 //! - Angles `dirX`, `dirY`, `dirZ` in radians, right-hand rule (positive
 //!   `dirZ` turns +X towards +Y). A point is turned about Y first, then X,
 //!   then Z: with row vectors the matrix is `RotY × RotX × RotZ`.
@@ -27,6 +29,11 @@ pub struct Placement {
     pub angles: [f32; 3],
     /// True if the section has an `...RMat` key (not supported).
     pub has_matrix_key: bool,
+    /// `keepOnGround`: true unless the section sets it to 0.
+    pub keep_on_ground: bool,
+    /// `flags` as written, if present (animation start options; see
+    /// objects.md "Animated objects at load" rule 4).
+    pub flags: Option<String>,
 }
 
 impl Placement {
@@ -42,41 +49,93 @@ impl Placement {
             position,
             angles,
             has_matrix_key: s.entries.iter().any(|(k, _)| k.to_ascii_lowercase().ends_with("rmat")),
+            keep_on_ground: s.number("keepOnGround").and_then(Result::ok).is_none_or(|v| v != 0.0),
+            flags: s.get("flags").map(str::to_string),
         })
+    }
+
+    /// Position after the ground rule: with `keepOnGround`, an object below
+    /// `ground` (the ground height under locX, locY) is raised onto it.
+    pub fn grounded_position(&self, ground: Option<f32>) -> [f32; 3] {
+        let [x, y, z] = self.position;
+        match ground {
+            Some(g) if self.keep_on_ground && z < g => [x, y, g],
+            _ => self.position,
+        }
     }
 
     /// The placement as a row-vector transform: point × rotation + position.
     pub fn transform(&self) -> Transform {
-        Transform { flags: 0, m: rotation(self.angles), p: self.position }
+        self.transform_at(self.position)
+    }
+
+    /// Same, with a different position (e.g. after the ground rule).
+    pub fn transform_at(&self, position: [f32; 3]) -> Transform {
+        Transform { flags: 0, m: rotation(self.angles), p: position }
     }
 }
 
-/// The model of an animated object's current animation.
-///
-/// Layout observed in the data (e.g. Daventry `alchdoor.kq`): the object
-/// section has `animLoops=<list>` and `currAnimName=<name>`; the section
-/// `[<list>]` (classType `KQAnimLoopList`) has `nMovement=N` and
-/// `Movement0..N-1=<name>`; section `[movement<k>]` has
-/// `loop=<model.kqs> <loop name> <numbers...>`. The model is the first
-/// word of the `loop` line of the movement whose name is `currAnimName`.
-/// What the numbers mean (which frame is shown) is not known (Q12).
+/// An animated object's current animation, from its `loop=` line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CurrentLoop {
+    /// Index k of `[movement<k>]`.
+    pub movement: usize,
+    /// True if `currAnimName` was missing, empty or not in the list, so
+    /// movement 0 was used (objects.md "Animated objects at load" rule 3).
+    pub fell_back: bool,
+    pub shape: String,
+    /// Sequence (loop) name inside the model.
+    pub sequence: String,
+    /// Start position 0..1 in the sequence.
+    pub start: f32,
+    /// 1 forward, -1 backward, 0 stopped.
+    pub speed: f32,
+    /// True = repeats; false = plays once.
+    pub repeat: bool,
+    /// Fourth value; effect not traced.
+    pub unknown: i64,
+}
+
+/// The current animation of an animated object (rules from objects.md
+/// "Animated objects at load"; layout observed, e.g. Daventry
+/// `alchdoor.kq`): `animLoops=<list>`; `[<list>]` has `nMovement` and
+/// `Movement0..` names; `[movement<k>]` (by number) has
+/// `loop=<model> <sequence> <start> <speed> <repeat> <unknown>`. The movement
+/// is the one named by `currAnimName` (key matched ignoring capitals only,
+/// so `curAnimName` does not count), else movement 0.
 ///
 /// Returns `Ok(None)` if the section is not animated this way.
-pub fn current_loop_shape(file: &[Section], s: &Section) -> Result<Option<String>, String> {
+pub fn current_loop(file: &[Section], s: &Section) -> Result<Option<CurrentLoop>, String> {
     let Some(list_name) = s.get("animLoops") else { return Ok(None) };
-    let current = s.get("currAnimName").ok_or("animLoops but no currAnimName")?;
     let find = |name: &str| file.iter().find(|x| x.name.eq_ignore_ascii_case(name));
     let list = find(list_name).ok_or(format!("animation list [{list_name}] not in the file"))?;
     let count = list
         .number("nMovement")
         .ok_or(format!("[{list_name}] has no nMovement"))??;
-    let k = (0..count as usize)
-        .find(|k| list.get(&format!("Movement{k}")).is_some_and(|m| m.eq_ignore_ascii_case(current)))
-        .ok_or(format!("currAnimName={current} is not one of [{list_name}]'s {count} movements"))?;
-    let movement = find(&format!("movement{k}")).ok_or(format!("section [movement{k}] not in the file"))?;
-    let line = movement.get("loop").ok_or(format!("[movement{k}] has no loop line"))?;
-    let shape = line.split_whitespace().next().ok_or(format!("[movement{k}] loop line is empty"))?;
-    Ok(Some(shape.to_string()))
+    let named = s.get("currAnimName").filter(|c| !c.is_empty()).and_then(|current| {
+        (0..count as usize).find(|k| list.get(&format!("Movement{k}")).is_some_and(|m| m.eq_ignore_ascii_case(current)))
+    });
+    let (movement, fell_back) = match named {
+        Some(k) => (k, false),
+        None => (0, true),
+    };
+    let section = find(&format!("movement{movement}")).ok_or(format!("section [movement{movement}] not in the file"))?;
+    let line = section.get("loop").ok_or(format!("[movement{movement}] has no loop line"))?;
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let [shape, sequence, start, speed, repeat, unknown] = words[..] else {
+        return Err(format!("[movement{movement}] loop line '{line}' does not have 6 parts"));
+    };
+    let bad = |what: &str| format!("[movement{movement}] loop line '{line}': {what} is not a number");
+    Ok(Some(CurrentLoop {
+        movement,
+        fell_back,
+        shape: shape.to_string(),
+        sequence: sequence.to_string(),
+        start: start.parse().map_err(|_| bad("start"))?,
+        speed: speed.parse().map_err(|_| bad("speed"))?,
+        repeat: repeat.parse::<i64>().map_err(|_| bad("repeat"))? != 0,
+        unknown: unknown.parse().map_err(|_| bad("fourth value"))?,
+    }))
 }
 
 /// Row-vector rotation `RotY(y) × RotX(x) × RotZ(z)` for angles
@@ -133,13 +192,35 @@ mod tests {
               [loops]\nclassType=KQAnimLoopList\nnMovement=2\nMovement0=closed\nMovement1=opened\n\
               [movement0]\nloop=door2.kqs door2 0.0 0.0 0 1\n[movement1]\nloop=door3.kqs door3 1.0 0.0 0 1\n",
         );
-        assert_eq!(current_loop_shape(&file, &file[0]).unwrap().as_deref(), Some("door3.kqs"));
+        let c = current_loop(&file, &file[0]).unwrap().unwrap();
+        assert_eq!((c.movement, c.fell_back, c.shape.as_str(), c.sequence.as_str()), (1, false, "door3.kqs", "door3"));
+        assert_eq!((c.start, c.speed, c.repeat, c.unknown), (1.0, 0.0, false, 1));
         // Not animated: no answer, no error.
         let plain = crate::kq_text::parse(b"[a]\nshapeName=x.kqs\n");
-        assert_eq!(current_loop_shape(&plain, &plain[0]).unwrap(), None);
-        // A name that is not in the list is an error.
-        let bad = crate::kq_text::parse(b"[a]\nanimLoops=l\ncurrAnimName=gone\n[l]\nnMovement=1\nMovement0=stop\n");
-        assert!(current_loop_shape(&bad, &bad[0]).is_err());
+        assert_eq!(current_loop(&plain, &plain[0]).unwrap(), None);
+    }
+
+    #[test]
+    fn missing_or_unknown_current_animation_uses_movement_0() {
+        let list = "[l]\nnMovement=2\nMovement0=stop\nMovement1=go\n[movement0]\nloop=a.kqs a 0.0 1.0 1 1\n[movement1]\nloop=b.kqs b 0 1 1 1\n";
+        for head in ["[o]\nanimLoops=l\n", "[o]\nanimLoops=l\ncurrAnimName=gone\n", "[o]\nanimLoops=l\ncurAnimName=go\n"] {
+            let file = crate::kq_text::parse(format!("{head}{list}").as_bytes());
+            let c = current_loop(&file, &file[0]).unwrap().unwrap();
+            assert_eq!((c.movement, c.fell_back, c.shape.as_str()), (0, true, "a.kqs"), "{head}");
+        }
+    }
+
+    #[test]
+    fn keep_on_ground_raises_never_lowers() {
+        let on = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\n")[0];
+        let p = Placement::from_section(on).unwrap();
+        assert!(p.keep_on_ground);
+        assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
+        assert_eq!(p.grounded_position(None), [1.0, 2.0, -1.0]);
+        let high = Placement { position: [1.0, 2.0, 900.0], ..p.clone() };
+        assert_eq!(high.grounded_position(Some(500.0)), [1.0, 2.0, 900.0]);
+        let off = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\nkeeponground=0\n")[0];
+        assert_eq!(Placement::from_section(off).unwrap().grounded_position(Some(500.0)), [1.0, 2.0, -1.0]);
     }
 
     #[test]

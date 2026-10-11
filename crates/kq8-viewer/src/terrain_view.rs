@@ -58,7 +58,7 @@ pub fn setup_ground(
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
-        let material = material_for(group.look, ImageAddressMode::ClampToEdge, &mut images);
+        let material = material_for(group.look, ImageAddressMode::ClampToEdge, false, &mut images);
         commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned ground mesh for {} ({} triangles)", group.label, group.triangles.len()));
     }
@@ -114,7 +114,7 @@ pub fn setup_objects(
                     uvs.push(t.uvs[k]);
                 }
             }
-            let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
+            let material = material_for(group.look, ImageAddressMode::Repeat, group.see_through, &mut images);
             parts.push((meshes.add(mesh_from(positions, uvs)), materials.add(material)));
         }
         built.push(parts);

@@ -120,7 +120,12 @@ Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).
 | Bevy rotation = C · Rᵀ · Cᵀ (C = the axis change of `to_bevy`) | Our derivation | Same self-check |
 | Sections at (0, 0, 0) are skipped | Our choice (91 in Daventry; probably templates) | — |
 | Animated objects: `animLoops` → `[list]` `MovementK` names → `[movementK]` `loop=<model> ...`; model of the `currAnimName` movement | Observed in the data (e.g. `alchdoor.kq`) | Unit test; 30 Daventry objects found this way (17 doors, 8 animated objects, 3 chests, 2 portals) |
-| Animated objects drawn in their model's first frame | Our choice, **not verified** (Q12). By eye: most doors look closed, user not sure | 51 objects with `animLoops` but no `currAnimName` are skipped until Q12 is answered |
+| Animated objects drawn in their model's first frame | Replaced 2026-10-11 by the next rows. (By eye before: most doors looked closed) | — |
+| `loop=<model> <sequence> <start> <speed> <repeat> <fourth>`; start frame = round(start × frames), wraps if repeating, else stops at the last frame; no usable `currAnimName` → movement 0; `curAnimName` (one r) not read | Behaviour note `objects.md` "Animated objects at load" (Q12) | Unit tests. Viewer log: 140 objects placed (was 104); 35 start in movement 0; doors' `closed` = frame 0; only 2 objects start past frame 0 (`Pyramid` frame 63/70, `telepad1` frame 5/16) |
+| Sequence name not found in the model → first loop | Our choice (Q13 b) | 20 Daventry objects |
+| Frame steps before a start frame are not applied | Our choice (Q13 a) | Only `Pyramid` affected (logged as WARNING) |
+| `keepOnGround` (default on): an object below the ground is raised onto it, never lowered | Behaviour note `buildings.md` (Q10 follow-up) | Unit test. Daventry objects raised: 0 (the two below the ground, mill wheel and keg, have `keepOnGround=0`). Matters for buildings (step 3b) |
+| Material flag 0x10000 = drawn 50% see-through | Behaviour note `models-and-textures.md` "Material flags" (Q5, partly) | 2 materials in Daventry's placed objects (`alchy`, `chandlir`). By eye: waterfalls and the teleport pad are solid. Their see-through look comes from elsewhere (`translucency=` in the object file; Q14) | 51 objects with `animLoops` but no `currAnimName` are skipped until Q12 is answered |
 | Object palette from `KQWorld::objectPalette` in `world.cs` | Behaviour note `models-and-textures.md` (Q3) | Daventry: `daventry.ppl` |
 
 ## Formats read but not yet implemented
