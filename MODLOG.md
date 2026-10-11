@@ -3,6 +3,57 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Fix: wrong palette for the Daventry image
+
+**Changed:** Docs only (`README.md`, `docs/provenance/README.md`). No code.
+**Why:** You looked at `daventry.png` made with `daventry.ppl`: very dark,
+speckled, the paper background wrong. It should be a pencil drawing on old
+paper.
+**Tested how:** Searched the game scripts (`mask.cs`, `world.cs`) for
+palette names, then converted `daventry.pbm` with every `.ppl` in `GAME/`
+and `data/Daventry/` and compared how much colour changes between
+neighbouring pixels.
+**Result:** All 16 loading palettes `GAME/8Gui/l*.ppl` have identical
+colours and score 18.4, against 44.5 for `daventry.ppl` and 107.5 for
+`Menus.ppl`. The image's most common colour (index 11, 44,125 pixels) is
+near-black (8,0,0) in `daventry.ppl` and brown-grey (128,112,96) in the
+loading palette, which explains the dark picture.
+**Mistake:** In the previous entry I called `daventry.ppl` "the right one".
+My measurement only showed it was better than `Menus.ppl`, not that it was
+correct. I should have tried every palette before concluding. My first file
+search also stopped after 40 entries and missed the `l*.ppl` files.
+**Still broken / not tested:** You checked the new PNG: colours correct.
+Which of the 16 identical loading palettes the engine loads is unknown
+(it does not matter for colours).
+**Next:** Step 3 (`.msg`).
+
+## 2026-10-11 Step 2: read images and palettes, export PNG
+
+**Changed:** `kq8-data`: new `chunks.rs`, `bitmap.rs`, `palette.rs`.
+`kq8-cli`: new `source.rs` (load a loose file or `vol:` archive entry),
+`bitmap_png.rs` (`kq8 bitmap-png`), `bitmap_verify.rs` (`kq8 bitmap-verify`);
+`main.rs` takes the new commands. Added the `png` crate. Updated
+`docs/provenance/README.md`, `docs/DESIGN.md`, `CREDITS.md`, `README.md`.
+**Why:** Step 2 of the plan: first real asset format on top of the archives.
+**Tested how:** `cargo test` (9 library tests: chunked 8-bit, mipmaps,
+24-bit colour order, Windows BMP, both palette kinds). `kq8 bitmap-verify`
+on the whole game. `kq8 bitmap-png` on `GAME/8Gui/daventry.pbm`.
+**Result:** bitmap-verify: 6,495 images and 50 palettes, 0 failures,
+1.7 s. Variants found: 1,909 `.pbm` + 1,173 mipmapped archive `.bmp`
+(chunked), 3,382 Windows-BMP `.bmp` (8 of them 24-bit), 31 `.dib`, 44 `.ppl`,
+6 RIFF `.pal`. bitmap-png: 640×480, 154 colours used.
+**Dead end recorded:** I first paired `daventry.pbm` with `Menus.ppl` (the
+menu palette locked in `mask.cs`). A measurement showed it was wrong:
+average neighbouring-pixel colour change was 107.5, against 44.5 with
+`Daventry/resource/daventry.ppl`, and 14–68 for images that carry their own
+palette. The world's own palette is the right one. (Wrong: see "Fix: wrong palette" above.)
+**Still broken / not tested:** Nobody has looked at the PNG yet (you need
+to). Transparency, palette lighting/haze tables, `.pba` image arrays and
+`.pal` with 237 colours are not handled. The forced system colours at both
+ends of the palette come from the GPL notes and are not verified against
+`Mask.exe`. No real 24-bit chunked image exists to test that path.
+**Next:** Step 3, dialogue text (`.msg`).
+
 ## 2026-10-11 Read the modding guides, adopt their templates and working method
 
 **Changed:** Cloned `ai-game-modding-guides` (commit `0c14be4`) and

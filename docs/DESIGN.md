@@ -95,13 +95,25 @@ Decompression uses the `explode` crate (MIT), a Rust port of Mark Adler's
 
 Each step is small and separately revertable.
 
-1. **Prove the data loads** (current step).
+1. **Prove the data loads** (done).
    `kq8 vol-verify` opens all 48 VOL archives, decompresses every entry in
    memory, and compares each one byte-for-byte with the already-unpacked copy
    in `./<world>/<archive>/`. It logs per-archive counts and a final total.
    Success = every entry decompresses and every comparison matches.
 2. Read one real asset format on top of that: a `.pbm` bitmap + `.ppl`
-   palette, converted to a PNG in `kq8-artifacts/` for checking.
+   palette, converted to a PNG in `kq8-artifacts/` for checking (done).
+   - `kq8-data`: `bitmap.rs` (image size, bits per pixel, flags, mipmap
+     count, pixels) and `palette.rs` (256 colours plus a list of the extra
+     lighting/haze tables, which are not decoded yet).
+   - `kq8 bitmap-png <file> [--palette <file>]` writes
+     `kq8-artifacts/png/<name>.png` and logs size, format and colour use.
+     `<file>` is either a path in the game folder (`GAME/8Gui/daventry.pbm`)
+     or a file inside an archive (`vol:Daventry/8bit/NAME.BMP`).
+   - `kq8 bitmap-verify` parses every image and palette in the game (all
+     archives and loose files) and logs counts per variant and every
+     failure. Success = 0 failures.
+   - PNG writing uses the `png` crate (MIT/Apache-2.0) and lives in the
+     CLI, so `kq8-data` stays free of output formats.
 3. Messages (`.msg`) so text can be checked as plain strings.
 4. Models (`.kqs`), then a first window that draws one model (needs a
    graphics library decision, will ask before choosing).

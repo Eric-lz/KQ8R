@@ -16,6 +16,8 @@ or endorsed by them.
 | [ai-game-modding-guides](https://github.com/trevaintdead/ai-game-modding-guides) | Trev and contributors | MIT | commit `0c14be4` | `MODLOG-template.md` and `STATUS-handoff.md` copied (licence below); working method in `docs/DESIGN.md` |
 | [`explode`](https://github.com/agrif/explode) crate | Aaron Griffith | MIT | 0.1.2 | PKWARE DCL decompression |
 | `arraydeque` crate (used by `explode`) | | MIT / Apache-2.0 | 0.4.5 | |
+| [`png`](https://github.com/image-rs/image-png) crate | image-rs contributors | MIT OR Apache-2.0 | 0.18.1 | Writing PNG files for checking |
+| Used by `png`: `adler2`, `bitflags`, `cfg-if`, `crc32fast`, `fdeflate`, `flate2`, `miniz_oxide`, `simd-adler32`, `zlib-rs` | | MIT, Apache-2.0, Zlib or 0BSD (each permissive) | see `Cargo.lock` | |
 
 Per-fact sources are listed in [docs/provenance/](docs/provenance/README.md).
 

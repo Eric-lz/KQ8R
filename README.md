@@ -14,6 +14,11 @@ The code is written with an AI coding agent (Claude Code); see
 - Reading the game's packed world archives (`data/<World>/*.vol`):
   all 48 archives, 14,444 files, decompress and match the installed copies
   byte-for-byte. Tested on Windows 11 with the GOG 1.03 install.
+- Reading images (`.pbm`, `.bmp`, `.dib`) and palettes (`.ppl`, `.pal`):
+  all 6,495 images and 50 palettes in the game load without errors, and
+  any of them can be saved as a PNG to check by eye.
+  Not done yet: transparency, the palettes' lighting/haze tables, and image
+  arrays (`.pba`).
 
 ## What doesn't work yet
 
@@ -24,7 +29,12 @@ logic.
 
 ```sh
 cargo run --release -- vol-verify
+cargo run --release -- bitmap-verify
+cargo run --release -- bitmap-png GAME/8Gui/daventry.pbm --palette GAME/8Gui/ldaventr.ppl
 ```
+
+The last one writes `kq8-artifacts/png/daventry.png`. Files inside an
+archive are named `vol:<World>/<archive>/<NAME>`.
 
 Use `--game <folder>` or the `KQ8_GAME_DIR` environment variable if the game
 is not in `./MASK/`. Logs are written to `kq8-artifacts/logs/`.
