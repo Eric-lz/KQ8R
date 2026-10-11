@@ -58,6 +58,24 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 STATUS.md brought up to date
+
+**Changed:** `STATUS.md` (after M2 step 2f: what is done, next steps 2c/2d/2e, open questions Q22–Q27; corrected the game version to what `MASK/Version.txt` and `readme.txt` say, the test count, the F key, and the step order).
+**Why:** The user asked for the hand-over to show the current state.
+**Tested how:** Read against `git log`, `cargo test` (kq8-data 41, kq8-game 17) and `QUESTIONS.md`.
+**Result:** —
+**Still broken / not tested:** —
+**Next:** —
+
+## 2026-10-11 README.md simplified
+
+**Changed:** `README.md` (rewritten in plain words: what works, what doesn't, how to try it with a key table; the numbers and details are in `docs/provenance/README.md` and this log).
+**Why:** The user found it out of date ("no buildings or objects") and too technical.
+**Tested how:** Read against `STATUS.md` and the latest entries here; the commands listed exist.
+**Result:** —
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-11 M2 step 2f: the camera follows Connor
 
 **Changed:** new `crates/kq8-game/src/camera.rs` (rules, 7 tests), new `crates/kq8-viewer/src/game_camera.rs` (keys, 15-per-second update after Connor, blended drawing, `camera.log`), `crates/kq8-viewer/src/load.rs` (Camera.sae, walk/run ranges, camera start), `crates/kq8-viewer/src/connor_view.rs` (keys `prior`/`next`/F11; the old C and F-follow keys removed), `crates/kq8-viewer/src/terrain_view.rs` (free camera only when chosen; Esc always quits), `crates/kq8-viewer/src/main.rs`, `docs/DESIGN.md` (2f plan, moved before 2c), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q27), `README.md`, `STATUS.md`.

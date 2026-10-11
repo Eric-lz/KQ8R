@@ -2,7 +2,7 @@
 
 Hand-over in case the chat is lost. First written 2026-10-11 by the study
 session (A); updated 2026-10-11 by the implementation session (B) after
-M2 step 2b (commit `875b423`). Read with `AGENTS.md`, `docs/DESIGN.md`,
+M2 step 2f (commit `0a8462a`). Read with `AGENTS.md`, `docs/DESIGN.md`,
 `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top).
 
 ## Goal
@@ -13,7 +13,8 @@ milestone: **M2, walk Connor around Daventry**.
 
 ## Setup
 
-- Game: GOG 1.03 ("Version 1.3") in `./MASK/` (read only, never committed).
+- Game: GOG.com release, "Version 1.3" (`MASK/Version.txt`; `MASK/readme.txt`
+  says 1.0.0.3), in `./MASK/` (read only, never committed).
 - Rust stable (MSVC), Bevy 0.20 for the viewer (`crates/kq8-viewer`).
 - Two-session workflow (`docs/SESSIONS.md`): **A** studies `Mask.exe` in
   Ghidra and writes `docs/behaviour/*.md` (no code); **B** writes code from
@@ -30,16 +31,16 @@ milestone: **M2, walk Connor around Daventry**.
   object placement rules). 41 unit tests.
 - `crates/kq8-game` (new in M2): game rules without drawing. `mover.rs`
   (steps, gravity, landing, Fall state, fall death), `connor.rs` (intent →
-  movement, turning, step from the animation). Runs at a fixed **15
-  updates per second** (decision in `docs/DESIGN.md`, M2 "Physics rate").
-  10 unit tests.
+  movement, turning, step from the animation), `camera.rs` (the following
+  camera). Runs at a fixed **15 updates per second** (decision in
+  `docs/DESIGN.md`, M2 "Physics rate"). 17 unit tests.
 - `crates/kq8-cli`: `kq8` checks (`vol-verify`, `bitmap-verify`,
   `bitmap-png`, `shape-verify`, `terrain-verify`, `building-verify`) and
   `kq8 text <file>` to print a game text file.
 - `crates/kq8-viewer`: Bevy viewer. `--terrain [--world <W>]` shows a
   world; `--frames N`, `--lift N`, `--hold F,T,R` are test options.
-- Logs go to `kq8-artifacts/logs/` (`viewer.log`, `connor.log` with one
-  line per Connor update).
+- Logs go to `kq8-artifacts/logs/` (`viewer.log`; `connor.log` and
+  `camera.log` with one line per update).
 
 ## What works (tested)
 
@@ -61,22 +62,30 @@ milestone: **M2, walk Connor around Daventry**.
   run on/off), intent from keys held (the note's recommendation), all
   animation frames played. Speeds measured: walk 1,126.6, run 2,518.1
   units/s; turning 1.75 rad/s (checked by eye: pace close to the
-  original). F = camera follows Connor.
+  original).
+- M2 step 2f (done before 2c at the user's request): the camera follows
+  Connor on a leash (1,500–5,000, the same walking and running), keeps at
+  least 1,400 above the ground, right mouse swings and zooms (Shift: tilt),
+  Page Up/Down tilt, Home resets, F11 fixed distance; starts where the
+  world script puts `KQCamera`. F switches to the free flying camera (right
+  mouse to look). Checked by eye; mouse directions and the single range
+  were set from the user's comparison with the original.
+- README rewritten in plain words (uncommitted, with its MODLOG entry).
 
 ## What doesn't work yet / next
 
-- M2 step 2f, the following camera, is built (not yet checked by eye):
-  leash, height, mouse swing/zoom, tilt, F11; F switches to the free
-  camera. Missing: swing back behind Connor (Q27 c), obstacle check (after
-  2d), first person.
+- Camera, still missing: swinging back behind Connor by itself (Q27 c),
+  the obstacle check (after 2d), first person (needs his first-person
+  models).
 - **Slopes:** running at a steep hillside, Connor slides a long way up it,
   then slowly back; in the original he is stopped quickly. Cause: the
   terrain only acts in the mover's ground check, as the note reads.
   Waiting for **Q26**; then M2 step **2c** (sliding, climbing up to 36.9°).
-- Next M2 steps (plan in `docs/DESIGN.md`): **2d** walls (buildings and
-  objects stop him or let him slide; needs the collision shape, physics
-  note open question 2), **2e** jumping/falling animations, crash, death
-  animation, **2f** the following camera (`camera.md`).
+- Next M2 steps (plan in `docs/DESIGN.md`): **2c** slopes (after Q26),
+  **2d** walls (buildings and objects stop him or let him slide; needs the
+  collision shape, `connor-physics.md` open question 2, to be asked
+  before starting), **2e** jumping and falling with their animations,
+  crash, death animation. Then the camera's obstacle check.
 - No start/stop transition animations yet (Q25); frame steps spread evenly
   (Q24); no banking.
 - Not drawn yet: haze/distance fade, building lighting (`.dil`), the
@@ -92,8 +101,11 @@ milestone: **M2, walk Connor around Daventry**.
 - Q24: frame steps applied per frame or spread.
 - Q25: which start/stop transition plays.
 - Q26: does the terrain stop the down pass (slopes, downhill running)?
-- Q27: camera details (mouse scale, what tilt turns, swing behind Connor,
-  start and `follow none`, range tied to walk/run, zoom direction).
+- Q27: camera details still open: mouse scale (a), what the tilt turns
+  (b), swing back behind Connor (c), the start place and Daventry's
+  `follow none` (d), when `walk.cs`/`run.cs` run (e). The mouse directions
+  and "same range walking and running" were answered by the user's check
+  of the original.
 
 ## Files that matter
 
@@ -107,6 +119,6 @@ milestone: **M2, walk Connor around Daventry**.
 ## Prompt for a fresh session
 
 Study session: the "Starting session A" prompt in `docs/SESSIONS.md`,
-topic "open questions Q22–Q26 in STATUS.md". Implementation session: the
-"Starting session B" prompt, task "M2 step 2c once Q26 is answered (camera 2f
-built; check Q27)".
+topic "open questions Q22–Q27 in STATUS.md". Implementation session: the
+"Starting session B" prompt, task "M2 step 2c once Q26 is answered; else
+plan 2d and ask the collision-shape question".
