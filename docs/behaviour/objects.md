@@ -255,10 +255,19 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    text): 0 = position and turn absolute; 1 = position relative, turn
    absolute; 2 = position absolute, turn relative; 3 = both relative. So
    `move flamelh.1a 3 0 0 2000` raises the flame 2,000 above where it was
-   loaded, keeping its turn. **Not traced:** whether a relative move is
-   along the world axes or the object's own turned axes. For DeadCity's
-   flames it makes no difference (their torches are loaded with three
-   numbers, so their angles are 0).
+   loaded, keeping its turn.
+   **Relative position uses the world axes (Q21, traced):** the game adds
+   x, y, z straight onto the object's current position. The object's turn
+   is not applied to the offset. So the DeadCity flames `flamedt.32a…38c`
+   and pots `pot.prs1a…2c` move by exactly the written numbers along
+   world x, y, z, however their torch or shelf is turned.
+   **Relative turn** (flags 2, 3): the game builds a turn from rx, ry, rz
+   and combines it with the object's current turn. For turns only about
+   Z (all 9 cases in the game) that is the same as adding the angles. The
+   order of combination for other turns is not traced.
+   The `move` command sends the object a move event and the object sets its
+   new position directly, without the mover's collision passes (traced).
+   Whether the ground rule applies afterwards is not traced.
 5. **(e) 4 or 5 numbers in a `loadKQ` line:** the angles are used only when
    all three are given. With x y z plus one or two more numbers, the extra
    numbers are **ignored** and the angles are 0 0 0. (Traced: angles need

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q21 (relative move axes)
+
+**Changed:** `docs/behaviour/objects.md` (Q20 (d)), `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** B asked whether a relative `move` on a turned object uses world axes or the object's own axes.
+**Tested how:** Traced the `move` command, the move event it sends, and the object's handler in `Mask.exe`.
+**Result:** World axes: x, y, z are added straight onto the current position, and the turn is not applied. Relative turns are combined with the current turn; for turns about Z only, that is the same as adding the angles. `move` sets the position directly, without collision passes.
+**Still broken / not tested:** The combination order for non-Z turns is not traced. Whether the ground rule runs after `move` is not traced.
+**Next:** M2 questions from B.
+
 ## 2026-10-11 Study session: M2 physics (gravity, steps, slopes, walls, jump, fall)
 
 **Changed:** New `docs/behaviour/connor-physics.md`; pointer in `docs/behaviour/connor-movement.md`. No code.
