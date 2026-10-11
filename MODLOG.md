@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: buildings (Q11) and ground snapping (Q10)
+
+**Changed:** `docs/behaviour/buildings.md` (new), `docs/behaviour/objects.md`
+(Q10 follow-up), `docs/behaviour/QUESTIONS.md` (statuses). No code.
+**Why:** The implementation session could not read the building files.
+**Tested how:** `.dig` reader and `KQInterior` placement traced in
+`Mask.exe`. Throwaway scripts in `re/` parsed every `.dig` in the install
+(153 files) and checked the layout, indices, corner order and texture
+mapping on Daventry's 30 buildings.
+**Result:** `.dig` layout known well enough to draw buildings. Buildings at
+`locZ` −1 are lifted onto the ground by `keepOnGround`, which is on by
+default and only ever raises an object.
+**Still broken / not tested:** That the ground lift runs when a building is
+first added was not traced (the data agrees). `.dil` lighting, the BSP
+tables and the two extra header values are not decoded. Texture mapping is
+measured, not traced.
+**Next:** Q12 (animation start frame), Q5 (material flags).
+
 ## 2026-10-11 Study session: answers to Q1, Q3, Q4; camera additions
 
 **Changed:** `docs/behaviour/models-and-textures.md` (new),

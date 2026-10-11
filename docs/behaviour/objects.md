@@ -34,15 +34,14 @@ Study session A, 2026-10-11. Answers `QUESTIONS.md` Q9 and Q10. Sources:
    from the level editor. `locZ` is used as written.
 2. Measured in Daventry (`KQInterior` sections with that flag): either
    `locZ` is −1/−2, or it is an absolute height 10–35 units above the ground
-   under the object (barn, docks, pub; `look` is 1,607 above). Buildings at
-   −1 would then sit at height ≈ 0, far under the ground, unless their
-   `.dig` geometry already carries world heights. **Open**: needs the `.dig`
-   format; when reading it, compare the geometry's lowest point with the
-   ground height at the object's position.
-3. **`keepOnGround` is a movement setting, not a placement rule.** It is
-   read together with `useGravity`, `submerged` and `MaxSlopeDot` for
-   objects that can move. For placing objects in M1, use `locZ` as written.
-   What it does while moving (stay on whatever is below) is not traced yet.
+   under the object (barn, docks, pub; `look` is 1,607 above).
+   **Answered in `buildings.md`**: `keepOnGround` is on by default and
+   raises anything below the ground up onto it, so use
+   `max(locZ, ground height at locX, locY)`.
+3. **`keepOnGround`** is read together with `useGravity`, `submerged` and
+   `MaxSlopeDot`. Default on. Rule (see `buildings.md`): if the object is
+   below the ground it is raised to the ground, never lowered. An object
+   whose `.kq` says `keepOnGround=0` keeps its `locZ`.
 4. Related, for M2: `MaxSlopeDot` defaults to 0.819 = cos 35°: ground whose
    normal is more than about 35° from straight up is too steep to walk on.
    (Default traced; how it is used not traced yet.)
