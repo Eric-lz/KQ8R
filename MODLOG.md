@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: animated objects at load (Q12)
+
+**Changed:** `docs/behaviour/objects.md` (new section), `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** The implementation session needs the right starting frame for doors and other animated objects.
+**Tested how:** Traced the movement list reader, the `loop=` parser and the start-up code in `Mask.exe`; counted the `loop=` patterns in Daventry's `.kq` files.
+**Result:** In `loop=`, a is the start position (0–1), b the speed (1, −1 or 0) and c whether it repeats. With no `currAnimName` the game uses movement 0. `[movementK]` is matched by number. `curAnimName` is not read.
+**Still broken / not tested:** The 4th number (d) and `nextAnimName` are not traced.
+**Next:** Q5 (material flags).
+
 ## 2026-10-11 Study session: buildings (Q11) and ground snapping (Q10)
 
 **Changed:** `docs/behaviour/buildings.md` (new), `docs/behaviour/objects.md`

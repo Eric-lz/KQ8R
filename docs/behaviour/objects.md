@@ -45,3 +45,43 @@ Study session A, 2026-10-11. Answers `QUESTIONS.md` Q9 and Q10. Sources:
 4. Related, for M2: `MaxSlopeDot` defaults to 0.819 = cos 35°: ground whose
    normal is more than about 35° from straight up is too steep to walk on.
    (Default traced; how it is used not traced yet.)
+
+## Animated objects at load (Q12)
+
+All traced in `Mask.exe` unless marked otherwise.
+
+1. **Movement list.** `[<list>]` gives `nMovement` and names `Movement0..`;
+   for movement *k* the game then reads the section `[movement<k>]` **by
+   number** (answer to c). The `MovementK=` value is the movement's name,
+   which `currAnimName` refers to.
+2. **`loop=<model> <sequence> <a> <b> <c> <d>`** is read as two words, two
+   decimal numbers and two whole numbers:
+   - `a` = **start position**, a fraction of the sequence from 0 to 1.
+     Frame shown = `round(a × frameCount)`. For a sequence that does not
+     repeat, anything at or past the end shows the last frame (so 1.0 =
+     last frame).
+   - `b` = **playing speed**: 1 = forward at normal speed, −1 = backwards,
+     0 = stopped (holds the start frame).
+   - `c` = **repeat** (1 = loops, 0 = plays once and stops at the end). A
+     repeating sequence runs through all `frameCount` frames per cycle; a
+     non-repeating one goes from the first to the last frame
+     (`frameCount − 1` steps).
+   - `d` = an on/off switch kept with the running animation. **Its effect
+     is not traced.** It is 1 in most lines, 0 in 30 Daventry lines.
+   - So the doors: `closed` = first frame, stopped; `opened` = last frame,
+     stopped; `open` = play forward once; `close` = play backward once from
+     93%.
+3. **Which movement shows first (answer to b):** the one named by
+   `currAnimName`. If that key is missing, empty or names no movement in the
+   list, the game uses **movement 0** (the first in the list), possibly
+   after printing an error message.
+4. **Also read from the object's section:** `animPos` (a position 0–1; if
+   it is past the start position from the `loop=` line, the animation jumps
+   there; not used in Daventry) and `flags`. If `flags` has the bit 8 set,
+   the animation starts at a **random frame** and plays at a random speed
+   between 0.9 and 1.1 (so rows of swaying things don't move in step).
+   `nextAnimName` is read too (what to play after this one); not traced
+   further.
+5. **Key names are matched ignoring capitals but otherwise exactly**
+   (`_stricmp`). So `milltree.kq`'s `curAnimName` (one r) is **not read**
+   (answer to d): that object starts in movement 0.
