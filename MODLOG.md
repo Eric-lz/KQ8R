@@ -3,6 +3,23 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: answers to Q1, Q3, Q4; camera additions
+
+**Changed:** `docs/behaviour/models-and-textures.md` (new),
+`docs/behaviour/QUESTIONS.md` (statuses), `docs/behaviour/camera.md`
+(swing back behind Connor; tilt reset after 10 units). No code.
+**Why:** The implementation session asked these while drawing models (M1).
+**Tested how:** Matrix convention traced in `Mask.exe`. Frame transforms
+measured in the data: Connor's walk (steady part offsets, per-frame steps)
+and doors (about 12–13° per frame, about 165° in total). Palettes and
+archive order read from `world.cs` and `mask.cs`.
+**Result:** Q1 answered (row vectors; frame transforms move the whole
+object, not used for drawing; flags are hints). Q3 and Q4 partly answered.
+**Still broken / not tested:** The code that applies frame steps was not
+found in the exe; the conclusion rests on the data. Q2, Q5 and parts of
+Q3/Q4 are still open.
+**Next:** Q2, Q5, then terrain height, slopes and collisions.
+
 ## 2026-10-11 Study session: behaviour notes for Connor's movement and the camera
 
 **Changed:** `docs/behaviour/connor-movement.md`, `docs/behaviour/camera.md`,

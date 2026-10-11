@@ -112,8 +112,22 @@ needed for normal play; keep them behind a debug switch.
 2. Page Up/Down tilt at 0.1 × 3 × 0.05 = **0.015 rad per update** while held
    (0.225 rad/s at 15 updates per second).
 3. Tilt is limited to ±1.57 rad (straight up/down) in third person.
-4. Home returns tilt to the default. The manual says tilt also returns to
-   default as soon as Connor moves (open question 3).
+4. Home returns tilt to the default.
+5. Tilt also returns to the default by itself when Connor moves: in normal
+   (not fixed) mode, once he has moved more than 10 units horizontally
+   (measured as |Δx| + |Δy|) while the tilt is not at default, it snaps back.
+   This matches the manual ("it will automatically reset itself as soon as
+   Connor moves").
+
+### Swinging back behind Connor
+
+1. When Connor turns so that the camera is no longer behind him, and the
+   player is not using the mouse on the camera, the camera swings round
+   towards his back by itself. It starts when the angle between "behind
+   Connor" and the camera's direction exceeds about 0.25 rad, and moves a
+   fraction of the remaining angle each update.
+2. The exact states and rates (constants seen: 0.25, 0.5, 1.25, 1/3, 0.21,
+   10/3) were not fully decoded: open question 7.
 
 ### Obstacles
 
@@ -188,9 +202,11 @@ needed for normal play; keep them behind a debug switch.
 1. How mouse movement (pixels) becomes the game's mouse value. Needed for
    swing/zoom speed.
 2. Sign convention of tilt (is the stored −0.2 "look down"?).
-3. Exactly when third-person tilt resets after Connor moves (found for first
-   person: more than 10 units moved; third person not traced).
+3. (Answered: tilt resets after Connor moves more than 10 units, in both
+   views; see Tilt rule 5.)
 4. The obstacle swing: how far and how fast the camera swings round, and
    when it gives up.
 5. First-person slope tilt details and the eye height.
 6. Whether the camera updates at the same rate as Connor (assumed yes).
+7. The automatic swing behind Connor: when exactly it starts and stops, and
+   how fast it turns.
