@@ -252,7 +252,7 @@ fn setup(
             outward += ((b - a).cross(c - a).dot((a + b + c) / 3.0) > 0.0) as usize;
         }
         vertices += positions.len();
-        let material = material_for(group.look, ImageAddressMode::Repeat, group.see_through, &mut images);
+        let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
         commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
     }
@@ -277,14 +277,11 @@ fn mesh_from(positions: Vec<[f32; 3]>, uvs: Vec<[f32; 2]>) -> Mesh {
 
 /// Unlit material for a texture, colour or missing material (magenta).
 /// Bevy's default: counter-clockwise is the front, back faces hidden.
-/// `see_through`: material flag 0x10000, drawn at 50% opacity
-/// (models-and-textures.md "Material flags").
-fn material_for(look: Look, address: ImageAddressMode, see_through: bool, images: &mut Assets<Image>) -> StandardMaterial {
-    let base = if see_through {
-        StandardMaterial { unlit: true, base_color: Color::srgba(1.0, 1.0, 1.0, 0.5), alpha_mode: AlphaMode::Blend, ..default() }
-    } else {
-        StandardMaterial { unlit: true, ..default() }
-    };
+/// Material flag 0x10000 is fog, not transparency
+/// (models-and-textures.md "Material flags", corrected), so it is ignored
+/// until haze is drawn. See-through objects: `with_opacity`.
+fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image>) -> StandardMaterial {
+    let base = StandardMaterial { unlit: true, ..default() };
     match look {
         Look::Texture { width, height, rgba, .. } => {
             let mut image = Image::new(
@@ -301,9 +298,18 @@ fn material_for(look: Look, address: ImageAddressMode, see_through: bool, images
             });
             StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
         }
-        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b).with_alpha(base.base_color.alpha()), ..base },
+        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },
         Look::Missing(_) => StandardMaterial { base_color: Color::srgb(1.0, 0.0, 1.0), ..base },
     }
+}
+
+/// A copy of `material` drawn at `opacity` (0..1): an object's
+/// `translucency` (objects.md "See-through objects", Q14).
+fn with_opacity(material: &StandardMaterial, opacity: f32) -> StandardMaterial {
+    let mut m = material.clone();
+    m.base_color = m.base_color.with_alpha(m.base_color.alpha() * opacity);
+    m.alpha_mode = AlphaMode::Blend;
+    m
 }
 
 fn orbit_input(

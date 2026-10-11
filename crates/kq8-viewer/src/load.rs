@@ -42,21 +42,6 @@ impl World {
             Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
         })
     }
-
-    /// Every archive entry whose name ends with `ext` (any case), unpacked,
-    /// as (label, bytes). Entries that fail to unpack are returned as errors.
-    pub fn entries_ending(&self, ext: &str) -> Vec<(String, Result<Vec<u8>, String>)> {
-        let ext = ext.to_ascii_lowercase();
-        self.vols
-            .iter()
-            .flat_map(|(v, a)| {
-                a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
-                    let label = format!("vol:{}/{v}/{}", self.name, e.name);
-                    (label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
-                })
-            })
-            .collect()
-    }
 }
 
 /// Everything the window needs, already converted.
@@ -75,9 +60,6 @@ pub struct Group {
     pub material: i32,
     pub triangles: Vec<Triangle>,
     pub look: Look,
-    /// Material flag 0x10000: drawn 50% see-through
-    /// (models-and-textures.md "Material flags").
-    pub see_through: bool,
 }
 
 /// Which animation frame to draw: (sequence/loop name, start 0..1, repeats).
@@ -175,11 +157,7 @@ pub fn load_model(
             flags.map_or("-".into(), |f| format!("0x{f:X}")),
             triangles.len()
         ));
-        let see_through = flags.is_some_and(|f| f & 0x10000 != 0);
-        if see_through {
-            log.summary(format!("  material {index}: drawn 50% see-through (flag 0x10000)"));
-        }
-        groups.push(Group { material: index, triangles, look, see_through });
+        groups.push(Group { material: index, triangles, look });
     }
     Ok(Model { label, groups, min, max, frame_note })
 }
@@ -456,15 +434,52 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let (mut sections, mut raised, mut fell_back) = (0, 0, 0);
     // Buildings use KQWorld::interiorPalette (buildings.md); loaded on first use.
     let mut interior_palette: Option<Result<[Rgb; 256], String>> = None;
-    for (label, bytes) in world.entries_ending(".kq") {
-        let Ok(bytes) = bytes else {
-            *skipped.entry("file failed to unpack".into()).or_default() += 1;
-            continue;
+    // Only what the world's start-up scripts load is in the world
+    // (objects.md "Where a world's objects come from", Q16).
+    let script = kq8_data::world_script::run("newWorld.cs", &|name: &str| {
+        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        world.load(base).and_then(Result::ok).map(|(_, b)| b)
+    });
+    log.summary(format!(
+        "world scripts: ran {:?}; missing scripts {:?}; {} loadKQ lines ({} inside if-blocks); unreadable lines {}; other commands (not run): {:?}",
+        script.scripts,
+        script.missing_scripts,
+        script.loads.len(),
+        script.loads.iter().filter(|l| l.inside_if).count(),
+        script.bad_lines.len(),
+        script.other_commands
+    ));
+    for b in &script.bad_lines {
+        log.summary(format!("  unreadable: {b}"));
+    }
+    let mut several_positions = 0;
+    for load in &script.loads {
+        let base = load.file.rsplit(['/', '\\']).next().unwrap_or(&load.file);
+        let (label, bytes) = match world.load(base) {
+            Some(Ok(x)) => x,
+            _ => {
+                log.detail(format!("skip {} line {}: {} not found", load.from, load.line, load.file));
+                *skipped.entry("loaded file not found".into()).or_default() += 1;
+                continue;
+            }
         };
         let file = kq_text::parse(&bytes);
-        for s in &file {
-            let Some(mut p) = Placement::from_section(s) else { continue };
+        if file.iter().filter(|x| x.get("locX").is_some()).count() > 1 {
+            several_positions += 1;
+            log.detail(format!("note {label}: several sections have a position; the first section is the object"));
+        }
+        // The object is the file's first section; the other sections
+        // (animation lists, movements) belong to it.
+        if let Some(s) = file.first() {
+            let Some(mut p) = Placement::from_load(s, load) else {
+                log.detail(format!("skip {label} ({} line {}): no position in the line or the file", load.from, load.line));
+                *skipped.entry("no position".into()).or_default() += 1;
+                continue;
+            };
             sections += 1;
+            if load.inside_if {
+                log.summary(format!("  NOTE {label}: loaded inside an if-block ({} line {}); placed anyway", load.from, load.line));
+            }
             // Animated objects name their model through their current
             // animation, shown at its start frame (objects.md "Animated
             // objects at load").
@@ -483,9 +498,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                     }
                 }
             }
-            let reason = if p.position == [0.0; 3] {
-                Some("position (0, 0, 0), probably a template".to_string())
-            } else if p.has_matrix_key {
+            let reason = if p.has_matrix_key {
                 Some("uses an RMat key (not supported)".to_string())
             } else {
                 match &p.shape {
@@ -622,11 +635,12 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     }
     let count = |f: &dyn Fn(f32) -> bool| gaps.iter().filter(|g| f(**g)).count();
     log.summary(format!(
-        "objects: {sections} sections with a position, {} placed using {} different models; skipped: {skipped:?}",
+        "objects: {sections} loaded objects with a position, {} placed using {} different models; skipped: {skipped:?}",
         placed.len(),
         shapes.len()
     ));
     log.summary(format!("  placed per class: {by_class:?}"));
+    log.summary(format!("  files where several sections have a position (first used): {several_positions}"));
     log.summary(format!(
         "  raised onto the ground (keepOnGround): {raised}; animated objects without a usable currAnimName (movement 0 used): {fell_back}; 'flags' values: {flag_values:?}"
     ));
@@ -719,8 +733,7 @@ pub fn load_building(
             m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        let see_through = m.is_some_and(|m| m.flags & 0x10000 != 0);
-        groups.push(Group { material: index as i32, triangles, look, see_through });
+        groups.push(Group { material: index as i32, triangles, look });
     }
     if not_drawn > 0 {
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));

@@ -34,6 +34,9 @@ pub struct Placement {
     /// `flags` as written, if present (animation start options; see
     /// objects.md "Animated objects at load" rule 4).
     pub flags: Option<String>,
+    /// `translucency`: 256 (the default) = solid; below that every
+    /// material is drawn at opacity n / 255 (objects.md Q14).
+    pub translucency: f32,
 }
 
 impl Placement {
@@ -51,7 +54,41 @@ impl Placement {
             has_matrix_key: s.entries.iter().any(|(k, _)| k.to_ascii_lowercase().ends_with("rmat")),
             keep_on_ground: s.number("keepOnGround").and_then(Result::ok).is_none_or(|v| v != 0.0),
             flags: s.get("flags").map(str::to_string),
+            translucency: s.number("translucency").and_then(Result::ok).map_or(256.0, |v| v as f32),
         })
+    }
+
+    /// The object a `loadKQ` line creates from `section` (objects.md Q16
+    /// rule 2): name kept, removed or replaced; with a position, it
+    /// replaces `locX/Y/Z` and the angles are the given ones or 0 0 0.
+    /// `None` if neither the line nor the section gives a position.
+    pub fn from_load(section: &Section, load: &crate::world_script::LoadKq) -> Option<Self> {
+        use crate::world_script::LoadName;
+        let mut p = match load.position {
+            Some(position) => {
+                // Build from the section, then replace position and angles.
+                let mut with_loc = section.clone();
+                with_loc.entries.retain(|(k, _)| !["locx", "locy", "locz"].contains(&k.to_ascii_lowercase().as_str()));
+                for (k, v) in ["locX", "locY", "locZ"].iter().zip(position) {
+                    with_loc.entries.push((k.to_string(), v.to_string()));
+                }
+                let mut p = Self::from_section(&with_loc)?;
+                p.angles = load.angles_or_zero();
+                p
+            }
+            None => Self::from_section(section)?,
+        };
+        match &load.name {
+            LoadName::Keep => {}
+            LoadName::None => p.name = String::new(),
+            LoadName::Rename(n) => p.name = n.clone(),
+        }
+        Some(p)
+    }
+
+    /// Opacity 0..1 from `translucency` (1 = solid).
+    pub fn opacity(&self) -> f32 {
+        if self.translucency >= 256.0 { 1.0 } else { (self.translucency / 255.0).clamp(0.0, 1.0) }
     }
 
     /// Position after the ground rule: with `keepOnGround`, an object below
@@ -221,6 +258,31 @@ mod tests {
         assert_eq!(high.grounded_position(Some(500.0)), [1.0, 2.0, 900.0]);
         let off = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\nkeeponground=0\n")[0];
         assert_eq!(Placement::from_section(off).unwrap().grounded_position(Some(500.0)), [1.0, 2.0, -1.0]);
+    }
+
+    #[test]
+    fn load_line_replaces_position_and_angles() {
+        use crate::world_script::{LoadKq, LoadName};
+        let s = &crate::kq_text::parse(b"[stool]
+shapeName=stool.kqs
+locX=0
+locY=0
+locZ=0
+dirZ=1.0
+translucency=200
+")[0];
+        let load = |name, position, angles| LoadKq {
+            file: "stool.kq".into(), name, position, angles, from: "permwrld.cs".into(), line: 1, inside_if: false,
+        };
+        let p = Placement::from_load(s, &load(LoadName::Rename("stool.02".into()), Some([1.0, 2.0, 3.0]), Some([0.0, 0.0, -0.81]))).unwrap();
+        assert_eq!((p.name.as_str(), p.position, p.angles), ("stool.02", [1.0, 2.0, 3.0], [0.0, 0.0, -0.81]));
+        // Position without angles: angles 0 0 0, not the section's dirZ.
+        let p = Placement::from_load(s, &load(LoadName::Keep, Some([1.0, 2.0, 3.0]), None)).unwrap();
+        assert_eq!((p.name.as_str(), p.angles), ("stool", [0.0; 3]));
+        // File name only: the section's own position and angles.
+        let p = Placement::from_load(s, &load(LoadName::None, None, None)).unwrap();
+        assert_eq!((p.name.as_str(), p.position, p.angles), ("", [0.0; 3], [0.0, 0.0, 1.0]));
+        assert!((p.opacity() - 200.0 / 255.0).abs() < 1e-6);
     }
 
     #[test]

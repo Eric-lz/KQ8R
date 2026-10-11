@@ -326,6 +326,33 @@ not decoded, not used yet) and the material list named by `material=`
 
 Not in this step: animation, doors opening, monsters moving (M2/M3).
 
+#### M1 step 3c — place only what the world scripts load (planned 2026-10-11)
+
+Rules from `docs/behaviour/objects.md` ("Where a world's objects come
+from", Q16; "See-through objects", Q14; "Follow-ups", Q13) and the
+corrections to `buildings.md` rule 2 and material flag `0x10000`.
+
+- `kq8-data/world_script.rs`: follow the world's `newWorld.cs` line by
+  line. A line whose first word is a `.cs` file runs that script at that
+  point (`WorldVar.cs`, `WorldInv.cs`, `permwrld.cs`); `#` starts a
+  comment; `loadKQ <file> [<name> [x y z [dirX dirY dirZ]]]` is recorded.
+  Other commands are counted, not run. `if … endif` blocks are not
+  evaluated; `loadKQ` lines inside them are counted and logged (Daventry:
+  none).
+- Placement per `loadKQ`: the object is the file's first section. Name:
+  `same` or missing = keep, `@` = none, else rename. With x y z, the
+  position replaces `locX/Y/Z` and the angles are the given ones or
+  0 0 0 (the `.kq`'s `dirX/Y/Z` are ignored); with only a file name, the
+  `.kq`'s own position and angles. The ground rule applies the same way.
+  Files with several sections that have a position are logged.
+- The viewer places only these objects (no more "all `.kq` files" and
+  no more "(0, 0, 0) = template" guess).
+- `translucency=<n>` below 256: every material of that object drawn at
+  opacity n/255. The distance fade needs haze, which we do not draw yet.
+- Material flag `0x10000` no longer means see-through (it is fog).
+- Tests: script parsing (comments, nested scripts, name rules, partial
+  positions); log: objects loaded per script, skipped and why.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,

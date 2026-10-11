@@ -92,6 +92,42 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 3c: only script-loaded objects; translucency
+
+**Changed:** `kq8-data`: new `world_script.rs` (follows `newWorld.cs` and
+the scripts it runs, collects `loadKQ` lines), `objects.rs`
+(`Placement::from_load`, `translucency`, `opacity`), 3 new tests.
+`kq8-viewer`: objects now come from the world scripts only; objects with
+`translucency` < 256 drawn at n/255; material flag 0x10000 no longer
+see-through; unused `World::entries_ending` removed. Docs: `DESIGN.md`
+(step 3c plan), provenance, `README.md`, question Q17. Session B, from
+`objects.md` (Q13, Q14, Q16) and the corrections to `buildings.md` rule 2
+and flag 0x10000.
+**Why:** You passed on the study session's answers and corrections and
+asked to place only what the world scripts load.
+**Tested how:** `cargo test` (36 pass), `cargo clippy` (0 warnings),
+`kq8-viewer --terrain --frames 120`, then read `viewer.log`.
+**Result:** Scripts run: newWorld.cs → WorldVar.cs, WorldInv.cs,
+permwrld.cs; 446 `loadKQ` lines, none unreadable, none inside if-blocks.
+347 objects placed (was 170) with 189 models; 15 raised onto the ground;
+9 see-through (waterfalls, water, well water, torches). Placement
+self-check 0.035 units. Skipped: 72 without a model (traps, sounds,
+triggers), 5 monsters (`.anm`), 19 without any position (e.g.
+`Cottage2–4`, `wateran1–9`), 3 files not in Daventry's archives
+(`terrain.kq`, drawn separately; `connor.kq`; `davmap.kq`).
+**Problem found:** 79 objects (graveyard tombs, 44 trees) sit ~8,000 units
+under the ground. Their `loadKQ` line says z = −1 and their template says
+`keeponground=0`, so the current rules do not raise them. Not guessed:
+question Q17.
+**Checked by eye:** All furniture and objects now seem to be there. The
+waterfall and the fountain water are see-through. Nothing out of place or
+doubled at a quick glance. The trees and graveyard tombs are all
+underground at about the same depth, as the log predicted (Q17).
+**Still broken / not tested:** The 79 sunken objects (Q17); the teleport
+pad (Q14 b); distance fade for see-through objects (needs haze); flag 8
+"random start frame" on 10 objects is not applied.
+**Next:** Q17.
+
 ## 2026-10-11 M1 step 3b: buildings
 
 **Changed:** `kq8-data`: new `building.rs` (`.dig` reader, triangles,

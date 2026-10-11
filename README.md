@@ -32,9 +32,11 @@ The code is written with an AI coding agent (Claude Code); see
 - Reading every building file (`.dig`, 153 in the game) and drawing
   Daventry's 30 buildings in the ground view. Checked by eye: placement,
   walls, roofs, insides and textures look right (no building lighting yet).
-- Placing Daventry's objects on the ground (140 of them: furniture, doors,
-  chests, signs...), turned the way the game turns them, animated ones at
-  their starting frame. Checked by eye (before the last fixes, 104 objects):
+- Placing the objects Daventry's start-up scripts load (347 of them:
+  furniture, doors, chests, signs, trees...), turned the way the game turns
+  them, animated ones at their starting frame, see-through ones (waterfalls,
+  torches) see-through. Checked by eye. 79 of them (tombs, many trees)
+  are still placed under the ground until question Q17 is answered. Checked by eye (before the last fixes, 104 objects):
   objects are where expected (the pub's keg, the mill wheel, doors,
   paintings; then the sign, bell, baskets and closed doors). Buildings and
   monsters are missing, so the village still looks mostly empty, and

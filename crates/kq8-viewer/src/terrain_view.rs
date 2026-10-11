@@ -10,7 +10,7 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 
 use crate::load::{Ground, Objects};
-use crate::{material_for, mesh_from, to_bevy, Shared, UNITS_PER_METRE};
+use crate::{material_for, mesh_from, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
 
 #[derive(Resource)]
 pub struct LoadedGround(pub Option<Ground>);
@@ -58,7 +58,7 @@ pub fn setup_ground(
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
-        let material = material_for(group.look, ImageAddressMode::ClampToEdge, false, &mut images);
+        let material = material_for(group.look, ImageAddressMode::ClampToEdge, &mut images);
         commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned ground mesh for {} ({} triangles)", group.label, group.triangles.len()));
     }
@@ -114,12 +114,13 @@ pub fn setup_objects(
                     uvs.push(t.uvs[k]);
                 }
             }
-            let material = material_for(group.look, ImageAddressMode::Repeat, group.see_through, &mut images);
+            let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
             parts.push((meshes.add(mesh_from(positions, uvs)), materials.add(material)));
         }
         built.push(parts);
     }
     let mut worst = 0.0f32;
+    let mut see_through = 0;
     for (p, i) in &objects.placed {
         let transform = bevy_transform(p);
         // Self-check: the game's rule (point x rotation + position, then
@@ -129,12 +130,26 @@ pub fn setup_objects(
             let bevy = transform.transform_point(Vec3::from(to_bevy(corner, [0.0; 3])));
             worst = worst.max((game - bevy).length() * UNITS_PER_METRE);
         }
+        let opacity = p.opacity();
+        if opacity < 1.0 {
+            see_through += 1;
+            log.detail(format!("see-through [{}]: translucency={} -> opacity {opacity:.2}", p.name, p.translucency));
+        }
         for (mesh, material) in &built[*i] {
-            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform));
+            let material = if opacity < 1.0 {
+                // Every material of a see-through object (objects.md Q14);
+                // a separate copy, because other copies of the model may
+                // be solid.
+                let original = materials.get(material).cloned().unwrap_or_default();
+                materials.add(with_opacity(&original, opacity))
+            } else {
+                material.clone()
+            };
+            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform));
         }
     }
     log.summary(format!(
-        "spawned objects: {} copies of {} models; largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
+        "spawned objects: {} copies of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
         objects.placed.len(),
         built.len()
     ));
