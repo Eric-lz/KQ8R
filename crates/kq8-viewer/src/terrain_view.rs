@@ -181,8 +181,8 @@ pub fn fly_input(
             step += dir;
         }
     }
-    // About three grid squares (4,096 game units each) per second; Shift x5.
-    let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 600.0 } else { 120.0 };
+    // Flying speed. Shift 5x
+    let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 400.0 } else { 80.0 };
     camera.translation += step.normalize_or_zero() * speed * time.delta_secs();
     if keys.just_pressed(KeyCode::Escape) {
         commands.write_message(AppExit::Success);
