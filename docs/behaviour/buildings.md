@@ -66,12 +66,19 @@ all 153 files):
 1. For each surface, take its corners in order and make a polygon (a fan of
    triangles from the first corner is fine: the polygons are flat and
    convex-looking; not checked for convexity).
-2. **Front side: corners run anticlockwise seen from the visible side**, the
-   opposite of `.kqs` models. Measured: 711 of 717 floor surfaces at the
-   bottom of buildings have their corner-order normal pointing up, and all
-   178 flat surfaces at the very top point down (ceilings seen from inside).
-   Hide back faces as for models. Inside and outside are separate surfaces,
-   so drawing every surface with hidden back faces shows the correct outside.
+2. **Front side: corners run clockwise seen from the visible side, the
+   same as `.kqs` models.** (Corrected 2026-10-11, Q15. The first version of
+   this note said anticlockwise. That was wrong: it read the building's
+   underside and roof as a floor and a ceiling seen from inside. Session B
+   measured on all 153 files that 99.7% of surfaces on the bounding box's
+   sides face outward with clockwise corners, and the user confirmed the
+   outside looks right drawn that way. Not traced in the exe.)
+   Hide back faces as for models.
+   **The inside is made of separate surfaces**, not the back of the outside
+   ones: walls have thickness, so the inner face lies on its own plane.
+   Measured: only 536 of 15,662 planes in all `.dig` files carry surfaces
+   facing both ways. So drawing every surface with back faces hidden is
+   right from both outside and inside.
 3. Texture coordinates, measured: texel position =
    `(offset_x + u × (size_x + 1), offset_y + v × (size_y + 1))`. In 93% of
    Daventry surfaces this equals a world-axis position ÷ 8, modulo 256,

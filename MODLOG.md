@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q13–Q16, two corrections
+
+**Changed:** `docs/behaviour/objects.md` (Q13, Q14, Q16), `docs/behaviour/buildings.md` (rule 2 corrected), `docs/behaviour/models-and-textures.md` (flag 0x10000 corrected), `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** Session B's questions from M1 steps 3a/3b.
+**Tested how:** Traced `loadKQ`, the save-game writer, the sequence lookup, the `translucency` reader and the model drawing code in `Mask.exe`. Read Daventry's `world.cs`, `newworld.cs` and `permwrld.cs`, and counted which `.kq` files they load. Counted plane sides in all `.dig` files.
+**Result:** Only script-loaded objects exist. `loadKQ`'s values are name, x y z, then dirX dirY dirZ. A sequence name that isn't found falls back to sequence 0. `translucency` = opacity n/255.
+**Corrections:** Buildings' front faces are clockwise, like models; my earlier rule was wrong and session B caught it by eye and by measurement. Flag 0x10000 halves the fog, not the opacity.
+**Still broken / not tested:** The teleport pad's see-through look is unexplained. Whether skipped frames' steps apply on a jump is not traced.
+**Next:** M2 study (slopes, collisions, jumping).
+
 ## 2026-10-11 Study session: material flags (Q5, partly)
 
 **Changed:** `docs/behaviour/models-and-textures.md` (new section), `docs/behaviour/QUESTIONS.md`. No code.

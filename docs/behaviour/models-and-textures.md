@@ -143,7 +143,7 @@ ours. The flags word is split into parts:
 | `0x0F00` | Lighting: `0x100` = none (full brightness), `0x200` = flat (one light value per triangle, from its facing), `0x400` = smooth (light per corner) | traced |
 | `0x1000` | Turns on a drawing option and **forces lighting to "none"** | traced; the option itself not identified |
 | `0x2000` | Turns on another drawing option (value 3 instead of 0) and also forces lighting to "none" | traced; option not identified. Only appears inside `0xF000` |
-| `0x10000` | **Halves the opacity**: the object is drawn 50% see-through | traced |
+| `0x10000` | **Halves the haze** (distance fog) on that material, so it stays clearer far away. Not see-through. (Corrected 2026-10-11: the first version said "halves the opacity"; the value it halves is the haze amount, which grows with distance from the camera.) | traced |
 
 What the data says about `0x1000` (`0x1403`, 20 materials): the textures
 are `nightsky`, `11gnd`, `Plstrwl1/2` (plaster walls), `Srwroof` (straw
@@ -152,8 +152,9 @@ things. **No texture in the game uses colour index 0** (checked in the
 textures of all 1,398 world material-list entries whose image was found), so "index 0 is see-through"
 is not how these files work. **Open:** whether any colour is see-through,
 and which renderer option `0x1000`/`0x2000` switch on. For now: draw
-`0x1000` materials at full brightness and fully solid; draw `0x10000` ones
-at 50% opacity.
+`0x1000` materials at full brightness and fully solid; draw `0x10000`
+materials fully solid (they only get less fog). See-through objects come
+from the object's `translucency` key instead (`objects.md`, Q14).
 
 ## Do not reproduce
 
