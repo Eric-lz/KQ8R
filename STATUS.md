@@ -43,10 +43,14 @@ own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`.
 
 ## What doesn't work yet / next
 
-- M1 step 3: place Daventry's objects from the `.kq` files (session B).
-- Open questions for A: Q5 (material flag bits 0x1000/0x10000/0xF000,
-  transparency), system colours for textures, which archive wins for
-  duplicate names / missing textures, terrain holes, `floorBMPName`.
+- M1 step 3: objects placed (3a done by B); buildings next, from
+  `docs/behaviour/buildings.md` (Q11: `.dig` layout; buildings at locZ −1
+  are lifted onto the ground). Animated objects' start frame: Q12 in
+  `objects.md`.
+- Still open for A: which colour (if any) is see-through and what material
+  bits 0x1000/0x2000 switch on (Q5), system colours for textures (Q3),
+  which archive wins for duplicate names / missing textures (Q4), terrain
+  holes, `floorBMPName`, `.dil` lighting, the 4th `loop=` number.
 - M2 study (A): slopes (walkable limit ~35° suspected), collisions
   (manual: stop when straight on, glance off at an angle), jumping.
 
