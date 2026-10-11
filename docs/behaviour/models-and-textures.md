@@ -1,8 +1,8 @@
 # Models, animation frames and textures
 
-Study session A, 2026-10-11. Answers to `QUESTIONS.md` Q1, Q3 and Q4
+Study session A, 2026-10-11. Answers to `QUESTIONS.md` Q1, Q2, Q3 and Q4
 (partly). Sources: game data files (observed, with throwaway measurements)
-and `Mask.exe` (studied, described in our own words). Q2 and Q5 are still
+and `Mask.exe` (studied, described in our own words). Q5 is still
 being studied.
 
 ## Transforms (Q1)
@@ -56,6 +56,30 @@ transform it simply flips rows and columns when the scale bit is clear,
 which is only valid for pure rotations). Treat them as information; never
 skip the matrix or translation because a bit is clear, unless you have
 checked the data agrees.
+
+## Front faces, hidden back faces, handedness (Q2)
+
+1. **Handedness: the world is right-handed and shown without a mirror**:
+   X east, Y north, Z up. Evidence: the game builds a turn about Z so that a
+   positive angle moves +X towards +Y (anticlockwise seen from above), and
+   the left-arrow key sends a positive turn (`Connor.sae`). Anticlockwise
+   seen from above is a left turn for anyone standing upright, so the
+   picture on screen must be unmirrored. Converting to a Y-up, right-handed
+   renderer (Bevy) is a plain rotation: (x, y, z) → (x, z, −y). No mirror.
+2. **Front side: corners run clockwise when seen from the front.** Measured
+   across 2,320 models (`daventry/resource` and `GAME/Common`): comparing
+   each triangle's corner order with the normals stored in its vertices,
+   1,471,394 triangles are clockwise seen from the side the normals point
+   to, 16,414 the other way (98.9% vs 1.1%); 2,317 of 2,320 models are
+   mostly clockwise. Vertex order is the order the face lists its three
+   corners.
+3. **Back faces are hidden.** In the 3dfx Glide renderer the game switches
+   back-face removal on once at start-up and never changes it, so every
+   model is one-sided (no per-material "two-sided" setting was found).
+   The Direct3D and software renderers were not checked.
+   In Bevy terms: front face = clockwise after the rotation in point 1
+   (or reverse each triangle's corner order and keep Bevy's default), with
+   back-face culling on.
 
 ## Which palette colours textures (Q3)
 
