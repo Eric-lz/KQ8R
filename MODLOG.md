@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q19 (missing locZ)
+
+**Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** Barren's two lookout buildings have no `locZ` and were skipped.
+**Tested how:** Traced the `.kq` position reader and the mover's starting values in `Mask.exe`; computed the ground height at both lookouts from Barren's height map.
+**Result:** A missing position value stays at 0, then the ground rule lifts the object onto the ground (11,592 for both lookouts).
+**Still broken / not tested:** Not checked by eye.
+**Next:** M2 study.
+
 ## 2026-10-11 Viewer: camera position on screen
 
 **Changed:** `crates/kq8-viewer/src/terrain_view.rs` (bottom-left text, updated every frame; the log's camera lines use the same conversion), `crates/kq8-viewer/src/main.rs` (registers it).

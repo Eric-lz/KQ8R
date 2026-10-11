@@ -178,3 +178,21 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    cycle ground-texture numbers (`materialIndexN`, every `delay` = 0.3 s,
    repeating) on the river squares, apart from the `exclude` squares. That
    is the flowing river. Not traced; skip them for M1.
+
+### Missing `locX` / `locY` / `locZ` (Q19)
+
+1. Each of `locX`, `locY`, `locZ` (and `dirX/Y/Z`) is read on its own. A
+   **missing key leaves that value unchanged**. (Traced: the number reader
+   only writes when the key is found.)
+2. The value it keeps is the mover's starting position, which is
+   **(0, 0, 0)**. (Traced in the mover's constructor.) So a missing `locZ`
+   is 0, and a missing `locX`/`locY` is 0 too. Missing angles are 0.
+3. Then the usual `keepOnGround` raise applies (default on): z = 0 is
+   below the ground, so the object is lifted to the ground height at its
+   (x, y). Use `max(0, ground height)`, the same as for −1.
+4. Barren's `lookout` and `lookout2` both stand on a flat hilltop. The
+   ground under both origins is 11,592 (our height lookup), so both sit at
+   z = 11,592. Their models reach below that (lowest points −1,803 and
+   −2,890 in model space), so foundations go into the hill. The user's
+   point at about 12,137 is 545 above the base, which fits a deck or floor
+   in the model (not checked).
