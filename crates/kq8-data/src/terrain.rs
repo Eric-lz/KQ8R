@@ -201,6 +201,76 @@ impl Terrain {
         let len = (sx * sx + sy * sy + 1.0).sqrt();
         Some(Ground { height, normal: [-sx / len, -sy / len, 1.0 / len] })
     }
+
+    /// The ground as triangles, two per square, using the same diagonals
+    /// as `height_at`. Corners are listed **clockwise seen from above**,
+    /// the game's front-face rule (models-and-textures.md, Q2), so a
+    /// renderer can treat ground and models the same way.
+    ///
+    /// `materials` gives one material number per square (`terrm.dib`);
+    /// `orientation[m]` is the direction-table code (0..7) of material m,
+    /// 0 if the table is shorter.
+    pub fn ground_triangles(&self, materials: &Grid, orientation: &[u32]) -> Result<Vec<GroundTriangle>, String> {
+        let (nx, ny) = self.squares();
+        if (materials.width, materials.height) != (nx, ny) {
+            return Err(format!(
+                "material image is {}x{}, ground has {nx}x{ny} squares",
+                materials.width, materials.height
+            ));
+        }
+        let size = self.settings.square_size();
+        let mut out = Vec::with_capacity(nx * ny * 2);
+        for j in 0..ny {
+            for i in 0..nx {
+                let material = materials.get(i, j).unwrap();
+                let code = orientation.get(material as usize).copied().unwrap_or(0);
+                // Corners as (east, north) offsets within the square.
+                let tris: [[(usize, usize); 3]; 2] = if Self::diagonal_is_rising(i, j) {
+                    [[(0, 0), (1, 1), (1, 0)], [(0, 0), (0, 1), (1, 1)]]
+                } else {
+                    [[(0, 0), (0, 1), (1, 0)], [(1, 0), (0, 1), (1, 1)]]
+                };
+                for corners in tris {
+                    let positions = corners.map(|(di, dj)| {
+                        [(i + di) as f32 * size, (j + dj) as f32 * size, self.point_height(i + di, j + dj).unwrap()]
+                    });
+                    // u runs west -> east, v runs north -> south.
+                    let uvs = corners.map(|(di, dj)| texture_coord(code, di as f32, 1.0 - dj as f32));
+                    out.push(GroundTriangle { positions, uvs, material, square: (i, j) });
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// One ground triangle in game units, corners clockwise seen from above.
+#[derive(Debug, Clone, Copy)]
+pub struct GroundTriangle {
+    pub positions: [[f32; 3]; 3],
+    /// Texture coordinates: x = image column (0 left .. 1 right),
+    /// y = image row (0 top .. 1 bottom).
+    pub uvs: [[f32; 2]; 3],
+    pub material: u8,
+    /// Grid square (column, row from the bottom).
+    pub square: (usize, usize),
+}
+
+/// Where in the texture the point (u, v) of a square looks, for
+/// orientation code `code` (terrain.md "Ground textures", rule 5).
+/// u = 0 at the square's west edge, 1 at its east edge; v = 0 at its north
+/// edge, 1 at its south edge. Unknown codes are treated as 0.
+pub fn texture_coord(code: u32, u: f32, v: f32) -> [f32; 2] {
+    match code {
+        1 => [1.0 - u, v],
+        2 => [u, 1.0 - v],
+        3 => [1.0 - u, 1.0 - v],
+        4 => [v, 1.0 - u],
+        5 => [1.0 - v, 1.0 - u],
+        6 => [v, u],
+        7 => [1.0 - v, u],
+        _ => [u, v],
+    }
 }
 
 #[cfg(test)]
@@ -281,5 +351,69 @@ mod tests {
         // Near its (1,1) corner: plane through (1,0)=0, (1,1)=8, (0,1)=0.
         // At local (0.75, 0.75): 0 + 8*(0.75+0.75-1) = 4.
         assert_eq!(t.height_at(7.0, 3.0).unwrap().height, 4.0);
+    }
+
+    /// 5 x 4 grid points (4 x 3 squares) with uneven heights.
+    fn bumpy() -> (Terrain, Grid) {
+        let mut t = terrain([[0, 0], [0, 0]], 3.0);
+        let values: Vec<u8> = (0..20u32).map(|k| ((k * 37 + 11) % 23) as u8).collect();
+        t.heights = Grid { width: 5, height: 4, values };
+        let materials = Grid { width: 4, height: 3, values: (0..12).collect() };
+        (t, materials)
+    }
+
+    #[test]
+    fn ground_triangles_lie_on_the_height_lookup() {
+        let (t, m) = bumpy();
+        let tris = t.ground_triangles(&m, &[]).unwrap();
+        assert_eq!(tris.len(), 4 * 3 * 2);
+        for tri in &tris {
+            let c: [f32; 3] = std::array::from_fn(|k| tri.positions.iter().map(|p| p[k]).sum::<f32>() / 3.0);
+            let h = t.height_at(c[0], c[1]).unwrap().height;
+            assert!((h - c[2]).abs() < 1e-3, "square {:?}: centre {c:?} lookup {h}", tri.square);
+            assert_eq!(tri.material as usize, tri.square.1 * 4 + tri.square.0);
+        }
+    }
+
+    #[test]
+    fn ground_triangles_are_clockwise_from_above() {
+        let (t, m) = bumpy();
+        for tri in t.ground_triangles(&m, &[]).unwrap() {
+            let [a, b, c] = tri.positions;
+            // z of the cross product of (b - a) and (c - a): negative = clockwise seen from above
+            let cross_z = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+            assert!(cross_z < 0.0, "square {:?} is not clockwise", tri.square);
+        }
+    }
+
+    #[test]
+    fn orientation_codes_are_eight_different_turns_and_mirrors() {
+        // Where the square's north-west and north-east corners land in the texture.
+        let maps: Vec<_> = (0..8).map(|c| (texture_coord(c, 0.0, 0.0), texture_coord(c, 1.0, 0.0))).collect();
+        for a in 0..8 {
+            for b in a + 1..8 {
+                assert_ne!(maps[a], maps[b], "codes {a} and {b} are the same");
+            }
+        }
+        // Code 0: as stored, image top at the north edge.
+        assert_eq!(texture_coord(0, 0.25, 0.0), [0.25, 0.0]);
+        // Code 4 (quarter turn clockwise): the image's bottom row ends up
+        // along the square's west edge.
+        assert_eq!(texture_coord(4, 0.0, 0.5), [0.5, 1.0]);
+    }
+
+    #[test]
+    fn ground_texture_coords_follow_the_code() {
+        let (t, m) = bumpy();
+        let orientation: Vec<u32> = (0..12).map(|k| k % 8).collect();
+        for tri in t.ground_triangles(&m, &orientation).unwrap() {
+            let code = orientation[tri.material as usize];
+            for (p, uv) in tri.positions.iter().zip(tri.uvs) {
+                let (i, j) = tri.square;
+                let u = p[0] / 4.0 - i as f32;
+                let v = 1.0 - (p[1] / 4.0 - j as f32);
+                assert_eq!(uv, texture_coord(code, u, v));
+            }
+        }
     }
 }

@@ -46,6 +46,34 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 2b: draw Daventry's ground with textures
+
+**Changed:** `kq8-data/src/terrain.rs`: `ground_triangles()` and
+`texture_coord()` (orientation codes 0–7), 4 new tests. `kq8-viewer`:
+`--terrain` mode (new `terrain_view.rs`: ground scene, flying camera,
+camera log; `load.rs`: `load_ground`, terrain palette from `world.cs`;
+`main.rs`: shared mesh/material helpers, mode switch). Docs:
+`docs/DESIGN.md`, `docs/provenance/README.md`, `README.md`. Session B,
+from behaviour notes `terrain.md` (Q6–Q8) and `models-and-textures.md`
+(Q2, Q3).
+**Why:** M1 step 2b: see Daventry's ground.
+**Tested how:** `cargo test` (23 pass), `cargo clippy` (0 warnings),
+`kq8-viewer --terrain --frames 120`, then read `viewer.log`. Also reran
+`kq8-viewer smlchest.KQS` to check the model view did not change.
+**Result:** All 16,384 squares (32,768 triangles) drawn with 30 textures,
+all found in Daventry's archives (128×128, mipmapped). Palette
+`DAVENTRY.PPL`, as named by `world.cs`. Loading 27 ms, average frame 6.0 ms.
+Camera starts at game (262144, 262144, 16750), 4,000 units above the
+ground. Chest unchanged (same bounds, 30 of 32 faces outward).
+**Mistake caught:** A shell step dropped a backslash in `load.rs` (build
+error), and one test line I wrote was garbled. Both fixed before testing.
+**Checked by eye:** You flew over it: "everything looks perfect". The land
+shape and textures are right, and textures join up between squares.
+**Still broken / not tested:** No lighting, haze, shadow maps, holes or
+`terrh2.dib`. No buildings or objects. Mipmaps not used. Only Daventry
+looked at; other worlds not tried in the viewer.
+**Next:** Step 3, objects and buildings.
+
 ## 2026-10-11 Fix: hide the back sides of model triangles
 
 **Changed:** `crates/kq8-viewer/src/main.rs`: each triangle's corners

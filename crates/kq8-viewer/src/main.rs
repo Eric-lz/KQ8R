@@ -1,13 +1,16 @@
-//! `kq8-viewer`: shows one KQ8 model in a window (M1 step 1).
+//! `kq8-viewer`: shows one KQ8 model (M1 step 1) or a world's ground
+//! (M1 step 2) in a window.
 //!
 //! Usage:
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
+//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
 //! palette. `--frames N` closes the window by itself after N frames.
-//! Mouse: left-drag to turn around the model, wheel to zoom.
-//! Keys: arrows turn, R resets the view, Esc quits.
+//! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
+//! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
+//! hold the right mouse button to look around. Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no lighting, no animation. Back faces are hidden as in the original
@@ -15,6 +18,7 @@
 
 mod load;
 mod log;
+mod terrain_view;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -36,9 +40,9 @@ use log::Log;
 /// renderer. A display choice only, not a claim about the game's units.
 const UNITS_PER_METRE: f32 = 100.0;
 
-/// Game space is Z-up (measured, see docs/provenance); Bevy is Y-up.
-/// (x, y, z) -> (x, z, -y) is a rotation, not a mirror. Whether the game
-/// itself is left- or right-handed is open (docs/behaviour/QUESTIONS.md Q2).
+/// Game space is right-handed and Z-up (docs/behaviour/models-and-textures.md,
+/// Q2); Bevy is right-handed and Y-up. (x, y, z) -> (x, z, -y) is a
+/// rotation, not a mirror.
 fn to_bevy(p: [f32; 3], centre: [f32; 3]) -> [f32; 3] {
     let d = [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]];
     [d[0] / UNITS_PER_METRE, d[2] / UNITS_PER_METRE, -d[1] / UNITS_PER_METRE]
@@ -50,6 +54,7 @@ struct Args {
     palette: Option<String>,
     game: PathBuf,
     frames: Option<u64>,
+    terrain: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -59,6 +64,7 @@ fn parse_args() -> Result<Args, String> {
         palette: None,
         game: std::env::var_os("KQ8_GAME_DIR").map(PathBuf::from).unwrap_or_else(|| "MASK".into()),
         frames: None,
+        terrain: false,
     };
     let mut it = std::env::args().skip(1);
     let mut positional = Vec::new();
@@ -68,6 +74,7 @@ fn parse_args() -> Result<Args, String> {
             "--world" => a.world = value()?,
             "--palette" => a.palette = Some(value()?),
             "--game" => a.game = value()?.into(),
+            "--terrain" => a.terrain = true,
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => positional.push(arg),
@@ -122,6 +129,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N]");
             return ExitCode::FAILURE;
         }
     };
@@ -134,15 +142,23 @@ fn main() -> ExitCode {
     };
     let started = Instant::now();
     log.summary(format!("log file: {}", log.path().display()));
+    enum Scene {
+        Model(Model),
+        Ground(load::Ground),
+    }
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
         .and_then(|game| {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
-            load::load_model(&game, &world, &args.model, args.palette.as_deref(), &mut log)
+            if args.terrain {
+                load::load_ground(&game, &world, &mut log).map(Scene::Ground)
+            } else {
+                load::load_model(&game, &world, &args.model, args.palette.as_deref(), &mut log).map(Scene::Model)
+            }
         });
-    let model = match loaded {
-        Ok(m) => m,
+    let scene = match loaded {
+        Ok(s) => s,
         Err(e) => {
             log.summary(format!("error: {e}"));
             log.summary("RESULT: FAIL");
@@ -151,24 +167,37 @@ fn main() -> ExitCode {
     };
     log.summary(format!("loading took {} ms", started.elapsed().as_millis()));
 
-    let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
-    let radius = 0.5 * (size[0] * size[0] + size[1] * size[1] + size[2] * size[2]).sqrt() / UNITS_PER_METRE;
     let shared = Shared { log: Arc::new(Mutex::new(log)), stats: Arc::new(Mutex::new(Stats::default())) };
-    let title = format!("KQ8 viewer - {}", model.label);
-
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window { title, ..default() }),
-            ..default()
-        }))
-        .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
-        .insert_resource(shared.clone())
-        .insert_resource(Loaded(Some(model)))
-        .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius })
-        .insert_resource(Orbit { yaw: 0.6, pitch: 0.35, distance: radius * 3.0, default_distance: radius * 3.0 })
-        .add_systems(Startup, setup)
-        .add_systems(Update, (orbit_input, place_camera, frame_stats).chain())
-        .run();
+    let title = match &scene {
+        Scene::Model(m) => format!("KQ8 viewer - {}", m.label),
+        Scene::Ground(_) => format!("KQ8 viewer - {} ground", args.world),
+    };
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window { title, ..default() }),
+        ..default()
+    }))
+    .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
+    .insert_resource(shared.clone());
+    match scene {
+        Scene::Model(model) => {
+            let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
+            let radius = 0.5 * (size[0] * size[0] + size[1] * size[1] + size[2] * size[2]).sqrt() / UNITS_PER_METRE;
+            app.insert_resource(Loaded(Some(model)))
+                .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius })
+                .insert_resource(Orbit { yaw: 0.6, pitch: 0.35, distance: radius * 3.0, default_distance: radius * 3.0 })
+                .add_systems(Startup, setup)
+                .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
+        }
+        Scene::Ground(ground) => {
+            app.insert_resource(terrain_view::LoadedGround(Some(ground)))
+                .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
+                .insert_resource(terrain_view::Fly::new())
+                .add_systems(Startup, terrain_view::setup_ground)
+                .add_systems(Update, (terrain_view::fly_input, terrain_view::report_camera, frame_stats).chain());
+        }
+    }
+    app.run();
 
     let mut log = shared.log.lock().unwrap();
     let s = shared.stats.lock().unwrap();
@@ -220,33 +249,8 @@ fn setup(
             outward += ((b - a).cross(c - a).dot((a + b + c) / 3.0) > 0.0) as usize;
         }
         vertices += positions.len();
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.compute_flat_normals();
-
-        // Bevy's default: counter-clockwise is the front, back faces hidden.
-        let base = StandardMaterial { unlit: true, ..default() };
-        let material = match group.look {
-            Look::Texture { width, height, rgba, .. } => {
-                let mut image = Image::new(
-                    Extent3d { width, height, depth_or_array_layers: 1 },
-                    TextureDimension::D2,
-                    rgba,
-                    TextureFormat::Rgba8UnormSrgb,
-                    RenderAssetUsages::default(),
-                );
-                image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    ..ImageSamplerDescriptor::linear()
-                });
-                StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
-            }
-            Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },
-            Look::Missing(_) => StandardMaterial { base_color: Color::srgb(1.0, 0.0, 1.0), ..base },
-        };
-        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(materials.add(material))));
+        let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
+        commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
     }
     log.summary(format!(
@@ -257,6 +261,40 @@ fn setup(
         centre[0], centre[1], centre[2]
     ));
     commands.spawn((Camera3d::default(), Transform::default()));
+}
+
+/// A triangle list (corners already in Bevy's counter-clockwise order).
+fn mesh_from(positions: Vec<[f32; 3]>, uvs: Vec<[f32; 2]>) -> Mesh {
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.compute_flat_normals();
+    mesh
+}
+
+/// Unlit material for a texture, colour or missing material (magenta).
+/// Bevy's default: counter-clockwise is the front, back faces hidden.
+fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image>) -> StandardMaterial {
+    let base = StandardMaterial { unlit: true, ..default() };
+    match look {
+        Look::Texture { width, height, rgba, .. } => {
+            let mut image = Image::new(
+                Extent3d { width, height, depth_or_array_layers: 1 },
+                TextureDimension::D2,
+                rgba,
+                TextureFormat::Rgba8UnormSrgb,
+                RenderAssetUsages::default(),
+            );
+            image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: address,
+                address_mode_v: address,
+                ..ImageSamplerDescriptor::linear()
+            });
+            StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
+        }
+        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },
+        Look::Missing(_) => StandardMaterial { base_color: Color::srgb(1.0, 0.0, 1.0), ..base },
+    }
 }
 
 fn orbit_input(
@@ -312,7 +350,7 @@ fn place_camera(orbit: Res<Orbit>, settings: Res<Settings>, mut camera: Single<&
 fn frame_stats(
     mut settings: ResMut<Settings>,
     shared: Res<Shared>,
-    orbit: Res<Orbit>,
+    orbit: Option<Res<Orbit>>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
@@ -329,8 +367,13 @@ fn frame_stats(
     if settings.last_report.elapsed().as_secs_f32() >= 2.0 {
         settings.last_report = Instant::now();
         shared.log.lock().unwrap().detail(format!(
-            "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2} camera yaw={:.2} pitch={:.2} distance={:.2}",
-            s.frames, s.worst_frame_ms, orbit.yaw, orbit.pitch, orbit.distance
+            "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2}{}",
+            s.frames,
+            s.worst_frame_ms,
+            orbit.map_or(String::new(), |o| format!(
+                " camera yaw={:.2} pitch={:.2} distance={:.2}",
+                o.yaw, o.pitch, o.distance
+            ))
         ));
     }
     if settings.frame_limit.is_some_and(|n| s.frames >= n) {

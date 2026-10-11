@@ -25,8 +25,10 @@ The code is written with an AI coding agent (Claude Code); see
   skipped).
 - Reading every world's ground (heights, materials, settings) and asking
   "how high is the ground here?". Checked against object positions: in
-  Daventry 11 objects stand exactly on the computed ground. Nothing is
-  drawn yet.
+  Daventry 11 objects stand exactly on the computed ground.
+- Showing a world's ground with its textures (`kq8-viewer --terrain`), with
+  a camera you can fly around. Checked by eye (2026-10-11): Daventry's
+  ground looks right (shape, textures, joins between squares).
 - Showing one model in a window with its textures (`kq8-viewer`), with a
   camera you can turn with the mouse. Tested: the window opens and draws
   (about 6 ms per frame). Checked by eye (2026-10-11) on two models: the
@@ -36,7 +38,8 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-Everything else. There is nothing to play yet: no terrain, no lighting,
+Everything else. There is nothing to play yet: no buildings or objects on
+the ground, no lighting,
 no animation, no sound, no game logic. Models are drawn without lighting,
 because those rules are not known yet.
 
@@ -49,6 +52,7 @@ cargo run --release -- bitmap-png GAME/8Gui/daventry.pbm --palette GAME/8Gui/lda
 cargo run --release -- shape-verify
 cargo run --release -- terrain-verify
 cargo run --release -p kq8-viewer -- smlchest.KQS --world Daventry
+cargo run --release -p kq8-viewer -- --terrain --world Daventry
 ```
 
 The last one writes `kq8-artifacts/png/daventry.png`. Files inside an

@@ -228,12 +228,39 @@ holes, and the second height image `terrh2.dib`.
   ground height at every placed object compared with its own height.
   (Done 2026-10-11.)
 
-**2b. Draw the ground** (viewer; textures blocked on Q8)
+**2b. Draw the ground** (planned 2026-10-11, after Q2 and Q8 were answered)
 
-- Build the ground mesh from the heights (two triangles per square, same
-  diagonals as the height lookup) and show it with a free-flying camera.
-- Until Q8 is answered: no textures; colour by height so hills can be
-  seen. Textures and their directions come from the answer, not guesses.
+Rules from `docs/behaviour/terrain.md` ("Ground textures") and
+`models-and-textures.md` (Q2):
+
+- `kq8-data/terrain.rs` gains `ground_triangles()`: two triangles per
+  square, the same diagonals as the height lookup, corners listed
+  clockwise seen from above (the game's front-face rule, same as models,
+  so the viewer treats both the same way). Each triangle carries its
+  square's material number and texture coordinates. Texture coordinates
+  follow the note's table for orientation codes 0–7: with u = west→east
+  and v = north→south inside the square, code 0 uses (u, v), 1 (1−u, v),
+  2 (u, 1−v), 3 (1−u, 1−v), 4 (v, 1−u), 5 (1−v, 1−u), 6 (v, u), 7 (1−v, u).
+  One texture covers exactly one square.
+- Unit tests: every triangle's centre lies on the height lookup's
+  surface; every triangle is clockwise from above; the eight codes give
+  the eight different turns and mirrors.
+- Viewer: `kq8-viewer --terrain [--world Daventry]`. Textures come from the
+  world's archives, coloured with the palette that `world.cs` names in
+  `KQWorld::terrainPalette` (falls back to `<world>.ppl` and says so).
+  Textures stop at the square's edge instead of repeating. Squares whose
+  material has no texture (kind "null") are not drawn and are counted.
+  Drawn without lighting, back faces hidden, mipmaps not used (level 0
+  only).
+- Camera for the ground: fly with W/A/S/D, Q/E down/up, Shift for faster;
+  hold the right mouse button to look around. Starts above the middle of
+  the grid looking north.
+- Log (`kq8-artifacts/logs/viewer.log`): squares drawn and skipped,
+  triangles, textures found and missing, the palette used, and every 2 s
+  the camera position in game units with the ground height below it.
+
+Not in this step: lighting/shadow maps, haze, holes, `terrh2.dib`, the
+buildings (`.dig`/`.dil`) and objects (step 3). (Built 2026-10-11.)
 
 ### M2 — Walk Connor around Daventry
 

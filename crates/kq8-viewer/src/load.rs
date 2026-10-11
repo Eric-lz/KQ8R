@@ -240,3 +240,130 @@ fn to_rgba(bmp: &Bitmap, palette: &[Rgb; 256]) -> Vec<u8> {
         _ => bmp.pixels.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
     }
 }
+
+/// The ground of a world, ready to draw: triangles grouped by texture.
+pub struct Ground {
+    pub terrain: kq8_data::Terrain,
+    pub groups: Vec<GroundGroup>,
+}
+
+pub struct GroundGroup {
+    pub label: String,
+    pub triangles: Vec<kq8_data::terrain::GroundTriangle>,
+    pub look: Look,
+}
+
+/// Reads `data/<World>/KQ/Terrain/TERRAIN.KQ` and everything it names
+/// (rules: docs/behaviour/terrain.md).
+pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Ground, String> {
+    use kq8_data::terrain::{parse_directions, Grid};
+    use kq8_data::{kq_text, MaterialList, Terrain, TerrainSettings};
+
+    let rel = format!("data/{}/KQ/Terrain/TERRAIN.KQ", world.name);
+    let path = game.find(&rel).ok_or(format!("{rel} not found"))?;
+    let text = std::fs::read(&path).map_err(|e| format!("{rel}: {e}"))?;
+    let sections = kq_text::parse(&text);
+    let section = sections
+        .iter()
+        .find(|s| s.get("classType").is_some_and(|c| c.eq_ignore_ascii_case("KQTerrain")))
+        .ok_or(format!("{rel}: no section with classType=KQTerrain"))?;
+    let settings = TerrainSettings::from_section(section)?;
+    log.summary(format!(
+        "terrain: {rel} groundScale={} (square {} units) heightBMPScale={}",
+        settings.ground_scale,
+        settings.square_size(),
+        settings.height_scale
+    ));
+
+    // Images, list and direction table: next to TERRAIN.KQ first, then the
+    // world's archives (where the images and the list are found).
+    let fetch = |name: &str| -> Result<(String, Vec<u8>), String> {
+        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        let loose = format!("data/{}/KQ/Terrain/{base}", world.name);
+        if let Some(p) = game.find(&loose).filter(|p| p.is_file()) {
+            return std::fs::read(&p).map(|b| (loose, b)).map_err(|e| e.to_string());
+        }
+        world.load(base).ok_or(format!("'{name}' not found for {}", world.name))?
+    };
+    let grid = |name: &str| -> Result<Grid, String> {
+        let (at, bytes) = fetch(name)?;
+        let b = Bitmap::parse(&bytes).map_err(|e| format!("{at}: {e}"))?;
+        Grid::from_bitmap(&b).map_err(|e| format!("{at}: {e}"))
+    };
+    let terrain = Terrain::new(settings.clone(), grid(&settings.height_image)?)?;
+    let materials = grid(&settings.material_image)?;
+    let (list_at, list_bytes) = fetch(&settings.material_list)?;
+    let list = MaterialList::parse(&list_bytes).map_err(|e| format!("{list_at}: {e}"))?;
+    let mut orientation = vec![0u32; list.materials.len()];
+    match &settings.material_direction {
+        Some(name) => {
+            let (at, bytes) = fetch(name)?;
+            let records = parse_directions(&bytes).map_err(|e| format!("{at}: {e}"))?;
+            for r in &records {
+                if let Some(slot) = orientation.get_mut(r.index as usize) {
+                    *slot = r.direction;
+                }
+            }
+            log.summary(format!("  direction table {at}: {} records", records.len()));
+        }
+        None => log.summary("  no direction table: every texture drawn as stored (code 0)"),
+    }
+
+    let palette_name = terrain_palette_name(world).unwrap_or_else(|| {
+        let fallback = format!("{}.ppl", world.name);
+        log.summary(format!("  world.cs names no KQWorld::terrainPalette; using {fallback}"));
+        fallback
+    });
+    let palette = load_palette(world, Some(&palette_name), game, log)?;
+
+    let triangles = terrain.ground_triangles(&materials, &orientation)?;
+    let mut by_texture: BTreeMap<String, (String, Vec<kq8_data::terrain::GroundTriangle>)> = BTreeMap::new();
+    let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
+    for t in triangles {
+        let m = list.materials.get(t.material as usize);
+        match m {
+            Some(m) if m.kind() == MaterialKind::Texture && !m.texture.is_empty() => {
+                by_texture
+                    .entry(m.texture.to_ascii_lowercase())
+                    .or_insert_with(|| (m.texture.clone(), Vec::new()))
+                    .1
+                    .push(t);
+            }
+            other => {
+                let why = other.map_or("material not in list".into(), |m| format!("kind {:?} flags 0x{:X}", m.kind(), m.flags));
+                *skipped.entry(why).or_default() += 1;
+            }
+        }
+    }
+    let drawn: usize = by_texture.values().map(|(_, v)| v.len()).sum();
+    log.summary(format!(
+        "  ground: {} triangles drawn ({} squares) using {} textures; skipped triangles: {:?}",
+        drawn,
+        drawn / 2,
+        by_texture.len(),
+        skipped
+    ));
+    let mut groups = Vec::new();
+    for (_, (name, tris)) in by_texture {
+        let look = load_texture(world, game, &name, &palette, log);
+        if let Look::Missing(why) = &look {
+            log.summary(format!("  MISSING {why} ({} triangles drawn magenta)", tris.len()));
+        }
+        groups.push(GroundGroup { label: name, triangles: tris, look });
+    }
+    Ok(Ground { terrain, groups })
+}
+
+/// `set KQWorld::terrainPalette <name>` in the world's `world.cs`
+/// (models-and-textures.md, Q3). The first such line is used; Daventry's
+/// 8-bit and high-colour branches name the same file.
+fn terrain_palette_name(world: &World) -> Option<String> {
+    let (_, bytes) = world.load("world.cs")?.ok()?;
+    let text: String = bytes.iter().map(|&b| b as char).collect();
+    text.lines().find_map(|l| {
+        let mut w = l.split_whitespace();
+        (w.next()?.eq_ignore_ascii_case("set") && w.next()?.eq_ignore_ascii_case("KQWorld::terrainPalette"))
+            .then(|| w.next().map(str::to_string))
+            .flatten()
+    })
+}
