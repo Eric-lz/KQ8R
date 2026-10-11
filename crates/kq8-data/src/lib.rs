@@ -4,6 +4,7 @@
 //! crate writes to the game folder.
 
 pub mod bitmap;
+pub mod building;
 pub mod chunks;
 pub mod game_dir;
 pub mod kq_text;

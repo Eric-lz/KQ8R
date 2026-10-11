@@ -297,11 +297,32 @@ use `.dig`/`.dil` files instead of `.kqs`.
   which frame is right. Monsters (`.anm`) and emitters wait for M2/M3.
   (Built 2026-10-11.)
 
-**3b. Buildings** (`KQInterior`, `.dig`/`.dil`)
+**3b. Buildings** (`KQInterior`, `.dig`/`.dil`; planned 2026-10-11)
 
-- New format, no community notes known. First survey the files (like
-  `shape-verify`), then ask the study session for whatever the data does
-  not explain before drawing anything.
+Rules from `docs/behaviour/buildings.md` (answers Q11 and the Q10
+follow-up). A building = `<name>.dig` (shape), `<name>.dil` (lighting,
+not decoded, not used yet) and the material list named by `material=`
+(Daventry: `interior.dml`, shared by all buildings).
+
+- `kq8-data/building.rs`: read the `.dig` (PERS block, class
+  `ITRGeometry`, versions 2 and 4): header (texture scale, bounding box,
+  8 counts), the 8 tables with record sizes 20, 8, 48, 1, 4, 12, 8, 16
+  bytes. Keep surfaces, corners, points, texture coordinates and planes;
+  skip the BSP and visibility tables (not needed to draw). Turn each
+  surface into triangles (a fan from its first corner) with texture
+  coordinates `(offset + uv × (size + 1)) / texture width or height`,
+  textures repeating.
+- Front faces are **anticlockwise**, the opposite of models, so the
+  viewer flips them the other way. Back faces hidden.
+- `kq8 building-verify`: read every `.dig` in the game (153 files) and
+  log counts, versions, index checks, and whether each surface's corner
+  order agrees with its plane and the 0x80 "flipped" bit.
+- Viewer `--terrain`: draw the 33 Daventry buildings with the same
+  placement rule as objects (rotation, then position, raised onto the
+  ground if below it). Palette from `KQWorld::interiorPalette`. Log per
+  building: lowest point vs ground, textures found or missing.
+- Not in this step: building lighting (`.dil`), inside/outside visibility
+  (BSP), doors between inside and outside. (Built 2026-10-11.)
 
 Not in this step: animation, doors opening, monsters moving (M2/M3).
 

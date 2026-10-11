@@ -41,7 +41,11 @@ pub fn read_block(bytes: &[u8], at: usize) -> Result<PersBlock<'_>, ReadError> {
     let size = (raw & 0x7FFF_FFFF) as usize;
     let align = if raw & 0x8000_0000 != 0 { 4 } else { 2 };
     let start = r.pos;
-    let end = start + size.next_multiple_of(align);
+    // The padding byte may be missing when the block is the last thing in
+    // the data: 61 of the game's 153 `.dig` files have an odd size and end
+    // exactly at size + 8 (docs/behaviour/buildings.md).
+    let padded = start + size.next_multiple_of(align);
+    let end = if padded > bytes.len() && start + size == bytes.len() { start + size } else { padded };
     if end > bytes.len() {
         return Err(r.error(format!(
             "PERS block size {size} runs past end of data ({} bytes left)",
@@ -120,6 +124,10 @@ impl<'a> Reader<'a> {
         Ok(self.array::<1>()?[0])
     }
 
+    pub fn u16(&mut self) -> Result<u16, ReadError> {
+        Ok(u16::from_le_bytes(self.array()?))
+    }
+
     pub fn i16(&mut self) -> Result<i16, ReadError> {
         Ok(i16::from_le_bytes(self.array()?))
     }
@@ -190,6 +198,15 @@ pub(crate) mod tests {
         assert_eq!(p.version, 3);
         assert_eq!(p.data, &[1, 2, 3, 4]);
         assert_eq!(p.end, b.len());
+    }
+
+    #[test]
+    fn missing_padding_at_the_end_is_accepted() {
+        // Odd-sized block with no padding byte after it.
+        let mut b = block("ITRGeometry", 4, &[9]);
+        b.pop();
+        let p = read_block(&b, 0).unwrap();
+        assert_eq!((p.data, p.end), (&[9u8][..], b.len()));
     }
 
     #[test]

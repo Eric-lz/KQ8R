@@ -82,6 +82,48 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 3b: buildings
+
+**Changed:** `kq8-data`: new `building.rs` (`.dig` reader, triangles,
+corner-order normal), `pers.rs` (accepts a missing padding byte at the
+end of the data; `u16`), 3 new tests. `kq8-cli`: new `building_verify.rs`
+(`kq8 building-verify`). `kq8-viewer/load.rs`: `load_building`;
+`KQInterior` objects now drawn as buildings, with the interior palette.
+Docs: `docs/DESIGN.md`, `docs/provenance/README.md`, `README.md`. Session
+B, from behaviour note `docs/behaviour/buildings.md` (Q11, Q10 follow-up).
+**Why:** M1 step 3b: Daventry's buildings.
+**Tested how:** `cargo test` (33 pass), `cargo clippy` (0 warnings),
+`kq8 building-verify`, `kq8 shape-verify` (unchanged),
+`kq8-viewer --terrain --frames 120`, then read `viewer.log`.
+**Result:** All 153 `.dig` files read, 0 failures. 172,780 of 172,783
+surfaces have the expected corner order. Viewer: 30 of 33 Daventry
+buildings drawn (30 different models, 0 missing textures), 19 raised
+onto the ground. 170 objects in total. Average frame 6.1 ms.
+**First run failed:** 61 of 153 files would not read. My PERS reader
+expected a padding byte that these files do not have at the very end.
+The study note says so ("ends at block size + 8"); fixed.
+**Mistake caught:** A test line I wrote was garbled again (second time).
+Rewritten before running.
+**Found by eye, then fixed:** You saw the buildings in the right places
+but every wall inside-out. I had followed the note's rule 2
+(anticlockwise = front). Measured with `building-verify`: on the outer
+sides of all 153 buildings' boxes, 99.7% of ~23,000 surfaces are
+clockwise seen from outside (roofs 6,069 vs 0). So buildings now use
+clockwise fronts, like models. The note's floor/ceiling numbers are the
+same finding read as inside views. Correction sent to the study session
+as Q15.
+**Checked by eye (after the fix):** Walls and roofs look right from
+outside, insides look right, and textures are placed correctly.
+**Still broken / not tested:** `ruins1/3/4.dig` do not exist in the game
+files (skipped). No building lighting, so buildings are evenly bright.
+Waterfalls/streams still solid (Q14). No monsters. **Objects missing
+from inside houses** (you noticed): the 106 objects at (0, 0, 0) that I
+skipped as "templates" are placed by Daventry's world script `permwrld.cs`
+(`loadKQ <file> <name> x y z a b c`, 180 such lines), which we do not
+read. How `loadKQ` works is behaviour: question Q16.
+**Next:** M1's goal is reached (Daventry's ground, objects and
+buildings). Remaining M1 polish waits on Q13/Q14; then M2.
+
 ## 2026-10-11 M1 step 3a fixes: ground rule, start frames, see-through
 
 **Changed:** `kq8-data/objects.rs`: `keepOnGround` and the ground rule,

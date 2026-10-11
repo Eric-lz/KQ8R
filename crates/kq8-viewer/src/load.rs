@@ -454,6 +454,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut flag_values: BTreeMap<String, usize> = BTreeMap::new();
     let (mut sections, mut raised, mut fell_back) = (0, 0, 0);
+    // Buildings use KQWorld::interiorPalette (buildings.md); loaded on first use.
+    let mut interior_palette: Option<Result<[Rgb; 256], String>> = None;
     for (label, bytes) in world.entries_ending(".kq") {
         let Ok(bytes) = bytes else {
             *skipped.entry("file failed to unpack".into()).or_default() += 1;
@@ -491,7 +493,10 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                         "no model ({})",
                         if s.get("animFile").is_some() { "uses an .anm file" } else { "no shapeName or animLoops" }
                     )),
-                    Some(sh) if sh.to_ascii_lowercase().ends_with(".dig") => Some("building (.dig, step 3b)".to_string()),
+                    Some(sh) if sh.to_ascii_lowercase().ends_with(".dig") && s.get("material").is_none() => {
+                        Some("building without material=".to_string())
+                    }
+                    Some(sh) if sh.to_ascii_lowercase().ends_with(".dig") => None,
                     Some(sh) if !sh.to_ascii_lowercase().ends_with(".kqs") => {
                         Some(format!("shapeName is not a .kqs ({})", sh.rsplit('.').next().unwrap_or("")))
                     }
@@ -510,10 +515,27 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                 None => shape.to_ascii_lowercase(),
             };
             let start = animation.as_ref().map(|c| (c.sequence.as_str(), c.start, c.repeat));
+            let material_list = s.get("material").map(str::to_string);
+            let key = match &material_list {
+                Some(m) => format!("{key}|{}", m.to_ascii_lowercase()),
+                None => key,
+            };
             let slot = *index_of.entry(key).or_insert_with(|| {
                 // Per-model lines go to the file only.
                 log.quiet = true;
-                let r = load_model(game, world, &shape, Some(&palette_name), start, log);
+                let r = if shape.to_ascii_lowercase().ends_with(".dig") {
+                    let palette = interior_palette.get_or_insert_with(|| {
+                        let name = world_palette_name(world, "interiorPalette").unwrap_or_else(|| format!("{}.ppl", world.name));
+                        log.summary(format!("buildings: palette {name} (KQWorld::interiorPalette)"));
+                        load_palette(world, Some(&name), game, log)
+                    });
+                    match palette {
+                        Ok(pal) => load_building(game, world, &shape, material_list.as_deref().unwrap(), pal, log),
+                        Err(e) => Err(e.clone()),
+                    }
+                } else {
+                    load_model(game, world, &shape, Some(&palette_name), start, log)
+                };
                 log.quiet = false;
                 match r {
                     Ok(m) => {
@@ -617,4 +639,97 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         count(&|g| g < -500.0)
     ));
     Objects { shapes, placed }
+}
+
+/// A building (`.dig`) as a `Model`, so it is placed and drawn like any
+/// object (rules: docs/behaviour/buildings.md). Not used: lighting
+/// (`.dil`), the visibility tables.
+pub fn load_building(
+    game: &GameDir,
+    world: &World,
+    dig: &str,
+    material_list: &str,
+    palette: &[Rgb; 256],
+    log: &mut Log,
+) -> Result<Model, String> {
+    use kq8_data::building::Building;
+    let (label, bytes) = world.load(dig).ok_or(format!("building '{dig}' not found in {}", world.name))??;
+    let b = Building::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
+    let (list_at, list_bytes) = world.load(material_list).ok_or(format!("material list '{material_list}' not found"))??;
+    let list = kq8_data::MaterialList::parse(&list_bytes).map_err(|e| format!("{list_at}: {e}"))?;
+    let (tris, bad) = b.triangles();
+    log.summary(format!(
+        "building: {label} v{} surfaces={} triangles={} bad_surfaces={bad} materials from {list_at} ({})",
+        b.version,
+        b.surfaces.len(),
+        tris.len(),
+        list.materials.len()
+    ));
+    let mut by_material: BTreeMap<u8, Vec<kq8_data::building::BuildingTriangle>> = BTreeMap::new();
+    for t in tris {
+        by_material.entry(t.material).or_default().push(t);
+    }
+    let mut groups = Vec::new();
+    let mut not_drawn = 0;
+    for (index, tris) in by_material {
+        let m = list.materials.get(index as usize);
+        let look = match m {
+            None => Look::Missing(format!("material index {index} not in list of {}", list.materials.len())),
+            Some(m) if m.kind() == MaterialKind::Texture && !m.texture.is_empty() => {
+                load_texture(world, game, &m.texture, palette, log)
+            }
+            Some(m) if m.kind() == MaterialKind::Rgb => Look::Color(m.rgb),
+            Some(m) => {
+                // Kind 0 = nothing to draw (models-and-textures.md
+                // "Material flags"): leave these surfaces out.
+                log.summary(format!("  material {index}: kind {:?} flags 0x{:X}: {} triangles not drawn", m.kind(), m.flags, tris.len()));
+                not_drawn += tris.len();
+                continue;
+            }
+        };
+        // Texels -> 0..1 by the texture's size; the texture repeats
+        // (buildings.md rule 3, "likely").
+        let size = match &look {
+            Look::Texture { width, height, .. } => [*width as f32, *height as f32],
+            _ => [1.0, 1.0],
+        };
+        let triangles: Vec<Triangle> = tris
+            .iter()
+            .map(|t| {
+                // Front faces are clockwise, as for models: measured on the
+                // outer sides of every building's box (99.7% of ~23,000
+                // surfaces) and seen by eye. This overrides buildings.md
+                // rule 2 (anticlockwise); see QUESTIONS.md Q15.
+                let order = [0, 1, 2];
+                Triangle {
+                    positions: order.map(|k| t.positions[k]),
+                    uvs: order.map(|k| [t.texels[k][0] / size[0], t.texels[k][1] / size[1]]),
+                    material: index as i32,
+                    node: t.surface,
+                }
+            })
+            .collect();
+        let what = match &look {
+            Look::Texture { name, width, height, .. } => format!("texture {name} {width}x{height}"),
+            Look::Color(c) => format!("colour {c:?}"),
+            Look::Missing(why) => format!("MISSING ({why}), drawn magenta"),
+        };
+        log.summary(format!(
+            "  material {index}: flags={} triangles={} -> {what}",
+            m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
+            triangles.len()
+        ));
+        let see_through = m.is_some_and(|m| m.flags & 0x10000 != 0);
+        groups.push(Group { material: index as i32, triangles, look, see_through });
+    }
+    if not_drawn > 0 {
+        log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));
+    }
+    Ok(Model {
+        label,
+        groups,
+        min: b.bounds_min,
+        max: b.bounds_max,
+        frame_note: "building".into(),
+    })
 }

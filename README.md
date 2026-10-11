@@ -29,6 +29,9 @@ The code is written with an AI coding agent (Claude Code); see
 - Showing a world's ground with its textures (`kq8-viewer --terrain`), with
   a camera you can fly around. Checked by eye (2026-10-11): Daventry's
   ground looks right (shape, textures, joins between squares).
+- Reading every building file (`.dig`, 153 in the game) and drawing
+  Daventry's 30 buildings in the ground view. Checked by eye: placement,
+  walls, roofs, insides and textures look right (no building lighting yet).
 - Placing Daventry's objects on the ground (140 of them: furniture, doors,
   chests, signs...), turned the way the game turns them, animated ones at
   their starting frame. Checked by eye (before the last fixes, 104 objects):
@@ -58,6 +61,7 @@ cargo run --release -- bitmap-verify
 cargo run --release -- bitmap-png GAME/8Gui/daventry.pbm --palette GAME/8Gui/ldaventr.ppl
 cargo run --release -- shape-verify
 cargo run --release -- terrain-verify
+cargo run --release -- building-verify
 cargo run --release -p kq8-viewer -- smlchest.KQS --world Daventry
 cargo run --release -p kq8-viewer -- --terrain --world Daventry
 ```

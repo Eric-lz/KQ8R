@@ -128,6 +128,24 @@ Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).
 | Material flag 0x10000 = drawn 50% see-through | Behaviour note `models-and-textures.md` "Material flags" (Q5, partly) | 2 materials in Daventry's placed objects (`alchy`, `chandlir`). By eye: waterfalls and the teleport pad are solid. Their see-through look comes from elsewhere (`translucency=` in the object file; Q14) | 51 objects with `animLoops` but no `currAnimName` are skipped until Q12 is answered |
 | Object palette from `KQWorld::objectPalette` in `world.cs` | Behaviour note `models-and-textures.md` (Q3) | Daventry: `daventry.ppl` |
 
+## Buildings — `crates/kq8-data/src/building.rs`, `crates/kq8-viewer/src/load.rs`
+
+Behaviour note = `docs/behaviour/buildings.md` (session A, answers Q11 and
+the Q10 follow-up). "Checked" numbers come from `kq8 building-verify`
+(`kq8-artifacts/logs/building-verify.log`).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `.dig` = PERS block `ITRGeometry`: build id, texture scale, bounding box, 8 counts, 8 tables (records 20, 8, 48, 1, 4, 12, 8, 16 bytes), +1 u32 if version > 3, +1 if version 4 | Behaviour note | Observed: all 153 files parse to exactly the end of their block. Versions 4 (151) and 2 (2); texture scale 0.125 in all |
+| A PERS block that ends the data may lack its padding byte | **Observed** (new; the community PERS note says blocks are padded) | 61 of 153 `.dig` files have an odd size and end exactly at size + 8. `shape-verify` unchanged: all 4,573 models still parse |
+| Surface record: flags (0x80 = faces opposite to its plane), material, texture size − 1, texture offset, plane, first corner, lighting ref, corner count | Behaviour note | Observed: corner order (anticlockwise = front) agrees with plane and 0x80 bit in 172,780 of 172,783 surfaces; corners within 0.50 units of their plane; texture coordinates all in 0..1; no index out of range |
+| Texel = offset + uv × (size + 1); divided by the texture's size; textures repeat | Behaviour note ("likely", not traced) | Checked by eye by the user 2026-10-11: textures placed correctly |
+| Front faces are **clockwise** seen from the visible side, as for models | **Observed, overrides the behaviour note** (rule 2 says anticlockwise; Q15) | Drawn anticlockwise first: user saw every wall inside-out. `building-verify`: surfaces on the sides of each building's box have their right-hand-rule normal pointing into the box in 99.7% (e.g. roofs 6,069 vs 0). After switching to clockwise, checked by eye by the user 2026-10-11: outside and inside look right |
+| Building palette `KQWorld::interiorPalette`; materials from the `material=` list (Daventry `interior.dml`, 52) | Behaviour note | Daventry: `daventry.ppl`; no texture missing; no material index past 52 in Daventry's buildings |
+| Below-ground buildings raised onto the ground | Behaviour note (Q10 follow-up) | 19 Daventry objects raised (all buildings at `locZ` −1/−2). Lowest points well below ground: docks (posts in the water), `look`, `fenc3` |
+| `ruins1/3/4.dig` named by Daventry objects but missing from the game | Observed | Not found in any archive or folder; skipped and logged |
+| Building lighting (`.dil`) and visibility tables not used | Our choice for now | — |
+
 ## Formats read but not yet implemented
 
 `libkq8fpc/doc/*.txt`: notes on `.msg`, `.kqs`, `.pba`, `.pft` and others
