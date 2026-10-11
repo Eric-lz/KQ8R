@@ -147,10 +147,34 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    - Your `13981 0 0` is a misread: in those lines 13981 is z (e.g.
      `stool.kq stool.02 260045 225746 13981 0 0 -0.81`).
    - With only a file name, the `.kq`'s own position and angles are used.
-3. **(b)** Yes: the object gets its mover the same way, so `locZ` −1/−2
-   and the ground rule apply identically.
+3. **(b)** Corrected by Q17 below: `loadKQ` has its own −1/−2 rule.
+   The `keepOnGround` raise also applies, as for any object.
 4. Connor and the camera have special cases (they can take a saved
    position); ignore that for now.
 5. Saved games (for later): the game writes its own script that runs
    `WorldVar.cs`, then `permWrld.cs`, then one `loadKQ` per object,
    `loadKQ WorldState.kq`, and finally `newWorld.cs`.
+
+### Ground heights −1 and −2 (Q17)
+
+1. **In a `loadKQ` line, a z of exactly −1 or exactly −2 means "on the
+   ground".** Before placing the object, the game replaces that z with the
+   ground height at (x, y). This happens **whatever `keepOnGround` says**.
+   (Traced.) The same rule is used by other commands that take a position,
+   e.g. `move Connor 0 x y -1 …` in the scripts.
+2. −1 and −2 pass a different on/off value to the height lookup, but the
+   ground (`KQTerrain`) ignores it, so both give the same ground height.
+   (Traced as far as the ground's lookup; if some other floor answers the
+   lookup, the difference may matter. Not seen.)
+3. Other values are used as written; then `keepOnGround` (default on) only
+   raises objects that are below the ground.
+4. A `.kq` file's own `locZ` does **not** go through rule 1. There a −1 is
+   handled by the `keepOnGround` raise (e.g. the buildings, which are
+   loaded by `loadKQ <file>` with no position).
+5. **`Cottage2/3/4` and `wateran1–9` have no model and need no position.**
+   (From the data.) `Cottage2–4` are `KQParticleCatcher`s tied to the
+   cottage building (`interior=Cottage`, `emitter=leaf1`): probably where
+   falling leaves collect. `wateran1–9` are `KQTerrainAnimator`s: they
+   cycle ground-texture numbers (`materialIndexN`, every `delay` = 0.3 s,
+   repeating) on the river squares, apart from the `exclude` squares. That
+   is the flowing river. Not traced; skip them for M1.

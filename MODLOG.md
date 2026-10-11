@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q17 (objects at −1 under the ground)
+
+**Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** 79 script-placed Daventry objects (tombs, trees) ended up under the ground.
+**Tested how:** Traced the `loadKQ` command and the height lookup it calls in `Mask.exe`; read the `.kq` files of the position-less objects.
+**Result:** In `loadKQ` (and `move`), a z of exactly −1 or −2 is replaced by the ground height, regardless of `keepOnGround`. `Cottage2–4` and `wateran1–9` have no model.
+**Still broken / not tested:** The difference between −1 and −2 makes no difference on the ground; any other floor that answers the lookup is not traced.
+**Next:** M2 study.
+
 ## 2026-10-11 Study session: Q13–Q16, two corrections
 
 **Changed:** `docs/behaviour/objects.md` (Q13, Q14, Q16), `docs/behaviour/buildings.md` (rule 2 corrected), `docs/behaviour/models-and-textures.md` (flag 0x10000 corrected), `docs/behaviour/QUESTIONS.md`. No code.
