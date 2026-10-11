@@ -284,7 +284,7 @@ dirZ=1.0
 translucency=200
 ")[0];
         let load = |name, position, angles| LoadKq {
-            file: "stool.kq".into(), name, position, angles, from: "permwrld.cs".into(), line: 1, inside_if: false,
+            file: "stool.kq".into(), name, position, angles, ignored_numbers: 0, from: "permwrld.cs".into(), line: 1, inside_if: false,
         };
         let p = Placement::from_load(s, &load(LoadName::Rename("stool.02".into()), Some([1.0, 2.0, 3.0]), Some([0.0, 0.0, -0.81])));
         assert_eq!((p.name.as_str(), p.position, p.angles), ("stool.02", [1.0, 2.0, 3.0], [0.0, 0.0, -0.81]));
@@ -302,7 +302,7 @@ translucency=200
         use crate::world_script::{LoadKq, LoadName};
         let s = &crate::kq_text::parse(b"[tomb]\nshapeName=tomb.kqs\nlocX=0\nlocY=0\nlocZ=-1\nkeeponground=0\n")[0];
         let load = |z| LoadKq {
-            file: "tomb.kq".into(), name: LoadName::Keep, position: Some([1.0, 2.0, z]), angles: None,
+            file: "tomb.kq".into(), name: LoadName::Keep, position: Some([1.0, 2.0, z]), angles: None, ignored_numbers: 0,
             from: "permwrld.cs".into(), line: 1, inside_if: false,
         };
         // -1 and -2 move the object onto the ground, up or down, even with keepOnGround off.

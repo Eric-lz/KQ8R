@@ -362,6 +362,48 @@ A `.kq` file's own `locZ` keeps the old rule (raise only, with
 `keepOnGround`). `Cottage2–4` and `wateran1–9` stay skipped (no model).
 Log: how many objects were put on the ground this way.
 
+#### M1 step 3e — script variables, `getLoc` and `move` (planned 2026-10-11)
+
+Rules from `docs/behaviour/objects.md` "Script variables, `getLoc` and
+`move`" (Q20) and the Q17 correction.
+
+- `kq8-data/world_script.rs` keeps a table of variables while the scripts
+  run, in order:
+  - `set <name> <words…>`: the variable holds the words joined by spaces
+    (after their own `$` replacement).
+  - A script run as `<file>.cs a b` gets `$1` = a, `$2` = b.
+  - A `$name` word that is not the first word of a line is replaced by
+    its text, which is split into words again. Words in double quotes stay
+    one word. An unknown variable makes the line unreadable (logged).
+  - `getLoc <name>` / `KQObject::getLoc <name>` asks the caller for the
+    object's current position and angles, then sets `$KQObject::loc`
+    (six numbers) and `$KQObject::locOnly` (three).
+  - `move <who> <flags> x y z [rx ry rz]` (missing numbers 0) is passed to
+    the caller.
+  - The runner talks to the caller through a small interface ("host"):
+    read a script, place a `loadKQ`, tell where a named object is, move
+    one. The data library stays free of drawing code.
+- `loadKQ` with 4 or 5 numbers: x y z, extra numbers ignored, angles
+  0 0 0 (Q20 e).
+- `.kq` values that are `$variables` are replaced the same way before the
+  object is read (e.g. the anvil's `locX=$Barren::Seller::xPos`).
+- Viewer: the ground rules run when the object is loaded, so `getLoc`
+  sees the result. Every loaded object is remembered by name (also those
+  with no model, like the Weirdling). `move` changes the remembered
+  object, then what is drawn:
+  - flags 0 to 3 as in the note (absolute or relative position and turn);
+  - a relative position on an object that is turned: world axes. This is
+    **not traced**, so these moves are counted and logged;
+  - a relative turn: when the object and the turn are both only about
+    the vertical axis, the two angles add up (true in any order; all 9
+    cases in the game). Any other relative turn is not applied (not
+    traced); counted and logged;
+  - `move` does not apply the −1/−2 rule (Q17 correction); moves with
+    z −1/−2 are counted and logged.
+- Log: variables set, unknown variables, `getLoc` and `move` lines (done,
+  object not found, not applied and why). Tests: substitution, quotes,
+  `$1`, `getLoc` → `loadKQ`, 4-number lines, `move` flags.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,
