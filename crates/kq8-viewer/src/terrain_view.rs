@@ -100,7 +100,8 @@ pub fn setup_objects(
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
     if let Some(connor) = objects.connor.take() {
-        crate::connor_view::spawn_connor(&mut commands, connor, &mut meshes, &mut materials, &mut images, &mut log);
+        let start = objects.camera_start;
+        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut materials, &mut images, &mut log);
     }
     // One (mesh, material) list per model, shared by all its copies.
     let mut built: Vec<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> = Vec::new();
@@ -284,8 +285,17 @@ pub fn fly_input(
     time: Res<Time>,
     mut camera: Single<&mut Transform, With<Camera3d>>,
     mut commands: Commands,
+    choice: Res<crate::game_camera::CameraChoice>,
 ) {
-    if buttons.pressed(MouseButton::Left) {
+    if keys.just_pressed(KeyCode::Escape) {
+        commands.write_message(AppExit::Success);
+    }
+    // The game camera (M2 step 2f) drives the view; F switches back here.
+    if choice.game {
+        return;
+    }
+    // Right mouse to look, as the original's camera button.
+    if buttons.pressed(MouseButton::Right) {
         fly.yaw -= motion.delta.x * 0.003;
         fly.pitch = (fly.pitch - motion.delta.y * 0.003).clamp(-1.55, 1.55);
     }
@@ -308,9 +318,6 @@ pub fn fly_input(
     // Flying speed. Shift 5x
     let speed = if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) { 400.0 } else { 80.0 };
     camera.translation += step.normalize_or_zero() * speed * time.delta_secs();
-    if keys.just_pressed(KeyCode::Escape) {
-        commands.write_message(AppExit::Success);
-    }
 }
 
 /// Every 2 s: camera position in game units and the ground below it.

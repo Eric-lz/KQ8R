@@ -10,11 +10,12 @@
 //! palette. `--frames N` closes the window by itself after N frames.
 //! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
 //! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
-//! hold the left mouse button to look around, H shows/hides invisible
+//! hold the right mouse button to look around, H shows/hides invisible
 //! objects (green: no model, orange: .anm character). Connor (M2): keys
-//! from Connor.sae (arrows walk/turn, End run on/off), C puts the camera
-//! behind him, F makes it follow him, G / B lift him 5,000 / 2,000 to test
-//! falling.
+//! from Connor.sae (arrows walk/turn, End run on/off); the game camera
+//! follows him (right mouse swing/zoom, Shift, Page Up/Down tilt, Home,
+//! F11 fixed distance; keys from Camera.sae); F switches to the free
+//! camera and back; G / B lift him 5,000 / 2,000 to test falling.
 //! Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
@@ -22,6 +23,7 @@
 //! (docs/behaviour/models-and-textures.md, Q2).
 
 mod connor_view;
+mod game_camera;
 mod load;
 mod log;
 mod terrain_view;
@@ -220,9 +222,10 @@ fn main() -> ExitCode {
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
                 .insert_resource(Time::<Fixed>::from_hz(kq8_game::UPDATES_PER_SECOND))
-                .add_systems(FixedUpdate, connor_view::connor_step)
+                .insert_resource(game_camera::CameraChoice { game: false })
+                .add_systems(FixedUpdate, (connor_view::connor_step, game_camera::camera_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

@@ -507,7 +507,44 @@ Steps (each separately revertable, each stopped for an eye check):
 - **2d** — walls: buildings and objects stop him or let him slide along
   (collision shapes need a question: `connor-physics.md` open question 2).
 - **2e** — jumping, falling with its animations, crash, death animation.
-- **2f** — the following camera (`camera.md`).
+- **2f — the following camera (planned 2026-10-11).** Moved up at the
+  user's request: done right after 2b, before 2c. Rules from `camera.md`.
+  - The camera logic runs in the same 15-updates-per-second schedule as
+    Connor, right after him, so every per-update rate in the note (height
+    10% per update, tilt 0.015 rad per update, zoom 125 per update) is used
+    as traced; drawing blends between its last two updates, like Connor.
+  - Rules in `kq8-game` (`camera.rs`), unit-tested: aim point 1,400 above
+    Connor's base; normal mode keeps the camera where it is unless it is
+    farther than the maximum (pulled to max − 1) or closer than the minimum
+    (pushed to min + 1), in 3D; fixed mode (F11) keeps its distance, zoom
+    changes it within min + 1 … max − 1; height = the higher of terrain
+    under the camera + 1,400 and Connor's base + 1,400, jumped to within
+    100, else 10% of the gap per update; right mouse held: sideways swings
+    round the aim point (3π/4 per mouse unit), forward/back zooms (5,000 per
+    unit, kept in range, never past the aim point) or tilts in fixed mode or
+    with Shift (0.75 per unit); the first update after pressing uses no
+    movement; Page Up/Down tilt 0.015 rad per update, limits ±1.57, Home
+    resets; tilt snaps back when Connor moves more than 10 (|Δx| + |Δy|)
+    in normal mode.
+  - Keys from `MASK/Camera.sae` (F11, Page Up/Down, Home) and `Connor.sae`
+    (right mouse, Shift). The letter keys in `Camera.sae` (development
+    moves) are not used.
+  - Range: 1,500–5,000, the same walking and running (changed after the
+    user compared with the original: no difference; Q27 e).
+  - Start: where the world script loads `cam3rd.kq` (`KQCamera`, class
+    `KQCamMover`; Daventry 275026, 197541, 14930), else behind Connor.
+    Daventry's script ends with `KQCamera::follow none` (probably its
+    opening scene); we follow Connor anyway (Q27 d).
+  - Not done here: the obstacle check (needs 2d), the automatic swing back
+    behind Connor (not decoded: Q27 c), first person (needs Connor's
+    first-person models), shake and cutscene cameras.
+  - Stand-ins until Q27 is answered, all logged: mouse value = pixels ÷
+    600 (a); the view looks exactly at the aim point at the default tilt,
+    and other tilts pitch it by the difference (b); mouse forward = zoom in
+    (f).
+  - Viewer: F switches between the game camera (default when Connor is
+    there) and the free flying camera. Log: camera position, distance to
+    the aim point, height above the terrain, tilt, mode, range, per update.
 
 ### M3 — Daventry comes alive
 

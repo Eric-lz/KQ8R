@@ -199,3 +199,19 @@ Code: `crates/kq8-data/src/action_map.rs`, `crates/kq8-game/src/connor.rs`, `cra
 | Terrain only in step 5 (ground check), not in the down pass | `connor-physics.md` as written; asked as Q26 | Downhill running: in the air every other update by about 1.4 units; steep slopes half-climbed (sliding is step 2c) |
 | F: camera follows (keeps its offset); `--hold F,T,R` test option | Our test helpers | — |
 
+## The following camera (M2 step 2f)
+
+Code: `crates/kq8-game/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`, `crates/kq8-viewer/src/load.rs` (`script_range`, camera start).
+
+| What | Source | Check |
+| --- | --- | --- |
+| Aim 1,400 above Connor's base; normal mode stays put inside min..max, pulled to max − 1 / pushed to min + 1 (3D) | `camera.md` "What the camera looks at", "Distance (normal mode)" | Unit tests. `--hold 1,0,1`: distance 4,999.0 while he runs away |
+| Range 1,500–5,000 (the note's value before any script sets one), the same walking and running | `camera.md` "Distance" rule 2; `walk.cs`/`run.cs` are **not** tied to the run switch: the user saw no difference in the original (Q27 e) | — |
+| Height: higher of terrain under the camera + 1,400 and Connor's base + 1,400; within 100 jump, else 10% of the gap per update | `camera.md` "Height above the ground" | Unit test; run log: never below 1,400 above the terrain |
+| Right mouse: swing 3π/4 per unit round the aim point, zoom 5,000 per unit (in range, never past the aim), tilt 0.75 per unit in fixed mode or with Shift; first update after pressing uses no movement | `camera.md` "Swinging and zooming with the mouse" | Unit tests. Mouse units = pixels ÷ 600 is a stand-in (Q27 a). Directions checked by eye by the user against the original: mouse left = swing left, mouse down = zoom in. Mouse tilt (Shift or fixed mode): mouse down tilts like Page Down, also checked by eye |
+| Page Up/Down tilt 0.015 rad per update (fixed mode: 125 closer/farther), ±1.57, Home resets, snaps back when Connor moves more than 10 in normal mode; F11 fixed distance | `camera.md` "Tilt", "Distance (fixed mode)" | Unit tests. What the tilt turns (we pitch the view by tilt − 0.2) is a stand-in: Q27 b |
+| Keys from `MASK/Camera.sae` (F11, `prior`/`next` = Page Up/Down, Home) and `Connor.sae` (right mouse `MoveCamera`, Shift `ModifyDn`) | Observed in the data | Log: keys found |
+| Start where the world script loads `cam3rd.kq` (`KQCamera`); follows Connor although Daventry's script ends with `follow none` | Observed in the data; Q27 d | Daventry starts at (275026, 197541, 14930), 3,147 from the aim point |
+| Camera logic at 15 updates per second after Connor, drawn blended | `docs/DESIGN.md` M2 "Physics rate" | — |
+| Not done: obstacle check (2d), swing back behind Connor (Q27 c), first person, shake, cutscene cameras | — | — |
+

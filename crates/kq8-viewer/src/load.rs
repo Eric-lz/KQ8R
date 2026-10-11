@@ -193,6 +193,8 @@ pub struct ConnorAssets {
     pub animations: Vec<Animation>,
     /// `MASK/Connor.sae`.
     pub keys: Vec<kq8_data::action_map::Binding>,
+    /// `MASK/Camera.sae`.
+    pub camera_keys: Vec<kq8_data::action_map::Binding>,
 }
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
@@ -532,6 +534,8 @@ pub struct Objects {
     pub markers: Vec<Marker>,
     /// Connor, if the world script loads him: placement, animations, keys.
     pub connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
+    /// Where the world script puts the camera object `KQCamera`, if anywhere.
+    pub camera_start: Option<[f32; 3]>,
 }
 
 pub struct Marker {
@@ -822,7 +826,12 @@ impl Placer<'_> {
             let palette = load_palette(self.world, Some(&palette_name), self.game, self.log);
             self.log.quiet = false;
             let palette = palette?;
-            let mut assets = ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys };
+            let (camera_keys, problems) = kq8_data::action_map::parse(&read("Camera.sae")?);
+            for pr in &problems {
+                self.log.summary(format!("connor: Camera.sae: {pr}"));
+            }
+            let mut assets =
+                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
             for name in CONNOR_MOVEMENTS {
                 let mut with_ask = anm.clone();
@@ -1240,7 +1249,10 @@ impl Placer<'_> {
                 m.name, m.class, m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
             ));
         }
-        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor }
+        // The camera object the world script loads (`cam3rd.kq`, named
+        // KQCamera): where the following camera starts (Q27 d).
+        let camera_start = self.located.get("kqcamera").map(|l| l.position);
+        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start }
     }
 }
 

@@ -4,6 +4,7 @@
 //! module names the note it follows. The game logic runs at a fixed
 //! [`UPDATES_PER_SECOND`] (docs/DESIGN.md, M2 "Physics rate").
 
+pub mod camera;
 pub mod connor;
 pub mod mover;
 

@@ -58,6 +58,25 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 M2 step 2f: the camera follows Connor
+
+**Changed:** new `crates/kq8-game/src/camera.rs` (rules, 7 tests), new `crates/kq8-viewer/src/game_camera.rs` (keys, 15-per-second update after Connor, blended drawing, `camera.log`), `crates/kq8-viewer/src/load.rs` (Camera.sae, walk/run ranges, camera start), `crates/kq8-viewer/src/connor_view.rs` (keys `prior`/`next`/F11; the old C and F-follow keys removed), `crates/kq8-viewer/src/terrain_view.rs` (free camera only when chosen; Esc always quits), `crates/kq8-viewer/src/main.rs`, `docs/DESIGN.md` (2f plan, moved before 2c), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q27), `README.md`, `STATUS.md`.
+**Why:** The user asked to do the camera before slopes. Rules from `camera.md`.
+**Tested how:** `cargo test` (kq8-game 17, kq8-data 41). Viewer: `--hold 1,0,1` (running, 1,500 frames), read `camera.log`; Swamp, Barren, CastleD open with Connor and the camera.
+**Result:** Daventry: the camera starts at the script's `KQCamera` spot (3,147 from the aim point), stays put until Connor is 5,000 away, then trails at 4,999.0; never below 1,400 above the terrain; rises smoothly when he climbs. Keys found: F11, Page Up/Down, Home, Shift, right mouse.
+**Checked by eye** by the user 2026-10-11: follow distance and height above the ground right; Page Up/Down tilt right. Mouse swing and zoom were the wrong way round (mouse left swung right, mouse down zoomed out): both flipped in `game_camera.rs`, then the mouse tilt with Shift was backwards and was flipped in `camera.rs` (swing confirmed after the first fix). Then, after the user compared with the original: one range (1,500–5,000) for walking and running (no longer tied to `walk.cs`/`run.cs`), and the free camera looks with the right mouse button, as the original's camera does.
+**Still broken / not tested:** Stand-ins until Q27: mouse pixels ÷ 600, tilt pitches the view by tilt − 0.2, range tied to the run switch, follow on although Daventry's script says `follow none`. Not done: swing back behind Connor (Q27 c), obstacle check (2d), first person.
+**Next:** User's eye check.
+
+## 2026-10-11 STATUS.md updated
+
+**Changed:** `STATUS.md` (rewritten for the state after M2 step 2b: code layout, what works, next steps, open questions Q14b and Q22–Q26).
+**Why:** The user asked to keep the hand-over current.
+**Tested how:** Read against `MODLOG.md`, `docs/DESIGN.md` and `docs/behaviour/QUESTIONS.md`.
+**Result:** —
+**Still broken / not tested:** —
+**Next:** Q26, then M2 step 2c.
+
 ## 2026-10-11 M2 step 2b: Connor walks, runs, steps back and turns
 
 **Changed:** new `crates/kq8-data/src/action_map.rs` (`.sae` reader, test), new `crates/kq8-game/src/connor.rs` (intent → movement, turning, step from the animation; tests), `crates/kq8-viewer/src/load.rs` (`load_animation`: every frame of a loop; Connor's six movements and keys), `crates/kq8-viewer/src/connor_view.rs` (keys held, walking, frames drawn in turn, F follow), `crates/kq8-viewer/src/main.rs` (`--hold F,T,R` test option), `docs/DESIGN.md` (plan 2b), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q24, Q25, Q26), `README.md`.

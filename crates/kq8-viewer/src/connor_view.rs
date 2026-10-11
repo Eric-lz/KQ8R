@@ -11,7 +11,7 @@
 //!   (display only).
 //!
 //! Test keys: G lifts him 5,000 (should die on landing), B lifts him 2,000
-//! (safe), C puts the camera behind him, F makes the camera follow him.
+//! (safe). The camera that follows him is in `game_camera.rs`.
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
@@ -21,7 +21,7 @@ use kq8_game::mover::{Mover, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform, Fly, GroundLookup};
+use crate::terrain_view::{bevy_transform, GroundLookup};
 use crate::{material_for, mesh_from, to_bevy, Shared};
 
 /// One drawable movement: its loop for the walker and one entity per frame.
@@ -77,10 +77,7 @@ pub struct ConnorSim {
     /// One line per update: `kq8-artifacts/logs/connor.log`.
     pub log: Log,
     last_state: &'static str,
-    camera_placed: bool,
-    follow: bool,
     shown: Option<Entity>,
-    last_drawn_at: Option<Vec3>,
 }
 
 #[derive(Component)]
@@ -97,7 +94,7 @@ pub struct HoldIntent(pub Option<[i8; 3]>);
 
 /// Bevy key for a key name in a `.sae` file. Only the names Connor's
 /// movement uses so far, plus letters and function keys.
-fn key_code(name: &str) -> Option<KeyCode> {
+pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
     Some(match name {
         "up" => KeyCode::ArrowUp,
         "down" => KeyCode::ArrowDown,
@@ -107,8 +104,10 @@ fn key_code(name: &str) -> Option<KeyCode> {
         "home" => KeyCode::Home,
         "insert" => KeyCode::Insert,
         "delete" => KeyCode::Delete,
-        "pageup" => KeyCode::PageUp,
-        "pagedown" => KeyCode::PageDown,
+        "pageup" | "prior" => KeyCode::PageUp,
+        "pagedown" | "next" => KeyCode::PageDown,
+        "f2" => KeyCode::F2,
+        "f11" => KeyCode::F11,
         "shift" => KeyCode::ShiftLeft,
         "control" => KeyCode::ControlLeft,
         "alt" => KeyCode::AltLeft,
@@ -122,11 +121,14 @@ fn key_code(name: &str) -> Option<KeyCode> {
 pub fn spawn_connor(
     commands: &mut Commands,
     (placement, assets): (Placement, ConnorAssets),
+    camera_start: Option<[f32; 3]>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     images: &mut Assets<Image>,
     main_log: &mut Log,
 ) {
+    let camera_keys = assets.camera_keys.clone();
+    let connor_keys = assets.keys.clone();
     let loops: Vec<(f32, [f32; 3])> = assets.animations.iter().map(|a| (a.duration, a.step_sum)).collect();
     // Each animation: one material per look, one entity per frame.
     let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
@@ -237,27 +239,32 @@ pub fn spawn_connor(
         updates: 0,
         log,
         last_state: "normal",
-        camera_placed: false,
-        follow: false,
         shown: None,
-        last_drawn_at: None,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z forward turn run movement heading phase wanted_x wanted_y",
     );
+    if let Some(cam) = crate::game_camera::make(
+        sim.mover.position,
+        heading,
+        camera_start,
+        &camera_keys,
+        &connor_keys,
+        main_log,
+    ) {
+        commands.insert_resource(cam);
+        commands.insert_resource(crate::game_camera::CameraChoice { game: true });
+    }
     commands.insert_resource(sim);
 }
 
-/// Keys: Connor's movement keys (held order) and the test keys G, B, C, F.
-/// The camera is put behind him once at the start.
+/// Keys: Connor's movement keys (held order) and the test keys G and B.
 pub fn connor_keys(
     keys: Res<ButtonInput<KeyCode>>,
     sim: Option<ResMut<ConnorSim>>,
     shared: Res<Shared>,
-    mut fly: ResMut<Fly>,
     mut start_lift: ResMut<StartLift>,
     hold: Res<HoldIntent>,
-    mut camera: Query<&mut Transform, (With<Camera3d>, Without<ConnorBody>)>,
 ) {
     let Some(mut sim) = sim else { return };
     // Movement keys, in the order they were pressed.
@@ -306,27 +313,6 @@ pub fn connor_keys(
         );
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
-    }
-    if keys.just_pressed(KeyCode::KeyF) {
-        sim.follow = !sim.follow;
-        shared.log.lock().unwrap().summary(format!("camera follows Connor: {}", if sim.follow { "on" } else { "off" }));
-    }
-    if keys.just_pressed(KeyCode::KeyC) || !sim.camera_placed {
-        let Ok(mut cam) = camera.single_mut() else { return };
-        sim.camera_placed = true;
-        // He faces -Y of his model, turned by his heading.
-        let heading = sim.current.1;
-        let forward = [heading.sin(), -heading.cos()];
-        let p = sim.current.0;
-        let eye = [p[0] - forward[0] * 3500.0, p[1] - forward[1] * 3500.0, p[2] + 2200.0];
-        let target = [p[0], p[1], p[2] + 1400.0];
-        let (eye, target) = (Vec3::from(to_bevy(eye, [0.0; 3])), Vec3::from(to_bevy(target, [0.0; 3])));
-        let d = target - eye;
-        // Matches fly_input: rotation = yaw about Y, then pitch.
-        fly.yaw = (-d.x).atan2(-d.z);
-        fly.pitch = (d.y / d.length()).asin();
-        cam.translation = eye;
-        sim.last_drawn_at = None;
     }
 }
 
@@ -408,7 +394,6 @@ pub fn connor_draw(
     fixed: Res<Time<Fixed>>,
     mut body: Query<&mut Transform, (With<ConnorBody>, Without<Camera3d>)>,
     mut visibility: Query<&mut Visibility>,
-    mut camera: Query<&mut Transform, (With<Camera3d>, Without<ConnorBody>)>,
 ) {
     let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
@@ -445,11 +430,4 @@ pub fn connor_draw(
         }
         sim.shown = frame;
     }
-    // F: the camera keeps its offset from Connor.
-    if sim.follow {
-        if let (Some(last), Ok(mut cam)) = (sim.last_drawn_at, camera.single_mut()) {
-            cam.translation += t.translation - last;
-        }
-    }
-    sim.last_drawn_at = Some(t.translation);
 }

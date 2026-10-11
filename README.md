@@ -48,15 +48,20 @@ The code is written with an AI coding agent (Claude Code); see
 - Start-up scripts' variables, `getLoc` and `move` are followed (Barren's
   forge objects, DeadCity's torch flames). Checked by eye.
 - M2 started: Connor stands at his start point by the cottage in his
-  standing pose, with gravity on (15 updates per second). Test keys: C
-  puts the camera behind him, G / B lift him 5,000 / 2,000 to watch him
+  standing pose, with gravity on (15 updates per second). Test keys: G
+  / B lift him 5,000 / 2,000 to watch him
   fall (5,000 kills him; the log says so). Checked by eye.
 - Connor walks (Up), steps back (Down), turns (Left/Right) and runs (End
   switches run on/off; it starts on), with his animations and the speeds
-  of the original (walk 1,127, run 2,518 units/s, measured). F makes the
-  camera follow him. No start/stop animations yet; running into a steep
+  of the original (walk 1,127, run 2,518 units/s, measured). No start/stop animations yet; running into a steep
   hillside looks wrong until slopes are done (step 2c): he slides far up
   it, then slowly back. Checked by eye.
+- The game camera follows Connor as in the original: it trails him on a
+  leash (same distance walking and running), stays 1,400 above the ground, right mouse
+  swings and zooms, Page Up/Down tilt, Home resets, F11 keeps a fixed
+  distance. F switches to the free flying camera and back. Not yet: it
+  does not swing back behind him by itself, nor avoid walls. Checked by
+  eye (mouse directions corrected after the check).
 - The other 11 worlds open the same way (`--world <name>`) and their
   objects load by the same rules; only Barren's lookouts were looked at
   by eye so far (not yet after the fix that places them).
