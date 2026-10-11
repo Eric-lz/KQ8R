@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/kq8-data", "crates/kq8-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+kq8-data = { path = "crates/kq8-data" }
+explode = "0.1.2"
+
+# Decompressing 133 MB byte-by-byte is slow in debug builds; optimise
+# dependencies even in dev builds so `cargo run` stays fast.
+[profile.dev.package."*"]
+opt-level = 3

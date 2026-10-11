@@ -1,0 +1,13 @@
+[package]
+name = "kq8-cli"
+description = "Command-line checks and dumps for the KQ8 rewrite"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "kq8"
+path = "src/main.rs"
+
+[dependencies]
+kq8-data.workspace = true

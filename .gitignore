@@ -1,1 +1,33 @@
-MASK/
+# WHITELIST: ignore everything, then allow only our own source files.
+# Never switch this to a normal ignore list (see AGENTS.md).
+# Game files (MASK/), build output (target/) and logs (kq8-artifacts/)
+# stay ignored because they are never listed below.
+*
+!*/
+
+# Never descend into these, even if a pattern below would match inside them.
+/MASK/
+/target/
+/kq8-artifacts/
+/reference/
+
+# Top-level project files
+!/.gitignore
+!/AGENTS.md
+!/README.md
+!/MODLOG.md
+!/CREDITS.md
+!/STATUS.md
+!/MODLOG-template.md
+!/STATUS-handoff.md
+!/Cargo.toml
+!/Cargo.lock
+!/rust-toolchain.toml
+
+# Documentation
+!/docs/*.md
+!/docs/**/*.md
+
+# Rust sources
+!/crates/*/Cargo.toml
+!/crates/*/src/**/*.rs

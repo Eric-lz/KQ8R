@@ -1,0 +1,9 @@
+[package]
+name = "kq8-data"
+description = "Readers for King's Quest: Mask of Eternity game files"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+explode.workspace = true
