@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q20 (script variables, getLoc, move)
+
+**Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
+**Why:** Objects placed through `$KQObject::loc` were missing.
+**Tested how:** Traced `KQObject::getLoc`, the console's variable substitution and the `move` command in `Mask.exe`; read Barren, IceWorld and Swamp scripts.
+**Result:** `$KQObject::loc` holds six numbers (position and angles). Variables are split into separate words, so `loadKQ` treats them as written numbers. `move` has flags 0–3 (absolute or relative). With 4–5 numbers, the extras are ignored. Values in `.kq` files can be variables.
+**Corrections:** Withdrew the Q17 claim that `move` uses the −1 ground rule (not traced).
+**Still broken / not tested:** Whether a relative move uses world or object axes, and how the short `getLoc` name is found, are not traced.
+**Next:** M2 study.
+
 ## 2026-10-11 Study session: Q5 and Q3 answered
 
 **Changed:** `docs/behaviour/models-and-textures.md`, `docs/behaviour/QUESTIONS.md`. No code.

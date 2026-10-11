@@ -160,8 +160,10 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
 1. **In a `loadKQ` line, a z of exactly −1 or exactly −2 means "on the
    ground".** Before placing the object, the game replaces that z with the
    ground height at (x, y). This happens **whatever `keepOnGround` says**.
-   (Traced.) The same rule is used by other commands that take a position,
-   e.g. `move Connor 0 x y -1 …` in the scripts.
+   (Traced.) The same rule is used by at least one other object-creating
+   command. (Corrected 2026-10-11: the first version said `move` uses it
+   too; that is **not traced**. Scripts write `move Connor 0 x y -1 …`,
+   which suggests the same meaning.)
 2. −1 and −2 pass a different on/off value to the height lookup, but the
    ground (`KQTerrain`) ignores it, so both give the same ground height.
    (Traced as far as the ground's lookup; if some other floor answers the
@@ -217,3 +219,48 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
 4. So: don't draw `wizchest1` at the start. An object whose
    `groupsAlways` includes 0x40 (e.g. `groupsAlways=1097` = 0x449, one
    object in the game) would still be drawn when hidden.
+
+## Script variables, `getLoc` and `move` (Q20)
+
+1. **(a) `KQObject::getLoc <name>`** (scripts also write just `getLoc`,
+   which does the same; how the short name is found is not traced) reads the
+   object's **current** position and turn and sets two variables (traced):
+   - `$KQObject::loc` = `"x y z dirX dirY dirZ"` (six numbers; the three
+     angles are worked back from the object's rotation, the reverse of
+     the `dirX/Y/Z` rule);
+   - `$KQObject::locOnly` = `"x y z"`.
+   "Current" means after `loadKQ` placed it, including the −1/−2 rule.
+   Whether a `keepOnGround` lift has happened yet at that moment is not
+   traced. For the Weirdling it doesn't matter: its z 1,744 is above the
+   ground there (1,656).
+2. **(b) A `$variable` that is not the first word of a line is replaced by
+   its text, and that text is split into words again** (traced in the
+   console reader). So `loadKQ anvil.kq same $KQObject::loc` becomes
+   `loadKQ anvil.kq same x y z dirX dirY dirZ`: nine words, position **and**
+   angles, and all `loadKQ` rules apply as if the numbers were written out.
+   (Inside double quotes it stays one word.) The anvil, coals and grinder
+   therefore get the Weirdling's position (144476, 131239, 1744) and turn
+   (dirZ ≈ −1.43). Their own `.kq` files also use variables:
+   `locX=$Barren::Seller::xPos` etc., set in Barren's `worldvar.cs` to the
+   same numbers. **Values in `.kq` files can be `$variables` too.**
+3. **(c)** Variables seen in `loadKQ` lines: `$KQObject::loc` (346 times),
+   `$1` (6, a script's first argument), `$IceWorld::ChestPos` (1). The
+   latter is set in IceWorld's `newWorld.cs` just before:
+   `set IceWorld::ChestPos $ChestX $ChestY $ChestZ 0 0 $ChestRotZ` with
+   `ChestX 279587`, `ChestY 498027`, `ChestZ 31641`, `ChestRotZ -2.9`.
+   So it reads as `279587 498027 31641 0 0 -2.9`. (From the scripts; that
+   `set` joins several words with spaces is likely, not traced.)
+4. **(d) `move <who> <flags> x y z [rx ry rz]`** (traced: up to six
+   numbers, missing ones are 0; flag meanings from the game's own help
+   text): 0 = position and turn absolute; 1 = position relative, turn
+   absolute; 2 = position absolute, turn relative; 3 = both relative. So
+   `move flamelh.1a 3 0 0 2000` raises the flame 2,000 above where it was
+   loaded, keeping its turn. **Not traced:** whether a relative move is
+   along the world axes or the object's own turned axes. For DeadCity's
+   flames it makes no difference (their torches are loaded with three
+   numbers, so their angles are 0).
+5. **(e) 4 or 5 numbers in a `loadKQ` line:** the angles are used only when
+   all three are given. With x y z plus one or two more numbers, the extra
+   numbers are **ignored** and the angles are 0 0 0. (Traced: angles need
+   at least 9 words.) So Swamp's `grass.kq swmp.01 166759 68128 -2 -1` is
+   at (166759, 68128, ground), not turned.
