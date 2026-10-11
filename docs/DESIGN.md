@@ -353,6 +353,15 @@ corrections to `buildings.md` rule 2 and material flag `0x10000`.
 - Tests: script parsing (comments, nested scripts, name rules, partial
   positions); log: objects loaded per script, skipped and why.
 
+#### M1 step 3d — `loadKQ` z of −1/−2 = on the ground (planned 2026-10-11)
+
+Rule from `docs/behaviour/objects.md` "Ground heights −1 and −2" (Q17).
+Small fix: a `loadKQ` line whose z is exactly −1 or −2 puts the object at
+the ground height under (x, y), up or down, whatever `keepOnGround` says.
+A `.kq` file's own `locZ` keeps the old rule (raise only, with
+`keepOnGround`). `Cottage2–4` and `wateran1–9` stay skipped (no model).
+Log: how many objects were put on the ground this way.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,

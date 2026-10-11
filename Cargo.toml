@@ -15,7 +15,7 @@ kq8-data = { path = "crates/kq8-data" }
 explode = "0.1.2"
 png = "0.18.1"
 # Only the 3D parts; no audio.
-bevy = { version = "0.20.0", default-features = false, features = ["3d"] }
+bevy = { version = "0.20.0", default-features = false, features = ["3d", "bevy_ui", "bevy_ui_render"] }
 
 # Decompressing 133 MB byte-by-byte is slow in debug builds; optimise
 # dependencies even in dev builds so `cargo run` stays fast.

@@ -42,6 +42,21 @@ impl World {
             Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
         })
     }
+
+    /// Every entry whose name ends with `ext` (any case), unpacked, with
+    /// its file name and archive label.
+    pub fn entries_ending(&self, ext: &str) -> Vec<(String, String, Result<Vec<u8>, String>)> {
+        let ext = ext.to_ascii_lowercase();
+        self.vols
+            .iter()
+            .flat_map(|(v, a)| {
+                a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
+                    let label = format!("vol:{}/{v}/{}", self.name, e.name);
+                    (e.name.clone(), label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
+                })
+            })
+            .collect()
+    }
 }
 
 /// Everything the window needs, already converted.
@@ -406,8 +421,23 @@ fn world_palette_name(world: &World, setting: &str) -> Option<String> {
 pub struct Objects {
     /// (shape name as first written, model in model space).
     pub shapes: Vec<(String, Model)>,
-    /// A placement and the index of its model in `shapes`.
-    pub placed: Vec<(kq8_data::objects::Placement, usize)>,
+    /// A placement, the index of its model in `shapes`, and whether it is
+    /// an unused object (in a `.kq` file no start-up script loads; drawn
+    /// only with the H key, viewer only).
+    pub placed: Vec<(kq8_data::objects::Placement, usize, bool)>,
+    /// Loaded objects that have a position but nothing we can draw: shown
+    /// as markers on request (viewer only, not a game rule).
+    pub markers: Vec<Marker>,
+}
+
+pub struct Marker {
+    pub name: String,
+    pub class: String,
+    /// After the same ground rules as drawn objects.
+    pub position: [f32; 3],
+    /// True: a character in an `.anm` file (drawn by the game, not by us
+    /// yet). False: no model at all (traps, sounds, paths...).
+    pub anm: bool,
 }
 
 /// Reads every `.kq` section with a position from the world's archives
@@ -428,10 +458,12 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut shapes: Vec<(String, Model)> = Vec::new();
     let mut index_of: BTreeMap<String, Option<usize>> = BTreeMap::new();
     let mut placed = Vec::new();
+    let mut markers = Vec::new();
     let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut flag_values: BTreeMap<String, usize> = BTreeMap::new();
-    let (mut sections, mut raised, mut fell_back) = (0, 0, 0);
+    let mut hidden_values: BTreeMap<String, usize> = BTreeMap::new();
+    let (mut sections, mut raised, mut fell_back, mut on_ground_marker) = (0, 0, 0, 0);
     // Buildings use KQWorld::interiorPalette (buildings.md); loaded on first use.
     let mut interior_palette: Option<Result<[Rgb; 256], String>> = None;
     // Only what the world's start-up scripts load is in the world
@@ -453,9 +485,45 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         log.summary(format!("  unreadable: {b}"));
     }
     let mut several_positions = 0;
-    for load in &script.loads {
+    // Unused objects: `.kq` files that no start-up script loads. Not in
+    // the game's world at the start; drawn only with the H key so they can
+    // be looked at (viewer only, not a game rule). Same rules as loaded
+    // objects otherwise, with the file's own position and angles.
+    let loaded_files: std::collections::BTreeSet<String> = script
+        .loads
+        .iter()
+        .map(|l| l.file.rsplit(['/', '\\']).next().unwrap_or(&l.file).to_ascii_lowercase())
+        .collect();
+    let all_scripts: Vec<(String, String)> = world
+        .entries_ending(".cs")
+        .into_iter()
+        .filter_map(|(n, _, b)| b.ok().map(|b| (n, b.iter().map(|&c| (c as char).to_ascii_lowercase()).collect())))
+        .collect();
+    let mut work: Vec<(kq8_data::world_script::LoadKq, Option<(String, Vec<u8>)>, bool)> =
+        script.loads.iter().map(|l| (l.clone(), None, false)).collect();
+    for (name, label, bytes) in world.entries_ending(".kq") {
+        if loaded_files.contains(&name.to_ascii_lowercase()) {
+            continue;
+        }
+        let Ok(bytes) = bytes else { continue };
+        let load = kq8_data::world_script::LoadKq {
+            file: name.clone(),
+            name: kq8_data::world_script::LoadName::Keep,
+            position: None,
+            angles: None,
+            from: "(no start-up script)".into(),
+            line: 0,
+            inside_if: false,
+        };
+        work.push((load, Some((label, bytes)), true));
+    }
+    let mut unused_skipped: BTreeMap<String, usize> = BTreeMap::new();
+    let mut unused_placed = 0;
+    for (load, preloaded, unused) in &work {
+        let unused = *unused;
+        let skipped = if unused { &mut unused_skipped } else { &mut skipped };
         let base = load.file.rsplit(['/', '\\']).next().unwrap_or(&load.file);
-        let (label, bytes) = match world.load(base) {
+        let (label, bytes) = match preloaded.clone().map(Ok).or_else(|| world.load(base)) {
             Some(Ok(x)) => x,
             _ => {
                 log.detail(format!("skip {} line {}: {} not found", load.from, load.line, load.file));
@@ -476,7 +544,30 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                 *skipped.entry("no position".into()).or_default() += 1;
                 continue;
             };
-            sections += 1;
+            if unused {
+                // Templates for script copies sit at (0, 0, 0): nothing to see there.
+                if p.position == [0.0; 3] {
+                    *skipped.entry("at (0, 0, 0) (template)".into()).or_default() += 1;
+                    continue;
+                }
+                let base_lc = base.to_ascii_lowercase();
+                let named_in: Vec<&str> =
+                    all_scripts.iter().filter(|(_, t)| t.contains(&base_lc)).map(|(n, _)| n.as_str()).collect();
+                log.detail(format!(
+                    "unused object {label}[{}] at ({:.0}, {:.0}, {:.0}); file named in scripts: {}",
+                    p.name,
+                    p.position[0],
+                    p.position[1],
+                    p.position[2],
+                    if named_in.is_empty() { "none".to_string() } else { named_in.join(", ") }
+                ));
+            } else {
+                sections += 1;
+            }
+            if let Some(h) = s.get("hidden") {
+                *hidden_values.entry(format!("{h} ({})", if p.shape.is_some() || s.get("animLoops").is_some() { "with a model" } else { "no model" })).or_default() += 1;
+                log.detail(format!("[{}] hidden={h}", p.name));
+            }
             if load.inside_if {
                 log.summary(format!("  NOTE {label}: loaded inside an if-block ({} line {}); placed anyway", load.from, load.line));
             }
@@ -518,6 +609,15 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
             };
             if let Some(r) = reason {
                 log.detail(format!("skip {label}[{}]: {r}", p.name));
+                if p.shape.is_none() && !unused {
+                    let ground = terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
+                    markers.push(Marker {
+                        name: p.name.clone(),
+                        class: p.class.clone().unwrap_or_else(|| "?".into()),
+                        position: p.grounded_position(ground),
+                        anm: s.get("animFile").is_some(),
+                    });
+                }
                 *skipped.entry(r).or_default() += 1;
                 continue;
             }
@@ -582,29 +682,44 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
                     shapes[i].1.frame_note,
                     p.flags.as_ref().map_or(String::new(), |f| format!(" flags={f} (random start not applied)"))
                 ));
-                if c.fell_back {
+                if c.fell_back && !unused {
                     fell_back += 1;
                 }
             }
-            if p.flags.is_some() {
+            if p.flags.is_some() && !unused {
                 *flag_values.entry(p.flags.clone().unwrap()).or_default() += 1;
             }
-            // Ground rule (buildings.md, Q10): raise, never lower.
+            // Ground rules: loadKQ z of -1/-2 = on the ground (objects.md
+            // Q17); otherwise keepOnGround raises, never lowers (Q10).
             let ground = terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
             let grounded = p.grounded_position(ground);
-            if grounded != p.position {
+            if p.z_on_ground {
+                log.detail(format!(
+                    "put [{}] on the ground (loadKQ z={:.0}, keepOnGround={}): z={}",
+                    p.name,
+                    p.position[2],
+                    p.keep_on_ground,
+                    ground.map_or("none (outside the grid, kept as written)".into(), |g| format!("{g:.0}"))
+                ));
+                on_ground_marker += usize::from(!unused);
+                p.position = grounded;
+            } else if grounded != p.position {
                 log.detail(format!("raised [{}] from z={:.0} to the ground at z={:.0}", p.name, p.position[2], grounded[2]));
-                raised += 1;
+                raised += usize::from(!unused);
                 p.position = grounded;
             }
-            *by_class.entry(if animation.is_some() { format!("{class} (animated)") } else { class }).or_default() += 1;
-            placed.push((p, i));
+            if unused {
+                unused_placed += 1;
+            } else {
+                *by_class.entry(if animation.is_some() { format!("{class} (animated)") } else { class }).or_default() += 1;
+            }
+            placed.push((p, i, unused));
         }
     }
 
     // Check from the numbers: lowest point of each placed model vs ground.
     let mut gaps = Vec::new();
-    for (p, i) in &placed {
+    for (p, i, _) in placed.iter().filter(|x| !x.2) {
         let t = p.transform();
         let lowest = shapes[*i]
             .1
@@ -636,13 +751,17 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let count = |f: &dyn Fn(f32) -> bool| gaps.iter().filter(|g| f(**g)).count();
     log.summary(format!(
         "objects: {sections} loaded objects with a position, {} placed using {} different models; skipped: {skipped:?}",
-        placed.len(),
+        placed.len() - unused_placed,
         shapes.len()
     ));
+    log.summary(format!(
+        "  unused objects (in .kq files no start-up script loads; shown with key H): {unused_placed} placed; skipped: {unused_skipped:?}"
+    ));
     log.summary(format!("  placed per class: {by_class:?}"));
+    log.summary(format!("  'hidden' values (not used yet): {hidden_values:?}"));
     log.summary(format!("  files where several sections have a position (first used): {several_positions}"));
     log.summary(format!(
-        "  raised onto the ground (keepOnGround): {raised}; animated objects without a usable currAnimName (movement 0 used): {fell_back}; 'flags' values: {flag_values:?}"
+        "  put on the ground by a loadKQ z of -1/-2: {on_ground_marker}; raised onto the ground (keepOnGround): {raised}; animated objects without a usable currAnimName (movement 0 used): {fell_back}; 'flags' values: {flag_values:?}"
     ));
     log.summary(format!(
         "  lowest point minus ground: within 50 units={} 50..500 above={} more than 500 above={} 50..500 below={} more than 500 below={}",
@@ -652,7 +771,18 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         count(&|g| (-500.0..-50.0).contains(&g)),
         count(&|g| g < -500.0)
     ));
-    Objects { shapes, placed }
+    log.summary(format!(
+        "  invisible objects (markers, key H): {} with no model, {} characters in .anm files",
+        markers.iter().filter(|m| !m.anm).count(),
+        markers.iter().filter(|m| m.anm).count()
+    ));
+    for m in &markers {
+        log.detail(format!(
+            "marker [{}] class={} at ({:.0}, {:.0}, {:.0}){}",
+            m.name, m.class, m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
+        ));
+    }
+    Objects { shapes, placed, markers }
 }
 
 /// A building (`.dig`) as a `Model`, so it is placed and drawn like any

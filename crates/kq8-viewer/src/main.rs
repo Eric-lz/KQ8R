@@ -10,7 +10,8 @@
 //! palette. `--frames N` closes the window by itself after N frames.
 //! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
 //! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
-//! hold the right mouse button to look around. Esc quits.
+//! hold the left mouse button to look around, H shows/hides invisible
+//! objects (green: no model, orange: .anm character). Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no lighting, no animation. Back faces are hidden as in the original
@@ -196,8 +197,8 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::LoadedObjects(Some(objects)))
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(terrain_view::Fly::new())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects))
-                .add_systems(Update, (terrain_view::fly_input, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
+                .add_systems(Update, (terrain_view::fly_input, terrain_view::toggle_markers, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

@@ -35,8 +35,15 @@ The code is written with an AI coding agent (Claude Code); see
 - Placing the objects Daventry's start-up scripts load (347 of them:
   furniture, doors, chests, signs, trees...), turned the way the game turns
   them, animated ones at their starting frame, see-through ones (waterfalls,
-  torches) see-through. Checked by eye. 79 of them (tombs, many trees)
-  are still placed under the ground until question Q17 is answered. Checked by eye (before the last fixes, 104 objects):
+  torches) see-through. Checked by eye. The 79 that the scripts place "on
+  the ground" (z −1/−2: tombs, many trees) now stand on it (not checked by
+  eye yet). Press H to show the 77 objects that have nothing to draw as
+  small cubes: green = invisible in the game (traps, sounds, paths,
+  leaf emitters), orange = characters we cannot draw yet (`.anm` files).
+  H also shows 16 unused objects: in the game's files but not loaded at
+  the start (pictures `tap01/02/04`, `pubart1`, the potion, the pyramid...).
+  A small text in the top-left corner says whether they are shown.
+  Not checked by eye yet. Checked by eye (before the last fixes, 104 objects):
   objects are where expected (the pub's keg, the mill wheel, doors,
   paintings; then the sign, bell, baskets and closed doors). Buildings and
   monsters are missing, so the village still looks mostly empty, and

@@ -37,6 +37,9 @@ pub struct Placement {
     /// `translucency`: 256 (the default) = solid; below that every
     /// material is drawn at opacity n / 255 (objects.md Q14).
     pub translucency: f32,
+    /// True if a `loadKQ` line gave z = -1 or -2: "on the ground", whatever
+    /// `keepOnGround` says (objects.md "Ground heights -1 and -2", Q17).
+    pub z_on_ground: bool,
 }
 
 impl Placement {
@@ -55,6 +58,8 @@ impl Placement {
             keep_on_ground: s.number("keepOnGround").and_then(Result::ok).is_none_or(|v| v != 0.0),
             flags: s.get("flags").map(str::to_string),
             translucency: s.number("translucency").and_then(Result::ok).map_or(256.0, |v| v as f32),
+            // A `.kq` file's own locZ never takes the -1/-2 rule (Q17 rule 4).
+            z_on_ground: false,
         })
     }
 
@@ -74,6 +79,7 @@ impl Placement {
                 }
                 let mut p = Self::from_section(&with_loc)?;
                 p.angles = load.angles_or_zero();
+                p.z_on_ground = position[2] == -1.0 || position[2] == -2.0;
                 p
             }
             None => Self::from_section(section)?,
@@ -91,11 +97,13 @@ impl Placement {
         if self.translucency >= 256.0 { 1.0 } else { (self.translucency / 255.0).clamp(0.0, 1.0) }
     }
 
-    /// Position after the ground rule: with `keepOnGround`, an object below
-    /// `ground` (the ground height under locX, locY) is raised onto it.
+    /// Position after the ground rules, with `ground` the ground height
+    /// under locX, locY: a `loadKQ` z of -1/-2 is replaced by it (Q17);
+    /// otherwise, with `keepOnGround`, an object below it is raised onto it.
     pub fn grounded_position(&self, ground: Option<f32>) -> [f32; 3] {
         let [x, y, z] = self.position;
         match ground {
+            Some(g) if self.z_on_ground => [x, y, g],
             Some(g) if self.keep_on_ground && z < g => [x, y, g],
             _ => self.position,
         }
@@ -283,6 +291,28 @@ translucency=200
         let p = Placement::from_load(s, &load(LoadName::None, None, None)).unwrap();
         assert_eq!((p.name.as_str(), p.position, p.angles), ("", [0.0; 3], [0.0, 0.0, 1.0]));
         assert!((p.opacity() - 200.0 / 255.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn load_line_z_minus_1_or_2_means_on_the_ground() {
+        use crate::world_script::{LoadKq, LoadName};
+        let s = &crate::kq_text::parse(b"[tomb]\nshapeName=tomb.kqs\nlocX=0\nlocY=0\nlocZ=-1\nkeeponground=0\n")[0];
+        let load = |z| LoadKq {
+            file: "tomb.kq".into(), name: LoadName::Keep, position: Some([1.0, 2.0, z]), angles: None,
+            from: "permwrld.cs".into(), line: 1, inside_if: false,
+        };
+        // -1 and -2 move the object onto the ground, up or down, even with keepOnGround off.
+        for z in [-1.0, -2.0] {
+            let p = Placement::from_load(s, &load(z)).unwrap();
+            assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
+            assert_eq!(p.grounded_position(Some(-800.0)), [1.0, 2.0, -800.0]);
+        }
+        // Any other value is used as written (keepOnGround is off here).
+        let p = Placement::from_load(s, &load(-3.0)).unwrap();
+        assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, -3.0]);
+        // A .kq file's own locZ=-1 does not take this rule.
+        let p = Placement::from_section(s).unwrap();
+        assert_eq!(p.grounded_position(Some(500.0)), [0.0, 0.0, -1.0]);
     }
 
     #[test]

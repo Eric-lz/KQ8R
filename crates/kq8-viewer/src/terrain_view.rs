@@ -121,7 +121,7 @@ pub fn setup_objects(
     }
     let mut worst = 0.0f32;
     let mut see_through = 0;
-    for (p, i) in &objects.placed {
+    for (p, i, unused) in &objects.placed {
         let transform = bevy_transform(p);
         // Self-check: the game's rule (point x rotation + position, then
         // converted) and Bevy's transform must put a corner at the same spot.
@@ -145,13 +145,81 @@ pub fn setup_objects(
             } else {
                 material.clone()
             };
-            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform));
+            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform));
+            if *unused {
+                e.insert((Visibility::Hidden, ShownWithH));
+            }
         }
     }
+    // Invisible objects: a 1 m cube each, hidden until H is pressed.
+    // Green = no model in the game; orange = a character we cannot draw yet.
+    let cube = meshes.add(Cuboid::from_length(100.0 / UNITS_PER_METRE));
+    let green = materials.add(StandardMaterial { base_color: Color::srgb(0.1, 1.0, 0.2), unlit: true, ..default() });
+    let orange = materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.55, 0.0), unlit: true, ..default() });
+    for m in &objects.markers {
+        // Cube resting on the point, so ground markers are not half buried.
+        let at = Vec3::from(to_bevy(m.position, [0.0; 3])) + Vec3::Y * 50.0 / UNITS_PER_METRE;
+        commands.spawn((
+            Mesh3d(cube.clone()),
+            MeshMaterial3d(if m.anm { orange.clone() } else { green.clone() }),
+            Transform::from_translation(at),
+            Visibility::Hidden,
+            ShownWithH,
+        ));
+    }
     log.summary(format!(
-        "spawned objects: {} copies of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
+        "spawned objects: {} copies ({} of them unused, shown with H) of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
         objects.placed.len(),
+        objects.placed.iter().filter(|x| x.2).count(),
         built.len()
+    ));
+}
+
+/// Hidden at start, shown by H: cubes for objects with nothing to draw,
+/// and unused objects (no start-up script loads them).
+#[derive(Component)]
+pub struct ShownWithH;
+
+/// The small on-screen text that says whether H is on.
+#[derive(Component)]
+pub struct HLabel;
+
+fn h_label_text(shown: bool) -> String {
+    format!("Hidden objects: {} (H)", if shown { "SHOWN" } else { "hidden" })
+}
+
+pub fn setup_h_label(mut commands: Commands) {
+    commands.spawn((
+        Text::new(h_label_text(false)),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(Color::WHITE),
+        Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
+        HLabel,
+    ));
+}
+
+/// H shows or hides everything marked `ShownWithH`.
+pub fn toggle_markers(
+    keys: Res<ButtonInput<KeyCode>>,
+    shared: Res<Shared>,
+    mut shown: Local<bool>,
+    mut markers: Query<&mut Visibility, With<ShownWithH>>,
+    mut label: Query<&mut Text, With<HLabel>>,
+) {
+    if !keys.just_pressed(KeyCode::KeyH) {
+        return;
+    }
+    *shown = !*shown;
+    for mut v in &mut markers {
+        *v = if *shown { Visibility::Inherited } else { Visibility::Hidden };
+    }
+    for mut t in &mut label {
+        t.0 = h_label_text(*shown);
+    }
+    shared.log.lock().unwrap().detail(format!(
+        "key H: invisible objects and unused objects {} ({} entities)",
+        if *shown { "shown" } else { "hidden" },
+        markers.iter().count()
     ));
 }
 

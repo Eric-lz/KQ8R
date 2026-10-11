@@ -3,6 +3,26 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Viewer: H shows invisible objects
+
+**Changed:** `Cargo.toml` (Bevy UI features, for the text), `crates/kq8-viewer/src/load.rs` (collects objects with a position but nothing to draw; logs `hidden=` values), `crates/kq8-viewer/src/terrain_view.rs` (cubes + H key), `crates/kq8-viewer/src/main.rs` (registers the key; fixes the help text: it is the left mouse button), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q18), `README.md`.
+**Why:** The user asked to see the invisible objects out of curiosity.
+**Tested how:** Built; `kq8-viewer --terrain --frames 5`; log says 72 no-model markers and 5 `.anm` characters. The H key itself is **not tested** (needs a person at the keyboard).
+**Result:** 77 cubes, 1 m wide, sitting at each object's position (same ground rules as drawn objects), hidden at start. Green = no model (traps, sounds, walking paths, leaf/stream emitters, camera); orange = `Girl`, `Wizard`, `Ravenw`, `Shadow`, `Uglybeast`. Found `wizchest1` has `hidden=1`; meaning unknown, asked as Q18, still drawn.
+**Still broken / not tested:** No name labels (names and positions are in the log as `marker [...]` lines). Trap and path sizes are not shown, only their anchor point.
+**Added after the user's question:** H also shows **unused objects**: `.kq` files in the world's archives that no start-up script loads (they were drawn before step 3c placed only script-loaded objects). 16 placed; 29 templates at (0, 0, 0) and 54 without a model or position are left out. Among them are the pictures the user remembered: `tap01`, `tap02` (near the church), `tap04`, flat picture models no Daventry script names. The log line `unused object ...` says which other scripts, if any, name the file: e.g. `potion`, `Pyramid`, `bell`, `waterfall2` are named by event scripts (`Starball.cs`, `Unicorn.cs`, `BELSTND.CS`, `BRICKS.CS`), so they probably appear later in the game; `tap01/02/04`, `easel2`, `pubart1`, `fenc2`, `zedrock1/2` are named by none. Checked by comparing the object lists of the step 3b build and this one (3b had 170, all of which are now either loaded or among these).
+**Added after that:** a small white text in the top-left corner, "Hidden objects: hidden (H)" / "Hidden objects: SHOWN (H)". Needed Bevy's UI features (`bevy_ui`, `bevy_ui_render` in `Cargo.toml`). Built without warnings and the viewer runs; the text itself is **not tested** (needs eyes). All 12 worlds load with the H key code (counts in the session notes); DeadCity has 184 `loadKQ` lines with a variable position (`$KQObject::loc`) that we cannot read yet.
+**Next:** User's eye check, then commit.
+
+## 2026-10-11 M1 step 3d: script objects at z −1/−2 stand on the ground
+
+**Changed:** `crates/kq8-data/src/objects.rs` (new rule + unit test), `crates/kq8-viewer/src/load.rs` (uses it, logs it), `docs/DESIGN.md`, `docs/provenance/README.md`, `README.md`.
+**Why:** 79 Daventry objects (graveyard tombs, 44 trees) were ~8,000 units under the ground.
+**Tested how:** `cargo test -p kq8-data` (37 pass). `kq8-viewer --terrain --frames 30`, then read `kq8-artifacts/logs/viewer.log`.
+**Result:** 79 objects put on the ground by the −1/−2 rule. Objects more than 500 units below the ground: 83 → 4 (two docks, the lookout, the mill wheel, which reach into water or hillside on purpose).
+**Still broken / not tested:** Not checked by eye yet. Teleport pad look (Q14b), haze, building lighting, the river's flowing textures (`wateran`) still missing.
+**Next:** User's eye check, then commit.
+
 ## 2026-10-11 Study session: Q17 (objects at −1 under the ground)
 
 **Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
