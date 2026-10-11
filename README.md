@@ -23,6 +23,10 @@ The code is written with an AI coding agent (Claude Code); see
 - Reading 3D models (`.kqs`) and material lists (`.dml`): all 4,573 models
   and 25 material lists load without errors (4 old-format tomb models are
   skipped).
+- Reading every world's ground (heights, materials, settings) and asking
+  "how high is the ground here?". Checked against object positions: in
+  Daventry 11 objects stand exactly on the computed ground. Nothing is
+  drawn yet.
 - Showing one model in a window with its textures (`kq8-viewer`), with a
   camera you can turn with the mouse. Tested: the window opens and draws
   (about 6 ms per frame). Checked by eye (2026-10-11) on two models: the
@@ -43,6 +47,7 @@ cargo run --release -- vol-verify
 cargo run --release -- bitmap-verify
 cargo run --release -- bitmap-png GAME/8Gui/daventry.pbm --palette GAME/8Gui/ldaventr.ppl
 cargo run --release -- shape-verify
+cargo run --release -- terrain-verify
 cargo run --release -p kq8-viewer -- smlchest.KQS --world Daventry
 ```
 

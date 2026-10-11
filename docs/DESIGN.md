@@ -137,7 +137,10 @@ free-flying camera.
   guide 3).
 - B: 3D models (`.kqs`) and material lists (`.dml`) → textured model in a
   window. Planned in detail below ("M1 step 1").
-- B: terrain (`.dig`/`.dil`/`.dib`, `kq/Terrain`) → Daventry ground.
+- B: terrain (`kq/Terrain`, `.dib` images) → Daventry ground. Planned in
+  detail below ("M1 step 2"). Correction: `.dig`/`.dil` are not terrain;
+  they are named after buildings (`pub`, `castle`, `wndmill`, ...) and go
+  with the 33 `KQInterior` objects, so they belong to step 3.
 - B: place objects from the `.kq` files.
 - A, only if the data does not explain it: terrain size/scale, how textures
   and palettes are applied, lighting (`.ppl` shade/haze tables).
@@ -186,6 +189,51 @@ notes `kq8kqs.txt`, `kq8dml.txt`, `kq8pers.txt` (facts only, see
 
 Not in this step: animation, lighting, transparency, the normal table
 (we compute our own normals instead of copying the game's table).
+
+#### M1 step 2 — Daventry's ground (planned 2026-10-11)
+
+No behaviour note exists. Sources: the game's files only (no community
+notes cover terrain). What the files say (observed):
+
+- `kq/Terrain/TERRAIN.KQ` is plain text (`key=value`): it names the
+  pieces. Daventry: height image `terrh.dib`, a second one `terrh2.dib`
+  (`floorBMPName`, almost the same pixels), material image `terrm.dib`,
+  material directions `terrain/daventry.bin`, material list
+  `davennew.dml`, plus `groundScale=12`, `heightBMPScale=255`, distances,
+  light settings and light/shadow maps (`*.bin`, 526,342 bytes each).
+- `terrh.dib`: 129×129 grey values 0–254, i.e. one height per corner of
+  128×128 squares. `terrm.dib`: 128×128 values, one material per square.
+- `daventry.bin`: a count (255) then 255 records of 28 bytes: own index,
+  16-byte texture name (same names, same order as `davennew.dml`), a value
+  that is always 0, a value 0–7 (probably the texture's direction).
+
+Size, heights, orientation and the triangle split come from the
+behaviour note `docs/behaviour/terrain.md` (answers Q6, Q7). Still open:
+how a material's texture covers a square and which way it turns (Q8),
+holes, and the second height image `terrh2.dib`.
+
+**2a. Read the terrain files** (`kq8-data`, no window; not blocked)
+
+- `kq_text.rs`: reader for the game's `[section]` / `key=value` text
+  files (`TERRAIN.KQ` now, the object `.kq` files in step 3).
+- `terrain.rs`: the `TERRAIN.KQ` settings, the height and material grids
+  (from the `.dib` images, using the existing bitmap reader), the
+  direction records, and the height lookup from `terrain.md`: square =
+  2^groundScale, height = value × heightBMPScale, bottom image row = y 0,
+  two flat triangles per square with a chessboard diagonal.
+- `kq8 terrain-verify`: reads the terrain of every world and logs sizes,
+  value ranges, how often each material is used, and checks (grid sizes
+  match, every material number exists in the list, direction-file names
+  match the list, every texture exists in the world's archives), and the
+  ground height at every placed object compared with its own height.
+  (Done 2026-10-11.)
+
+**2b. Draw the ground** (viewer; textures blocked on Q8)
+
+- Build the ground mesh from the heights (two triangles per square, same
+  diagonals as the height lookup) and show it with a free-flying camera.
+- Until Q8 is answered: no textures; colour by height so hills can be
+  seen. Textures and their directions come from the answer, not guesses.
 
 ### M2 — Walk Connor around Daventry
 

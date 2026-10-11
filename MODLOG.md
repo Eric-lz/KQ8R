@@ -46,6 +46,59 @@ the real camera key map, not only a debug map as I first assumed.
 Open questions are listed at the end of each note.
 **Next:** Terrain height, slopes and collisions.
 
+## 2026-10-11 M1 step 2a: read the terrain, height lookup
+
+**Changed:** `kq8-data`: new `kq_text.rs` (reader for `[section]` /
+`key=value` files), `terrain.rs` (settings, height/material grids,
+direction table, height lookup). `kq8-cli`: new `terrain_verify.rs`
+(`kq8 terrain-verify`). Docs: `docs/DESIGN.md` (2a done, 2b plan),
+`docs/provenance/README.md`, `README.md`. Session B, from behaviour note
+`docs/behaviour/terrain.md` (Q6, Q7) and the data files.
+**Why:** M1 step 2a: the ground has to load before it can be drawn.
+**Tested how:** `cargo test` (19 pass, 5 new: row flip, corners, both
+diagonals, slope direction, text files), `cargo clippy` (0 warnings),
+`kq8 terrain-verify` on all 12 worlds.
+**Result:** 17 terrain files read, 0 failures, 0.1 s. Objects exactly on
+our ground (±0.5 units): Daventry 11 (heights 6,630–30,600), Barren 11
+(92 within 5), Ice World 11, Dead City 7, Snow exit 2. Daventry's height
+step is exactly 255. Many objects stand exactly +5 or +25 above the ground.
+That explains the note's 256.2.
+**First run failed:** 4 "failures" were the temple worlds' `terrain2.kq`
+naming `ice.dml`, which those worlds lack. A fact about the data, so it is
+now a note, not a failure.
+**Still broken / not tested:** Gnome: 0 objects on the ground (median
+17,450 units off; probably caves, not studied). Temple grounds are flat at 0.
+Holes, `terrh2.dib` (differs from `terrh.dib` at 120 Daventry points, all
+1–5 steps lower) and texture mapping (Q8) open. Nothing drawn yet.
+**Next:** Step 2b, draw the ground (untextured until Q8), after your go-ahead.
+
+## 2026-10-11 M1 step 2 planned; terrain size and layout blocked on questions
+
+**Changed:** Docs only: `docs/DESIGN.md` (M1 step 2 plan; roadmap
+corrected: `.dig`/`.dil` are buildings, not terrain),
+`docs/behaviour/QUESTIONS.md` (Q6–Q8). No code.
+**Why:** Start of M1 step 2. You asked me not to guess terrain scale,
+height lookup or texture mapping.
+**Tested how:** Read `TERRAIN.KQ` of every world and the Daventry terrain
+files; measured them with throwaway scripts kept outside the repo.
+**Result:** File layouts are clear: heights 129×129 (0–254), materials
+128×128, `daventry.bin` = 4 + 255 × 28 bytes exactly, names match
+`davennew.dml` 255 of 255. Units and orientation are **not** clear.
+**Dead end:** Two attempts to find the scale from object positions.
+(1) Straight-line fit of object height against the height image, 4,096-unit
+squares, 4 image orientations: best R² = 0.24 (weak). (2) Scan of 12 square
+sizes (1,024–8,192), height steps 80–200 per grey value, 4 orientations,
+counting objects within 150 units of the surface: best 23 of 247, with
+several quite different settings tied, which is noise. Most objects
+are not on open ground (inside buildings, on tables, flying). Stopped
+there and asked the study session instead (Q6, Q7).
+**Odd finding:** The most used material number (159, on 93% of squares)
+is `stone1.bmp`. That suggests the material image is not a plain index,
+or I misread it (Q8).
+**Still broken / not tested:** Nothing built yet. Step 2a (reading the
+files) does not depend on the answers; step 2b (drawing) does.
+**Next:** Your choice: build step 2a now, or wait for Q6–Q8.
+
 ## 2026-10-11 Fix: frame transforms are not used to draw model parts
 
 **Changed:** `kq8-data/src/shape.rs`: `Shape::geometry` no longer applies

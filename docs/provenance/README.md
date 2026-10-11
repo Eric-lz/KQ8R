@@ -85,6 +85,25 @@ come from `kq8 shape-verify` on the GOG 1.03 install
 | Textures not in the current world are taken from another world | Our choice (question Q4) | Logged per texture when it happens |
 | No lighting, both triangle sides drawn, linear filtering, texture repeats | Our choice while Q2/Q5 are open | — |
 
+## Terrain — `crates/kq8-data/src/{kq_text,terrain}.rs`
+
+Behaviour note = `docs/behaviour/terrain.md` (session A, answers Q6/Q7).
+"Checked" numbers come from `kq8 terrain-verify`
+(`kq8-artifacts/logs/terrain-verify.log`).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `.kq` files are `[section]` + `key=value` lines, `;` comments, keys in mixed case | Observed | All 17 terrain files parse; object files read for the height check |
+| Terrain files live loose in `data/<World>/KQ/Terrain/` (not in `kq.vol`); images, `.dml` and light maps are in `resource.vol` | Observed | `terrain-verify` finds every named file there (except below) |
+| Missing setting defaults (groundScale 12, heightBMPScale 60, `terrain.dml`, `terrm.dib`, `terrh.dib`) | Behaviour note | No terrain file leaves these out, so not exercised |
+| Square = 2^groundScale units; grid corner at (0, 0); pixel column = x, bottom image row = y 0; height = value × heightBMPScale | Behaviour note | Observed: objects exactly on our ground (within 0.5 units): Daventry 11, Barren 11, Ice World 11, Dead City 7, Snow exit 2. Daventry's 11 span heights 6,630–30,600. Daventry's scale is exactly 255 per grey step (the note's 256.2 was objects standing a little above the ground; many stand exactly +5 or +25) |
+| Two flat triangles per square; diagonal (0,0)–(1,1) when i + j is even, (1,0)–(0,1) when odd | Behaviour note | Unit tests for both diagonals. Observed: `St_gdad` stands between grid points and matches to 0.1 units |
+| Height image has a plain grey colour table | Behaviour note | Observed: true for every terrain image |
+| Direction table: u32 count, then per record u32 index, 16-byte name, u32 (always 0), u32 0..7 | Observed | Exact file sizes; names match the material list in the same order for every world (e.g. 255/255 Daventry, 164/164 Swamp, 170/170 Dead City). Meaning of the 0..7 value open (Q8) |
+| Material image is one value per square; no value past the list | Observed | 128×128 in every world; 0 squares out of range. Meaning not confirmed (Q8): Daventry's most used value is 159 = `stone1.bmp` on 15,224 of 16,384 squares |
+| `terrain2.kq` in temple1–4 names `ice.dml`, which those worlds do not have | Observed | Reported as a note; those grids are flat (all heights 0) |
+| No holes | Our choice until the note answers it (terrain.md open question 3) | — |
+
 ## Formats read but not yet implemented
 
 `libkq8fpc/doc/*.txt`: notes on `.msg`, `.kqs`, `.pba`, `.pft` and others
