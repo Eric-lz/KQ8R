@@ -50,8 +50,13 @@ The code is written with an AI coding agent (Claude Code); see
 - M2 started: Connor stands at his start point by the cottage in his
   standing pose, with gravity on (15 updates per second). Test keys: C
   puts the camera behind him, G / B lift him 5,000 / 2,000 to watch him
-  fall (5,000 kills him; the log says so). He cannot walk yet. Checked by
-  eye.
+  fall (5,000 kills him; the log says so). Checked by eye.
+- Connor walks (Up), steps back (Down), turns (Left/Right) and runs (End
+  switches run on/off; it starts on), with his animations and the speeds
+  of the original (walk 1,127, run 2,518 units/s, measured). F makes the
+  camera follow him. No start/stop animations yet; running into a steep
+  hillside looks wrong until slopes are done (step 2c): he slides far up
+  it, then slowly back. Checked by eye.
 - The other 11 worlds open the same way (`--world <name>`) and their
   objects load by the same rules; only Barren's lookouts were looked at
   by eye so far (not yet after the fix that places them).

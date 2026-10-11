@@ -3,6 +3,7 @@
 //! Everything here reads from the player's own install. Nothing in this
 //! crate writes to the game folder.
 
+pub mod action_map;
 pub mod bitmap;
 pub mod building;
 pub mod chunks;

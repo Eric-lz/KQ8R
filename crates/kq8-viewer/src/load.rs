@@ -177,6 +177,104 @@ pub fn load_model(
     Ok(Model { label, groups, min, max, frame_note })
 }
 
+/// The movements M2 step 2b uses (connor-movement.md "Which movement plays").
+pub const CONNOR_MOVEMENTS: [&str; 6] = ["stop", "walk", "run", "back", "left", "right"];
+
+/// One of Connor's movements: its animation and playback speed.
+pub struct ConnorMovement {
+    pub name: &'static str,
+    /// Index into `ConnorAssets::animations`.
+    pub animation: usize,
+    pub speed: f32,
+}
+
+pub struct ConnorAssets {
+    pub movements: Vec<ConnorMovement>,
+    pub animations: Vec<Animation>,
+    /// `MASK/Connor.sae`.
+    pub keys: Vec<kq8_data::action_map::Binding>,
+}
+
+/// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
+pub struct Animation {
+    /// One look per material index used by any frame.
+    pub looks: Vec<(i32, Look)>,
+    /// Per frame: triangles grouped by material index (model space).
+    pub frames: Vec<Vec<(i32, Vec<Triangle>)>>,
+    /// Loop length in seconds.
+    pub duration: f32,
+    /// The frames' whole-body steps added up (model space).
+    pub step_sum: [f32; 3],
+}
+
+/// Loads all frames of loop `loop_name` of `model`. Frame transforms are
+/// whole-body steps, not drawn (models-and-textures.md Q1 b); they are
+/// added up into `step_sum` (connor-movement.md "Forward speed comes from
+/// the animation").
+pub fn load_animation(
+    game: &GameDir,
+    world: &World,
+    model: &str,
+    loop_name: &str,
+    palette: &[Rgb; 256],
+    log: &mut Log,
+) -> Result<Animation, String> {
+    let (label, bytes) = find_model(game, world, model)?;
+    let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
+    let l = shape
+        .loops
+        .iter()
+        .find(|l| usize::try_from(l.name).ok().and_then(|n| shape.names.get(n)).is_some_and(|n| n.eq_ignore_ascii_case(loop_name)))
+        .ok_or(format!("{label}: no loop called '{loop_name}'"))?;
+    let (first, count) = (l.first_sequence.max(0) as usize, l.sequence_count.max(0) as usize);
+    let mut frames = Vec::with_capacity(count);
+    let mut step_sum = [0.0f32; 3];
+    let mut turning = 0;
+    for seq in first..first + count {
+        let s = shape.sequences.get(seq).ok_or(format!("{label}: loop '{loop_name}' runs past the sequences"))?;
+        if s.transform.rotates() {
+            turning += 1;
+        }
+        for (sum, v) in step_sum.iter_mut().zip(s.transform.p) {
+            *sum += v;
+        }
+        let geometry = shape.geometry(seq);
+        for p in &geometry.problems {
+            log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
+        }
+        let mut by_material: BTreeMap<i32, Vec<Triangle>> = BTreeMap::new();
+        for t in geometry.triangles {
+            by_material.entry(t.material).or_default().push(t);
+        }
+        frames.push(by_material.into_iter().collect::<Vec<_>>());
+    }
+    let list = shape.materials.as_ref().map(|m| m.materials.as_slice()).unwrap_or(&[]);
+    let used: std::collections::BTreeSet<i32> = frames.iter().flatten().map(|(m, _)| *m).collect();
+    let looks = used
+        .into_iter()
+        .map(|index| {
+            let look = match usize::try_from(index).ok().and_then(|i| list.get(i)) {
+                None => Look::Missing(format!("material index {index} not in list of {}", list.len())),
+                Some(m) => match m.kind() {
+                    MaterialKind::Texture => load_texture(world, game, &m.texture, palette, log),
+                    MaterialKind::Rgb => Look::Color(m.rgb),
+                    k => Look::Missing(format!("material kind {k:?}")),
+                },
+            };
+            (index, look)
+        })
+        .collect();
+    log.detail(format!(
+        "animation {label} loop '{loop_name}': {count} frames, {:.4} s, steps add up to ({:.1}, {:.1}, {:.1}){}",
+        l.duration,
+        step_sum[0],
+        step_sum[1],
+        step_sum[2],
+        if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
+    ));
+    Ok(Animation { looks, frames, duration: l.duration, step_sum })
+}
+
 /// A model name is looked up in the world's archives, then in
 /// `GAME/Common`; a path to a loose file also works.
 fn find_model(game: &GameDir, world: &World, model: &str) -> Result<(String, Vec<u8>), String> {
@@ -432,8 +530,8 @@ pub struct Objects {
     /// Loaded objects that have a position but nothing we can draw: shown
     /// as markers on request (viewer only, not a game rule).
     pub markers: Vec<Marker>,
-    /// Connor, if the world script loads him: placement and standing model.
-    pub connor: Option<(kq8_data::objects::Placement, Model)>,
+    /// Connor, if the world script loads him: placement, animations, keys.
+    pub connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
 }
 
 pub struct Marker {
@@ -586,7 +684,7 @@ struct Placer<'a> {
     index_of: BTreeMap<String, Option<usize>>,
     placed: Vec<(kq8_data::objects::Placement, usize, bool)>,
     markers: Vec<Marker>,
-    connor: Option<(kq8_data::objects::Placement, Model)>,
+    connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     /// Loaded objects by lower-case name (the last one loaded wins).
     located: BTreeMap<String, Located>,
     skipped: BTreeMap<String, usize>,
@@ -694,12 +792,12 @@ impl kq8_data::world_script::Host for Placer<'_> {
 }
 
 impl Placer<'_> {
-    /// Connor (M2 step 2a, docs/DESIGN.md): the world script loads
+    /// Connor (M2 steps 2a, 2b; docs/DESIGN.md): the world script loads
     /// `connor.kq`, which is not in the world archives but in
     /// `GAME/Kq/Connor.kq` (connor-physics.md "Data used"). Placed by the
-    /// script line with the usual ground rules, drawn in the first frame of
-    /// his `stop` movement from `GAME/Kq/Conner.anm`, coloured with
-    /// `KQWorld::connorPalette`.
+    /// script line with the usual ground rules. His movements come from
+    /// `GAME/Kq/Conner.anm` (connor-movement.md), coloured with
+    /// `KQWorld::connorPalette`; his keys from `MASK/Connor.sae`.
     fn place_connor(&mut self, load: &kq8_data::world_script::LoadKq) {
         use kq8_data::kq_text;
         let at = format!("{} line {}", load.from, load.line);
@@ -707,40 +805,70 @@ impl Placer<'_> {
             let path = self.game.find(rel).ok_or(format!("{rel} not found in the game folder"))?;
             std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))
         };
-        let result = (|| -> Result<(kq8_data::objects::Placement, Model, String), String> {
+        let result = (|| -> Result<(kq8_data::objects::Placement, ConnorAssets), String> {
             let file = kq_text::parse(&read("GAME/Kq/Connor.kq")?);
             let section = file.first().ok_or("GAME/Kq/Connor.kq has no section")?;
             let mut p = kq8_data::objects::Placement::from_load(section, load);
             let ground = self.terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
             p.position = p.grounded_position(ground);
-            // The standing pose: movement `stop` of his animation list.
-            let mut anm = kq_text::parse(&read("GAME/Kq/Conner.anm")?);
-            let list = anm.first().map(|s| s.name.clone()).ok_or("Conner.anm has no section")?;
-            let asks = kq_text::parse(format!("[ConnorStanding]\nanimLoops={list}\ncurrAnimName=stop\n").as_bytes());
-            anm.extend(asks);
-            let c = kq8_data::objects::current_loop(&anm, anm.last().unwrap())?.ok_or("no animation list")?;
-            if c.fell_back {
-                return Err("Conner.anm has no movement called stop".into());
+            let (keys, problems) = kq8_data::action_map::parse(&read("Connor.sae")?);
+            for pr in &problems {
+                self.log.summary(format!("connor: Connor.sae: {pr}"));
             }
-            let palette = world_palette_name(self.world, "connorPalette").unwrap_or_else(|| format!("{}.ppl", self.world.name));
+            let anm = kq_text::parse(&read("GAME/Kq/Conner.anm")?);
+            let list = anm.first().map(|s| s.name.clone()).ok_or("Conner.anm has no section")?;
+            let palette_name = world_palette_name(self.world, "connorPalette").unwrap_or_else(|| format!("{}.ppl", self.world.name));
             self.log.quiet = true;
-            let model =
-                load_model(self.game, self.world, &c.shape, Some(&palette), Some((c.sequence.as_str(), 0.0, true)), self.log);
+            let palette = load_palette(self.world, Some(&palette_name), self.game, self.log);
             self.log.quiet = false;
-            let note = format!("movement {} = {} {} (palette {palette})", c.movement, c.shape, c.sequence);
-            Ok((p, model?, note))
+            let palette = palette?;
+            let mut assets = ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys };
+            let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
+            for name in CONNOR_MOVEMENTS {
+                let mut with_ask = anm.clone();
+                with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={list}\ncurrAnimName={name}\n").as_bytes()));
+                let c = kq8_data::objects::current_loop(&with_ask, with_ask.last().unwrap())?.ok_or("no animation list")?;
+                if c.fell_back {
+                    return Err(format!("Conner.anm has no movement called {name}"));
+                }
+                let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
+                let animation = match index_of.get(&key) {
+                    Some(&i) => i,
+                    None => {
+                        self.log.quiet = true;
+                        let a = load_animation(self.game, self.world, &c.shape, &c.sequence, &palette, self.log);
+                        self.log.quiet = false;
+                        assets.animations.push(a?);
+                        index_of.insert(key, assets.animations.len() - 1);
+                        assets.animations.len() - 1
+                    }
+                };
+                let a = &assets.animations[animation];
+                let speed_now = if a.duration > 0.0 {
+                    (a.step_sum[0].powi(2) + a.step_sum[1].powi(2)).sqrt() / a.duration * c.speed
+                } else {
+                    0.0
+                };
+                self.log.summary(format!(
+                    "connor: movement {name} = movement {} loop={} {} speed {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
+                    c.movement, c.shape, c.sequence, c.speed, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
+                ));
+                assets.movements.push(ConnorMovement { name, animation, speed: c.speed });
+            }
+            self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
+            Ok((p, assets))
         })();
         match result {
-            Ok((p, model, note)) => {
+            Ok((p, assets)) => {
                 self.log.summary(format!(
-                    "connor: loaded by {at} at ({:.0}, {:.0}, {:.0}) angles ({:.2}, {:.2}, {:.2}); standing model {note}",
+                    "connor: loaded by {at} at ({:.0}, {:.0}, {:.0}) angles ({:.2}, {:.2}, {:.2})",
                     p.position[0], p.position[1], p.position[2], p.angles[0], p.angles[1], p.angles[2]
                 ));
                 self.located.insert(
                     p.name.to_ascii_lowercase(),
                     Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing },
                 );
-                self.connor = Some((p, model));
+                self.connor = Some((p, assets));
             }
             Err(e) => self.log.summary(format!("connor: not loaded ({at}): {e}")),
         }

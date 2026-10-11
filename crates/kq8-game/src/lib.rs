@@ -4,6 +4,7 @@
 //! module names the note it follows. The game logic runs at a fixed
 //! [`UPDATES_PER_SECOND`] (docs/DESIGN.md, M2 "Physics rate").
 
+pub mod connor;
 pub mod mover;
 
 /// The original's update rate (`KQGame::FPSLimit 15`); every per-update

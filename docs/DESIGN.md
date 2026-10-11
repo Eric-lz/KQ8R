@@ -474,8 +474,35 @@ Steps (each separately revertable, each stopped for an eye check):
   - Log (`kq8-artifacts/logs/connor.log`), one line per update: time,
     position, on ground, gravity, fall timer, air counter, state, ground
     height and normal; state changes and deaths also in the main log.
-- **2b** — walk, run, back and turn from the keys in `Connor.sae`, with
-  speeds from the animation steps; his animations play.
+- **2b — walk, run, back and turn (planned 2026-10-11).** Rules from
+  `connor-movement.md`.
+  - Keys read from `MASK/Connor.sae` (new reader in `kq8-data`): the keys
+    whose `make` sends `MoveY 1` / `MoveY -1` / `RotateZ 1` / `RotateZ -1`
+    / `Run`. As the note recommends ("Do not reproduce"), the intent comes
+    from the keys **held**: of two opposite keys held, the one pressed last
+    wins, and releasing it gives the other back. (No setting for the
+    original behaviour for now, as the user asked.) `Run` toggles; Connor
+    starts with run on (Daventry's scripts do not set it).
+  - Movement chosen from the intent by the note's table (`run`, `walk`,
+    `back`, `left`, `right`, `stop`), each from `Conner.anm`.
+  - Speed from the animation: the loop's per-frame steps added up, divided
+    by the loop's length, times the playback speed (`back` = walk at −1).
+    The steps are **spread evenly** over the loop (the note says this is
+    close; whether the game applies them per frame is asked as Q24).
+  - Turning: 1.75 rad/s × 1/15 s per update while a turn key is held,
+    standing, walking or running. No banking yet.
+  - No start/stop animations (`stopwalk`, `walkstopleft`...) yet: he goes
+    straight from one movement to the next, starting the loop at its
+    beginning. Which transition plays is asked as Q25.
+  - All frames of each movement's loop are drawn in turn, at the loop's
+    speed.
+  - The rules live in `kq8-game` (`connor.rs`): intent → movement, turning,
+    the wanted step for the mover. Unit tests: the table, speeds, turn
+    rate.
+  - Viewer: F makes the camera follow Connor (keeps its offset; a
+    stand-in until the real camera, 2f).
+  - Log per update: keys' intent, movement, heading, loop position, wanted
+    step; the measured speeds of walk and run at load.
 - **2c** — slopes: sliding on steep ground, climbing up to 36.9°.
 - **2d** — walls: buildings and objects stop him or let him slide along
   (collision shapes need a question: `connor-physics.md` open question 2).

@@ -58,6 +58,16 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
 
+## 2026-10-11 M2 step 2b: Connor walks, runs, steps back and turns
+
+**Changed:** new `crates/kq8-data/src/action_map.rs` (`.sae` reader, test), new `crates/kq8-game/src/connor.rs` (intent → movement, turning, step from the animation; tests), `crates/kq8-viewer/src/load.rs` (`load_animation`: every frame of a loop; Connor's six movements and keys), `crates/kq8-viewer/src/connor_view.rs` (keys held, walking, frames drawn in turn, F follow), `crates/kq8-viewer/src/main.rs` (`--hold F,T,R` test option), `docs/DESIGN.md` (plan 2b), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q24, Q25, Q26), `README.md`.
+**Why:** M2 step 2b, as asked; rules from `connor-movement.md`. Intent from keys held, as the note recommends; no setting for the original behaviour (user's choice).
+**Tested how:** `cargo test` (kq8-game 10, kq8-data 41). Viewer: standing, and `--hold` for walk (1,0,0), run (1,0,1), turn left (0,1,0), back (−1,0,0), each about 12 s; read `connor.log`.
+**Result:** Speeds measured from the animations: walk 1,126.6, run 2,518.1, back −1,126.6 units/s (the note's ≈ 1,127 and ≈ 2,518). Walk: 11,191 in 149 updates, exactly that speed. Turn: 3.383 rad in 29 updates (1.75 rad/s). Back: same distance, other way.
+**Checked by eye** by the user 2026-10-11: animations work; walking and running pace very close to the original. Seen: running at a steep slope he slides a long way up it, then slowly back down; in the original he is stopped much sooner (Q26 / step 2c).
+**Still broken / not tested:** Running downhill he is 1.4 units in the air every other update, and he half-climbs ground steeper than 36.9° (after about 90 updates of running north from the start): both because the terrain only acts in the ground check, as the note reads; asked as Q26 (sliding is step 2c). No start/stop animations (Q25); steps spread evenly (Q24); no banking.
+**Next:** User's eye check.
+
 ## 2026-10-11 M2 step 2a: Connor stands in Daventry, gravity on
 
 **Changed:** new crate `crates/kq8-game` (`mover.rs`: Connor's mover, unit tests), `Cargo.toml` (workspace), `crates/kq8-viewer/Cargo.toml`, `crates/kq8-viewer/src/connor_view.rs` (new: draw Connor, run the mover at 15 updates per second, test keys), `crates/kq8-viewer/src/load.rs` (`place_connor`), `crates/kq8-viewer/src/terrain_view.rs`, `crates/kq8-viewer/src/main.rs` (`--lift N`, fixed 15 Hz schedule), `docs/DESIGN.md` (M2 plan, physics rate), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q23), `README.md`.
