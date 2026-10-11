@@ -34,10 +34,11 @@ Adopted from ai-game-modding-guides, guides 3 and 13 (not legal advice).
 3. **If disassembly is needed, split the work across two sessions.**
    Session A studies `Mask.exe` (in Ghidra, with all output kept outside the
    repo) and writes a behaviour description in its own words into
-   `docs/formats/` or `docs/behaviour/`. Session B, a fresh chat with no
+   `docs/behaviour/`. Session B, a fresh chat with no
    access to the disassembly, writes the Rust code from that description
    only. Not a legal safe harbour, but much better than one session
-   doing both.
+   doing both. Full rules and the prompts for each session:
+   [docs/SESSIONS.md](SESSIONS.md).
 4. **Never transcribe.** Describe *what* the original does (sizes, units,
    rules, timings), never *how its code is laid out* (struct field order,
    function structure).
@@ -91,31 +92,94 @@ Learned from Nico Bendlin's MIT-licensed `kqmoevol` extractor (see
 Decompression uses the `explode` crate (MIT), a Rust port of Mark Adler's
 `blast.c`.
 
-## Plan
+## Roadmap
 
-Each step is small and separately revertable.
+The goal is a fully playable game. That is a multi-month project; the
+roadmap is built around **milestones you can see and test**, each made of
+small, separately revertable steps. Steps are planned in detail only when
+a milestone starts.
 
-1. **Prove the data loads** (done).
-   `kq8 vol-verify` opens all 48 VOL archives, decompresses every entry in
-   memory, and compares each one byte-for-byte with the already-unpacked copy
-   in `./<world>/<archive>/`. It logs per-archive counts and a final total.
-   Success = every entry decompresses and every comparison matches.
-2. Read one real asset format on top of that: a `.pbm` bitmap + `.ppl`
-   palette, converted to a PNG in `kq8-artifacts/` for checking (done).
-   - `kq8-data`: `bitmap.rs` (image size, bits per pixel, flags, mipmap
-     count, pixels) and `palette.rs` (256 colours plus a list of the extra
-     lighting/haze tables, which are not decoded yet).
-   - `kq8 bitmap-png <file> [--palette <file>]` writes
-     `kq8-artifacts/png/<name>.png` and logs size, format and colour use.
-     `<file>` is either a path in the game folder (`GAME/8Gui/daventry.pbm`)
-     or a file inside an archive (`vol:Daventry/8bit/NAME.BMP`).
-   - `kq8 bitmap-verify` parses every image and palette in the game (all
-     archives and loose files) and logs counts per variant and every
-     failure. Success = 0 failures.
-   - PNG writing uses the `png` crate (MIT/Apache-2.0) and lives in the
-     CLI, so `kq8-data` stays free of output formats.
-3. Messages (`.msg`) so text can be checked as plain strings.
-4. Models (`.kqs`), then a first window that draws one model (needs a
-   graphics library decision, will ask before choosing).
+Who does what (see [SESSIONS.md](SESSIONS.md)):
+- **A** = study session: works out behaviour from `Mask.exe`, writes
+  `docs/behaviour/*.md`. No code.
+- **B** = implementation session: writes Rust from data files, community
+  format notes and behaviour notes. Never looks at `Mask.exe`.
 
-Steps after 4 will be planned here when we get there.
+Where the game keeps things (found so far):
+- **Data files** say *what* exists: models, textures, terrain, object lists
+  (`.kq` files are plain-text object descriptions: class, model, position,
+  settings).
+- **Scripts** (`.cs`) hold puzzle logic, e.g. "this switch opens that door
+  and marks the puzzle solved". We run them with our own interpreter.
+- **`Mask.exe`** holds *how* each kind of object behaves (monsters, traps,
+  doors, Connor's movement, combat, camera). That needs study session A.
+
+### M0 — Read the game's files (done)
+
+- Step 1: VOL archives. 48 archives, 14,444 files, all match. (done)
+- Step 2: images and palettes. 6,495 images, 50 palettes, PNG export,
+  confirmed by eye. (done)
+
+### M1 — See Daventry
+
+**You will see:** a window showing Daventry's terrain and objects, with a
+free-flying camera.
+
+- Graphics library: **Bevy** (decided 2026-10-11; IW4L uses it). Keep game
+  logic in Bevy's ECS (the part that stores game objects and runs their
+  logic) and rendering separate, so the drawing part can be
+  swapped later if Bevy's renderer ever becomes too slow (ai-game-modding-guides,
+  guide 3).
+- B: 3D models (`.kqs`) and material lists (`.dml`) → textured model in a
+  window.
+- B: terrain (`.dig`/`.dil`/`.dib`, `kq/Terrain`) → Daventry ground.
+- B: place objects from the `.kq` files.
+- A, only if the data does not explain it: terrain size/scale, how textures
+  and palettes are applied, lighting (`.ppl` shade/haze tables).
+
+### M2 — Walk Connor around Daventry
+
+**You will see:** Connor walking, running and turning, the camera following,
+not falling through the ground or walking through walls.
+
+- B: animations (`.anm`), Connor's model.
+- A: Connor's movement (speeds, turning, jumping, slopes), camera behaviour,
+  collision rules, controls of the original.
+- B: implement from those notes.
+
+### M3 — Daventry comes alive
+
+**You will see:** doors opening, traps firing, chests, animated objects,
+the first puzzles working.
+
+- A: the script language (`.cs` commands like `set`, `if test`,
+  `sendEvent`), the event system, and each object kind used in Daventry
+  (door, trap, chest, emitter, animation lists...).
+- B: script interpreter, event system, the object kinds.
+
+### M4 — Talk, listen, use the menus
+
+**You will see and hear:** dialogue text, speech with lip sync, the
+inventory and menus.
+
+- B: messages (`.msg`), audio (`.aud`), fonts (`.pft`), GUI files.
+- A: conversations, inventory rules, menu behaviour.
+
+### M5 — Fight
+
+**You will see:** monsters that move, attack and die; Connor's health and
+stats.
+
+- A: monster AI per type, combat rules and numbers, stats, death.
+- B: implement.
+
+### M6 — The whole game
+
+Save/load, moving between worlds, all 12 worlds, cutscene videos, music,
+options. A and B as needed per topic.
+
+### M7 — Match the original, then improve
+
+Play the original next to ours, list differences, fix them. After that,
+the improvements this project was started for: controls, graphics,
+gameplay changes.

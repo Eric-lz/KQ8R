@@ -3,6 +3,28 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Ghidra connected, two-session workflow, roadmap
+
+**Changed:** `docs/SESSIONS.md` (new: rules and prompts for the study and
+implementation sessions, behaviour-note format), `docs/DESIGN.md` (links
+to it; the four-step plan replaced by a milestone roadmap M0–M7),
+`.gitignore` (`/re/`). Outside git: `re/` holds a copy of `Mask.exe`, the
+Ghidra project and study scratch notes; `.mcp.json` configures the
+GhidraMCP bridge (pinned to release 2.0). No code changed.
+**Why:** You decided to study `Mask.exe` and to keep the two-session method
+from ai-game-modding-guides guide 13. Behaviour of object kinds, movement,
+combat and camera lives in the exe, not the data.
+**Tested how:** Called the Ghidra tools from this chat: program info,
+class list, string search, cross-references.
+**Result:** Connected to `re/Mask.exe` (sha256 matches the game's exe),
+6,413 functions. Ghidra recovered only 2 classes although ~399 C++ class
+names are in the file; its class detection apparently does not understand
+this 1998 compiler's layout. The names are still usable by following
+references by hand.
+**Still broken / not tested:** Class structure not recovered yet. `/mcp`
+toggle for the implementation session not tested.
+**Next:** Your choice of graphics library, then M1 (see Daventry).
+
 ## 2026-10-11 Fix: wrong palette for the Daventry image
 
 **Changed:** Docs only (`README.md`, `docs/provenance/README.md`). No code.

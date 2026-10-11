@@ -10,6 +10,7 @@
 /target/
 /kq8-artifacts/
 /reference/
+/re/
 
 # Top-level project files
 !/.gitignore
