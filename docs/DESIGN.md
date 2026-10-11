@@ -57,15 +57,20 @@ Cargo.toml            workspace definition
 crates/
   kq8-data/           library: finds and reads game files (VOL archives, ...)
   kq8-cli/            the `kq8` command-line tool for checks and dumps
+  kq8-viewer/         window that shows one model (uses Bevy)
 docs/                 DESIGN.md (this file), RESEARCH.md (what exists online)
 docs/provenance/      where each piece of knowledge came from
+docs/behaviour/       behaviour notes (session A) and QUESTIONS.md
 kq8-artifacts/        logs and dumps (never committed)
 reference/            third-party repos cloned for reading (never committed)
 MASK/                 the game install (never committed)
 ```
 
 More crates will come later (rendering, audio, game logic). Asset *parsing*
-stays in `kq8-data` so the engine never touches raw bytes directly.
+stays in `kq8-data` so the engine never touches raw bytes directly. The
+viewer follows that rule: `kq8-data` turns a model into a plain list of
+triangles (positions, texture coordinates, material), and only the
+viewer's `main.rs` knows about Bevy.
 
 ## Game data layout (as found in the GOG 1.03 install)
 
@@ -131,11 +136,56 @@ free-flying camera.
   swapped later if Bevy's renderer ever becomes too slow (ai-game-modding-guides,
   guide 3).
 - B: 3D models (`.kqs`) and material lists (`.dml`) → textured model in a
-  window.
+  window. Planned in detail below ("M1 step 1").
 - B: terrain (`.dig`/`.dil`/`.dib`, `kq/Terrain`) → Daventry ground.
 - B: place objects from the `.kq` files.
 - A, only if the data does not explain it: terrain size/scale, how textures
   and palettes are applied, lighting (`.ppl` shade/haze tables).
+
+#### M1 step 1 — one textured model in a window (planned 2026-10-11)
+
+No behaviour note exists. Sources: the game's files and the libkq8fpc
+notes `kq8kqs.txt`, `kq8dml.txt`, `kq8pers.txt` (facts only, see
+`docs/provenance/`). Split into two parts you can revert separately:
+
+**1a. Read models and material lists** (`kq8-data`, no window yet)
+
+- `pers.rs`: the "PERS" wrapper every model and material list sits in
+  (a tag, a size, a class name like `KQ8::Shape`, a version number).
+- `material.rs`: `TS::MaterialList` (`.dml`, and the copy at the end of
+  every `.kqs`): per material its kind (texture / colour / none),
+  shading, colour and texture file name.
+- `shape.rs`: `KQ8::Shape` with its `TS::CelAnimMesh` meshes. A model is
+  a set of *mesh nodes* (a mesh plus a placement), grouped into
+  *sequences* (one per animation frame). Vertices are stored as bytes
+  0–254 and turned into positions with a per-frame scale and origin.
+- A function that builds the triangles of one frame (positions, texture
+  coordinates, material) without any graphics library, so the engine never
+  touches raw bytes.
+- `kq8 shape-verify`: parses every `.kqs` and `.dml` in the game and logs
+  counts, versions, failures, and checks: face indices in range, the two
+  bounding-box vertices, transforms that rotate, texture names that cannot
+  be found, the range of texture coordinates, which axis is tallest.
+
+**1b. Show it** (new crate `kq8-viewer`, uses Bevy)
+
+- `kq8-viewer <model.kqs> [--world Daventry] [--palette <file>]`: finds
+  the model and its textures in that world's archives, builds frame 0,
+  shows it with a camera you can orbit with the mouse.
+- Textures use the world palette (`resource/<world>.ppl`) by default.
+  Reason: measured on 3 Daventry textures, `daventry.ppl` gives the
+  smoothest pictures (same as `8bit/daventry.pal`; `daventr1.pal` is worse).
+- Drawn without lighting (texture colours as they are) and from both sides,
+  because the lighting rules and which side of a triangle is the front are
+  not known yet.
+- The game's axes are converted to Bevy's (Bevy has Y up). Which game axis
+  is up is decided from the `shape-verify` numbers.
+- Logs to `kq8-artifacts/logs/viewer.log`: vertex/triangle counts, the
+  bounding box, every texture found or missing, frame times.
+  `--frames N` closes the window after N frames, for a quick check.
+
+Not in this step: animation, lighting, transparency, the normal table
+(we compute our own normals instead of copying the game's table).
 
 ### M2 — Walk Connor around Daventry
 

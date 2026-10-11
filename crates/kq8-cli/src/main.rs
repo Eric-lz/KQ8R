@@ -4,6 +4,7 @@
 //!   kq8 vol-verify [--game DIR]
 //!   kq8 bitmap-verify [--game DIR]
 //!   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
+//!   kq8 shape-verify [--game DIR]
 //!
 //! `<file>` is a path in the game folder (`GAME/8Gui/daventry.pbm`) or an
 //! archive entry (`vol:Daventry/8bit/NAME.BMP`).
@@ -13,6 +14,7 @@
 mod bitmap_png;
 mod bitmap_verify;
 mod log;
+mod shape_verify;
 mod source;
 mod vol_verify;
 
@@ -24,7 +26,8 @@ use kq8_data::GameDir;
 const USAGE: &str = "usage:
   kq8 vol-verify [--game DIR]
   kq8 bitmap-verify [--game DIR]
-  kq8 bitmap-png <file> [--palette <file>] [--game DIR]";
+  kq8 bitmap-png <file> [--palette <file>] [--game DIR]
+  kq8 shape-verify [--game DIR]";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -60,6 +63,7 @@ fn main() -> ExitCode {
         (Some("vol-verify"), []) => vol_verify::run(&game),
         (Some("bitmap-verify"), []) => bitmap_verify::run(&game),
         (Some("bitmap-png"), [image]) => bitmap_png::run(&game, image, palette.as_deref()),
+        (Some("shape-verify"), []) => shape_verify::run(&game),
         _ => usage(),
     }
 }

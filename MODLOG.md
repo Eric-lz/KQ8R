@@ -3,6 +3,75 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 M1 step 1b checked by eye
+
+**Changed:** Docs only (`README.md`, `docs/provenance/README.md`). No code.
+**Why:** You looked at the viewer.
+**Tested how:** You ran `kq8-viewer smlchest.KQS` and `alcmsign.KQS`. I
+then measured the sign's tilt in each animation frame with a throwaway
+program kept outside the repo (scratchpad).
+**Result:** Chest correct: lid closed, wood-and-metal texture. The sign
+looks right but tilted. Measured: its animation is 31 frames over 2.0 s.
+The tilt goes 10° (frame 0) → 0° (6) → 10° (15) → 0° (23), a swing. The
+viewer shows frame 0, so the tilt is the start of the swing, as you
+remembered. This also supports the row-vector matrix choice (Q1).
+**Still broken / not tested:** Whether models are mirrored is not ruled
+out (Q2). Neither model was confirmed to have readable lettering. No
+animation yet. Q1–Q5 still open.
+**Next:** M1 step 2, terrain.
+
+## 2026-10-11 M1 step 1b: show one textured model in a Bevy window
+
+**Changed:** New crate `crates/kq8-viewer` (`main.rs` Bevy window and
+orbit camera, `load.rs` model/texture/palette lookup, `log.rs`). Added
+Bevy 0.20.0 (only its 3D features) to the workspace. `Cargo.toml`:
+`default-members`, so plain `cargo run -- <command>` still runs `kq8`.
+Docs: `README.md`, `CREDITS.md`, `docs/DESIGN.md` (layout),
+`docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md`.
+**Why:** Second part of M1 step 1: see a game model on screen.
+**Tested how:** `cargo run --release -p kq8-viewer -- smlchest.KQS --frames 60`
+(also `--frames 120`, and `broom.KQS`, `alchy.KQS` with `--frames 30`),
+then read `kq8-artifacts/logs/viewer.log`. `cargo test`, `cargo clippy`.
+**Result:** Window opens and draws on the RTX 4060 Ti (Vulkan). Chest:
+32 triangles, 1 texture (`ITEMS22.BMP` 128×128), first frame after
+~0.5–1.1 s, average 6.4 ms per frame. For all 4 textures checked, the
+image's own colour table equals `DAVENTRY.PPL` for every colour used.
+**Mistake caught:** Adding a second program to the workspace broke
+`cargo run -- vol-verify` (cargo could not tell which program to run).
+Fixed with `default-members` before handing over.
+**Note:** While I worked, another session replaced `QUESTIONS.md` with a
+table template, which removed my Q1–Q5. I re-added them as table rows and
+did not change anything else in that file or in `connor-movement.md`.
+**Still broken / not tested:** **Nobody has looked at the window yet.**
+Not known: upside-down textures, a mirror image, parts in wrong places.
+No lighting, no animation, no transparency, both sides of triangles drawn.
+**Next:** You look at the chest (procedure in the hand-over message). Then
+M1 step 2, terrain.
+
+## 2026-10-11 M1 step 1a: read 3D models (.kqs) and material lists (.dml)
+
+**Changed:** `kq8-data`: new `pers.rs` (the PERS wrapper + a byte reader),
+`material.rs` (`TS::MaterialList`), `shape.rs` (`KQ8::Shape`,
+`TS::CelAnimMesh`, building the triangles of one animation frame).
+`kq8-cli`: new `shape_verify.rs` (`kq8 shape-verify`). Docs:
+`docs/DESIGN.md` (M1 step 1 plan), `docs/provenance/README.md`, new
+`docs/behaviour/QUESTIONS.md` (Q1–Q5). Session B; no behaviour note exists
+for this, so it is built from the data files and the libkq8fpc notes.
+**Why:** First part of M1 step 1: models must load before they can be shown.
+**Tested how:** `cargo test` (14 tests, 4 new). `kq8 shape-verify` on the
+whole game.
+**Result:** 4,573 models and 25 material lists parse, 0 failures, 0 unread
+bytes, 3.4 s. 23,153 meshes, 2,397,317 faces, all indices in range. Z is
+up (tallest axis in 2,950 models; 3,177 stand on z ≈ 0). Matrix test
+favours row-vector (245 models clearly better vs 7).
+**Dead end / correction:** The community note says material flags are 1
+byte. They are 4 bytes. File sizes only add up that way.
+**Still broken / not tested:** 4 `TS::Shape` tomb files skipped.
+Matrix convention, front faces, texture palette, texture search order and
+3 flag bits are open questions (QUESTIONS.md). 29 texture names are
+missing from the game files. Nothing drawn yet.
+**Next:** Step 1b, show one model in a Bevy window.
+
 ## 2026-10-11 Ghidra connected, two-session workflow, roadmap
 
 **Changed:** `docs/SESSIONS.md` (new: rules and prompts for the study and

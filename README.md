@@ -20,10 +20,21 @@ The code is written with an AI coding agent (Claude Code); see
   Not done yet: transparency, the palettes' lighting/haze tables, and image
   arrays (`.pba`).
 
+- Reading 3D models (`.kqs`) and material lists (`.dml`): all 4,573 models
+  and 25 material lists load without errors (4 old-format tomb models are
+  skipped).
+- Showing one model in a window with its textures (`kq8-viewer`), with a
+  camera you can turn with the mouse. Tested: the window opens and draws
+  (about 6 ms per frame). Checked by eye (2026-10-11) on two models: the
+  small chest (lid closed, wood-and-metal texture) and the alchemist's
+  sign look right. Only the first frame of each model's animation is
+  shown, so the swinging sign appears tilted.
+
 ## What doesn't work yet
 
-Everything else. There is nothing to play yet: no graphics, sound, or game
-logic.
+Everything else. There is nothing to play yet: no terrain, no lighting,
+no animation, no sound, no game logic. Models are drawn without lighting
+and from both sides, because those rules are not known yet.
 
 ## Try it
 
@@ -31,6 +42,8 @@ logic.
 cargo run --release -- vol-verify
 cargo run --release -- bitmap-verify
 cargo run --release -- bitmap-png GAME/8Gui/daventry.pbm --palette GAME/8Gui/ldaventr.ppl
+cargo run --release -- shape-verify
+cargo run --release -p kq8-viewer -- smlchest.KQS --world Daventry
 ```
 
 The last one writes `kq8-artifacts/png/daventry.png`. Files inside an

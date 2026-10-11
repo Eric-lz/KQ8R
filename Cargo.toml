@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/kq8-data", "crates/kq8-cli"]
+members = ["crates/kq8-data", "crates/kq8-cli", "crates/kq8-viewer"]
+# Plain `cargo run` / `cargo test` use these, so `cargo run -- vol-verify`
+# keeps working. The viewer is built with `-p kq8-viewer`.
+default-members = ["crates/kq8-data", "crates/kq8-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +14,8 @@ publish = false
 kq8-data = { path = "crates/kq8-data" }
 explode = "0.1.2"
 png = "0.18.1"
+# Only the 3D parts; no audio.
+bevy = { version = "0.20.0", default-features = false, features = ["3d"] }
 
 # Decompressing 133 MB byte-by-byte is slow in debug builds; optimise
 # dependencies even in dev builds so `cargo run` stays fast.

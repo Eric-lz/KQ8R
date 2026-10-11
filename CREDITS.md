@@ -17,6 +17,7 @@ or endorsed by them.
 | [`explode`](https://github.com/agrif/explode) crate | Aaron Griffith | MIT | 0.1.2 | PKWARE DCL decompression |
 | `arraydeque` crate (used by `explode`) | | MIT / Apache-2.0 | 0.4.5 | |
 | [`png`](https://github.com/image-rs/image-png) crate | image-rs contributors | MIT OR Apache-2.0 | 0.18.1 | Writing PNG files for checking |
+| [Bevy](https://bevy.org) | Bevy contributors | MIT OR Apache-2.0 | 0.20.0 | Window, 3D drawing, input (`kq8-viewer` only). Its many dependencies are listed in `Cargo.lock`; check their licences before any binary release |
 | Used by `png`: `adler2`, `bitflags`, `cfg-if`, `crc32fast`, `fdeflate`, `flate2`, `miniz_oxide`, `simd-adler32`, `zlib-rs` | | MIT, Apache-2.0, Zlib or 0BSD (each permissive) | see `Cargo.lock` | |
 
 Per-fact sources are listed in [docs/provenance/](docs/provenance/README.md).
