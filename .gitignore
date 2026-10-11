@@ -18,9 +18,6 @@
 !/README.md
 !/MODLOG.md
 !/CREDITS.md
-!/STATUS.md
-!/MODLOG-template.md
-!/STATUS-handoff.md
 !/Cargo.toml
 !/Cargo.lock
 !/rust-toolchain.toml
@@ -28,6 +25,11 @@
 # Documentation
 !/docs/*.md
 !/docs/**/*.md
+
+# Local-only working notes (kept on this machine, never published).
+# STATUS.md, STATUS-handoff.md and MODLOG-template.md are simply not
+# whitelisted above; SESSIONS.md needs an explicit rule because docs/*.md is.
+/docs/SESSIONS.md
 
 # Rust sources
 !/crates/*/Cargo.toml

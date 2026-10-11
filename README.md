@@ -35,7 +35,7 @@ shouldn't, and walks through walls and objects. The camera doesn't swing
 back behind him by itself or avoid walls. People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the
-latest state in [STATUS.md](STATUS.md).
+latest changes in [MODLOG.md](MODLOG.md).
 
 ## Try it
 
@@ -77,7 +77,6 @@ is not in `./MASK/`.
 
 ## More
 
-- [STATUS.md](STATUS.md): where the project stands
 - [docs/DESIGN.md](docs/DESIGN.md): how the project works and the plan
 - [docs/provenance/README.md](docs/provenance/README.md): where each rule
   comes from and how it was checked

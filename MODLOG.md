@@ -1,7 +1,17 @@
 # MODLOG
 
 What changed and what was tested. Newest entries at the top.
-Format: [MODLOG-template.md](MODLOG-template.md).
+Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
+
+## 2026-10-11 Stop publishing local working notes
+
+**Changed:** `.gitignore`. Untracked (kept on disk) `STATUS.md`, `STATUS-handoff.md`, `MODLOG-template.md` and `docs/SESSIONS.md`. No code.
+**Why:** These are working notes for hand-offs between chats, not something readers of the repo need. Past history is left as is.
+**Tested how:** `git check-ignore -v` reports all four as ignored; `git ls-files` no longer lists them; the files are still on disk.
+**Result:** The removal is staged, not committed.
+**Changed (links):** Also fixed the links to the local-only files in `README.md`, `docs/DESIGN.md` and the header of this file.
+**Still broken / not tested:** `AGENTS.md` and `CREDITS.md` still name the local-only files in plain text. Links checked with grep only.
+**Next:** None.
 
 ## 2026-10-11 Study session: Q21 (relative move axes)
 

@@ -38,7 +38,7 @@ Adopted from ai-game-modding-guides, guides 3 and 13 (not legal advice).
    access to the disassembly, writes the Rust code from that description
    only. Not a legal safe harbour, but much better than one session
    doing both. Full rules and the prompts for each session:
-   [docs/SESSIONS.md](SESSIONS.md).
+   `docs/SESSIONS.md` (kept locally, not published).
 4. **Never transcribe.** Describe *what* the original does (sizes, units,
    rules, timings), never *how its code is laid out* (struct field order,
    function structure).
@@ -104,7 +104,7 @@ roadmap is built around **milestones you can see and test**, each made of
 small, separately revertable steps. Steps are planned in detail only when
 a milestone starts.
 
-Who does what (see [SESSIONS.md](SESSIONS.md)):
+Who does what (see `docs/SESSIONS.md`, kept locally):
 - **A** = study session: works out behaviour from `Mask.exe`, writes
   `docs/behaviour/*.md`. No code.
 - **B** = implementation session: writes Rust from data files, community
