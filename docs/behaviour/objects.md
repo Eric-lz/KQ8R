@@ -196,3 +196,24 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    −2,890 in model space), so foundations go into the hill. The user's
    point at about 12,137 is 545 above the base, which fits a deck or floor
    in the model (not checked).
+
+## Hidden objects (Q18)
+
+1. `hidden=<n>` is read as a whole number; any value other than 0 means
+   hidden. Scripts switch it with `KQObject::setHidden <name> 0|1` (about
+   280 such lines in the game, e.g. `bricks.cs`, `miltrap1.cs`, and
+   `newworld.cs` hides a newly made inventory item). (Traced.)
+2. What it does (traced): every object belongs to "groups", given as bit
+   masks: `groupsAlways` (default 6), `groupsActive3D` (default 0x448,
+   added when Connor is near) and `groupsActive3DFar` (default 0x440,
+   added when far). A hidden object is treated as **not active**: it
+   keeps only its `groupsAlways` bits.
+3. Which bit means what is **inferred, not traced**: 0x40 is in both the
+   near and the far defaults, so it is very likely "drawn"; 0x8 is
+   near-only, likely "can be touched/collided with"; 0x400 is tied to
+   running animations. With the default `groupsAlways` = 6, **a hidden
+   object is not drawn and cannot be touched** until a script calls
+   `setHidden <name> 0`.
+4. So: don't draw `wizchest1` at the start. An object whose
+   `groupsAlways` includes 0x40 (e.g. `groupsAlways=1097` = 0x449, one
+   object in the game) would still be drawn when hidden.

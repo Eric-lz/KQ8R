@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: [MODLOG-template.md](MODLOG-template.md).
 
+## 2026-10-11 Study session: Q18 (hidden), Q4 (lookup order)
+
+**Changed:** `docs/behaviour/objects.md` (Hidden objects), `docs/behaviour/models-and-textures.md` (Q4), `docs/behaviour/QUESTIONS.md` (Q4, Q18, stale Q5 row). No code.
+**Why:** Open questions from session B.
+**Tested how:** Traced `setHidden`, the object group switching, `loadVolume`, the search list and `moveVolToFront` in `Mask.exe`. Hashed every duplicate file name across the loaded folders of all 12 worlds.
+**Result:** A hidden object keeps only its `groupsAlways` groups, so by default it isn't drawn. When names clash, the folder loaded last wins. The game reads loose folders, including patch folders that the `.vol` archives don't contain.
+**Still broken / not tested:** Group bit meanings are inferred. The order inside `GAME/` and what happens to missing texture names are not traced. Q3 (system colours), Q5 (which colour is see-through) and Q14b (teleport pad) are still open.
+**Next:** M2 study.
+
 ## 2026-10-11 Study session: Q19 (missing locZ)
 
 **Changed:** `docs/behaviour/objects.md`, `docs/behaviour/QUESTIONS.md`. No code.
@@ -11,6 +20,15 @@ Format: [MODLOG-template.md](MODLOG-template.md).
 **Result:** A missing position value stays at 0, then the ground rule lifts the object onto the ground (11,592 for both lookouts).
 **Still broken / not tested:** Not checked by eye.
 **Next:** M2 study.
+
+## 2026-10-11 M1: missing locX/locY/locZ are 0 (Q19); Barren's lookouts drawn
+
+**Changed:** `crates/kq8-data/src/objects.rs` (each position key read on its own, missing = 0; `from_section`/`from_load` always give a placement; unit test), `crates/kq8-viewer/src/load.rs` (no more "no position" skip; logs which keys were missing), `docs/provenance/README.md`, `README.md`.
+**Why:** Barren's `lookout` and `lookout2` (the user's missing hilltop building and bridge) have no `locZ`. Rule from `objects.md` "Missing locX / locY / locZ" (Q19).
+**Tested how:** `cargo test -p kq8-data` (38 pass). Ran the viewer for all 12 worlds (`--terrain --world <W> --frames 3`) and compared the placed counts with the previous run.
+**Result:** Barren: 284 → 287 placed. `lookout` (78812, 124815) and `lookout2` (71571, 108848) raised from 0 to 11,592, as the note says. `sparks16` has no `locX`, so it lands at x 0, about 20,000 under the ground (its file turns the ground lift off); that is what the rule gives. Every other world places the same objects as before. Objects with no position keys at all (e.g. music, inventory, lava animators) have no model; they now show as green cubes at the map corner with H.
+**Still broken / not tested:** Not checked by eye yet.
+**Next:** User's eye check in Barren.
 
 ## 2026-10-11 Viewer: camera position on screen
 

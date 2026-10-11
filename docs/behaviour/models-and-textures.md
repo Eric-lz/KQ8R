@@ -128,9 +128,35 @@ in world archives: the same model is textured by the **current world's**
 `8bit.vol`. A texture missing from the current world is expected to be
 missing in the original too.
 
-Still open: which archive wins when a name exists in several loaded ones
-(front of the list first is the likely reading of "move to front"), and what
-the game does when a name is not found anywhere (29 names).
+**Which one wins (traced, 2026-10-11):**
+
+- `loadVolume` puts each new folder at the **front** of the search list,
+  and a lookup walks the list from the front and takes the **first** match.
+  So the folder loaded **last** wins. For a world the search order is
+  therefore: `cur` (moved to the front last), `<world>/Patch`,
+  `<world>/8 Gui`, `<world>/Resource`, `<parent>/English`, `<world>/8 Bit`,
+  `<world>/Kq`, `<parent>/Sound`, and then the game-wide `GAME/...` folders,
+  which the program loads before any world. The order inside `GAME/` (for
+  example `GAME/patch` before `GAME/Kq`) is **not traced**; the patch
+  folder first is the likely reading.
+- **The game reads the loose folders** (`MASK/daventry/Kq`,
+  `MASK/barren/Patch`, ...), not `MASK/data/<World>/*.vol`. `mask.cs` names
+  folders, and the patch folders exist only as loose folders:
+  `GAME/patch` (2 files), `barren/patch` (13), `deadcity/patch` (5),
+  `iceworld/patch` (3), `temple4/patch` (1). They hold fixed `.kq`/`.cs`
+  files (e.g. Barren's `world.cs`, `brokbrig.kq`, `elevator.cs`).
+  **Reading only the `.vol` archives misses these fixes.** The `.vol`
+  files match the loose copies for everything else. (Traced: the volume
+  loader checks whether the path is a folder and, if so, reads the folder;
+  in this install every such folder exists.)
+- Measured, all 12 worlds: 180 names appear in more than one loaded
+  folder; 104 of those differ in content. For art files the differences
+  are few: `4green.pbm`/`4red.pbm` (world `8gui` over `GAME/8Gui`),
+  `clicker.kqs`, `bp_badie.kqs` (Barren) and `mush1.kqs` (Swamp), where the
+  world's copy wins over `GAME`'s.
+
+Still open: what the game does when a texture name is found nowhere (29
+names). Not traced; draw a plain colour.
 
 ## Material flags (Q5, partly)
 
