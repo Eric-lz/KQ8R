@@ -494,8 +494,8 @@ Steps (each separately revertable, each stopped for an eye check):
     standing, walking or running. No banking yet.
   - No start/stop animations (`stopwalk`, `walkstopleft`...) yet: he goes
     straight from one movement to the next, starting the loop at its
-    beginning. Which transition plays is asked as Q25. (Starts added in
-    2g-1.)
+    beginning. Which transition plays is asked as Q25. (Replaced by 2g:
+    starts in 2g-1, stops in 2g-2.)
   - All frames of each movement's loop are drawn in turn, at the loop's
     speed.
   - The rules live in `kq8-game` (`connor.rs`): intent → movement, turning,
@@ -812,7 +812,7 @@ Steps (each separately revertable, each stopped for an eye check):
     the measurement), taken by the mover like any other step, so a wall
     behind him still stops it. Keys are ignored while it plays; then he
     stands, and with run still held he runs again (the original plays
-    `stoprun` first; we have no start animations yet, Q25) and can crash
+    `stoprun` first; done since 2g-1: `stop`, `stoprun`, `run`) and can crash
     again, as measured. Not done: the head-on exceptions that need things
     we don't have yet (`KQMonster`, `backJump`, the unknown Connor flag,
     the "no crash" flags of open question 4). Unit test: run into a wall,
@@ -965,7 +965,8 @@ Steps (each separately revertable, each stopped for an eye check):
   - Viewer: F switches between the game camera (default when Connor is
     there) and the free flying camera. Log: camera position, distance to
     the aim point, height above the terrain, tilt, mode, range, per update.
-- **2g — start and stop transitions (planned 2026-10-12).** Rules from
+- **2g — start and stop transitions (planned 2026-10-12; done
+  2026-10-12, 2g-1 and 2g-2 checked by eye by the user).** Rules from
   `connor-movement.md` "Starting and stopping" (Q25, rules 1–6, the two
   `loop=` flags, "Steps in the start animations"); walls from
   `connor-physics.md` ("Walls", "Walk held against a wall"). Two sub-steps,
@@ -1019,8 +1020,10 @@ Steps (each separately revertable, each stopped for an eye check):
       keys ask again from there, so with run held after a crash `stoprun`
       plays before `run` (as the original does, DESIGN 2d-4). For `jumpend`
       this is our choice, not traced.
-  - **2g-1, starting.** *Done 2026-10-12 (MODLOG); not yet checked by
-    eye. Found on the way: `stoprun` adds up to 526.7 forward in the data,
+  - **2g-1, starting.** *Done 2026-10-12 (MODLOG), checked by eye by
+    the user, including the original's quirk that holding a turn key and
+    then pressing forward starts at once with no start animation (`left`
+    and `right` have no transitions and can be cut short, rule 4). Found on the way: `stoprun` adds up to 526.7 forward in the data,
     not the note's 536.7 (Q40 c).* Load `stopwalk` (`c_stpwk.kqs`) and `stoprun`
     (`c_stprn.kqs`). Expected (the note): `stopwalk` 7 updates, 51.2 left
     and 78.5 forward in all (7 × (7.32, 11.22)), then `walk` from phase
@@ -1029,11 +1032,27 @@ Steps (each separately revertable, each stopped for an eye check):
     it plays to its end, `walk` at 0.85, then `stop` at once (no stop
     animations loaded yet). Run switched on during `stopwalk`: `run` at
     once from 0 when it ends.
-  - **2g-2, stopping.** Load `walkstopleft`, `stopwalkstop`,
+  - **2g-2, stopping.** *Done 2026-10-12 (MODLOG), checked by eye by
+    the user. Added on the way: `--hold F,T,R,N` lets go after N updates, so
+    a stop can be logged.* Load `walkstopleft`, `stopwalkstop`,
     `walkstopright`, `runstopright`, `runstopleft`, `stoprunstop`.
     Expected: letting go during `stoprun` gives one update of `run`, then
     `stoprunstop`; letting go while walking waits for the next from point
     (0.45, 0.90 or 0.95), then plays that point's animation.
+    - State: from the moment `stop` is asked for, he is in Wait, not Move
+      (the note's measurement: "state already Wait" while the walk or run
+      plays on). So a wall hit while a stop waits or plays is never
+      head-on: he slides or stops at the contact, with no `crash` or wall
+      block. In code: "moving" follows the keys' choice, not the movement
+      playing.
+    - Pressing forward again while a stop waits: walking carries on (our
+      reading, Q40 b). Pressed while a stop animation plays: it plays to
+      its end, then `stopwalk` (rules 4 and 6).
+    - Unit tests: each of the three walk stops and the run stops picked by
+      the phase at release; letting go during `stopwalk` (walk at 0.85,
+      then `stopwalkstop` about one update later) and during `stoprun`
+      (one update of `run` with no step, then `stoprunstop`); forward
+      pressed again while waiting; no head-on while stopping.
   - **Log** (`connor.log`, new columns): phase at the start of the update,
     the wanted movement, the step applied in his own axes (left,
     forward). Event lines: a request, the transition chosen (from, to,

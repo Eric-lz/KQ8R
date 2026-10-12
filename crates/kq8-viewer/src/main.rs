@@ -4,7 +4,7 @@
 //! Usage:
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
-//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R]
+//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]]
 //!              [--at X,Y,H]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
@@ -66,8 +66,9 @@ struct Args {
     frames: Option<u64>,
     /// Test: lift Connor this much at the start (like the G/B keys).
     lift: Option<f32>,
-    /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor.
-    hold: Option<[i8; 3]>,
+    /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor,
+    /// optionally only for the first N updates (`1,0,0,30`).
+    hold: Option<([i8; 3], Option<u64>)>,
     /// Test: start Connor on the ground at X, Y facing heading H (radians).
     at: Option<[f32; 3]>,
     terrain: bool,
@@ -96,9 +97,14 @@ fn parse_args() -> Result<Args, String> {
             "--terrain" => a.terrain = true,
             "--hold" => {
                 let v = value()?;
-                let n: Vec<i8> = v.split(',').map(|x| x.trim().parse::<i8>()).collect::<Result<_, _>>().map_err(|_| "--hold needs forward,turn,run e.g. 1,0,0".to_string())?;
-                let [f, t, r] = n[..] else { return Err("--hold needs three numbers, e.g. 1,0,0".into()) };
-                a.hold = Some([f, t, r]);
+                let n: Vec<i64> = v.split(',').map(|x| x.trim().parse::<i64>()).collect::<Result<_, _>>().map_err(|_| "--hold needs forward,turn,run[,updates] e.g. 1,0,0".to_string())?;
+                // Optional 4th number: let go after that many updates.
+                let (keys, until) = match n[..] {
+                    [f, t, r] => ([f, t, r], None),
+                    [f, t, r, u] if u >= 0 => ([f, t, r], Some(u as u64)),
+                    _ => return Err("--hold needs three or four numbers, e.g. 1,0,0 or 1,0,0,30".into()),
+                };
+                a.hold = Some((keys.map(|k| k.clamp(-1, 1) as i8), until));
             }
             "--at" => {
                 let v = value()?;
@@ -161,7 +167,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R] [--at X,Y,H]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--at X,Y,H]");
             return ExitCode::FAILURE;
         }
     };

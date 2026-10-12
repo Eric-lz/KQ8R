@@ -179,11 +179,29 @@ pub fn load_model(
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
 /// plays"), the falls of step 2c/2e (connor-physics.md "Falling off an
-/// edge"), the crash (2d-4) and the start transitions (2g-1,
+/// edge"), the crash (2d-4) and the start and stop transitions (2g,
 /// connor-movement.md "Starting and stopping"). Transitions to or via a
 /// movement not listed here are skipped.
-pub const CONNOR_MOVEMENTS: [&str; 12] =
-    ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie", "crash", "stopwalk", "stoprun"];
+pub const CONNOR_MOVEMENTS: [&str; 18] = [
+    "stop",
+    "walk",
+    "run",
+    "back",
+    "left",
+    "right",
+    "jumphold",
+    "jumpend",
+    "jumpdie",
+    "crash",
+    "stopwalk",
+    "stoprun",
+    "walkstopleft",
+    "stopwalkstop",
+    "walkstopright",
+    "runstopright",
+    "runstopleft",
+    "stoprunstop",
+];
 
 /// One of Connor's movements: its animation and playback speed.
 pub struct ConnorMovement {

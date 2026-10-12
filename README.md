@@ -23,8 +23,8 @@ The code is written with an AI coding agent (Claude Code); see
   and turns with the original's keys and speeds, with his animations.
   Starting to walk or run plays the original's short start animation
   first (with its small step to his left), then the walk or run (checked
-  in the logs, not yet by eye). He stops at once, without the stop
-  animations, for now. He
+  by eye). Letting go, he finishes his step and plays the matching stop
+  animation (checked by eye). He
   follows hills, runs down steep walkable slopes without falling, can't
   climb slopes steeper than about 37° (he slides back), and falls off high
   places with the falling, landing and death animations. Falls and slides

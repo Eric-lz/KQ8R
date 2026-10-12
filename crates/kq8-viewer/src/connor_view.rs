@@ -103,10 +103,11 @@ pub struct ConnorBody;
 #[derive(Resource)]
 pub struct StartLift(pub Option<f32>);
 
-/// `--hold F,T,R`: a test that holds this intent (forward, turn, run 0/1)
-/// instead of the keys.
+/// `--hold F,T,R[,N]`: a test that holds this intent (forward, turn, run
+/// 0/1) instead of the keys; with N, only for the first N updates, then
+/// forward and turn are let go (run stays as it was).
 #[derive(Resource)]
-pub struct HoldIntent(pub Option<[i8; 3]>);
+pub struct HoldIntent(pub Option<([i8; 3], Option<u64>)>);
 
 /// `--at X,Y,H`: a test that starts Connor on the ground at X, Y facing
 /// heading H (radians) instead of where the world script puts him.
@@ -379,8 +380,9 @@ pub fn connor_keys(
     let run_pressed = c.run.is_some_and(|k| keys.just_pressed(k));
     sim.intent.forward = forward;
     sim.intent.turn = turn;
-    if let Some([f, t, r]) = hold.0 {
-        sim.intent = Intent { forward: f.clamp(-1, 1), turn: t.clamp(-1, 1), run: r != 0 };
+    if let Some(([f, t, r], until)) = hold.0 {
+        let held = until.is_none_or(|n| sim.updates < n);
+        sim.intent = if held { Intent { forward: f, turn: t, run: r != 0 } } else { Intent { forward: 0, turn: 0, run: r != 0 } };
     }
     if run_pressed {
         sim.intent.run = !sim.intent.run;

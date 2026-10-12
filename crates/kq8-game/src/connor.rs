@@ -368,9 +368,13 @@ impl Walker {
     }
 
     /// In the Move state: the keys chose a movement other than standing
-    /// (walking, running, stepping back, turning on the spot).
+    /// (walking, running, stepping back, turning on the spot). It follows
+    /// the keys' choice, not the movement playing: while a walk or run
+    /// plays on to its stop point, and while the stop animation plays, he
+    /// is already in Wait (connor-movement.md open question 2, measured),
+    /// so a wall there is never head-on.
     pub fn moving(&self) -> bool {
-        self.mode == Mode::Free && self.movement != "stop"
+        self.mode == Mode::Free && self.choice != "stop"
     }
 
     /// A head-on hit while moving (connor-physics.md "Walls"). Running:
@@ -552,12 +556,14 @@ mod tests {
         ] {
             let mut w = Walker::new(0.0);
             w.movement = movement;
+            w.choice = movement;
             w.phase = 0.5;
             assert_eq!(w.head_on_at_wall(), change, "{movement}");
             assert_eq!(w.mode, mode, "{movement}");
         }
         let mut w = Walker::new(0.0);
         w.movement = "walk";
+        w.choice = "walk";
         w.set_mode(Mode::Fall);
         assert_eq!(w.head_on_at_wall(), None, "not while falling");
         w.movement = "crash";
@@ -1022,5 +1028,185 @@ mod tests {
         // Half of frame 1 and a quarter of frame 2.
         let s = a.one_shot_step(0.25, 0.625);
         assert!((s[0] - 0.5).abs() < 1e-6 && (s[1] + 2.5).abs() < 1e-6, "{s:?}");
+    }
+
+    // The stop transitions (M2 2g-2), with `Conner.anm`'s from points and
+    // frame counts. The stop animations' steps don't matter here (zero).
+
+    /// `start_list` plus walk's and run's stop transitions and the six stop
+    /// animations.
+    fn full_list() -> Vec<(&'static str, MovementLoop)> {
+        let to_stop = |from, via| Transition { from, to: "stop", to_phase: 0.0, via };
+        let mut list = start_list();
+        for (name, l) in list.iter_mut() {
+            match *name {
+                "walk" => {
+                    l.transitions = vec![to_stop(0.9, "stopwalkstop"), to_stop(0.95, "walkstopright"), to_stop(0.45, "walkstopleft")]
+                }
+                "run" => {
+                    l.transitions =
+                        vec![to_stop(0.066667, "runstopright"), to_stop(0.866667, "stoprunstop"), to_stop(0.6, "runstopleft")]
+                }
+                _ => {}
+            }
+        }
+        for (name, frames) in [
+            ("walkstopleft", 6),
+            ("stopwalkstop", 9),
+            ("walkstopright", 7),
+            ("runstopright", 12),
+            ("runstopleft", 16),
+            ("stoprunstop", 10),
+        ] {
+            list.push((name, transition_anim(&vec![(0.0, 0.0); frames - 1])));
+        }
+        list
+    }
+
+    /// Walks or runs from standing until the loop's phase is in [release,
+    /// before), lets go, and returns the next 30 updates.
+    fn stop_from(run: bool, release: f32, before: f32) -> (Vec<Step>, Walker) {
+        let list = full_list();
+        let loops = lookup(&list);
+        let main = if run { "run" } else { "walk" };
+        let mut w = Walker::new(0.0);
+        for _ in 0..200 {
+            w.update(intent(1, 0, run), &loops);
+            if w.movement == main && w.phase >= release && w.phase < before {
+                let steps = (0..30).map(|_| w.update(intent(0, 0, run), &loops)).collect();
+                return (steps, w);
+            }
+        }
+        panic!("{main} never reached phase {release}");
+    }
+
+    /// The movements played, as (name, updates) runs.
+    fn runs(steps: &[Step]) -> Vec<(&'static str, usize)> {
+        let mut out: Vec<(&'static str, usize)> = Vec::new();
+        for s in steps {
+            match out.last_mut() {
+                Some((name, n)) if *name == s.played => *n += 1,
+                _ => out.push((s.played, 1)),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_stop_is_picked_by_the_next_from_point_after_letting_go() {
+        for (run, release, before, from, via, frames) in [
+            (false, 0.3, 0.45, 0.45, "walkstopleft", 6),
+            (false, 0.76, 0.9, 0.9, "stopwalkstop", 9),
+            (false, 0.9, 0.95, 0.95, "walkstopright", 7),
+            (true, 0.5, 0.6, 0.6, "runstopleft", 16),
+            (true, 0.7, 0.866, 0.866667, "stoprunstop", 10),
+            (true, 0.9, 1.0, 0.066667, "runstopright", 12),
+        ] {
+            let (steps, w) = stop_from(run, release, before);
+            let r = runs(&steps);
+            let main = if run { "run" } else { "walk" };
+            assert_eq!((r[0].0, r[1], r[2].0), (main, (via, frames - 1), "stop"), "release at {release}: {r:?}");
+            // The loop played exactly up to the from point.
+            let last = &steps[r[0].1 - 1];
+            assert!((last.played_to - from).abs() < 1e-5, "release at {release}: {last:?}");
+            assert_eq!((w.movement, w.wanted, w.waiting, w.playing), ("stop", None, None, None));
+        }
+    }
+
+    #[test]
+    fn letting_go_during_stopwalk_walks_to_0_9_then_stopwalkstop() {
+        let list = full_list();
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, false), &loops);
+        w.update(intent(1, 0, false), &loops);
+        let steps: Vec<_> = (0..12).map(|_| w.update(intent(0, 0, false), &loops)).collect();
+        assert_eq!(runs(&steps), [("stopwalk", 6), ("walk", 1), ("stopwalkstop", 5)]);
+        let walk = &steps[6];
+        assert_eq!(walk.played_from, 0.85);
+        assert!((walk.played_to - 0.9).abs() < 1e-5 && walk.own_step[1] < 0.0, "{walk:?}");
+    }
+
+    #[test]
+    fn letting_go_during_stoprun_gives_one_update_of_run_then_stoprunstop() {
+        let list = full_list();
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, true), &loops);
+        w.update(intent(1, 0, true), &loops);
+        let steps: Vec<_> = (0..20).map(|_| w.update(intent(0, 0, true), &loops)).collect();
+        assert_eq!(runs(&steps), [("stoprun", 9), ("run", 1), ("stoprunstop", 9), ("stop", 1)]);
+        let run = &steps[9];
+        assert_eq!((run.played_from, run.played_to, run.own_step), (0.866667, 0.866667, [0.0; 3]));
+    }
+
+    #[test]
+    fn pressing_forward_again_while_a_stop_waits_walks_on() {
+        let list = full_list();
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        for _ in 0..12 {
+            w.update(intent(1, 0, false), &loops);
+        }
+        // Walk at about 0.1: let go (walkstopleft waits for 0.45), then
+        // press forward again (Q40 b, our reading).
+        w.update(intent(0, 0, false), &loops);
+        assert_eq!(w.waiting.map(|t| t.via), Some("walkstopleft"));
+        let steps: Vec<_> = (0..30).map(|_| w.update(intent(1, 0, false), &loops)).collect();
+        assert_eq!(runs(&steps), [("walk", 30)]);
+        assert_eq!((w.wanted, w.waiting), (None, None));
+    }
+
+    #[test]
+    fn forward_pressed_during_a_stop_animation_waits_for_its_end_then_starts_again() {
+        let (_, mut w) = stop_from(false, 0.3, 0.45);
+        // stop_from already played the stop to its end; walk and let go again.
+        let list = full_list();
+        let loops = lookup(&list);
+        let mut steps = Vec::new();
+        for _ in 0..40 {
+            let s = w.update(intent(1, 0, false), &loops);
+            let walking = s.played == "walk";
+            steps.push(s);
+            if walking {
+                break;
+            }
+        }
+        assert_eq!(runs(&steps), [("stop", 1), ("stopwalk", 7), ("walk", 1)]);
+        let (_, mut w) = {
+            let list = full_list();
+            let loops = lookup(&list);
+            let mut w = Walker::new(0.0);
+            let mut played = Vec::new();
+            for _ in 0..200 {
+                w.update(intent(1, 0, false), &loops);
+                if w.movement == "walk" && w.phase > 0.3 && w.phase < 0.35 {
+                    break;
+                }
+            }
+            while w.movement != "walkstopleft" {
+                played.push(w.update(intent(0, 0, false), &loops));
+            }
+            (played, w)
+        };
+        let steps: Vec<_> = (0..14).map(|_| w.update(intent(1, 0, false), &loops)).collect();
+        assert_eq!(runs(&steps), [("walkstopleft", 5), ("stop", 1), ("stopwalk", 7), ("walk", 1)]);
+    }
+
+    #[test]
+    fn no_head_on_while_stopping() {
+        let list = full_list();
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        for _ in 0..12 {
+            w.update(intent(1, 0, true), &loops);
+        }
+        assert!(w.moving());
+        // Let go: run plays on to its stop point, already in Wait.
+        w.update(intent(0, 0, true), &loops);
+        assert_eq!(w.movement, "run");
+        assert!(!w.moving());
+        assert_eq!(w.head_on_at_wall(), None);
+        assert_eq!((w.mode, w.blocked_name()), (Mode::Free, "none"));
     }
 }

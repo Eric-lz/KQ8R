@@ -202,7 +202,7 @@ Not used by Connor's movement yet (2d-3).
 | `crash`: movement 7 of `Conner.anm`, `c_crash.KQS` loop `c_crash`, plays once, 8 frames, 0.4667 s, steps add up to (0, 441.5, 0): straight back | Observed (`GAME/Kq/Conner.anm`, `GAME/Common/c_crash.KQS`) | `viewer.log`: "connor: movement crash … 8 frames, 0.4667 s, steps (0.0, 441.5, 0.0)" |
 | The crash starts with the update after the head-on hit | Our choice, the same as `Land` (the note doesn't say which update) | Viewer log: hit at update 1, `crash` updates 2–8 |
 | While `crash` plays he is not in the Move state, so a wall behind him is never head-on (he slides or stops) | `connor-physics.md` "Exact hit handling" (head-on only in Move or Jump; crash is state Special) | Unit test (`a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on`) |
-| Not done: the other run-like movements (`stoprun`, `WaterRun`, `runwaterrun`, `runJump`, `PreBirth`), the exceptions (`KQMonster`, `backJump`, the Connor flag, the "no crash" object flag), the `crash.aud` sound and footstep cues | Not in our code yet | — |
+| Not done: the other run-like movements (`stoprun` done in 2g-1; `WaterRun`, `runwaterrun`, `runJump`, `PreBirth`), the exceptions (`KQMonster`, `backJump`, the Connor flag, the "no crash" object flag), the `crash.aud` sound and footstep cues | Not in our code yet | — |
 
 ## Objects in Connor's movement (M2 step 2d-5) — `crates/kq8-data/src/bounds.rs` (`lookup`), `crates/kq8-game/src/{collide,mover}.rs`, `crates/kq8-viewer/src/{load,terrain_view,connor_view}.rs`
 
@@ -232,7 +232,7 @@ stopping" (session A, traced, Q25).
 | A transition is kept only when its `<to>` and `<via>` movements are loaded; the others are skipped and logged | Our choice (water and the stop animations aren't loaded yet) | Viewer log: walk's and run's stop transitions and the water ones "skipped (movement not loaded)" |
 | Rules 1–6: ask only when the keys' choice changes; next from point ahead (wrap on a loop, never on a one-shot, −1 always wins, ties to the first listed); the movement plays up to the from point; no transition → at once from 0 if it can be cut short; at the end `<to>` at `<to phase>`, then a different wanted movement is asked for again | Note, rules 1–6 (traced) | Unit tests (`choosing_the_next_from_point_ahead`, `letting_go_during_stopwalk_…`, `run_switched_on_during_stopwalk_…`) |
 | The transition plays from the update **after** the one where the from point is reached (so −1 gives one update of `stop` with no step) | **Our reading** of rule 3; fits the measured "one update of `run`, then `stoprunstop`". Asked as Q40 (a) | Viewer log: update 1 `stop`, `stopwalk` from update 2 |
-| Asking for the movement already playing drops a waiting transition and changes nothing | **Our choice**, not traced; asked as Q40 (b) | Can't happen until 2g-2 |
+| Asking for the movement already playing drops a waiting transition and changes nothing | **Our choice**, not traced; asked as Q40 (b) | Unit test (`pressing_forward_again_while_a_stop_waits_walks_on`) |
 | One-shot animations move by their own frame steps, frame by frame (frame k's step over frame time = play time / (frames − 1)), both axes; +x = his left | Note "Steps in the start animations" | Unit tests; viewer `--hold 1,0,0`: `stopwalk` 7 updates of (7.32 left, 11.22 forward), 51.2 / 78.5 in all, then `walk` from 0.85. `--hold 1,0,1`: `stoprun` 10 updates with the note's steps, 43.9 / **526.7**, then `run` from 0.8667 |
 | `stoprun` adds up to 526.7 forward, not the note's 536.7 | **Observed** (`GAME/Common/C_stprn.kqs` frame steps; the note's own per-frame table agrees) | Viewer log frame steps; asked as Q40 (c) |
 | This also changes `jumpend`: its whole step (78 forward, 291 down) is in frame 1, so it is now taken in the first landing update instead of spread over 10 | Data (`C_jstp.kqs` frame steps), same rule | Viewer log frame steps. Not checked by eye |
@@ -240,6 +240,22 @@ stopping" (session A, traced, Q25).
 | Head-on during `stopwalk`: `stop`, forward blocked; during `stoprun`: `crash`; either drops the transition | Note ("Walking into a wall during `stopwalk`…"), `connor-physics.md` "Walls" | Unit test; viewer `--hold 1,0,1`: `stoprun` into `tree.06` at update 29 → `crash` |
 | He turns while a transition plays | Note ("Turning during a start") | Unit test |
 | Falling, a test lift or the end of a mode's one-shot (`crash`, `jumpend`) leaves him in `stop`, and the keys ask again from there | After `crash`: fits the measurement (the original plays `stoprun` before `run`, DESIGN 2d-4). After `jumpend`: **our choice**, not traced | Unit test (`after_a_crash_with_run_held_stoprun_plays_before_run`); viewer: crash ends update 19, `stop` 20, `stoprun` 21– |
+
+## Stop transitions (M2 step 2g-2) — `crates/kq8-game/src/connor.rs`, `crates/kq8-viewer/src/{load,connor_view,main}.rs`
+
+Same note and rules as 2g-1; this step loads the six stop animations
+(`walkstopleft`, `stopwalkstop`, `walkstopright`, `runstopright`,
+`runstopleft`, `stoprunstop`), so walk's and run's stop transitions are
+no longer skipped.
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Letting go waits for the next from point ahead (walk 0.45 / 0.90 / 0.95, run 0.0667 / 0.6 / 0.8667, wrapping), then plays that point's animation to its end, then `stop` from 0 | Note rules 2, 3, 5, 6 (traced) | Unit test (`the_stop_is_picked_by_the_next_from_point_after_letting_go`, all six). Viewer `--at 277744,199295,3.14 --hold 1,0,1,20`: release at run phase 0.51 → `runstopleft` at 0.6; `--hold 1,0,0,20`: release at walk 0.48 → walk to 0.9, then `stopwalkstop` |
+| Let go during `stopwalk`: walk at 0.85, cut at 0.9 one update later, `stopwalkstop`. During `stoprun`: one update of `run` with no step (cut at 0.8667, distance 0), then `stoprunstop` | Note, worked examples; matches the measured "one update of `run`, then `stoprunstop`" | Unit tests; viewer `--hold 1,0,0,4` and `--hold 1,0,1,4`: as described |
+| Stop animations step by their own frames; `stoprunstop` goes to his right (about 35) | Data (`c_strst.kqs` frame steps); the note's measurement ("almost straight to his right") | Viewer `--hold 1,0,1,4`: −10.45, −8.21, … left (i.e. right), 35.2 in all |
+| From the moment `stop` is asked for he is in Wait, not Move, so a wall while a stop waits or plays is never head-on (no `crash`, no wall block) | Note open question 2 (measured: "state already Wait" while the walk or run plays on); `connor-physics.md` "Exact hit handling" (head-on only in Move/Jump) | Unit test (`no_head_on_while_stopping`) |
+| Forward pressed during a stop animation: it plays to its end, then `stop`, `stopwalk`, `walk` | Note rules 4 and 6 | Unit test |
+| `--hold F,T,R,N`: let go of forward and turn after N updates | Our test helper | — |
 
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
