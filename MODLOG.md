@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Study session: Q29 (what counts as on the ground) and Q28 (a)
+
+**Changed:** `docs/behaviour/connor-physics.md` ("Falling off an edge" rule 1, "Gravity", the steep-hill consequence, new open question 7), `docs/behaviour/QUESTIONS.md` (Q28, Q29). No code.
+**Why:** B's slope code falls on a slow walk into a steep slope; the user's checks in the original show it doesn't, and that he gains little height.
+**Tested how:** Read in `Mask.exe`, at instruction level: the air-counter update and the Fall request. Searched the exe for every write to the mover's on-ground flag and air counter. Re-read the gravity step for how the drop follows the pull.
+**Result:** Only a walkable contact (normal z > 0.8) counts as on the ground; steep contact never does. There's no speed or height condition. The count is exact: Fall is asked for at the start of the update after 5 updates in a row that ended not on the ground. So 4 air updates and a landing in the 5th start no fall, which fits the user's walking check; B's code seems to fall one update early. Q28 (a): the drop is the vertical drop projected onto the pull, so the note's 45° example stands.
+**Still broken / not tested:** Why he gains so little height running into a steep slope is not explained (open question 7). Not looked at yet: where the mover's wanted position comes from each update, and the end-of-update step. Q28 (b), (c) and whether `jumpend` plays in full after a one-update fall are not traced.
+**Next:** B fixes the count and re-checks the walking case; then open question 7 (which may also explain open question 6) if the user wants it.
+
 ## 2026-10-11 Camera tests follow the hand-tuned values
 
 **Changed:** `crates/kq8-game/src/camera.rs`, tests only (4 of them). They now use `AIM_HEIGHT`, `MIN_HEIGHT`, `HEIGHT_RATE` and `FIXED_ZOOM_PER_UPDATE` instead of the note's numbers written in. The camera code and the user's values (aim 800, height rate 0.5, commit `10cf08b`) are unchanged.

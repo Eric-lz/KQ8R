@@ -147,7 +147,24 @@ Consequences:
   steep ground, so the push-back grows each update. He is never "on
   ground" there, so after 5 updates (about 0.4 s) the Fall state starts
   and he slides back down in it. Example at 45° (computed): 80, 71, 62,
-  53, 44 units forward, about 310 in all.
+  53, 44 units forward, about 310 in all. The formula holds both in the
+  first update, where the pull is still straight down, and in later ones,
+  where the drop goes along the slope as projected (see "Gravity"):
+  the projected drop's backward part and the smaller push-off add up to
+  the same thing.
+  **Checked by the user in the original (Q29), and not explained by the
+  traced rules:** walking straight into a steep slope, the walk animation
+  keeps playing. He is pushed into and out of the slope over and over,
+  **barely gaining height**, and never falls. Running, the same with a
+  little more height and a more chaotic back-and-forth, but much less
+  height than the rules give (B's code: 60, 60, 45, 31, 17 units up, then
+  a fall). He only stumbles into Fall when he gets high enough to be off
+  the ground for 5 updates, which head-on rarely happens. It does happen
+  when he runs slightly downhill along the slope and then turns into it.
+  Part of this is the exact count (rule 1 in "Falling off an edge"): a
+  push-off that lands him back on the flat ground in front of the slope
+  within 5 updates resets the counter. **Why he gains so little height
+  is open** (open question 7).
 - **Going downhill on walkable ground.** The down pass only lands him if
   the ground under his new spot is above where it ended, so a slope that
   falls faster than the gravity drop leaves him in the air for an update
@@ -191,8 +208,11 @@ Consequences:
   `5000 × (t² − t_prev²) / 2` (constant acceleration of 5,000 units/s²,
   starting from rest at `t = 0`). One update's drop is capped at 5,000.
 - The drop is applied along the pull direction: straight down in the air,
-  down the slope after touching a steep surface. On a slope of angle θ that
-  is a slide accelerating at 5,000 × sin θ. The pull is reset to straight
+  down the slope after touching a steep surface. Exactly (traced, Q28 a):
+  the vertical drop d is **projected onto the pull**. He moves along the
+  pull by d·sinθ, not by d (θ is the slope's angle). That is d·sinθ·cosθ
+  back horizontally and d·sin²θ down. On a slope of angle θ that is a
+  slide accelerating at 5,000 × sin θ. The pull is reset to straight
   down at the start of every update that begins on the ground. After any
   down-pass contact it is set to the surface's downhill direction.
 - If the pull points less than 30° below horizontal (for example after
@@ -215,10 +235,26 @@ Consequences:
 
 ### Falling off an edge (traced)
 
-1. With gravity on, every update that ends **not on the ground** adds 1 to
-   the air counter. From **5** on, every update asks for the **Fall**
-   state (unless he is jumping). The start height is his height at that
-   moment. **Connor's current state decides whether to accept** (traced):
+1. **The air counter, exactly (traced, Q29):** at the **start** of each
+   update, before any pass:
+   - if the previous update ended **on the ground**, or gravity is off,
+     the counter is set to 0 (and the pull is reset to straight down);
+   - otherwise (it ended not on the ground, gravity on) the counter goes
+     up by 1, and if it is now **5 or more**, Fall is asked for (unless
+     he is jumping or his collision type lacks bit 4).
+
+   So Fall is asked for at the start of the update that follows **5
+   updates in a row that all ended not on the ground**. It is asked for
+   before that update's own passes, so even if he lands in that update,
+   the fall has already started. Four air updates followed by a landing
+   in the fifth start **no** fall.
+   **"On the ground"** means only this: in that update the down pass or
+   the ground check put him on a surface with normal z **above 0.8**
+   (walkable). Touching steep ground, being pushed off it, or standing on
+   it never counts. There is **no height or speed condition** anywhere in
+   the count or the Fall request (checked instruction by instruction).
+   The start height is his height at that moment. **Connor's current
+   state decides whether to accept** (traced):
    - **Move** (walking, running, stepping back, turning on the spot) and
      **Wait** (standing) both **accept** Fall in normal play. Both refuse
      it while the player's controls are taken away (a flag set by puzzles
@@ -418,3 +454,15 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    hills, but the traced rules predict one on slopes over about 15°. Not
    found after three searches (see "Going downhill on walkable ground").
    Until it is found, use the recommended rule there.
+7. Why Connor gains so little height walking or running into a steep
+   slope in the original (user's check, Q29). Traced and found as the
+   note says: the across pass ignores the terrain; the down pass hits the
+   hillside at (end x, end y, terrain height) with the terrain's normal;
+   the push-off projects the rest of the move onto the surface; it is
+   carried out as an across move, so the terrain is ignored there too;
+   the pull is set downhill and only reset at the start of an update that
+   began on the ground. Nothing undoes the across move, and nothing adds a
+   speed or height condition. Not looked at yet: who hands the mover its
+   wanted position each update and what height it uses, and whether the
+   end of the update moves him again. This may be the same unfound
+   mechanism as open question 6.
