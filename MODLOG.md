@@ -3,6 +3,22 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-3 checked by eye (user)
+
+**Changed:** `README.md`, this entry. No code.
+**Tested how:** The user ran the viewer (`--at 237907.4,187510.2,0.027` and free play).
+**Result:**
+
+- Works: walls and floors; he goes inside houses and walks across bridges. At an angle he slides along walls, which is correct.
+
+**Still broken:**
+
+- No collision with objects (trees, the stump near the wizard, closed doors, DeadCity crates, and more): expected, step 2d-5.
+- Running head-on: he stops but keeps the run animation, with no crash: expected, step 2d-4.
+- Walking head-on: he stops, which is correct, but stands frozen on the walk's first frame while forward is held, instead of the idle (`stop`) animation. No flicker. Cause, likely: each update the walker restarts `walk` at frame 0, then the head-on stop switches it to `stop` at frame 0, so neither animation advances. Not fixed yet; it ties in with Q37 (d).
+
+**Next:** Fix the frozen frame, then 2d-4 (crash) and 2d-5 (objects), after the user's go.
+
 ## 2026-10-12 Study session: Q34 and Q37 answered; notes and STATUS brought up to date
 
 **Changed:** `docs/behaviour/connor-physics.md` (how the box table is read; head-on test only on up and across passes; slide count per pass; walk held against a wall; an old 1,600 height marked as superseded), `docs/behaviour/QUESTIONS.md` (Q34, Q37 answered, Q36 marked read). `STATUS.md` (not tracked) rewritten at the top, plus "What works", "What doesn't work", open questions and the fresh-session prompt. No code.
