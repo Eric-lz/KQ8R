@@ -612,111 +612,190 @@ Steps (each separately revertable, each stopped for an eye check):
       468 in Fall (no jump from 324 to 468).
     - Log: no new columns. `connor.log` already has the fall timer and
       the drop per update, so both steps can be checked from the numbers.
-- **2d — walls (planned 2026-10-12, waiting for the user's OK).** Rules
-  from `connor-physics.md`: "One update of the mover" (passes 2–4),
-  "The terrain in the passes" (nearest contact wins), "Walls" (traced and
-  the measured part), "Collision shape". Data: `.dig` surfaces and planes
-  (`buildings.md`), `Conner.anm` (`crash`). Five sub-steps, each
-  separately revertable and each stopped for a check.
-  - **What the note leaves open, and our stand-ins** (all asked as Q31,
-    all logged, each a small change once answered):
-    - *How the box is tested against a building's surfaces* is not traced.
-      Our own method: Connor's box is moved along each pass in small
-      pieces (at most 25 units). At each piece we test whether the box
-      overlaps any nearby building polygon (a standard "separating axis"
-      test: two convex shapes don't touch if some direction exists along
-      which their shadows don't overlap). At the first overlap he is put
-      back at the last free spot, refined by halving to within about 1
-      unit. The contact normal is the polygon's plane normal (with the
-      0x80 "faces the other way" bit applied). A surface only stops him
-      when he moves against its front (visible) side; walls have
-      thickness (`buildings.md` rule 2), so the inside is a separate
-      surface.
-    - *Whether the box turns with his heading.* "In his own space" says
-      yes, but turning is not a pass, so a turning box could swing into a
-      wall. Stand-in: an upright box that does **not** turn, x and y both
-      −200…200 (the larger half-width), z 0…1,600. He then stops 200
-      from a wall whichever way he faces (the original: 150–200).
-    - *Which building surfaces are solid.* Stand-in: all of them,
-      including surfaces with kind-0 (not drawn) materials, which may be
-      invisible walls. Logged as a count per building.
-    - *Which objects are solid* (sub-step 2d-5 only): see there.
-  - **2d-1, collision geometry (nothing moves differently yet).** At
-    world load, every building's surfaces are put in world space with the
-    same placement as drawing (rotation, position, the "raise to the
-    ground" rule) and sorted into a grid of square cells (4,096 units) so
-    a pass only tests polygons near it. New code in `kq8-game`
-    (`collide.rs`): polygons, the grid, box-vs-polygon overlap, the
-    piece-by-piece sweep. Unit tests on made-up polygons: a box touching,
-    not touching, swept into a wall stops within 1 unit of it, the normal
-    is the wall's. Log: polygons and cells per world, time to build.
-  - **2d-2, floors, stairs and ceilings (up and down passes).** The up
-    pass is stopped by a ceiling (contact normal pointing down). The down
-    pass tests buildings as well as the terrain; whichever contact is
-    nearer to where the pass started wins (traced). A building floor
-    uses the same 0.8 walkable test, landing and steep push-off as the
-    terrain. Steps up to 325 high are climbed by the existing up/down
-    passes, with no extra rule. The ground check (`keepOnGround`) stays
-    terrain-only, as the note says. Unit tests: a 300-high step is
-    climbed, a 400-high one isn't (blocked once 2d-3 is in), walking out
-    of a doorway at floor height, a ceiling lower than the up pass stops
-    it. Log: down-pass contact source (`terrain` or the building's name
-    and surface number), up-pass ceiling hits.
-  - **2d-3, walls in the across pass: glance and stop.** When the across
-    pass hits a surface:
-    - **Head-on** if the angle between his movement direction and the
-      wall's normal (pointing out of the wall, horizontal part only) is
-      under 0.35 rad (20°), measured as in the note's measured section.
-      Walking (or stepping back): he stops at the contact point, the
-      movement switches straight to `stop` (no stop animation; measured),
-      and the keys are read again from the next update. While he keeps
-      the walk key held into the wall, he keeps trying the step and
-      stopping, which is our reading of the original's Move → Wait →
-      Move; the user can compare.
-    - **Glancing:** the rest of the move with its part into the wall
-      removed, tried again, at most 3 times; then he stays at the last
-      contact. Measured: the slide along the wall is the step × sin(angle
-      from the normal) and nothing more is lost. That is exactly what
-      removing the part into the wall gives, so no extra rule.
-    - The steep push-off (terrain or building) is now an across move that
-      walls can stop (traced), sharing the same 3 tries.
-    - Unit tests: walking straight at a wall stops at it and switches to
-      `stop`; at 21.6° and 35° from the normal the slide per update is
-      0.37 and 0.57 of the step (the measured factors); into a corner, he
-      stops after 3 tries; past the end of a wall he goes on at full step.
-    - Log per update: across result (`free` / `glance` / `head-on` /
-      `stopped`), tries used, the angle to the wall, the wall's normal.
+- **2d — walls (plan rewritten 2026-10-12 from the traced rules, Q31 and
+  Q33; waiting for the user's OK).** Every rule below is traced or read
+  from the data; there are no stand-ins of our own. Rules from
+  `connor-physics.md`: "Where the values live", "Collision shape" (the
+  ball stack, the building test steps 1–7, the object test, the 25-unit
+  pull-back), "The terrain in the passes" (nearest contact wins), "Walls"
+  (head-on, "Exact hit handling", the measured part). Data:
+  `GAME/patch/BOUNDS.KQ` (every collision box, by name), `.dig` tables 2,
+  3 and 8 (BSP nodes, leaves, planes), `Conner.anm` (`crash`). Five
+  sub-steps, each separately revertable and each stopped for a check.
+  - **Words used here.** A *BSP tree* ("binary space partition") is the
+    tree of flat planes stored in each building file: each branch point
+    (*node*) splits space by one plane into a front side and a back side,
+    and each end of the tree (*leaf*) is a region that is either solid
+    (inside a wall) or open. A *sweep* moves a shape from its old to its
+    new position and finds the first point along the way where it would
+    touch something.
+  - **Connor's shape** (traced, and read from the running game): his box
+    is the `Connor` entry of `BOUNDS.KQ`, −200…200, −200…200, 0…1,300
+    (**not** the 1,600-tall `[ConnerCollider]` in `Connor.kq`, which an
+    earlier version of this plan used). It becomes a stack of balls of
+    radius 200 on his vertical axis, at heights 200, 600, 1,000 and 1,100
+    (the top one at the box top − r, so it overlaps the one below). The
+    balls are built from the box by the note's rule, not typed in, so the
+    same code serves monsters later. They don't turn with him; turning is
+    never checked.
+  - **2d-1, the data (nothing moves differently yet).** *Done
+    2026-10-12 (MODLOG). Found on the way: names used twice in
+    `BOUNDS.KQ`, a `#item968` line and a second inside-out box
+    (`iceshard.kqs`), asked as Q34 (only matters for 2d-5); unused BSP
+    leaves with first byte 2.*
+    - `kq8-data`: a reader for `BOUNDS.KQ` (`[BoundingBoxes]`,
+      `itemN=<name> xmin ymin zmin xmax ymax zmax`, lines starting with `;`
+      are comments). Lookup by name, ignoring case. Read from
+      `GAME/patch/` (the patch copy, which differs from `GAME/Kq/Bounds.kq`
+      only in two door entries).
+    - `building.rs`: read table 2 (nodes: plane number u16, front child
+      i16, back child i16, 2 unused bytes) and table 3 (leaves: 48 bytes;
+      only the first byte's bit 0 = solid is used). Child below 0 = leaf
+      number −1 − child. The tree starts at node 0 (traced).
+    - Checks with `kq8 building-verify`, on all 153 `.dig` files: every
+      child and plane number in range; no node lists node 0 as a child;
+      every node reachable from node 0; counts of solid and open leaves.
+      And `BOUNDS.KQ`: 1,111 entries read, the `Connor` entry as above.
+    - Unit tests for both readers on made-up bytes.
+  - **2d-2, the collision tests (`kq8-game`, new `collide.rs`; still not
+    used by the mover).** *Done 2026-10-12 (MODLOG). Checked against
+    the original's measurements (house floor, Tomb wall: Q36). Added on
+    the way: the touch test's 0.00001 margin is done in 64-bit numbers,
+    because in 32-bit `200 + 0.00001` is exactly 200. Inside-out object
+    boxes are refused (no hit) until Q34 (c) is answered.*
+    - **Ball stack from a box** (the rule above).
+    - **Building test**, exactly the note's steps 1–7: no test for a move
+      under 0.1; work in the building's own space (its placement undone:
+      the same rotation, position and "raise to the ground" rule as
+      drawing); each of the four balls traced from node 0, sorted at each
+      node as in front / behind / touching with the margin r + 0.00001;
+      split where the ball first touches the plane moved by r; both
+      children when both ends touch, keeping the nearer hit; a solid leaf
+      entered across a plane is a hit, starting inside solid is not; the
+      hit's surface direction is the crossed plane, flipped to point
+      against the move (walls block from both sides); the earliest of
+      the balls' hits counts; the contact is that hit minus the ball's
+      offset, back in world space, then **pulled back 25** toward the old
+      position (the old position itself if within 25).
+    - **Object test** (used in 2d-5): each ball swept in the object's own
+      space (the box turns with the object) against the box **enlarged
+      by r on every face** (a bigger box with square corners, not a
+      rounded one); earliest hit; the hit face's axis turned back into the
+      world as the surface direction; the same 25 pull-back. An exactly
+      vertical move tests only the top ball going up (or not moving) and
+      the bottom ball going down. Moves under 0.001 in every axis are not
+      tested.
+    - **Hit handler:** over everything hit in one pass, the contact
+      nearest the old position is kept. Against the terrain (up and down
+      passes only), whichever is nearer the pass's start wins; terrain
+      contacts get no pull-back.
+    - Unit tests on a made-up one-wall building (one node, a solid back
+      leaf): walking at it from either side stops with his centre 225
+      from the wall; a move along the wall doesn't hit; a move that only
+      touches the plane; a ball starting inside the wall: no hit; a floor:
+      feet stop 25 above it; a ceiling: top ball stops 25 below it; the
+      earliest of four balls wins when only the top one hits (a low
+      lintel). Object test: square-cornered enlarged box, rotated object,
+      the vertical one-ball rule.
+  - **2d-3, buildings in the passes; glance and stop.**
+    - The up, across and down passes, and every slide retry, sweep Connor
+      against the buildings near the move (a rough check first, by each
+      building's bounding box grown by the note's √3 × his largest
+      half-size, only to save time). The terrain stays as it is: tested
+      only at the end of the up and down passes, never in the across pass.
+      The ground check (`keepOnGround`) stays terrain-only.
+    - "Exact hit handling" as traced. With the kept contact (already
+      pulled back 25):
+      - **Head-on:** the angle between this pass's horizontal movement
+        (wanted end − start, unit length) and the reversed surface
+        direction is under 0.35 rad; zero horizontal movement is never
+        head-on. His movement, not his facing, so stepping backwards into
+        a wall is head-on. Acts only in state Move (or Jump, 2e), so not
+        while standing. Walking or stepping back head-on: he is put at the
+        contact and the movement switches straight to `stop` (state Wait,
+        no stop animation; measured). With the key still held he moves
+        again next update and is stopped again.
+      - **Up-pass hits and walkable landings** (down pass, surface
+        direction z ≥ 0.8): put at the contact, no slide.
+      - **Everything else** (glancing, steep floors or roofs in the down
+        pass): target = wanted end − n × ((wanted end − contact) · n);
+        set at the contact and swept to the target as an across pass. A
+        hit there runs the same handling again (its own head-on test, with
+        the slide as the movement); on the 3rd hit in one update he stays
+        at that contact. The steep terrain push-off already works this way
+        (the same formula, with no pull-back for the terrain); it moves
+        into this shared code so buildings can stop it.
+    - So, by the traced rules: he stands 25 above building floors and
+      stops with his centre 225 from a wall. **Neither is checked in the
+      original yet** (see "Still to check").
+    - Unit tests on made-up buildings: the head-on stop (walking: `stop`;
+      backwards: also head-on); glancing at 21.6° and 35° from the normal
+      slides 0.37 and 0.57 of the step (the measured factors); into a
+      corner, stops at the 3rd hit; past the end of a wall, full step; a
+      325 step climbed, a 400 one blocked; under a low ceiling the up
+      pass is cut short; standing on a building floor stays 25 above it
+      update after update.
+    - Log per update (`connor.log`), new columns: for each pass, what it
+      hit (`terrain`, a building's name, later an object's name) and the
+      surface direction; the across result (`free` / `glance` /
+      `head-on` / `3 hits`), hits used, the head-on angle; on a building
+      floor, his height above it.
   - **2d-4, crash when running head-on.** Running (`run`; the note's
     other run-like movements don't exist in our code yet) head-on into a
-    wall plays `crash` once. **From the data:** `c_crash` moves him
-    441.5 units straight back over its 7 steps, 63 per update, which
-    matches the measured push-back (about 63 per update, 440–600 in
-    all). So the push-back is the animation's own movement, taken by the
-    mover like any other step (walls behind him still stop it). Keys are
-    ignored while it plays. Then he stands; if run is still held he runs
-    again (the original plays `stoprun` first; we have no start
-    animations yet, Q25) and may crash again, as the user saw. Open,
-    logged: measured 5 updates, the animation has 7 steps (Q31 e).
-    Unit test: running into a wall gives `crash`, 7 updates, about 441
-    back, then `run`. The "no crash" object flag and the game flag that
-    blocks crashes are not known (open question 4); not done.
-  - **2d-5, objects (after Q31 d is answered, or with the stand-in if
-    the user prefers).** Each object loaded by the world scripts gets the
-    box from its collider section (`boxfMin*`/`boxfMax*`; to be checked
-    in the data that objects have one) at its position and rotation, and
-    its type and mask (`colliderType`, `colliderMask`, defaults 0x41 and
-    0; script `collisionType`/`collision` commands). An object blocks
-    Connor when his mask shares a bit with its type or its mask shares a
-    bit with his type 4 (traced). Box vs box uses the same sweep. Stand-in
-    until Q31 d: hidden objects never block. Log: blocking objects per
-    world, and which object stopped him.
-  - **Not in 2d:** the camera's obstacle check (after 2d), jumping
-    (2e), water, ropes, pushing objects.
+    wall: `crash` plays **in full** (traced, Q31 e). Its own 7 steps move
+    him 441.5 straight back (63 per update; read from the data, matches
+    the measurement), taken by the mover like any other step, so a wall
+    behind him still stops it. Keys are ignored while it plays; then he
+    stands, and with run still held he runs again (the original plays
+    `stoprun` first; we have no start animations yet, Q25) and can crash
+    again, as measured. Not done: the head-on exceptions that need things
+    we don't have yet (`KQMonster`, `backJump`, the unknown Connor flag,
+    the "no crash" flags of open question 4). Unit test: run into a wall,
+    `crash` for 7 updates, 441.5 back, then `run`.
+  - **2d-5, objects.**
+    - Box: from `BOUNDS.KQ` by name when the object enters the world:
+      first its shape's name (for an animated object, the shape of the
+      movement it has then, e.g. `signpst1.kqs`), then its own name. Used
+      as is, in the object's own space, fixed (doesn't follow the
+      animation). **Not in the table: never collides** (e.g. Daventry's
+      `Davtorch`).
+    - Type and mask: `colliderType` / `colliderMask` from its `.kq` (lines
+      starting with `#` are switched off), defaults type 0x41, mask 0;
+      the script commands `collisionType` and `collision` (a negative
+      number clears bits). Type 0 and mask 0: never collides. A pair is
+      tested when Connor's mask 0x281B shares a bit with its type, or its
+      mask shares a bit with his type 4.
+    - **Hidden objects still collide** (traced).
+    - Log: per world, objects with a box, without one, and with type and
+      mask 0; which object stopped him.
+    - Unit tests on made-up objects; a check in Daventry (the signpost:
+      box −250…−10, 0…250, 0…2,420).
+  - **Still to check or not traced** (none blocks 2d; each is logged
+    where it happens):
+    - **25 above floors: confirmed** (2026-10-12, Q35). In the original
+      his feet are at 13,980 in Connor's house; the house's floor in our
+      data is at 13,955.
+    - **225 from a wall: confirmed for the sweep** (2026-10-12, Q36).
+      Our building sweep at the Tomb wall gives the measured contacts to
+      within 0.1 unit. Still to repeat in the viewer with Connor's real
+      movement once 2d-3 is in (`connor-physics.md`, "Wall test
+      positions").
+    - A ball that starts inside an object's box: "a hit with no usable
+      contact"; what follows was not traced. Logged if it happens.
+    - The inside-out `lfswdoor.kqs` box (xmin 10 > xmax −1,520): not
+      traced; logged if a world uses it (to be checked in 2d-5).
+    - Walkable is "> 0.8" in the slope rules and "≥ 0.8" in the hit
+      handling. They differ only at exactly 0.8, which doesn't happen in
+      practice; we use each as written.
+  - **Not in 2d:** the camera's obstacle check (after 2d), jumping (2e),
+    Connor against monsters (ball stack against ball stack, not traced;
+    no monsters move in M2), landing on a monster (pushed 250 sideways),
+    water, ropes, pushing objects.
   - **How the user will test 2d:** spots next to Daventry buildings
-    found by a throwaway scan, given with `--at` and `--hold` commands:
-    a straight wall to walk and run into head-on and at about 30°, a
-    doorway, steps, the inside of a building. Compared with the
-    original by eye and with `connor.log`.
+    found by a throwaway scan, given as `--at` and `--hold` commands: a
+    straight wall to walk and run into head-on, at about 30°, and
+    backwards; a doorway; steps; the inside of a building; the signpost.
+    Compared with the original by eye and with `connor.log`.
 - **2e** — jumping, crash, the rest of the falling animations (after jumps).
 - **2f — the following camera (planned 2026-10-11).** Moved up at the
   user's request: done right after 2b, before 2c. Rules from `camera.md`.

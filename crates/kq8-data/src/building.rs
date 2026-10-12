@@ -9,9 +9,10 @@
 //! build id (u32), texture scale (f32), bounding box (6 x f32), 8 counts
 //! (i32), then 8 tables in that order with records of 20, 8, 48, 1, 4, 12,
 //! 8 and 16 bytes, then one u32 if version > 3 and one more if version 4.
-//! Tables used here: 1 surfaces, 5 corners, 6 points, 7 texture
-//! coordinates, 8 planes. Tables 2-4 (visibility: BSP nodes, leaves,
-//! bits) are skipped.
+//! Tables used here: 1 surfaces, 2 BSP nodes, 3 BSP leaves (first byte
+//! only), 5 corners, 6 points, 7 texture coordinates, 8 planes. Table 4
+//! (visibility bits) is skipped. The BSP layout is from
+//! `docs/behaviour/connor-physics.md` "Against a building" (Q31, Q33).
 
 use crate::pers::{read_block, ReadError, Reader};
 
@@ -50,6 +51,32 @@ pub struct Corner {
     pub texture_coord: u16,
 }
 
+/// A branch point of the BSP tree (table 2, 8 bytes): a plane splits
+/// space into a front side (normal · p + d > 0) and a back side.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BspNode {
+    pub plane: u16,
+    pub front: BspChild,
+    pub back: BspChild,
+}
+
+/// What a node's side leads to: another node, or a leaf (stored as a
+/// number below 0: leaf = −1 − number).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BspChild {
+    Node(usize),
+    Leaf(usize),
+}
+
+impl BspChild {
+    pub fn from_stored(v: i16) -> Self {
+        if v < 0 { BspChild::Leaf((-1 - v as i32) as usize) } else { BspChild::Node(v as usize) }
+    }
+}
+
+/// The tree's start (traced: the trace always begins at node 0).
+pub const BSP_ROOT: usize = 0;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Plane {
     pub normal: [f32; 3],
@@ -70,6 +97,11 @@ pub struct Building {
     pub points: Vec<[f32; 3]>,
     pub texture_coords: Vec<[f32; 2]>,
     pub planes: Vec<Plane>,
+    /// BSP nodes (table 2).
+    pub nodes: Vec<BspNode>,
+    /// First byte of each BSP leaf (table 3, 48 bytes each; the other 47
+    /// bytes are not used for collision). Bit 0 set = solid.
+    pub leaf_flags: Vec<u8>,
     /// Bytes after the PERS block (the note: 5 of 153 files have some).
     pub trailing_bytes: usize,
 }
@@ -120,10 +152,20 @@ impl Building {
                 light_count: b[17],
             });
         }
-        // Tables 2-4: visibility data, not needed to draw.
-        for (i, size) in RECORD_SIZES.iter().enumerate().take(4).skip(1) {
-            r.bytes(counts[i] * size)?;
-        }
+        let nodes = (0..counts[1])
+            .map(|_| {
+                let b = r.bytes(RECORD_SIZES[1])?;
+                let i16_at = |k: usize| i16::from_le_bytes([b[k], b[k + 1]]);
+                Ok(BspNode {
+                    plane: u16::from_le_bytes([b[0], b[1]]),
+                    front: BspChild::from_stored(i16_at(2)),
+                    back: BspChild::from_stored(i16_at(4)),
+                })
+            })
+            .collect::<Result<Vec<_>, ReadError>>()?;
+        let leaf_flags = (0..counts[2]).map(|_| Ok(r.bytes(RECORD_SIZES[2])?[0])).collect::<Result<Vec<_>, ReadError>>()?;
+        // Table 4: visibility bits, not used.
+        r.bytes(counts[3] * RECORD_SIZES[3])?;
         let corners = (0..counts[4])
             .map(|_| Ok(Corner { point: r.u16()?, texture_coord: r.u16()? }))
             .collect::<Result<Vec<_>, ReadError>>()?;
@@ -153,8 +195,16 @@ impl Building {
             points,
             texture_coords,
             planes,
+            nodes,
+            leaf_flags,
             trailing_bytes: bytes.len() - block.end,
         })
+    }
+
+    /// Leaf `i` is solid (its first byte has bit 0 set). `None` if out of
+    /// range.
+    pub fn leaf_solid(&self, i: usize) -> Option<bool> {
+        self.leaf_flags.get(i).map(|f| f & 1 != 0)
     }
 
     /// Corner positions and texel positions of surface `i`, in order.
@@ -226,13 +276,19 @@ mod tests {
     /// A building with one square surface (4 corners) in the z = 0 plane,
     /// corners anticlockwise seen from above.
     fn square() -> Vec<u8> {
+        square_with_bsp(&[], &[])
+    }
+
+    /// `square()` plus BSP nodes (plane, front, back as stored) and leaves
+    /// (first byte; the other 47 bytes filled with 0xEE).
+    fn square_with_bsp(nodes: &[(u16, i16, i16)], leaves: &[u8]) -> Vec<u8> {
         let mut d = Vec::new();
         d.extend(7u32.to_le_bytes()); // build id
         d.extend(0.125f32.to_le_bytes());
         for v in [0.0f32, 0.0, 0.0, 8.0, 8.0, 0.0] {
             d.extend(v.to_le_bytes());
         }
-        for c in [1i32, 0, 0, 0, 4, 4, 4, 1] {
+        for c in [1i32, nodes.len() as i32, leaves.len() as i32, 0, 4, 4, 4, 1] {
             d.extend(c.to_le_bytes());
         }
         // surface: flags 0, material 2, size 15x15, offset 1,0, plane 0,
@@ -242,6 +298,16 @@ mod tests {
         d.extend(0u32.to_le_bytes());
         d.extend(0u32.to_le_bytes());
         d.extend([4, 0, 0, 0]);
+        for &(plane, front, back) in nodes {
+            d.extend(plane.to_le_bytes());
+            d.extend(front.to_le_bytes());
+            d.extend(back.to_le_bytes());
+            d.extend([0, 0]);
+        }
+        for &first in leaves {
+            d.push(first);
+            d.extend([0xEE; 47]);
+        }
         for k in 0u16..4 {
             d.extend(k.to_le_bytes());
             d.extend(k.to_le_bytes());
@@ -274,6 +340,20 @@ mod tests {
         // the same way as the plane.
         let n = b.corner_order_normal(0).unwrap();
         assert!(n[2] > 0.0 && b.planes[0].normal[2] > 0.0);
+    }
+
+    #[test]
+    fn reads_bsp_nodes_and_leaves() {
+        // Node 0: plane 0, front -> node 1, back -> leaf 0 (stored -1);
+        // node 1: front -> leaf 1 (stored -2), back -> leaf 2 (stored -3).
+        let b = Building::parse(&square_with_bsp(&[(0, 1, -1), (0, -2, -3)], &[0x01, 0x00, 0xFF])).unwrap();
+        assert_eq!(b.counts[1..3], [2, 3]);
+        assert_eq!(b.nodes[0], BspNode { plane: 0, front: BspChild::Node(1), back: BspChild::Leaf(0) });
+        assert_eq!(b.nodes[1], BspNode { plane: 0, front: BspChild::Leaf(1), back: BspChild::Leaf(2) });
+        assert_eq!((b.leaf_solid(0), b.leaf_solid(1), b.leaf_solid(2), b.leaf_solid(3)), (Some(true), Some(false), Some(true), None));
+        // The rest of the file still lines up.
+        assert_eq!(b.points.len(), 4);
+        assert_eq!(b.planes[0].normal, [0.0, 0.0, 1.0]);
     }
 
     #[test]

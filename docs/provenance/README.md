@@ -158,7 +158,30 @@ the Q10 follow-up). "Checked" numbers come from `kq8 building-verify`
 | Building palette `KQWorld::interiorPalette`; materials from the `material=` list (Daventry `interior.dml`, 52) | Behaviour note | Daventry: `daventry.ppl`; no texture missing; no material index past 52 in Daventry's buildings |
 | Below-ground buildings raised onto the ground | Behaviour note (Q10 follow-up) | 19 Daventry objects raised (all buildings at `locZ` −1/−2). Lowest points well below ground: docks (posts in the water), `look`, `fenc3` |
 | `ruins1/3/4.dig` named by Daventry objects but missing from the game | Observed | Not found in any archive or folder; skipped and logged |
-| Building lighting (`.dil`) and visibility tables not used | Our choice for now | — |
+| Building lighting (`.dil`) and visibility bits (table 4) not used | Our choice for now | — |
+| BSP nodes (table 2, 8 bytes): plane u16, front child i16, back child i16, 2 unused; a child below 0 is leaf −1 − child; the tree starts at node 0. Leaves (table 3, 48 bytes): first byte bit 0 = solid, the rest unused | `connor-physics.md` "Against a building" (traced, Q31, Q33 e) | Unit test on made-up bytes. `building-verify` (M2 step 2d-1), all 153 files: 30,400 nodes, 37,132 leaves; every index in range; node 0 is nobody's child; every other node has exactly one parent and is reachable from node 0; every plane normal has length 1.00000. Leaf first bytes: 0 (16,688), 1 = solid (13,865), 2 (6,579). Every leaf with 2 is one no node leads to, so it never matters for the trace; every reachable leaf is 0 or 1 with exactly one parent |
+
+## Collision tests (M2 step 2d-2) — `crates/kq8-game/src/collide.rs`
+
+Not used by Connor's movement yet (2d-3).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Ball stack from a box: r = half the larger of x/y size; n = height / 2r rounded up; ball k at min z + r + 2r·k, the last at max z − r. Connor: r 200 at 200, 600, 1,000, 1,100 | `connor-physics.md` "Collision shape" (traced, Q31 a, Q33) | Unit tests |
+| Building test: no test under 0.1; own space (placement undone); each ball traced from node 0; front / behind / touching with margin r + 0.00001; split where the ball touches the plane moved by r; both children when both ends touch; a solid leaf entered across a plane is a hit, starting inside solid is not; normal = the crossed plane pointing against the move; earliest ball wins | `connor-physics.md` "Against a building" steps 1–7 (traced, Q31 b, c) | Unit tests on made-up trees (wall from both sides, floor, ceiling, lintel, start inside, exact touch, turned building). **Against the original:** `ConHouse` floor at session A's 3 points: feet at 13,980.0 (measured 13,980). `Tomb` wall: run head-on contact (237959.73, 187449.17) (measured 237959.7, 187449.2); walk head-on stop at (237909.4, 187437.8) (as measured); glancing contact y 187449.56 (measured 187449.4–187449.6). Throwaway program, Q36 |
+| The touch margin is compared in 64-bit numbers | Our choice: in 32-bit, r + 0.00001 rounds back to r; the note gives the margin | — |
+| Contact pulled back 25 towards the old position (the old position itself if within 25), for buildings and objects, not the terrain | `connor-physics.md` (traced, Q33 b); confirmed on floors (Q35) | Unit tests; the floor and wall checks above |
+| The rough check uses the building's bounding box, placed, grown by √3 × 200 | `connor-physics.md` "First, a rough check" (traced) | Measured with a throwaway program on all 153 buildings: the BSP is open everywhere just outside the bounding box (2.3 million points, 1–400 units out, none solid), so the rough check can't change a result |
+| Object test: each ball swept in the object's own space against its box enlarged by r on every face (square corners); exactly vertical moves test only the top ball (up or not moving) or the bottom ball (down); no test under 0.001 in every axis; a ball starting inside is a hit without a contact | `connor-physics.md` "Against another object" (traced, Q31 b, Q33) | Unit tests (square corner, turned object, vertical one-ball rule, start inside) |
+| Inside-out boxes (min > max) give no hit | Our choice until Q34 (c) | Unit test |
+
+## Collision boxes — `crates/kq8-data/src/bounds.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `GAME/patch/BOUNDS.KQ`, `[BoundingBoxes]`: `nItems`, then `itemN=<name> xmin ymin zmin xmax ymax zmax`; `;` lines are comments; fields separated by one or more spaces | `connor-physics.md` "Where every object's box comes from" (traced, Q33 a); spacing observed | Unit test. `building-verify`: 1,111 entries, `nItems=1111`, numbered 0–1,110 each once, no unreadable line. `Connor` = −200 −200 0 200 200 1,300 (two older 1,600 lines are `;` comments) |
+| `#item968=...` is not an entry (its key isn't `itemN`) | Our reading of the format; the note says only that `;` lines are comments | The file also has a normal `item968=Althillman` line; the `#` one is an older box for the same name |
+| Every entry is kept; lookups return all entries with the name, ignoring case | Our choice until Q34 (which duplicate wins, case) | Duplicates in the data: `henchman`/`Henchman`, `rat`, `razetta.kqs` (boxes differ); `sprigan`, `trip2`–`trip5` (same). Inside-out boxes (min > max): `lfswdoor.kqs` and `iceshard.kqs` |
 
 ## Formats read but not yet implemented
 

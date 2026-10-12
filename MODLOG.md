@@ -3,6 +3,110 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-2: collision tests (ball stack, building BSP sweep, object boxes)
+
+**Changed:** New `crates/kq8-game/src/collide.rs`: the ball stack built from a box, the building sweep through the BSP tree, the object box sweep, and the 25 pull-back. `crates/kq8-game/src/lib.rs` (module). `docs/DESIGN.md` (2d-2 done), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q36, the wall result for session A). Connor's movement doesn't use any of it yet.
+**Why:** M2 step 2d-2, from `connor-physics.md` "Collision shape" (traced, Q31, Q33).
+**Tested how:**
+
+- `cargo test -p kq8-game`: 38 pass, 13 of them new:
+  - balls: Connor's four balls, overlap, a single ball;
+  - pull-back;
+  - wall: from both sides, along it, moving away, too short a move, an exact touch, starting inside;
+  - floor and ceiling; a low lintel and a high one; a turned building;
+  - object box: square corners, a turned object, the vertical one-ball rule, start inside, an inside-out box.
+- **Against the original's measurements** (throwaway program in the scratch folder, using `collide.rs` and the real `.dig` files):
+  - `ConHouse` floor at session A's three points;
+  - the `Tomb` wall from session A's start points (placement from `TOMB.KQ`: 233311, 183109, ground 8160, dirZ −1.57).
+- Also measured, all 153 buildings: the BSP is open everywhere just outside each bounding box (2.3 million sample points, none solid), so the rough check only saves time.
+
+**Result:**
+
+- Floor: feet at 13,980.0 (measured 13,980).
+- Wall, run head-on: contact (237959.73, 187449.17), measured (237959.7, 187449.2).
+- Wall, walk head-on: stops at (237909.4, 187437.8), as measured. The step before is free; the stopping step touches 13 in, so he stays where he was.
+- Wall, glancing: contact y 187449.56, measured 187449.4–187449.6. Wall face at y 187224.7 (session A's estimate 187225).
+
+**Failed attempts, corrected:**
+
+- Two unit tests failed at first, both my test setups: the lintel's last split was the wrong way round (solid below the beam), and a "too short" move was really 50 units long.
+- I also found that in 32-bit numbers `200 + 0.00001` is exactly 200, so the traced touch margin vanished. That comparison is now done in 64-bit numbers.
+
+**Still broken / not tested:** Not in the movement yet, so nothing changes in the viewer. Inside-out object boxes give no hit until Q34 (c) is answered (objects are 2d-5).
+**Next:** 2d-3, buildings in the up, across and down passes, with head-on stops and glancing slides.
+
+## 2026-10-12 Study session: 25 pull-back on floors confirmed (Q35)
+
+**Changed:** `docs/behaviour/connor-physics.md` ("Collision shape" pull-back bullet, "Walls" floor height), `docs/behaviour/QUESTIONS.md` (Q33 b, Q35 marked read). No code.
+**Why:** B found the floor of Connor's house at 13955 in our data (Q35).
+**Tested how:** My measurement in the original (feet at 13980 inside `ConHouse`) compared with B's floor height at the same three points.
+**Result:** Feet 25 above the floor: the traced 25-unit pull-back on landings is confirmed in the game.
+**Still broken / not tested:** The pull-back against walls (225 stop) and ceilings is not checked directly.
+**Next:** None needed for floors.
+
+## 2026-10-12 Floor height in Connor's house: the 25 pull-back on landings confirmed
+
+**Changed:** `docs/behaviour/QUESTIONS.md` (Q35, the answer for session A), `docs/DESIGN.md` (2d "Still to check"). No code.
+**Why:** Session A measured Connor's feet at z 13,980 inside his house in the original. It asked for the floor's height in our data: 13,955 would confirm the traced 25 pull-back on landings, 13,980 would refute it.
+**Tested how:** A throwaway program in the scratch folder (not in the repo), using `kq8-data`. It reads `cnnrhut.dig`, places it as our viewer does (262411, 228400, 13795, no rotation, from `viewer.log`), then at session A's three points: (1) asks the BSP tree whether each height is solid or open, every 0.25 units straight down; (2) lists the surfaces covering the point.
+**Result:** At all three points the BSP is open down to own z 160 and solid from 160 to 0. The solid top is a plane at own z 160.00 carrying the floor surfaces, so the floor is at **13,955**: feet 25 above it, the pull-back confirmed.
+**Failed attempt, corrected:** My first listing used the wrong facing rule. It took the plane direction with the flip bit as the visible side; it is the opposite (Q15). So I briefly reported that the drawn floor was 160 below the collision floor. Read the right way, the surfaces at own z 160 are the floor seen from above, and those at 0 its underside. The drawn floor and the collision floor agree.
+**Still broken / not tested:** The wall prediction (centre 225 from the face) is checked after 2d-3.
+**Next:** 2d-2, the collision tests.
+
+## 2026-10-12 Study session: Connor's height on a building floor measured
+
+**Changed:** `docs/behaviour/connor-physics.md` ("Walls", wall test positions: height on a building floor). No code.
+**Why:** B asked for his height on a building floor to check the 25 pull-back in our viewer.
+**Tested how:** User walked from the ground outside Connor's house into it and stood still twice; my scratch reader logged his position and the surface he touched from the running original (read only).
+**Result:** Ground outside: feet at z 13770 (terrain). Inside `ConHouse`, e.g. at (263402.8, 223443.2): feet at z 13980, surface straight up. The kept touch point equals his feet position, as traced.
+**Still broken / not tested:** The floor's own height was not read, so the 25 is still not confirmed: B's viewer should find 13955 there if it is right. While stopping my reader I used a command that may also have closed any other Python program running at that moment.
+**Next:** B compares the floor height in the viewer.
+
+## 2026-10-12 M2 step 2d-1: collision data read (box table, building BSP trees)
+
+**Changed:**
+
+- New `crates/kq8-data/src/bounds.rs`: reader for `GAME/patch/BOUNDS.KQ`. Keeps every entry in item order; lookup by name ignoring case returns all matches; reports duplicates.
+- `crates/kq8-data/src/building.rs`: now reads the BSP nodes (table 2) and the leaves' first byte (table 3) instead of skipping them.
+- `kq8 building-verify` (`crates/kq8-cli/src/building_verify.rs`): checks the BSP trees and the box table.
+- `docs/provenance/README.md`, `docs/DESIGN.md` (2d-1 marked done), `docs/behaviour/QUESTIONS.md` (Q34).
+
+Nothing in the game or viewer uses these yet.
+**Why:** M2 step 2d-1, the data that the traced collision rules need (`connor-physics.md` "Collision shape", Q31, Q33).
+**Tested how:** `cargo test --workspace` (kq8-data 44 tests, 3 new: box table, duplicates, BSP tables on made-up bytes; kq8-game 25). `cargo run -p kq8-cli -- building-verify` (log in `kq8-artifacts/logs/building-verify.log`).
+**Result:**
+
+- `building-verify`: PASS, 153 buildings.
+  - 30,400 nodes and 37,132 leaves. Every index is in range, node 0 is nobody's child in every tree, every other node has exactly one parent, and all nodes are reachable from node 0.
+  - Every plane normal has length 1.00000 (the sweep's distances rely on that).
+  - Leaf first bytes: 0 (16,688), 1 = solid (13,865), 2 (6,579). All the 2s are leaves that no node leads to.
+- `BOUNDS.KQ`: 1,111 entries, `nItems=1111`, numbered 0–1,110 each once, no unreadable line. `Connor` = −200 −200 0 200 200 1,300.
+  - Names used twice: `henchman`/`Henchman`, `rat` and `razetta.kqs` with different boxes; `sprigan` and `trip2`–`trip5` with the same box.
+  - Inside-out boxes: `lfswdoor.kqs` (known) and `iceshard.kqs` (new).
+  - A `#item968` line beside a normal `item968`.
+
+**Still broken / not tested:** Q34 (which duplicate wins, case, `#` lines, inside-out boxes) is open; it only matters for objects (2d-5). The viewer was not run (nothing changed there).
+**Next:** 2d-2, the collision tests in `kq8-game` (not used by the mover yet), with unit tests.
+
+## 2026-10-12 Study session: wall test positions written out for checking
+
+**Changed:** `docs/behaviour/connor-physics.md` ("Walls": a table of the wall test positions from my memory log, and what they imply). No code. (Scratch reader in `re/` now also logs the last surface touched; not committed.)
+**Why:** B can't read my logs in `re/` and wants to put Connor at the same spot in our viewer and compare.
+**Tested how:** Re-read my memory log of 2026-10-12 (Daventry wall tests). Reader change tried for a few seconds on the running game: it logged a terrain contact at his feet, as expected.
+**Result:** The run contact and the glancing slide sit at y 187449.2–187449.6; from the traced rules the wall's face is at about y 187225, facing +y. The walking head-on stop is 11.6 closer, which fits "contact within 25 of the start → stay at the start". So the log supports a pull-back of at least 12; it doesn't prove exactly 25.
+**Still broken / not tested:** Wall face position is worked out, not read from the data. Height on a building floor: not measured (needs a new session in the game).
+**Next:** B compares in the viewer. If wanted: a short session in the game to measure the height on a building floor.
+
+## 2026-10-12 M2 step 2d plan rewritten from the traced collision rules
+
+**Changed:** `docs/DESIGN.md`, M2 step 2d only. No code.
+**Why:** Session A answered Q31 and Q33. The old plan had stand-ins of our own: a box sweep against surfaces, every surface solid, hidden objects not colliding, a 1,600-tall box. It now follows the traced rules: Connor's box from `GAME/patch/BOUNDS.KQ` (1,300 tall, four balls of radius 200 at 200, 600, 1,000, 1,100); the `.dig` BSP sweep with solid leaves; the 25-unit pull-back on building and object hits; the slide projection; head-on judged by movement; object boxes by name from `BOUNDS.KQ`; hidden objects colliding.
+**Tested how:** Data check only: `MASK/GAME/patch/BOUNDS.KQ` read by eye. `nItems=1111`; `Connor -200 -200 0 200 200 1300` (two older lines with 1,600 are commented out with `;`); `signpst1.kqs`, `shut1r.kqs` and `chandlir.kqs` have entries; `Davtorch` has none (so it never collides). Searched the code and docs for other uses of 1,600: none.
+**Result:** Plan ready for the user's OK.
+**Still broken / not tested:** Two traced predictions aren't checked in the original: standing 25 above building floors, and stopping with his centre 225 from a wall. Session A's wall log is in `re/`, which session B must not read, so the stop position needs to be written into the note for comparison.
+**Next:** The user's OK, then 2d-1.
+
 ## 2026-10-12 Study session: Q33 answered (object boxes, pull-back, slide, head-on)
 
 **Changed:** `docs/behaviour/connor-physics.md` ("Where the values live", "Collision shape", "Walls"), `docs/behaviour/QUESTIONS.md` (Q33 answered, Q31 corrected), Connor's height in `connor-movement.md` and `camera.md`. No code.

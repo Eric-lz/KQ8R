@@ -5,6 +5,7 @@
 
 pub mod action_map;
 pub mod bitmap;
+pub mod bounds;
 pub mod building;
 pub mod chunks;
 pub mod game_dir;
