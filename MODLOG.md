@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Study session: correction, no Fall while walking or running downhill
+
+**Changed:** `docs/behaviour/connor-physics.md` ("The terrain in the passes", "Slopes", "Falling off an edge" rule 1, How to check, new open question 6), `docs/behaviour/QUESTIONS.md` (Q26 prediction withdrawn). No code.
+**Why:** The previous entry predicted that running down slopes over about 15° would start the Fall state. The user checked the original: no falling animation on any walkable slope. It only appears on unwalkable slopes, and the camera bounces slightly going down very steep walkable ones.
+**Tested how:** Traced in `Mask.exe` how the Fall request is handled. Connor's current state decides whether to accept a new state, and the Move state's rule refuses Fall unless a "controls taken away" flag is set (puzzles, a few scripted moments).
+**Result:** While walking or running, being in the air never starts Fall, which matches the user's test. The short hops downhill still happen (the camera bounce). The steep-hill example changes: at 45° he gains about 390 units in 0.6 s, then slides back (computed).
+**Still broken / not tested:** What starts the fall on unwalkable ground or off a ledge while a move key is held is not traced (open question 6). Whether Wait and other states accept Fall is not traced. The previous prediction was wrong because it assumed every state accepts Fall.
+**Next:** Open question 6 if B needs it for step 2e; otherwise Q27.
+
 ## 2026-10-11 Study session: Q26 (terrain in the passes) and Q23 (gravity off)
 
 **Changed:** `docs/behaviour/connor-physics.md` (steps 2–5, new section "The terrain in the passes", gravity-off correction, How to check), `docs/behaviour/QUESTIONS.md` (Q23, Q26 answered). No code.
