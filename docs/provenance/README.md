@@ -193,6 +193,16 @@ Not used by Connor's movement yet (2d-3).
 | Every building the start-up scripts load is a collider, hidden ones too, placed as drawn | "Against a building", "When an object takes part" (hidden objects collide; traced) | Viewer log: Daventry's building colliders listed with their world boxes |
 | Connor's balls from his `BOUNDS.KQ` box | "Collision shape" (traced) | Viewer log: box −200…200, −200…200, 0…1,300; balls r 200 at 200, 600, 1,000, 1,100 |
 
+## Crash when running head-on (M2 step 2d-4) — `crates/kq8-game/src/connor.rs`, `crates/kq8-viewer/src/{connor_view,load}.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Running (`run`) head-on into a wall: `crash` plays in full, keys ignored, then the keys take over (held run runs again and can crash again) | `connor-physics.md` "Walls" (traced, Q31 e; measured) | Unit test (`running_head_on_crashes_7_updates_441_5_back_then_runs`). Viewer at the `Tomb` (`--at 237968.9,187493.2,-0.2054 --hold 1,0,1`): contact (237959.7, 187449.2), crash ends at (238049.8, 187881.3); measured (238050.1, 187881.3). Crashes again every 10 updates with run held |
+| `crash`: movement 7 of `Conner.anm`, `c_crash.KQS` loop `c_crash`, plays once, 8 frames, 0.4667 s, steps add up to (0, 441.5, 0): straight back | Observed (`GAME/Kq/Conner.anm`, `GAME/Common/c_crash.KQS`) | `viewer.log`: "connor: movement crash … 8 frames, 0.4667 s, steps (0.0, 441.5, 0.0)" |
+| The crash starts with the update after the head-on hit | Our choice, the same as `Land` (the note doesn't say which update) | Viewer log: hit at update 1, `crash` updates 2–8 |
+| While `crash` plays he is not in the Move state, so a wall behind him is never head-on (he slides or stops) | `connor-physics.md` "Exact hit handling" (head-on only in Move or Jump; crash is state Special) | Unit test (`a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on`) |
+| Not done: the other run-like movements (`stoprun`, `WaterRun`, `runwaterrun`, `runJump`, `PreBirth`), the exceptions (`KQMonster`, `backJump`, the Connor flag, the "no crash" object flag), the `crash.aud` sound and footstep cues | Not in our code yet | — |
+
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
 | Fact | Source | Checked how |
@@ -256,7 +266,7 @@ Code: `crates/kq8-game/src/mover.rs`, `crates/kq8-game/src/connor.rs` (`Mode`, o
 | Fall asked for at the start of the update after 5 updates in a row that ended not on the ground (only walkable ground counts), on every update from then on; accepted in normal play; no speed or height condition | `connor-physics.md` "Falling off an edge" rule 1 (Q29) | Unit test: lifted, Fall at update 6. Daventry hill, walking head-on: 1 fall (the first approach, 5 updates in the air) in 101 updates, then in and out of the slope with the walk playing |
 | Fall decided before the animation's step is taken, so its first update uses `jumphold`'s step, not the walk's | Our choice (the order is not in the note). Without it, the walk step of that update lifted him up the hill, "moved up" ended the fall at once, and he crept up the hill forever (seen in a unit test run) | Unit test of the 45° hill |
 | `jumphold` (repeats) while falling, `jumpend` once on a safe landing, `jumpdie` once then the Die state on its last frame; keys (also turning) ignored meanwhile | `connor-physics.md` "Falling off an edge" rules 2, 5; ignoring the keys and turning: our stand-in (asked as Q28 c) | Unit tests; `--lift 2000 --hold 1,0,0`: jumphold at 5, landing at 14 (1,875), jumpend 10 updates, walk again. `--lift 5000`: lands at 22 (4,856), jumpdie 10 updates, Die |
-| One-shot animations play first to last frame (`frameCount − 1` frame times) | `objects.md` "Animated objects at load" loop rule 2 | Unit tests |
+| One-shot animations play first to last frame (`frameCount − 1` steps). ~~Over `frameCount − 1` of `frameCount` frame times of the stored length~~ **Corrected 2026-10-12 (2d-4):** over the whole stored loop length, moving the whole step sum | `objects.md` "Animated objects at load" loop rule 2 (steps); the length is Observed in the data (every loop's stored length is (frames − 1) / 15 s: `crash` 8 frames 0.4667 s, `jumpend` 11 frames 0.6667 s, `walk` 20 frames 1.2667 s) and Measured (`crash`: 441 in 7 ticks of 63, `connor-physics.md` "Walls") | Unit tests; viewer: `crash` 7 updates, 441.5 |
 | A loop name missing in the model: the first loop plays | `objects.md` Q13 (b) | `C_jhld.kqs` has no loop `C_jhld`; the log says which loop is used |
 | `jumpdie` steps not applied: the mover stops at death | Our choice (asked as Q28 b) | — |
 | `--at X,Y,H` start option; spots from a throwaway terrain scan (not kept) | Our test helper | Log line `test --at: put on the ground at ...` |

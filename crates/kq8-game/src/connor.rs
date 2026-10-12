@@ -59,14 +59,11 @@ impl MovementLoop {
         if self.duration > 0.0 { (x * x + y * y).sqrt() / self.duration * self.speed } else { 0.0 }
     }
 
-    /// Seconds one play takes: the whole loop when it repeats; from the
-    /// first frame to the last (`frames − 1` frame times) when it doesn't.
+    /// Seconds one play takes: the stored loop length, repeating or not.
+    /// It already runs from the first frame to the last (`crash`: 8 frames
+    /// in 7/15 s, and measured: its whole step in 7 ticks; DESIGN 2d-4).
     pub fn play_time(&self) -> f32 {
-        if self.repeat || self.frames < 2 {
-            self.duration
-        } else {
-            self.duration * (self.frames - 1) as f32 / self.frames as f32
-        }
+        self.duration
     }
 
     /// The frame shown at `phase` (0..1 of one play).
@@ -93,6 +90,9 @@ pub enum Mode {
     Dying,
     /// The Die state: holds the last frame of `jumpdie`.
     Dead,
+    /// Ran head-on into a wall: `crash` once (it pushes him back), then
+    /// back to the keys.
+    Crash,
 }
 
 impl Mode {
@@ -103,6 +103,7 @@ impl Mode {
             Mode::Land => "land",
             Mode::Dying => "dying",
             Mode::Dead => "dead",
+            Mode::Crash => "crash",
         }
     }
 
@@ -113,6 +114,7 @@ impl Mode {
             Mode::Fall => Some("jumphold"),
             Mode::Land => Some("jumpend"),
             Mode::Dying | Mode::Dead => Some("jumpdie"),
+            Mode::Crash => Some("crash"),
         }
     }
 }
@@ -173,15 +175,19 @@ impl Walker {
         self.mode == Mode::Free && self.movement != "stop"
     }
 
-    /// A head-on hit while moving (connor-physics.md "Walls"): walking or
-    /// stepping back switches straight to `stop`, with no stop animation
-    /// (measured). That key direction then stays blocked until it is
+    /// A head-on hit while moving (connor-physics.md "Walls"). Running:
+    /// `crash` plays in full from the next update (traced, Q31 e). Walking
+    /// or stepping back switches straight to `stop`, with no stop animation
+    /// (measured); that key direction then stays blocked until it is
     /// pressed again (the user's check of the original, DESIGN 2d-3b).
-    /// Running is left alone until the crash (M2 step 2d-4).
     /// Returns the change, if any.
-    pub fn stop_at_wall(&mut self) -> Option<(&'static str, &'static str)> {
-        if !self.moving() || self.movement == "run" {
+    pub fn head_on_at_wall(&mut self) -> Option<(&'static str, &'static str)> {
+        if !self.moving() {
             return None;
+        }
+        if self.movement == "run" {
+            self.set_mode(Mode::Crash);
+            return Some(("run", "crash"));
         }
         let from = self.movement;
         self.blocked = match from {
@@ -210,7 +216,7 @@ impl Walker {
         // A one-shot animation that finished last update hands over.
         if self.phase >= 1.0 {
             let next = match self.mode {
-                Mode::Land => Some(Mode::Free),
+                Mode::Land | Mode::Crash => Some(Mode::Free),
                 Mode::Dying => Some(Mode::Dead),
                 _ => None,
             };
@@ -275,18 +281,65 @@ mod tests {
     }
 
     #[test]
-    fn head_on_stops_walking_and_stepping_back_not_running() {
-        for (movement, stops) in [("walk", true), ("back", true), ("run", false), ("stop", false)] {
+    fn head_on_stops_walking_and_stepping_back_and_crashes_running() {
+        for (movement, change, mode) in [
+            ("walk", Some(("walk", "stop")), Mode::Free),
+            ("back", Some(("back", "stop")), Mode::Free),
+            ("run", Some(("run", "crash")), Mode::Crash),
+            ("stop", None, Mode::Free),
+        ] {
             let mut w = Walker::new(0.0);
             w.movement = movement;
             w.phase = 0.5;
-            assert_eq!(w.stop_at_wall().is_some(), stops, "{movement}");
-            assert_eq!(w.movement, if stops { "stop" } else { movement });
+            assert_eq!(w.head_on_at_wall(), change, "{movement}");
+            assert_eq!(w.mode, mode, "{movement}");
         }
         let mut w = Walker::new(0.0);
         w.movement = "walk";
         w.set_mode(Mode::Fall);
-        assert_eq!(w.stop_at_wall(), None, "not while falling");
+        assert_eq!(w.head_on_at_wall(), None, "not while falling");
+        w.movement = "crash";
+        w.set_mode(Mode::Crash);
+        assert_eq!(w.head_on_at_wall(), None, "not while crashing");
+    }
+
+    /// `crash` as in the data: 8 frames in 7/15 s, 441.5 back (+Y in the
+    /// model, which faces −Y).
+    fn crash() -> MovementLoop {
+        MovementLoop { duration: 7.0 / 15.0, step_sum: [0.0, 441.5, 0.0], speed: 1.0, repeat: false, frames: 8 }
+    }
+
+    #[test]
+    fn running_head_on_crashes_7_updates_441_5_back_then_runs() {
+        let run = MovementLoop { duration: 14.0 / 15.0, step_sum: [0.0, -2350.2, 0.0], speed: 1.0, repeat: true, frames: 15 };
+        let loops = |m: &str| match m {
+            "run" => Some(run),
+            "crash" => Some(crash()),
+            _ => None,
+        };
+        let held = intent(1, 1, true);
+        let mut w = Walker::new(0.0);
+        w.update(held, &loops);
+        assert_eq!(w.head_on_at_wall(), Some(("run", "crash")));
+        // Straight back from his facing (he turned a little while running).
+        let heading = w.heading;
+        let behind = [-heading.sin(), heading.cos()];
+        let mut back = 0.0;
+        for n in 1..=7 {
+            let s = w.update(held, &loops);
+            assert_eq!((w.movement, w.mode), ("crash", Mode::Crash), "update {n}");
+            let along = s.wanted[0] * behind[0] + s.wanted[1] * behind[1];
+            assert!((along - 63.07).abs() < 0.01 && s.wanted[0].hypot(s.wanted[1]) - along < 1e-3, "update {n}: {s:?}");
+            assert_eq!(crash().frame_at(w.phase), n, "update {n}: frame");
+            back += along;
+        }
+        assert!((back - 441.5).abs() < 0.01, "{back}");
+        // Keys ignored while it played (no turning); then running again.
+        assert_eq!(w.heading, heading);
+        let s = w.update(held, &loops);
+        assert_eq!(s.mode_changed, Some((Mode::Crash, Mode::Free)));
+        assert_eq!(w.movement, "run");
+        assert!(s.wanted[0] * behind[0] + s.wanted[1] * behind[1] < 0.0, "runs forward: {s:?}");
     }
 
     #[test]
@@ -300,7 +353,7 @@ mod tests {
         for (forward, movement) in [(1, "walk"), (-1, "back")] {
             let mut w = Walker::new(0.0);
             w.update(intent(forward, 0, false), &loops);
-            assert_eq!(w.stop_at_wall(), Some((movement, "stop")));
+            assert_eq!(w.head_on_at_wall(), Some((movement, "stop")));
             assert_eq!(w.blocked, forward);
             // Key held for 3 s: standing, the idle animation playing on.
             let mut last = w.phase;
@@ -327,7 +380,7 @@ mod tests {
         // Running isn't blocked; a mode change clears the block.
         let mut w = Walker::new(0.0);
         w.update(intent(1, 0, false), &loops);
-        w.stop_at_wall();
+        w.head_on_at_wall();
         w.update(intent(1, 0, true), &loops);
         assert_eq!(w.movement, "run");
         w.blocked = 1;
@@ -350,9 +403,10 @@ mod tests {
         MovementLoop { duration: 1.2667, step_sum: [0.0, -1427.1, 0.0], speed, repeat: true, frames: 20 }
     }
 
-    /// A one-shot of 11 frames lasting 11/15 s, so 10/15 s to play.
+    /// A one-shot of 11 frames, 10/15 s from the first to the last (as
+    /// `jumpend` in the data).
     fn once() -> MovementLoop {
-        MovementLoop { duration: 11.0 / 15.0, step_sum: [0.0; 3], speed: 1.0, repeat: false, frames: 11 }
+        MovementLoop { duration: 10.0 / 15.0, step_sum: [0.0; 3], speed: 1.0, repeat: false, frames: 11 }
     }
 
     #[test]

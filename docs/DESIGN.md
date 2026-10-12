@@ -553,7 +553,8 @@ Steps (each separately revertable, each stopped for an eye check):
     the keys ask for. On death, `jumpdie` plays once, then the Die state:
     he stays on its last frame. The `jumpdie.aud` sound isn't played (no
     sound yet). One-shot animations run from the first frame to the last
-    (`objects.md`, loop rule 2: `frameCount − 1` steps). The walker hears
+    (`objects.md`, loop rule 2: `frameCount − 1` steps) (**corrected in 2d-4:** over the stored
+    loop length, which already runs from the first frame to the last). The walker hears
     about a fall starting, a landing or a death from the mover's report
     and switches on the next update (1/15 s later).
   - Test helper: `--at X,Y,H` starts Connor on the ground at X, Y, facing
@@ -774,7 +775,8 @@ Steps (each separately revertable, each stopped for an eye check):
     - Unit tests: walk into a wall, keep forward held for 45 updates:
       `stop` all the time with its phase moving on; release and press
       forward: walks again. Back works the same way.
-  - **2d-4, crash when running head-on.** Running (`run`; the note's
+  - **2d-4, crash when running head-on.** *Done 2026-10-12 (MODLOG).*
+    Running (`run`; the note's
     other run-like movements don't exist in our code yet) head-on into a
     wall: `crash` plays **in full** (traced, Q31 e). Its own 7 steps move
     him 441.5 straight back (63 per update; read from the data, matches
@@ -788,7 +790,23 @@ Steps (each separately revertable, each stopped for an eye check):
     `crash` for 7 updates, 441.5 back, then `run`.
     - How (the user's choice, 2026-10-12): a new walker mode `Crash`,
       like `Land`: `crash` plays once, its steps go to the mover, the
-      keys are ignored, then the keys take over again.
+      keys are ignored, then the keys take over again. The head-on hit
+      is found during an update; `crash` starts with the next one (as
+      `Land` does). While it plays he is not in the Move state, so a wall
+      behind him is never head-on: he slides or stops at it.
+    - **Fix found on the way: how long a play-once animation lasts.** The
+      walker took a one-shot's stored length to cover all its frames and
+      played it for (frames − 1) / frames of it, moving that share of its
+      steps. The data says the stored length already runs from the first
+      frame to the last: `crash` 8 frames 0.4667 s (7/15), `jumpend` 11
+      frames 0.6667 s (10/15), even `walk` 20 frames 1.2667 s (19/15). A
+      measurement agrees: `crash` moved him 441 in 7 ticks of 63, the
+      whole step sum (441.5) in 7/15 s. So a one-shot now lasts its stored
+      length and moves its whole step sum. Side effects: `jumpend` and
+      `jumpdie` last exactly 10 updates (before: 9.1, shown as 10), and
+      `jumpend`'s own steps are given in full (before: 10/11).
+    - Log: event lines for the head-on crash and its end; `mode` column
+      `crash`.
   - **2d-5, objects.**
     - How (the user's choice, 2026-10-12): a second list, of object
       boxes, next to the building list in the mover's scene; both are

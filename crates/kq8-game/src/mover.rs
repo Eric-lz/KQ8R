@@ -873,6 +873,21 @@ mod tests {
     }
 
     #[test]
+    fn a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on() {
+        // `crash` (not the Move state) pushes him 63 per update for 7
+        // updates straight at a wall 300 away: he stops at it, never inside.
+        let b = [wall()];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([0.0, 300.0, 0.0], true);
+        for n in 1..=7 {
+            let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false });
+            assert!(!r.head_on, "update {n}: no head-on outside Move");
+            assert!(m.position[1] >= 199.0, "update {n}: never inside the wall: {:?}", m.position);
+        }
+        assert!(m.position[1] <= 225.0 + 0.01, "stopped at the wall: {:?}", m.position);
+    }
+
+    #[test]
     fn stepping_backwards_into_a_wall_is_head_on_too() {
         // The mover only sees the movement: backwards is still straight in.
         let b = [wall()];

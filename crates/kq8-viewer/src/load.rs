@@ -180,7 +180,7 @@ pub fn load_model(
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
 /// plays") and the falls of step 2c/2e (connor-physics.md "Falling off an
 /// edge").
-pub const CONNOR_MOVEMENTS: [&str; 9] = ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie"];
+pub const CONNOR_MOVEMENTS: [&str; 10] = ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie", "crash"];
 
 /// One of Connor's movements: its animation and playback speed.
 pub struct ConnorMovement {

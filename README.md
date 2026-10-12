@@ -29,7 +29,9 @@ The code is written with an AI coding agent (Claude Code); see
   slides along it at an angle, climbs low steps, and stands on building
   floors. Checked by eye: he goes inside houses, crosses bridges and
   slides along walls. After walking into a wall he stands idle until
-  forward is pressed again, as in the original (checked by eye).
+  forward is pressed again, as in the original (checked by eye). Running
+  straight into a wall knocks him back (the crash animation), as far as
+  in the original (checked by eye).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
@@ -38,8 +40,7 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-There is nothing to play yet. Connor can't jump, doesn't crash when he
-runs into a wall (he just stops, still running), and walks through objects (trees, doors,
+There is nothing to play yet. Connor can't jump, walks through objects (trees, doors,
 crates, and so on). The camera doesn't swing
 back behind him by itself or avoid walls. People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting

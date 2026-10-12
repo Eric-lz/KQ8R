@@ -13,6 +13,8 @@
 //!
 //! - Falling: `jumphold` while the mover is in Fall, then `jumpend` or
 //!   `jumpdie` once (connor-physics.md "Falling off an edge").
+//! - Walls: walking head-on stops (`stop`), running head-on plays `crash`
+//!   once (connor-physics.md "Walls"; M2 steps 2d-3, 2d-3b, 2d-4).
 //!
 //! Test keys: G lifts him 5,000 (should die on landing), B lifts him 2,000
 //! (safe). `--at X,Y,H` starts him somewhere else. The camera that follows
@@ -416,8 +418,9 @@ pub fn connor_step(
         Some(FallEvent::Died(_)) => sim.walker.set_mode(Mode::Dying),
         _ => {}
     }
-    // Head-on into a wall: walking or stepping back stops at once.
-    let wall_stop = if report.head_on { sim.walker.stop_at_wall() } else { None };
+    // Head-on into a wall: walking or stepping back stops at once; running
+    // crashes from the next update.
+    let wall_stop = if report.head_on { sim.walker.head_on_at_wall() } else { None };
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
         if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }
@@ -520,7 +523,11 @@ pub fn connor_step(
         }
     }
     if let Some((from, to)) = wall_stop {
-        events.push(format!("head-on into a wall: movement {from} -> {to}; this key blocked until pressed again"));
+        events.push(if to == "crash" {
+            format!("head-on into a wall: {from} -> {to} from the next update (keys ignored until it ends)")
+        } else {
+            format!("head-on into a wall: movement {from} -> {to}; this key blocked until pressed again")
+        });
     }
     let state = sim.mover.state.name();
     if state != sim.last_state || !events.is_empty() {

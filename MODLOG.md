@@ -3,6 +3,44 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-4: crash when running head-on
+
+**Changed:**
+
+- `crates/kq8-game/src/connor.rs`:
+  - New walker mode `Crash`: `crash` plays once with the keys ignored, then the keys take over (like `Land`).
+  - `stop_at_wall` is now `head_on_at_wall`: running switches to `Crash`; walking and stepping back stop as before.
+  - **Fix found on the way:** a play-once animation now lasts its stored loop length and moves its whole step sum. Before, it lasted (frames − 1) / frames of the length and moved that share of the steps (`crash` would have pushed him 386 in about 6 updates instead of 441.5 in 7). The data shows the stored length already runs from the first frame to the last; the measured crash agrees.
+- `crates/kq8-game/src/mover.rs`: a new test only.
+- `crates/kq8-viewer/src/load.rs`: `crash` added to Connor's movements. `connor_view.rs`: event lines for the crash.
+- Records: `docs/DESIGN.md` (2d-4 plan and done, the one-shot correction), `docs/provenance/README.md`, `README.md`.
+
+**Why:** M2 step 2d-4, from `connor-physics.md` "Walls" (running head-on: `crash` in full, traced Q31 e; measured push-back).
+**Tested how:**
+
+- `cargo test --workspace`: kq8-data 44, kq8-game 51. New tests:
+  - run head-on → `crash` for 7 updates, 63.07 straight back each, 441.5 in all, frames 1–7, keys ignored, then `run`;
+  - a crash pushing him into a wall behind: no head-on, stops at the wall, never inside.
+- The landing test now uses `jumpend`'s real timing (11 frames in 10/15 s).
+- Viewer at the `Tomb` (`--at 237968.9,187493.2,-0.2054 --hold 1,0,1 --frames 600`).
+- Regression: walk head-on (`--at 237907.4,187510.2,0.027 --hold 1,0,0`), safe landing (`--lift 2000`).
+
+**Result:**
+
+- Run: contact (237959.7, 187449.2) at update 1; `crash` updates 2–8, ending at **(238049.8, 187881.3)**; measured in the original **(238050.1, 187881.3)**. Then runs again and crashes again every 10 updates, as A saw (twice in a row).
+- `viewer.log`: `crash` = 8 frames, 0.4667 s, steps (0, 441.5, 0).
+- Walk head-on: unchanged (stops at (237909.4, 187435.1), blocked).
+- Landing: `jumpend` updates 9–18, back to `stop` at 19 (10 updates, as before).
+
+**Still broken / not tested:**
+
+- Checked by eye by the user afterwards (2026-10-12): looks good.
+- No `crash.aud` sound (no sound yet). No `stoprun` before running again (no start animations, Q25).
+- Only `run` crashes. The other run-like movements and the exceptions (`KQMonster`, `backJump`, the Connor flag, "no crash" objects) need things we don't have yet.
+- The crash pushing him into a wall behind is tested only in a unit test, not at a real wall.
+
+**Next:** 2d-3c (the wall block as session A traced it, Q38), then 2d-5 (objects).
+
 ## 2026-10-12 M2 step 2d-3b: walk held against a wall (no more frozen frame)
 
 **Changed:**
