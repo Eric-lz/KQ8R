@@ -112,3 +112,10 @@ all 153 files):
    own space, so they then sit on the ground.
 5. This explains Q10's `keepOnGround=1` objects floating up to 6,600 above
    the ground: the rule only raises, it never lowers.
+6. **Which ground (added 2026-10-12, Q43):** the mover's default "on" value
+   is −1, and −1 means the **floor** grid (`terrh2.dib`, the ground under
+   water, where a world has one). A `.kq` with `keepOnGround=1` uses the
+   **surface** grid (`terrh.dib`) instead; `keepOnGround=0` (some DeadCity
+   and Barren buildings) means no raise at all. A building without the line
+   stands on the floor: Swamp's `shack2` (`locZ=-1`) at 5,355, not 6,120.
+   Details in `water.md`.

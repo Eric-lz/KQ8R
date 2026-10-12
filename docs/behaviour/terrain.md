@@ -24,7 +24,7 @@ class `KQTerrain`. Daventry's:
 | `groundScale` | 12 | Grid square size is 2^groundScale: **4,096 units** for 12, **2,048** for 11 (Dead City, Snow exit). Confirmed by measurement for 12 and 11 |
 | `heightBMP` | `terrh.dib` | Height image (in `resource`) (confirmed) |
 | `heightBMPScale` | 255 (Barren: 138) | Height per image value (measured, see below) |
-| `floorBMPName` | `terrh2.dib` | A second height image; purpose **open** |
+| `floorBMPName` | `terrh2.dib` | The **floor** grid: the ground under water, which Connor stands on. See `water.md` (traced) |
 | `materialBMP` | `terrm.dib` | Ground material per grid square (see "Ground textures") |
 | `materialListFile` | `davennew.dml` | Ground materials (a material list, same format as in models) |
 | `materialDirection` | `terrain/daventry.bin` | Texture name and orientation per material (see "Ground textures") |
@@ -65,8 +65,9 @@ what they do is open.
    ground: Dead City 48.0 × value (setting 48), Daventry 256.2 × value
    (setting 255), Barren 141.7 × value (setting 138); correlations 0.9998 to
    1.0000. The small excess in Daventry and Barren is within the scatter of
-   objects standing slightly above the ground. The code that builds the grid
-   from the image was not found, so this rests on the measurement.
+   objects standing slightly above the ground. **Now traced (2026-10-12):**
+   the grid is built as value × `heightBMPScale`, stored as a whole number,
+   no offset; the floor image (`water.md`) the same way.
 
 ### Height between grid points
 
@@ -155,8 +156,9 @@ traced yet; terrain sounds and ground damage (`KQWorld::PoisonTime`,
 
 - Points exactly on a grid line: either neighbouring square gives the same
   height (the triangles share edges), so no special case is needed.
-- Some worlds comment out `floorBMPName` (Gnome); then there is no floor
-  image.
+- Some worlds comment out `floorBMPName` (Gnome, temples) or have no such
+  line (Barren, CastleD, SnowExit); then there is no floor grid and every
+  "floor" height question gets the surface (`water.md`).
 
 ## Do not reproduce
 
@@ -172,8 +174,8 @@ Nothing identified yet.
 
 ## Open questions
 
-1. (Answered by measurement: value × `heightBMPScale`. Not yet seen in code.)
-2. What `floorBMPName` (`terrh2.dib`) does.
+1. (Answered: value × `heightBMPScale`, measured and now traced.)
+2. (Answered in `water.md`: `floorBMPName` is the floor under the water.)
 3. What marks a square as a hole. (Texture choice and orientation: answered
    in "Ground textures".)
 4. What the terrain material flag bits 0x1000 and 0xF000 mean

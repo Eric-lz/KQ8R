@@ -134,8 +134,8 @@ Transitions between movements are data, listed per movement as
   60% of the cycle; run: 0% and 53.3%).
 - No other changes Connor makes by himself have transitions: walk ↔ run,
   anything ↔ `back`, `left`, `right` switch directly (see rule 4 below).
-  (Water ones exist, e.g. `walk` → `waterwalk` via `walkwaterwalk`; water
-  is not studied.)
+  (Water ones exist, e.g. `walk` → `waterwalk` via `walkwaterwalk`; when
+  "in water" holds and how the switch happens: `water.md`.)
 
 "Phase" everywhere here is the fraction of the animation's play time,
 0 at the start, 1 at the end (the `<start>` value on the `loop=` line is

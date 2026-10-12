@@ -324,6 +324,11 @@ under where the pass ended with the height Connor ended at:
 This only happens for movers whose collision mask has the "terrain" bit.
 Connor's does: his constructor sets it, and `Connor.kq` doesn't change it.
 
+**Which terrain (added 2026-10-12):** "terrain height" here and in the
+gravity and landing rules means the **floor** grid (`terrh2.dib`, the
+ground under water) in worlds that have one, not the drawn surface. Connor
+walks on the bottom of water. See `water.md`.
+
 Consequences:
 
 - **Steep hill (over 36.9°), running into it.** Each update the across pass

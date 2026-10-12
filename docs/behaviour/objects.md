@@ -164,12 +164,14 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    command. (Corrected 2026-10-11: the first version said `move` uses it
    too; that is **not traced**. Scripts write `move Connor 0 x y -1 …`,
    which suggests the same meaning.)
-2. −1 and −2 pass a different on/off value to the height lookup, but the
-   ground (`KQTerrain`) ignores it, so both give the same ground height.
-   (Traced as far as the ground's lookup; if some other floor answers the
-   lookup, the difference may matter. Not seen.)
+2. **Corrected 2026-10-12 (Q43):** −1 and −2 are different. **−1 gives
+   the floor height** (`terrh2.dib`, the ground under water) and **−2 the
+   surface height** (`terrh.dib`). The first version of this rule said the
+   ground ignores the difference; that was wrong (it was misread). In a
+   world without a floor image both give the surface. See `water.md`.
 3. Other values are used as written; then `keepOnGround` (default on) only
-   raises objects that are below the ground.
+   raises objects that are below the ground (default: onto the floor;
+   `keepOnGround=1`: onto the surface; `water.md`).
 4. A `.kq` file's own `locZ` does **not** go through rule 1. There a −1 is
    handled by the `keepOnGround` raise (e.g. the buildings, which are
    loaded by `loadKQ <file>` with no position).

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: water and the second height map (Q43)
+
+**Changed:** New `docs/behaviour/water.md`. Corrected/extended `docs/behaviour/objects.md` (Q17 rule 2), `buildings.md` (rule 6), `terrain.md` (`floorBMPName`, open questions 1–2), `connor-physics.md` (terrain passes use the floor), `connor-movement.md` (pointer). `QUESTIONS.md`: Q43 answered. No code.
+**Why:** B's Q43: the Swamp shack sits 765 too high, and Connor walks on top of water instead of wading.
+**Tested how:** Traced in `Mask.exe` (terrain loading, the height lookup, the mover's terrain test and ground raise, the per-move water test, the movement choice, the `envInfo.kq` reader). Then a throwaway script (scratchpad, not in the repo) compared `terrh.dib` / `terrh2.dib` with the liquid flags from `envInfo.kq` in all 12 worlds.
+**Result:** `terrh2.dib` is a second "floor" grid, the ground under the water. Connor stands on it (his `keepOnGround` default −1 selects the floor; the mover's terrain hits always use it). After each move, if the square's material is liquid and the drawn surface is ≥ 600 above his feet, `walk`/`run` become `waterwalk`/`waterrun`. `loadKQ` z −1 = floor, −2 = surface (my earlier Q17 rule 2 said they were the same: wrong). Buildings without a `keepOnGround` line stand on the floor, so `shack2` is at 5,355, as B guessed. Data: every liquid square has the surface above the floor (Daventry mostly 1,020 deep), except 180 Swamp squares with no depth.
+**Still broken / not tested:** Nothing checked in the running original. Not traced: whether the floor grid is drawn (probably not), what restores gravity after an `ontop` hazard (lava sinking), damage. DeadCity has 1,086 squares where the floor is above the drawn ground; not looked at.
+**Next:** B: stand Connor and default-`keepOnGround` objects on `terrh2`, `locZ` −1/−2 as in `water.md`, then the water test and the wading animations. Check the shack and Daventry's river by eye.
+
 ## 2026-10-12 A held turn key keeps turning him at a wall (keyboard auto-repeat)
 
 **Changed:** `crates/kq8-viewer/src/connor_view.rs`: the movement key pressed last, while still held, counts as pressed again before every update (only that key, as Windows does; letting it go ends it), and the log says when that clears a wall block. New test option `--turn N[,1|-1]` (press and hold left or right before update N + 1; `main.rs`). `crates/kq8-game/src/player.rs`: new unit test. Docs: provenance, Q38 in QUESTIONS, README.
