@@ -62,13 +62,13 @@ fn convert(game: &GameDir, image: &str, palette: Option<&str>, log: &mut Log) ->
             "palette: {spec} format={:?} entries={} head_says_following={:?} chunks={:?}",
             pal.format, pal.entry_count, pal.declared_chunks, pal.chunk_tags
         ));
-        // Used exactly as stored (models-and-textures.md Q3).
+        // As stored, entry 0 black (models-and-textures.md Q3, Q22).
         Some(pal.shown_colors())
     } else if let Some(embedded) = &bmp.embedded_palette {
         log.summary(format!("palette: embedded in image ({} entries)", embedded.len()));
         let mut c = [[0u8; 3]; 256];
         c.iter_mut().zip(embedded).for_each(|(d, s)| *d = *s);
-        Some(c)
+        Some(kq8_data::palette::as_shown(c))
     } else {
         log.summary("palette: none given, writing greyscale (pass --palette <file>)");
         Some(std::array::from_fn(|i| [i as u8; 3]))

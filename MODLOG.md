@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Palette entry 0 drawn black (Q22)
+
+**Changed:** `crates/kq8-data/src/palette.rs` (new `as_shown`: colours as stored, entry 0 black; `shown_colors` uses it; tests updated), `crates/kq8-viewer/src/load.rs` (textures with their own colour table use `as_shown` too; the log's own-vs-world comparison compares drawn colours), `crates/kq8-cli/src/bitmap_png.rs` (same rule in `kq8 bitmap-png`). Docs: `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (new Q42), `STATUS.md`.
+**Why:** Session A measured entry 0 = black in the running original (Q22). The user chose to apply it to textures' own colour tables too, for one consistent rule.
+**Tested how:** `cargo test --workspace --release`; `kq8 bitmap-png` on both `Teleport.BMP`; `kq8-viewer --terrain --world Swamp --frames 30` and `--world Daventry --frames 30`, then read `viewer.log`. Before the change, the user compared exported images of both `Teleport.BMP` (entry 0 blue vs black).
+**Result:** 133 tests pass (47 + 86). Exported entry 0 is now (0, 0, 0) for Swamp and Daventry `Teleport.BMP` (was (0, 0, 255)). Viewer log: both `Teleport.BMP` lines now say `used_colours_differing_from_world_palette=0` (was 1). Found on the way: `swamp.ppl` already stores entry 0 black, so `WIRLPOOL.BMP` was black all along and doesn't change (the 2026-10-11 entry saying it turned blue was wrong); `daventry.ppl`, `barren.ppl`, `gnome.ppl` store blue. User: the changed pixels are outside the round teleport pad and never seen in the game.
+**Still broken / not tested:** Not checked by eye in the viewer (nothing visible should change). Whether the game also makes entry 0 black in a texture's own table is not measured (Q42, stand-in). Unrelated, seen in the log and left alone: 104 Daventry textures with their own colour table use one colour that differs from `daventry.ppl` (not entry 0; it was like that before this change).
+**Next:** A: Q42 if convenient.
+
 ## 2026-10-12 Study session: Q22 answered by measurement (palette entry 0 is black)
 
 **Changed:** `docs/behaviour/models-and-textures.md` ("System colours": entry 0 is black on any screen), `docs/behaviour/QUESTIONS.md` (Q22 answered). No code.

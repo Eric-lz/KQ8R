@@ -369,7 +369,7 @@ fn load_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log
     };
     let pal = Palette::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
     log.summary(format!("palette: {label} ({:?}, {} entries)", pal.format, pal.entry_count));
-    // Used exactly as stored (models-and-textures.md Q3).
+    // As stored, entry 0 black (models-and-textures.md Q3, Q22).
     Ok(pal.shown_colors())
 }
 
@@ -400,15 +400,17 @@ fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256],
     let rgba = to_rgba(&bmp, palette);
     let histogram = bmp.index_histogram();
     // Pixels using the 20 entries a 256-colour screen would swap (0-9,
-    // 246-255; Q3), and entry 0 alone (stored blue in the world palettes).
+    // 246-255; Q3), and entry 0 alone (drawn black, Q22).
     let edge = histogram.map(|h| h[..10].iter().chain(&h[246..]).sum::<u32>());
     let index0 = histogram.map_or(0, |h| h[0]);
     // For images with their own colour table: how many of the colours the
-    // image actually uses differ from the world palette (0 = no difference).
+    // image actually uses differ from the world palette (0 = no difference),
+    // both as drawn (entry 0 black, Q22).
     let own_vs_world = match (&bmp.embedded_palette, histogram) {
         (Some(own), Some(h)) => {
             let used = (0..256).filter(|&i| h[i] > 0);
-            let differ = used.filter(|&i| own.get(i) != Some(&palette[i])).count();
+            let drawn = |i: usize| if i == 0 { Some([0, 0, 0]) } else { own.get(i).copied() };
+            let differ = used.filter(|&i| drawn(i) != Some(palette[i])).count();
             format!(" own_palette=yes used_colours_differing_from_world_palette={differ}")
         }
         _ => " own_palette=no".into(),
@@ -434,7 +436,8 @@ fn to_rgba(bmp: &Bitmap, palette: &[Rgb; 256]) -> Vec<u8> {
             let own: Option<[Rgb; 256]> = bmp.embedded_palette.as_ref().map(|e| {
                 let mut c = [[0; 3]; 256];
                 c.iter_mut().zip(e).for_each(|(d, s)| *d = *s);
-                c
+                // Entry 0 black, as for world palettes (Q22).
+                kq8_data::palette::as_shown(c)
             });
             let colors = own.as_ref().unwrap_or(palette);
             bmp.pixels.iter().flat_map(|&i| {

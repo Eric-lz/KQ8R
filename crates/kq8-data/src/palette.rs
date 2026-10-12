@@ -119,13 +119,22 @@ impl Palette {
         })
     }
 
-    /// The colours as the game shows them on a modern display: exactly as
-    /// stored. (Only on a 256-colour screen does the game swap entries 0–9
-    /// and 246–255 for the computer's system colours;
-    /// models-and-textures.md "System colours", Q3.)
+    /// The colours as the game shows them on a modern display: as stored,
+    /// except entry 0, which is black (see [`as_shown`]).
     pub fn shown_colors(&self) -> [Rgb; 256] {
-        self.colors
+        as_shown(self.colors)
     }
+}
+
+/// A colour table as the game shows it on a modern display: as stored
+/// (only a 256-colour screen swaps entries 0–9 and 246–255 for the system
+/// colours, Q3), except entry 0, which is black on any screen (measured in
+/// the running original, Q22; models-and-textures.md "System colours").
+/// Also used for the colour tables inside textures, so every texture
+/// follows one rule; that part was not measured (only a world palette was).
+pub fn as_shown(mut colors: [Rgb; 256]) -> [Rgb; 256] {
+    colors[0] = [0, 0, 0];
+    colors
 }
 
 fn first4(bytes: &[u8]) -> [u8; 4] {
@@ -161,8 +170,10 @@ mod tests {
         assert_eq!(p.colors[100], [1, 2, 3]);
         assert_eq!(p.declared_chunks, Some(1));
         assert_eq!(p.extra_chunks, vec![("pcmt".to_string(), 32)]);
-        // Stored colours are used as they are (Q3), including entry 0.
-        assert_eq!(p.shown_colors()[0], [9, 9, 9]);
+        // Stored colours are used as they are (Q3), except entry 0: black (Q22).
+        assert_eq!(p.shown_colors()[100], [1, 2, 3]);
+        assert_eq!(p.shown_colors()[0], [0, 0, 0]);
+        assert_eq!(p.colors[0], [9, 9, 9]);
     }
 
     #[test]
@@ -178,6 +189,7 @@ mod tests {
         assert_eq!(p.format, PaletteFormat::Riff);
         assert_eq!(p.entry_count, 2);
         assert_eq!(p.colors[1], [40, 50, 60]);
-        assert_eq!(p.shown_colors()[0], [10, 20, 30]);
+        assert_eq!(p.shown_colors()[0], [0, 0, 0]);
+        assert_eq!(p.shown_colors()[1], [40, 50, 60]);
     }
 }
