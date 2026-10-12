@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Swamp shack objects sink into the floor: question Q43 for A
+
+**Changed:** `docs/behaviour/QUESTIONS.md` (new Q43). No code.
+**Why:** The user saw the stove, small table, three chests and two barricades half through the floor of the Swamp shack (`shack2`, around (84654, 44049)).
+**Tested how:** Read `viewer.log` (Swamp run) for the shack's and the objects' positions; dropped Connor into the shack 3 times (`kq8-viewer --terrain --world Swamp --at X,Y,0 --lift 3000 --frames 600`) and read his landing height in `connor.log`; compared `terrh.dib` and `terrh2.dib` in every world with a throwaway script (scratchpad, not in the repo).
+**Result:** The house has `locZ=-1` and is lifted to the terrain, 6,120. Its floors: 7,208 (east part), 8,072 (west part). The objects stand 715–765 below them. `terrh2.dib` (the "floor" image, unused so far) is 5,355 under the house; with the house there, every object would sit 18–70 above its floor. Likely `terrh2` is the bottom under the water, but how the game uses it is not known.
+**Still broken / not tested:** Nothing fixed. The guess is not traced; whether Connor should walk on the water's bottom is also open.
+**Seen by the user afterwards:** in our viewer Connor walks on top of the water in every world with water; in the original he goes down into it. Added to Q43; it fits `terrh2` being the ground under the water. README's "doesn't work" list and STATUS updated.
+**Next:** A: Q43. Then B: place by the answer.
+
 ## 2026-10-12 Palette entry 0 drawn black (Q22)
 
 **Changed:** `crates/kq8-data/src/palette.rs` (new `as_shown`: colours as stored, entry 0 black; `shown_colors` uses it; tests updated), `crates/kq8-viewer/src/load.rs` (textures with their own colour table use `as_shown` too; the log's own-vs-world comparison compares drawn colours), `crates/kq8-cli/src/bitmap_png.rs` (same rule in `kq8 bitmap-png`). Docs: `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (new Q42), `STATUS.md`.

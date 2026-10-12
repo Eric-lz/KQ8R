@@ -55,7 +55,10 @@ The code is written with an AI coding agent (Claude Code); see
 There is nothing to play yet. Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
-back behind him by itself or avoid walls. People and monsters are not shown,
+back behind him by itself or avoid walls. Water is not done: Connor walks
+on top of it instead of wading in, and in the Swamp shack the house
+stands too high, so its stove, table, chests and barricades sink into the
+floor (both waiting for the study session, Q43). People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the
 latest changes in [MODLOG.md](MODLOG.md).
