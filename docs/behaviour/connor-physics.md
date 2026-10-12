@@ -175,9 +175,10 @@ banking, already in `connor-movement.md`). Values it uses:
     on a building floor Connor stands **25 above** the floor (feet at
     floor + 25); against a wall, head-on, his centre stops **225** from
     the wall (ball radius 200 + 25); under a ceiling his top ball stops
-    25 short of it. **Not checked in the game.** B can check the wall
-    one from my log of 2026-10-12 (the straight Daventry wall in "Walls,
-    measured") if the engine can find that wall's plane.
+    25 short of it. **Floors: confirmed in the game (2026-10-12, Q35)**:
+    in Connor's house his feet stood at 13980 over a floor at 13955.
+    Walls and ceilings: not checked directly; B can check the wall from
+    the positions in "Walls" (wall test positions).
 - **The sphere is never used.** The game's collider reader reads only
   `boxfMinX/Y/Z`, `boxfMaxX/Y/Z`, `deactivateWidth` and `deactivateSpace`
   from a collider section, plus the display keys every object section has
@@ -528,6 +529,57 @@ When the across pass hits something:
 - **Glancing:** remove the part of the remaining movement that goes into the
   wall, i.e. **slide along it**, and try again. This happens at most 3 times
   in one update; after that he stops at the contact point.
+
+**Wall test positions, for checking in our viewer (measured 2026-10-12,
+Daventry).** All from my memory log of the original. Positions are
+Connor's position (feet), in world units. The ground there is flat at
+z 8160. The wall is a straight building wall running along x, with
+Connor on its **+y side**, walking or running toward −y. Which building
+it is was not logged.
+
+| Test | Moving from | Direction of movement | Where he ended |
+| --- | --- | --- | --- |
+| Walk, head-on (1.6° off the wall's normal) | (237907.4, 187510.2) | (0.027, −1.000) | **(237909.4, 187437.8)**, `Stop` at once |
+| Run, head-on (11.8°) | (237968.9, 187493.2) | (−0.204, −0.979) | contact **(237959.7, 187449.2)**, then `crash` pushes him back to (238050.1, 187881.3) |
+| Walk, glancing (21.6°) | slides along the wall | (0.369, −0.930) | slides at **y 187449.4–187449.6** from x 239937 to 240238 |
+
+What these say (worked out from the traced rules, not measured
+directly):
+- The run contact and the slide sit at the same y (187449.2–187449.6),
+  so the wall is straight here.
+- With the 25 pull-back along the movement, the ball touched the wall
+  with his centre at about **y 187424.7** (run: 187449.2 − 25 × cos 11.8°)
+  or 187426.3 (slide: 187449.5 − 25 × cos 21.6°). With the ball radius
+  200, the **wall's face is at about y 187225** (±2), facing +y.
+- The walking stop is **11.6 closer** to the wall than the run contact.
+  That fits the rule "contact within 25 of the start → stay at the
+  start": his last step (72 units, 187510.2 → 187437.8) didn't touch;
+  the next one touched 13 units in, so he stayed where he was. Without
+  a pull-back, this stop would put the ball inside the wall. So **this
+  log supports the pull-back** (at least 12). It doesn't prove the exact
+  25.
+- **Check for our viewer:** place Connor at the "moving from" points
+  with the same direction and steps. Expected: the run's contact and the
+  slide at y ≈ 187449 (225 from the wall's face, minus the small cosine
+  effect), and a walking stop anywhere between 200 and 225 from the face,
+  depending on where the last step ends. If our wall's face is not near
+  y 187225 here, the wall position or the plane reading differs from the
+  original.
+- **Height on a building floor (measured 2026-10-12, Daventry, Connor's
+  house).** Read from memory, with the surface he last touched:
+  - outside on the ground: feet at **z 13770**, touching the terrain;
+  - inside, standing roughly in the middle of the house at
+    **(263402.8, 223443.2)**: feet at **z 13980**, touching the
+    building `ConHouse`, surface pointing straight up (0, 0, 1). Also
+    13980 everywhere he walked inside, e.g. (266587.3, 224428.1) and
+    (268690.4, 225683.9);
+  - the touch point the game keeps is exactly his feet position, as the
+    traced rule says (the kept contact is the pulled-back one), so it
+    can't show the 25 by itself.
+  - **Confirmed (Q35, B, 2026-10-12):** in our data `ConHouse`'s floor is
+    at **13955** under all three points (building placed at z 13795,
+    floor plane at its own z 160). His feet at 13980 are **25 above the
+    floor**, so the 25-unit pull-back on landings is confirmed.
 
 **Exact hit handling (traced 2026-10-12, Q33 c, d).** "Contact" is the
 contact the hit handler kept, i.e. **already pulled back 25** (see
