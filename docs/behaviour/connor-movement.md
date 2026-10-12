@@ -181,7 +181,9 @@ phases (nearest, next one reached, or first match) is open question 2.
 
 ## Measured in the running original (2026-10-12)
 
-Read from the game's memory on flat ground (game clock time):
+Read from the game's memory on flat ground (game clock time). Update
+counts below are my log lines (one per drawn frame, about 78 ms, one or
+two 1/15 s ticks each); go by the seconds.
 
 - Walk: 1,083–1,131 units/s over 2.4–3.1 s stretches (average about
   1,100, about 2% under the data's 1,127). Run: 2,492–2,561 (average

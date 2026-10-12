@@ -63,10 +63,38 @@ banking, already in `connor-movement.md`). Values it uses:
 
 ### Collision shape (traced; answers open question 2 in part)
 
-- **Connor collides as a box**: the `boxfMin*`/`boxfMax*` values of
-  `[ConnerCollider]`, in his own space (feet at z 0, so the box sits on
-  the ground). Each pass moves the box from where it was to where it is
-  going and tests it against what lies along the way.
+- **The box sets the size; the precise test uses a stack of balls**
+  (traced 2026-10-12, Q31; corrects "Connor collides as a box"). The
+  `boxfMin*`/`boxfMax*` values of `[ConnerCollider]` (his own space, feet
+  at z 0) are turned into balls when the object is set up:
+  - radius r = half the larger of the box's x size and y size;
+  - spacing 2r; count = height / 2r, rounded up;
+  - centres straight above his position (x 0, y 0): the lowest at
+    min z + r, each next 2r higher, the top one at max z - r;
+  - **Connor:** box 400 x 300 x 1600, so r = **200** and **four balls at
+    heights 200, 600, 1000, 1400**, touching, covering 0-1600.
+  This applies to objects whose class asks for it; all monsters do,
+  Connor included. Because the balls sit on his vertical axis, **his
+  shape does not turn with his heading**: turning on the spot is never
+  checked and can't push him into anything.
+- **First, a rough check:** each move covers a box from the old to the
+  new position, enlarged on every side by the square root of 3 times the
+  largest half-size of his box (enough for any rotation). Only objects
+  whose rough boxes overlap go on to the precise test.
+- **Against another object (precise):** each of his balls is swept from
+  its old to its new position, carried into the other object's own space
+  (so **the other object's box does turn with it**), and tested against
+  that box enlarged by the ball's radius. The earliest hit along the move
+  counts. The surface direction is the hit face's axis, turned back into
+  the world.
+- **Against a building (precise):** a ball is swept along the move
+  through the building's BSP tree (the plane tree in the `.dig`), with
+  every plane pushed out by the ball's radius. The first plane hit along
+  the move counts. Its direction is flipped to face the side he came
+  from, so **walls block from both sides**. **Not settled:** which radius
+  and which of his balls the building test uses (probably the same
+  r = 200; not followed to the end). Which surfaces count as solid
+  (Q31 c) is not traced.
 - **The sphere is never used.** The game's collider reader reads only
   `boxfMinX/Y/Z`, `boxfMaxX/Y/Z`, `deactivateWidth` and `deactivateSpace`
   from a collider section, plus the display keys every object section has
@@ -88,9 +116,12 @@ banking, already in `connor-movement.md`). Values it uses:
 - Defaults: an object that sets nothing has type 0x41 and mask 0. Object
   `.kq` files in the game use `colliderMask` values 0, 1, 2, 4 (316 files),
   11, 13, 15, 31 and 2055.
-- **Not traced:** how the box is tested against a building's surfaces
-  (`.dig`) and against another object's box; what each mask/type bit stands
-  for, other than 0x800 (terrain, in Connor's mask) and 4 (Connor's type).
+- **Also skipped (traced):** an object with no collision owner; an
+  object whose owner has a certain flag bit set; and an object that
+  answers "no" to a yes/no check of its own (what it checks is not
+  traced, so whether hidden objects collide is **not settled**, Q31 d).
+- **Not traced:** what each mask/type bit stands for, other than 0x800
+  (terrain, in Connor's mask) and 4 (Connor's type).
 
 The mover also has `MaxSlopeDot` (default 0.819 = cos 35°), and the
 `KQMonster::walkSlope` command sets it. **Connor's movement code doesn't use
@@ -411,7 +442,11 @@ This matches the manual: straight into an object stops him; at an angle he
 glances off and keeps going.
 
 **Measured in the running original (2026-10-12),** against a straight
-building wall, reading his mover from memory:
+building wall, reading his mover from memory. (In all "measured" parts
+of these notes, "updates" counted by me are log lines: one per drawn
+frame, about 78 ms, which can hold one or two 1/15 s ticks. Trust the
+seconds and distances; the update counts are only rough. The air
+counter values are the game's own and are exact.)
 
 - **Which angle counts as head-on:** measure it between his facing and
   the wall's normal (straight into the wall). Head-on at 1.6° and 11.8°;
@@ -420,9 +455,10 @@ building wall, reading his mover from memory:
   read this way.)
 - **Walking head-on:** he stops at the contact point at once. `Walk`
   switches straight to `Stop` (standing), with **no** stop animation.
-- **Running head-on:** `crash` plays for 5 updates (about 0.5 s). During
-  it he is pushed **backwards** (straight back from his facing) by about
-  440–600 units in all (about 63 per update), then stands. If run is
+- **Running head-on:** `crash` plays **in full** (corrected; an earlier
+  version said "5 updates"): he is pushed **backwards** (straight back
+  from his facing) by **441 units** in all, 63 per 1/15 s tick, exactly
+  the animation's 7 steps (Q31 e), then stands. If run is
   still held, he starts running again (`stoprun`) and crashes again
   (seen twice in a row).
 - **Glancing (walking or running):** he slides along the wall with the
@@ -587,6 +623,12 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    the timer is reset when the pull is less than 30° below horizontal;
    this doesn't fit that. It may be a reading taken part-way through an
    update. Not checked.
+   **Explained (Q32, 2026-10-12):** B's log with the corrected gravity
+   shows the cause, and it fits the traced rules: the timer is reset only
+   when the **down pass** lands him on walkable ground. At the foot of
+   the hill the ground check puts him on the flat (counts as on the
+   ground, timer untouched) while his down pass keeps touching the steep
+   hillside, so the timer grows until a down pass lands on the flat.
 8. **Falls are much faster in the original than these rules give** (user,
    Q30). He follows a steep slope down "sucked into the surface", and in
    Fall he gains falling speed much faster. Traced and matching the rules:

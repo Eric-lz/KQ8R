@@ -57,6 +57,21 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not checked by eye in the viewer. The Daventry hillside numbers in the provenance file (Fall at update 17 on a 52° hill) are from before this change and weren't redone. Fall start still sets the timer to 0.36 (visible in the log: timer 0.30 → 0.42, drop 468 instead of 396): that's step G2.
 **Next:** G2.
 
+## 2026-10-12 Study session: wall collision traced (Q31), Q32 confirmed
+
+**Changed:** `docs/behaviour/connor-physics.md` (Collision shape, Walls, open question 7), `docs/behaviour/connor-movement.md` (a note on update counts), `docs/behaviour/QUESTIONS.md` (Q31, Q32). Scratch addresses in `re/notes.md`.
+**Why:** B's questions for M2 step 2d (walls).
+**Tested how:** Traced in `Mask.exe` with Ghidra. Some class tables were found by scanning the exe copy in `re/` for the class type records, because Ghidra hadn't linked them. Q31 (e) was checked against the wall log (`re/dbg/mem_move.log`).
+**Result:**
+
+- The precise collision uses a stack of balls built from the box: Connor has r = 200, four balls at heights 200, 600, 1000, 1400. They don't turn with him, so turning on the spot is never checked. The box only sizes the balls and a rough pre-check.
+- Against objects: balls swept against the other object's box (which turns with that object). Against buildings: a ball swept through the `.dig` BSP, first hit, blocking from both sides.
+- Q31 (e): `crash` plays in full, 441 back. My earlier "5 updates" counted log lines (drawn frames), not ticks. Corrected, and a caveat about update counts added to the measured sections.
+- Q32: B's explanation of the timer oddity fits the traced rules; confirmed.
+
+**Still broken / not tested:** Which radius and balls the building test uses (probably 200) was not followed to the end. Which building surfaces are solid (Q31 c) and whether hidden objects collide (Q31 d) were not traced. Stopped there rather than keep going in circles.
+**Next:** Either trace those three in Ghidra, or measure them in the original with the reader (stop distance from a wall gives the radius).
+
 ## 2026-10-12 Study session: movement, turning, jumps and walls measured in the running original
 
 **Changed:** `docs/behaviour/connor-movement.md` (new "Measured" section, open questions 1 and 2), `docs/behaviour/connor-physics.md` (Walls, open question 3), `docs/behaviour/QUESTIONS.md` (Q24, Q25). In `re/` (not committed): the reader now also logs which way Connor faces.
