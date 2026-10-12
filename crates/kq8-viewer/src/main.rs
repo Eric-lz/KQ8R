@@ -4,7 +4,7 @@
 //! Usage:
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
-//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]]
+//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N]
 //!              [--at X,Y,H]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
@@ -69,6 +69,8 @@ struct Args {
     /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor,
     /// optionally only for the first N updates (`1,0,0,30`).
     hold: Option<([i8; 3], Option<u64>)>,
+    /// Test: press Jump once, before update N + 1.
+    jump: Option<u64>,
     /// Test: start Connor on the ground at X, Y facing heading H (radians).
     at: Option<[f32; 3]>,
     terrain: bool,
@@ -83,6 +85,7 @@ fn parse_args() -> Result<Args, String> {
         frames: None,
         lift: None,
         hold: None,
+        jump: None,
         at: None,
         terrain: false,
     };
@@ -113,6 +116,7 @@ fn parse_args() -> Result<Args, String> {
                 a.at = Some([x, y, h]);
             }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
+            "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => positional.push(arg),
@@ -167,7 +171,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--at X,Y,H]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--at X,Y,H]");
             return ExitCode::FAILURE;
         }
     };
@@ -236,6 +240,7 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::Fly::new())
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
+                .insert_resource(connor_view::JumpAt(args.jump))
                 .insert_resource(connor_view::StartAt(args.at))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").

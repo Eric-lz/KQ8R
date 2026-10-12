@@ -145,6 +145,67 @@ impl MovementLoop {
     }
 }
 
+/// The three jumps (connor-physics.md "Jumping"), each with its own hold,
+/// landing and death animations. A walk-off falls as `Stand`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JumpKind {
+    #[default]
+    Stand,
+    Run,
+    Back,
+}
+
+impl JumpKind {
+    /// Rule 2: `runJump` from `run`, `backJump` from `back`, otherwise `jump`.
+    pub fn for_movement(movement: &str) -> JumpKind {
+        match movement {
+            "run" => JumpKind::Run,
+            "back" => JumpKind::Back,
+            _ => JumpKind::Stand,
+        }
+    }
+
+    pub fn jump(&self) -> &'static str {
+        match self {
+            JumpKind::Stand => "jump",
+            JumpKind::Run => "runJump",
+            JumpKind::Back => "backJump",
+        }
+    }
+
+    /// Played while falling (repeats).
+    pub fn hold(&self) -> &'static str {
+        match self {
+            JumpKind::Stand => "jumphold",
+            JumpKind::Run => "runJumpHold",
+            JumpKind::Back => "backJumpHold",
+        }
+    }
+
+    /// Played once on a safe landing; `runJump` has none.
+    pub fn end(&self) -> Option<&'static str> {
+        match self {
+            JumpKind::Stand => Some("jumpend"),
+            JumpKind::Run => None,
+            JumpKind::Back => Some("backJumpEnd"),
+        }
+    }
+
+    pub fn die(&self) -> &'static str {
+        match self {
+            JumpKind::Stand => "jumpdie",
+            JumpKind::Run => "runJumpDie",
+            JumpKind::Back => "backJumpDie",
+        }
+    }
+}
+
+/// The movements a jump can start from (the user's check in the
+/// original: standing, full walking or full running, never during a start
+/// or stop animation; `back` from the note's rule 2; turning on the spot:
+/// Q41 a).
+pub const JUMP_FROM: [&str; 6] = ["stop", "walk", "run", "back", "left", "right"];
+
 /// What drives Connor's animation.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
@@ -161,6 +222,9 @@ pub enum Mode {
     /// Ran head-on into a wall: `crash` once (it pushes him back), then
     /// back to the keys.
     Crash,
+    /// Jumping: the jump animation once, keys ignored; when it ends the
+    /// game starts Fall (`player.rs`).
+    Jump,
 }
 
 impl Mode {
@@ -172,17 +236,7 @@ impl Mode {
             Mode::Dying => "dying",
             Mode::Dead => "dead",
             Mode::Crash => "crash",
-        }
-    }
-
-    /// The movement this mode plays (`None`: the keys decide).
-    fn movement(&self) -> Option<&'static str> {
-        match self {
-            Mode::Free => None,
-            Mode::Fall => Some("jumphold"),
-            Mode::Land => Some("jumpend"),
-            Mode::Dying | Mode::Dead => Some("jumpdie"),
-            Mode::Crash => Some("crash"),
+            Mode::Jump => "jump",
         }
     }
 }
@@ -208,6 +262,9 @@ pub struct Walker {
     pub playing: Option<Transition>,
     /// The keys' last choice: a request is made only when it changes.
     choice: &'static str,
+    /// The last jump's kind, for the hold, landing and death animations
+    /// (`Stand` after a walk-off).
+    pub kind: JumpKind,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -255,7 +312,47 @@ impl Walker {
             waiting: None,
             playing: None,
             choice: "stop",
+            kind: JumpKind::Stand,
         }
+    }
+
+    /// The movement the mode plays (`None`: the keys decide).
+    fn mode_movement(&self) -> Option<&'static str> {
+        match self.mode {
+            Mode::Free => None,
+            Mode::Fall => Some(self.kind.hold()),
+            // runJump has no landing animation; it never gets Land.
+            Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
+            Mode::Dying | Mode::Dead => Some(self.kind.die()),
+            Mode::Crash => Some("crash"),
+            Mode::Jump => Some(self.kind.jump()),
+        }
+    }
+
+    /// Which jump the Jump key would start now, or why none: only in the
+    /// keys' control, with no start or stop animation playing, from
+    /// `JUMP_FROM` (the ground conditions are the mover's, `player.rs`).
+    pub fn jump_kind(&self) -> Result<JumpKind, String> {
+        if self.mode != Mode::Free {
+            return Err(format!("not in the keys' control (mode {})", self.mode.name()));
+        }
+        if let Some(t) = self.playing {
+            return Err(format!("{} is playing", t.via));
+        }
+        if !JUMP_FROM.contains(&self.movement) {
+            return Err(format!("not from {}", self.movement));
+        }
+        Ok(JumpKind::for_movement(self.movement))
+    }
+
+    /// A jump starts: its animation plays once from the next `update`,
+    /// keys ignored. Any waiting transition is dropped.
+    pub fn start_jump(&mut self, kind: JumpKind) {
+        self.clear_transitions();
+        self.kind = kind;
+        self.mode = Mode::Jump;
+        self.movement = kind.jump();
+        self.phase = 0.0;
     }
 
     /// Switch mode (from the mover's fall events, or a test lift). The new
@@ -422,7 +519,7 @@ impl Walker {
                 self.set_mode(next);
             }
         }
-        if let Some(m) = self.mode.movement() {
+        if let Some(m) = self.mode_movement() {
             if m != self.movement {
                 self.movement = m;
                 self.phase = 0.0;

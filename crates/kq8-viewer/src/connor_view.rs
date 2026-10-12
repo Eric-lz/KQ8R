@@ -24,7 +24,7 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_game::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
-use kq8_game::mover::{FallEvent, Mover, Scene as MoverScene, State, Wish};
+use kq8_game::mover::{Mover, Scene as MoverScene, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
@@ -45,6 +45,7 @@ pub struct Controls {
     left: Option<KeyCode>,
     right: Option<KeyCode>,
     run: Option<KeyCode>,
+    jump: Option<KeyCode>,
     held: Vec<KeyCode>,
 }
 
@@ -81,6 +82,10 @@ pub struct ConnorSim {
     /// Share of the loop played per update (for blending the loop position).
     phase_step: f32,
     pub updates: u64,
+    /// The Jump key was pressed since the last update.
+    jump_pressed: bool,
+    /// Height where the last jump started (for the log).
+    jump_start_z: Option<f32>,
     /// One line per update: `kq8-artifacts/logs/connor.log`.
     pub log: Log,
     last_state: &'static str,
@@ -108,6 +113,10 @@ pub struct StartLift(pub Option<f32>);
 /// forward and turn are let go (run stays as it was).
 #[derive(Resource)]
 pub struct HoldIntent(pub Option<([i8; 3], Option<u64>)>);
+
+/// `--jump N`: a test that presses Jump once, before update N + 1.
+#[derive(Resource)]
+pub struct JumpAt(pub Option<u64>);
 
 /// `--at X,Y,H`: a test that starts Connor on the ground at X, Y facing
 /// heading H (radians) instead of where the world script puts him.
@@ -236,11 +245,12 @@ pub fn spawn_connor(
         left: key("RotateZ", 1.0),
         right: key("RotateZ", -1.0),
         run: key("Run", 0.0),
+        jump: key("Jump", 0.0),
         held: Vec::new(),
     };
     main_log.summary(format!(
-        "connor: keys from Connor.sae: forward {:?}, back {:?}, turn left {:?}, turn right {:?}, run on/off {:?}",
-        controls.forward, controls.back, controls.left, controls.right, controls.run
+        "connor: keys from Connor.sae: forward {:?}, back {:?}, turn left {:?}, turn right {:?}, run on/off {:?}, jump {:?}",
+        controls.forward, controls.back, controls.left, controls.right, controls.run, controls.jump
     ));
 
     let mut mover = Mover::new(placement.position, true);
@@ -280,13 +290,15 @@ pub fn spawn_connor(
         current: start,
         phase_step: 0.0,
         updates: 0,
+        jump_pressed: false,
+        jump_start_z: None,
         log,
         last_state: "normal",
         last_down: "terrain".to_string(),
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start",
     );
     sim.log.detail(
         "  (played = the animation that moved him this update, with its phase before and after; wanted_movement = asked for and not reached yet; step_left / step_forward = that animation's step in his own axes; movement / phase = where he is after the update)",
@@ -306,6 +318,7 @@ pub fn spawn_connor(
 }
 
 /// Keys: Connor's movement keys (held order) and the test keys G and B.
+#[allow(clippy::too_many_arguments)]
 pub fn connor_keys(
     keys: Res<ButtonInput<KeyCode>>,
     sim: Option<ResMut<ConnorSim>>,
@@ -313,6 +326,7 @@ pub fn connor_keys(
     mut start_lift: ResMut<StartLift>,
     mut start_at: ResMut<StartAt>,
     hold: Res<HoldIntent>,
+    mut jump_at: ResMut<JumpAt>,
     lookup: Option<Res<GroundLookup>>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -378,6 +392,16 @@ pub fn connor_keys(
     let c = &sim.controls;
     let (forward, turn) = (c.axis(c.forward, c.back), c.axis(c.left, c.right));
     let run_pressed = c.run.is_some_and(|k| keys.just_pressed(k));
+    if c.jump.is_some_and(|k| keys.just_pressed(k)) {
+        sim.jump_pressed = true;
+    }
+    if jump_at.0.is_some_and(|n| sim.updates >= n) {
+        jump_at.0 = None;
+        sim.jump_pressed = true;
+        let line = format!("connor update {}: test --jump: Jump pressed", sim.updates);
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
     sim.intent.forward = forward;
     sim.intent.turn = turn;
     if let Some(([f, t, r], until)) = hold.0 {
@@ -430,36 +454,17 @@ pub fn connor_step(
         objects.as_ref().map_or(&[][..], |o| &o.0),
     );
     let intent = sim.intent;
-    let mut step = None;
-    let report = {
+    let jump = std::mem::take(&mut sim.jump_pressed);
+    let z_before = sim.mover.position[2];
+    let tick = {
         let ConnorSim { mover, walker, movements, .. } = &mut *sim;
         let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop);
-        if mover.state == State::Dead {
-            // The mover stands still; the death animation plays on.
-            step = Some(walker.update(intent, &loops));
-            mover.update([0.0; 3], &scene)
-        } else {
-            mover.update_with(&scene, |_, fall| {
-                // Fall replaces the walk at once, so its first update
-                // already uses jumphold's step.
-                if fall == Some(FallEvent::Started) {
-                    walker.set_mode(Mode::Fall);
-                }
-                let s = walker.update(intent, &loops);
-                let wish = Wish { step: s.wanted, moving: walker.moving() };
-                step = Some(s);
-                wish
-            })
-        }
+        kq8_game::player::tick(mover, walker, intent, jump, &loops, &scene)
     };
-    match report.fall {
-        Some(FallEvent::Landed(_)) => sim.walker.set_mode(Mode::Land),
-        Some(FallEvent::Died(_)) => sim.walker.set_mode(Mode::Dying),
-        _ => {}
+    if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
+        sim.jump_start_z = Some(z_before);
     }
-    // Head-on into a wall: walking or stepping back stops at once; running
-    // crashes from the next update.
-    let wall_stop = if report.head_on { sim.walker.head_on_at_wall() } else { None };
+    let kq8_game::player::Tick { step, report, wall_stop, notes: jump_notes } = tick;
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
         if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }
@@ -472,7 +477,7 @@ pub fn connor_step(
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2} {}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -515,9 +520,14 @@ pub fn connor_step(
         sim.walker.wanted.unwrap_or("none"),
         step.as_ref().map_or(0.0, |s| s.own_step[0]),
         step.as_ref().map_or(0.0, |s| -s.own_step[1]),
+        sim.jump_start_z.map_or("none".into(), |z| format!("{:.1}", sim.mover.position[2] - z)),
     );
+    if sim.walker.mode == Mode::Free {
+        sim.jump_start_z = None;
+    }
     sim.log.detail(line);
-    let mut events = report.events.clone();
+    let mut events = jump_notes;
+    events.extend(report.events.iter().cloned());
     if report.up_contact.is_some() {
         events.push(format!("up pass hit the terrain (normal z {})", normal(report.up_contact, 2)));
     }

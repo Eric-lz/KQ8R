@@ -8,6 +8,7 @@ pub mod camera;
 pub mod collide;
 pub mod connor;
 pub mod mover;
+pub mod player;
 
 /// The original's update rate (`KQGame::FPSLimit 15`); every per-update
 /// value in the rules assumes it.

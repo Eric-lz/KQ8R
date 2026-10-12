@@ -925,8 +925,83 @@ Steps (each separately revertable, each stopped for an eye check):
     straight wall to walk and run into head-on, at about 30°, and
     backwards; a doorway; steps; the inside of a building; the signpost.
     Compared with the original by eye and with `connor.log`.
-- **2e** — jumping and the falling animations after jumps (the crash
-  when running into a wall is done, 2d-4). Not planned yet.
+- **2e — jumping (planned 2026-10-12).** Rules from `connor-physics.md`
+  "Jumping" (traced; arcs measured), "Falling off an edge" rules 2–5,
+  "Walls"; the user's checks in the original (2026-10-12, below). Three
+  sub-steps, each stopped for a check.
+  - **The user's checks in the original:** no jump while a start or stop
+    animation plays; a jump only from standing (standing jump), full
+    walking (standing jump) or full running (running jump). No turning
+    during a jump or its fall; the only turning is during the landing of
+    a running jump (forward let go before he lands, a turn key held).
+    The running jump's measured 6,480 vs 6,356 in the data: probably not
+    flat ground; no need to match. Turning on the spot, then Jump: the
+    jump happens, turning stops, and starts again after the landing
+    animation. A back flip into a wall or steep hill: he slides down in
+    the backward falling animation until he reaches the ground (death
+    rule as usual).
+  - **Where the code goes.** The update that ties the walker and the
+    mover together (fall events, head-on, and now jumps) moves from the
+    viewer (`connor_view.rs` `connor_step`) into `kq8-game` (new
+    `player.rs`), so jumps can be unit-tested with both. The viewer keeps
+    the keys, drawing and logging. A small move of existing code, no
+    change in behaviour.
+  - **2e-1, the standing jump** (`jump`, `C_jump.kqs`): *Done 2026-10-12
+    (MODLOG), checked by eye by the user (also from turning on the spot,
+    as in the original). Added on the way: `--jump N` test
+    option.*
+    - The Jump key (`Connor.sae` action `Jump`, Insert) asks for a jump at
+      the next update. It is done only if (a) he is in the keys' control
+      (not falling, landing, crashing or dead), no start or stop animation
+      plays (user's check), and his movement is `stop`, `walk`, `run`,
+      `back`, `left` or `right`; (b) he is on the ground, or within 250
+      above the terrain, whose normal then counts; (c) that ground is
+      walkable (normal z > 0.8), or steep but its normal doesn't point
+      toward his back (not facing uphill). Otherwise it is refused and
+      logged with the reason. Which jump: `runJump` from `run`,
+      `backJump` from `back`, otherwise `jump`. In 2e-1 only `jump` is
+      loaded, so a jump from running or stepping back is refused as "not
+      loaded yet".
+    - Jumping (new mover state Jump, walker mode Jump): gravity off, step
+      up and down 0; the arc is the animation's own frame steps (x, y and
+      z), frame by frame (as in 2g). Keys ignored, no turning. Walls,
+      ceilings and the ground check still act; a hit during the jump is
+      handled as glancing until 2e-3.
+    - The update after the jump animation ends: gravity on, steps 325,
+      the Fall state with the start height 1,280 below where he is (so
+      death if he lands more than 5,120 lower), fall timer so that the
+      first drop is from 0.30 to 0.36 s (396). Then `jumphold`, and
+      `jumpend` or `jumpdie` as for a walk-off. No Fall request from the
+      air counter during a jump (gravity is off, so it stays 0).
+    - Expected on flat ground (note): 20 updates of `jump` (1.333 s),
+      highest about 1,697 above the start, at the end 873 above and 1,423
+      forward; then `jumphold` until he lands, then `jumpend`.
+  - **2e-2, running and backward jumps.** Load `runJump`, `runJumpHold`,
+    `runJumpDie`, `jumprun`, `jumpstop`, `backJump`, `backJumpHold`,
+    `backJumpEnd`, `backJumpDie`. Hold, landing and death animations by
+    the jump's kind. `runJump` has no landing animation: on landing he is
+    in the keys' control at once, still in `runJumpHold`, and the keys ask
+    for a movement from there, so the transitions in `Conner.anm` (2g
+    rules) give `jumprun` → `run` at 0.8 with run held, `jumpstop` →
+    `stop` with forward let go (turning allowed, as the user saw), and
+    `walk` at once with run off. Expected: `runJump` about 6,356 forward.
+  - **2e-3, hitting something during a jump.** A steep hit (normal z <
+    0.8) ends the jump: gravity on, steps 325. Down pass during `jump` or
+    `runJump`: `crash`. Up or across pass: `runJump` crashes, `jump`
+    stops (`stop`, standing). During a jump any surface with normal z <
+    0.8 counts as head-on, and head-on acts in Jump as in Move.
+    `backJump` does neither: the user saw him keep sliding down in
+    `backJumpHold` until he reaches the ground, with the usual death rule.
+    So for `backJump` the jump ends at the hit and Fall (backward kind)
+    starts at once.
+  - **Log** (`connor.log`): the mover state `jump`; event lines for a jump
+    asked for, done or refused (and why), its end, the Fall it starts
+    (start height, timer), the landing; the height above the jump's start.
+  - **Unit tests** (made-up flat ground, the note's arc numbers): the
+    standing jump's 20 updates, highest point and end point, then Fall
+    with drops 396, 468, …, `jumpend`; death limit 5,120; each refusal
+    (falling, during `stopwalk`, steep ground facing uphill, 300 above
+    the ground); no turning while jumping.
 - **2f — the following camera (planned 2026-10-11).** Moved up at the
   user's request: done right after 2b, before 2c. Rules from `camera.md`.
   - The camera logic runs in the same 15-updates-per-second schedule as

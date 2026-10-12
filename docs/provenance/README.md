@@ -257,6 +257,25 @@ no longer skipped.
 | Forward pressed during a stop animation: it plays to its end, then `stop`, `stopwalk`, `walk` | Note rules 4 and 6 | Unit test |
 | `--hold F,T,R,N`: let go of forward and turn after N updates | Our test helper | — |
 
+## The standing jump (M2 step 2e-1) — `crates/kq8-game/src/{player,connor,mover}.rs`, `crates/kq8-viewer/src/{connor_view,load,main}.rs`
+
+Behaviour note = `docs/behaviour/connor-physics.md` "Jumping" (traced;
+arcs measured) and "Falling off an edge"; the user's checks in the
+original (2026-10-12).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| The update tying walker and mover together (falls, landings, head-on) moved from the viewer to `kq8-game` `player.rs`, unchanged | Our refactor, so jumps can be unit-tested | All earlier tests pass; viewer runs as before |
+| Jump key = `Connor.sae` action `Jump` (Insert) | Observed; note "Controls" | Viewer log: `jump Some(Insert)` |
+| A jump only in the keys' control, with no start or stop animation playing, from `stop`, `walk`, `run` (and `back`, `left`, `right`) | **User's check in the original** (no jump during start/stop animations; standing, full walking, full running; from turning on the spot: allowed, turning stops, and starts again after the landing); `back` from rule 2; the wait before a stop: our reading, Q41 (a) | Unit test; viewer `--hold 1,0,1 --jump 4`: "refused: stoprun is playing" |
+| On the ground, or within 250 above the terrain (its normal then counts); walkable, or steep and not facing uphill | Rule 1 (traced); "feet to the terrain under him" is our reading, Q41 (c) | Unit test (300 refused, 200 allowed; 45° slope facing up refused, facing down allowed) |
+| `runJump` from `run`, `backJump` from `back`, else `jump` (walking too) | Rule 2 | Viewer `--hold 1,0,0 --jump 20`: `jump from walk`; from running: "runJump is not loaded yet" (2e-2) |
+| Jumping: gravity off, step up and down 0, the arc = the animation's frame steps (x, y, z); keys ignored, no turning | Rule 3; no turning: **user's check** | Unit test; viewer `--jump 5`: 20 updates of `jump`, still for 9, top +1,697.0, end +872.8 and 1,423.4 forward (data: 1,423.4, 872.8) |
+| The update after the animation ends: gravity on, steps 325, Fall with the death limit from 1,280 below there, fall timer 0.36 (previous 0.30), so the first drop is 396 | Rule 4; "Falling off an edge" rule 2; the timer measured in the original | Unit tests (drop 396; landing 4,873 below the end safe, 5,373 fatal); viewer: first Fall drop 396.0 |
+| No Fall request from the air counter while jumping | "Falling off an edge" rule 1 ("unless he is jumping"); gravity is off, so the counter stays 0 | Unit test (20 jump updates, no Fall) |
+| Hits during a jump: walls, ceilings and the ground check act; glancing only (head-on and steep hits during jumps come in 2e-3) | Rule 3 ("walls and ceilings still stop him"); the rest: stand-in until 2e-3 | — |
+| `--jump N`: test option, presses Jump once | Our test helper | Log line `test --jump` |
+
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
 | Fact | Source | Checked how |

@@ -34,7 +34,10 @@ The code is written with an AI coding agent (Claude Code); see
   floors. Checked by eye: he goes inside houses, crosses bridges and
   slides along walls. After walking into a wall he stands idle until
   forward is released and pressed again, or a turn key is pressed, as in
-  the original (the turn key part checked in the logs, not yet by eye). Running
+  the original (the turn key part checked in the logs, not yet by eye). He
+  does a standing jump (Insert) from standing or walking, with the
+  original's arc (checked by eye); running and
+  backward jumps are not in yet. Running
   straight into a wall knocks him back (the crash animation), as far as
   in the original (checked by eye). Objects are solid too (trees,
   signposts, doors, crates, stone villagers…), with each object's box
@@ -47,7 +50,7 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-There is nothing to play yet. Connor can't jump. Some objects have no
+There is nothing to play yet. Connor can't do running or backward jumps yet. Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
 back behind him by itself or avoid walls. People and monsters are not shown,

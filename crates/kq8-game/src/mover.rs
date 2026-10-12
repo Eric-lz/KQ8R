@@ -150,9 +150,16 @@ pub const MIN_PULL_DOWN: f32 = 0.5;
 /// Updates in the air before the Fall state starts.
 pub const AIR_UPDATES_TO_FALL: u32 = 5;
 /// The fall timer when the Fall state starts **after a jump** (previous
-/// 0.30). Not used yet: jumps come in step 2e. From walking or standing,
-/// Fall leaves the timer running on.
+/// 0.30, so the first drop is 396). From walking or standing, Fall leaves
+/// the timer running on.
 pub const FALL_START_TIMER: f32 = 0.36;
+/// After a jump the death limit is measured from this far below the
+/// height where the jump animation ended (connor-physics.md "Jumping"
+/// rule 4): death if he lands more than 3,840 + 1,280 = 5,120 lower.
+pub const JUMP_DEATH_OFFSET: f32 = 1280.0;
+/// A jump can start this high above the terrain (connor-physics.md
+/// "Jumping" rule 1).
+pub const JUMP_ABOVE_TERRAIN: f32 = 250.0;
 /// In Fall, dropping less than this in one update counts as "stuck".
 pub const STUCK_DROP: f32 = 50.0;
 /// More than this many stuck updates ends the fall like a landing.
@@ -174,6 +181,8 @@ pub const CONNOR_BOX: ([f32; 3], [f32; 3]) = ([-200.0, -200.0, 0.0], [200.0, 200
 pub enum State {
     /// On the ground or moving normally (the original's Wait/Move).
     Normal,
+    /// Jumping: gravity off, steps 0, the arc is the animation's own steps.
+    Jump,
     /// The Fall state: `start_z` is the height when it started.
     Fall { start_z: f32, stuck: u32 },
     /// Died from a fall; the mover no longer updates.
@@ -184,6 +193,7 @@ impl State {
     pub fn name(&self) -> &'static str {
         match self {
             State::Normal => "normal",
+            State::Jump => "jump",
             State::Fall { .. } => "fall",
             State::Dead => "dead",
         }
@@ -309,7 +319,34 @@ impl Mover {
     /// counts in the air only if that one ended off the ground (Q29).
     pub fn lift(&mut self, height: f32) {
         self.position[2] += height;
+        if self.state == State::Jump {
+            // Lifted mid-jump: the jump is over (gravity on, steps back).
+            self.use_gravity = true;
+            self.step_up = STEP;
+            self.step_down = STEP;
+        }
         self.state = State::Normal;
+    }
+
+    /// A jump starts (connor-physics.md "Jumping" rule 3): gravity off and
+    /// step up and down 0, so the jump animation's own steps make the arc.
+    pub fn start_jump(&mut self) {
+        self.state = State::Jump;
+        self.use_gravity = false;
+        self.step_up = 0.0;
+        self.step_down = 0.0;
+    }
+
+    /// The jump animation has ended (rule 4): gravity on, steps back to
+    /// 325, and the Fall state, with the death limit measured from 1,280
+    /// below here and the fall timer at 0.36 (previous 0.30): the next down
+    /// pass drops 396.
+    pub fn end_jump(&mut self) {
+        self.use_gravity = true;
+        self.step_up = STEP;
+        self.step_down = STEP;
+        self.fall_timer = FALL_START_TIMER - FALL_TIMER_STEP;
+        self.state = State::Fall { start_z: self.position[2] - JUMP_DEATH_OFFSET, stuck: 0 };
     }
 
     /// One update (1/15 s) with a fixed wanted movement (x, y, z change);
@@ -487,11 +524,15 @@ impl Mover {
                     if fallen > DEATH_DROP {
                         self.state = State::Dead;
                         report.fall = Some(FallEvent::Died(fallen));
-                        report.events.push(format!("fall ends ({why}) after {fallen:.0} units: more than {DEATH_DROP}, Connor dies"));
+                        report.events.push(format!(
+                            "fall ends ({why}) {fallen:.0} below the death limit's start z={start_z:.0} (after a jump 1,280 under where it ended): more than {DEATH_DROP}, Connor dies"
+                        ));
                     } else {
                         self.state = State::Normal;
                         report.fall = Some(FallEvent::Landed(fallen));
-                        report.events.push(format!("fall ends ({why}) after {fallen:.0} units: safe landing"));
+                        report.events.push(format!(
+                            "fall ends ({why}) {fallen:.0} below the death limit's start z={start_z:.0} (after a jump 1,280 under where it ended): safe landing"
+                        ));
                     }
                 }
                 None => self.state = State::Fall { start_z, stuck },
