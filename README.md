@@ -29,7 +29,8 @@ The code is written with an AI coding agent (Claude Code); see
   slides along it at an angle, climbs low steps, and stands on building
   floors. Checked by eye: he goes inside houses, crosses bridges and
   slides along walls. After walking into a wall he stands idle until
-  forward is pressed again, as in the original (checked by eye). Running
+  forward is released and pressed again, or a turn key is pressed, as in
+  the original (the turn key part checked in the logs, not yet by eye). Running
   straight into a wall knocks him back (the crash animation), as far as
   in the original (checked by eye).
 - **The camera** follows Connor like the original's: it trails behind him,

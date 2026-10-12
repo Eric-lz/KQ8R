@@ -775,6 +775,32 @@ Steps (each separately revertable, each stopped for an eye check):
     - Unit tests: walk into a wall, keep forward held for 45 updates:
       `stop` all the time with its phase moving on; release and press
       forward: walks again. Back works the same way.
+  - **2d-3c, the wall block as traced.** *Done 2026-10-12 (MODLOG).*
+    Session A
+    traced why a held walk key doesn't restart walking (`connor-physics.md`
+    "Walk held against a wall", Q38). It replaces 2d-3b's rules where
+    they differ:
+    - Two blocks, forward and back, both off at the start. A head-on
+      stop that plays `stop` sets back blocked if the movement was `back`,
+      otherwise forward blocked (running crashes and sets none).
+    - While either block is on, he stands in `stop` whatever the keys
+      ask: no walking, running, stepping back **or turning on the spot**
+      (2d-3b let him run and turn).
+    - Only key events clear blocks: forward released → forward; back
+      released → back; forward pressed → back; back pressed → forward;
+      left or right pressed → both. Releasing a turn key clears nothing.
+      Falling, landing and the test lift no longer clear them (2d-3b did);
+      `--at` still starts a fresh Connor.
+    - So the user's check still holds (release and press forward: walks
+      again), and pressing a turn key against the wall makes him walk
+      again, turning as he goes, instead of turning on the spot.
+    - Not done: the unknown Connor flag that clears both blocks on hits.
+      Keyboard auto-repeat: Bevy reports a held key as pressed once, so a
+      held turn key clears the blocks once (A's open point).
+    - Log: column `blocked` (`none`, `fwd`, `back`, `both`); event lines
+      when a key clears a block.
+    - Unit tests: the clearing table; standing still with run or a turn
+      key held while blocked; a block survives a mode change.
   - **2d-4, crash when running head-on.** *Done 2026-10-12 (MODLOG).*
     Running (`run`; the note's
     other run-like movements don't exist in our code yet) head-on into a

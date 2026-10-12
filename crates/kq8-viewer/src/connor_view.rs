@@ -23,7 +23,7 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
-use kq8_game::connor::{Intent, Mode, MovementLoop, Walker};
+use kq8_game::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
 use kq8_game::mover::{FallEvent, Mover, Scene as MoverScene, State, Wish};
 
 use crate::load::ConnorAssets;
@@ -328,15 +328,28 @@ pub fn connor_keys(
             sim.controls.held.retain(|h| h != k);
         }
     }
-    // A fresh press of forward or back ends a wall block of that direction.
-    let presses: Vec<i8> = [(sim.controls.forward, 1), (sim.controls.back, -1)]
-        .into_iter()
-        .filter(|(k, _)| k.is_some_and(|k| keys.just_pressed(k)))
-        .map(|(_, d)| d)
-        .collect();
-    for d in presses {
-        if sim.walker.key_pressed(d) {
-            let line = format!("connor update {}: {} pressed again: wall block ended", sim.updates, if d > 0 { "forward" } else { "back" });
+    // Movement key events clear wall blocks (connor-physics.md "Walk held
+    // against a wall").
+    let c = &sim.controls;
+    let mut key_events = Vec::new();
+    for (key, what) in [(c.forward, MoveKey::Forward), (c.back, MoveKey::Back), (c.left, MoveKey::Turn), (c.right, MoveKey::Turn)] {
+        let Some(key) = key else { continue };
+        if keys.just_pressed(key) {
+            key_events.push((what, true));
+        }
+        if keys.just_released(key) {
+            key_events.push((what, false));
+        }
+    }
+    for (what, pressed) in key_events {
+        let cleared = sim.walker.key_event(what, pressed);
+        if cleared != (false, false) {
+            let block = match cleared {
+                (true, true) => "forward and back blocks",
+                (true, false) => "forward block",
+                _ => "back block",
+            };
+            let line = format!("connor update {}: {what:?} {}: {block} cleared", sim.updates, if pressed { "pressed" } else { "released" });
             shared.log.lock().unwrap().detail(&line);
             sim.log.detail(line);
         }
@@ -469,11 +482,7 @@ pub fn connor_step(
         report.hits.len(),
         down_hit.map_or("none".into(), |h| h.hit.what.replace(' ', "_")),
         down_hit.map_or("none".into(), |h| format!("{:.1}", h.hit.position[2] - h.hit.touch[2])),
-        match sim.walker.blocked {
-            1 => "fwd",
-            -1 => "back",
-            _ => "none",
-        },
+        sim.walker.blocked_name(),
     );
     sim.log.detail(line);
     let mut events = report.events.clone();
@@ -526,7 +535,7 @@ pub fn connor_step(
         events.push(if to == "crash" {
             format!("head-on into a wall: {from} -> {to} from the next update (keys ignored until it ends)")
         } else {
-            format!("head-on into a wall: movement {from} -> {to}; this key blocked until pressed again")
+            format!("head-on into a wall: movement {from} -> {to}; blocked: {}", sim.walker.blocked_name())
         });
     }
     let state = sim.mover.state.name();

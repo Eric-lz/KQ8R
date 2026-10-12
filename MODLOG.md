@@ -3,6 +3,29 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-3c: the wall block as session A traced it
+
+**Changed:**
+
+- `crates/kq8-game/src/connor.rs`: the single "blocked direction" of 2d-3b became the two traced blocks (`blocked_forward`, `blocked_back`) and `Walker::key_event` (key pressed or released). While either block is on he stands in `stop`: no walking, running, stepping back or turning on the spot. Mode changes no longer clear the blocks.
+- `crates/kq8-viewer/src/connor_view.rs`: forward, back, left and right presses and releases go to the walker; `blocked` column now `none`/`fwd`/`back`/`both`; an event line for each block a key clears.
+- Records: `docs/DESIGN.md` (2d-3c), `docs/provenance/README.md`, `README.md`.
+
+**Why:** Session A traced why a held walk key doesn't restart walking (`connor-physics.md` "Walk held against a wall", Q38). It differs from 2d-3b: a turn key clears the blocks (he walks again, turning) instead of turning him on the spot; releasing forward clears its block; pressing the opposite key clears the other block; blocks also stop running; falling and landing don't clear them.
+**Tested how:**
+
+- `cargo test --workspace`: kq8-data 44, kq8-game 53. New tests: the block holds for 45 updates with the key held, and pressing the same key again doesn't clear it; releasing it does; the whole clearing table; no running or turning on the spot while blocked; a mode change leaves the block on; forward held plus a turn key pressed → walks again, turning.
+- Viewer regressions at the `Tomb`: walk head-on (`--at 237907.4,187510.2,0.027 --hold 1,0,0`) and run head-on (`--at 237968.9,187493.2,-0.2054 --hold 1,0,1`).
+
+**Result:** Walk: stops at (237909.4, 187435.1), `stop` and `blocked fwd` to the end. Run: unchanged (3 crashes in 300 frames, the first ending at (238049.8, 187881.3), no block).
+**Still broken / not tested:**
+
+- The key events are tested only in unit tests (`--hold` presses no keys); the user's check by eye is still to come.
+- Keyboard auto-repeat (A's open point): our keys report a held key as pressed once.
+- The Connor flag that clears both blocks on hits is not traced, so not done.
+
+**Next:** 2d-5 (objects).
+
 ## 2026-10-12 M2 step 2d-4: crash when running head-on
 
 **Changed:**
