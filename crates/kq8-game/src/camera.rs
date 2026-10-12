@@ -229,32 +229,43 @@ mod tests {
         ((c.position[0] - aim[0]).powi(2) + (c.position[1] - aim[1]).powi(2)).sqrt()
     }
 
+    /// Where a camera at (0, `y`, MIN_HEIGHT) ends up horizontally when it
+    /// is moved along the line to the aim point (Connor at 0, 0, 0) until
+    /// it is `d` from it in 3D. The height rule afterwards changes z only.
+    fn horizontal_at(y: f32, d: f32) -> f32 {
+        let dz = MIN_HEIGHT - AIM_HEIGHT;
+        d * y / (y * y + dz * dz).sqrt()
+    }
+
     #[test]
     fn pulled_in_on_a_leash_and_pushed_out() {
-        let mut c = Camera::new([0.0, 9000.0, 1400.0]);
-        let r = c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert!((r.distance - 4999.0).abs() < 1.0, "{}", r.distance);
-        let mut c = Camera::new([0.0, 300.0, 1400.0]);
-        let r = c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert!((r.distance - 1501.0).abs() < 1.0, "{}", r.distance);
-        // Inside the range it stays where it is.
-        let mut c = Camera::new([0.0, 3000.0, 1400.0]);
+        let (min, max) = DEFAULT_RANGE;
+        let aim = [0.0, 0.0, AIM_HEIGHT];
+        let mut c = Camera::new([0.0, 9000.0, MIN_HEIGHT]);
         c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert_eq!(c.position, [0.0, 3000.0, 1400.0]);
+        assert!((horizontal(&c, aim) - horizontal_at(9000.0, max - 1.0)).abs() < 1.0, "{:?}", c.position);
+        let mut c = Camera::new([0.0, 300.0, MIN_HEIGHT]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert!((horizontal(&c, aim) - horizontal_at(300.0, min + 1.0)).abs() < 1.0, "{:?}", c.position);
+        // Inside the range, at its wanted height: it stays where it is.
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert_eq!(c.position, [0.0, 3000.0, MIN_HEIGHT]);
     }
 
     #[test]
     fn height_jumps_when_close_and_eases_when_far() {
-        let mut c = Camera::new([0.0, 3000.0, 1350.0]);
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT - 50.0]);
         c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert_eq!(c.position[2], 1400.0);
+        assert_eq!(c.position[2], MIN_HEIGHT);
         let mut c = Camera::new([0.0, 3000.0, 400.0]);
         c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert!((c.position[2] - 500.0).abs() < 1e-3, "{}", c.position[2]);
+        let want = 400.0 + (MIN_HEIGHT - 400.0) * HEIGHT_RATE;
+        assert!((c.position[2] - want).abs() < 1e-3, "{} (want {want})", c.position[2]);
         // Terrain under the camera higher than Connor's base wins.
-        let mut c = Camera::new([0.0, 3000.0, 5450.0]);
+        let mut c = Camera::new([0.0, 1500.0, 4000.0 + MIN_HEIGHT + 50.0]);
         c.update([0.0; 3], &Input::default(), &Flat(4000.0));
-        assert_eq!(c.position[2], 5400.0);
+        assert_eq!(c.position[2], 4000.0 + MIN_HEIGHT);
     }
 
     #[test]
@@ -270,24 +281,32 @@ mod tests {
 
     #[test]
     fn zoom_stays_in_range_and_never_passes_the_aim() {
-        let mut c = Camera::new([0.0, 3000.0, 1400.0]);
+        let (min, _) = DEFAULT_RANGE;
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT]);
         let zoom_in = Input { mouse_held: true, mouse_forward: 10.0, ..Input::default() };
         c.update([0.0; 3], &zoom_in, &Flat(0.0));
-        let r = c.update([0.0; 3], &zoom_in, &Flat(0.0));
-        assert!((r.distance - 1501.0).abs() < 1.0, "{}", r.distance);
+        c.update([0.0; 3], &zoom_in, &Flat(0.0));
+        let h = horizontal(&c, [0.0, 0.0, AIM_HEIGHT]);
+        assert!((h - horizontal_at(3000.0, min + 1.0)).abs() < 1.0, "{:?}", c.position);
         assert!(c.position[1] > 0.0, "same side: {:?}", c.position);
     }
 
     #[test]
     fn fixed_mode_keeps_its_distance() {
-        let mut c = Camera::new([0.0, 3000.0, 1400.0]);
+        // The distance kept is the 3D distance to the aim point when F11
+        // is pressed.
+        let d = (3000.0f32.powi(2) + (MIN_HEIGHT - AIM_HEIGHT).powi(2)).sqrt();
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT]);
         c.update([0.0; 3], &Input { change_mode: true, ..Input::default() }, &Flat(0.0));
-        assert_eq!(c.mode, Mode::Fixed { distance: 3000.0 });
+        assert_eq!(c.mode, Mode::Fixed { distance: d });
+        // Connor moves 2,000: the camera is put back at that distance, then
+        // the height rule moves it up or down, which changes the distance
+        // by less than the gap between the aim and the wanted height.
         let r = c.update([2000.0, 0.0, 0.0], &Input::default(), &Flat(0.0));
-        assert!((r.distance - 3000.0).abs() < 1.0, "{}", r.distance);
+        assert!((r.distance - d).abs() <= (MIN_HEIGHT - AIM_HEIGHT).abs() + 1.0, "{}", r.distance);
         // Page Up in fixed mode: 125 closer.
         c.update([2000.0, 0.0, 0.0], &Input { tilt_keys: 1, ..Input::default() }, &Flat(0.0));
-        assert_eq!(c.mode, Mode::Fixed { distance: 2875.0 });
+        assert_eq!(c.mode, Mode::Fixed { distance: d - FIXED_ZOOM_PER_UPDATE });
     }
 
     #[test]

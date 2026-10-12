@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Camera tests follow the hand-tuned values
+
+**Changed:** `crates/kq8-game/src/camera.rs`, tests only (4 of them). They now use `AIM_HEIGHT`, `MIN_HEIGHT`, `HEIGHT_RATE` and `FIXED_ZOOM_PER_UPDATE` instead of the note's numbers written in. The camera code and the user's values (aim 800, height rate 0.5, commit `10cf08b`) are unchanged.
+**Why:** The user asked. The 4 tests assumed the aim point is at the camera's minimum height (both 1,400 in the note). With aim 800 there is a 600 vertical gap, so the leash, zoom and fixed distances are now measured in 3D, and the height rule then moves the camera up or down.
+**Tested how:** `cargo test -p kq8-game` with the user's values, and once with the note's values (1,400 and 0.1) swapped in temporarily, then restored.
+**Result:** All `kq8-game` tests pass with the user's values: 17 at this commit (run on a copy of the committed files), 24 with the slopes work that came after. The 7 camera tests also pass with the note's values.
+**Still broken / not tested:** With the aim below the minimum height, the fixed-distance mode (F11) doesn't hold its distance exactly. Each update the height rule moves the camera after the distance is set, so the distance drifts by up to the 600 gap. The test now allows for this. Not checked in the viewer.
+**Next:** None for the tests.
+
 ## 2026-10-11 Study session: when the Fall state starts (with the user's checks)
 
 **Changed:** `docs/behaviour/connor-physics.md` ("The terrain in the passes", "Gravity", "Slopes", "Falling off an edge" rule 1, How to check, open question 6), `docs/behaviour/QUESTIONS.md` (Q26 row). No code.
