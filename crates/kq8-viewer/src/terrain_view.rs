@@ -23,6 +23,10 @@ pub struct GroundLookup(pub kq8_data::Terrain);
 #[derive(Resource, Default)]
 pub struct Buildings(pub Vec<kq8_game::collide::BuildingCollider>);
 
+/// The world's objects that collide with Connor (M2 step 2d-5).
+#[derive(Resource, Default)]
+pub struct ObjectColliders(pub Vec<kq8_game::collide::BoxCollider>);
+
 #[derive(Resource)]
 pub struct Fly {
     pub yaw: f32,
@@ -105,6 +109,7 @@ pub fn setup_objects(
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
     commands.insert_resource(Buildings(std::mem::take(&mut objects.buildings)));
+    commands.insert_resource(ObjectColliders(std::mem::take(&mut objects.objects)));
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
         crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut materials, &mut images, &mut log);

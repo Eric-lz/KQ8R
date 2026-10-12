@@ -28,7 +28,7 @@ use kq8_game::mover::{FallEvent, Mover, Scene as MoverScene, State, Wish};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform, Buildings, GroundLookup};
+use crate::terrain_view::{bevy_transform, Buildings, GroundLookup, ObjectColliders};
 use crate::{material_for, mesh_from, to_bevy, Shared};
 
 /// One drawable movement: its loop for the walker and one entity per frame.
@@ -397,12 +397,16 @@ pub fn connor_step(
     sim: Option<ResMut<ConnorSim>>,
     lookup: Option<Res<GroundLookup>>,
     buildings: Option<Res<Buildings>>,
+    objects: Option<Res<ObjectColliders>>,
     shared: Res<Shared>,
 ) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let sim = &mut *sim;
-    let no_buildings = Vec::new();
-    let scene = MoverScene { ground: &lookup.0, buildings: buildings.as_ref().map_or(&no_buildings, |b| &b.0) };
+    let scene = MoverScene::new(
+        &lookup.0,
+        buildings.as_ref().map_or(&[][..], |b| &b.0),
+        objects.as_ref().map_or(&[][..], |o| &o.0),
+    );
     let intent = sim.intent;
     let mut step = None;
     let report = {
@@ -511,7 +515,8 @@ pub fn connor_step(
         sim.last_down = down_now;
     }
     for h in &report.hits {
-        // Floor landings are in the columns; log the other building hits.
+        // Floor landings are in the columns; log the other building and
+        // object hits.
         if h.hit.what != "terrain" && h.result != "landing" {
             events.push(format!(
                 "{} pass hit {} ({}): normal ({:.3}, {:.3}, {:.3}), angle {}, put at ({:.1}, {:.1}, {:.1}), touched at ({:.1}, {:.1}, {:.1})",

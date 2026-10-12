@@ -32,7 +32,9 @@ The code is written with an AI coding agent (Claude Code); see
   forward is released and pressed again, or a turn key is pressed, as in
   the original (the turn key part checked in the logs, not yet by eye). Running
   straight into a wall knocks him back (the crash animation), as far as
-  in the original (checked by eye).
+  in the original (checked by eye). Objects are solid too (trees,
+  signposts, doors, crates, stone villagers…), with each object's box
+  from the game's table (checked by eye).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
@@ -41,8 +43,9 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-There is nothing to play yet. Connor can't jump, walks through objects (trees, doors,
-crates, and so on). The camera doesn't swing
+There is nothing to play yet. Connor can't jump. Some objects have no
+box in the game's table and stay walk-through (as in the original, if we
+read it right). The camera doesn't swing
 back behind him by itself or avoid walls. People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the

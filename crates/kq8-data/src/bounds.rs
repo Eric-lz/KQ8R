@@ -8,12 +8,18 @@
 //! more spaces (seen in the data). A line such as `#item968=...` is not an
 //! `itemN` key, so it is not an entry.
 //!
-//! Every entry is kept, in item order. Some names appear twice with
-//! different boxes (`henchman`/`Henchman`, `rat`, `razetta.kqs`); which one
-//! the game uses, and whether names match without regard to case, is asked
-//! as Q34, so lookups return all matches and leave the choice to the caller.
+//! Every entry is kept, in item order, as written (`kq8 building-verify`
+//! reports on them). `lookup` gives the box the game uses for a name
+//! (Q34: case matters, duplicates as read from the running game,
+//! inside-out boxes fixed).
 
 use crate::kq_text;
+
+/// Names that really appear twice (same case) in `GAME/patch/BOUNDS.KQ`,
+/// and the item the game ends up using (connor-physics.md "How the table
+/// is read", read from the running game, Q34). Any other duplicate: the
+/// first in item order.
+const DUPLICATES: [(&str, usize); 2] = [("rat", 8), ("razetta.kqs", 775)];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoxEntry {
@@ -76,6 +82,32 @@ impl BoundingBoxes {
         (BoundingBoxes { entries, declared }, problems)
     }
 
+    /// The box the game uses for `name` (connor-physics.md "How the table
+    /// is read", traced, Q34): only keys `item0` … `item<nItems − 1>`;
+    /// names compared byte by byte (case matters); the two names that
+    /// really appear twice resolved as read from the running game; on
+    /// each axis the smaller number is the min (inside-out boxes fixed).
+    pub fn lookup(&self, name: &str) -> Option<BoxEntry> {
+        let in_range = |e: &&BoxEntry| self.declared.is_none_or(|n| e.item < n);
+        let found: Vec<&BoxEntry> = self.entries.iter().filter(in_range).filter(|e| e.name == name).collect();
+        let chosen = match found.as_slice() {
+            [] => return None,
+            [one] => *one,
+            several => DUPLICATES
+                .iter()
+                .find(|(n, _)| *n == name)
+                .and_then(|(_, item)| several.iter().find(|e| e.item == *item))
+                .unwrap_or(&several[0]),
+        };
+        let mut e = chosen.clone();
+        for k in 0..3 {
+            if e.min[k] > e.max[k] {
+                std::mem::swap(&mut e.min[k], &mut e.max[k]);
+            }
+        }
+        Some(e)
+    }
+
     /// Every entry whose name equals `name`, ignoring case, in item order.
     pub fn find_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a BoxEntry> + 'a {
         self.entries.iter().filter(move |e| e.name.eq_ignore_ascii_case(name))
@@ -135,5 +167,44 @@ mod tests {
         let rats: Vec<_> = b.find_all("rat").map(|e| e.item).collect();
         assert_eq!(rats, [1, 3]);
         assert_eq!(b.duplicates(), [("rat".to_string(), true)]);
+    }
+
+    #[test]
+    fn lookup_follows_the_game() {
+        let (b, _) = BoundingBoxes::parse(
+            b"[BoundingBoxes]
+nItems=6
+            item0=Connor -200 -200 0 200 200 1300
+            item1=door.kqs 10 -240 20 -1520 10 3020
+            item2=rat 1 1 1 2 2 2
+            item3=rat 3 3 3 4 4 4
+            item4=other 0 0 0 1 1 1
+            item5=other 0 0 0 2 2 2
+            item6=late 0 0 0 1 1 1
+",
+        );
+        assert_eq!(b.lookup("Connor").map(|e| e.max), Some([200.0, 200.0, 1300.0]));
+        assert_eq!(b.lookup("connor"), None, "case matters");
+        // Inside-out on x: fixed.
+        let door = b.lookup("door.kqs").unwrap();
+        assert_eq!((door.min, door.max), ([-1520.0, -240.0, 20.0], [10.0, 10.0, 3020.0]));
+        // Duplicates: rat as the note says (item 8 in the real table is the
+        // first; here no item 8, so the first), any other: the first.
+        assert_eq!(b.lookup("rat").map(|e| e.item), Some(2));
+        assert_eq!(b.lookup("other").map(|e| e.item), Some(4));
+        // Past nItems: not an entry.
+        assert_eq!(b.lookup("late"), None);
+    }
+
+    #[test]
+    fn lookup_razetta_uses_item_775() {
+        let (b, _) = BoundingBoxes::parse(
+            b"[BoundingBoxes]
+nItems=800
+            item686=razetta.kqs -160 -110 0 140 60 530
+            item775=razetta.kqs -150 -150 0 150 150 750
+",
+        );
+        assert_eq!(b.lookup("razetta.kqs").map(|e| (e.item, e.max)), Some((775, [150.0, 150.0, 750.0])));
     }
 }

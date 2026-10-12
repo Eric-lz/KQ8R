@@ -833,7 +833,15 @@ Steps (each separately revertable, each stopped for an eye check):
       `jumpend`'s own steps are given in full (before: 10/11).
     - Log: event lines for the head-on crash and its end; `mode` column
       `crash`.
-  - **2d-5, objects.**
+  - **2d-5, objects.** *Done 2026-10-12 (MODLOG), checked by eye by the user.
+    Changes from this plan: no `ObjectCollider` wrapper (the box
+    collider got its own rough check, using the box enlarged by r and
+    turned into the world, so a turned box's corner is never skipped);
+    shape names are lower-cased before the lookup (stand-in, Q39);
+    `colliderType=97  #World, Click, Attack` (Barren, IceWorld) is read as
+    97 (our reading: what follows the number is a comment). No start-up
+    script in the 12 worlds uses `collisionType` / `collision`, so they
+    aren't run.*
     - How (the user's choice, 2026-10-12): a second list, of object
       boxes, next to the building list in the mover's scene; both are
       swept and the nearest hit kept. Buildings stay as they are. To
@@ -855,6 +863,37 @@ Steps (each separately revertable, each stopped for an eye check):
       mask 0; which object stopped him.
     - Unit tests on made-up objects; a check in Daventry (the signpost:
       box −250…−10, 0…250, 0…2,420).
+    - **Detailed plan (2026-10-12), with the Q34 answers:**
+      - `kq8-data` `bounds.rs`: a lookup that follows the game: only keys
+        `item0` … `item<nItems − 1>`; names compared with case; inside-out
+        boxes fixed (smaller number = min on each axis); for the two real
+        duplicates the entries the note names (`rat` = item 8,
+        `razetta.kqs` = item 775). The raw list stays for
+        `building-verify`.
+      - `kq8-game` `collide.rs`: `ObjectCollider` (the box collider plus
+        its world box for the rough check); Connor's type 4 and mask
+        0x281B; the pair test.
+      - `mover.rs`: the scene gets an object list next to the buildings;
+        every sweep tests both and keeps the contact nearest the old
+        position (step 7). The rest of the hit handling is unchanged, so
+        objects stop, glance, carry him (floors) and block like
+        buildings. A ball that **starts inside** an object's box has no
+        usable contact (not traced what follows): we treat it as no hit,
+        so he can walk out, and log it.
+      - Viewer `load.rs`: every object the start-up scripts load and we
+        place, apart from buildings, after `move` and `setHidden` (hidden
+        ones too). Objects we can't place (no model, `.anm` characters,
+        a model that fails to load) get no collider; they are counted in
+        the log. `KQMonster`s are ball stacks, and Connor against ball
+        stacks is not traced: none in M2 (they aren't drawn yet).
+      - The script commands `collisionType` / `collision`: applied only
+        if a start-up script uses them (checked over all 12 worlds).
+      - Log (`viewer.log`): counts of objects with a box (by class),
+        without one, with type and mask 0, not tested against Connor by
+        the pair rule; names that match the table only when case is
+        ignored; every object collider in detail.
+      - Check by eye: the signpost, trees, the stump near the wizard,
+        closed doors, DeadCity's crates.
   - **Still to check or not traced** (none blocks 2d; each is logged
     where it happens):
     - **25 above floors: confirmed** (2026-10-12, Q35). In the original

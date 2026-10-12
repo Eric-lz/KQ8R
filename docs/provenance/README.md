@@ -204,6 +204,22 @@ Not used by Connor's movement yet (2d-3).
 | While `crash` plays he is not in the Move state, so a wall behind him is never head-on (he slides or stops) | `connor-physics.md` "Exact hit handling" (head-on only in Move or Jump; crash is state Special) | Unit test (`a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on`) |
 | Not done: the other run-like movements (`stoprun`, `WaterRun`, `runwaterrun`, `runJump`, `PreBirth`), the exceptions (`KQMonster`, `backJump`, the Connor flag, the "no crash" object flag), the `crash.aud` sound and footstep cues | Not in our code yet | — |
 
+## Objects in Connor's movement (M2 step 2d-5) — `crates/kq8-data/src/bounds.rs` (`lookup`), `crates/kq8-game/src/{collide,mover}.rs`, `crates/kq8-viewer/src/{load,terrain_view,connor_view}.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Box lookup: keys `item0` … `item<nItems − 1>` only; names compared with case; inside-out boxes fixed on loading; duplicates `rat` = item 8, `razetta.kqs` = item 775 | `connor-physics.md` "How the table is read" (traced, Q34; duplicates read from the running game) | Unit tests (`lookup_follows_the_game`, `lookup_razetta_uses_item_775`). Swamp's `Lfswdoor` gets the fixed box (log) |
+| A shape's name is lower-cased before the lookup; object names are not | **Our stand-in until Q39**: all 951 live `.kqs` entries of the table are lower case, and 25 Daventry objects (stone villagers, wagons…) write theirs with capitals | Viewer log: 25 such objects in Daventry, 60 in DeadCity, 12 in IceWorld, 7 Barren, 6 CastleD, 3 SnowExit, 1 Gnome, 1 Swamp |
+| Box by the shape's name first (an animated object: its movement's shape when loaded), then the object's own name; none: never collides; fixed, not following the animation | "Where every object's box comes from" (traced, Q33 a) | Viewer log, Daventry: 295 object colliders, 24 without a box (e.g. the `Davtorch` torches, the gates `davgate1/2`, jugs) |
+| Type and mask from `colliderType` / `colliderMask` in the object's section, defaults 0x41 and 0; type 0 and mask 0 never collides; a pair is tested when one's mask shares a bit with the other's type; Connor type 4, mask 0x281B | "Which pairs collide", "When an object takes part" (traced) | Unit test (`which_pairs_collide_with_connor`). Viewer log: per world, left out by type and mask (Daventry: `keepwall`, `pondclck`, type 0x20) |
+| A value like `97		#World, Click, Attack` is read as 97 | Our reading (the note gives only the key) | Viewer log: Barren and IceWorld `eleswtch` type 0x61 |
+| The script commands `collisionType` / `collision` | Not run: no start-up script of the 12 worlds uses them | Viewer log, "other commands" of every world |
+| Hidden objects collide | "When an object takes part" (traced, not checked in the game) | Viewer log: Daventry 1 (`wizchest1`), Barren 50, Gnome 20, SnowExit 1 |
+| `KQMonster`s get no box (ball stacks; Connor against them is not traced) | "Collision shape", "Not traced" | Viewer log: DeadCity 1 left out |
+| Object test in the passes: the same sweep handling as buildings; over buildings and objects the contact nearest the old position | "Against a building" step 7, "Exact hit handling" (traced) | Unit tests: head-on stop 225 from an object's face, glancing slide, standing on a crate 25 above it. Viewer: `signpst.05` from east and north, stopped 225 from the turned box's face; DeadCity `crate.01` (turned 25.8°) glanced, as the 20° limit says |
+| A ball that starts inside an object's box: no hit (he can walk out), logged | **Our choice** (the note: "a hit with no usable contact", what follows not traced) | Unit test (`starting_inside_an_object_is_no_hit_and_is_noted`) |
+| Rough check for objects: the box enlarged by r, turned into the world | Our choice, only to save time (never skips a hit) | Unit test (`rough_check_never_skips_a_turned_box_corner`) |
+
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
 | Fact | Source | Checked how |

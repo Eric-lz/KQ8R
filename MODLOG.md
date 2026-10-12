@@ -3,6 +3,57 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-5: objects are solid
+
+**Changed:**
+
+- `crates/kq8-data/src/bounds.rs`: `BoundingBoxes::lookup`, the box the game uses for a name (Q34: keys below `nItems`, case matters, inside-out boxes fixed, `rat` = item 8, `razetta.kqs` = item 775).
+- `crates/kq8-game/src/collide.rs`: Connor's type 4 and mask 0x281B, the default type 0x41 and mask 0, `pair_collides`; `BoxCollider::overlaps` (rough check with the box enlarged by r and turned into the world).
+- `crates/kq8-game/src/mover.rs`: `Scene` has an object list next to the buildings (`Scene::new`); each sweep tests both and keeps the contact nearest the old position. A ball starting inside an object's box: no hit, noted in the report's events.
+- Viewer:
+  - `load.rs`: keeps each placed object's shape name, `colliderType` and `colliderMask`; after the scripts ran, builds the object colliders and logs counts per world.
+  - `terrain_view.rs`: new resource `ObjectColliders`.
+  - `connor_view.rs`: passes the objects to the mover.
+- Records: `docs/DESIGN.md` (2d-5 detailed plan, done), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q39), `README.md`.
+
+**Why:** M2 step 2d-5, from `connor-physics.md` "Collision shape" (box table, object test, which pairs collide, hidden objects) and "Exact hit handling".
+**Tested how:**
+
+- `cargo test --workspace`: kq8-data 46, kq8-game 59. New tests:
+  - the lookup (case, inside-out, duplicates, past `nItems`);
+  - the pair rule;
+  - the rough check never skips a turned box's corner;
+  - in the mover: head-on stop 225 from an object's face, glancing slide past it, standing on a crate 25 above it, starting inside a box (no hit, noted).
+- All 12 worlds loaded, collision summary read from each `viewer.log`.
+- Daventry `signpst.05`: `--at 173802,269850,-1.5708 --hold 1,0,0` (from the east) and `--at 172302,271350,0 --hold 1,0,0` (from the north).
+- DeadCity `crate.01`: `--at 171392,82080,-1.5708 --hold 1,0,0`.
+- Regressions: the `Tomb` walk and run, Connor's house, running from the start spot.
+
+**Result:**
+
+- Daventry: 295 object colliders (KQObject 185, KQAnimObject 88, KQDoor 17, KQChest 3, KQPortal 2). Left out: 24 without a box (e.g. the `Davtorch` torches, the gates `davgate1/2`, jugs, `tombhero`), 2 by type and mask (`keepwall`, `pondclck`, type 0x20). The signpost's box is −250…−10, 0…250, 0…2,420, as planned.
+- Other worlds: DeadCity 864, Swamp 265, Gnome 178, Barren 166, IceWorld 81, Temple1 50, Temple3 43, Temple2 25, CastleD 18, Temple4 4, SnowExit 3. Many more "type 0 and mask 0" in Gnome and the temples (153–261), which never collide.
+- Signpost: stops head-on with the contact 200 from the turned box's face, 225 after the pull-back (east: 223.1, the walk-step rule; north: 225), `blocked fwd`.
+- Crate (turned 25.8°): glances off and walks on past it (more than the 20° head-on limit).
+- Regressions: the `Tomb` numbers and the house floor (13,980) unchanged. **New:** running straight ahead from Connor's start spot now hits `tree.06` (about 550 ahead) and crashes; before, he ran through it.
+
+**Failed attempts, corrected:**
+
+- Two of my new mover tests failed at first, both test setups: the head-on test looked at the last hit, which is the landing on the ground; the glancing test's path passed beside the post without touching it.
+- Names compared exactly left 25 Daventry objects (the stone villagers, wagons, landslide…) without a box, because their files write the shape with capitals and the table has it in lower case. Now lower-cased first, as a stand-in (Q39).
+- `colliderType=97  #World, Click, Attack` (Barren, IceWorld) was first read as "not a number" (default used); now 97.
+
+**Still broken / not tested:**
+
+- Checked by eye by the user afterwards (2026-10-12): looks good.
+- Q39 (lower-casing shape names) is our guess.
+- Hidden objects collide, as traced, so some invisible things are solid: Daventry's hidden `wizchest1`, 50 in Barren, 20 in Gnome, 1 in SnowExit. Not checked in the original.
+- Objects whose model we can't load, `.anm` characters and `KQMonster`s get no box.
+- Doors stay solid at their loading box (no opening yet).
+- Starting inside a box is our choice (no hit).
+
+**Next:** 2e (jumping) or the camera's obstacle check, as the user prefers.
+
 ## 2026-10-12 M2 step 2d-3c: the wall block as session A traced it
 
 **Changed:**

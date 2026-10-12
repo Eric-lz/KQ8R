@@ -555,6 +555,37 @@ pub struct Objects {
     /// Every building the start-up scripts load (hidden ones too: hiding
     /// only changes the drawing), as colliders (M2 step 2d-3).
     pub buildings: Vec<kq8_game::collide::BuildingCollider>,
+    /// Every other placed object that collides with Connor (box from
+    /// `BOUNDS.KQ`, type and mask rule; hidden ones too), M2 step 2d-5.
+    pub objects: Vec<kq8_game::collide::BoxCollider>,
+}
+
+/// What collision needs to know about a placed object (M2 step 2d-5,
+/// connor-physics.md "Collision shape").
+struct CollisionInfo {
+    /// The shape name as the object gives it (an animated object: the
+    /// shape of the movement it has when it is loaded).
+    shape: String,
+    collider_type: u32,
+    collider_mask: u32,
+}
+
+/// `colliderType` / `colliderMask` from an object's section: a whole
+/// number (decimal, or hex with `0x`) at the start of the value; anything
+/// after it (`97		#World, Click, Attack` in Barren and IceWorld) is a
+/// comment (our reading). `default` if missing. A value that can't be read
+/// gives the default and a problem text.
+fn collider_value(s: &kq8_data::kq_text::Section, key: &str, default: u32) -> (u32, Option<String>) {
+    let Some(full) = s.get(key) else { return (default, None) };
+    let v = full.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("");
+    let parsed = match v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
+        Some(hex) => u32::from_str_radix(hex, 16).ok(),
+        None => v.parse::<i64>().ok().map(|n| n as u32),
+    };
+    match parsed {
+        Some(n) => (n, None),
+        None => (default, Some(format!("{key}={full} is not a whole number; default {default:#x} used"))),
+    }
 }
 
 pub struct Marker {
@@ -596,6 +627,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         shapes: Vec::new(),
         index_of: BTreeMap::new(),
         placed: Vec::new(),
+        collision: Vec::new(),
         markers: Vec::new(),
         connor: None,
         located: BTreeMap::new(),
@@ -706,6 +738,8 @@ struct Placer<'a> {
     shapes: Vec<(String, Model)>,
     index_of: BTreeMap<String, Option<usize>>,
     placed: Vec<(kq8_data::objects::Placement, usize, bool)>,
+    /// One for each entry of `placed`.
+    collision: Vec<CollisionInfo>,
     markers: Vec<Marker>,
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     /// Loaded objects by lower-case name (the last one loaded wins).
@@ -1158,6 +1192,12 @@ impl Placer<'_> {
         } else {
             *self.by_class.entry(if animation.is_some() { format!("{class} (animated)") } else { class }).or_default() += 1;
         }
+        let (collider_type, problem_t) = collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE);
+        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
+        for problem in [problem_t, problem_m].into_iter().flatten() {
+            self.log.summary(format!("collision: {label}[{}]: {problem}", p.name));
+        }
+        self.collision.push(CollisionInfo { shape, collider_type, collider_mask });
         self.placed.push((p, i, unused));
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);
@@ -1320,8 +1360,130 @@ impl Placer<'_> {
             buildings.push(c);
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
-        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start, buildings }
+        let objects = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
+        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start, buildings, objects }
     }
+}
+
+/// The object colliders (M2 step 2d-5; connor-physics.md "Collision
+/// shape", "Which pairs collide", "When an object takes part"): every
+/// object the start-up scripts load and we place, apart from buildings,
+/// with its place after `move`, hidden ones too. The box comes from
+/// `BOUNDS.KQ`, first by the shape's name, then by the object's own name;
+/// none: never collides. Names are compared with case (Q34 a), but the
+/// shape's name is lower-cased first: our stand-in until Q39 (every shape
+/// entry in the table is lower case; 25 Daventry objects write theirs
+/// with capitals). Type 0 and mask 0: never collides. Only pairs
+/// with Connor are kept (nothing else moves yet). `KQMonster`s are ball
+/// stacks (Connor against them is not traced; none are placed in M2).
+fn object_colliders(
+    game: &GameDir,
+    shapes: &[(String, Model)],
+    placed: &[(kq8_data::objects::Placement, usize, bool)],
+    collision: &[CollisionInfo],
+    markers: &[Marker],
+    log: &mut Log,
+) -> Vec<kq8_game::collide::BoxCollider> {
+    use kq8_game::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
+    let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
+        Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
+        _ => {
+            log.summary("collision: GAME/patch/BOUNDS.KQ could not be read: no object colliders");
+            return Vec::new();
+        }
+    };
+    let mut objects = Vec::new();
+    let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
+    let mut left_out: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut by_name = 0;
+    let mut case_only = Vec::new();
+    let mut lowered = 0;
+    let mut fixed = Vec::new();
+    for ((p, i, unused), info) in placed.iter().zip(collision) {
+        if *unused || shapes[*i].0.to_ascii_lowercase().ends_with(".dig") {
+            continue;
+        }
+        let class = p.class.as_deref().unwrap_or("?");
+        let what = format!("[{}] class={class} shape={}", p.name, info.shape);
+        if class == "KQMonster" {
+            *left_out.entry("KQMonster (ball stack, not traced against Connor)").or_default() += 1;
+            continue;
+        }
+        if info.collider_type == 0 && info.collider_mask == 0 {
+            *left_out.entry("type 0 and mask 0").or_default() += 1;
+            log.detail(format!("collision: {what}: type 0 and mask 0: never collides"));
+            continue;
+        }
+        let shape_lc = info.shape.to_ascii_lowercase();
+        let found = table.lookup(&shape_lc).map(|e| (e, "shape")).or_else(|| table.lookup(&p.name).map(|e| (e, "name")));
+        if found.as_ref().is_some_and(|(_, from)| *from == "shape") && shape_lc != info.shape && table.lookup(&info.shape).is_none() {
+            lowered += 1;
+            log.detail(format!("collision: {what}: found only with the shape name lower-cased (Q39 stand-in)"));
+        }
+        let Some((entry, from)) = found else {
+            let other_case = table.find_all(&p.name).next();
+            if let Some(e) = other_case {
+                case_only.push(format!("{} ({})", p.name, e.name));
+                *left_out.entry("not in BOUNDS.KQ (only with other case)").or_default() += 1;
+            } else {
+                *left_out.entry("not in BOUNDS.KQ").or_default() += 1;
+            }
+            log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides"));
+            continue;
+        };
+        if !pair_collides(CONNOR_TYPE, CONNOR_MASK, info.collider_type, info.collider_mask) {
+            *left_out.entry("type and mask: not tested against Connor").or_default() += 1;
+            log.detail(format!(
+                "collision: {what}: type {:#x} mask {:#x}: not tested against Connor (type 4, mask 0x281b)",
+                info.collider_type, info.collider_mask
+            ));
+            continue;
+        }
+        by_name += usize::from(from == "name");
+        let written = table.entries.iter().find(|e| e.item == entry.item);
+        if written.is_some_and(|w| w.min != entry.min) {
+            fixed.push(format!("{} ({})", p.name, entry.name));
+        }
+        let placement = Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
+        log.detail(format!(
+            "collision: {what}: box item{}={} by its {from} ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}), type {:#x} mask {:#x}, at ({:.0}, {:.0}, {:.0}) angles ({:.2}, {:.2}, {:.2}){}",
+            entry.item,
+            entry.name,
+            entry.min[0],
+            entry.min[1],
+            entry.min[2],
+            entry.max[0],
+            entry.max[1],
+            entry.max[2],
+            info.collider_type,
+            info.collider_mask,
+            p.position[0],
+            p.position[1],
+            p.position[2],
+            p.angles[0],
+            p.angles[1],
+            p.angles[2],
+            if p.drawn() { "" } else { " (hidden: still collides)" }
+        ));
+        *by_class.entry(class.to_string()).or_default() += 1;
+        objects.push(BoxCollider { name: p.name.clone(), min: entry.min, max: entry.max, placement });
+    }
+    log.summary(format!(
+        "collision: {} object colliders (per class {by_class:?}; {by_name} found by the object's own name, the rest by shape; {lowered} only with the shape name lower-cased, Q39); left out: {left_out:?}",
+        objects.len()
+    ));
+    if !case_only.is_empty() {
+        log.summary(format!("collision: in BOUNDS.KQ only with other case (left out, Q34 a): {case_only:?}"));
+    }
+    if !fixed.is_empty() {
+        log.summary(format!("collision: inside-out boxes fixed (Q34 c): {fixed:?}"));
+    }
+    log.summary(format!(
+        "collision: no collider (no model of ours): {} markers, {} of them .anm characters",
+        markers.len(),
+        markers.iter().filter(|m| m.anm).count()
+    ));
+    objects
 }
 
 /// A building (`.dig`) as a `Model`, so it is placed and drawn like any

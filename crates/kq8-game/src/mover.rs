@@ -4,10 +4,12 @@
 //! Rules from the behaviour note `docs/behaviour/connor-physics.md`
 //! ("One update of the mover", "The terrain in the passes", "Gravity",
 //! "Slopes", "Falling off an edge", "Walls" with "Exact hit handling",
-//! "Collision shape", "Is gravity on at the start?"). M2 steps 2a, 2c and
-//! 2d-3: the terrain and buildings are solid; objects come in 2d-5.
+//! "Collision shape", "Is gravity on at the start?"). M2 steps 2a, 2c,
+//! 2d-3 and 2d-5: the terrain, buildings and objects are solid.
 
-use crate::collide::{BallStack, BuildingCollider};
+use std::cell::RefCell;
+
+use crate::collide::{BallStack, BoxCollider, BuildingCollider, ObjectHit};
 
 /// The ground under a point: height and unit normal (z > 0), or `None`
 /// where there is no ground (outside the terrain grid).
@@ -30,7 +32,7 @@ pub struct Hit {
     pub touch: [f32; 3],
     /// Unit surface direction (for buildings: pointing against the move).
     pub normal: [f32; 3],
-    /// `terrain`, or the building's name.
+    /// `terrain`, or the building's or object's name.
     pub what: String,
 }
 
@@ -38,10 +40,14 @@ pub struct Hit {
 /// can hit.
 pub trait MoverWorld {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])>;
-    /// The building (later also object) contact nearest `from` when the
-    /// balls move from `from` to `to`; the terrain is not part of this.
+    /// The building or object contact nearest `from` when the balls move
+    /// from `from` to `to`; the terrain is not part of this.
     fn sweep(&self, _balls: &BallStack, _from: [f32; 3], _to: [f32; 3]) -> Option<Hit> {
         None
+    }
+    /// Notes gathered by the sweeps since the last call (for the report).
+    fn take_notes(&self) -> Vec<String> {
+        Vec::new()
     }
 }
 
@@ -52,10 +58,20 @@ impl<T: GroundLookup> MoverWorld for T {
     }
 }
 
-/// The ground and the world's buildings.
+/// The ground, the world's buildings and the objects that collide with
+/// Connor (already chosen by the type and mask rule).
 pub struct Scene<'a> {
     pub ground: &'a dyn GroundLookup,
     pub buildings: &'a [BuildingCollider],
+    pub objects: &'a [BoxCollider],
+    /// Objects a ball started inside (no usable contact), noted by `sweep`.
+    pub notes: RefCell<Vec<String>>,
+}
+
+impl<'a> Scene<'a> {
+    pub fn new(ground: &'a dyn GroundLookup, buildings: &'a [BuildingCollider], objects: &'a [BoxCollider]) -> Self {
+        Scene { ground, buildings, objects, notes: RefCell::new(Vec::new()) }
+    }
 }
 
 impl MoverWorld for Scene<'_> {
@@ -63,19 +79,39 @@ impl MoverWorld for Scene<'_> {
         self.ground.ground(x, y)
     }
 
-    /// Over every building hit, the contact nearest the old position is
-    /// kept (connor-physics.md "Against a building", step 7).
+    /// Over every building and object hit, the contact nearest the old
+    /// position is kept (connor-physics.md "Against a building", step 7).
+    /// A ball that starts inside an object's box gives no usable contact;
+    /// what the game does then was not traced, so it counts as no hit (he
+    /// can walk out) and is noted.
     fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
         let (lo, hi) = balls.reach(from, to);
         let mut best: Option<Hit> = None;
+        let mut keep = |c: crate::collide::Contact, what: &str| {
+            if best.as_ref().is_none_or(|h| length(sub(c.position, from)) < length(sub(h.position, from))) {
+                best = Some(Hit { position: c.position, touch: c.touch, normal: c.normal, what: what.to_string() });
+            }
+        };
         for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
             if let Some(c) = b.sweep(balls, from, to) {
-                if best.as_ref().is_none_or(|h| length(sub(c.position, from)) < length(sub(h.position, from))) {
-                    best = Some(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone() });
-                }
+                keep(c, &b.name);
+            }
+        }
+        for o in self.objects.iter().filter(|o| o.overlaps(balls.radius, lo, hi)) {
+            match o.sweep(balls, from, to) {
+                Some(ObjectHit::Contact(c)) => keep(c, &o.name),
+                Some(ObjectHit::StartedInside { ball }) => self.notes.borrow_mut().push(format!(
+                    "ball {ball} started inside {}'s box: no usable contact, not counted as a hit (not traced)",
+                    o.name
+                )),
+                None => {}
             }
         }
         best
+    }
+
+    fn take_notes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notes.borrow_mut())
     }
 }
 
@@ -461,6 +497,7 @@ impl Mover {
                 None => self.state = State::Fall { start_z, stuck },
             }
         }
+        report.events.extend(world.take_notes());
         report
     }
 
@@ -588,6 +625,7 @@ fn down_slope(normal: [f32; 3]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collide::BoxCollider;
 
     /// Flat ground at a fixed height everywhere.
     struct Flat(f32);
@@ -853,7 +891,7 @@ mod tests {
     #[test]
     fn walking_head_on_stops_225_from_the_wall() {
         let b = [wall()];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 600.0, 0.0], true);
         let mut stopped = None;
         for n in 1..=20 {
@@ -872,12 +910,84 @@ mod tests {
         assert!(m.on_ground);
     }
 
+    /// A made-up object box (like the signpost: −250…−10, 0…250, 0…2,420).
+    fn post(position: [f32; 3]) -> BoxCollider {
+        BoxCollider {
+            name: "post".into(),
+            min: [-250.0, 0.0, 0.0],
+            max: [-10.0, 250.0, 2420.0],
+            placement: crate::collide::Placement::at(position),
+        }
+    }
+
+    #[test]
+    fn walking_head_on_into_an_object_stops_225_from_its_face() {
+        let o = [post([0.0; 3])];
+        let scene = Scene::new(&Flat(0.0), &[], &o);
+        // From +y toward −y at the post's middle (x −130): its face is y 250.
+        let mut m = Mover::new([-130.0, 1000.0, 0.0], true);
+        let mut stopped = None;
+        for _ in 1..=20 {
+            let r = m.update([0.0, -72.0, 0.0], &scene);
+            assert!(m.position[1] >= 449.0, "never inside: {:?}", m.position);
+            if r.head_on {
+                assert!(r.hits.iter().any(|h| h.hit.what == "post" && h.pass == "across"), "{:?}", r.hits);
+                stopped.get_or_insert(m.position);
+            }
+        }
+        let p = stopped.expect("head-on");
+        assert!(p[1] >= 450.0 && p[1] <= 475.0 + 72.0, "{p:?}");
+    }
+
+    #[test]
+    fn glancing_off_an_object_slides_along_it() {
+        let o = [post([0.0; 3])];
+        let scene = Scene::new(&Flat(0.0), &[], &o);
+        // 35° off the face's normal: slides along x, keeps clear of y 450
+        // while beside the post (its enlarged box: x −450…190).
+        let (s, c) = 35f32.to_radians().sin_cos();
+        let mut m = Mover::new([-545.0, 800.0, 0.0], true);
+        let mut slid = false;
+        for _ in 0..40 {
+            let r = m.update([400.0 * s, -400.0 * c, 0.0], &scene);
+            assert!(!r.head_on);
+            slid |= r.across == "glance";
+            let beside = m.position[0] > -450.0 && m.position[0] < 190.0;
+            assert!(!beside || m.position[1] >= 449.0, "{:?}", m.position);
+        }
+        assert!(slid);
+        assert!(m.position[0] > 210.0, "went past the post: {:?}", m.position);
+    }
+
+    #[test]
+    fn standing_on_top_of_an_object_stays_25_above_it() {
+        // A low crate, 300 high, under him: he lands on it 25 above.
+        let o = [BoxCollider { name: "crate".into(), min: [-500.0; 3], max: [500.0, 500.0, 300.0], placement: crate::collide::Placement::at([0.0, 0.0, 0.0]) }];
+        let scene = Scene::new(&Flat(0.0), &[], &o);
+        let mut m = Mover::new([0.0, 0.0, 800.0], true);
+        for _ in 0..30 {
+            m.update([0.0; 3], &scene);
+        }
+        assert!(near(m.position[2], 325.0, 0.01), "{:?}", m.position);
+        assert_eq!(m.state, State::Normal);
+    }
+
+    #[test]
+    fn starting_inside_an_object_is_no_hit_and_is_noted() {
+        let o = [post([0.0; 3])];
+        let scene = Scene::new(&Flat(0.0), &[], &o);
+        let mut m = Mover::new([-130.0, 125.0, 0.0], true);
+        let r = m.update([0.0, -72.0, 0.0], &scene);
+        assert!(near(m.position[1], 53.0, 0.01), "walks on: {:?}", m.position);
+        assert!(r.events.iter().any(|e| e.contains("started inside post")), "{:?}", r.events);
+    }
+
     #[test]
     fn a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on() {
         // `crash` (not the Move state) pushes him 63 per update for 7
         // updates straight at a wall 300 away: he stops at it, never inside.
         let b = [wall()];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 300.0, 0.0], true);
         for n in 1..=7 {
             let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false });
@@ -891,7 +1001,7 @@ mod tests {
     fn stepping_backwards_into_a_wall_is_head_on_too() {
         // The mover only sees the movement: backwards is still straight in.
         let b = [wall()];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 260.0, 0.0], true);
         let r = m.update([0.0, -60.0, 0.0], &scene);
         assert!(r.head_on, "{:?}", r.hits);
@@ -900,7 +1010,7 @@ mod tests {
     #[test]
     fn not_moving_is_never_head_on() {
         let b = [wall()];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 260.0, 0.0], true);
         let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false });
         assert!(!r.head_on);
@@ -914,7 +1024,7 @@ mod tests {
     fn glancing_slides_step_times_sine() {
         for (deg, factor) in [(21.6f32, 0.37f32), (35.0, 0.57)] {
             let b = [wall()];
-            let scene = Scene { ground: &Flat(0.0), buildings: &b };
+            let scene = Scene::new(&Flat(0.0), &b, &[]);
             let a = deg.to_radians();
             let step = [72.0 * a.sin(), -72.0 * a.cos(), 0.0];
             let mut m = Mover::new([0.0, 400.0, 0.0], true);
@@ -942,7 +1052,7 @@ mod tests {
             vec![([0.0, 1.0, 0.0], 0.0), ([1.0, 0.0, 0.0], 0.0)],
         );
         let b = [corner];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([600.0, 500.0, 0.0], true);
         for _ in 0..30 {
             m.update([-100.0, -90.0, 0.0], &scene);
@@ -960,7 +1070,7 @@ mod tests {
             vec![([0.0, 1.0, 0.0], 0.0), ([1.0, 0.0, 0.0], 0.0)],
         );
         let b = [half];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let step = [50.0, -50.0, 0.0];
         let mut m = Mover::new([-1500.0, 400.0, 0.0], true);
         let mut last = m.position;
@@ -991,7 +1101,7 @@ mod tests {
     #[test]
     fn a_300_step_is_climbed_a_400_one_stops_him() {
         let b = [step_block(300.0)];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([-500.0, 0.0, 0.0], true);
         for _ in 0..20 {
             m.update([75.0, 0.0, 0.0], &scene);
@@ -1001,7 +1111,7 @@ mod tests {
         assert!(near(m.position[2], 325.0, 0.01) && m.on_ground, "{:?}", m.position);
 
         let b = [step_block(400.0)];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([-500.0, 0.0, 0.0], true);
         let mut head_on = false;
         for _ in 0..20 {
@@ -1016,7 +1126,7 @@ mod tests {
         // Solid above z = 1500.
         let ceiling = building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 0.0, -1.0], 1500.0)]);
         let b = [ceiling];
-        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 0.0, 0.0], true);
         let r = m.update([0.0; 3], &scene);
         let up = r.hits.iter().find(|h| h.pass == "up").expect("up-pass hit");
@@ -1032,7 +1142,7 @@ mod tests {
         // Solid below z = 0; the terrain far below.
         let floor = building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 0.0, 1.0], 0.0)]);
         let b = [floor];
-        let scene = Scene { ground: &Flat(-5000.0), buildings: &b };
+        let scene = Scene::new(&Flat(-5000.0), &b, &[]);
         let mut m = Mover::new([0.0, 0.0, 25.0], true);
         for _ in 0..30 {
             let r = m.update([0.0; 3], &scene);

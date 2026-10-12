@@ -1,6 +1,6 @@
 //! Collision tests: Connor's ball stack against buildings (through their
-//! BSP tree) and against objects' boxes. M2 step 2d-2; not used by the
-//! mover yet (that is 2d-3).
+//! BSP tree) and against objects' boxes. M2 step 2d-2; used by the mover
+//! for buildings since 2d-3 and for objects since 2d-5.
 //!
 //! Rules from `docs/behaviour/connor-physics.md` "Collision shape"
 //! (traced, Q31 and Q33): the ball stack built from the box, the building
@@ -23,6 +23,21 @@ pub const OBJECT_MIN_MOVE: f32 = 0.001;
 /// At a BSP node a ball is "touching" the plane unless its centre is more
 /// than r + this away from it.
 pub const TOUCH_MARGIN: f64 = 0.00001;
+/// Connor's collision type and mask (connor-physics.md "Collision shape",
+/// read from the running game).
+pub const CONNOR_TYPE: u32 = 4;
+pub const CONNOR_MASK: u32 = 0x281B;
+/// Type and mask of an object that sets neither `colliderType` nor
+/// `colliderMask` (connor-physics.md "Collision shape", traced).
+pub const DEFAULT_TYPE: u32 = 0x41;
+pub const DEFAULT_MASK: u32 = 0;
+
+/// Whether two objects are tested against each other: the first one's
+/// mask shares a bit with the second one's type, or the other way round
+/// (connor-physics.md "Which pairs collide", traced).
+pub fn pair_collides(type_a: u32, mask_a: u32, type_b: u32, mask_b: u32) -> bool {
+    mask_a & type_b != 0 || mask_b & type_a != 0
+}
 
 /// The balls an object collides with: all of radius `radius`, centred
 /// straight above its position at `heights`.
@@ -161,17 +176,7 @@ impl BuildingCollider {
         bounds: ([f32; 3], [f32; 3]),
         placement: Placement,
     ) -> Self {
-        let (lo, hi) = bounds;
-        let mut world_min = [f32::INFINITY; 3];
-        let mut world_max = [f32::NEG_INFINITY; 3];
-        for c in 0..8 {
-            let corner = [if c & 1 == 0 { lo[0] } else { hi[0] }, if c & 2 == 0 { lo[1] } else { hi[1] }, if c & 4 == 0 { lo[2] } else { hi[2] }];
-            let w = placement.to_world(corner);
-            for k in 0..3 {
-                world_min[k] = world_min[k].min(w[k]);
-                world_max[k] = world_max[k].max(w[k]);
-            }
-        }
+        let (world_min, world_max) = world_box(bounds.0, bounds.1, &placement);
         BuildingCollider { name: name.to_string(), nodes, solid, planes, placement, world_min, world_max }
     }
 
@@ -306,6 +311,15 @@ pub enum ObjectHit {
 }
 
 impl BoxCollider {
+    /// The rough check, only to save time: does the box `lo..hi` (world
+    /// space: `BallStack::reach`) overlap this box enlarged by `r` on every
+    /// face and turned into the world (an axis-aligned box round its 8
+    /// corners)? Generous for turned objects, so it never skips a hit.
+    pub fn overlaps(&self, r: f32, lo: [f32; 3], hi: [f32; 3]) -> bool {
+        let (wmin, wmax) = world_box(self.min.map(|v| v - r), self.max.map(|v| v + r), &self.placement);
+        (0..3).all(|k| lo[k] <= wmax[k] && hi[k] >= wmin[k])
+    }
+
     /// Sweeps the mover's balls against the box enlarged by the radius on
     /// every face (square corners), in the object's own space. An exactly
     /// vertical move tests only the top ball (going up or not moving) or
@@ -318,7 +332,8 @@ impl BoxCollider {
         let r = stack.radius;
         let (lo, hi) = (self.min.map(|v| v - r), self.max.map(|v| v + r));
         if (0..3).any(|k| lo[k] > hi[k]) {
-            // An inside-out box (BOUNDS.KQ has two): not traced, Q34 (c).
+            // An inside-out box: the table lookup fixes these on loading
+            // (Q34 c), so only a made-up box gets here.
             return None;
         }
         let last = stack.heights.len() - 1;
@@ -346,6 +361,22 @@ impl BoxCollider {
         let normal = normalise(self.placement.direction_to_world(normal));
         Some(ObjectHit::Contact(Contact { position: pull_back(touch, from), touch, normal, ball }))
     }
+}
+
+/// The axis-aligned world box round the 8 corners of the own-space box
+/// `lo..hi` placed by `placement`.
+fn world_box(lo: [f32; 3], hi: [f32; 3], placement: &Placement) -> ([f32; 3], [f32; 3]) {
+    let mut world_min = [f32::INFINITY; 3];
+    let mut world_max = [f32::NEG_INFINITY; 3];
+    for c in 0..8 {
+        let corner = [if c & 1 == 0 { lo[0] } else { hi[0] }, if c & 2 == 0 { lo[1] } else { hi[1] }, if c & 4 == 0 { lo[2] } else { hi[2] }];
+        let w = placement.to_world(corner);
+        for k in 0..3 {
+            world_min[k] = world_min[k].min(w[k]);
+            world_max[k] = world_max[k].max(w[k]);
+        }
+    }
+    (world_min, world_max)
 }
 
 /// Where a point moving from `s` by `d` (fraction 0..1) first enters the
@@ -613,8 +644,37 @@ mod tests {
     }
 
     #[test]
-    fn inside_out_box_never_hits_until_q34_is_answered() {
+    fn an_inside_out_box_given_directly_never_hits() {
+        // The table lookup fixes these (Q34 c); a made-up one is refused.
         let b = crate_box([10.0, -240.0, 20.0], [-1520.0, 10.0, 3020.0], Placement::at([0.0; 3]));
         assert_eq!(b.sweep(&connor(), [-3000.0, 0.0, 0.0], [3000.0, 0.0, 0.0]), None);
+    }
+
+    #[test]
+    fn which_pairs_collide_with_connor() {
+        let with_connor = |t, m| pair_collides(CONNOR_TYPE, CONNOR_MASK, t, m);
+        assert!(with_connor(DEFAULT_TYPE, DEFAULT_MASK), "the default type 0x41 shares bit 1 with his mask");
+        assert!(!with_connor(0, 0));
+        assert!(with_connor(0, 4), "its mask covers his type");
+        assert!(!with_connor(0x40, 0), "type 0x40 isn't in his mask 0x281B");
+        assert!(with_connor(0x800, 0));
+    }
+
+    #[test]
+    fn rough_check_never_skips_a_turned_box_corner() {
+        // Turned 45°: the enlarged box's corner reaches 0.41 r further
+        // along x than the plain box's world box plus r.
+        let rot = kq8_data::objects::rotation([0.0, 0.0, std::f32::consts::FRAC_PI_4]);
+        let b = crate_box([-100.0, -100.0, 0.0], [100.0, 100.0, 500.0], Placement { rotation: rot, position: [0.0; 3] });
+        let stack = connor();
+        for x in (300..=420).step_by(5) {
+            let (from, to) = ([x as f32, -2000.0, 0.0], [x as f32, 2000.0, 0.0]);
+            if b.sweep(&stack, from, to).is_some() {
+                let (lo, hi) = stack.reach(from, to);
+                assert!(b.overlaps(stack.radius, lo, hi), "x {x}: hit but skipped");
+            }
+        }
+        let (lo, hi) = stack.reach([2000.0, 0.0, 0.0], [3000.0, 0.0, 0.0]);
+        assert!(!b.overlaps(stack.radius, lo, hi), "far away: skipped");
     }
 }
