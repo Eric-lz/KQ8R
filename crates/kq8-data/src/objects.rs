@@ -155,8 +155,60 @@ pub struct CurrentLoop {
     pub speed: f32,
     /// True = repeats; false = plays once.
     pub repeat: bool,
-    /// Fourth value; effect not traced.
+    /// Fourth value (6th field of the line). For Connor's movements it is
+    /// "can be cut short" (`connor-movement.md` "Starting and stopping");
+    /// for objects not traced.
     pub unknown: i64,
+    /// The movement's `transitionN` lines (`nTransition` of them).
+    pub transitions: Vec<TransitionLine>,
+    /// Transition lines that could not be read, with the reason.
+    pub transition_problems: Vec<String>,
+}
+
+/// `transitionN=<from phase> <to movement> <to phase> <transition movement>`
+/// (`connor-movement.md` "Starting and stopping"; a from phase of −1 means
+/// "at once").
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransitionLine {
+    pub from: f32,
+    pub to: String,
+    pub to_phase: f32,
+    pub via: String,
+}
+
+/// The `nTransition` / `transitionN` lines of a `[movement<k>]` section.
+fn transition_lines(section: &Section) -> (Vec<TransitionLine>, Vec<String>) {
+    let (mut lines, mut problems) = (Vec::new(), Vec::new());
+    let count = match section.number("nTransition") {
+        None => 0,
+        Some(Ok(n)) if n >= 0.0 => n as usize,
+        Some(_) => {
+            problems.push(format!("[{}] nTransition is not a count", section.name));
+            0
+        }
+    };
+    for k in 0..count {
+        let key = format!("transition{k}");
+        let Some(text) = section.get(&key) else {
+            problems.push(format!("[{}] has no {key}", section.name));
+            continue;
+        };
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let parsed = match words[..] {
+            [from, to, to_phase, via] => from.parse().ok().zip(to_phase.parse().ok()).map(|(from, to_phase)| TransitionLine {
+                from,
+                to: to.to_string(),
+                to_phase,
+                via: via.to_string(),
+            }),
+            _ => None,
+        };
+        match parsed {
+            Some(t) => lines.push(t),
+            None => problems.push(format!("[{}] {key}={text} is not '<from> <to> <to phase> <via>'", section.name)),
+        }
+    }
+    (lines, problems)
 }
 
 /// The current animation of an animated object (rules from objects.md
@@ -189,6 +241,7 @@ pub fn current_loop(file: &[Section], s: &Section) -> Result<Option<CurrentLoop>
         return Err(format!("[movement{movement}] loop line '{line}' does not have 6 parts"));
     };
     let bad = |what: &str| format!("[movement{movement}] loop line '{line}': {what} is not a number");
+    let (transitions, transition_problems) = transition_lines(section);
     Ok(Some(CurrentLoop {
         movement,
         fell_back,
@@ -198,6 +251,8 @@ pub fn current_loop(file: &[Section], s: &Section) -> Result<Option<CurrentLoop>
         speed: speed.parse().map_err(|_| bad("speed"))?,
         repeat: repeat.parse::<i64>().map_err(|_| bad("repeat"))? != 0,
         unknown: unknown.parse().map_err(|_| bad("fourth value"))?,
+        transitions,
+        transition_problems,
     }))
 }
 
@@ -261,6 +316,31 @@ mod tests {
         // Not animated: no answer, no error.
         let plain = crate::kq_text::parse(b"[a]\nshapeName=x.kqs\n");
         assert_eq!(current_loop(&plain, &plain[0]).unwrap(), None);
+    }
+
+    #[test]
+    fn transition_lines_as_in_conner_anm() {
+        let file = crate::kq_text::parse(
+            b"[c]
+animLoops=l
+currAnimName=stop
+[l]
+nMovement=1
+Movement0=stop
+              [movement0]
+loop=c_stop.kqs c_stop 0.000000 1.0 1 1
+nTransition=3
+              transition0=-1 run 0.866667 stoprun
+;toFrames0=15
+transition1=-1 walk 0.850000 stopwalk
+              transition2=0.5 walk
+",
+        );
+        let c = current_loop(&file, &file[0]).unwrap().unwrap();
+        let t = |from, to: &str, to_phase, via: &str| TransitionLine { from, to: to.into(), to_phase, via: via.into() };
+        assert_eq!(c.transitions, vec![t(-1.0, "run", 0.866667, "stoprun"), t(-1.0, "walk", 0.85, "stopwalk")]);
+        assert_eq!(c.transition_problems.len(), 1, "{:?}", c.transition_problems);
+        assert_eq!(c.unknown, 1);
     }
 
     #[test]

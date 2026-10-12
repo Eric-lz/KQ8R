@@ -20,7 +20,11 @@ The code is written with an AI coding agent (Claude Code); see
   fountains) see-through. Checked by eye in Daventry; the other 11 worlds
   load but have only been looked at in a few places.
 - **Connor:** he stands at the world's start point, walks, runs, steps back
-  and turns with the original's keys and speeds, with his animations. He
+  and turns with the original's keys and speeds, with his animations.
+  Starting to walk or run plays the original's short start animation
+  first (with its small step to his left), then the walk or run (checked
+  in the logs, not yet by eye). He stops at once, without the stop
+  animations, for now. He
   follows hills, runs down steep walkable slopes without falling, can't
   climb slopes steeper than about 37° (he slides back), and falls off high
   places with the falling, landing and death animations. Falls and slides

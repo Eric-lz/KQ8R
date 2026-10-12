@@ -494,7 +494,8 @@ Steps (each separately revertable, each stopped for an eye check):
     standing, walking or running. No banking yet.
   - No start/stop animations (`stopwalk`, `walkstopleft`...) yet: he goes
     straight from one movement to the next, starting the loop at its
-    beginning. Which transition plays is asked as Q25.
+    beginning. Which transition plays is asked as Q25. (Starts added in
+    2g-1.)
   - All frames of each movement's loop are drawn in turn, at the loop's
     speed.
   - The rules live in `kq8-game` (`connor.rs`): intent → movement, turning,
@@ -964,6 +965,85 @@ Steps (each separately revertable, each stopped for an eye check):
   - Viewer: F switches between the game camera (default when Connor is
     there) and the free flying camera. Log: camera position, distance to
     the aim point, height above the terrain, tilt, mode, range, per update.
+- **2g — start and stop transitions (planned 2026-10-12).** Rules from
+  `connor-movement.md` "Starting and stopping" (Q25, rules 1–6, the two
+  `loop=` flags, "Steps in the start animations"); walls from
+  `connor-physics.md` ("Walls", "Walk held against a wall"). Two sub-steps,
+  each stopped for a check.
+  - **Words used here.** *Phase*: how far through its animation a
+    movement is, 0 at the start, 1 at the end. A *transition* is a short
+    animation played between two movements (`stopwalk` between `stop`
+    and `walk`). A *one-shot* animation plays once and stops on its last
+    frame; a *loop* repeats.
+  - **The data** (`kq8-data` `objects.rs`, read for every movement):
+    `transitionN=<from phase> <to movement> <to phase> <transition
+    movement>` lines (`nTransition` of them), and the 6th `loop=` field,
+    "can be cut short". The viewer keeps a transition only when both its
+    `<to movement>` and its transition movement are loaded; the others are
+    logged as "not loaded" and skipped (for now: water, and in 2g-1 the
+    stop animations).
+  - **Per-frame steps** for one-shot animations: the frames' own steps
+    (frame k's step is the move from frame k−1 to k, over one frame time,
+    the stored length / (frames − 1)), applied for the part of each frame
+    the update covers, on both axes (x = his left, −y = forward). Loops
+    (`walk`, `run`, …) keep the even spread (Q24 is only partly
+    answered). This also changes `jumpend` (its steps are uneven); `crash`
+    is even, so it doesn't change.
+  - **The walker** (`kq8-game` `connor.rs`) gains, following rules 1–6:
+    the *wanted* movement (asked for only when the keys' choice changes;
+    a new request replaces the old one); a *chosen* transition waiting
+    for its from point; the transition being played and its `<to
+    movement>` / `<to phase>`.
+    - Choosing (rule 2): of the current movement's transitions to the
+      wanted one, the smallest distance `from − phase` (+1 if negative and
+      the movement loops; never chosen if negative on a one-shot); ties:
+      first listed; from −1 always wins on a loop.
+    - Waiting (rule 3): the movement plays on; in the update where its
+      phase reaches the from point it stops exactly there (only that part
+      of the step), and the transition starts at phase 0. **Our reading:**
+      the transition plays from the next update, so from −1 gives one
+      update of `stop` with no movement, then `stopwalk`. The same reading
+      gives the measured "one update of `run`, then `stoprunstop`" in 2g-2.
+      Asked as Q40 (a).
+    - No transition (rule 4): switch at once from phase 0 if the current
+      movement can be cut short; otherwise keep the wanted one for the
+      end.
+    - The end (rule 6): `<to movement>` at `<to phase>`; if the wanted
+      movement is now different, choose again from there at once.
+    - Turning works throughout (it doesn't depend on the animation).
+    - Walls: head-on during `stopwalk` is handled as for `walk` (`stop`,
+      forward blocked); during `stoprun` as for `run` (`crash`). Either
+      clears the transition state.
+    - Falling and the test lifts clear the transition state. After a
+      mode's one-shot (`crash`, `jumpend`) ends he is in `stop`, and the
+      keys ask again from there, so with run held after a crash `stoprun`
+      plays before `run` (as the original does, DESIGN 2d-4). For `jumpend`
+      this is our choice, not traced.
+  - **2g-1, starting.** *Done 2026-10-12 (MODLOG); not yet checked by
+    eye. Found on the way: `stoprun` adds up to 526.7 forward in the data,
+    not the note's 536.7 (Q40 c).* Load `stopwalk` (`c_stpwk.kqs`) and `stoprun`
+    (`c_stprn.kqs`). Expected (the note): `stopwalk` 7 updates, 51.2 left
+    and 78.5 forward in all (7 × (7.32, 11.22)), then `walk` from phase
+    0.85; `stoprun` 10 updates, 43.9 left and 536.7 forward with the
+    note's uneven steps, then `run` from 0.867. Let go during `stopwalk`:
+    it plays to its end, `walk` at 0.85, then `stop` at once (no stop
+    animations loaded yet). Run switched on during `stopwalk`: `run` at
+    once from 0 when it ends.
+  - **2g-2, stopping.** Load `walkstopleft`, `stopwalkstop`,
+    `walkstopright`, `runstopright`, `runstopleft`, `stoprunstop`.
+    Expected: letting go during `stoprun` gives one update of `run`, then
+    `stoprunstop`; letting go while walking waits for the next from point
+    (0.45, 0.90 or 0.95), then plays that point's animation.
+  - **Log** (`connor.log`, new columns): phase at the start of the update,
+    the wanted movement, the step applied in his own axes (left,
+    forward). Event lines: a request, the transition chosen (from, to,
+    via, distance), its start and its end.
+  - **Unit tests:** the data reader; choosing (next ahead, wrap, −1, ties,
+    one-shot never wraps); `stopwalk` 7 updates and its totals, then walk
+    at 0.85; `stoprun` 10 updates and its totals, then run at 0.867;
+    letting go during `stopwalk`; run switched on during `stopwalk`;
+    head-on during `stopwalk` and `stoprun`; turning during a start; after
+    a crash with run held: `stop`, `stoprun`, `run`.
 
 ### M3 — Daventry comes alive
 

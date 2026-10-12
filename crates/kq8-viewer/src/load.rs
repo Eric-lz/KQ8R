@@ -178,9 +178,12 @@ pub fn load_model(
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
-/// plays") and the falls of step 2c/2e (connor-physics.md "Falling off an
-/// edge").
-pub const CONNOR_MOVEMENTS: [&str; 10] = ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie", "crash"];
+/// plays"), the falls of step 2c/2e (connor-physics.md "Falling off an
+/// edge"), the crash (2d-4) and the start transitions (2g-1,
+/// connor-movement.md "Starting and stopping"). Transitions to or via a
+/// movement not listed here are skipped.
+pub const CONNOR_MOVEMENTS: [&str; 12] =
+    ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie", "crash", "stopwalk", "stoprun"];
 
 /// One of Connor's movements: its animation and playback speed.
 pub struct ConnorMovement {
@@ -190,6 +193,10 @@ pub struct ConnorMovement {
     pub speed: f32,
     /// True = repeats; false = plays once.
     pub repeat: bool,
+    /// `loop=` 6th field: can be cut short.
+    pub cut_short: bool,
+    /// Its `transitionN` lines whose movements are all loaded.
+    pub transitions: Vec<kq8_game::connor::Transition>,
 }
 
 pub struct ConnorAssets {
@@ -214,6 +221,8 @@ pub struct Animation {
     pub duration: f32,
     /// The frames' whole-body steps added up (model space).
     pub step_sum: [f32; 3],
+    /// Each frame's own step (model space), frame 0 first.
+    pub frame_steps: Vec<[f32; 3]>,
 }
 
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
@@ -247,6 +256,7 @@ pub fn load_animation(
     let (first, count) = (l.first_sequence.max(0) as usize, l.sequence_count.max(0) as usize);
     let mut frames = Vec::with_capacity(count);
     let mut step_sum = [0.0f32; 3];
+    let mut frame_steps = Vec::with_capacity(count);
     let mut turning = 0;
     for seq in first..first + count {
         let s = shape.sequences.get(seq).ok_or(format!("{label}: loop '{loop_name}' runs past the sequences"))?;
@@ -256,6 +266,7 @@ pub fn load_animation(
         for (sum, v) in step_sum.iter_mut().zip(s.transform.p) {
             *sum += v;
         }
+        frame_steps.push(s.transform.p);
         let geometry = shape.geometry(seq);
         for p in &geometry.problems {
             log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
@@ -290,7 +301,7 @@ pub fn load_animation(
         step_sum[2],
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum })
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps })
 }
 
 /// A model name is looked up in the world's archives, then in
@@ -930,7 +941,36 @@ impl Placer<'_> {
                     "connor: movement {name} = movement {} loop={} {} speed {} repeat {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
                     c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
                 ));
-                assets.movements.push(ConnorMovement { name, animation, speed: c.speed, repeat: c.repeat });
+                // Transitions: only those whose movements are loaded
+                // (connor-movement.md "Starting and stopping").
+                let known = |n: &str| CONNOR_MOVEMENTS.into_iter().find(|k| k.eq_ignore_ascii_case(n));
+                let mut transitions = Vec::new();
+                for t in &c.transitions {
+                    let line = format!("{} {} {} {}", t.from, t.to, t.to_phase, t.via);
+                    match (known(&t.to), known(&t.via)) {
+                        (Some(to), Some(via)) => {
+                            self.log.summary(format!("connor: {name}: transition {line}"));
+                            transitions.push(kq8_game::connor::Transition { from: t.from, to, to_phase: t.to_phase, via });
+                        }
+                        _ => self.log.summary(format!("connor: {name}: transition {line} skipped (movement not loaded)")),
+                    }
+                }
+                for p in &c.transition_problems {
+                    self.log.summary(format!("connor: {name}: {p}"));
+                }
+                if !c.repeat || !c.transitions.is_empty() {
+                    let steps: Vec<String> =
+                        a.frame_steps.iter().map(|p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])).collect();
+                    self.log.summary(format!("connor: {name}: can be cut short {}; frame steps {}", c.unknown != 0, steps.join(" ")));
+                }
+                assets.movements.push(ConnorMovement {
+                    name,
+                    animation,
+                    speed: c.speed,
+                    repeat: c.repeat,
+                    cut_short: c.unknown != 0,
+                    transitions,
+                });
             }
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
             Ok((p, assets))

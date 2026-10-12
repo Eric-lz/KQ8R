@@ -91,8 +91,8 @@ pub struct ConnorSim {
 }
 
 impl ConnorSim {
-    fn movement_loop(&self, name: &str) -> Option<MovementLoop> {
-        self.movements.iter().find(|m| m.name == name).map(|m| m.movement_loop)
+    fn movement_loop(&self, name: &str) -> Option<&MovementLoop> {
+        self.movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop)
     }
 }
 
@@ -150,7 +150,19 @@ pub fn spawn_connor(
 ) {
     let camera_keys = assets.camera_keys.clone();
     let connor_keys = assets.keys.clone();
-    let loops: Vec<(f32, [f32; 3], usize)> = assets.animations.iter().map(|a| (a.duration, a.step_sum, a.frames.len())).collect();
+    // Each animation's loop data; the movements add speed, flags and
+    // transitions.
+    let loops: Vec<MovementLoop> = assets
+        .animations
+        .iter()
+        .map(|a| MovementLoop {
+            duration: a.duration,
+            step_sum: a.step_sum,
+            frames: a.frames.len(),
+            frame_steps: a.frame_steps.clone(),
+            ..Default::default()
+        })
+        .collect();
     // Each animation: one material per look, one entity per frame.
     let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
@@ -186,10 +198,15 @@ pub fn spawn_connor(
         .movements
         .iter()
         .map(|m| {
-            let (duration, step_sum, frames) = loops[m.animation];
             DrawnMovement {
                 name: m.name,
-                movement_loop: MovementLoop { duration, step_sum, speed: m.speed, repeat: m.repeat, frames },
+                movement_loop: MovementLoop {
+                    speed: m.speed,
+                    repeat: m.repeat,
+                    cut_short: m.cut_short,
+                    transitions: m.transitions.clone(),
+                    ..loops[m.animation].clone()
+                },
                 frames: frame_entities[m.animation].clone(),
             }
         })
@@ -268,7 +285,10 @@ pub fn spawn_connor(
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward",
+    );
+    sim.log.detail(
+        "  (played = the animation that moved him this update, with its phase before and after; wanted_movement = asked for and not reached yet; step_left / step_forward = that animation's step in his own axes; movement / phase = where he is after the update)",
     );
     if let Some(cam) = crate::game_camera::make(
         sim.mover.position,
@@ -411,7 +431,7 @@ pub fn connor_step(
     let mut step = None;
     let report = {
         let ConnorSim { mover, walker, movements, .. } = &mut *sim;
-        let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| m.movement_loop);
+        let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop);
         if mover.state == State::Dead {
             // The mover stands still; the death animation plays on.
             step = Some(walker.update(intent, &loops));
@@ -450,7 +470,7 @@ pub fn connor_step(
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -487,6 +507,12 @@ pub fn connor_step(
         down_hit.map_or("none".into(), |h| h.hit.what.replace(' ', "_")),
         down_hit.map_or("none".into(), |h| format!("{:.1}", h.hit.position[2] - h.hit.touch[2])),
         sim.walker.blocked_name(),
+        step.as_ref().map_or("none", |s| s.played),
+        step.as_ref().map_or("none".into(), |s| format!("{:.4}", s.played_from)),
+        step.as_ref().map_or("none".into(), |s| format!("{:.4}", s.played_to)),
+        sim.walker.wanted.unwrap_or("none"),
+        step.as_ref().map_or(0.0, |s| s.own_step[0]),
+        step.as_ref().map_or(0.0, |s| -s.own_step[1]),
     );
     sim.log.detail(line);
     let mut events = report.events.clone();
@@ -500,6 +526,7 @@ pub fn connor_step(
                 events.push("jumpdie finished: Die state".into());
             }
         }
+        events.extend(s.notes.iter().cloned());
         if let Some((from, to)) = s.changed {
             events.push(format!("movement {from} -> {to}"));
         }

@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 2g-1: start transitions (stop → walk via stopwalk, stop → run via stoprun)
+
+**Changed:** `kq8-data` `objects.rs` (reads `transitionN` lines); `kq8-game` `connor.rs` (the walker follows rules 1–6 of "Starting and stopping": wanted movement, transition chosen by the next from point, played to its end, then its `to` movement at its `to` phase; one-shot animations step frame by frame on both axes; `stoprun` crashes and `stopwalk` stops at a wall like `run` and `walk`); `kq8-viewer` `load.rs` (loads `stopwalk`, `stoprun`, every movement's transitions and "can be cut short" flag, logs frame steps), `connor_view.rs` (new `connor.log` columns `played played_from played_to wanted_movement step_left step_forward`, event lines for requests and transitions). Plan in `docs/DESIGN.md` (M2 2g), provenance, README, Q40 in `QUESTIONS.md`.
+**Why:** Your task: Connor's start animations, from `connor-movement.md` (Q25 answered). The stops come next as 2g-2.
+**Tested how:** `cargo test --workspace` (116 tests, 10 new for the walker, 1 for the reader). Viewer runs in Daventry: `--terrain --world Daventry --hold 1,0,0 --frames 400` and `--hold 1,0,1`, read from `connor.log`.
+**Result:** Walk: update 1 `stop` (no step), updates 2–8 `stopwalk`, each 7.32 left / 11.22 forward, 51.2 / 78.5 in all (x grew 51.2 = his left at heading 0), then `walk` from phase 0.85 (update 9: 0.8500 → 0.9026). Run: updates 2–11 `stoprun` with the note's uneven steps (0.18/0.19 … 1.77/43.80), 43.9 left / **526.7** forward, then `run` from 0.8667. After the crash into `tree.06` with run held: one update of `stop`, then `stoprun` again, which crashed into the tree again (head-on during `stoprun` = crash, as the note says). Unit tests: let go during `stopwalk` → plays to its end, then `stop`; run switched on during `stopwalk` → `run` from 0 when it ends; turning during a start; the choice rule (next ahead, wrap, −1, ties, one-shots never wrap).
+**Mistake found in the note (not in our code):** its `stoprun` total says 536.7 forward; its own per-frame steps and `C_stprn.kqs` add up to 526.7. Asked as Q40 (c).
+**Still broken / not tested:** Not checked by eye. Not checked against the original. Our reading of when a transition starts (one update of `stop` with no step before `stopwalk`) is asked as Q40 (a). `jumpend` now takes its whole step (78 forward, 291 down, all in its frame 1) in the first landing update instead of spreading it over 10: same rule, not checked by eye. Stops are still immediate (2g-2). After `jumpend`, walking again now goes through `stopwalk` (our choice, not traced). Letting go during a start and switching run on during one are only unit-tested (`--hold` can't change keys).
+**Next:** You check by eye; then 2g-2, the stop animations.
+
 ## 2026-10-12 Study session: start and stop transitions traced (Q25)
 
 **Changed:** `docs/behaviour/connor-movement.md` ("Starting and stopping" rewritten with the traced rules, the `loop=` flags and the start animations' per-frame steps; open question 2 updated), `docs/behaviour/QUESTIONS.md` (Q25 answered). No code.
