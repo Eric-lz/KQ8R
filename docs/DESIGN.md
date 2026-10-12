@@ -614,8 +614,10 @@ Steps (each separately revertable, each stopped for an eye check):
     - Log: no new columns. `connor.log` already has the fall timer and
       the drop per update, so both steps can be checked from the numbers.
 - **2d — walls (plan rewritten 2026-10-12 from the traced rules, Q31 and
-  Q33; waiting for the user's OK).** Every rule below is traced or read
-  from the data; there are no stand-ins of our own. Rules from
+  Q33). Done 2026-10-12: 2d-1 to 2d-5, 2d-3b and 2d-3c, all checked by eye
+  by the user.** Every rule below is traced or read from the data; the
+  stand-ins added on the way are marked in their sub-step (Q39, starting
+  inside a box, the `#` comment after `colliderType`). Rules from
   `connor-physics.md`: "Where the values live", "Collision shape" (the
   ball stack, the building test steps 1–7, the object test, the 25-unit
   pull-back), "The terrain in the passes" (nearest contact wins), "Walls"
@@ -903,9 +905,13 @@ Steps (each separately revertable, each stopped for an eye check):
       at the Tomb wall gives the measured contacts to within 0.1 unit,
       and so does the viewer with Connor's real movement (2d-3).
     - A ball that starts inside an object's box: "a hit with no usable
-      contact"; what follows was not traced. Logged if it happens.
-    - The inside-out `lfswdoor.kqs` box (xmin 10 > xmax −1,520): not
-      traced; logged if a world uses it (to be checked in 2d-5).
+      contact"; what follows was not traced. We count it as no hit (he
+      can walk out) and log it (2d-5).
+    - ~~The inside-out `lfswdoor.kqs` box: not traced~~ **Answered (Q34
+      c):** inside-out boxes are fixed on loading. Swamp's `Lfswdoor`
+      uses it (2d-5 log).
+    - Whether a shape's name is lower-cased before the box lookup: our
+      stand-in says yes (Q39, open).
     - Walkable is "> 0.8" in the slope rules and "≥ 0.8" in the hit
       handling. They differ only at exactly 0.8, which doesn't happen in
       practice; we use each as written.
@@ -918,7 +924,8 @@ Steps (each separately revertable, each stopped for an eye check):
     straight wall to walk and run into head-on, at about 30°, and
     backwards; a doorway; steps; the inside of a building; the signpost.
     Compared with the original by eye and with `connor.log`.
-- **2e** — jumping, crash, the rest of the falling animations (after jumps).
+- **2e** — jumping and the falling animations after jumps (the crash
+  when running into a wall is done, 2d-4). Not planned yet.
 - **2f — the following camera (planned 2026-10-11).** Moved up at the
   user's request: done right after 2b, before 2c. Rules from `camera.md`.
   - The camera logic runs in the same 15-updates-per-second schedule as

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Docs brought up to date after M2 step 2d
+
+**Changed:** `docs/DESIGN.md` (2d marked done with its stand-ins; the inside-out box and "starting inside a box" items resolved; 2e no longer lists the crash), `docs/behaviour/QUESTIONS.md` (Q38 marked answered, auto-repeat still open), `STATUS.md` (not tracked: latest state, code layout, test counts, what works, what's next, open questions, fresh-session prompts). No code.
+**Why:** The user asked for all relevant documents to be up to date after 2d.
+**Tested how:** Read through; `cargo test --workspace` unchanged (kq8-data 46, kq8-game 59).
+**Result:** Docs match the code at `ef205e5`.
+**Still broken / not tested:** `docs/behaviour/connor-physics.md` has session A's uncommitted Q38 trace; left for A.
+**Next:** The user chooses 2e (jumping) or the camera's obstacle check.
+
 ## 2026-10-12 M2 step 2d-5: objects are solid
 
 **Changed:**
