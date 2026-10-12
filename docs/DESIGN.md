@@ -461,7 +461,8 @@ Steps (each separately revertable, each stopped for an eye check):
   - each update: up pass (step up 325), across (no movement yet), down pass
     (gravity drop + step down 325), ground check (`keepOnGround`) with the
     0.8 walkable test;
-  - gravity: fall timer +0.06 per update, drop `5000 × (t² − t_prev²) / 2`,
+  - gravity: fall timer +0.06 per update, drop `5000 × (t² − t_prev²) / 2`
+    (changed to 4 times that on 2026-10-12, see the follow-up under 2c),
     at most 5,000 per update; timer back to 0 on walkable ground;
   - air counter, the Fall state (start at 5 updates in the air, timer
     0.36, the "stuck" count, end rules) and the death test (more than
@@ -503,10 +504,220 @@ Steps (each separately revertable, each stopped for an eye check):
     stand-in until the real camera, 2f).
   - Log per update: keys' intent, movement, heading, loop position, wanted
     step; the measured speeds of walk and run at load.
-- **2c** — slopes: sliding on steep ground, climbing up to 36.9°.
-- **2d** — walls: buildings and objects stop him or let him slide along
-  (collision shapes need a question: `connor-physics.md` open question 2).
-- **2e** — jumping, falling with its animations, crash, death animation.
+- **2c + falling part of 2e — slopes and falls (planned 2026-10-11).**
+  Done together at the user's request, after Q26 and Q23 were answered.
+  Rules from `connor-physics.md`: "One update of the mover", "The terrain in
+  the passes" (with the recommended rule for walkable downhill), "Gravity",
+  "Slopes", "Falling off an edge". The terrain is still the only solid
+  thing (buildings and objects come in 2d).
+  - The mover's update (`kq8-game` `mover.rs`):
+    1. Start: as before. It also remembers whether he began the update on
+       walkable ground (for the downhill rule).
+    2. Up pass: step up + the animation's height change. At its end, if
+       the terrain under him is higher than where he ended, that is a hit:
+       he stops at the terrain (in effect, he is raised to it). The note
+       says nothing else happens outside a jump. This should be rare,
+       because each update ends with him at or above the terrain. Logged.
+    3. Across pass: the wanted x, y. The terrain is not tested (Q26).
+    4. Down pass: this update's gravity drop along the pull, then step
+       down 325. The fall timer is +0.06 per update. If the pull points
+       less than 30° below horizontal, the timer goes back to 0 and there
+       is no drop. At the end the terrain is tested:
+       - **walkable hit** (normal z > 0.8): he is put on the contact point,
+         on ground, fall timer 0;
+       - **steep hit**: not on ground, the pull points down the slope,
+         gravity is switched on, and he is **pushed off**. The rest of the
+         move, from the contact point to where the pass ended, is
+         projected onto the surface and done as an across move (terrain
+         ignored). With no walls yet that is always one try; the
+         3-try limit is kept for 2d;
+       - **no hit: the downhill rule** (**removed 2026-10-12**, not needed
+         with the measured gravity; see MODLOG) (the note's recommendation, our own
+         design, not traced): if he began the update on walkable ground and
+         there is walkable terrain no more than 325 + this update's drop
+         below where the pass ended, he is put on it (on ground, fall
+         timer 0). Logged as `snap`.
+    5. Ground check: as before (at or below the terrain → on it, 0.8 test),
+       but it **no longer resets the fall timer** (the note: only the down
+       pass does).
+  - The Fall state: asked for on **every** update from 5 updates in the air
+    on (before, only on the 5th), and accepted in normal play. There is no
+    "controls taken away" flag yet. Then: fall timer 0.36, the stuck
+    count, the end rules, death if more than 3,840 below the start (as in
+    2a).
+  - Animations: Fall plays `jumphold` (repeats). Its own steps replace the
+    walk's, so his forward movement stops, as the user saw in the
+    original. The keys are ignored while falling, including turning (the
+    note doesn't say; a stand-in, logged). On a safe landing, `jumpend`
+    plays once with the keys ignored, then he goes back to the movement
+    the keys ask for. On death, `jumpdie` plays once, then the Die state:
+    he stays on its last frame. The `jumpdie.aud` sound isn't played (no
+    sound yet). One-shot animations run from the first frame to the last
+    (`objects.md`, loop rule 2: `frameCount − 1` steps). The walker hears
+    about a fall starting, a landing or a death from the mover's report
+    and switches on the next update (1/15 s later).
+  - Test helper: `--at X,Y,H` starts Connor on the ground at X, Y, facing
+    heading H (radians), instead of the script's spot. Combined with
+    `--hold`, it lets a steep hillside or a steep walkable slope be tried
+    the same way each time. Spots found with a throwaway terrain scan
+    (in the scratch folder, not committed).
+  - Log (`connor.log`), new columns per update: began on walkable ground,
+    up-pass contact, down-pass result (`none` / `walkable` / `steep` /
+    `snap`) and its contact normal (x y z), push-off length, ground-check
+    result, pull z, animation mode (`free` / `fall` / `land` / `dying` /
+    `dead`). The air counter and on-ground flag are logged as before.
+  - Unit tests on made-up ground (flat, planes at set angles, a ledge):
+    flat ground unchanged; running into a 45° hill: forward gain shrinks
+    each update, Fall after 5 updates, then a slide down; running down
+    20°, 30° and 36° planes: the air counter never reaches 5; ledge 5,000:
+    Fall, then death; ledge 300: followed with no fall; the ground check
+    leaves the fall timer alone.
+  - Known difference: the note's 45° example (80, 71, 62, 53, 44 units)
+    assumes the gravity drop goes straight down. The note's own Gravity
+    rules put it along the pull after a steep contact. We follow the rules
+    and log the numbers; the difference goes to `QUESTIONS.md`.
+  - **Follow-up after Q28 (a) and Q29 (planned 2026-10-11):**
+    - the gravity drop d is projected onto the pull: he moves d·(−pull z)
+      along the pull (d·sinθ on a slope of angle θ; the full d when the
+      pull is straight down). The 45° unit test then expects the note's
+      80, 71, 62, 53, 44;
+    - the test lift (G, B, `--lift`) no longer clears "on ground". The
+      update before the lift ended on the ground, so the first update after
+      it doesn't count as in the air. Fall then starts after 5 real updates
+      in the air (at update 6, not 5). The count for real updates already
+      matches Q29 and is unchanged;
+    - still open, no change: Q28 (b), (c) and why he gains so little height
+      on steep slopes (`connor-physics.md` open question 7).
+  - **Follow-up after the fall-speed measurement (planned 2026-10-12).**
+    Two steps, each separately revertable. Rules from `connor-physics.md`
+    "Gravity" and "Falling off an edge" rule 2 (Q30).
+    - **G1, gravity strength:** the drop per update becomes
+      `10000 × (t² − t_prev²)` (36, 108, 180, … units; 4 times the old
+      drop), as measured in the running original. Same fall timer
+      (+0.06 per update), same 5,000 cap, same projection onto the pull.
+      In code: `GRAVITY` from 5,000 to 20,000 (the formula keeps its
+      `/ 2`, so `20000 × (t² − t_prev²) / 2` is exactly the note's rule).
+      Unit tests: first three drops 36, 108, 180; the 45° hill test's
+      expected numbers recomputed from the note's own rule
+      (168·cos²θ − d·sinθ·cosθ, now with d = 36, 108, …), so the gains
+      turn negative after two updates (he slides back sooner). Done: the
+      gains are 66, 30, −6, −42, and in update 5 the slide carries him
+      back onto the flat, so only 4 updates end in the air and **no Fall**
+      starts there (the old test expected one).
+    - **G2, entering Fall from walking or standing leaves gravity alone:**
+      no more setting the fall timer to 0.36 when Fall starts; it runs on
+      from the 5 updates in the air (0.30). The 0.36 head start belongs
+      to jumps only and comes with 2e (kept as a constant for then).
+      Unit test: a walk-off's drops are 36, 108, 180, 252, 324, then 396,
+      468 in Fall (no jump from 324 to 468).
+    - Log: no new columns. `connor.log` already has the fall timer and
+      the drop per update, so both steps can be checked from the numbers.
+- **2d — walls (planned 2026-10-12, waiting for the user's OK).** Rules
+  from `connor-physics.md`: "One update of the mover" (passes 2–4),
+  "The terrain in the passes" (nearest contact wins), "Walls" (traced and
+  the measured part), "Collision shape". Data: `.dig` surfaces and planes
+  (`buildings.md`), `Conner.anm` (`crash`). Five sub-steps, each
+  separately revertable and each stopped for a check.
+  - **What the note leaves open, and our stand-ins** (all asked as Q31,
+    all logged, each a small change once answered):
+    - *How the box is tested against a building's surfaces* is not traced.
+      Our own method: Connor's box is moved along each pass in small
+      pieces (at most 25 units). At each piece we test whether the box
+      overlaps any nearby building polygon (a standard "separating axis"
+      test: two convex shapes don't touch if some direction exists along
+      which their shadows don't overlap). At the first overlap he is put
+      back at the last free spot, refined by halving to within about 1
+      unit. The contact normal is the polygon's plane normal (with the
+      0x80 "faces the other way" bit applied). A surface only stops him
+      when he moves against its front (visible) side; walls have
+      thickness (`buildings.md` rule 2), so the inside is a separate
+      surface.
+    - *Whether the box turns with his heading.* "In his own space" says
+      yes, but turning is not a pass, so a turning box could swing into a
+      wall. Stand-in: an upright box that does **not** turn, x and y both
+      −200…200 (the larger half-width), z 0…1,600. He then stops 200
+      from a wall whichever way he faces (the original: 150–200).
+    - *Which building surfaces are solid.* Stand-in: all of them,
+      including surfaces with kind-0 (not drawn) materials, which may be
+      invisible walls. Logged as a count per building.
+    - *Which objects are solid* (sub-step 2d-5 only): see there.
+  - **2d-1, collision geometry (nothing moves differently yet).** At
+    world load, every building's surfaces are put in world space with the
+    same placement as drawing (rotation, position, the "raise to the
+    ground" rule) and sorted into a grid of square cells (4,096 units) so
+    a pass only tests polygons near it. New code in `kq8-game`
+    (`collide.rs`): polygons, the grid, box-vs-polygon overlap, the
+    piece-by-piece sweep. Unit tests on made-up polygons: a box touching,
+    not touching, swept into a wall stops within 1 unit of it, the normal
+    is the wall's. Log: polygons and cells per world, time to build.
+  - **2d-2, floors, stairs and ceilings (up and down passes).** The up
+    pass is stopped by a ceiling (contact normal pointing down). The down
+    pass tests buildings as well as the terrain; whichever contact is
+    nearer to where the pass started wins (traced). A building floor
+    uses the same 0.8 walkable test, landing and steep push-off as the
+    terrain. Steps up to 325 high are climbed by the existing up/down
+    passes, with no extra rule. The ground check (`keepOnGround`) stays
+    terrain-only, as the note says. Unit tests: a 300-high step is
+    climbed, a 400-high one isn't (blocked once 2d-3 is in), walking out
+    of a doorway at floor height, a ceiling lower than the up pass stops
+    it. Log: down-pass contact source (`terrain` or the building's name
+    and surface number), up-pass ceiling hits.
+  - **2d-3, walls in the across pass: glance and stop.** When the across
+    pass hits a surface:
+    - **Head-on** if the angle between his movement direction and the
+      wall's normal (pointing out of the wall, horizontal part only) is
+      under 0.35 rad (20°), measured as in the note's measured section.
+      Walking (or stepping back): he stops at the contact point, the
+      movement switches straight to `stop` (no stop animation; measured),
+      and the keys are read again from the next update. While he keeps
+      the walk key held into the wall, he keeps trying the step and
+      stopping, which is our reading of the original's Move → Wait →
+      Move; the user can compare.
+    - **Glancing:** the rest of the move with its part into the wall
+      removed, tried again, at most 3 times; then he stays at the last
+      contact. Measured: the slide along the wall is the step × sin(angle
+      from the normal) and nothing more is lost. That is exactly what
+      removing the part into the wall gives, so no extra rule.
+    - The steep push-off (terrain or building) is now an across move that
+      walls can stop (traced), sharing the same 3 tries.
+    - Unit tests: walking straight at a wall stops at it and switches to
+      `stop`; at 21.6° and 35° from the normal the slide per update is
+      0.37 and 0.57 of the step (the measured factors); into a corner, he
+      stops after 3 tries; past the end of a wall he goes on at full step.
+    - Log per update: across result (`free` / `glance` / `head-on` /
+      `stopped`), tries used, the angle to the wall, the wall's normal.
+  - **2d-4, crash when running head-on.** Running (`run`; the note's
+    other run-like movements don't exist in our code yet) head-on into a
+    wall plays `crash` once. **From the data:** `c_crash` moves him
+    441.5 units straight back over its 7 steps, 63 per update, which
+    matches the measured push-back (about 63 per update, 440–600 in
+    all). So the push-back is the animation's own movement, taken by the
+    mover like any other step (walls behind him still stop it). Keys are
+    ignored while it plays. Then he stands; if run is still held he runs
+    again (the original plays `stoprun` first; we have no start
+    animations yet, Q25) and may crash again, as the user saw. Open,
+    logged: measured 5 updates, the animation has 7 steps (Q31 e).
+    Unit test: running into a wall gives `crash`, 7 updates, about 441
+    back, then `run`. The "no crash" object flag and the game flag that
+    blocks crashes are not known (open question 4); not done.
+  - **2d-5, objects (after Q31 d is answered, or with the stand-in if
+    the user prefers).** Each object loaded by the world scripts gets the
+    box from its collider section (`boxfMin*`/`boxfMax*`; to be checked
+    in the data that objects have one) at its position and rotation, and
+    its type and mask (`colliderType`, `colliderMask`, defaults 0x41 and
+    0; script `collisionType`/`collision` commands). An object blocks
+    Connor when his mask shares a bit with its type or its mask shares a
+    bit with his type 4 (traced). Box vs box uses the same sweep. Stand-in
+    until Q31 d: hidden objects never block. Log: blocking objects per
+    world, and which object stopped him.
+  - **Not in 2d:** the camera's obstacle check (after 2d), jumping
+    (2e), water, ropes, pushing objects.
+  - **How the user will test 2d:** spots next to Daventry buildings
+    found by a throwaway scan, given with `--at` and `--hold` commands:
+    a straight wall to walk and run into head-on and at about 30°, a
+    doorway, steps, the inside of a building. Compared with the
+    original by eye and with `connor.log`.
+- **2e** — jumping, crash, the rest of the falling animations (after jumps).
 - **2f — the following camera (planned 2026-10-11).** Moved up at the
   user's request: done right after 2b, before 2c. Rules from `camera.md`.
   - The camera logic runs in the same 15-updates-per-second schedule as

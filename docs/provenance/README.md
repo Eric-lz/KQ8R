@@ -177,10 +177,10 @@ Code: `crates/kq8-game/src/mover.rs`, `crates/kq8-viewer/src/connor_view.rs`, `c
 | Game logic at a fixed 15 updates per second; drawing blended between the last two updates | Our choice, recorded in `docs/DESIGN.md` M2 "Physics rate" (`connor-physics.md` "Do not reproduce") | 26 updates in 1.77 s of a test run |
 | Gravity on at the start | `connor-physics.md` "Is gravity on at the start?" (recommendation; not traced) | Log line `gravity on` |
 | One update: start (on ground → reset pull and air count, else count), up pass 325 + wanted z, across, down pass (gravity drop along the pull, then 325), ground check with the 0.8 walkable test | `connor-physics.md` "One update of the mover" | Unit tests; standing: z constant 13,633.5, on ground every update (ground normal z 0.996). With gravity off this rule hovers, which contradicts the note: Q23 |
-| Fall timer +0.06 per update, drop `5000 × (t² − t_prev²) / 2`, at most 5,000; timer 0 on walkable ground | `connor-physics.md` "Gravity" | Unit test: drops 9, 27, 45 |
-| Fall state after 5 updates in the air (timer set to 0.36), stuck count (< 50 per update, more than 5), ends on ground / stuck / moving up; death if more than 3,840 below the start | `connor-physics.md` "Falling off an edge" | Unit tests. Viewer `--lift 2000`: Fall at update 5, lands at update 14 after 1,856, safe. `--lift 5000`: lands at update 22 after 4,856, dies |
+| Fall timer +0.06 per update, drop `10000 × (t² − t_prev²)` (in code `GRAVITY` 20,000 with `/ 2`), at most 5,000; timer 0 on walkable ground | `connor-physics.md` "Gravity" (strength measured in the running original, Q30; was 5,000 traced until 2026-10-12, step G1) | Unit test: drops 36, 108, 180 |
+| Fall state after 5 updates in the air (timer left running on, since step G2 2026-10-12; before, it was set to 0.36, which the note now gives for jumps only), stuck count (< 50 per update, more than 5), ends on ground / stuck / moving up; death if more than 3,840 below the start | `connor-physics.md` "Falling off an edge" | Unit tests (`walking_off_a_ledge_keeps_the_fall_timer`: drops 36 … 324, then 396, 468). Viewer `--lift 5000` after G1 + G2: Fall at update 6, lands at update 12 after 4,100, dies. (Before G1: `--lift 2000`: Fall at update 5, lands at update 14 after 1,856, safe; `--lift 5000`: lands at update 22 after 4,856, dies) |
 | Steep ground (normal z ≤ 0.8): not on ground, pull down the slope, gravity on | `connor-physics.md` steps 4–5 | Unit test of the downhill direction; sliding itself is step 2c |
-| Test keys G / B (lift 5,000 / 2,000), C (camera behind him), `--lift N` | Our test helpers | — |
+| Test keys G / B (lift 5,000 / 2,000), C (camera behind him), `--lift N`. The lift keeps "on ground" as it was (since Q29), so the first update after it isn't counted as in the air | Our test helpers | `--lift 2000`: Fall at update 6, safe after 1,775; `--lift 5000`: dies after 4,775 |
 
 ## Connor: walking, running, turning (M2 step 2b)
 
@@ -196,8 +196,29 @@ Code: `crates/kq8-data/src/action_map.rs`, `crates/kq8-game/src/connor.rs`, `cra
 | Turning 1.75 rad/s while a turn key is held | `connor-movement.md` "Turning" | Unit test; `--hold 0,1,0`: 3.383 rad in 29 updates |
 | No start/stop transitions, new loop starts at 0 | Our choice until Q25 | — |
 | All frames of the current movement drawn in turn | Frame layout from the shape (`models-and-textures.md`) | Not checked by eye yet |
-| Terrain only in step 5 (ground check), not in the down pass | `connor-physics.md` as written; asked as Q26 | Downhill running: in the air every other update by about 1.4 units; steep slopes half-climbed (sliding is step 2c) |
+| Terrain only in step 5 (ground check), not in the down pass | `connor-physics.md` as written; asked as Q26 | Downhill running: in the air every other update by about 1.4 units; steep slopes half-climbed (sliding is step 2c). **Replaced in 2c** (below) |
 | F: camera follows (keeps its offset); `--hold F,T,R` test option | Our test helpers | — |
+
+## Slopes and falls (M2 step 2c, falling part of 2e)
+
+Code: `crates/kq8-game/src/mover.rs`, `crates/kq8-game/src/connor.rs` (`Mode`, one-shot animations), `crates/kq8-viewer/src/connor_view.rs`, `crates/kq8-viewer/src/load.rs` (`CONNOR_MOVEMENTS`, `load_animation`), `crates/kq8-viewer/src/main.rs` (`--at`).
+
+| What | From | Checked |
+| --- | --- | --- |
+| Terrain tested at the end of the up and down passes (a hit when it is above where the pass ended; contact = end x, y at terrain height; normal = terrain's), not in the across pass | `connor-physics.md` "The terrain in the passes" (Q26) | Unit tests; Daventry hill (`--at 286169,190211,0.291 --hold 1,0,1`): steep down-pass hit every update on the slope |
+| Up-pass hit: he stops at the terrain, nothing else | Our reading: the note gives no response outside jumps | Unit test (started 1,000 below the ground); never seen in the viewer runs |
+| Walkable down-pass hit: on the contact point, on ground, fall timer 0 | `connor-physics.md` "One update" step 4 | Unit tests |
+| Steep down-pass hit: pull down the slope, gravity on, push-off = rest of the move (end − contact) with its part along the normal removed, as an across move (terrain ignored) | `connor-physics.md` step 4, "The terrain in the passes", "Walls" (glancing) | Numbers measured before the 4× gravity (G1, 2026-10-12), not redone: unit test at 45°: gains 79.5, 64.9, 52.2, 39.5, 26.7, then Fall and slide back. Daventry hill (normal z 0.610): climbs 60, 60, 45, 31, 17, then Fall at update 17, slides back, lands after 214 units |
+| ~~Downhill rule~~ **removed 2026-10-12**: with the measured gravity it isn't needed. Going down a walkable slope he is in the air for an update or a few and lands again, never 5 in a row | `connor-physics.md` open questions 6 and 7 (measured in the original), Q32 | Unit test at 5°, 20°, 30°, 36°, walking and running: air count under 5, no Fall. Daventry 36° slope (`--at 293994,218295,-1.222`): walking, off every other update, air count at most 1; running, off up to 3 in a row, at most 3. The original: 1, and 1–4. (Before removal: 21 snaps, air counter always 0) |
+| Gravity skipped (timer 0) when the pull is less than 30° below horizontal; the vertical drop d projected onto the pull (d·sinθ along a slope) | `connor-physics.md` "Gravity" (projection: Q28 a) | Unit test at 45° (since G1, 2026-10-12): gains 66, 30, −6, −42 from the note's rule 168·cos²θ − d·sinθ·cosθ, d = 36, 108, 180, 252; back on the flat in update 5, no Fall. (Before G1: 79.5, 70.5, 61.5, 52.5, 43.5, the note's old example) |
+| Ground check no longer resets the fall timer | `connor-physics.md` "Gravity" (last rule) | Unit test |
+| Fall asked for at the start of the update after 5 updates in a row that ended not on the ground (only walkable ground counts), on every update from then on; accepted in normal play; no speed or height condition | `connor-physics.md` "Falling off an edge" rule 1 (Q29) | Unit test: lifted, Fall at update 6. Daventry hill, walking head-on: 1 fall (the first approach, 5 updates in the air) in 101 updates, then in and out of the slope with the walk playing |
+| Fall decided before the animation's step is taken, so its first update uses `jumphold`'s step, not the walk's | Our choice (the order is not in the note). Without it, the walk step of that update lifted him up the hill, "moved up" ended the fall at once, and he crept up the hill forever (seen in a unit test run) | Unit test of the 45° hill |
+| `jumphold` (repeats) while falling, `jumpend` once on a safe landing, `jumpdie` once then the Die state on its last frame; keys (also turning) ignored meanwhile | `connor-physics.md` "Falling off an edge" rules 2, 5; ignoring the keys and turning: our stand-in (asked as Q28 c) | Unit tests; `--lift 2000 --hold 1,0,0`: jumphold at 5, landing at 14 (1,875), jumpend 10 updates, walk again. `--lift 5000`: lands at 22 (4,856), jumpdie 10 updates, Die |
+| One-shot animations play first to last frame (`frameCount − 1` frame times) | `objects.md` "Animated objects at load" loop rule 2 | Unit tests |
+| A loop name missing in the model: the first loop plays | `objects.md` Q13 (b) | `C_jhld.kqs` has no loop `C_jhld`; the log says which loop is used |
+| `jumpdie` steps not applied: the mover stops at death | Our choice (asked as Q28 b) | — |
+| `--at X,Y,H` start option; spots from a throwaway terrain scan (not kept) | Our test helper | Log line `test --at: put on the ground at ...` |
 
 ## The following camera (M2 step 2f)
 

@@ -3,6 +3,60 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Downhill rule removed
+
+**Changed:** `crates/kq8-game/src/mover.rs`: the downhill rule (our own design, from the note's recommendation) is gone, along with its `snap` result in the log's `down` column. The unit test `running_down_walkable_slopes_never_falls` now checks walking and running at 5°, 20°, 30° and 36°: no Fall and the air count never reaches 5. It no longer requires him to be on the ground every update. `docs/provenance/README.md`, `docs/DESIGN.md` (2c) marked.
+**Why:** With the measured gravity (G1) he gets back to a walkable slope within 1–3 updates, as in the original. The rule kept him glued to the ground, which the original doesn't do (entry below). Asked for by the user.
+**Tested how:** `cargo test -p kq8-game` (25 pass). Viewer, `--frames 1000`, logs summarised as in the entry below: `--at 293994,218295,-1.222` and `--at 286169,190211,0.291`, each with `--hold 1,0,0` and `1,0,1`; also `--lift 5000`.
+**Result:** Same as the "rule off" runs below. Walking down 36°: off the ground 23 of 84 updates, air count at most 1. Running down: 16 of 85, at most 3. Hill: walking at most 1, running at most 3. No Fall in any of them. `--lift 5000`: unchanged, Fall at update 6.
+**Still broken / not tested:** Not looked at by eye: the small bounce going downhill should now show in the camera, as in the original. Only one slope tried.
+**Next:** M2 step 2d (walls), once the user OKs the plan.
+
+## 2026-10-12 Slopes rechecked with the corrected gravity; M2 step 2d (walls) planned
+
+**Changed:** No code (two temporary experiments, both reverted, see below). `docs/DESIGN.md`: plan for M2 step 2d (walls), in 5 sub-steps. `docs/behaviour/QUESTIONS.md`: Q31 (walls: box turning, how the box is tested, which surfaces and objects are solid, crash length) and Q32 (this check, for session A).
+**Why:** `connor-physics.md` open questions 6 and 7 were measured in the original and say "check with B's corrected gravity". Then plan 2d, as asked.
+**Tested how:** `cargo test -p kq8-game`, and viewer runs (`--frames 1000`, about 85 updates each) on the two Daventry spots from step 2c: walkable 36° slope `--at 293994,218295,-1.222`, steep 52° hill `--at 286169,190211,0.291`, each with `--hold 1,0,0` (walk) and `1,0,1` (run). Each run twice: the downhill rule on, then off (a temporary environment-variable switch in `mover.rs`, removed afterwards; tests pass again, 25). `connor.log` summarised with a throwaway script in the scratch folder.
+**Result:**
+
+| Run | Rule on | Rule off | Original (measured by A) |
+| --- | --- | --- | --- |
+| Walk down 36° | never off the ground | off every other update (drop 36), lands next (73 down); max air count 1 | off every other update after 36, lands next (25–85) |
+| Run down 36° | never off the ground | off 3 updates (36, 108, 180), lands with 252; max air count 3 | off 1–3 updates (once 4), never 5 |
+| Walk into 52° hill | at most 14 up, no Fall | same | barely gains height |
+| Run into 52° hill | at most 72 up, 3 updates off, back on the flat, no Fall | same | at most 80 up (usually 5–40), 2–4 updates off, no Fall |
+
+- **The downhill rule is no longer needed.** Without it, our runs match the original's measurements, including the small bounce going downhill that the rule removed. With it, he never leaves the ground. Not removed yet: it is a separate step for the user to approve.
+- With the rule off, the unit test `running_down_walkable_slopes_never_falls` fails. It is the test's own check that he is on the ground every update; its "air count under 5, no Fall" checks still pass.
+- Seen in the hill log: at the foot of the hill he is on the flat (the ground check) while his down pass hits the hillside, so the fall timer keeps growing (0.30, 0.36, 0.42), then resets. That is likely the "also seen, not understood" in open question 7; sent to A as Q32.
+- **Data check for 2d:** `crash` (`c_crash`) moves him 441.5 units straight back over 7 steps (63 per update), the measured push-back. Read by loading `crash` and `stoprun` in a temporary build; reverted (`CONNOR_MOVEMENTS` back to 9 entries).
+
+**Still broken / not tested:** Only one slope and one hill, and only straight down or straight in. Nothing looked at by eye.
+**Next:** User's OK on the 2d plan (and on removing the downhill rule as its own step). Q31 for session A.
+
+## 2026-10-12 M2 follow-up G2: walking off a ledge doesn't reset the fall timer
+
+**Changed:** `crates/kq8-game/src/mover.rs`: when Fall starts, the fall timer is no longer set to 0.36; it runs on from the 5 updates in the air (0.30). `FALL_START_TIMER` (0.36) is kept for jumps (step 2e) and not used yet. New unit test `walking_off_a_ledge_keeps_the_fall_timer`. The log line now says "fall timer runs on from 0.30 s". `docs/provenance/README.md` and `README.md` updated.
+**Why:** `connor-physics.md` "Falling off an edge" rule 2 (corrected 2026-10-12, measured in the original): the head start is only for Fall after a jump. From walking or standing, gravity is left alone.
+**Tested how:** `cargo test -p kq8-game` (25 tests pass). Same viewer run as G1 (`--lift 5000 --frames 400`), then read `connor.log` and `viewer.log`.
+**Result:** Fall timer 0.24, 0.30, then 0.36, 0.42, … (before: 0.30 → 0.42). Drops 252, 324, then 396, 468, 540, … as the note gives for a walk-off. Fall at update 6, lands at update 12 after 4,100 units, dies (more than 3,840).
+**Still broken / not tested:** Not checked by eye. The "start height lowered by a fixed amount" after a jump isn't relevant until jumps exist (2e).
+**Next:** The user checks a few falls by eye. Then M2 step 2d (walls) or 2e (jumps).
+
+## 2026-10-12 M2 follow-up G1: gravity 4 times stronger (as measured)
+
+**Changed:** `crates/kq8-game/src/mover.rs`: `GRAVITY` 5,000 → 20,000, so the drop per update is `10000 × (t² − t_prev²)` (`connor-physics.md` "Gravity", Q30). Two unit tests' expected numbers changed (below). Plan in `docs/DESIGN.md` (M2, "Follow-up after the fall-speed measurement"); `docs/provenance/README.md` rows updated.
+**Why:** Session A measured the running original: every drop in the air is exactly 4 times the old traced rule. Our falls were about 4 times too slow.
+**Tested how:** `cargo test -p kq8-game` (24 tests pass). Viewer run `cargo run -p kq8-viewer -- --terrain --lift 5000 --frames 400`, then read `kq8-artifacts/logs/connor.log`.
+**Result:**
+
+- Unit test drops: 36, 108, 180 (were 9, 27, 45).
+- 45° hill unit test: forward gains 66, 30, −6, −42, exactly the note's rule 168·cos²θ − d·sinθ·cosθ. In update 5 the slide carries him back past the foot of the hill and he is on the flat again, so only 4 updates end in the air and **no Fall starts**. The old test expected a Fall, then a slide; it was rewritten to expect this.
+- Viewer, lift 5,000 in Daventry: drops 36, 108, 180, 252, 324 over the 5 air updates, Fall at update 6, lands at update 12 after 4,100 units and dies (before: landed at update 22).
+
+**Still broken / not tested:** Not checked by eye in the viewer. The Daventry hillside numbers in the provenance file (Fall at update 17 on a 52° hill) are from before this change and weren't redone. Fall start still sets the timer to 0.36 (visible in the log: timer 0.30 → 0.42, drop 468 instead of 396): that's step G2.
+**Next:** G2.
+
 ## 2026-10-12 Study session: movement, turning, jumps and walls measured in the running original
 
 **Changed:** `docs/behaviour/connor-movement.md` (new "Measured" section, open questions 1 and 2), `docs/behaviour/connor-physics.md` (Walls, open question 3), `docs/behaviour/QUESTIONS.md` (Q24, Q25). In `re/` (not committed): the reader now also logs which way Connor faces.
@@ -105,6 +159,33 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Why the original falls so much faster is not explained (open question 8). A guess, not shown: the move routine also runs more often than the tick, which would also explain open questions 6 and 7. What keeps him on a steep slope going down (Q30 b) is open.
 **Next:** User: record the original while Connor walks off a high ledge and count frames from the falling pose to the landing (rules: about 0.7 s for 2,000 units). That decides whether to look further at how often the mover runs.
 
+## 2026-10-11 Slopes follow-up: Q28 (a) and Q29 answers
+
+**Changed:** `crates/kq8-game/src/mover.rs`. The gravity drop is projected onto the pull: d·sinθ along a slope, the full d straight down (Q28 a). The test lift no longer clears "on ground". Unit tests: the 45° test checks the note's numbers; the lift test expects Fall at update 6; the ground-check test sets the flag directly. Also `docs/DESIGN.md` (plan) and `docs/provenance/README.md`.
+**Why:** Session A answered Q28 (a) and Q29. The note was right about the drop, and our code moved Connor by the full drop along the slope. Fall should start after 5 updates in a row that ended off the ground. For real updates our count already did that, as the walking log shows (26–30 off the ground, Fall at 31). But the test lift cleared "on ground", so the lift itself counted as an update in the air, and lifted falls started one update early (at 5).
+**Tested how:** `cargo test -p kq8-game`. Viewer runs read from the logs: Daventry hill walking and running (`--at 286169,190211,0.291 --hold 1,0,0` / `1,0,1`), `--lift 2000`, `--lift 5000`.
+**Result:**
+
+- Unit tests: 24 of 24 pass. At 45° the gains are 79.5, 70.5, 61.5, 52.5, 43.5 (the note: 80, 71, 62, 53, 44).
+- Walking at the hill: 1 fall in 101 updates (before: 12 in 217). That fall is the first approach: 58 units up, 5 updates off the ground, and Fall starts although he lands in that update, as Q29 says. After it he goes in and out of the slope with the walk playing: 20–30 units up, 4 updates off the ground, back on the flat. That matches the user's check of the original.
+- Running: still falls every time, with 249–271 units of slide (before: 196–214).
+- `--lift 2000`: Fall at update 6, safe after 1,775. `--lift 5000`: Fall at 6, dies after 4,775.
+
+**Still broken / not tested:**
+
+- Running into a steep slope climbs far higher than in the original and always falls. Not explained by the traced rules (`connor-physics.md` open question 7).
+- The first walking contact still gives one short fall. Whether the original does this too is not checked.
+- Q28 (b), (c) open. Nothing looked at by eye.
+
+**Next:** The user compares walking and running into a steep slope with the original. Open question 7 is for session A.
+
+**Added later (same day):** The user reports that falls are much slower than in the original, both off steep slopes and off ledges. Measured and asked as Q30, no code change:
+
+- Off the top of a steep slope: he floats 4 updates and ends 729 above it. In Fall the drop goes along the slope (the pull stays downhill until he lands), so 62→157 down and 58→148 sideways per update.
+- Off a ledge: Fall at 117 units per update, +18 per update.
+- `MASK/console.cs` still has `KQGame::FPSLimit 15`; the Windows 11 fix only adds `PlayFromCD 0` (compared with `console.bak`).
+- Daventry's ground has no cliffs (a scan found no drop steeper than about 60° over 500 units), so a ledge was simulated with the lift.
+
 ## 2026-10-11 Study session: Q29 (what counts as on the ground) and Q28 (a)
 
 **Changed:** `docs/behaviour/connor-physics.md` ("Falling off an edge" rule 1, "Gravity", the steep-hill consequence, new open question 7), `docs/behaviour/QUESTIONS.md` (Q28, Q29). No code.
@@ -122,6 +203,39 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Result:** All `kq8-game` tests pass with the user's values: 17 at this commit (run on a copy of the committed files), 24 with the slopes work that came after. The 7 camera tests also pass with the note's values.
 **Still broken / not tested:** With the aim below the minimum height, the fixed-distance mode (F11) doesn't hold its distance exactly. Each update the height rule moves the camera after the distance is set, so the distance drifts by up to the 600 gap. The test now allows for this. Not checked in the viewer.
 **Next:** None for the tests.
+
+## 2026-10-11 M2 step 2c (slopes) and the falling part of 2e
+
+**Changed:** `crates/kq8-game/src/mover.rs` (terrain tested at the end of the up and down passes, steep push-off, the downhill rule, gravity along the pull with the 30° rule, Fall asked for on every update from 5 in the air, the ground check no longer resets the fall timer, fall events in the report, `update_with`). `crates/kq8-game/src/connor.rs` (modes free/fall/land/dying/dead, one-shot animations). `crates/kq8-viewer`: loads `jumphold`, `jumpend` and `jumpdie`; a loop name missing in a model now plays the model's first loop (`objects.md` Q13 b) instead of failing; new `--at X,Y,H` start option; new `connor.log` columns. Also `docs/DESIGN.md` (plan), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q28), `README.md`.
+**Why:** Q26 and Q23 are answered. The user asked for slopes and falling together, following `connor-physics.md` with the recommended rule for walkable downhill.
+**Tested how:** `cargo test -p kq8-game` (new unit tests on made-up ground: 45° hill, downhill planes at 5–36°, ledges of 300 and 5,000, the ground check and the fall timer, an up-pass hit, landing and death animations). The viewer, run by me, with the log read afterwards (not looked at):
+
+- steep hill: `--at 286169,190211,0.291 --hold 1,0,1`;
+- steepest walkable slope found: `--at 293994,218295,-1.222 --hold 1,0,1`;
+- falls: `--lift 2000 --hold 1,0,0` and `--lift 5000`.
+
+The two spots came from a throwaway scan of Daventry's terrain in the scratch folder, not kept.
+**Result:**
+
+- Unit tests: 20 pass.
+- Hill (ground normal z 0.610, about 52°): the down pass hits steep ground every update. He climbs 60, 60, 45, 31, 17 units of height, with a push-off of 148–173 units each update. Fall starts at update 17 (5 updates in the air), he slides back and lands at update 19 after 214 units, `jumpend` plays for 10 updates, then he runs at the hill again.
+- Walkable slope (normal z 0.808, 36°): 34 updates, dropping about 122 per update; 21 `snap` and 13 `walkable` down passes; the air counter never left 0; no Fall.
+- `--lift 2000`: Fall at update 5, safe landing at 14 after 1,875, `jumpend`, then walking again.
+- `--lift 5000`: lands at 22 after 4,856, `jumpdie` for 10 updates, then the Die state on its last frame.
+
+**Failed attempt:** At first the walk step for an update was taken before the mover decided on Fall. On a steep hill, the update where Fall started still pushed him uphill, so "moved up" ended the fall at once. Fall then restarted every update, and he crept up the hill about 1.3 units per update forever (unit-test trace). Fixed by deciding on Fall first (`Mover::update_with`), so that update already uses `jumphold`'s step.
+**Still broken / not tested:**
+
+- Nothing looked at by eye: the animations, the camera during falls and slides, and the keyboard (the runs used `--hold`).
+- 4 camera unit tests fail. This is not from this change: the manual values in commit `10cf08b` (`AIM_HEIGHT` 800, `HEIGHT_RATE` 0.5) no longer match the tests.
+- The note's 45° example differs from its own gravity rules (Q28 a).
+- `jumpdie`'s steps are not applied (Q28 b). Keys and turning are ignored while falling and landing (Q28 c).
+- `C_jhld.kqs` has no loop named `C_jhld`; its first loop is used, as traced.
+- No sound (`jumpdie.aud`).
+- Buildings and objects are still not solid (2d).
+- **Found after the user's check of the original:** walking slowly into an unwalkable slope never starts the falling animation in the original, but ours does. Walking head-on at the Daventry hill: 12 short falls in 217 updates; each time he is back over flat ground but 4.8 units above it when the 5th update in the air comes. Running: 5 falls in 102 updates, 196–214 units of slide each. Asked as Q29; no code change until it's answered. The user's further checks: it depends on height, not speed. He barely climbs (much less than ours) and is pushed in and out of the slope, and only falls when he gets high enough to be off the ground. Added to Q29 (d, e).
+
+**Next:** The user checks by eye (test steps in the chat). Then 2d (walls), which needs the box-vs-building test from session A.
 
 ## 2026-10-11 Study session: when the Fall state starts (with the user's checks)
 

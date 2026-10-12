@@ -5,6 +5,7 @@
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
 //!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R]
+//!              [--at X,Y,H]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
 //! palette. `--frames N` closes the window by itself after N frames.
@@ -16,6 +17,7 @@
 //! follows him (right mouse swing/zoom, Shift, Page Up/Down tilt, Home,
 //! F11 fixed distance; keys from Camera.sae); F switches to the free
 //! camera and back; G / B lift him 5,000 / 2,000 to test falling.
+//! `--at X,Y,H` starts him on the ground at X, Y facing heading H (radians).
 //! Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
@@ -66,6 +68,8 @@ struct Args {
     lift: Option<f32>,
     /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor.
     hold: Option<[i8; 3]>,
+    /// Test: start Connor on the ground at X, Y facing heading H (radians).
+    at: Option<[f32; 3]>,
     terrain: bool,
 }
 
@@ -78,6 +82,7 @@ fn parse_args() -> Result<Args, String> {
         frames: None,
         lift: None,
         hold: None,
+        at: None,
         terrain: false,
     };
     let mut it = std::env::args().skip(1);
@@ -94,6 +99,12 @@ fn parse_args() -> Result<Args, String> {
                 let n: Vec<i8> = v.split(',').map(|x| x.trim().parse::<i8>()).collect::<Result<_, _>>().map_err(|_| "--hold needs forward,turn,run e.g. 1,0,0".to_string())?;
                 let [f, t, r] = n[..] else { return Err("--hold needs three numbers, e.g. 1,0,0".into()) };
                 a.hold = Some([f, t, r]);
+            }
+            "--at" => {
+                let v = value()?;
+                let n: Vec<f32> = v.split(',').map(|x| x.trim().parse::<f32>()).collect::<Result<_, _>>().map_err(|_| "--at needs x,y,heading e.g. 286169,190211,0.291".to_string())?;
+                let [x, y, h] = n[..] else { return Err("--at needs three numbers, e.g. 286169,190211,0.291".into()) };
+                a.at = Some([x, y, h]);
             }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
@@ -150,7 +161,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R] [--at X,Y,H]");
             return ExitCode::FAILURE;
         }
     };
@@ -219,6 +230,7 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::Fly::new())
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
+                .insert_resource(connor_view::StartAt(args.at))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
                 .insert_resource(Time::<Fixed>::from_hz(kq8_game::UPDATES_PER_SECOND))

@@ -1,4 +1,5 @@
-//! Connor in the ground view (M2 steps 2a and 2b, docs/DESIGN.md).
+//! Connor in the ground view (M2 steps 2a, 2b, 2c and the falls of 2e,
+//! docs/DESIGN.md).
 //!
 //! - His mover (`kq8_game::mover`, docs/behaviour/connor-physics.md) and his
 //!   walking (`kq8_game::connor`, docs/behaviour/connor-movement.md) run at
@@ -10,14 +11,18 @@
 //!   heading and loop position are blended between the last two updates
 //!   (display only).
 //!
+//! - Falling: `jumphold` while the mover is in Fall, then `jumpend` or
+//!   `jumpdie` once (connor-physics.md "Falling off an edge").
+//!
 //! Test keys: G lifts him 5,000 (should die on landing), B lifts him 2,000
-//! (safe). The camera that follows him is in `game_camera.rs`.
+//! (safe). `--at X,Y,H` starts him somewhere else. The camera that follows
+//! him is in `game_camera.rs`.
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
-use kq8_game::connor::{Intent, MovementLoop, Walker};
-use kq8_game::mover::{Mover, State};
+use kq8_game::connor::{Intent, Mode, MovementLoop, Walker};
+use kq8_game::mover::{FallEvent, Mover, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
@@ -80,6 +85,12 @@ pub struct ConnorSim {
     shown: Option<Entity>,
 }
 
+impl ConnorSim {
+    fn movement_loop(&self, name: &str) -> Option<MovementLoop> {
+        self.movements.iter().find(|m| m.name == name).map(|m| m.movement_loop)
+    }
+}
+
 #[derive(Component)]
 pub struct ConnorBody;
 
@@ -91,6 +102,11 @@ pub struct StartLift(pub Option<f32>);
 /// instead of the keys.
 #[derive(Resource)]
 pub struct HoldIntent(pub Option<[i8; 3]>);
+
+/// `--at X,Y,H`: a test that starts Connor on the ground at X, Y facing
+/// heading H (radians) instead of where the world script puts him.
+#[derive(Resource)]
+pub struct StartAt(pub Option<[f32; 3]>);
 
 /// Bevy key for a key name in a `.sae` file. Only the names Connor's
 /// movement uses so far, plus letters and function keys.
@@ -129,7 +145,7 @@ pub fn spawn_connor(
 ) {
     let camera_keys = assets.camera_keys.clone();
     let connor_keys = assets.keys.clone();
-    let loops: Vec<(f32, [f32; 3])> = assets.animations.iter().map(|a| (a.duration, a.step_sum)).collect();
+    let loops: Vec<(f32, [f32; 3], usize)> = assets.animations.iter().map(|a| (a.duration, a.step_sum, a.frames.len())).collect();
     // Each animation: one material per look, one entity per frame.
     let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
@@ -165,10 +181,10 @@ pub fn spawn_connor(
         .movements
         .iter()
         .map(|m| {
-            let (duration, step_sum) = loops[m.animation];
+            let (duration, step_sum, frames) = loops[m.animation];
             DrawnMovement {
                 name: m.name,
-                movement_loop: MovementLoop { duration, step_sum, speed: m.speed },
+                movement_loop: MovementLoop { duration, step_sum, speed: m.speed, repeat: m.repeat, frames },
                 frames: frame_entities[m.animation].clone(),
             }
         })
@@ -242,7 +258,7 @@ pub fn spawn_connor(
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z forward turn run movement heading phase wanted_x wanted_y",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y",
     );
     if let Some(cam) = crate::game_camera::make(
         sim.mover.position,
@@ -264,9 +280,30 @@ pub fn connor_keys(
     sim: Option<ResMut<ConnorSim>>,
     shared: Res<Shared>,
     mut start_lift: ResMut<StartLift>,
+    mut start_at: ResMut<StartAt>,
     hold: Res<HoldIntent>,
+    lookup: Option<Res<GroundLookup>>,
 ) {
     let Some(mut sim) = sim else { return };
+    if let (Some([x, y, heading]), Some(lookup)) = (start_at.0, &lookup) {
+        start_at.0 = None;
+        let line = match lookup.0.height_at(x, y) {
+            Some(g) => {
+                sim.mover = Mover::new([x, y, g.height], sim.mover.use_gravity);
+                sim.walker = Walker::new(heading);
+                let p = sim.mover.position;
+                sim.previous = (p, heading, 0.0);
+                sim.current = sim.previous;
+                format!(
+                    "connor update {}: test --at: put on the ground at ({x:.0}, {y:.0}, {:.0}), heading {heading:.3}, ground normal z {:.3}",
+                    sim.updates, g.height, g.normal[2]
+                )
+            }
+            None => format!("connor update {}: test --at ({x:.0}, {y:.0}): no ground there; not moved", sim.updates),
+        };
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
     // Movement keys, in the order they were pressed.
     let c = &sim.controls;
     let movement_keys: Vec<KeyCode> = [c.forward, c.back, c.left, c.right].into_iter().flatten().collect();
@@ -302,6 +339,7 @@ pub fn connor_keys(
     for (what, height) in start.into_iter().chain(pressed) {
         let was = sim.mover.state;
         sim.mover.lift(height);
+        sim.walker.set_mode(Mode::Free);
         let p = sim.mover.position;
         sim.previous.0 = p;
         sim.current.0 = p;
@@ -321,25 +359,45 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let sim = &mut *sim;
     let intent = sim.intent;
-    let step = if sim.mover.state == State::Dead {
-        None
-    } else {
-        let movements = &sim.movements;
+    let mut step = None;
+    let report = {
+        let ConnorSim { mover, walker, movements, .. } = &mut *sim;
         let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| m.movement_loop);
-        let step = sim.walker.update(intent, &loops);
-        sim.phase_step = loops(sim.walker.movement).map_or(0.0, |l| {
-            if l.duration > 0.0 { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / l.duration } else { 0.0 }
-        });
-        Some(step)
+        if mover.state == State::Dead {
+            // The mover stands still; the death animation plays on.
+            step = Some(walker.update(intent, &loops));
+            mover.update([0.0; 3], &lookup.0)
+        } else {
+            mover.update_with(&lookup.0, |_, fall| {
+                // Fall replaces the walk at once, so its first update
+                // already uses jumphold's step.
+                if fall == Some(FallEvent::Started) {
+                    walker.set_mode(Mode::Fall);
+                }
+                let s = walker.update(intent, &loops);
+                let wanted = s.wanted;
+                step = Some(s);
+                wanted
+            })
+        }
     };
+    match report.fall {
+        Some(FallEvent::Landed(_)) => sim.walker.set_mode(Mode::Land),
+        Some(FallEvent::Died(_)) => sim.walker.set_mode(Mode::Dying),
+        _ => {}
+    }
+    sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
+        let time = l.play_time();
+        if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }
+    });
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
-    let report = sim.mover.update(wanted, &lookup.0);
     sim.updates += 1;
     sim.previous = sim.current;
     sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase);
     let m = &sim.mover;
+    let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -353,9 +411,19 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
         report.drop,
         report.ground.map_or("none".into(), |g| format!("{:.1}", g.0)),
         report.ground.map_or("none".into(), |g| format!("{:.3}", g.1[2])),
+        report.began_on_ground,
+        normal(report.up_contact, 2),
+        report.down.name(),
+        normal(report.down_normal, 0),
+        normal(report.down_normal, 1),
+        normal(report.down_normal, 2),
+        report.push,
+        report.check,
+        m.pull[2],
         intent.forward,
         intent.turn,
         intent.run,
+        sim.walker.mode.name(),
         sim.walker.movement,
         sim.walker.heading,
         sim.walker.phase,
@@ -364,7 +432,16 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
     );
     sim.log.detail(line);
     let mut events = report.events;
+    if report.up_contact.is_some() {
+        events.push(format!("up pass hit the terrain (normal z {})", normal(report.up_contact, 2)));
+    }
     if let Some(s) = &step {
+        if let Some((from, to)) = s.mode_changed {
+            events.push(format!("animation mode {} -> {}", from.name(), to.name()));
+            if to == Mode::Dead {
+                events.push("jumpdie finished: Die state".into());
+            }
+        }
         if let Some((from, to)) = s.changed {
             events.push(format!("movement {from} -> {to}"));
         }
@@ -412,10 +489,7 @@ pub fn connor_draw(
     let movement = sim.walker.movement;
     let frame = sim.movements.iter().find(|m| m.name == movement).and_then(|m| {
         let n = m.frames.len();
-        (n > 0).then(|| {
-            let at = (phase + sim.phase_step * a).rem_euclid(1.0);
-            m.frames[((at * n as f32) as usize).min(n - 1)]
-        })
+        (n > 0).then(|| m.frames[m.movement_loop.frame_at(phase + sim.phase_step * a).min(n - 1)])
     });
     if frame != sim.shown {
         if let Some(old) = sim.shown {

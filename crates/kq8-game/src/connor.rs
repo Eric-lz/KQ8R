@@ -5,6 +5,10 @@
 //! ("Movement intent", "Which movement plays", "Forward speed comes from
 //! the animation", "Turning"). M2 step 2b: no start/stop transitions (Q25),
 //! no banking, the loop's step spread evenly over the loop (Q24).
+//!
+//! The falling animations (M2 step 2c/2e, `connor-physics.md` "Falling off
+//! an edge"): `jumphold` while falling, then `jumpend` (safe landing) or
+//! `jumpdie` (death), each played once, with the keys ignored meanwhile.
 
 use crate::UPDATES_PER_SECOND;
 
@@ -41,6 +45,11 @@ pub struct MovementLoop {
     pub step_sum: [f32; 3],
     /// Playback speed from `Conner.anm` (`back`: −1).
     pub speed: f32,
+    /// True = repeats; false = plays once, first to last frame
+    /// (`objects.md` "Animated objects at load", loop rule 2).
+    pub repeat: bool,
+    /// Number of frames.
+    pub frames: usize,
 }
 
 impl MovementLoop {
@@ -48,6 +57,63 @@ impl MovementLoop {
     pub fn ground_speed(&self) -> f32 {
         let [x, y, _] = self.step_sum;
         if self.duration > 0.0 { (x * x + y * y).sqrt() / self.duration * self.speed } else { 0.0 }
+    }
+
+    /// Seconds one play takes: the whole loop when it repeats; from the
+    /// first frame to the last (`frames − 1` frame times) when it doesn't.
+    pub fn play_time(&self) -> f32 {
+        if self.repeat || self.frames < 2 {
+            self.duration
+        } else {
+            self.duration * (self.frames - 1) as f32 / self.frames as f32
+        }
+    }
+
+    /// The frame shown at `phase` (0..1 of one play).
+    pub fn frame_at(&self, phase: f32) -> usize {
+        let n = self.frames.max(1);
+        if self.repeat {
+            ((phase.rem_euclid(1.0) * n as f32) as usize).min(n - 1)
+        } else {
+            (phase.clamp(0.0, 1.0) * (n - 1) as f32).round() as usize
+        }
+    }
+}
+
+/// What drives Connor's animation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Mode {
+    /// The keys choose the movement.
+    Free,
+    /// Falling: `jumphold`, repeating.
+    Fall,
+    /// Safe landing: `jumpend` once, then back to the keys.
+    Land,
+    /// Fatal landing: `jumpdie` once, then dead.
+    Dying,
+    /// The Die state: holds the last frame of `jumpdie`.
+    Dead,
+}
+
+impl Mode {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Mode::Free => "free",
+            Mode::Fall => "fall",
+            Mode::Land => "land",
+            Mode::Dying => "dying",
+            Mode::Dead => "dead",
+        }
+    }
+
+    /// The movement this mode plays (`None`: the keys decide).
+    fn movement(&self) -> Option<&'static str> {
+        match self {
+            Mode::Free => None,
+            Mode::Fall => Some("jumphold"),
+            Mode::Land => Some("jumpend"),
+            Mode::Dying | Mode::Dead => Some("jumpdie"),
+        }
     }
 }
 
@@ -59,6 +125,7 @@ pub struct Walker {
     pub movement: &'static str,
     /// Position in the current loop, 0..1.
     pub phase: f32,
+    pub mode: Mode,
 }
 
 /// What one update asks for.
@@ -70,17 +137,38 @@ pub struct Step {
     pub changed: Option<(&'static str, &'static str)>,
     /// The movement has no loop in the animation list.
     pub missing: bool,
+    /// Set when the mode changed this update: (from, to).
+    pub mode_changed: Option<(Mode, Mode)>,
 }
 
 impl Walker {
     pub fn new(heading: f32) -> Self {
-        Walker { heading, movement: "stop", phase: 0.0 }
+        Walker { heading, movement: "stop", phase: 0.0, mode: Mode::Free }
+    }
+
+    /// Switch mode (from the mover's fall events, or a test lift). The new
+    /// mode's animation starts at its beginning in the next `update`.
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
     }
 
     /// One update (1/15 s). `loops` gives a movement's loop by name.
     pub fn update(&mut self, intent: Intent, loops: &dyn Fn(&str) -> Option<MovementLoop>) -> Step {
         let dt = (1.0 / UPDATES_PER_SECOND) as f32;
-        let movement = choose_movement(intent);
+        let mut mode_changed = None;
+        // A one-shot animation that finished last update hands over.
+        if self.phase >= 1.0 {
+            let next = match self.mode {
+                Mode::Land => Some(Mode::Free),
+                Mode::Dying => Some(Mode::Dead),
+                _ => None,
+            };
+            if let Some(next) = next {
+                mode_changed = Some((self.mode, next));
+                self.mode = next;
+            }
+        }
+        let movement = self.mode.movement().unwrap_or_else(|| choose_movement(intent));
         let mut changed = None;
         if movement != self.movement {
             // No transition animations yet (Q25): the new loop starts at
@@ -89,20 +177,41 @@ impl Walker {
             self.movement = movement;
             self.phase = 0.0;
         }
-        self.heading += f32::from(intent.turn) * TURN_RATE * dt;
+        let none = |changed, missing| Step { wanted: [0.0; 3], changed, missing, mode_changed };
+        if self.mode == Mode::Dead {
+            self.phase = 1.0;
+            return none(changed, false);
+        }
+        // The keys turn him only when they choose the movement.
+        if self.mode == Mode::Free {
+            self.heading += f32::from(intent.turn) * TURN_RATE * dt;
+        }
         let Some(l) = loops(movement) else {
-            return Step { wanted: [0.0; 3], changed, missing: true };
+            return none(changed, true);
         };
-        if l.duration <= 0.0 {
-            return Step { wanted: [0.0; 3], changed, missing: false };
+        let time = l.play_time();
+        if time <= 0.0 {
+            return none(changed, false);
         }
         // Spread the loop's step evenly over its length (Q24).
-        let share = dt * l.speed / l.duration;
-        self.phase = (self.phase + share).rem_euclid(1.0);
-        let [x, y, z] = l.step_sum.map(|v| v * share);
+        // Share of one play this update (negative when played backwards).
+        let mut share = dt * l.speed / time;
+        if l.repeat {
+            self.phase = (self.phase + share).rem_euclid(1.0);
+        } else {
+            // One-shots run forward and stop on the last frame.
+            share = share.abs().min(1.0 - self.phase);
+            self.phase += share;
+            if self.phase > 1.0 - 1e-4 {
+                self.phase = 1.0;
+            }
+            share *= l.speed.signum();
+        }
+        let k = share * time / l.duration;
+        let [x, y, z] = l.step_sum.map(|v| v * k);
         // Turn the model-space step by the heading (positive = left, CCW).
         let (s, c) = self.heading.sin_cos();
-        Step { wanted: [x * c - y * s, x * s + y * c, z], changed, missing: false }
+        Step { wanted: [x * c - y * s, x * s + y * c, z], changed, missing: false, mode_changed }
     }
 }
 
@@ -126,7 +235,54 @@ mod tests {
 
     /// The note's walk: 1,427.1 per 1.2667 s loop, along −Y.
     fn walk(speed: f32) -> MovementLoop {
-        MovementLoop { duration: 1.2667, step_sum: [0.0, -1427.1, 0.0], speed }
+        MovementLoop { duration: 1.2667, step_sum: [0.0, -1427.1, 0.0], speed, repeat: true, frames: 20 }
+    }
+
+    /// A one-shot of 11 frames lasting 11/15 s, so 10/15 s to play.
+    fn once() -> MovementLoop {
+        MovementLoop { duration: 11.0 / 15.0, step_sum: [0.0; 3], speed: 1.0, repeat: false, frames: 11 }
+    }
+
+    #[test]
+    fn landing_plays_once_then_the_keys_take_over() {
+        let mut w = Walker::new(0.0);
+        let loops = |m: &str| match m {
+            "walk" => Some(walk(1.0)),
+            "jumphold" => Some(MovementLoop { repeat: true, ..once() }),
+            "jumpend" => Some(once()),
+            _ => None,
+        };
+        w.set_mode(Mode::Fall);
+        for _ in 0..3 {
+            let s = w.update(intent(1, 1, false), &loops);
+            assert_eq!(w.movement, "jumphold");
+            assert_eq!(s.wanted, [0.0; 3], "no walking while falling");
+        }
+        assert_eq!(w.heading, 0.0, "no turning while falling");
+        w.set_mode(Mode::Land);
+        // 10 updates of jumpend (10/15 s), keys ignored; then walking.
+        for n in 1..=10 {
+            w.update(intent(1, 0, false), &loops);
+            assert_eq!((w.movement, w.mode), ("jumpend", Mode::Land), "update {n}");
+        }
+        assert_eq!(once().frame_at(w.phase), 10, "last frame shown");
+        let s = w.update(intent(1, 0, false), &loops);
+        assert_eq!(s.mode_changed, Some((Mode::Land, Mode::Free)));
+        assert_eq!(w.movement, "walk");
+    }
+
+    #[test]
+    fn dying_ends_dead_on_the_last_frame() {
+        let mut w = Walker::new(0.0);
+        let loops = |m: &str| (m == "jumpdie").then(once);
+        w.set_mode(Mode::Dying);
+        let mut changes = Vec::new();
+        for _ in 0..20 {
+            changes.extend(w.update(intent(1, 0, false), &loops).mode_changed);
+        }
+        assert_eq!(changes, vec![(Mode::Dying, Mode::Dead)]);
+        assert_eq!((w.movement, w.mode), ("jumpdie", Mode::Dead));
+        assert_eq!(once().frame_at(w.phase), 10);
     }
 
     #[test]

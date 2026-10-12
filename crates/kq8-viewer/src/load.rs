@@ -177,8 +177,10 @@ pub fn load_model(
     Ok(Model { label, groups, min, max, frame_note })
 }
 
-/// The movements M2 step 2b uses (connor-movement.md "Which movement plays").
-pub const CONNOR_MOVEMENTS: [&str; 6] = ["stop", "walk", "run", "back", "left", "right"];
+/// The movements M2 uses: step 2b (connor-movement.md "Which movement
+/// plays") and the falls of step 2c/2e (connor-physics.md "Falling off an
+/// edge").
+pub const CONNOR_MOVEMENTS: [&str; 9] = ["stop", "walk", "run", "back", "left", "right", "jumphold", "jumpend", "jumpdie"];
 
 /// One of Connor's movements: its animation and playback speed.
 pub struct ConnorMovement {
@@ -186,6 +188,8 @@ pub struct ConnorMovement {
     /// Index into `ConnorAssets::animations`.
     pub animation: usize,
     pub speed: f32,
+    /// True = repeats; false = plays once.
+    pub repeat: bool,
 }
 
 pub struct ConnorAssets {
@@ -223,11 +227,20 @@ pub fn load_animation(
 ) -> Result<Animation, String> {
     let (label, bytes) = find_model(game, world, model)?;
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
-    let l = shape
+    let named = shape
         .loops
         .iter()
-        .find(|l| usize::try_from(l.name).ok().and_then(|n| shape.names.get(n)).is_some_and(|n| n.eq_ignore_ascii_case(loop_name)))
-        .ok_or(format!("{label}: no loop called '{loop_name}'"))?;
+        .find(|l| usize::try_from(l.name).ok().and_then(|n| shape.names.get(n)).is_some_and(|n| n.eq_ignore_ascii_case(loop_name)));
+    // A name not in the model: the first loop plays (objects.md Q13 b).
+    let l = match named {
+        Some(l) => l,
+        None => {
+            let first = shape.loops.first().ok_or(format!("{label}: no loops"))?;
+            let name = usize::try_from(first.name).ok().and_then(|n| shape.names.get(n)).map_or("?", |n| n.as_str());
+            log.summary(format!("{label}: no loop called '{loop_name}'; using the first loop '{name}' (objects.md Q13 b)"));
+            first
+        }
+    };
     let (first, count) = (l.first_sequence.max(0) as usize, l.sequence_count.max(0) as usize);
     let mut frames = Vec::with_capacity(count);
     let mut step_sum = [0.0f32; 3];
@@ -859,10 +872,10 @@ impl Placer<'_> {
                     0.0
                 };
                 self.log.summary(format!(
-                    "connor: movement {name} = movement {} loop={} {} speed {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
-                    c.movement, c.shape, c.sequence, c.speed, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
+                    "connor: movement {name} = movement {} loop={} {} speed {} repeat {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
+                    c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
                 ));
-                assets.movements.push(ConnorMovement { name, animation, speed: c.speed });
+                assets.movements.push(ConnorMovement { name, animation, speed: c.speed, repeat: c.repeat });
             }
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
             Ok((p, assets))
