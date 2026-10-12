@@ -34,7 +34,9 @@ The code is written with an AI coding agent (Claude Code); see
   floors. Checked by eye: he goes inside houses, crosses bridges and
   slides along walls. After walking into a wall he stands idle until
   forward is released and pressed again, or a turn key is pressed, as in
-  the original (the turn key part checked in the logs, not yet by eye). He
+  the original (the turn key part checked in the logs, not yet by eye).
+  Holding a turn key there keeps him turning until he slides off the
+  wall, as in the original (checked in the logs, not yet by eye). He
   does a standing jump (Insert) from standing or walking, with the
   original's arc (checked by eye), and running and backward jumps
   (Insert while running or stepping back), all checked by eye. Jumping

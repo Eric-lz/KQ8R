@@ -168,7 +168,7 @@ pub fn tick<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::connor::Transition;
+    use crate::connor::{MoveKey, Transition};
     use crate::mover::GroundLookup;
 
     /// Flat ground at height 0, or a plane rising along +y by `slope`.
@@ -500,6 +500,46 @@ mod tests {
             t = tick(&mut m, &mut w, keys, false, &loops, world);
         }
         panic!("the jump never ended: {:?}", t.report);
+    }
+
+    /// Walks head-on into a wall until forward is blocked, then holds
+    /// forward and right for 45 updates, the turn key pressed once
+    /// (`repeat` false) or seen pressed again every update, as keyboard
+    /// auto-repeat does (true). Right, because `stopwalk` steps to his
+    /// left: turning right brings that step back to head-on. Returns his
+    /// heading at the end and the walker.
+    fn turn_at_wall(repeat: bool) -> (f32, Walker) {
+        let list = list();
+        let loops = lookup(&list);
+        let wall = Wall { at: -600.0 };
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        let walk = Intent { forward: 1, turn: 0, run: false };
+        for _ in 0..30 {
+            tick(&mut m, &mut w, walk, false, &loops, &wall);
+        }
+        assert_eq!((w.movement, w.blocked_name()), ("stop", "fwd"));
+        let turning = Intent { forward: 1, turn: -1, run: false };
+        for i in 0..45 {
+            if i == 0 || repeat {
+                w.key_event(MoveKey::Turn, true);
+            }
+            tick(&mut m, &mut w, turning, false, &loops, &wall);
+        }
+        (w.heading, w)
+    }
+
+    #[test]
+    fn at_a_wall_a_held_turn_key_turns_him_only_while_it_repeats() {
+        // Pressed once: one update's turn, then the next head-on hit
+        // blocks forward again and he stands (user, 2026-10-12: wrong).
+        let (once, w) = turn_at_wall(false);
+        assert!(once.abs() < 0.4, "turned {once}");
+        assert_eq!((w.movement, w.blocked_name()), ("stop", "fwd"));
+        // Repeating: he keeps turning past the head-on angle (0.35 rad)
+        // and glances off along the wall (user, 2026-10-12: original).
+        let (held, _) = turn_at_wall(true);
+        assert!(held.abs() > 1.0, "turned {held}");
     }
 
     #[test]

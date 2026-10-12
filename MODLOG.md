@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 A held turn key keeps turning him at a wall (keyboard auto-repeat)
+
+**Changed:** `crates/kq8-viewer/src/connor_view.rs`: the movement key pressed last, while still held, counts as pressed again before every update (only that key, as Windows does; letting it go ends it), and the log says when that clears a wall block. New test option `--turn N[,1|-1]` (press and hold left or right before update N + 1; `main.rs`). `crates/kq8-game/src/player.rs`: new unit test. Docs: provenance, Q38 in QUESTIONS, README.
+**Why:** User: against an object, head-on, a turn key turned him a little and then he stood; in the original he keeps turning while the key is held. Cause: a key press clears the wall block once; walking again starts `stopwalk`, whose step goes 33° to his left. Turning left, that glances off (so left already worked); turning right brings it back under the 20° head-on limit after 3 updates, he stops and forward is blocked again. With the held key repeating, each update clears the block again.
+**Tested how:** `cargo test --workspace --release`; viewer in Daventry at `signpst.05`: `--at 173802,269850,-1.5708 --hold 1,0,0 --turn 40,-1` before and after the change, `--turn 40` (left), and backing in `--at 171300,269800,-1.5708 --hold -1,0,0 --turn 40,-1`; read `connor.log`.
+**Result:** 134 tests pass (47 + 87). Before: heading −1.571 → −1.921 (0.35 rad), head-on at update 43, then `stop`, blocked, unchanged to the end. After: he turns every update; 3 head-on bumps (updates 43, 45, 47), glances off at update 49 and walks round the post. Backing in: turns every update, glances off at update 44. Left turn: same as before (glances at once).
+**Still broken / not tested:** Not checked by eye. Letting go of the turn key is not tested in the viewer (`--turn` can't let go); by the rules he then stands if the last bump was head-on, as you described. No 0.5 s delay before the repeat starts (Windows has one; whether the game sees it is not known, asked in Q38). While bumping, `stop` and `stopwalk` alternate for a few updates (may flicker; not seen).
+**Next:** You: check by eye at an object, both turn keys, forward and back held.
+
 ## 2026-10-12 Swamp shack objects sink into the floor: question Q43 for A
 
 **Changed:** `docs/behaviour/QUESTIONS.md` (new Q43). No code.

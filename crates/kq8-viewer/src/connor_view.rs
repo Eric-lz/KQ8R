@@ -86,6 +86,13 @@ pub struct ConnorSim {
     jump_pressed: bool,
     /// Height where the last jump started (for the log).
     jump_start_z: Option<f32>,
+    /// `--turn`: the test's turn key held (1 left, −1 right, 0 none).
+    test_turn: i8,
+    /// Keyboard auto-repeat: the movement key pressed last, while it is
+    /// still held (its key, `None` for the `--turn` test). Each update it
+    /// counts as pressed again (user's check in the original, 2026-10-12:
+    /// a held turn key keeps clearing the wall blocks).
+    repeat: Option<(Option<KeyCode>, MoveKey)>,
     /// One line per update: `kq8-artifacts/logs/connor.log`.
     pub log: Log,
     last_state: &'static str,
@@ -117,6 +124,12 @@ pub struct HoldIntent(pub Option<([i8; 3], Option<u64>)>);
 /// `--jump N`: a test that presses Jump once, before update N + 1.
 #[derive(Resource)]
 pub struct JumpAt(pub Option<u64>);
+
+/// `--turn N[,T]`: a test that presses a turn key (T = 1 left, the
+/// default, or −1 right) before update N + 1 and holds it from then on
+/// (with `--hold`, on top of its intent).
+#[derive(Resource)]
+pub struct TurnAt(pub Option<(u64, i8)>);
 
 /// `--at X,Y,H`: a test that starts Connor on the ground at X, Y facing
 /// heading H (radians) instead of where the world script puts him.
@@ -292,6 +305,8 @@ pub fn spawn_connor(
         updates: 0,
         jump_pressed: false,
         jump_start_z: None,
+        test_turn: 0,
+        repeat: None,
         log,
         last_state: "normal",
         last_down: "terrain".to_string(),
@@ -327,6 +342,7 @@ pub fn connor_keys(
     mut start_at: ResMut<StartAt>,
     hold: Res<HoldIntent>,
     mut jump_at: ResMut<JumpAt>,
+    mut turn_at: ResMut<TurnAt>,
     lookup: Option<Res<GroundLookup>>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -376,6 +392,17 @@ pub fn connor_keys(
             key_events.push((what, false));
         }
     }
+    // Only the key pressed last repeats, as in Windows; letting it go
+    // ends the repeat.
+    for (key, what) in [(c.forward, MoveKey::Forward), (c.back, MoveKey::Back), (c.left, MoveKey::Turn), (c.right, MoveKey::Turn)] {
+        let Some(key) = key else { continue };
+        if keys.just_released(key) && sim.repeat.is_some_and(|(k, _)| k == Some(key)) {
+            sim.repeat = None;
+        }
+        if keys.just_pressed(key) {
+            sim.repeat = Some((Some(key), what));
+        }
+    }
     for (what, pressed) in key_events {
         let cleared = sim.walker.key_event(what, pressed);
         if cleared != (false, false) {
@@ -407,6 +434,19 @@ pub fn connor_keys(
     if let Some(([f, t, r], until)) = hold.0 {
         let held = until.is_none_or(|n| sim.updates < n);
         sim.intent = if held { Intent { forward: f, turn: t, run: r != 0 } } else { Intent { forward: 0, turn: 0, run: r != 0 } };
+    }
+    if let Some((_, t)) = turn_at.0.filter(|&(n, _)| sim.updates >= n) {
+        turn_at.0 = None;
+        sim.test_turn = t;
+        sim.repeat = Some((None, MoveKey::Turn));
+        let cleared = sim.walker.key_event(MoveKey::Turn, true);
+        let side = if t > 0 { "left" } else { "right" };
+        let line = format!("connor update {}: test --turn: {side} pressed and held; blocks cleared (forward, back): {cleared:?}", sim.updates);
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
+    if sim.test_turn != 0 {
+        sim.intent.turn = sim.test_turn;
     }
     if run_pressed {
         sim.intent.run = !sim.intent.run;
@@ -453,6 +493,14 @@ pub fn connor_step(
         buildings.as_ref().map_or(&[][..], |b| &b.0),
         objects.as_ref().map_or(&[][..], |o| &o.0),
     );
+    if let Some((_, what)) = sim.repeat {
+        let cleared = sim.walker.key_event(what, true);
+        if cleared != (false, false) {
+            let line = format!("connor update {}: {what:?} held (repeat): blocks cleared (forward, back): {cleared:?}", sim.updates);
+            shared.log.lock().unwrap().detail(&line);
+            sim.log.detail(line);
+        }
+    }
     let intent = sim.intent;
     let jump = std::mem::take(&mut sim.jump_pressed);
     let z_before = sim.mover.position[2];

@@ -4,7 +4,7 @@
 //! Usage:
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
-//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N]
+//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
 //!              [--at X,Y,H]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
@@ -71,6 +71,9 @@ struct Args {
     hold: Option<([i8; 3], Option<u64>)>,
     /// Test: press Jump once, before update N + 1.
     jump: Option<u64>,
+    /// Test: press a turn key before update N + 1 and hold it (`N` or
+    /// `N,1` left, `N,-1` right).
+    turn: Option<(u64, i8)>,
     /// Test: start Connor on the ground at X, Y facing heading H (radians).
     at: Option<[f32; 3]>,
     terrain: bool,
@@ -86,6 +89,7 @@ fn parse_args() -> Result<Args, String> {
         lift: None,
         hold: None,
         jump: None,
+        turn: None,
         at: None,
         terrain: false,
     };
@@ -117,6 +121,15 @@ fn parse_args() -> Result<Args, String> {
             }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
+            "--turn" => {
+                let v = value()?;
+                let n: Vec<i64> = v.split(',').map(|x| x.trim().parse::<i64>()).collect::<Result<_, _>>().map_err(|_| "--turn needs updates[,1 left / -1 right] e.g. 40,-1".to_string())?;
+                a.turn = match n[..] {
+                    [u] if u >= 0 => Some((u as u64, 1)),
+                    [u, t] if u >= 0 && (t == 1 || t == -1) => Some((u as u64, t as i8)),
+                    _ => return Err("--turn needs updates[,1 left / -1 right] e.g. 40 or 40,-1".into()),
+                };
+            }
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => positional.push(arg),
@@ -171,7 +184,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--at X,Y,H]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H]");
             return ExitCode::FAILURE;
         }
     };
@@ -241,6 +254,7 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
                 .insert_resource(connor_view::JumpAt(args.jump))
+                .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
