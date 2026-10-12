@@ -3,6 +3,21 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: start and stop transitions traced (Q25)
+
+**Changed:** `docs/behaviour/connor-movement.md` ("Starting and stopping" rewritten with the traced rules, the `loop=` flags and the start animations' per-frame steps; open question 2 updated), `docs/behaviour/QUESTIONS.md` (Q25 answered). No code.
+**Why:** The user wants the start animations (standing → walking or running) implemented; B needs the rules first.
+**Tested how:** Traced in Ghidra (how transition lines are read, chosen, waited for, played and ended; the `loop=` fields). Steps read from `C_stpwk.kqs` and `C_stprn.kqs`. Compared with my earlier measurements (start lengths, "one update of `run`, then `stoprunstop`", the drift to his left). Not tested in the game.
+**Result:**
+
+- A transition is chosen by the next "from" point ahead of the current phase; the current animation plays on until it; −1 = at once.
+- Transition animations always play to their end (`0 0` on their `loop=` line); a key change meanwhile is handled when they end.
+- Starting: `stopwalk` 0.467 s then `walk` at 0.85; `stoprun` 0.667 s then `run` at 0.867. Both step to his left (`stopwalk` 33° left throughout; `stoprun` almost on the spot for its first third, then a surge forward).
+- The measured lengths and the "one update of `run`, then `stoprunstop`" fit the rules.
+
+**Still broken / not tested:** The measured start distances (about 80 and 385–490) are under the data's totals (93.8, 536.7); probably my log windows, not confirmed. Not traced: how the leftover time of the update in which a transition starts is used.
+**Next:** B implements the transitions (start first). Optional check in the original afterwards with the memory reader.
+
 ## 2026-10-12 Study session: Q38 traced (held walk key against a wall)
 
 **Changed:** `docs/behaviour/connor-physics.md` "Walk held against a wall" (committed as `305647d`); this entry. No code.

@@ -118,7 +118,7 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    Connor's own states also switch banking off; which ones is not identified
    yet.
 
-### Starting and stopping (data: `Conner.anm`)
+### Starting and stopping (data: `Conner.anm`; rules traced 2026-10-12, Q25)
 
 Transitions between movements are data, listed per movement as
 `transitionN=<from phase> <to movement> <to phase> <transition movement>`:
@@ -132,9 +132,116 @@ Transitions between movements are data, listed per movement as
   86.7% `stoprunstop`.
 - Footstep sounds fire at the `cueN=<phase> footstep` points (walk: 10% and
   60% of the cycle; run: 0% and 53.3%).
+- No other changes Connor makes by himself have transitions: walk ↔ run,
+  anything ↔ `back`, `left`, `right` switch directly (see rule 4 below).
+  (Water ones exist, e.g. `walk` → `waterwalk` via `walkwaterwalk`; water
+  is not studied.)
 
-How the game chooses between several transitions with different "from"
-phases (nearest, next one reached, or first match) is open question 2.
+"Phase" everywhere here is the fraction of the animation's play time,
+0 at the start, 1 at the end (the `<start>` value on the `loop=` line is
+also a phase).
+
+**The two flags on each `loop=` line** (`loop=<shape> <anim> <start phase>
+<speed> <loops> <can be cut short>`):
+
+- 5th field, **loops**: 1 = plays round and round (`stop`, `walk`, `run`,
+  `back`, `left`, `right`); 0 = plays once and holds its last frame.
+- 6th field, **can be cut short**: 1 = a new movement may replace it at
+  once; 0 = it always plays to its end first. `stop`, `walk`, `run`,
+  `back`, `left`, `right` are `1 1`. **Every transition animation
+  (`stopwalk`, `stoprun`, the stop animations) is `0 0`.** Gestures are
+  `0 1`.
+
+**Rules (traced):**
+
+1. **Asking for a movement.** Connor's movement code asks for a new
+   movement only when its choice changes (the table in "Which movement
+   plays"). The request is remembered as the **wanted** movement (a new
+   request replaces an older one).
+2. **Choosing a transition.** Among the current movement's transitions
+   whose `<to movement>` is the wanted one, the game takes the one whose
+   `<from phase>` comes **next going forward** from the current phase:
+   - from ≥ current phase: distance = from − current;
+   - from < current phase: distance = from − current + 1 if the current
+     animation loops (it is reached after the wrap), otherwise it is
+     never reached and not chosen;
+   - a `<from phase>` of **−1 means "at once"**: on a looping animation
+     it always wins (its distance is ≤ 0);
+   - on a tie the one listed first wins.
+   (For an animation playing backwards the same is done the other way
+   round; Connor's `back` has no transitions, so it does not matter
+   here.)
+3. **Waiting for the "from" point.** If a transition was chosen, the
+   current animation keeps playing (and keeps moving him) until its phase
+   reaches the chosen `<from phase>` within an update. That update's
+   phase is cut off exactly at the from point, and the transition starts.
+   With −1 the transition starts at the next animation update.
+4. **No transition listed.** If none of the current movement's
+   transitions leads to the wanted one: if the current animation can be
+   cut short (6th field 1) or has already reached its end, the wanted
+   movement starts **at once, from phase 0**. Otherwise (a `0 0`
+   animation still playing) nothing happens yet; the wanted movement is
+   kept and handled when that animation ends (rule 6).
+5. **Playing a transition.** The transition movement plays from phase 0
+   at speed 1, once, to its end. It moves Connor by its own per-frame
+   steps, like any movement (see "Steps in the start animations" below).
+   The game remembers the transition's `<to movement>` and `<to phase>`.
+6. **When the transition ends:**
+   - wanted movement = its `<to movement>`: the `<to movement>` starts at
+     its `<to phase>` (e.g. `walk` at 0.85);
+   - wanted movement changed meanwhile (for example the key was let go
+     during `stoprun`, so the wanted one is now `stop`): the
+     `<to movement>` **still starts at its `<to phase>`**, and at once the
+     choice of rule 2 is made again, from there to the newly wanted
+     movement. If that finds a transition, rules 3–6 repeat. If not, the
+     newly wanted movement starts at once from phase 0 (the `<to
+     movement>` can be cut short).
+   - A one-shot animation ending with no transition in progress: the
+     wanted movement, if any, starts from phase 0.
+
+**What this gives for starting (worked out from the rules and data):**
+
+- Forward pressed while standing (`stop` loops, `stop → walk` has
+  from −1): `stopwalk` starts at the next update, plays 0.467 s (7
+  ticks), then `walk` at 0.85. Running: `stoprun`, 0.667 s (10 ticks),
+  then `run` at 0.867.
+- Let go during `stopwalk`: it still plays to its end (it is `0 0`),
+  then `walk` starts at 0.85, and the walk → stop choice from 0.85 is
+  `stopwalkstop` (from 0.90, the next point ahead), reached about one
+  update later. Running: `run` starts at 0.867, and `stoprunstop` has
+  from 0.867 (distance 0), so it starts at the next update. This is the
+  measured "one update of `run`, then `stoprunstop`".
+- Run switched on during `stopwalk`: `stopwalk` plays to its end, `walk`
+  starts at 0.85, there is no walk → run transition, so `run` starts at
+  once from phase 0 (the `walk` is not seen).
+- Run switched on or off while walking or running: direct switch, the
+  new loop from phase 0, no transition.
+- Back, or a turn key alone, from standing: no transition listed, `stop`
+  can be cut short, so `back` / `left` / `right` start at once from 0.
+- Turning during a start: turning does not depend on the animation
+  (see "Turning"), so he turns while `stopwalk` / `stoprun` play.
+- Walking into a wall during `stopwalk`: head-on handling as for `walk`
+  (`Stop`, forward blocked; see `connor-physics.md`). During `stoprun`:
+  the `crash`, as for `run`.
+
+**Steps in the start animations (data, `GAME/Common`).** These two do
+not move him evenly and are not straight ahead. Frame k's offset is the
+move from frame k−1 to frame k, over one frame's time (1/15 s; the play
+time is (frames − 1) / 15 s). The model faces its −y axis; its +x side
+is Connor's **left** (this matches the drift to his left that I measured
+in the original). Units as everywhere.
+
+| Shape | Frames | Play time | Steps (left, forward) per frame | Total |
+| --- | --- | --- | --- | --- |
+| `C_stpwk.kqs` (`stopwalk`) | 8 | 0.4667 s | frames 1–7: each (7.32, 11.22) | 51.2 left, 78.5 forward: 93.8 at 33° left of facing |
+| `C_stprn.kqs` (`stoprun`) | 11 | 0.6667 s | 1: (0.18, 0.19) 2: (1.32, 1.28) 3: (3.85, 3.15) 4: (7.81, 5.73) 5: (8.79, 12.77) 6: (6.11, 86.57) 7: (6.04, 129.17) 8: (4.43, 136.26) 9: (3.59, 107.78) 10: (1.77, 43.80) | 43.9 left, 536.7 forward |
+
+So `stoprun` stays almost on the spot for its first third (and goes
+about 45° to the left), then surges forward. Spreading its distance
+evenly over its play time, as is done now for `walk` and `run`, would
+look wrong: the steps have to be applied frame by frame, both axes. (The
+stop animations, `stoprunstop` especially, also step sideways; same
+rule.)
 
 ## Data used
 
@@ -204,9 +311,17 @@ two 1/15 s ticks each); go by the seconds.
    that frame's time), not one even speed for the whole loop and not
    whole steps at frame changes. Not yet compared frame by frame with the
    steps in `C_walk.kqs`.
-2. Which transition is used when several have "from" phases, and what
-   happens if the stop is requested between them?
-   **Measured (2026-10-12), partly answered:**
+2. ~~Which transition is used when several have "from" phases, and what
+   happens if the stop is requested between them?~~ **Traced
+   2026-10-12:** the next "from" point ahead, waiting for it; −1 = at
+   once (rules in "Starting and stopping"). The sideways drift below is
+   the start animations' own sideways steps (table there). **Still not
+   checked:** the measured start distances (about 80 and 385–490) are
+   under the data's totals (93.8 and 536.7); probably my log's first
+   and last updates cut parts off, not confirmed. The running stops'
+   15% phase offset below is not explained by the rules either; most
+   likely my phase estimate, not confirmed.
+   **Measured (2026-10-12), before the trace:**
    - A stop never cuts the cycle at once. After the key is let go, the
      walk or run keeps playing for 0–4 updates (state already Wait),
      then a stop animation from the list plays.
