@@ -3,6 +3,20 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q39 settled by measurement (box names ignore case)
+
+**Changed:** `docs/behaviour/connor-physics.md` (new "Case doesn't matter in practice"; the old trace marked wrong; "How to check" updated), `docs/behaviour/QUESTIONS.md` (Q39 answered). No code.
+**Why:** My code reading said `St_smom` has no box; the user saw Connor stop at her. Two reading attempts failed, so I measured instead.
+**Tested how:** User at the original game in Daventry (stone mother's cottage); my memory reader (`re/dbg/mem_fall.py`, read only) logged Connor's position, state and the surface he touched while the user walked into her twice, from two sides.
+**Result:**
+
+- Head-on stop 575.2 from her centre along her box's axis = 350 (table half-width of `st_smom.kqs`) + 200 (ball) + 25 (pull-back). The hit was logged against `St_smom` with a face direction matching her heading.
+- Second approach (while turning): 557 on the same axis, consistent with the same box.
+- So the lower-case table entry is used for `St_smom.KQS`; B's stand-in is right.
+
+**Still broken / not tested:** Where the game ignores the case is not found. Object names with a case difference: not tested. Wagons not measured (the user's check says they collide).
+**Next:** Q22 (palette entry 0), when the user wants.
+
 ## 2026-10-12 Study session: Q39 and Q40 answered
 
 **Changed:** `docs/behaviour/connor-physics.md` (which names are looked up in the box table, and their case; a game check), `docs/behaviour/connor-movement.md` (rule 3: order within an update; rule 4: a request replaces a waiting transition and restarts a playing movement; "Do not reproduce": that restart; `stoprun` total corrected to 526.7), `docs/behaviour/QUESTIONS.md` (Q39, Q40 answered). No code.

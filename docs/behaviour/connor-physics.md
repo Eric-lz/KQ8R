@@ -90,7 +90,21 @@ banking, already in `connor-movement.md`). Values it uses:
     `iceshard.kqs`).
   - Names are compared **byte by byte, case matters**: `henchman` and
     `Henchman` are two different names.
-  - **Which names are looked up (traced 2026-10-12, Q39; NOT SETTLED):**
+  - **Case doesn't matter in practice (measured 2026-10-12, Q39):** in
+    the running original, Connor walking head-on into the stone mother
+    (`St_smom`, `shapeName=St_smom.KQS`, heading −2.11) stopped
+    **575.2** from her centre along her box's axis: 350 (half-width of
+    `st_smom.kqs` in the table) + 200 (his ball radius) + 25 (pull-back).
+    The hit was against her own object, on a face whose direction
+    (0.858, −0.514) is her box's axis turned by her heading. A second
+    approach from the other side, while turning, stopped 557 from her
+    centre on that same axis: the same box, with the pull-back at an
+    angle. So **the table's lower-case `st_smom.kqs` box is used for
+    `St_smom.KQS`**: implement the lookup as if shape names were
+    lower-cased (B's stand-in is right). Where the game does this was
+    not found (see below).
+  - **Which names are looked up (traced 2026-10-12, Q39; the case part
+    was wrong, see the measurement above):**
     first the shape file name (for a plain object its `shapeName=`
     value; for an animated object the shape file on its current `loop=`
     line), then, if that isn't in the table, the object's own name.
@@ -785,9 +799,9 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 - Q39 (box names and case), in the original: in Daventry, walk Connor
   straight into a stone villager (e.g. the stone mother, `St_smom`) or
   a wagon. **Checked by the user (2026-10-12): he stops; he does not
-  walk through.** Still to measure: where he stops (his distance from
-  the object's centre), to tell whether the box used is the table's
-  `st_smom.kqs` box (350 half-width) or something else.
+  walk through.** Measured the same day (memory reader): head-on, he
+  stops 575 from the stone mother's centre, the table's 350 box (see
+  "Case doesn't matter in practice").
 - Stand on flat ground: z constant, on ground every update, fall timer 0.
 - Standing jump on flat ground: 1.333 s of `jump`; highest point about
   1,697 above the start; at the end about 873 above and 1,423 forward;
