@@ -3,6 +3,48 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: fall speed measured in the running original (open question 8)
+
+**Changed:** `docs/behaviour/connor-physics.md` (Gravity, values table, Falling rule 2, Units, open question 8), `docs/behaviour/QUESTIONS.md` (Q30). In `re/` (never committed): `re/dbg/mem_fall.py`, a reader that reads Connor's mover from the game's memory from outside (Windows ReadProcessMemory: read only, no debugger, no pauses, nothing written to the game).
+**Why:** The debugger approach froze or crashed the game (entry below), so we switched to reading memory from outside (option 6 in `STATUS.md`).
+**Tested how:** The user started the game normally and stood at a ledge, ran off it, landed, stood, then did one standing jump. The reader found Connor by itself (id 0x80B with his mover) and logged a line each time a value changed: 1,091 lines, about one update every 78 ms. I compared every update in the air with the traced rule.
+**Result:**
+
+- Every drop in the air (18 updates, timer 0.06 to 0.90) is **exactly 4.000 times** the traced `5000 × (t² − t_prev²) / 2`. New rule: `10000 × (t² − t_prev²)`, so 36, 108, 180, 252, 324, then 396, 468, … (+72 each update). This is the "about 4 times faster" from the user's video.
+- As traced: timer +0.06 per update; Fall asked for after 5 updates in the air; after a walk-off the timer carries on from 0.30; after a jump Fall sets it to 0.36 (previous 0.30); the stored base vector is always 0; on a slope the height lost is the drop × sin²θ (to within 0.3 units).
+- Standing jump: highest point 1,681 above the start (the note says about 1,697).
+- First version of the reader crashed at its first sample (it read too little of Connor's object). Fixed, then it worked.
+
+**Still broken / not tested:** Where the factor of 4 is in the code was not found. Only one ledge fall and one jump were measured. Q30 (b) (what holds him to a walkable slope going downhill) is still open. B's code still uses the old numbers.
+**Next:** Session B: change the gravity drop to `10000 × (t² − t_prev²)` (connor-physics.md "Gravity") and update the tests' expected numbers. Session A: the same reader can measure open questions 6 and 7 (walking down a walkable slope, running into a steep one).
+
+## 2026-10-12 Study session: why the original crashes or freezes after a debugger stop
+
+**Changed:** `STATUS.md` "Current problem" only. No code, no notes in `docs/behaviour/`.
+**Why:** Both earlier live attempts crashed the game on resume (0xC000041D), so no fall data was logged. Before trying the full script again, find the cause with the smallest possible test.
+**Tested how:** With the user at the game, session A drove x32dbg through the plugin: read the debugger's exception settings; ran the game under the debugger with no stops of ours; then set one stop at Connor's update, checked the CPU flags while paused, deleted the stop, cleared the single-step flag, resumed with plain `run` (twice). When the game froze, read its thread states through Windows (`Get-Process`).
+**Result:**
+
+- Exception settings are the defaults; the debugger keeps its own signals. Ruled out.
+- No stops of ours: the game plays normally under the debugger.
+- At the stop, the single-step flag was already on (flags 0x344). After deleting the stop, clearing it and resuming: no crash, but a full freeze both times. 21 of 22 threads suspended, CPU zero, the debugger couldn't pause it any more. In the first of the two runs I told the user the game had "survived" because it didn't crash and the debugger reported "running"; the user's report showed it had frozen. Corrected.
+- Likely cause (not proven): changing the stop the game is paused on breaks the debugger's "step past the stop" routine. With the flag left on, the step reaches the game (crash). With the flag cleared, the debugger waits for a step that never comes, with the other threads held (freeze).
+
+**Still broken / not tested:** No fall data logged yet. The explanation is untested. The script's `var` fix is untested.
+**Next:** One run to test the explanation: at the stop, single-step once first, then delete the stop, then `run`. If that fails, switch to reading the game's memory from outside with no stops (`STATUS.md` ideas).
+
+## 2026-10-12 Study session: debugger set-up to watch falls in the original
+
+**Changed:** Nothing in the repository except this entry. Outside it: x64dbg (which contains x32dbg) unzipped to `C:\Tools\x64dbg` (path chosen by the user). In `re/` (never committed): a debugger script that logs Connor's movement while the original runs, a decoder for its log, and scratch notes.
+**Why:** Open question 8 (falls about 4 times faster in the original) wasn't solved by reading the exe. Watching the running game shows the real numbers each update, and which code changes Connor's height.
+**Tested how:** The download's SHA-256 checksum matches the one GitHub publishes for the release. The decoder was run on a made-up log.
+**Result:** Ready to run. While preparing it, reading the exe showed something new: each move ends by scheduling Connor's next update event at "now + the time step the move was given", and the move's result is applied only when that event arrives. So Connor's update rate may follow the time step he's given, not only the 1/15 s tick. Not confirmed; the log will show it.
+**Still broken / not tested:** The script hasn't been run yet, and x32dbg itself hasn't been started. Not tested: whether the game runs normally under the debugger.
+**Next:** The user runs the game under x32dbg with the script, walks off a ledge and does a standing jump; session A reads the log.
+**Added later (same day):** The user added the x64dbg-mcp-server plugin so session A can drive x32dbg directly. The first set-up failed with "401 Unauthorized": the header's name had literal quote marks in it (`"Authorization"`). Fixed by adding an `x32dbg` entry to `.mcp.json` (git-ignored) that reads the token from the Windows user environment variable `X32DBG_MCP_TOKEN`, so the token is in no file (AGENTS.md rule 6). The plugin listens on 127.0.0.1:9095 only (checked). Not tested yet: the connection with the new entry (needs the variable and a restart of VS Code).
+**First run through the plugin (failed):** The connection works. The game started under the debugger and reached Connor's first update, and the logging stops were set while the game was paused at that point. On resuming, the stop at the paused spot went off again as an unrecognised breakpoint error. Resuming once more passed it to the game as a fatal error inside a Windows callback (0xC000041D), so that game session is lost. No Connor data was logged. Probable cause (not proven): the stop at the spot where the game was paused had been changed while paused on it, so the debugger didn't step around it on resume. All stops were cleared afterwards. Plan for attempt 2: the first stop deletes itself when hit; step one instruction before setting any stop at that spot; resume with the debugger's own `erun` command.
+**Attempt 2 (failed, same crash):** I followed that plan, and the game crashed on the first resume with the same fatal callback error, this time with no stop at that spot. The debugger log shows the real cause: `erun` passes the debugger's own last exception (here, my single step) to the game ("Exception will be thrown in the program"), and inside a Windows callback that's fatal. My explanation for attempt 1 was wrong. Also found: `$name = value` doesn't create a debugger variable ("Not enough arguments"), so the Connor-only conditions would have been wrong; the command is `var name, value`. Both fixed in the scratch script, not tested. Stopped after two attempts as AGENTS.md asks. Write-up in `STATUS.md` "Current problem".
+
 ## 2026-10-11 Study session: user's recording of a steep-slope fall
 
 **Changed:** `docs/behaviour/connor-physics.md`, open question 8 (the user's recording and what it implies). No code, no new tracing.

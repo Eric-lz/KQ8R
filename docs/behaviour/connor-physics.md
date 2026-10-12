@@ -36,6 +36,12 @@ walls or slides along them, jumps, and falls (and can die from a fall).
   - **Not confirmed:** that Connor's three-pass move is run from this
     tick. Which code hands the mover Connor's animation step each update
     was not found (open question 8).
+  - **Seen in the running original (2026-10-12):** Connor's position
+    changed once per drawn frame, and frames came every 78 ms (about 12.8
+    a second), sometimes 156 ms while he stood still. A few times the fall
+    timer moved on by two steps (0.12) in one frame. That fits the rules
+    above (a 1/15 s tick, with catch-up when a frame is late), but it was
+    not checked further.
 
 ## Where the values live
 
@@ -50,7 +56,7 @@ banking, already in `connor-movement.md`). Values it uses:
 | step up | 325 | monster/Connor default (traced); `.kq` key `stepUpAmount` |
 | step down | 325 | same; `.kq` key `stepDownAmount` |
 | walkable | contact normal z > 0.8 (slope under 36.9°) | fixed in the code (traced) |
-| gravity | 5,000 units/s² | fixed (traced) |
+| gravity | drop per update `10000 × (t² − t_prev²)` (see "Gravity") | fixed; measured in the running original (the code reading gave 4 times less) |
 | collision type | 4 | Connor's constructor (traced); bit 4 lets the Fall state start and makes steep ground switch gravity on |
 | collision mask | 0x281B | Connor's constructor (traced); bit 0x800 makes the terrain count in the up and down passes |
 | collision box | x −200…200, y −150…150, z 0…1,600 | `GAME/Kq/Connor.kq` `[ConnerCollider]` |
@@ -218,18 +224,30 @@ Consequences:
   a little, then the falling animation starts and he falls rapidly down
   the slope.
 
-### Gravity (traced)
+### Gravity (traced; strength measured in the running original)
 
 - A fall timer `t` (seconds) belongs to the mover. Each update with gravity
   on, `t` grows by **0.06**, and the drop for that update is
-  `5000 × (t² − t_prev²) / 2` (constant acceleration of 5,000 units/s²,
-  starting from rest at `t = 0`). One update's drop is capped at 5,000.
+  **`10000 × (t² − t_prev²)`**: 36, 108, 180, 252, 324, 396, … (72 more
+  each update). One update's drop is capped at 5,000 (traced, not seen in
+  the measurement).
+  - **Measured 2026-10-12** (open question 8): read from the original's
+    memory while it ran, every update in the air of a ledge walk-off and
+    a standing jump, 18 updates with t from 0.06 to 0.90. The drop was
+    **exactly 4.000 times** `5000 × (t² − t_prev²) / 2`, the formula
+    this note first gave from reading the code, at every one of them.
+    The timer values (+0.06 per update) were as traced. Where the factor
+    of 4 comes from in the code was not found; the measured rule is what
+    to implement.
+  - In everyday terms: a constant acceleration of 20,000 units/s² if the
+    0.06 per update is taken as seconds.
 - The drop is applied along the pull direction: straight down in the air,
   down the slope after touching a steep surface. Exactly (traced, Q28 a):
   the vertical drop d is **projected onto the pull**. He moves along the
   pull by d·sinθ, not by d (θ is the slope's angle). That is d·sinθ·cosθ
   back horizontally and d·sin²θ down. On a slope of angle θ that is a
-  slide accelerating at 5,000 × sin θ. The pull is reset to straight
+  slide accelerating at 20,000 × sin θ. (Measured: on two slopes the
+  height lost per update was the drop × sin²θ to within 0.3 units.) The pull is reset to straight
   down at the start of every update that begins on the ground. After any
   down-pass contact it is set to the surface's downhill direction.
 - If the pull points less than 30° below horizontal (for example after
@@ -302,9 +320,12 @@ Consequences:
 
    Neither case touches the pull direction (Q30 a). If the last contact
    was steep, each drop stays projected down that slope until he lands.
-   So walking off a ledge, the drops go 9, 27, 45, 63, 81 in the 5 air
-   updates (225 in all), then 99, 117, 135, … in Fall (18 more each
-   update). The hold animations have no movement of their own (`jumphold`:
+   So walking off a ledge, the drops go 36, 108, 180, 252, 324 in the 5
+   air updates (900 in all), then 396, 468, 540, … in Fall (72 more each
+   update). (Measured in the running original 2026-10-12, including the
+   timer carrying on from 0.30 after a walk-off and being set to 0.36,
+   previous 0.30, after a standing jump. An earlier version of this note
+   gave 4 times smaller drops; see "Gravity".) The hold animations have no movement of their own (`jumphold`:
    3 frames, all zero). Nothing else in Fall changes gravity or moves
    him. Its per-update check only does rule 3 and picks the landing or
    death animation.
@@ -547,6 +568,14 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    height from somewhere else would add to the fall); the drop routine
    adds a stored base vector to each drop; what it holds and what sets
    it is not traced. Stopped after these attempts.
+   **Answered by measurement (2026-10-12):** Connor's mover was read from
+   the original's memory while it ran (from outside the game, no
+   debugger). Every update in the air, the drop was exactly 4 times the
+   traced formula, at the traced timer values, and the stored base
+   vector stayed 0. The new rule is in "Gravity". It accounts for the
+   user's ledge fall (about 4 times as far per update). **Still open:**
+   where the factor of 4 is in the code; nothing else in the fall
+   differed from the rules.
    **Also from the user:** he never leaves the ground by running fast over
    a crest or down a walkable slope; the game seems to always put him on
    the ground below him (see open question 6). Only with no ground below
