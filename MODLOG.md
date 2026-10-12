@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Study session: Q26 (terrain in the passes) and Q23 (gravity off)
+
+**Changed:** `docs/behaviour/connor-physics.md` (steps 2–5, new section "The terrain in the passes", gravity-off correction, How to check), `docs/behaviour/QUESTIONS.md` (Q23, Q26 answered). No code.
+**Why:** M2 step 2c (slopes) was waiting on Q26. Q23 is about the same update.
+**Tested how:** Traced in `Mask.exe`: the mover's three-pass update, the sweep each pass calls, the terrain test inside it, Connor's collision response, where gravity is applied, and Connor's constructor (collision type and mask).
+**Result:** The terrain counts as a hit at the end of the up and down passes, not the across pass, when it is above where the pass ended. Connor's collision mask turns this on. A steep hit pushes him back onto the slope, and gravity grows until Fall starts (about 0.4 s). Downhill, the terrain never pulls him down, so B's "in the air every other update" log matches the original. With gravity off he hovers over an edge; the old "drops 325 per update" was wrong.
+**Still broken / not tested:** Nothing checked in the running game. The prediction that running down slopes over about 15° starts the Fall state is derived from the rules only. Whether the gravity drop goes straight down or along the slope's pull, while sliding, is not re-checked.
+**Next:** The collision-shape question (`connor-physics.md` open question 2), then Q27.
+**Added (same session):** New section "Collision shape" in `connor-physics.md`. Connor collides as the `boxf` box; the sphere keys are never read (the strings aren't in `Mask.exe`), and neither are the collider section's `mask`/`type`/`collisionDetail`. His type (4) and mask (0x281B) come from his constructor. Two objects are tested when either one's mask shares a bit with the other's type. Not traced: the box-vs-building test and the meaning of most bits.
+
 ## 2026-10-11 Stop publishing local working notes
 
 **Changed:** `.gitignore`. Untracked (kept on disk) `STATUS.md`, `STATUS-handoff.md`, `MODLOG-template.md` and `docs/SESSIONS.md`. No code.

@@ -34,11 +34,40 @@ banking, already in `connor-movement.md`). Values it uses:
 | step down | 325 | same; `.kq` key `stepDownAmount` |
 | walkable | contact normal z > 0.8 (slope under 36.9°) | fixed in the code (traced) |
 | gravity | 5,000 units/s² | fixed (traced) |
-| collider type | 4 | Connor's constructor (traced); bit 4 lets the Fall state start |
+| collision type | 4 | Connor's constructor (traced); bit 4 lets the Fall state start and makes steep ground switch gravity on |
+| collision mask | 0x281B | Connor's constructor (traced); bit 0x800 makes the terrain count in the up and down passes |
 | collision box | x −200…200, y −150…150, z 0…1,600 | `GAME/Kq/Connor.kq` `[ConnerCollider]` |
 
-`Connor.kq` also gives a sphere (radius 1,000 at z 700). Which shape is used
-against buildings and objects is **not traced**; use the box.
+### Collision shape (traced; answers open question 2 in part)
+
+- **Connor collides as a box**: the `boxfMin*`/`boxfMax*` values of
+  `[ConnerCollider]`, in his own space (feet at z 0, so the box sits on
+  the ground). Each pass moves the box from where it was to where it is
+  going and tests it against what lies along the way.
+- **The sphere is never used.** The game's collider reader reads only
+  `boxfMinX/Y/Z`, `boxfMaxX/Y/Z`, `deactivateWidth` and `deactivateSpace`
+  from a collider section, plus the display keys every object section has
+  (`active3DFlag`, `isFar`, `tooFar`, `translucency`, `hazeMultiplier`,
+  `hazeSolid`, `hidden`). The words `sphereRadius`, `sphereX/Y/Z` don't
+  appear anywhere in `Mask.exe`.
+- The other keys in `[ConnerCollider]` (`collisionDetail=4`, `mask=65535`,
+  `type=4`) are **not read from that section either**. Connor's real type
+  and mask come from his constructor (table above). An object's type and
+  mask can be set in its main `.kq` section with `colliderType` and
+  `colliderMask` (`Connor.kq` has neither), and by the script commands
+  `KQObject::collisionType` and `KQObject::collision` (a negative number
+  clears bits).
+- **Which pairs collide:** two objects are tested against each other when
+  the first one's mask shares a bit with the second one's type, **or** the
+  second one's mask shares a bit with the first one's type. Either side is
+  enough. So an object with mask 0 can still be hit by Connor if Connor's
+  mask covers its type.
+- Defaults: an object that sets nothing has type 0x41 and mask 0. Object
+  `.kq` files in the game use `colliderMask` values 0, 1, 2, 4 (316 files),
+  11, 13, 15, 31 and 2055.
+- **Not traced:** how the box is tested against a building's surfaces
+  (`.dig`) and against another object's box; what each mask/type bit stands
+  for, other than 0x800 (terrain, in Connor's mask) and 4 (Connor's type).
 
 The mover also has `MaxSlopeDot` (default 0.819 = cos 35°), and the
 `KQMonster::walkSlope` command sets it. **Connor's movement code doesn't use
@@ -58,27 +87,80 @@ mover then works in three passes, each stopped by collisions:
    counter. See "Falling off an edge" for what happens at 5.
 2. **Up pass.** Move straight up by **step up (325) + the wanted change in
    height** (the animation's own up/down step; 0 when walking). A ceiling
-   stops it.
+   stops it. This pass runs every update, also in the air (Q23).
 3. **Across pass.** At that height, move to the wanted x, y. Walls stop or
-   deflect it (see "Walls").
+   deflect it (see "Walls"). **The terrain is not tested in this pass**
+   (Q26): he can move into a hillside here, and the down pass sorts it out.
 4. **Down pass.** Add this update's gravity drop (if gravity is on), then
-   move down by **step down (325)**. If this pass hits something, that is
-   what he stands on:
-   - contact normal z > 0.8 → **on ground**, and the fall timer is reset
-     to 0;
+   move down by **step down (325)**. The terrain counts as something he
+   can hit in this pass (see "The terrain in the passes" below). If this
+   pass hits something, that is what he stands on:
+   - contact normal z > 0.8 → **on ground**: he is put exactly on the
+     contact point, and the fall timer is reset to 0;
    - contact normal z ≤ 0.8 (steep) → not on ground; the pull is turned to
-     point down the slope, and gravity is switched on when bit 4 is set in
-     the collision result's flags (which flag that is, own or hit surface,
-     is not fully traced; assume it is set for Connor).
+     point down the slope, and gravity is switched on (Connor's own
+     collision type has bit 4, so this always happens for him). He is
+     **pushed off the surface** as for a glancing wall (see "Walls"): the
+     rest of the move is projected onto the surface, which moves him
+     sideways down the slope.
 5. **Ground check** (`keepOnGround`): find the terrain height and normal
    under the new x, y. If he is **at or below** the terrain, put him on it,
    with the same 0.8 test for "on ground" or "steep". If he is above it,
-   nothing changes (see `buildings.md`, "Where a building stands").
+   nothing changes (see `buildings.md`, "Where a building stands"). It only
+   changes his height, never x or y. After step 4 this rarely does
+   anything; it catches what the passes missed.
 
 What this gives, on flat ground: up 325, across, down 325, land on the same
 floor. **Steps up to 325 units high are climbed without doing anything**,
 and going down steps up to 325 per update follows the floor. Anything
 higher is a wall; a bigger drop leaves him in the air.
+
+### The terrain in the passes (traced, Q26)
+
+The terrain is not a collision shape. Instead, at the end of the **up** and
+**down** passes (not the across pass) the game compares the terrain height
+under where the pass ended with the height Connor ended at:
+
+- If the terrain there is **higher** than his end height, the pass counts
+  as a hit. The contact point is (end x, end y, terrain height), and the
+  contact normal is the terrain's normal there.
+- If the same pass also hit a building or object, whichever contact is
+  **nearer to where the pass started** wins.
+- If the terrain is at or below his end height, nothing happens. The
+  terrain does **not** pull him down to it.
+- The push-off after a steep or glancing hit is itself carried out as an
+  across move, so it ignores the terrain too (walls and objects still stop
+  it). It is tried at most 3 times in one update; after that he stays at
+  the last contact point.
+
+This only happens for movers whose collision mask has the "terrain" bit.
+Connor's does: his constructor sets it, and `Connor.kq` doesn't change it.
+
+Consequences:
+
+- **Steep hill (over 36.9°), running into it.** Each update the across pass
+  takes him 168 units into the hill. The down pass ends below the hillside,
+  so it hits it, steeply. He is pushed back down the slope onto its surface
+  and gravity turns on. On a slope of angle θ with this update's gravity
+  drop d, his forward gain is about 168·cos²θ − d·sinθ·cosθ (computed from
+  the rules). Gravity keeps growing, because the fall timer isn't reset on
+  steep ground. After 5 such updates (about 0.4 s) the air counter starts
+  the **Fall** state, and he slides back. So he gets only a few hundred
+  units up before stopping. Example at 45°: 80, 71, 62, 53, 44 units
+  forward, about 310 in all.
+- **Running downhill.** The down pass only lands him if the ground under
+  his new spot is above where it ended, so a slope that falls faster than
+  the gravity drop leaves him in the air for an update or more. The drop
+  is 9 in the first update after leaving the ground, then 27, 45, ...;
+  9·k² in all after k updates. On a gentle slope he lands again the next
+  update, so the air counter never reaches 5 and nothing shows.
+  **Derived, not checked in the original:** if the ground falls more than
+  about 45 units per update, he hasn't landed after 5 updates and the
+  **Fall** state starts (`jumphold`), then `jumpend` when he lands. That
+  is slopes over about 15° when running (168 per update) and over about
+  31° when walking (75 per update). The B session's log (`--hold 1,0,1`,
+  in the air every other update on a slope with normal z 0.996) is what
+  the original does too.
 
 ### Gravity (traced)
 
@@ -101,7 +183,7 @@ higher is a wall; a bigger drop leaves him in the air.
   so a long steep slope ends in the fall animation and, if the drop is big
   enough, death.
 - Walking up a slope steeper than 36.9° fails because each down pass lands
-  on a steep surface and pulls him back.
+  on a steep surface and pushes him back (see "The terrain in the passes").
 
 ### Falling off an edge (traced)
 
@@ -200,8 +282,12 @@ jump, by landing on a steep surface, and by scripts (`setUseGravity
 Connor 1` after cutscenes in IceWorld). The scripts turning it back to 1
 suggest that 1 is the normal value.
 
-- With gravity **off**, walking off a high edge drops him 325 per update
-  (the step-down pass, about 4,900 units/s) with no Fall state and no death.
+- With gravity **off**, walking off a high edge leaves him **hovering** at
+  the same height: the up pass lifts him 325 and the down pass lowers him
+  325, and the ground check only ever raises him. No Fall state starts,
+  because the air counter only counts with gravity on. (Corrected for Q23:
+  this note used to say he drops 325 per update. That was wrong: the up
+  pass is not skipped in the air.)
 - With gravity **on**, the fall rules above apply.
 
 **Recommendation:** start with gravity on and log it. If the original is
@@ -209,7 +295,8 @@ later found to start with it off, it is a one-line change.
 
 ## Data used
 
-- `GAME/Kq/Connor.kq`: collider box and sphere.
+- `GAME/Kq/Connor.kq`: collider box (the sphere and the section's
+  `mask`/`type`/`collisionDetail` lines are not read).
 - `GAME/Kq/Conner.anm`: movement names and sounds (`jump`, `runJump`,
   `backJump`, `*Hold`, `*End`, `*Die`, `crash`, `jumprun`, `jumpstop`).
 - `GAME/Common/C_jump.kqs`, `C_rnjmp.kqs`, `C_bkjmp.kqs` and the hold/end
@@ -255,14 +342,22 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 - Walk into a wall head-on: `Stop`, standing. Run into it head-on: `crash`.
   At 45°: he slides along the wall.
 - Walk up a ramp under 36°: he climbs. Over 37°: he slides back.
+- Run straight at a steep hillside (Q26): about 0.4 s and a few hundred
+  units of climb, then `jumphold` and a slide back. Log the contact normal
+  of the down pass. It should be steep, and the push-back should grow each
+  update.
+- Run down a slope of 20° or more in the original game and watch whether
+  Connor switches to the falling pose. The rules predict he does (see
+  "The terrain in the passes"); this has not been checked.
 - Walk off a ledge more than 3,840 high (with gravity on): `jumpdie`, then
   Die.
 
 ## Open questions
 
 1. Is Connor's gravity on when a world starts? (See above.)
-2. Which collision shape (box or sphere) is used against buildings and
-   objects, and how the building BSP is tested.
+2. ~~Box or sphere?~~ The box (see "Collision shape"). Still open: how
+   the box is tested against building surfaces and other objects' boxes,
+   and what the mask/type bits mean.
 3. When `jumprun` / `jumpstop` play after a running jump.
 4. What the "no crash" object flag means, and the game flag that blocks
    crashes.
