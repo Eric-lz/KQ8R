@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q22 answered by measurement (palette entry 0 is black)
+
+**Changed:** `docs/behaviour/models-and-textures.md` ("System colours": entry 0 is black on any screen), `docs/behaviour/QUESTIONS.md` (Q22 answered). No code.
+**Why:** Q3 ("palette as stored", entry 0 blue) and Q5 ("entry 0 set to black") disagreed.
+**Tested how:** Traced the code that sends palettes to the 3D card (Glide): it passes entry 0 on as it is in memory (only brightness applied; entries 1–9 and 246–254 that are pure black become magenta). Then read the running original's memory (read only, `re/dbg/mem_pal.py`) with the game in Daventry on a normal desktop: found the in-memory copy of `daventry.ppl`.
+**Result:** It equals the file in all 256 entries except entry 0: (0, 0, 0) instead of (0, 0, 255). So entry 0 is black on a normal screen; Q5 was right, the entry-0 part of Q3 was wrong.
+**Still broken / not tested:** Where entry 0 is set to black was not traced. Only Daventry's palette was read. The magenta replacement of black system entries (1–9, 246–254) when sending to the card is noted in my scratch notes only; no texture uses those entries as far as known.
+**Next:** B: draw entry 0 as black (`WIRLPOOL.BMP`, `Teleport.BMP`).
+
 ## 2026-10-12 Study session: Q39 settled by measurement (box names ignore case)
 
 **Changed:** `docs/behaviour/connor-physics.md` (new "Case doesn't matter in practice"; the old trace marked wrong; "How to check" updated), `docs/behaviour/QUESTIONS.md` (Q39 answered). No code.

@@ -118,11 +118,22 @@ answered yet** (still being studied).
   256-colour mode**. (Traced: it asks Windows for the system palette and
   copies it in, only for an 8-bit screen.) In any other mode the palette is
   used as stored.
-- So for a modern display: **use the palette exactly as stored**. The
-  current "force 8 system colours at each end" rule (from libkq8fpc notes)
-  is not what this game does on a normal screen. It only matters for
-  textures that use those entries (e.g. `Teleport.BMP`), and for entry 0
-  (blue as stored, black on a 256-colour screen).
+- So for a modern display: **use the palette as stored, except entry 0,
+  which is black** (see the next point). The current "force 8 system
+  colours at each end" rule (from libkq8fpc notes) is not what this game
+  does on a normal screen. It only matters for textures that use those
+  entries (e.g. `Teleport.BMP`).
+- **Entry 0 is black on a normal screen too (measured 2026-10-12, Q22).**
+  In the running original (GOG version, normal desktop, not 256-colour
+  mode), the copy of `daventry.ppl` held in memory matches the file in
+  all 256 entries **except entry 0, which is (0, 0, 0)** instead of the
+  stored (0, 0, 255). No other entry is changed. So whatever the screen
+  mode, use **black for entry 0**. This corrects the earlier "blue as
+  stored" for entry 0 and agrees with the `0x1000` answer below. (Where
+  the game does this was not traced; only Daventry's palette was
+  checked, and the rule is assumed to hold for every world's palette.)
+  Affected textures: Swamp's `WIRLPOOL.BMP` and `Teleport.BMP` (black,
+  not blue, where they use entry 0).
 
 ## Where texture names are looked up (Q4, partly)
 
