@@ -59,22 +59,46 @@ banking, already in `connor-movement.md`). Values it uses:
 | gravity | drop per update `10000 × (t² − t_prev²)` (see "Gravity") | fixed; measured in the running original (the code reading gave 4 times less) |
 | collision type | 4 | Connor's constructor (traced); bit 4 lets the Fall state start and makes steep ground switch gravity on |
 | collision mask | 0x281B | Connor's constructor (traced); bit 0x800 makes the terrain count in the up and down passes |
-| collision box | x −200…200, y −150…150, z 0…1,600 | `GAME/Kq/Connor.kq` `[ConnerCollider]` |
+| collision box | x −200…200, y −200…200, z 0…1,300 | `GAME/patch/BOUNDS.KQ`, entry `Connor` (traced, and read from the running game's memory, Q33); **not** `[ConnerCollider]` |
 
 ### Collision shape (traced; answers open question 2 in part)
 
+- **Where every object's box comes from (traced 2026-10-12, Q33 a):**
+  one game-wide table, `GAME/patch/BOUNDS.KQ` (section `[BoundingBoxes]`,
+  `classType=KQBoundingBoxManager`, `nItems=1111`, lines
+  `itemN=<name> xmin ymin zmin xmax ymax zmax`, lines starting with `;`
+  are comments; the `patch` copy differs from `GAME/Kq/Bounds.kq` only
+  in two door entries, `rtswdoor.kqs` and `lfswdoor.kqs`). The box is
+  looked up **by name** when the object enters the world: first a name
+  from the object's shape (for an animated object, the entry of the
+  movement it has at that moment, e.g. `signpst1.kqs`), then the
+  object's own name (Connor: `Connor`). The numbers are used as they
+  are, in the object's own space: nothing scales them, and the box
+  **does not follow the animation** (it is set once, not per frame).
+  **An object whose names aren't in the table gets no box and never
+  collides.** Collider sections in `.kq` files (`[ConnerCollider]` and
+  the like) are read by a different object, not used for this box.
+  (Note: in the patch copy `lfswdoor.kqs` has xmin 10 > xmax −1520; what
+  the tests do with an inside-out box was not traced.)
 - **The box sets the size; the precise test uses a stack of balls**
-  (traced 2026-10-12, Q31; corrects "Connor collides as a box"). The
-  `boxfMin*`/`boxfMax*` values of `[ConnerCollider]` (his own space, feet
-  at z 0) are turned into balls when the object is set up:
+  (traced 2026-10-12, Q31; corrects "Connor collides as a box"). The box
+  (own space, feet at z 0) is turned into balls when the object is set
+  up:
   - radius r = half the larger of the box's x size and y size;
-  - spacing 2r; count = height / 2r, rounded up;
-  - centres straight above his position (x 0, y 0): the lowest at
-    min z + r, each next 2r higher, the top one at max z - r;
-  - **Connor:** box 400 x 300 x 1600, so r = **200** and **four balls at
-    heights 200, 600, 1000, 1400**, touching, covering 0-1600.
+  - count n = height / 2r, rounded up;
+  - centres straight above his position (x 0, y 0): ball k (k = 0 … n−2)
+    at min z + r + 2r·k; **the last ball at max z − r** (so it can
+    overlap the one below); a single ball sits at min z + r;
+  - **Connor (corrected 2026-10-12, Q33):** box 400 x 400 x 1300, so
+    r = **200** and **four balls at heights 200, 600, 1000, 1100**,
+    covering 0–1300. Read from the running game's memory: exactly these
+    four balls, box −200…200, −200…200, 0…1300, type 4, mask 0x281B.
+    (An earlier version said 1600 tall with the top ball at 1400, from
+    `[ConnerCollider]`; that was wrong.)
   This applies to objects whose class asks for it; all monsters do,
-  Connor included. Because the balls sit on his vertical axis, **his
+  Connor included. (Collision kinds, traced: box = most objects, ball
+  stack = monsters and Connor, building = `KQInterior`; a fourth kind is
+  used only by `RiverControl`.) Because the balls sit on his vertical axis, **his
   shape does not turn with his heading**: turning on the spot is never
   checked and can't push him into anything.
 - **First, a rough check:** each move covers a box from the old to the
@@ -86,15 +110,74 @@ banking, already in `connor-movement.md`). Values it uses:
   (so **the other object's box does turn with it**), and tested against
   that box enlarged by the ball's radius. The earliest hit along the move
   counts. The surface direction is the hit face's axis, turned back into
-  the world.
-- **Against a building (precise):** a ball is swept along the move
-  through the building's BSP tree (the plane tree in the `.dig`), with
-  every plane pushed out by the ball's radius. The first plane hit along
-  the move counts. Its direction is flipped to face the side he came
-  from, so **walls block from both sides**. **Not settled:** which radius
-  and which of his balls the building test uses (probably the same
-  r = 200; not followed to the end). Which surfaces count as solid
-  (Q31 c) is not traced.
+  the world. Details (traced, Q33):
+  - **A move that is exactly vertical** (x and y change both exactly 0)
+    tests one ball only: the top ball when going up (or not moving), the
+    bottom ball when going down. Any other move tests all of them.
+  - Moves shorter than 0.001 in every axis are not tested.
+  - A ball that **starts inside** the enlarged box counts as a hit with
+    no usable contact (what the caller then does was not followed).
+  - **The same 25-unit pull-back as for buildings:** the contact moves 25
+    back toward the ball's start; if the contact is 25 or less from the
+    start, the start itself.
+- **Against a building (precise; fully traced 2026-10-12, Q31 b, c).**
+  Game buildings (`KQInterior`) are their own collision kind; Connor's
+  balls are always tested against them like this:
+  1. If his move this pass (old position to new) is shorter than 0.1,
+     there is no test and no hit.
+  2. Everything is done in the building's own space (its placement
+     undone).
+  3. **Each of his four balls** (radius 200) is traced from old
+     position + its offset to new position + its offset through the
+     building's BSP tree, using the `.dig` tables 2 (nodes, 8 bytes:
+     plane number u16, front child i16, back child i16, 2 bytes not
+     used), 3 (leaves, 48 bytes) and 8 (planes: normal, d).
+  4. **At a node:** the ball at the start of the piece being traced and
+     the ball at its end are each sorted against the node's plane: **in
+     front** if its centre is more than r + 0.00001 on the side where
+     normal · p + d > 0, **behind** if more than that on the other side,
+     otherwise **touching**.
+     - Both in front, or start touching and end in front: go on in the
+       front child only. Both behind, or start touching and end behind:
+       back child only.
+     - Start in front and end behind or touching (or start behind and end
+       in front or touching): split the piece where the ball first touches
+       the plane (the plane moved by r toward the side the ball comes
+       from). Trace the first part in the start's child; if that hits,
+       done. Otherwise trace the rest in the other child, remembering this
+       plane as **the plane crossed**.
+     - Both touching: trace the whole piece in both children; if both hit,
+       keep the hit nearer the start.
+  5. **A child number below 0 is a leaf** (leaf number = −1 − child). A
+     leaf whose first byte has **bit 0 set is solid**, any other leaf is
+     empty (no hit). Entering a solid leaf is a hit, unless no plane was
+     crossed on the way in (the ball started inside solid: no hit). The
+     hit point is where the piece entered the leaf; the surface is the
+     plane crossed, its direction flipped if needed so it points
+     **against** the move. So walls block from both sides.
+  6. Of the four balls' hits, the one nearest to its ball's start (the
+     earliest along the move) counts. Connor's contact position is that
+     hit point minus the ball's offset, back in world space, then **pulled
+     back 25 units toward his old position** (if the contact is within 25
+     of the old position, the old position itself).
+  7. The result goes to the hit handler (below): over all buildings and
+     objects hit in that pass, the contact **nearest his old position**
+     is kept, with its surface direction and the object hit. Then the
+     rules in "Walls" apply.
+  - **Which surfaces are solid (Q31 c):** only the BSP leaves' bit 0
+    decides. Surfaces and materials (table 1) play no part in collision.
+  - **The trace always starts at node 0** (with "no plane crossed"), so
+    node 0 is the root (traced, Q33 e).
+  - **Where the 25-unit pull-back applies (traced, Q33 b):** to every
+    building hit and every object hit, in every pass (up, across, down,
+    and the slide retries). **Not** to the terrain: a terrain contact is
+    exactly (end x, end y, terrain height). So, by the rules as traced:
+    on a building floor Connor stands **25 above** the floor (feet at
+    floor + 25); against a wall, head-on, his centre stops **225** from
+    the wall (ball radius 200 + 25); under a ceiling his top ball stops
+    25 short of it. **Not checked in the game.** B can check the wall
+    one from my log of 2026-10-12 (the straight Daventry wall in "Walls,
+    measured") if the engine can find that wall's plane.
 - **The sphere is never used.** The game's collider reader reads only
   `boxfMinX/Y/Z`, `boxfMaxX/Y/Z`, `deactivateWidth` and `deactivateSpace`
   from a collider section, plus the display keys every object section has
@@ -116,10 +199,17 @@ banking, already in `connor-movement.md`). Values it uses:
 - Defaults: an object that sets nothing has type 0x41 and mask 0. Object
   `.kq` files in the game use `colliderMask` values 0, 1, 2, 4 (316 files),
   11, 13, 15, 31 and 2055.
-- **Also skipped (traced):** an object with no collision owner; an
-  object whose owner has a certain flag bit set; and an object that
-  answers "no" to a yes/no check of its own (what it checks is not
-  traced, so whether hidden objects collide is **not settled**, Q31 d).
+- **When an object takes part at all (traced, Q31 d):** an object gets a
+  collider only if its type or its mask is non-zero and it has a shape
+  with a bounding box. An object with type 0 and mask 0 never collides.
+  A pair is also skipped while the object is being removed, and while a
+  game-wide "ready" check says no (this check looks at the game state,
+  not at the object; probably loading). **Hidden objects still collide:**
+  `KQObject::setHidden` (and the `hidden` key) only change the drawing;
+  none of the collision steps reads it. (Traced, not checked in the
+  game.)
+- **Not traced:** Connor against another ball-stack object (monsters):
+  a different routine, used when both sides are ball stacks.
 - **Not traced:** what each mask/type bit stands for, other than 0x800
   (terrain, in Connor's mask) and 4 (Connor's type).
 
@@ -423,8 +513,9 @@ Consequences:
 
 When the across pass hits something:
 
-- **Head-on** means the angle between his movement and the wall's face is
-  under **0.35 rad (about 20°)**, and the movement isn't straight up or
+- **Head-on** means the angle between his movement and the wall's
+  normal (reversed, pointing into the wall) is under **0.35 rad (about
+  20°)**, and the movement isn't straight up or
   down. During a jump, any surface with normal z < 0.8 also counts.
   This only applies while he is moving or jumping (states Move and Jump).
   - Movement `Run`, `stoprun`, `WaterRun`, `runwaterrun`, `runJump` or
@@ -437,6 +528,38 @@ When the across pass hits something:
 - **Glancing:** remove the part of the remaining movement that goes into the
   wall, i.e. **slide along it**, and try again. This happens at most 3 times
   in one update; after that he stops at the contact point.
+
+**Exact hit handling (traced 2026-10-12, Q33 c, d).** "Contact" is the
+contact the hit handler kept, i.e. **already pulled back 25** (see
+"Collision shape"); "wanted end" is where this pass was trying to go.
+
+- **Head-on test:** the angle between his **movement in this pass**
+  (wanted end − start of the pass, horizontal part only, made unit
+  length) and the reversed surface direction is under 0.35 rad. If the
+  horizontal movement is zero it is never head-on. It is his movement,
+  **not his facing**: stepping straight backwards into a wall is
+  head-on. (The measurements fit both because he was walking forwards.)
+  Head-on only acts in state Move or Jump, and never against a
+  `KQMonster`, against a ball-stack object without type bit 0x100, during
+  `backJump`, or while a Connor flag is set (not traced which).
+- **Head-on, up-pass hits, and walkable landings** (down pass, or the
+  pass type 2 not otherwise described, with surface z ≥ 0.8): he is put
+  at the contact, no slide.
+- **Everything else** (glancing, steep ground in the down pass): the new
+  target is the wanted end **projected onto the contact's plane**:
+  target = wanted end − n × ((wanted end − contact) · n), n the unit
+  surface direction. So the leftover is measured from the **pulled-back**
+  contact, and the 25 lost to the pull-back is given back along the
+  wall. If wanted end − contact is under 0.000001 in every axis, the
+  target is the contact (no slide). He is set at the contact and swept
+  to the target as an across pass (terrain ignored). If that sweep hits,
+  the same handling runs again for the new hit (its own head-on test,
+  with the slide as the movement); on the 3rd hit in one update he stays
+  at that hit's contact. If it doesn't hit, he ends at the target. The
+  steep push-off is this same code.
+- **Landing on top of a `KQMonster`** (surface direction exactly
+  straight up): instead of all this he is pushed 250 sideways, straight
+  away from the monster's position (traced only this far).
 
 This matches the manual: straight into an object stops him; at an angle he
 glances off and keeps going.
@@ -451,8 +574,8 @@ counter values are the game's own and are exact.)
 - **Which angle counts as head-on:** measure it between his facing and
   the wall's normal (straight into the wall). Head-on at 1.6° and 11.8°;
   glancing at 21.6° and 35°. That fits a 20° (0.35 rad) limit measured
-  from the normal. (The wording "angle to the wall's face" above should be
-  read this way.)
+  from the normal. (He was moving forwards, so facing and movement were
+  the same here; the code uses his movement, see "Exact hit handling".)
 - **Walking head-on:** he stops at the contact point at once. `Walk`
   switches straight to `Stop` (standing), with **no** stop animation.
 - **Running head-on:** `crash` plays **in full** (corrected; an earlier

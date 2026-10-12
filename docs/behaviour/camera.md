@@ -50,7 +50,7 @@ needed for normal play; keep them behind a debug switch.
    (`KQCamera::follow Connor`; `KQCamera::follow none` stops following,
    used around cutscenes).
 2. It aims at a point **1,400 units above** the followed object's base
-   (Connor is 1,600 tall, so roughly head height).
+   (Connor's collision box is 1,300 tall, so a little above his head).
 3. The view direction is from the camera to that point, so Connor stays in
    the middle of the screen.
 

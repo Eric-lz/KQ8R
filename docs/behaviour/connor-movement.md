@@ -12,8 +12,10 @@ and turning on flat ground, and which animation plays for each.
 
 ## Units and axes
 
-- Distances are in game units. Connor is 1,600 units tall (collision box in
-  `GAME/Kq/Connor.kq`) and walks about 1,127 units per second, so 1 unit is
+- Distances are in game units. Connor's collision box is 1,300 units tall
+  (`GAME/patch/BOUNDS.KQ`, entry `Connor`; corrected 2026-10-12, Q33; the
+  1,600 in `[ConnerCollider]` of `GAME/Kq/Connor.kq` is not used for it)
+  and walks about 1,127 units per second, so 1 unit is
   very likely 1 mm. Treat this as the working assumption.
 - Z is up. Turning is rotation about Z. Positive turn = counter-clockwise
   seen from above = turning left.

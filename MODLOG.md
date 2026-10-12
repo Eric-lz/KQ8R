@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q33 answered (object boxes, pull-back, slide, head-on)
+
+**Changed:** `docs/behaviour/connor-physics.md` ("Where the values live", "Collision shape", "Walls"), `docs/behaviour/QUESTIONS.md` (Q33 answered, Q31 corrected), Connor's height in `connor-movement.md` and `camera.md`. No code.
+**Why:** B's Q33, for M2 step 2d (walls).
+**Tested how:** Traced in Ghidra. Connor's box and balls also read from the running original's memory (read only, outside the process): box −200…200, −200…200, 0…1300; balls at 200, 600, 1000, 1100, radius 200.
+**Result:** Object boxes come from `GAME/patch/BOUNDS.KQ` by name; an object not listed never collides. **Correction:** Connor's box is that table's `Connor` entry, not `[ConnerCollider]`; his top ball is at 1100, not 1400. The 25 pull-back applies to every building and object hit in every pass, never to the terrain. The slide starts at the pulled-back contact. The head-on test uses his movement, not his facing. The BSP root is node 0.
+**Still broken / not tested:** Not checked in the game: standing 25 above building floors, and stopping 225 from a wall. Not traced: Connor against monsters (ball stack vs ball stack), and what happens when a ball starts inside an object's box.
+**Next:** B uses this for 2d. A check of the 225 stop distance would settle the pull-back.
+
+## 2026-10-12 Q33 asked (walls follow-up)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q33. No code.
+**Why:** After Q31's answers, four points still decide exact behaviour for M2 step 2d: which box objects use, where the 25-unit pull-back applies, where a glancing slide starts, and whether head-on is judged by movement or facing. The user wants all answers in before coding.
+**Tested how:** Data check only: `kq8 text vol:Daventry/kq/<file>` for `signpst1.kq`, `Davtorch.kq`, `shut1r.kq`, `chandlir.kq`.
+**Result:** None of them has a collider section; `signpst1.kq` has `#colliderType=257` and `#colliderMask=31`, commented out.
+**Still broken / not tested:** 2d not started. Whether the BSP root is node 0 is not checked yet (to do from the data, read only).
+**Next:** Session A answers Q33; then B rewrites the 2d plan and shows it before coding.
+
 ## 2026-10-12 Downhill rule removed
 
 **Changed:** `crates/kq8-game/src/mover.rs`: the downhill rule (our own design, from the note's recommendation) is gone, along with its `snap` result in the log's `down` column. The unit test `running_down_walkable_slopes_never_falls` now checks walking and running at 5°, 20°, 30° and 36°: no Fall and the air count never reaches 5. It no longer requires him to be on the ground every update. `docs/provenance/README.md`, `docs/DESIGN.md` (2c) marked.
@@ -56,6 +74,20 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 
 **Still broken / not tested:** Not checked by eye in the viewer. The Daventry hillside numbers in the provenance file (Fall at update 17 on a 52° hill) are from before this change and weren't redone. Fall start still sets the timer to 0.36 (visible in the log: timer 0.30 → 0.42, drop 468 instead of 396): that's step G2.
 **Next:** G2.
+
+## 2026-10-12 Study session: building collision traced exactly (Q31 finished)
+
+**Changed:** `docs/behaviour/connor-physics.md` (Collision shape: the building test step by step, solid surfaces, when objects collide, hidden objects), `docs/behaviour/QUESTIONS.md` (Q31 now answered). Scratch addresses in `re/notes.md`.
+**Why:** The user asked for exact rules instead of measurements for the three open Q31 points.
+**Tested how:** Traced in `Mask.exe` with Ghidra: the collision manager's event handling, the dispatcher that picks a test by collision kind, the ball-stack-against-building test, the BSP trace and its helpers, the hit handler, collider registration and `KQObject::setHidden`. Some class tables were found by scanning the exe copy in `re/` for the class type records.
+**Result:**
+
+- Buildings (`KQInterior`) are their own collision kind. All four of Connor's balls (r 200) are traced through the `.dig` BSP (nodes, leaves, planes). The earliest hit counts, and the contact is pulled back 25 toward his old position. Moves under 0.1 aren't tested.
+- Solid = a BSP leaf whose first byte has bit 0 set. Surfaces and materials don't matter.
+- Hidden objects still collide (hiding only changes the drawing). Objects with type 0 and mask 0 never get a collider.
+
+**Still broken / not tested:** Nothing of this has been checked in the running game. Connor against monsters (ball stack against ball stack) isn't traced. The game-wide "ready" check that can skip all pairs isn't traced (probably loading).
+**Next:** B can implement building collision from the note. A possible check in the game: walk into a hidden object and see if it blocks.
 
 ## 2026-10-12 Study session: wall collision traced (Q31), Q32 confirmed
 
