@@ -266,7 +266,7 @@ pub fn spawn_connor(
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked",
     );
     if let Some(cam) = crate::game_camera::make(
         sim.mover.position,
@@ -324,6 +324,19 @@ pub fn connor_keys(
         }
         if keys.just_released(*k) {
             sim.controls.held.retain(|h| h != k);
+        }
+    }
+    // A fresh press of forward or back ends a wall block of that direction.
+    let presses: Vec<i8> = [(sim.controls.forward, 1), (sim.controls.back, -1)]
+        .into_iter()
+        .filter(|(k, _)| k.is_some_and(|k| keys.just_pressed(k)))
+        .map(|(_, d)| d)
+        .collect();
+    for d in presses {
+        if sim.walker.key_pressed(d) {
+            let line = format!("connor update {}: {} pressed again: wall block ended", sim.updates, if d > 0 { "forward" } else { "back" });
+            shared.log.lock().unwrap().detail(&line);
+            sim.log.detail(line);
         }
     }
     let c = &sim.controls;
@@ -417,7 +430,7 @@ pub fn connor_step(
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -453,6 +466,11 @@ pub fn connor_step(
         report.hits.len(),
         down_hit.map_or("none".into(), |h| h.hit.what.replace(' ', "_")),
         down_hit.map_or("none".into(), |h| format!("{:.1}", h.hit.position[2] - h.hit.touch[2])),
+        match sim.walker.blocked {
+            1 => "fwd",
+            -1 => "back",
+            _ => "none",
+        },
     );
     sim.log.detail(line);
     let mut events = report.events.clone();
@@ -502,7 +520,7 @@ pub fn connor_step(
         }
     }
     if let Some((from, to)) = wall_stop {
-        events.push(format!("head-on into a wall: movement {from} -> {to}"));
+        events.push(format!("head-on into a wall: movement {from} -> {to}; this key blocked until pressed again"));
     }
     let state = sim.mover.state.name();
     if state != sim.last_state || !events.is_empty() {

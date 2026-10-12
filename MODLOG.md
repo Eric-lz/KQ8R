@@ -3,6 +3,34 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-3b: walk held against a wall (no more frozen frame)
+
+**Changed:**
+
+- `crates/kq8-game/src/connor.rs`: the walker remembers which key direction (forward or back) a head-on stop blocked (`Walker::blocked`). While the keys still ask for it, he stands in `stop` and its animation plays on. A fresh press of that key ends the block (`Walker::key_pressed`), and so does any mode change. Running is never blocked.
+- `crates/kq8-viewer/src/connor_view.rs`: passes fresh forward/back presses to the walker; new `connor.log` column `blocked` (`none`, `fwd`, `back`); event lines when the block starts and ends.
+- Records: `docs/DESIGN.md` (plan 2d-3b, plus the user's choices for 2d-4 and 2d-5), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q38, for A's information), `README.md`.
+
+**Why:** The user saw him frozen on the walk's first frame with forward held against a wall, and checked the original: he stops in the idle animation and doesn't try again until forward is pressed again.
+**Tested how:**
+
+- `cargo test --workspace`: kq8-data 44, kq8-game 49 (new: `a_wall_stop_holds_until_the_key_is_pressed_again`, for forward and back: 45 updates held → `stop` with its phase moving on; turn key → turns on the spot; the other key moves him; pressed again → moves again; run not blocked; a mode change clears it).
+- Viewer, walk head-on at the `Tomb` (`--at 237907.4,187510.2,0.027 --hold 1,0,0 --frames 400`).
+- Regression: run head-on (`--at 237968.9,187493.2,-0.2054 --hold 1,0,1`).
+
+**Result:**
+
+- Walk: head-on at update 2, stops at (237909.4, 187435.1) as before. Then `stop` for every update to the end (33 updates), phase 0.034, 0.069 … 0.966, 0.000, … (the idle loop plays), `blocked fwd`, position unchanged. No walk/stop alternation.
+- Run: unchanged (contact (237959.7, 187449.2), still running, `blocked none`).
+
+**Still broken / not tested:**
+
+- Checked by eye by the user afterwards (2026-10-12): working.
+- Turning on the spot with the blocked key held is our choice, not checked in the original (Q38).
+- Running head-on still keeps running (2d-4); objects don't collide (2d-5).
+
+**Next:** 2d-4 (crash).
+
 ## 2026-10-12 M2 step 2d-3 checked by eye (user)
 
 **Changed:** `README.md`, this entry. No code.

@@ -748,6 +748,32 @@ Steps (each separately revertable, each stopped for an eye check):
       surface direction; the across result (`free` / `glance` /
       `head-on` / `3 hits`), hits used, the head-on angle; on a building
       floor, his height above it.
+  - **2d-3b, walk held against a wall.** *Done 2026-10-12 (MODLOG).*
+    The user
+    saw Connor frozen on the walk's first frame while forward was held
+    against a wall: each update the keys restart `walk` at frame 0 and
+    the head-on stop puts `stop` back at frame 0. **The user checked the
+    original:** he tries to move, stops in the idle animation (`stop`) as
+    soon as the wall is hit, and doesn't try again until the forward key
+    is pressed again (A measured 2.8 s of `Stop` with the key held, Q37
+    d; the user's check says it lasts until the key is pressed again).
+    - The walker remembers the key direction (forward or back) that was
+      stopped. While that direction is still what the keys ask for, it
+      counts as "not moving forward or back": with no turn key he stands
+      in `stop` and its animation plays on; with a turn key he turns on
+      the spot (our choice, not checked in the original).
+    - Pressing that key again (a new press, not a held one) clears it,
+      and so does any mode change (falling, the test lifts). Releasing the
+      key alone doesn't clear it, but then nothing asks for that
+      direction anyway. Pressing the other direction moves him normally;
+      the stopped direction stays blocked until it is pressed again.
+    - Running is not blocked (2d-4: held run runs again after the crash).
+    - Log: an event line when the block starts and when a key press
+      clears it; `connor.log` gets a column `blocked` (`none`, `fwd`,
+      `back`).
+    - Unit tests: walk into a wall, keep forward held for 45 updates:
+      `stop` all the time with its phase moving on; release and press
+      forward: walks again. Back works the same way.
   - **2d-4, crash when running head-on.** Running (`run`; the note's
     other run-like movements don't exist in our code yet) head-on into a
     wall: `crash` plays **in full** (traced, Q31 e). Its own 7 steps move
@@ -760,7 +786,14 @@ Steps (each separately revertable, each stopped for an eye check):
     we don't have yet (`KQMonster`, `backJump`, the unknown Connor flag,
     the "no crash" flags of open question 4). Unit test: run into a wall,
     `crash` for 7 updates, 441.5 back, then `run`.
+    - How (the user's choice, 2026-10-12): a new walker mode `Crash`,
+      like `Land`: `crash` plays once, its steps go to the mover, the
+      keys are ignored, then the keys take over again.
   - **2d-5, objects.**
+    - How (the user's choice, 2026-10-12): a second list, of object
+      boxes, next to the building list in the mover's scene; both are
+      swept and the nearest hit kept. Buildings stay as they are. To
+      revisit if monsters (ball stacks) make a third list awkward.
     - Box: from `BOUNDS.KQ` by name when the object enters the world:
       first its shape's name (for an animated object, the shape of the
       movement it has then, e.g. `signpst1.kqs`), then its own name. Used

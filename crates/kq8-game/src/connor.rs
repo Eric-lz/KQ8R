@@ -126,6 +126,9 @@ pub struct Walker {
     /// Position in the current loop, 0..1.
     pub phase: f32,
     pub mode: Mode,
+    /// The key direction a head-on stop blocked (1 forward, −1 back, 0
+    /// none): it doesn't move him again until that key is pressed again.
+    pub blocked: i8,
 }
 
 /// What one update asks for.
@@ -143,13 +146,25 @@ pub struct Step {
 
 impl Walker {
     pub fn new(heading: f32) -> Self {
-        Walker { heading, movement: "stop", phase: 0.0, mode: Mode::Free }
+        Walker { heading, movement: "stop", phase: 0.0, mode: Mode::Free, blocked: 0 }
     }
 
     /// Switch mode (from the mover's fall events, or a test lift). The new
-    /// mode's animation starts at its beginning in the next `update`.
+    /// mode's animation starts at its beginning in the next `update`. Also
+    /// ends a wall block.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
+        self.blocked = 0;
+    }
+
+    /// A fresh press of the forward (1) or back (−1) key: ends the wall
+    /// block of that direction. Returns true if it ended one.
+    pub fn key_pressed(&mut self, forward: i8) -> bool {
+        let cleared = forward != 0 && self.blocked == forward;
+        if cleared {
+            self.blocked = 0;
+        }
+        cleared
     }
 
     /// In the Move state: the keys chose a movement other than standing
@@ -160,16 +175,32 @@ impl Walker {
 
     /// A head-on hit while moving (connor-physics.md "Walls"): walking or
     /// stepping back switches straight to `stop`, with no stop animation
-    /// (measured). Running is left alone until the crash (M2 step 2d-4).
+    /// (measured). That key direction then stays blocked until it is
+    /// pressed again (the user's check of the original, DESIGN 2d-3b).
+    /// Running is left alone until the crash (M2 step 2d-4).
     /// Returns the change, if any.
     pub fn stop_at_wall(&mut self) -> Option<(&'static str, &'static str)> {
         if !self.moving() || self.movement == "run" {
             return None;
         }
         let from = self.movement;
+        self.blocked = match from {
+            "walk" => 1,
+            "back" => -1,
+            _ => 0,
+        };
         self.movement = "stop";
         self.phase = 0.0;
         Some((from, "stop"))
+    }
+
+    /// The intent with a blocked key direction taken out (running is
+    /// never blocked).
+    fn unblocked(&self, mut intent: Intent) -> Intent {
+        if self.blocked != 0 && intent.forward == self.blocked && !(intent.forward == 1 && intent.run) {
+            intent.forward = 0;
+        }
+        intent
     }
 
     /// One update (1/15 s). `loops` gives a movement's loop by name.
@@ -188,7 +219,7 @@ impl Walker {
                 self.mode = next;
             }
         }
-        let movement = self.mode.movement().unwrap_or_else(|| choose_movement(intent));
+        let movement = self.mode.movement().unwrap_or_else(|| choose_movement(self.unblocked(intent)));
         let mut changed = None;
         if movement != self.movement {
             // No transition animations yet (Q25): the new loop starts at
@@ -256,6 +287,52 @@ mod tests {
         w.movement = "walk";
         w.set_mode(Mode::Fall);
         assert_eq!(w.stop_at_wall(), None, "not while falling");
+    }
+
+    #[test]
+    fn a_wall_stop_holds_until_the_key_is_pressed_again() {
+        let loops = |m: &str| match m {
+            "walk" => Some(walk(1.0)),
+            "back" => Some(walk(-1.0)),
+            "stop" => Some(MovementLoop { step_sum: [0.0; 3], ..walk(1.0) }),
+            _ => None,
+        };
+        for (forward, movement) in [(1, "walk"), (-1, "back")] {
+            let mut w = Walker::new(0.0);
+            w.update(intent(forward, 0, false), &loops);
+            assert_eq!(w.stop_at_wall(), Some((movement, "stop")));
+            assert_eq!(w.blocked, forward);
+            // Key held for 3 s: standing, the idle animation playing on.
+            let mut last = w.phase;
+            for n in 0..45 {
+                let s = w.update(intent(forward, 0, false), &loops);
+                assert_eq!((w.movement, s.wanted), ("stop", [0.0; 3]), "{movement} update {n}");
+                assert_ne!(w.phase, last, "{movement} update {n}: stop's frame moves on");
+                last = w.phase;
+            }
+            // A turn key turns him on the spot.
+            w.update(intent(forward, 1, false), &loops);
+            assert_eq!(w.movement, "left");
+            // Releasing alone doesn't clear it; the other key isn't blocked.
+            assert!(!w.key_pressed(-forward));
+            w.update(intent(-forward, 0, false), &loops);
+            assert_ne!(w.movement, "stop");
+            w.update(intent(forward, 0, false), &loops);
+            assert_eq!(w.movement, "stop", "{movement}: still blocked");
+            // Pressed again: moves again.
+            assert!(w.key_pressed(forward));
+            w.update(intent(forward, 0, false), &loops);
+            assert_eq!(w.movement, movement);
+        }
+        // Running isn't blocked; a mode change clears the block.
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, false), &loops);
+        w.stop_at_wall();
+        w.update(intent(1, 0, true), &loops);
+        assert_eq!(w.movement, "run");
+        w.blocked = 1;
+        w.set_mode(Mode::Free);
+        assert_eq!(w.blocked, 0);
     }
 
     #[test]
