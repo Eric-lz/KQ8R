@@ -410,6 +410,29 @@ When the across pass hits something:
 This matches the manual: straight into an object stops him; at an angle he
 glances off and keeps going.
 
+**Measured in the running original (2026-10-12),** against a straight
+building wall, reading his mover from memory:
+
+- **Which angle counts as head-on:** measure it between his facing and
+  the wall's normal (straight into the wall). Head-on at 1.6° and 11.8°;
+  glancing at 21.6° and 35°. That fits a 20° (0.35 rad) limit measured
+  from the normal. (The wording "angle to the wall's face" above should be
+  read this way.)
+- **Walking head-on:** he stops at the contact point at once. `Walk`
+  switches straight to `Stop` (standing), with **no** stop animation.
+- **Running head-on:** `crash` plays for 5 updates (about 0.5 s). During
+  it he is pushed **backwards** (straight back from his facing) by about
+  440–600 units in all (about 63 per update), then stands. If run is
+  still held, he starts running again (`stoprun`) and crashes again
+  (seen twice in a row).
+- **Glancing (walking or running):** he slides along the wall with the
+  walk or run animation still playing. Each update's movement along the
+  wall is the normal step × sin(angle from the normal): at 21.6°, 27–53
+  per update instead of 72–143 (× 0.37); at 35°, 119–238 instead of
+  208–416 (× 0.57). Nothing is lost beyond the part going into the wall.
+  When the wall ends, he carries on at full step in his facing
+  direction.
+
 ### Is gravity on at the start?
 
 **Not traced.** The mover starts with gravity off, and neither `Connor.kq`
@@ -497,7 +520,13 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 2. ~~Box or sphere?~~ The box (see "Collision shape"). Still open: how
    the box is tested against building surfaces and other objects' boxes,
    and what the mask/type bits mean.
-3. When `jumprun` / `jumpstop` play after a running jump.
+3. When `jumprun` / `jumpstop` play after a running jump. **Measured
+   (2026-10-12), one jump each:** run still held at the landing →
+   `jumprun` (3 updates, about 830 units) and back to `Run`; run let go →
+   `jumpstop` (13 updates, 1.0 s, about 1,860 units forward) and then
+   standing. Both jumps covered about **6,480** units from the start of
+   `runJump` to the landing (`runJump` 17 updates, 1.25 s; the table
+   above says 6,356 for the animation alone).
 4. What the "no crash" object flag means, and the game flag that blocks
    crashes.
 5. Water (`submerged`, `WaterWalk`), ropes and pushing: not studied.

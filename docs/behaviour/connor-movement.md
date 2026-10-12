@@ -179,12 +179,52 @@ phases (nearest, next one reached, or first match) is open question 2.
 - In the original game, walk Connor between two landmarks with known
   positions (from the `.kq` files) and time it; compare with ours.
 
+## Measured in the running original (2026-10-12)
+
+Read from the game's memory on flat ground (game clock time):
+
+- Walk: 1,083–1,131 units/s over 2.4–3.1 s stretches (average about
+  1,100, about 2% under the data's 1,127). Run: 2,492–2,561 (average
+  about 2,520; data 2,518). Stepping back: 1,079–1,085.
+- Turning on the spot: 98–102° per second (data: 1.75 rad/s = 100°/s),
+  6.7° per 1/15 s tick, the same left and right.
+
 ## Open questions
 
 1. Are the per-frame steps applied in one go when each frame is reached, or
    blended between frames? Affects smoothness, not average speed.
+   **Measured (2026-10-12),** on flat ground: walking, the distance per
+   1/15 s tick changes smoothly between 70 and 81 (average 75), rising
+   and falling with the step cycle, with no jumps or empty ticks. That
+   fits steps **spread within each frame** (each frame's own step over
+   that frame's time), not one even speed for the whole loop and not
+   whole steps at frame changes. Not yet compared frame by frame with the
+   steps in `C_walk.kqs`.
 2. Which transition is used when several have "from" phases, and what
    happens if the stop is requested between them?
+   **Measured (2026-10-12), partly answered:**
+   - A stop never cuts the cycle at once. After the key is let go, the
+     walk or run keeps playing for 0–4 updates (state already Wait),
+     then a stop animation from the list plays.
+   - Walking (5 stops): let go at 32% of the cycle → `walkstopleft`
+     started at about 50%. Let go at 76%, 89% and 95% → `stopwalkstop`
+     started at about 95–100%. `walkstopright` never played. That fits
+     "wait for the next listed point, play that point's animation", if
+     my phase estimate runs about 5% late (it is worked out from the
+     clock, ±1 update, not read from the game).
+   - Running (8 stops): `runstopleft` (12–13 updates, about 1 s) and
+     `stoprunstop` (6–8 updates, about 0.6 s) both played;
+     `runstopright` never did. The phases fit the same rule only with an
+     unexplained 15% offset, so this part is **not settled**.
+   - Starting: `stopwalk` 5–6 updates (about 0.45 s, about 80 units),
+     `stoprun` 6–9 updates (0.6–0.7 s, 385–490 units). Letting go during
+     `stoprun`: one update of `run`, then `stoprunstop`.
+   - Seen, not explained: during `stopwalk` and `stoprun` he moves about
+     35–50° to the left of his facing, and during `stoprunstop` almost
+     straight to his right (short distances). Probably sideways steps in
+     those animations' data; check the `.kqs` steps.
+   To settle it, the reader needs to log the animation phase itself
+   (the place in memory is not found yet).
 3. Jumping, falling, slopes and walls: answered in `connor-physics.md`
    (walkable limit is 36.9°, not 35°). Water (`waterwalk`), ropes and
    pushing are not studied yet.

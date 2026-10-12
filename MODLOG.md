@@ -3,6 +3,23 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: movement, turning, jumps and walls measured in the running original
+
+**Changed:** `docs/behaviour/connor-movement.md` (new "Measured" section, open questions 1 and 2), `docs/behaviour/connor-physics.md` (Walls, open question 3), `docs/behaviour/QUESTIONS.md` (Q24, Q25). In `re/` (not committed): the reader now also logs which way Connor faces.
+**Why:** The game was still open; the same reader could answer Q24, Q25 and check the wall rules before B's step 2d.
+**Tested how:** The user, in the original on flat ground: walked 4 times and ran 4 times (start and stop each), turned on the spot both ways, did running jumps; then at a building wall, walked and ran into it head-on and at an angle. The reader logged every update (`re/dbg/mem_move.log`).
+**Result:**
+
+- Speeds match the data: walk about 1,100/s (2% under 1,127), run about 2,520, back about 1,080. Turning 98–102°/s (data 100).
+- Q24: the distance per tick changes smoothly with the step cycle (walk 70–81), so steps are spread within each frame.
+- Q25 (partly): stops wait 0–4 updates, then a listed stop animation plays; walking fits "the next listed point". Running not settled.
+- Running jump: about 6,480 to the landing; `jumprun` if run is still held, `jumpstop` if not.
+- Walls confirm the traced rule: head-on (under 20° from straight in) walking stops at once with no stop animation; running crashes for 5 updates and is pushed back about 440–600. Otherwise he slides along the wall at step × sin(angle).
+- The user's angled tests were 21.6° and 35° from straight on, not 45°. Both slid, as the user saw.
+
+**Still broken / not tested:** Run stop choice (Q25) not settled. The animation phase isn't logged (not found in memory). Only one jump of each ending. Only one wall.
+**Next:** B can use these for step 2d (walls) and the start/stop animations. A: find where the animation phase is stored, then repeat the run stops.
+
 ## 2026-10-12 Study session: slopes measured in the running original (open questions 6 and 7)
 
 **Changed:** `docs/behaviour/connor-physics.md` (open questions 6 and 7), `docs/behaviour/QUESTIONS.md` (Q30 b). No code.
