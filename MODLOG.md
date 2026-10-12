@@ -3,6 +3,20 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q38 traced (held walk key against a wall)
+
+**Changed:** `docs/behaviour/connor-physics.md` "Walk held against a wall" (committed as `305647d`); this entry. No code.
+**Why:** The measured "stays in `Stop` while forward is held" had no traced rule, and B asked (Q38) whether a turn key should turn him on the spot.
+**Tested how:** Traced in Ghidra (the hit handler, Connor's key handler, the Wait state's update). Not tested in the game.
+**Result:**
+
+- A walking head-on stop sets a forward block (back block if he was walking backwards). Wait goes back to Move only when the keys ask for a movement and both blocks are off.
+- Clearing: forward released → forward block; back released → back block; forward pressed → back block; back pressed → forward block; a turn key pressed → both. So a turn press makes him walk again while turning, not turn on the spot.
+- Nothing else found clears them (not falling, landing or a new world), except one untraced Connor flag during hits.
+
+**Still broken / not tested:** Whether a held key repeats its "pressed" event (keyboard auto-repeat) is not known. Check in the original: walk into a wall, keep forward held, press and hold a turn key; he should walk again (or stutter walk/stop if auto-repeat clears the block repeatedly).
+**Next:** The remaining study topics: Connor against monsters, which running stop animation plays (Q25), Q27, Q22.
+
 ## 2026-10-12 Docs brought up to date after M2 step 2d
 
 **Changed:** `docs/DESIGN.md` (2d marked done with its stand-ins; the inside-out box and "starting inside a box" items resolved; 2e no longer lists the crash), `docs/behaviour/QUESTIONS.md` (Q38 marked answered, auto-repeat still open), `STATUS.md` (not tracked: latest state, code layout, test counts, what works, what's next, open questions, fresh-session prompts). No code.
