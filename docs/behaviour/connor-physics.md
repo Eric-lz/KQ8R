@@ -634,12 +634,47 @@ contact the hit handler kept, i.e. **already pulled back 25** (see
   fully as above (head-on test included). If the **4th slide** also
   hits, he stays at that hit's contact, with no head-on test and no
   further slide.
-- **Walk held against a wall (measured, Q37 d):** after a walking
-  head-on stop he stayed in `Stop` (state Wait, not moving) for about
-  2.8 s while the walk key was held (user's step: "keep holding forward
-  for 2 seconds"); walking never started again in that time. Why it
-  doesn't restart was not traced. Running is different: held run starts
-  running again and crashes again (see "Measured" below).
+- **Walk held against a wall (measured, Q37 d; traced 2026-10-12,
+  Q38):** after a walking head-on stop he stayed in `Stop` (state Wait,
+  not moving) for about 2.8 s while the walk key was held (user's step:
+  "keep holding forward for 2 seconds"); walking never started again in
+  that time. Running is different: held run starts running again and
+  crashes again (see "Measured" below). **Why (traced):** a head-on stop
+  that plays `Stop` (any movement except the running and jumping ones
+  that `crash`) also sets a **block** on the direction he was going:
+  **back blocked** if the movement was `Back`, otherwise **forward
+  blocked**. Connor has two such blocks, both off when he is created.
+  - **What Wait does each update:** if the move keys ask for a movement
+    (the same choice as in Move: forward → `Walk`/`Run`, back → `Back`,
+    only a turn key → `Left`/`Right`) **and neither block is on**, he
+    goes back to Move with that movement. If either block is on he stays
+    in Wait, **even for a turn on the spot**: with forward still held
+    and nothing else pressed he just stands in `Stop`.
+  - **What clears a block** (only key events, at the moment the event
+    arrives):
+    - forward **released** → clears forward blocked;
+    - back **released** → clears back blocked;
+    - forward **pressed** → clears back blocked (not forward);
+    - back **pressed** → clears forward blocked;
+    - **a turn key pressed** (left or right) → clears **both**.
+      Releasing a turn key clears nothing.
+  - So with forward held against the wall, pressing a turn key clears
+    the block and on the next Wait update he **walks again** (forward
+    still wins over turning in the movement choice), turning as he goes.
+    He does **not** turn on the spot. If he is still facing the wall
+    within the head-on angle, the next hit stops him again and sets the
+    block again; once he has turned enough he glances off and slides.
+  - Nothing else found clears the blocks: not falling, not landing, not
+    a new world. The one exception: while the Connor flag that switches
+    off the head-on test is set (see "Head-on test"; which flag is not
+    traced), each up- or across-pass hit clears both blocks.
+  - **Not known:** whether holding a key makes the game send the
+    "pressed" event again (keyboard auto-repeat). If it does, a held
+    turn key keeps clearing both blocks. The measured 2.8 s with forward
+    held fits either way, because a forward press doesn't clear forward
+    blocked. Check in the original: walk into a wall, keep forward held,
+    then press and hold a turn key, and watch whether he walks (stop,
+    walk, stop…) or turns.
 - **Landing on top of a `KQMonster`** (surface direction exactly
   straight up): instead of all this he is pushed 250 sideways, straight
   away from the monster's position (traced only this far).
