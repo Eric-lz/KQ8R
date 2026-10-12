@@ -1,10 +1,13 @@
-//! Connor's mover: steps, gravity, slopes, landing and the Fall state.
+//! Connor's mover: steps, gravity, slopes, walls, landing and the Fall
+//! state.
 //!
 //! Rules from the behaviour note `docs/behaviour/connor-physics.md`
 //! ("One update of the mover", "The terrain in the passes", "Gravity",
-//! "Slopes", "Falling off an edge", "Is gravity on at the start?"). M2
-//! steps 2a and 2c: only the ground (terrain) is solid; there are no walls,
-//! ceilings or objects yet (2d).
+//! "Slopes", "Falling off an edge", "Walls" with "Exact hit handling",
+//! "Collision shape", "Is gravity on at the start?"). M2 steps 2a, 2c and
+//! 2d-3: the terrain and buildings are solid; objects come in 2d-5.
+
+use crate::collide::{BallStack, BuildingCollider};
 
 /// The ground under a point: height and unit normal (z > 0), or `None`
 /// where there is no ground (outside the terrain grid).
@@ -15,6 +18,80 @@ pub trait GroundLookup {
 impl GroundLookup for kq8_data::Terrain {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
         self.height_at(x, y).map(|g| (g.height, g.normal))
+    }
+}
+
+/// A contact a pass ended on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hit {
+    /// Where the mover is put (for buildings: already pulled back 25).
+    pub position: [f32; 3],
+    /// Where it touched (the terrain has no pull-back: the same).
+    pub touch: [f32; 3],
+    /// Unit surface direction (for buildings: pointing against the move).
+    pub normal: [f32; 3],
+    /// `terrain`, or the building's name.
+    pub what: String,
+}
+
+/// What the mover moves through: the ground, and the solid things a pass
+/// can hit.
+pub trait MoverWorld {
+    fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])>;
+    /// The building (later also object) contact nearest `from` when the
+    /// balls move from `from` to `to`; the terrain is not part of this.
+    fn sweep(&self, _balls: &BallStack, _from: [f32; 3], _to: [f32; 3]) -> Option<Hit> {
+        None
+    }
+}
+
+/// Ground only, nothing else solid (the unit tests' made-up grounds).
+impl<T: GroundLookup> MoverWorld for T {
+    fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
+        GroundLookup::ground(self, x, y)
+    }
+}
+
+/// The ground and the world's buildings.
+pub struct Scene<'a> {
+    pub ground: &'a dyn GroundLookup,
+    pub buildings: &'a [BuildingCollider],
+}
+
+impl MoverWorld for Scene<'_> {
+    fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
+        self.ground.ground(x, y)
+    }
+
+    /// Over every building hit, the contact nearest the old position is
+    /// kept (connor-physics.md "Against a building", step 7).
+    fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
+        let (lo, hi) = balls.reach(from, to);
+        let mut best: Option<Hit> = None;
+        for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
+            if let Some(c) = b.sweep(balls, from, to) {
+                if best.as_ref().is_none_or(|h| length(sub(c.position, from)) < length(sub(h.position, from))) {
+                    best = Some(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone() });
+                }
+            }
+        }
+        best
+    }
+}
+
+/// What the walker asks of one update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wish {
+    /// The movement (x, y, z change), world space.
+    pub step: [f32; 3],
+    /// Connor is in the Move state (walking, running, stepping back,
+    /// turning on the spot): only then can a hit be head-on.
+    pub moving: bool,
+}
+
+impl From<[f32; 3]> for Wish {
+    fn from(step: [f32; 3]) -> Self {
+        Wish { step, moving: true }
     }
 }
 
@@ -46,8 +123,16 @@ pub const STUCK_DROP: f32 = 50.0;
 pub const STUCK_UPDATES: u32 = 5;
 /// Falling further than this kills Connor.
 pub const DEATH_DROP: f32 = 3840.0;
-/// At most this many push-offs (slides along a surface) in one update.
-pub const MAX_PUSH_OFFS: u32 = 3;
+/// On this many hits in one update he stays at the last contact.
+pub const MAX_HITS: u32 = 3;
+/// A hit is head-on when his horizontal movement is less than this
+/// (0.35 rad, about 20°) from the reversed surface direction.
+pub const HEAD_ON_ANGLE: f32 = 0.35;
+/// No slide when the rest of the move is shorter than this in every axis.
+pub const SLIDE_MIN: f32 = 0.000001;
+/// Connor's collision box, `GAME/patch/BOUNDS.KQ` entry `Connor` (the
+/// viewer reads it from the file and logs whether it differs).
+pub const CONNOR_BOX: ([f32; 3], [f32; 3]) = ([-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
@@ -85,6 +170,8 @@ pub struct Mover {
     pub step_up: f32,
     pub step_down: f32,
     pub state: State,
+    /// The balls he collides with (built from his box).
+    pub balls: BallStack,
 }
 
 /// What the down pass ended on.
@@ -138,8 +225,28 @@ pub struct Report {
     /// Ground height and normal under the final position, if any.
     pub ground: Option<(f32, [f32; 3])>,
     pub fall: Option<FallEvent>,
+    /// Every hit this update, in order.
+    pub hits: Vec<HitRecord>,
+    /// What the across pass did: `free`, `glance`, `head-on` or `3 hits`.
+    pub across: &'static str,
+    /// A hit was head-on while he was moving: he stops (the walker plays
+    /// `Stop`).
+    pub head_on: bool,
     /// Things worth a line in the main log (state changes, landings).
     pub events: Vec<String>,
+}
+
+/// One hit, for the log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HitRecord {
+    /// `up`, `across`, `down` or `slide`.
+    pub pass: &'static str,
+    pub hit: Hit,
+    /// Angle between his horizontal movement and the reversed surface
+    /// direction; `None` without horizontal movement.
+    pub angle: Option<f32>,
+    /// What was done: `stop`, `head-on`, `landing`, `glance`, `3 hits`.
+    pub result: &'static str,
 }
 
 impl Mover {
@@ -156,6 +263,7 @@ impl Mover {
             step_up: STEP,
             step_down: STEP,
             state: State::Normal,
+            balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
         }
     }
 
@@ -169,23 +277,24 @@ impl Mover {
     }
 
     /// One update (1/15 s) with a fixed wanted movement (x, y, z change);
-    /// zero while standing.
-    pub fn update(&mut self, wanted: [f32; 3], ground: &dyn GroundLookup) -> Report {
-        self.update_with(ground, |_, _| wanted)
+    /// zero while standing. Counts as moving (the Move state).
+    pub fn update(&mut self, wanted: [f32; 3], world: &dyn MoverWorld) -> Report {
+        self.update_with(world, |_, _| wanted)
     }
 
     /// One update (1/15 s). `wanted` gives the movement the animation asks
-    /// for. It is called after the start of the update, so it already knows
-    /// whether Fall started this update (then the fall animation's step is
-    /// used, not the walk's). Not called when Connor is dead.
-    pub fn update_with(
+    /// for (a plain step counts as moving). It is called after the start of
+    /// the update, so it already knows whether Fall started this update
+    /// (then the fall animation's step is used, not the walk's). Not called
+    /// when Connor is dead.
+    pub fn update_with<W: Into<Wish>>(
         &mut self,
-        ground: &dyn GroundLookup,
-        wanted: impl FnOnce(&Mover, Option<FallEvent>) -> [f32; 3],
+        world: &dyn MoverWorld,
+        wanted: impl FnOnce(&Mover, Option<FallEvent>) -> W,
     ) -> Report {
-        let mut report = Report { check: "none", ..Default::default() };
+        let mut report = Report { check: "none", across: "none", ..Default::default() };
         if self.state == State::Dead {
-            report.ground = ground.ground(self.position[0], self.position[1]);
+            report.ground = world.ground(self.position[0], self.position[1]);
             return report;
         }
         let before_z = self.position[2];
@@ -210,22 +319,31 @@ impl Mover {
             }
         }
 
-        let wanted = wanted(self, report.fall);
+        let wish: Wish = wanted(self, report.fall).into();
+        let wanted = wish.step;
+        // Head-on only acts in the Move state (Fall is not Move).
+        let head_on_allowed = wish.moving && self.state == State::Normal;
+        let mut hits = 0;
 
-        // 2. Up pass: step up plus the wanted height change. The terrain
-        //    counts as a hit if it is above where the pass ends; he stops
-        //    at it (no ceilings yet).
-        self.position[2] += self.step_up + wanted[2];
-        if let Some((height, normal)) = ground.ground(self.position[0], self.position[1]) {
-            if height > self.position[2] {
-                self.position[2] = height;
-                report.up_contact = Some(normal);
+        // 2. Up pass: step up plus the wanted height change. A building
+        //    (ceiling) or the terrain above where the pass ends stops it;
+        //    the nearer contact wins. Up-pass hits never slide.
+        let start = self.position;
+        let end = add(start, [0.0, 0.0, self.step_up + wanted[2]]);
+        match nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
+            Some(h) => {
+                hits += 1;
+                self.position = h.position;
+                report.up_contact = Some(h.normal);
+                report.hits.push(HitRecord { pass: "up", hit: h, angle: None, result: "stop" });
             }
+            None => self.position = end,
         }
 
-        // 3. Across pass: the terrain is not tested (Q26); no walls yet.
-        self.position[0] += wanted[0];
-        self.position[1] += wanted[1];
+        // 3. Across pass: buildings only, the terrain is not tested (Q26).
+        let start = self.position;
+        let target = [start[0] + wanted[0], start[1] + wanted[1], start[2]];
+        report.across = self.across(world, start, target, head_on_allowed, "across", &mut hits, &mut report);
 
         // 4. Down pass: this update's gravity drop along the pull, then
         //    step down.
@@ -242,49 +360,57 @@ impl Mover {
         // The vertical drop projected onto the pull (Q28 a): d along a
         // straight-down pull, d·sinθ along a slope of angle θ.
         let start = self.position;
-        let mut end = start;
-        let along = report.drop * -self.pull[2];
-        for (e, d) in end.iter_mut().zip(self.pull) {
-            *e += d * along;
-        }
+        let mut end = add(start, scale(self.pull, report.drop * -self.pull[2]));
         end[2] -= self.step_down;
         self.position = end;
-        match ground.ground(end[0], end[1]) {
-            // The terrain is above where the pass ended: a hit there.
-            Some((height, normal)) if height > end[2] => {
-                let contact = [end[0], end[1], height];
-                report.down_normal = Some(normal);
-                self.pull = down_slope(normal);
-                if normal[2] > WALKABLE_NORMAL_Z {
-                    report.down = DownResult::Walkable;
-                    self.position = contact;
-                    self.on_ground = true;
-                    self.fall_timer = 0.0;
-                } else {
-                    report.down = DownResult::Steep;
-                    if !self.use_gravity {
-                        report.events.push("steep ground: gravity switched on".into());
-                    }
-                    self.use_gravity = true;
-                    // Push-off: the rest of the move, projected onto the
-                    // surface, done as an across move (terrain ignored).
-                    // With no walls it never hits anything, so one try of
-                    // the MAX_PUSH_OFFS is enough.
-                    let rest: [f32; 3] = std::array::from_fn(|i| end[i] - contact[i]);
-                    let along = slide_along(rest, normal);
-                    report.push = length(along);
-                    self.position = std::array::from_fn(|i| contact[i] + along[i]);
+        // Not hit: he is in the air. Going down a steep walkable slope that
+        // is often for an update or a few; the gravity brings him back
+        // before the air count reaches 5 (measured, Q32).
+        if let Some(h) = nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
+            hits += 1;
+            let normal = h.normal;
+            report.down_normal = Some(normal);
+            self.pull = down_slope(normal);
+            let angle = head_on_angle(sub(end, start), normal);
+            if normal[2] > WALKABLE_NORMAL_Z {
+                report.down = DownResult::Walkable;
+                self.on_ground = true;
+                self.fall_timer = 0.0;
+            } else {
+                report.down = DownResult::Steep;
+                if !self.use_gravity {
+                    report.events.push("steep ground: gravity switched on".into());
                 }
+                self.use_gravity = true;
             }
-            // Not hit: he is in the air. Going down a steep walkable slope
-            // that is often for an update or a few; the gravity brings him
-            // back before the air count reaches 5 (measured, Q32).
-            _ => {}
+            let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
+            // "Exact hit handling": walkable landings (surface z ≥ 0.8),
+            // head-on hits and the last allowed hit stay at the contact;
+            // anything else is pushed off along the surface.
+            let result = if normal[2] >= WALKABLE_NORMAL_Z {
+                "landing"
+            } else if head_on {
+                "head-on"
+            } else if hits >= MAX_HITS {
+                "3 hits"
+            } else {
+                "glance"
+            };
+            let contact = h.position;
+            report.head_on |= head_on;
+            report.hits.push(HitRecord { pass: "down", hit: h, angle, result });
+            self.position = contact;
+            if result == "glance" {
+                let target = project_onto(end, contact, normal);
+                report.push = length(sub(target, contact));
+                self.across(world, contact, target, head_on_allowed, "slide", &mut hits, &mut report);
+            }
         }
 
         // 5. Ground check (keepOnGround): at or below the ground -> on it.
-        //    Only the height changes; the fall timer is left alone.
-        let under = ground.ground(self.position[0], self.position[1]);
+        //    Only the height changes; the fall timer is left alone. The
+        //    terrain only, as the note says.
+        let under = world.ground(self.position[0], self.position[1]);
         report.ground = under;
         if let (true, Some((height, normal))) = (self.keep_on_ground, under) {
             if self.position[2] <= height {
@@ -337,6 +463,56 @@ impl Mover {
         }
         report
     }
+
+    /// An across move from `start` to `target` against the buildings (the
+    /// terrain is ignored), with "Exact hit handling": a head-on hit (in the
+    /// Move state) stops him at the contact; otherwise the rest of the move
+    /// is projected onto the surface and tried again from the contact; on
+    /// the 3rd hit of the update he stays at that contact. Returns what
+    /// happened: `free`, `glance`, `head-on` or `3 hits`.
+    #[allow(clippy::too_many_arguments)]
+    fn across(
+        &mut self,
+        world: &dyn MoverWorld,
+        mut start: [f32; 3],
+        mut target: [f32; 3],
+        head_on_allowed: bool,
+        mut pass: &'static str,
+        hits: &mut u32,
+        report: &mut Report,
+    ) -> &'static str {
+        let mut outcome = "free";
+        loop {
+            let Some(h) = world.sweep(&self.balls, start, target) else {
+                self.position = target;
+                return outcome;
+            };
+            *hits += 1;
+            let angle = head_on_angle(sub(target, start), h.normal);
+            let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
+            let (contact, normal) = (h.position, h.normal);
+            let result = if head_on {
+                "head-on"
+            } else if *hits >= MAX_HITS {
+                "3 hits"
+            } else {
+                "glance"
+            };
+            report.hits.push(HitRecord { pass, hit: h, angle, result });
+            self.position = contact;
+            if result != "glance" {
+                report.head_on |= head_on;
+                return result;
+            }
+            outcome = "glance";
+            if sub(target, contact).iter().all(|v| v.abs() < SLIDE_MIN) {
+                return outcome;
+            }
+            target = project_onto(target, contact, normal);
+            start = contact;
+            pass = "slide";
+        }
+    }
 }
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -345,6 +521,54 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
 
 fn length(a: [f32; 3]) -> f32 {
     dot(a, a).sqrt()
+}
+
+fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|i| a[i] + b[i])
+}
+
+fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|i| a[i] - b[i])
+}
+
+fn scale(a: [f32; 3], s: f32) -> [f32; 3] {
+    a.map(|v| v * s)
+}
+
+/// `target` moved onto the plane through `contact` with unit normal `n`:
+/// target − n × ((target − contact) · n) ("Exact hit handling").
+fn project_onto(target: [f32; 3], contact: [f32; 3], n: [f32; 3]) -> [f32; 3] {
+    sub(target, scale(n, dot(sub(target, contact), n)))
+}
+
+/// The angle between the horizontal part of `movement` (made unit length)
+/// and the reversed surface direction; `None` without horizontal movement
+/// (never head-on).
+fn head_on_angle(movement: [f32; 3], normal: [f32; 3]) -> Option<f32> {
+    let h = [movement[0], movement[1], 0.0];
+    let len = length(h);
+    if len == 0.0 {
+        return None;
+    }
+    Some((-dot(h, normal) / len).clamp(-1.0, 1.0).acos())
+}
+
+/// The terrain as a hit at the end of an up or down pass: if it is above
+/// where the pass ended, the contact is (end x, end y, terrain height),
+/// with no pull-back (connor-physics.md "The terrain in the passes").
+fn terrain_hit(world: &dyn MoverWorld, end: [f32; 3]) -> Option<Hit> {
+    let (height, normal) = world.ground(end[0], end[1]).filter(|(h, _)| *h > end[2])?;
+    let p = [end[0], end[1], height];
+    Some(Hit { position: p, touch: p, normal, what: "terrain".into() })
+}
+
+/// Of a building contact and a terrain contact, the one nearer the start
+/// of the pass.
+fn nearest(start: [f32; 3], a: Option<Hit>, b: Option<Hit>) -> Option<Hit> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(if length(sub(a.position, start)) <= length(sub(b.position, start)) { a } else { b }),
+        (a, b) => a.or(b),
+    }
 }
 
 /// `v` with the part along `normal` removed: what is left of a move after
@@ -396,7 +620,7 @@ mod tests {
     }
 
     /// Updates until the state settles; returns (updates, events).
-    fn run(m: &mut Mover, ground: &dyn GroundLookup, max: usize) -> (usize, Vec<String>) {
+    fn run(m: &mut Mover, ground: &dyn MoverWorld, max: usize) -> (usize, Vec<String>) {
         let mut events = Vec::new();
         for n in 1..=max {
             let r = m.update([0.0; 3], ground);
@@ -601,5 +825,205 @@ mod tests {
         assert!(r.up_contact.is_some());
         assert_eq!(r.down, DownResult::Walkable);
         assert_eq!(m.position[2], 0.0);
+    }
+
+    // --- Buildings in the passes (M2 step 2d-3) ---
+
+    use crate::collide::{BuildingCollider, Placement};
+    use kq8_data::building::{BspChild::Leaf, BspChild::Node, BspNode};
+
+    fn node(plane: u16, front: kq8_data::building::BspChild, back: kq8_data::building::BspChild) -> BspNode {
+        BspNode { plane, front, back }
+    }
+
+    /// A made-up building from its tree.
+    fn building(nodes: Vec<BspNode>, solid: Vec<bool>, planes: Vec<([f32; 3], f32)>) -> BuildingCollider {
+        BuildingCollider::from_parts("test", nodes, solid, planes, ([-1e5; 3], [1e5; 3]), Placement::at([0.0; 3]))
+    }
+
+    /// A wall whose face is y = 0, solid for y < 0 (endless).
+    fn wall() -> BuildingCollider {
+        building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 1.0, 0.0], 0.0)])
+    }
+
+    fn near(a: f32, b: f32, tol: f32) -> bool {
+        (a - b).abs() <= tol
+    }
+
+    #[test]
+    fn walking_head_on_stops_225_from_the_wall() {
+        let b = [wall()];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([0.0, 600.0, 0.0], true);
+        let mut stopped = None;
+        for n in 1..=20 {
+            let r = m.update([2.0, -72.0, 0.0], &scene);
+            assert!(m.position[1] >= 199.0, "never inside the wall: {:?}", m.position);
+            if r.head_on {
+                assert_eq!(r.across, "head-on");
+                stopped.get_or_insert((n, m.position));
+            }
+        }
+        let (_, p) = stopped.expect("head-on");
+        // The ball touches at y 200, pulled back 25 along the move (or he
+        // stays where the step started, if that is nearer).
+        assert!(p[1] >= 200.0 && p[1] <= 225.0 + 72.0, "{p:?}");
+        assert_eq!(m.position[2], 0.0, "still on the ground");
+        assert!(m.on_ground);
+    }
+
+    #[test]
+    fn stepping_backwards_into_a_wall_is_head_on_too() {
+        // The mover only sees the movement: backwards is still straight in.
+        let b = [wall()];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([0.0, 260.0, 0.0], true);
+        let r = m.update([0.0, -60.0, 0.0], &scene);
+        assert!(r.head_on, "{:?}", r.hits);
+    }
+
+    #[test]
+    fn not_moving_is_never_head_on() {
+        let b = [wall()];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([0.0, 260.0, 0.0], true);
+        let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false });
+        assert!(!r.head_on);
+        assert_eq!(r.across, "glance");
+    }
+
+    /// Measured in the original: glancing, the slide along the wall per
+    /// update is the step × sin(angle from the normal): × 0.37 at 21.6°,
+    /// × 0.57 at 35°.
+    #[test]
+    fn glancing_slides_step_times_sine() {
+        for (deg, factor) in [(21.6f32, 0.37f32), (35.0, 0.57)] {
+            let b = [wall()];
+            let scene = Scene { ground: &Flat(0.0), buildings: &b };
+            let a = deg.to_radians();
+            let step = [72.0 * a.sin(), -72.0 * a.cos(), 0.0];
+            let mut m = Mover::new([0.0, 400.0, 0.0], true);
+            let mut xs = Vec::new();
+            for _ in 0..15 {
+                let r = m.update(step, &scene);
+                assert!(!r.head_on, "{deg}°");
+                xs.push(m.position[0]);
+            }
+            // Once against the wall: the full step along x is kept, which
+            // is 72 × sin(angle).
+            let last = xs[14] - xs[13];
+            assert!(near(last, 72.0 * a.sin(), 0.01), "{deg}°: {last}");
+            assert!(near(last / 72.0, factor, 0.01), "{deg}°: {}", last / 72.0);
+            assert!(m.position[1] >= 200.0 && m.position[1] <= 225.0, "{deg}°: {:?}", m.position);
+        }
+    }
+
+    #[test]
+    fn into_a_corner_he_stops_outside_both_walls() {
+        // Solid where y < 0 or x < 0.
+        let corner = building(
+            vec![node(0, Node(1), Leaf(0)), node(1, Leaf(1), Leaf(2))],
+            vec![true, false, true],
+            vec![([0.0, 1.0, 0.0], 0.0), ([1.0, 0.0, 0.0], 0.0)],
+        );
+        let b = [corner];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([600.0, 500.0, 0.0], true);
+        for _ in 0..30 {
+            m.update([-100.0, -90.0, 0.0], &scene);
+            assert!(m.position[0] >= 199.0 && m.position[1] >= 199.0, "{:?}", m.position);
+        }
+        assert!(m.position[0] <= 300.0 && m.position[1] <= 300.0, "in the corner: {:?}", m.position);
+    }
+
+    #[test]
+    fn past_the_end_of_a_wall_he_goes_on_at_full_step() {
+        // Solid where y < 0 and x < 0: the wall ends at x = 0.
+        let half = building(
+            vec![node(0, Leaf(0), Node(1)), node(1, Leaf(1), Leaf(2))],
+            vec![false, false, true],
+            vec![([0.0, 1.0, 0.0], 0.0), ([1.0, 0.0, 0.0], 0.0)],
+        );
+        let b = [half];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let step = [50.0, -50.0, 0.0];
+        let mut m = Mover::new([-1500.0, 400.0, 0.0], true);
+        let mut last = m.position;
+        let mut slid = false;
+        for _ in 0..80 {
+            let r = m.update(step, &scene);
+            slid |= r.across == "glance";
+            last = std::array::from_fn(|i| m.position[i] - last[i]);
+            let moved = last;
+            last = m.position;
+            if m.position[0] > 400.0 {
+                assert!(near(moved[0], 50.0, 0.01) && near(moved[1], -50.0, 0.01), "{moved:?}");
+            }
+        }
+        assert!(slid, "it slid along the wall first");
+        assert!(m.position[1] < 0.0, "then went on past its end: {:?}", m.position);
+    }
+
+    /// A block whose top is at `height`, solid for x > 0 below it.
+    fn step_block(height: f32) -> BuildingCollider {
+        building(
+            vec![node(0, Node(1), Leaf(0)), node(1, Leaf(1), Leaf(2))],
+            vec![false, false, true],
+            vec![([1.0, 0.0, 0.0], 0.0), ([0.0, 0.0, 1.0], -height)],
+        )
+    }
+
+    #[test]
+    fn a_300_step_is_climbed_a_400_one_stops_him() {
+        let b = [step_block(300.0)];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([-500.0, 0.0, 0.0], true);
+        for _ in 0..20 {
+            m.update([75.0, 0.0, 0.0], &scene);
+        }
+        assert!(m.position[0] > 500.0, "{:?}", m.position);
+        // On the block: 25 above its top, on the ground.
+        assert!(near(m.position[2], 325.0, 0.01) && m.on_ground, "{:?}", m.position);
+
+        let b = [step_block(400.0)];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([-500.0, 0.0, 0.0], true);
+        let mut head_on = false;
+        for _ in 0..20 {
+            head_on |= m.update([75.0, 0.0, 0.0], &scene).head_on;
+        }
+        assert!(head_on);
+        assert!(m.position[0] <= -200.0 && m.position[2] == 0.0, "{:?}", m.position);
+    }
+
+    #[test]
+    fn a_low_ceiling_cuts_the_up_pass() {
+        // Solid above z = 1500.
+        let ceiling = building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 0.0, -1.0], 1500.0)]);
+        let b = [ceiling];
+        let scene = Scene { ground: &Flat(0.0), buildings: &b };
+        let mut m = Mover::new([0.0, 0.0, 0.0], true);
+        let r = m.update([0.0; 3], &scene);
+        let up = r.hits.iter().find(|h| h.pass == "up").expect("up-pass hit");
+        // Top ball (centre 1,100, radius 200) touches at feet 200, pulled
+        // back 25 towards the start.
+        assert!(near(up.hit.position[2], 175.0, 0.01), "{up:?}");
+        assert_eq!(up.hit.what, "test");
+        assert!(m.on_ground && m.position[2] == 0.0, "then down onto the ground: {:?}", m.position);
+    }
+
+    #[test]
+    fn standing_on_a_building_floor_stays_25_above_it() {
+        // Solid below z = 0; the terrain far below.
+        let floor = building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 0.0, 1.0], 0.0)]);
+        let b = [floor];
+        let scene = Scene { ground: &Flat(-5000.0), buildings: &b };
+        let mut m = Mover::new([0.0, 0.0, 25.0], true);
+        for _ in 0..30 {
+            let r = m.update([0.0; 3], &scene);
+            assert_eq!(r.down, DownResult::Walkable);
+            assert!(near(m.position[2], 25.0, 0.001) && m.on_ground, "{:?}", m.position);
+            assert_eq!(m.air_updates, 0);
+        }
     }
 }

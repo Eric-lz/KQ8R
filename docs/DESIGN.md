@@ -697,7 +697,15 @@ Steps (each separately revertable, each stopped for an eye check):
       earliest of four balls wins when only the top one hits (a low
       lintel). Object test: square-cornered enlarged box, rotated object,
       the vertical one-ball rule.
-  - **2d-3, buildings in the passes; glance and stop.**
+  - **2d-3, buildings in the passes; glance and stop.** *Done
+    2026-10-12 (MODLOG). Changes from this plan: the rough check covers
+    the balls' full reach instead of the game's √3 rule (whose starting
+    point isn't traced; it can't change a result). Four readings of the
+    note asked as Q37: head-on outside Move counts as glancing; one count
+    of 3 hits per update over all passes; the head-on test also on
+    down-pass and slide hits; with the walk key held against a wall the
+    movement alternates walk/stop each update. Running head-on stops at
+    the contact but keeps running until 2d-4 (crash).*
     - The up, across and down passes, and every slide retry, sweep Connor
       against the buildings near the move (a rough check first, by each
       building's bounding box grown by the note's √3 × his largest
@@ -775,11 +783,9 @@ Steps (each separately revertable, each stopped for an eye check):
     - **25 above floors: confirmed** (2026-10-12, Q35). In the original
       his feet are at 13,980 in Connor's house; the house's floor in our
       data is at 13,955.
-    - **225 from a wall: confirmed for the sweep** (2026-10-12, Q36).
-      Our building sweep at the Tomb wall gives the measured contacts to
-      within 0.1 unit. Still to repeat in the viewer with Connor's real
-      movement once 2d-3 is in (`connor-physics.md`, "Wall test
-      positions").
+    - **225 from a wall: confirmed** (2026-10-12, Q36, Q37). The sweep
+      at the Tomb wall gives the measured contacts to within 0.1 unit,
+      and so does the viewer with Connor's real movement (2d-3).
     - A ball that starts inside an object's box: "a hit with no usable
       contact"; what follows was not traced. Logged if it happens.
     - The inside-out `lfswdoor.kqs` box (xmin 10 > xmax −1,520): not

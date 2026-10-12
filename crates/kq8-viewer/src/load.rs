@@ -199,6 +199,9 @@ pub struct ConnorAssets {
     pub keys: Vec<kq8_data::action_map::Binding>,
     /// `MASK/Camera.sae`.
     pub camera_keys: Vec<kq8_data::action_map::Binding>,
+    /// His collision box, the `Connor` entry of `GAME/patch/BOUNDS.KQ`
+    /// (connor-physics.md "Collision shape"); `None` if it can't be read.
+    pub collision_box: Option<([f32; 3], [f32; 3])>,
 }
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
@@ -549,6 +552,9 @@ pub struct Objects {
     pub connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     /// Where the world script puts the camera object `KQCamera`, if anywhere.
     pub camera_start: Option<[f32; 3]>,
+    /// Every building the start-up scripts load (hidden ones too: hiding
+    /// only changes the drawing), as colliders (M2 step 2d-3).
+    pub buildings: Vec<kq8_game::collide::BuildingCollider>,
 }
 
 pub struct Marker {
@@ -843,8 +849,23 @@ impl Placer<'_> {
             for pr in &problems {
                 self.log.summary(format!("connor: Camera.sae: {pr}"));
             }
+            let collision_box = match self.game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
+                Some(Ok(bytes)) => {
+                    let (table, _) = kq8_data::bounds::BoundingBoxes::parse(&bytes);
+                    let found: Vec<_> = table.find_all("Connor").collect();
+                    if found.len() != 1 {
+                        self.log.summary(format!("connor: BOUNDS.KQ has {} entries called Connor; using the first", found.len()));
+                    }
+                    found.first().map(|e| (e.min, e.max))
+                }
+                _ => None,
+            };
+            match collision_box {
+                Some((min, max)) => self.log.summary(format!("connor: collision box from BOUNDS.KQ: {min:?} .. {max:?}")),
+                None => self.log.summary("connor: no Connor entry read from GAME/patch/BOUNDS.KQ; the mover's built-in copy is used"),
+            }
             let mut assets =
-                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys };
+                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
             for name in CONNOR_MOVEMENTS {
                 let mut with_ask = anm.clone();
@@ -1265,7 +1286,41 @@ impl Placer<'_> {
         // The camera object the world script loads (`cam3rd.kq`, named
         // KQCamera): where the following camera starts (Q27 d).
         let camera_start = self.located.get("kqcamera").map(|l| l.position);
-        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start }
+        // Building colliders, placed exactly as drawn (connor-physics.md
+        // "Against a building").
+        let mut buildings = Vec::new();
+        let mut digs: BTreeMap<String, Option<kq8_data::building::Building>> = BTreeMap::new();
+        for (p, i, unused) in &self.placed {
+            let shape = &self.shapes[*i].0;
+            if *unused || !shape.to_ascii_lowercase().ends_with(".dig") {
+                continue;
+            }
+            let dig = digs.entry(shape.to_ascii_lowercase()).or_insert_with(|| {
+                let bytes = self.world.load(shape)?.ok()?;
+                kq8_data::building::Building::parse(&bytes.1).ok()
+            });
+            let Some(dig) = dig else {
+                log.summary(format!("collision: [{}] {shape} could not be read; no collider", p.name));
+                continue;
+            };
+            let placement = kq8_game::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
+            let c = kq8_game::collide::BuildingCollider::new(&p.name, dig, placement);
+            log.detail(format!(
+                "collision: building [{}] {shape}: {} nodes, {} leaves, world box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0})",
+                p.name,
+                dig.nodes.len(),
+                dig.leaf_flags.len(),
+                c.world_min[0],
+                c.world_min[1],
+                c.world_min[2],
+                c.world_max[0],
+                c.world_max[1],
+                c.world_max[2]
+            ));
+            buildings.push(c);
+        }
+        log.summary(format!("collision: {} building colliders", buildings.len()));
+        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start, buildings }
     }
 }
 

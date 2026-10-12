@@ -152,6 +152,26 @@ impl Walker {
         self.mode = mode;
     }
 
+    /// In the Move state: the keys chose a movement other than standing
+    /// (walking, running, stepping back, turning on the spot).
+    pub fn moving(&self) -> bool {
+        self.mode == Mode::Free && self.movement != "stop"
+    }
+
+    /// A head-on hit while moving (connor-physics.md "Walls"): walking or
+    /// stepping back switches straight to `stop`, with no stop animation
+    /// (measured). Running is left alone until the crash (M2 step 2d-4).
+    /// Returns the change, if any.
+    pub fn stop_at_wall(&mut self) -> Option<(&'static str, &'static str)> {
+        if !self.moving() || self.movement == "run" {
+            return None;
+        }
+        let from = self.movement;
+        self.movement = "stop";
+        self.phase = 0.0;
+        Some((from, "stop"))
+    }
+
     /// One update (1/15 s). `loops` gives a movement's loop by name.
     pub fn update(&mut self, intent: Intent, loops: &dyn Fn(&str) -> Option<MovementLoop>) -> Step {
         let dt = (1.0 / UPDATES_PER_SECOND) as f32;
@@ -221,6 +241,21 @@ mod tests {
 
     fn intent(forward: i8, turn: i8, run: bool) -> Intent {
         Intent { forward, turn, run }
+    }
+
+    #[test]
+    fn head_on_stops_walking_and_stepping_back_not_running() {
+        for (movement, stops) in [("walk", true), ("back", true), ("run", false), ("stop", false)] {
+            let mut w = Walker::new(0.0);
+            w.movement = movement;
+            w.phase = 0.5;
+            assert_eq!(w.stop_at_wall().is_some(), stops, "{movement}");
+            assert_eq!(w.movement, if stops { "stop" } else { movement });
+        }
+        let mut w = Walker::new(0.0);
+        w.movement = "walk";
+        w.set_mode(Mode::Fall);
+        assert_eq!(w.stop_at_wall(), None, "not while falling");
     }
 
     #[test]

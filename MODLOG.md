@@ -3,6 +3,58 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 step 2d-3: buildings are solid (stop, slide, steps, floors, ceilings)
+
+**Changed:**
+
+- `crates/kq8-game/src/mover.rs`:
+  - The up, across and down passes, and every slide retry, sweep Connor's balls against the buildings. The note's "Exact hit handling" decides what happens: a head-on stop, put at the contact, or a slide along the surface; on the 3rd hit of an update he stays at the contact.
+  - New `MoverWorld` (ground plus solids) and `Scene` (terrain plus buildings). A plain ground still works, so the old tests run unchanged.
+  - New `Wish` (step and "in the Move state").
+  - The report lists every hit, the across result, and whether a hit was head-on.
+- `crates/kq8-game/src/collide.rs`: the rough check covers the balls' full reach (`BallStack::reach`, `overlaps`).
+- `crates/kq8-game/src/connor.rs`: `Walker::moving`, and `Walker::stop_at_wall` (walk or back → `stop`).
+- Viewer:
+  - `load.rs` builds a collider for every building the scripts load (26 in Daventry, hidden ones included) and reads Connor's box from `BOUNDS.KQ`.
+  - `terrain_view.rs` holds the colliders as a resource.
+  - `connor_view.rs` passes them to the mover, stops the walk on a head-on hit, and logs more. New `connor.log` columns: `across hits down_what touch_gap`. Event lines for each building hit that isn't a floor landing, and one line when the surface he stands on changes.
+- Records: `docs/DESIGN.md` (2d-3 done), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q37), `README.md`.
+
+**Why:** M2 step 2d-3, from `connor-physics.md` "One update of the mover", "Walls" (with "Exact hit handling") and "Collision shape".
+**Tested how:**
+
+- `cargo test --workspace`: kq8-data 44, kq8-game 48. New tests:
+  - head-on stop; backwards is head-on; not moving is never head-on;
+  - glancing at 21.6° and 35° slides 0.37 and 0.57 of the step;
+  - a corner; past the end of a wall;
+  - a 300 step climbed and a 400 one blocked; a low ceiling;
+  - standing on a building floor; the walker's wall stop.
+- Viewer runs (`--frames 300–1500`, logs read), at session A's `Tomb` wall spots (`connor-physics.md` "Wall test positions"; heading = atan2(dx, −dy)):
+  - `--at 237907.4,187510.2,0.027 --hold 1,0,0` (walk head-on);
+  - `--at 237968.9,187493.2,-0.2054 --hold 1,0,1` (run head-on);
+  - `--at 239837.4,187700.6,0.3777 --hold 1,0,0` (walk glancing).
+- Inside Connor's house: `--at 263402.8,223443.2,0` standing, and with `--hold 1,0,0`.
+- Regression: the slope and hill spots from 2c, `--lift 5000`, and running from the start spot.
+
+**Result:**
+
+- Run head-on: contact (237959.7, 187449.2), as measured in the original.
+- Glancing: slides at y 187449.5–187449.6 from x 239937.0, as measured (27.6 per update at our walk speed).
+- Walk head-on: stops at (237909.4, 187435.1), 210 from the wall's face. The original stopped at 187437.8; the note says anywhere between 200 and 225 depending on where the last free step ends, and our walk step is 75 per update against its 72.
+- In the house: feet at 13,980 (as measured). Walking toward −y he stays at 13,980 for 43 updates, then stops head-on at the inner wall and never enters it.
+- Regression: the slope and hill numbers are the same as before the change; the 5,000 lift still ends in one fatal fall; running from the start spot hits no building.
+
+**Still broken / not tested:**
+
+- Nothing looked at by eye.
+- Running head-on stops but keeps the run animation; the crash is 2d-4.
+- With the walk key held against a wall, the movement alternates walk/stop every update; whether the original does that is asked (Q37 d).
+- Three more readings of the note are asked as Q37 (a)–(c).
+- Objects still don't collide (2d-5).
+- The ground check is terrain-only, as traced; not tried where the terrain rises above a building floor.
+
+**Next:** The user checks by eye (commands in the summary). Then 2d-4 (crash), after the user's go.
+
 ## 2026-10-12 M2 step 2d-2: collision tests (ball stack, building BSP sweep, object boxes)
 
 **Changed:** New `crates/kq8-game/src/collide.rs`: the ball stack built from a box, the building sweep through the BSP tree, the object box sweep, and the 25 pull-back. `crates/kq8-game/src/lib.rs` (module). `docs/DESIGN.md` (2d-2 done), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q36, the wall result for session A). Connor's movement doesn't use any of it yet.

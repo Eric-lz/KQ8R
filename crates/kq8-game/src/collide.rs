@@ -46,6 +46,19 @@ impl BallStack {
         heights.push(if n == 1 { min[2] + radius } else { max[2] - radius });
         BallStack { radius, heights }
     }
+
+    /// The world box the balls can touch while the mover goes from `from`
+    /// to `to`: for the rough check. (The game grows the move's box by
+    /// √3 × the largest half-size of the object's box, about 1,126 for
+    /// Connor; measured from where is not traced, so this covers the balls'
+    /// full reach instead, which can't miss anything.)
+    pub fn reach(&self, from: [f32; 3], to: [f32; 3]) -> ([f32; 3], [f32; 3]) {
+        let r = self.radius;
+        let (low, high) = (self.heights[0] - r, self.heights[self.heights.len() - 1] + r);
+        let lo = [from[0].min(to[0]) - r, from[1].min(to[1]) - r, from[2].min(to[2]) + low];
+        let hi = [from[0].max(to[0]) + r, from[1].max(to[1]) + r, from[2].max(to[2]) + high];
+        (lo, hi)
+    }
 }
 
 /// Where an object stands: `world = own × rotation + position` (row
@@ -162,13 +175,13 @@ impl BuildingCollider {
         BuildingCollider { name: name.to_string(), nodes, solid, planes, placement, world_min, world_max }
     }
 
-    /// The rough check: does the box around the move, grown by `grow` on
-    /// every side, overlap the building's box? (Measured on all 153
-    /// buildings: the BSP is open everywhere just outside the building's
-    /// box, so this only saves time and never changes a result, as long as
-    /// `grow` covers the ball radius.)
-    pub fn near(&self, from: [f32; 3], to: [f32; 3], grow: f32) -> bool {
-        (0..3).all(|k| from[k].min(to[k]) - grow <= self.world_max[k] && from[k].max(to[k]) + grow >= self.world_min[k])
+    /// The rough check: does the box `lo..hi` (world space) overlap the
+    /// building's box? (Measured on all 153 buildings: the BSP is open
+    /// everywhere just outside the building's box, so this only saves time
+    /// and never changes a result, as long as `lo..hi` covers everything
+    /// the balls can touch: `BallStack::reach`.)
+    pub fn overlaps(&self, lo: [f32; 3], hi: [f32; 3]) -> bool {
+        (0..3).all(|k| lo[k] <= self.world_max[k] && hi[k] >= self.world_min[k])
     }
 
     /// Sweeps the mover's balls from `from` to `to` (mover positions, world
@@ -550,8 +563,10 @@ mod tests {
         let c = w.sweep(&connor(), [9000.0, 20_000.0, 500.0], [9900.0, 20_000.0, 500.0]).expect("hit");
         assert!(near(c.position, [10_000.0 - 225.0, 20_000.0, 500.0]), "{c:?}");
         assert!(near(c.normal, [-1.0, 0.0, 0.0]), "{c:?}");
-        assert!(w.near([9000.0, 20_000.0, 500.0], [9900.0, 20_000.0, 500.0], 346.5));
-        assert!(!w.near([0.0, 0.0, 0.0], [10.0, 0.0, 0.0], 346.5));
+        let (lo, hi) = connor().reach([9000.0, 20_000.0, 500.0], [9900.0, 20_000.0, 500.0]);
+        assert!(w.overlaps(lo, hi));
+        let (lo, hi) = connor().reach([0.0, 0.0, 0.0], [10.0, 0.0, 0.0]);
+        assert!(!w.overlaps(lo, hi));
     }
 
     fn crate_box(min: [f32; 3], max: [f32; 3], placement: Placement) -> BoxCollider {

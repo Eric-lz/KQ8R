@@ -22,11 +22,11 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_game::connor::{Intent, Mode, MovementLoop, Walker};
-use kq8_game::mover::{FallEvent, Mover, State};
+use kq8_game::mover::{FallEvent, Mover, Scene as MoverScene, State, Wish};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform, GroundLookup};
+use crate::terrain_view::{bevy_transform, Buildings, GroundLookup};
 use crate::{material_for, mesh_from, to_bevy, Shared};
 
 /// One drawable movement: its loop for the walker and one entity per frame.
@@ -82,6 +82,9 @@ pub struct ConnorSim {
     /// One line per update: `kq8-artifacts/logs/connor.log`.
     pub log: Log,
     last_state: &'static str,
+    /// What the last down-pass contact was (`terrain`, a building, or
+    /// `none`), to log only when it changes.
+    last_down: String,
     shown: Option<Entity>,
 }
 
@@ -220,7 +223,11 @@ pub fn spawn_connor(
         controls.forward, controls.back, controls.left, controls.right, controls.run
     ));
 
-    let mover = Mover::new(placement.position, true);
+    let mut mover = Mover::new(placement.position, true);
+    if let Some((min, max)) = assets.collision_box {
+        mover.balls = kq8_game::collide::BallStack::from_box(min, max);
+    }
+    main_log.summary(format!("connor: collision balls radius {} at heights {:?}", mover.balls.radius, mover.balls.heights));
     let log = match Log::create("connor") {
         Ok(l) => l,
         Err(e) => {
@@ -255,10 +262,11 @@ pub fn spawn_connor(
         updates: 0,
         log,
         last_state: "normal",
+        last_down: "terrain".to_string(),
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap",
     );
     if let Some(cam) = crate::game_camera::make(
         sim.mover.position,
@@ -289,7 +297,9 @@ pub fn connor_keys(
         start_at.0 = None;
         let line = match lookup.0.height_at(x, y) {
             Some(g) => {
+                let balls = sim.mover.balls.clone();
                 sim.mover = Mover::new([x, y, g.height], sim.mover.use_gravity);
+                sim.mover.balls = balls;
                 sim.walker = Walker::new(heading);
                 let p = sim.mover.position;
                 sim.previous = (p, heading, 0.0);
@@ -355,9 +365,16 @@ pub fn connor_keys(
 }
 
 /// One update; runs in Bevy's fixed-rate schedule (15 per second).
-pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLookup>>, shared: Res<Shared>) {
+pub fn connor_step(
+    sim: Option<ResMut<ConnorSim>>,
+    lookup: Option<Res<GroundLookup>>,
+    buildings: Option<Res<Buildings>>,
+    shared: Res<Shared>,
+) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let sim = &mut *sim;
+    let no_buildings = Vec::new();
+    let scene = MoverScene { ground: &lookup.0, buildings: buildings.as_ref().map_or(&no_buildings, |b| &b.0) };
     let intent = sim.intent;
     let mut step = None;
     let report = {
@@ -366,18 +383,18 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
         if mover.state == State::Dead {
             // The mover stands still; the death animation plays on.
             step = Some(walker.update(intent, &loops));
-            mover.update([0.0; 3], &lookup.0)
+            mover.update([0.0; 3], &scene)
         } else {
-            mover.update_with(&lookup.0, |_, fall| {
+            mover.update_with(&scene, |_, fall| {
                 // Fall replaces the walk at once, so its first update
                 // already uses jumphold's step.
                 if fall == Some(FallEvent::Started) {
                     walker.set_mode(Mode::Fall);
                 }
                 let s = walker.update(intent, &loops);
-                let wanted = s.wanted;
+                let wish = Wish { step: s.wanted, moving: walker.moving() };
                 step = Some(s);
-                wanted
+                wish
             })
         }
     };
@@ -386,6 +403,8 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
         Some(FallEvent::Died(_)) => sim.walker.set_mode(Mode::Dying),
         _ => {}
     }
+    // Head-on into a wall: walking or stepping back stops at once.
+    let wall_stop = if report.head_on { sim.walker.stop_at_wall() } else { None };
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
         if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }
@@ -395,9 +414,10 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
     sim.previous = sim.current;
     sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase);
     let m = &sim.mover;
+    let down_hit = report.hits.iter().find(|h| h.pass == "down");
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -429,9 +449,13 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
         sim.walker.phase,
         wanted[0],
         wanted[1],
+        report.across,
+        report.hits.len(),
+        down_hit.map_or("none".into(), |h| h.hit.what.replace(' ', "_")),
+        down_hit.map_or("none".into(), |h| format!("{:.1}", h.hit.position[2] - h.hit.touch[2])),
     );
     sim.log.detail(line);
-    let mut events = report.events;
+    let mut events = report.events.clone();
     if report.up_contact.is_some() {
         events.push(format!("up pass hit the terrain (normal z {})", normal(report.up_contact, 2)));
     }
@@ -448,6 +472,37 @@ pub fn connor_step(sim: Option<ResMut<ConnorSim>>, lookup: Option<Res<GroundLook
         if s.missing {
             events.push(format!("movement {} has no loop loaded; not moving", sim.walker.movement));
         }
+    }
+    let down_now = down_hit.map_or("none".to_string(), |h| h.hit.what.clone());
+    if down_now != sim.last_down && down_now != "none" {
+        events.push(format!("standing on {down_now} (was {})", sim.last_down));
+    }
+    if down_now != "none" {
+        sim.last_down = down_now;
+    }
+    for h in &report.hits {
+        // Floor landings are in the columns; log the other building hits.
+        if h.hit.what != "terrain" && h.result != "landing" {
+            events.push(format!(
+                "{} pass hit {} ({}): normal ({:.3}, {:.3}, {:.3}), angle {}, put at ({:.1}, {:.1}, {:.1}), touched at ({:.1}, {:.1}, {:.1})",
+                h.pass,
+                h.hit.what,
+                h.result,
+                h.hit.normal[0],
+                h.hit.normal[1],
+                h.hit.normal[2],
+                h.angle.map_or("none".into(), |a| format!("{:.1} deg", a.to_degrees())),
+                h.hit.position[0],
+                h.hit.position[1],
+                h.hit.position[2],
+                h.hit.touch[0],
+                h.hit.touch[1],
+                h.hit.touch[2]
+            ));
+        }
+    }
+    if let Some((from, to)) = wall_stop {
+        events.push(format!("head-on into a wall: movement {from} -> {to}"));
     }
     let state = sim.mover.state.name();
     if state != sim.last_state || !events.is_empty() {

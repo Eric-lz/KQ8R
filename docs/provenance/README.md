@@ -175,6 +175,22 @@ Not used by Connor's movement yet (2d-3).
 | Object test: each ball swept in the object's own space against its box enlarged by r on every face (square corners); exactly vertical moves test only the top ball (up or not moving) or the bottom ball (down); no test under 0.001 in every axis; a ball starting inside is a hit without a contact | `connor-physics.md` "Against another object" (traced, Q31 b, Q33) | Unit tests (square corner, turned object, vertical one-ball rule, start inside) |
 | Inside-out boxes (min > max) give no hit | Our choice until Q34 (c) | Unit test |
 
+## Buildings in Connor's movement (M2 step 2d-3) — `crates/kq8-game/src/{mover,connor}.rs`, `crates/kq8-viewer/src/{load,connor_view,terrain_view}.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Up pass: the building sweep and the terrain (above the pass's end); the contact nearer the start wins; put at the contact, no slide | `connor-physics.md` "One update", "The terrain in the passes", "Exact hit handling" (traced) | Unit test: a ceiling at 1,500 cuts the up pass at feet 175 (top ball 25 short of it) |
+| Across pass: buildings only (terrain not tested) | Same (traced, Q26) | Unit tests; viewer |
+| Head-on: angle between this pass's horizontal movement (unit) and the reversed surface direction under 0.35 rad; never without horizontal movement; only in the Move state; by movement, not facing | "Exact hit handling" (traced, Q33 d) | Unit tests: head-on stop, backwards is head-on, not moving is never head-on. Viewer at the `Tomb`: 1.5° and 11.8° head-on, 21.6° glancing, as measured |
+| Head-on (Move), up-pass hits, walkable landings (surface z ≥ 0.8): put at the contact. Otherwise: target = wanted end − n × ((wanted end − contact) · n), swept from the contact as an across pass, the same handling again for a new hit; on the 3rd hit in the update he stays at that contact; no slide if the rest is under 0.000001 in every axis | "Exact hit handling" (traced, Q33 c) | Unit tests: glancing at 21.6° and 35° slides 0.37 and 0.57 of the step (the measured factors), a corner, past the end of a wall. Viewer at the `Tomb`: run head-on contact (237959.7, 187449.2), as measured; glancing slide at y 187449.5–187449.6 from x 239937.0, as measured; walk head-on stop 210 from the face (measured: between 200 and 225 depending on the last free step) |
+| Head-on outside Move counts as glancing; one count of 3 hits per update over all passes; the head-on test also on down-pass and slide hits | Our reading of the note; asked as Q37 (a)–(c) | — |
+| Down pass: the building sweep and the terrain; the nearer contact wins; walkable (z > 0.8): on ground, fall timer 0; steep: gravity on, pushed off as above (buildings can now stop the push-off); the pull points down the contact's slope | "One update" step 4, "Exact hit handling" (traced) | Unit tests: a 300 step climbed (stands at 325), a 400 one stops him head-on; standing on a building floor stays 25 above it. Viewer in `ConHouse`: feet at 13,980 (measured 13,980), then walking 43 updates on the floor to a head-on stop at the inner wall |
+| Ground check: the terrain only | "One update" step 5 (traced) | Unchanged |
+| Walk or step back head-on: the movement switches straight to `stop` (no stop animation); the next update the held key starts the walk again | "Walls" (measured); what the held key does next is our reading, Q37 (d) | Unit test of the walker; viewer log (walk/stop alternate at the wall) |
+| Running head-on: stops at the contact, keeps running | Stand-in until 2d-4 (`crash`) | — |
+| Every building the start-up scripts load is a collider, hidden ones too, placed as drawn | "Against a building", "When an object takes part" (hidden objects collide; traced) | Viewer log: Daventry's building colliders listed with their world boxes |
+| Connor's balls from his `BOUNDS.KQ` box | "Collision shape" (traced) | Viewer log: box −200…200, −200…200, 0…1,300; balls r 200 at 200, 600, 1,000, 1,100 |
+
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
 | Fact | Source | Checked how |

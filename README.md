@@ -25,7 +25,9 @@ The code is written with an AI coding agent (Claude Code); see
   climb slopes steeper than about 37° (he slides back), and falls off high
   places with the falling, landing and death animations. Falls and slides
   are as fast as in the original (gravity measured in the running game).
-  Checked in the logs, not yet by eye.
+  Buildings are solid: he stops when he walks straight into a wall,
+  slides along it at an angle, climbs low steps, and stands on building
+  floors. Checked in the logs, not yet by eye.
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
@@ -34,8 +36,9 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-There is nothing to play yet. Connor can't jump and walks through walls,
-buildings and objects. The camera doesn't swing
+There is nothing to play yet. Connor can't jump, doesn't crash when he
+runs into a wall (he just stops), and walks through objects (signposts,
+furniture, and so on). The camera doesn't swing
 back behind him by itself or avoid walls. People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the
