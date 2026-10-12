@@ -3,6 +3,22 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: slopes measured in the running original (open questions 6 and 7)
+
+**Changed:** `docs/behaviour/connor-physics.md` (open questions 6 and 7), `docs/behaviour/QUESTIONS.md` (Q30 b). No code.
+**Why:** Two slope puzzles: in the original he never falls going down walkable hills, and he barely climbs steep ones. Our rules predicted otherwise.
+**Tested how:** The user played the original normally while `re/dbg/mem_fall.py` read Connor's mover from memory (log `re/dbg/mem_slope.log`). Walked and ran down a hill of 19° to 37°, then ran into a 45–54° hillside for about 12 seconds.
+**Result:**
+
+- Walking down 34–37°: off the ground every other update (drop 36), lands the next. Air count never above 1.
+- Running down: 1–3 updates off the ground at a time (once 4), never 5, so no Fall.
+- Running into the 45–54° hillside: at most 80 units up, 2–4 updates in the air per try, back on the flat each time, no Fall.
+- No extra pull onto the slope: every drop was the gravity rule. Likely explanation for both (not proven): the gravity is 4 times stronger than our code had, so he gets back down before the count reaches 5.
+- Also seen, not understood: on flat ground at the foot, the fall timer kept growing for a few updates while he counted as on the ground.
+
+**Still broken / not tested:** The explanation isn't tested. It needs B's code with the corrected gravity, run on a similar slope.
+**Next:** Session B, after the gravity change: rerun the walking and running hill tests and the steep-slope run, and compare air counts and climb height with these numbers.
+
 ## 2026-10-12 Study session: fall speed measured in the running original (open question 8)
 
 **Changed:** `docs/behaviour/connor-physics.md` (Gravity, values table, Falling rule 2, Units, open question 8), `docs/behaviour/QUESTIONS.md` (Q30). In `re/` (never committed): `re/dbg/mem_fall.py`, a reader that reads Connor's mover from the game's memory from outside (Windows ReadProcessMemory: read only, no debugger, no pauses, nothing written to the game).

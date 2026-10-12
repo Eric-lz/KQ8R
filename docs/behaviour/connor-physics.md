@@ -508,6 +508,27 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    hills, but the traced rules predict one on slopes over about 15°. Not
    found after three searches (see "Going downhill on walkable ground").
    Until it is found, use the recommended rule there.
+   **Measured in the running original (2026-10-12),** reading his mover
+   from memory on a hill whose slope changes from 19° to 37° (the
+   walkable limit):
+   - Walking down 34–37°: every other update he ends **off the ground**,
+     having dropped exactly 36 (the first gravity step, t = 0.06), and
+     lands in the next update (25–85 down). The air counter goes 0, 1,
+     0, 1, … and never passes 1. On 19–30° he stays on the ground every
+     update.
+   - Running down 29–37°: off the ground for 1 to 3 updates at a time
+     (once 4), dropping 36, 108, 180, 252 as gravity builds, then lands
+     and the count starts again. It **never reached 5**, so no Fall.
+   - Nothing pulls him onto the slope beyond gravity: the drops are
+     exactly the gravity rule (now 4 times the earlier figure, see
+     "Gravity").
+   **Likely explanation (not proven):** with the measured gravity he gets
+   back to the slope within 1 to 4 updates, so the count of 5 is never
+   reached. The earlier figure (4 times weaker) kept him in the air
+   longer, which would explain why our version falls here. Check: run
+   the same walk with the corrected gravity; if the air count stays
+   under 5, the recommended rule in "Going downhill on walkable ground"
+   is not needed.
 7. Why Connor gains so little height walking or running into a steep
    slope in the original (user's check, Q29). Traced and found as the
    note says: the across pass ignores the terrain; the down pass hits the
@@ -520,6 +541,23 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    wanted position each update and what height it uses, and whether the
    end of the update moves him again. This may be the same unfound
    mechanism as open question 6.
+   **Measured in the running original (2026-10-12):** running straight
+   into a 45–54° hillside from flat ground, he got at most **80 units**
+   up (usually 5–40). Each try lasts 2 to 4 updates off the ground
+   (gravity drops 36, 108, 180, 252), and then the next update puts him
+   back on the flat ground at the foot. He never reached 5 updates in
+   the air, so no Fall and no falling animation, for about 12 seconds of
+   holding run. **Likely explanation (not proven):** the same as open
+   question 6, the measured gravity being 4 times stronger. Check: run
+   at a steep hillside with the corrected gravity and compare with these
+   numbers.
+   **Also seen, not understood:** standing on flat ground at the foot
+   with a horizontal pull, the fall timer kept growing (0.06 up to 0.42)
+   for a few updates while he counted as on the ground, before going
+   back to 0. Being on flat ground, he didn't move down. "Gravity" says
+   the timer is reset when the pull is less than 30° below horizontal;
+   this doesn't fit that. It may be a reading taken part-way through an
+   update. Not checked.
 8. **Falls are much faster in the original than these rules give** (user,
    Q30). He follows a steep slope down "sucked into the surface", and in
    Fall he gains falling speed much faster. Traced and matching the rules:
