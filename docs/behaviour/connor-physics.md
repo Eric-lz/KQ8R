@@ -16,9 +16,26 @@ walls or slides along them, jumps, and falls (and can die from a fall).
 ## Units
 
 - Game units (1 unit ≈ 1 mm, see `connor-movement.md`). Z is up.
-- **"Per update"** means once per mover update. The game runs at most 15
-  updates per second (`KQGame::FPSLimit 15`). Several values below are per
-  update, not per second; see "Do not reproduce".
+- **"Per update"** means once per mover update. Several values below are
+  per update, not per second; see "Do not reproduce".
+- **How often updates happen (traced, Q30 c):**
+  - The game's update tick is a **fixed timer of 1/15 s of game time**,
+    set when the game starts. Each time it fires, it sends the per-update
+    event to every object, then sets itself again 1/15 s later.
+  - **Game time follows real time.** Each frame the game measures the
+    real time since the last frame (millisecond clock) and moves game
+    time on by that much, then runs every timer that has come due. A slow
+    frame therefore runs several ticks at once (catch-up). One frame
+    moves game time by at most 1 s (a few scripted moments lower this
+    limit for a while).
+  - **`KQGame::FPSLimit 15`** (set by `console.cs`) only limits how often
+    a frame is drawn and game time is moved on: at most once per 1/15 s
+    of real time. It doesn't change the tick. Without the line there is
+    no limit, and the tick still runs at 15 per second.
+  - So the update tick does **not** run faster on a fast PC.
+  - **Not confirmed:** that Connor's three-pass move is run from this
+    tick. Which code hands the mover Connor's animation step each update
+    was not found (open question 8).
 
 ## Where the values live
 
@@ -269,12 +286,28 @@ Consequences:
      high ledge he steps fully off, drops a little, then the falling
      animation starts and he falls **straight down**. His forward
      movement stops, which fits the walk steps ending when Fall replaces
-     the walk animation with `jumphold` (whether `jumphold` has steps of
-     its own was not checked). On an unwalkable slope the same happens,
+     the walk animation with `jumphold` (which has no steps of its own). On an unwalkable slope the same happens,
      but he slides rapidly down the slope.
-2. Entering Fall sets the fall timer to **0.36 s**, as if he had already
-   been falling that long (speed 1,800 units/s), and plays `jumphold`
-   (repeating).
+2. **What entering Fall does depends on the state he comes from**
+   (corrected 2026-10-12; an earlier version said the timer was always
+   set):
+   - **From Move or Wait** (walking off a ledge or onto a steep slope):
+     gravity is **not touched at all**: the timer keeps running from the
+     5 updates in the air (0.30 s). The start height for the death rule
+     is his height when Fall was requested. `jumphold` plays, repeating.
+   - **After a jump** (`jump`, `runjump` or `backjump`): the fall timer
+     is set to **0.36 s** (previous 0.30 s), the start height is lowered
+     by a fixed amount (not read), and the matching hold animation plays
+     (`jumphold`, `runJumpHold` or `backJumpHold`).
+
+   Neither case touches the pull direction (Q30 a). If the last contact
+   was steep, each drop stays projected down that slope until he lands.
+   So walking off a ledge, the drops go 9, 27, 45, 63, 81 in the 5 air
+   updates (225 in all), then 99, 117, 135, … in Fall (18 more each
+   update). The hold animations have no movement of their own (`jumphold`:
+   3 frames, all zero). Nothing else in Fall changes gravity or moves
+   him. Its per-update check only does rule 3 and picks the landing or
+   death animation.
 3. Each update in Fall: if he dropped **less than 50** units since the last
    update, a "stuck" counter goes up; otherwise it goes back to 0. After
    more than 5 "stuck" updates he counts as on the ground.
@@ -466,3 +499,56 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    wanted position each update and what height it uses, and whether the
    end of the update moves him again. This may be the same unfound
    mechanism as open question 6.
+8. **Falls are much faster in the original than these rules give** (user,
+   Q30). He follows a steep slope down "sucked into the surface", and in
+   Fall he gains falling speed much faster. Traced and matching the rules:
+   the tick (15 per second of real time, whatever the frame rate), the Fall
+   start (rule 2; pull unchanged), gravity 5,000 with +0.06 per
+   update. Not found: which code hands Connor's animation step to the mover
+   each update. A first guess (the move routine runs more often than the
+   tick) was ruled out by the user's recordings below.
+   **User's recording (running onto a slope too steep to walk, two
+   places, same result):** once about the middle of his body reaches the
+   start of the drop, he moves down quickly, following the slope; the
+   falling animation starts **18 frames of a 60 fps video (0.3 s, 4
+   changed game frames)** after the first frame that moves down, and he
+   keeps sliding down the slope fast. The game felt choppy, about 15
+   frames per second. By these rules the falling animation shows 5
+   updates after the first update in the air: 1/3 s, 20 video frames.
+   18 is within one update of that (each update spans about 4 video
+   frames), so **the start of the fall matches the 15-per-second rules**
+   and does not support the guess above. (A first count of "4 frames"
+   was changed game frames, not video frames; it briefly looked like
+   support for the guess.) What is still unexplained is the speed: how
+   fast he goes down the slope and falls, not when Fall starts.
+   **User's ledge fall (straight down, flat ground below, a drop of a bit
+   under 2.5 Connor heights):** 23 frames of a 60 fps video from the
+   first falling-pose frame to the first landing-pose frame, about 6
+   updates. Connor is 1,600 units tall (collision box), so the drop was
+   about 3,500 to 3,900 units. (A first comparison used 720 for his
+   height, which was wrong.) He survived, which fits: the death limit,
+   3,840 counted from the Fall start, is 2.4 Connor heights. By these
+   rules (rule 2: walking off, 225 units before Fall, then 99, 117, …)
+   the part after the Fall start, about 3,300 to 3,700 units, takes 15 to
+   16 updates (about 60 to 64 frames). In 6 updates the rules give only
+   864. So **the original falls about 4 times as far as these rules in
+   the same time.** The start of the fall is on time (slope recording),
+   so the air count is not faster; only the distance per update is.
+   **Checked and ruled out (2026-10-12):** the fall animation moving him
+   (`jumphold` has no movement); an extra drop in Fall (its per-update
+   check only watches the drop and picks the end animation); a second
+   call of the gravity step (one per mover update, from one place); the
+   object move handler splitting a move into several (it runs the move
+   once, plus a lowered second move only for an object standing in
+   water). "The mover runs more often" is also out: the air count runs
+   in the same routine, so Fall would start early, and it doesn't.
+   **Not checked:** what else feeds the wanted height into the mover
+   (the up pass adds the wanted change in height, so a downward wanted
+   height from somewhere else would add to the fall); the drop routine
+   adds a stored base vector to each drop; what it holds and what sets
+   it is not traced. Stopped after these attempts.
+   **Also from the user:** he never leaves the ground by running fast over
+   a crest or down a walkable slope; the game seems to always put him on
+   the ground below him (see open question 6). Only with no ground below
+   (a real ledge) does he lose his forward speed and fall straight down.
+   The only case where he keeps forward speed in the air is a jump.

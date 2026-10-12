@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Study session: user's recording of a steep-slope fall
+
+**Changed:** `docs/behaviour/connor-physics.md`, open question 8 (the user's recording and what it implies). No code, no new tracing.
+**Why:** The user recorded the original running onto a slope too steep to walk on, to time the fall.
+**Tested how:** The user watched the recording frame by frame in two places. I compared it with the traced rules.
+**Result:** The falling animation starts 18 frames of the 60 fps video (0.3 s, 4 changed game frames; the game ran at about 15 fps) after the first frame that moves down. The traced rules give 5 updates, 1/3 s, 20 video frames. That's within one update, so the start of the fall matches the 15-per-second rules. **Correction:** my first reading took the "4 frames" as video frames and said this backed the guess that the mover runs more often than 15 times a second. It doesn't; the note now says so. The user also saw that he never leaves the ground running over a crest or down a walkable slope (always put on the ground below him), and loses his forward speed only off a real ledge.
+**Still broken / not tested:** Why he slides and falls so fast (speed, not timing) is still open (open question 8). The open question 8 guess is now weaker.
+**Ledge fall (added after):** the user timed a straight fall from a bit under 2.5 Connor heights: 23 frames at 60 fps from the falling pose to the landing pose, about 6 updates. **Correction:** I first compared it using 720 units for Connor's height; he is 1,600 (collision box), so the drop was about 3,500 to 3,900 units. The rules need 15 to 16 updates after the Fall start for that and give only 864 units in 6. So the original falls about 4 times as far per update. The start of the fall is on time, so "the mover runs more often" is ruled out (the air count would also run faster).
+**Follow-up tracing (2026-10-12):** Changed `connor-physics.md` ("Falling off an edge" rule 2, open question 8) and the Q30 answer in `QUESTIONS.md`.
+
+- **Correction of my Q30 answer:** entering Fall sets the timer to 0.36 (previous 0.30) **only after a jump**. From Move or Wait (walking off), gravity is left alone; the timer runs on from 0.30, so the first Fall drop is 99, not 117. B's code follows the old text.
+- Ruled out as the cause of the fast fall: the fall animation (`jumphold` has no movement); an extra drop in Fall's per-update check; a second gravity step per update (one caller); the object move handler running the move several times (once, plus a second lowered move only in water).
+- Not checked: whether something else lowers the wanted height handed to the mover; a stored base vector the drop routine adds to every drop.
+
+**Still broken / not tested:** Why the original falls about 4 times as far per update is not found. Stopped after these attempts.
+**Next:** User check that would separate "stronger gravity" from "something else": time two ledge falls of clearly different heights (about 1 and about 2 Connor heights), counting from the first frame he leaves the ledge to the landing. If the times grow like a falling object (twice the height, about 1.4 times the time), it is a stronger gravity, and its strength can be worked out from the two times.
+
+## 2026-10-11 Study session: Q30 (update rate, Fall start, fast falls)
+
+**Changed:** `docs/behaviour/connor-physics.md` (Units "How often updates happen", "Falling off an edge" rule 2, new open question 8), `docs/behaviour/QUESTIONS.md` (Q30). No code.
+**Why:** In the original, falls and slides down steep slopes are much faster than in B's code. B asked whether the update rate, the Fall start or the pull explains it.
+**Tested how:** Traced in `Mask.exe`: the `FPSLimit` command, the main loop and the per-frame routine, the game clock, the 1/15 s update timer, the Fall state's start and per-update routines (instruction by instruction), Connor's per-update handler, and the code that calls the mover's move routine.
+**Result:** The update tick is a fixed 1/15 s timer in game time, and game time follows real time (millisecond clock, at most 1 s per frame, catch-up when frames are slow). `FPSLimit 15` only limits how often frames are drawn and game time is moved on; it doesn't change the tick. So updates don't run faster on a modern PC. Entering Fall sets the timer to 0.36 (previous 0.30) and doesn't touch the pull. Nothing else in Fall changes gravity. B's numbers (117, 135, 153… per update; drops projected onto the slope) are what the traced rules give.
+**Failed attempts:** Looked for what hands Connor's animation step to the mover each update, to confirm it runs on the tick. Found the object move-event handler and two other callers (other classes), but not Connor's sender. Also checked the frame-rate display, the sound timer (`timeSetEvent`, sound only) and the extra thread (graphics). Several attempts, so stopped.
+**Still broken / not tested:** Why the original falls so much faster is not explained (open question 8). A guess, not shown: the move routine also runs more often than the tick, which would also explain open questions 6 and 7. What keeps him on a steep slope going down (Q30 b) is open.
+**Next:** User: record the original while Connor walks off a high ledge and count frames from the falling pose to the landing (rules: about 0.7 s for 2,000 units). That decides whether to look further at how often the mover runs.
+
 ## 2026-10-11 Study session: Q29 (what counts as on the ground) and Q28 (a)
 
 **Changed:** `docs/behaviour/connor-physics.md` ("Falling off an edge" rule 1, "Gravity", the steep-hill consequence, new open question 7), `docs/behaviour/QUESTIONS.md` (Q28, Q29). No code.
