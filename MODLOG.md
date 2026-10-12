@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q34 and Q37 answered; notes and STATUS brought up to date
+
+**Changed:** `docs/behaviour/connor-physics.md` (how the box table is read; head-on test only on up and across passes; slide count per pass; walk held against a wall; an old 1,600 height marked as superseded), `docs/behaviour/QUESTIONS.md` (Q34, Q37 answered, Q36 marked read). `STATUS.md` (not tracked) rewritten at the top, plus "What works", "What doesn't work", open questions and the fresh-session prompt. No code.
+**Why:** The user asked for all documents and the status to be up to date; Q34 and Q37 were waiting for A.
+**Tested how:** Traced in Ghidra. The box table was also read from the running original's memory (read only): 1,111 entries, sorted byte by byte, inside-out boxes already swapped, `rat` and `razetta.kqs` duplicates in the order given. Q37 (d) from my wall log of 2026-10-12.
+**Result:** Box names: case matters; read by key `itemN`; inside-out boxes fixed on loading; duplicates: `rat` = item 8, `razetta.kqs` = item 775. Hit handling: head-on test only on up- and across-pass hits; slides counted per pass (pass hit plus 3 slide hits handled; a 4th slide hit stops him); walk held against a wall stays in `Stop` (measured about 2.8 s).
+**Still broken / not tested:** Not traced: why the held walk key doesn't restart walking; Connor against monsters. The 225 wall stop is not checked directly in the game.
+**Next:** B continues 2d. A: monsters when B gets to them.
+
 ## 2026-10-12 M2 step 2d-3: buildings are solid (stop, slide, steps, floors, ceilings)
 
 **Changed:**

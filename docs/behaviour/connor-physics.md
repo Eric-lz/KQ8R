@@ -78,8 +78,23 @@ banking, already in `connor-movement.md`). Values it uses:
   **An object whose names aren't in the table gets no box and never
   collides.** Collider sections in `.kq` files (`[ConnerCollider]` and
   the like) are read by a different object, not used for this box.
-  (Note: in the patch copy `lfswdoor.kqs` has xmin 10 > xmax −1520; what
-  the tests do with an inside-out box was not traced.)
+  **How the table is read (traced 2026-10-12, Q34; checked against the
+  table in the running game's memory):**
+  - Entries are read **by key**, `item0` to `item<nItems−1>`, not line by
+    line; a key that isn't one of these (e.g. `#item968=…`) is ignored,
+    and so is an empty value.
+  - Each value is read as: name up to the first space, then six numbers
+    (any amount of space between them).
+  - **Inside-out boxes are fixed on loading:** on each axis the smaller
+    number becomes the min and the larger the max (`lfswdoor.kqs`,
+    `iceshard.kqs`).
+  - Names are compared **byte by byte, case matters**: `henchman` and
+    `Henchman` are two different names.
+  - The table is kept sorted by name and searched for the first match.
+    For the two names that really appear twice, the game ends up using
+    **`rat` = item 8** (−70 −200 0 30 70 70) and **`razetta.kqs` =
+    item 775** (−150 −150 0 150 150 750). (This comes from the sort the
+    game runs after every entry; read from the running game.)
 - **The box sets the size; the precise test uses a stack of balls**
   (traced 2026-10-12, Q31; corrects "Connor collides as a box"). The box
   (own space, feet at z 0) is turned into balls when the object is set
@@ -527,8 +542,8 @@ When the across pass hits something:
     says so; meaning not traced), during `backJump`, or while a game flag
     blocks it.
 - **Glancing:** remove the part of the remaining movement that goes into the
-  wall, i.e. **slide along it**, and try again. This happens at most 3 times
-  in one update; after that he stops at the contact point.
+  wall, i.e. **slide along it**, and try again. The count is per pass, not
+  per update; see "Exact hit handling" for the exact numbers.
 
 **Wall test positions, for checking in our viewer (measured 2026-10-12,
 Daventry).** All from my memory log of the original. Positions are
@@ -593,7 +608,12 @@ contact the hit handler kept, i.e. **already pulled back 25** (see
   head-on. (The measurements fit both because he was walking forwards.)
   Head-on only acts in state Move or Jump, and never against a
   `KQMonster`, against a ball-stack object without type bit 0x100, during
-  `backJump`, or while a Connor flag is set (not traced which).
+  `backJump`, or while a Connor flag is set (not traced which). In any
+  of those cases the hit is handled as **glancing** (he slides).
+  **The head-on test runs only on up-pass and across-pass hits**
+  (slides are across passes, so they get it too). A **down-pass** hit
+  never gets it: there it is only "walkable → land" or "steep → slide"
+  (Q37 c).
 - **Head-on, up-pass hits, and walkable landings** (down pass, or the
   pass type 2 not otherwise described, with surface z ≥ 0.8): he is put
   at the contact, no slide.
@@ -606,9 +626,20 @@ contact the hit handler kept, i.e. **already pulled back 25** (see
   target is the contact (no slide). He is set at the contact and swept
   to the target as an across pass (terrain ignored). If that sweep hits,
   the same handling runs again for the new hit (its own head-on test,
-  with the slide as the movement); on the 3rd hit in one update he stays
-  at that hit's contact. If it doesn't hit, he ends at the target. The
-  steep push-off is this same code.
+  with the slide as the movement). If it doesn't hit, he ends at the
+  target. The steep push-off is this same code.
+- **How many slides (Q37 b):** counted **per pass** (the count starts at
+  0 for each pass's hit and is cleared when that pass's handling ends).
+  The pass's own hit and the hits of the first 3 slides are each handled
+  fully as above (head-on test included). If the **4th slide** also
+  hits, he stays at that hit's contact, with no head-on test and no
+  further slide.
+- **Walk held against a wall (measured, Q37 d):** after a walking
+  head-on stop he stayed in `Stop` (state Wait, not moving) for about
+  2.8 s while the walk key was held (user's step: "keep holding forward
+  for 2 seconds"); walking never started again in that time. Why it
+  doesn't restart was not traced. Running is different: held run starts
+  running again and crashes again (see "Measured" below).
 - **Landing on top of a `KQMonster`** (surface direction exactly
   straight up): instead of all this he is pushed 250 sideways, straight
   away from the monster's position (traced only this far).
@@ -829,8 +860,9 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
    **User's ledge fall (straight down, flat ground below, a drop of a bit
    under 2.5 Connor heights):** 23 frames of a 60 fps video from the
    first falling-pose frame to the first landing-pose frame, about 6
-   updates. Connor is 1,600 units tall (collision box), so the drop was
-   about 3,500 to 3,900 units. (A first comparison used 720 for his
+   updates. Taking Connor as 1,600 units tall (the value used then; his
+   collision box is in fact 1,300 tall, corrected 2026-10-12), the drop
+   was about 3,500 to 3,900 units. (A first comparison used 720 for his
    height, which was wrong.) He survived, which fits: the death limit,
    3,840 counted from the Fall start, is 2.4 Connor heights. By these
    rules (rule 2: walking off, 225 units before Fall, then 99, 117, …)
