@@ -3,6 +3,26 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M2 2e-3: hitting something during a jump
+
+**Changed:** `kq8-game` `mover.rs`: head-on also in the Jump state, where any surface with normal z < 0.8 counts (also on up-pass hits, so ceilings); the report names the pass of the first steep hit during a jump; `end_jump_on_hit` (gravity on, steps 325). `player.rs`: a steep hit ends the jump: `backJump` falls at once in `backJumpHold`, a down-pass hit or any `runJump` hit crashes, an up or across hit during `jump` stands him with forward blocked; 4 new tests. `connor.rs`: `stop_after_jump`. Docs: DESIGN, provenance, README.
+**Why:** Last part of jumping (`connor-physics.md` "Jumping" rule 5, "Walls"; your back flip check).
+**Tested how:** `cargo test --workspace` (133 tests; 132 after the fix below). Viewer in Daventry against `tree.06`: `--at 277744,199295,0 --jump 3`; `--at 277744,201500,0 --hold 1,0,1 --jump 13`; `--at 277744,199295,3.14 --hold -1,0,0 --jump 2`.
+**Result:** Standing jump: hits the tree (across pass, update 16), stands with forward blocked, in the air, Fall 5 updates later, `jumpend`. Running jump: hits it (update 21), `crash`, then falls and lands. Back flip: hits it (update 13), slides, `backJumpHold` at once, lands at update 17, `backJumpEnd`, then steps back into the tree again (normal head-on stop). Fixed on the way: the back flip's hit was also logged as "head-on into a wall … stop" although no stop happened.
+**Still broken / not tested:** Not checked by eye. The back flip's Fall start values after a hit are our choice. A standing jump stopped high against a wall stands in mid-air for the 5 updates before Fall starts, as the traced rules give; not checked in the original.
+**Next:** You check 2e-2 and 2e-3 by eye.
+**Checked by eye by you (2026-10-12):** 2e-2 and 2e-3, after the fix below, all look correct.
+**Fix after your check (same day):** in the original the back flip doesn't crash or stumble at a wall or steep slope: it keeps going, then the falling animation until the ground. Ours cut the flip off at the hit and fell at once (my misreading of your first description). Now at the hit he slides, gravity comes on (rule 5), `backJump` plays on to its end, then Fall as after any jump. Viewer (`--at 277744,199295,3.14 --hold -1,0,0 --jump 2`): hit at update 13, `backJump` to update 20, `backJumpHold`, `backJumpEnd`. Tests: 132 pass (old back flip test replaced).
+
+## 2026-10-12 M2 2e-2: running and backward jumps
+
+**Changed:** `kq8-viewer` `load.rs` loads `runJump`, `runJumpHold`, `runJumpDie`, `jumprun`, `jumpstop`, `backJump`, `backJumpHold`, `backJumpEnd`, `backJumpDie`. `kq8-game` `connor.rs`: `land()` (a running jump has no landing animation: the keys' control at once in `runJumpHold`, and whatever the keys choose is asked for from there); at that landing a turn key alone counts as standing. `player.rs` calls `land()`; 4 new tests. Docs: DESIGN, provenance, Q41 (d).
+**Why:** Second part of jumping (your go-ahead).
+**Tested how:** `cargo test --workspace` (129 tests). Viewer runs in Daventry: `--at 277744,199295,3.14 --hold 1,0,1 --jump 20` and `--hold 1,0,1,30 --jump 20`; `--at 277744,199295,0 --hold -1,0,0 --jump 10`.
+**Result:** Running jump: `runJump` 20 updates, top +1,858.8 (note 1,859); lands after one Fall update; run held: `jumprun` 3 updates, then `run` (the note measured 3); forward let go: `jumpstop` 15 updates (1.0 s, measured 1.0 s), then `stop`. Back flip: 18 updates, 2,565.7 back, top +2,156.1, end +788.1 (note 2,566 / 2,156 / 788), `backJumpHold`, `backJumpEnd` 11 updates, then stepping back again. First try of the back flip jumped from `stop`: stepping back from that spot hits `tree.06`, which blocks him, so a standing jump was right; tried facing the other way.
+**Still broken / not tested:** Not checked by eye. How the original decides what follows a running jump's landing is not traced; ours follows the 2g rules plus your check (Q41 d). Hits during jumps are still glancing only (2e-3, next).
+**Next:** 2e-3, hitting something during a jump.
+
 ## 2026-10-12 M2 2e-1: the standing jump
 
 **Changed:** `kq8-game`: new `player.rs` (one update of Connor: walker and mover together; the falls, landings and head-on code moved here from the viewer unchanged; jumps: when one is allowed, start, end into Fall); `mover.rs` (state Jump, `start_jump` / `end_jump`: gravity off and steps 0 while jumping, then gravity on, steps 325, Fall with the death limit 1,280 lower and the timer at 0.36 after 0.30; lifting mid-jump ends it; clearer fall-end message); `connor.rs` (jump kinds with their hold/landing/death animations, mode Jump, which movements allow a jump). `kq8-viewer`: Jump key from `Connor.sae`, loads `jump`, `--jump N` test option, new `connor.log` column `above_jump_start`, jump event lines. Plan in DESIGN (M2 2e), provenance, README, Q41.

@@ -121,13 +121,17 @@ pub struct Wish {
     /// The movement (x, y, z change), world space.
     pub step: [f32; 3],
     /// Connor is in the Move state (walking, running, stepping back,
-    /// turning on the spot): only then can a hit be head-on.
+    /// turning on the spot) or jumping (not `backJump`): only then can a
+    /// hit be head-on.
     pub moving: bool,
+    /// Jumping (not `backJump`): any surface with normal z < 0.8 also
+    /// counts as head-on (connor-physics.md "Walls").
+    pub steep_head_on: bool,
 }
 
 impl From<[f32; 3]> for Wish {
     fn from(step: [f32; 3]) -> Self {
-        Wish { step, moving: true }
+        Wish { step, moving: true, steep_head_on: false }
     }
 }
 
@@ -216,6 +220,8 @@ pub struct Mover {
     pub step_up: f32,
     pub step_down: f32,
     pub state: State,
+    /// This update: steep surfaces count as head-on (jumping).
+    steep_head_on: bool,
     /// The balls he collides with (built from his box).
     pub balls: BallStack,
 }
@@ -278,6 +284,10 @@ pub struct Report {
     /// A hit was head-on while he was moving: he stops (the walker plays
     /// `Stop`).
     pub head_on: bool,
+    /// While jumping: the pass (`up`, `across`, `slide`, `down`) of the
+    /// first hit on a surface with normal z < 0.8, which ends the jump
+    /// (connor-physics.md "Jumping" rule 5).
+    pub jump_hit: Option<&'static str>,
     /// Things worth a line in the main log (state changes, landings).
     pub events: Vec<String>,
 }
@@ -309,6 +319,7 @@ impl Mover {
             step_up: STEP,
             step_down: STEP,
             state: State::Normal,
+            steep_head_on: false,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
         }
     }
@@ -335,6 +346,25 @@ impl Mover {
         self.use_gravity = false;
         self.step_up = 0.0;
         self.step_down = 0.0;
+    }
+
+    /// A steep hit ended the jump and he crashes or stands (rule 5): gravity
+    /// on, steps back to 325, the normal state.
+    pub fn end_jump_on_hit(&mut self) {
+        self.use_gravity = true;
+        self.step_up = STEP;
+        self.step_down = STEP;
+        self.state = State::Normal;
+    }
+
+    /// A steep hit during `backJump` (rule 5: the jump ends, gravity on,
+    /// steps 325), but the animation plays on (the user's check in the
+    /// original), so the state stays Jump: no Fall request from the air
+    /// counter until it ends.
+    pub fn back_jump_hit(&mut self) {
+        self.use_gravity = true;
+        self.step_up = STEP;
+        self.step_down = STEP;
     }
 
     /// The jump animation has ended (rule 4): gravity on, steps back to
@@ -395,7 +425,10 @@ impl Mover {
         let wish: Wish = wanted(self, report.fall).into();
         let wanted = wish.step;
         // Head-on only acts in the Move state (Fall is not Move).
-        let head_on_allowed = wish.moving && self.state == State::Normal;
+        // Head-on also acts while jumping (state Jump), where a steep
+        // surface counts too.
+        let head_on_allowed = wish.moving && matches!(self.state, State::Normal | State::Jump);
+        self.steep_head_on = head_on_allowed && wish.steep_head_on && self.state == State::Jump;
         let mut hits = 0;
 
         // 2. Up pass: step up plus the wanted height change. A building
@@ -408,7 +441,11 @@ impl Mover {
                 hits += 1;
                 self.position = h.position;
                 report.up_contact = Some(h.normal);
-                report.hits.push(HitRecord { pass: "up", hit: h, angle: None, result: "stop" });
+                // A vertical move is never head-on by angle; while jumping a
+                // steep surface (a ceiling too) is.
+                let head_on = self.steep_head_on && h.normal[2] < WALKABLE_NORMAL_Z;
+                report.head_on |= head_on;
+                report.hits.push(HitRecord { pass: "up", hit: h, angle: None, result: if head_on { "head-on" } else { "stop" } });
             }
             None => self.position = end,
         }
@@ -538,6 +575,9 @@ impl Mover {
                 None => self.state = State::Fall { start_z, stuck },
             }
         }
+        if self.state == State::Jump {
+            report.jump_hit = report.hits.iter().find(|h| h.hit.normal[2] < WALKABLE_NORMAL_Z).map(|h| h.pass);
+        }
         report.events.extend(world.take_notes());
         report
     }
@@ -567,7 +607,8 @@ impl Mover {
             };
             *hits += 1;
             let angle = head_on_angle(sub(target, start), h.normal);
-            let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
+            let head_on = head_on_allowed
+                && (angle.is_some_and(|a| a < HEAD_ON_ANGLE) || (self.steep_head_on && h.normal[2] < WALKABLE_NORMAL_Z));
             let (contact, normal) = (h.position, h.normal);
             let result = if head_on {
                 "head-on"
@@ -1031,7 +1072,7 @@ mod tests {
         let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 300.0, 0.0], true);
         for n in 1..=7 {
-            let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false });
+            let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false, steep_head_on: false });
             assert!(!r.head_on, "update {n}: no head-on outside Move");
             assert!(m.position[1] >= 199.0, "update {n}: never inside the wall: {:?}", m.position);
         }
@@ -1053,7 +1094,7 @@ mod tests {
         let b = [wall()];
         let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 260.0, 0.0], true);
-        let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false });
+        let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false, steep_head_on: false });
         assert!(!r.head_on);
         assert_eq!(r.across, "glance");
     }

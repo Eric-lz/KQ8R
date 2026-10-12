@@ -261,7 +261,7 @@ pub struct Walker {
     /// The transition playing now (rules 5 and 6).
     pub playing: Option<Transition>,
     /// The keys' last choice: a request is made only when it changes.
-    choice: &'static str,
+    pub(crate) choice: &'static str,
     /// The last jump's kind, for the hold, landing and death animations
     /// (`Stand` after a walk-off).
     pub kind: JumpKind,
@@ -343,6 +343,33 @@ impl Walker {
             return Err(format!("not from {}", self.movement));
         }
         Ok(JumpKind::for_movement(self.movement))
+    }
+
+    /// A safe landing (connor-physics.md "Jumping" rule 4): the kind's
+    /// landing animation, or for `runJump`, which has none, the keys'
+    /// control at once while `runJumpHold` plays on. The keys then always
+    /// ask for a movement from there, so `Conner.anm`'s transitions give
+    /// `jumprun` (run held), `jumpstop` (forward let go) or a direct switch
+    /// (measured in the original: `jumprun` 3 updates then `run`;
+    /// `jumpstop` 13 updates then standing).
+    pub fn land(&mut self) {
+        if self.kind.end().is_some() {
+            self.set_mode(Mode::Land);
+            return;
+        }
+        self.clear_transitions();
+        self.mode = Mode::Free;
+        // No choice yet: whatever the keys choose is a new request.
+        self.choice = "";
+    }
+
+    /// A standing jump hit something steep in the up or across pass: he
+    /// stands (`stop`), as for a walking head-on stop, which sets the
+    /// forward wall block (connor-physics.md "Jumping" rule 5, "Walk held
+    /// against a wall").
+    pub fn stop_after_jump(&mut self) {
+        self.set_mode(Mode::Free);
+        self.blocked_forward = true;
     }
 
     /// A jump starts: its animation plays once from the next `update`,
@@ -526,7 +553,14 @@ impl Walker {
             }
         } else {
             // While a wall block is on he stands, whatever the keys ask.
-            let choice = if self.blocked() { "stop" } else { choose_movement(intent) };
+            let mut choice = if self.blocked() { "stop" } else { choose_movement(intent) };
+            // Just landed from a running jump (`choice` is ""): a turn key
+            // alone counts as standing, so `jumpstop` plays (he turns
+            // during it) and the turn on the spot is asked for once it has
+            // started. The user's check in the original; not traced (Q41 d).
+            if self.choice.is_empty() && matches!(choice, "left" | "right") {
+                choice = "stop";
+            }
             if choice != self.choice {
                 self.choice = choice;
                 notes.push(format!("asks for {choice}"));

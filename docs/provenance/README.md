@@ -276,6 +276,24 @@ original (2026-10-12).
 | Hits during a jump: walls, ceilings and the ground check act; glancing only (head-on and steep hits during jumps come in 2e-3) | Rule 3 ("walls and ceilings still stop him"); the rest: stand-in until 2e-3 | — |
 | `--jump N`: test option, presses Jump once | Our test helper | Log line `test --jump` |
 
+## Running and backward jumps (M2 step 2e-2) — `crates/kq8-game/src/{connor,player}.rs`, `crates/kq8-viewer/src/load.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `runJump` from `run`, `backJump` from `back`; hold, landing and death animations by kind (`runJumpHold`/`runJumpDie`; `backJumpHold`/`backJumpEnd`/`backJumpDie`); `runJump` has no landing animation | `connor-physics.md` "Jumping" rules 2, 4 (table) | Unit tests; viewer `--at 277744,199295,3.14 --hold 1,0,1 --jump 20`: `runJump` 20 updates, top +1,858.8 (note 1,859); `--at 277744,199295,0 --hold -1,0,0 --jump 10`: `backJump` 18 updates, 2,565.7 back, top +2,156.1, end +788.1 (note 2,566, 2,156, 788), `backJumpEnd` 11 updates |
+| After a running jump lands he is in the keys' control at once, still in `runJumpHold`; the keys' choice is asked for from there, so `Conner.anm`'s transitions give `jumprun` (run held) → `run` at 0.8, `jumpstop` (forward let go) → `stop`, `walk` at once (run off) | Note's measurement (open question 3: `jumprun` 3 updates, `jumpstop` 13 updates ≈ 1.0 s); the 2g rules; **our reading**, the landing itself not traced | Unit tests; viewer: `jumprun` updates 43–45 then `run`; with forward let go (`--hold 1,0,1,30`) `jumpstop` updates 43–57 then `stop` |
+| At that landing a turn key alone counts as standing: `jumpstop` plays and he turns during it, then the turn on the spot | **User's check in the original** (turning only during the running jump's landing, forward let go, a turn key held); how the game does it: Q41 (d) | Unit test (`running_jump_lands_into_jumpstop_with_forward_let_go_and_turns_there`) |
+
+## Hits during a jump (M2 step 2e-3) — `crates/kq8-game/src/{mover,player,connor}.rs`
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Head-on acts while jumping (state Jump) as in Move, and any surface with normal z < 0.8 counts as head-on; never during `backJump` | `connor-physics.md` "Walls" (traced) | Unit tests |
+| Up-pass hits during a jump are tested too (a vertical move is never head-on by angle, so only the steep rule; a ceiling counts) | "Exact hit handling" (head-on is tested on up and across passes, Q37 c) | Unit tests (through the wall tests) |
+| The first steep hit (normal z < 0.8) in any pass ends the jump: gravity on, steps 325 | "Jumping" rule 5 (traced) | Unit tests |
+| Down-pass steep hit during `jump` or `runJump`: `crash`. Up or across: `runJump` crashes, `jump` stands (`stop`, forward blocked as for a walking head-on stop) | Rule 5; the forward block from "Walk held against a wall" (Q38) | Unit tests (wall, 63° hill); viewer `--at 277744,199295,0 --jump 3`: `jump` hits `tree.06` (across), stands, falls 5 updates later, `jumpend`; `--at 277744,201500,0 --hold 1,0,1 --jump 13`: `runJump` hits it, `crash` |
+| `backJump` into a wall or steep hill: no head-on (it slides), gravity on and steps 325 (rule 5), but the animation plays on to its end (state still Jump), then Fall as at any jump's end (`backJumpHold` until the ground, usual death rule) | **User's check in the original** (no crash, no stumble, the flip keeps going, then the falling animation; Q41 b). Gravity on during the rest of the flip: rule 5 as traced, not visible to the user | Unit test (`a_back_flip_slides_along_the_wall_and_plays_on`); viewer `--at 277744,199295,3.14 --hold -1,0,0 --jump 2`: hits `tree.06` at update 13, `backJump` plays on to update 20, then `backJumpHold`, `backJumpEnd` |
+
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
 
 | Fact | Source | Checked how |

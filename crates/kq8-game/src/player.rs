@@ -6,7 +6,7 @@
 //! Rules: `connor-physics.md` "Falling off an edge", "Walls", "Jumping";
 //! the user's checks of jumping in the original (docs/DESIGN.md M2 2e).
 
-use crate::connor::{Intent, Mode, MovementLoop, Step, Walker};
+use crate::connor::{Intent, JumpKind, Mode, MovementLoop, Step, Walker};
 use crate::mover::{FallEvent, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
 
 /// What one update did.
@@ -114,26 +114,61 @@ pub fn tick<'a>(
                 walker.set_mode(Mode::Fall);
             }
             let s = walker.update(intent, loops);
-            let wish = Wish { step: s.wanted, moving: walker.moving() };
+            // Head-on acts while jumping too, steep surfaces counting, but
+            // never during `backJump` ("Walls").
+            let jumping = walker.mode == Mode::Jump && walker.kind != JumpKind::Back;
+            let wish = Wish { step: s.wanted, moving: walker.moving() || jumping, steep_head_on: jumping };
             step = Some(s);
             wish
         })
     };
     match report.fall {
-        Some(FallEvent::Landed(_)) => walker.set_mode(Mode::Land),
+        Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
     }
-    // Head-on into a wall: walking or stepping back stops at once; running
-    // crashes from the next update.
-    let wall_stop = if report.head_on { walker.head_on_at_wall() } else { None };
+    // A steep hit ends a jump (rule 5): during `backJump` he slides, gravity
+    // comes on and the animation plays on to its end, then Fall as usual
+    // (the user's check in the original: no crash, no stumble); a
+    // down-pass hit, or any during `runJump`, crashes; an up or across hit
+    // during `jump` stands him still.
+    let mut wall_stop = None;
+    let first_back_hit = walker.kind != JumpKind::Back || !mover.use_gravity;
+    if let (Mode::Jump, Some(pass), true) = (walker.mode, report.jump_hit, first_back_hit) {
+        let jump = walker.kind.jump();
+        let what = report.hits.iter().find(|h| h.pass == pass).map_or("?".into(), |h| h.hit.what.clone());
+        let to = match (walker.kind, pass) {
+            (JumpKind::Back, _) => {
+                mover.back_jump_hit();
+                "gravity on, backJump plays on, then Fall"
+            }
+            (JumpKind::Run, _) | (_, "down") => {
+                mover.end_jump_on_hit();
+                walker.set_mode(Mode::Crash);
+                "crash"
+            }
+            _ => {
+                mover.end_jump_on_hit();
+                walker.stop_after_jump();
+                "stop (forward blocked)"
+            }
+        };
+        notes.push(format!("{jump} hit {what} (steep, {pass} pass): the jump ends, {to}"));
+        if walker.kind != JumpKind::Back {
+            wall_stop = Some((jump, if to == "crash" { "crash" } else { "stop" }));
+        }
+    } else if report.head_on {
+        // Head-on into a wall: walking or stepping back stops at once;
+        // running crashes from the next update.
+        wall_stop = walker.head_on_at_wall();
+    }
     Tick { step, report, wall_stop, notes }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::connor::{JumpKind, Transition};
+    use crate::connor::Transition;
     use crate::mover::GroundLookup;
 
     /// Flat ground at height 0, or a plane rising along +y by `slope`.
@@ -315,5 +350,211 @@ mod tests {
         w.movement = "run";
         assert_eq!(can_jump(&Mover::new([0.0; 3], true), &w, &flat, &loops), Err("runJump is not loaded yet".into()));
         assert_eq!(JumpKind::for_movement("back"), JumpKind::Back);
+    }
+
+    // Running and backward jumps (2e-2), with `Conner.anm`'s frame counts
+    // and runJumpHold's transitions; arcs made up (flat, so he lands in the
+    // first Fall update).
+
+    fn jumps_list() -> Vec<(&'static str, MovementLoop)> {
+        let mut list = list();
+        let t = |to, to_phase, via| Transition { from: -1.0, to, to_phase, via };
+        list.extend([
+            ("run", looping(15, -2350.2, Vec::new())),
+            ("back", MovementLoop { speed: -1.0, ..looping(20, -1427.1, Vec::new()) }),
+            ("runJump", one_shot(vec![[0.0, -317.8, 0.0]; 20])),
+            ("runJumpHold", looping(3, 0.0, vec![t("run", 0.8, "jumprun"), t("stop", 0.0, "jumpstop")])),
+            ("runJumpDie", one_shot(vec![[0.0; 3]; 10])),
+            ("jumprun", one_shot(vec![[0.0, -276.0, 0.0]; 3])),
+            ("jumpstop", one_shot(vec![[0.0, -124.0, 0.0]; 15])),
+            ("backJump", one_shot(vec![[0.0, 142.6, 0.0]; 18])),
+            ("backJumpHold", looping(4, 0.0, Vec::new())),
+            ("backJumpEnd", one_shot(vec![[0.0; 3]; 11])),
+            ("backJumpDie", one_shot(vec![[0.0; 3]; 10])),
+        ]);
+        list
+    }
+
+    /// Jumps from `from` (held by `keys`), then plays on with `after` held
+    /// once the jump is in the air; returns the movements played.
+    fn jump_from(from: &'static str, keys: Intent, after: Intent, updates: usize) -> (Vec<&'static str>, Mover, Walker) {
+        let list = jumps_list();
+        let loops = lookup(&list);
+        let ground = Plane(0.0);
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        w.movement = from;
+        w.choice = from;
+        let mut played = Vec::new();
+        let t = tick(&mut m, &mut w, keys, true, &loops, &ground);
+        played.extend(t.step.map(|s| s.played));
+        for _ in 0..updates {
+            let t = tick(&mut m, &mut w, after, false, &loops, &ground);
+            played.extend(t.step.map(|s| s.played));
+        }
+        (played, m, w)
+    }
+
+    fn runs(played: &[&'static str]) -> Vec<(&'static str, usize)> {
+        let mut out: Vec<(&'static str, usize)> = Vec::new();
+        for p in played {
+            match out.last_mut() {
+                Some((name, n)) if name == p => *n += 1,
+                _ => out.push((p, 1)),
+            }
+        }
+        out
+    }
+
+    const RUN: Intent = Intent { forward: 1, turn: 0, run: true };
+
+    #[test]
+    fn running_jump_lands_into_jumprun_with_run_held() {
+        let (played, m, w) = jump_from("run", RUN, RUN, 26);
+        assert_eq!(
+            runs(&played),
+            [("runJump", 20), ("runJumpHold", 2), ("jumprun", 3), ("run", 2)],
+            "the hold: the Fall update and the landing's request update"
+        );
+        // runJump, jumprun, then 2 updates of run (2,350.2 per 14/15 s).
+        let run_two = 2.0 * 2350.2 / 14.0;
+        assert!((m.position[1] + 6356.0 + 3.0 * 276.0 + run_two).abs() < 1.0, "{:?}", m.position);
+        assert_eq!((w.mode, w.movement), (Mode::Free, "run"));
+    }
+
+    #[test]
+    fn running_jump_lands_into_jumpstop_with_forward_let_go_and_turns_there() {
+        let turn = Intent { forward: 0, turn: 1, run: true };
+        let (played, _, w) = jump_from("run", RUN, turn, 23);
+        assert_eq!(runs(&played)[..3], [("runJump", 20), ("runJumpHold", 2), ("jumpstop", 2)]);
+        // No turning until the landing; then he turns during jumpstop
+        // (the user's check in the original).
+        // (the update after landing, then 2 of jumpstop).
+        let turned = w.heading;
+        assert!((turned - 3.0 * crate::connor::TURN_RATE / 15.0).abs() < 1e-4, "{turned}");
+        let (played, _, w) = jump_from("run", RUN, turn, 40);
+        assert_eq!(runs(&played)[2..], [("jumpstop", 15), ("left", 4)]);
+        assert_eq!(w.movement, "left");
+    }
+
+    #[test]
+    fn running_jump_with_run_switched_off_walks_at_once() {
+        let walk = Intent { forward: 1, turn: 0, run: false };
+        let (played, _, _) = jump_from("run", RUN, walk, 25);
+        // No transition to walk: at once, in the update after landing.
+        assert_eq!(runs(&played), [("runJump", 20), ("runJumpHold", 1), ("walk", 5)]);
+    }
+
+    #[test]
+    fn back_jump_then_its_own_hold_and_landing() {
+        let back = Intent { forward: -1, turn: 0, run: false };
+        let (played, m, w) = jump_from("back", back, STAND, 32);
+        assert_eq!(runs(&played)[..3], [("backJump", 18), ("backJumpHold", 1), ("backJumpEnd", 11)]);
+        assert!((m.position[1] - 18.0 * 142.6).abs() < 1.0, "backwards: {:?}", m.position);
+        assert_eq!(w.kind, JumpKind::Back);
+    }
+
+    // Hitting something during a jump (2e-3).
+
+    /// Flat ground at 0 and a wall across y = `at`, facing toward y = 0:
+    /// a move crossing it stops 225 short (ball radius 200 + the 25
+    /// pull-back), as a building wall does.
+    struct Wall {
+        at: f32,
+    }
+
+    impl MoverWorld for Wall {
+        fn ground(&self, _: f32, _: f32) -> Option<(f32, [f32; 3])> {
+            Some((0.0, [0.0, 0.0, 1.0]))
+        }
+
+        fn sweep(&self, _: &crate::collide::BallStack, from: [f32; 3], to: [f32; 3]) -> Option<crate::mover::Hit> {
+            let side = self.at.signum();
+            let touch_y = self.at - side * 200.0;
+            if (to[1] - touch_y) * side <= 0.0 || from[1] == to[1] {
+                return None;
+            }
+            let f = (touch_y - from[1]) / (to[1] - from[1]);
+            let touch: [f32; 3] = std::array::from_fn(|i| from[i] + (to[i] - from[i]) * f);
+            let len = (0..3).map(|i| (to[i] - from[i]).powi(2)).sum::<f32>().sqrt() * f;
+            let back = if len > 25.0 { 25.0 / len } else { 1.0 };
+            let position: [f32; 3] = std::array::from_fn(|i| touch[i] - (touch[i] - from[i]) * back);
+            Some(crate::mover::Hit { position, touch, normal: [0.0, -side, 0.0], what: "wall".into() })
+        }
+    }
+
+    /// Jumps from `from` toward a wall at `at` (or a steep hill); returns
+    /// the tick where the jump ended and the walker and mover after it.
+    fn jump_into(from: &'static str, keys: Intent, world: &dyn MoverWorld) -> (Tick, Mover, Walker) {
+        let list = jumps_list();
+        let loops = lookup(&list);
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        w.movement = from;
+        w.choice = from;
+        let mut t = tick(&mut m, &mut w, keys, true, &loops, world);
+        for _ in 0..30 {
+            if w.mode != Mode::Jump {
+                return (t, m, w);
+            }
+            t = tick(&mut m, &mut w, keys, false, &loops, world);
+        }
+        panic!("the jump never ended: {:?}", t.report);
+    }
+
+    #[test]
+    fn a_standing_jump_into_a_wall_stops_him_standing_with_forward_blocked() {
+        let (t, m, w) = jump_into("stop", STAND, &Wall { at: -600.0 });
+        assert!(t.notes.iter().any(|n| n.contains("jump hit wall (steep, across pass): the jump ends, stop")), "{:?}", t.notes);
+        assert_eq!((w.mode, w.movement, w.blocked_name()), (Mode::Free, "stop", "fwd"));
+        assert_eq!((m.state, m.use_gravity, m.step_up), (State::Normal, true, 325.0));
+        assert!((m.position[1] + 375.0).abs() < 0.5, "stopped 225 from the wall: {:?}", m.position);
+    }
+
+    #[test]
+    fn a_running_jump_into_a_wall_crashes() {
+        let (t, m, w) = jump_into("run", RUN, &Wall { at: -2000.0 });
+        assert!(t.notes.iter().any(|n| n.contains("runJump hit wall (steep, across pass): the jump ends, crash")), "{:?}", t.notes);
+        assert_eq!((w.mode, m.state, m.use_gravity), (Mode::Crash, State::Normal, true));
+    }
+
+    #[test]
+    fn a_back_flip_slides_along_the_wall_and_plays_on() {
+        let list = jumps_list();
+        let loops = lookup(&list);
+        let back = Intent { forward: -1, turn: 0, run: false };
+        let wall = Wall { at: 1000.0 };
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        w.movement = "back";
+        w.choice = "back";
+        let mut notes = Vec::new();
+        let mut jump_updates = 0;
+        let mut hit_results = Vec::new();
+        for n in 0..25 {
+            let t = tick(&mut m, &mut w, back, n == 0, &loops, &wall);
+            notes.extend(t.notes);
+            hit_results.extend(t.report.hits.iter().map(|h| h.result));
+            if t.step.as_ref().is_some_and(|s| s.played == "backJump") {
+                jump_updates += 1;
+            }
+        }
+        let hits: Vec<_> = notes.iter().filter(|n| n.contains("backJump hit wall")).collect();
+        assert_eq!(hits.len(), 1, "noted once: {notes:?}");
+        assert!(hits[0].contains("backJump plays on"), "{hits:?}");
+        assert_eq!(jump_updates, 18, "the whole animation");
+        // Never head-on during backJump: it slides.
+        assert!(!hit_results.contains(&"head-on"), "{hit_results:?}");
+        assert!(m.position[1] <= 1000.0 - 225.0 + 0.5, "{:?}", m.position);
+        assert_ne!(w.mode, Mode::Crash);
+    }
+
+    #[test]
+    fn landing_on_a_steep_hill_during_a_jump_crashes() {
+        // Rising toward −y at 63° (normal z 0.447): the jump's arc goes
+        // into it, and the down pass finds the hillside above him.
+        let (t, m, w) = jump_into("stop", STAND, &Plane(-2.0));
+        assert!(t.notes.iter().any(|n| n.contains("jump hit terrain (steep, down pass): the jump ends, crash")), "{:?}", t.notes);
+        assert_eq!((w.mode, m.state), (Mode::Crash, State::Normal));
     }
 }

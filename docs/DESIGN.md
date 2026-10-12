@@ -925,7 +925,8 @@ Steps (each separately revertable, each stopped for an eye check):
     straight wall to walk and run into head-on, at about 30°, and
     backwards; a doorway; steps; the inside of a building; the signpost.
     Compared with the original by eye and with `connor.log`.
-- **2e — jumping (planned 2026-10-12).** Rules from `connor-physics.md`
+- **2e — jumping (planned 2026-10-12; 2e-1 to 2e-3 done 2026-10-12,
+  all three checked by eye by the user).** Rules from `connor-physics.md`
   "Jumping" (traced; arcs measured), "Falling off an edge" rules 2–5,
   "Walls"; the user's checks in the original (2026-10-12, below). Three
   sub-steps, each stopped for a check.
@@ -976,7 +977,10 @@ Steps (each separately revertable, each stopped for an eye check):
     - Expected on flat ground (note): 20 updates of `jump` (1.333 s),
       highest about 1,697 above the start, at the end 873 above and 1,423
       forward; then `jumphold` until he lands, then `jumpend`.
-  - **2e-2, running and backward jumps.** Load `runJump`, `runJumpHold`,
+  - **2e-2, running and backward jumps.** *Done 2026-10-12 (MODLOG),
+    checked by eye by the user. Added on the way (from the user's check): at a
+    running jump's landing a turn key alone counts as standing, so
+    `jumpstop` plays and he turns during it (Q41 d).* Load `runJump`, `runJumpHold`,
     `runJumpDie`, `jumprun`, `jumpstop`, `backJump`, `backJumpHold`,
     `backJumpEnd`, `backJumpDie`. Hold, landing and death animations by
     the jump's kind. `runJump` has no landing animation: on landing he is
@@ -985,15 +989,19 @@ Steps (each separately revertable, each stopped for an eye check):
     rules) give `jumprun` → `run` at 0.8 with run held, `jumpstop` →
     `stop` with forward let go (turning allowed, as the user saw), and
     `walk` at once with run off. Expected: `runJump` about 6,356 forward.
-  - **2e-3, hitting something during a jump.** A steep hit (normal z <
+  - **2e-3, hitting something during a jump.** *Done 2026-10-12
+    (MODLOG), checked by eye by the user. Corrected after the user's check:
+    the back flip first ended at the hit (Fall at once); it now plays on
+    to its end.* A steep hit (normal z <
     0.8) ends the jump: gravity on, steps 325. Down pass during `jump` or
     `runJump`: `crash`. Up or across pass: `runJump` crashes, `jump`
     stops (`stop`, standing). During a jump any surface with normal z <
     0.8 counts as head-on, and head-on acts in Jump as in Move.
-    `backJump` does neither: the user saw him keep sliding down in
-    `backJumpHold` until he reaches the ground, with the usual death rule.
-    So for `backJump` the jump ends at the hit and Fall (backward kind)
-    starts at once.
+    `backJump` does neither: the user saw the back flip keep going to its
+    end, then `backJumpHold` until he reaches the ground, with no crash or
+    stumble. So for `backJump` the hit is glancing, gravity comes on and
+    steps go back to 325 (rule 5), the animation plays on (state still
+    Jump, so no Fall request), then Fall as at any jump's end.
   - **Log** (`connor.log`): the mover state `jump`; event lines for a jump
     asked for, done or refused (and why), its end, the Fall it starts
     (start height, timer), the landing; the height above the jump's start.
