@@ -144,27 +144,45 @@ Consequences:
   and gravity turns on. On a slope of angle θ with this update's gravity
   drop d, his forward gain is about 168·cos²θ − d·sinθ·cosθ (computed from
   the rules). Gravity keeps growing, because the fall timer isn't reset on
-  steep ground, so the push-back grows each update until it cancels his
-  forward step and he slides back. While he is walking or running, the
-  air counter does **not** start Fall (see "Falling off an edge", rule 1).
-  Example at 45° (computed): 80, 71, 62, 53, 44, 35, 26, 17, 8 units
-  forward, then backward: about 390 in all, in 0.6 s.
+  steep ground, so the push-back grows each update. He is never "on
+  ground" there, so after 5 updates (about 0.4 s) the Fall state starts
+  and he slides back down in it. Example at 45° (computed): 80, 71, 62,
+  53, 44 units forward, about 310 in all.
 - **Going downhill on walkable ground.** The down pass only lands him if
   the ground under his new spot is above where it ended, so a slope that
   falls faster than the gravity drop leaves him in the air for an update
   or more. The drop is 9 in the first update after leaving the ground,
-  then 27, 45, ...; 9·k² in all after k updates. He lands again within a
-  few updates. Because he is walking or running, the Fall state never
-  starts, however long he is in the air (rule 1 below). **Checked by the
-  user in the original:** no falling animation on any walkable slope, and
-  the camera "bounces" slightly going down very steep walkable slopes,
-  which fits these short hops. The B session's log (`--hold 1,0,1`, in the
-  air every other update on a slope with normal z 0.996) is what the
-  original does too. Copying the camera bounce exactly is not required
-  (user's call).
-- **Going down unwalkable ground (over 36.9°).** The user sees the falling
-  animation here in the original. **What starts it while he is moving is
-  not traced** (see open questions).
+  then 27, 45, ...; 9·k² in all after k updates. On most slopes he lands
+  again within a few updates, which the user sees in the original as a
+  slight camera "bounce" going down very steep walkable slopes. Copying
+  the bounce exactly is not required (user's call). The B session's log
+  (`--hold 1,0,1`, in the air every other update on a slope with normal z
+  0.996) is what the original does too.
+  **Checked by the user in the original (walking and running, the
+  steepest walkable hills in Daventry): he never falls on walkable
+  ground, however steep.**
+  The traced rules disagree: by them, if the ground drops more than about
+  45 units per update for 5 updates (running down slopes over about 15°),
+  the air counter should start Fall. So something keeps him on walkable
+  ground that this study did not find (open question 6). Searched without
+  finding it: the gravity step (instruction by instruction), every reset
+  of the fall timer, the ground check's comparison, the terrain lookup,
+  and every place that changes Connor's step-up/step-down values.
+  **Recommended rule (our own design, not traced; it reproduces what the
+  user saw):** in the down pass, if he was on walkable ground last update
+  and there is walkable ground no more than **step down (325) + this
+  update's drop** below where the pass ends, put him on it (on ground,
+  fall timer 0). So he follows any walkable slope at walking or running
+  speed. A drop bigger than that (a ledge) or steep ground still leaves
+  him "not on ground", and Fall starts after 5 updates as the user saw.
+  This loses the slight camera bounce, which the user said need not be
+  copied.
+- **Going down unwalkable ground (over 36.9°).** Every down pass lands on
+  steep ground, so he is never on the ground. After 5 updates Fall starts,
+  and he slides down the slope in it. **Checked by the user in the
+  original,** while holding the walk key: he steps onto the slope, drops
+  a little, then the falling animation starts and he falls rapidly down
+  the slope.
 
 ### Gravity (traced)
 
@@ -174,9 +192,14 @@ Consequences:
   starting from rest at `t = 0`). One update's drop is capped at 5,000.
 - The drop is applied along the pull direction: straight down in the air,
   down the slope after touching a steep surface. On a slope of angle θ that
-  is a slide accelerating at 5,000 × sin θ.
-- The timer is reset to 0 whenever he lands on walkable ground (step 4 or
-  5 above), so walking never builds up speed.
+  is a slide accelerating at 5,000 × sin θ. The pull is reset to straight
+  down at the start of every update that begins on the ground. After any
+  down-pass contact it is set to the surface's downhill direction.
+- If the pull points less than 30° below horizontal (for example after
+  touching flat ground), the timer is reset to 0 instead of advancing, so
+  there is no drop that update.
+- The timer is reset to 0 when the **down pass** lands him on walkable
+  ground (step 4). The ground check (step 5) does not reset it.
 
 ### Slopes (traced)
 
@@ -184,9 +207,9 @@ Consequences:
   **36.9°**. Same rule on terrain and on buildings.
 - Steeper: he is not on the ground, gravity turns on (see the flag note in
   step 4), and he slides down the slope. Sliding for 5 updates in a row
-  asks for a fall (next section). The user sees the fall animation on
-  unwalkable slopes in the original, but how it starts while he is moving
-  is not traced.
+  starts a fall (next section), so a long steep slope ends in the fall
+  animation and, if the drop is big enough, death. Checked by the user in
+  the original.
 - Walking up a slope steeper than 36.9° fails because each down pass lands
   on a steep surface and pushes him back (see "The terrain in the passes").
 
@@ -196,17 +219,23 @@ Consequences:
    the air counter. From **5** on, every update asks for the **Fall**
    state (unless he is jumping). The start height is his height at that
    moment. **Connor's current state decides whether to accept** (traced):
-   - **Move** (walking, running, stepping back, turning on the spot)
-     **refuses** Fall in normal play. It accepts it only while the
-     player's controls are taken away (a flag set by puzzles such as the
-     tile puzzle, and by a few scripted moments). So walking or running
-     never turns into Fall through the air counter.
-   - Whether the other states (standing/Wait, Special, ...) accept it is
-     **not traced**.
-   - **Not traced:** how the fall starts when he walks off a high ledge or
-     goes down unwalkable ground while a move key is held. The user sees
-     the falling animation in the original on unwalkable slopes, so
-     something starts it.
+   - **Move** (walking, running, stepping back, turning on the spot) and
+     **Wait** (standing) both **accept** Fall in normal play. Both refuse
+     it while the player's controls are taken away (a flag set by puzzles
+     such as the tile puzzle, and by a few scripted moments).
+     (Corrected: an earlier version of this note said Move refuses Fall.
+     That was a misreading of the rule.)
+   - A refused request is kept as "pending" (the game's own name for it
+     is `nextState`) and tried first at the next state change. When
+     Wait's current animation finishes, it also retries the pending state.
+     Each update in the air (from 5 on) asks for Fall again anyway.
+   - **Checked by the user in the original,** holding the walk key: off a
+     high ledge he steps fully off, drops a little, then the falling
+     animation starts and he falls **straight down**. His forward
+     movement stops, which fits the walk steps ending when Fall replaces
+     the walk animation with `jumphold` (whether `jumphold` has steps of
+     its own was not checked). On an unwalkable slope the same happens,
+     but he slides rapidly down the slope.
 2. Entering Fall sets the fall timer to **0.36 s**, as if he had already
    been falling that long (speed 1,800 units/s), and plays `jumphold`
    (repeating).
@@ -359,14 +388,18 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 - Walk into a wall head-on: `Stop`, standing. Run into it head-on: `crash`.
   At 45°: he slides along the wall.
 - Walk up a ramp under 36°: he climbs. Over 37°: he slides back.
-- Run straight at a steep hillside (Q26): about 0.6 s and a few hundred
-  units of climb, then a slide back. Log the contact normal of the down
-  pass. It should be steep, and the push-back should grow each update.
-- Run or walk down any walkable slope: **no** Fall state, however many
-  updates he spends in the air (checked in the original by the user).
+- Run straight at a steep hillside (Q26): about 0.4 s and about 300 units
+  of climb, then `jumphold` and a slide back. Log the contact normal of
+  the down pass. It should be steep, and the push-back should grow each
+  update.
+- Walk or run down the steepest walkable slope you can find: **never** a
+  Fall (checked in the original by the user, both walking and running).
+  Log the air counter: it must never reach 5 on walkable ground.
+- Hold walk and step off a high ledge, or onto an unwalkable slope: about
+  5 updates of dropping, then `jumphold`. Forward movement stops; on the
+  slope he slides down it (both checked in the original by the user).
 - Walk off a ledge more than 3,840 high (with gravity on): `jumpdie`, then
-  Die. **How the fall starts while a move key is held is not traced**
-  (open question 6).
+  Die.
 
 ## Open questions
 
@@ -378,7 +411,10 @@ counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 4. What the "no crash" object flag means, and the game flag that blocks
    crashes.
 5. Water (`submerged`, `WaterWalk`), ropes and pushing: not studied.
-6. The Move state refuses Fall in normal play (traced). So what starts the
-   fall when Connor walks or runs off a ledge, or down unwalkable ground
-   (where the user sees the falling animation)? And do the other states
-   (Wait, Special) accept Fall?
+6. ~~What starts the fall while a move key is held?~~ The air counter
+   does: Move accepts Fall (see "Falling off an edge"), and the user's
+   checks match. **Still open:** what keeps him on walkable ground going
+   downhill. The user saw no fall even running down the steepest walkable
+   hills, but the traced rules predict one on slopes over about 15°. Not
+   found after three searches (see "Going downhill on walkable ground").
+   Until it is found, use the recommended rule there.

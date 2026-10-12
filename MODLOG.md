@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-11 Study session: when the Fall state starts (with the user's checks)
+
+**Changed:** `docs/behaviour/connor-physics.md` ("The terrain in the passes", "Gravity", "Slopes", "Falling off an edge" rule 1, How to check, open question 6), `docs/behaviour/QUESTIONS.md` (Q26 row). No code.
+**Why:** The user asked for falling to be finished before session B starts, so B can do slopes and falling together.
+**Tested how:** Traced in `Mask.exe` Connor's states and which state changes each one accepts, the pending-state (`nextState`) handling, the gravity step instruction by instruction, every reset of the fall timer, and the ground check's comparison. The user checked the original game: holding walk off a high ledge, and onto an unwalkable slope.
+**Result:** Move and Wait both accept Fall in normal play. So after 5 updates in the air Fall starts, also while walking, which matches the user's checks: he drops a little, then falls straight down (ledge) or slides down (slope). Gravity follows the "pull" direction. The pull is reset to straight down each update that starts on the ground. Gravity is skipped when the pull is within 30° of horizontal. The timer is reset only by a down-pass landing on walkable ground.
+**Failed attempts:** My first reading of the Move state's accept rule was backwards. It went into the previous entry and commit `0215e83` ("Move state refuses Fall"), which this entry replaces. The user's checks showed it couldn't be right, and re-reading the rule fixed it. Two searches for some other fall trigger found nothing, because none is needed.
+**User's running test:** Running down the steepest walkable hills in Daventry, he never falls. The traced rules predict a fall on slopes over about 15°, so they are missing something. Searched without finding it: the gravity step instruction by instruction, the terrain lookup's extra flag (unused), every reset of the fall timer, and every write to the step-up/step-down values (the others belong to other movers). Three attempts, so stopped.
+**Still broken / not tested:** What keeps Connor on walkable ground going downhill is not found. The note gives a recommended rule for B instead, marked as our own design: snap to walkable ground within step down + this update's drop below, if he was on walkable ground last update. It reproduces everything the user saw, but loses the slight camera bounce.
+**Next:** Commit; B implements slopes and falling with the recommended rule.
+
 ## 2026-10-11 Study session: correction, no Fall while walking or running downhill
 
 **Changed:** `docs/behaviour/connor-physics.md` ("The terrain in the passes", "Slopes", "Falling off an edge" rule 1, How to check, new open question 6), `docs/behaviour/QUESTIONS.md` (Q26 prediction withdrawn). No code.
