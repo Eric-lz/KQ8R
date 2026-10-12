@@ -90,6 +90,20 @@ banking, already in `connor-movement.md`). Values it uses:
     `iceshard.kqs`).
   - Names are compared **byte by byte, case matters**: `henchman` and
     `Henchman` are two different names.
+  - **Which names are looked up (traced 2026-10-12, Q39; NOT SETTLED):**
+    first the shape file name (for a plain object its `shapeName=`
+    value; for an animated object the shape file on its current `loop=`
+    line), then, if that isn't in the table, the object's own name.
+    **The game contradicts my first reading.** I found nothing that
+    lower-cases either name (not the `.kq` reading, not the resource
+    loader, not the lookup), which would leave `St_smom`
+    (`shapeName=St_smom.KQS`; the table has only `st_smom.kqs`; the
+    archive's copy of the file says the same) with no box and no
+    collision. **The user checked: Connor does not walk through the
+    stone villagers or the wagon.** So either something lower-cases the
+    name that I missed, or these objects get collision another way.
+    Until settled, B's stand-in (shape names lower-cased before the
+    lookup) matches what the user saw and should stay.
   - The table is kept sorted by name and searched for the first match.
     For the two names that really appear twice, the game ends up using
     **`rat` = item 8** (−70 −200 0 30 70 70) and **`razetta.kqs` =
@@ -768,6 +782,12 @@ later found to start with it off, it is a one-line change.
 Log per update: position, on-ground flag, gravity on/off, fall timer, air
 counter, state (Wait/Move/Jump/Fall/crash), movement name, contact normal.
 
+- Q39 (box names and case), in the original: in Daventry, walk Connor
+  straight into a stone villager (e.g. the stone mother, `St_smom`) or
+  a wagon. **Checked by the user (2026-10-12): he stops; he does not
+  walk through.** Still to measure: where he stops (his distance from
+  the object's centre), to tell whether the box used is the table's
+  `st_smom.kqs` box (350 half-width) or something else.
 - Stand on flat ground: z constant, on ground every update, fall timer 0.
 - Standing jump on flat ground: 1.333 s of `jump`; highest point about
   1,697 above the start; at the end about 873 above and 1,423 forward;

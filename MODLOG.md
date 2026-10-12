@@ -3,6 +3,21 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study session: Q39 and Q40 answered
+
+**Changed:** `docs/behaviour/connor-physics.md` (which names are looked up in the box table, and their case; a game check), `docs/behaviour/connor-movement.md` (rule 3: order within an update; rule 4: a request replaces a waiting transition and restarts a playing movement; "Do not reproduce": that restart; `stoprun` total corrected to 526.7), `docs/behaviour/QUESTIONS.md` (Q39, Q40 answered). No code.
+**Why:** B's open questions from M2 steps 2d-5 and 2g.
+**Tested how:** Traced in Ghidra. The `stoprun` sum re-added by hand (B was right: 526.7). Not tested in the game.
+**Result:**
+
+- Q39: **wrong, corrected the same day.** I traced no lower-casing anywhere, which would mean the stone villagers and wagons have no collision. The user checked in the game: Connor does not walk through them. Q39 is open again; B's stand-in (lower-cased shape names) stays. Also checked: the archive's copy of `st_smom.kq` says `St_smom.KQS` too, so it isn't a different file.
+- Q40 (a): −1 transitions are one update late too (state step, then animation step; the transition advances from the next update). B's reading is right.
+- Q40 (b): asking for the movement that is playing restarts it from phase 0 in the original. **Confirmed in the game by the user**; the user decided to keep B's version (no restart), noted in "Do not reproduce".
+- Q40 (c): corrected.
+
+**Still broken / not tested:** Q39 not settled: two code-reading attempts failed; next is a measurement in the running game. Q22 (palette entry 0) still open.
+**Next:** Q39 by measurement (where Connor stops against `St_smom`, and the box the running game holds for it).
+
 ## 2026-10-12 M2 2e-3: hitting something during a jump
 
 **Changed:** `kq8-game` `mover.rs`: head-on also in the Jump state, where any surface with normal z < 0.8 counts (also on up-pass hits, so ceilings); the report names the pass of the first steep hit during a jump; `end_jump_on_hit` (gravity on, steps 325). `player.rs`: a steep hit ends the jump: `backJump` falls at once in `backJumpHold`, a down-pass hit or any `runJump` hit crashes, an up or across hit during `jump` stands him with forward blocked; 4 new tests. `connor.rs`: `stop_after_jump`. Docs: DESIGN, provenance, README.

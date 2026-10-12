@@ -176,12 +176,32 @@ also a phase).
    reaches the chosen `<from phase>` within an update. That update's
    phase is cut off exactly at the from point, and the transition starts.
    With −1 the transition starts at the next animation update.
+   **Order within one update (Q40 a):** Connor's state step runs first
+   (that is where a movement is asked for), then the animation step
+   (advance the phase, fire cues, check the from point, apply the
+   frame). In both cases (a from point reached, or −1) the transition
+   is set up at the end of that update's animation step, and it is
+   **first advanced in the next update**. So pressing forward while
+   standing gives one update of `stop` (the update the key is first
+   seen; the whole update, nothing cut), then 7 of `stopwalk`, then
+   `walk` from 0.85. Letting go during `stoprun` gives one update of
+   `run` cut at 0.867, then `stoprunstop`. The rest of a cut update is
+   not carried over.
 4. **No transition listed.** If none of the current movement's
    transitions leads to the wanted one: if the current animation can be
    cut short (6th field 1) or has already reached its end, the wanted
    movement starts **at once, from phase 0**. Otherwise (a `0 0`
    animation still playing) nothing happens yet; the wanted movement is
    kept and handled when that animation ends (rule 6).
+   **Every request also replaces a waiting transition (Q40 b):** the
+   choice of rule 2 is made again for the new wanted movement, and if it
+   finds nothing, the waiting one is dropped. "Starts at once from phase
+   0" holds **even when the wanted movement is the one already playing**:
+   the animation is set up afresh at its start. Example: walking, let go
+   at phase 0.5 (`stopwalkstop` waits for 0.90), press forward again at
+   0.7: `walk` has no transition to `walk`, so the waiting stop is
+   dropped and `walk` restarts from phase 0 (a visible jump in the step
+   cycle). See "Do not reproduce".
 5. **Playing a transition.** The transition movement plays from phase 0
    at speed 1, once, to its end. It moves Connor by its own per-frame
    steps, like any movement (see "Steps in the start animations" below).
@@ -234,7 +254,7 @@ in the original). Units as everywhere.
 | Shape | Frames | Play time | Steps (left, forward) per frame | Total |
 | --- | --- | --- | --- | --- |
 | `C_stpwk.kqs` (`stopwalk`) | 8 | 0.4667 s | frames 1–7: each (7.32, 11.22) | 51.2 left, 78.5 forward: 93.8 at 33° left of facing |
-| `C_stprn.kqs` (`stoprun`) | 11 | 0.6667 s | 1: (0.18, 0.19) 2: (1.32, 1.28) 3: (3.85, 3.15) 4: (7.81, 5.73) 5: (8.79, 12.77) 6: (6.11, 86.57) 7: (6.04, 129.17) 8: (4.43, 136.26) 9: (3.59, 107.78) 10: (1.77, 43.80) | 43.9 left, 536.7 forward |
+| `C_stprn.kqs` (`stoprun`) | 11 | 0.6667 s | 1: (0.18, 0.19) 2: (1.32, 1.28) 3: (3.85, 3.15) 4: (7.81, 5.73) 5: (8.79, 12.77) 6: (6.11, 86.57) 7: (6.04, 129.17) 8: (4.43, 136.26) 9: (3.59, 107.78) 10: (1.77, 43.80) | 43.9 left, 526.7 forward (corrected from 536.7, Q40 c) |
 
 So `stoprun` stays almost on the spot for its first third (and goes
 about 45° to the left), then surges forward. Spreading its distance
@@ -278,6 +298,15 @@ rule.)
   is still held keeps turning right. This is a deliberate improvement; keep
   a setting to get the original behaviour if exact matching is wanted.
 - **Turning disabled → silently dropping input.** Fine to keep, but log it.
+- **Walk or run restarting from phase 0 when asked for again while it
+  plays** (rule 4, Q40 b). Pressing forward again while a stop is still
+  waiting snaps the step cycle back to its start. **Confirmed in the
+  original by the user (2026-10-12):** letting go of forward and quickly
+  pressing it again resets the walking animation. **Decision (user,
+  2026-10-12): not reproduced.** When the wanted movement is the one
+  already playing, the waiting transition is dropped and the animation
+  carries on (B's implementation). A deliberate difference from the
+  original.
 
 ## How to check
 
@@ -317,7 +346,7 @@ two 1/15 s ticks each); go by the seconds.
    once (rules in "Starting and stopping"). The sideways drift below is
    the start animations' own sideways steps (table there). **Still not
    checked:** the measured start distances (about 80 and 385–490) are
-   under the data's totals (93.8 and 536.7); probably my log's first
+   under the data's totals (93.8 and 526.7); probably my log's first
    and last updates cut parts off, not confirmed. The running stops'
    15% phase offset below is not explained by the rules either; most
    likely my phase estimate, not confirmed.
