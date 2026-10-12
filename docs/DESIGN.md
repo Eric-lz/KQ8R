@@ -1147,6 +1147,55 @@ Steps (each separately revertable, each stopped for an eye check):
     head-on during `stopwalk` and `stoprun`; turning during a start; after
     a crash with run held: `stop`, `stoprun`, `run`.
 
+- **2h — water: the floor grid and wading (planned 2026-10-12; 2h-1 and
+  2h-2 done 2026-10-12, MODLOG; not checked by eye yet).** Rules
+  from `docs/behaviour/water.md` (Q43). Two steps, each tested and
+  checked on its own.
+  - **2h-1, the floor grid.** Worlds with a `floorBMPName` line
+    (Daventry, Swamp, IceWorld, DeadCity) get a second height grid from
+    that image (`terrh2.dib`), built like the drawn one. "Floor" questions
+    use it; in a world without one they use the drawn grid (the
+    "surface").
+    - `kq8-data` `terrain.rs`: `Terrain` keeps an optional floor grid;
+      `height_at` stays the surface (drawing), new `floor_at` (floor, or
+      surface without one). Same triangle rule for both.
+    - `kq8-data` `objects.rs`: `keepOnGround` becomes three values:
+      default (−1) raise onto the **floor**, `=1` onto the **surface**,
+      `=0` no raise. A `loadKQ` z of −1 = floor height, −2 = surface
+      height (replaces the old "both = ground"). So Swamp's `shack2` goes
+      from 6,120 to 5,355.
+    - Connor's mover and the camera's "keep above the ground" use the
+      floor; `--at` puts him on the floor. The ground drawn stays the
+      surface (the floor is most likely never drawn, note open question
+      1).
+    - Log: per world, whether it has a floor grid and at how many corners
+      it differs; each placement says which grid it used.
+    - Expected (note "How to check"): Swamp `shack2` at 5,355; Connor
+      dropped in the shack lands 765 lower than before (feet 6,468 east,
+      7,332 west); Daventry objects placed with −1 on dry land unchanged.
+    - Unit tests: grid choice for −1, −2, `keepOnGround` 1/0/default,
+      floor fallback without a floor image.
+  - **2h-2, wading.** Read each world's `kq/envInfo.kq` ground flags (the
+    note's exact column rule). After every move of Connor: `submerged` =
+    the square's material is liquid (water, poison, fastpoison/lava,
+    swamp) and the surface ≥ feet + 600. The movement choice uses it:
+    forward → `waterwalk` / `waterrun` instead of `walk` / `run`; redone
+    every update while moving, a new movement asked for only when the
+    chosen name changes, so the `.anm` transitions (`walkwaterwalk`,
+    `runwaterrun`, `waterwalkwalk`, `waterrunrun`) play. `waterrun` and
+    `runwaterrun` crash head-on like `run`. No slowing, no floating.
+    - Load `waterwalk`, `waterrun` and the four transitions.
+    - Log: `submerged` and the surface height in `connor.log`; an event
+      line when it changes.
+    - Expected: walking into the Daventry river, his feet go about 1,020
+      under the drawn water; `submerged` comes on where the surface is
+      ≥ 600 above his feet; the next update asks for `waterwalk`.
+    - Unit tests: the envInfo line reader (stripping, the skipped first
+      mark, tabs), the submerged test, the movement choice switching both
+      ways, crash from `waterrun`.
+  - Not in 2h: damage from poison, lava and swamp, sinking into `ontop`
+    hazards, monsters (`keepOnGround=1`), drawing the water differently.
+
 ### M3 — Daventry comes alive
 
 **You will see:** doors opening, traps firing, chests, animated objects,

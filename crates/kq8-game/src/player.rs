@@ -100,6 +100,9 @@ pub fn tick<'a>(
             Err(why) => notes.push(format!("jump refused: {why}")),
         }
     }
+    // The choice this update uses the water test from the end of the last
+    // move (water.md "Wading animations" rule 3).
+    walker.submerged = mover.submerged;
     let mut step = None;
     let report = if mover.state == State::Dead {
         // The mover stands still; the death animation plays on.
@@ -122,6 +125,19 @@ pub fn tick<'a>(
             wish
         })
     };
+    // The water test after the move (water.md "The water test").
+    let [x, y, z] = mover.position;
+    let water = world.water(x, y);
+    let submerged = crate::water::submerged(water, z);
+    if submerged != mover.submerged {
+        let surface = water.map_or("none".into(), |(s, _)| format!("{s:.0}"));
+        notes.push(format!(
+            "submerged {}: surface {surface}, feet {z:.0}, ground flags 0x{:X}",
+            if submerged { "on" } else { "off" },
+            water.map_or(0, |(_, f)| f)
+        ));
+    }
+    mover.submerged = submerged;
     match report.fall {
         Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
@@ -500,6 +516,88 @@ mod tests {
             t = tick(&mut m, &mut w, keys, false, &loops, world);
         }
         panic!("the jump never ended: {:?}", t.report);
+    }
+
+    // Wading (water.md, M2 2h-2).
+
+    /// Flat floor at 0; for y between `from` and `to` (he walks toward −y)
+    /// a water square with the surface 1,020 above the floor, as in
+    /// Daventry's river; dry ground (surface = floor) elsewhere.
+    struct River {
+        from: f32,
+        to: f32,
+    }
+
+    impl GroundLookup for River {
+        fn ground(&self, _: f32, _: f32) -> Option<(f32, [f32; 3])> {
+            Some((0.0, [0.0, 0.0, 1.0]))
+        }
+
+        fn water(&self, _: f32, y: f32) -> Option<(f32, u32)> {
+            let wet = y <= self.from && y >= self.to;
+            Some(if wet { (1020.0, kq8_data::envinfo::WATER) } else { (0.0, 0x1) })
+        }
+    }
+
+    fn wading_list() -> Vec<(&'static str, MovementLoop)> {
+        let mut list = list();
+        let at = |from, to, to_phase, via| Transition { from, to, to_phase, via };
+        for (name, l) in list.iter_mut() {
+            if *name == "walk" {
+                l.transitions.push(at(0.2, "waterwalk", 0.0, "walkwaterwalk"));
+            }
+        }
+        list.extend([
+            ("waterwalk", looping(24, -900.0, vec![at(0.958333, "walk", 0.75, "waterwalkwalk")])),
+            ("walkwaterwalk", one_shot(vec![[0.0, -40.0, 0.0]; 6])),
+            ("waterwalkwalk", one_shot(vec![[0.0, -40.0, 0.0]; 6])),
+            ("run", looping(15, -2350.2, vec![at(-1.0, "waterrun", 0.0, "runwaterrun")])),
+            ("waterrun", looping(19, -1800.0, Vec::new())),
+            ("runwaterrun", one_shot(vec![[0.0, -100.0, 0.0]; 5])),
+            ("crash", one_shot(vec![[0.0, 63.0, 0.0]; 7])),
+        ]);
+        list
+    }
+
+    #[test]
+    fn walking_through_deep_water_wades_and_comes_out_walking() {
+        let list = wading_list();
+        let loops = lookup(&list);
+        let river = River { from: -1500.0, to: -6000.0 };
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        let walk = Intent { forward: 1, turn: 0, run: false };
+        let mut played = Vec::new();
+        let mut first_wet = None;
+        for i in 0..200 {
+            let t = tick(&mut m, &mut w, walk, false, &loops, &river);
+            if m.submerged && first_wet.is_none() {
+                first_wet = Some(i);
+                assert!(t.notes.iter().any(|n| n.starts_with("submerged on: surface 1020, feet 0")), "{:?}", t.notes);
+            }
+            played.push(t.step.unwrap().played);
+        }
+        // He stays on the floor: no floating.
+        assert_eq!(m.position[2], 0.0);
+        let first_wet = first_wet.expect("never submerged");
+        // The update after the test turned on asks for waterwalk.
+        let order: Vec<_> = runs(&played).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(
+            order,
+            ["stop", "stopwalk", "walk", "walkwaterwalk", "waterwalk", "waterwalkwalk", "walk"],
+            "{played:?}"
+        );
+        assert!(played[..=first_wet].iter().all(|p| !p.starts_with("water") && *p != "walkwaterwalk"));
+    }
+
+    #[test]
+    fn running_head_on_in_water_crashes() {
+        for from in ["waterrun", "runwaterrun"] {
+            let mut w = Walker::new(0.0);
+            w.movement = from;
+            w.choice = "waterrun";
+            assert_eq!(w.head_on_at_wall(), Some((from, "crash")));
+        }
     }
 
     /// Walks head-on into a wall until forward is blocked, then holds

@@ -10,6 +10,9 @@
 //! - Pixel column i is at x = i * square; pixel row j, counted from the
 //!   bottom row of the image, is at y = j * square. Grid corner at (0, 0).
 //! - height = pixel value * heightBMPScale.
+//! - A world with `floorBMPName` also has a floor grid (the ground under
+//!   water) built the same way; without one, floor questions get the
+//!   drawn grid (water.md "Two ground grids").
 //! - Each square is two flat triangles; the diagonal alternates like a
 //!   chessboard (see `Terrain::height_at`).
 
@@ -23,7 +26,8 @@ pub struct TerrainSettings {
     pub ground_scale: u32,
     pub height_scale: f32,
     pub height_image: String,
-    /// `floorBMPName`; purpose unknown (terrain.md open question 2).
+    /// `floorBMPName`: the floor grid's image, the ground under water
+    /// (water.md).
     pub floor_image: Option<String>,
     pub material_image: String,
     pub material_list: String,
@@ -132,10 +136,27 @@ pub struct Ground {
     pub normal: [f32; 3],
 }
 
+/// Which of the two height grids (water.md "Which grid answers").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Level {
+    /// The ground under water (`floorBMPName`); the surface where a world
+    /// has no floor image.
+    Floor,
+    /// The drawn ground (`heightBMP`): the water's surface where there is
+    /// water.
+    Surface,
+}
+
 #[derive(Debug, Clone)]
 pub struct Terrain {
     pub settings: TerrainSettings,
+    /// The surface grid (`heightBMP`), the one that is drawn.
     pub heights: Grid,
+    /// The floor grid (`floorBMPName`), if the world has one.
+    pub floor: Option<Grid>,
+    /// Ground flags per square (`envInfo.kq` by the square's material,
+    /// water.md), row by row from the bottom; empty if not read.
+    pub square_flags: Vec<u32>,
 }
 
 impl Terrain {
@@ -143,7 +164,56 @@ impl Terrain {
         if heights.width < 2 || heights.height < 2 {
             return Err(format!("height grid {}x{} is too small", heights.width, heights.height));
         }
-        Ok(Terrain { settings, heights })
+        Ok(Terrain { settings, heights, floor: None, square_flags: Vec::new() })
+    }
+
+    /// Adds the floor grid; it must be the same size as the surface grid.
+    pub fn with_floor(mut self, floor: Grid) -> Result<Self, String> {
+        if (floor.width, floor.height) != (self.heights.width, self.heights.height) {
+            return Err(format!(
+                "floor grid {}x{} differs from the height grid {}x{}",
+                floor.width, floor.height, self.heights.width, self.heights.height
+            ));
+        }
+        self.floor = Some(floor);
+        Ok(self)
+    }
+
+    /// Adds the ground flags: `materials` (`terrm.dib`, one value per
+    /// square) looked up in `flags` (per material number; 0 past its end).
+    pub fn with_ground_flags(mut self, materials: &Grid, flags: &[u32]) -> Result<Self, String> {
+        let (nx, ny) = self.squares();
+        if (materials.width, materials.height) != (nx, ny) {
+            return Err(format!("material image is {}x{}, ground has {nx}x{ny} squares", materials.width, materials.height));
+        }
+        self.square_flags = materials.values().iter().map(|&m| flags.get(m as usize).copied().unwrap_or(0)).collect();
+        Ok(self)
+    }
+
+    /// Ground flags of the square (x, y) is in; 0 outside the grid or
+    /// without flags.
+    pub fn flags_at(&self, x: f32, y: f32) -> u32 {
+        let (nx, _) = self.squares();
+        self.square_of(x, y).and_then(|(i, j)| self.square_flags.get(j * nx + i).copied()).unwrap_or(0)
+    }
+
+    /// The square (i, j) that (x, y) is in, `None` outside the grid. A point
+    /// on the far edge belongs to the last square.
+    fn square_of(&self, x: f32, y: f32) -> Option<(usize, usize)> {
+        let size = self.settings.square_size();
+        let (fx, fy) = (x / size, y / size);
+        let (nx, ny) = self.squares();
+        if !(fx >= 0.0 && fy >= 0.0) || fx > nx as f32 || fy > ny as f32 {
+            return None;
+        }
+        Some(((fx.floor() as usize).min(nx - 1), (fy.floor() as usize).min(ny - 1)))
+    }
+
+    fn grid(&self, level: Level) -> &Grid {
+        match level {
+            Level::Floor => self.floor.as_ref().unwrap_or(&self.heights),
+            Level::Surface => &self.heights,
+        }
     }
 
     /// Number of squares along x and y.
@@ -151,9 +221,14 @@ impl Terrain {
         (self.heights.width - 1, self.heights.height - 1)
     }
 
-    /// Height of grid point (i, j) in game units.
+    /// Height of grid point (i, j) in game units (the surface).
     pub fn point_height(&self, i: usize, j: usize) -> Option<f32> {
-        self.heights.get(i, j).map(|v| v as f32 * self.settings.height_scale)
+        self.point_height_on(Level::Surface, i, j)
+    }
+
+    /// Height of grid point (i, j) on one of the two grids.
+    pub fn point_height_on(&self, level: Level, i: usize, j: usize) -> Option<f32> {
+        self.grid(level).get(i, j).map(|v| v as f32 * self.settings.height_scale)
     }
 
     /// True if square (i, j)'s diagonal runs from its (0, 0) corner to
@@ -162,23 +237,24 @@ impl Terrain {
         (i + j).is_multiple_of(2)
     }
 
-    /// Ground under (x, y), or `None` outside the grid. Holes are not
-    /// known yet (terrain.md open question 3), so there are none.
+    /// The drawn ground (surface) under (x, y), or `None` outside the
+    /// grid. Holes are not known yet (terrain.md open question 3), so
+    /// there are none.
     pub fn height_at(&self, x: f32, y: f32) -> Option<Ground> {
+        self.ground_at(Level::Surface, x, y)
+    }
+
+    /// The floor under (x, y): what Connor stands on (water.md).
+    pub fn floor_at(&self, x: f32, y: f32) -> Option<Ground> {
+        self.ground_at(Level::Floor, x, y)
+    }
+
+    /// Ground under (x, y) on one of the two grids.
+    pub fn ground_at(&self, level: Level, x: f32, y: f32) -> Option<Ground> {
         let size = self.settings.square_size();
-        let (fx, fy) = (x / size, y / size);
-        if !(fx >= 0.0 && fy >= 0.0) {
-            return None;
-        }
-        let (nx, ny) = self.squares();
-        // A point on the far edge belongs to the last square.
-        let i = (fx.floor() as usize).min(nx - 1);
-        let j = (fy.floor() as usize).min(ny - 1);
-        if fx > nx as f32 || fy > ny as f32 {
-            return None;
-        }
-        let (u, v) = (fx - i as f32, fy - j as f32);
-        let h = |di, dj| self.point_height(i + di, j + dj).unwrap();
+        let (i, j) = self.square_of(x, y)?;
+        let (u, v) = (x / size - i as f32, y / size - j as f32);
+        let h = |di, dj| self.point_height_on(level, i + di, j + dj).unwrap();
         let (h00, h10, h01, h11) = (h(0, 0), h(1, 0), h(0, 1), h(1, 1));
         // Height on the triangle's plane as h = base + du * u + dv * v.
         let (base, du, dv) = if Self::diagonal_is_rising(i, j) {
@@ -360,6 +436,36 @@ mod tests {
         t.heights = Grid { width: 5, height: 4, values };
         let materials = Grid { width: 4, height: 3, values: (0..12).collect() };
         (t, materials)
+    }
+
+    #[test]
+    fn floor_grid_answers_floor_questions_and_falls_back_to_the_surface() {
+        let t = terrain([[24, 24], [24, 24]], 255.0);
+        // No floor image: the floor is the surface.
+        assert_eq!(t.floor_at(1.0, 1.0).unwrap().height, 6120.0);
+        let floor = Grid { width: 2, height: 2, values: vec![21, 21, 21, 21] };
+        let t = t.with_floor(floor).unwrap();
+        assert_eq!(t.floor_at(1.0, 1.0).unwrap().height, 5355.0);
+        assert_eq!(t.height_at(1.0, 1.0).unwrap().height, 6120.0);
+        assert_eq!(t.ground_at(Level::Surface, 1.0, 1.0).unwrap().height, 6120.0);
+        let wrong = Grid { width: 3, height: 2, values: vec![0; 6] };
+        assert!(terrain([[0, 0], [0, 0]], 1.0).with_floor(wrong).is_err());
+    }
+
+    #[test]
+    fn ground_flags_follow_the_square_material() {
+        let (t, materials) = bumpy();
+        let flags = [0, crate::envinfo::WATER];
+        let t = t.with_ground_flags(&materials, &flags).unwrap();
+        let (nx, ny) = t.squares();
+        for j in 0..ny {
+            for i in 0..nx {
+                let m = materials.get(i, j).unwrap() as usize;
+                let want = flags.get(m).copied().unwrap_or(0);
+                assert_eq!(t.flags_at(i as f32 * 4.0 + 1.0, j as f32 * 4.0 + 1.0), want, "square {i},{j}");
+            }
+        }
+        assert_eq!(t.flags_at(-1.0, 0.0), 0);
     }
 
     #[test]

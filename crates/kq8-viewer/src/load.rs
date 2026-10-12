@@ -179,10 +179,10 @@ pub fn load_model(
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
 /// plays"), the falls of step 2c/2e (connor-physics.md "Falling off an
-/// edge"), the crash (2d-4), the jumps (2e) and the start and stop transitions (2g,
-/// connor-movement.md "Starting and stopping"). Transitions to or via a
-/// movement not listed here are skipped.
-pub const CONNOR_MOVEMENTS: [&str; 28] = [
+/// edge"), the crash (2d-4), the jumps (2e), the start and stop transitions (2g,
+/// connor-movement.md "Starting and stopping") and wading (2h, water.md).
+/// Transitions to or via a movement not listed here are skipped.
+pub const CONNOR_MOVEMENTS: [&str; 34] = [
     "stop",
     "walk",
     "run",
@@ -211,6 +211,12 @@ pub const CONNOR_MOVEMENTS: [&str; 28] = [
     "backJumpHold",
     "backJumpEnd",
     "backJumpDie",
+    "waterwalk",
+    "waterrun",
+    "walkwaterwalk",
+    "waterwalkwalk",
+    "runwaterrun",
+    "waterrunrun",
 ];
 
 /// One of Connor's movements: its animation and playback speed.
@@ -498,8 +504,71 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         let b = Bitmap::parse(&bytes).map_err(|e| format!("{at}: {e}"))?;
         Grid::from_bitmap(&b).map_err(|e| format!("{at}: {e}"))
     };
-    let terrain = Terrain::new(settings.clone(), grid(&settings.height_image)?)?;
+    let mut terrain = Terrain::new(settings.clone(), grid(&settings.height_image)?)?;
+    // The floor grid, the ground under water (water.md "Two ground grids").
+    match &settings.floor_image {
+        Some(name) => match grid(name).and_then(|floor| terrain.clone().with_floor(floor)) {
+            Ok(t) => {
+                terrain = t;
+                let floor = terrain.floor.as_ref().unwrap();
+                let pairs = terrain.heights.values().iter().zip(floor.values());
+                let (mut higher, mut lower) = (0, 0);
+                for (s, f) in pairs {
+                    higher += usize::from(f > s);
+                    lower += usize::from(f < s);
+                }
+                log.summary(format!(
+                    "  floor grid: {name}; corners where the floor is lower than the surface {lower}, higher {higher}"
+                ));
+            }
+            Err(e) => log.summary(format!("  floor grid: {name} NOT loaded ({e}); floor = surface")),
+        },
+        None => log.summary("  floor grid: none (no floorBMPName); floor = surface"),
+    }
     let materials = grid(&settings.material_image)?;
+    // Ground flags per material (water.md "Ground flags from envInfo.kq").
+    let env_name = settings
+        .all
+        .iter()
+        .find(|(k, v)| k.eq_ignore_ascii_case("envinfoName") && !v.is_empty())
+        .map_or("envInfo.kq".to_string(), |(_, v)| v.clone());
+    match fetch(&env_name) {
+        Ok((at, bytes)) => {
+            let flags = kq8_data::envinfo::parse(&bytes);
+            match terrain.clone().with_ground_flags(&materials, &flags) {
+                Ok(t) => {
+                    terrain = t;
+                    let count = |mask: u32| terrain.square_flags.iter().filter(|f| *f & mask != 0).count();
+                    use kq8_data::envinfo::{FAST_POISON, LIQUID, POISON, SWAMP, WATER};
+                    // Liquid squares with the surface above the floor somewhere.
+                    let (nx, _) = terrain.squares();
+                    let size = settings.square_size();
+                    let deep = terrain
+                        .square_flags
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, f)| *f & LIQUID != 0)
+                        .filter(|(k, _)| {
+                            let (x, y) = (((k % nx) as f32 + 0.5) * size, ((k / nx) as f32 + 0.5) * size);
+                            let (s, f) = (terrain.height_at(x, y), terrain.floor_at(x, y));
+                            s.zip(f).is_some_and(|(s, f)| s.height > f.height)
+                        })
+                        .count();
+                    log.summary(format!(
+                        "  ground flags: {at}: {} materials; liquid squares {} (water {}, poison {}, fastpoison/lava {}, swamp {}), {deep} with the surface above the floor at their centre",
+                        flags.len(),
+                        count(LIQUID),
+                        count(WATER),
+                        count(POISON),
+                        count(FAST_POISON),
+                        count(SWAMP)
+                    ));
+                }
+                Err(e) => log.summary(format!("  ground flags: {at}: NOT used ({e}); no water anywhere")),
+            }
+        }
+        Err(e) => log.summary(format!("  ground flags: {env_name} NOT found ({e}); no water anywhere")),
+    }
     let (list_at, list_bytes) = fetch(&settings.material_list)?;
     let list = MaterialList::parse(&list_bytes).map_err(|e| format!("{list_at}: {e}"))?;
     let mut orientation = vec![0u32; list.materials.len()];
@@ -908,8 +977,8 @@ impl Placer<'_> {
             let file = kq_text::parse(&read("GAME/Kq/Connor.kq")?);
             let section = file.first().ok_or("GAME/Kq/Connor.kq has no section")?;
             let mut p = kq8_data::objects::Placement::from_load(section, load);
-            let ground = self.terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
-            p.position = p.grounded_position(ground);
+            let (terrain, [x, y, _]) = (&self.terrain, p.position);
+            p.position = p.grounded_position(|level| terrain.ground_at(level, x, y).map(|g| g.height));
             let (keys, problems) = kq8_data::action_map::parse(&read("Connor.sae")?);
             for pr in &problems {
                 self.log.summary(format!("connor: Connor.sae: {pr}"));
@@ -1134,22 +1203,32 @@ impl Placer<'_> {
         }
 
         // Ground rules, when the object is loaded, so `getLoc` sees the
-        // result: loadKQ z of -1/-2 = on the ground (objects.md Q17);
-        // otherwise keepOnGround raises, never lowers (Q10).
-        let ground = self.terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
-        let grounded = p.grounded_position(ground);
-        if p.z_on_ground {
+        // result: loadKQ z of -1 = on the floor, -2 = on the surface
+        // (objects.md Q17, water.md); otherwise keepOnGround raises onto
+        // its grid, never lowers (Q10).
+        let (terrain, [x, y, _]) = (self.terrain, p.position);
+        let height = |level| terrain.ground_at(level, x, y).map(|g| g.height);
+        let grounded = p.grounded_position(height);
+        let level = p.ground_level();
+        if p.z_on_ground.is_some() {
             self.log.detail(format!(
-                "put [{}] on the ground (loadKQ z={:.0}, keepOnGround={}): z={}",
+                "put [{}] on the {:?} grid (loadKQ z={:.0}, keepOnGround={:?}): z={}",
                 p.name,
+                level.unwrap(),
                 p.position[2],
                 p.keep_on_ground,
-                ground.map_or("none (outside the grid, kept as written)".into(), |g| format!("{g:.0}"))
+                level.and_then(height).map_or("none (outside the grid, kept as written)".into(), |g| format!("{g:.0}"))
             ));
             self.on_ground_marker += usize::from(!unused);
             p.position = grounded;
         } else if grounded != p.position {
-            self.log.detail(format!("raised [{}] from z={:.0} to the ground at z={:.0}", p.name, p.position[2], grounded[2]));
+            self.log.detail(format!(
+                "raised [{}] from z={:.0} onto the {:?} grid at z={:.0}",
+                p.name,
+                p.position[2],
+                level.unwrap(),
+                grounded[2]
+            ));
             self.raised += usize::from(!unused);
             p.position = grounded;
         }
@@ -1325,7 +1404,7 @@ impl Placer<'_> {
                 .flat_map(|g| g.triangles.iter().flat_map(|tri| tri.positions))
                 .map(|v| t.apply(v)[2])
                 .fold(f32::INFINITY, f32::min);
-            let ground = self.terrain.height_at(p.position[0], p.position[1]).map(|g| g.height);
+            let ground = self.terrain.floor_at(p.position[0], p.position[1]).map(|g| g.height);
             let gap = ground.map(|h| lowest - h);
             log.detail(format!(
                 "object [{}] class={} shape={} at ({:.0}, {:.0}, {:.0}) angles=({:.2}, {:.2}, {:.2}) lowest_point={lowest:.0} ground={} gap={}",

@@ -3,6 +3,35 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Standing jump while wading
+
+**Changed:** `crates/kq8-game/src/connor.rs`: `waterwalk` and `waterrun` added to the movements a jump can start from; both give the standing `jump`. Unit test. Docs: provenance, README.
+**Why:** User's check in the original: walking or running in water, Jump stops him and does a standing jump. Ours refused it.
+**Tested how:** `cargo test --workspace --release`; viewer in Daventry, `--at 141312,198656,0 --hold 1,0,1 --jump 60 --frames 2500`, read `connor.log`.
+**Result:** 142 tests pass. Update 61: `jump from waterrun`; jump ends at update 81, lands at 83 (safe), `jumpend`, then `waterrun` again.
+**Still broken / not tested:** Not checked by eye. Jumping during `walkwaterwalk`, `runwaterrun` and the ways out is refused, like other start/stop animations (not checked in the original). Walking-in-water jump only unit-tested.
+**Next:** DeadCity hall height, when you have looked.
+
+**Checked afterwards (you, 2026-10-12):** M2 2h-1 and 2h-2 look right; the Swamp shack is correctly placed now.
+
+## 2026-10-12 M2 2h-2: wading (water test and animations)
+
+**Changed:** `crates/kq8-data/src/envinfo.rs` (new: `envInfo.kq` ground flags, the note's column rule), `terrain.rs` (flags per square, `flags_at`). `crates/kq8-game/src/water.rs` (new: the water test), `mover.rs` (`water()` lookup: surface height and flags; `submerged`), `connor.rs` (`waterwalk`/`waterrun` chosen when submerged; `waterrun`/`runwaterrun` crash head-on), `player.rs` (the test after every move, its result used by the next update's choice; event line when it changes). `crates/kq8-viewer`: loads the flags and the 6 water movements; `connor.log` columns `submerged surface_z`. Docs: DESIGN (2h), provenance, README.
+**Why:** `water.md` (Q43): Connor wades where the ground is a liquid and the surface is at least 600 above his feet.
+**Tested how:** `cargo test --workspace --release`; viewer in Daventry, from a dry square into the river and out: `--at 141312,198656,0 --hold 1,0,0 --frames 5000` (walking) and `--hold 1,0,1 --frames 2500` (running); read `connor.log`.
+**Result:** 142 tests pass (52 + 90). Viewer log: Daventry 201 water squares (4 also swamp), as A counted. Walking: submerged at update 67 (surface 6,630, feet 6,017); update 68 asks for `waterwalk`, `walkwaterwalk` from phase 0.2, `waterwalk` from update 77; feet down to 5,610 (1,020 under the surface); submerged off at update 192, `waterwalkwalk` at 215, `walk` at 220, out on the far bank. Running: `runwaterrun` the update after (36), `waterrun`, then `waterrunrun` and `run` on the way out.
+**Still broken / not tested:** Not checked by eye. No damage from poison, lava or swamp; no sinking into `ontop` hazards (not in this step). No jumping while wading (the notes don't say; our choice). The water's look is unchanged.
+**Next:** You: walk into the Daventry river and compare with the original (water at his chest, the wading walk).
+
+## 2026-10-12 M2 2h-1: the floor grid (ground under water) and placement
+
+**Changed:** `crates/kq8-data/src/terrain.rs` (optional floor grid, `floor_at` / `ground_at`, surface fallback), `objects.rs` (`keepOnGround` default floor / 1 surface / 0 off; `loadKQ` z −1 floor, −2 surface). `crates/kq8-game/src/mover.rs`: the terrain lookup (Connor and the camera) uses the floor. `crates/kq8-viewer`: loads `floorBMPName`, places objects by the new rules, `--at` puts Connor on the floor; log lines name the grid. Docs: DESIGN (plan 2h), provenance.
+**Why:** `water.md` (Q43): `terrh2.dib` is the ground under water; Connor and default objects stand on it. Fixes the Swamp shack (objects half through its floor).
+**Tested how:** `cargo test --workspace --release`; viewer runs: Swamp `--at 83500,43000,0 --lift 3000` and `--at 74000,47000,0 --lift 3000` (Connor dropped into the shack); every object's position before and after in Daventry, Swamp, IceWorld, DeadCity (old build vs new, viewer logs).
+**Result:** `shack2` at 5,355 (was 6,120). Connor lands at 6,468 (east) and 7,332 (west), 765 lower, as predicted; the stove, chests, table and barricades now sit 18–70 above the floors. Daventry and IceWorld: no object moved. Swamp: also `fientowr` 6,120 → 5,994, `proftree` 6,885 → 6,871. DeadCity: `DeadHal2`, `platfrml`, the four hall doors, `porttow3.01` and its flame moved **up 2,784**: they stand in two large blocks where the floor image is exactly 2,784 above the drawn ground (the note's open question 3); `Pool1`–`Pool5` (invisible click targets, `locZ=0`) moved down from the surface to the floor.
+**Still broken / not tested:** Not checked by eye. The DeadCity hall area is not checked in the original (it may float 2,784 above the drawn ground in our viewer; whether that is what the game shows is unknown). A `keepOnGround` value other than 0/1 counts as the surface (our reading; none in the data).
+**Next:** 2h-2 (wading). You: the Swamp shack by eye; DeadCity's hall area if you know it.
+
 ## 2026-10-12 Study session: water and the second height map (Q43)
 
 **Changed:** New `docs/behaviour/water.md`. Corrected/extended `docs/behaviour/objects.md` (Q17 rule 2), `buildings.md` (rule 6), `terrain.md` (`floorBMPName`, open questions 1–2), `connor-physics.md` (terrain passes use the floor), `connor-movement.md` (pointer). `QUESTIONS.md`: Q43 answered. No code.

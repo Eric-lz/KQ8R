@@ -6,9 +6,11 @@
 //!
 //! - Position `locX`, `locY`, `locZ` in game units (`isGroundRelative` is
 //!   never read by the game). Each key is read on its own; a missing one is
-//!   0 (objects.md "Missing locX / locY / locZ", Q19). `keepOnGround` is on unless the section says
-//!   `keepOnGround=0`; then an object below the ground is raised onto it,
-//!   never lowered (docs/behaviour/buildings.md, Q10 follow-up).
+//!   0 (objects.md "Missing locX / locY / locZ", Q19). `keepOnGround`
+//!   raises an object below the ground onto it, never lowers it
+//!   (docs/behaviour/buildings.md, Q10 follow-up): by default onto the
+//!   floor grid, with `keepOnGround=1` onto the surface, with `=0` not at
+//!   all (water.md "Which grid answers").
 //! - Angles `dirX`, `dirY`, `dirZ` in radians, right-hand rule (positive
 //!   `dirZ` turns +X towards +Y). A point is turned about Y first, then X,
 //!   then Z: with row vectors the matrix is `RotY × RotX × RotZ`.
@@ -17,6 +19,37 @@
 
 use crate::kq_text::Section;
 use crate::shape::Transform;
+use crate::terrain::Level;
+
+/// `keepOnGround` (water.md "Which grid answers"): the mover's default
+/// (−1) raises onto the floor grid, `1` onto the surface, `0` not at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepOnGround {
+    Floor,
+    Surface,
+    Off,
+}
+
+impl KeepOnGround {
+    /// From a `keepOnGround=` value: 0 off, −1 floor, anything else the
+    /// surface (the data only uses 0 and 1; other values are our reading).
+    pub fn from_value(v: f64) -> Self {
+        match v as i64 {
+            0 => KeepOnGround::Off,
+            -1 => KeepOnGround::Floor,
+            _ => KeepOnGround::Surface,
+        }
+    }
+
+    /// The grid it raises onto, `None` when off.
+    pub fn level(self) -> Option<Level> {
+        match self {
+            KeepOnGround::Floor => Some(Level::Floor),
+            KeepOnGround::Surface => Some(Level::Surface),
+            KeepOnGround::Off => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Placement {
@@ -30,17 +63,18 @@ pub struct Placement {
     pub angles: [f32; 3],
     /// True if the section has an `...RMat` key (not supported).
     pub has_matrix_key: bool,
-    /// `keepOnGround`: true unless the section sets it to 0.
-    pub keep_on_ground: bool,
+    /// `keepOnGround`: the floor unless the section sets it.
+    pub keep_on_ground: KeepOnGround,
     /// `flags` as written, if present (animation start options; see
     /// objects.md "Animated objects at load" rule 4).
     pub flags: Option<String>,
     /// `translucency`: 256 (the default) = solid; below that every
     /// material is drawn at opacity n / 255 (objects.md Q14).
     pub translucency: f32,
-    /// True if a `loadKQ` line gave z = -1 or -2: "on the ground", whatever
-    /// `keepOnGround` says (objects.md "Ground heights -1 and -2", Q17).
-    pub z_on_ground: bool,
+    /// Set if a `loadKQ` line gave z = −1 (the floor) or −2 (the
+    /// surface): put on that grid, whatever `keepOnGround` says
+    /// (objects.md "Ground heights -1 and -2", Q17; water.md).
+    pub z_on_ground: Option<Level>,
     /// Which of `locX`, `locY`, `locZ` the section left out (taken as 0).
     pub missing_loc: [bool; 3],
     /// `hidden`: any value other than 0 (objects.md Q18). Scripts can
@@ -64,11 +98,11 @@ impl Placement {
             position,
             angles,
             has_matrix_key: s.entries.iter().any(|(k, _)| k.to_ascii_lowercase().ends_with("rmat")),
-            keep_on_ground: s.number("keepOnGround").and_then(Result::ok).is_none_or(|v| v != 0.0),
+            keep_on_ground: s.number("keepOnGround").and_then(Result::ok).map_or(KeepOnGround::Floor, KeepOnGround::from_value),
             flags: s.get("flags").map(str::to_string),
             translucency: s.number("translucency").and_then(Result::ok).map_or(256.0, |v| v as f32),
             // A `.kq` file's own locZ never takes the -1/-2 rule (Q17 rule 4).
-            z_on_ground: false,
+            z_on_ground: None,
             missing_loc: loc.map(|v| v.is_none()),
             hidden: s.number("hidden").and_then(Result::ok).is_some_and(|v| v as i64 != 0),
             groups_always: s.number("groupsAlways").and_then(Result::ok).map_or(6, |v| v as u32),
@@ -90,7 +124,11 @@ impl Placement {
                 }
                 let mut p = Self::from_section(&with_loc);
                 p.angles = load.angles_or_zero();
-                p.z_on_ground = position[2] == -1.0 || position[2] == -2.0;
+                p.z_on_ground = match position[2] {
+                    -1.0 => Some(Level::Floor),
+                    -2.0 => Some(Level::Surface),
+                    _ => None,
+                };
                 p
             }
             None => Self::from_section(section),
@@ -115,14 +153,23 @@ impl Placement {
         if self.translucency >= 256.0 { 1.0 } else { (self.translucency / 255.0).clamp(0.0, 1.0) }
     }
 
-    /// Position after the ground rules, with `ground` the ground height
-    /// under locX, locY: a `loadKQ` z of -1/-2 is replaced by it (Q17);
-    /// otherwise, with `keepOnGround`, an object below it is raised onto it.
-    pub fn grounded_position(&self, ground: Option<f32>) -> [f32; 3] {
+    /// The grid the ground rules use: the `loadKQ` z's (−1/−2), else
+    /// `keepOnGround`'s; `None` if neither applies.
+    pub fn ground_level(&self) -> Option<Level> {
+        self.z_on_ground.or(self.keep_on_ground.level())
+    }
+
+    /// Position after the ground rules, with `ground(level)` the height of
+    /// that grid under locX, locY: a `loadKQ` z of −1/−2 is replaced by the
+    /// floor/surface height (Q17, water.md); otherwise `keepOnGround`
+    /// raises an object below its grid onto it, never lowers it.
+    pub fn grounded_position(&self, ground: impl Fn(Level) -> Option<f32>) -> [f32; 3] {
         let [x, y, z] = self.position;
-        match ground {
-            Some(g) if self.z_on_ground => [x, y, g],
-            Some(g) if self.keep_on_ground && z < g => [x, y, g],
+        if let Some(level) = self.z_on_ground {
+            return ground(level).map_or(self.position, |g| [x, y, g]);
+        }
+        match self.keep_on_ground.level().and_then(ground) {
+            Some(g) if z < g => [x, y, g],
             _ => self.position,
         }
     }
@@ -353,17 +400,36 @@ transition1=-1 walk 0.850000 stopwalk
         }
     }
 
+    /// Floor 500, surface 800 (water 300 deep).
+    fn water(level: Level) -> Option<f32> {
+        Some(match level {
+            Level::Floor => 500.0,
+            Level::Surface => 800.0,
+        })
+    }
+
     #[test]
     fn keep_on_ground_raises_never_lowers() {
         let on = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\n")[0];
         let p = Placement::from_section(on);
-        assert!(p.keep_on_ground);
-        assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
-        assert_eq!(p.grounded_position(None), [1.0, 2.0, -1.0]);
+        assert_eq!(p.keep_on_ground, KeepOnGround::Floor);
+        assert_eq!(p.grounded_position(|_| Some(500.0)), [1.0, 2.0, 500.0]);
+        assert_eq!(p.grounded_position(|_| None), [1.0, 2.0, -1.0]);
         let high = Placement { position: [1.0, 2.0, 900.0], ..p.clone() };
-        assert_eq!(high.grounded_position(Some(500.0)), [1.0, 2.0, 900.0]);
+        assert_eq!(high.grounded_position(|_| Some(500.0)), [1.0, 2.0, 900.0]);
         let off = &crate::kq_text::parse(b"[a]\nlocX=1\nlocY=2\nlocZ=-1\nkeeponground=0\n")[0];
-        assert_eq!(Placement::from_section(off).grounded_position(Some(500.0)), [1.0, 2.0, -1.0]);
+        assert_eq!(Placement::from_section(off).grounded_position(|_| Some(500.0)), [1.0, 2.0, -1.0]);
+    }
+
+    #[test]
+    fn keep_on_ground_default_uses_the_floor_and_1_the_surface() {
+        // The Swamp shack: locZ=-1, no keepOnGround line -> the floor.
+        let shack = &crate::kq_text::parse(b"[shack2]\nlocX=1\nlocY=2\nlocZ=-1\n")[0];
+        assert_eq!(Placement::from_section(shack).grounded_position(water), [1.0, 2.0, 500.0]);
+        let one = &crate::kq_text::parse(b"[knight]\nlocX=1\nlocY=2\nlocZ=-1\nkeepOnGround=1\n")[0];
+        let p = Placement::from_section(one);
+        assert_eq!(p.keep_on_ground, KeepOnGround::Surface);
+        assert_eq!(p.grounded_position(water), [1.0, 2.0, 800.0]);
     }
 
     #[test]
@@ -402,15 +468,18 @@ translucency=200
         // -1 and -2 move the object onto the ground, up or down, even with keepOnGround off.
         for z in [-1.0, -2.0] {
             let p = Placement::from_load(s, &load(z));
-            assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, 500.0]);
-            assert_eq!(p.grounded_position(Some(-800.0)), [1.0, 2.0, -800.0]);
+            assert_eq!(p.grounded_position(|_| Some(500.0)), [1.0, 2.0, 500.0]);
+            assert_eq!(p.grounded_position(|_| Some(-800.0)), [1.0, 2.0, -800.0]);
         }
+        // -1 is the floor, -2 the surface (water.md).
+        assert_eq!(Placement::from_load(s, &load(-1.0)).grounded_position(water), [1.0, 2.0, 500.0]);
+        assert_eq!(Placement::from_load(s, &load(-2.0)).grounded_position(water), [1.0, 2.0, 800.0]);
         // Any other value is used as written (keepOnGround is off here).
         let p = Placement::from_load(s, &load(-3.0));
-        assert_eq!(p.grounded_position(Some(500.0)), [1.0, 2.0, -3.0]);
+        assert_eq!(p.grounded_position(|_| Some(500.0)), [1.0, 2.0, -3.0]);
         // A .kq file's own locZ=-1 does not take this rule.
         let p = Placement::from_section(s);
-        assert_eq!(p.grounded_position(Some(500.0)), [0.0, 0.0, -1.0]);
+        assert_eq!(p.grounded_position(|_| Some(500.0)), [0.0, 0.0, -1.0]);
     }
 
     #[test]
@@ -443,8 +512,8 @@ translucency=200
         let s = &crate::kq_text::parse(b"[lookout2]\nshapeName=lookout4.dig\nlocX=71571\nlocY=108848\ndirZ=3.14\n")[0];
         let p = Placement::from_section(s);
         assert_eq!((p.position, p.missing_loc), ([71571.0, 108848.0, 0.0], [false, false, true]));
-        assert_eq!(p.grounded_position(Some(11592.0)), [71571.0, 108848.0, 11592.0]);
+        assert_eq!(p.grounded_position(|_| Some(11592.0)), [71571.0, 108848.0, 11592.0]);
         // Below-zero ground: z 0 stays (raise only), i.e. max(0, ground).
-        assert_eq!(p.grounded_position(Some(-300.0)), [71571.0, 108848.0, 0.0]);
+        assert_eq!(p.grounded_position(|_| Some(-300.0)), [71571.0, 108848.0, 0.0]);
     }
 }

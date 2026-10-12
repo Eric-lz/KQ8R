@@ -29,8 +29,11 @@ pub struct Intent {
 }
 
 /// The movement name for an intent (the note's table; no water yet).
-pub fn choose_movement(intent: Intent) -> &'static str {
+pub fn choose_movement(intent: Intent, submerged: bool) -> &'static str {
     match (intent.forward, intent.turn) {
+        // In water (water.md "Wading animations"): the wading ones.
+        (1, _) if intent.run && submerged => "waterrun",
+        (1, _) if submerged => "waterwalk",
         (1, _) if intent.run => "run",
         (1, _) => "walk",
         (-1, _) => "back",
@@ -203,8 +206,9 @@ impl JumpKind {
 /// The movements a jump can start from (the user's check in the
 /// original: standing, full walking or full running, never during a start
 /// or stop animation; `back` from the note's rule 2; turning on the spot:
-/// Q41 a).
-pub const JUMP_FROM: [&str; 6] = ["stop", "walk", "run", "back", "left", "right"];
+/// Q41 a). Wading too: the user's check in the original (2026-10-12),
+/// walking or running in water gives the standing jump.
+pub const JUMP_FROM: [&str; 8] = ["stop", "walk", "run", "back", "left", "right", "waterwalk", "waterrun"];
 
 /// What drives Connor's animation.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -256,6 +260,9 @@ pub struct Walker {
     pub blocked_back: bool,
     /// The movement asked for and not reached yet (rule 1).
     pub wanted: Option<&'static str>,
+    /// The mover's `submerged` from the end of the last update's move
+    /// (water.md "Wading animations" rule 3).
+    pub submerged: bool,
     /// A chosen transition waiting for its from point (rule 3).
     pub waiting: Option<Transition>,
     /// The transition playing now (rules 5 and 6).
@@ -313,6 +320,7 @@ impl Walker {
             playing: None,
             choice: "stop",
             kind: JumpKind::Stand,
+            submerged: false,
         }
     }
 
@@ -513,7 +521,7 @@ impl Walker {
             return None;
         }
         let from = self.movement;
-        if matches!(from, "run" | "stoprun") {
+        if matches!(from, "run" | "stoprun" | "waterrun" | "runwaterrun") {
             self.set_mode(Mode::Crash);
             return Some((from, "crash"));
         }
@@ -553,7 +561,7 @@ impl Walker {
             }
         } else {
             // While a wall block is on he stands, whatever the keys ask.
-            let mut choice = if self.blocked() { "stop" } else { choose_movement(intent) };
+            let mut choice = if self.blocked() { "stop" } else { choose_movement(intent, self.submerged) };
             // Just landed from a running jump (`choice` is ""): a turn key
             // alone counts as standing, so `jumpstop` plays (he turns
             // during it) and the turn on the spot is asked for once it has
@@ -810,12 +818,23 @@ mod tests {
 
     #[test]
     fn movement_table() {
-        assert_eq!(choose_movement(intent(1, 0, true)), "run");
-        assert_eq!(choose_movement(intent(1, 1, false)), "walk");
-        assert_eq!(choose_movement(intent(-1, -1, true)), "back");
-        assert_eq!(choose_movement(intent(0, 1, true)), "left");
-        assert_eq!(choose_movement(intent(0, -1, false)), "right");
-        assert_eq!(choose_movement(intent(0, 0, true)), "stop");
+        // Wading jumps are standing jumps (user's check in the original).
+        for m in ["waterwalk", "waterrun"] {
+            let w = Walker { movement: m, ..Walker::new(0.0) };
+            assert_eq!(w.jump_kind(), Ok(JumpKind::Stand), "{m}");
+        }
+        assert_eq!(choose_movement(intent(1, 0, true), false), "run");
+        assert_eq!(choose_movement(intent(1, 1, false), false), "walk");
+        assert_eq!(choose_movement(intent(-1, -1, true), false), "back");
+        assert_eq!(choose_movement(intent(0, 1, true), false), "left");
+        assert_eq!(choose_movement(intent(0, -1, false), false), "right");
+        assert_eq!(choose_movement(intent(0, 0, true), false), "stop");
+        // In water only forward changes (water.md "Wading animations").
+        assert_eq!(choose_movement(intent(1, 0, true), true), "waterrun");
+        assert_eq!(choose_movement(intent(1, 1, false), true), "waterwalk");
+        assert_eq!(choose_movement(intent(-1, 0, true), true), "back");
+        assert_eq!(choose_movement(intent(0, 1, false), true), "left");
+        assert_eq!(choose_movement(intent(0, 0, false), true), "stop");
     }
 
     /// The note's walk: 1,427.1 per 1.2667 s loop, along −Y.

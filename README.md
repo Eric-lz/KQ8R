@@ -45,7 +45,11 @@ The code is written with an AI coding agent (Claude Code); see
   straight into a wall knocks him back (the crash animation), as far as
   in the original (checked by eye). Objects are solid too (trees,
   signposts, doors, crates, stone villagers…), with each object's box
-  from the game's table (checked by eye).
+  from the game's table (checked by eye). He walks into water on the
+  bottom, with the water up to his chest, and switches to the wading
+  walk and run while it is deep (checked in the logs, not yet by eye).
+  Buildings and objects stand on the ground under the water where the
+  original puts them (e.g. the Swamp shack; checked in the logs).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
@@ -57,10 +61,8 @@ The code is written with an AI coding agent (Claude Code); see
 There is nothing to play yet. Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
-back behind him by itself or avoid walls. Water is not done: Connor walks
-on top of it instead of wading in, and in the Swamp shack the house
-stands too high, so its stove, table, chests and barricades sink into the
-floor (both waiting for the study session, Q43). People and monsters are not shown,
+back behind him by itself or avoid walls. In water there is no damage
+yet (poison, lava, swamp). People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the
 latest changes in [MODLOG.md](MODLOG.md).

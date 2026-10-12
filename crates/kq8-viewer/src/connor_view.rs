@@ -24,7 +24,7 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_game::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
-use kq8_game::mover::{Mover, Scene as MoverScene, State};
+use kq8_game::mover::{Mover, MoverWorld, Scene as MoverScene, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
@@ -313,7 +313,7 @@ pub fn spawn_connor(
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z",
     );
     sim.log.detail(
         "  (played = the animation that moved him this update, with its phase before and after; wanted_movement = asked for and not reached yet; step_left / step_forward = that animation's step in his own axes; movement / phase = where he is after the update)",
@@ -348,7 +348,7 @@ pub fn connor_keys(
     let Some(mut sim) = sim else { return };
     if let (Some([x, y, heading]), Some(lookup)) = (start_at.0, &lookup) {
         start_at.0 = None;
-        let line = match lookup.0.height_at(x, y) {
+        let line = match lookup.0.floor_at(x, y) {
             Some(g) => {
                 let balls = sim.mover.balls.clone();
                 sim.mover = Mover::new([x, y, g.height], sim.mover.use_gravity);
@@ -523,9 +523,11 @@ pub fn connor_step(
     sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase);
     let m = &sim.mover;
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
+    // The drawn ground (the water's surface where there is water).
+    let surface_z = scene.water(m.position[0], m.position[1]).map_or("none".into(), |(s, _)| format!("{s:.1}"));
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2} {}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2} {} {} {}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -569,6 +571,8 @@ pub fn connor_step(
         step.as_ref().map_or(0.0, |s| s.own_step[0]),
         step.as_ref().map_or(0.0, |s| -s.own_step[1]),
         sim.jump_start_z.map_or("none".into(), |z| format!("{:.1}", sim.mover.position[2] - z)),
+        m.submerged,
+        surface_z,
     );
     if sim.walker.mode == Mode::Free {
         sim.jump_start_z = None;

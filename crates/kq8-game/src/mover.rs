@@ -12,14 +12,26 @@ use std::cell::RefCell;
 use crate::collide::{BallStack, BoxCollider, BuildingCollider, ObjectHit};
 
 /// The ground under a point: height and unit normal (z > 0), or `None`
-/// where there is no ground (outside the terrain grid).
+/// where there is no ground (outside the terrain grid). For the terrain
+/// this is the **floor** grid, the ground under water (water.md: Connor,
+/// with the default `keepOnGround`, takes height, normal and material from
+/// the floor; the camera keeps above the floor too).
 pub trait GroundLookup {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])>;
+    /// The water test's view (water.md): the **surface** height and the
+    /// ground flags at (x, y); `None` where there is no water to test.
+    fn water(&self, _x: f32, _y: f32) -> Option<(f32, u32)> {
+        None
+    }
 }
 
 impl GroundLookup for kq8_data::Terrain {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
-        self.height_at(x, y).map(|g| (g.height, g.normal))
+        self.floor_at(x, y).map(|g| (g.height, g.normal))
+    }
+
+    fn water(&self, x: f32, y: f32) -> Option<(f32, u32)> {
+        self.height_at(x, y).map(|g| (g.height, self.flags_at(x, y)))
     }
 }
 
@@ -49,12 +61,20 @@ pub trait MoverWorld {
     fn take_notes(&self) -> Vec<String> {
         Vec::new()
     }
+    /// Surface height and ground flags for the water test (`GroundLookup::water`).
+    fn water(&self, _x: f32, _y: f32) -> Option<(f32, u32)> {
+        None
+    }
 }
 
 /// Ground only, nothing else solid (the unit tests' made-up grounds).
 impl<T: GroundLookup> MoverWorld for T {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
         GroundLookup::ground(self, x, y)
+    }
+
+    fn water(&self, x: f32, y: f32) -> Option<(f32, u32)> {
+        GroundLookup::water(self, x, y)
     }
 }
 
@@ -77,6 +97,10 @@ impl<'a> Scene<'a> {
 impl MoverWorld for Scene<'_> {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
         self.ground.ground(x, y)
+    }
+
+    fn water(&self, x: f32, y: f32) -> Option<(f32, u32)> {
+        self.ground.water(x, y)
     }
 
     /// Over every building and object hit, the contact nearest the old
@@ -224,6 +248,8 @@ pub struct Mover {
     steep_head_on: bool,
     /// The balls he collides with (built from his box).
     pub balls: BallStack,
+    /// The water test's result after the last move (water.md).
+    pub submerged: bool,
 }
 
 /// What the down pass ended on.
@@ -321,6 +347,7 @@ impl Mover {
             state: State::Normal,
             steep_head_on: false,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
+            submerged: false,
         }
     }
 
