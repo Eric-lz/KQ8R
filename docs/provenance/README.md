@@ -566,8 +566,8 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Stay while the box centre is in (edges count) or still touching; leave when both fail: last out `Off <who>`, others `Cue 302 <who>` | `traps.md` rules 7–9 | Unit tests |
 | Sticky (`trapType` bit 2): shrunk to `innerPercent` towards the position while empty, full while someone is in | `traps.md` rule 10 | Unit test (0.9: ±300 → ±270, z 0–1,000 → 0–900) |
 | One-shot (bit 1): gone after its `On` | `traps.md` rule 11 | Unit test (unused in the data) |
-| Who counts: only the trap's mask against the visitor's type | **Our stand-in**, Q58 (rule 4's two-sided pair rule conflicts with rule 16 because Connor's mask 0x281B has bit 0x10) | Unit test |
-| "Touching" = one of the visitor's wall-collision balls within its radius of the box, at the end of the move | **Our stand-in**, `traps.md` open question 2 | Unit tests |
+| Who counts: only the trap's mask against the visitor's type | `traps.md` rule 4, `connor-collision.md` rule 2 (Q58: our stand-in confirmed) | Unit test |
+| ~~"Touching" at the end of the move~~ **Replaced in 3d-4:** each ball's path against the box widened by its radius (swept, starting inside counts) | `traps.md` rule 6 (Q57 b) | Unit tests |
 | No `colliderMask` → 0; no `innerPercent` → full box | **Our stand-in** (not in the note; every trap in the data has a mask, every sticky one an `innerPercent`) | — |
 
 ## Traps in Daventry (M3 step 3d-2) — `crates/kq8-game/src/active.rs`, `crates/kq8-viewer/src/{load,door_view,main}.rs`
@@ -581,7 +581,7 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Sticky boxes in play | `traps.md` rule 10 | `--at 186500,198000,1.5708 --hold 1,0,1,90`: `mwiztrap` On at x 189,041 (inner edge 189,101 − 200), Off at x 198,106 (full edge 197,857 + 200) |
 | `KQCueEvent` to a trap → `Cue n1 n2 [n3]` | `traps.md` rule 14 (as doors rule 23) | Unit test |
 | `KQObject::collision <name> <±bits>` changes a trap's or door's mask | `traps.md` rule 16 | Unit test; log: `jumpa.cs` `collision jumptp -4: mask 0x4 -> 0x0` |
-| Whoever is inside when the mask changes: no `Off` | **Our stand-in**, `traps.md` open question 1 | Unit test |
+| ~~Whoever is inside when the mask changes: no `Off`~~ **Replaced in 3d-4:** they stay inside and get `Off` when they leave; the mask only gates coming in | `traps.md` rule 16 (Q57 d) | Unit tests |
 | Scripts looked up in the world, then `GAME/patch`, then `GAME/Kq` | `models-and-textures.md` "Which one wins" (world folders before `GAME/`; patch before Kq: the note's likely reading) | 174 world + 30 game-wide scripts; no name in both |
 
 ## What the walk/run zones do (M3 step 3d-3) — `crates/kq8-game/src/{active,script}.rs`, `crates/kq8-viewer/src/{door_view,connor_view,game_camera}.rs`
@@ -594,4 +594,12 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Applied after the traps' check, before the camera's update in the same tick | **Our stand-in** (order not traced) | — |
 | Action-only commands of Daventry's trap scripts are stubs (one log line, result 0); question commands (`getloc`, `checkDistance`, `exist`, `checkSave`, `getConInventory`, `getEndLoop`, `KQConner::getDoMode`) stay unknown (result 1) | **Our choice** until they are studied | Log |
 | `--hold F,T,R`: the run switch only at the start | Our test helper (so scripts can change it) | Same run |
+
+## Trap corrections after Q57/Q58 (M3 step 3d-4) — `crates/kq8-game/src/{trap,active}.rs`, `crates/kq8-viewer/src/door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Entering: swept ball paths against the box widened by the radius; the entering move is not also tested for leaving | `traps.md` rule 6 | Unit test: x 9,000 → 11,000 through a box 9,700–10,300 gives `On`, the next move `Off`; a path 600 to the side nothing |
+| Staying: the same swept test for "still touching" | **Our stand-in** (rule 7 doesn't say) | Unit test; viewer: every `Off` one update later than in 3d-3 (`Conrun.tp` 25, `Conwalk.tp` 39, `mwiztrap` 78), `On` unchanged |
+| Mask only gates coming in | `traps.md` rule 16 | Unit tests (trap and `active.rs`) |
 

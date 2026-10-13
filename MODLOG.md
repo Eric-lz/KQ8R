@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3d-4: traps after the Q57/Q58 answers
+
+**Changed:** `crates/kq8-game/src/trap.rs` (touching swept along the move; mask only gates coming in; 3 new unit tests), `active.rs` (log wording; test), `crates/kq8-viewer/src/door_view.rs` (Connor's move since the last check). Docs: DESIGN (3d-4), provenance.
+**Why:** Session A's answers: `traps.md` rule 6 (the touch is the swept shape test) and rule 16 (those inside still get `Off` after a mask bit is removed). Q58 confirmed the one-sided stand-in.
+**Tested how:** `cargo test --workspace`; viewer `--at 270813,225311,-1.5708 --hold 1,0,0,80 --click Condoor,2` and `--at 186500,198000,1.5708 --hold 1,0,1,90`, comparing `traps.log` with 3d-3.
+**Result:** 218 unit tests pass (58 + 160). Every `On` at the same update as before (18, 26, 23); every `Off` one update later (`Conrun.tp` 25 instead of 24, `Conwalk.tp` 39 instead of 38, `mwiztrap` 78 instead of 77), from the swept stay test.
+**Still broken / not tested:** The swept test for staying is our stand-in (rule 7 doesn't say). Not checked by eye (one update, 1/15 s, later `Off`; the walk/run switching happens on `On`, so nothing visible should change).
+**Next:** 2i-3, the banking correction (Q56).
+
 ## 2026-10-13 Study: touches with Connor, rolling rocks, trap masks, banking (Q55–Q58)
 
 **Changed:** new `docs/behaviour/connor-collision.md`; `traps.md` (rules 4–6, 16, numbers, open questions), `connor-movement.md` ("Turning" rule 3, "Do not reproduce"), `connor-physics.md` (two "not traced" items now point to the new note), `QUESTIONS.md` (Q55–Q58 marked answered). Docs only, no code.

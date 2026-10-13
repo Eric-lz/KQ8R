@@ -192,8 +192,8 @@ impl WorldState {
         };
         let mut line = format!("{at}: collision {name} {bits:+}: mask {old:#x} -> {new:#x}");
         if !inside.is_empty() {
-            // traps.md open question 1; stand-in: no Off.
-            line.push_str(&format!("; inside now: {} (stay listed, no Off sent: stand-in)", inside.join(", ")));
+            // traps.md rule 16: nothing sent now; they get Off when they leave.
+            line.push_str(&format!("; inside now: {} (stay inside, Off when they leave)", inside.join(", ")));
         }
         self.note(line);
         "0".into()
@@ -881,7 +881,8 @@ mod tests {
 
     fn connor_at(a: &mut Active, x: f32) -> Vec<String> {
         let balls = crate::collide::BallStack::from_box([-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]);
-        let v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, position: [x, 0.0, 0.0], min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
+        let p = [x, 0.0, 0.0];
+        let v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: p, position: p, min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
         a.connor_moved(&v)
     }
 
@@ -910,9 +911,11 @@ mod tests {
         let log = a.take_trap_log().join("\n");
         assert!(log.contains("KQCueEvent 10 0 to trap clifTrap") && log.contains("echo cue 10"), "{log}");
         assert!(log.contains("mask 0x4 -> 0x0; inside now: Connor"), "{log}");
-        // Leaving: Connor no longer counts, so no Off (stand-in).
-        assert!(connor_at(&mut a, 5000.0).is_empty());
-        assert_eq!(a.scripts.vars.get("T::Out"), None);
+        // Leaving: he was inside, so he still gets the Off (rule 16) ...
+        assert_eq!(connor_at(&mut a, 5000.0), ["clifTrap Off Connor"]);
+        assert_eq!(a.scripts.vars.get("T::Out"), Some("Connor"));
+        // ... but can't come in again.
+        assert!(connor_at(&mut a, 0.0).is_empty());
     }
 
     #[test]

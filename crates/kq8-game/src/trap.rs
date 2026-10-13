@@ -5,30 +5,33 @@
 //!
 //! - The box is `BBMin`/`BBMax` added to the trap's position, never turned
 //!   (rule 1). A trap is never solid (rule 5).
-//! - Who counts: the trap's mask (`colliderMask`) has a bit of the
-//!   object's type (rule 4, as rule 16 uses it; see the stand-in below).
-//! - Entering: the object's collision shape touches the box. The first one
-//!   in gives `On <name>`, any later one `Cue 301 <name>` (rule 6).
+//! - Who can come in: the trap's mask (`colliderMask`) has a bit of the
+//!   object's type; only the trap's side counts (rule 4, Q58). The mask is
+//!   not looked at for staying or leaving: removing a bit lets nobody new
+//!   in, but whoever is inside still gets the `Off` when they leave (rule
+//!   16).
+//! - Entering: the object's collision shape touches the box during its
+//!   move: each ball's path from the old to the new position is tested
+//!   against the box widened by the ball's radius, so a move straight
+//!   through a thin trap counts, and so does a ball that starts inside
+//!   (rule 6). The first one in gives `On <name>`, any later one `Cue 301
+//!   <name>`.
 //! - Staying: the centre of the object's box is in the trap's box (edges
 //!   count), or its shape still touches it (rule 7). Leaving: both fail;
 //!   the last one out gives `Off <name>`, others `Cue 302 <name>` (rule 8).
+//!   A move that enters is not also tested for leaving: a move straight
+//!   through gives `On`, the next one `Off` (rule 6).
 //! - Sticky (`trapType` bit 2): the box is shrunk to `innerPercent` (all
 //!   six numbers, so towards the trap's position) while nobody is inside,
 //!   full size while someone is (rule 10). One-shot (bit 1): gone after
 //!   its `On` (rule 11).
 //!
-//! Stand-ins (docs/DESIGN.md M3 3d-1): "touches" is one of the object's
-//! balls (the same balls as for walls, `collide.rs`) reaching the box,
-//! tested where the object ends its move, not along the way (traps.md
-//! open question 2); a trap without `colliderMask` has mask 0; a trap
-//! without `innerPercent` keeps its full box. The object's box centre is
-//! not turned with the object (Connor's box is the same all round).
-//!
-//! Stand-in, asked as Q58: rule 4 says the usual pair rule (either side's
-//! mask covers the other's type), but Connor's own mask 0x281B has the
-//! trap type 0x10, so then every trap would see him whatever its mask,
-//! and rule 16 (scripts remove bit 4 from a trap's mask so Connor no
-//! longer counts) could not work. We use only the trap's side.
+//! Stand-ins (docs/DESIGN.md M3 3d-1, 3d-4): "still touching" for staying
+//! uses the same swept test along the move (rule 7 doesn't say; at most
+//! one update's difference); a trap without `colliderMask` has mask 0; a
+//! trap without `innerPercent` keeps its full box. The object's box
+//! centre is not turned with the object (Connor's box is the same all
+//! round).
 
 use crate::collide::BallStack;
 
@@ -74,6 +77,8 @@ pub struct Trap {
 pub struct Visitor<'a> {
     pub name: &'a str,
     pub collision_type: u32,
+    /// Where its move started and ended.
+    pub from: [f32; 3],
     pub position: [f32; 3],
     /// Its `BOUNDS.KQ` box, own space.
     pub min: [f32; 3],
@@ -84,7 +89,7 @@ pub struct Visitor<'a> {
 /// What one check found, for the log, and the script call it leads to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Check {
-    /// The pair rule lets the trap see this object.
+    /// The trap's mask lets this object come in.
     pub counts: bool,
     pub touching: bool,
     pub centre_inside: bool,
@@ -128,17 +133,22 @@ impl Trap {
     pub fn check(&mut self, v: &Visitor) -> Check {
         let (min, max) = self.current_box();
         let counts = !self.gone && self.counts(v.collision_type);
+        // Rule 6: each ball's path against the box widened by its radius.
+        let r = v.balls.radius;
+        let (wide_min, wide_max) = (min.map(|m| m - r), max.map(|m| m + r));
         let touching = v.balls.heights.iter().any(|h| {
-            let c = [v.position[0], v.position[1], v.position[2] + h];
-            distance_squared_to_box(c, min, max) <= v.balls.radius * v.balls.radius
+            let a = [v.from[0], v.from[1], v.from[2] + h];
+            let b = [v.position[0], v.position[1], v.position[2] + h];
+            segment_meets_box(a, b, wide_min, wide_max)
         });
         let centre: [f32; 3] = std::array::from_fn(|i| v.position[i] + (v.min[i] + v.max[i]) / 2.0);
         let centre_inside = (0..3).all(|i| centre[i] >= min[i] && centre[i] <= max[i]);
         let mut out = Check { counts, touching, centre_inside, min, max, call: None };
-        if !counts {
+        let was_inside = self.inside.iter().any(|n| n.eq_ignore_ascii_case(v.name));
+        // Only coming in needs the mask (rule 16); a deleted trap does nothing.
+        if self.gone || (!was_inside && !counts) {
             return out;
         }
-        let was_inside = self.inside.iter().any(|n| n.eq_ignore_ascii_case(v.name));
         let sticky = self.settings.trap_type & STICKY != 0 && self.settings.inner_percent.is_some();
         if !was_inside && touching {
             self.inside.push(v.name.to_string());
@@ -168,9 +178,29 @@ impl Trap {
     }
 }
 
-/// Squared distance from `p` to the box (0 inside).
-fn distance_squared_to_box(p: [f32; 3], min: [f32; 3], max: [f32; 3]) -> f32 {
-    (0..3).map(|i| (min[i] - p[i]).max(0.0).max(p[i] - max[i])).map(|d| d * d).sum()
+/// Whether the segment from `a` to `b` meets the box (edges count; a
+/// segment starting inside meets it). Slab test.
+fn segment_meets_box(a: [f32; 3], b: [f32; 3], min: [f32; 3], max: [f32; 3]) -> bool {
+    let (mut t0, mut t1) = (0.0f32, 1.0f32);
+    for i in 0..3 {
+        let d = b[i] - a[i];
+        if d == 0.0 {
+            if a[i] < min[i] || a[i] > max[i] {
+                return false;
+            }
+            continue;
+        }
+        let (mut lo, mut hi) = ((min[i] - a[i]) / d, (max[i] - a[i]) / d);
+        if lo > hi {
+            std::mem::swap(&mut lo, &mut hi);
+        }
+        t0 = t0.max(lo);
+        t1 = t1.min(hi);
+        if t0 > t1 {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -196,9 +226,16 @@ mod tests {
         })
     }
 
-    /// Connor at x (y and z level with the trap).
+    /// Connor at x (y and z level with the trap), as if he had just
+    /// stepped there from a spot right by it.
     fn at<'a>(name: &'a str, x: f32, balls: &'a BallStack) -> Visitor<'a> {
-        Visitor { name, collision_type: CONNOR_TYPE, position: [x, 20_000.0, 500.0], min: MIN, max: MAX, balls }
+        let p = [x, 20_000.0, 500.0];
+        Visitor { name, collision_type: CONNOR_TYPE, from: p, position: p, min: MIN, max: MAX, balls }
+    }
+
+    /// Connor moving from x0 to x1 in one update.
+    fn moving<'a>(x0: f32, x1: f32, balls: &'a BallStack) -> Visitor<'a> {
+        Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: [x0, 20_000.0, 500.0], position: [x1, 20_000.0, 500.0], min: MIN, max: MAX, balls }
     }
 
     fn call(c: &Check) -> Option<String> {
@@ -230,7 +267,7 @@ mod tests {
         // 500–1,500.
         let balls = BallStack { radius: 10.0, heights: vec![10.0] };
         let mut t = trap(0, None);
-        let v = |z: f32| Visitor { name: "Connor", collision_type: CONNOR_TYPE, position: [10_000.0, 20_000.0, z], min: MIN, max: MAX, balls: &balls };
+        let v = |z: f32| Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: [10_000.0, 20_000.0, z], position: [10_000.0, 20_000.0, z], min: MIN, max: MAX, balls: &balls };
         assert_eq!(call(&t.check(&v(500.0))).as_deref(), Some("On Connor"));
         // Feet at 0: the ball (z 10) is far below the box, the centre
         // (z 650) is in it: still inside.
@@ -285,6 +322,45 @@ mod tests {
         t.settings.mask = 0;
         let c = t.check(&at("Connor", 10_000.0, &balls));
         assert!(!c.counts && c.call.is_none());
+    }
+
+    #[test]
+    fn removing_the_mask_bit_keeps_those_inside_and_they_still_get_off() {
+        let balls = BallStack::from_box(MIN, MAX);
+        let mut t = trap(0, None);
+        assert_eq!(call(&t.check(&at("Connor", 10_000.0, &balls))).as_deref(), Some("On Connor"));
+        t.settings.mask = 0;
+        assert_eq!(call(&t.check(&at("Connor", 10_100.0, &balls))), None);
+        assert_eq!(call(&t.check(&at("Connor", 12_000.0, &balls))).as_deref(), Some("Off Connor"));
+        // And nobody new comes in.
+        assert_eq!(call(&t.check(&at("Connor", 10_000.0, &balls))), None);
+    }
+
+    #[test]
+    fn a_move_straight_through_enters_and_the_next_move_leaves() {
+        let balls = BallStack::from_box(MIN, MAX);
+        let mut t = trap(0, None);
+        // From x 9,000 to 11,000 in one update: never touching at either
+        // end (box 9,700–10,300, balls of 200), but the path crosses it.
+        let c = t.check(&moving(9_000.0, 11_000.0, &balls));
+        assert!(c.touching && !c.centre_inside, "{c:?}");
+        assert_eq!(call(&c).as_deref(), Some("On Connor"));
+        assert_eq!(call(&t.check(&moving(11_000.0, 11_100.0, &balls))).as_deref(), Some("Off Connor"));
+        // A path that passes beside it doesn't count.
+        let mut v = moving(9_000.0, 11_000.0, &balls);
+        v.from[1] = 20_600.0;
+        v.position[1] = 20_600.0;
+        assert_eq!(call(&t.check(&v)), None);
+    }
+
+    #[test]
+    fn staying_uses_the_whole_move_too() {
+        let balls = BallStack::from_box(MIN, MAX);
+        let mut t = trap(0, None);
+        assert_eq!(call(&t.check(&at("Connor", 10_000.0, &balls))).as_deref(), Some("On Connor"));
+        // Inside to far outside in one move: the path still touches (stand-in).
+        assert_eq!(call(&t.check(&moving(10_000.0, 12_000.0, &balls))), None);
+        assert_eq!(call(&t.check(&moving(12_000.0, 12_100.0, &balls))).as_deref(), Some("Off Connor"));
     }
 
     #[test]

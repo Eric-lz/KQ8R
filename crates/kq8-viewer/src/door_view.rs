@@ -317,11 +317,13 @@ pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     let sim = &mut *sim;
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
-        sim.connor_checked_at = Some(position);
+        // His move since the last check (traps.md rule 6: swept).
+        let from = sim.connor_checked_at.replace(position).unwrap_or(position);
         let (min, max) = kq8_game::mover::CONNOR_BOX;
         let v = Visitor {
             name: &connor.placement.name,
             collision_type: kq8_game::collide::CONNOR_TYPE,
+            from,
             position,
             min,
             max,

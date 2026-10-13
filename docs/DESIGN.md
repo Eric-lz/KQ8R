@@ -1738,6 +1738,20 @@ catchers, ground animators).
     sets the run switch only at the start, so the scripts can change it.
     What you'll see: by Connor's house and the other houses he drops to a
     walk and the camera comes closer; away from them he runs again.
+  - **3d-4, corrections after Q57/Q58 (planned and done 2026-10-13).**
+    The study answers (`traps.md` rules 4, 6, 16) change two stand-ins:
+    - **Touching is swept** (rule 6): each of the visitor's balls, from
+      where its move started to where it ended, against the trap's box
+      widened by the ball's radius (a slab test); a ball that starts inside
+      counts. The move that enters is not also tested for leaving. For
+      staying (rule 7, "still touching") the same swept test is used
+      (stand-in: the note doesn't say; at most one update later `Off`).
+    - **Mask changes only gate coming in** (rule 16): those inside stay
+      inside and get their `Off` when they leave.
+    - Q58's one-sided rule was already the stand-in: unchanged.
+    Tests: a move straight through a thin trap gives `On`, the next `Off`;
+    a path beside it nothing; mask removed while inside → `Off` on
+    leaving, no new entry.
 
 ### M4 — Talk, listen, use the menus
 
