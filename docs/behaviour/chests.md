@@ -87,7 +87,23 @@ item; after that the chest is empty and Connor says so.
 - **`smlchst1`** (small wooden chest by the keg): click: it opens and
   the coins appear **next to** it; click the chest again: Connor says
   it's empty.
-- **Not yet matched to the trace:** by rule 8, the first chest click
+- **Rules 7–9 confirmed (user, 2026-10-13, second try):** clicking only
+  the chest: 1st click opens it and a crystal appears inside; 2nd click
+  Connor takes the crystal (into the inventory); 3rd click Connor says
+  it's empty. Exactly as traced.
+- **Direct pickup case: solved (user, 2026-10-13, third try).** Clicking
+  "the crystal" and then the chest also ended with "empty". The user's
+  explanation is right: the crystal can't be clicked while it lies in the
+  chest. `chest2.kqs`'s box (`BOUNDS.KQ`) is x −480…470, y −310…290,
+  z 0…2,060; the crystal (`crystl.kqs`, x −60…70, y −80…80, z 0…290)
+  appears at the chest's x, y and 301 above its base, so it sits **wholly
+  inside the chest's box**. A click line to the crystal enters the
+  chest's box first, and the nearest clickable box wins (`doors.md`
+  Q45 b), so that click was the chest's second click (rule 8). Rules 7–9
+  hold with no exception; **drop the stand-in below.** (For other chests
+  an item placed outside the chest's box, e.g. `smlchst1`'s coins, can be
+  clicked directly.)
+- *(Superseded, kept for the record)* by rule 8, the first chest click
   after the crystal was picked up directly should say nothing (no `Take`
   remark) and only the click after that should give the `Empty` remark.
   The user heard "empty" on the next click. Either one click was missed,
@@ -115,8 +131,10 @@ item; after that the chest is empty and Connor says so.
 
 ## Edge cases
 
-- **The item can also be clicked directly** once the chest is open: it
-  is an ordinary world item (clickable). Connor picks it up (`items.md`).
+- **The item can be clicked directly only if it lies outside the
+  chest's click box** (for `smlchst3` it doesn't, see the user's checks
+  below). Then it is an ordinary world item and Connor picks it up
+  (`items.md`).
   The chest still remembers its name; the chest's second click then
   finds the item in Connor's inventory, takes it out and puts it back
   (no change), says the `Take` remark if any and becomes empty. Not
