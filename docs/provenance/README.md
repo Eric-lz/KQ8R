@@ -497,3 +497,16 @@ length is its stored length).
 | Whole-object steps applied like doors (pose = steps 1…k of the shown frame chained, never added across cycles) | **Our stand-in** (doors.md rule 24 applied to loops; Q51) | Only Gnome `rrock1–3` (`theroll`) have any: up to 9,691 units, 57 units off the start at the last frame |
 | Collision boxes stay fixed | `connor-physics.md` (Q33 a) | Unchanged |
 | Drawn: one entity per frame, only the shown one visible; H-key and opacity kept | Our choice (display), as doors | Not checked by eye |
+
+## Emitters that follow something (M3 step 3b-4) — `crates/kq8-game/src/emitter.rs`, `crates/kq8-viewer/src/{effects_view,terrain_view,game_camera}.rs`
+
+Behaviour note = `docs/behaviour/emitters.md` emitter rule 11 (traced).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| A following emitter's `loc` = target position + `followOffset`, the offset in the target's own axes unless its x and y are both 0 (then world axes); moved with the target | Rule 11 | Unit test (`a_following_emitter_sits_at_its_target_plus_the_offset`). IceWorld viewer, Connor running: `snow`'s `loc` stays 4,000 above him every second of the log |
+| Velocity limits turned with the target at the particle's start; kept afterwards; restarts at the moved `loc` | Rule 11, rules 1–2 | Unit test (`following_turns_the_velocity_and_restarts_at_the_moved_spot`) |
+| `followMesh`: a restart takes the target's turn and a new random velocity, turned | Rule 11 | Unit test (`follow_mesh_restarts_…`). Its value (a mesh-part name) not used: Q52 (a). No running emitter has it |
+| Targets: `Connor` (turn = his heading about z), `KQCamera` (position, no turn), placed objects and markers by name, any case; no target → not started | **Our stand-ins** (Q52 b, c) | IceWorld: `snow` follows Connor |
+| The emitter follows before its particles move, after Connor's update | **Our stand-in** (Q52 d) | — |
+| IceWorld's 10 snow catchers now find their emitter | Catchers rule 2 | Viewer: 296 flakes hidden in about 140 s (Connor starts inside `Lvator`) |

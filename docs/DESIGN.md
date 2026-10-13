@@ -1428,6 +1428,33 @@ catchers, ground animators).
     19, 0, 17, 32, 2, 13, 4, 4), square (45, 57) never animated, and each
     change with its game time and material.
 
+- **3b-4 — emitters that follow something (planned 2026-10-13; done
+  2026-10-13, MODLOG; checked in the logs and by eye by the user).**
+  `emitters.md` rule 11. In the data only IceWorld's `snow` follows
+  something when a world starts (Connor); the dragon fires are made by
+  the dragon heads (`fireFile=`, monsters, M5) and Temple4's `lucfire` by
+  its altar script, so those two kinds are not started yet.
+  - `follow=<name>`: Connor, `KQCamera` (the game camera) or a placed
+    object (any case). Every update, before the particles move, the
+    emitter's `loc` = the target's position + `followOffset`, the offset
+    turned with the target unless its x and y are both 0 (then world
+    axes). Connor's turn = his heading about z; the camera: position only,
+    no turn (stand-in: what the camera's "turn" is was not described).
+    Target not found: the emitter is not started (logged; the note
+    doesn't say).
+  - Velocity limits turned with the target: a particle's velocity is
+    chosen in the limits, then turned by the target's turn at that
+    moment (rule 1: at the start; rule 2: kept after that).
+  - `followMesh`: at each restart the particle takes the target's current
+    turn and a new random velocity (turned). Its value in the data is a
+    mesh-part name (`fire`, `Box01`), which the note doesn't explain
+    (asked); no running emitter has it yet.
+  - Particles already flying don't move with the target (their positions
+    are world positions); restarts happen at the moved `loc`.
+  - Tests: offset in own vs world axes, turned velocity, restart at the
+    moved spot, `followMesh` new velocity and turn. Log: `snow`'s `loc`
+    vs Connor every second, particle 0 as before.
+
 - **3c — animated objects play (planned 2026-10-13; done 2026-10-13,
   MODLOG; checked in the logs and by eye by the user).** Rules from
   `objects.md` "Animated objects at load" (rules 2–4, Q13), the phase

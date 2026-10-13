@@ -209,6 +209,27 @@ pub fn setup_objects(
     let mut colliders = std::mem::take(&mut objects.objects);
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut materials, &mut images, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
+    // What following emitters can follow (3b-4): Connor, the camera, or a
+    // placed object or marker (any case; the last one loaded by that name).
+    let connor_at = objects.connor.as_ref().map(|(p, _)| (p.position, p.angles));
+    let camera_at = objects.camera_start;
+    let fixed: Vec<(String, [f32; 3], [f32; 3])> = objects
+        .placed
+        .iter()
+        .filter(|(_, _, unused)| !unused)
+        .map(|(p, _, _)| (p.name.clone(), p.position, p.angles))
+        .chain(objects.markers.iter().map(|m| (m.name.clone(), m.position, [0.0; 3])))
+        .collect();
+    let targets = move |name: &str| -> Option<(crate::effects_view::Target, [f32; 3], [f32; 3])> {
+        use crate::effects_view::Target;
+        if name.eq_ignore_ascii_case("Connor") {
+            return connor_at.map(|(p, a)| (Target::Connor, p, a));
+        }
+        if name.eq_ignore_ascii_case("KQCamera") {
+            return camera_at.map(|p| (Target::Camera, p, [0.0; 3]));
+        }
+        fixed.iter().rev().find(|(n, _, _)| n.eq_ignore_ascii_case(name)).map(|(_, p, a)| (Target::Fixed(*p, *a), *p, *a))
+    };
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
         crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut materials, &mut images, &mut log);
@@ -238,7 +259,7 @@ pub fn setup_objects(
     // Particle catchers (3b-2) look up their emitter and building.
     let emitters = std::mem::take(&mut objects.emitters);
     let catchers = std::mem::take(&mut objects.catchers);
-    crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &built, &mut materials, &mut log);
+    crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &targets, &built, &mut materials, &mut log);
     commands.insert_resource(Buildings(buildings));
     // Animated objects whose movement plays (3c): drawn by anim_view.
     let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();

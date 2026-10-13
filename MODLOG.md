@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3b-4: emitters that follow something (IceWorld's snow)
+
+**Changed:** `crates/kq8-game/src/emitter.rs` (`Emitter::new_following`, `follow_to`, `follow_loc`; velocities turned with the target; `followMesh` restarts; `Rng::fork`). `crates/kq8-viewer`: `effects_view.rs` (targets: Connor, the camera, placed objects; moved every update; logged), `terrain_view.rs` (the target lookup), `game_camera.rs` (`GameCam::position`). Docs: DESIGN (plan 3b-4), provenance, README, QUESTIONS (Q52).
+**Why:** `emitters.md` rule 11; the one following emitter that exists at a world's start is IceWorld's `snow` (follows Connor), and its 10 catchers did nothing without it.
+**Tested how:** `cargo test --workspace --release`, clippy; viewer in IceWorld with Connor running (`--hold 1,0,1 --frames 2500`) and in Daventry (`--frames 300`), read `effects.log` and `viewer.log`.
+**Result:** 193 tests pass (58 + 135). IceWorld: `snow` (300 flakes) starts 4,000 above Connor and stays there as he moves (logged every second); particle 0 restarts inside the 8,000 box around that point; all 10 catchers find it and hid 296 flakes (Connor starts inside the lift building `Lvator`). Daventry unchanged: 14 emitters, 210 particles.
+**Still broken / not tested:** **Not checked by eye.** The dragon fires (made by the dragon heads, fighting) and Temple4's `lucfire` (made by its altar script) still aren't running. `followMesh`'s part name, a missing target, the camera's turn and the order in a tick are stand-ins (Q52).
+**Next:** You: walk around IceWorld and look at the snow (also at a building). Then a study session for traps and chests and Q45–Q52.
+
+**Checked afterwards (you, 2026-10-13):** everything looks right: the snow follows Connor and stays out of buildings.
+
 ## 2026-10-13 M3 3c: animated objects play their movement
 
 **Changed:** `crates/kq8-game/src/anim.rs` (new: a loop's phase, wrap, frame rule, random start and speed, the whole-object pose). `crates/kq8-viewer`: `anim_view.rs` (new: every frame built once per loop, the shown one visible, `anim.log`), `load.rs` (objects whose movement plays get all their loop's frames; the object palette loaded once), `terrain_view.rs` (those objects are no longer drawn as still models), `main.rs`. Docs: DESIGN (plan 3c), provenance, README, QUESTIONS (Q51).

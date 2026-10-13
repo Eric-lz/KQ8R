@@ -21,6 +21,8 @@ use kq8_data::effects::CatcherSettings;
 use kq8_game::collide::BuildingCollider;
 use kq8_game::emitter::{Catcher, Emitter, Rng};
 
+use crate::connor_view::ConnorSim;
+use crate::game_camera::GameCam;
 use crate::load::EmitterAssets;
 use crate::log::Log;
 use crate::terrain_view::bevy_transform_from;
@@ -49,8 +51,23 @@ struct Tracker {
     hidden_ticks: u32,
 }
 
+/// What a following emitter follows (emitters.md rule 11).
+#[derive(Debug, Clone)]
+pub enum Target {
+    Connor,
+    /// The game camera: position only (its turn is not described).
+    Camera,
+    /// A placed object that doesn't move: (position, angles).
+    Fixed([f32; 3], [f32; 3]),
+}
+
+/// Finds a following emitter's target by name: what it is, its position
+/// and turn now.
+pub type TargetLookup<'a> = &'a dyn Fn(&str) -> Option<(Target, [f32; 3], [f32; 3])>;
+
 struct DrawnEmitter {
     emitter: Emitter,
+    target: Option<Target>,
     /// One entity per particle (its model's meshes are children).
     entities: Vec<Entity>,
     /// Positions before the last update, for blending.
@@ -76,11 +93,13 @@ pub struct EffectsSim {
 
 /// Builds the emitters and their particles' entities. `built` is each
 /// object model's (mesh, material) list, indexed like `Objects::shapes`.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_emitters(
     commands: &mut Commands,
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, CatcherSettings)>,
     buildings: &[BuildingCollider],
+    targets: TargetLookup,
     built: &[Vec<(Handle<Mesh>, Handle<StandardMaterial>)>],
     materials: &mut Assets<StandardMaterial>,
     main_log: &mut Log,
@@ -127,17 +146,39 @@ pub fn spawn_emitters(
         );
         main_log.detail(&line);
         log.detail(line);
-        // Following an object (rule 11) is not done yet: no Daventry
-        // emitter uses it.
-        if let Some(f) = &s.follow {
-            not_started.push(format!("{} (follows {f}: not done yet)", a.name));
-            continue;
-        }
         let Some(shape) = a.shape else {
             not_started.push(format!("{} (no particle model)", a.name));
             continue;
         };
-        let emitter = Emitter::new(&a.name, a.position, a.settings.clone(), &mut rng);
+        // Following (rule 11): Connor, the camera or a placed object. The
+        // note doesn't say what happens without a target: not started.
+        let (emitter, target) = match &s.follow {
+            None => (Emitter::new(&a.name, a.position, a.settings.clone(), &mut rng), None),
+            Some(f) => match targets(f) {
+                Some((target, at, angles)) => {
+                    let e = Emitter::new_following(&a.name, at, angles, a.settings.clone(), &mut rng);
+                    let line = format!(
+                        "emitter [{}] follows {f} ({target:?}) from ({:.0}, {:.0}, {:.0}) turn {:?}: loc ({:.0}, {:.0}, {:.0}){}",
+                        a.name,
+                        at[0],
+                        at[1],
+                        at[2],
+                        angles,
+                        e.loc[0],
+                        e.loc[1],
+                        e.loc[2],
+                        if s.follow_mesh { "; followMesh: restarts take the target's turn and a new velocity (its mesh name is not used, Q52)" } else { "" }
+                    );
+                    main_log.summary(format!("effects: {line}"));
+                    log.detail(line);
+                    (e, Some(target))
+                }
+                None => {
+                    not_started.push(format!("{} (follows {f}: not in this world)", a.name));
+                    continue;
+                }
+            },
+        };
         // The emitter's translucency on every particle (likely, not traced:
         // emitters.md rule 9, open question 2).
         let opacity = if a.translucency >= 256.0 { 1.0 } else { (a.translucency / 255.0).clamp(0.0, 1.0) };
@@ -166,7 +207,7 @@ pub fn spawn_emitters(
         }
         particles += emitter.particles.len();
         let previous = emitter.particles.iter().map(|p| p.position).collect();
-        drawn.push(DrawnEmitter { emitter, entities, previous });
+        drawn.push(DrawnEmitter { emitter, target, entities, previous });
     }
     // Particle catchers: names looked up once, after the start-up scripts
     // (rule 2); any case. Nothing found: the catcher does nothing.
@@ -232,12 +273,28 @@ pub fn spawn_emitters(
 }
 
 /// One update of every emitter (15 per second), particles in list order.
-pub fn effects_step(sim: Option<ResMut<EffectsSim>>, shared: Res<Shared>) {
+pub fn effects_step(sim: Option<ResMut<EffectsSim>>, shared: Res<Shared>, connor: Option<Res<ConnorSim>>, camera: Option<Res<GameCam>>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.updates += 1;
     let n = sim.updates;
     for d in &mut sim.emitters {
+        // Following emitters move with their target before the particles do.
+        let at = match &d.target {
+            None => None,
+            Some(Target::Connor) => connor.as_ref().map(|c| (c.mover.position, [0.0, 0.0, c.walker.heading])),
+            Some(Target::Camera) => camera.as_ref().map(|c| (c.position(), [0.0; 3])),
+            Some(Target::Fixed(p, a)) => Some((*p, *a)),
+        };
+        if let Some((position, angles)) = at {
+            d.emitter.follow_to(position, angles);
+            if n % 15 == 0 && !matches!(d.target, Some(Target::Fixed(..))) {
+                sim.log.detail(format!(
+                    "update {n} [{}] follows ({:.0}, {:.0}, {:.0}) heading {:.3}: loc ({:.0}, {:.0}, {:.0})",
+                    d.emitter.name, position[0], position[1], position[2], angles[2], d.emitter.loc[0], d.emitter.loc[1], d.emitter.loc[2]
+                ));
+            }
+        }
         d.previous.clear();
         d.previous.extend(d.emitter.particles.iter().map(|p| p.position));
         d.emitter.tick();

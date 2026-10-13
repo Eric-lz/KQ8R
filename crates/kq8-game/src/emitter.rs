@@ -10,8 +10,9 @@
 //! A particle catcher (`Catcher`) hides one emitter's particles inside a
 //! building's box (emitters.md "Particle catchers").
 //!
-//! Not done here: following an object (rule 11), dying (rule 10), the
-//! script commands (open question 4). `randomZRot` has no effect in the
+//! Following an object (rule 11): `Emitter::follow_to` before each tick.
+//!
+//! Not done here: dying (rule 10), the script commands (open question 4). `randomZRot` has no effect in the
 //! original and is left out ("Do not reproduce").
 
 use kq8_data::effects::EmitterSettings;
@@ -37,6 +38,11 @@ pub struct Rng(u64);
 impl Rng {
     pub fn new(seed: u64) -> Self {
         Rng(seed)
+    }
+
+    /// A new generator seeded from this one (for an emitter's own draws).
+    pub fn fork(&mut self) -> Rng {
+        Rng::new(u64::from(self.fraction().to_bits()) << 32 | u64::from(self.fraction().to_bits()))
     }
 
     /// A uniform fraction in [0, 1).
@@ -99,6 +105,35 @@ pub struct Emitter {
     pub particles: Vec<Particle>,
     /// Ticks run so far.
     pub ticks: u64,
+    /// Following an object (rule 11): its turn now (angles like
+    /// `dirX/Y/Z`), and the generator for `followMesh` restarts.
+    pub following: Option<Following>,
+}
+
+/// What a following emitter knows about its target.
+#[derive(Debug, Clone)]
+pub struct Following {
+    pub angles: [f32; 3],
+    pub rng: Rng,
+}
+
+/// Where a following emitter is: the target's position + `followOffset`,
+/// the offset in the target's own axes unless its x and y are both 0, then
+/// in world axes (rule 11).
+pub fn follow_loc(position: [f32; 3], angles: [f32; 3], offset: [f32; 3]) -> [f32; 3] {
+    let turned = if offset[0] == 0.0 && offset[1] == 0.0 { offset } else { turn(offset, angles) };
+    std::array::from_fn(|k| position[k] + turned[k])
+}
+
+/// A vector turned like an object with `angles` (row vector × rotation).
+fn turn(v: [f32; 3], angles: [f32; 3]) -> [f32; 3] {
+    let r = kq8_data::objects::rotation(angles);
+    std::array::from_fn(|j| (0..3).map(|k| v[k] * r[k][j]).sum())
+}
+
+/// A random velocity within the limits (rule 1).
+fn random_velocity(s: &EmitterSettings, rng: &mut Rng) -> [f32; 3] {
+    std::array::from_fn(|k| rng.between(s.force_min[k], s.force_max[k]))
 }
 
 impl Emitter {
@@ -106,12 +141,29 @@ impl Emitter {
     /// its random choices, spread along their paths by their starting age
     /// (rule 1).
     pub fn new(name: &str, loc: [f32; 3], settings: EmitterSettings, rng: &mut Rng) -> Self {
+        Self::make(name, loc, settings, rng, None)
+    }
+
+    /// A following emitter entering the world (rule 11): placed at the
+    /// target, its particles' velocities turned with the target's turn.
+    pub fn new_following(name: &str, target: [f32; 3], angles: [f32; 3], settings: EmitterSettings, rng: &mut Rng) -> Self {
+        let loc = follow_loc(target, angles, settings.follow_offset);
+        let own = rng.fork();
+        Self::make(name, loc, settings, rng, Some(Following { angles, rng: own }))
+    }
+
+    fn make(name: &str, loc: [f32; 3], settings: EmitterSettings, rng: &mut Rng, following: Option<Following>) -> Self {
         let s = &settings;
+        let angles = following.as_ref().map(|f| f.angles);
         let spins = s.rot_min.iter().chain(&s.rot_max).any(|v| nonzero(*v));
         let particles = (0..s.max_particles)
             .map(|_| {
                 let offset: [f32; 3] = std::array::from_fn(|k| rng.between(-s.radius[k], s.radius[k]));
-                let velocity: [f32; 3] = std::array::from_fn(|k| rng.between(s.force_min[k], s.force_max[k]));
+                let mut velocity = random_velocity(s, rng);
+                // Following: the velocity limits are turned with the target.
+                if let Some(a) = angles {
+                    velocity = turn(velocity, a);
+                }
                 let spin = spins.then(|| std::array::from_fn(|k| rng.between(s.rot_min[k], s.rot_max[k])));
                 // Rule 6: random fraction × P × 6.28 ÷ maxLife radians per tick.
                 let sway_speed: [f32; 3] = std::array::from_fn(|k| {
@@ -140,7 +192,16 @@ impl Emitter {
                 }
             })
             .collect();
-        Emitter { name: name.to_string(), loc, settings, particles, ticks: 0 }
+        Emitter { name: name.to_string(), loc, settings, particles, ticks: 0, following }
+    }
+
+    /// A following emitter moves with its target (call before `tick`):
+    /// new `loc` and turn. Particles already flying stay where they are.
+    pub fn follow_to(&mut self, target: [f32; 3], angles: [f32; 3]) {
+        self.loc = follow_loc(target, angles, self.settings.follow_offset);
+        if let Some(f) = &mut self.following {
+            f.angles = angles;
+        }
     }
 
     /// One tick (rule 3), particles in list order. No collision test:
@@ -149,6 +210,8 @@ impl Emitter {
         self.ticks += 1;
         let s = &self.settings;
         let gravity = s.gravity.iter().any(|g| nonzero(*g)).then_some(s.gravity);
+        // `followMesh`: a restart takes the target's turn and a new velocity.
+        let mut mesh = self.following.as_mut().filter(|_| s.follow_mesh);
         for p in &mut self.particles {
             p.restarted = false;
             // 1. age + 1
@@ -181,6 +244,10 @@ impl Emitter {
                 p.position = std::array::from_fn(|k| self.loc[k] + p.offset[k]);
                 p.visible = true;
                 p.restarted = true;
+                if let Some(f) = mesh.as_mut() {
+                    p.angles = f.angles;
+                    p.velocity = turn(random_velocity(s, &mut f.rng), f.angles);
+                }
             }
         }
     }
@@ -452,6 +519,65 @@ mod tests {
             e.tick();
             assert!(c.catch(&mut e).is_empty());
         }
+    }
+
+    #[test]
+    fn a_following_emitter_sits_at_its_target_plus_the_offset() {
+        let quarter = [0.0, 0.0, std::f32::consts::FRAC_PI_2];
+        // x and y of the offset 0: world axes, whatever the turn.
+        let up = follow_loc([10.0, 20.0, 30.0], quarter, [0.0, 0.0, 4000.0]);
+        assert_eq!(up, [10.0, 20.0, 4030.0]);
+        // Otherwise the target's own axes: own +x is world +y after a quarter turn.
+        let side = follow_loc([10.0, 20.0, 30.0], quarter, [100.0, 0.0, 0.0]);
+        assert!((side[0] - 10.0).abs() < 1e-3 && (side[1] - 120.0).abs() < 1e-3 && side[2] == 30.0);
+    }
+
+    #[test]
+    fn following_turns_the_velocity_and_restarts_at_the_moved_spot() {
+        let mut s = settings();
+        s.force_min = [100.0, 0.0, 0.0];
+        s.force_max = [100.0, 0.0, 0.0];
+        s.follow = Some("Connor".into());
+        let quarter = [0.0, 0.0, std::f32::consts::FRAC_PI_2];
+        let mut e = Emitter::new_following("e", [0.0; 3], quarter, s, &mut Rng::new(1));
+        // Own +x (100) became world +y.
+        let v = e.particles[0].velocity;
+        assert!(v[0].abs() < 1e-3 && (v[1] - 100.0).abs() < 1e-3);
+        // The target moves; the next restart is at the new spot.
+        for _ in 0..30 {
+            e.follow_to([5000.0, 0.0, 0.0], quarter);
+            e.tick();
+            if e.particles[0].restarted {
+                break;
+            }
+        }
+        assert!(e.particles[0].restarted);
+        assert_eq!(e.particles[0].position, [5000.0, 0.0, 0.0]);
+        // Without followMesh the velocity is kept (rule 2).
+        assert!((e.particles[0].velocity[1] - 100.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn follow_mesh_restarts_take_the_targets_turn_and_a_new_velocity() {
+        let mut s = settings();
+        s.force_min = [100.0, 0.0, 0.0];
+        s.force_max = [100.0, 0.0, 0.0];
+        s.follow = Some("head".into());
+        s.follow_mesh = true;
+        let mut e = Emitter::new_following("e", [0.0; 3], [0.0; 3], s, &mut Rng::new(1));
+        let half = [0.0, 0.0, std::f32::consts::PI];
+        for _ in 0..30 {
+            e.follow_to([0.0; 3], half);
+            e.tick();
+            if e.particles[0].restarted {
+                break;
+            }
+        }
+        let p = &e.particles[0];
+        assert!(p.restarted);
+        assert_eq!(p.angles, half);
+        // Turned half round: own +x is now world -x.
+        assert!((p.velocity[0] + 100.0).abs() < 1e-3);
     }
 
     #[test]

@@ -66,6 +66,8 @@ The code is written with an AI coding agent (Claude Code); see
   the original's speeds, lifetimes, swaying and gravity. Leaves that
   drift into the cottage vanish at its box, as in the original. The
   rivers and the stream flow: their ground textures change every 0.3 s.
+  In IceWorld it snows around Connor wherever he goes, but not inside
+  buildings (checked in the logs and by eye, 2026-10-13).
   Checked in the logs (`kq8-artifacts/logs/effects.log`, `ground_anim.log`) and by eye
   (2026-10-13).
 - **Animated objects play** (M3): the windmill sails, mill wheel and
@@ -93,7 +95,7 @@ box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
 back behind him by itself or avoid walls. In water there is no damage
 yet (poison, lava, swamp). Fire and ice arrow
-sparks, the snow and dragon fire that follow an object are not shown.
+sparks and the dragon fire are not shown (they come with fighting).
 Animated objects play only the movement they start with (scripts don't
 switch them yet) and make no sound.
 People and monsters are not shown,

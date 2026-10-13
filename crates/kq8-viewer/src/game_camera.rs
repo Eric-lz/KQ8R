@@ -35,6 +35,13 @@ struct Keys {
     mouse: Option<MouseButton>,
 }
 
+impl GameCam {
+    /// The camera's position after the last update (game units).
+    pub fn position(&self) -> [f32; 3] {
+        self.cam.position
+    }
+}
+
 #[derive(Resource)]
 pub struct GameCam {
     cam: Camera,
