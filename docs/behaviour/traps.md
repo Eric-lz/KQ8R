@@ -28,23 +28,65 @@ never blocks anything.
    when the trap enters the world. Only −1; a −2 is not special for traps.
 3. Traps without `locX/Y` (e.g. `conwalk`, `conrun`) are templates; world
    scripts place copies with `loadKQ` and a position (`objects.md`).
-4. **Who sets a trap off.** A trap's own collision type is 0x10; its mask
-   is `colliderMask`. The usual pair rule applies (`connor-physics.md`
-   "Which pairs collide": either side's mask covers the other's type).
-   Every trap in the data has `colliderMask=4`, Connor's type, so only
-   Connor sets them off. Monsters (types like 0xC021) do not.
-5. **A trap is never solid.** It only reports contacts; nothing is pushed
-   or stopped by it (from play; the "no response" part is not traced).
+4. **Who sets a trap off** (corrected 2026-10-13, Q57, Q58). A trap's own
+   collision type is 0x10; its mask is `colliderMask`. **Only the trap's
+   own mask counts:** a trap is told about a touch when its mask covers
+   the visitor's `colliderType` (`connor-collision.md` rule 2; the
+   two-sided rule only decides which pairs are looked at). Connor's own
+   mask has bit 0x10, but that only means Connor is told too, and he
+   ignores traps (rule 5). Any object can be a visitor, not only Connor.
+   The masks in the data:
+
+   | Mask | Set off by | Traps |
+   | --- | --- | --- |
+   | 4 | Connor (type 4) | 285 traps, all 58 in Daventry |
+   | 516 (4 + 0x200) | Connor, inventory items (type 0x220) | 17 in Temple1 (`trap01.kq`: ";Collide with Conner=4, Inventory=512"), IceWorld `pondtrap`, Swamp `platrap` |
+   | 517 (4 + 0x200 + 1) | the above and anything with type bit 1 | Gnome `triptrp1–4` |
+   | 519 (4 + 0x200 + 2 + 1) | the above and anything with type bit 2 | DeadCity `triptrp2–5`, `trptrp12–15` |
+   | 5 (4 + 1) | Connor and type bit 1 | Gnome `agtrap`, `aptrap`, `aptrap2`, `wgtrap`, `wgtrap2` |
+   | 1 | type bit 1 only, **not Connor** | Gnome `bouldtrp`, `bouldtp2`; DeadCity `girltrap`; Temple2 `booktrap` |
+   | 2 | type bit 2 only | DeadCity `fightrp3` |
+   | 6 (4 + 2), 7 (4 + 2 + 1) | Connor and type bit 2 (and 1) | Temple4 `vortrap`; DeadCity `coaltrap` |
+   | 0 | **nobody**, until a script adds bits | Barren `gongtp*`, `tiletpn`; DeadCity `portrap2–5`, `portrp2b–5b` |
+
+   Type bit 1 is on most solid objects and many monsters (0x21, 0x101
+   `boulder`, 0x121 `pushbook`, 0x141 push blocks, 0xC021 monsters, the
+   rolling rocks' 0x1). Type bit 2 is on creatures (monsters 0x42,
+   0x4042, 0xC022, 0x8022 gnomes, 0x4002 …). The scripts fit: `bouldtrp`
+   checks for the `boulder`, `booktrap` for `pushbook`, `girltrap` for
+   the pushed box `girlbx.02`, `coaltrap` sets whatever entered on fire.
+   Mask 0 traps get bits from scripts (`KQObject::collision portrap2 +4`,
+   `KQObject::collision gongtpX 4`).
+5. **A trap is never solid** (traced 2026-10-13). Connor's reaction to a
+   touch with type 0x10 is nothing, and a plain object's is nothing too
+   (`connor-collision.md` rule 3), so nobody is stopped or pushed by a
+   trap.
+
+   **Only moving things set traps off.** A touch is only found while the
+   visitor moves (`connor-collision.md` rule 1). An object lying still in
+   a trap's box doesn't count until it moves; an item counts while it is
+   tossed or falls (its throw moves it through its mover), a pushed box
+   while it is pushed. Whether being placed by `move` or `loadKQ` counts
+   was not traced.
 
 ### Entering and leaving
 
-6. **Entering.** When Connor's collision shape touches the trap's box,
-   he is added to the trap's "inside" list (once; touching again while
-   inside does nothing). If he is the **first** one inside, the script
-   runs with `$1` = trap name, `$2` = `On`, `$3` = Connor's object name.
-   If someone else was already inside, it runs with `$2` = `Cue`, `$3` =
-   `301`, `$4` = the newcomer's name. (Only Connor sets traps off in the
-   data, so in practice it is always `On`.)
+6. **Entering.** When a visitor's collision shape touches the trap's box,
+   it is added to the trap's "inside" list (once; touching again while
+   inside does nothing). If it is the **first** one inside, the script
+   runs with `$1` = trap name, `$2` = `On`, `$3` = the visitor's object
+   name. If someone else was already inside, it runs with `$2` = `Cue`,
+   `$3` = `301`, `$4` = the newcomer's name. In Daventry only Connor sets
+   traps off, so there it is always `On` with `$3` = `Connor`.
+   **"Touches" (traced 2026-10-13):** found by the same swept test as
+   walls (`connor-physics.md` "Collision shape"), using the visitor's own
+   shape: for Connor, items and other ball stacks, each ball's path is
+   tested against the trap's box widened by the ball's radius; for a box
+   object, its box. It is tested **along the whole move**, so a fast
+   move that passes right through a thin trap in one update still
+   enters it (and the next move's stay test, rule 7, then finds him
+   outside: `Off`). A visitor whose shape **starts inside** the box also
+   counts as touching, at its next move.
 7. **Staying.** Every time an object inside moves, the trap checks
    whether it is still inside: first, is the **centre of the object's
    box** (its position plus the middle of its `BOUNDS.KQ` box) inside the
@@ -88,15 +130,23 @@ never blocks anything.
 16. Scripts commonly turn a trap off for good with
     `KQObject::collision <trap> -4` (removes bit 4 from its mask, so
     Connor no longer counts; `clifTrap.cs` does it on its first `On`).
-    What happens to an object already inside at that moment was not
-    traced: our stand-in is that no `Off` is sent.
+    `KQObject::collision <trap> n` adds the bits of n when n is above 0
+    (with or without a `+`), removes them when n is below 0, and refuses
+    0 with a message; it works on the trap's live mask, the same for any
+    bits (traced 2026-10-13, Q57 d).
+    **An object already inside stays inside** (traced): removing a bit
+    sends nothing at that moment and doesn't empty the list. The stay /
+    leave test (rules 7–8) doesn't look at the mask, so when that object
+    later leaves, the trap still sends its `Off` (or `Cue 302`). Only new
+    entries need the bit. (`clifTrap.cs` has no `Off` branch, so for it
+    this changes nothing.)
 
 ## Numbers and units
 
 | What | Value | Source |
 | --- | --- | --- |
 | trap's own collision type | 0x10 | traced |
-| `colliderMask` in all trap data | 4 (Connor) | data |
+| `colliderMask` in trap data | 4 in 285 traps (all of Daventry); 0, 1, 2, 5, 6, 7, 516, 517, 519 elsewhere (rule 4) | data |
 | cue numbers for a second object entering / leaving | 301 / 302 | traced |
 | `innerPercent` values in the data | 0.8, 0.85, 0.9 | data |
 | `trapType` values in the data | only 2 (14 traps) | data |
@@ -149,8 +199,10 @@ never blocks anything.
 
 ## Open questions
 
-1. Whether removing a trap's mask bit (rule 16) sends `Off` for whoever
-   is inside.
-2. The exact contact test used for "touching" (rule 6): the same
-   collision pair test as for walls, assumed; it may be a box-against-box
-   overlap only.
+1. ~~Whether removing a trap's mask bit (rule 16) sends `Off` for whoever
+   is inside.~~ Answered 2026-10-13: no; they stay inside and get the
+   normal `Off` when they leave (rule 16).
+2. ~~The exact contact test used for "touching" (rule 6).~~ Answered
+   2026-10-13: the swept shape test, along the move (rule 6).
+3. Whether an object placed inside a trap by `move` or `loadKQ`, without
+   moving there, sets it off (rule 5).

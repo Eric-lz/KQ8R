@@ -110,13 +110,50 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    the shorter way round) at **double rate, 3.5 rad/s**, and stops exactly
    on the target heading once the remaining angle is smaller than one update's turn.
    Any player turn input (non-zero) cancels this automatic turn.
-3. **Banking while running**: when running forward *and* turning, Connor
-   leans into the turn (rotation about his forward axis), building up to at
-   most **0.15 rad (≈ 8.6°)**. When he stops turning or stops running, the
-   lean returns to upright at the same rate; once it is within 0.029 rad of
-   upright it snaps to exactly upright. Walking never banks. Some of
-   Connor's own states also switch banking off; which ones is not identified
-   yet.
+3. **Banking while running** (details traced 2026-10-13, Q56): when
+   running forward *and* turning, Connor leans into the turn (a rotation
+   about his forward axis, through his feet). Walking never banks.
+   - **The "lean allowed" switch.** Every update in which Connor stands
+     (Wait) or moves (Move), the game picks his movement from the intent
+     (table in "Which movement plays") and sets the switch **on exactly when it picks `run`
+     or `waterrun`** (forward +1 and the run switch on), off otherwise.
+     So the start `stoprun` leans (the pick is already `run`); the stops
+     (`runstopleft`, `runstopright`, `stoprunstop`) and the run's wait for
+     its stop point don't (forward is let go, so the pick isn't `run`
+     any more); a pivot (`left`/`right`) and `back` don't. In **every
+     other state** (jumping, falling, `Special` movements like
+     `reactback`, climbing, death …) the switch is not recalculated: it
+     keeps the value from his last stand/move update. It is also forced
+     off in the first-person view, and when Connor's `allowLeaning` flag
+     is 0 (it is 1 from the start; nothing in the data changes it; code
+     that might was not found).
+   - **Building.** Each update in which the turn intent is ±1, the switch
+     is on and the forward intent is +1, the lean moves **0.03 rad**
+     toward the turn's side, but only if, **before** the step, it is
+     still short of 0.15 rad on that side. From upright that gives 0.03,
+     0.06, 0.09, 0.12, 0.15 (a hair under, in 32-bit floats), **0.18**:
+     the lean ends at **≈ 0.18 rad (10.3°)** after 6 updates, not 0.15
+     as this rule said before.
+   - **Returning.** Each update in which the turn intent is 0 or the switch
+     is off: if the lean is within 0.029 rad of upright it becomes exactly
+     upright; otherwise it moves 0.03 rad toward upright.
+   - **Neither.** Turning, switch on, but forward not +1 (only possible in
+     the states that don't recalculate the switch, e.g. letting go of
+     forward during a running jump while still turning): the lean stays
+     as it is.
+   - **Turning the other way** while leaning: the same 0.03 steps go
+     straight through upright to the other side; the snap near upright
+     only happens when returning. Because of float rounding, after
+     swinging over from +0.18 the other side stops at −0.15 (the step
+     that lands on −0.15000001 is not "short of" −0.15); from upright
+     either side reaches 0.18.
+   - **Size of the turn:** the turn intent is always −1, 0 or +1 (a half
+     value from a key release becomes 0, "Movement intent" rule 2), so
+     there is no half lean.
+   - **Drawing only:** the lean is part of his orientation, so his model
+     tilts. His collision balls don't turn with it (they always sit
+     straight above his position), and his heading (which way he faces,
+     used by the movement and the camera) isn't changed by it.
 
 ### Starting and stopping (data: `Conner.anm`; rules traced 2026-10-12, Q25)
 
@@ -292,7 +329,9 @@ rule.)
   the frame rate (the game is capped at 15 updates per second by
   `KQGame::FPSLimit 15` in `console.cs`, which gives 0.45 rad/s). Implement
   it as 0.45 rad/s times elapsed time instead, which matches the original
-  at its normal frame rate.
+  at its normal frame rate. Keep the end value **0.18 rad** on both sides
+  (rule 3); the −0.15 end after swinging over from the other side is a
+  float-rounding accident and need not be copied.
 - **Release of one key cancelling the other.** Recommended: track which keys
   are held and derive the intent from them, so releasing Left while Right
   is still held keeps turning right. This is a deliberate improvement; keep

@@ -252,10 +252,17 @@ banking, already in `connor-movement.md`). Values it uses:
   `KQObject::setHidden` (and the `hidden` key) only change the drawing;
   none of the collision steps reads it. (Traced, not checked in the
   game.)
-- **Not traced:** Connor against another ball-stack object (monsters):
-  a different routine, used when both sides are ball stacks.
+- **Connor against another ball-stack object** (monsters, objects with
+  `collisionShape=1`): traced 2026-10-13, see `connor-collision.md`
+  rules 18–19 (each ball against an upright cylinder around the other;
+  starting inside a creature or Connor is no hit, starting inside
+  anything else is). What happens when a **moving object runs into
+  Connor** (it passes through him; he is not pushed) and who is told
+  about a touch: `connor-collision.md` rules 1–6.
 - **Not traced:** what each mask/type bit stands for, other than 0x800
-  (terrain, in Connor's mask) and 4 (Connor's type).
+  (terrain, in Connor's mask), 4 (Connor's type), 0x10 (traps; Connor
+  ignores touches with them) and 0x200 (inventory items, type 0x220);
+  how objects react to each bit: `connor-collision.md` rule 3.
 
 The mover also has `MaxSlopeDot` (default 0.819 = cos 35°), and the
 `KQMonster::walkSlope` command sets it. **Connor's movement code doesn't use

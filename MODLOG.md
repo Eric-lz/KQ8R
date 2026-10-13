@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Study: touches with Connor, rolling rocks, trap masks, banking (Q55–Q58)
+
+**Changed:** new `docs/behaviour/connor-collision.md`; `traps.md` (rules 4–6, 16, numbers, open questions), `connor-movement.md` ("Turning" rule 3, "Do not reproduce"), `connor-physics.md` (two "not traced" items now point to the new note), `QUESTIONS.md` (Q55–Q58 marked answered). Docs only, no code.
+**Why:** Study session A for Q55 (`conCollisionAction`, `ConnorCollision`, the rolling rocks' hit), Q56's open points (banking), Q57 (trap masks outside Daventry) and Q58 (one-sided trap mask), which belongs to the same topic.
+**Tested how:** Traced in `Mask.exe` with Ghidra (scratch notes in `re/`, not committed); checked against the data: counted trap masks and object types in all 12 worlds' `kq/` folders, read the scripts that use them, summed `C_rctbk.kqs`'s steps, and simulated the lean steps in 32-bit floats.
+**Result:** A moving object passes through Connor without stopping or pushing him; its script (`ConnorCollision`, 0.2 s repeat limit per direction, `$3` = 1 for "on top") does the rest. The rocks' hit costs 1 point (sometimes 2) of 10 at level 1 and plays `reactback` (1.933 s, 903 units back). Traps: only the trap's mask counts (B's Q58 stand-in is right); items, solid objects and creatures set off the non-Connor traps; removing a bit doesn't send `Off`. Banking: lean allowed exactly when the pick is `run`/`waterrun`; **correction: the lean ends at 0.18 rad, not 0.15**.
+**Still broken / not tested:** Nothing here was checked in the running game. Not traced: what `makeActive` changes, the exact cylinder size for ball-stack against ball-stack, the order of objects' moves in an update, whether `Special` can start from every state. Connor getting stuck inside a rock is from the code only.
+**Next:** B can use the answers (Q55 for Gnome, Q56 for the lean's end value). User checks suggested in `connor-collision.md` "How to check".
+
 ## 2026-10-13 M3 3d-2: Daventry's traps switch on and off
 
 **Changed:** `crates/kq8-game/src/active.rs` (traps in the world objects: `Init`, `connor_moved`, `KQCueEvent` to traps, `KQObject::collision`, a separate trap log; 2 unit tests), `crates/kq8-viewer/src/load.rs` (traps loaded; game-wide scripts from `GAME/patch` and `GAME/Kq`), `door_view.rs` (traps created with the doors, new `trap_step` after Connor's update, `traps.log`), `main.rs` (order). Docs: DESIGN (3d-2), provenance, README.
