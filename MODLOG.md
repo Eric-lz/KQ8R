@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M2 2i-4: a jump straightens Connor up (user's check)
+
+**Changed:** `crates/kq8-game/src/connor.rs` (the lean switch is off while jumping, falling and landing; the jump test now expects him to straighten up). `docs/behaviour/QUESTIONS.md` (Q59). Docs: DESIGN (2i-4), provenance, README.
+**Why:** The user checked in the original: Connor does not stay leaned through a jump, even holding the turn key. 2i-3 followed the traced rule (the switch is kept in jumps), which disagrees; asked as Q59.
+**Tested how:** `cargo test --workspace`; viewer `--terrain --hold 1,1,1 --jump 20 --frames 900`, reading `connor.log`.
+**Result:** 219 unit tests pass (58 + 161). Viewer: lean 0.180 at the jump (update 21: `runJump`), then 0.150, 0.120 … upright by update 26, turn key held throughout.
+**Checked by the user (2026-10-13):** by eye, it now looks correct (as in the original).
+**Still broken / not tested:** Whether the original straightens him gradually or at once, and what the crash, death and `Special` states do, wait for Q59.
+**Next:** User checks by eye; then chests and items.
+
 ## 2026-10-13 M2 2i-3: banking as traced (ends at 0.18, the start leans, jumps keep it)
 
 **Changed:** `crates/kq8-game/src/connor.rs` (`lean_allowed` switch, the traced step rules, `BANK_LIMIT` replaces `BANK_MAX`; banking tests rewritten, 1 more). Docs: DESIGN (2i-3), provenance, README.

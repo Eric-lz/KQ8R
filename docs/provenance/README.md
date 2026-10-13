@@ -609,7 +609,8 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 
 | What | Source | Check |
 | --- | --- | --- |
-| "Lean allowed" switch: set only in the keys' updates, on when they pick `run`/`waterrun`; kept in jumps, falls, crash, landing, death | `connor-movement.md` "Turning" rule 3 (traced) | Unit tests; `--hold 1,1,1,45`: leans from update 1 (`stoprun`) |
+| "Lean allowed" switch: set only in the keys' updates, on when they pick `run`/`waterrun`; kept in crash, death and other states | `connor-movement.md` "Turning" rule 3 (traced) | Unit tests; `--hold 1,1,1,45`: leans from update 1 (`stoprun`) |
+| **2i-4:** switch off while jumping, falling and landing, so he straightens up | **The user's check in the original** (2026-10-13), against the traced rule; asked as Q59 | Unit test; `--hold 1,1,1 --jump 20`: 0.180 at the jump (update 21), upright by 26 |
 | Step 0.03 per update (0.45 rad/s) while short of 0.15 before the step: ends at 0.18 rad | Same rule; per second: "Do not reproduce" | Unit test; viewer: 0.030 … 0.180 by update 6 |
 | 0.18 on both sides, also after swinging over | "Do not reproduce" (the original's −0.15 there is float rounding) | Unit test |
 | Returning: within 0.029 → upright, else one step; the check before the step | Same rule | Unit test (0.04 → 0.01 → 0) |

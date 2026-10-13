@@ -1289,6 +1289,12 @@ Steps (each separately revertable, each stopped for an eye check):
     else one step back; turning with the switch on but forward not held →
     unchanged. So the running start `stoprun` leans, the stops don't, and
     a jump keeps the lean going.
+  - **2i-4, jumps straighten him up (2026-10-13).** The user checked in
+    the original: he does **not** stay leaned through a jump, even with
+    the turn key held, against the traced rule. Stand-in until Q59: the
+    switch is off while jumping, falling and landing, so the lean goes
+    back to upright at the usual 0.03 per update. Crash, death and the
+    other states keep the note's rule.
 
 ### M3 — Daventry comes alive
 

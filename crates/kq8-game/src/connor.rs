@@ -288,7 +288,8 @@ pub struct Walker {
     /// positive = leaning to his left (turning left). Drawing only.
     pub bank: f32,
     /// The "lean allowed" switch: set in the keys' updates (on when they
-    /// pick `run` or `waterrun`), kept as it is in every other mode.
+    /// pick `run` or `waterrun`), off while jumping, falling and landing
+    /// (the user's check, Q59), kept as it is in the other modes.
     pub lean_allowed: bool,
 }
 
@@ -642,6 +643,13 @@ impl Walker {
             step.notes = notes;
             step
         };
+        // The user's check in the original (2026-10-13): he doesn't stay
+        // leaned through a jump, turn key held or not. The note says the
+        // switch is kept in jumps (rule 3); asked as Q59. Stand-in: off
+        // while jumping, falling and landing, so he straightens up.
+        if matches!(self.mode, Mode::Jump | Mode::Fall | Mode::Land) {
+            self.lean_allowed = false;
+        }
         self.update_bank(intent, dt);
         if self.mode == Mode::Dead {
             self.phase = 1.0;
@@ -1478,22 +1486,21 @@ mod tests {
     }
 
     #[test]
-    fn a_jump_keeps_the_switch_so_the_lean_carries_on() {
+    fn a_jump_straightens_him_up_even_with_the_turn_key_held() {
         let list = [("run", run())];
         let loops = lookup(&list);
         let mut w = Walker::new(0.0);
-        leans(&mut w, intent(1, 1, true), 3, &loops);
-        assert!(near(w.bank, 0.09) && w.lean_allowed);
+        leans(&mut w, intent(1, 1, true), 6, &loops);
+        assert!(near(w.bank, 0.18) && w.lean_allowed);
         w.start_jump(JumpKind::Run);
-        // Forward and turn still held: the switch is not recalculated in
-        // the jump, so the lean goes on building, to 0.18.
-        let l = leans(&mut w, intent(1, 1, true), 4, &loops);
-        assert!(near(l[0], 0.12) && near(l[2], 0.18) && near(l[3], 0.18), "{l:?}");
-        // Forward let go, still turning: it stays as it is.
-        assert!(near(leans(&mut w, intent(0, 1, true), 2, &loops)[1], 0.18));
-        // Turn let go: back towards upright, still in the jump.
-        let l = leans(&mut w, intent(0, 0, true), 2, &loops);
-        assert!(near(l[1], 0.12) && w.mode == Mode::Jump, "{l:?}");
+        // Forward and turn still held: back to upright in 0.03 steps (the
+        // user's check in the original, Q59).
+        let l = leans(&mut w, intent(1, 1, true), 6, &loops);
+        assert!(near(l[0], 0.15) && near(l[4], 0.03) && l[5] == 0.0, "{l:?}");
+        assert!(!w.lean_allowed && w.mode == Mode::Jump);
+        // Falling after it: still upright.
+        w.set_mode(Mode::Fall);
+        assert_eq!(leans(&mut w, intent(1, 1, true), 3, &loops), [0.0; 3]);
     }
 
     #[test]
