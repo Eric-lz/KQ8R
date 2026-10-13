@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study: doors, their scripts, minimum `.cs` language (Q44 answered)
+
+**Changed:** New note `docs/behaviour/doors.md` (study session A). `objects.md`: rule 3 of "Ground heights −1 and −2" (Q44 order), pointer for the 6th `loop=` field. `QUESTIONS.md`: Q44 answered. Scratch notes in `re/` (not committed).
+**Why:** M3 starts with Daventry's doors; B needs the door's behaviour, the script events and enough of the script language to run the door scripts.
+**Tested how:** Traced in `Mask.exe` with Ghidra; door data read from `daventry/kq/*.kq`, `*.cs`, the door `.kqs` files, `BOUNDS.KQ`, `Connor.kq`, the manual. Nothing run in the game.
+**Result:** Door state machine (closed / opening / opened / closing; `KQDoorEvent` 1 open, 2 close, anything else toggle; moving doors ignore it; `Open`/`Close` script calls when the animation ends). Click rules (play cursor, collision bit 0x20, reach 2 × `attackDist` = 4,700 to the door's box, `ConnorAction do do` / item / `TooFar`). Hits (`stats` hit points, default 10,000; `Die`, `ProjImmune`). Language: `if`/`else`/`endif` (`else if` = else + nested if, needs its own `endif`), `test` (0 = true, numbers vs text, wrong word count = false), `$Console::Return`, `sendEvent` timing, `collisionType ±bits`. Q44: the `keepOnGround` raise runs after the −1/−2 replacement (B's order is right).
+**Still broken / not tested:** Not checked in the game. Not traced: where a door's animation turns the door object (so its box swings out of the doorway; inferred from the data), how "accepts this item" is decided, Connor's remark lines, which update a `sendEvent 0` lands in. Prediction to check: Daventry's plain doors open but never close again on a click.
+**Next:** You: in the original, click Connor's open front door again (expect: stays open), and note roughly how far away a door still opens on a click. Then B can implement doors from `doors.md`.
+
+**Checked afterwards (you, 2026-10-12):** (1) Connor's front door opens on a click and stays open on the next click, as predicted. (2) From far away Connor says it's too far (distance not measured). (3) With the door open the doorway is free and the open door leaf still blocks Connor. Recorded in `doors.md` (edge cases, rules 14 and 24). The reach number (4,700) is still from the trace only.
+
 ## 2026-10-12 DeadCity portal raised onto the floor (keepOnGround after −1/−2)
 
 **Changed:** `crates/kq8-data/src/objects.rs`: after a `loadKQ` z of −1/−2 is replaced by its grid's height, the `keepOnGround` raise runs too (was skipped). Unit test. `crates/kq8-viewer/src/load.rs`: log line when that raise moves an object. Docs: QUESTIONS (new Q44, for A to confirm), provenance.

@@ -68,6 +68,8 @@ All traced in `Mask.exe` unless marked otherwise.
      (`frameCount − 1` steps).
    - `d` = an on/off switch kept with the running animation. **Its effect
      is not traced.** It is 1 in most lines, 0 in 30 Daventry lines.
+     (Later traced for Connor: it is "can be cut short", see
+     `connor-movement.md` "The two flags on each `loop=` line".)
    - So the doors: `closed` = first frame, stopped; `opened` = last frame,
      stopped; `open` = play forward once; `close` = play backward once from
      93%.
@@ -172,6 +174,10 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
 3. Other values are used as written; then `keepOnGround` (default on) only
    raises objects that are below the ground (default: onto the floor;
    `keepOnGround=1`: onto the surface; `water.md`).
+   **The raise also runs after rule 1 (Q44, traced 2026-10-12):** the
+   −1/−2 replacement happens first, then the position goes to the
+   object's mover, whose placing includes the raise. So a −2 (surface)
+   can still be lifted to a higher floor (DeadCity portal: 0 → 2,784).
 4. A `.kq` file's own `locZ` does **not** go through rule 1. There a −1 is
    handled by the `keepOnGround` raise (e.g. the buildings, which are
    loaded by `loadKQ <file>` with no position).
