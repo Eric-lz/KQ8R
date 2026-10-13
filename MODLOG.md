@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Study: terrain lighting (light and shadow maps)
+
+**Changed:** new `docs/behaviour/terrain-lighting.md`; `docs/behaviour/terrain.md` (the `lightScale` and map-name rows point to it). Docs only, no code.
+**Why:** The user wants lighting implemented, terrain first; there was no study yet.
+**Tested how:** Traced in `Mask.exe` (Ghidra; scratch notes in `re/`, not committed): the `TERRAIN.KQ` reader, the map loaders, the `useDynamicLighting` switch, the per-square light textures, the Glide texture setup, and the developer relighting tool. Checked against the data: file sizes and counts in all 7 worlds that have maps, value histograms of Daventry's four maps, and a recomputation of the sun's hill shadows from the height map.
+**Result:** File = u32 count + (128 × 2^lightScale + 1)² 16-bit values (Daventry 513 × 513, one point every 1,024 units), row by row along +x, rows along +y, same way round as the height map (the recomputed shadows match 97.5% as stored, 87–89% if flipped or turned). Each value = 4-bit brightness, red, green, blue; Daventry hardware maps are grey 7 (sun) / 4 (shadow). With `useDynamicLighting 1` (this install's `Options.cs`) the shadow map is shown, else the light map; Daventry's two differ in 761 points only. No file → full brightness.
+**Still broken / not tested:** **Not settled: whether the hardware light value is doubled** (traced Glide setup multiplies without doubling, giving sunlit ground at 47%; the software maps' 15/9 suggest doubling, 93%). Needs the user's eye. Filtering between points assumed bilinear. Brightness setting and moving lights not studied.
+**Next:** B implements from `terrain-lighting.md` with the ×2 stand-in and a switch for ×1; the user compares with the original.
+
 ## 2026-10-13 Study: Q59 (lean during a jump), not settled
 
 **Changed:** `docs/behaviour/connor-movement.md` ("Turning" rule 3: jumps, falls and landings now follow B's stand-in; new open question 4), `docs/behaviour/QUESTIONS.md` (Q59 status), `STATUS.md` (stuck item). Docs only.

@@ -32,9 +32,9 @@ class `KQTerrain`. Daventry's:
 | `hazeDistance` | 18,000 | Where haze starts (by name; not traced) |
 | `perspectiveDistance` | 18,500 | Not traced (likely where texture perspective correction stops) |
 | `smoothing` | 0 | Not traced |
-| `lightScale` | 2 | Not traced |
+| `lightScale` | 2 | Light map resolution: 2^`lightScale` map points per square side (`terrain-lighting.md`, traced 2026-10-13) |
 | `detailTableNmin/max` | ranges | Level-of-detail distance bands; not traced |
-| `lightmapName`, `shadowmapName`, `SWlightmapName`, `SWshadowmapName` | `.bin` files | Pre-computed light and shadow maps (hardware / software renderer); not studied |
+| `lightmapName`, `shadowmapName`, `SWlightmapName`, `SWshadowmapName` | `.bin` files | Pre-computed light and shadow maps (hardware / software renderer); see `terrain-lighting.md` (traced 2026-10-13) |
 | `envinfoName` | `envInfo.kq` | Environment settings; not studied |
 
 Defaults when a setting is missing: `groundScale` 12, `heightBMPScale` 60,
