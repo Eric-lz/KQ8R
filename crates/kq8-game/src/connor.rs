@@ -3,8 +3,9 @@
 //!
 //! Rules from the behaviour note `docs/behaviour/connor-movement.md`
 //! ("Movement intent", "Which movement plays", "Forward speed comes from
-//! the animation", "Turning"). M2 step 2b: no banking, a loop's step spread
-//! evenly over the loop (Q24).
+//! the animation", "Turning"). M2 step 2b: a loop's step spread
+//! evenly over the loop (Q24). Banking (M2 step 2i, "Turning" rule 3):
+//! `Walker::bank`.
 //!
 //! Start and stop transitions (M2 step 2g, "Starting and stopping", rules
 //! 1–6): the movement asked for, the transition chosen by its from point,
@@ -19,6 +20,15 @@ use crate::UPDATES_PER_SECOND;
 
 /// Turning speed while a turn key is held, radians per second.
 pub const TURN_RATE: f32 = 1.75;
+
+/// Banking ("Turning" rule 3): the largest lean, radians.
+pub const BANK_MAX: f32 = 0.15;
+/// How fast the lean changes, radians per second: the original's 0.03 per
+/// update at 15 updates per second, made per second as the note's "Do not
+/// reproduce" asks.
+pub const BANK_RATE: f32 = 0.45;
+/// Back within this of upright, the lean snaps to exactly upright.
+pub const BANK_SNAP: f32 = 0.029;
 
 /// What the player wants: forward/back and turn are −1, 0 or +1.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -272,6 +282,9 @@ pub struct Walker {
     /// The last jump's kind, for the hold, landing and death animations
     /// (`Stand` after a walk-off).
     pub kind: JumpKind,
+    /// The lean into a turn while running, radians about his forward axis;
+    /// positive = leaning to his left (turning left). Drawing only.
+    pub bank: f32,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -321,6 +334,23 @@ impl Walker {
             choice: "stop",
             kind: JumpKind::Stand,
             submerged: false,
+            bank: 0.0,
+        }
+    }
+
+    /// Rule 3: the lean moves towards 0.15 × the turn while he runs and
+    /// turns, else towards upright, by at most `BANK_RATE` × `dt`; back
+    /// near upright it snaps there. "Runs": the `run` or `waterrun` loop
+    /// plays this update (wading: the user's check in the original,
+    /// 2026-10-13), the keys drive him and no wall block is on (stand-ins,
+    /// Q56 a); the start/stop animations don't lean.
+    fn update_bank(&mut self, played: &str, turn: i8, dt: f32) {
+        let running = matches!(played, "run" | "waterrun") && self.mode == Mode::Free && !self.blocked();
+        let target = if running { BANK_MAX * f32::from(turn.signum()) } else { 0.0 };
+        let most = BANK_RATE * dt;
+        self.bank += (target - self.bank).clamp(-most, most);
+        if target == 0.0 && self.bank.abs() < BANK_SNAP {
+            self.bank = 0.0;
         }
     }
 
@@ -597,6 +627,7 @@ impl Walker {
             self.phase = 1.0;
             return finish(step, self, notes);
         }
+        self.update_bank(played, intent.turn, dt);
         // The keys turn him only when they choose the movement; that
         // includes the start and stop transitions.
         if self.mode == Mode::Free && !self.blocked() {
@@ -1358,5 +1389,81 @@ mod tests {
         assert!(!w.moving());
         assert_eq!(w.head_on_at_wall(), None);
         assert_eq!((w.mode, w.blocked_name()), (Mode::Free, "none"));
+    }
+
+    /// Runs `n` updates with `held`; returns the lean after each.
+    fn leans<'a>(w: &mut Walker, held: Intent, n: usize, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>) -> Vec<f32> {
+        (0..n).map(|_| { w.update(held, loops); w.bank }).collect()
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-5
+    }
+
+    #[test]
+    fn running_and_turning_leans_in_0_03_steps_up_to_0_15() {
+        let list = [("run", run())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        // Turning left: leans to his left (positive), 0.03 per update.
+        let l = leans(&mut w, intent(1, 1, true), 8, &loops);
+        for (k, b) in l.iter().enumerate() {
+            assert!(near(*b, (0.03 * (k + 1) as f32).min(BANK_MAX)), "update {}: {b}", k + 1);
+        }
+        // The other way: through 0 at the same rate to −0.15, 10 updates.
+        let l = leans(&mut w, intent(1, -1, true), 10, &loops);
+        assert!(near(l[4], 0.0) && near(l[5], -0.03), "{l:?}");
+        assert!(near(l[9], -BANK_MAX), "{l:?}");
+        // Turn key let go, still running: back up in 5 updates.
+        let l = leans(&mut w, intent(1, 0, true), 5, &loops);
+        assert!(near(l[3], -0.03) && l[4] == 0.0, "{l:?}");
+    }
+
+    #[test]
+    fn the_lean_snaps_upright_within_0_029() {
+        let list = [("run", run())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.bank = 0.045;
+        assert_eq!(leans(&mut w, intent(1, 0, true), 1, &loops), [0.0], "0.015 left: snapped");
+        // Building up, small values are kept (the snap is only for upright).
+        w.bank = -0.01;
+        assert!(near(leans(&mut w, intent(1, 1, true), 1, &loops)[0], 0.02));
+    }
+
+    #[test]
+    fn walking_and_turning_on_the_spot_never_lean() {
+        let list = [("walk", run()), ("waterwalk", run()), ("left", run())];
+        let loops = lookup(&list);
+        for (held, submerged) in [(intent(1, 1, false), false), (intent(1, 1, false), true), (intent(0, 1, true), false)] {
+            let mut w = Walker::new(0.0);
+            w.submerged = submerged;
+            let l = leans(&mut w, held, 10, &loops);
+            assert!(l.iter().all(|b| *b == 0.0), "{held:?} submerged {submerged}: {l:?}");
+        }
+    }
+
+    #[test]
+    fn running_through_water_leans_too() {
+        let list = [("waterrun", run())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.submerged = true;
+        let l = leans(&mut w, intent(1, -1, true), 6, &loops);
+        assert_eq!(w.movement, "waterrun");
+        assert!(near(l[0], -0.03) && near(l[5], -BANK_MAX), "{l:?}");
+    }
+
+    #[test]
+    fn a_jump_from_a_leaning_run_straightens_up() {
+        let list = [("run", run())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        leans(&mut w, intent(1, 1, true), 5, &loops);
+        assert!(near(w.bank, BANK_MAX));
+        w.start_jump(JumpKind::Run);
+        // Turn key still held: no turning and no lean during the jump.
+        let l = leans(&mut w, intent(1, 1, true), 5, &loops);
+        assert!(near(l[0], 0.12) && l[4] == 0.0, "{l:?}");
     }
 }

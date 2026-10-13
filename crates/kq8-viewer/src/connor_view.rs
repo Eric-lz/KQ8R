@@ -8,8 +8,11 @@
 //!   note's recommendation), so releasing one of two opposite keys gives the
 //!   other back.
 //! - Every frame of his current movement is drawn in turn; position,
-//!   heading and loop position are blended between the last two updates
-//!   (display only).
+//!   heading, lean and loop position are blended between the last two
+//!   updates (display only).
+//! - Banking (M2 step 2i, connor-movement.md "Turning" rule 3): the
+//!   walker's lean is turned in before his heading, about his forward axis
+//!   through his feet (pivot: stand-in, Q56 b). Drawing only.
 //!
 //! - Falling: `jumphold` while the mover is in Fall, then `jumpend` or
 //!   `jumpdie` once (connor-physics.md "Falling off an edge").
@@ -28,7 +31,7 @@ use kq8_game::mover::{Mover, MoverWorld, Scene as MoverScene, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform, Buildings, GroundLookup, ObjectColliders};
+use crate::terrain_view::{bevy_transform, bevy_transform_from, Buildings, GroundLookup, ObjectColliders};
 use crate::{material_for, mesh_from, to_bevy, Shared};
 
 /// One drawable movement: its loop for the walker and one entity per frame.
@@ -76,9 +79,9 @@ pub struct ConnorSim {
     /// Placement (name, angles) used to build his transform; angle Z is
     /// the walker's heading.
     pub placement: Placement,
-    /// Position, heading and loop position after the last two updates.
-    previous: ([f32; 3], f32, f32),
-    current: ([f32; 3], f32, f32),
+    /// Position, heading, loop position and lean after the last two updates.
+    previous: ([f32; 3], f32, f32, f32),
+    current: ([f32; 3], f32, f32, f32),
     /// Share of the loop played per update (for blending the loop position).
     phase_step: f32,
     pub updates: u64,
@@ -290,7 +293,7 @@ pub fn spawn_connor(
         log.path().display()
     ));
     let heading = placement.angles[2];
-    let start = (mover.position, heading, 0.0);
+    let start = (mover.position, heading, 0.0, 0.0);
     let mut sim = ConnorSim {
         mover,
         walker: Walker::new(heading),
@@ -313,7 +316,7 @@ pub fn spawn_connor(
         shown: None,
     };
     sim.log.detail(
-        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z",
+        "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
     );
     sim.log.detail(
         "  (played = the animation that moved him this update, with its phase before and after; wanted_movement = asked for and not reached yet; step_left / step_forward = that animation's step in his own axes; movement / phase = where he is after the update)",
@@ -355,7 +358,7 @@ pub fn connor_keys(
                 sim.mover.balls = balls;
                 sim.walker = Walker::new(heading);
                 let p = sim.mover.position;
-                sim.previous = (p, heading, 0.0);
+                sim.previous = (p, heading, 0.0, 0.0);
                 sim.current = sim.previous;
                 format!(
                     "connor update {}: test --at: put on the ground at ({x:.0}, {y:.0}, {:.0}), heading {heading:.3}, ground normal z {:.3}",
@@ -520,14 +523,15 @@ pub fn connor_step(
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
     sim.updates += 1;
     sim.previous = sim.current;
-    sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase);
+    let bank_before = sim.current.3;
+    sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase, sim.walker.bank);
     let m = &sim.mover;
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
     // The drawn ground (the water's surface where there is water).
     let surface_z = scene.water(m.position[0], m.position[1]).map_or("none".into(), |(s, _)| format!("{s:.1}"));
     let normal = |n: Option<[f32; 3]>, i: usize| n.map_or("none".into(), |n| format!("{:.3}", n[i]));
     let line = format!(
-        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2} {} {} {}",
+        "{} {:.3} {:.1} {:.1} {:.1} {} {} {:.2} {} {} {:.1} {} {} {} {} {} {} {} {} {:.1} {} {:.3} {} {} {} {} {} {:.4} {:.3} {:.1} {:.1} {} {} {} {} {} {} {} {} {} {:.2} {:.2} {} {} {} {:.3}",
         sim.updates,
         sim.updates as f64 / kq8_game::UPDATES_PER_SECOND,
         m.position[0],
@@ -573,6 +577,7 @@ pub fn connor_step(
         sim.jump_start_z.map_or("none".into(), |z| format!("{:.1}", sim.mover.position[2] - z)),
         m.submerged,
         surface_z,
+        sim.walker.bank,
     );
     if sim.walker.mode == Mode::Free {
         sim.jump_start_z = None;
@@ -597,6 +602,12 @@ pub fn connor_step(
         if s.missing {
             events.push(format!("movement {} has no loop loaded; not moving", sim.walker.movement));
         }
+    }
+    let bank = sim.walker.bank;
+    if bank_before == 0.0 && bank != 0.0 {
+        events.push(format!("lean starts: {bank:.3} rad ({})", if bank > 0.0 { "left" } else { "right" }));
+    } else if bank_before != 0.0 && bank == 0.0 {
+        events.push(format!("lean back upright (was {bank_before:.3} rad)"));
     }
     let down_now = down_hit.map_or("none".to_string(), |h| h.hit.what.clone());
     if down_now != sim.last_down && down_now != "none" {
@@ -659,14 +670,20 @@ pub fn connor_draw(
 ) {
     let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
-    let (p0, h0, _) = sim.previous;
-    let (p1, h1, phase) = sim.current;
+    let (p0, h0, _, b0) = sim.previous;
+    let (p1, h1, phase, b1) = sim.current;
     let p: [f32; 3] = std::array::from_fn(|i| p0[i] + (p1[i] - p0[i]) * a);
     let heading = h0 + (h1 - h0) * a;
+    let bank = b0 + (b1 - b0) * a;
     let mut placement = sim.placement.clone();
     placement.position = p;
     placement.angles[2] = heading;
-    let t = bevy_transform(&placement);
+    // The lean first, about the model's forward axis (−Y; a turn about Y,
+    // positive tips his head towards +X, his left), then his placement.
+    let lean = kq8_data::objects::rotation([0.0, bank, 0.0]);
+    let r = placement.transform().m;
+    let m: [[f32; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| lean[i][k] * r[k][j]).sum()));
+    let t = bevy_transform_from(m, p);
     for mut b in &mut body {
         *b = t;
     }

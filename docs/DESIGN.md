@@ -491,7 +491,7 @@ Steps (each separately revertable, each stopped for an eye check):
     The steps are **spread evenly** over the loop (the note says this is
     close; whether the game applies them per frame is asked as Q24).
   - Turning: 1.75 rad/s × 1/15 s per update while a turn key is held,
-    standing, walking or running. No banking yet.
+    standing, walking or running. Banking came later (2i).
   - No start/stop animations (`stopwalk`, `walkstopleft`...) yet: he goes
     straight from one movement to the next, starting the loop at its
     beginning. Which transition plays is asked as Q25. (Replaced by 2g:
@@ -1245,6 +1245,37 @@ Steps (each separately revertable, each stopped for an eye check):
     under the minimum; standing still nothing moves; the four line tests.
   - Log (`camera.log`): per update blocked yes/no, the hit and what hit,
     swing step and remaining angle, pulled-in distance.
+- **2i — banking while running (planned 2026-10-13; done 2026-10-13,
+  MODLOG; checked in the logs and by eye by the user, 2i-2 for water).** Rules from
+  `connor-movement.md` "Turning" rule 3 and "Do not reproduce"
+  (frame-rate-dependent banking).
+  - **Words.** *Banking* (or the *lean*) is Connor tilting sideways into a
+    turn, like a cyclist: a turn about his own forward axis.
+  - **The rule** (`kq8-game` `connor.rs`, `Walker::bank`, radians,
+    positive = leaning to his left): each update the lean moves towards a
+    target by at most 0.45 rad/s × 1/15 s (= the original's 0.03 per
+    update at its 15 updates per second). Target = 0.15 × the turn key
+    (+1 left, −1 right) while he runs and turns, else 0. When the target
+    is 0 and the lean is within 0.029 of it, it snaps to exactly 0.
+  - **"Runs and turns"** (stand-ins, asked as Q56): the movement playing
+    this update is `run` or `waterrun` (**2i-2**: the user saw him lean
+    while wading in the original), the keys drive him (no jump, fall,
+    crash or landing) and no wall block is on, and a turn key is held. Not
+    the start/stop transitions (`stoprun`, `runstopleft`, `runwaterrun`...). In every other case the lean goes back to upright
+    at the same rate, also during jumps and falls. Dead: left as it is.
+  - **Drawing only** (`kq8-viewer` `connor_view.rs`): the lean is turned
+    in **before** his heading, about his model's forward axis (−Y) through
+    his feet (the model's origin; the user's check in the original), blended
+    between updates like the heading. It changes nothing in collision,
+    movement or the camera.
+  - Tests: builds to 0.15 in 5 updates and stays there; turning the other
+    way swings through 0 to −0.15 in 10; letting go of the turn key
+    returns in steps of 0.03, snapping at the end; `waterrun` leans;
+    walking, wading at a walk and turning on the spot never lean; a jump from a leaning run
+    returns to upright during the jump.
+  - Log: `connor.log` gets the lean as a new last column; `viewer.log`
+    gets an event line when the lean starts building and when it is back
+    at 0.
 
 ### M3 — Daventry comes alive
 

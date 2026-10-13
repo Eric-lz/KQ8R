@@ -24,7 +24,10 @@ The code is written with an AI coding agent (Claude Code); see
   Starting to walk or run plays the original's short start animation
   first (with its small step to his left), then the walk or run (checked
   by eye). Letting go, he finishes his step and plays the matching stop
-  animation (checked by eye). He
+  animation (checked by eye). Running and turning at the same time, he
+  leans into the turn, up to about 8.6°, and straightens up when he stops
+  turning or running, also when running through water (checked by eye
+  against the original). He
   follows hills, runs down steep walkable slopes without falling, can't
   climb slopes steeper than about 37° (he slides back), and falls off high
   places with the falling, landing and death animations. Falls and slides

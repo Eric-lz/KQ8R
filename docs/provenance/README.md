@@ -540,3 +540,19 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | "Connor is moving": position or heading changed, from the update after he starts until 3 updates without movement | Note ("Connor is moving"; heading counts: the note's assumption) | Unit test (the first moving update doesn't count) |
 | The new direction is 3D (towards M) | Note as written; asked (Q53 c) | — |
 | Not done: the camera updating only while Connor moves or the camera is used; switching avoidance off | Note "When the camera updates at all" (Q53 d) | — |
+
+## Banking while running (M2 step 2i) — `crates/kq8-game/src/connor.rs` (`Walker::bank`, `update_bank`), `crates/kq8-viewer/src/connor_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Lean into the turn while running and turning, at most 0.15 rad | `connor-movement.md` "Turning" rule 3 | Unit test; `--hold 1,1,1,45`: 0.03 per update from update 12 (first `run` update after `stoprun`), 0.150 from update 16 |
+| Lean speed 0.45 rad/s × elapsed time (not 0.03 per update) | `connor-movement.md` "Do not reproduce" (frame-rate-dependent banking) | Unit test (0.03 per 1/15 s update) |
+| Back to upright at the same rate, snap within 0.029 | `connor-movement.md` "Turning" rule 3 | Unit test; log: upright 5 updates after the keys are let go |
+| Walking never leans | `connor-movement.md` "Turning" rule 3 | Unit test; `--hold 1,1,0,40`: lean 0 in all updates |
+| `waterrun` leans too | The user's check in the original (2026-10-13), Q56 a | Unit test; `--at 141312,198656,0 --hold 1,0,1 --turn 60,1`: wading from update 44, lean from 61 |
+| Otherwise only `run`, keys in control, no wall block; not the start/stop animations; upright during jumps and falls; dead: unchanged | **Our stand-in**, asked as Q56 a | Unit tests |
+| Lean always 0.15 × the turn's sign | **Our stand-in**, Q56 d (half turns); the size checked by eye against the original by the user | By eye (user) |
+| Through 0 to the other side at the same rate, snap only towards upright | **Our stand-in**, Q56 c | Unit test |
+| Pivot through his feet (model origin), turned in before the heading | The user's check in the original (2026-10-13), Q56 b | By eye (user) |
+| Drawing only | **Our stand-in**, Q56 e | — |
+| Sign: positive lean = turn about the model's Y (forward axis), head towards +X (his left) | `objects.rs` rotation convention (unit test "positive dirY turns +Z towards +X"); `connor.rs`: +X is his left, turn +1 = left | `--hold 1,-1,1,30`: lean −0.150 turning right |

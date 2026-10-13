@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M2 2i-2: Connor leans while running through water too
+
+**Changed:** `crates/kq8-game/src/connor.rs` (`waterrun` leans like `run`; unit test), `docs/behaviour/QUESTIONS.md` (Q56 partly answered by the user), `docs/DESIGN.md` (2i), `docs/provenance/README.md`, `README.md`, `STATUS.md`.
+**Why:** The user checked 2i by eye against the original: the size of the lean and the pivot at his feet are right, and he does lean while running through water (we didn't).
+**Tested how:** `cargo test --workspace`; viewer `--terrain --at 141312,198656,0 --hold 1,0,1 --turn 60,1 --frames 2500`, reading `connor.log`.
+**Result:** 206 unit tests pass (58 + 148). Submerged at update 35, `runwaterrun` 36–43, `waterrun` from 44; turn key from 60, `lean starts: 0.030 rad (left)` at 61, leaning for the remaining 168 updates while he circles in the water.
+**Still broken / not tested:** Wading lean not checked by eye yet. Still stand-ins (Q56): no lean during the start/stop animations, half turns lean fully, drawing only.
+**Next:** User looks at the wading lean; back to the M3 list (traps).
+
+## 2026-10-13 M2 2i: Connor leans into turns while running
+
+**Changed:** `crates/kq8-game/src/connor.rs` (`Walker::bank`, the lean rule, 4 unit tests), `crates/kq8-viewer/src/connor_view.rs` (draws the lean, `connor.log` new last column `bank`, event lines when the lean starts and ends), `docs/DESIGN.md` (plan 2i), `docs/behaviour/QUESTIONS.md` (Q56), `docs/provenance/README.md`, `README.md`, `STATUS.md`.
+**Why:** The user asked for banking (`connor-movement.md` "Turning" rule 3).
+**Tested how:** `cargo test --workspace`; viewer runs `--hold 1,1,1,45`, `--hold 1,-1,1,30` and `--hold 1,1,0,40` in Daventry, reading `connor.log`.
+**Result:** 205 unit tests pass (58 + 147). Running left: no lean while `stoprun` plays (updates 1–11), then 0.030, 0.060 … 0.150 from update 16, held; keys let go at 45: 0.120 … 0.030, upright at update 50. Running right: −0.150. Walking and turning: lean 0 throughout.
+**Still broken / not tested:** Not checked by eye. Details are stand-ins (Q56): only the `run` loop leans (not `waterrun`, not the start/stop animations), pivot at his feet, always 0.15.
+**Next:** User checks it by eye; back to the M3 list (traps).
+
 ## 2026-10-13 M3 3r-3: review of Q45–Q52, docs
 
 **Changed:** `docs/DESIGN.md` (new step 3r with a table: each answer, what our code does, what changes; plans 3a, 3b, 3b-4, 3c corrected where they said "stand-in"), `docs/provenance/README.md` (rows marked confirmed or replaced; new section "Review after Q45–Q52"), comments in `script.rs`, `door.rs`, `effects_view.rs`, `anim_view.rs`, `README.md`, `QUESTIONS.md` (Q54, Q55).
