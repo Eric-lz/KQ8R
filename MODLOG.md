@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Study: emitters, particle catchers, ground animators
+
+**Changed:** New note `docs/behaviour/emitters.md` (study session A). Scratch notes in `re/` (not committed).
+**Why:** M3 item 3: Daventry's falling leaves, stream drips, and the flowing-water ground textures.
+**Tested how:** Traced in `Mask.exe` with Ghidra; keys collected from all 12 worlds' `.kq` files; Daventry's animator squares counted from `terrm.dib`, flags from `envinfo.kq` (throwaway script, not in the repo). Nothing run in the game.
+**Result:** Emitter: per-tick particle rules (random offset in a box, velocity, spin, sway by sin, gravity as age × g, restart after `maxLife` + 1 ticks with the same path, hidden for one tick, `delayStart` = appear one by one; defaults 200 particles, 100 ticks). Catcher: hides an emitter's particles inside a building's box (the cottage's leaves). Ground animator: picks squares by material (or an explicit list), sets them all to the next material of the cycle every `delay` (0.3 s in Daventry); per-animator square counts for Daventry. `randomZRot` has no effect.
+**Still broken / not tested:** Not checked in the game. Not traced: what makes an emitter active, whether particles get `translucency`, whether changed ground materials change the envInfo flags (no difference in Daventry).
+**Next:** You: near the cottage, check that leaves vanish at the roof and that one leaf repeats its path; at the stream, square (45, 57) should stay still. Then B can implement from `emitters.md`.
+
 ## 2026-10-12 Study: doors, their scripts, minimum `.cs` language (Q44 answered)
 
 **Changed:** New note `docs/behaviour/doors.md` (study session A). `objects.md`: rule 3 of "Ground heights −1 and −2" (Q44 order), pointer for the 6th `loop=` field. `QUESTIONS.md`: Q44 answered. Scratch notes in `re/` (not committed).
