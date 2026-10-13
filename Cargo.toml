@@ -22,3 +22,6 @@ bevy = { version = "0.20.0", default-features = false, features = ["3d", "bevy_u
 # dependencies even in dev builds so `cargo run` stays fast.
 [profile.dev.package."*"]
 opt-level = 3
+# No debugging information for dependencies (Bevy's alone made each
+# viewer `.pdb` about 1.2 GB); our own crates keep theirs.
+debug = false

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Smaller build folder (no debug info for dependencies)
+
+**Changed:** `Cargo.toml`: `debug = false` for all dependencies in dev builds (our own crates keep their debugging information). Deleted `target/side/` (a spare build copy from 2026-10-11, see the M1 3a entry) and the old dev builds (`cargo clean --profile dev`). Nothing in the repo besides `Cargo.toml`.
+**Why:** `target/` had grown to 28 GB: 12 GB in `target/side/`, 13 GB of dev builds (many outdated copies, and a ~1.2 GB `.pdb` per viewer build, mostly Bevy's debugging information).
+**Tested how:** Rebuilt from scratch: `cargo test --workspace` (6 min including the rebuild) and `cargo build -p kq8-viewer`; measured with `du`.
+**Result:** All tests pass (61 + 161). Debug viewer: `kq8_viewer.pdb` 105 MB (was ~1.2 GB), exe 111 MB. `target/debug` 3.4 GB with the viewer, 2.5 GB without; whole `target/` 28 GB → 6.7 GB. Release builds unchanged.
+**Still broken / not tested:** A debugger can no longer step inside Bevy's code (nobody does here).
+**Next:** Run `cargo clean --profile dev` now and then; close the viewer before builds so no side copy is needed.
+
 ## 2026-10-13 M3 3e-1: the item type list (`Invinfo.itl`)
 
 **Changed:** Plan for chests and items in `docs/DESIGN.md` (M3 3e, five sub-steps). New `crates/kq8-data/src/items.rs` (reads `GAME/Kq/Invinfo.itl`, the type-name rule), new CLI command `kq8 item-verify` (`crates/kq8-cli/src/item_verify.rs`, `main.rs`). Questions Q60, Q61, Q62 in `docs/behaviour/QUESTIONS.md`. `README.md`, `docs/provenance/README.md`.
