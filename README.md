@@ -68,6 +68,12 @@ The code is written with an AI coding agent (Claude Code); see
   rivers and the stream flow: their ground textures change every 0.3 s.
   Checked in the logs (`kq8-artifacts/logs/effects.log`, `ground_anim.log`) and by eye
   (2026-10-13).
+- **Animated objects play** (M3): the windmill sails, mill wheel and
+  gears, swinging signs, shutters, torches, lamps, waterfalls, fish and
+  the fountain's water move as the game's files say, torches and other
+  rows of things out of step as in the original. Checked in the logs
+  (`kq8-artifacts/logs/anim.log`) and by eye (2026-10-13). Gnome's
+  rolling rock spins; how it should travel is still open.
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Ground key U:** shows the hidden ground under the water (the
@@ -88,6 +94,8 @@ read it right). The camera doesn't swing
 back behind him by itself or avoid walls. In water there is no damage
 yet (poison, lava, swamp). Fire and ice arrow
 sparks, the snow and dragon fire that follow an object are not shown.
+Animated objects play only the movement they start with (scripts don't
+switch them yet) and make no sound.
 People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the

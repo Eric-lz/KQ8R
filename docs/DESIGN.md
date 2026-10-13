@@ -1428,6 +1428,48 @@ catchers, ground animators).
     19, 0, 17, 32, 2, 13, 4, 4), square (45, 57) never animated, and each
     change with its game time and material.
 
+- **3c — animated objects play (planned 2026-10-13; done 2026-10-13,
+  MODLOG; checked in the logs and by eye by the user).** Rules from
+  `objects.md` "Animated objects at load" (rules 2–4, Q13), the phase
+  rule the doors use (`doors.md` rules 5, 8) and the loop length Connor's
+  loops use (the loop's stored length). Until now every animated object
+  other than a door was drawn frozen in its start frame (the user saw the
+  fountain's water, `wellwatr`, as drips stuck in the air).
+  - **Which objects:** every placed object with `animLoops` that is not a
+    door, whose current movement's `loop=` speed is not 0 (Daventry: the
+    windmill sails, mill wheel and gears, signs, shutters, torches, lamps,
+    burners, waterfalls, fish, the fountain water, …). Speed 0 stays a
+    still model, as now.
+  - **Playing** (`kq8-game` `anim.rs`, no Bevy): phase starts at `a`
+    (`loop=` start); each update it moves by speed × (1/15 s) ÷ the loop's
+    stored length; repeating loops wrap round 0..1, one-shots stop at the
+    end (and stay there: `nextAnimName` is not traced). Frame shown:
+    repeating round(phase × frames) mod frames (rule 2, as the start
+    frame), one-shot round(phase × (frames − 1)) (as doors). `flags` bit 8:
+    random start phase and speed × a random 0.9–1.1 (rule 4).
+  - **Whole-object steps** (frame transforms, models-and-textures.md Q1 b):
+    first measured and logged per object. Applied, if any running object
+    has them, like the doors: the pose of the shown frame = its steps
+    1…k chained, never added up across cycles. Stand-in, asked if it
+    matters.
+  - **Not done (logged):** cues (sounds), `nextAnimName`, `animPos`,
+    scripts changing an object's movement (`KQAnimPlayEvent` to non-door
+    objects). Collision boxes stay fixed, as traced (Q33 a).
+  - **Drawing** (`kq8-viewer` `anim_view.rs`): all frames of the loop
+    built once per (model, loop), one entity per frame, only the shown one
+    visible (as doors); hidden and unused objects keep their H-key
+    visibility; see-through objects keep their opacity.
+  - **Log** `kq8-artifacts/logs/anim.log`: per object its loop, frames,
+    length, start phase and speed (with the random parts), its steps;
+    per update for a few objects (`wellwatr`, `windprop`, `millwheel`,
+    a torch) the phase and frame. (A loop's stored length is
+    (frames − 1) / 15 s, so a repeating loop that runs through all its
+    frames per cycle skips one frame per cycle at 15 updates per second;
+    that follows from the rules, not a bug.)
+  - Tests: phase and wrap, frame rule (start frame equals the still model's
+    start frame, e.g. `telepad1` 0.3 × 16 → 5), one-shot stops at the end,
+    random range, speed −1 runs backwards.
+
 ### M4 — Talk, listen, use the menus
 
 **You will see and hear:** dialogue text, speech with lip sync, the

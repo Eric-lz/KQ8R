@@ -479,3 +479,21 @@ A, traced; square choice checked against the data).
 | ~~The drawn square follows its material: texture and orientation code from the direction table~~ **Changed 2026-10-13:** the texture follows the new material, the orientation stays that of the square's own (loaded) material | Rule 6 read as "the new material's code" first; **user's check of our viewer** (Daventry shores all turned alike, DeadCity blood frames turned 90°, Swamp squares flipping) and the direction tables (turned variants are separate materials of one texture; animation frames mostly code 0). Stand-in, asked as Q50 | Viewer log: squares where it makes a difference: Daventry 116, DeadCity 42 (`Blood2` 4, `Blood3` 38), Swamp 376. Throwaway script (scratchpad) listing each animator's own and cycle codes. Not yet re-checked by eye |
 | Animated squares drawn as their own entities; their surface left out of the ground mesh, their floor kept; U view: hidden in "floor only", see-through in "both" over a different floor | Our choice (display only) | Viewer log: Daventry 234 squares, 43 materials; Swamp 25 animators, 676 squares; DeadCity 8, 543; IceWorld 7 (6 running), 263 |
 | `Grid::from_rows`, `Grid::set`, `Terrain::square_triangles` (one square's triangles, now also used by `ground_triangles`) | Refactor | Existing terrain tests pass unchanged |
+
+## Animated objects play (M3 step 3c) — `crates/kq8-game/src/anim.rs`, `crates/kq8-viewer/src/{anim_view,load,terrain_view,main}.rs`
+
+Behaviour notes: `objects.md` "Animated objects at load" (traced, Q12,
+Q13), `doors.md` rules 5, 8 (phase), `connor-movement.md` (a loop's
+length is its stored length).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Every placed non-door object with `animLoops` whose current movement's speed is not 0 plays it; speed 0 stays still | `objects.md` rule 2 (`b` = speed, 0 = holds the start frame) | Viewer log: Daventry 72 objects, 40 loops; Swamp 426, DeadCity 213, Barren 135, Gnome 234, IceWorld 23, CastleD 8 |
+| Phase starts at `a`, moves speed × 1/15 s ÷ the loop's stored length per update; repeating wraps, one-shots stop at their end and stay | Rule 2; doors.md rules 5, 8 (same phase rule); the stored length as for Connor's loops | Unit tests (`a_repeating_loop_wraps_once_per_stored_length`, `a_one_shot_stops_…`, `speed_zero_holds`). Viewer: `wellwatr` 66 frames / 4.333 s, one frame per update |
+| Frame while playing: repeating round(phase × frames) mod frames; one-shot round(phase × (frames − 1)) | Rule 2 gives the repeating formula for the start frame; using it while playing is **our reading** (Q51); one-shot as doors | Unit test (`the_start_frame_is_the_still_models`: `telepad1` 0.3 × 16 → 5, as before) |
+| A 16-frame loop of stored length 15/15 s skips one frame per cycle | Follows from the two rules above | Unit test |
+| `flags` bit 8: random start phase, speed × random 0.9–1.1 | Rule 4 | Unit test (`random_start_and_speed_stay_in_range`). Viewer: Daventry 10 (`Davtorch.01–05`, dead birds, fish) |
+| `nextAnimName` (one-shot end), `animPos`, cues, script changes of the movement | Not done (rule 4: `nextAnimName` not traced) | — |
+| Whole-object steps applied like doors (pose = steps 1…k of the shown frame chained, never added across cycles) | **Our stand-in** (doors.md rule 24 applied to loops; Q51) | Only Gnome `rrock1–3` (`theroll`) have any: up to 9,691 units, 57 units off the start at the last frame |
+| Collision boxes stay fixed | `connor-physics.md` (Q33 a) | Unchanged |
+| Drawn: one entity per frame, only the shown one visible; H-key and opacity kept | Our choice (display), as doors | Not checked by eye |

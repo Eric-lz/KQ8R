@@ -240,9 +240,24 @@ pub fn setup_objects(
     let catchers = std::mem::take(&mut objects.catchers);
     crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &built, &mut materials, &mut log);
     commands.insert_resource(Buildings(buildings));
+    // Animated objects whose movement plays (3c): drawn by anim_view.
+    let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();
+    crate::anim_view::spawn_animated(
+        &mut commands,
+        std::mem::take(&mut objects.animated),
+        std::mem::take(&mut objects.object_animations),
+        &objects.placed,
+        &mut meshes,
+        &mut materials,
+        &mut images,
+        &mut log,
+    );
     let mut worst = 0.0f32;
     let mut see_through = 0;
-    for (p, i, unused) in &objects.placed {
+    for (k, (p, i, unused)) in objects.placed.iter().enumerate() {
+        if animated.contains(&k) {
+            continue;
+        }
         let transform = bevy_transform(p);
         // Self-check: the game's rule (point x rotation + position, then
         // converted) and Bevy's transform must put a corner at the same spot.

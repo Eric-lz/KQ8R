@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3c: animated objects play their movement
+
+**Changed:** `crates/kq8-game/src/anim.rs` (new: a loop's phase, wrap, frame rule, random start and speed, the whole-object pose). `crates/kq8-viewer`: `anim_view.rs` (new: every frame built once per loop, the shown one visible, `anim.log`), `load.rs` (objects whose movement plays get all their loop's frames; the object palette loaded once), `terrain_view.rs` (those objects are no longer drawn as still models), `main.rs`. Docs: DESIGN (plan 3c), provenance, README, QUESTIONS (Q51).
+**Why:** You saw "stuck drips" on the fountain: its water `wellwatr` is a 66-frame loop drawn frozen. Every animated object except doors was frozen the same way.
+**Tested how:** `cargo test --workspace --release`, clippy; viewer in Daventry (`--frames 1500`), read `anim.log` and `viewer.log`; Swamp, DeadCity, Barren, IceWorld, Gnome, CastleD started (`--frames 40`).
+**Result:** 190 tests pass (58 + 132). Daventry: 72 objects play, 40 different loops, 10 with a random start and speed (torches, dead birds, fish); `wellwatr` and `millwheel` move about one frame per update, as their stored lengths say. Other worlds: Swamp 426, DeadCity 213, Barren 135, Gnome 234, IceWorld 23, CastleD 8. Whole-object steps: none anywhere except Gnome's rolling rocks `rrock1–3` (up to 9,691 units), applied like the doors' (stand-in, Q51).
+**Still broken / not tested:** **Not checked by eye.** Only the starting movement plays: scripts can't switch it yet, `nextAnimName` isn't done, no sounds (cues). Collision boxes don't follow the animation (as traced). The frame rule while playing and the rolling rocks are stand-ins (Q51).
+**Next:** You: look at the fountain, the windmill, the mill wheel, the signs and the torches. Then commit if it looks right.
+
+**Checked afterwards (you, 2026-10-13):** everything looks right in Daventry. Gnome's rolling rock spins; how it should move is left for later (Q51).
+
 ## 2026-10-13 Fix: animated ground squares keep their own orientation
 
 **Changed:** `crates/kq8-viewer/src/load.rs` (`prepare_ground_animation`: every material an animated square shows is drawn with the orientation code of the square's own loaded material; log line counting the squares where that matters), `ground_anim_view.rs` (comment, a type alias and a clippy allow). Docs: QUESTIONS (Q50), provenance, DESIGN.

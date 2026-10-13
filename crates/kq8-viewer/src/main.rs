@@ -28,6 +28,7 @@
 //! no lighting, no animation. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
+mod anim_view;
 mod connor_view;
 mod door_view;
 mod effects_view;
@@ -289,9 +290,9 @@ fn main() -> ExitCode {
                 .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
-                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, game_camera::camera_step, effects_view::effects_step, ground_anim_view::ground_anim_step).chain())
+                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, game_camera::camera_step, effects_view::effects_step, ground_anim_view::ground_anim_step, anim_view::anim_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim))
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, effects_view::effects_draw, ground_anim_view::ground_anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, effects_view::effects_draw, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

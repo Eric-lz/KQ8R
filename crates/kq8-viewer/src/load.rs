@@ -851,6 +851,26 @@ pub struct Objects {
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     /// The ground animators in load order (M3 step 3b-3).
     pub animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
+    /// Placed objects whose current movement plays (M3 step 3c).
+    pub animated: Vec<AnimatedAssets>,
+    /// Their animations, each (model, loop) once.
+    pub object_animations: Vec<Animation>,
+}
+
+/// A placed object whose movement plays (M3 step 3c; objects.md "Animated
+/// objects at load"). It stays in `Objects::placed` (collision, logs) but
+/// is drawn by `anim_view.rs`, not as a still model.
+pub struct AnimatedAssets {
+    /// Index into `Objects::placed`.
+    pub placed: usize,
+    /// Index into `Objects::object_animations`.
+    pub animation: usize,
+    /// `loop=` start, speed, repeat.
+    pub start: f32,
+    pub speed: f32,
+    pub repeat: bool,
+    /// `flags` bit 8: random start and speed.
+    pub random: bool,
 }
 
 /// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
@@ -968,6 +988,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         emitters: Vec::new(),
         catchers: Vec::new(),
         animators: Vec::new(),
+        animated: Vec::new(),
+        object_animations: Vec::new(),
+        object_animation_index: BTreeMap::new(),
         object_palette: None,
         located: BTreeMap::new(),
         skipped: BTreeMap::new(),
@@ -1092,6 +1115,9 @@ struct Placer<'a> {
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
+    animated: Vec<AnimatedAssets>,
+    object_animations: Vec<Animation>,
+    object_animation_index: BTreeMap<String, Option<usize>>,
     object_palette: Option<Result<[Rgb; 256], String>>,
     /// Loaded objects by lower-case name (the last one loaded wins).
     located: BTreeMap<String, Located>,
@@ -1595,7 +1621,7 @@ impl Placer<'_> {
                 c.repeat,
                 c.unknown,
                 self.shapes[i].1.frame_note,
-                p.flags.as_ref().map_or(String::new(), |f| format!(" flags={f} (random start not applied)"))
+                p.flags.as_ref().map_or(String::new(), |f| format!(" flags={f}"))
             ));
             if c.fell_back && !unused {
                 self.fell_back += 1;
@@ -1615,7 +1641,12 @@ impl Placer<'_> {
             self.log.summary(format!("collision: {label}[{}]: {problem}", p.name));
         }
         self.collision.push(CollisionInfo { shape, collider_type, collider_mask });
+        let flags = p.flags.clone();
         self.placed.push((p, i, unused));
+        // A movement that plays (speed not 0): all its frames (3c).
+        if let Some(c) = animation.as_ref().filter(|c| c.speed != 0.0) {
+            self.place_animated(&label, c, flags.as_deref());
+        }
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);
         }
@@ -1746,6 +1777,61 @@ impl Placer<'_> {
             shape,
             ground: [kq8_data::terrain::Level::Floor, kq8_data::terrain::Level::Surface]
                 .map(|level| self.terrain.ground_at(level, p.position[0], p.position[1]).map(|g| g.height)),
+        });
+    }
+
+    /// The object palette, loaded once.
+    fn object_palette(&mut self) -> Result<[Rgb; 256], String> {
+        let (game, world) = (self.game, self.world);
+        let palette_name = self.palette_name.clone();
+        let log = &mut *self.log;
+        let palette = self.object_palette.get_or_insert_with(|| {
+            log.quiet = true;
+            let r = load_palette(world, Some(&palette_name), game, log);
+            log.quiet = false;
+            r
+        });
+        palette.clone()
+    }
+
+    /// The object just placed plays its movement (M3 step 3c): its loop's
+    /// frames, loaded once per (model, loop).
+    fn place_animated(&mut self, label: &str, c: &kq8_data::objects::CurrentLoop, flags: Option<&str>) {
+        let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
+        let index = match self.object_animation_index.get(&key) {
+            Some(i) => *i,
+            None => {
+                let loaded = self.object_palette().and_then(|palette| {
+                    self.log.quiet = true;
+                    let a = load_animation(self.game, self.world, &c.shape, &c.sequence, &palette, self.log);
+                    self.log.quiet = false;
+                    a
+                });
+                let i = match loaded {
+                    Ok(a) => {
+                        self.object_animations.push(a);
+                        Some(self.object_animations.len() - 1)
+                    }
+                    Err(e) => {
+                        self.log.summary(format!("animated {label}: {} {}: {e}; drawn still", c.shape, c.sequence));
+                        None
+                    }
+                };
+                self.object_animation_index.insert(key, i);
+                i
+            }
+        };
+        let Some(animation) = index else { return };
+        // `flags` bit 8 (objects.md rule 4); a value that is not a whole
+        // number counts as no flags.
+        let flag_bits = flags.and_then(|f| f.trim().parse::<i64>().ok()).unwrap_or(0) as u32;
+        self.animated.push(AnimatedAssets {
+            placed: self.placed.len() - 1,
+            animation,
+            start: c.start,
+            speed: c.speed,
+            repeat: c.repeat,
+            random: flag_bits & kq8_game::anim::RANDOM_START != 0,
         });
     }
 
@@ -1935,6 +2021,8 @@ impl Placer<'_> {
             emitters,
             catchers: self.catchers,
             animators: self.animators,
+            animated: self.animated,
+            object_animations: self.object_animations,
         }
     }
 }
