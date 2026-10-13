@@ -84,11 +84,13 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
 
 ### Timing (data)
 
-8. `door1`, `door2`, `door3`, `tombdoor`, `keepdrl`, `chainbtn` (and by
-   the same layout `keepdrr`, `outdor`): **16 frames, play time 1.0 s**.
-   So `open` takes **1.0 s**; `close` from 0.93 takes **0.93 s** (from 1.0:
-   1.0 s). At the game's 15 updates per second that is 15 and about 14
-   updates.
+8. **Each door plays its own `.kqs` file's frame count and play time.**
+   `door1`, `door2`: 16 frames, 1.0 s, so `open` takes **1.0 s** and
+   `close` from 0.93 takes **0.93 s** (15 and about 14 updates).
+   `door3` (`Tombdor`): **25 frames, 1.6 s** (24 updates). (Corrected
+   2026-10-13, Q46: the first version gave every door door1's numbers;
+   B's reading of the files is right.) Use the numbers in each file;
+   nothing in the door code overrides them.
 9. Cue points fire when the phase passes them during an update: a cue
    at phase *c* fires when *c* lies in [lower, higher) of the phase before
    and after that update, in either direction (traced). So `cue0=0.0`
@@ -174,9 +176,16 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
     box fills the doorway (`door1.kqs` is 1,230 wide), and Connor walks
     into houses in the original, so **the box must swing with the door**:
     the door object itself turns by the frame steps of its animation
-    (about 11–13° per frame about a hinge near one edge, ~165° in all;
+    (about 11–13° per frame about a hinge near one edge;
     `models-and-textures.md` "Frame transform"), and its box turns with
-    it. Where the game applies these steps to a door was **not found**.
+    it. The total turn is whatever the file's steps add up to:
+    `door1`/`door2` 165°, `door3` and `keepdrl` 180°, `keepdrr` −180°,
+    `tombdoor` and `outdor` 90° (B's reading, Q46). **How the steps are
+    applied (found 2026-10-13):** every update, the frame steps of the
+    animation are put onto the object's **current** placement (the same
+    path that moves Connor forward when he walks), and the object is
+    moved there, box and all. They are added up, not worked out from the
+    phase. See "Do not reproduce" for doors.
     **Confirmed by the user in the original (2026-10-12):** with the door
     open the doorway is free, and walking into the open door leaf blocks
     Connor: the door stays solid, just out of the way.
@@ -250,7 +259,7 @@ about 500 characters.
 
 | Thing | Value | Source |
 | --- | --- | --- |
-| door open / close time | 1.0 s / 0.93 s (16 frames) | data |
+| door open / close time | each `.kqs`: door1/2 1.0 s / 0.93 s (16 frames), door3 1.6 s (25 frames) | data |
 | reach | < 2 × `attackDist` = 4,700 from Connor's feet to the door's box | traced (factor 2, default 1,250) + data (2,350) |
 | door hit points default | 10,000 | traced |
 | clickable bit | collision type 0x20 | traced |
@@ -289,7 +298,16 @@ about 500 characters.
 
 ## Do not reproduce
 
-- Nothing found in the door code itself. Note for testing: in Daventry
+- **Work out a door's turn from its phase** (the steps of frames 1…k
+  chained, k = the shown frame), as B does, instead of adding steps up
+  every update as the original does (rule 24). For one open (or one
+  close) the two give the same turn; adding up can leave a door slightly
+  off after many open/close cycles (which steps a backward `close` and
+  its start at 0.93 apply was not traced). Daventry's plain doors never
+  close, so nothing visible changes. This is for doors only: objects
+  whose loops are meant to travel use the adding-up rule (`objects.md`
+  Q51).
+- Nothing else found in the door code itself. Note for testing: in Daventry
   the toggle (value 0) is sent only by `KeepDoor.cs` (to both halves when
   the key is used, which opens them from closed), and `close`/`Close` is
   reached only by the arrow switches (value 2).
@@ -315,18 +333,62 @@ about 500 characters.
 
 ## Open questions
 
-1. Where the game applies an animation's frame steps to a door (rule 24),
-   and whether the jump to 0.93 at the start of `close` adds or removes
-   the skipped step. If steps were simply added up, every open/close cycle
-   would leave the door one step (~12°) further open; Daventry's plain
-   doors never close, so this hardly matters there. Recommendation: work
-   out the door's turn from the current phase (sum of the steps up to the
-   shown frame), which never drifts.
+1. (Partly answered 2026-10-13, rule 24: steps are added up every
+   update.) Still open: which steps a backward `close` applies, and what
+   its start at 0.93 does to the turn. Recommendation unchanged: work the
+   turn out from the phase ("Do not reproduce").
 2. How "accepts this item" is decided (rule 13), and which stock lines
    Connor says for "too far" and "doesn't work" (M4).
 3. Connor's states in which he turns to face the clicked door (rule 16).
-4. Which update a `sendEvent 0` event is handled in (the same one or the
-   next).
+4. (See Q45 d below: likely the next; not proven.)
+
+## Q45 (answered 2026-10-13, traced unless marked)
+
+- **(a) `tooFar=<n>`** is not about reach. It is one of the display
+  settings every object reads (with `active3DFlag`, `isFar`,
+  `translucency`, `hazeMultiplier`, `hidden`); what it does when drawing
+  was not traced (probably a draw-distance factor). The click reach uses
+  only `attackDist` (rule 11). B's stand-in (ignore it for clicks) is
+  right.
+- **(b) Picking:** the click line is tested **only against objects whose
+  collision type has bit 0x20**; the nearest one along the line wins.
+  Walls, buildings (type 0x28, never clickable), the ground and
+  non-clickable objects do **not** hide anything; deleted objects are
+  skipped. B's stand-in is right. (The camera's view test is the same
+  line test with other bits, `camera.md` "Obstacles".)
+- **(c) Reach box:** Connor's feet are turned into the object's
+  **current** axes, so for an open door it is the box as it stands now,
+  turned. B's stand-in is right.
+- **(d) A movement started by an event** is switched on (its phase set to
+  its start) at the moment the event is handled, and first **advances on
+  the next per-update tick** that object receives. A `sendEvent 0` gets
+  the time "now" and is queued behind everything already waiting for
+  "now"; the per-update tick for that moment was queued one update
+  earlier, so it comes first. So the first movement step is in the
+  **next** update, as B's stand-in. (Reasoned from the queue order; not
+  measured.)
+- **(e) `$Console::Return`:** every command leaves **its own** result:
+  - `test`: true = `0`. False = `1` for numbers; for text, a false `==`
+    leaves `1` or `-1` (text order), `!=` on equal text leaves `1`; all
+    of them are "not 0", so all count as false in `if`. Wrong word count:
+    usage line, `1`. `&&`/`||` on text: error line, `1`.
+  - unknown command: error line, `1`.
+  - a script call (`foo.cs …`) does **not** set it itself: what the
+    script's last command left stays.
+  - `set`, `echo`: not traced; keep the stand-in `0`.
+  - game commands with a yes/no answer use **1 = yes**:
+    `KQMonster::checkInventory` (1 = found), `KQConnor::pay` (1 = paid),
+    `KQConner::checkInvisible` (1 = yes) — from their own usage texts
+    and, for `checkInventory`, traced (`items.md` rule 10).
+    `KQMonster::inventory` (`give`) leaves 0 on success, 1 for an unknown
+    item type.
+- **(f) Numbers in `test`:** a word "looks like a number" when its first
+  character is a digit, or `-`/`.` followed by a digit; only the first
+  one or two characters are checked. Its value is then its **leading
+  number part** (`12abc` → 12, `-5x` → −5). So `test 12abc == 12` is
+  true. Careful: `-.5` does **not** look like a number (the character
+  after `-` is not a digit), so it is compared as text. B's stand-in is
+  right.
 
 ## Q44 (answered, traced)
 

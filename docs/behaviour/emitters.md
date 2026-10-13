@@ -85,8 +85,12 @@ so: "How many cycles (1/15th of sec) does a particle live".
    when the world appears; no gravity or swaying in this jump).
 2. **These choices are made once.** Velocity, offset, spin and sway speed
    stay the same for the particle's whole existence, through all its
-   restarts. So **each particle repeats exactly the same path every
-   life**; only the mix of ages makes the stream look random.
+   restarts. So a particle **without swaying** repeats exactly the same
+   path every life; only the mix of ages makes the stream look random.
+   **A swaying axis does not repeat** (corrected 2026-10-13, Q47): the
+   sway angle carries on from where the last life ended (rule 3.6), so
+   the path drifts from life to life, as B found for `leaf1`. Its turn
+   (spin) also carries on. Both are as the game does it; keep them.
 3. **Every tick, for each particle:**
    1. age + 1;
    2. sway angles + sway speeds (rule 6);
@@ -144,6 +148,32 @@ so: "How many cycles (1/15th of sec) does a particle live".
     object's own directions. With `followMesh` also set, each restarting
     particle takes the object's current turn and gets a new random
     velocity (the arrow trails).
+    **Details (2026-10-13, Q52):**
+    - **(a) `followMesh=<part name>`** names a part of the target's model
+      (`fire` on the dragon heads, `Box01` on `Lucreto`). Then, every
+      tick before the particles move, the emitter is put at **that part**
+      of the target: the target's position plus the part's place in the
+      model, turned with the target (the part's current, animated place
+      is assumed; how the part's place is read was not fully traced).
+      **`followOffset` is not used** in this case (only at the very
+      first placement). Restarting particles take the part's turn
+      combined with the target's, and get a new random velocity inside
+      the velocity limits turned that way. If the part can't be found,
+      the emitter stops following and **dies** (rule 10): its particles
+      finish their lives and it removes itself.
+    - **(b) Target not found:** the original does not check; it would
+      crash. Do not reproduce: B's choice (don't start it, log it) is
+      fine.
+    - **(c) Turn:** the offset is turned with the target's **whole**
+      turn (all three angles), for Connor and for `KQCamera` alike (the
+      camera's own turn, when the offset's x or y is not 0). With x = y
+      = 0 the offset is added in world axes, no turn: IceWorld's `snow`
+      (`followOffsetZ=4000` only) is placed the same either way. B's
+      handling is right for `snow`.
+    - **(d) Order:** the emitter moves to its target when the target
+      reports that it moved, i.e. right after the target's own move in
+      that update, before the emitter's particles move. B's order is
+      right.
 12. **Active.** An emitter receives the ticks only while the game counts
     it as active; what switches that (probably closeness to the player or
     camera, as for other objects) was not traced. Daventry's emitters set
@@ -164,7 +194,17 @@ so: "How many cycles (1/15th of sec) does a particle live".
    axes; if it lies inside the box (min ≤ value < max on all three axes)
    the particle is made **invisible**. It keeps moving and becomes
    visible again at its next restart (emitter rule 4).
-5. So under a roof the leaves vanish where they would enter the house.
+5. **Order and names (Q48, 2026-10-13).** Emitters and catchers each
+   get their own per-update tick; which of the two is handled first in an
+   update was **not settled** (it depends on the order they joined the
+   timer). The difference is one tick (1/15 s) before a leaf vanishes;
+   B's order (emitters first, then catchers) is a fine choice. Names
+   (`emitter`, `interior`, and object names in general) are looked up
+   **letter for letter, capitals counting** in the game's name table;
+   whether names are stored with their capitals changed was not checked.
+   Daventry's names match exactly, so ignoring capitals gives the same
+   result there.
+6. So under a roof the leaves vanish where they would enter the house.
    Elsewhere nothing stops them: they can pass below the ground before
    their life ends (whether that is visible in Daventry was not checked).
 
@@ -195,23 +235,40 @@ and listed squares of Daventry's animators have material 15 in
    `numGridBlocks`, the listed squares. Otherwise every square of the
    world (any order) that is not in the exclude list and whose **current**
    material is one of the `origTexture`s.
-2. **Each change** sets **all** chosen squares to the same material: the
-   next number of the cycle. The squares' own variety is lost while
-   animating (e.g. `AnimatedRiver1` turns both its 56 and 57 squares into
-   57, 89, 90, 89, …).
+2. **Each change** sets **all** chosen squares to the same material
+   **number**: the next number of the cycle (e.g. `AnimatedRiver1`'s 86
+   squares, all material 57 in `terrm.dib` as B counted, become 57, 89,
+   90, 89, …; the first version wrongly said "56 and 57"). **Each square
+   keeps its own orientation** (corrected 2026-10-13, Q50): when the
+   ground is loaded, every square stores its orientation (turn/mirror,
+   from its **original** material's direction code) separately from its
+   material number, and the animator changes only the number. So a
+   changed square shows the new material's texture with the square's own
+   original orientation; the new material's direction code is not used.
+   B's fix and the user's check are right.
 3. **Timing.** When started, the first change happens `delay` seconds
    later and shows the **first** cycle entry, then one change every
    `delay` seconds: entry 1, 2, …, last, then (with `repeatflag=1`) entry 0
    again. Before the first change the squares show their original
    materials. Daventry: `delay=0.3` everywhere, so a 4-step cycle repeats
    every 1.2 s.
+   **Clock (Q49, 2026-10-13):** the animator does not use the 15-per-
+   second update tick. It sets a timer on the game's running clock, and
+   after each change the next one is due at **the clock's time when the
+   change happened + `delay`** (not previous due time + delay). That
+   clock moves on every drawn frame, so the changes come `delay` apart
+   plus at most one frame's lateness each. Recommendation: on a
+   continuous game-time clock, next due = time of this change + `delay`;
+   at our frame rates that is 0.3 s apart (not 4 and 5 ticks, not 5
+   ticks). (Which clock object it is was not fully traced; that it
+   counts from the moment of the change is traced.)
 4. With `repeatflag=0` the animator stops after the last entry and the
    squares keep it. (None in Daventry.)
 5. A non-zero `frameCount` (saved game) applies that entry at once when
    loaded, before the timer starts.
 6. The ground's texture comes from the square's material number, so the
-   drawn texture changes (with the material's orientation code from the
-   direction table, `terrain.md`). Whether the **envInfo flags** (water,
+   drawn texture changes (orientation: the square's own, rule 2). Whether
+   the **envInfo flags** (water,
    footsteps, `water.md`) follow the changed number was not traced; in
    Daventry every cycle uses materials with the same flags as the squares
    it animates (data: e.g. 56, 57, 89, 90 all only `0x10`; 111–116 all

@@ -102,6 +102,61 @@ All traced in `Mask.exe` unless marked otherwise.
    jump. Likely not (it is a jump, the same call that `animPos` uses);
    draw it without them, as you do now.
 
+### Loops that move the whole object (Q51, 2026-10-13)
+
+1. **The steps are added up.** Every update, after an animated object's
+   movement advances, the frame steps of that advance are put onto the
+   object's **current** placement and the object is moved there (through
+   its mover, so its collision box goes with it). This is the same path
+   for every animated object, Connor included: it is how his walk loop
+   carries him forward. Nothing recomputes the placement from the phase.
+   (Traced: the composition onto the current placement and the move.
+   Which frames' steps one update includes, exactly at a wrap, was not
+   traced.)
+2. So Gnome's rolling rocks (`rrock1–3`, loop `theroll`, 54 frames,
+   3.53 s, repeating) **really travel** along the path their steps
+   describe (up to 9,691 away) and would end each cycle about 57 units
+   from where it began, drifting further every cycle.
+3. **The data puts them back.** Each rock's moving movement has a cue at
+   phase 1.0: `cue1=1.0 sendEvent @ KQMoveEvent 0 57500 111710 18265 0 0
+   0 0` (`rrock1.kq`; the others with their own start). `@` is the
+   object itself; `KQMoveEvent` with first number 0 sets its position
+   and turn **absolutely** (x y z, then three angles). So at every wrap
+   the rock jumps back exactly to its start, and the 57-unit leftover
+   never builds up. (A commented-out line next to it does the same with a
+   relative move by the leftover, `KQMoveEvent 3 0.109 -56.617 1.670 …`:
+   the designers saw the drift.) The first number's meaning beyond 0 is
+   read from the same event's handler on the camera: flag value 1 = the
+   position is added to the current one, 2 = the turn is added, 3 = both;
+   the last number non-zero = don't refresh the object at once. That is
+   the camera's handler; for objects only the 0 case (absolute) is used
+   by this data. Treat the other values as "not checked" for objects.
+4. **A cue at exactly 1.0 fires on a repeating loop.** At a wrap the cue
+   range checked is from the old phase up to just above 1 (1.0001), then
+   from 0 to the new phase. So `cue1=1.0` fires once per cycle, when the
+   loop wraps. (For a play-once movement that stops at exactly 1.0, the
+   range ends at 1.0 and excludes it, `doors.md` rule 9.)
+5. So for B: apply the steps by adding them up (as for Connor), run the
+   cue's `sendEvent @ KQMoveEvent …` (moving the object and its box), and
+   the rocks roll out and come back each cycle. The **collision box
+   follows the object** (it is the object's box at its current
+   placement); Q33 a's "boxes are fixed" means the box's size and shape
+   never change, not its place.
+6. Frame shown during a repeating loop: not traced separately; keep B's
+   rule (round(phase × frames) mod frames).
+7. **User's check (2026-10-13):** our viewer already shows the three
+   rolling rocks correctly. B's way (steps chained from the phase, jump
+   back at the wrap) and the game's way (steps added up, reset to the
+   start by the cue at 1.0) give the **same picture**; B's can stay. Only
+   switch if something else ever moves the rock mid-roll.
+8. **Not the same thing: Gnome's `boulder`** (class `KQBoulder`, the
+   stone Connor pushes in the big room). Its only movement `stop` is a
+   repeating rolling loop (`pushston`, speed 1) by the data, and our
+   viewer plays it, so it rolls on the spot. The original shows it still.
+   So `KQBoulder` must be controlling its own animation (likely playing
+   it only while pushed). Not studied; until pushable objects are
+   studied, **don't play a `KQBoulder`'s movement** (show frame 0).
+
 ## See-through objects (Q14)
 
 1. **`translucency=<n>`** is read for every object (with `hazeMultiplier`,
