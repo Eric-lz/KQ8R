@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Questions: Q55 data findings, Q57 trap masks
+
+**Changed:** `docs/behaviour/QUESTIONS.md` only (Q55: what the data shows; new Q57).
+**Why:** Found while reviewing the new notes: the rolling rocks' own script handles the hit on Connor (`conCollisionAction=1`, `rollside.cs` `ConnorCollision`: `reactback`, `setRelDamage 0.2`, `KQAttackEvent`); and 59 of 344 trap files outside Daventry don't use mask 4, against `traps.md` rule 4.
+**Tested how:** Read and counted the data files in `MASK/*/kq/` (grep for `classType=KQTrap`, `colliderMask`, `conCollisionAction`, `ConnorCollision`).
+**Result:** 12 objects use `conCollisionAction=1`, 2 of them in Daventry (`bricks`, `waterfal`; `waterfal.cs` makes a remark on `ConnorCollision`). Trap masks: 285 × 4, the rest 0, 1, 2, 5, 6, 7, 516, 517, 519; Daventry's 58 are all 4.
+**Still broken / not tested:** No code change. Both questions wait for the study session.
+**Next:** M3 traps for Daventry (not blocked by these questions).
+
 ## 2026-10-13 M2 2i-2: Connor leans while running through water too
 
 **Changed:** `crates/kq8-game/src/connor.rs` (`waterrun` leans like `run`; unit test), `docs/behaviour/QUESTIONS.md` (Q56 partly answered by the user), `docs/DESIGN.md` (2i), `docs/provenance/README.md`, `README.md`, `STATUS.md`.
