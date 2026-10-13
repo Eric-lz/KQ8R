@@ -1193,6 +1193,9 @@ Steps (each separately revertable, each stopped for an eye check):
     - Unit tests: the envInfo line reader (stripping, the skipped first
       mark, tabs), the submerged test, the movement choice switching both
       ways, crash from `waterrun`.
+  - Viewer helper (added 2026-10-12, user's request): key U cycles
+    normal → both → floor only, to look at the floor grid (e.g.
+    DeadCity's raised areas).
   - Not in 2h: damage from poison, lava and swamp, sinking into `ontop`
     hazards, monsters (`keepOnGround=1`), drawing the water differently.
 

@@ -52,6 +52,10 @@ The code is written with an AI coding agent (Claude Code); see
   original puts them (e.g. the Swamp shack; checked in the logs).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
+- **Ground key U:** shows the hidden ground under the water (the
+  "floor"): first press both (the visible ground see-through where the
+  floor differs, the floor tinted blue where lower, red where higher),
+  second press the floor only, third press back to normal.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
   sound sources, unused pictures and objects that appear later in the
   story).

@@ -12,6 +12,25 @@ use bevy::prelude::*;
 use crate::load::{Ground, Objects};
 use crate::{material_for, mesh_from, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
 
+/// Which part of the ground a mesh is, for the U key (the floor grid,
+/// water.md): the drawn surface where it equals the floor or lies over a
+/// different floor, and the floor itself where it equals the surface or
+/// differs from it (tinted).
+#[derive(Component)]
+pub enum GroundPart {
+    SurfaceSame,
+    SurfaceOverFloor { opaque: Handle<StandardMaterial>, see_through: Handle<StandardMaterial> },
+    FloorSame,
+    FloorDiffers,
+}
+
+/// Tint for floor squares lower than the surface (under water).
+const FLOOR_LOWER_TINT: Color = Color::srgb(0.45, 0.6, 1.0);
+/// Tint for floor squares higher than the surface.
+const FLOOR_HIGHER_TINT: Color = Color::srgb(1.0, 0.4, 0.4);
+/// Opacity of the surface over a different floor while both are shown.
+const SURFACE_SEE_THROUGH: f32 = 0.35;
+
 #[derive(Resource)]
 pub struct LoadedGround(pub Option<Ground>);
 
@@ -52,24 +71,86 @@ pub fn setup_ground(
     let ground = loaded.0.take().expect("ground is loaded once");
     let mut log = shared.log.lock().unwrap();
     let mut triangles = 0;
+    let terrain = &ground.terrain;
+    let size = terrain.settings.square_size();
+    // Floor height at a grid corner given in game units.
+    let floor_z = |p: [f32; 3]| {
+        let (i, j) = ((p[0] / size).round() as usize, (p[1] / size).round() as usize);
+        terrain.point_height_on(kq8_data::terrain::Level::Floor, i, j).unwrap_or(p[2])
+    };
+    // Per kind: (surface same, surface over a different floor, floor same,
+    // floor lower, floor higher) triangle counts, for the log.
+    let mut counts = [0usize; 5];
     for group in ground.groups {
-        let mut positions = Vec::with_capacity(group.triangles.len() * 3);
-        let mut uvs = Vec::with_capacity(group.triangles.len() * 3);
+        // Clockwise from above (the game's front) -> reversed for Bevy,
+        // exactly as for models.
+        let mesh = |tris: &[(kq8_data::terrain::GroundTriangle, [f32; 3])], floor: bool| {
+            let mut positions = Vec::with_capacity(tris.len() * 3);
+            let mut uvs = Vec::with_capacity(tris.len() * 3);
+            for (t, fz) in tris {
+                for k in [0, 2, 1] {
+                    let mut p = t.positions[k];
+                    if floor {
+                        p[2] = fz[k];
+                    }
+                    positions.push(to_bevy(p, [0.0; 3]));
+                    uvs.push(t.uvs[k]);
+                }
+            }
+            mesh_from(positions, uvs)
+        };
+        // Sort the triangles by how the floor compares with the surface.
+        let (mut same, mut lower, mut higher) = (Vec::new(), Vec::new(), Vec::new());
         for t in &group.triangles {
-            // Clockwise from above (the game's front) -> reversed for Bevy,
-            // exactly as for models.
-            for k in [0, 2, 1] {
-                positions.push(to_bevy(t.positions[k], [0.0; 3]));
-                uvs.push(t.uvs[k]);
+            let fz = t.positions.map(floor_z);
+            let d: f32 = (0..3).map(|k| fz[k] - t.positions[k][2]).sum();
+            let differs = (0..3).any(|k| fz[k] != t.positions[k][2]);
+            match (differs, d < 0.0) {
+                (false, _) => same.push((*t, fz)),
+                (true, true) => lower.push((*t, fz)),
+                (true, false) => higher.push((*t, fz)),
             }
         }
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
         let material = material_for(group.look, ImageAddressMode::ClampToEdge, &mut images);
-        commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
-        log.detail(format!("spawned ground mesh for {} ({} triangles)", group.label, group.triangles.len()));
+        let tinted = |tint: Color| {
+            let mut m = material.clone();
+            m.base_color = tint;
+            m
+        };
+        let opaque = materials.add(material.clone());
+        let mut over: Vec<_> = lower.iter().chain(&higher).cloned().collect();
+        over.sort_by_key(|(t, _)| t.square);
+        let mut spawn = |tris: &[_], floor: bool, handle: Handle<StandardMaterial>, part: GroundPart, shown: bool| {
+            if tris.is_empty() {
+                return;
+            }
+            let v = if shown { Visibility::Inherited } else { Visibility::Hidden };
+            commands.spawn((Mesh3d(meshes.add(mesh(tris, floor))), MeshMaterial3d(handle), part, v));
+        };
+        spawn(&same, false, opaque.clone(), GroundPart::SurfaceSame, true);
+        let see_through = materials.add(with_opacity(&material, SURFACE_SEE_THROUGH));
+        spawn(&over, false, opaque.clone(), GroundPart::SurfaceOverFloor { opaque: opaque.clone(), see_through }, true);
+        spawn(&same, true, opaque.clone(), GroundPart::FloorSame, false);
+        spawn(&lower, true, materials.add(tinted(FLOOR_LOWER_TINT)), GroundPart::FloorDiffers, false);
+        spawn(&higher, true, materials.add(tinted(FLOOR_HIGHER_TINT)), GroundPart::FloorDiffers, false);
+        for (k, n) in [same.len(), over.len(), same.len(), lower.len(), higher.len()].into_iter().enumerate() {
+            counts[k] += n;
+        }
+        log.detail(format!(
+            "spawned ground meshes for {} ({} triangles; floor lower under {}, higher under {})",
+            group.label,
+            group.triangles.len(),
+            lower.len(),
+            higher.len()
+        ));
     }
+    log.summary(format!(
+        "  floor view (U): {} triangles where the floor differs ({} lower, blue; {} higher, red)",
+        counts[1], counts[3], counts[4]
+    ));
 
     let t = &ground.terrain;
     let (nx, ny) = t.squares();
@@ -201,6 +282,19 @@ pub struct ShownWithH;
 #[derive(Component)]
 pub struct HLabel;
 
+/// The on-screen text that says what U shows.
+#[derive(Component)]
+pub struct FloorLabel;
+
+fn floor_label_text(mode: u8) -> String {
+    let what = match mode {
+        1 => "BOTH (surface see-through over a different floor; floor blue = lower, red = higher)",
+        2 => "FLOOR ONLY (blue = lower than the surface, red = higher)",
+        _ => "surface (normal)",
+    };
+    format!("Ground: {what} (U)")
+}
+
 fn h_label_text(shown: bool) -> String {
     format!("Hidden objects: {} (H)", if shown { "SHOWN" } else { "hidden" })
 }
@@ -212,6 +306,13 @@ pub fn setup_h_label(mut commands: Commands) {
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
         HLabel,
+    ));
+    commands.spawn((
+        Text::new(floor_label_text(0)),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(Color::WHITE),
+        Node { position_type: PositionType::Absolute, top: Val::Px(30.0), left: Val::Px(10.0), ..default() },
+        FloorLabel,
     ));
     commands.spawn((
         Text::new(""),
@@ -274,6 +375,39 @@ pub fn toggle_markers(
         if *shown { "shown" } else { "hidden" },
         markers.iter().count()
     ));
+}
+
+/// U cycles the ground view (a viewer helper for water.md's floor grid):
+/// normal → both (the surface see-through where a different floor lies
+/// under or over it, that floor tinted) → floor only → normal.
+pub fn toggle_floor(
+    keys: Res<ButtonInput<KeyCode>>,
+    shared: Res<Shared>,
+    mut mode: Local<u8>,
+    mut parts: Query<(&GroundPart, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>)>,
+    mut label: Query<&mut Text, With<FloorLabel>>,
+) {
+    if !keys.just_pressed(KeyCode::KeyU) {
+        return;
+    }
+    *mode = (*mode + 1) % 3;
+    let show = |on: bool| if on { Visibility::Inherited } else { Visibility::Hidden };
+    for (part, mut v, mut m) in &mut parts {
+        match part {
+            GroundPart::SurfaceSame => *v = show(*mode != 2),
+            GroundPart::SurfaceOverFloor { opaque, see_through } => {
+                *v = show(*mode != 2);
+                m.0 = if *mode == 1 { see_through.clone() } else { opaque.clone() };
+            }
+            GroundPart::FloorSame => *v = show(*mode == 2),
+            GroundPart::FloorDiffers => *v = show(*mode != 0),
+        }
+    }
+    for mut t in &mut label {
+        t.0 = floor_label_text(*mode);
+    }
+    let name = ["surface (normal)", "both", "floor only"][*mode as usize];
+    shared.log.lock().unwrap().summary(format!("key U: ground view {name} ({} ground meshes)", parts.iter().count()));
 }
 
 /// A placement as a Bevy transform. The game moves a point as

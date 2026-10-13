@@ -262,7 +262,7 @@ fn main() -> ExitCode {
                 .insert_resource(game_camera::CameraChoice { game: false })
                 .add_systems(FixedUpdate, (connor_view::connor_step, game_camera::camera_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

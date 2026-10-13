@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 Viewer: key U shows the floor grid
+
+**Changed:** `crates/kq8-viewer/src/terrain_view.rs`: the ground is drawn in parts (surface where it equals the floor, surface over a different floor, floor where equal, floor where different); key U cycles normal → both (surface see-through where a different floor is under or over it; that floor tinted blue where lower, red where higher) → floor only (the whole floor, textured, same tints) → normal; on-screen label; log lines. `main.rs`: the system. Docs: README, DESIGN (2h).
+**Why:** User's request, to see the hidden floor (e.g. DeadCity's hall area).
+**Tested how:** `cargo build`, clippy; viewer start-up in Daventry, DeadCity, Barren (`--frames 30`), read `viewer.log`.
+**Result:** Triangles where the floor differs: Daventry 383 (all lower: the river), DeadCity 3,320 (1,150 lower, 2,170 higher), Barren 0 (no floor grid). No new clippy warnings.
+**Still broken / not tested:** Key presses not tested (no test option presses U); not checked by eye. In "both", see-through ground can look odd where objects stand on it.
+**Next:** You: press U three times in DeadCity near the hall and in the Daventry river.
+
 ## 2026-10-12 Standing jump while wading
 
 **Changed:** `crates/kq8-game/src/connor.rs`: `waterwalk` and `waterrun` added to the movements a jump can start from; both give the standing `jump`. Unit test. Docs: provenance, README.
