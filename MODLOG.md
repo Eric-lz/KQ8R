@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 DeadCity portal raised onto the floor (keepOnGround after −1/−2)
+
+**Changed:** `crates/kq8-data/src/objects.rs`: after a `loadKQ` z of −1/−2 is replaced by its grid's height, the `keepOnGround` raise runs too (was skipped). Unit test. `crates/kq8-viewer/src/load.rs`: log line when that raise moves an object. Docs: QUESTIONS (new Q44, for A to confirm), provenance.
+**Why:** User, in the original: the portal next to DeadCity's flame tower floats up on the raised floor like the tower; ours stood at 0. Its parts are placed with z −2 (surface, 0 there) and have the default `keepOnGround` (floor, 2,784 there). The notes give both rules but not their order.
+**Tested how:** `cargo test --workspace --release`; every object's position before and after in all 12 worlds (viewer logs, `--frames 30`).
+**Result:** Only `portsa7`, `portsb7`, `porttp7`, `portaa7` moved: 0 → 2,784 (their trap `portrap7` is at 2,909). The user also said the hall (cutscene place) and the tower are right as they are.
+**Still broken / not tested:** Not checked by eye. The order of the two rules is from the user's check, not traced (Q44).
+**Next:** You: look at the portal (`--world DeadCity --at 217513,37000,3.1416`, walk north; it is west of the tower at (209000, 49034)).
+
 ## 2026-10-12 Viewer: key U shows the floor grid
 
 **Changed:** `crates/kq8-viewer/src/terrain_view.rs`: the ground is drawn in parts (surface where it equals the floor, surface over a different floor, floor where equal, floor where different); key U cycles normal → both (surface see-through where a different floor is under or over it; that floor tinted blue where lower, red where higher) → floor only (the whole floor, textured, same tints) → normal; on-screen label; log lines. `main.rs`: the system. Docs: README, DESIGN (2h).

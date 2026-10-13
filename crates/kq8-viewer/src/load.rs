@@ -1219,6 +1219,14 @@ impl Placer<'_> {
                 p.keep_on_ground,
                 level.and_then(height).map_or("none (outside the grid, kept as written)".into(), |g| format!("{g:.0}"))
             ));
+            if level.and_then(height).is_some_and(|g| g != grounded[2]) {
+                self.log.detail(format!(
+                    "  then raised [{}] by keepOnGround onto the {:?} grid at z={:.0}",
+                    p.name,
+                    p.keep_on_ground.level().unwrap(),
+                    grounded[2]
+                ));
+            }
             self.on_ground_marker += usize::from(!unused);
             p.position = grounded;
         } else if grounded != p.position {

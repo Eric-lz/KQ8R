@@ -161,16 +161,18 @@ impl Placement {
 
     /// Position after the ground rules, with `ground(level)` the height of
     /// that grid under locX, locY: a `loadKQ` z of −1/−2 is replaced by the
-    /// floor/surface height (Q17, water.md); otherwise `keepOnGround`
-    /// raises an object below its grid onto it, never lowers it.
+    /// floor/surface height (Q17, water.md); then `keepOnGround` raises an
+    /// object below its grid onto it, never lowers it. The raise also
+    /// follows a −2 (the user's check in the original, 2026-10-12: DeadCity's
+    /// portal by the flame tower, placed at −2, stands on the higher floor).
     pub fn grounded_position(&self, ground: impl Fn(Level) -> Option<f32>) -> [f32; 3] {
-        let [x, y, z] = self.position;
-        if let Some(level) = self.z_on_ground {
-            return ground(level).map_or(self.position, |g| [x, y, g]);
+        let mut p = self.position;
+        if let Some(g) = self.z_on_ground.and_then(&ground) {
+            p[2] = g;
         }
-        match self.keep_on_ground.level().and_then(ground) {
-            Some(g) if z < g => [x, y, g],
-            _ => self.position,
+        match self.keep_on_ground.level().and_then(&ground) {
+            Some(g) if p[2] < g => [p[0], p[1], g],
+            _ => p,
         }
     }
 
@@ -474,6 +476,19 @@ translucency=200
         // -1 is the floor, -2 the surface (water.md).
         assert_eq!(Placement::from_load(s, &load(-1.0)).grounded_position(water), [1.0, 2.0, 500.0]);
         assert_eq!(Placement::from_load(s, &load(-2.0)).grounded_position(water), [1.0, 2.0, 800.0]);
+        // -2 where the floor is above the surface (DeadCity's portal): on the
+        // surface, then the default keepOnGround raise lifts it to the floor;
+        // with keepOnGround=0 (this template) it stays on the surface.
+        let raised = |level| Some(if level == Level::Floor { 2784.0 } else { 0.0 });
+        assert_eq!(Placement::from_load(s, &load(-2.0)).grounded_position(raised), [1.0, 2.0, 0.0]);
+        let portal = &crate::kq_text::parse(b"[porttp7]
+shapeName=poptop.kqs
+locX=0
+locY=0
+locZ=937
+")[0];
+        assert_eq!(Placement::from_load(portal, &load(-2.0)).grounded_position(raised), [1.0, 2.0, 2784.0]);
+        assert_eq!(Placement::from_load(portal, &load(-1.0)).grounded_position(raised), [1.0, 2.0, 2784.0]);
         // Any other value is used as written (keepOnGround is off here).
         let p = Placement::from_load(s, &load(-3.0));
         assert_eq!(p.grounded_position(|_| Some(500.0)), [1.0, 2.0, -3.0]);
