@@ -854,6 +854,8 @@ pub struct Objects {
     pub emitters: Vec<EmitterAssets>,
     /// The particle catchers (M3 step 3b-2): name and settings.
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
+    /// The traps (M3 step 3d-2), where the start-up scripts left them.
+    pub traps: Vec<kq8_game::trap::TrapSettings>,
     /// The ground animators in load order (M3 step 3b-3).
     pub animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     /// Placed objects whose current movement plays (M3 step 3c).
@@ -1000,6 +1002,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         door_animation_index: BTreeMap::new(),
         emitters: Vec::new(),
         catchers: Vec::new(),
+        traps: Vec::new(),
         animators: Vec::new(),
         animated: Vec::new(),
         object_animations: Vec::new(),
@@ -1079,9 +1082,32 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         };
         placer.place(&load, Some((label, bytes)), true, &script.vars);
     }
-    let mut objects = placer.finish();
     // The world's scripts, for running them while the game plays (M3).
-    objects.scripts = world.entries_ending(".cs").into_iter().filter_map(|(n, _, b)| b.ok().map(|b| (n, b))).collect();
+    let mut scripts: Vec<(String, Vec<u8>)> = world.entries_ending(".cs").into_iter().filter_map(|(n, _, b)| b.ok().map(|b| (n, b))).collect();
+    // Then the game-wide ones (`walk_la.cs`, ... in `GAME/Kq`, traps.md
+    // "Data used"): searched after the world's folders, so a world's own
+    // script of the same name wins (models-and-textures.md "Which one
+    // wins"; `GAME/patch` before `GAME/Kq`: the note's likely reading).
+    let mut shared = 0;
+    for folder in ["GAME/patch", "GAME/Kq"] {
+        let Some(dir) = game.find(folder) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let mut files: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
+        files.sort();
+        for path in files {
+            let Some(name) = path.file_name().and_then(|n| n.to_str()).map(str::to_string) else { continue };
+            if !name.to_ascii_lowercase().ends_with(".cs") || scripts.iter().any(|(n, _)| n.eq_ignore_ascii_case(&name)) {
+                continue;
+            }
+            if let Ok(bytes) = std::fs::read(&path) {
+                scripts.push((name, bytes));
+                shared += 1;
+            }
+        }
+    }
+    placer.log.summary(format!("scripts for play: {} from the world, {shared} game-wide (GAME/patch, GAME/Kq)", scripts.len() - shared));
+    let mut objects = placer.finish();
+    objects.scripts = scripts;
     objects.vars = script.vars;
     objects
 }
@@ -1127,6 +1153,7 @@ struct Placer<'a> {
     door_animation_index: BTreeMap<String, usize>,
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
+    traps: Vec<kq8_game::trap::TrapSettings>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     animated: Vec<AnimatedAssets>,
     object_animations: Vec<Animation>,
@@ -1481,6 +1508,13 @@ impl Placer<'_> {
         if load.inside_if {
             self.log.summary(format!("  NOTE {label}: loaded inside an if-block ({} line {}); placed anyway", load.from, load.line));
         }
+        // A trap (M3 step 3d-2, traps.md rules 1 and 2): no model, its
+        // position as written (keepOnGround ignored), a z of -1 on the
+        // floor grid; it stays an invisible-object marker.
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap")) {
+            self.place_trap(&label, s, p);
+            return;
+        }
 
         // Ground rules, when the object is loaded, so `getLoc` sees the
         // result: loadKQ z of -1 = on the floor, -2 = on the surface
@@ -1769,6 +1803,46 @@ impl Placer<'_> {
 
     /// An emitter (M3 step 3b-1; docs/behaviour/emitters.md): its keys and
     /// its particle model, loaded once like any object model.
+    fn place_trap(&mut self, label: &str, s: &kq8_data::kq_text::Section, mut p: kq8_data::objects::Placement) {
+        let num = |key: &str| s.get(key).and_then(|v| v.trim().parse::<f32>().ok());
+        if p.position[2] == -1.0 {
+            let [x, y, _] = p.position;
+            match self.terrain.ground_at(kq8_data::terrain::Level::Floor, x, y) {
+                Some(g) => {
+                    self.log.detail(format!("trap [{}]: locZ -1 -> floor grid height {:.0}", p.name, g.height));
+                    p.position[2] = g.height;
+                }
+                None => self.log.detail(format!("trap [{}]: locZ -1 outside the floor grid; kept as -1", p.name)),
+            }
+        }
+        let (mask, problem) = collider_value(s, "colliderMask", 0);
+        if let Some(problem) = problem {
+            self.log.detail(format!("trap [{}]: {problem}", p.name));
+        }
+        let trap_type = s.get("trapType").and_then(|v| v.trim().parse::<u32>().ok()).unwrap_or(0);
+        let settings = kq8_game::trap::TrapSettings {
+            name: p.name.clone(),
+            position: p.position,
+            min: [num("BBMinX").unwrap_or(0.0), num("BBMinY").unwrap_or(0.0), num("BBMinZ").unwrap_or(0.0)],
+            max: [num("BBMaxX").unwrap_or(0.0), num("BBMaxY").unwrap_or(0.0), num("BBMaxZ").unwrap_or(0.0)],
+            script: s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            mask,
+            trap_type,
+            inner_percent: num("innerPercent"),
+        };
+        self.log.detail(format!(
+            "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, script {:?}",
+            p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.script
+        ));
+        self.traps.push(settings);
+        self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQTrap".into(), position: p.position, anm: false });
+        if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+            l.drawn = Drawn::Marker(self.markers.len() - 1);
+        }
+        *self.by_class.entry("KQTrap (trap, M3)".into()).or_default() += 1;
+    }
+
     fn place_emitter(
         &mut self,
         label: &str,
@@ -2043,6 +2117,12 @@ impl Placer<'_> {
                 e.position = l.position;
             }
         }
+        let mut traps = self.traps;
+        for t in &mut traps {
+            if let Some(l) = self.located.get(&t.name.to_ascii_lowercase()) {
+                t.position = l.position;
+            }
+        }
         let mut known: Vec<String> = self.located.keys().cloned().collect();
         known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
         Objects {
@@ -2064,6 +2144,7 @@ impl Placer<'_> {
             attack_dist: self.attack_dist,
             emitters,
             catchers: self.catchers,
+            traps,
             animators: self.animators,
             animated: self.animated,
             object_animations: self.object_animations,

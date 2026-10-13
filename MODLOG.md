@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3d-2: Daventry's traps switch on and off
+
+**Changed:** `crates/kq8-game/src/active.rs` (traps in the world objects: `Init`, `connor_moved`, `KQCueEvent` to traps, `KQObject::collision`, a separate trap log; 2 unit tests), `crates/kq8-viewer/src/load.rs` (traps loaded; game-wide scripts from `GAME/patch` and `GAME/Kq`), `door_view.rs` (traps created with the doors, new `trap_step` after Connor's update, `traps.log`), `main.rs` (order). Docs: DESIGN (3d-2), provenance, README.
+**Why:** M3 step 3d-2 (`traps.md`).
+**Tested how:** `cargo test --workspace`; viewer runs in Daventry reading `traps.log`: `--at 277744,199295,3.1416 --hold 1,0,1,40`, `--at 268280,223800,3.1416 --hold 1,0,1,30`, `--at 186500,198000,1.5708 --hold 1,0,1,90`, `--at 143974,206673,1.5708 --hold 1,0,1,40`.
+**Result:** 214 unit tests pass (58 + 156). 52 traps loaded (4 sticky, start shrunk), every script gets `Init`; 174 world + 30 game-wide scripts. `jumptp`: On at update 11 when his balls reach its box (y 199,822, box from 200,000); `jumpa.cs` sets its variable, asks for popup 133 (stub) and removes bit 4 (mask 0x4 -> 0x0). Connor's house `Conwalk.tp`: On at update 15, Off at 21; `walk_la.cs` runs (found in `GAME/Kq` after adding game-wide scripts; first try: "not found"). Sticky `mwiztrap`: On at x 189,041 (inner box), grows to full, Off at x 198,106 (full box), shrinks again; the overlapping `wiztrap` switches on separately. Ropes: `ropetrap` On at the foot of the wizard's cliff; rope commands logged as unknown.
+**Still broken / not tested:** Nothing visible yet: `KQConner::setRun`, `KQCamera::setRange` (3d-3), music, rope, monster and cutscene commands log as unknown. The note says Daventry has 50 traps, we place 52 (no duplicates, none inside an if-block); not settled. `mwzhtrap` (the wizard's house) is about 5,000 above the ground where we tested, on top of the cliff, so not reached. **Found, not caused by this step:** running east at y 204,700 from x 140,000, Connor gets stuck in Fall (`jumphold`) at about (141,850, 204,070) from update ~28, sinking a few units per update; the same on the previous commit. Not investigated.
+**Next:** 3d-3: `setRun` and `setRange` from the walk/run zones; stubs for the action-only commands.
+
 ## 2026-10-13 M3 3d-1: the trap rules
 
 **Changed:** `crates/kq8-game/src/trap.rs` (new: `Trap`, entering / staying / leaving, sticky boxes, one-shot; 6 unit tests), `lib.rs`. `docs/DESIGN.md` (plan 3d), `docs/behaviour/QUESTIONS.md` (Q58), `docs/provenance/README.md`.

@@ -1654,7 +1654,8 @@ catchers, ground animators).
   - **Next after 3r:** traps (`traps.md`), chests (`chests.md`), items
     and picking up (`items.md`), each planned here before it is built.
 
-- **3d — Daventry's traps (planned 2026-10-13).** Rules from `traps.md`
+- **3d — Daventry's traps (planned 2026-10-13; 3d-1 and 3d-2 done
+  2026-10-13, MODLOG; checked in the logs).** Rules from `traps.md`
   (and `connor-movement.md` rule 4, `camera.md` "Distance" rule 2 for the
   two commands). Three sub-steps, each with its own tests and MODLOG
   entry.
@@ -1714,7 +1715,11 @@ catchers, ground animators).
     trap's script with `$1` = trap name (rules 6, 8). `sendEvent … <trap>
     KQCueEvent n1 n2` → `Cue n1 n2` (rule 14, as doors). `KQObject::collision
     <name> <±bits>` changes a trap's (or door's) mask (rule 16).
-    `TalkComplete` and `StateChange` are M4/M5. Log
+    `TalkComplete` and `StateChange` are M4/M5. The shared scripts
+    (`walk_la.cs` ...) are in `GAME/Kq`: scripts are looked up in the
+    world first, then `GAME/patch`, then `GAME/Kq`
+    (`models-and-textures.md` "Which one wins"; no Daventry script has a
+    game-wide twin). Log
     `kq8-artifacts/logs/traps.log`: every trap at load (name, file, box,
     shrunk box, mask, script, `Init`), and every `On`/`Off`/`Cue` with
     Connor's position, his box centre, the box used, and the script's

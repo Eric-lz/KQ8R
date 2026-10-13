@@ -570,3 +570,17 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | "Touching" = one of the visitor's wall-collision balls within its radius of the box, at the end of the move | **Our stand-in**, `traps.md` open question 2 | Unit tests |
 | No `colliderMask` → 0; no `innerPercent` → full box | **Our stand-in** (not in the note; every trap in the data has a mask, every sticky one an `innerPercent`) | — |
 
+## Traps in Daventry (M3 step 3d-2) — `crates/kq8-game/src/active.rs`, `crates/kq8-viewer/src/{load,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Every placed `KQTrap` becomes a trap; position as written, `keepOnGround` ignored; `locZ=-1` → floor grid height | `traps.md` rules 1, 2 | Daventry: 52 traps, 4 sticky (note: 50; asked, not settled) |
+| Final position after the start-up scripts' `move` lines | Our choice, as emitters (3b-1) | — |
+| `Init` for each trap at the start, after the doors' | `traps.md` rule 13; the order is **our stand-in** | Log: `script roofTrap.cs roofTrap Init` ... |
+| Checked after Connor's update whenever his position changed | `traps.md` rules 6, 7 ("every time an object inside moves"); the order in the update is **our stand-in** | `--at 268280,223800,3.1416 --hold 1,0,1,30`: `Conwalk.tp` On at update 15, Off at 21 |
+| Sticky boxes in play | `traps.md` rule 10 | `--at 186500,198000,1.5708 --hold 1,0,1,90`: `mwiztrap` On at x 189,041 (inner edge 189,101 − 200), Off at x 198,106 (full edge 197,857 + 200) |
+| `KQCueEvent` to a trap → `Cue n1 n2 [n3]` | `traps.md` rule 14 (as doors rule 23) | Unit test |
+| `KQObject::collision <name> <±bits>` changes a trap's or door's mask | `traps.md` rule 16 | Unit test; log: `jumpa.cs` `collision jumptp -4: mask 0x4 -> 0x0` |
+| Whoever is inside when the mask changes: no `Off` | **Our stand-in**, `traps.md` open question 1 | Unit test |
+| Scripts looked up in the world, then `GAME/patch`, then `GAME/Kq` | `models-and-textures.md` "Which one wins" (world folders before `GAME/`; patch before Kq: the note's likely reading) | 174 world + 30 game-wide scripts; no name in both |
+

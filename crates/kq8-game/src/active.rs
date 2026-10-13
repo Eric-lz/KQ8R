@@ -13,6 +13,14 @@
 //!
 //! Every line worth checking goes to [`WorldState::log`], which the caller
 //! writes to `doors.log`.
+//!
+//! Traps (M3 step 3d-2, `docs/behaviour/traps.md`) share the variables,
+//! scripts and event queue. Each trap's script gets `Init` at the start
+//! (rule 13); after Connor's update, if he moved, every trap checks him
+//! ([`Active::connor_moved`], `crate::trap`) and runs its script with `On`,
+//! `Off` or `Cue` (rules 6-8); `KQCueEvent`s sent to a trap run it with
+//! `Cue` (rule 14); `KQObject::collision` changes a trap's mask (rule 16).
+//! Lines from trap calls go to [`WorldState::trap_log`] (`traps.log`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,6 +31,7 @@ use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
+use crate::trap::{Trap, Visitor};
 
 /// Event types we know (doors.md "Commands door scripts use"). Any other
 /// is an error and is not sent.
@@ -102,6 +111,7 @@ pub enum ClickResult {
 /// Everything a script can touch, apart from the variables.
 pub struct WorldState {
     pub doors: Vec<ActiveDoor>,
+    pub traps: Vec<Trap>,
     pub clickables: Vec<Clickable>,
     /// Every loaded object's name, lower case (for "unknown object").
     pub known: BTreeSet<String>,
@@ -112,6 +122,10 @@ pub struct WorldState {
     pub updates: u64,
     /// Lines for `doors.log`, taken by the caller.
     pub log: Vec<String>,
+    /// Lines for `traps.log`: everything while a trap's call runs.
+    pub trap_log: Vec<String>,
+    /// A trap's call is running: lines go to `trap_log`.
+    in_trap: bool,
 }
 
 impl WorldState {
@@ -120,11 +134,56 @@ impl WorldState {
     }
 
     fn note(&mut self, line: impl AsRef<str>) {
-        self.log.push(format!("update {}: {}", self.updates, line.as_ref()));
+        let line = format!("update {}: {}", self.updates, line.as_ref());
+        if self.in_trap {
+            self.trap_log.push(line);
+        } else {
+            self.log.push(line);
+        }
     }
 
     pub fn door_index(&self, name: &str) -> Option<usize> {
         self.doors.iter().position(|d| d.door.name.eq_ignore_ascii_case(name))
+    }
+
+    pub fn trap_index(&self, name: &str) -> Option<usize> {
+        self.traps.iter().position(|t| t.settings.name.eq_ignore_ascii_case(name))
+    }
+
+    /// `KQObject::collision <name> <+-bits>`: adds or removes bits of an
+    /// object's collision mask (traps.md rule 16; traps and doors).
+    fn collision_mask(&mut self, words: &[String], at: &str) -> String {
+        let (Some(name), Some(bits)) = (words.get(1), words.get(2)) else {
+            self.note(format!("{at}: usage: KQObject::collision <name> <bits>"));
+            return "1".into();
+        };
+        let Ok(bits) = bits.parse::<i64>() else {
+            self.note(format!("{at}: collision {name} {bits}: not a whole number"));
+            return "1".into();
+        };
+        let change = |m: u32| if bits >= 0 { m | bits as u32 } else { m & !(bits.unsigned_abs() as u32) };
+        let (old, new, inside) = if let Some(i) = self.trap_index(name) {
+            let t = &mut self.traps[i];
+            let old = t.settings.mask;
+            t.settings.mask = change(old);
+            (old, t.settings.mask, t.inside.clone())
+        } else if let Some(i) = self.door_index(name) {
+            let d = &mut self.doors[i];
+            let old = d.collision_mask;
+            d.collision_mask = change(old);
+            (old, d.collision_mask, Vec::new())
+        } else {
+            let why = if self.known.contains(&name.to_ascii_lowercase()) { "object kind not tracked yet" } else { "unknown object" };
+            self.note(format!("{at}: collision {name} {bits}: {why}; not changed"));
+            return "1".into();
+        };
+        let mut line = format!("{at}: collision {name} {bits:+}: mask {old:#x} -> {new:#x}");
+        if !inside.is_empty() {
+            // traps.md open question 1; stand-in: no Off.
+            line.push_str(&format!("; inside now: {} (stay listed, no Off sent: stand-in)", inside.join(", ")));
+        }
+        self.note(line);
+        "0".into()
     }
 
     /// `KQObject::collisionType <name> <±bits>`.
@@ -206,6 +265,7 @@ impl ScriptHost for WorldState {
         match words[0].as_str() {
             "sendEvent" => Some(self.send_event(words, at)),
             "KQObject::collisionType" => Some(self.collision_type(words, at)),
+            "KQObject::collision" => Some(self.collision_mask(words, at)),
             _ => None,
         }
     }
@@ -238,8 +298,91 @@ impl Active {
         let sources = sources.into_iter().map(|(n, b)| (n.to_ascii_lowercase(), b)).collect();
         Active {
             scripts: Scripts::new(vars),
-            world: WorldState { doors, clickables, known, sources, queue: EventQueue::default(), updates: 0, log: Vec::new() },
+            world: WorldState {
+                doors,
+                traps: Vec::new(),
+                clickables,
+                known,
+                sources,
+                queue: EventQueue::default(),
+                updates: 0,
+                log: Vec::new(),
+                trap_log: Vec::new(),
+                in_trap: false,
+            },
         }
+    }
+
+    /// Adds the world's traps (before [`Active::start`]).
+    pub fn add_traps(&mut self, traps: impl IntoIterator<Item = Trap>) {
+        for t in traps {
+            self.world.known.insert(t.settings.name.to_ascii_lowercase());
+            self.world.traps.push(t);
+        }
+    }
+
+    /// Runs trap `i`'s script with `args` (`$1` is the trap's name); its
+    /// lines go to the trap log.
+    fn call_trap(&mut self, i: usize, args: &[&str]) {
+        let was = std::mem::replace(&mut self.world.in_trap, true);
+        let t = &self.world.traps[i];
+        let name = t.settings.name.clone();
+        let mut all = vec![name.clone()];
+        all.extend(args.iter().map(|a| a.to_string()));
+        match t.settings.script.clone() {
+            Some(script) => {
+                self.world.note(format!("script {script} {}", all.join(" ")));
+                self.scripts.call(&script, &all, &mut self.world);
+            }
+            None => self.world.note(format!("trap {name} has no script; {} not called", all.join(" "))),
+        }
+        self.world.in_trap = was;
+    }
+
+    /// After an object's move (Connor's, in this step): every trap checks
+    /// it and runs its script for `On`, `Off` or `Cue` (traps.md rules
+    /// 6-9). Returns the calls made, as `<trap> <args>`.
+    pub fn connor_moved(&mut self, v: &Visitor) -> Vec<String> {
+        let mut calls = Vec::new();
+        for i in 0..self.world.traps.len() {
+            let shrunk_before = self.world.traps[i].shrunk;
+            let c = self.world.traps[i].check(v);
+            let Some(args) = c.call else { continue };
+            let t = &self.world.traps[i];
+            let (name, gone) = (t.settings.name.clone(), t.gone);
+            let change = match (shrunk_before, t.shrunk) {
+                (true, false) => "; grows to full",
+                (false, true) => "; shrinks again",
+                _ => "",
+            };
+            let line = format!(
+                "trap {name}: {} at ({:.0}, {:.0}, {:.0}): touching {}, box centre inside {}, {} box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}){change}; inside now: [{}]",
+                args.join(" "),
+                v.position[0],
+                v.position[1],
+                v.position[2],
+                c.touching,
+                c.centre_inside,
+                if shrunk_before { "inner (shrunk)" } else { "full" },
+                c.min[0],
+                c.min[1],
+                c.min[2],
+                c.max[0],
+                c.max[1],
+                c.max[2],
+                t.inside.join(", ")
+            );
+            let was = std::mem::replace(&mut self.world.in_trap, true);
+            self.world.note(line);
+            if gone {
+                self.world.note(format!("trap {name}: one-shot, deleted after its On (rule 11)"));
+            }
+            self.world.in_trap = was;
+            calls.push(format!("{name} {}", args.join(" ")));
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            self.call_trap(i, &refs);
+        }
+        calls
     }
 
     /// Runs door `i`'s script with `args` (`$1` is the door's name).
@@ -261,6 +404,10 @@ impl Active {
     pub fn start(&mut self) {
         for i in 0..self.world.doors.len() {
             self.call_door(i, &["Init"]);
+        }
+        // traps.md rule 13 (after the doors: our order).
+        for i in 0..self.world.traps.len() {
+            self.call_trap(i, &["Init"]);
         }
     }
 
@@ -412,6 +559,24 @@ impl Active {
 
     fn handle(&mut self, e: Pending) {
         let from = if e.from.is_empty() { String::new() } else { format!(" (sent by {})", e.from) };
+        if let Some(i) = self.world.trap_index(&e.target) {
+            let was = std::mem::replace(&mut self.world.in_trap, true);
+            if e.kind == "KQCueEvent" {
+                // traps.md rule 14, as doors (rule 23).
+                let n = |k: usize| e.data.get(k).cloned().unwrap_or_else(|| "0".into());
+                let mut args = vec!["Cue".to_string(), n(0), n(1)];
+                if e.data.get(2).is_some_and(|v| number_value(v) != 0.0) {
+                    args.push(e.data[2].clone());
+                }
+                self.world.note(format!("KQCueEvent {} to trap {}{from}", e.data.join(" "), e.target));
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                self.call_trap(i, &refs);
+            } else {
+                self.world.note(format!("event {} {} to trap {}{from}: not handled for traps", e.kind, e.data.join(" "), e.target));
+            }
+            self.world.in_trap = was;
+            return;
+        }
         let Some(i) = self.world.door_index(&e.target) else {
             let why = if e.kind == "KQStatsChangeRequestEvent" { "stats are M5" } else { "object kind not implemented yet" };
             self.world.note(format!("event {} {} to {}{from}: not handled ({why})", e.kind, e.data.join(" "), e.target));
@@ -469,6 +634,11 @@ impl Active {
     /// Lines for the log since the last call.
     pub fn take_log(&mut self) -> Vec<String> {
         std::mem::take(&mut self.world.log)
+    }
+
+    /// Lines for the trap log since the last call.
+    pub fn take_trap_log(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.world.trap_log)
     }
 }
 
@@ -632,5 +802,62 @@ mod tests {
             Active::pick(&active(PLAIN, &[]), [0.0, -5000.0, 900.0], [0.0, 1.0, 0.0]).map(|(n, t)| (n, t.round())),
             Some(("Condoor".to_string(), 4810.0))
         );
+    }
+
+    /// A made-up trap script in the style of `clifTrap.cs` (not a copy):
+    /// on its first On it cues itself and switches itself off for Connor.
+    const TRAP: &str = "if test $2 == Init\n set T::Init 1\nelse if test $2 == On\n set T::Who $3\n sendEvent 0 $1 KQCueEvent 10 0\n KQObject::collision $1 -4\nelse if test $2 == Off\n set T::Out $3\nelse if test $2 == Cue\n echo cue $3\nendif\nendif\nendif\nendif\n";
+
+    fn with_trap(script: &'static str) -> Active {
+        use crate::trap::TrapSettings;
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), script.as_bytes().to_vec())]);
+        a.add_traps([Trap::new(TrapSettings {
+            name: "clifTrap".into(),
+            position: [0.0; 3],
+            min: [-500.0, -500.0, 0.0],
+            max: [500.0, 500.0, 1000.0],
+            script: Some("trap.cs".into()),
+            mask: 4,
+            trap_type: 0,
+            inner_percent: None,
+        })]);
+        a.start();
+        a
+    }
+
+    fn connor_at(a: &mut Active, x: f32) -> Vec<String> {
+        let balls = crate::collide::BallStack::from_box([-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]);
+        let v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, position: [x, 0.0, 0.0], min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
+        a.connor_moved(&v)
+    }
+
+    #[test]
+    fn a_trap_gets_init_on_and_off_with_its_name_and_connors() {
+        let mut a = with_trap("if test $2 == Init\n set T::Init $1\nelse if test $2 == On\n set T::Who $3\nelse if test $2 == Off\n set T::Out $3\nendif\nendif\nendif\n");
+        assert_eq!(a.scripts.vars.get("T::Init"), Some("clifTrap"));
+        assert!(connor_at(&mut a, -2000.0).is_empty());
+        assert_eq!(connor_at(&mut a, -600.0), ["clifTrap On Connor"]);
+        assert_eq!(a.scripts.vars.get("T::Who"), Some("Connor"));
+        assert!(connor_at(&mut a, 0.0).is_empty());
+        assert_eq!(connor_at(&mut a, 800.0), ["clifTrap Off Connor"]);
+        assert_eq!(a.scripts.vars.get("T::Out"), Some("Connor"));
+        let log = a.take_trap_log().join("\n");
+        assert!(log.contains("script trap.cs clifTrap Init") && log.contains("trap clifTrap: On Connor at (-600, 0, 0)"), "{log}");
+        assert!(a.take_log().is_empty(), "trap lines stay out of doors.log");
+    }
+
+    #[test]
+    fn a_trap_cues_itself_and_switches_itself_off_for_connor() {
+        let mut a = with_trap(TRAP);
+        assert_eq!(connor_at(&mut a, 0.0), ["clifTrap On Connor"]);
+        assert_eq!(a.world.traps[0].settings.mask, 0, "bit 4 removed (rule 16)");
+        // The cue (delay 0) is handled in the next update's events.
+        a.update();
+        let log = a.take_trap_log().join("\n");
+        assert!(log.contains("KQCueEvent 10 0 to trap clifTrap") && log.contains("echo cue 10"), "{log}");
+        assert!(log.contains("mask 0x4 -> 0x0; inside now: Connor"), "{log}");
+        // Leaving: Connor no longer counts, so no Off (stand-in).
+        assert!(connor_at(&mut a, 5000.0).is_empty());
+        assert_eq!(a.scripts.vars.get("T::Out"), None);
     }
 }

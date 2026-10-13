@@ -13,11 +13,17 @@
 //! Test options: `--click NAME,N` clicks object NAME before update N + 1;
 //! `--item TYPE` puts an item of that type in Connor's hand. Everything is
 //! logged to `kq8-artifacts/logs/doors.log`.
+//!
+//! Traps (M3 step 3d-2, docs/behaviour/traps.md) live in the same
+//! `Active` (shared variables, scripts and events). [`trap_step`] runs
+//! after Connor's update: if he moved, every trap checks him. Their lines
+//! go to `kq8-artifacts/logs/traps.log`.
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kq8_game::active::{Active, ActiveDoor, Item};
+use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
 use kq8_game::door::{turn_degrees, Cue, Door, DoorMovement};
 
@@ -54,6 +60,29 @@ pub struct DoorSim {
     /// Objects clicked since the last update, with how (mouse, test).
     pending: Vec<(String, String)>,
     log: Log,
+    /// `traps.log`; `None` if it could not be made.
+    trap_log: Option<Log>,
+    /// Where the traps last checked Connor.
+    connor_checked_at: Option<[f32; 3]>,
+}
+
+impl DoorSim {
+    /// Writes the trap lines gathered since the last call; `On`/`Off` also
+    /// to the main log.
+    fn flush_traps(&mut self, shared: &Shared) {
+        let lines = self.active.take_trap_log();
+        let Some(log) = &mut self.trap_log else { return };
+        if lines.is_empty() {
+            return;
+        }
+        let mut main = shared.log.lock().unwrap();
+        for line in lines {
+            if line.contains(": trap ") && (line.contains(": On ") || line.contains(": Off ") || line.contains(": Cue ")) {
+                main.summary(format!("traps: {line}"));
+            }
+            log.detail(line);
+        }
+    }
 }
 
 /// `--click NAME,N` (each may be given more than once).
@@ -236,13 +265,68 @@ pub fn spawn_doors(
         std::mem::take(&mut objects.known).into_iter().chain(["Connor".to_string()]),
         sources,
     );
-    // Rule 22: each door's script gets Init as the door enters the world.
+    // Traps (3d-2): loaded where the start-up scripts left them.
+    let mut trap_log = match Log::create("traps") {
+        Ok(l) => Some(l),
+        Err(e) => {
+            main_log.summary(format!("traps: cannot create traps.log: {e}; traps still run, not logged"));
+            None
+        }
+    };
+    let traps: Vec<Trap> = std::mem::take(&mut objects.traps).into_iter().map(Trap::new).collect();
+    let sticky = traps.iter().filter(|t| t.shrunk).count();
+    main_log.summary(format!(
+        "traps: {} traps ({sticky} sticky, start shrunk); log in {}",
+        traps.len(),
+        trap_log.as_ref().map_or("(none)".into(), |l| l.path().display().to_string())
+    ));
+    if let Some(log) = &mut trap_log {
+        log.detail("traps at the start: name, box in use (world), full box, mask, trapType, innerPercent, script");
+        for t in &traps {
+            let ((a, b), (fa, fb)) = (t.current_box(), t.full_box());
+            log.detail(format!(
+                "trap {} box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}) full ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}) mask {:#x} trapType {} innerPercent {:?} script {:?}",
+                t.settings.name, a[0], a[1], a[2], b[0], b[1], b[2], fa[0], fa[1], fa[2], fb[0], fb[1], fb[2],
+                t.settings.mask, t.settings.trap_type, t.settings.inner_percent, t.settings.script
+            ));
+        }
+    }
+    active.add_traps(traps);
+    // Rule 22: each door's script gets Init as the door enters the world;
+    // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
+    if let Some(log) = &mut sim.trap_log {
+        for line in sim.active.take_trap_log() {
+            log.detail(line);
+        }
+    }
     commands.insert_resource(sim);
+}
+
+/// After Connor's update (M3 step 3d-2): if he moved, every trap checks
+/// him (traps.md rules 6-9) and runs its script.
+pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, shared: Res<Shared>) {
+    let (Some(mut sim), Some(connor)) = (sim, connor) else { return };
+    let sim = &mut *sim;
+    let position = connor.mover.position;
+    if sim.connor_checked_at != Some(position) {
+        sim.connor_checked_at = Some(position);
+        let (min, max) = kq8_game::mover::CONNOR_BOX;
+        let v = Visitor {
+            name: &connor.placement.name,
+            collision_type: kq8_game::collide::CONNOR_TYPE,
+            position,
+            min,
+            max,
+            balls: &connor.mover.balls,
+        };
+        sim.active.connor_moved(&v);
+    }
+    sim.flush_traps(&shared);
 }
 
 /// Left click: the nearest clickable box under the mouse (rule 10), handled
@@ -323,6 +407,7 @@ pub fn door_step(
             }
         }
     }
+    sim.flush_traps(&shared);
     let lines = sim.active.take_log();
     if !lines.is_empty() {
         let mut main = shared.log.lock().unwrap();
