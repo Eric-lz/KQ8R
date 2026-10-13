@@ -50,6 +50,16 @@ The code is written with an AI coding agent (Claude Code); see
   walk and run while it is deep (checked in the logs, not yet by eye).
   Buildings and objects stand on the ground under the water where the
   original puts them (e.g. the Swamp shack; checked in the logs).
+- **Doors** (M3, first step): a left click on a door uses it, as with
+  the game's play cursor. In reach (the original's 4,700 units from the
+  door) the door's own script runs, which opens it: it swings open on its
+  hinge in the original's time, and its box swings with it, so the doorway
+  is free and the open door still blocks Connor where it stands. Plain
+  house doors stay open on a second click; from too far nothing happens
+  (Connor's remark is only written to the log); the castle keep's doors
+  open only with the key (a test option, there is no inventory yet).
+  Checked in the logs, **not yet by eye or with the mouse**. Everything is
+  written to `kq8-artifacts/logs/doors.log`.
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Ground key U:** shows the hidden ground under the water (the
@@ -62,7 +72,9 @@ The code is written with an AI coding agent (Claude Code); see
 
 ## What doesn't work yet
 
-There is nothing to play yet. Some objects have no
+There is nothing to play yet. Doors make no sound, Connor says nothing
+when clicking (too far, locked) and doesn't turn to face the door; only
+doors react to clicks (other clickable things are logged only). Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
 back behind him by itself or avoid walls. In water there is no damage
@@ -88,6 +100,7 @@ cargo run --release -p kq8-viewer -- --terrain --world Daventry
 | Page Up / Page Down, Home | Tilt the camera, reset the tilt |
 | F11 | Camera keeps a fixed distance |
 | F | Switch to a free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
+| Left mouse | Use the door under the mouse (play cursor) |
 | H | Show or hide hidden and unused objects |
 | G / B | Test: lift Connor high / a little and let him fall |
 | Esc | Quit |

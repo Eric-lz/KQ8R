@@ -18,13 +18,16 @@
 //! F11 fixed distance; keys from Camera.sae); F switches to the free
 //! camera and back; G / B lift him 5,000 / 2,000 to test falling.
 //! `--at X,Y,H` starts him on the ground at X, Y facing heading H (radians).
-//! Esc quits.
+//! Doors (M3): left click on a door uses it (play cursor); `--click NAME,N`
+//! clicks object NAME before update N + 1, `--item TYPE` puts an item of
+//! that type in Connor's hand (tests). Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no lighting, no animation. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
 mod connor_view;
+mod door_view;
 mod game_camera;
 mod load;
 mod log;
@@ -76,6 +79,11 @@ struct Args {
     turn: Option<(u64, i8)>,
     /// Test: start Connor on the ground at X, Y facing heading H (radians).
     at: Option<[f32; 3]>,
+    /// Test: click object NAME before update N + 1 (may be given more
+    /// than once).
+    click: Vec<(String, u64)>,
+    /// Test: Connor holds an item of this type.
+    item: Option<String>,
     terrain: bool,
 }
 
@@ -91,6 +99,8 @@ fn parse_args() -> Result<Args, String> {
         jump: None,
         turn: None,
         at: None,
+        click: Vec::new(),
+        item: None,
         terrain: false,
     };
     let mut it = std::env::args().skip(1);
@@ -119,6 +129,13 @@ fn parse_args() -> Result<Args, String> {
                 let [x, y, h] = n[..] else { return Err("--at needs three numbers, e.g. 286169,190211,0.291".into()) };
                 a.at = Some([x, y, h]);
             }
+            "--click" => {
+                let v = value()?;
+                let (name, n) = v.rsplit_once(',').ok_or("--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
+                let n = n.trim().parse::<u64>().map_err(|_| "--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
+                a.click.push((name.trim().to_string(), n));
+            }
+            "--item" => a.item = Some(value()?),
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -184,7 +201,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE]");
             return ExitCode::FAILURE;
         }
     };
@@ -256,13 +273,17 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::JumpAt(args.jump))
                 .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))
+                .insert_resource(door_view::ClickAt(args.click))
+                .insert_resource(door_view::HeldItem(args.item))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
                 .insert_resource(Time::<Fixed>::from_hz(kq8_game::UPDATES_PER_SECOND))
                 .insert_resource(game_camera::CameraChoice { game: false })
-                .add_systems(FixedUpdate, (connor_view::connor_step, game_camera::camera_step).chain())
+                // Doors first, so a door's box is where it is drawn when
+                // Connor moves (M3 step 3a).
+                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, game_camera::camera_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, connor_view::connor_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();

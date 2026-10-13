@@ -1,0 +1,470 @@
+//! The door (`KQDoor`): its four states, its movements, cues and the turn
+//! its animation gives it (M3 step 3a-2).
+//!
+//! Rules from `docs/behaviour/doors.md` (traced unless marked):
+//!
+//! - States closed / opening / opened / closing; every door starts closed
+//!   (rule 1).
+//! - `KQDoorEvent` 1 opens only a closed door, 2 closes only an opened
+//!   one, anything else (also no number) toggles; a moving door ignores
+//!   it (rules 2–4).
+//! - `KQAnimPlayEvent <movement>` starts that movement; the state stays
+//!   (rule 6).
+//! - When a movement called `open` / `close` (any capitals) finishes, the
+//!   door is opened / closed, shows `opened` / `closed`, and its script is
+//!   called with `Open` / `Close` (rules 5, 6). The caller makes that call.
+//! - A cue at phase c fires when c is in [lower, higher) of the phases
+//!   before and after the update, in either direction (rule 9).
+//! - The door turns with its animation (rule 24, inferred from data and
+//!   the user's check). Open question 1's recommendation: the turn is
+//!   worked out from the current phase, never added up: the frame shown
+//!   at the phase, and the frame steps 1…k of that frame chained, so it
+//!   can't drift.
+
+use kq8_data::shape::Transform;
+
+use crate::collide::Placement;
+
+/// Rule 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoorState {
+    Closed,
+    Opening,
+    Opened,
+    Closing,
+}
+
+impl DoorState {
+    pub fn name(self) -> &'static str {
+        match self {
+            DoorState::Closed => "closed",
+            DoorState::Opening => "opening",
+            DoorState::Opened => "opened",
+            DoorState::Closing => "closing",
+        }
+    }
+}
+
+/// `cueN=<phase> <action…>` of a movement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cue {
+    pub phase: f32,
+    pub action: String,
+}
+
+/// One of the door's movements, from its `loop=` line, its cues and its
+/// shape's frames.
+#[derive(Debug, Clone)]
+pub struct DoorMovement {
+    pub name: String,
+    /// Start phase, 0..1.
+    pub start: f32,
+    /// 1 forward, −1 backward, 0 still.
+    pub speed: f32,
+    /// True = repeats (no Daventry door movement does).
+    pub repeat: bool,
+    /// Seconds for one play from phase 0 to 1 (the loop's stored length).
+    pub play_time: f32,
+    /// Each frame's own step (frame 0 first; frame 0's is zero).
+    pub frame_steps: Vec<Transform>,
+    pub cues: Vec<Cue>,
+}
+
+impl DoorMovement {
+    /// Frames in the loop (at least 1).
+    pub fn frames(&self) -> usize {
+        self.frame_steps.len().max(1)
+    }
+
+    /// The frame shown at `phase`: round(phase × (frames − 1)) for a
+    /// one-shot, as for Connor's one-shots (`connor::MovementLoop::frame_at`).
+    pub fn frame_at(&self, phase: f32) -> usize {
+        let n = self.frames();
+        if self.repeat {
+            ((phase.rem_euclid(1.0) * n as f32) as usize).min(n - 1)
+        } else {
+            (phase.clamp(0.0, 1.0) * (n - 1) as f32).round() as usize
+        }
+    }
+
+    /// The steps of frames 1…`frame` chained: each step is taken in the
+    /// door's own axes as they are after the earlier steps. Frame 0 is the
+    /// starting pose (no step).
+    pub fn turn_at_frame(&self, frame: usize) -> Transform {
+        let mut c = identity();
+        for s in self.frame_steps.iter().take(frame + 1).skip(1) {
+            c = chain(&c, s);
+        }
+        c
+    }
+}
+
+/// No change.
+pub fn identity() -> Transform {
+    Transform { flags: 0, m: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], p: [0.0; 3] }
+}
+
+/// `outer` after `step`: a point goes through `step` first, then `outer`
+/// (row vectors: m = step.m × outer.m, p = step.p × outer.m + outer.p).
+pub fn chain(outer: &Transform, step: &Transform) -> Transform {
+    let m = std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| step.m[i][k] * outer.m[k][j]).sum()));
+    let p = std::array::from_fn(|j| (0..3).map(|k| step.p[k] * outer.m[k][j]).sum::<f32>() + outer.p[j]);
+    Transform { flags: 0, m, p }
+}
+
+/// The angle a transform turns about Z, in degrees (for the log).
+pub fn turn_degrees(t: &Transform) -> f32 {
+    t.m[0][1].atan2(t.m[0][0]).to_degrees()
+}
+
+/// What one update did to a door.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Advance {
+    /// Phase before and after.
+    pub from: f32,
+    pub to: f32,
+    /// Cue actions that fired.
+    pub cues: Vec<String>,
+    /// `Open` or `Close` when an `open` / `close` movement finished: the
+    /// caller calls the script with it.
+    pub finished: Option<&'static str>,
+    /// The name of the movement that finished, if any.
+    pub finished_movement: Option<String>,
+    /// A movement needed after finishing (`opened` / `closed`) that the
+    /// door doesn't have.
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Door {
+    pub name: String,
+    pub state: DoorState,
+    pub movements: Vec<DoorMovement>,
+    /// Index into `movements` of the one playing or shown.
+    pub current: usize,
+    pub phase: f32,
+    /// The current movement still moves (speed not 0, not finished).
+    pub playing: bool,
+    /// Started in this update: it first moves in the next (DESIGN 3a-2,
+    /// stand-in, Q45 d).
+    pub started_this_update: bool,
+    /// The door's place in the world (from its `.kq` or `loadKQ` line).
+    pub base: Placement,
+}
+
+impl Door {
+    /// A door showing movement `current` at its start phase, closed
+    /// whatever that movement is (rule 1).
+    pub fn new(name: &str, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
+        let current = current.min(movements.len().saturating_sub(1));
+        let (phase, playing) = movements.get(current).map_or((0.0, false), |m| (m.start, m.speed != 0.0));
+        Door {
+            name: name.to_string(),
+            state: DoorState::Closed,
+            movements,
+            current,
+            phase,
+            playing,
+            started_this_update: false,
+            base,
+        }
+    }
+
+    pub fn movement(&self) -> Option<&DoorMovement> {
+        self.movements.get(self.current)
+    }
+
+    pub fn movement_name(&self) -> &str {
+        self.movement().map_or("none", |m| m.name.as_str())
+    }
+
+    /// Starts movement `name` (any capitals) at its start phase. `Err` if
+    /// the door has no such movement.
+    pub fn play(&mut self, name: &str) -> Result<(), String> {
+        let i = self
+            .movements
+            .iter()
+            .position(|m| m.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| format!("{} has no movement '{name}'", self.name))?;
+        self.current = i;
+        self.phase = self.movements[i].start;
+        self.playing = self.movements[i].speed != 0.0;
+        self.started_this_update = true;
+        Ok(())
+    }
+
+    /// `KQDoorEvent` (rules 2–4); `None` = no number (toggle). Returns the
+    /// state before and a note (what happened, or why it was ignored).
+    pub fn door_event(&mut self, value: Option<i64>) -> (DoorState, String) {
+        let before = self.state;
+        let wants = match value {
+            Some(1) => "open",
+            Some(2) => "close",
+            _ => "toggle",
+        };
+        let target = match (wants, before) {
+            ("open" | "toggle", DoorState::Closed) => Some(("open", DoorState::Opening)),
+            ("close" | "toggle", DoorState::Opened) => Some(("close", DoorState::Closing)),
+            _ => None,
+        };
+        let note = match target {
+            Some((movement, state)) => match self.play(movement) {
+                Ok(()) => {
+                    self.state = state;
+                    format!("{wants}: starts '{movement}'")
+                }
+                Err(e) => format!("{wants}: {e}; state unchanged"),
+            },
+            None => format!("{wants}: ignored while {}", before.name()),
+        };
+        (before, note)
+    }
+
+    /// One update of `dt` seconds: the phase moves, cues fire, a play-once
+    /// movement finishes at 1 (forward) or 0 (backward).
+    pub fn advance(&mut self, dt: f32) -> Advance {
+        let mut out = Advance { from: self.phase, to: self.phase, ..Default::default() };
+        if self.started_this_update {
+            self.started_this_update = false;
+            return out;
+        }
+        if !self.playing {
+            return out;
+        }
+        let Some(m) = self.movements.get(self.current) else { return out };
+        if m.play_time <= 0.0 {
+            self.playing = false;
+            return out;
+        }
+        let p0 = self.phase;
+        let mut p1 = p0 + m.speed * dt / m.play_time;
+        let mut done = false;
+        if m.repeat {
+            // Not used by any Daventry door; cues of a wrapping loop are
+            // not handled (logged by the caller as nothing fired).
+            p1 = p1.rem_euclid(1.0);
+        } else if p1 >= 1.0 && m.speed > 0.0 {
+            p1 = 1.0;
+            done = true;
+        } else if p1 <= 0.0 && m.speed < 0.0 {
+            p1 = 0.0;
+            done = true;
+        }
+        let (lo, hi) = if p0 <= p1 { (p0, p1) } else { (p1, p0) };
+        out.cues = m.cues.iter().filter(|c| c.phase >= lo && c.phase < hi).map(|c| c.action.clone()).collect();
+        let name = m.name.clone();
+        self.phase = p1;
+        out.to = p1;
+        if done {
+            self.playing = false;
+            let next = if name.eq_ignore_ascii_case("open") {
+                Some((DoorState::Opened, "opened", "Open"))
+            } else if name.eq_ignore_ascii_case("close") {
+                Some((DoorState::Closed, "closed", "Close"))
+            } else {
+                None
+            };
+            out.finished_movement = Some(name);
+            if let Some((state, still, call)) = next {
+                self.state = state;
+                if let Err(e) = self.play(still) {
+                    out.problem = Some(e);
+                }
+                // Showing the still movement is not a new start to wait for.
+                self.started_this_update = false;
+                out.finished = Some(call);
+            }
+        }
+        out
+    }
+
+    /// The frame shown now.
+    pub fn frame(&self) -> usize {
+        self.movement().map_or(0, |m| m.frame_at(self.phase))
+    }
+
+    /// The turn the animation gives the door now (own space).
+    pub fn turn(&self) -> Transform {
+        self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()))
+    }
+
+    /// Where the door stands now: its turn, then its place in the world.
+    pub fn placement(&self) -> Placement {
+        let t = self.turn();
+        let base = Transform { flags: 0, m: self.base.rotation, p: self.base.position };
+        let w = chain(&base, &t);
+        Placement { rotation: w.m, position: w.p }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    /// A turn of `deg` about Z round the point (hx, hy), as one frame
+    /// step (made-up numbers in the style of `door1.kqs`).
+    pub fn hinge_step(deg: f32, hx: f32, hy: f32) -> Transform {
+        let (s, c) = deg.to_radians().sin_cos();
+        let m = [[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]];
+        // p such that the hinge stays put: h·m + p = h.
+        let p = [hx - (hx * c - hy * s), hy - (hx * s + hy * c), 0.0];
+        Transform { flags: 3, m, p }
+    }
+
+    /// A door like Daventry's: 16 frames over 1 s, 15 steps adding up to
+    /// 165°, the four movements of the `.kq` files.
+    pub fn test_door(close_cue: Option<f32>) -> Door {
+        let mut steps = vec![identity()];
+        steps.extend((1..16).map(|_| hinge_step(11.0, -634.0, -63.0)));
+        let mv = |name: &str, start: f32, speed: f32, cues: Vec<Cue>| DoorMovement {
+            name: name.into(),
+            start,
+            speed,
+            repeat: false,
+            play_time: 1.0,
+            frame_steps: steps.clone(),
+            cues,
+        };
+        let close_cues = close_cue.map(|phase| Cue { phase, action: "playsound door4.aud".into() }).into_iter().collect();
+        Door::new(
+            "Condoor",
+            vec![
+                mv("closed", 0.0, 0.0, vec![]),
+                mv("opened", 1.0, 0.0, vec![]),
+                mv("open", 0.0, 1.0, vec![Cue { phase: 0.0, action: "playsound door4.aud".into() }]),
+                mv("close", 0.93, -1.0, close_cues),
+            ],
+            0,
+            Placement::at([1000.0, 2000.0, 300.0]),
+        )
+    }
+
+    const DT: f32 = 1.0 / 15.0;
+
+    /// Updates until the door stops moving: (updates moved, advances).
+    fn run_out(d: &mut Door) -> (usize, Vec<Advance>) {
+        let mut all = Vec::new();
+        for _ in 0..100 {
+            let a = d.advance(DT);
+            let moved = a.from != a.to;
+            let finished = a.finished.is_some();
+            all.push(a);
+            if finished || (!moved && !d.playing) {
+                break;
+            }
+        }
+        (all.iter().filter(|a| a.from != a.to).count(), all)
+    }
+
+    #[test]
+    fn the_state_table() {
+        use DoorState::*;
+        // (state, value) -> state after.
+        for (state, value, after) in [
+            (Closed, Some(1), Opening),
+            (Closed, Some(2), Closed),
+            (Closed, Some(0), Opening),
+            (Closed, None, Opening),
+            (Opened, Some(1), Opened),
+            (Opened, Some(2), Closing),
+            (Opened, Some(7), Closing),
+            (Opened, None, Closing),
+            (Opening, Some(1), Opening),
+            (Opening, Some(2), Opening),
+            (Opening, None, Opening),
+            (Closing, Some(1), Closing),
+            (Closing, Some(2), Closing),
+            (Closing, Some(0), Closing),
+        ] {
+            let mut d = test_door(None);
+            d.state = state;
+            let (before, note) = d.door_event(value);
+            assert_eq!((before, d.state), (state, after), "{state:?} {value:?}: {note}");
+        }
+    }
+
+    #[test]
+    fn open_takes_15_updates_then_calls_open_and_stays_opened() {
+        let mut d = test_door(None);
+        d.door_event(Some(1));
+        assert_eq!((d.state, d.movement_name()), (DoorState::Opening, "open"));
+        // The update it was started in: no movement yet.
+        let first = d.advance(DT);
+        assert_eq!(first.from, first.to);
+        let (moved, all) = run_out(&mut d);
+        assert_eq!(moved, 15);
+        let last = all.last().unwrap();
+        assert_eq!((last.finished, last.finished_movement.as_deref()), (Some("Open"), Some("open")));
+        assert_eq!((d.state, d.movement_name(), d.phase, d.frame()), (DoorState::Opened, "opened", 1.0, 15));
+        // A plain door's script sends 1 again: ignored, it stays open.
+        d.door_event(Some(1));
+        assert_eq!((d.state, d.movement_name()), (DoorState::Opened, "opened"));
+        // The open cue at 0.0 fired in the first moving update only.
+        let cues: Vec<usize> = all.iter().enumerate().filter(|(_, a)| !a.cues.is_empty()).map(|(i, _)| i).collect();
+        assert_eq!(cues, [0]);
+    }
+
+    #[test]
+    fn close_from_0_93_takes_14_updates_and_a_cue_at_0_95_never_fires() {
+        let mut d = test_door(Some(0.95));
+        d.door_event(Some(1));
+        run_out(&mut d);
+        d.advance(DT);
+        d.door_event(Some(2));
+        assert_eq!((d.state, d.phase), (DoorState::Closing, 0.93));
+        d.advance(DT);
+        let (moved, all) = run_out(&mut d);
+        assert_eq!(moved, 14);
+        assert!(all.iter().all(|a| a.cues.is_empty()), "Saradoor's close cue at 0.95 must stay silent");
+        assert_eq!((all.last().unwrap().finished, d.state, d.movement_name()), (Some("Close"), DoorState::Closed, "closed"));
+    }
+
+    #[test]
+    fn anim_play_open_from_closed_ends_opened_and_a_door_event_restarts_it() {
+        let mut d = test_door(None);
+        d.play("OPEN").unwrap();
+        assert_eq!(d.state, DoorState::Closed, "rule 6: the state stays");
+        d.advance(DT);
+        for _ in 0..5 {
+            d.advance(DT);
+        }
+        assert!(d.phase > 0.3);
+        // Still closed, so KQDoorEvent 1 starts `open` again from the start.
+        d.door_event(Some(1));
+        assert_eq!((d.state, d.phase), (DoorState::Opening, 0.0));
+        d.advance(DT);
+        let (_, all) = run_out(&mut d);
+        assert_eq!((all.last().unwrap().finished, d.state), (Some("Open"), DoorState::Opened));
+        assert!(d.play("swing").is_err());
+    }
+
+    #[test]
+    fn the_turn_follows_the_phase_and_never_drifts() {
+        let mut d = test_door(None);
+        let closed = d.placement();
+        for _ in 0..10 {
+            d.door_event(None);
+            d.advance(DT);
+            run_out(&mut d);
+            assert!((turn_degrees(&d.turn()) - 165.0).abs() < 0.01, "{}", turn_degrees(&d.turn()));
+            d.door_event(None);
+            d.advance(DT);
+            run_out(&mut d);
+        }
+        assert_eq!(d.state, DoorState::Closed);
+        assert_eq!(d.frame(), 0);
+        let now = d.placement();
+        assert_eq!((now.rotation, now.position), (closed.rotation, closed.position));
+        // `close` starts at 0.93, which shows frame 14 (with these equal
+        // made-up steps 154°; in `door1.kqs` frame 14 is 167.75°, 2.75°
+        // past frame 15).
+        d.door_event(None);
+        d.advance(DT);
+        run_out(&mut d);
+        d.door_event(None);
+        assert_eq!(d.frame(), 14);
+        // The hinge stays where it is, in the world too.
+        let hinge = d.placement().to_world([-634.0, -63.0, 0.0]);
+        assert!((hinge[0] - (1000.0 - 634.0)).abs() < 0.05 && (hinge[1] - (2000.0 - 63.0)).abs() < 0.05, "{hinge:?}");
+    }
+}

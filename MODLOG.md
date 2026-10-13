@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-12 M3 3a-3: clicking doors, doors in the viewer
+
+**Changed:** `crates/kq8-game/src/click.rs` (new: ray against a turned box, distance to a box in its own axes), `active.rs` (new: doors + event queue + scripts together; clicks with reach, `ConnorAction do do` / item / too far; `collisionType`; `Init` calls). `crates/kq8-data/src/objects.rs`: `movement_loops` (every movement of an object) and cue lines. `crates/kq8-viewer`: `door_view.rs` (new: doors drawn turned and showing their frame, left-click picking, `door_step` before Connor's update moves the door colliders), `load.rs` (doors loaded with all movements and frame steps, Connor's `attackDist`, clickable objects, the world's scripts and start-up variables), `terrain_view.rs` (`bevy_transform_from`), `main.rs` (`--click NAME,N` (repeatable), `--item TYPE`, systems). Docs: DESIGN (3a), provenance, README, QUESTIONS (Q45, Q46).
+**Why:** `doors.md` rules 10–17 and 24: the player clicks a door; the door's script opens it; the open door must be out of the doorway but still solid.
+**Tested how:** `cargo test --workspace --release`; viewer runs in Daventry with test clicks (no mouse), reading `doors.log`, `connor.log`, `viewer.log`: `--at 269813,225311,3.1416 --click Condoor,5 --click Condoor,40`; too far from the start spot `--click Condoor,3`; walking west into the doorway `--at 270813,225311,-1.5708 --hold 1,0,0` with and without `--click Condoor,2`; into the open leaf from inside `--at 267200,224000,1.5708 --hold 1,0,0 --click Condoor,2`; keep doors `--at 217414,279300,0` with and without `--item INVITEM_KeepKey`. Swamp, DeadCity, Barren, IceWorld started (`--frames 30`).
+**Result:** 165 tests pass (53 + 112). Daventry: 17 doors, 105 other clickable objects, reach 4,700. Click from 1,000: `Condoor ConnorAction do do` → `KQDoorEvent 1` (update 5) → opening, first step update 6, frames 1…15 (12.81°, …, 165°, 167.75°, 165°) → opened at update 20 → `condoor.cs Condoor Open`. Second click: script runs, `open: ignored while opened`. From the start spot: distance 26,913.5, "too far", nothing sent. Door closed: Connor stops head-on at x 269,038 (225 from the face). Door open: he walks through the doorway into the house (to its far wall, 2,977 further). Into the open leaf: head-on stop, contact normal (−0.966, 0.260) = the leaf turned 165°. Keep doors: no key → "locked" (stub); key → both toggle open (180°, −180°) and become unclickable (`0x1021 → 0x1001`). Other worlds: 8 / 64 / 12 / 19 doors, all door scripts balanced; IceWorld `control.cs` uses `getEndLoop` (logged as unknown).
+**Still broken / not tested:** **Not checked by eye; the mouse click is not tested at all** (only the `--click` option). No sound, no remarks, Connor doesn't turn to the door (rule 16), no hits/`Die`/`ProjImmune` (no combat yet), clicks on other objects only logged, `tooFar=` ignored (Q45 a). Stand-ins: picking ignores walls (Q45 b), reach uses the turned box (Q45 c), events/movement timing (Q45 d). `door3.kqs` opens in 1.6 s and 180° per the data, unlike `doors.md` rule 8 (Q46).
+**Next:** You: see "How to test" in the chat (click Connor's door, watch it swing, walk in). Then a study session for Q45/Q46.
+
+## 2026-10-12 M3 3a-2: the door and the event queue
+
+**Changed:** `crates/kq8-game/src/door.rs` (new: four states, `KQDoorEvent`, `KQAnimPlayEvent`, movements by phase, cues, `Open`/`Close` on finishing, the turn worked out from the phase), `events.rs` (new: `sendEvent` queue, time then send order). Docs: DESIGN (plan 3a).
+**Why:** `doors.md` rules 1–9, 22–24.
+**Tested how:** `cargo test -p kq8-game --release`; a throwaway program (scratch folder) chaining `door1.kqs` and `keepdrl.kqs` frame steps.
+**Result:** Unit tests: state table (14 cases), `open` 15 moving updates, `close` from 0.93 14, cue at 0.0 fires in the first moving update, a close cue at 0.95 never fires, `KQAnimPlayEvent open` ends opened with `Open`, 10 open/close cycles return exactly to the closed pose, event order and delays (0.07 s = two updates). Data: `door1.kqs`'s chained steps all turn about one hinge (−634, −63).
+**Still broken / not tested:** Which update a movement first moves in, and whether `sendEvent 0` lands in the same update, are our stand-ins (Q45 d).
+**Next:** 3a-3.
+
+## 2026-10-12 M3 3a-1: the script runner
+
+**Changed:** `crates/kq8-game/src/script.rs` (new): words, `#`, quotes, `$` arguments and variables (unset ones vanish), `if`/`else`/`endif` with `else if` as else + nested if, `test`, `$Console::Return`, `set`, `echo`, scripts calling scripts, stubs for later-milestone commands, world commands handed to the caller. The start-up follower (`world_script.rs`) is unchanged.
+**Why:** `doors.md` "The script language".
+**Tested how:** `cargo test -p kq8-game --release` (7 tests on made-up scripts, not copies of the game's); a throwaway program counting `if`/`endif` pairing over every Daventry `.cs`.
+**Result:** 7 tests pass. All 174 Daventry scripts balance under "`else if` needs its own `endif`".
+**Still broken / not tested:** `$Console::Return` values other than "0 = true", and how a number word is read, are stand-ins (Q45 e, f). Commands outside doors.md's list fail as unknown (logged).
+**Next:** 3a-2.
+
 ## 2026-10-12 Study: emitters, particle catchers, ground animators
 
 **Changed:** New note `docs/behaviour/emitters.md` (study session A). Scratch notes in `re/` (not committed).

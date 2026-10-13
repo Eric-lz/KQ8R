@@ -186,11 +186,16 @@ pub fn setup_objects(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    held: Res<crate::door_view::HeldItem>,
 ) {
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
     commands.insert_resource(Buildings(std::mem::take(&mut objects.buildings)));
-    commands.insert_resource(ObjectColliders(std::mem::take(&mut objects.objects)));
+    // Doors (M3 step 3a): drawn and moved by door_view; their colliders
+    // join the others and are moved every update.
+    let mut colliders = std::mem::take(&mut objects.objects);
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut materials, &mut images, &mut log);
+    commands.insert_resource(ObjectColliders(colliders));
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
         crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut materials, &mut images, &mut log);
@@ -414,12 +419,18 @@ pub fn toggle_floor(
 /// `point × R + position` (row vectors, Z up); in Bevy's Y-up space the
 /// same turn is `C · Rᵀ · Cᵀ`, where C is the axis change of `to_bevy`.
 pub fn bevy_transform(p: &kq8_data::objects::Placement) -> Transform {
+    bevy_transform_from(p.transform().m, p.position)
+}
+
+/// The same for a rotation matrix R (row vectors) and a position, e.g. a
+/// door turned by its animation.
+pub fn bevy_transform_from(r: [[f32; 3]; 3], position: [f32; 3]) -> Transform {
     // Columns of a glam matrix built from R's rows = Rᵀ.
-    let r_t = Mat3::from_cols_array_2d(&p.transform().m);
+    let r_t = Mat3::from_cols_array_2d(&r);
     // to_bevy: (x, y, z) -> (x, z, -y), as columns.
     let c = Mat3::from_cols(Vec3::X, Vec3::NEG_Z, Vec3::Y);
     let rotation = Quat::from_mat3(&(c * r_t * c.transpose()));
-    Transform { translation: Vec3::from(to_bevy(p.position, [0.0; 3])), rotation, scale: Vec3::ONE }
+    Transform { translation: Vec3::from(to_bevy(position, [0.0; 3])), rotation, scale: Vec3::ONE }
 }
 
 pub fn fly_input(

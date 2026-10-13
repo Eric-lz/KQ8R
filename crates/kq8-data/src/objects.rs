@@ -212,6 +212,11 @@ pub struct CurrentLoop {
     pub transitions: Vec<TransitionLine>,
     /// Transition lines that could not be read, with the reason.
     pub transition_problems: Vec<String>,
+    /// The movement's `cueN=<phase> <action…>` lines (`nCue` of them),
+    /// in file order (doors.md rule 9; e.g. `cue0=0.0 playsound door4.aud`).
+    pub cues: Vec<(f32, String)>,
+    /// Cue lines that could not be read, with the reason.
+    pub cue_problems: Vec<String>,
 }
 
 /// `transitionN=<from phase> <to movement> <to phase> <transition movement>`
@@ -260,6 +265,77 @@ fn transition_lines(section: &Section) -> (Vec<TransitionLine>, Vec<String>) {
     (lines, problems)
 }
 
+/// The `nCue` / `cueN=<phase> <action…>` lines of a `[movement<k>]`
+/// section. Lines commented out with `#` have another key and don't count.
+fn cue_lines(section: &Section) -> (Vec<(f32, String)>, Vec<String>) {
+    let (mut cues, mut problems) = (Vec::new(), Vec::new());
+    let count = match section.number("nCue") {
+        None => 0,
+        Some(Ok(n)) if n >= 0.0 => n as usize,
+        Some(_) => {
+            problems.push(format!("[{}] nCue is not a count", section.name));
+            0
+        }
+    };
+    for k in 0..count {
+        let key = format!("cue{k}");
+        let Some(text) = section.get(&key) else {
+            problems.push(format!("[{}] has no {key}", section.name));
+            continue;
+        };
+        let mut words = text.split_whitespace();
+        match (words.next().map(str::parse::<f32>), words.collect::<Vec<_>>().join(" ")) {
+            (Some(Ok(phase)), action) if !action.is_empty() => cues.push((phase, action)),
+            _ => problems.push(format!("[{}] {key}={text} is not '<phase> <action>'", section.name)),
+        }
+    }
+    (cues, problems)
+}
+
+/// Every movement of an animated object, in list order (index k =
+/// `Movement<k>` = `[movement<k>]`): its name and loop. `Ok(None)` if the
+/// section is not animated this way.
+pub fn movement_loops(file: &[Section], s: &Section) -> Result<Option<Vec<(String, CurrentLoop)>>, String> {
+    let Some(list_name) = s.get("animLoops") else { return Ok(None) };
+    let find = |name: &str| file.iter().find(|x| x.name.eq_ignore_ascii_case(name));
+    let list = find(list_name).ok_or(format!("animation list [{list_name}] not in the file"))?;
+    let count = list.number("nMovement").ok_or(format!("[{list_name}] has no nMovement"))??;
+    let mut out = Vec::new();
+    for k in 0..count as usize {
+        let name = list.get(&format!("Movement{k}")).ok_or(format!("[{list_name}] has no Movement{k}"))?;
+        out.push((name.to_string(), loop_of(file, k, false)?));
+    }
+    Ok(Some(out))
+}
+
+/// The loop of `[movement<k>]`.
+fn loop_of(file: &[Section], movement: usize, fell_back: bool) -> Result<CurrentLoop, String> {
+    let find = |name: &str| file.iter().find(|x| x.name.eq_ignore_ascii_case(name));
+    let section = find(&format!("movement{movement}")).ok_or(format!("section [movement{movement}] not in the file"))?;
+    let line = section.get("loop").ok_or(format!("[movement{movement}] has no loop line"))?;
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let [shape, sequence, start, speed, repeat, unknown] = words[..] else {
+        return Err(format!("[movement{movement}] loop line '{line}' does not have 6 parts"));
+    };
+    let bad = |what: &str| format!("[movement{movement}] loop line '{line}': {what} is not a number");
+    let (transitions, transition_problems) = transition_lines(section);
+    let (cues, cue_problems) = cue_lines(section);
+    Ok(CurrentLoop {
+        movement,
+        fell_back,
+        shape: shape.to_string(),
+        sequence: sequence.to_string(),
+        start: start.parse().map_err(|_| bad("start"))?,
+        speed: speed.parse().map_err(|_| bad("speed"))?,
+        repeat: repeat.parse::<i64>().map_err(|_| bad("repeat"))? != 0,
+        unknown: unknown.parse().map_err(|_| bad("fourth value"))?,
+        transitions,
+        transition_problems,
+        cues,
+        cue_problems,
+    })
+}
+
 /// The current animation of an animated object (rules from objects.md
 /// "Animated objects at load"; layout observed, e.g. Daventry
 /// `alchdoor.kq`): `animLoops=<list>`; `[<list>]` has `nMovement` and
@@ -283,26 +359,7 @@ pub fn current_loop(file: &[Section], s: &Section) -> Result<Option<CurrentLoop>
         Some(k) => (k, false),
         None => (0, true),
     };
-    let section = find(&format!("movement{movement}")).ok_or(format!("section [movement{movement}] not in the file"))?;
-    let line = section.get("loop").ok_or(format!("[movement{movement}] has no loop line"))?;
-    let words: Vec<&str> = line.split_whitespace().collect();
-    let [shape, sequence, start, speed, repeat, unknown] = words[..] else {
-        return Err(format!("[movement{movement}] loop line '{line}' does not have 6 parts"));
-    };
-    let bad = |what: &str| format!("[movement{movement}] loop line '{line}': {what} is not a number");
-    let (transitions, transition_problems) = transition_lines(section);
-    Ok(Some(CurrentLoop {
-        movement,
-        fell_back,
-        shape: shape.to_string(),
-        sequence: sequence.to_string(),
-        start: start.parse().map_err(|_| bad("start"))?,
-        speed: speed.parse().map_err(|_| bad("speed"))?,
-        repeat: repeat.parse::<i64>().map_err(|_| bad("repeat"))? != 0,
-        unknown: unknown.parse().map_err(|_| bad("fourth value"))?,
-        transitions,
-        transition_problems,
-    }))
+    loop_of(file, movement, fell_back).map(Some)
 }
 
 /// Row-vector rotation `RotY(y) × RotX(x) × RotZ(z)` for angles
@@ -390,6 +447,35 @@ transition1=-1 walk 0.850000 stopwalk
         assert_eq!(c.transitions, vec![t(-1.0, "run", 0.866667, "stoprun"), t(-1.0, "walk", 0.85, "stopwalk")]);
         assert_eq!(c.transition_problems.len(), 1, "{:?}", c.transition_problems);
         assert_eq!(c.unknown, 1);
+    }
+
+    #[test]
+    fn every_movement_with_its_cues() {
+        let file = crate::kq_text::parse(
+            b"[door]
+classType=KQDoor
+currAnimName=closed
+animLoops=loops
+[loops]
+nMovement=2
+Movement0=closed
+Movement1=open
+              [movement0]
+loop=door1.kqs door1 0.0 0.0 0 1
+[movement1]
+loop=door1.kqs door1 0.0 1.0 0 1
+nCue=2
+cue0=0.0 playsound door4.aud
+#cue1=0.5 sendEvent x
+",
+        );
+        let all = movement_loops(&file, &file[0]).unwrap().unwrap();
+        assert_eq!(all.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["closed", "open"]);
+        assert_eq!((all[1].1.speed, all[1].1.movement), (1.0, 1));
+        assert_eq!(all[1].1.cues, vec![(0.0, "playsound door4.aud".to_string())]);
+        // nCue=2 but cue1 is commented out: one problem, not a cue.
+        assert_eq!(all[1].1.cue_problems.len(), 1);
+        assert!(all[0].1.cues.is_empty());
     }
 
     #[test]

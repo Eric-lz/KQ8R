@@ -1209,6 +1209,153 @@ the first puzzles working.
   (door, trap, chest, emitter, animation lists...).
 - B: script interpreter, event system, the object kinds.
 
+Notes: `docs/behaviour/doors.md` (doors, their scripts, the minimum of the
+`.cs` language).
+
+- **3a — Daventry's doors (planned 2026-10-12; 3a-1, 3a-2, 3a-3 done
+  2026-10-12, MODLOG; checked in the logs, not yet by eye).** Rules from
+  `doors.md`.
+  Three sub-steps, each with its own tests and MODLOG entry.
+  - **Words used here.** A *script* is one of the game's `.cs` text files
+    (puzzle logic). An *event* is a message sent to a named object
+    (`sendEvent`), handled when its time comes. A *movement* is one of an
+    object's named animations (`closed`, `open`, ...); its *phase* runs
+    from 0 (first frame) to 1 (last frame). A *cue* is an action written
+    in the movement (`cue0=0.0 playsound door4.aud`) that fires when the
+    phase passes it.
+  - **3a-1, the script runner** (`kq8-game` `script.rs`, no Bevy). Only
+    what `doors.md` "The script language" lists:
+    - a line is split into words (spaces/tabs), `#` starts a comment, a
+      double-quoted part is one word;
+    - `$1`…`$n` the call's arguments (missing ones empty), `$Name` a
+      variable, replaced and split into words again; an unset or empty
+      one **vanishes**, unless quoted (then one word, maybe empty);
+    - `if <command…>` runs the rest of the line and takes the branch when
+      `$Console::Return` is 0 or empty; `else` flips; `endif` closes;
+      skipped `if`s are counted so their `else`/`endif` pair up; `else
+      if …` = `else` + a nested `if` that needs its own `endif`;
+    - `test a op b`: exactly 3 words (else a usage line, false); numbers
+      when both look like numbers, else text with capitals counting;
+      `&&`/`||` whole numbers only (error for text);
+    - `set`, `echo` (to the log), a first word that names a script (with
+      `.cs` added if it has no dot) runs it with the rest as arguments,
+      an unknown command logs an error and fails;
+    - `sendEvent <delay> <object> <type> [data…]` and
+      `KQObject::collisionType <name> <±bits>` are handed to the caller;
+      the later-milestone commands (`KQMonster::speak`, `doPopup`,
+      `addMapIcon`, `earnTeleport`, `teleportersEarned`,
+      `KQMonster::checkInventory`, `deleteObject`, `handsOff`,
+      `KQMonster::setState`, `pauseAnim`, `preloadShape`,
+      `KQObject::setHidden`, `loadKQ`, `setThirdPerson`, ...) are
+      **stubs**: one log line, nothing else (`checkInventory` → 0).
+    - Stand-ins (asked as Q45): `$Console::Return` is `0` for true or
+      success and `1` for false or failure (the note gives only "0 =
+      true"); a word "looks like a number" as the note says and its value
+      is its leading number part.
+    - The start-up follower (`kq8-data` `world_script.rs`) is **not**
+      changed in this step (it still skips a line with an unknown
+      variable and ignores `if`). Moving it onto the new runner is a later
+      step of its own.
+    - Unit tests on made-up scripts (never copies of the game's files):
+      vanishing and quoted variables, nesting, `else if` with its extra
+      `endif`, `test` with numbers/text/wrong word count, `&&`/`||`,
+      `$Console::Return`, a script calling another, `sendEvent` parsing.
+      Viewer log: every Daventry door script read through the block
+      counter (balanced `if`/`endif`).
+  - **3a-2, the door and the event queue** (`kq8-game` `door.rs`,
+    `events.rs`, no Bevy).
+    - Door state (rule 1): closed / opening / opened / closing, closed at
+      the start. `KQDoorEvent 1` opens only when closed, `2` closes only
+      when opened, anything else (also no number) toggles; ignored while
+      moving (rules 2–4). `KQAnimPlayEvent <movement>` starts it by name,
+      state unchanged (rule 6).
+    - Playing a movement: its `loop=` start phase and speed; phase moves
+      by speed × (1/15 s) / play time per update; a play-once movement
+      finishes at 1 (forward) or 0 (backward). When the finished
+      movement is called `open`/`close` (any capitals): state opened /
+      closed, the `opened` / `closed` movement, and the script with `$1`
+      = door name, `$2` = `Open` / `Close` (rule 5).
+    - Cues: a cue at phase c fires when c is in [lower, higher) of the
+      phases before and after the update (rule 9). `playsound` is logged
+      (no audio yet); anything else is logged as not done.
+    - **The door's turn** (rule 24, open question 1): worked out from the
+      phase every update, never added up: the shown frame is
+      round(phase × (frames − 1)), as for Connor's one-shots, and the turn
+      is the frame steps 1…k chained (each step in the door's own,
+      already-turned axes). Measured from `door1.kqs` with a throwaway
+      program: every chained step turns about the same point, (−634,
+      −63) in the door's own space (its hinge edge); frames 13, 14, 15 are
+      165°, 167.75°, 165°. So `close` from 0.93 (frame 14) starts 2.75°
+      past `opened` (frame 15), a tiny jump, and a full cycle comes back
+      to exactly 0°. The box turns with it: the door's collider is moved
+      every update.
+    - Events (`events.rs`): game time = updates / 15. `sendEvent` with
+      delay d is due at now + d; due events are handled in time order,
+      same time in send order. Unknown object or event type: logged,
+      nothing sent. `KQCueEvent n1 [n2]` → the target's script with `Cue
+      n1 n2` (rule 23). `KQStatsChangeRequestEvent` → logged (stats are
+      M5).
+    - **Order in one update** (stand-ins, Q45): (1) clicks; (2) events
+      due by now, including those just sent with delay 0 (open question
+      4); (3) each moving door advances, except one started in this
+      update, which first advances in the next (as Connor's transitions,
+      Q40 a), cues fire, finishes call the script (events sent there are
+      handled in the next update); (4) the door colliders are moved; then
+      Connor's update as before.
+    - Unit tests: the state table (1/2/0/none in every state), `open` 15
+      updates and `close` from 0.93 14 updates, `Open`/`Close` calls,
+      `KQAnimPlayEvent open` from closed ends opened with `Open`, cue at
+      0.0 fires in the first update, `Saradoor`-like cue at 0.95 on
+      `close` never fires, turn after 10 open/close cycles is exactly 0,
+      event order and delays.
+  - **3a-3, clicking and the viewer** (`kq8-game` `click.rs`;
+    `kq8-viewer` `door_view.rs`, `load.rs`, `main.rs`).
+    - Load every `KQDoor`: its four movements (`loop=`, cues), all frames
+      of its shape with their frame transforms, `script=`,
+      `colliderType`, `acceptsInventory`, `acceptAllItems`,
+      `tooFarAwayAction`, `doNotPointAt`, its `BOUNDS.KQ` box. Doors are
+      drawn by `door_view.rs` (turned as above, the shown frame's mesh),
+      no longer as static copies.
+    - The play cursor: a **left click** sends a ray from the camera
+      through the mouse; the nearest box hit among objects whose
+      collision type has bit 0x20 is picked (rule 10). Stand-in (Q45):
+      only those boxes are tested; walls, terrain and other objects do
+      not hide a clickable one. No weapons yet, so the cursor is always
+      the play cursor.
+    - Reach (rule 11): Connor's feet turned into the door's own axes
+      (its current, turned box), only the part outside the box counts on
+      each axis; in reach when that distance is < 2 × `attackDist`
+      (`GAME/Kq/Connor.kq`, 2,350 → 4,700).
+    - In reach, nothing in hand: script `<door> ConnorAction do do`.
+      Item in hand (test option only, no inventory yet): accepted when
+      the door's `acceptsInventory` names its type, or `acceptAllItems=1`
+      (stand-in, open question 2), then `<door> ConnorAction <item
+      object> <item type>`; refused: logged "that doesn't work" remark,
+      no script. Out of reach: `tooFarAwayAction` 0 → logged "too far"
+      remark, nothing sent; else `ConnorAction TooFar TooFar` (rules
+      12–14). A picked object that is not a door: logged, its script not
+      run (only doors in this step).
+    - `KQObject::collisionType` changes the runtime collision type: −32
+      makes a door unclickable. Removing bit 0x1 would stop Connor's
+      collision; no Daventry script does, so it is logged, not applied.
+    - Not done (logged): Connor turning to face the door (rule 16, which
+      states not traced), the remark lines themselves (M4), hits,
+      `Die`, `ProjImmune` (no combat yet, M5), `tooFar=` (Q45).
+    - Test options: `--click NAME,N` clicks object NAME before update
+      N + 1 (no mouse needed); `--item TYPE` puts an item of that type in
+      Connor's hand (object name = the type).
+    - Log `kq8-artifacts/logs/doors.log`: for every click the picked
+      object, distance to its box, reach yes/no, the script arguments;
+      every script line that does something (echo, `set`, stubs, errors);
+      every `KQDoorEvent` with its value and the state before and after;
+      every finished movement with its `Open`/`Close` call; cues; one
+      line per update for each moving door (phase, frame, turn angle).
+    - Expected (`doors.md` "How to check"): `Condoor` clicked in reach →
+      `Condoor ConnorAction do do` → `KQDoorEvent 1` → opening for 15
+      updates → opened → `Condoor Open`; clicked again: stays open; from
+      far away: "too far", nothing sent; open door turned ~165° out of
+      the doorway, still solid where it now stands.
+
 ### M4 — Talk, listen, use the menus
 
 **You will see and hear:** dialogue text, speech with lip sync, the

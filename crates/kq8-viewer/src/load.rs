@@ -257,6 +257,9 @@ pub struct Animation {
     pub step_sum: [f32; 3],
     /// Each frame's own step (model space), frame 0 first.
     pub frame_steps: Vec<[f32; 3]>,
+    /// Each frame's whole step, turn included (doors turn by these;
+    /// doors.md rule 24).
+    pub frame_transforms: Vec<kq8_data::shape::Transform>,
 }
 
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
@@ -291,6 +294,7 @@ pub fn load_animation(
     let mut frames = Vec::with_capacity(count);
     let mut step_sum = [0.0f32; 3];
     let mut frame_steps = Vec::with_capacity(count);
+    let mut frame_transforms = Vec::with_capacity(count);
     let mut turning = 0;
     for seq in first..first + count {
         let s = shape.sequences.get(seq).ok_or(format!("{label}: loop '{loop_name}' runs past the sequences"))?;
@@ -301,6 +305,7 @@ pub fn load_animation(
             *sum += v;
         }
         frame_steps.push(s.transform.p);
+        frame_transforms.push(s.transform);
         let geometry = shape.geometry(seq);
         for p in &geometry.problems {
             log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
@@ -335,7 +340,7 @@ pub fn load_animation(
         step_sum[2],
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps })
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms })
 }
 
 /// A model name is looked up in the world's archives, then in
@@ -668,7 +673,44 @@ pub struct Objects {
     pub buildings: Vec<kq8_game::collide::BuildingCollider>,
     /// Every other placed object that collides with Connor (box from
     /// `BOUNDS.KQ`, type and mask rule; hidden ones too), M2 step 2d-5.
+    /// Doors are not in it (their boxes move; `door_view.rs`).
     pub objects: Vec<kq8_game::collide::BoxCollider>,
+    /// The doors the start-up scripts load (M3 step 3a).
+    pub doors: Vec<DoorAssets>,
+    /// The doors' animations, each different one once.
+    pub door_animations: Vec<Animation>,
+    /// Objects other than doors with the clickable bit 0x20 and a box.
+    pub clickables: Vec<kq8_game::active::Clickable>,
+    /// Every loaded object's name (for scripts: "unknown object").
+    pub known: Vec<String>,
+    /// The variables the start-up scripts left.
+    pub vars: kq8_data::world_script::Vars,
+    /// Every `.cs` of the world: (file name, bytes).
+    pub scripts: Vec<(String, Vec<u8>)>,
+    /// Connor's `attackDist` from `GAME/Kq/Connor.kq` (doors.md rule 11).
+    pub attack_dist: Option<f32>,
+}
+
+/// A door (`classType=KQDoor`) as loaded (docs/behaviour/doors.md).
+pub struct DoorAssets {
+    /// Its place after the ground rules.
+    pub placement: kq8_data::objects::Placement,
+    /// Every movement in list order: name, `loop=` line and cues, index
+    /// into `Objects::door_animations`.
+    pub movements: Vec<(String, kq8_data::objects::CurrentLoop, usize)>,
+    /// The movement shown when loaded (`currAnimName`).
+    pub current: usize,
+    /// Shape of that movement (for the box lookup).
+    pub shape: String,
+    pub script: Option<String>,
+    pub collider_type: u32,
+    pub collider_mask: u32,
+    pub accepts_inventory: Option<String>,
+    pub accept_all_items: bool,
+    pub too_far_away_action: i64,
+    pub do_not_point_at: bool,
+    /// Its `BOUNDS.KQ` box (own space), found in `finish`.
+    pub bounds: Option<([f32; 3], [f32; 3])>,
 }
 
 /// What collision needs to know about a placed object (M2 step 2d-5,
@@ -741,6 +783,11 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         collision: Vec::new(),
         markers: Vec::new(),
         connor: None,
+        attack_dist: None,
+        doors: Vec::new(),
+        door_animations: Vec::new(),
+        door_animation_index: BTreeMap::new(),
+        object_palette: None,
         located: BTreeMap::new(),
         skipped: BTreeMap::new(),
         unused_skipped: BTreeMap::new(),
@@ -815,7 +862,11 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         };
         placer.place(&load, Some((label, bytes)), true, &script.vars);
     }
-    placer.finish()
+    let mut objects = placer.finish();
+    // The world's scripts, for running them while the game plays (M3).
+    objects.scripts = world.entries_ending(".cs").into_iter().filter_map(|(n, _, b)| b.ok().map(|b| (n, b))).collect();
+    objects.vars = script.vars;
+    objects
 }
 
 /// Where a remembered object is drawn, so a `move` can change it.
@@ -853,6 +904,11 @@ struct Placer<'a> {
     collision: Vec<CollisionInfo>,
     markers: Vec<Marker>,
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
+    attack_dist: Option<f32>,
+    doors: Vec<DoorAssets>,
+    door_animations: Vec<Animation>,
+    door_animation_index: BTreeMap<String, usize>,
+    object_palette: Option<Result<[Rgb; 256], String>>,
     /// Loaded objects by lower-case name (the last one loaded wins).
     located: BTreeMap<String, Located>,
     skipped: BTreeMap<String, usize>,
@@ -977,6 +1033,7 @@ impl Placer<'_> {
             let file = kq_text::parse(&read("GAME/Kq/Connor.kq")?);
             let section = file.first().ok_or("GAME/Kq/Connor.kq has no section")?;
             let mut p = kq8_data::objects::Placement::from_load(section, load);
+            self.attack_dist = section.number("attackDist").and_then(Result::ok).map(|v| v as f32);
             let (terrain, [x, y, _]) = (&self.terrain, p.position);
             p.position = p.grounded_position(|level| terrain.ground_at(level, x, y).map(|g| g.height));
             let (keys, problems) = kq8_data::action_map::parse(&read("Connor.sae")?);
@@ -1263,6 +1320,10 @@ impl Placer<'_> {
                 }
             }
         }
+        if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQDoor")) {
+            self.place_door(&label, &file, p);
+            return;
+        }
         let reason = if p.has_matrix_key {
             Some("uses an RMat key (not supported)".to_string())
         } else {
@@ -1360,6 +1421,94 @@ impl Placer<'_> {
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);
         }
+    }
+
+    /// A door (M3 step 3a; docs/behaviour/doors.md): every movement with
+    /// its cues and all frames of its shape (with their frame steps, which
+    /// turn the door), and the keys clicking needs. Drawn and moved by
+    /// `door_view.rs`, not as a still copy.
+    fn place_door(&mut self, label: &str, file: &[kq8_data::kq_text::Section], p: kq8_data::objects::Placement) {
+        let s = &file[0];
+        let movements = match kq8_data::objects::movement_loops(file, s) {
+            Ok(Some(m)) => m,
+            Ok(None) => return,
+            Err(e) => {
+                self.log.summary(format!("door {label}[{}]: movements could not be read: {e}; not placed", p.name));
+                return;
+            }
+        };
+        let current = kq8_data::objects::current_loop(file, s).ok().flatten().map_or(0, |c| c.movement);
+        let (game, world) = (self.game, self.world);
+        let palette_name = self.palette_name.clone();
+        let log = &mut *self.log;
+        let palette = self.object_palette.get_or_insert_with(|| {
+            log.quiet = true;
+            let r = load_palette(world, Some(&palette_name), game, log);
+            log.quiet = false;
+            r
+        });
+        let palette = match palette {
+            Ok(pal) => *pal,
+            Err(e) => {
+                let e = e.clone();
+                self.log.summary(format!("door {label}[{}]: palette: {e}; not placed", p.name));
+                return;
+            }
+        };
+        let mut with_index = Vec::new();
+        for (name, l) in movements {
+            let key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
+            let index = match self.door_animation_index.get(&key) {
+                Some(&i) => i,
+                None => {
+                    self.log.quiet = true;
+                    let a = load_animation(game, world, &l.shape, &l.sequence, &palette, self.log);
+                    self.log.quiet = false;
+                    match a {
+                        Ok(a) => {
+                            self.door_animations.push(a);
+                            self.door_animation_index.insert(key, self.door_animations.len() - 1);
+                            self.door_animations.len() - 1
+                        }
+                        Err(e) => {
+                            self.log.summary(format!("door {label}[{}]: movement {name}: {e}; door not placed", p.name));
+                            return;
+                        }
+                    }
+                }
+            };
+            for problem in l.cue_problems.iter().chain(&l.transition_problems) {
+                self.log.detail(format!("door [{}]: {problem}", p.name));
+            }
+            with_index.push((name, l, index));
+        }
+        let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string());
+        let number = |k: &str| s.number(k).and_then(Result::ok);
+        let (collider_type, problem_t) = collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE);
+        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
+        for problem in [problem_t, problem_m].into_iter().flatten() {
+            self.log.summary(format!("door {label}[{}]: {problem}", p.name));
+        }
+        let shape = with_index.get(current).map_or(String::new(), |(_, l, _)| l.shape.clone());
+        let door = DoorAssets {
+            movements: with_index,
+            current,
+            shape,
+            script: text("script").filter(|v| !v.is_empty()),
+            collider_type,
+            collider_mask,
+            accepts_inventory: text("acceptsInventory").filter(|v| !v.is_empty()),
+            accept_all_items: number("acceptAllItems").is_some_and(|v| v != 0.0),
+            too_far_away_action: number("tooFarAwayAction").map_or(0, |v| v as i64),
+            do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
+            bounds: None,
+            placement: p,
+        };
+        if let Some(v) = s.get("tooFar") {
+            self.log.detail(format!("door [{}]: tooFar={v} not used (Q45 a)", door.placement.name));
+        }
+        *self.by_class.entry("KQDoor (door, M3)".into()).or_default() += 1;
+        self.doors.push(door);
     }
 
     fn skipped_map(&mut self, unused: bool) -> &mut BTreeMap<String, usize> {
@@ -1518,8 +1667,27 @@ impl Placer<'_> {
             buildings.push(c);
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
-        let objects = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
-        Objects { shapes: self.shapes, placed: self.placed, markers: self.markers, connor: self.connor, camera_start, buildings, objects }
+        let (objects, clickables) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
+        let mut doors = self.doors;
+        door_bounds(self.game, &mut doors, log);
+        let mut known: Vec<String> = self.located.keys().cloned().collect();
+        known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
+        Objects {
+            shapes: self.shapes,
+            placed: self.placed,
+            markers: self.markers,
+            connor: self.connor,
+            camera_start,
+            buildings,
+            objects,
+            doors,
+            door_animations: self.door_animations,
+            clickables,
+            known,
+            vars: Default::default(),
+            scripts: Vec::new(),
+            attack_dist: self.attack_dist,
+        }
     }
 }
 
@@ -1541,16 +1709,18 @@ fn object_colliders(
     collision: &[CollisionInfo],
     markers: &[Marker],
     log: &mut Log,
-) -> Vec<kq8_game::collide::BoxCollider> {
+) -> (Vec<kq8_game::collide::BoxCollider>, Vec<kq8_game::active::Clickable>) {
     use kq8_game::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
     let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
         Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
         _ => {
             log.summary("collision: GAME/patch/BOUNDS.KQ could not be read: no object colliders");
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
     };
     let mut objects = Vec::new();
+    let mut clickables = Vec::new();
+    let mut clickable_without_box = 0;
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut left_out: BTreeMap<&str, usize> = BTreeMap::new();
     let mut by_name = 0;
@@ -1587,8 +1757,21 @@ fn object_colliders(
                 *left_out.entry("not in BOUNDS.KQ").or_default() += 1;
             }
             log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides"));
+            clickable_without_box += usize::from(info.collider_type & kq8_game::click::CLICKABLE != 0);
             continue;
         };
+        // Clickable (doors.md rule 10): picked by its box, whatever it
+        // collides with.
+        if info.collider_type & kq8_game::click::CLICKABLE != 0 {
+            clickables.push(kq8_game::active::Clickable {
+                name: p.name.clone(),
+                class: class.to_string(),
+                min: entry.min,
+                max: entry.max,
+                placement: Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                collision_type: info.collider_type,
+            });
+        }
         if !pair_collides(CONNOR_TYPE, CONNOR_MASK, info.collider_type, info.collider_mask) {
             *left_out.entry("type and mask: not tested against Connor").or_default() += 1;
             log.detail(format!(
@@ -1641,7 +1824,32 @@ fn object_colliders(
         markers.len(),
         markers.iter().filter(|m| m.anm).count()
     ));
-    objects
+    log.summary(format!(
+        "click: {} clickable objects other than doors (collision type bit 0x20, with a box); {clickable_without_box} clickable without a box (can't be picked)",
+        clickables.len()
+    ));
+    for c in &clickables {
+        log.detail(format!("click: clickable [{}] class {} type {:#x}", c.name, c.class, c.collision_type));
+    }
+    (objects, clickables)
+}
+
+/// Each door's box from `BOUNDS.KQ`, by the same rule as other objects
+/// (shape name lower-cased first, then the object's own name).
+fn door_bounds(game: &GameDir, doors: &mut [DoorAssets], log: &mut Log) {
+    let Some(Ok(bytes)) = game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) else {
+        log.summary("doors: GAME/patch/BOUNDS.KQ could not be read: doors have no box");
+        return;
+    };
+    let table = kq8_data::bounds::BoundingBoxes::parse(&bytes).0;
+    for d in doors {
+        let found = table.lookup(&d.shape.to_ascii_lowercase()).or_else(|| table.lookup(&d.placement.name));
+        d.bounds = found.as_ref().map(|e| (e.min, e.max));
+        match found {
+            Some(e) => log.detail(format!("doors: [{}] box item{}={} ({:?}..{:?})", d.placement.name, e.item, e.name, e.min, e.max)),
+            None => log.summary(format!("doors: [{}] {} has no box in BOUNDS.KQ: can't be clicked, doesn't collide", d.placement.name, d.shape)),
+        }
+    }
 }
 
 /// A building (`.dig`) as a `Model`, so it is placed and drawn like any
