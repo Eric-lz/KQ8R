@@ -7,6 +7,7 @@
 //!   kq8 shape-verify [--game DIR]
 //!   kq8 terrain-verify [--game DIR]
 //!   kq8 building-verify [--game DIR]
+//!   kq8 item-verify [--game DIR]
 //!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
 //!
 //! `<file>` is a path in the game folder (`GAME/8Gui/daventry.pbm`) or an
@@ -17,6 +18,7 @@
 mod bitmap_png;
 mod bitmap_verify;
 mod building_verify;
+mod item_verify;
 mod log;
 mod shape_verify;
 mod source;
@@ -35,6 +37,7 @@ const USAGE: &str = "usage:
   kq8 shape-verify [--game DIR]
   kq8 terrain-verify [--game DIR]
   kq8 building-verify [--game DIR]
+  kq8 item-verify [--game DIR]
   kq8 text <file> [--game DIR]";
 
 fn main() -> ExitCode {
@@ -74,6 +77,7 @@ fn main() -> ExitCode {
         (Some("shape-verify"), []) => shape_verify::run(&game),
         (Some("terrain-verify"), []) => terrain_verify::run(&game),
         (Some("building-verify"), []) => building_verify::run(&game),
+        (Some("item-verify"), []) => item_verify::run(&game),
         (Some("text"), [file]) => match source::load(&game, file) {
             // Printed only (never written into the repo), with line numbers.
             Ok(bytes) => {

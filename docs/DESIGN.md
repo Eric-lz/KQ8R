@@ -1772,6 +1772,128 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
+- **3e — chests and items (planned 2026-10-13; 3e-1 done 2026-10-13,
+  MODLOG).** Rules from
+  `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
+  clicking, `objects.md` for heights and hiding). Five sub-steps, each
+  with its own tests and MODLOG entry.
+  - **Words.** An *item type* is one line of `GAME/Kq/Invinfo.itl`
+    (`INVITEM_Crystal`: its model, sounds, size). An *item object* is one
+    thing of that type, in the world or carried, holding a *quantity*
+    (one object can be 200 coins). An *inventory* is the list of item
+    objects a character carries (in M3 just a list; the screen is M4).
+  - **Data (Daventry, counted 2026-10-13):** 3 `KQChest`s placed
+    (`smlchst3` 3 crystals, pub upstairs; `smlchst4` 200 silver coins,
+    keep; `wizchest1` 1 lady bell, hidden, type 1 until a Reveal potion);
+    the `jar` chest template is not loaded. 3 *scripted* chests, plain
+    animated objects with a script, type 33 (`smlchst1`, `smlchst2`,
+    `jar1`). Items at the start: 21 `KQMonster::inventory world …` lines
+    in `WorldInv.cs` and 1 in `newWorld.cs` (`BirthdaySuit`, hidden); 23
+    Daventry scripts make or give items.
+  - **3e-1, item types** (`kq8-data` new `items.rs`, `kq8` CLI). Read
+    `Invinfo.itl`: `[InventoryItemTypeList]`, `itemN=` lines, fields
+    tab-separated in the order of the `;itemX=` header (rule 1). Keep
+    the name, id, category, land and pickup sounds, shape, radius,
+    translucency. Name lookup (rule 2): put `INVITEM_` in front unless
+    the name starts with exactly that, then compare ignoring capitals.
+    New CLI command `kq8 item-verify` (log
+    `kq8-artifacts/logs/item-verify.log`): number of types (expect 135),
+    each type's shape found or not (world archives, then `GAME`), its
+    `BOUNDS.KQ` box (shape name lower-cased, as for objects), and every
+    item type named by any world's scripts and chests that the lookup
+    does not find. Unit tests: field split, the prefix rule
+    (`silverCoins`, `INVITEM_Crystal`, `ladybell`, `invitem_X` gets a
+    second prefix, so it is not found).
+    **Done:** 135 types, all models found, 3 without a box; of 758 type
+    names in the data only `INVITEM_All` (an `acceptsInventory` value) and
+    one id number don't resolve (Q62). `acceptsInventory` turned out to
+    hold comma-separated lists too (Q62); it matters for using items on
+    doors (today: exact comparison), not for this step.
+  - **3e-2, item objects and inventories** (`kq8-game` new `item.rs`,
+    `active.rs`; no Bevy). An item object: name, type, quantity, third
+    number −1 (rule 3), where it is (in the world at a position and turn,
+    or carried by someone), hidden, script, `doNotPointAt` (default on,
+    rule 4). Commands in the running world's scripts:
+    - `KQMonster::inventory <who> <type> [qty] [x y z [rx ry rz]]` and
+      `give <type> [qty]` (rule 9): a new object; `world` → placed (z −1
+      / −2 → floor / surface height, which the caller supplies), any
+      other name → carried by it; sets `NewInvItem`; unknown type →
+      error line, result 1.
+    - `KQMonster::checkInventory <who> <type> [var]` (rule 10): result 1
+      if found, 0 if not or on error (was a stub answering 0).
+    - `KQObject::setScript <item> <script|none>` and `setDontLook <item>
+      0|1` on item objects; `KQObject::setHidden` and `deleteObject` on
+      item objects. On other objects: as now (stub or unknown).
+    - Stubs, logged: `KQObject::tossItems` (smashed barrels need weapons,
+      M5; its flight is not fully traced, items.md open question 3),
+      `KQMonster::dropItem` (only `rockHit.cs`, M5), `KQObject::changeBmp`,
+      `KQObject::setGroupsAlways`.
+    - **Name of a new item object:** not in the note. Stand-in:
+      `<type without INVITEM_>.<n>`, n counting from 1 per world
+      (`Crystal.1`); asked as Q60.
+    - **Clicking an item** (rules 6–8): picked like any clickable object
+      by its box (the type's shape in `BOUNDS.KQ`, lower-cased; our
+      reading of `chests.md`'s crystal check); type 0x220 (clickable).
+      Out of reach → "too far" (logged, nothing); item in hand →
+      "that doesn't work"; in reach → taken out of the world, added to
+      Connor's inventory, pickup sound logged (no audio yet), hidden from
+      the world; then its script (if any) runs with `<item> ConnorAction
+      do do`. Items never collide with Connor (type 0x220 and mask 0x809
+      share no bit with his type 4 and mask 0x281B, pair rule).
+    Unit tests: make in the world and carried, `NewInvItem`, unknown
+    type, `give`, `checkInventory` 1/0 and its variable, pickup in and
+    out of reach, script after pickup with `setScript … none` removing it
+    (`Tavcoin.cs`), hidden items not clickable.
+  - **3e-3, items at the start and in the viewer** (`kq8-data`
+    `world_script.rs`; `kq8-viewer` `load.rs`, new `item_view.rs`).
+    The start-up runner runs `KQMonster::inventory`, `give`,
+    `KQObject::setScript`, `setDontLook` and `setHidden` on items through
+    its host and sets `NewInvItem`, so `WorldInv.cs`'s lines work
+    (`KQObject::setScript $NewInvItem dagger.cs`). The viewer: every
+    world item gets a model (its type's shape, loaded once per type; also
+    the types chests and world scripts can make later), its
+    translucency, z −1/−2 → floor / surface height, its turn; hidden ones
+    are not drawn and can't be clicked. Clicks go through the same
+    picking as doors (nearest box). On pickup the model disappears; when
+    a script makes a new world item while playing, it appears. Log
+    `kq8-artifacts/logs/items.log`: every item made (type, quantity,
+    name, where, `NewInvItem`), every pickup (distance, Connor's count of
+    that type before and after), the start count in the main log.
+  - **3e-4, chests** (`kq8-game` new `chest.rs`, `active.rs`;
+    `kq8-viewer` `load.rs`, `door_view.rs`). A `KQChest`: its keys (rule
+    1), default type 0x8021 unless `colliderType` (rule 2; today chests
+    load with the plain default 0x41, which is not clickable), movements
+    `closed`/`open` played as doors' are (the phase step and cues shared
+    with `door.rs`; no `opened`: it stays on the last frame, rule 3),
+    states closed / open / empty. Clicks (rules 4–10): reach, "too far"
+    and "doesn't work" as doors; 1st click plays `open` and makes the
+    item object at `invLoc`/`invDir` (or goes straight to empty if no
+    type); 2nd click moves the remembered item into Connor's inventory
+    (from the world, or already carried: only the state changes, the
+    note's stand-in), then the `Take` remark if any; later clicks the
+    `Empty` remark (logged, lines are M4). The chest's script is not run
+    on clicks; it gets `Init`, `EndLoop <movement>` when a movement
+    finishes, and `Cue`. Chests are drawn like doors (frame of the
+    current movement). `KQObject::collisionType` works on chests
+    (`wizchest.cs`). Unit tests: the three clicks, no item type, item
+    already picked up, item in hand refused, out of reach, `EndLoop
+    open` after 1 s.
+  - **3e-5, scripted chests and baskets** (`active.rs`, viewer). A
+    clickable object with a script that is not a door, chest or item:
+    clicking it in reach runs `<name> ConnorAction do do` (`chests.md`
+    rule 11 says these chests work with "the script runner, `items.md`
+    and the commands above"; the call is the same as a door's, rule 12);
+    `KQAnimPlayEvent <movement>` to it plays that movement (as doors,
+    rule 6), so `smlchst1`, `smlchst2` and `jar1` open and drop their
+    coins, and the mushroom baskets (`give mushroom 5`) give. These
+    objects are drawn like doors. `KQMonster::speak` is logged as
+    Connor's remark (M4).
+  - **What you'll see after 3e:** coins, mushrooms, crystals and the
+    other start items lying where `WorldInv.cs` puts them; click one near
+    Connor and it vanishes into his (invisible) inventory, logged. In the
+    pub upstairs the big chest opens on the first click and a crystal
+    appears in it; the second click takes it; the third logs "empty".
+
 ### M4 — Talk, listen, use the menus
 
 **You will see and hear:** dialogue text, speech with lip sync, the

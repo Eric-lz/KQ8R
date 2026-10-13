@@ -11,6 +11,7 @@ pub mod chunks;
 pub mod effects;
 pub mod envinfo;
 pub mod game_dir;
+pub mod items;
 pub mod kq_text;
 pub mod material;
 pub mod objects;

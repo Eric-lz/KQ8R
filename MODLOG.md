@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3e-1: the item type list (`Invinfo.itl`)
+
+**Changed:** Plan for chests and items in `docs/DESIGN.md` (M3 3e, five sub-steps). New `crates/kq8-data/src/items.rs` (reads `GAME/Kq/Invinfo.itl`, the type-name rule), new CLI command `kq8 item-verify` (`crates/kq8-cli/src/item_verify.rs`, `main.rs`). Questions Q60, Q61, Q62 in `docs/behaviour/QUESTIONS.md`. `README.md`, `docs/provenance/README.md`.
+**Why:** Step 1 of chests and items: every item (coins in a chest, mushrooms in the world) needs its type's model, sounds and size, and scripts name types loosely (`give mushroom 5`, `invItemTypeName=silverCoins`).
+**Tested how:** Unit tests (field positions, `none` sounds, a line without a shape, the `INVITEM_` prefix rule). `cargo run --release -- item-verify`, log `kq8-artifacts/logs/item-verify.log`. Whole workspace `cargo test` passes; clippy clean on the two crates.
+**Result:** 135 types read (`numItems=135`), 0 problems, no name twice; 16 categories (QuestItem 69, LongWeapon 20, ShortWeapon 13, ...). All 135 models found (world archives or `GAME/Common`); 3 have no box in `BOUNDS.KQ` (`truthkey.kqs`, `tablet2.kqs`, `orcxbow.kqs`). 3,523 scripts and object files in all 12 worlds name item types 758 times (182 different spellings); all resolve with the prefix rule except `INVITEM_All` (35 `acceptsInventory` values) and `2050` (an id number, Gnome `ARMORGNM.CS` line 293). Found on the way: `acceptsInventory` can be a comma-separated list (19 files).
+**Still broken / not tested:** Nothing in the game uses the list yet (3e-2 does). Asked: Q60 (the name of a new item object; stand-in planned), Q61 (does a chest's 2nd click play the pickup sound), Q62 (`acceptsInventory` lists and `INVITEM_All`, type by id number, the 3 items without a box). The door code still compares `acceptsInventory` exactly (only matters once Connor can hold items, M4).
+**Next:** You: run `item-verify` and check the numbers. Then 3e-2 (item objects, inventories, the item script commands, picking up).
+
 ## 2026-10-13 Study: terrain lighting (light and shadow maps)
 
 **Changed:** new `docs/behaviour/terrain-lighting.md`; `docs/behaviour/terrain.md` (the `lightScale` and map-name rows point to it). Docs only, no code.

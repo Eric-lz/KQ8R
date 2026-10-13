@@ -618,3 +618,15 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | With a wall block on, the pick is `stop` (switch off) | **Our reading** (our wall block makes the keys pick `stop`) | — |
 | First-person view and `allowLeaning` switch it off | Same rule | Not done (no first-person view yet; nothing in the data changes `allowLeaning`) |
 
+
+## Item types (M3 step 3e-1) — `crates/kq8-data/src/items.rs`, `crates/kq8-cli/src/item_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `GAME/Kq/Invinfo.itl`: `[InventoryItemTypeList]`, `numItems`, one `itemN=` line per type, fields tab-separated | `items.md` rule 1; **Observed** in the file (the commented `;itemX=` header names the 23 fields) | `kq8 item-verify`: 135 types read, `numItems=135`, 0 problems, every class `KQInventoryItemType`, no name twice |
+| Field order: class, `IDName`, id, …, category (10th), …, land sound (16th), pickup sound (17th), use sound, shape (19th), cursor, radius, translucency, extra data | `items.md` rule 1 (same order as the file's header) | Unit test; log: `INVITEM_Crystal` id 3020, `HealthItem`, `crystl.KQS`, radius 250, translucency 200, sounds `potnland.aud` / `energy.aud` |
+| A sound field `none` = no sound | `items.md` "Edge cases" | Unit test |
+| Type names: `INVITEM_` put in front unless the name starts with exactly that, then compared ignoring capitals | `items.md` rule 2 | Unit tests; `item-verify`: of 758 uses of a type name in all 12 worlds' scripts and object files, all resolve except `INVITEM_All` (35, `acceptsInventory`) and one id number (`2050`), asked as Q62 |
+| Kept: name, id, category, sounds, shape, radius, translucency; the rest (stats, menus) not read yet | `items.md` rule 1 ("for M3 only … matter") | — |
+| Each type's model is found in a world's archives or `GAME/Common`, and its box in `BOUNDS.KQ` with the shape name lower-cased | Where the viewer looks for models (M1); lower-cased lookup: `connor-physics.md` Q39 | `item-verify`: all 135 models found; 3 without a box (`truthkey.kqs`, `tablet2.kqs`, `orcxbow.kqs`; Q62 c) |
+| `acceptsInventory` read as a comma-separated list in the check | **Observed** in the data (19 files); what the game does with it is Q62 a | — |

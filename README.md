@@ -12,8 +12,9 @@ The code is written with an AI coding agent (Claude Code); see
 ## What works
 
 - **Reading the game's files:** archives, images, palettes, 3D models,
-  buildings, the ground of every world, and the scripts that set up each
-  world.
+  buildings, the ground of every world, the scripts that set up each
+  world, and the list of all 135 item types (coins, crystals, weapons...;
+  checked with `item-verify` against every item name in the game's data).
 - **Seeing a world:** the ground, the buildings and the objects the game
   places at the start, each where the original puts them, with animated
   objects at their starting pose and see-through things (waterfalls,
@@ -163,6 +164,7 @@ cargo run --release -- bitmap-verify
 cargo run --release -- shape-verify
 cargo run --release -- terrain-verify
 cargo run --release -- building-verify
+cargo run --release -- item-verify
 ```
 
 Use `--game <folder>` or the `KQ8_GAME_DIR` environment variable if the game
