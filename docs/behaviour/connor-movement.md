@@ -120,10 +120,19 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
      So the start `stoprun` leans (the pick is already `run`); the stops
      (`runstopleft`, `runstopright`, `stoprunstop`) and the run's wait for
      its stop point don't (forward is let go, so the pick isn't `run`
-     any more); a pivot (`left`/`right`) and `back` don't. In **every
-     other state** (jumping, falling, `Special` movements like
-     `reactback`, climbing, death …) the switch is not recalculated: it
-     keeps the value from his last stand/move update. It is also forced
+     any more); a pivot (`left`/`right`) and `back` don't. The start of a
+     jump makes the same pick (to choose `jump`, `runJump` or
+     `backJump`), so a running jump starts with the switch on. In the
+     other states (jumping, falling, `Special` movements like
+     `reactback`, death …) the code doesn't recalculate it.
+     **But the user saw in the original that Connor is upright during a
+     jump even with the turn key held (Q59), and what causes this was
+     not found** (see "Open questions" 4). The rule: treat jumps,
+     falls and landings as "switch off" (he straightens at the normal
+     0.03 per update), which is B's stand-in, checked by the user against the original; other states as the code says. Four of Connor's special
+     states (not identified by name; the ones that handle the jump key
+     their own way, such as ropes) switch leaning off while they are
+     active and back on when they end. It is also forced
      off in the first-person view, and when Connor's `allowLeaning` flag
      is 0 (it is 1 from the start; nothing in the data changes it; code
      that might was not found).
@@ -415,3 +424,23 @@ two 1/15 s ticks each); go by the seconds.
 3. Jumping, falling, slopes and walls: answered in `connor-physics.md`
    (walkable limit is 36.9°, not 35°). Water (`waterwalk`), ropes and
    pushing are not studied yet.
+4. **Why Connor is upright during a jump (Q59, closed 2026-10-13: the user compared the original with our build and accepted the "switch off in jumps, falls and landings" rule as correct; the cause in the code stays unknown and is not being pursued).** The user
+   saw in the original (2026-10-13) that he doesn't stay leaned through
+   a jump, even holding the turn key. Reading the code says he should:
+   the jump start leaves the lean switch on, the turn key keeps working
+   in the air, the lean is updated in every move including the jump's,
+   the jump animations carry no rotation of their own, and only the lean
+   rule itself ever changes the lean value. Checked and ruled out: the
+   jump start, the jump key, the state-start code shared by all states,
+   the animation steps, every place that writes the lean, the switch,
+   the turn direction, the forward intent or the turn on/off flag, and
+   the `allowLeaning` flag (only four special states, not the jump,
+   clear it). Not ruled out: something in how the drawn orientation is
+   taken from the mover during a jump, or the user's test conditions
+   (whether forward was held and whether he turned in the air; a 10°
+   lean may also be hard to see in the jump pose). How to settle it:
+   (a) the user repeats the test, holding forward and turn the whole
+   time, and says whether Connor turns in the air and whether he
+   straightens at once or over about half a second; or (b) a debugger
+   run (as for Q30) logging the lean value every update through a
+   running jump.

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Study: Q59 (lean during a jump), not settled
+
+**Changed:** `docs/behaviour/connor-movement.md` ("Turning" rule 3: jumps, falls and landings now follow B's stand-in; new open question 4), `docs/behaviour/QUESTIONS.md` (Q59 status), `STATUS.md` (stuck item). Docs only.
+**Why:** The user saw Connor upright during a running jump with the turn key held, against my Q56 answer.
+**Tested how:** Traced again in `Mask.exe` (Ghidra) and scanned the program for every instruction that writes the lean, its switch, the turn direction, the forward intent, the turn on/off flag and `allowLeaning`.
+**Result:** **Failed to find the cause.** The code still says the lean carries on through a jump: the jump start leaves the switch on, turning works in the air, the lean is updated in every move, the jump animations have no rotation, and nothing outside the lean rule changes the lean. Found on the way: four special states (not named; probably ropes and the like) switch leaning off while active. My earlier "jumps keep the lean" is therefore unconfirmed and contradicted by the user; the note now tells B to keep the stand-in.
+**Still broken / not tested:** The cause is unknown. `Special` and death states: from the code only.
+**Next:** ~~User repeats the jump test.~~ **Closed the same day:** the user compared the original with our build and accepted B's behaviour (jumps, falls and landings straighten him) as correct; Q59 closed, no debugger run, no code change.
+
 ## 2026-10-13 M2 2i-4: a jump straightens Connor up (user's check)
 
 **Changed:** `crates/kq8-game/src/connor.rs` (the lean switch is off while jumping, falling and landing; the jump test now expects him to straighten up). `docs/behaviour/QUESTIONS.md` (Q59). Docs: DESIGN (2i-4), provenance, README.
