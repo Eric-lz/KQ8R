@@ -58,8 +58,16 @@ The code is written with an AI coding agent (Claude Code); see
   house doors stay open on a second click; from too far nothing happens
   (Connor's remark is only written to the log); the castle keep's doors
   open only with the key (a test option, there is no inventory yet).
-  Checked in the logs, **not yet by eye or with the mouse**. Everything is
+  Checked in the logs, and by eye with real mouse clicks
+  (2026-10-13): the doors work and the clicks show in the log. Everything is
   written to `kq8-artifacts/logs/doors.log`.
+- **Falling leaves and stream drips** (M3, emitters): the small particles
+  the game keeps flying around Daventry's trees and over the stream, with
+  the original's speeds, lifetimes, swaying and gravity. Leaves that
+  drift into the cottage vanish at its box, as in the original. The
+  rivers and the stream flow: their ground textures change every 0.3 s.
+  Checked in the logs (`kq8-artifacts/logs/effects.log`, `ground_anim.log`) and by eye
+  (2026-10-13).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted.
 - **Ground key U:** shows the hidden ground under the water (the
@@ -78,7 +86,9 @@ doors react to clicks (other clickable things are logged only). Some objects hav
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
 back behind him by itself or avoid walls. In water there is no damage
-yet (poison, lava, swamp). People and monsters are not shown,
+yet (poison, lava, swamp). Fire and ice arrow
+sparks, the snow and dragon fire that follow an object are not shown.
+People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the
 latest changes in [MODLOG.md](MODLOG.md).

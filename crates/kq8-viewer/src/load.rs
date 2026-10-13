@@ -464,6 +464,32 @@ fn to_rgba(bmp: &Bitmap, palette: &[Rgb; 256]) -> Vec<u8> {
 pub struct Ground {
     pub terrain: kq8_data::Terrain,
     pub groups: Vec<GroundGroup>,
+    /// The material image (`terrm.dib`): one material per square.
+    pub materials: kq8_data::terrain::Grid,
+    /// Orientation code per material (direction table).
+    pub orientation: Vec<u32>,
+    /// Texture name per material, if it is a texture.
+    pub textures: Vec<Option<String>>,
+    /// `KQWorld::terrainPalette`.
+    pub palette: [Rgb; 256],
+    /// Squares a ground animator draws instead (M3 step 3b-3).
+    pub animated: std::collections::BTreeSet<(usize, usize)>,
+}
+
+/// The ground animators of a world (M3 step 3b-3, emitters.md "Ground
+/// animators"), ready to run and draw.
+pub struct GroundAnimAssets {
+    pub animators: Vec<kq8_game::ground_anim::GroundAnimator>,
+    /// The material image as loaded; the animators change their copy.
+    pub materials: kq8_data::terrain::Grid,
+    /// Triangles of each animated square for each material it can show.
+    pub triangles: BTreeMap<((usize, usize), u8), Vec<kq8_data::terrain::GroundTriangle>>,
+    /// The look of each of those materials (`None`: not a texture, the
+    /// square is not drawn while it shows it).
+    pub looks: BTreeMap<u8, Option<Look>>,
+    /// Animated squares where the floor grid differs from the surface
+    /// (see-through in the U key's "both" view).
+    pub floor_differs: std::collections::BTreeSet<(usize, usize)>,
 }
 
 pub struct GroundGroup {
@@ -599,6 +625,11 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
     let palette = load_palette(world, Some(&palette_name), game, log)?;
 
     let triangles = terrain.ground_triangles(&materials, &orientation)?;
+    let textures = list
+        .materials
+        .iter()
+        .map(|m| (m.kind() == MaterialKind::Texture && !m.texture.is_empty()).then(|| m.texture.clone()))
+        .collect();
     let mut by_texture: BTreeMap<String, (String, Vec<kq8_data::terrain::GroundTriangle>)> = BTreeMap::new();
     let mut skipped: BTreeMap<String, usize> = BTreeMap::new();
     for t in triangles {
@@ -633,7 +664,132 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         }
         groups.push(GroundGroup { label: name, triangles: tris, look });
     }
-    Ok(Ground { terrain, groups })
+    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default() })
+}
+
+/// Chooses each ground animator's squares (in load order, from the
+/// materials as loaded), starts them at game time 0, and loads what drawing
+/// their squares needs (M3 step 3b-3). Marks the squares in
+/// `ground.animated`, so the normal ground mesh leaves their surface out.
+pub fn prepare_ground_animation(
+    game: &GameDir,
+    world: &World,
+    ground: &mut Ground,
+    animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
+    log: &mut Log,
+) -> GroundAnimAssets {
+    use kq8_game::ground_anim::{choose_squares, GroundAnimator};
+    let mut running = Vec::new();
+    for (name, settings) in animators {
+        let (squares, mut notes) = choose_squares(&settings, &ground.materials);
+        let (a, more) = GroundAnimator::new(&name, &settings, squares, 0.0);
+        notes.extend(more);
+        notes.extend(settings.problems.iter().cloned());
+        // Which materials its squares had, for the log.
+        let mut had: BTreeMap<u8, usize> = BTreeMap::new();
+        for &(i, j) in &a.squares {
+            *had.entry(ground.materials.get(i, j).unwrap()).or_default() += 1;
+        }
+        let how = match &settings.grid_blocks {
+            Some(b) => format!("{} listed squares", b.len()),
+            None => format!("materials {:?} minus {} excluded squares", settings.orig_textures, settings.exclude.len()),
+        };
+        log.summary(format!(
+            "ground animator [{name}]: {} squares ({how}; their materials {had:?}); cycle {:?} every {} s, repeat {}, {}{}",
+            a.squares.len(),
+            a.cycle,
+            a.delay,
+            a.repeat,
+            if a.running { "started" } else { "NOT started" },
+            if notes.is_empty() { String::new() } else { format!("; notes: {}", notes.join("; ")) }
+        ));
+        running.push((a, settings.exclude.clone()));
+    }
+    // Excluded squares: does any animator draw them anyway? (emitters.md
+    // "Edge cases": (45, 57) at Daventry's stream never animates.)
+    let mut excluded_by: BTreeMap<(i64, i64), Vec<&str>> = BTreeMap::new();
+    for (a, exclude) in &running {
+        for &sq in exclude {
+            excluded_by.entry(sq).or_default().push(a.name.as_str());
+        }
+    }
+    for ((i, j), names) in &excluded_by {
+        let by: Vec<&str> = running
+            .iter()
+            .filter(|(b, _)| b.squares.iter().any(|&(x, y)| (x as i64, y as i64) == (*i, *j)))
+            .map(|(b, _)| b.name.as_str())
+            .collect();
+        log.summary(format!("  excluded square ({i}, {j}) (by {} animators): animated by {by:?}", names.len()));
+    }
+    let animators: Vec<GroundAnimator> = running.into_iter().map(|(a, _)| a).collect();
+    // Every material each animated square can show: its own, and the
+    // cycles of the animators that change it.
+    let mut triangles = BTreeMap::new();
+    let mut needed = std::collections::BTreeSet::new();
+    let mut floor_differs = std::collections::BTreeSet::new();
+    // Squares whose own turn differs from a cycle material's (where the Q50
+    // stand-in changes the picture), per animator.
+    let mut kept_turn: Vec<String> = Vec::new();
+    let terrain = &ground.terrain;
+    for a in &animators {
+        for &(i, j) in &a.squares {
+            ground.animated.insert((i, j));
+            let own = ground.materials.get(i, j).unwrap();
+            // The square keeps its own material's orientation whatever it
+            // shows: the user's check of our viewer against the data (shore
+            // and corner squares are one texture in up to four turns, the
+            // animation frames are stored unturned). Stand-in until Q50;
+            // emitters.md rules 2 and 6 read as "the new material's turn".
+            let code = ground.orientation.get(own as usize).copied().unwrap_or(0);
+            if a.cycle.iter().any(|&m| ground.orientation.get(m as usize).copied().unwrap_or(0) != code) {
+                kept_turn.push(a.name.clone());
+            }
+            for m in std::iter::once(own).chain(a.cycle.iter().copied()) {
+                needed.insert(m);
+                triangles.entry(((i, j), m)).or_insert_with(|| terrain.square_triangles(i, j, m, code));
+            }
+            let corners = [(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)];
+            if corners.iter().any(|&(x, y)| terrain.point_height_on(kq8_data::terrain::Level::Floor, x, y) != terrain.point_height(x, y)) {
+                floor_differs.insert((i, j));
+            }
+        }
+    }
+    let mut per: BTreeMap<String, usize> = BTreeMap::new();
+    for name in kept_turn {
+        *per.entry(name).or_default() += 1;
+    }
+    log.summary(format!(
+        "ground animation: squares keeping their own turn where a cycle material has another (Q50 stand-in): {} {per:?}",
+        per.values().sum::<usize>()
+    ));
+    let mut looks = BTreeMap::new();
+    for m in needed {
+        let look = match ground.textures.get(m as usize).cloned().flatten() {
+            Some(name) => {
+                log.quiet = true;
+                let look = load_texture(world, game, &name, &ground.palette, log);
+                log.quiet = false;
+                if let Look::Missing(why) = &look {
+                    log.summary(format!("  ground animation: material {m}: MISSING {why} (drawn magenta)"));
+                }
+                Some(look)
+            }
+            None => {
+                log.summary(format!("  ground animation: material {m} is not a texture; squares showing it are not drawn"));
+                None
+            }
+        };
+        looks.insert(m, look);
+    }
+    log.summary(format!(
+        "ground animation: {} animators ({} running), {} animated squares ({} over a different floor), {} materials",
+        animators.len(),
+        animators.iter().filter(|a| a.running).count(),
+        ground.animated.len(),
+        floor_differs.len(),
+        looks.len()
+    ));
+    GroundAnimAssets { animators, materials: ground.materials.clone(), triangles, looks, floor_differs }
 }
 
 /// `set KQWorld::<setting> <name>` in the world's `world.cs`, e.g.
@@ -689,6 +845,28 @@ pub struct Objects {
     pub scripts: Vec<(String, Vec<u8>)>,
     /// Connor's `attackDist` from `GAME/Kq/Connor.kq` (doors.md rule 11).
     pub attack_dist: Option<f32>,
+    /// The emitters the start-up scripts load (M3 step 3b-1).
+    pub emitters: Vec<EmitterAssets>,
+    /// The particle catchers (M3 step 3b-2): name and settings.
+    pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
+    /// The ground animators in load order (M3 step 3b-3).
+    pub animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
+}
+
+/// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
+pub struct EmitterAssets {
+    pub name: String,
+    /// The position as the file or the `loadKQ` line gives it, and after
+    /// the usual placement rules (and any `move`).
+    pub written: [f32; 3],
+    pub position: [f32; 3],
+    pub settings: kq8_data::effects::EmitterSettings,
+    /// `translucency` (256 = solid), read like any object's.
+    pub translucency: f32,
+    /// The particle model: index into `Objects::shapes`.
+    pub shape: Option<usize>,
+    /// Floor and surface heights under the emitter, for the log.
+    pub ground: [Option<f32>; 2],
 }
 
 /// A door (`classType=KQDoor`) as loaded (docs/behaviour/doors.md).
@@ -787,6 +965,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         doors: Vec::new(),
         door_animations: Vec::new(),
         door_animation_index: BTreeMap::new(),
+        emitters: Vec::new(),
+        catchers: Vec::new(),
+        animators: Vec::new(),
         object_palette: None,
         located: BTreeMap::new(),
         skipped: BTreeMap::new(),
@@ -908,6 +1089,9 @@ struct Placer<'a> {
     doors: Vec<DoorAssets>,
     door_animations: Vec<Animation>,
     door_animation_index: BTreeMap<String, usize>,
+    emitters: Vec<EmitterAssets>,
+    catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
+    animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     object_palette: Option<Result<[Rgb; 256], String>>,
     /// Loaded objects by lower-case name (the last one loaded wins).
     located: BTreeMap<String, Located>,
@@ -1320,6 +1504,20 @@ impl Placer<'_> {
                 }
             }
         }
+        // An emitter has no model of its own (it stays an invisible-object
+        // marker); its particles are drawn by `effects_view.rs`.
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQEmitter")) {
+            self.place_emitter(&label, s, &p, load);
+        }
+        // A particle catcher: no model; its names are looked up once all
+        // start-up scripts have run (emitters.md "Particle catchers" rule 2).
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQParticleCatcher")) {
+            self.catchers.push((p.name.clone(), kq8_data::effects::CatcherSettings::from_section(s)));
+        }
+        // A ground animator: no model; it changes ground squares (3b-3).
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTerrainAnimator")) {
+            self.animators.push((p.name.clone(), kq8_data::effects::AnimatorSettings::from_section(s)));
+        }
         if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQDoor")) {
             self.place_door(&label, &file, p);
             return;
@@ -1511,6 +1709,46 @@ impl Placer<'_> {
         self.doors.push(door);
     }
 
+    /// An emitter (M3 step 3b-1; docs/behaviour/emitters.md): its keys and
+    /// its particle model, loaded once like any object model.
+    fn place_emitter(
+        &mut self,
+        label: &str,
+        s: &kq8_data::kq_text::Section,
+        p: &kq8_data::objects::Placement,
+        load: &kq8_data::world_script::LoadKq,
+    ) {
+        let settings = kq8_data::effects::EmitterSettings::from_section(s);
+        for problem in &settings.problems {
+            self.log.summary(format!("emitter {label}[{}]: {problem}", p.name));
+        }
+        let written = kq8_data::objects::Placement::from_load(s, load).position;
+        let shape = settings.shape.clone().and_then(|shape| {
+            let key = shape.to_ascii_lowercase();
+            match self.index_of.get(&key) {
+                Some(slot) => *slot,
+                None => {
+                    let slot = self.load_shape(&shape, None, None);
+                    self.index_of.insert(key, slot);
+                    if slot.is_none() {
+                        self.log.summary(format!("emitter {label}[{}]: particle model {shape} could not be loaded", p.name));
+                    }
+                    slot
+                }
+            }
+        });
+        self.emitters.push(EmitterAssets {
+            name: p.name.clone(),
+            written,
+            position: p.position,
+            settings,
+            translucency: p.translucency,
+            shape,
+            ground: [kq8_data::terrain::Level::Floor, kq8_data::terrain::Level::Surface]
+                .map(|level| self.terrain.ground_at(level, p.position[0], p.position[1]).map(|g| g.height)),
+        });
+    }
+
     fn skipped_map(&mut self, unused: bool) -> &mut BTreeMap<String, usize> {
         if unused { &mut self.unused_skipped } else { &mut self.skipped }
     }
@@ -1670,6 +1908,13 @@ impl Placer<'_> {
         let (objects, clickables) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
         let mut doors = self.doors;
         door_bounds(self.game, &mut doors, log);
+        // Emitters follow any `move` of their object.
+        let mut emitters = self.emitters;
+        for e in &mut emitters {
+            if let Some(l) = self.located.get(&e.name.to_ascii_lowercase()) {
+                e.position = l.position;
+            }
+        }
         let mut known: Vec<String> = self.located.keys().cloned().collect();
         known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
         Objects {
@@ -1687,6 +1932,9 @@ impl Placer<'_> {
             vars: Default::default(),
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
+            emitters,
+            catchers: self.catchers,
+            animators: self.animators,
         }
     }
 }

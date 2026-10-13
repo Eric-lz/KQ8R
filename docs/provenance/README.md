@@ -426,3 +426,56 @@ copied (unit tests use made-up scripts).
 | Reach: Connor's feet into the door's axes, per-axis part outside the box, < 2 × `attackDist` (`Connor.kq` 2,350 → 4,700); the box as it stands (turned) | doors.md rule 11; "turned box" **our stand-in** (Q45 c) | Unit test (`distance_is_measured_in_the_doors_own_axes`); viewer: 1,000.0 from 1,000 in front; 26,913.5 from the start spot → too far |
 | `ConnorAction do do`; item: accepted when `acceptsInventory` = its type or `acceptAllItems=1` → `<object> <type>`, else refused; out of reach: `tooFarAwayAction` 0 → remark, nothing sent, else `TooFar TooFar` | doors.md rules 12–14; the accept rule is **our stand-in** (open question 2) | Unit tests; viewer with `--item INVITEM_KeepKey`: both keep doors open |
 | Not done: turning Connor to face the door (rule 16), the remarks' lines, hits / `Die` / `ProjImmune` (no combat yet), `tooFar=` (Q45 a), clicks on objects other than doors (logged only), changing Connor's collision when a script removes bit 0x1 (none does in Daventry) | — | Logged |
+
+## Emitters (M3 step 3b-1) — `crates/kq8-data/src/effects.rs`, `crates/kq8-game/src/emitter.rs`, `crates/kq8-viewer/src/{effects_view,load,terrain_view}.rs`
+
+Behaviour note = `docs/behaviour/emitters.md` "Emitters" (session A,
+traced). No other source; unit tests use made-up sections.
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Keys `shape`, `radius`, `forceMin/Max`, `gravity`, `rotMin/Max`, `maxSinPeriod`, `followOffset` as `X/Y/Z` triples (missing 0); `maxLife` 100, `maxParticles` 200 by default; `delayStart` only zero or not; `follow`, `followMesh` | Note "Emitter keys" | Unit tests (`emitter_keys_and_defaults`, `unreadable_numbers_are_reported`). Over all 12 worlds (throwaway count): 43 emitter files; no `dying`, `deadCount` or `frameCount` |
+| Position: the object's place after the usual placement rules | Our reading (the note gives only `loc`); no difference in Daventry | Viewer log: all 14 Daventry emitters unchanged by the rules and above both grids |
+| At the start: offset in the ±radius box, velocity, spin (only if a rot limit is non-zero), sway speeds, starting age ⌊fraction × maxLife⌋, each uniform and independent; moved on by age × velocity | Rule 1 | Unit test (`choices_lie_within_their_limits`) |
+| Per tick in this order: age + 1; sway angles + speeds; position + velocity (velocity × sin(angle) on an axis whose angle is not 0); turn + spin; position + age × gravity; past `maxLife` restart at loc + offset, visible, turn and sway angle kept | Rules 3, 6, 7 | Unit tests (`a_life_is_max_life_plus_one_ticks_with_one_hidden`, `gravity_adds_up_to_n_n_plus_1_over_2`, `swaying_steps_are_velocity_times_sine`). Viewer: `stream1` particle 0 restarts every 41 updates, 1 not drawn, rises to +277, falls to 7,834 (580 below the ground near its end; rule 5: no collision) |
+| Sway speed = fraction × P × 6.28 ÷ maxLife; "non-zero" = absolute value ≥ 0.000001 | Rule 6, "Numbers and units" | Unit test |
+| Same path every life | Rule 2 | **Only on axes without sway.** With rule 3.6 (sway angle not reset), `leaf1` particle 0's x differs from its first life by 2,787 in the second life and 5,400 in the third (viewer log); y and z repeat exactly. Asked as Q47 |
+| `delayStart`: all hidden until their first restart | Rule 4 | Unit test (`delay_start_hides_…`) |
+| Drawn: frame 0 of `shape` at the particle's position and turn (turn used like `dirX/Y/Z`), only when visible and age ≠ 0 | Rules 4, 9 (turn convention: the note's assumption, not checked) | Not checked by eye |
+| The emitter's `translucency` on every particle | Rule 9 ("likely, not traced", open question 2) | `stream1–4` drawn at 150/255 |
+| Always updated | Rule 12 (recommendation) | — |
+| Random numbers: our own seeded generator (SplitMix64), same seed every run | Note "Do not reproduce" (no need to match the C library's) | Unit test (`random_fractions_stay_in_range`) |
+| Drawing blended between updates, not across a restart | Our choice (display only, as Connor) | — |
+| Not done: `follow`/`followMesh` (rule 11; IceWorld `draglfir`, `dragrfir`, `snow`, Temple4 `lucfire`), dying (rule 10), script commands (open question 4), arrow emitters (`emitter=` in projectiles, combat) | — | Logged as "not started" |
+
+## Particle catchers (M3 step 3b-2) — `crates/kq8-data/src/effects.rs` (`CatcherSettings`), `crates/kq8-game/src/{emitter,collide}.rs`, `crates/kq8-viewer/src/{effects_view,load,terrain_view}.rs`
+
+Behaviour note = `docs/behaviour/emitters.md` "Particle catchers" (session
+A, traced).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Keys `emitter`, `interior` | Rule 1 | Unit test (`catcher_keys`) |
+| Names looked up once after the start-up scripts; nothing found → the catcher does nothing | Rule 2 | Viewer log: Daventry's 3 catchers find `leaf1–3` and `Cottage` |
+| Names compared without case | **Our stand-in** (Q48); Daventry's names match exactly anyway | — |
+| Box = the building's `.dig` bounding box (`BuildingCollider::bounds`) and its placement; top = box top z + building z | Rule 3 | Viewer log: `Cottage` (`house1.dig`, dirZ −1.57) box (−6,272, −3,936, 0)..(3,072, 9,184, 5,120), top 18,915 |
+| Every tick: particles at or below the top, turned into the building's own axes, hidden if min ≤ value < max on all axes; visible again at the next restart | Rules 4, 5; emitter rule 4 | Unit test (`a_catcher_hides_particles_inside_the_turned_box_until_their_restart`: a turned box, the roof edge itself not inside, visible again after the restart). Viewer (about 620 updates): `Cottage2` hid `leaf1` particles 19 times, at x ≈ 280,190–280,250 (the box's west side is at 280,181), `Cottage4` hid `leaf3` 4 times, `Cottage3` none (`leaf2` is 13,000 west of the cottage) |
+| Catchers run after all emitters in the same tick | **Our stand-in** (Q48) | — |
+
+## Ground animators (M3 step 3b-3) — `crates/kq8-data/src/{effects,terrain}.rs`, `crates/kq8-game/src/ground_anim.rs`, `crates/kq8-viewer/src/{ground_anim_view,load,terrain_view,main}.rs`
+
+Behaviour note = `docs/behaviour/emitters.md` "Ground animators" (session
+A, traced; square choice checked against the data).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Keys `numOrigTextures`/`origTextureK`, `numExclude`/`excludeXK`/`excludeYK`, `numGridBlocks`/`gridBlockXK`/`gridBlockYK`, `numMaterialIndex`/`materialIndexK`, `numMaterialIndexII`/…, `delay`, `repeatflag`, `startNow`, `frameCount`; only the first `numX` entries read; with `numGridBlocks` ≠ 0 the texture and exclude keys are not read | Note "Ground animator keys" | Unit tests (`animator_keys`, `grid_blocks_replace_textures_and_excludes`). `#numMaterialIndex=` lines (`fullstrm.kq`) are other keys, so not read |
+| A missing `delay`, `repeatflag`, `startNow` counts as 0 | Our reading (every file of the 12 worlds sets all three) | — |
+| Squares chosen once, from the materials as loaded: the list, or every square with an `origTexture` minus the excluded | Rule 1 | Unit tests. Viewer log, Daventry: 86, 0, 57, 19, 0, 17, 32, 2, 13, 4, 4 squares, as the note's table; (45, 57) animated by none, (45, 53)–(45, 56) by `FullStream` only |
+| Each change sets every chosen square to the same material; first change `delay` after the start shows entry 0, then 1, 2, …; `repeatflag=1` wraps to 0, `0` stops at the last | Rules 2–4 | Unit tests (`changes_every_delay_on_the_15_per_second_clock`, `played_once_keeps_the_last_material`). Viewer: first change at update 5, entry 0 |
+| Timer on game time (updates / 15); next due = previous due + `delay` | **Our stand-in** (Q49) | Viewer: changes 4 and 5 updates apart, 16 of each in 150 updates (0.3 s on average) |
+| `startNow=0`: never started | Note keys table; the commands that would start it are unused (open question 4) | IceWorld `pond` logged as not started |
+| `frameCount` ≠ 0 not applied; envInfo flags not changed | Rule 5 (no file sets `frameCount`); open question 3 | Logged if seen |
+| ~~The drawn square follows its material: texture and orientation code from the direction table~~ **Changed 2026-10-13:** the texture follows the new material, the orientation stays that of the square's own (loaded) material | Rule 6 read as "the new material's code" first; **user's check of our viewer** (Daventry shores all turned alike, DeadCity blood frames turned 90°, Swamp squares flipping) and the direction tables (turned variants are separate materials of one texture; animation frames mostly code 0). Stand-in, asked as Q50 | Viewer log: squares where it makes a difference: Daventry 116, DeadCity 42 (`Blood2` 4, `Blood3` 38), Swamp 376. Throwaway script (scratchpad) listing each animator's own and cycle codes. Not yet re-checked by eye |
+| Animated squares drawn as their own entities; their surface left out of the ground mesh, their floor kept; U view: hidden in "floor only", see-through in "both" over a different floor | Our choice (display only) | Viewer log: Daventry 234 squares, 43 materials; Swamp 25 animators, 676 squares; DeadCity 8, 543; IceWorld 7 (6 running), 263 |
+| `Grid::from_rows`, `Grid::set`, `Terrain::square_triangles` (one square's triangles, now also used by `ground_triangles`) | Refactor | Existing terrain tests pass unchanged |

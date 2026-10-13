@@ -138,6 +138,8 @@ pub struct BuildingCollider {
     solid: Vec<bool>,
     planes: Vec<([f32; 3], f32)>,
     pub placement: Placement,
+    /// The building's own bounding box (from its `.dig`), in its own space.
+    pub bounds: ([f32; 3], [f32; 3]),
     /// The building's bounding box turned into the world (an axis-aligned
     /// box around its 8 corners), for the rough check.
     pub world_min: [f32; 3],
@@ -177,7 +179,7 @@ impl BuildingCollider {
         placement: Placement,
     ) -> Self {
         let (world_min, world_max) = world_box(bounds.0, bounds.1, &placement);
-        BuildingCollider { name: name.to_string(), nodes, solid, planes, placement, world_min, world_max }
+        BuildingCollider { name: name.to_string(), nodes, solid, planes, placement, bounds, world_min, world_max }
     }
 
     /// The rough check: does the box `lo..hi` (world space) overlap the

@@ -90,8 +90,25 @@ impl Grid {
         Ok(Grid { width: w, height: h, values })
     }
 
+    /// From values listed bottom row first (`values[j * width + i]`).
+    pub fn from_rows(width: usize, height: usize, values: Vec<u8>) -> Result<Self, String> {
+        if values.len() != width * height {
+            return Err(format!("{} values for a {width}x{height} grid", values.len()));
+        }
+        Ok(Grid { width, height, values })
+    }
+
     pub fn get(&self, i: usize, j: usize) -> Option<u8> {
         (i < self.width && j < self.height).then(|| self.values[j * self.width + i])
+    }
+
+    /// Changes one value; false (nothing changed) outside the grid.
+    pub fn set(&mut self, i: usize, j: usize, v: u8) -> bool {
+        let inside = i < self.width && j < self.height;
+        if inside {
+            self.values[j * self.width + i] = v;
+        }
+        inside
     }
 
     pub fn values(&self) -> &[u8] {
@@ -294,29 +311,42 @@ impl Terrain {
                 materials.width, materials.height
             ));
         }
-        let size = self.settings.square_size();
         let mut out = Vec::with_capacity(nx * ny * 2);
         for j in 0..ny {
             for i in 0..nx {
                 let material = materials.get(i, j).unwrap();
                 let code = orientation.get(material as usize).copied().unwrap_or(0);
-                // Corners as (east, north) offsets within the square.
-                let tris: [[(usize, usize); 3]; 2] = if Self::diagonal_is_rising(i, j) {
-                    [[(0, 0), (1, 1), (1, 0)], [(0, 0), (0, 1), (1, 1)]]
-                } else {
-                    [[(0, 0), (0, 1), (1, 0)], [(1, 0), (0, 1), (1, 1)]]
-                };
-                for corners in tris {
-                    let positions = corners.map(|(di, dj)| {
-                        [(i + di) as f32 * size, (j + dj) as f32 * size, self.point_height(i + di, j + dj).unwrap()]
-                    });
-                    // u runs west -> east, v runs north -> south.
-                    let uvs = corners.map(|(di, dj)| texture_coord(code, di as f32, 1.0 - dj as f32));
-                    out.push(GroundTriangle { positions, uvs, material, square: (i, j) });
-                }
+                out.extend(self.square_triangles(i, j, material, code));
             }
         }
         Ok(out)
+    }
+
+    /// The two triangles of square (i, j) showing `material` with
+    /// orientation code `code` (also used when a ground animator changes a
+    /// square's material). Empty outside the grid.
+    pub fn square_triangles(&self, i: usize, j: usize, material: u8, code: u32) -> Vec<GroundTriangle> {
+        let (nx, ny) = self.squares();
+        if i >= nx || j >= ny {
+            return Vec::new();
+        }
+        let size = self.settings.square_size();
+        // Corners as (east, north) offsets within the square.
+        let tris: [[(usize, usize); 3]; 2] = if Self::diagonal_is_rising(i, j) {
+            [[(0, 0), (1, 1), (1, 0)], [(0, 0), (0, 1), (1, 1)]]
+        } else {
+            [[(0, 0), (0, 1), (1, 0)], [(1, 0), (0, 1), (1, 1)]]
+        };
+        tris.iter()
+            .map(|corners| {
+                let positions = corners.map(|(di, dj)| {
+                    [(i + di) as f32 * size, (j + dj) as f32 * size, self.point_height(i + di, j + dj).unwrap()]
+                });
+                // u runs west -> east, v runs north -> south.
+                let uvs = corners.map(|(di, dj)| texture_coord(code, di as f32, 1.0 - dj as f32));
+                GroundTriangle { positions, uvs, material, square: (i, j) }
+            })
+            .collect()
     }
 }
 

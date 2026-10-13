@@ -1210,10 +1210,12 @@ the first puzzles working.
 - B: script interpreter, event system, the object kinds.
 
 Notes: `docs/behaviour/doors.md` (doors, their scripts, the minimum of the
-`.cs` language).
+`.cs` language), `docs/behaviour/emitters.md` (emitters, particle
+catchers, ground animators).
 
 - **3a — Daventry's doors (planned 2026-10-12; 3a-1, 3a-2, 3a-3 done
-  2026-10-12, MODLOG; checked in the logs, not yet by eye).** Rules from
+  2026-10-12, MODLOG; checked in the logs, and by eye with the mouse by
+  the user).** Rules from
   `doors.md`.
   Three sub-steps, each with its own tests and MODLOG entry.
   - **Words used here.** A *script* is one of the game's `.cs` text files
@@ -1355,6 +1357,76 @@ Notes: `docs/behaviour/doors.md` (doors, their scripts, the minimum of the
       updates → opened → `Condoor Open`; clicked again: stays open; from
       far away: "too far", nothing sent; open door turned ~165° out of
       the doorway, still solid where it now stands.
+
+- **3b — emitters, particle catchers, ground animators (planned
+  2026-10-13; 3b-1, 3b-2, 3b-3 done 2026-10-13, MODLOG; checked in the
+  logs and by eye by the user).** Rules from `docs/behaviour/emitters.md`. Three
+  sub-steps, each with its own tests and MODLOG entry.
+  - **Words used here.** An *emitter* is an invisible point that keeps a
+    fixed number of *particles* (small models: leaves, drips) flying; each
+    particle repeats the same path every *life*. A *particle catcher* hides
+    one emitter's particles inside a building's box. A *ground animator*
+    swaps the ground texture of some grid squares every few tenths of a
+    second (flowing water). A *tick* is one game update (1/15 s).
+  - **Where the code goes.** Reading the keys: `kq8-data` `effects.rs`
+    (no rules, just the numbers with their defaults). The rules:
+    `kq8-game` `emitter.rs` (particles and catchers) and `ground_anim.rs`
+    (animators), no Bevy, unit-tested. Drawing and the tick:
+    `kq8-viewer` `effects_view.rs` (emitters, catchers) and
+    `ground_anim_view.rs` (animators), run in the fixed 15-per-second
+    update after the doors and Connor. Logs:
+    `kq8-artifacts/logs/effects.log` and `ground_anim.log`.
+  - **Random numbers:** a small seeded generator of our own (uniform
+    fractions, the note says the original's sequence needn't be copied).
+    Same seed every run, so two runs give the same log.
+  - **3b-1, emitters.** Keys and defaults from the note's table
+    (`maxParticles` 200, `maxLife` 100, `translucency` 256). Position: the
+    object's place after the usual placement rules (`loc`, `loadKQ`
+    position); whether the ground rules apply to emitters is not in the
+    note: the log lists any emitter below the ground. At the start every
+    particle gets its offset, velocity, spin, sway speeds and starting age
+    (rule 1) and is moved on by age × velocity. Every tick: rule 3 steps
+    1–6 in that order, sway (rule 6), gravity as age × g (rule 7),
+    restart after `maxLife` + 1 ticks, `delayStart` (rule 4). "Non-zero" =
+    absolute value ≥ 0.000001. Spin: the turn angles add up and are used
+    like an object's `dirX/Y/Z` (the note's assumption). Drawn: frame 0 of
+    `shape` at the particle's position and turn, only when visible and age
+    ≠ 0, with the emitter's `translucency` (likely, open question 2), blended
+    between ticks except right after a restart. Always active (rule 12).
+    Not done (logged): `follow` / `followMesh` (rule 11; no Daventry
+    emitter uses it), dying (rule 10; no file uses it), the script
+    commands (open question 4). `randomZRot` ignored (Do not reproduce).
+    Tests: same path every life, restart after `maxLife` + 1 ticks with
+    one hidden tick, gravity sum n(n+1)/2, sway = velocity × sin, delayStart.
+    Log: per emitter its settings and particle count; for `stream1` and
+    `leaf1`, particle 0's choices and then per tick its age, position and
+    visibility (note "How to check").
+  - **3b-2, particle catchers.** After loading, each catcher looks up its
+    emitter and building by name (any case; nothing found → does nothing,
+    logged). Box = the building's `.dig` bounding box; top = box top +
+    building z. Every tick, after the emitters: each visible particle of
+    its emitter with z ≤ top is turned into the building's own axes and
+    hidden if min ≤ value < max on all three axes. Stand-in (asked):
+    catchers run after the emitters in the same tick. Log: each catcher's
+    box and a line whenever it hides a particle.
+  - **3b-3, ground animators.** Squares chosen once at load (explicit
+    list if `numGridBlocks` ≠ 0, else every square whose material is an
+    `origTexture`, minus the exclude list). Started when `startNow=1`
+    (else logged and left alone). Changes: the first after `delay`
+    seconds, entry 0; then every `delay` seconds the next entry; with
+    `repeatflag=0` stop at the last. Timer on the game clock (ticks /
+    15); a change is due when game time ≥ the due time, and the next is
+    due `delay` after the previous due time (stand-in, asked: the note
+    doesn't say how 0.3 s falls on a 1/15 s clock). Ground flags
+    (envInfo) not changed (open question 3). Drawn: animated squares are
+    taken out of the normal ground mesh's surface (their floor stays in
+    it) and drawn one entity each; on a change its texture follows the new
+    material, while its orientation stays that of its own loaded material
+    (changed after the user's check, stand-in until Q50). The floor view
+    (U) treats them as surface squares.
+    Log: squares chosen per animator (expect the note's table: 86, 0, 57,
+    19, 0, 17, 32, 2, 13, 4, 4), square (45, 57) never animated, and each
+    change with its game time and material.
 
 ### M4 — Talk, listen, use the menus
 

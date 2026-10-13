@@ -34,6 +34,10 @@ const SURFACE_SEE_THROUGH: f32 = 0.35;
 #[derive(Resource)]
 pub struct LoadedGround(pub Option<Ground>);
 
+/// What the U key shows: 0 the surface (normal), 1 both, 2 the floor only.
+#[derive(Resource)]
+pub struct FloorView(pub u8);
+
 /// Kept after setup so the camera report can ask for the ground height.
 #[derive(Resource)]
 pub struct GroundLookup(pub kq8_data::Terrain);
@@ -100,8 +104,11 @@ pub fn setup_ground(
             mesh_from(positions, uvs)
         };
         // Sort the triangles by how the floor compares with the surface.
-        let (mut same, mut lower, mut higher) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut same, mut lower, mut higher, mut floor_only) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for t in &group.triangles {
+            // Animated squares' surface is drawn by ground_anim_view (3b-3);
+            // their floor stays here.
+            let animated = ground.animated.contains(&t.square);
             let fz = t.positions.map(floor_z);
             let d: f32 = (0..3).map(|k| fz[k] - t.positions[k][2]).sum();
             let differs = (0..3).any(|k| fz[k] != t.positions[k][2]);
@@ -110,7 +117,13 @@ pub fn setup_ground(
                 (true, true) => lower.push((*t, fz)),
                 (true, false) => higher.push((*t, fz)),
             }
+            if animated {
+                floor_only.push((*t, fz));
+            }
         }
+        // Surface parts without the animated squares; floor parts with them.
+        let surface_same: Vec<_> = same.iter().filter(|(t, _)| !ground.animated.contains(&t.square)).cloned().collect();
+        let floor_same_animated = floor_only.len();
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
@@ -121,7 +134,7 @@ pub fn setup_ground(
             m
         };
         let opaque = materials.add(material.clone());
-        let mut over: Vec<_> = lower.iter().chain(&higher).cloned().collect();
+        let mut over: Vec<_> = lower.iter().chain(&higher).filter(|(t, _)| !ground.animated.contains(&t.square)).cloned().collect();
         over.sort_by_key(|(t, _)| t.square);
         let mut spawn = |tris: &[_], floor: bool, handle: Handle<StandardMaterial>, part: GroundPart, shown: bool| {
             if tris.is_empty() {
@@ -130,7 +143,7 @@ pub fn setup_ground(
             let v = if shown { Visibility::Inherited } else { Visibility::Hidden };
             commands.spawn((Mesh3d(meshes.add(mesh(tris, floor))), MeshMaterial3d(handle), part, v));
         };
-        spawn(&same, false, opaque.clone(), GroundPart::SurfaceSame, true);
+        spawn(&surface_same, false, opaque.clone(), GroundPart::SurfaceSame, true);
         let see_through = materials.add(with_opacity(&material, SURFACE_SEE_THROUGH));
         spawn(&over, false, opaque.clone(), GroundPart::SurfaceOverFloor { opaque: opaque.clone(), see_through }, true);
         spawn(&same, true, opaque.clone(), GroundPart::FloorSame, false);
@@ -140,7 +153,7 @@ pub fn setup_ground(
             counts[k] += n;
         }
         log.detail(format!(
-            "spawned ground meshes for {} ({} triangles; floor lower under {}, higher under {})",
+            "spawned ground meshes for {} ({} triangles; floor lower under {}, higher under {}; {floor_same_animated} on animated squares, surface drawn by the animators)",
             group.label,
             group.triangles.len(),
             lower.len(),
@@ -190,7 +203,7 @@ pub fn setup_objects(
 ) {
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
-    commands.insert_resource(Buildings(std::mem::take(&mut objects.buildings)));
+    let buildings = std::mem::take(&mut objects.buildings);
     // Doors (M3 step 3a): drawn and moved by door_view; their colliders
     // join the others and are moved every update.
     let mut colliders = std::mem::take(&mut objects.objects);
@@ -221,6 +234,12 @@ pub fn setup_objects(
         }
         built.push(parts);
     }
+    // Emitters (M3 step 3b-1): their particles use the object models.
+    // Particle catchers (3b-2) look up their emitter and building.
+    let emitters = std::mem::take(&mut objects.emitters);
+    let catchers = std::mem::take(&mut objects.catchers);
+    crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &built, &mut materials, &mut log);
+    commands.insert_resource(Buildings(buildings));
     let mut worst = 0.0f32;
     let mut see_through = 0;
     for (p, i, unused) in &objects.placed {
@@ -388,14 +407,15 @@ pub fn toggle_markers(
 pub fn toggle_floor(
     keys: Res<ButtonInput<KeyCode>>,
     shared: Res<Shared>,
-    mut mode: Local<u8>,
+    mut view: ResMut<FloorView>,
     mut parts: Query<(&GroundPart, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>)>,
     mut label: Query<&mut Text, With<FloorLabel>>,
 ) {
     if !keys.just_pressed(KeyCode::KeyU) {
         return;
     }
-    *mode = (*mode + 1) % 3;
+    view.0 = (view.0 + 1) % 3;
+    let mode = &view.0;
     let show = |on: bool| if on { Visibility::Inherited } else { Visibility::Hidden };
     for (part, mut v, mut m) in &mut parts {
         match part {

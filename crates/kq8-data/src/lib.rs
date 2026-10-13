@@ -8,6 +8,7 @@ pub mod bitmap;
 pub mod bounds;
 pub mod building;
 pub mod chunks;
+pub mod effects;
 pub mod envinfo;
 pub mod game_dir;
 pub mod kq_text;

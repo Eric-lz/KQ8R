@@ -20,7 +20,9 @@
 //! `--at X,Y,H` starts him on the ground at X, Y facing heading H (radians).
 //! Doors (M3): left click on a door uses it (play cursor); `--click NAME,N`
 //! clicks object NAME before update N + 1, `--item TYPE` puts an item of
-//! that type in Connor's hand (tests). Esc quits.
+//! that type in Connor's hand (tests). Emitters (M3 step 3b): falling
+//! leaves and drips, logged to effects.log; flowing water squares, logged
+//! to ground_anim.log. Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no lighting, no animation. Back faces are hidden as in the original
@@ -28,7 +30,9 @@
 
 mod connor_view;
 mod door_view;
+mod effects_view;
 mod game_camera;
+mod ground_anim_view;
 mod load;
 mod log;
 mod terrain_view;
@@ -216,7 +220,7 @@ fn main() -> ExitCode {
     log.summary(format!("log file: {}", log.path().display()));
     enum Scene {
         Model(Model),
-        Ground(load::Ground, load::Objects),
+        Ground(load::Ground, load::Objects, load::GroundAnimAssets),
     }
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
@@ -224,9 +228,11 @@ fn main() -> ExitCode {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
             if args.terrain {
-                let ground = load::load_ground(&game, &world, &mut log)?;
-                let objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
-                Ok(Scene::Ground(ground, objects))
+                let mut ground = load::load_ground(&game, &world, &mut log)?;
+                let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
+                let animators = std::mem::take(&mut objects.animators);
+                let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
+                Ok(Scene::Ground(ground, objects, animation))
             } else {
                 load::load_model(&game, &world, &args.model, args.palette.as_deref(), None, &mut log).map(Scene::Model)
             }
@@ -263,8 +269,10 @@ fn main() -> ExitCode {
                 .add_systems(Startup, setup)
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
-        Scene::Ground(ground, objects) => {
+        Scene::Ground(ground, objects, animation) => {
             app.insert_resource(terrain_view::LoadedGround(Some(ground)))
+                .insert_resource(ground_anim_view::LoadedGroundAnim(Some(animation)))
+                .insert_resource(terrain_view::FloorView(0))
                 .insert_resource(terrain_view::LoadedObjects(Some(objects)))
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(terrain_view::Fly::new())
@@ -281,9 +289,9 @@ fn main() -> ExitCode {
                 .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
-                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, game_camera::camera_step).chain())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label))
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, game_camera::camera_step, effects_view::effects_step, ground_anim_view::ground_anim_step).chain())
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim))
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, effects_view::effects_draw, ground_anim_view::ground_anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();
