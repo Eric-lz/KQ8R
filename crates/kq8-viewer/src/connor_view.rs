@@ -91,6 +91,8 @@ pub struct ConnorSim {
     jump_start_z: Option<f32>,
     /// `--turn`: the test's turn key held (1 left, −1 right, 0 none).
     test_turn: i8,
+    /// `--hold`'s run switch has been set (once, at the start).
+    hold_run_set: bool,
     /// Keyboard auto-repeat: the movement key pressed last, while it is
     /// still held (its key, `None` for the `--turn` test). Each update it
     /// counts as pressed again (user's check in the original, 2026-10-12:
@@ -309,6 +311,7 @@ pub fn spawn_connor(
         jump_pressed: false,
         jump_start_z: None,
         test_turn: 0,
+        hold_run_set: false,
         repeat: None,
         log,
         last_state: "normal",
@@ -436,7 +439,13 @@ pub fn connor_keys(
     sim.intent.turn = turn;
     if let Some(([f, t, r], until)) = hold.0 {
         let held = until.is_none_or(|n| sim.updates < n);
-        sim.intent = if held { Intent { forward: f, turn: t, run: r != 0 } } else { Intent { forward: 0, turn: 0, run: r != 0 } };
+        (sim.intent.forward, sim.intent.turn) = if held { (f, t) } else { (0, 0) };
+        // The run switch only at the start, so scripts can change it
+        // (`KQConner::setRun`, M3 step 3d-3).
+        if !sim.hold_run_set {
+            sim.hold_run_set = true;
+            sim.intent.run = r != 0;
+        }
     }
     if let Some((_, t)) = turn_at.0.filter(|&(n, _)| sim.updates >= n) {
         turn_at.0 = None;
@@ -478,6 +487,20 @@ pub fn connor_keys(
         );
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
+    }
+}
+
+impl ConnorSim {
+    /// `KQConner::setRun` from a script (M3 step 3d-3).
+    pub fn set_run(&mut self, run: bool, at: &str) {
+        let was = self.intent.run;
+        self.intent.run = run;
+        self.log.detail(format!(
+            "connor update {}: run switch {} -> {} ({at})",
+            self.updates,
+            if was { "on" } else { "off" },
+            if run { "on" } else { "off" }
+        ));
     }
 }
 

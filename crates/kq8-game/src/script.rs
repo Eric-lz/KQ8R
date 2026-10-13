@@ -38,12 +38,16 @@
 
 use kq8_data::world_script::Vars;
 
-/// Commands the door scripts use that belong to later milestones
-/// (dialogue, GUI, inventory, cutscenes; `doors.md` "Commands door scripts
-/// use"). Each only writes a log line and leaves 0 in `$Console::Return`
-/// (for `checkInventory` 0 = not found, right for an empty inventory:
-/// `items.md` rule 10).
-pub const STUBS: [&str; 13] = [
+/// Commands of later milestones: the door scripts' (dialogue, GUI,
+/// inventory, cutscenes; `doors.md` "Commands door scripts use"), then
+/// those of Daventry's trap scripts that only act (music, monsters, ropes,
+/// cutscene camera, moving objects while playing; M3 step 3d-3). Each only
+/// writes a log line and leaves 0 in `$Console::Return` (for
+/// `checkInventory` 0 = not found, right for an empty inventory:
+/// `items.md` rule 10). Commands that answer a question (`getloc`,
+/// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
+/// unknown (error line, result 1) until they are studied.
+pub const STUBS: [&str; 39] = [
     "KQMonster::speak",
     "doPopup",
     "addMapIcon",
@@ -57,6 +61,33 @@ pub const STUBS: [&str; 13] = [
     "preloadShape",
     "KQObject::setHidden",
     "loadKQ",
+    // Daventry's trap scripts (3d-3).
+    "KQMusic::push",
+    "KQMusic::pop",
+    "KQMonster::setHome",
+    "KQMonster::setHomeRadius",
+    "KQMonster::setChaseRadius",
+    "KQMonster::setAlarmRadius",
+    "KQMonster::goHome",
+    "KQMonster::stateChangeNotify",
+    "KQMonster::clearStateChangeNotify",
+    "KQConner::setRope",
+    "KQConner::setRopeCam",
+    "KQConner::setRopeCam2",
+    "KQConner::setRopeCamAngle",
+    "KQConner::setDoMode",
+    "KQConner::walkTo",
+    "KQConner::endJump",
+    "KQConner::JumpDir",
+    "KQCamera::follow",
+    "KQCamera::flyToCamLoc",
+    "KQCamera::addCamLoc",
+    "KQGame::letCatchUp",
+    "setThirdPerson",
+    "move",
+    "onTeleport",
+    "offTeleport",
+    "pointAndCue",
 ];
 
 /// Scripts calling scripts deeper than this stop (a guard of ours).

@@ -74,6 +74,20 @@ impl GameCam {
     pub fn position(&self) -> [f32; 3] {
         self.cam.position
     }
+
+    /// `KQCamera::setRange` from a script (M3 step 3d-3); false = refused.
+    pub fn set_range(&mut self, min: f32, max: f32) -> bool {
+        let old = self.cam.range;
+        let ok = self.cam.set_range(min, max);
+        self.log.detail(format!(
+            "camera update {}: range ({:.0}, {:.0}) -> {} (script)",
+            self.updates,
+            old.0,
+            old.1,
+            if ok { format!("({min:.0}, {max:.0})") } else { "refused".into() }
+        ));
+        ok
+    }
 }
 
 #[derive(Resource)]

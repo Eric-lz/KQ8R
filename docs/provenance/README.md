@@ -584,3 +584,14 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Whoever is inside when the mask changes: no `Off` | **Our stand-in**, `traps.md` open question 1 | Unit test |
 | Scripts looked up in the world, then `GAME/patch`, then `GAME/Kq` | `models-and-textures.md` "Which one wins" (world folders before `GAME/`; patch before Kq: the note's likely reading) | 174 world + 30 game-wide scripts; no name in both |
 
+## What the walk/run zones do (M3 step 3d-3) — `crates/kq8-game/src/{active,script}.rs`, `crates/kq8-viewer/src/{door_view,connor_view,game_camera}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQConner::setRun 0\|1` sets Connor's run switch | `connor-movement.md` rule 4 | Unit test; `--at 270813,225311,-1.5708 --hold 1,0,0,80 --click Condoor,2`: `Conrun.tp` On at update 18 → run on, `walk -> run` at 19; `Conwalk.tp` On at 26 → run off, `run -> walk` at 27 |
+| Any number but 0 counts as on | **Our reading** (the data only uses 0 and 1) | — |
+| `KQCamera::setRange <min> <max>`, refused unless min < max | `camera.md` "Distance" rule 2 | Unit test; same run: range (1,000, 2,500) in the house, (1,500, 5,000) outside |
+| Applied after the traps' check, before the camera's update in the same tick | **Our stand-in** (order not traced) | — |
+| Action-only commands of Daventry's trap scripts are stubs (one log line, result 0); question commands (`getloc`, `checkDistance`, `exist`, `checkSave`, `getConInventory`, `getEndLoop`, `KQConner::getDoMode`) stay unknown (result 1) | **Our choice** until they are studied | Log |
+| `--hold F,T,R`: the run switch only at the start | Our test helper (so scripts can change it) | Same run |
+

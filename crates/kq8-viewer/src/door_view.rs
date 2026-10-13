@@ -22,12 +22,13 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use kq8_game::active::{Active, ActiveDoor, Item};
+use kq8_game::active::{Active, ActiveDoor, Item, Request};
 use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
 use kq8_game::door::{turn_degrees, Cue, Door, DoorMovement};
 
 use crate::connor_view::ConnorSim;
+use crate::game_camera::GameCam;
 use crate::load::Objects;
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform_from, ObjectColliders};
@@ -308,9 +309,11 @@ pub fn spawn_doors(
 }
 
 /// After Connor's update (M3 step 3d-2): if he moved, every trap checks
-/// him (traps.md rules 6-9) and runs its script.
-pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, shared: Res<Shared>) {
-    let (Some(mut sim), Some(connor)) = (sim, connor) else { return };
+/// him (traps.md rules 6-9) and runs its script. Then what the scripts
+/// asked of Connor and the camera this update is applied (3d-3), before
+/// the camera's update.
+pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>, camera: Option<ResMut<GameCam>>, shared: Res<Shared>) {
+    let (Some(mut sim), Some(mut connor)) = (sim, connor) else { return };
     let sim = &mut *sim;
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
@@ -327,6 +330,24 @@ pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, s
         sim.active.connor_moved(&v);
     }
     sim.flush_traps(&shared);
+    let mut camera = camera;
+    for r in std::mem::take(&mut sim.active.world.requests) {
+        let line = match r {
+            Request::SetRun { run, at } => {
+                connor.set_run(run, &at);
+                format!("{at}: applied: Connor's run switch {}", if run { "on" } else { "off" })
+            }
+            Request::SetRange { min, max, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: camera range ({min:.0}, {max:.0}){}", if c.set_range(min, max) { "" } else { " REFUSED" }),
+                None => format!("{at}: camera range ({min:.0}, {max:.0}): no game camera; not applied"),
+            },
+        };
+        let line = format!("update {}: {line}", sim.active.world.updates);
+        shared.log.lock().unwrap().summary(format!("traps: {line}"));
+        if let Some(log) = &mut sim.trap_log {
+            log.detail(line);
+        }
+    }
 }
 
 /// Left click: the nearest clickable box under the mouse (rule 10), handled

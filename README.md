@@ -84,12 +84,16 @@ The code is written with an AI coding agent (Claude Code); see
   since 2026-10-13 their collision boxes move with them (checked in the
   log only). Gnome's pushable `boulder` stands still, as in the original
   (checked by eye); it can't be pushed yet.
-- **Traps** (M3, in progress): Daventry's 52 invisible trap boxes are
-  loaded and switch on and off as Connor walks in and out of them
-  (including the music zones' smaller "get in" box), running their
-  scripts. Checked in the logs (`kq8-artifacts/logs/traps.log`) only.
-  Nothing visible happens yet: what the walk/run zones do comes next;
-  music, ropes and cutscenes are later milestones.
+- **Traps** (M3): Daventry's 52 invisible trap boxes are loaded and
+  switch on and off as Connor walks in and out of them (including the
+  music zones' smaller "get in" box), running their scripts. Walk and run
+  zones work: inside Connor's house (and the other houses with such
+  zones) he drops to a walk and the camera follows closer (1,000–2,500);
+  outside he runs again (1,500–5,000). Checked in the logs
+  (`kq8-artifacts/logs/traps.log`) and by eye, the same as in the original
+  (user, 2026-10-13). Music, ropes,
+  teleporters and cutscenes started by traps are later milestones (their
+  commands are only logged).
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted. It doesn't
   go through walls, closed doors or hills: when a building gets between

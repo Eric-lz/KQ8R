@@ -12,6 +12,16 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing here was checked in the running game. Not traced: what `makeActive` changes, the exact cylinder size for ball-stack against ball-stack, the order of objects' moves in an update, whether `Special` can start from every state. Connor getting stuck inside a rock is from the code only.
 **Next:** B can use the answers (Q55 for Gnome, Q56 for the lean's end value). User checks suggested in `connor-collision.md` "How to check".
 
+## 2026-10-13 M3 3d-3: walk and run zones change Connor's pace and the camera
+
+**Changed:** `crates/kq8-game/src/active.rs` (`KQConner::setRun`, `KQCamera::setRange` handed to the caller as requests; unit test), `script.rs` (26 more stubs: the action-only commands of Daventry's trap scripts), `crates/kq8-viewer/src/door_view.rs` (`trap_step` applies the requests), `connor_view.rs` (`set_run`; `--hold` sets the run switch only at the start), `game_camera.rs` (`set_range`). Docs: DESIGN, provenance, README.
+**Why:** M3 step 3d-3: what the walk/run zones do (`walk_la.cs`, `run_la.cs`).
+**Tested how:** `cargo test --workspace`; viewer `--terrain --at 270813,225311,-1.5708 --hold 1,0,0,80 --click Condoor,2` (walk in through Connor's front door), reading `traps.log`, `connor.log`, `camera.log`.
+**Result:** 215 unit tests pass (58 + 157). Update 18 `Conrun.tp` On: run switch on, `walk -> run` at 19, camera range (1,500, 5,000); update 24 Off; update 26 `Conwalk.tp` On: run switch off, `run -> walk` at 27, camera range (1,000, 2,500). Tried first: walking out of the house from (268280, 225448) east: he walked into the closed door; from (268050, 225448) with the door clicked: the door opens inwards and stopped him (head-on, then "started inside Condoor's box"); the way in from outside works.
+**Checked by the user (2026-10-13):** by eye, walking in and out of Connor's house: the same behaviour as in the original.
+**Still broken / not tested:** The walk zone covers the house inside, so walking out the door is only tested with the door already open from outside. Music, ropes, teleporters, monsters and cutscene commands are stubs (logged only); `checkSave`, `getloc` and other question commands log as unknown.
+**Next:** User checks by eye; then chests and items (`chests.md`, `items.md`), planned first.
+
 ## 2026-10-13 M3 3d-2: Daventry's traps switch on and off
 
 **Changed:** `crates/kq8-game/src/active.rs` (traps in the world objects: `Init`, `connor_moved`, `KQCueEvent` to traps, `KQObject::collision`, a separate trap log; 2 unit tests), `crates/kq8-viewer/src/load.rs` (traps loaded; game-wide scripts from `GAME/patch` and `GAME/Kq`), `door_view.rs` (traps created with the doors, new `trap_step` after Connor's update, `traps.log`), `main.rs` (order). Docs: DESIGN (3d-2), provenance, README.

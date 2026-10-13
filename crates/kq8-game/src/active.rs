@@ -37,6 +37,17 @@ use crate::trap::{Trap, Visitor};
 /// is an error and is not sent.
 pub const EVENT_TYPES: [&str; 4] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent"];
 
+/// What a script asked of Connor or the camera, for the caller to apply
+/// (M3 step 3d-3). `at` is where in which script.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Request {
+    /// `KQConner::setRun 0|1` (connor-movement.md rule 4).
+    SetRun { run: bool, at: String },
+    /// `KQCamera::setRange <min> <max>` (camera.md "Distance" rule 2),
+    /// already checked: min < max.
+    SetRange { min: f32, max: f32, at: String },
+}
+
 /// A door and what clicking and collision need to know about it.
 #[derive(Debug, Clone)]
 pub struct ActiveDoor {
@@ -126,6 +137,8 @@ pub struct WorldState {
     pub trap_log: Vec<String>,
     /// A trap's call is running: lines go to `trap_log`.
     in_trap: bool,
+    /// Requests for Connor and the camera, taken by the caller.
+    pub requests: Vec<Request>,
 }
 
 impl WorldState {
@@ -228,6 +241,44 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQConner::setRun 0|1`: the run switch (connor-movement.md rule 4;
+    /// any number but 0 counts as on: our reading).
+    fn set_run(&mut self, words: &[String], at: &str) -> String {
+        match words.get(1).filter(|w| looks_like_number(w)) {
+            Some(v) => {
+                let run = number_value(v) != 0.0;
+                self.note(format!("{at}: setRun {v}: Connor's run switch {}", if run { "on" } else { "off" }));
+                self.requests.push(Request::SetRun { run, at: at.to_string() });
+                "0".into()
+            }
+            None => {
+                self.note(format!("{at}: usage: KQConner::setRun 0|1: '{}'", words.join(" ")));
+                "1".into()
+            }
+        }
+    }
+
+    /// `KQCamera::setRange <min> <max>`: refused unless min < max
+    /// (camera.md "Distance" rule 2).
+    fn set_range(&mut self, words: &[String], at: &str) -> String {
+        let (Some(a), Some(b)) = (words.get(1), words.get(2)) else {
+            self.note(format!("{at}: usage: KQCamera::setRange <min> <max>: '{}'", words.join(" ")));
+            return "1".into();
+        };
+        if !looks_like_number(a) || !looks_like_number(b) {
+            self.note(format!("{at}: setRange {a} {b}: not numbers; refused"));
+            return "1".into();
+        }
+        let (min, max) = (number_value(a) as f32, number_value(b) as f32);
+        if min >= max {
+            self.note(format!("{at}: setRange {min} {max}: min not below max; refused (camera.md)"));
+            return "1".into();
+        }
+        self.note(format!("{at}: setRange {min} {max}: camera range"));
+        self.requests.push(Request::SetRange { min, max, at: at.to_string() });
+        "0".into()
+    }
+
     /// `sendEvent <delay> <object> <type> [data…]`.
     fn send_event(&mut self, words: &[String], at: &str) -> String {
         if words.len() < 4 {
@@ -266,6 +317,8 @@ impl ScriptHost for WorldState {
             "sendEvent" => Some(self.send_event(words, at)),
             "KQObject::collisionType" => Some(self.collision_type(words, at)),
             "KQObject::collision" => Some(self.collision_mask(words, at)),
+            "KQConner::setRun" => Some(self.set_run(words, at)),
+            "KQCamera::setRange" => Some(self.set_range(words, at)),
             _ => None,
         }
     }
@@ -309,6 +362,7 @@ impl Active {
                 log: Vec::new(),
                 trap_log: Vec::new(),
                 in_trap: false,
+                requests: Vec::new(),
             },
         }
     }
@@ -859,5 +913,18 @@ mod tests {
         // Leaving: Connor no longer counts, so no Off (stand-in).
         assert!(connor_at(&mut a, 5000.0).is_empty());
         assert_eq!(a.scripts.vars.get("T::Out"), None);
+    }
+
+    #[test]
+    fn walk_and_run_zones_ask_for_the_run_switch_and_the_camera_range() {
+        let mut a = with_trap("if test $2 == On\n KQConner::setRun 0\n KQCamera::setRange 1000 2500\n KQMusic::push minside.aud\nelse if test $2 == Off\n KQCamera::setRange 3000 3000\nendif\nendif\n");
+        connor_at(&mut a, 0.0);
+        let r = std::mem::take(&mut a.world.requests);
+        assert!(matches!(&r[..], [Request::SetRun { run: false, .. }, Request::SetRange { min, max, .. }] if *min == 1000.0 && *max == 2500.0), "{r:?}");
+        assert!(a.take_trap_log().join("\n").contains("stub (later milestone, nothing done): KQMusic::push minside.aud"));
+        // Refused: min not below max; nothing asked.
+        connor_at(&mut a, 5000.0);
+        assert!(a.world.requests.is_empty());
+        assert_eq!(a.scripts.vars.get(crate::script::RETURN), Some("1"));
     }
 }
