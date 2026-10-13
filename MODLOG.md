@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M2 2i-3: banking as traced (ends at 0.18, the start leans, jumps keep it)
+
+**Changed:** `crates/kq8-game/src/connor.rs` (`lean_allowed` switch, the traced step rules, `BANK_LIMIT` replaces `BANK_MAX`; banking tests rewritten, 1 more). Docs: DESIGN (2i-3), provenance, README.
+**Why:** Session A traced banking (Q56, `connor-movement.md` "Turning" rule 3): the lean ends at 0.18 rad, not 0.15; the running start leans and the stops don't; jumps and falls keep the switch; the snap is checked before the step.
+**Tested how:** `cargo test --workspace`; viewer `--terrain --hold 1,1,1,45 --frames 600`, reading `connor.log`.
+**Result:** 219 unit tests pass (58 + 161). Viewer: lean from update 1 during `stoprun` (before: from 12, after the start), 0.030 … 0.180 by update 6, held; keys let go at 45: 0.150 … 0.030, upright at update 51 during `runstopleft`.
+**Still broken / not tested:** Not checked by eye after the change (the user checked 0.15 by eye; 0.18 is about 1.7° more). The jump rule (the lean carries on in a jump while the turn is held) only unit-tested. First-person view and `allowLeaning` not done.
+**Next:** User checks by eye; then chests and items (`chests.md`, `items.md`), planned first.
+
 ## 2026-10-13 M3 3d-4: traps after the Q57/Q58 answers
 
 **Changed:** `crates/kq8-game/src/trap.rs` (touching swept along the move; mask only gates coming in; 3 new unit tests), `active.rs` (log wording; test), `crates/kq8-viewer/src/door_view.rs` (Connor's move since the last check). Docs: DESIGN (3d-4), provenance.

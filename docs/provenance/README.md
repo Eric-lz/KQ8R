@@ -603,3 +603,17 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Staying: the same swept test for "still touching" | **Our stand-in** (rule 7 doesn't say) | Unit test; viewer: every `Off` one update later than in 3d-3 (`Conrun.tp` 25, `Conwalk.tp` 39, `mwiztrap` 78), `On` unchanged |
 | Mask only gates coming in | `traps.md` rule 16 | Unit tests (trap and `active.rs`) |
 
+## Banking corrected after Q56 (M2 step 2i-3) — `crates/kq8-game/src/connor.rs`
+
+Replaces the stand-ins in the 2i table above (which movements lean, the end value, what jumps do).
+
+| What | Source | Check |
+| --- | --- | --- |
+| "Lean allowed" switch: set only in the keys' updates, on when they pick `run`/`waterrun`; kept in jumps, falls, crash, landing, death | `connor-movement.md` "Turning" rule 3 (traced) | Unit tests; `--hold 1,1,1,45`: leans from update 1 (`stoprun`) |
+| Step 0.03 per update (0.45 rad/s) while short of 0.15 before the step: ends at 0.18 rad | Same rule; per second: "Do not reproduce" | Unit test; viewer: 0.030 … 0.180 by update 6 |
+| 0.18 on both sides, also after swinging over | "Do not reproduce" (the original's −0.15 there is float rounding) | Unit test |
+| Returning: within 0.029 → upright, else one step; the check before the step | Same rule | Unit test (0.04 → 0.01 → 0) |
+| Turning, switch on, forward not held: unchanged | Same rule | Unit test |
+| With a wall block on, the pick is `stop` (switch off) | **Our reading** (our wall block makes the keys pick `stop`) | — |
+| First-person view and `allowLeaning` switch it off | Same rule | Not done (no first-person view yet; nothing in the data changes `allowLeaning`) |
+

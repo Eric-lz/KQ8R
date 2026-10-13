@@ -1276,6 +1276,19 @@ Steps (each separately revertable, each stopped for an eye check):
   - Log: `connor.log` gets the lean as a new last column; `viewer.log`
     gets an event line when the lean starts building and when it is back
     at 0.
+  - **2i-3, correction after Q56 (planned and done 2026-10-13).** The
+    traced rule (`connor-movement.md` "Turning" rule 3) replaces the
+    stand-ins: a *lean allowed* switch, set in the keys' updates only (on
+    when they pick `run` or `waterrun`; with a wall block on, the pick is
+    `stop`), kept in every other mode (jumps, falls, crash, landing,
+    death). Each update, every mode: turning + switch on + forward held →
+    one 0.03 step (0.45 rad/s) towards the turn if the lean is still short
+    of 0.15 before the step, so it ends at **0.18**, on both sides (the
+    original's −0.15 after swinging over is not copied, "Do not
+    reproduce"); not turning or switch off → upright if within 0.029,
+    else one step back; turning with the switch on but forward not held →
+    unchanged. So the running start `stoprun` leans, the stops don't, and
+    a jump keeps the lean going.
 
 ### M3 — Daventry comes alive
 

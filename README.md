@@ -25,9 +25,11 @@ The code is written with an AI coding agent (Claude Code); see
   first (with its small step to his left), then the walk or run (checked
   by eye). Letting go, he finishes his step and plays the matching stop
   animation (checked by eye). Running and turning at the same time, he
-  leans into the turn, up to about 8.6°, and straightens up when he stops
-  turning or running, also when running through water (checked by eye
-  against the original). He
+  leans into the turn, up to about 10° (0.18 rad, as traced), from the
+  running start on, keeps the lean through a jump, and straightens up
+  when he stops turning or running, also when running through water
+  (checked by eye against the original at 0.15 rad; the 0.18 end value
+  and the jump rule only in the logs so far). He
   follows hills, runs down steep walkable slopes without falling, can't
   climb slopes steeper than about 37° (he slides back), and falls off high
   places with the falling, landing and death animations. Falls and slides
