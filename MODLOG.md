@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3d-1: the trap rules
+
+**Changed:** `crates/kq8-game/src/trap.rs` (new: `Trap`, entering / staying / leaving, sticky boxes, one-shot; 6 unit tests), `lib.rs`. `docs/DESIGN.md` (plan 3d), `docs/behaviour/QUESTIONS.md` (Q58), `docs/provenance/README.md`.
+**Why:** M3 step 3d, traps (`traps.md`), planned in `docs/DESIGN.md` first.
+**Tested how:** `cargo test --workspace`.
+**Result:** 212 unit tests pass (58 + 154). Found while testing: by `traps.md` rule 4's two-sided pair rule every trap would see Connor (his mask 0x281B has the trap type 0x10), which contradicts rule 16; asked as Q58, stand-in: only the trap's mask counts.
+**Still broken / not tested:** Rules only; nothing in the viewer yet (3d-2). "Touching" is tested where Connor ends each update, not along his path (stand-in).
+**Next:** 3d-2, traps loaded in Daventry and their scripts run.
+
 ## 2026-10-13 Questions: Q55 data findings, Q57 trap masks
 
 **Changed:** `docs/behaviour/QUESTIONS.md` only (Q55: what the data shows; new Q57).

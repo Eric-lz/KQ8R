@@ -17,6 +17,7 @@ pub mod ground_anim;
 pub mod mover;
 pub mod player;
 pub mod script;
+pub mod trap;
 pub mod water;
 
 /// The original's update rate (`KQGame::FPSLimit 15`); every per-update

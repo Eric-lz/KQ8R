@@ -1654,6 +1654,85 @@ catchers, ground animators).
   - **Next after 3r:** traps (`traps.md`), chests (`chests.md`), items
     and picking up (`items.md`), each planned here before it is built.
 
+- **3d — Daventry's traps (planned 2026-10-13).** Rules from `traps.md`
+  (and `connor-movement.md` rule 4, `camera.md` "Distance" rule 2 for the
+  two commands). Three sub-steps, each with its own tests and MODLOG
+  entry.
+  - **Words.** A *trap* is an invisible box; when Connor walks into it or
+    out of it, its script runs (`On` / `Off`). Its *inside list* is who is
+    in it now. A *sticky* trap (`trapType=2`) has a smaller *inner* box to
+    get in and the full box to get out, so music zones don't flicker at
+    the edge.
+  - **Data (Daventry, counted 2026-10-13):** 58 trap files, all
+    `colliderMask=4` (Connor only; other worlds differ, Q57); 19 are
+    templates that `newworld.cs`-style scripts place 17 times with
+    `loadKQ` (positive z; their angles are ignored, the box never turns);
+    8 files have `locZ=-1`; 4 sticky traps (`chrchtrp` 0.9, `mugltrap`,
+    `mwiztrap`, `mwzhtrap` 0.8).
+  - **3d-1, the trap rules** (`kq8-game` new `trap.rs`, no Bevy). A `Trap`:
+    name, position, box (`BBMin/BBMax` added to the position, never
+    turned), script, mask (`colliderMask`, default 0, stand-in: not
+    stated in the note), `trapType`, `innerPercent`, inside list, shrunk
+    yes/no. On entering the world: sticky → box × `innerPercent` (all six
+    numbers, so it shrinks towards the position, rule 10). `check(object)`
+    for one object that moved (name, type, position, its `BOUNDS.KQ` box,
+    its ball stack), returning what to call:
+    - who counts: the trap's mask has a bit of the object's type
+      (stand-in, Q58: rule 4's two-sided pair rule would let every trap
+      see Connor, whose own mask 0x281B has the trap type 0x10, and rule
+      16 could not switch a trap off); otherwise nothing;
+    - **touching** = one of the object's balls reaches the box (the ball's
+      centre within its radius of the box; stand-in for open question 2:
+      the same balls as for walls, tested where he ends the update, not
+      along the way);
+    - not inside and touching → added; first one in → `On <name>`, else
+      `Cue 301 <name>` (rule 6); sticky → box back to full (÷
+      `innerPercent`);
+    - inside: still in if the centre of his box (position + middle of his
+      `BOUNDS.KQ` box) is in the box (edges count) or he is touching;
+      else taken off, list empty → `Off <name>`, else `Cue 302 <name>`
+      (rules 7, 8); sticky and empty → shrunk again;
+    - one-shot (`trapType` bit 1): gone after its `On` (rule 11; unused in
+      the data);
+    - mask change (`KQObject::collision`, rule 16): applied at once; no
+      `Off` is sent for whoever is inside (stand-in, open question 1),
+      and since the pair rule now fails, later moves neither add nor
+      remove him (stand-in; logged).
+    Unit tests: enter on touch, stay while the centre is in, leave only
+    when both fail; sticky inner/full box and the shrink/grow numbers; a
+    second object gives `Cue 301/302`; the pair rule (mask 0 never fires);
+    one-shot.
+  - **3d-2, traps in Daventry** (`kq8-viewer` `load.rs`, `door_view.rs`
+    or a new `trap_view.rs`; `kq8-game` `active.rs`). Loading: every
+    placed `KQTrap` becomes a trap: position as written (`keepOnGround`
+    ignored, rule 1), z of −1 → the floor grid height there (rule 2), the
+    template copies at their `loadKQ` place. The traps join the doors'
+    world (`Active`): the same variables, script runner and event queue.
+    At the start each trap's script gets `Init` (rule 13). Each update,
+    **after Connor's update** (so the trap sees where he is now), if his
+    position changed, every trap checks him; `On`/`Off`/`Cue` run the
+    trap's script with `$1` = trap name (rules 6, 8). `sendEvent … <trap>
+    KQCueEvent n1 n2` → `Cue n1 n2` (rule 14, as doors). `KQObject::collision
+    <name> <±bits>` changes a trap's (or door's) mask (rule 16).
+    `TalkComplete` and `StateChange` are M4/M5. Log
+    `kq8-artifacts/logs/traps.log`: every trap at load (name, file, box,
+    shrunk box, mask, script, `Init`), and every `On`/`Off`/`Cue` with
+    Connor's position, his box centre, the box used, and the script's
+    lines. The main log gets a count at load and each `On`/`Off`.
+  - **3d-3, what the walk/run zones do** (`kq8-game` `active.rs`, viewer).
+    `KQConner::setRun 0|1` sets Connor's run switch (connor-movement.md
+    rule 4); `KQCamera::setRange <min> <max>` sets the camera's range,
+    refused unless min < max (camera.md). Both are handed to the viewer
+    as requests and applied before the camera's update in the same tick.
+    The other commands the Daventry trap scripts use and that only act
+    (music, monsters, ropes, cutscene camera, `move`, `handsOff`, ...) are
+    added to the stubs (one log line); commands that answer a question
+    (`getloc`, `checkDistance`, `exist`, `checkSave`, ...) stay unknown
+    (error line, result 1) until they are studied. `--hold F,T,R` then
+    sets the run switch only at the start, so the scripts can change it.
+    What you'll see: by Connor's house and the other houses he drops to a
+    walk and the camera comes closer; away from them he runs again.
+
 ### M4 — Talk, listen, use the menus
 
 **You will see and hear:** dialogue text, speech with lip sync, the

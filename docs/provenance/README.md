@@ -556,3 +556,17 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Pivot through his feet (model origin), turned in before the heading | The user's check in the original (2026-10-13), Q56 b | By eye (user) |
 | Drawing only | **Our stand-in**, Q56 e | — |
 | Sign: positive lean = turn about the model's Y (forward axis), head towards +X (his left) | `objects.rs` rotation convention (unit test "positive dirY turns +Z towards +X"); `connor.rs`: +X is his left, turn +1 = left | `--hold 1,-1,1,30`: lean −0.150 turning right |
+
+## Trap rules (M3 step 3d-1) — `crates/kq8-game/src/trap.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Box = `BBMin/BBMax` + position, never turned; never solid | `traps.md` rules 1, 5 | Unit tests |
+| Enter on touch: first in `On <who>`, later ones `Cue 301 <who>` | `traps.md` rule 6 | Unit tests |
+| Stay while the box centre is in (edges count) or still touching; leave when both fail: last out `Off <who>`, others `Cue 302 <who>` | `traps.md` rules 7–9 | Unit tests |
+| Sticky (`trapType` bit 2): shrunk to `innerPercent` towards the position while empty, full while someone is in | `traps.md` rule 10 | Unit test (0.9: ±300 → ±270, z 0–1,000 → 0–900) |
+| One-shot (bit 1): gone after its `On` | `traps.md` rule 11 | Unit test (unused in the data) |
+| Who counts: only the trap's mask against the visitor's type | **Our stand-in**, Q58 (rule 4's two-sided pair rule conflicts with rule 16 because Connor's mask 0x281B has bit 0x10) | Unit test |
+| "Touching" = one of the visitor's wall-collision balls within its radius of the box, at the end of the move | **Our stand-in**, `traps.md` open question 2 | Unit tests |
+| No `colliderMask` → 0; no `innerPercent` → full box | **Our stand-in** (not in the note; every trap in the data has a mask, every sticky one an `innerPercent`) | — |
+
