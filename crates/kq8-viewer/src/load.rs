@@ -827,6 +827,11 @@ pub struct Objects {
     /// Every building the start-up scripts load (hidden ones too: hiding
     /// only changes the drawing), as colliders (M2 step 2d-3).
     pub buildings: Vec<kq8_game::collide::BuildingCollider>,
+    /// Each building's collision type (default 0x28), same order.
+    pub building_types: Vec<u32>,
+    /// Placed objects other than buildings and doors whose collision type
+    /// blocks the camera's view (bit 0x8 or 0x1000), by their box (2f-2).
+    pub view_boxes: Vec<kq8_game::collide::BoxCollider>,
     /// Every other placed object that collides with Connor (box from
     /// `BOUNDS.KQ`, type and mask rule; hidden ones too), M2 step 2d-5.
     /// Doors are not in it (their boxes move; `door_view.rs`).
@@ -910,6 +915,14 @@ pub struct DoorAssets {
     /// Its `BOUNDS.KQ` box (own space), found in `finish`.
     pub bounds: Option<([f32; 3], [f32; 3])>,
 }
+
+/// A building's collision type when its `.kq` gives none (camera.md
+/// "Obstacles").
+pub const BUILDING_TYPE: u32 = 0x28;
+
+/// Collision type bits that block the camera's view line (camera.md
+/// "Obstacles").
+pub const VIEW_BLOCKING: u32 = 0x8 | 0x1000;
 
 /// What collision needs to know about a placed object (M2 step 2d-5,
 /// connor-physics.md "Collision shape").
@@ -1635,7 +1648,10 @@ impl Placer<'_> {
         } else {
             *self.by_class.entry(if animation.is_some() { format!("{class} (animated)") } else { class }).or_default() += 1;
         }
-        let (collider_type, problem_t) = collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE);
+        // Buildings default to type 0x28 (camera.md "Obstacles"), other
+        // objects to 0x41.
+        let default_type = if shape.to_ascii_lowercase().ends_with(".dig") { BUILDING_TYPE } else { kq8_game::collide::DEFAULT_TYPE };
+        let (collider_type, problem_t) = collider_value(s, "colliderType", default_type);
         let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
         for problem in [problem_t, problem_m].into_iter().flatten() {
             self.log.summary(format!("collision: {label}[{}]: {problem}", p.name));
@@ -1960,8 +1976,9 @@ impl Placer<'_> {
         // Building colliders, placed exactly as drawn (connor-physics.md
         // "Against a building").
         let mut buildings = Vec::new();
+        let mut building_types = Vec::new();
         let mut digs: BTreeMap<String, Option<kq8_data::building::Building>> = BTreeMap::new();
-        for (p, i, unused) in &self.placed {
+        for (k, (p, i, unused)) in self.placed.iter().enumerate() {
             let shape = &self.shapes[*i].0;
             if *unused || !shape.to_ascii_lowercase().ends_with(".dig") {
                 continue;
@@ -1989,9 +2006,23 @@ impl Placer<'_> {
                 c.world_max[2]
             ));
             buildings.push(c);
+            building_types.push(self.collision[k].collider_type);
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
-        let (objects, clickables) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
+        let (objects, clickables, view_boxes) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
+        let not_blocking: Vec<String> = buildings
+            .iter()
+            .zip(&building_types)
+            .filter(|(_, t)| *t & VIEW_BLOCKING == 0)
+            .map(|(b, t): (&kq8_game::collide::BuildingCollider, &u32)| format!("{} ({t:#x})", b.name))
+            .collect();
+        log.summary(format!(
+            "camera view blockers: {} of {} buildings (not: {not_blocking:?}), {} object boxes (bit 0x8 or 0x1000) {:?}, plus doors as they stand",
+            buildings.len() - not_blocking.len(),
+            buildings.len(),
+            view_boxes.len(),
+            view_boxes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>()
+        ));
         let mut doors = self.doors;
         door_bounds(self.game, &mut doors, log);
         // Emitters follow any `move` of their object.
@@ -2010,6 +2041,8 @@ impl Placer<'_> {
             connor: self.connor,
             camera_start,
             buildings,
+            building_types,
+            view_boxes,
             objects,
             doors,
             door_animations: self.door_animations,
@@ -2045,17 +2078,18 @@ fn object_colliders(
     collision: &[CollisionInfo],
     markers: &[Marker],
     log: &mut Log,
-) -> (Vec<kq8_game::collide::BoxCollider>, Vec<kq8_game::active::Clickable>) {
+) -> (Vec<kq8_game::collide::BoxCollider>, Vec<kq8_game::active::Clickable>, Vec<kq8_game::collide::BoxCollider>) {
     use kq8_game::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
     let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
         Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
         _ => {
             log.summary("collision: GAME/patch/BOUNDS.KQ could not be read: no object colliders");
-            return (Vec::new(), Vec::new());
+            return (Vec::new(), Vec::new(), Vec::new());
         }
     };
     let mut objects = Vec::new();
     let mut clickables = Vec::new();
+    let mut view_boxes = Vec::new();
     let mut clickable_without_box = 0;
     let mut by_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut left_out: BTreeMap<&str, usize> = BTreeMap::new();
@@ -2098,6 +2132,16 @@ fn object_colliders(
         };
         // Clickable (doors.md rule 10): picked by its box, whatever it
         // collides with.
+        // Blocks the camera's view (camera.md "Obstacles"), whatever it
+        // collides with.
+        if info.collider_type & VIEW_BLOCKING != 0 {
+            view_boxes.push(BoxCollider {
+                name: p.name.clone(),
+                min: entry.min,
+                max: entry.max,
+                placement: Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+            });
+        }
         if info.collider_type & kq8_game::click::CLICKABLE != 0 {
             clickables.push(kq8_game::active::Clickable {
                 name: p.name.clone(),
@@ -2167,7 +2211,7 @@ fn object_colliders(
     for c in &clickables {
         log.detail(format!("click: clickable [{}] class {} type {:#x}", c.name, c.class, c.collision_type));
     }
-    (objects, clickables)
+    (objects, clickables, view_boxes)
 }
 
 /// Each door's box from `BOUNDS.KQ`, by the same rule as other objects

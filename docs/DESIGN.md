@@ -1198,6 +1198,53 @@ Steps (each separately revertable, each stopped for an eye check):
     DeadCity's raised areas).
   - Not in 2h: damage from poison, lava and swamp, sinking into `ontop`
     hazards, monsters (`keepOnGround=1`), drawing the water differently.
+- **2f-2 — the camera avoids walls (planned 2026-10-13; done 2026-10-13,
+  MODLOG; checked in the logs and by eye).** Rules from
+  `camera.md` "Obstacles" (traced 2026-10-13; three points checked by the
+  user in the original). The aim height (800) and height easing (50%) the
+  user set by hand stay as they are.
+  - **Words.** The *view line* runs from the aim point to the camera. A
+    *view blocker* is something that line may not pass through.
+  - **View blockers** (built once at load, `kq8-viewer` `load.rs`):
+    - the drawn ground (the surface grid, not the floor under water);
+    - every building, unless its `.kq` gives a `colliderType` without bit
+      0x8 or 0x1000 (buildings default to 0x28, so the default blocks);
+    - objects whose collision type has bit 0x8 or 0x1000, by their
+      `BOUNDS.KQ` box, turned with the object (Daventry: the doors);
+      doors use their box as it stands now (`door_view`), with their
+      current type. Monsters, trees and other plain objects don't block.
+  - **Line tests** (`kq8-game` `collide.rs`): a building's BSP walked with
+    a zero-width line (the same walk as Connor's balls, radius 0); a box
+    by the slab test Connor's boxes use; the ground by stepping along the
+    line every 50 units, then halving the step 20 times at the first step
+    that goes from above the ground to below it (our choice: the note
+    gives no method; a line that starts under the ground, e.g. the aim
+    point under deep water, is not blocked until it goes back down into
+    it). The nearest hit wins.
+  - **The camera update** (`kq8-game` `camera.rs`), after the existing
+    steps 1–5: (6) a running swing turns the camera round the aim point by
+    its step, or is cancelled if the mouse moved the camera this update;
+    (7) the view test; (8) if blocked: (8.1) mouse moved → back to the
+    previous update's offset × 0.95 (not if that's under the minimum);
+    (8.2) if avoidance is on, Connor is moving, and his feet aren't under
+    the floor grid: new direction towards the point halfway between his
+    aim point one update ago (A) and the hit (H), same length; start a
+    swing of 0.66 × that turn per update, ending once the direction
+    towards A is reached or passed; test again, and if still blocked pull
+    the camera in to 100 short of the new hit (at least 1 from the aim
+    point, "Do not reproduce") and cancel the swing. No height rule after
+    this.
+  - **"Connor is moving":** he moved (position or heading changed) in one
+    of the last 3 updates, not counting the update he starts in.
+  - **Not done:** updating only while Connor moves or the camera is used
+    (the note's "When the camera updates at all"; our camera updates every
+    tick, which only matters for the height easing; asked as a separate
+    small step), switching avoidance off (nothing found that does).
+  - Tests: blocked line pulls in to 100 short; swing towards the path he
+    came by and its end; mouse drag into a wall creeps by 5% and never
+    under the minimum; standing still nothing moves; the four line tests.
+  - Log (`camera.log`): per update blocked yes/no, the hit and what hit,
+    swing step and remaining angle, pulled-in distance.
 
 ### M3 — Daventry comes alive
 

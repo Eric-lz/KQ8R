@@ -510,3 +510,21 @@ Behaviour note = `docs/behaviour/emitters.md` emitter rule 11 (traced).
 | Targets: `Connor` (turn = his heading about z), `KQCamera` (position, no turn), placed objects and markers by name, any case; no target → not started | **Our stand-ins** (Q52 b, c) | IceWorld: `snow` follows Connor |
 | The emitter follows before its particles move, after Connor's update | **Our stand-in** (Q52 d) | — |
 | IceWorld's 10 snow catchers now find their emitter | Catchers rule 2 | Viewer: 296 flakes hidden in about 140 s (Connor starts inside `Lvator`) |
+
+## The camera avoids walls (M2 step 2f-2) — `crates/kq8-game/src/{camera,collide}.rs`, `crates/kq8-viewer/src/{game_camera,load,terrain_view}.rs`
+
+Behaviour note = `docs/behaviour/camera.md` "Obstacles" (session A,
+traced 2026-10-13; three points checked by the user in the original).
+The aim height (800) and height easing (50%) the user set by hand are
+unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| View blockers: the drawn ground; buildings (type default 0x28) and objects whose type has bit 0x8 or 0x1000, by `BOUNDS.KQ` box turned with the object; doors as they stand, with their current type; not monsters, trees or plain objects | Note "What blocks the view" | Viewer log per world: Daventry 26/26 buildings, 0 object boxes + 17 doors; Barren `smlrock` (0x21) doesn't block; DeadCity 41 boxes (crates, blocks), Gnome 9 (bridges), IceWorld 8 |
+| Buildings: the BSP walk with a zero-width line; starting inside solid is not a hit | Note ("buildings by their BSP"); the zero-width walk is **our reading** (Q53 b) | Unit test (`a_line_stops_at_the_wall_face_and_not_from_inside`) |
+| Boxes: the slab test | Note ("objects by their box") | Unit test (`a_line_meets_a_turned_box`) |
+| Ground: stepped every 50 units, halved 20 times, only a step from above to below counts | **Our method** (Q53 a) | Unit test (`the_ground_blocks_where_the_line_goes_into_it`) |
+| Update steps 6–9: running swing (cancelled by the mouse); view test; mouse into a wall → previous offset × 0.95 unless under the minimum; when moving, avoidance on and feet not under the floor grid: towards halfway between the last aim point and the hit, swing 0.66 × the first turn per update until the direction to the last aim point is reached or passed; still blocked → 100 short of the new hit (at least 1, "Do not reproduce"), swing cancelled; no height rule after | Note steps 6–9, "Obstacle numbers" | Unit tests (`standing_still_behind_a_wall_nothing_moves`, `walking_with_a_wall_behind_pulls_the_camera_in_100_short`, `the_camera_swings_round_to_look_along_his_path`, `dragging_into_a_wall_creeps_in_5_percent_never_under_the_minimum`, `a_hit_closer_than_100_keeps_the_camera_in_front`). Viewer, Connor walking into his house: blocked at update 39, turned 0.084 rad, swing 0.056 per update ending 0.039 rad past his path at update 54. Three runs near the house: 0 updates with the camera inside a building's solid |
+| "Connor is moving": position or heading changed, from the update after he starts until 3 updates without movement | Note ("Connor is moving"; heading counts: the note's assumption) | Unit test (the first moving update doesn't count) |
+| The new direction is 3D (towards M) | Note as written; asked (Q53 c) | — |
+| Not done: the camera updating only while Connor moves or the camera is used; switching avoidance off | Note "When the camera updates at all" (Q53 d) | — |

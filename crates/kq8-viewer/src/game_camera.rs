@@ -10,15 +10,49 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_game::camera::{Camera, Input, Mode, DEFAULT_TILT};
+use kq8_game::camera::{ground_line_hit, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_game::collide::{BoxCollider, BuildingCollider};
 
 use crate::connor_view::{key_code, ConnorSim};
 use crate::log::Log;
-use crate::terrain_view::{Fly, GroundLookup};
+use crate::door_view::DoorSim;
+use crate::load::VIEW_BLOCKING;
+use crate::terrain_view::{Buildings, Fly, GroundLookup, ViewBlockerSet};
 use crate::{to_bevy, Shared, UNITS_PER_METRE};
 
 /// Stand-in until Q27 (a): this many screen pixels make one mouse unit.
 const PIXELS_PER_MOUSE_UNIT: f32 = 800.0; // modified manually to what feels more natural, but could be wrong
+
+/// What blocks the view line now (camera.md "Obstacles"): the drawn
+/// ground, the blocking buildings, object boxes and doors as they stand.
+struct Blockers<'a> {
+    terrain: &'a kq8_data::Terrain,
+    buildings: Vec<&'a BuildingCollider>,
+    boxes: &'a [BoxCollider],
+    doors: Vec<BoxCollider>,
+}
+
+impl ViewBlockers for Blockers<'_> {
+    fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)> {
+        let dist = |p: [f32; 3]| (0..3).map(|k| (p[k] - from[k]).powi(2)).sum::<f32>();
+        let surface = |x: f32, y: f32| self.terrain.height_at(x, y).map(|g| g.height);
+        let mut hits: Vec<([f32; 3], String)> = Vec::new();
+        if let Some(h) = ground_line_hit(&surface, from, to) {
+            hits.push((h, "the ground".into()));
+        }
+        for b in &self.buildings {
+            if let Some(h) = b.line_hit(from, to) {
+                hits.push((h, format!("building {}", b.name)));
+            }
+        }
+        for b in self.boxes.iter().chain(&self.doors) {
+            if let Some(h) = b.line_hit(from, to) {
+                hits.push((h, format!("box {}", b.name)));
+            }
+        }
+        hits.into_iter().min_by(|a, b| dist(a.0).total_cmp(&dist(b.0)))
+    }
+}
 
 /// Which camera draws the view: the game camera or the free one.
 #[derive(Resource)]
@@ -122,7 +156,7 @@ pub fn make(
         updates: 0,
         log,
     };
-    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max");
+    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building");
     Some(g)
 }
 
@@ -166,10 +200,14 @@ pub fn camera_input(
 }
 
 /// One camera update, right after Connor's (fixed 15 per second).
+#[allow(clippy::too_many_arguments)]
 pub fn camera_step(
     game: Option<ResMut<GameCam>>,
     sim: Option<Res<ConnorSim>>,
     lookup: Option<Res<GroundLookup>>,
+    buildings: Option<Res<Buildings>>,
+    blockers: Option<Res<ViewBlockerSet>>,
+    doors: Option<Res<DoorSim>>,
     keys: Res<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,
     choice: Res<CameraChoice>,
@@ -195,13 +233,30 @@ pub fn camera_step(
     g.mouse_px = Vec2::ZERO;
     g.pressed_mode = false;
     g.pressed_reset = false;
-    let report = g.cam.update(sim.mover.position, &input, &lookup.0);
+    // The view blockers as they stand now (doors move).
+    let view = Blockers {
+        terrain: &lookup.0,
+        buildings: match (&buildings, &blockers) {
+            (Some(b), Some(v)) => b.0.iter().zip(&v.building_types).filter(|(_, t)| *t & VIEW_BLOCKING != 0).map(|(b, _)| b).collect(),
+            (Some(b), None) => b.0.iter().collect(),
+            _ => Vec::new(),
+        },
+        boxes: blockers.as_ref().map_or(&[][..], |v| &v.boxes[..]),
+        doors: doors
+            .as_ref()
+            .map(|d| d.active.world.doors.iter().filter(|a| a.collision_type & VIEW_BLOCKING != 0).filter_map(|a| a.collider()).collect())
+            .unwrap_or_default(),
+    };
+    let followed = Followed { base: sim.mover.position, heading: sim.walker.heading };
+    let report = g.cam.update_with(followed, &input, &lookup.0, Some(&view));
+    // Check from the numbers: is the camera inside a building's solid?
+    let inside: Vec<&str> = view.buildings.iter().filter(|b| b.solid_at(g.cam.position)).map(|b| b.name.as_str()).collect();
     g.updates += 1;
     g.previous = g.current;
     g.current = (g.cam.position, g.cam.tilt, report.aim);
     let p = g.cam.position;
     let line = format!(
-        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {}",
+        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {}",
         g.updates,
         p[0],
         p[1],
@@ -215,7 +270,14 @@ pub fn camera_step(
             Mode::Fixed { distance } => format!("fixed({distance:.0})"),
         },
         g.cam.range.0,
-        g.cam.range.1
+        g.cam.range.1,
+        report.moving,
+        report.blocked.as_ref().map_or("-".to_string(), |(_, w)| w.replace(' ', "_")),
+        report.blocked.as_ref().map_or("-".to_string(), |(h, _)| format!("({:.0},{:.0},{:.0})", h[0], h[1], h[2])),
+        report.swing.map_or("-".to_string(), |(s, _)| format!("{s:.3}")),
+        report.swing.map_or("-".to_string(), |(_, l)| format!("{l:.3}")),
+        report.pulled_in.map_or("-".to_string(), |d| format!("{d:.1}")),
+        if inside.is_empty() { "-".to_string() } else { inside.join(",") }
     );
     g.log.detail(line);
     if !report.events.is_empty() {

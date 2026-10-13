@@ -2,10 +2,10 @@
 //!
 //! Rules from the behaviour note `docs/behaviour/camera.md` ("What the camera
 //! looks at", "Distance", "Height above the ground", "Swinging and zooming
-//! with the mouse", "Tilt"). Runs once per game update (15 per second), so
-//! the note's per-update rates are used as traced. Not here yet: the
-//! obstacle check (M2 step 2d), the automatic swing behind Connor (Q27 c),
-//! first person, shake and cutscene cameras.
+//! with the mouse", "Tilt", "Obstacles"). Runs once per game update (15 per
+//! second), so the note's per-update rates are used as traced. Not here
+//! yet: the automatic swing behind Connor (Q27 c), first person, shake and
+//! cutscene cameras.
 //!
 //! Stand-ins until Q27 is answered: what the tilt turns (the caller draws
 //! the view looking at the aim point, pitched by `tilt - DEFAULT_TILT`),
@@ -42,6 +42,81 @@ pub const DEFAULT_TILT: f32 = 0.2;
 pub const MOVE_RESETS_TILT: f32 = 10.0;
 /// Range before any script sets one.
 pub const DEFAULT_RANGE: (f32, f32) = (1500.0, 5000.0);
+/// A blocked camera is pulled in to this far short of the hit
+/// (camera.md "Obstacle numbers").
+pub const PULL_IN_MARGIN: f32 = 100.0;
+/// ...but never closer than this to the aim point ("Do not reproduce":
+/// the original can end up behind Connor).
+pub const PULL_IN_MIN: f32 = 1.0;
+/// The new direction aims halfway between Connor's last aim point and
+/// the hit.
+pub const AVOID_MIX: f32 = 0.5;
+/// Swing step per update = this × the first turn.
+pub const SWING_SHARE: f32 = 0.66;
+/// Dragging into a wall: the previous offset shortened to this.
+pub const DRAG_SHORTEN: f32 = 0.95;
+/// Connor counts as still after this many updates without movement.
+pub const STILL_UPDATES: u32 = 3;
+
+/// What blocks the view line (camera.md "Obstacles"): the drawn ground,
+/// buildings, objects with collision bit 0x8 or 0x1000.
+pub trait ViewBlockers {
+    /// The nearest point where the line from `from` to `to` is blocked,
+    /// and what blocked it (for the log).
+    fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)>;
+}
+
+/// Step along the view line when testing it against the drawn ground.
+pub const GROUND_STEP: f32 = 50.0;
+/// Halvings of the step that found the ground.
+pub const GROUND_REFINE: u32 = 20;
+
+/// Where the line from `from` to `to` first goes from above the ground to
+/// below it; `height` gives the drawn ground's height at (x, y) (`None`
+/// outside the grid). Stepped every `GROUND_STEP`, then halved
+/// `GROUND_REFINE` times (our method; the note gives none). A line that
+/// starts below the ground is not blocked until it comes up and goes down
+/// again (our choice, e.g. the aim point under deep water).
+pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+    let at = |t: f32| -> [f32; 3] { std::array::from_fn(|k| from[k] + (to[k] - from[k]) * t) };
+    let below = |p: [f32; 3]| height(p[0], p[1]).is_some_and(|h| p[2] < h);
+    let steps = (length(sub(to, from)) / GROUND_STEP).ceil().max(1.0) as u32;
+    let mut was_below = below(from);
+    let mut t0 = 0.0;
+    for i in 1..=steps {
+        let t1 = i as f32 / steps as f32;
+        let now = below(at(t1));
+        if now && !was_below {
+            let (mut lo, mut hi) = (t0, t1);
+            for _ in 0..GROUND_REFINE {
+                let mid = 0.5 * (lo + hi);
+                if below(at(mid)) { hi = mid } else { lo = mid }
+            }
+            return Some(at(hi));
+        }
+        was_below = now;
+        t0 = t1;
+    }
+    None
+}
+
+/// The followed object, for the obstacle rules.
+#[derive(Debug, Clone, Copy)]
+pub struct Followed {
+    /// Its base (Connor's feet).
+    pub base: [f32; 3],
+    /// Its heading (radians); a change counts as moving.
+    pub heading: f32,
+}
+
+/// An avoidance swing: turn `step` radians round the aim point every
+/// update until the direction `target` (an angle round the vertical) is
+/// reached or passed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Swing {
+    pub step: f32,
+    pub target: f32,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
@@ -79,6 +154,17 @@ pub struct Camera {
     pub range: (f32, f32),
     last_base: Option<[f32; 3]>,
     mouse_was_held: bool,
+    /// Obstacle avoidance on (it is by default; nothing found switches it
+    /// off).
+    pub avoid: bool,
+    pub swing: Option<Swing>,
+    /// The previous update's offset (camera − aim) and aim point.
+    prev_offset: Option<[f32; 3]>,
+    prev_aim: Option<[f32; 3]>,
+    last_heading: Option<f32>,
+    /// "Connor is moving" (see `update_with`), and updates without movement.
+    moving: bool,
+    still: u32,
 }
 
 /// What one update did, for the log.
@@ -88,6 +174,14 @@ pub struct Report {
     pub distance: f32,
     pub terrain_below: Option<f32>,
     pub events: Vec<String>,
+    /// The view test: where and by what the view line was blocked.
+    pub blocked: Option<([f32; 3], String)>,
+    /// Connor counted as moving for the obstacle rules this update.
+    pub moving: bool,
+    /// The swing after this update: (step, angle still to go).
+    pub swing: Option<(f32, f32)>,
+    /// Pulled in to this distance from the aim point.
+    pub pulled_in: Option<f32>,
 }
 
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -96,6 +190,28 @@ fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 
 fn length(v: [f32; 3]) -> f32 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+/// The angle of `v` round the vertical (atan2 of y, x).
+fn azimuth(v: [f32; 3]) -> f32 {
+    v[1].atan2(v[0])
+}
+
+/// An angle brought into −π..π.
+fn wrap(a: f32) -> f32 {
+    let t = std::f32::consts::TAU;
+    let a = a.rem_euclid(t);
+    if a > std::f32::consts::PI { a - t } else { a }
+}
+
+/// `v` turned by `a` round the vertical.
+fn turn_z(v: [f32; 3], a: f32) -> [f32; 3] {
+    let (s, c) = a.sin_cos();
+    [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]]
 }
 
 /// `aim + direction(from aim towards camera) × distance`.
@@ -108,7 +224,21 @@ fn at_distance(aim: [f32; 3], camera: [f32; 3], distance: f32) -> [f32; 3] {
 
 impl Camera {
     pub fn new(position: [f32; 3]) -> Self {
-        Camera { position, tilt: DEFAULT_TILT, mode: Mode::Normal, range: DEFAULT_RANGE, last_base: None, mouse_was_held: false }
+        Camera {
+            position,
+            tilt: DEFAULT_TILT,
+            mode: Mode::Normal,
+            range: DEFAULT_RANGE,
+            last_base: None,
+            mouse_was_held: false,
+            avoid: true,
+            swing: None,
+            prev_offset: None,
+            prev_aim: None,
+            last_heading: None,
+            moving: false,
+            still: 0,
+        }
     }
 
     /// `KQCamera::setRange <min> <max>`: refused unless min < max.
@@ -121,9 +251,32 @@ impl Camera {
         }
     }
 
-    /// One update following an object whose base is at `base`.
+    /// One update following an object whose base is at `base`, without
+    /// obstacles.
     pub fn update(&mut self, base: [f32; 3], input: &Input, ground: &dyn GroundLookup) -> Report {
+        self.update_with(Followed { base, heading: 0.0 }, input, ground, None)
+    }
+
+    /// One update with the obstacle rules (camera.md "Obstacles", steps
+    /// 6–9) when `view` is given.
+    pub fn update_with(&mut self, followed: Followed, input: &Input, ground: &dyn GroundLookup, view: Option<&dyn ViewBlockers>) -> Report {
+        let base = followed.base;
         let mut report = Report::default();
+        // "Connor is moving": from the update after he starts moving until
+        // 3 updates have passed without movement (position or heading).
+        let moving_now = self.moving;
+        let moved = self.last_base.is_some_and(|l| l != base) || self.last_heading.is_some_and(|h| h != followed.heading);
+        if moved {
+            self.moving = true;
+            self.still = 0;
+        } else {
+            self.still += 1;
+            if self.still >= STILL_UPDATES {
+                self.moving = false;
+            }
+        }
+        self.last_heading = Some(followed.heading);
+        report.moving = moving_now;
         let aim = [base[0], base[1], base[2] + AIM_HEIGHT];
         let (min, max) = self.range;
 
@@ -198,6 +351,13 @@ impl Camera {
         let gap = wanted - self.position[2];
         self.position[2] = if gap.abs() <= HEIGHT_SNAP { wanted } else { self.position[2] + gap * HEIGHT_RATE };
 
+        if let Some(view) = view {
+            self.avoid_obstacles(aim, base, mx != 0.0 || mf != 0.0, moving_now, ground, view, &mut report);
+        }
+        self.prev_offset = Some(sub(self.position, aim));
+        self.prev_aim = Some(aim);
+        report.swing = self.swing.map(|s| (s.step, wrap(s.target - azimuth(sub(self.position, aim)))));
+
         // Tilt snaps back once the followed object moves (normal mode).
         if let (Mode::Normal, Some(last)) = (self.mode, self.last_base) {
             let moved = (base[0] - last[0]).abs() + (base[1] - last[1]).abs();
@@ -211,6 +371,78 @@ impl Camera {
         report.aim = aim;
         report.distance = length(sub(self.position, aim));
         report
+    }
+
+    /// camera.md "Obstacles", steps 6–9.
+    #[allow(clippy::too_many_arguments)]
+    fn avoid_obstacles(
+        &mut self,
+        aim: [f32; 3],
+        base: [f32; 3],
+        mouse_used: bool,
+        moving: bool,
+        ground: &dyn GroundLookup,
+        view: &dyn ViewBlockers,
+        report: &mut Report,
+    ) {
+        let (min, _) = self.range;
+        // 6. A running swing turns the camera round the aim point, or is
+        // cancelled by the mouse.
+        if let Some(sw) = self.swing {
+            if mouse_used {
+                self.swing = None;
+                report.events.push("avoidance swing cancelled (mouse)".into());
+            } else {
+                let offset = turn_z(sub(self.position, aim), sw.step);
+                self.position = add(aim, offset);
+                let left = wrap(sw.target - azimuth(offset));
+                if left == 0.0 || left.signum() != sw.step.signum() {
+                    self.swing = None;
+                    report.events.push(format!("avoidance swing ended ({:.3} rad past the path he came by)", -left));
+                }
+            }
+        }
+        // 7. The view test.
+        let Some((hit, what)) = view.first_block(aim, self.position) else { return };
+        report.blocked = Some((hit, what));
+        // 8.1 Dragged into a wall: back to the previous offset, 5% shorter
+        // unless that is under the minimum.
+        if mouse_used {
+            if let Some(prev) = self.prev_offset {
+                let short = prev.map(|v| v * DRAG_SHORTEN);
+                self.position = add(aim, if length(short) < min { prev } else { short });
+                report.events.push("dragged into a wall: previous offset kept, shortened 5%".into());
+            }
+        }
+        // 8.2 Only when avoidance is on, Connor is moving and his feet are
+        // not under the ground (floor grid).
+        let feet_ok = ground.ground(base[0], base[1]).is_none_or(|g| base[2] >= g.0);
+        if !(self.avoid && moving && feet_ok) {
+            return;
+        }
+        let a = self.prev_aim.unwrap_or(aim);
+        let m: [f32; 3] = std::array::from_fn(|k| a[k] + (hit[k] - a[k]) * AVOID_MIX);
+        let old = sub(self.position, aim);
+        let len = length(old);
+        let towards = sub(m, aim);
+        if length(towards) < 1e-3 || len < 1e-3 {
+            return;
+        }
+        let new = towards.map(|v| v / length(towards) * len);
+        self.position = add(aim, new);
+        let first_turn = wrap(azimuth(new) - azimuth(old));
+        // The swing ends looking along the path he came by (towards A).
+        let back = sub(a, aim);
+        self.swing = (back[0].abs() + back[1].abs() > 1e-3).then(|| Swing { step: SWING_SHARE * first_turn, target: azimuth(back) });
+        report.events.push(format!("view blocked: turned {first_turn:.3} rad towards the path he came by; swing {:?}", self.swing));
+        // Still blocked: pulled in to 100 short of the new hit.
+        if let Some((hit2, what2)) = view.first_block(aim, self.position) {
+            let d = (length(sub(hit2, aim)) - PULL_IN_MARGIN).max(PULL_IN_MIN);
+            self.position = at_distance(aim, self.position, d);
+            self.swing = None;
+            report.pulled_in = Some(d);
+            report.events.push(format!("still blocked by {what2}: pulled in to {d:.1}"));
+        }
     }
 }
 
@@ -322,6 +554,136 @@ mod tests {
         c.tilt = 1.0;
         c.update([75.0, 0.0, 0.0], &Input { reset_tilt: true, ..Input::default() }, &Flat(0.0));
         assert_eq!(c.tilt, DEFAULT_TILT);
+    }
+
+    /// Upright walls of any height, as 2D segments.
+    struct Walls(Vec<([f32; 2], [f32; 2])>);
+    impl ViewBlockers for Walls {
+        fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)> {
+            let mut best: Option<f32> = None;
+            for (p, q) in &self.0 {
+                let (d, e) = ([to[0] - from[0], to[1] - from[1]], [q[0] - p[0], q[1] - p[1]]);
+                let den = d[0] * e[1] - d[1] * e[0];
+                if den.abs() < 1e-9 {
+                    continue;
+                }
+                let w = [p[0] - from[0], p[1] - from[1]];
+                let t = (w[0] * e[1] - w[1] * e[0]) / den;
+                let u = (w[0] * d[1] - w[1] * d[0]) / den;
+                if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) && best.is_none_or(|b| t < b) {
+                    best = Some(t);
+                }
+            }
+            best.map(|t| (std::array::from_fn(|k| from[k] + (to[k] - from[k]) * t), "wall".into()))
+        }
+    }
+
+    fn follow(x: f32, y: f32) -> Followed {
+        Followed { base: [x, y, 0.0], heading: 0.0 }
+    }
+
+    #[test]
+    fn standing_still_behind_a_wall_nothing_moves() {
+        let wall = Walls(vec![([-5000.0, -1000.0], [5000.0, -1000.0])]);
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        for _ in 0..5 {
+            let r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            assert!(r.blocked.is_some() && !r.moving);
+        }
+        assert_eq!(c.position, [0.0, -3000.0, MIN_HEIGHT]);
+    }
+
+    #[test]
+    fn walking_with_a_wall_behind_pulls_the_camera_in_100_short() {
+        let wall = Walls(vec![([-50000.0, -1000.0], [50000.0, -1000.0])]);
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        // The first update he moves in doesn't count as moving yet.
+        let mut r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        for x in [75.0, 150.0] {
+            r = c.update_with(follow(x, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        }
+        assert!(r.moving && r.blocked.is_some());
+        let d = r.pulled_in.expect("pulled in");
+        // In front of the wall now, 100 short of where the line met it.
+        assert!(c.position[1] > -1000.0, "{:?}", c.position);
+        assert!(c.swing.is_none());
+        assert!((d - r.distance).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_camera_swings_round_to_look_along_his_path() {
+        // A short wall straight between the camera and the aim at update 3.
+        let wall = Walls(vec![([-500.0, -1000.0], [500.0, -1000.0])]);
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        c.set_range(100.0, 50000.0);
+        c.update_with(follow(-2000.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        c.update_with(follow(-1000.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        let r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        assert!(r.blocked.is_some() && r.pulled_in.is_none(), "{r:?}");
+        let sw = c.swing.expect("swing started");
+        // From straight behind (-90°) towards halfway to A (-1000, 0): -135°, so the
+        // swing turns clockwise by 0.66 × 45° per update.
+        let az = azimuth(sub(c.position, r.aim));
+        assert!((az + 3.0 * std::f32::consts::FRAC_PI_4).abs() < 0.05, "{az}");
+        assert!((sw.step + SWING_SHARE * std::f32::consts::FRAC_PI_4).abs() < 0.05, "{sw:?}");
+        // He stops; the swing goes on and ends once it reaches or passes
+        // the direction he came from (180°).
+        let mut updates = 0;
+        while c.swing.is_some() && updates < 20 {
+            c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            updates += 1;
+        }
+        assert!(c.swing.is_none() && updates <= 3, "{updates}");
+        let az = azimuth(sub(c.position, [0.0, 0.0, AIM_HEIGHT]));
+        assert!(wrap(az - std::f32::consts::PI).abs() <= sw.step.abs() + 1e-3, "{az}");
+    }
+
+    #[test]
+    fn dragging_into_a_wall_creeps_in_5_percent_never_under_the_minimum() {
+        let wall = Walls(vec![([-5000.0, -1000.0], [5000.0, -1000.0])]);
+        let mut c = Camera::new([0.0, -900.0, MIN_HEIGHT]);
+        c.set_range(100.0, 5000.0);
+        let zoom_out = Input { mouse_held: true, mouse_forward: -0.2, ..Input::default() };
+        c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall)); // first update: no movement
+        let before = sub(c.position, [0.0, 0.0, AIM_HEIGHT]);
+        let r = c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall));
+        assert!(r.blocked.is_some());
+        let after = sub(c.position, r.aim);
+        for k in 0..3 {
+            assert!((after[k] - before[k] * DRAG_SHORTEN).abs() < 0.01, "{after:?} vs {before:?}");
+        }
+        // With the minimum just under the current distance, it stays put.
+        c.set_range(length(after) - 1.0, 5000.0);
+        let r = c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall));
+        assert!(r.blocked.is_some());
+        let kept = sub(c.position, r.aim);
+        assert!((0..3).all(|k| (kept[k] - after[k]).abs() < 0.01), "{kept:?} vs {after:?}");
+    }
+
+    #[test]
+    fn a_hit_closer_than_100_keeps_the_camera_in_front() {
+        let wall = Walls(vec![([-50000.0, -30.0], [50000.0, -30.0])]);
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        for x in [0.0, 75.0, 150.0] {
+            c.update_with(follow(x, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        }
+        let d = length(sub(c.position, [150.0, 0.0, AIM_HEIGHT]));
+        assert!((d - PULL_IN_MIN).abs() < 0.01, "{d}");
+        assert!(c.position[1] < 0.0, "same side as before: {:?}", c.position);
+    }
+
+    #[test]
+    fn the_ground_blocks_where_the_line_goes_into_it() {
+        // A ridge 1,000 high between x = 1,000 and x = 2,000.
+        let ridge = |x: f32, _: f32| Some(if (1000.0..2000.0).contains(&x) { 1000.0 } else { 0.0 });
+        let hit = ground_line_hit(&ridge, [0.0, 0.0, 800.0], [3000.0, 0.0, 800.0]).expect("blocked");
+        assert!((hit[0] - 1000.0).abs() < 0.1 && hit[2] == 800.0, "{hit:?}");
+        assert!(ground_line_hit(&ridge, [0.0, 0.0, 1200.0], [3000.0, 0.0, 1200.0]).is_none());
+        // Starting under water (below the surface) and rising out: not blocked.
+        let lake = |_: f32, _: f32| Some(1000.0);
+        assert!(ground_line_hit(&lake, [0.0, 0.0, 800.0], [3000.0, 0.0, 2000.0]).is_none());
+        // Outside the grid: no ground.
+        assert!(ground_line_hit(&|_, _| None, [0.0, 0.0, 0.0], [3000.0, 0.0, -100.0]).is_none());
     }
 
     #[test]

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M2 2f-2: the camera avoids walls
+
+**Changed:** `crates/kq8-game/src/camera.rs` (`update_with`: obstacle steps 6–9, swing, drag creep, pull-in, "Connor is moving"; `ViewBlockers`; `ground_line_hit`), `collide.rs` (`line_hit` for buildings and boxes). `crates/kq8-viewer`: `game_camera.rs` (the blockers as they stand each update: ground, buildings, boxes, doors; log columns: moving, blocked by, hit, swing, pull-in, camera inside a building), `load.rs` (buildings default to type 0x28; view-blocking boxes with bit 0x8/0x1000), `terrain_view.rs` (`ViewBlockerSet`). Docs: DESIGN (plan 2f-2), provenance, README, QUESTIONS (Q53).
+**Why:** `camera.md` "Obstacles" (study session 2026-10-13): the camera went through walls.
+**Tested how:** `cargo test --workspace --release`, clippy; viewer in Daventry: Connor clicking his door open and walking in (`--at 270813,225311,-1.5708 --hold 1,0,0 --click Condoor,2`), circling inside and near the house (`--at 266000,222500,0 --hold 1,1,0`, `--at 266000,222500,3.1416 --hold 1,-1,1`); Swamp, DeadCity, Barren, IceWorld, Gnome, SnowExit started; read `camera.log` and `viewer.log`.
+**Result:** 201 tests pass (58 + 143). Walking into the house: the wall blocks the view at update 39; the camera turns 0.084 rad towards his path and swings 0.056 rad per update, ending 0.039 rad past it at update 54 (within one step, as the note says). Circling inside the house with the camera starting outside: 38 updates blocked, 35 pulled in (to 3–1,337 from the aim point), the minimum pushing it out again each update (the note's edge case). In all three runs the camera is never inside a building's solid. View blockers: Daventry all 26 buildings and the 17 doors; DeadCity 41 boxes, Gnome 9, IceWorld 8; Barren's `smlrock` (0x21) doesn't block.
+**Still broken / not tested:** Checked by eye by the user (2026-10-13): "so far it looks great". Dragging with the mouse into a wall was not reported on separately. Stand-ins: the ground test method and a line starting under water, the zero-width BSP walk, the 3D new direction (Q53). Not done: the camera updating only while Connor moves or the camera is used (Q53 d).
+**Next:** Answers to Q53 from a study session; then traps, chests and picking things up (notes now arriving from the study session).
+
 ## 2026-10-13 M3 3b-4: emitters that follow something (IceWorld's snow)
 
 **Changed:** `crates/kq8-game/src/emitter.rs` (`Emitter::new_following`, `follow_to`, `follow_loc`; velocities turned with the target; `followMesh` restarts; `Rng::fork`). `crates/kq8-viewer`: `effects_view.rs` (targets: Connor, the camera, placed objects; moved every update; logged), `terrain_view.rs` (the target lookup), `game_camera.rs` (`GameCam::position`). Docs: DESIGN (plan 3b-4), provenance, README, QUESTIONS (Q52).

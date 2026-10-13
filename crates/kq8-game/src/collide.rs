@@ -215,6 +215,19 @@ impl BuildingCollider {
         Some(Contact { position: pull_back(touch, from), touch, normal, ball })
     }
 
+    /// Where a straight line from `from` to `to` (world space) first enters
+    /// solid: the same BSP walk as `sweep` with a line of no width
+    /// (camera.md "Obstacles": buildings block the view by their BSP).
+    /// Starting inside solid is not a hit.
+    pub fn line_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+        if self.nodes.is_empty() || length(sub(to, from)) < BUILDING_MIN_MOVE {
+            return None;
+        }
+        let (s, e) = (self.placement.to_own(from), self.placement.to_own(to));
+        let hit = self.trace(BspChild::Node(BSP_ROOT), s, e, 0.0, None, sub(e, s))?;
+        Some(self.placement.to_world(hit.point))
+    }
+
     /// Whether a point (world space) is in a solid leaf. For checks and
     /// logs only; the passes use `sweep`.
     pub fn solid_at(&self, p: [f32; 3]) -> bool {
@@ -320,6 +333,21 @@ impl BoxCollider {
     pub fn overlaps(&self, r: f32, lo: [f32; 3], hi: [f32; 3]) -> bool {
         let (wmin, wmax) = world_box(self.min.map(|v| v - r), self.max.map(|v| v + r), &self.placement);
         (0..3).all(|k| lo[k] <= wmax[k] && hi[k] >= wmin[k])
+    }
+
+    /// Where a straight line from `from` to `to` (world space) first enters
+    /// the box (camera.md "Obstacles"); starting inside is not a hit.
+    pub fn line_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+        let (lo, hi) = (self.min, self.max);
+        if (0..3).any(|k| lo[k] > hi[k]) {
+            return None;
+        }
+        let (s, e) = (self.placement.to_own(from), self.placement.to_own(to));
+        if (0..3).all(|k| s[k] > lo[k] && s[k] < hi[k]) {
+            return None;
+        }
+        let (t, _) = slab_entry(s, sub(e, s), lo, hi)?;
+        Some(lerp(from, to, t))
     }
 
     /// Sweeps the mover's balls against the box enlarged by the radius on
@@ -486,6 +514,29 @@ mod tests {
             ([-5000.0, -5000.0, -100.0], [5000.0, 5000.0, top + 100.0]),
             Placement::at([0.0; 3]),
         )
+    }
+
+    #[test]
+    fn a_line_stops_at_the_wall_face_and_not_from_inside() {
+        let hit = wall().line_hit([0.0, 1000.0, 500.0], [0.0, -1000.0, 500.0]).expect("blocked");
+        assert!(near(hit, [0.0, 0.0, 500.0]), "{hit:?}");
+        let hit = wall().line_hit([0.0, -1000.0, 500.0], [0.0, 1000.0, 500.0]).expect("blocked");
+        assert!(near(hit, [0.0, -100.0, 500.0]), "{hit:?}");
+        // Not reaching it, or starting inside the solid: no hit.
+        assert!(wall().line_hit([0.0, 1000.0, 500.0], [0.0, 10.0, 500.0]).is_none());
+        assert!(wall().line_hit([0.0, -50.0, 500.0], [0.0, 1000.0, 500.0]).is_none());
+    }
+
+    #[test]
+    fn a_line_meets_a_turned_box() {
+        let mut b = BoxCollider { name: "b".into(), min: [-100.0, -50.0, 0.0], max: [100.0, 50.0, 300.0], placement: Placement::at([1000.0, 0.0, 0.0]) };
+        let hit = b.line_hit([0.0, 0.0, 100.0], [2000.0, 0.0, 100.0]).expect("blocked");
+        assert!(near(hit, [900.0, 0.0, 100.0]), "{hit:?}");
+        // Turned a quarter: its long side now runs along y.
+        b.placement.rotation = kq8_data::objects::rotation([0.0, 0.0, std::f32::consts::FRAC_PI_2]);
+        let hit = b.line_hit([0.0, 0.0, 100.0], [2000.0, 0.0, 100.0]).expect("blocked");
+        assert!(near(hit, [950.0, 0.0, 100.0]), "{hit:?}");
+        assert!(b.line_hit([0.0, 0.0, 400.0], [2000.0, 0.0, 400.0]).is_none());
     }
 
     #[test]

@@ -77,7 +77,12 @@ The code is written with an AI coding agent (Claude Code); see
   (`kq8-artifacts/logs/anim.log`) and by eye (2026-10-13). Gnome's
   rolling rock spins; how it should travel is still open.
 - **The camera** follows Connor like the original's: it trails behind him,
-  keeps above the ground, and can be swung, zoomed and tilted.
+  keeps above the ground, and can be swung, zoomed and tilted. It doesn't
+  go through walls, closed doors or hills: when a building gets between
+  it and Connor it swings round to look along the way he came, and comes
+  closer if it has to; dragging it into a wall only creeps it closer.
+  Trees and plain objects don't stop it, as in the original. Checked in
+  the logs (`camera.log`) and checked by eye by the user.
 - **Ground key U:** shows the hidden ground under the water (the
   "floor"): first press both (the visible ground see-through where the
   floor differs, the floor tinted blue where lower, red where higher),
@@ -93,7 +98,7 @@ when clicking (too far, locked) and doesn't turn to face the door; only
 doors react to clicks (other clickable things are logged only). Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing
-back behind him by itself or avoid walls. In water there is no damage
+back behind him by itself. In water there is no damage
 yet (poison, lava, swamp). Fire and ice arrow
 sparks and the dragon fire are not shown (they come with fighting).
 Animated objects play only the movement they start with (scripts don't

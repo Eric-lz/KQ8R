@@ -46,6 +46,15 @@ pub struct GroundLookup(pub kq8_data::Terrain);
 #[derive(Resource, Default)]
 pub struct Buildings(pub Vec<kq8_game::collide::BuildingCollider>);
 
+/// What blocks the camera's view line besides the ground and the doors
+/// (M2 step 2f-2): each building's collision type (same order as
+/// `Buildings`) and the view-blocking object boxes.
+#[derive(Resource, Default)]
+pub struct ViewBlockerSet {
+    pub building_types: Vec<u32>,
+    pub boxes: Vec<kq8_game::collide::BoxCollider>,
+}
+
 /// The world's objects that collide with Connor (M2 step 2d-5).
 #[derive(Resource, Default)]
 pub struct ObjectColliders(pub Vec<kq8_game::collide::BoxCollider>);
@@ -204,6 +213,10 @@ pub fn setup_objects(
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
     let buildings = std::mem::take(&mut objects.buildings);
+    commands.insert_resource(ViewBlockerSet {
+        building_types: std::mem::take(&mut objects.building_types),
+        boxes: std::mem::take(&mut objects.view_boxes),
+    });
     // Doors (M3 step 3a): drawn and moved by door_view; their colliders
     // join the others and are moved every update.
     let mut colliders = std::mem::take(&mut objects.objects);
