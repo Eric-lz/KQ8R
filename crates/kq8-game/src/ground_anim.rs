@@ -4,9 +4,11 @@
 //! traced; square choice checked against the data). The keys are read by
 //! `kq8_data::effects::AnimatorSettings`.
 //!
-//! Stand-in (asked as Q48): the timer runs on the game clock (updates /
-//! 15); a change happens in the first update whose time has reached the
-//! due time, and the next is due `delay` after the previous due time.
+//! Clock (rule 3, Q49, traced): the animator does not run on the 15-per-
+//! second update. It is checked against continuous game time, and after
+//! each change the next one is due `delay` after **the time the change
+//! happened** (not after the previous due time), so each gap is `delay`
+//! plus however late that check came.
 //!
 //! Not done: the envInfo flags of a changed square (open question 3; no
 //! difference in Daventry), `frameCount` (saved games; no file sets it),
@@ -16,7 +18,7 @@ use kq8_data::effects::AnimatorSettings;
 use kq8_data::terrain::Grid;
 
 /// Allowance when comparing game time with a due time, so that e.g.
-/// 9 / 15 counts as reaching 0.3 + 0.3.
+/// 4.5 / 15 counts as reaching 0.3.
 const TIME_EPSILON: f64 = 1e-9;
 
 /// The squares an animator works on (rule 1), chosen once from the
@@ -60,14 +62,16 @@ pub struct GroundAnimator {
     pub repeat: bool,
     /// Counting down to changes.
     pub running: bool,
-    /// Game time (s) of the next change.
+    /// Game time (s) of the next change: the time of the last change +
+    /// `delay` (the start + `delay` before the first).
     pub due: f64,
     /// The cycle entry the next change shows.
     pub next_entry: usize,
 }
 
 /// One change: an animator set all its squares to `material` (cycle entry
-/// `entry`) at game time `time`.
+/// `entry`) at game time `time` (when it was checked, at or after the due
+/// time).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Change {
     pub entry: usize,
@@ -119,28 +123,29 @@ impl GroundAnimator {
         (a, notes)
     }
 
-    /// The changes due by game time `now` (rules 2–4), each applied to
-    /// `materials` (every chosen square gets the same material).
-    pub fn update(&mut self, now: f64, materials: &mut Grid) -> Vec<Change> {
-        let mut changes = Vec::new();
-        while self.running && now + TIME_EPSILON >= self.due {
-            let material = self.cycle[self.next_entry];
-            for &(i, j) in &self.squares {
-                materials.set(i, j, material);
-            }
-            changes.push(Change { entry: self.next_entry, material, time: self.due });
-            self.due += self.delay;
-            self.next_entry += 1;
-            if self.next_entry == self.cycle.len() {
-                if self.repeat {
-                    self.next_entry = 0;
-                } else {
-                    // Played once: the squares keep the last material.
-                    self.running = false;
-                }
+    /// The change due by game time `now`, if any (rules 2–4), applied to
+    /// `materials` (every chosen square gets the same material). At most
+    /// one per call: the next is due `delay` after `now`.
+    pub fn update(&mut self, now: f64, materials: &mut Grid) -> Option<Change> {
+        if !(self.running && now + TIME_EPSILON >= self.due) {
+            return None;
+        }
+        let material = self.cycle[self.next_entry];
+        for &(i, j) in &self.squares {
+            materials.set(i, j, material);
+        }
+        let change = Change { entry: self.next_entry, material, time: now };
+        self.due = now + self.delay;
+        self.next_entry += 1;
+        if self.next_entry == self.cycle.len() {
+            if self.repeat {
+                self.next_entry = 0;
+            } else {
+                // Played once: the squares keep the last material.
+                self.running = false;
             }
         }
-        changes
+        Some(change)
     }
 }
 
@@ -192,20 +197,21 @@ mod tests {
     }
 
     #[test]
-    fn changes_every_delay_on_the_15_per_second_clock() {
+    fn each_change_is_delay_after_the_previous_change() {
         let mut g = grid();
         let (sq, _) = choose_squares(&settings(), &g);
         let (mut a, notes) = GroundAnimator::new("a", &settings(), sq, 0.0);
         assert!(notes.is_empty() && a.running);
-        let mut seen = Vec::new();
-        for n in 1..=30u32 {
-            for c in a.update(n as f64 / 15.0, &mut g) {
-                seen.push((n, c.entry, c.material));
-            }
-        }
-        // 0.3 s = 4.5 updates: changes at updates 5, 9, 14, 18, 23, 27; the
-        // first shows entry 0, then 1, 2, 3, then entry 0 again.
-        assert_eq!(seen, vec![(5, 0, 12), (9, 1, 30), (14, 2, 31), (18, 3, 30), (23, 0, 12), (27, 1, 30)]);
+        // Checked at uneven frame times (s), as drawn frames come.
+        let frames = [0.1, 0.29, 0.31, 0.5, 0.6, 0.62, 0.9, 0.93, 1.3, 1.55];
+        let seen: Vec<(f64, usize, u8)> =
+            frames.iter().filter_map(|&t| a.update(t, &mut g)).map(|c| (c.time, c.entry, c.material)).collect();
+        // First change at the first check at or after 0.3 (0.31); then each
+        // one 0.3 after the previous **change**: due 0.61 -> 0.62, due 0.92
+        // -> 0.93, due 1.23 -> 1.3 (one change only, though the check is late).
+        // With "previous due + 0.3" they would have come at 0.6, 0.9, 1.3, 1.3.
+        assert_eq!(seen, vec![(0.31, 0, 12), (0.62, 1, 30), (0.93, 2, 31), (1.3, 3, 30)]);
+        assert!((a.due - 1.6).abs() < 1e-9);
         // Every chosen square shows the same material, the others are untouched.
         assert_eq!((g.get(2, 0), g.get(1, 1), g.get(1, 0), g.get(2, 1)), (Some(30), Some(30), Some(11), Some(20)));
     }
@@ -217,7 +223,7 @@ mod tests {
         let mut g = grid();
         let (sq, _) = choose_squares(&s, &g);
         let (mut a, _) = GroundAnimator::new("a", &s, sq, 0.0);
-        let changes: usize = (1..=60).map(|n| a.update(n as f64 / 15.0, &mut g).len()).sum();
+        let changes = (1..=600).filter(|&n| a.update(n as f64 / 60.0, &mut g).is_some()).count();
         assert_eq!(changes, 4);
         assert!(!a.running);
         assert_eq!(g.get(2, 0), Some(30));
@@ -230,7 +236,7 @@ mod tests {
         let mut g = grid();
         let (mut a, notes) = GroundAnimator::new("a", &s, vec![(0, 0)], 0.0);
         assert_eq!(notes.len(), 1);
-        assert!(a.update(100.0, &mut g).is_empty());
+        assert!(a.update(100.0, &mut g).is_none());
         assert_eq!(g.get(0, 0), Some(10));
     }
 }

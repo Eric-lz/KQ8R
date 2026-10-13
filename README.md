@@ -65,7 +65,9 @@ The code is written with an AI coding agent (Claude Code); see
   the game keeps flying around Daventry's trees and over the stream, with
   the original's speeds, lifetimes, swaying and gravity. Leaves that
   drift into the cottage vanish at its box, as in the original. The
-  rivers and the stream flow: their ground textures change every 0.3 s.
+  rivers and the stream flow: their ground textures change every 0.3 s
+  (timed from each change, as the original does; 2026-10-13, checked in
+  the log and by eye).
   In IceWorld it snows around Connor wherever he goes, but not inside
   buildings (checked in the logs and by eye, 2026-10-13).
   Checked in the logs (`kq8-artifacts/logs/effects.log`, `ground_anim.log`) and by eye
@@ -74,8 +76,11 @@ The code is written with an AI coding agent (Claude Code); see
   gears, swinging signs, shutters, torches, lamps, waterfalls, fish and
   the fountain's water move as the game's files say, torches and other
   rows of things out of step as in the original. Checked in the logs
-  (`kq8-artifacts/logs/anim.log`) and by eye (2026-10-13). Gnome's
-  rolling rock spins; how it should travel is still open.
+  (`kq8-artifacts/logs/anim.log`) and by eye (2026-10-13). Gnome's three
+  rolling rocks roll out and come back each cycle (checked by eye), and
+  since 2026-10-13 their collision boxes move with them (checked in the
+  log only). Gnome's pushable `boulder` stands still, as in the original
+  (checked by eye); it can't be pushed yet.
 - **The camera** follows Connor like the original's: it trails behind him,
   keeps above the ground, and can be swung, zoomed and tilted. It doesn't
   go through walls, closed doors or hills: when a building gets between
@@ -102,7 +107,8 @@ back behind him by itself. In water there is no damage
 yet (poison, lava, swamp). Fire and ice arrow
 sparks and the dragon fire are not shown (they come with fighting).
 Animated objects play only the movement they start with (scripts don't
-switch them yet) and make no sound.
+switch them yet) and make no sound. A rolling rock that runs into Connor
+does nothing to him yet (in the original he stumbles and takes damage).
 People and monsters are not shown,
 and there is no lighting, distance haze, sound, talking, inventory, fighting
 or story. The current plan is in [docs/DESIGN.md](docs/DESIGN.md) and the

@@ -3,6 +3,48 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3r-3: review of Q45–Q52, docs
+
+**Changed:** `docs/DESIGN.md` (new step 3r with a table: each answer, what our code does, what changes; plans 3a, 3b, 3b-4, 3c corrected where they said "stand-in"), `docs/provenance/README.md` (rows marked confirmed or replaced; new section "Review after Q45–Q52"), comments in `script.rs`, `door.rs`, `effects_view.rs`, `anim_view.rs`, `README.md`, `QUESTIONS.md` (Q54, Q55).
+**Why:** Session A answered Q45–Q52; the plans and code comments still called those points stand-ins.
+**Tested how:** Read every answer against the code. Where an answer could matter, checked the data of all 12 worlds with a throwaway scanner (scratchpad, not kept): which emitters follow something, which use `followMesh`, which objects are `KQBoulder`, and whether the particle catchers' names match with capitals counting.
+**Result:** Already as answered: Q45 a–f, Q46, Q47, Q50, Q52 b and d. No visible change needed: Q48 (all 13 catchers' names match exactly), Q52 a (`followMesh`: only the dragon fires and `lucfire`, not started yet), Q52 c (no emitter follows the camera). Code changes needed: Q49 (3r-1), Q51 rule 8 (3r-2), Q51 rule 5 (3r-4).
+**Still broken / not tested:** Two small new questions: Q54 (the −1 a false text test can leave; `set`/`echo` results) and Q55 (what a moving rock does to Connor).
+**Next:** Plan traps (`traps.md`), then chests and items.
+
+## 2026-10-13 M3 3r-4: a rolling rock's collision box moves with it
+
+**Changed:** `crates/kq8-viewer/src/anim_view.rs` (`anim_step` moves the collider of an object whose loop moves it; log lines in `anim.log`).
+**Why:** Found while checking Q51: Gnome's rolling rocks have collision boxes (type 0x1, Connor collides with it) that stayed at the rocks' start while the rocks rolled up to 9,691 units away. `objects.md` Q51 rule 5: the box goes with the object.
+**Tested how:** `cargo test --workspace --release`, clippy; viewer in Gnome (`--frames 2000`, about 11 s), read `anim.log`.
+**Result:** 201 tests pass. `rrock1–3` each find their collider. `rrock1`'s box: y 111,710 at the start, 104,693 at update 15, 103,823 at 30, back to 111,316 at 45, and so on each 3.53 s cycle (x stays 57,500).
+**Still broken / not tested:** **Not checked by walking into a rock.** The box moves one update after Connor's move (order not traced). If the box rolls over Connor, nothing happens to him: his next move "starts inside" the box, which our mover logs and ignores (Q55).
+**Next:** You, in Gnome: walk to where a rock starts while it is away: you should no longer bump into an invisible box there.
+
+**Checked afterwards (you, 2026-10-13):** the three rolling rocks still roll correctly. Walking Connor to where a rock starts, while it is away: he collides with nothing there. In the original that spot can't be reached: the rocks roll back and forth all the time, and when one hits Connor he stumbles and takes damage, so he would be hurt badly or die before getting there. Recorded in Q55.
+
+## 2026-10-13 M3 3r-2: Gnome's boulder stands still
+
+**Changed:** `crates/kq8-viewer/src/load.rs` (an object of class `KQBoulder` doesn't play its movement; one log line).
+**Why:** `objects.md` Q51 rule 8: the `boulder` in Gnome's big room shows a rolling loop in its data, but the original shows it still; `KQBoulder` controls its own animation (not studied yet).
+**Tested how:** viewer in Gnome (`--frames 60`), read `viewer.log`; throwaway scanner: `boulder` is the only `KQBoulder` in the game.
+**Result:** `class KQBoulder: movement 0 not played, drawn still at its start`; Gnome now plays 233 objects (was 234); the three rolling rocks still play.
+**Still broken / not tested:** **Not checked by eye.** The boulder can't be pushed (not studied).
+**Next:** You: look at the boulder in Gnome's big room: it should stand still.
+
+**Checked afterwards (you, 2026-10-13):** the boulder is now still; pushing it comes later.
+
+## 2026-10-13 M3 3r-1: flowing water timed from each change
+
+**Changed:** `crates/kq8-game/src/ground_anim.rs` (`update`: at most one change per check, next due = time of this change + `delay`; new test), `crates/kq8-viewer/src/ground_anim_view.rs` (checked every drawn frame on continuous game time instead of the 15-per-second update; log gaps in seconds), `main.rs` (moved from the fixed update to the frame update).
+**Why:** `emitters.md` ground animator rule 3 (Q49): the original's animator doesn't use the 15-per-second tick; the next change is due `delay` after the moment of the change. Ours counted from the previous due time on the tick, so changes came 4 and 5 ticks apart (0.267 s and 0.333 s).
+**Tested how:** `cargo test --workspace --release`, clippy; viewer in Daventry (`--frames 1500`, 8.5 s of game time), read `ground_anim.log`.
+**Result:** 201 tests pass (58 + 143). 297 gaps between changes, 0.300–0.306 s, average 0.304 s (frames about 5.7 ms each), e.g. `AnimatedRiver1` at 0.3018, 0.6073, 0.9128, 1.2184 s.
+**Still broken / not tested:** **Not checked by eye** (the difference from before is hard to see: about 1/30 s per change).
+**Next:** You: look at Daventry's river: it should flow as before, a little more evenly.
+
+**Checked afterwards (you, 2026-10-13):** the river flows nicely.
+
 ## 2026-10-13 Study: traps, chests, picking items up; Q45–Q52 answered
 
 **Changed:** New notes `docs/behaviour/traps.md`, `chests.md`, `items.md`. Answers and corrections in `doors.md` (rule 8, rule 24, "Do not reproduce", new "Q45" section), `emitters.md` (emitter rules 2 and 11, catcher rule 5, ground animator rules 2, 3, 6), `objects.md` (new "Loops that move the whole object", Q51). `QUESTIONS.md`: Q45–Q52 marked answered (Q48 partly). Scratch notes in `re/` (not committed). No code.

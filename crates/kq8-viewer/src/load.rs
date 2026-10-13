@@ -1621,6 +1621,7 @@ impl Placer<'_> {
             return;
         };
         let class = p.class.clone().unwrap_or("?".into());
+        let boulder = class.eq_ignore_ascii_case("KQBoulder");
         if let Some(c) = &animation {
             self.log.detail(format!(
                 "animated {label}[{}]: movement {}{} loop={} {} start={} speed={} repeat={} fourth={} -> {}{}",
@@ -1659,9 +1660,19 @@ impl Placer<'_> {
         self.collision.push(CollisionInfo { shape, collider_type, collider_mask });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
-        // A movement that plays (speed not 0): all its frames (3c).
+        // A movement that plays (speed not 0): all its frames (3c). Not a
+        // `KQBoulder`: it controls its own animation (shown still in the
+        // original), not studied yet (objects.md Q51 rule 8, step 3r-2).
         if let Some(c) = animation.as_ref().filter(|c| c.speed != 0.0) {
-            self.place_animated(&label, c, flags.as_deref());
+            if boulder {
+                self.log.summary(format!(
+                    "animated {label}[{}]: class KQBoulder: movement {} not played, drawn still at its start (objects.md Q51 rule 8)",
+                    self.placed.last().map_or("?", |(p, _, _)| p.name.as_str()),
+                    c.movement
+                ));
+            } else {
+                self.place_animated(&label, c, flags.as_deref());
+            }
         }
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);

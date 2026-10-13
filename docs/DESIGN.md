@@ -1300,7 +1300,8 @@ catchers, ground animators).
     - Stand-ins (asked as Q45): `$Console::Return` is `0` for true or
       success and `1` for false or failure (the note gives only "0 =
       true"); a word "looks like a number" as the note says and its value
-      is its leading number part.
+      is its leading number part. **Confirmed 2026-10-13** (`doors.md`
+      "Q45" e, f; see 3r).
     - The start-up follower (`kq8-data` `world_script.rs`) is **not**
       changed in this step (it still skips a line with an unknown
       variable and ignores `if`). Moving it onto the new runner is a later
@@ -1344,7 +1345,8 @@ catchers, ground animators).
       nothing sent. `KQCueEvent n1 [n2]` → the target's script with `Cue
       n1 n2` (rule 23). `KQStatsChangeRequestEvent` → logged (stats are
       M5).
-    - **Order in one update** (stand-ins, Q45): (1) clicks; (2) events
+    - **Order in one update** (stand-ins, Q45; confirmed 2026-10-13,
+      `doors.md` "Q45" d): (1) clicks; (2) events
       due by now, including those just sent with delay 0 (open question
       4); (3) each moving door advances, except one started in this
       update, which first advances in the next (as Connor's transitions,
@@ -1352,7 +1354,8 @@ catchers, ground animators).
       handled in the next update); (4) the door colliders are moved; then
       Connor's update as before.
     - Unit tests: the state table (1/2/0/none in every state), `open` 15
-      updates and `close` from 0.93 14 updates, `Open`/`Close` calls,
+      updates and `close` from 0.93 14 updates (door1/door2; each door
+      uses its own file's frames and time, Q46), `Open`/`Close` calls,
       `KQAnimPlayEvent open` from closed ends opened with `Open`, cue at
       0.0 fires in the first update, `Saradoor`-like cue at 0.95 on
       `close` never fires, turn after 10 open/close cycles is exactly 0,
@@ -1369,12 +1372,13 @@ catchers, ground animators).
       through the mouse; the nearest box hit among objects whose
       collision type has bit 0x20 is picked (rule 10). Stand-in (Q45):
       only those boxes are tested; walls, terrain and other objects do
-      not hide a clickable one. No weapons yet, so the cursor is always
+      not hide a clickable one (confirmed, `doors.md` Q45 b). No weapons yet, so the cursor is always
       the play cursor.
     - Reach (rule 11): Connor's feet turned into the door's own axes
       (its current, turned box), only the part outside the box counts on
       each axis; in reach when that distance is < 2 × `attackDist`
-      (`GAME/Kq/Connor.kq`, 2,350 → 4,700).
+      (`GAME/Kq/Connor.kq`, 2,350 → 4,700). The box as it stands, turned
+      (confirmed, Q45 c).
     - In reach, nothing in hand: script `<door> ConnorAction do do`.
       Item in hand (test option only, no inventory yet): accepted when
       the door's `acceptsInventory` names its type, or `acceptAllItems=1`
@@ -1389,7 +1393,8 @@ catchers, ground animators).
       collision; no Daventry script does, so it is logged, not applied.
     - Not done (logged): Connor turning to face the door (rule 16, which
       states not traced), the remark lines themselves (M4), hits,
-      `Die`, `ProjImmune` (no combat yet, M5), `tooFar=` (Q45).
+      `Die`, `ProjImmune` (no combat yet, M5), `tooFar=` (a display
+      setting, not reach: Q45 a).
     - Test options: `--click NAME,N` clicks object NAME before update
       N + 1 (no mouse needed); `--item TYPE` puts an item of that type in
       Connor's hand (object name = the type).
@@ -1450,26 +1455,28 @@ catchers, ground animators).
     visibility (note "How to check").
   - **3b-2, particle catchers.** After loading, each catcher looks up its
     emitter and building by name (any case; nothing found → does nothing,
-    logged). Box = the building's `.dig` bounding box; top = box top +
+    logged; the original counts capitals, but every catcher's names match
+    exactly in all worlds, 3r). Box = the building's `.dig` bounding box; top = box top +
     building z. Every tick, after the emitters: each visible particle of
     its emitter with z ≤ top is turned into the building's own axes and
-    hidden if min ≤ value < max on all three axes. Stand-in (asked):
-    catchers run after the emitters in the same tick. Log: each catcher's
+    hidden if min ≤ value < max on all three axes. Catchers run after the
+    emitters in the same tick (the original's order is not settled; ours
+    is fine, `emitters.md` catcher rule 5). Log: each catcher's
     box and a line whenever it hides a particle.
   - **3b-3, ground animators.** Squares chosen once at load (explicit
     list if `numGridBlocks` ≠ 0, else every square whose material is an
     `origTexture`, minus the exclude list). Started when `startNow=1`
     (else logged and left alone). Changes: the first after `delay`
     seconds, entry 0; then every `delay` seconds the next entry; with
-    `repeatflag=0` stop at the last. Timer on the game clock (ticks /
-    15); a change is due when game time ≥ the due time, and the next is
-    due `delay` after the previous due time (stand-in, asked: the note
-    doesn't say how 0.3 s falls on a 1/15 s clock). Ground flags
+    `repeatflag=0` stop at the last. ~~Timer on the game clock (ticks /
+    15), next due `delay` after the previous due time~~ (stand-in;
+    **replaced in 3r-1**, Q49: continuous game time, checked every drawn
+    frame, next due `delay` after the time of the change). Ground flags
     (envInfo) not changed (open question 3). Drawn: animated squares are
     taken out of the normal ground mesh's surface (their floor stays in
     it) and drawn one entity each; on a change its texture follows the new
     material, while its orientation stays that of its own loaded material
-    (changed after the user's check, stand-in until Q50). The floor view
+    (changed after the user's check; confirmed by Q50). The floor view
     (U) treats them as surface squares.
     Log: squares chosen per animator (expect the note's table: 86, 0, 57,
     19, 0, 17, 32, 2, 13, 4, 4), square (45, 57) never animated, and each
@@ -1486,16 +1493,19 @@ catchers, ground animators).
     emitter's `loc` = the target's position + `followOffset`, the offset
     turned with the target unless its x and y are both 0 (then world
     axes). Connor's turn = his heading about z; the camera: position only,
-    no turn (stand-in: what the camera's "turn" is was not described).
-    Target not found: the emitter is not started (logged; the note
-    doesn't say).
+    no turn (the original turns the offset by the camera's turn, Q52 c;
+    no emitter in any world follows the camera). Target not found: the
+    emitter is not started (logged; the original would crash, so keep
+    this, Q52 b).
   - Velocity limits turned with the target: a particle's velocity is
     chosen in the limits, then turned by the target's turn at that
     moment (rule 1: at the start; rule 2: kept after that).
   - `followMesh`: at each restart the particle takes the target's current
     turn and a new random velocity (turned). Its value in the data is a
-    mesh-part name (`fire`, `Box01`), which the note doesn't explain
-    (asked); no running emitter has it yet.
+    mesh-part name (`fire`, `Box01`). **Answered (Q52 a), not built yet:**
+    the emitter sits at that part of the target's (animated) model,
+    `followOffset` unused; part missing → the emitter dies (rule 10). To
+    do with the dragon heads (M5) and Temple4's `lucfire`, the only users.
   - Particles already flying don't move with the target (their positions
     are world positions); restarts happen at the moved `loc`.
   - Tests: offset in own vs world axes, turned velocity, restart at the
@@ -1524,11 +1534,15 @@ catchers, ground animators).
   - **Whole-object steps** (frame transforms, models-and-textures.md Q1 b):
     first measured and logged per object. Applied, if any running object
     has them, like the doors: the pose of the shown frame = its steps
-    1…k chained, never added up across cycles. Stand-in, asked if it
-    matters.
+    1…k chained, never added up across cycles. (Q51: the original adds
+    them up and the data's cue puts the object back each cycle; the same
+    picture for Gnome's rocks, the only ones, so kept, by the user's
+    check. `KQBoulder` is not played: 3r-2.)
   - **Not done (logged):** cues (sounds), `nextAnimName`, `animPos`,
     scripts changing an object's movement (`KQAnimPlayEvent` to non-door
-    objects). Collision boxes stay fixed, as traced (Q33 a).
+    objects). Collision boxes stay fixed. (Q51 rule 5: in the original a
+    box moves with its object; "fixed" in Q33 a means its size. Only the
+    rolling rocks move, and their colliders don't follow yet; not done.)
   - **Drawing** (`kq8-viewer` `anim_view.rs`): all frames of the loop
     built once per (model, loop), one entity per frame, only the shown one
     visible (as doors); hidden and unused objects keep their H-key
@@ -1543,6 +1557,71 @@ catchers, ground animators).
   - Tests: phase and wrap, frame rule (start frame equals the still model's
     start frame, e.g. `telepad1` 0.3 × 16 → 5), one-shot stops at the end,
     random range, speed −1 runs backwards.
+
+- **3r — review after the answers to Q45–Q52 (planned 2026-10-13; 3r-1 to
+  3r-4 done 2026-10-13, MODLOG; checked in the logs and by eye by the
+  user).** The
+  study session answered Q45–Q52 (`doors.md` "Q45", rules 8 and 24;
+  `emitters.md` emitter rules 2 and 11, catcher rule 5, ground animator
+  rules 2 and 3; `objects.md` "Loops that move the whole object"). Each
+  answer checked against the code and, where it could matter, against the
+  data of all 12 worlds (throwaway scanner in B's scratch folder, nothing
+  kept):
+
+  | Q | Answer | Our code | Change |
+  | --- | --- | --- | --- |
+  | Q45 a–f | all six stand-ins right; `$Console::Return` details | matches (script call keeps the last command's result; `-.5` is text; unknown command 1) | comments only. Not copied: a false text `==` can leave −1 instead of 1 (which sign for which order is not given; both count as false; asked as Q54) |
+  | Q46 | each door plays its own `.kqs` | already | none |
+  | Q47 | sway and turn carry on; paths drift | already | none |
+  | Q48 | catcher order not settled (ours fine); names compared with capitals counting | we ignore capitals | none: every catcher's `emitter`/`interior` name in all worlds matches exactly (Daventry 3, IceWorld 10), so both give the same result |
+  | Q49 | next change = clock time **of this change** + `delay`, on continuous game time, not the 15/s tick | previous due + `delay`, checked once per tick | **3r-1** |
+  | Q50 | the square's own orientation | already (the fix) | none |
+  | Q51 | steps added up + the data's reset cue; user: our chained way gives the same picture, keep it | chained per frame | none for the rocks; **3r-2** for `KQBoulder` (rule 8: don't play it) |
+  | Q52 a | `followMesh=<part>`: sit at that model part, `followOffset` unused, part missing → the emitter dies | name ignored | none now: only the dragon fires (IceWorld, made by monsters, M5) and `lucfire` (Temple4's altar script) use it, and neither is started. Do it when those arrive |
+  | Q52 b, d | missing target: keep ours; order right | already | none |
+  | Q52 c | offset turned by the target's whole turn, the camera's too | Connor heading, objects all three angles, camera no turn | none: no emitter in any world follows `KQCamera` (only `snow` → Connor, offset z only) |
+
+  - **3r-1, ground animator clock (Q49).** `kq8-game` `ground_anim.rs`:
+    after a change at clock time t the next is due at t + `delay`
+    (`update` takes the clock time; the change records it). `kq8-viewer`
+    `ground_anim_view.rs`: the step moves from the 15-per-second update to
+    every drawn frame, with game time = the fixed clock's time + its
+    overstep (the time already run since the last update), so it is
+    continuous and stays in step with the other systems' game time. The
+    log gives each change's game time and the gap since the last change
+    in seconds; the 10-second summary gives the gaps' smallest, largest
+    and average. Expected: gaps 0.300 s plus at most one drawn frame (at
+    60 frames per second, 0.300–0.317 s), never the 0.267/0.333 s of the
+    old tick-based timer. Unit test: changes checked at irregular frame
+    times are each `delay` after the previous **change**, not after the
+    previous due time.
+  - **3r-2, `KQBoulder` still (Q51 rule 8).** `kq8-viewer` `load.rs`: an
+    object whose `classType` is `KQBoulder` is not played (drawn still,
+    frame 0: its `stop` loop starts at 0.0), logged. Only one in the game
+    (Gnome `boulder`, `pushston`). Until pushable objects are studied.
+  - **3r-4, a moving object's collider moves with it (Q51 rule 5).**
+    Found while checking 3c against Q51: Gnome's three rolling rocks have
+    `BOUNDS.KQ` boxes (`theroll.kqs`, ±900 × ±900 × 0–1,750, type 0x1,
+    which Connor collides with), but our boxes stay at the rocks' start
+    while the rocks roll up to 9,691 away. `kq8-viewer` `anim_view.rs`:
+    every update, an object whose loop has whole-object steps puts its
+    collider (found once by the object's name in the world's object
+    colliders; none or several → logged, left alone) at the pose it is
+    drawn with (the chained steps of the shown frame, as 3c). Runs in
+    `anim_step`, which comes after Connor's update, so Connor is tested
+    against the box of the previous update (one update late; the
+    original's order between objects was not traced). Not done: what
+    happens when a moving box runs into a standing Connor (the mover only
+    sweeps Connor's own moves; a box that ends up around him counts as
+    "started inside", which was not traced, `collide.rs`); the rocks
+    knocking him down (not studied). Log `anim.log`: each such collider
+    found, then its position every second for the first 10 s.
+  - **3r-3, docs.** Comments in `script.rs`, `ground_anim.rs`,
+    `ground_anim_view.rs`, `emitter.rs`/`effects_view.rs` and the plans
+    above (3a, 3b, 3b-4, 3c) now say "confirmed" where they said
+    "stand-in"; provenance updated; Q54 asked.
+  - **Next after 3r:** traps (`traps.md`), chests (`chests.md`), items
+    and picking up (`items.md`), each planned here before it is built.
 
 ### M4 — Talk, listen, use the menus
 

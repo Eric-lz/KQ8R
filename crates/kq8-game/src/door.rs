@@ -146,7 +146,7 @@ pub struct Door {
     /// The current movement still moves (speed not 0, not finished).
     pub playing: bool,
     /// Started in this update: it first moves in the next (DESIGN 3a-2,
-    /// stand-in, Q45 d).
+    /// `doors.md` Q45 d).
     pub started_this_update: bool,
     /// The door's place in the world (from its `.kq` or `loadKQ` line).
     pub base: Placement,

@@ -1,17 +1,19 @@
 //! Ground animators in the ground view (M3 step 3b-3, docs/DESIGN.md;
 //! rules: docs/behaviour/emitters.md "Ground animators").
 //!
-//! - The animators live in `kq8_game::ground_anim` and run at 15 updates
-//!   per second; game time = updates / 15.
+//! - The animators live in `kq8_game::ground_anim`. They are checked every
+//!   drawn frame, not on the 15-per-second update (Q49, M3 step 3r-1), on
+//!   continuous game time: the fixed clock's time plus the time already
+//!   run since its last update.
 //! - Each animated square is its own entity, taken out of the normal
 //!   ground mesh. When its material changes, it gets that material's
 //!   texture, but keeps the orientation of its own (loaded) material
-//!   (stand-in, Q50).
+//!   (emitters.md ground animator rule 2, Q50).
 //! - The U key's views treat these squares as surface squares (hidden in
 //!   "floor only", see-through in "both" where the floor differs).
 //!
-//! Log: `kq8-artifacts/logs/ground_anim.log`, every change with its update,
-//! game time and material.
+//! Log: `kq8-artifacts/logs/ground_anim.log`, every change with its game
+//! time, material and the seconds since the animator's last change.
 
 use std::collections::BTreeMap;
 
@@ -51,10 +53,11 @@ pub struct GroundAnimSim {
     looks: BTreeMap<u8, Option<SquareLook>>,
     /// The U view the squares were last drawn for.
     view: u8,
-    updates: u64,
-    /// Per animator: the update of its last change, and the gaps seen.
-    last_change: Vec<Option<u64>>,
-    gaps: Vec<BTreeMap<u64, u64>>,
+    /// Game time (s) of the next 10-second summary.
+    next_summary: f64,
+    /// Per animator: the game time of its last change, and the gaps seen.
+    last_change: Vec<Option<f64>>,
+    gaps: Vec<Gaps>,
     log: Log,
 }
 
@@ -132,48 +135,68 @@ pub fn setup_ground_anim(
         meshes: built_meshes,
         looks,
         view: u8::MAX,
-        updates: 0,
+        next_summary: 10.0,
         last_change: vec![None; n],
-        gaps: vec![BTreeMap::new(); n],
+        gaps: vec![Gaps::default(); n],
         log,
     });
 }
 
-/// One update (15 per second): every animator's changes due by now.
-pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, shared: Res<Shared>) {
+/// Seconds between one animator's changes: smallest, largest, average.
+#[derive(Clone, Default)]
+struct Gaps {
+    count: u64,
+    sum: f64,
+    min: f64,
+    max: f64,
+}
+
+impl Gaps {
+    fn add(&mut self, g: f64) {
+        (self.min, self.max) = if self.count == 0 { (g, g) } else { (self.min.min(g), self.max.max(g)) };
+        self.count += 1;
+        self.sum += g;
+    }
+}
+
+impl std::fmt::Display for Gaps {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if self.count == 0 {
+            return write!(f, "no gaps yet");
+        }
+        write!(f, "{} gaps {:.3}-{:.3} s, average {:.4} s", self.count, self.min, self.max, self.sum / self.count as f64)
+    }
+}
+
+/// Every drawn frame: every animator's change due by now (Q49). Game time
+/// = the fixed clock's time + the time run since its last update.
+pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, shared: Res<Shared>, fixed: Res<Time<Fixed>>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
-    sim.updates += 1;
-    let n = sim.updates;
-    let now = n as f64 / kq8_game::UPDATES_PER_SECOND;
+    let now = fixed.elapsed_secs_f64() + fixed.overstep().as_secs_f64();
     for (k, a) in sim.animators.iter_mut().enumerate() {
-        for c in a.update(now, &mut sim.materials) {
-            let gap = sim.last_change[k].map(|last| n - last);
-            if let Some(g) = gap {
-                *sim.gaps[k].entry(g).or_default() += 1;
-            }
-            sim.last_change[k] = Some(n);
-            sim.log.detail(format!(
-                "update {n} (game time {now:.3} s, due {:.3} s): [{}] entry {} material {} on {} squares{}",
-                c.time,
-                a.name,
-                c.entry,
-                c.material,
-                a.squares.len(),
-                gap.map_or(String::new(), |g| format!(", {g} updates after the last"))
-            ));
+        let Some(c) = a.update(now, &mut sim.materials) else { continue };
+        let gap = sim.last_change[k].map(|last| c.time - last);
+        if let Some(g) = gap {
+            sim.gaps[k].add(g);
         }
+        sim.last_change[k] = Some(c.time);
+        sim.log.detail(format!(
+            "game time {:.4} s: [{}] entry {} material {} on {} squares{}",
+            c.time,
+            a.name,
+            c.entry,
+            c.material,
+            a.squares.len(),
+            gap.map_or(String::new(), |g| format!(", {g:.4} s after the last"))
+        ));
     }
-    // Every 150 updates (10 s): the gaps between changes so far.
-    if n % 150 == 0 {
-        let summary: Vec<String> = sim
-            .animators
-            .iter()
-            .zip(&sim.gaps)
-            .filter(|(a, _)| a.running)
-            .map(|(a, g)| format!("{} {g:?}", a.name))
-            .collect();
-        let line = format!("ground animation: update {n}: updates between changes (gap: count): {}", summary.join(", "));
+    // Every 10 s of game time: the gaps between changes so far.
+    if now >= sim.next_summary {
+        sim.next_summary += 10.0;
+        let summary: Vec<String> =
+            sim.animators.iter().zip(&sim.gaps).filter(|(a, _)| a.running).map(|(a, g)| format!("{} {g}", a.name)).collect();
+        let line = format!("ground animation: game time {now:.1} s: time between changes: {}", summary.join("; "));
         shared.log.lock().unwrap().detail(&line);
         sim.log.detail(line);
     }

@@ -6,7 +6,12 @@
 //! - Each object is a body entity at its placement with one child per
 //!   frame; only the shown frame is visible (as doors). If the loop has
 //!   whole-object steps (frame transforms), the body is moved by the shown
-//!   frame's chained steps, as doors are turned (stand-in).
+//!   frame's chained steps, as doors are turned. The original adds the
+//!   steps up and the data's cue puts the object back at each wrap; for
+//!   Gnome's rolling rocks both give the same picture, so this stays
+//!   (objects.md Q51 rules 1–7, checked by the user). Such an object's
+//!   collider is moved to the same pose every update (Q51 rule 5, M3
+//!   step 3r-4).
 //! - Hidden and unused objects keep their H-key visibility; see-through
 //!   objects keep their opacity.
 //!
@@ -20,7 +25,7 @@ use kq8_game::emitter::Rng;
 
 use crate::load::{AnimatedAssets, Animation};
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform_from, ShownWithH};
+use crate::terrain_view::{bevy_transform_from, ObjectColliders, ShownWithH};
 use crate::{material_for, mesh_from, to_bevy, with_opacity};
 
 /// Seed for the `flags` bit 8 random starts and speeds.
@@ -42,6 +47,9 @@ struct Playing {
     frames: Vec<Entity>,
     shown: Option<usize>,
     tracked: bool,
+    /// Its entry in `ObjectColliders` (only for objects with steps):
+    /// `None` = not looked up yet, `Some(None)` = it has none.
+    collider: Option<Option<usize>>,
 }
 
 #[derive(Resource)]
@@ -190,7 +198,7 @@ pub fn spawn_animated(
             if *unused || !p.drawn() { "; hidden (H)" } else { "" }
         ));
         let tracked = TRACKED.iter().any(|t| t.eq_ignore_ascii_case(&p.name));
-        playing.push(Playing { name: p.name.clone(), player, rotation, position: p.position, steps, body, frames, shown: None, tracked });
+        playing.push(Playing { name: p.name.clone(), player, rotation, position: p.position, steps, body, frames, shown: None, tracked, collider: None });
     }
     main_log.summary(format!(
         "animated objects: {} playing ({} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
@@ -203,16 +211,49 @@ pub fn spawn_animated(
     commands.insert_resource(AnimSim { playing, updates: 0, log });
 }
 
-/// One update (15 per second): every loop moves on.
-pub fn anim_step(sim: Option<ResMut<AnimSim>>) {
+/// One update (15 per second): every loop moves on, and an object whose
+/// loop moves it takes its collider along (3r-4).
+pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.updates += 1;
     let n = sim.updates;
+    let mut colliders = colliders;
     for p in &mut sim.playing {
         p.player.advance(1.0 / kq8_game::UPDATES_PER_SECOND as f32);
         if p.tracked && n <= TRACK_UPDATES {
             sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, p.player.phase, p.player.frame(), if p.player.finished { " finished" } else { "" }));
+        }
+        if p.steps.is_empty() {
+            continue;
+        }
+        let Some(colliders) = colliders.as_mut() else { continue };
+        let slot = *p.collider.get_or_insert_with(|| {
+            let found: Vec<usize> = colliders.0.iter().enumerate().filter(|(_, c)| c.name == p.name).map(|(i, _)| i).collect();
+            match found[..] {
+                [i] => {
+                    sim.log.detail(format!("[{}] its collider moves with it (objects.md Q51 rule 5)", p.name));
+                    Some(i)
+                }
+                [] => {
+                    sim.log.detail(format!("[{}] has no collider: nothing to move", p.name));
+                    None
+                }
+                _ => {
+                    sim.log.detail(format!("[{}] {} colliders by that name: none moved", p.name, found.len()));
+                    None
+                }
+            }
+        });
+        let Some(i) = slot else { continue };
+        let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
+        let (rotation, position) = combine(&pose_at_frame(&p.steps, frame), &p.rotation, p.position);
+        colliders.0[i].placement = kq8_game::collide::Placement { rotation, position };
+        if n % 15 == 0 && n <= 150 {
+            sim.log.detail(format!(
+                "update {n} [{}] frame {frame}: collider at ({:.0}, {:.0}, {:.0})",
+                p.name, position[0], position[1], position[2]
+            ));
         }
     }
 }

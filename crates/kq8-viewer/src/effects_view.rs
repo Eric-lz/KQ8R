@@ -4,8 +4,8 @@
 //! - The particles live in `kq8_game::emitter` and move at 15 updates per
 //!   second, after the doors and Connor.
 //! - Particle catchers run after the emitters in the same update and hide
-//!   their emitter's particles inside a building's box (stand-in for the
-//!   order, Q48).
+//!   their emitter's particles inside a building's box (the original's
+//!   order is not settled; this one is fine, emitters.md catcher rule 5).
 //! - Each particle is drawn as its emitter's `shape` (frame 0) at its
 //!   position and turn, only while it is on screen (visible and age not 0),
 //!   blended between updates except right after a restart.
@@ -55,7 +55,9 @@ struct Tracker {
 #[derive(Debug, Clone)]
 pub enum Target {
     Connor,
-    /// The game camera: position only (its turn is not described).
+    /// The game camera: position only. The original turns the offset by
+    /// the camera's turn (emitters.md rule 11 c); no emitter in any world
+    /// follows the camera, so that is not done.
     Camera,
     /// A placed object that doesn't move: (position, angles).
     Fixed([f32; 3], [f32; 3]),
@@ -167,7 +169,7 @@ pub fn spawn_emitters(
                         e.loc[0],
                         e.loc[1],
                         e.loc[2],
-                        if s.follow_mesh { "; followMesh: restarts take the target's turn and a new velocity (its mesh name is not used, Q52)" } else { "" }
+                        if s.follow_mesh { "; followMesh: restarts take the target's turn and a new velocity (its mesh-part name is not used yet: emitters.md rule 11 a, DESIGN 3r)" } else { "" }
                     );
                     main_log.summary(format!("effects: {line}"));
                     log.detail(line);
@@ -299,7 +301,8 @@ pub fn effects_step(sim: Option<ResMut<EffectsSim>>, shared: Res<Shared>, connor
         d.previous.extend(d.emitter.particles.iter().map(|p| p.position));
         d.emitter.tick();
     }
-    // Catchers after the emitters, in the same update (stand-in, Q48).
+    // Catchers after the emitters, in the same update (emitters.md catcher
+    // rule 5: the original's order is not settled, this one is fine).
     for c in &mut sim.catchers {
         let e = &mut sim.emitters[c.emitter].emitter;
         for k in c.catcher.catch(e) {

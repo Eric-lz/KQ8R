@@ -24,9 +24,13 @@
 //!   an error and fails.
 //! - Every command leaves a result in `$Console::Return`.
 //!
-//! Stand-ins (asked as Q45 e, f): the result is `0` for true or success
-//! and `1` for false or failure; a word that looks like a number is read
-//! up to where the number ends.
+//! Confirmed by the study session (`doors.md` "Q45" e, f): the result is
+//! `0` for true or success and `1` for false or failure; an unknown command
+//! leaves `1`; a script call sets nothing itself (its last command's result
+//! stays); a word that looks like a number is read up to where the number
+//! ends (`-.5` is text). Not copied: a false text `==` can leave `-1`
+//! instead of `1` in the original (which order gives which is not given,
+//! Q54); both count as false. `set` and `echo` leave `0` (not traced).
 //!
 //! Commands that act on the world (`sendEvent`, `KQObject::collisionType`)
 //! go to the caller ([`ScriptHost::world_command`]). Commands of later
@@ -37,7 +41,8 @@ use kq8_data::world_script::Vars;
 /// Commands the door scripts use that belong to later milestones
 /// (dialogue, GUI, inventory, cutscenes; `doors.md` "Commands door scripts
 /// use"). Each only writes a log line and leaves 0 in `$Console::Return`
-/// (the note's stand-in for `checkInventory`).
+/// (for `checkInventory` 0 = not found, right for an empty inventory:
+/// `items.md` rule 10).
 pub const STUBS: [&str; 13] = [
     "KQMonster::speak",
     "doPopup",
@@ -295,7 +300,7 @@ pub fn looks_like_number(s: &str) -> bool {
 }
 
 /// The value of a word that looks like a number: its leading number part
-/// (stand-in, Q45 f).
+/// (`doors.md` Q45 f).
 pub fn number_value(s: &str) -> f64 {
     (1..=s.len()).rev().filter(|&n| s.is_char_boundary(n)).find_map(|n| s[..n].parse::<f64>().ok()).unwrap_or(0.0)
 }
