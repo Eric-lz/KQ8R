@@ -695,3 +695,16 @@ Replaces "walls, terrain and other objects do not hide a clickable one" (`doors.
 | A blocked click clicks nothing; reach unchanged | **Our stand-in** (Q63 b, c) | Unit test |
 | The line is tested up to 1 unit short of the picked box (an object never blocks itself) | Our method | Unit test (wall at the box's face: seen); viewer: `Condoor` seen |
 | `--aim NAME,N`: a ray from the camera to the middle of NAME's box at update N, through the same test as the mouse | Our test helper (`--click` skips the ray) | `--at 202336,262000,1.5708 --aim smlchst3,20`: blocked by building `Pub` at 5,319 (chest at 5,974); `--at 266011,221900,0 --aim Mushroom.14,20`: seen, picked up; `--at 270813,225311,-1.5708 --aim Condoor,20`: seen, clicked |
+
+## Scripted objects (M3 step 3e-5) — `crates/kq8-game/src/{movement,chest,active}.rs`, `crates/kq8-viewer/src/{load,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Which: placed `KQAnimObject`s with `script=`, the click bit 0x20, and a still movement at load; one that plays stays with `anim_view` (not clickable yet) | **Our choice** (Q64 d) | Daventry 14 (`smlchst1/2`, `jar1`, 6 baskets, `coffnlid`, `Bricks`, `MillTree`, `wizbook`, `wizquill`); 10 left to `anim_view` (signs, fish, birds, `starball`, `girltree`) |
+| Movements played by a shared player (phase step and cues as doors, play-once stops on its last frame); chests use it too | `doors.md` rules 6, 9; `chests.md` rule 3 | Unit tests (`movement.rs`); chest tests unchanged |
+| Click: `ConnorAction do do` in reach; item in hand by `acceptsInventory`/`acceptAllItems`; out of reach by `tooFarAwayAction`; turn unless `doNotPointAt` (logged) | `chests.md` rule 11 ("the script runner and the commands above"), as `doors.md` rules 12–16; **our reading**, Q64 a | Unit tests; viewer: `smlchst1` (35 coins at 300 beside it, `Tavcoin.cs`), `basket1` (`give mushroom 5`) |
+| `KQAnimPlayEvent <movement>` plays it | `doors.md` rule 6, applied to these objects (Q64 b) | Unit test; viewer `open` |
+| `Init` at the start (after chests), `EndLoop <movement>` when a play-once movement ends, `KQCueEvent` → `Cue` | `chests.md` rule 6, applied to these objects (**our stand-in**, Q64 c) | Unit tests; viewer: `smlchst1.cs smlchst1 EndLoop open` |
+| `collisionType`, `setHidden` on them | As chests (3e-4) | — |
+| Box moves with the shown frame's steps (collider updated each update) | As doors and chests | — |
+| Click shares the doors' argument rules (`script_args`) | Our code structure (doors unchanged) | Door tests unchanged |

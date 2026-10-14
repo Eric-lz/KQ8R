@@ -31,7 +31,8 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use kq8_game::active::{Active, ActiveChest, ActiveDoor, Item, Pick, Request};
+use kq8_game::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
+use kq8_game::movement::MovementPlayer;
 use kq8_game::chest::Chest;
 use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
@@ -69,6 +70,9 @@ pub struct DoorSim {
     /// The same for the chests (3e-4).
     chest_drawn: Vec<DrawnDoor>,
     chest_collider: Vec<Option<usize>>,
+    /// The same for the scripted objects (3e-5).
+    object_drawn: Vec<DrawnDoor>,
+    object_collider: Vec<Option<usize>>,
     attack_dist: f32,
     item: Option<Item>,
     /// Objects clicked since the last update, with how (mouse, test).
@@ -215,6 +219,7 @@ pub fn spawn_doors(
     let mut drawn = Vec::new();
     let mut collider = Vec::new();
     let (mut active_chests, mut chest_drawn, mut chest_collider) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut active_objects, mut object_drawn, mut object_collider) = (Vec::new(), Vec::new(), Vec::new());
     let sources = std::mem::take(&mut objects.scripts);
     for d in std::mem::take(&mut objects.doors) {
         let p = &d.placement;
@@ -233,10 +238,46 @@ pub fn spawn_doors(
             })
             .collect();
         let animations: Vec<usize> = d.movements.iter().map(|(_, _, a)| *a).collect();
+        if d.object {
+            // A scripted object (3e-5).
+            let o = ActiveObject {
+                player: MovementPlayer::new(&p.name, movements, d.current, base),
+                script: d.script.clone(),
+                bounds: d.bounds,
+                collision_type: d.collider_type,
+                collision_mask: d.collider_mask,
+                accepts_inventory: d.accepts_inventory.clone(),
+                accept_all_items: d.accept_all_items,
+                too_far_away_action: d.too_far_away_action,
+                do_not_point_at: d.do_not_point_at,
+                hidden: !p.drawn(),
+            };
+            main_log.summary(format!(
+                "objects: [{}] scripted at ({:.0}, {:.0}, {:.0}), type {:#x}, script {:?}, box {}, shows '{}', movements {:?}",
+                p.name,
+                p.position[0],
+                p.position[1],
+                p.position[2],
+                o.collision_type,
+                o.script,
+                d.bounds.map_or("NONE".to_string(), |(a, b)| format!("{a:?}..{b:?}")),
+                o.player.movement_name(),
+                o.player.movements.iter().map(|m| m.name.as_str()).collect::<Vec<_>>()
+            ));
+            object_collider.push(if o.collides_with_connor() {
+                colliders.push(o.collider().expect("an object that collides has a box"));
+                Some(colliders.len() - 1)
+            } else {
+                None
+            });
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built));
+            active_objects.push(o);
+            continue;
+        }
         if let Some(settings) = d.chest.clone() {
             // A chest (3e-4).
             let chest = Chest::new(&p.name, settings, movements, d.current, base);
-            let open_turn = chest.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open")).map(|m| turn_degrees(&m.turn_at_frame(m.frames() - 1)));
+            let open_turn = chest.player.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open")).map(|m| turn_degrees(&m.turn_at_frame(m.frames() - 1)));
             let c = ActiveChest {
                 bounds: d.bounds,
                 collision_type: d.collider_type,
@@ -384,6 +425,8 @@ pub fn spawn_doors(
     active.add_traps(traps);
     main_log.summary(format!("chests: {} chests", active_chests.len()));
     active.add_chests(active_chests);
+    main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
+    active.add_objects(active_objects);
     // Items (3e-3): those the start-up scripts made, and the ground for
     // z -1 / -2 of items made while playing.
     let mut item_log = match Log::create("items") {
@@ -415,7 +458,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, chest_drawn, chest_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -589,6 +632,11 @@ pub fn door_step(
                 colliders.0[*i] = c;
             }
         }
+        for (object, slot) in sim.active.world.objects.iter().zip(&sim.object_collider) {
+            if let (Some(i), Some(c)) = (slot, object.collider()) {
+                colliders.0[*i] = c;
+            }
+        }
     }
     sim.flush_traps(&shared);
     let item_lines = sim.flush_items(&shared);
@@ -641,9 +689,19 @@ pub fn door_draw(sim: Option<ResMut<DoorSim>>, mut transforms: Query<&mut Transf
         let d = &door.door;
         show_frame(drawn, &d.placement(), d.current, d.frame(), &mut transforms, &mut visibility);
     }
+    for (object, drawn) in sim.active.world.objects.iter().zip(sim.object_drawn.iter_mut()) {
+        let p = &object.player;
+        show_frame(drawn, &p.placement(), p.current, p.frame(), &mut transforms, &mut visibility);
+        let want = if object.hidden { Visibility::Hidden } else { Visibility::Inherited };
+        if let Ok(mut v) = visibility.get_mut(drawn.body) {
+            if *v != want {
+                *v = want;
+            }
+        }
+    }
     for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
         let c = &chest.chest;
-        show_frame(drawn, &c.placement(), c.current, c.frame(), &mut transforms, &mut visibility);
+        show_frame(drawn, &c.placement(), c.player.current, c.frame(), &mut transforms, &mut visibility);
         let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {

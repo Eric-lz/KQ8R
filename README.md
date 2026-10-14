@@ -118,7 +118,13 @@ The code is written with an AI coding agent (Claude Code); see
   and three crystals appear in it; the second click takes them, the third
   only logs Connor's "it's empty" remark. The same for the chest of
   coins in the keep. The wizard's hidden chest stays hidden (it needs a
-  Reveal potion). Checked in the logs; not yet checked by eye.
+  Reveal potion). Checked in the logs and by eye (the pub chest, also
+  that it can't be clicked through the ceiling or walls).
+- **Small chests, the jar and the mushroom baskets:** the small chest by
+  the pub's keg and the one at the farm drop their coins beside them and
+  open, then only "it's empty"; the baskets give Connor their mushrooms
+  and turn into empty baskets. Checked in the logs; not yet checked by
+  eye.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
   sound sources, unused pictures and objects that appear later in the
   story).
@@ -127,8 +133,8 @@ The code is written with an AI coding agent (Claude Code); see
 
 There is nothing to play yet. Doors make no sound, Connor says nothing
 when clicking (too far, locked) and doesn't turn to face the door; only
-doors, chests and items react to clicks (other clickable things are
-logged only; there is no inventory screen, picked-up items are only
+doors, chests, items and scripted objects react to clicks (swinging
+signs and other things that move when the world starts are logged only; there is no inventory screen, picked-up items are only
 counted in the log). Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing

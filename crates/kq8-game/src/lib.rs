@@ -15,6 +15,7 @@ pub mod door;
 pub mod emitter;
 pub mod events;
 pub mod item;
+pub mod movement;
 pub mod ground_anim;
 pub mod mover;
 pub mod player;

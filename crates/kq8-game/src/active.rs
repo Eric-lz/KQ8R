@@ -33,6 +33,13 @@
 //! clicked like doors (reach, "too far", "doesn't work"), but a click runs
 //! the chest's own three steps instead of its script (rules 6-9); its
 //! script gets `Init`, `EndLoop <movement>` and `Cue`.
+//!
+//! Scripted objects (M3 step 3e-5): clickable animated objects with a
+//! script that are not doors, chests or items (`smlchst1`, `jar1`, the
+//! mushroom baskets): a click runs `ConnorAction` as for doors (`chests.md`
+//! rule 11, `doors.md` rules 12-14); `KQAnimPlayEvent` plays a movement
+//! (`doors.md` rule 6); `Init` and `EndLoop` as chests get them (our
+//! reading of `chests.md` rule 6, asked as Q64).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -45,6 +52,7 @@ use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::item::{Items, Place};
+use crate::movement::MovementPlayer;
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::trap::{Trap, Visitor};
 
@@ -122,6 +130,43 @@ impl ActiveChest {
     }
 }
 
+/// A clickable animated object with a script that is not a door, chest or
+/// item (3e-5).
+#[derive(Debug, Clone)]
+pub struct ActiveObject {
+    pub player: MovementPlayer,
+    pub script: Option<String>,
+    pub bounds: Option<([f32; 3], [f32; 3])>,
+    pub collision_type: u32,
+    pub collision_mask: u32,
+    pub accepts_inventory: Option<String>,
+    pub accept_all_items: bool,
+    pub too_far_away_action: i64,
+    pub do_not_point_at: bool,
+    pub hidden: bool,
+}
+
+impl ActiveObject {
+    pub fn name(&self) -> &str {
+        &self.player.name
+    }
+
+    pub fn collider(&self) -> Option<BoxCollider> {
+        self.bounds.map(|(min, max)| BoxCollider { name: self.player.name.clone(), min, max, placement: self.player.placement() })
+    }
+
+    pub fn collides_with_connor(&self) -> bool {
+        self.bounds.is_some() && pair_collides(CONNOR_TYPE, CONNOR_MASK, self.collision_type, self.collision_mask)
+    }
+}
+
+/// What decides a click's script call (`doors.md` rules 12-14).
+struct ClickRules<'a> {
+    accepts_inventory: &'a Option<String>,
+    accept_all_items: bool,
+    too_far_away_action: i64,
+}
+
 /// Any other object that can be clicked: never moves in this step.
 #[derive(Debug, Clone)]
 pub struct Clickable {
@@ -182,6 +227,7 @@ pub type Heights = Box<dyn Fn(f32, f32, bool) -> Option<f32> + Send + Sync>;
 pub struct WorldState {
     pub doors: Vec<ActiveDoor>,
     pub chests: Vec<ActiveChest>,
+    pub objects: Vec<ActiveObject>,
     pub traps: Vec<Trap>,
     pub clickables: Vec<Clickable>,
     /// Every loaded object's name, lower case (for "unknown object").
@@ -227,6 +273,10 @@ impl WorldState {
     fn item_note(&mut self, line: impl AsRef<str>) {
         self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
         self.note(line);
+    }
+
+    pub fn object_index(&self, name: &str) -> Option<usize> {
+        self.objects.iter().position(|o| o.name().eq_ignore_ascii_case(name))
     }
 
     pub fn chest_index(&self, name: &str) -> Option<usize> {
@@ -312,6 +362,11 @@ impl WorldState {
             let old = d.collision_type;
             d.collision_type = change(old);
             (old, d.collision_type)
+        } else if let Some(i) = self.object_index(name) {
+            let o = &mut self.objects[i];
+            let old = o.collision_type;
+            o.collision_type = change(old);
+            (old, o.collision_type)
         } else if let Some(i) = self.chest_index(name) {
             let c = &mut self.chests[i];
             let old = c.collision_type;
@@ -453,6 +508,12 @@ impl WorldState {
             self.note(format!("{at}: usage: {command} <object> ..."));
             return "1".into();
         };
+        if let (Some(o), "KQObject::setHidden") = (self.object_index(name), command) {
+            let hidden = words.get(2).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
+            self.objects[o].hidden = hidden;
+            self.note(format!("{at}: setHidden {name}: object hidden {hidden}"));
+            return "0".into();
+        }
         if let (Some(c), "KQObject::setHidden") = (self.chest_index(name), command) {
             // A chest (`wizchest.cs` on `Reveal`): not drawn, not clickable.
             let hidden = words.get(2).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
@@ -581,6 +642,7 @@ impl Active {
             world: WorldState {
                 doors,
                 chests: Vec::new(),
+                objects: Vec::new(),
                 traps: Vec::new(),
                 clickables,
                 known,
@@ -604,6 +666,29 @@ impl Active {
         for c in chests {
             self.world.known.insert(c.chest.name.to_ascii_lowercase());
             self.world.chests.push(c);
+        }
+    }
+
+    /// Adds the scripted objects (before [`Active::start`]).
+    pub fn add_objects(&mut self, objects: impl IntoIterator<Item = ActiveObject>) {
+        for o in objects {
+            self.world.known.insert(o.name().to_ascii_lowercase());
+            self.world.objects.push(o);
+        }
+    }
+
+    /// Runs object `i`'s script with `args` (`$1` is its name).
+    fn call_object(&mut self, i: usize, args: &[&str]) {
+        let o = &self.world.objects[i];
+        let name = o.name().to_string();
+        let mut all = vec![name.clone()];
+        all.extend(args.iter().map(|a| a.to_string()));
+        match o.script.clone() {
+            Some(script) => {
+                self.world.note(format!("script {script} {}", all.join(" ")));
+                self.scripts.call(&script, &all, &mut self.world);
+            }
+            None => self.world.note(format!("object {name} has no script; {} not called", all.join(" "))),
         }
     }
 
@@ -718,7 +803,11 @@ impl Active {
         for i in 0..self.world.chests.len() {
             self.call_chest(i, &["Init"]);
         }
-        // traps.md rule 13 (after the doors and chests: our order).
+        // Scripted objects (Q64 stand-in; after the chests: our order).
+        for i in 0..self.world.objects.len() {
+            self.call_object(i, &["Init"]);
+        }
+        // traps.md rule 13 (after the doors, chests, objects: our order).
         for i in 0..self.world.traps.len() {
             self.call_trap(i, &["Init"]);
         }
@@ -743,7 +832,11 @@ impl Active {
             let (min, max) = c.bounds?;
             Some((c.chest.name.clone(), ray_box(origin, dir, &c.chest.placement(), min, max)?))
         });
-        let doors = doors.chain(chests);
+        let objects = self.world.objects.iter().filter(|o| o.collision_type & CLICKABLE != 0 && !o.hidden).filter_map(|o| {
+            let (min, max) = o.bounds?;
+            Some((o.name().to_string(), ray_box(origin, dir, &o.player.placement(), min, max)?))
+        });
+        let doors = doors.chain(chests).chain(objects);
         // World items (items.md rule 6): by their type's box; hidden ones
         // can't be clicked.
         let items = &self.world.items;
@@ -764,6 +857,9 @@ impl Active {
         }
         if let Some(i) = w.chest_index(name) {
             return w.chests[i].bounds.map(|b| mid(&w.chests[i].chest.placement(), b));
+        }
+        if let Some(i) = w.object_index(name) {
+            return w.objects[i].bounds.map(|b| mid(&w.objects[i].player.placement(), b));
         }
         if let Some(o) = w.items.get(name) {
             return Some(mid(&o.placement()?, w.items.click_box(o)?));
@@ -803,6 +899,9 @@ impl Active {
         if let Some(i) = self.world.chest_index(name) {
             return self.click_chest(i, feet, reach, item);
         }
+        if let Some(i) = self.world.object_index(name) {
+            return self.click_object(i, feet, reach, item);
+        }
         let Some(i) = self.world.door_index(name) else {
             let found = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).cloned();
             match found {
@@ -838,24 +937,10 @@ impl Active {
             d.door.name,
             if in_reach { "IN REACH" } else { "OUT OF REACH" }
         );
-        let args: Vec<String> = match (in_reach, item) {
-            (true, None) => vec!["ConnorAction".into(), "do".into(), "do".into()],
-            (true, Some(it)) => {
-                let accepted = d.accept_all_items || d.accepts_inventory.as_deref() == Some(it.kind.as_str());
-                if !accepted {
-                    self.world.note(format!(
-                        "{head}; holds {} ({}): not accepted (acceptsInventory {:?}): Connor's \"that doesn't work\" remark (line not traced, M4); script not run",
-                        it.object, it.kind, d.accepts_inventory
-                    ));
-                    return ClickResult::Refused;
-                }
-                vec!["ConnorAction".into(), it.object.clone(), it.kind.clone()]
-            }
-            (false, _) if d.too_far_away_action == 0 => {
-                self.world.note(format!("{head}; tooFarAwayAction 0: Connor's \"too far\" remark (line not traced, M4); nothing sent"));
-                return ClickResult::TooFar;
-            }
-            (false, _) => vec!["ConnorAction".into(), "TooFar".into(), "TooFar".into()],
+        let rules = ClickRules { accepts_inventory: &d.accepts_inventory, accept_all_items: d.accept_all_items, too_far_away_action: d.too_far_away_action };
+        let args = match self.script_args(&head, in_reach, item, &rules) {
+            Ok(a) => a,
+            Err(r) => return r,
         };
         self.world.note(format!("{head}; script arguments: {} {}", d.door.name, args.join(" ")));
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -864,6 +949,69 @@ impl Active {
             self.world.note(format!("Connor would turn to face {} (rule 16; not done: his states not traced)", d.door.name));
         }
         let mut full = vec![d.door.name.clone()];
+        full.extend(args);
+        ClickResult::Script(full)
+    }
+
+    /// The script arguments of a click (`doors.md` rules 12-14), or what
+    /// happened instead (logged).
+    fn script_args(&mut self, head: &str, in_reach: bool, item: Option<&Item>, rules: &ClickRules) -> Result<Vec<String>, ClickResult> {
+        match (in_reach, item) {
+            (true, None) => Ok(vec!["ConnorAction".into(), "do".into(), "do".into()]),
+            (true, Some(it)) => {
+                let accepted = rules.accept_all_items || rules.accepts_inventory.as_deref() == Some(it.kind.as_str());
+                if !accepted {
+                    self.world.note(format!(
+                        "{head}; holds {} ({}): not accepted (acceptsInventory {:?}): Connor's \"that doesn't work\" remark (line not traced, M4); script not run",
+                        it.object, it.kind, rules.accepts_inventory
+                    ));
+                    return Err(ClickResult::Refused);
+                }
+                Ok(vec!["ConnorAction".into(), it.object.clone(), it.kind.clone()])
+            }
+            (false, _) if rules.too_far_away_action == 0 => {
+                self.world.note(format!("{head}; tooFarAwayAction 0: Connor's \"too far\" remark (line not traced, M4); nothing sent"));
+                Err(ClickResult::TooFar)
+            }
+            (false, _) => Ok(vec!["ConnorAction".into(), "TooFar".into(), "TooFar".into()]),
+        }
+    }
+
+    /// Connor clicks scripted object `i` (3e-5): as a door (`doors.md`
+    /// rules 11-16, `chests.md` rule 11).
+    fn click_object(&mut self, i: usize, feet: [f32; 3], reach: f32, item: Option<&Item>) -> ClickResult {
+        let o = self.world.objects[i].clone();
+        let name = o.name().to_string();
+        if o.collision_type & CLICKABLE == 0 || o.hidden {
+            self.world.note(format!("click {name}: not clickable now (type {:#x}, hidden {}); nothing", o.collision_type, o.hidden));
+            return ClickResult::Nothing;
+        }
+        let Some((min, max)) = o.bounds else {
+            self.world.note(format!("click {name}: no box in BOUNDS.KQ; can't be clicked"));
+            return ClickResult::Nothing;
+        };
+        let distance = distance_to_box(feet, &o.player.placement(), min, max);
+        let in_reach = distance < reach;
+        let head = format!(
+            "click {name} (scripted object): Connor at ({:.0}, {:.0}, {:.0}), distance to its box {distance:.1}, reach {reach:.0}: {}; movement {}",
+            feet[0],
+            feet[1],
+            feet[2],
+            if in_reach { "IN REACH" } else { "OUT OF REACH" },
+            o.player.movement_name()
+        );
+        let rules = ClickRules { accepts_inventory: &o.accepts_inventory, accept_all_items: o.accept_all_items, too_far_away_action: o.too_far_away_action };
+        let args = match self.script_args(&head, in_reach, item, &rules) {
+            Ok(a) => a,
+            Err(r) => return r,
+        };
+        self.world.note(format!("{head}; script arguments: {name} {}", args.join(" ")));
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.call_object(i, &refs);
+        if !o.do_not_point_at {
+            self.world.note(format!("Connor would turn to face {name} (doors.md rule 16; not done: his states not traced)"));
+        }
+        let mut full = vec![name];
         full.extend(args);
         ClickResult::Script(full)
     }
@@ -1088,6 +1236,23 @@ impl Active {
                 self.call_chest(i, &["EndLoop", &m]);
             }
         }
+        for i in 0..self.world.objects.len() {
+            let a = self.world.objects[i].player.advance(dt);
+            let p = &self.world.objects[i].player;
+            let name = p.name.clone();
+            if a.from != a.to {
+                let line = format!("object {name}: movement {} phase {:.4} -> {:.4} frame {}", p.movement_name(), a.from, a.to, p.frame());
+                self.world.note(line);
+            }
+            for cue in &a.cues {
+                self.world.note(format!("object {name}: cue '{cue}' fires (cue actions not done)"));
+            }
+            if let Some(m) = a.finished {
+                // Q64 stand-in: EndLoop as chests get it (chests.md rule 6).
+                self.world.note(format!("object {name}: movement '{m}' finished; stays on its last frame; calls its script with EndLoop {m}"));
+                self.call_object(i, &["EndLoop", &m]);
+            }
+        }
         self.world.updates += 1;
     }
 
@@ -1109,6 +1274,33 @@ impl Active {
                 self.world.note(format!("event {} {} to trap {}{from}: not handled for traps", e.kind, e.data.join(" "), e.target));
             }
             self.world.in_trap = was;
+            return;
+        }
+        if let Some(i) = self.world.object_index(&e.target) {
+            match e.kind.as_str() {
+                "KQAnimPlayEvent" => {
+                    // doors.md rule 6, as for doors.
+                    let line = match e.data.first() {
+                        Some(m) => match self.world.objects[i].player.play(m) {
+                            Ok(()) => format!("KQAnimPlayEvent {m} to object {}{from}: starts '{m}'", e.target),
+                            Err(err) => format!("KQAnimPlayEvent {m} to object {}{from}: {err}; nothing", e.target),
+                        },
+                        None => format!("KQAnimPlayEvent to object {}{from}: no movement named; nothing", e.target),
+                    };
+                    self.world.note(line);
+                }
+                "KQCueEvent" => {
+                    let n = |k: usize| e.data.get(k).cloned().unwrap_or_else(|| "0".into());
+                    let mut args = vec!["Cue".to_string(), n(0), n(1)];
+                    if e.data.get(2).is_some_and(|v| number_value(v) != 0.0) {
+                        args.push(e.data[2].clone());
+                    }
+                    self.world.note(format!("KQCueEvent {} to object {}{from}", e.data.join(" "), e.target));
+                    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                    self.call_object(i, &refs);
+                }
+                other => self.world.note(format!("event {other} {} to object {}{from}: not handled for scripted objects", e.data.join(" "), e.target)),
+            }
             return;
         }
         if let Some(i) = self.world.chest_index(&e.target) {
@@ -1632,6 +1824,82 @@ mod tests {
         // A wall exactly at the box's face is the box itself: in sight.
         assert_eq!(a.pick_seen(from, dir, &Wall { y: -310.0 }), Pick::Seen { name: "smlchst3".into(), t: 4690.0 });
         assert_eq!(a.pick_seen(from, [0.0, -1.0, 0.0], &Wall { y: -3000.0 }), Pick::Nothing);
+    }
+
+    /// Made-up scripts in the style of `basket1.cs` and `smlchst1.cs` (not
+    /// copies).
+    const BASKET: &str = "if test $2 == ConnorAction\n if test $B::full == true\n  set B::full false\n  give crystal 5\n  sendEvent 0 $1 KQAnimPlayEvent open\n endif\nendif\nif test $2 == EndLoop\n set B::ended $3\nendif\nif test $2 == Init\n set B::init $1\nendif\n";
+    const SMALL_CHEST: &str = "if test $2 == ConnorAction\n if test $S::full == true\n  set S::full false\n  KQMonster::inventory world SilverCoins 35 300 0 0 0 0 1.57\n  KQObject::setScript $NewInvItem coin.cs\n  sendEvent 0 $1 KQAnimPlayEvent open\n else\n  KQMonster::speak Connor Connor 0 109 14 33 1 1\n endif\nendif\n";
+
+    fn with_object(script: &'static str, var: &str) -> Active {
+        let sources = [("o.cs".to_string(), script.as_bytes().to_vec()), ("coin.cs".to_string(), COIN.as_bytes().to_vec())];
+        let mut v = Vars::default();
+        v.set(var, "true".into());
+        let mut a = Active::new(v, vec![], vec![], ["Connor".to_string()], sources);
+        a.world.items = crate::item::tests::items();
+        let mut player = crate::movement::tests::still_then_open("basket1");
+        player.movements[0].name = "stop".into();
+        a.add_objects([ActiveObject {
+            player,
+            script: Some("o.cs".into()),
+            bounds: Some(([-200.0, -200.0, 0.0], [200.0, 200.0, 400.0])),
+            collision_type: 33,
+            collision_mask: 0,
+            accepts_inventory: None,
+            accept_all_items: false,
+            too_far_away_action: 0,
+            do_not_point_at: false,
+            hidden: false,
+        }]);
+        a.start();
+        a
+    }
+
+    #[test]
+    fn a_basket_gives_once_and_opens() {
+        let mut a = with_object(BASKET, "B::full");
+        assert_eq!(a.scripts.vars.get("B::init"), Some("basket1"), "Init at the start (Q64 stand-in)");
+        let near = [0.0, -1000.0, 0.0];
+        let r = a.click("basket1", near, 2350.0, None);
+        assert_eq!(r, ClickResult::Script(["basket1", "ConnorAction", "do", "do"].map(String::from).to_vec()));
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 5);
+        // The event is handled in the next update, which starts `open`.
+        a.update();
+        assert_eq!(a.world.objects[0].player.movement_name(), "open");
+        for _ in 0..14 {
+            a.update();
+        }
+        assert_eq!(a.scripts.vars.get("B::ended"), None);
+        a.update();
+        assert_eq!(a.scripts.vars.get("B::ended"), Some("open"), "EndLoop open (Q64 stand-in)");
+        // Second click: empty now, nothing more given.
+        a.click("basket1", near, 2350.0, None);
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 5);
+        // Too far; an item in hand that it doesn't accept.
+        assert_eq!(a.click("basket1", [0.0, -6000.0, 0.0], 2350.0, None), ClickResult::TooFar);
+        let bread = Item { object: "bread.1".into(), kind: "INVITEM_Bread".into() };
+        assert_eq!(a.click("basket1", near, 2350.0, Some(&bread)), ClickResult::Refused);
+        // The pick ray finds it.
+        assert_eq!(a.pick([0.0, -5000.0, 200.0], [0.0, 1.0, 0.0]).map(|(n, _)| n), Some("basket1".to_string()));
+    }
+
+    #[test]
+    fn a_small_chest_puts_coins_beside_itself_then_says_empty() {
+        let mut a = with_object(SMALL_CHEST, "S::full");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let coins = a.world.items.get("SilverCoins.1").unwrap().clone();
+        assert_eq!((coins.quantity, coins.place, coins.script.as_deref()), (35, Place::World { position: [300.0, 0.0, 0.0], angles: [0.0, 0.0, 1.57] }, Some("coin.cs")));
+        a.update();
+        assert_eq!(a.world.objects[0].player.movement_name(), "open");
+        a.take_log();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let log = a.take_log().join("\n");
+        assert!(log.contains("stub (later milestone, nothing done): KQMonster::speak Connor Connor 0 109 14 33 1 1"), "{log}");
+        // A movement it doesn't have.
+        let mut b = with_object("sendEvent 0 $1 KQAnimPlayEvent fly\n", "x");
+        b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        b.update();
+        assert!(b.take_log().join("\n").contains("basket1 has no movement 'fly'; nothing"));
     }
 
     #[test]

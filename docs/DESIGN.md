@@ -1772,8 +1772,8 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
-- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-4 and 3e-4b
-  done 2026-10-13, MODLOG).** Rules from
+- **3e — chests and items (planned 2026-10-13; done 2026-10-13: 3e-1
+  to 3e-5 and 3e-4b, MODLOG).** Rules from
   `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
   clicking, `objects.md` for heights and hiding). Five sub-steps, each
   with its own tests and MODLOG entry.
@@ -1928,6 +1928,14 @@ catchers, ground animators).
     coins, and the mushroom baskets (`give mushroom 5`) give. These
     objects are drawn like doors. `KQMonster::speak` is logged as
     Connor's remark (M4).
+    **Done.** Which objects: placed `KQAnimObject`s with a script and the
+    click bit whose movement is still at load (Daventry 14); those whose
+    movement plays at load (signs, fish) stay with `anim_view` and are not
+    clickable yet. The movement-playing part of chests moved to
+    `kq8-game` `movement.rs` (`MovementPlayer`), used by chests and these
+    objects; doors keep their own. Our stand-ins for what the notes
+    describe only for doors and chests (`Init`, `EndLoop`, the click
+    call, `KQAnimPlayEvent`) are asked as Q64.
   - **What you'll see after 3e:** coins, mushrooms, crystals and the
     other start items lying where `WorldInv.cs` puts them; click one near
     Connor and it vanishes into his (invisible) inventory, logged. In the

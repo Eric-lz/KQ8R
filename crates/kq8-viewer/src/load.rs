@@ -929,6 +929,18 @@ pub struct DoorAssets {
     pub bounds: Option<([f32; 3], [f32; 3])>,
     /// A `KQChest`'s own keys (M3 step 3e-4); `None` for a door.
     pub chest: Option<kq8_game::chest::ChestSettings>,
+    /// A scripted animated object (3e-5), not a door.
+    pub object: bool,
+}
+
+/// What `place_door` places.
+#[derive(Clone, Copy, PartialEq)]
+enum Mover {
+    Door,
+    Chest,
+    /// A clickable `KQAnimObject` with a script whose movement is still
+    /// when loaded (3e-5).
+    Object,
 }
 
 /// A building's collision type when its `.kq` gives none (camera.md
@@ -1716,13 +1728,28 @@ impl Placer<'_> {
             self.animators.push((p.name.clone(), kq8_data::effects::AnimatorSettings::from_section(s)));
         }
         if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQDoor")) {
-            self.place_door(&label, &file, p, false);
+            self.place_door(&label, &file, p, Mover::Door);
             return;
         }
         // A chest (3e-4): moves and is drawn like a door.
         if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQChest")) {
-            self.place_door(&label, &file, p, true);
+            self.place_door(&label, &file, p, Mover::Chest);
             return;
+        }
+        // A clickable animated object with a script, still when loaded
+        // (3e-5: `smlchst1`, `jar1`, the baskets): its script may play
+        // another movement. One that already plays stays with `anim_view`.
+        let scripted = p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAnimObject"))
+            && s.get("script").is_some_and(|v| !v.trim().is_empty())
+            && collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE).0 & kq8_game::click::CLICKABLE != 0;
+        if !unused && scripted {
+            match &animation {
+                Some(c) if c.speed == 0.0 => {
+                    self.place_door(&label, &file, p, Mover::Object);
+                    return;
+                }
+                _ => self.log.detail(format!("object {label}[{}]: scripted and clickable, but its movement plays at load: left to anim_view (not clickable yet)", p.name)),
+            }
         }
         let reason = if p.has_matrix_key {
             Some("uses an RMat key (not supported)".to_string())
@@ -1846,7 +1873,8 @@ impl Placer<'_> {
     /// its cues and all frames of its shape (with their frame steps, which
     /// turn the door), and the keys clicking needs. Drawn and moved by
     /// `door_view.rs`, not as a still copy.
-    fn place_door(&mut self, label: &str, file: &[kq8_data::kq_text::Section], p: kq8_data::objects::Placement, chest: bool) {
+    fn place_door(&mut self, label: &str, file: &[kq8_data::kq_text::Section], p: kq8_data::objects::Placement, kind: Mover) {
+        let chest = kind == Mover::Chest;
         let s = &file[0];
         let movements = match kq8_data::objects::movement_loops(file, s) {
             Ok(Some(m)) => m,
@@ -1949,11 +1977,16 @@ impl Placer<'_> {
             bounds: None,
             placement: p,
             chest,
+            object: kind == Mover::Object,
         };
         if let Some(v) = s.get("tooFar") {
             self.log.detail(format!("door [{}]: tooFar={v} not used (Q45 a)", door.placement.name));
         }
-        let class = if door.chest.is_some() { "KQChest (chest, M3)" } else { "KQDoor (door, M3)" };
+        let class = match kind {
+            Mover::Door => "KQDoor (door, M3)",
+            Mover::Chest => "KQChest (chest, M3)",
+            Mover::Object => "KQAnimObject (scripted, clickable, M3 3e-5)",
+        };
         *self.by_class.entry(class.into()).or_default() += 1;
         self.doors.push(door);
     }
