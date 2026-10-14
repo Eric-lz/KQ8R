@@ -33,6 +33,17 @@ pub struct TerrainSettings {
     pub material_list: String,
     /// `materialDirection`, e.g. `terrain/daventry.bin`.
     pub material_direction: Option<String>,
+    /// `lightScale`: 2^lightScale light-map points per square side
+    /// (terrain-lighting.md rule 6). 0 when missing (our stand-in; the
+    /// note gives no default).
+    pub light_scale: u32,
+    /// `lightmapName`, `shadowmapName` (hardware) and `SWlightmapName`,
+    /// `SWshadowmapName` (software), as written; may be empty
+    /// (terrain-lighting.md rules 1, 4). See `lightmap::file_name`.
+    pub lightmap_name: Option<String>,
+    pub shadowmap_name: Option<String>,
+    pub sw_lightmap_name: Option<String>,
+    pub sw_shadowmap_name: Option<String>,
     /// Every entry as written, for logging.
     pub all: Vec<(String, String)>,
 }
@@ -51,7 +62,20 @@ impl TerrainSettings {
             None => 60.0,
             Some(r) => r?,
         };
+        let light_scale = match s.number("lightScale") {
+            None => 0.0,
+            Some(r) => r?,
+        };
+        if !(0.0..=8.0).contains(&light_scale) || light_scale.fract() != 0.0 {
+            return Err(format!("lightScale={light_scale} is not a whole number 0..8"));
+        }
+        let name = |k: &str| s.get(k).map(str::to_string);
         Ok(TerrainSettings {
+            light_scale: light_scale as u32,
+            lightmap_name: name("lightmapName"),
+            shadowmap_name: name("shadowmapName"),
+            sw_lightmap_name: name("SWlightmapName"),
+            sw_shadowmap_name: name("SWshadowmapName"),
             ground_scale: ground_scale as u32,
             height_scale: height_scale as f32,
             height_image: text("heightBMP", "terrh.dib"),
@@ -338,15 +362,70 @@ impl Terrain {
             [[(0, 0), (0, 1), (1, 0)], [(1, 0), (0, 1), (1, 1)]]
         };
         tris.iter()
-            .map(|corners| {
+            .zip(0u8..)
+            .map(|(corners, half)| {
                 let positions = corners.map(|(di, dj)| {
                     [(i + di) as f32 * size, (j + dj) as f32 * size, self.point_height(i + di, j + dj).unwrap()]
                 });
                 // u runs west -> east, v runs north -> south.
                 let uvs = corners.map(|(di, dj)| texture_coord(code, di as f32, 1.0 - dj as f32));
-                GroundTriangle { positions, uvs, material, square: (i, j) }
+                GroundTriangle { positions, uvs, material, square: (i, j), half }
             })
             .collect()
+    }
+
+    /// Square (i, j) cut into `n` x `n` cells, two triangles each, on the
+    /// given grid: the same ground as `square_triangles` (same shape, same
+    /// texture coordinates, corners clockwise from above), only finer, so
+    /// that a light map with n points per square side has a mesh corner
+    /// at every point (terrain-lighting.md rule 11, M1 step 4c).
+    ///
+    /// Every cell is split along the square's own diagonal direction, so
+    /// cells on the square's diagonal are split exactly on it and every
+    /// other cell lies wholly in one of the square's two triangles: the
+    /// fine triangles lie on the same flat planes. Each fine triangle's
+    /// `half` says which of the two (`square_triangles` order) it is in.
+    /// Empty outside the grid or for n = 0.
+    pub fn square_cells(&self, level: Level, i: usize, j: usize, material: u8, code: u32, n: usize) -> Vec<GroundTriangle> {
+        let (nx, ny) = self.squares();
+        if i >= nx || j >= ny || n == 0 {
+            return Vec::new();
+        }
+        let size = self.settings.square_size();
+        let rising = Self::diagonal_is_rising(i, j);
+        // Corner (a, b) of the cell grid, 0..=n each way, from the square's
+        // (0, 0) corner: (east, north) as fractions of the square.
+        let corner = |a: usize, b: usize| (a as f32 / n as f32, b as f32 / n as f32);
+        let point = |(fu, fv): (f32, f32)| {
+            let (x, y) = ((i as f32 + fu) * size, (j as f32 + fv) * size);
+            let z = self.ground_at(level, x, y).map_or(0.0, |g| g.height);
+            [x, y, z]
+        };
+        // The same corner patterns as `square_triangles`.
+        let pattern: [[(usize, usize); 3]; 2] = if rising {
+            [[(0, 0), (1, 1), (1, 0)], [(0, 0), (0, 1), (1, 1)]]
+        } else {
+            [[(0, 0), (0, 1), (1, 0)], [(1, 0), (0, 1), (1, 1)]]
+        };
+        let mut out = Vec::with_capacity(n * n * 2);
+        for b in 0..n {
+            for a in 0..n {
+                for tri in &pattern {
+                    let fr = tri.map(|(da, db)| corner(a + da, b + db));
+                    let (cu, cv) = (fr.iter().map(|c| c.0).sum::<f32>() / 3.0, fr.iter().map(|c| c.1).sum::<f32>() / 3.0);
+                    let half = if rising { u8::from(cv > cu) } else { u8::from(cu + cv > 1.0) };
+                    out.push(GroundTriangle {
+                        positions: fr.map(point),
+                        // u runs west -> east, v runs north -> south.
+                        uvs: fr.map(|(fu, fv)| texture_coord(code, fu, 1.0 - fv)),
+                        material,
+                        square: (i, j),
+                        half,
+                    });
+                }
+            }
+        }
+        out
     }
 }
 
@@ -360,6 +439,10 @@ pub struct GroundTriangle {
     pub material: u8,
     /// Grid square (column, row from the bottom).
     pub square: (usize, usize),
+    /// Which of the square's two triangles this is (or lies in, for the
+    /// finer cells of `Terrain::square_cells`): 0 or 1, in the order
+    /// `Terrain::square_triangles` lists them.
+    pub half: u8,
 }
 
 /// Where in the texture the point (u, v) of a square looks, for
@@ -392,6 +475,11 @@ mod tests {
             material_image: String::new(),
             material_list: String::new(),
             material_direction: None,
+            light_scale: 0,
+            lightmap_name: None,
+            shadowmap_name: None,
+            sw_lightmap_name: None,
+            sw_shadowmap_name: None,
             all: Vec::new(),
         };
         // points[j][i], j = 0 is the bottom row
@@ -551,5 +639,52 @@ mod tests {
                 assert_eq!(uv, texture_coord(code, u, v));
             }
         }
+    }
+    #[test]
+    fn square_cells_are_the_same_ground_only_finer() {
+        let (t, _) = bumpy();
+        let inside = |tri: &GroundTriangle, p: (f32, f32)| {
+            // Barycentric test in the plane, corners clockwise from above.
+            let [a, b, c] = tri.positions;
+            let cross = |o: [f32; 3], q: [f32; 3]| (q[0] - o[0]) * (p.1 - o[1]) - (q[1] - o[1]) * (p.0 - o[0]);
+            let (d1, d2, d3) = (cross(a, b), cross(b, c), cross(c, a));
+            d1 <= 1e-4 && d2 <= 1e-4 && d3 <= 1e-4
+        };
+        for j in 0..3 {
+            for i in 0..4 {
+                let code = ((i + j) % 8) as u32;
+                // n = 1 gives exactly the two triangles of the square.
+                let coarse = t.square_triangles(i, j, 7, code);
+                let one = t.square_cells(Level::Surface, i, j, 7, code, 1);
+                assert_eq!(one.len(), 2);
+                for (a, b) in coarse.iter().zip(&one) {
+                    assert_eq!((a.positions, a.uvs, a.half), (b.positions, b.uvs, b.half));
+                }
+                let fine = t.square_cells(Level::Surface, i, j, 7, code, 4);
+                assert_eq!(fine.len(), 32);
+                for tri in &fine {
+                    let [a, b, c] = tri.positions;
+                    let cross_z = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+                    assert!(cross_z < 0.0, "a cell of square ({i}, {j}) is not clockwise");
+                    // Every corner and the centre lie on the height lookup's surface.
+                    let centre = std::array::from_fn::<f32, 3, _>(|k| (a[k] + b[k] + c[k]) / 3.0);
+                    for p in [a, b, c, centre] {
+                        let h = t.height_at(p[0], p[1]).unwrap().height;
+                        assert!((h - p[2]).abs() < 1e-3, "({}, {}) at {} but the ground is {h}", p[0], p[1], p[2]);
+                    }
+                    // It lies in the coarse triangle its `half` names.
+                    assert!(inside(&coarse[tri.half as usize], (centre[0], centre[1])));
+                    // Texture coordinates follow the code as for the coarse ones.
+                    for (p, uv) in tri.positions.iter().zip(tri.uvs) {
+                        let u = p[0] / 4.0 - i as f32;
+                        let v = 1.0 - (p[1] / 4.0 - j as f32);
+                        let want = texture_coord(code, u, v);
+                        assert!((uv[0] - want[0]).abs() < 1e-6 && (uv[1] - want[1]).abs() < 1e-6);
+                    }
+                }
+                assert!(t.square_cells(Level::Surface, i, j, 7, code, 0).is_empty());
+            }
+        }
+        assert!(t.square_cells(Level::Surface, 4, 0, 7, 0, 4).is_empty());
     }
 }

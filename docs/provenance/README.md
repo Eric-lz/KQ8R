@@ -110,6 +110,40 @@ Behaviour note = `docs/behaviour/terrain.md` (session A, answers Q6/Q7).
 | Ground textures coloured with the palette `world.cs` names in `KQWorld::terrainPalette` | Behaviour note `models-and-textures.md` Q3 | Read from `world.cs` in the world's archives: Daventry gives `daventry.ppl` |
 | Ground textures stop at the square's edge (no repeat); mipmaps not used; no lighting | Our choice (display only) | — |
 
+## Ground lighting maps (M1 step 4a) — `crates/kq8-data/src/{lightmap,terrain}.rs`, `crates/kq8-cli/src/lightmap_verify.rs`
+
+Behaviour note = `docs/behaviour/terrain-lighting.md` (session A,
+2026-10-13); rule numbers are the note's. "Checked" numbers come from
+`kq8 lightmap-verify` (`kq8-artifacts/logs/lightmap-verify.log`).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `TERRAIN.KQ` names four maps: `lightmapName`/`shadowmapName` (hardware), `SWlightmapName`/`SWshadowmapName` (software); one pair is used | Note rule 1 | 6 worlds name files, 6 have empty names; all 24 named files found in `resource.vol` |
+| `useDynamicLighting 1` → shadow map, 0 → light map; the game starts at 0 | Note rule 2 | `Options.cs` has `useDynamicLighting 1` (read by `lightmap::use_dynamic_lighting`, last line wins; unit test) |
+| Empty name or unusable file → every channel 15 | Note rule 4 | `LightMap::full`; unit test |
+| File = u32 count + count × u16, little-endian; count must be side × side | Note rule 5 | All 24 files: count = side², file size = 4 + 2 × count; unit test refuses a wrong count and a short file |
+| side = 128 × 2^lightScale + 1; spacing = 2^groundScale / 2^lightScale | Note rule 6 | Daventry and Dead City 513 (spacing 1,024 / 512), Swamp 257, the rest 129, as in the note's table |
+| Value j × side + i = point (i, j) at (i × spacing, j × spacing) | Note rules 7–8 | Unit test; the order itself is the note's (checked by session A against the height map's shadows) |
+| Value = brightness ¦ red ¦ green ¦ blue, 4 bits each | Note rule 9 | Unit test. Daventry shown (shadow) map red: 4 ×20,127, 6 ×4,598, 7 ×236,889, 8 ×1,555, exactly the note's "How to check" numbers; light vs shadow differ in 761 points, as rule 3 says |
+| Between points: bilinear in world coordinates | Note rule 11, **stand-in** (open question 2: the original's filtering not traced) | Unit test of the blend (`colour_at`) |
+| Missing `lightScale` → 0 | **Our stand-in** (the note gives no default) | Every world's file has the line |
+
+## Ground drawn lit (M1 steps 4b, 4c) — `crates/kq8-data/src/terrain.rs` (`square_cells`), `crates/kq8-viewer/src/{light_view,terrain_view,ground_anim_view,load,main}.rs`
+
+Behaviour note = `docs/behaviour/terrain-lighting.md` (rule numbers are
+the note's).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Hardware pair; shadow map when `useDynamicLighting 1` | Note rules 1–2 | Viewer log: Daventry `daveshdw.bin`, Swamp, Dead City, Ice World shadow maps; Barren: no name, full brightness |
+| Texture × light colour, channel by channel (÷ 15); top 4 bits not used | Note rule 10 | Viewer log at Connor: Daventry start 7 → 93% (x2) / 47% (x1); a hill shadow (208,896, 284,672) 4 → 53% |
+| **×1 (channel ÷ 15) by default; ×2 (capped at 100%) and off on F7 / `--light`** | **User's check by eye** (2026-10-14: ×1 matches the original, which is very dark and muddy), against the note's suggested ×2 (open question 1) and the data in Q65; correction request Q66. Still a stand-in until session A confirms | Unit test of the three modes |
+| Map points are mesh corners; inside a cell the colour is blended over the cell's two triangles | **Stand-in** for the note's assumed bilinear filtering (open question 2) | Unit test: the cells are the same ground (n = 1 equals the two triangles; corners and centres on the height lookup; each cell inside its triangle; texture coordinates follow the code). Viewer: walking, the light under Connor changes smoothly (8 → 7 → 6.2) |
+| Multiply on the colour as shown (sRGB), turned into Bevy's linear space per corner | **Our choice / stand-in** (a 1998 card has no gamma step; sRGB of a product is not exactly the product of sRGBs) | — |
+| Brightness setting (`setBrightness`) ignored | **Stand-in** (open question 3) | — |
+| No tone mapping (`Tonemapping::None` on every camera) | **Our choice** (display only: colours as computed, so ×1 / ×2 can be compared by eye) | — |
+| Ground animators' squares (Daventry's river) and the U key's floor view are lit like the rest of the ground | Note rule 10 ("when a ground square is drawn") | Viewer log: 872 lit meshes in Daventry, including the animators' |
+
 ## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
 
 Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).

@@ -6,6 +6,7 @@
 //!   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
 //!   kq8 shape-verify [--game DIR]
 //!   kq8 terrain-verify [--game DIR]
+//!   kq8 lightmap-verify [--game DIR]
 //!   kq8 building-verify [--game DIR]
 //!   kq8 item-verify [--game DIR]
 //!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
@@ -19,6 +20,7 @@ mod bitmap_png;
 mod bitmap_verify;
 mod building_verify;
 mod item_verify;
+mod lightmap_verify;
 mod log;
 mod shape_verify;
 mod source;
@@ -36,6 +38,7 @@ const USAGE: &str = "usage:
   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
   kq8 shape-verify [--game DIR]
   kq8 terrain-verify [--game DIR]
+  kq8 lightmap-verify [--game DIR]
   kq8 building-verify [--game DIR]
   kq8 item-verify [--game DIR]
   kq8 text <file> [--game DIR]";
@@ -76,6 +79,7 @@ fn main() -> ExitCode {
         (Some("bitmap-png"), [image]) => bitmap_png::run(&game, image, palette.as_deref()),
         (Some("shape-verify"), []) => shape_verify::run(&game),
         (Some("terrain-verify"), []) => terrain_verify::run(&game),
+        (Some("lightmap-verify"), []) => lightmap_verify::run(&game),
         (Some("building-verify"), []) => building_verify::run(&game),
         (Some("item-verify"), []) => item_verify::run(&game),
         (Some("text"), [file]) => match source::load(&game, file) {

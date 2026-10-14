@@ -31,6 +31,8 @@ items. The goal is the whole game; see the roadmap in
 - **Doors** open with a mouse click when Connor is close enough.
 - **Chests, baskets and items**: open them, pick things up (counted in a
   log; no inventory screen yet).
+- **Ground lighting**: hill shadows from the game's light maps, as dark
+  as in the original.
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
   torches, swimming fish, rolling rocks.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
@@ -44,7 +46,8 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - No story, talking, inventory screen, fighting or saving.
 - No sound or music.
 - People and monsters are not shown.
-- No lighting or distance haze.
+- Objects and buildings are not lit (only the ground is); no distance
+  haze.
 - Clicking works only on doors, chests, items and a few scripted objects;
   Connor doesn't speak (his remarks are only logged).
 - Objects only play their starting animation, and rolling rocks don't
@@ -91,6 +94,7 @@ load, but only Daventry has been checked closely).
 | F | Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
 | H | Show hidden and unused objects (traps, sound sources...) |
 | U | Show the ground under the water |
+| F7 | Ground light: x1 (default, as in the original), x2, off |
 | G / B | Test: lift Connor high / a little and let him fall |
 | Esc | Quit |
 
@@ -108,6 +112,7 @@ cargo run --release -- vol-verify
 cargo run --release -- bitmap-verify
 cargo run --release -- shape-verify
 cargo run --release -- terrain-verify
+cargo run --release -- lightmap-verify
 cargo run --release -- building-verify
 cargo run --release -- item-verify
 ```

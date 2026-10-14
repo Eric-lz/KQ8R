@@ -61,7 +61,7 @@ pub fn run(game: &GameDir) -> ExitCode {
     }
 }
 
-fn open_world(game: &GameDir, world: &str, log: &mut Log) -> Vec<(String, VolArchive)> {
+pub(crate) fn open_world(game: &GameDir, world: &str, log: &mut Log) -> Vec<(String, VolArchive)> {
     let mut out = Vec::new();
     for v in VOLUMES {
         if let Some(path) = game.volume_path(world, v) {
@@ -76,7 +76,7 @@ fn open_world(game: &GameDir, world: &str, log: &mut Log) -> Vec<(String, VolArc
 
 /// Finds a file by its last path part: first next to the terrain file,
 /// then in the world's archives. Returns (where, bytes).
-fn load(game: &GameDir, world: &str, vols: &[(String, VolArchive)], name: &str) -> Result<(String, Vec<u8>), String> {
+pub(crate) fn load(game: &GameDir, world: &str, vols: &[(String, VolArchive)], name: &str) -> Result<(String, Vec<u8>), String> {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
     for rel in [format!("data/{world}/KQ/Terrain/{base}"), format!("data/{world}/KQ/{name}")] {
         if let Some(p) = game.find(&rel).filter(|p| p.is_file()) {

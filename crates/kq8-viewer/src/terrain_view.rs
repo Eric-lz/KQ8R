@@ -9,6 +9,10 @@ use bevy::image::ImageAddressMode;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 
+use bevy::core_pipeline::tonemapping::Tonemapping;
+use kq8_data::terrain::Level;
+
+use crate::light_view::GroundLight;
 use crate::load::{Ground, Objects};
 use crate::{material_for, mesh_from, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
 
@@ -85,6 +89,7 @@ pub fn setup_ground(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut light: ResMut<GroundLight>,
 ) {
     let ground = loaded.0.take().expect("ground is loaded once");
     let mut log = shared.log.lock().unwrap();
@@ -99,23 +104,34 @@ pub fn setup_ground(
     // Per kind: (surface same, surface over a different floor, floor same,
     // floor lower, floor higher) triangle counts, for the log.
     let mut counts = [0usize; 5];
+    // Light map cells per square side (terrain-lighting.md rule 6).
+    let cells = 1usize << terrain.settings.light_scale;
+    log.summary(format!(
+        "  ground drawn as {cells} x {cells} light-map cells per square ({} units each)",
+        size / cells as f32
+    ));
     for group in ground.groups {
-        // Clockwise from above (the game's front) -> reversed for Bevy,
-        // exactly as for models.
+        // Each triangle is drawn as the light map's cells that lie in it
+        // (M1 step 4c), on the surface or the floor grid. Clockwise from
+        // above (the game's front) -> reversed for Bevy, exactly as for
+        // models. Also returns the corners in game units, for the light.
         let mesh = |tris: &[(kq8_data::terrain::GroundTriangle, [f32; 3])], floor: bool| {
-            let mut positions = Vec::with_capacity(tris.len() * 3);
-            let mut uvs = Vec::with_capacity(tris.len() * 3);
-            for (t, fz) in tris {
-                for k in [0, 2, 1] {
-                    let mut p = t.positions[k];
-                    if floor {
-                        p[2] = fz[k];
+            let level = if floor { Level::Floor } else { Level::Surface };
+            let mut positions = Vec::with_capacity(tris.len() * 3 * cells * cells);
+            let mut uvs = Vec::with_capacity(positions.capacity());
+            let mut game = Vec::with_capacity(positions.capacity());
+            for (t, _) in tris {
+                let code = ground.orientation.get(t.material as usize).copied().unwrap_or(0);
+                let (i, j) = t.square;
+                for c in terrain.square_cells(level, i, j, t.material, code, cells).iter().filter(|c| c.half == t.half) {
+                    for k in [0, 2, 1] {
+                        positions.push(to_bevy(c.positions[k], [0.0; 3]));
+                        uvs.push(c.uvs[k]);
+                        game.push(c.positions[k]);
                     }
-                    positions.push(to_bevy(p, [0.0; 3]));
-                    uvs.push(t.uvs[k]);
                 }
             }
-            mesh_from(positions, uvs)
+            (mesh_from(positions, uvs), game)
         };
         // Sort the triangles by how the floor compares with the surface.
         let (mut same, mut lower, mut higher, mut floor_only) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -155,7 +171,9 @@ pub fn setup_ground(
                 return;
             }
             let v = if shown { Visibility::Inherited } else { Visibility::Hidden };
-            commands.spawn((Mesh3d(meshes.add(mesh(tris, floor))), MeshMaterial3d(handle), part, v));
+            let (m, game) = mesh(tris, floor);
+            let m = light.light_mesh(m, &game, &mut meshes);
+            commands.spawn((Mesh3d(m), MeshMaterial3d(handle), part, v));
         };
         spawn(&surface_same, false, opaque.clone(), GroundPart::SurfaceSame, true);
         let see_through = materials.add(with_opacity(&material, SURFACE_SEE_THROUGH));
@@ -192,6 +210,8 @@ pub fn setup_ground(
     ));
     commands.spawn((
         Camera3d::default(),
+        // Colours as computed, no tone-mapping curve (M1 step 4b).
+        Tonemapping::None,
         // The whole ground must stay inside the view distance. Field of
         // view 70 degrees vertically (Bevy's default is 45; user's choice).
         // modified manually to what feels more natural, but could be wrong

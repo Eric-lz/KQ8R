@@ -20,7 +20,9 @@ The ground, the buildings and the objects the game places at the start,
 each where the original puts them, with animated objects at their
 starting pose and see-through things (waterfalls, fountains) see-through.
 Checked by eye in Daventry; the other 11 worlds load but have only been
-looked at in a few places.
+looked at in a few places. The ground is lit by the game's light maps
+(hill shadows), compared with the original by eye in Daventry
+(2026-10-14): as stored (x1) matches; objects are not lit yet.
 
 ## Connor
 
@@ -147,12 +149,16 @@ objects don't stop it, as in the original. Checked in the logs
   floor only, third press back to normal.
 - **F:** a free flying camera.
 - **G / B:** lift Connor high / a little and let him fall.
+- **F7:** the ground's light map as stored (x1, default), doubled (x2),
+  or off; the mode is shown on screen. x1 is the default because it
+  matches the original by eye (user, 2026-10-14).
 
 ## What doesn't work yet
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, lighting, distance haze, fire and
+- **Not drawn:** people and monsters, lighting of objects and buildings
+  (they are full bright; only the ground is lit), distance haze, fire and
   ice arrow sparks and the dragon fire (they come with fighting), the
   teleport pad's look.
 - **No sound or music** at all.

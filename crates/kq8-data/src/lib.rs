@@ -13,6 +13,7 @@ pub mod envinfo;
 pub mod game_dir;
 pub mod items;
 pub mod kq_text;
+pub mod lightmap;
 pub mod material;
 pub mod objects;
 pub mod palette;

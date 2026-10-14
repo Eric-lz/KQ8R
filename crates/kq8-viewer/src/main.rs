@@ -5,7 +5,7 @@
 //!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
 //!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
-//!              [--at X,Y,H]
+//!              [--at X,Y,H] [--light x1|x2|off]
 //!
 //! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
 //! palette. `--frames N` closes the window by itself after N frames.
@@ -22,10 +22,11 @@
 //! clicks object NAME before update N + 1, `--item TYPE` puts an item of
 //! that type in Connor's hand (tests). Emitters (M3 step 3b): falling
 //! leaves and drips, logged to effects.log; flowing water squares, logged
-//! to ground_anim.log. Esc quits.
+//! to ground_anim.log. Ground light (M1 step 4): F7 cycles the light
+//! map x1 / x2 / off (`--light` sets the start; default x1). Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
-//! no lighting, no animation. Back faces are hidden as in the original
+//! no lighting on models, no animation in the model view. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
 mod anim_view;
@@ -35,6 +36,7 @@ mod effects_view;
 mod game_camera;
 mod ground_anim_view;
 mod item_view;
+mod light_view;
 mod load;
 mod log;
 mod terrain_view;
@@ -92,6 +94,9 @@ struct Args {
     aim: Vec<(String, u64)>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
+    /// `--light x1|x2|off`: how the ground's light map is applied at the
+    /// start (M1 step 4c; default x1, the user's check); F7 changes it.
+    light: light_view::LightMode,
     terrain: bool,
 }
 
@@ -110,6 +115,7 @@ fn parse_args() -> Result<Args, String> {
         click: Vec::new(),
         aim: Vec::new(),
         item: None,
+        light: light_view::LightMode::X1,
         terrain: false,
     };
     let mut it = std::env::args().skip(1);
@@ -151,6 +157,7 @@ fn parse_args() -> Result<Args, String> {
                 a.aim.push((name.trim().to_string(), n));
             }
             "--item" => a.item = Some(value()?),
+            "--light" => a.light = light_view::LightMode::parse(&value()?)?,
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -216,7 +223,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE]");
+            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off]");
             return ExitCode::FAILURE;
         }
     };
@@ -281,7 +288,8 @@ fn main() -> ExitCode {
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
         Scene::Ground(ground, objects, animation) => {
-            app.insert_resource(terrain_view::LoadedGround(Some(ground)))
+            app.insert_resource(light_view::GroundLight::new(ground.light.clone(), args.light))
+                .insert_resource(terrain_view::LoadedGround(Some(ground)))
                 .insert_resource(ground_anim_view::LoadedGroundAnim(Some(animation)))
                 .insert_resource(terrain_view::FloorView(0))
                 .insert_resource(terrain_view::LoadedObjects(Some(objects)))
@@ -303,8 +311,8 @@ fn main() -> ExitCode {
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim))
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label).chain())
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
         }
     }
     app.run();
@@ -370,7 +378,8 @@ fn setup(
         "spawned: vertices={vertices} centre_moved_to_origin=({:.1}, {:.1}, {:.1}) game units",
         centre[0], centre[1], centre[2]
     ));
-    commands.spawn((Camera3d::default(), Transform::default()));
+    // Colours as computed, no tone-mapping curve (M1 step 4b).
+    commands.spawn((Camera3d::default(), bevy::core_pipeline::tonemapping::Tonemapping::None, Transform::default()));
 }
 
 /// A triangle list (corners already in Bevy's counter-clockwise order).

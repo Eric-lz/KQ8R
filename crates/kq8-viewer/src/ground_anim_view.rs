@@ -21,6 +21,7 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_core::ground_anim::GroundAnimator;
 
+use crate::light_view::GroundLight;
 use crate::load::GroundAnimAssets;
 use crate::log::Log;
 use crate::terrain_view::FloorView;
@@ -68,6 +69,7 @@ pub fn setup_ground_anim(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut light: ResMut<GroundLight>,
 ) {
     let Some(assets) = loaded.0.take() else { return };
     let mut main_log = shared.log.lock().unwrap();
@@ -82,14 +84,17 @@ pub fn setup_ground_anim(
     for (key, triangles) in assets.triangles {
         let mut positions = Vec::with_capacity(triangles.len() * 3);
         let mut uvs = Vec::with_capacity(triangles.len() * 3);
+        let mut game = Vec::with_capacity(triangles.len() * 3);
         for t in &triangles {
             // Clockwise from above (the game's front) -> reversed for Bevy.
             for k in [0, 2, 1] {
                 positions.push(to_bevy(t.positions[k], [0.0; 3]));
                 uvs.push(t.uvs[k]);
+                game.push(t.positions[k]);
             }
         }
-        built_meshes.insert(key, meshes.add(mesh_from(positions, uvs)));
+        // Lit like the rest of the ground (M1 step 4c).
+        built_meshes.insert(key, light.light_mesh(mesh_from(positions, uvs), &game, &mut meshes));
     }
     let mut looks = BTreeMap::new();
     for (m, look) in assets.looks {

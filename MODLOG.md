@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 M1 4c: x1 is the default ground light (user's check)
+
+**Changed:** `crates/kq8-viewer/src/light_view.rs` (default mode x1, F7 cycles x1 → x2 → off, one more unit test), `main.rs` (`--light` default and help). Q66 (correction request) and a note on Q65 in `docs/behaviour/QUESTIONS.md`. DESIGN, provenance, README, `docs/FEATURES.md`.
+**Why:** The user compared the viewer with the original by eye: x1 matches better, the original is very dark and muddy. The note's suggested stand-in was x2; the user's check wins (AGENTS/session rules), and session A is asked to confirm (Q66).
+**Tested how:** `cargo test --workspace`; clippy on `kq8-viewer`; viewer `--terrain --world Daventry --frames 120`.
+**Result:** 181 + 69 + 1 tests pass; no new clippy warnings. Viewer: "ground light: mode x1 at start (872 lit ground meshes, 3201408 corners); F7 cycles x1 -> x2 -> off"; at Connor's start raw 7 → 47%; `RESULT: PASS`.
+**Still broken / not tested:** Objects and buildings are drawn full bright (the user noticed; not studied yet). F7 by key press not tested by me.
+**Next:** A study session for object and building lighting, or Q66.
+
+## 2026-10-14 M1 4b + 4c: the ground drawn with its light map (x2 / x1 / off), no tone mapping
+
+**Changed:** New `crates/kq8-viewer/src/light_view.rs` (light modes x2 / x1 / off, F7 key, on-screen line "Ground light: ... (F7)", light under Connor and the camera every second in `viewer.log`). `kq8-data/src/terrain.rs`: `Terrain::square_cells` (a square cut into the light map's cells, same shape) and `GroundTriangle::half`. `kq8-viewer`: `load.rs` loads the shown map with the ground (`load_light_map`) and cuts the animated squares into cells; `terrain_view.rs` builds the ground from cells with a colour per corner, camera without tone mapping; `ground_anim_view.rs` lights the river squares; `main.rs` `--light x2|x1|off`, wiring, the model view's camera without tone mapping too. DESIGN (4b/4c done), provenance, README (F7 key, what doesn't work), `docs/FEATURES.md`.
+**Why:** Steps 2 and 3 of terrain lighting (`docs/behaviour/terrain-lighting.md`), done together at the user's request. Tone mapping (Bevy's default colour curve) is off so the screen shows the colours as computed, needed for an eye comparison of x1 and x2.
+**Tested how:** New unit tests: `square_cells` (n = 1 is the two triangles; for n = 4 every corner and centre is on the height lookup, clockwise, inside the triangle its `half` names, texture coordinates follow the code) and the three light modes. Viewer runs: `--terrain --world Daventry --frames 300`; `--at 208896,284672,0 --frames 120` (inside a hill shadow); `--at 208896,272000,-1.5708 --hold 1,0,1 --frames 1500` (walking); `--light x1 --frames 120`; Swamp, DeadCity, IceWorld, Barren `--frames 60`. Whole workspace `cargo test`; clippy: no new warnings.
+**Result:** 181 tests pass in `kq8-core`, 69 in `kq8-data`, 1 in `kq8-viewer`. Daventry: "Shadow map daveshdw.bin (Options.cs useDynamicLighting 1) ... red 4 x20127, 6 x4598, 7 x236889, 8 x1555"; 4 x 4 cells per square; 872 lit meshes, 3,201,408 corners; average frame 6.78 ms; loading 793 ms. Light under Connor: start (277,744, 199,295) raw 7 → 93% (x2), 47% (x1); in the hill shadow at (208,896, 284,672) raw 4 → 53%; walking it changes smoothly (8.00, 7.77, 7.00, 6.90, 6.55, 6.19). Swamp, Dead City, Ice World load their shadow maps; Barren has none (full brightness). All runs end `RESULT: PASS`.
+**Still broken / not tested:** **Not checked by eye** (nobody has looked at the lit ground yet), and **x1 vs x2 is still open** (your check decides). F7 not tested by a key press (only the start option). Stand-ins: x2, the blend inside a cell (not exactly bilinear), the multiply in screen colours, brightness setting ignored. Objects, buildings, haze and moving lights are not lit. `--hold` with heading −1.5708 still moved Connor south; heading direction not looked into (not part of this step).
+**Next:** You: compare x2 and x1 with the original (below). Then the result goes into Q65 / the note.
+
+## 2026-10-14 M1 4a: reading the ground's light and shadow maps
+
+**Changed:** Plan for ground lighting in `docs/DESIGN.md` ("M1 step 4", sub-steps 4a–4c). New `crates/kq8-data/src/lightmap.rs` (the map file, its channels, the bilinear lookup, which file is shown, the `useDynamicLighting` line of `Options.cs`); `terrain.rs`: `TerrainSettings` reads `lightScale` and the four map names. New CLI command `kq8 lightmap-verify` (`crates/kq8-cli/src/lightmap_verify.rs`; `terrain_verify.rs` shares its file finder). Q65 in `docs/behaviour/QUESTIONS.md`. `docs/provenance/README.md`, `README.md` (command list).
+**Why:** Step 1 of terrain lighting (`docs/behaviour/terrain-lighting.md`): read and check the maps before drawing with them.
+**Tested how:** 6 new unit tests (side and spacing, value order and channels, wrong count / short file refused, bilinear blend, which file, the `Options.cs` line). `cargo run --release -- lightmap-verify`, log `kq8-artifacts/logs/lightmap-verify.log`. Whole workspace `cargo test`; clippy clean on `kq8-data` and `kq8-cli`.
+**Result:** RESULT: PASS, 24 files in 6 worlds (Castle, Daventry, Dead City, Ice World, Snow exit, Swamp; the user's "7" is 6 in the data), 0 failures. Every count = side² and every file size = the note's table. `Options.cs`: `useDynamicLighting 1` → shadow maps shown. Daventry's `daveshdw.bin` red: 4 ×20,127, 6 ×4,598, 7 ×236,889, 8 ×1,555, exactly the note's numbers; light vs shadow differ in 761 points (the note's number), but 4 of them by more than one step in red (2 by 1, 2 by 3). Found: other worlds' hardware maps use 15 for sunlit ground (Swamp, Ice World, Snow exit, Castle) and Dead City 9, while Daventry uses 7; so ×2 (capped) gives 93–100% sunlit ground everywhere, ×1 gives 47% in Daventry but 100% elsewhere. Asked as Q65, with two small note corrections.
+**Still broken / not tested:** Nothing is drawn with the maps yet (4c). Bilinear blending and the ×2 factor are stand-ins (note open questions 1, 2).
+**Next:** 4b (tone mapping off, so colours show as computed), then 4c (the ground drawn lit, ×2 / ×1 / off).
+
 ## 2026-10-14 STATUS.md brought up to date
 
 **Changed:** `STATUS.md` (local only, not committed): where we are (M3 traps, items, chests, scripted objects, fish done), next steps (terrain lighting or Q60–Q64), the `kq8-core` name and its current files, `item-verify`, the `--aim` option, all log files, test counts (62 + 181), what works and what doesn't, open questions Q60–Q64 added (Q55 answered, Q59 closed), fresh-session prompts. Docs only, no code.

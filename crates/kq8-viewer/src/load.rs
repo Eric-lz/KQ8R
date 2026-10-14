@@ -474,6 +474,9 @@ pub struct Ground {
     pub palette: [Rgb; 256],
     /// Squares a ground animator draws instead (M3 step 3b-3).
     pub animated: std::collections::BTreeSet<(usize, usize)>,
+    /// The light or shadow map drawn on the ground (M1 step 4c,
+    /// terrain-lighting.md); full brightness if none.
+    pub light: kq8_data::lightmap::LightMap,
 }
 
 /// The ground animators of a world (M3 step 3b-3, emitters.md "Ground
@@ -664,7 +667,62 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         }
         groups.push(GroundGroup { label: name, triangles: tris, look });
     }
-    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default() })
+    let light = load_light_map(game, world, &settings, &fetch, log);
+    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default(), light })
+}
+
+/// A file found by name: (where, bytes).
+type Fetched = Result<(String, Vec<u8>), String>;
+
+/// The ground's light map (terrain-lighting.md rules 1-6): the hardware
+/// pair (we draw like the Glide/Direct3D renderers), the shadow map if
+/// `Options.cs` says `useDynamicLighting 1`, else the light map. No name,
+/// or a file that can't be used: full brightness (rule 4).
+fn load_light_map(
+    game: &GameDir,
+    world: &World,
+    settings: &kq8_data::TerrainSettings,
+    fetch: &dyn Fn(&str) -> Fetched,
+    log: &mut Log,
+) -> kq8_data::lightmap::LightMap {
+    use kq8_data::lightmap::{self, Kind, LightMap};
+    let dynamic = game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| lightmap::use_dynamic_lighting(&b));
+    let kind = Kind::for_dynamic_lighting(dynamic.unwrap_or(false));
+    let why = match dynamic {
+        Some(on) => format!("Options.cs useDynamicLighting {}", u8::from(on)),
+        None => "no useDynamicLighting in Options.cs, the game's start value 0".into(),
+    };
+    let full = LightMap::full(settings);
+    let Some(name) = lightmap::file_name(settings, true, kind) else {
+        log.summary(format!(
+            "  ground light: {kind:?} map ({why}); {} has no file name: full brightness (side {}, spacing {})",
+            world.name, full.side, full.spacing
+        ));
+        return full;
+    };
+    let map = fetch(name).and_then(|(at, bytes)| match LightMap::parse(&bytes, settings) {
+        Ok(m) => Ok((at, m)),
+        Err(e) => Err(format!("{at}: {e}")),
+    });
+    match map {
+        Ok((at, map)) => {
+            let red = map.histograms()[1];
+            let hist: Vec<String> = red.iter().enumerate().filter(|(_, n)| **n > 0).map(|(v, n)| format!("{v} x{n}")).collect();
+            log.summary(format!(
+                "  ground light: {kind:?} map {name} ({why}): {at}, count {} = {} x {}, spacing {} units; red {}",
+                map.values().len(),
+                map.side,
+                map.side,
+                map.spacing,
+                hist.join(", ")
+            ));
+            map
+        }
+        Err(e) => {
+            log.summary(format!("  ground light: {kind:?} map {name} NOT used ({e}); full brightness"));
+            full
+        }
+    }
 }
 
 /// Chooses each ground animator's squares (in load order, from the
@@ -746,7 +804,9 @@ pub fn prepare_ground_animation(
             }
             for m in std::iter::once(own).chain(a.cycle.iter().copied()) {
                 needed.insert(m);
-                triangles.entry(((i, j), m)).or_insert_with(|| terrain.square_triangles(i, j, m, code));
+                // Cut into the light map's cells, like the rest of the ground (M1 step 4c).
+                let cells = 1usize << terrain.settings.light_scale;
+                triangles.entry(((i, j), m)).or_insert_with(|| terrain.square_cells(kq8_data::terrain::Level::Surface, i, j, m, code, cells));
             }
             let corners = [(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)];
             if corners.iter().any(|&(x, y)| terrain.point_height_on(kq8_data::terrain::Level::Floor, x, y) != terrain.point_height(x, y)) {

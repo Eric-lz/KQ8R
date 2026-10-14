@@ -429,6 +429,113 @@ Rules from `docs/behaviour/objects.md` "Hidden objects" (Q18). Small fix.
   unused objects.
 - Log: hidden objects, `setHidden` lines, objects drawn although hidden.
 
+#### M1 step 4 — ground lighting: light and shadow maps (planned 2026-10-14)
+
+Rules from `docs/behaviour/terrain-lighting.md` (rule numbers below are
+that note's). Ground only: objects, buildings, haze and moving lights
+(rule 15) are not part of this step. Each sub-step is tested and
+reported before the next starts.
+
+What the data says (checked 2026-10-14): six worlds name map files
+(Castle, Daventry, Dead City, Ice World, Snow exit, Swamp); Barren, Gnome
+and Temples 1–4 have empty names. Swamp and Ice World name the same file
+for the hardware and the software pair. `MASK/Options.cs` has
+`useDynamicLighting 1`.
+
+**4a. Read the maps** (`kq8-data`, `kq8-cli`; no window)
+
+- `TerrainSettings` gains `lightScale` (default 0 when missing; stand-in,
+  the note gives no default) and the four map names.
+- New `kq8-data/src/lightmap.rs`:
+  - `LightMap`: side = 128 × 2^lightScale + 1 (rule 6), spacing =
+    2^groundScale / 2^lightScale, values row by row along +x, rows along
+    +y from y = 0 (rule 7). Read from a u32 count + count × u16 (rule 5);
+    a count ≠ side × side or a short file is an error (the caller then
+    keeps full brightness, rule 4). `LightMap::full(side)`: every channel
+    15 (rule 4).
+  - A value's channels: brightness (bits 12–15), red, green, blue
+    (rule 9).
+  - `colour_at(x, y)`: the four surrounding points blended bilinearly in
+    world coordinates (rule 11; bilinear is the note's assumption,
+    **stand-in**, open question 2). Outside the map: the nearest edge
+    point.
+  - Which file (rules 1–2): we draw like the hardware renderers, so the
+    `lightmapName`/`shadowmapName` pair; `useDynamicLighting` 1 → shadow
+    map, 0 (or missing) → light map. A reader for that line of
+    `Options.cs` (last line wins).
+- `kq8 lightmap-verify`: every world: `lightScale`, `groundScale`, the
+  four names; for each named file: where it was found, bytes, count,
+  side, spacing, a histogram of each channel, whether it is grey; per
+  pair, points that differ and by how much; hardware vs software red
+  channel as a table of value pairs. Also `Options.cs`'s
+  `useDynamicLighting` and which map is shown. Log
+  `kq8-artifacts/logs/lightmap-verify.log`. Compared with the note:
+  Daventry shadow map red 4 ×20,127, 6 ×4,598, 7 ×236,889, 8 ×1,555; light
+  vs shadow differ in 761 points by one step; 263,169 points; file sizes
+  in rule 6's table.
+- Unit tests: the side rule, value order (point (i, j) = value
+  j × side + i), channels, a wrong count is refused, bilinear blend at a
+  point, between two points and in a cell's middle, the file choice.
+  **Done 2026-10-14** (MODLOG): PASS, 24 files in 6 worlds; Daventry's
+  numbers match the note. Other worlds' hardware maps use 15 for sunlit
+  ground, which favours ×2 (Q65).
+
+**4b. Colours as stored: no tone mapping** (`kq8-viewer`)
+
+Bevy's 3D camera applies "tone mapping" by default (a curve meant for
+photo-like lighting, `TonyMcMapface`): it changes the brightness and
+saturation of every colour we draw, so a texture at 100% does not look
+like the texture. For an eye comparison of ×1 and ×2 (4c) the screen
+must show the colours as computed. Change: every camera gets
+`Tonemapping::None`; logged at start. Affects everything drawn, not only
+the ground (a separate step so it can be reverted alone).
+
+**4c. Draw the ground lit** (`kq8-viewer`, `kq8-data`)
+
+- The map is chosen and loaded with the ground (4a); missing, unnamed or
+  unreadable: full brightness, logged.
+- Each ground square is drawn as (2^lightScale)² small cells (Daventry
+  4 × 4) whose corners are the map's points, so every map point is a
+  mesh corner and gets its colour there. The cells use the square's own
+  diagonal direction, so the shape of the ground does not change
+  (`terrain.md` rules on triangles). Inside a cell the colour is blended
+  across its two triangles: close to bilinear but not the same
+  (**stand-in**, open question 2). New `Terrain::square_cells` in
+  `kq8-data` (same corners and texture coordinates as
+  `square_triangles`, finer).
+- The colour multiplies the texture, red by red, green by green, blue by
+  blue (rule 10). Factor (planned: ×2 by default; **changed to ×1 after
+  the user's check, see below**):
+  shown = min(1, 2 × channel / 15); ×1: channel / 15; "off": 1 (as
+  before). The multiply is meant to act on the colour as shown on screen
+  (an 8-bit card of 1998 has no gamma step), so the factor is turned into
+  Bevy's linear colour space before it is stored (stand-in). Brightness
+  setting (`setBrightness`, open question 3): ignored (**stand-in**).
+- Applies to the drawn surface, the floor view (U key) and the ground
+  animators' squares (Daventry's river), which are ground squares too.
+- `--light x1|x2|off` and the **F7** key (not used by
+  `Connor.sae`/`Camera.sae`) cycles the modes. The on-screen label
+  shows the mode.
+- Log (`viewer.log`): map file used and why (`useDynamicLighting`),
+  count, side, spacing, red-channel histogram; the mode at start and on
+  every change; the light under Connor (or the camera when flying) every
+  second: raw channels and the shown percentage.
+- Check: by eye against the original (terrain-lighting.md "How to
+  check"): a hill's shadow on the +y side, shadowed grass about half as
+  bright as sunlit grass; ×1 vs ×2 against the original decides open
+  question 1.
+
+**4b and 4c done together 2026-10-14** (user's choice; MODLOG). New
+`kq8-viewer/src/light_view.rs` (mode, F7, the on-screen line "Ground
+light: x2 / x1 / off (F7)" under the U line, the log every second).
+Daventry draws 3.2 million corners (surface and the hidden floor view);
+average frame 6.8 ms in a 300-frame run.
+
+**User's check 2026-10-14:** ×1 matches the original better (it is very
+dark and muddy). ×1 is now the default; F7 cycles ×1 → ×2 → off.
+Correction request Q66. Objects and buildings are still drawn full
+bright (not part of this step; their lighting is not studied yet).
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,
