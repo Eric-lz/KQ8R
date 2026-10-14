@@ -959,6 +959,13 @@ struct CollisionInfo {
     shape: String,
     collider_type: u32,
     collider_mask: u32,
+    /// `script=` and the click keys (`doors.md` rules 12-16), for a
+    /// clickable one (3f).
+    script: Option<String>,
+    accepts_inventory: Option<String>,
+    accept_all_items: bool,
+    too_far_away_action: i64,
+    do_not_point_at: bool,
 }
 
 /// `colliderType` / `colliderMask` from an object's section: a whole
@@ -1847,7 +1854,18 @@ impl Placer<'_> {
         for problem in [problem_t, problem_m].into_iter().flatten() {
             self.log.summary(format!("collision: {label}[{}]: {problem}", p.name));
         }
-        self.collision.push(CollisionInfo { shape, collider_type, collider_mask });
+        let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string()).filter(|v| !v.is_empty());
+        let number = |k: &str| s.number(k).and_then(Result::ok);
+        self.collision.push(CollisionInfo {
+            shape,
+            collider_type,
+            collider_mask,
+            script: text("script"),
+            accepts_inventory: text("acceptsInventory"),
+            accept_all_items: number("acceptAllItems").is_some_and(|v| v != 0.0),
+            too_far_away_action: number("tooFarAwayAction").map_or(0, |v| v as i64),
+            do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
+        });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
         // A movement that plays (speed not 0): all its frames (3c). Not a
@@ -2506,14 +2524,21 @@ fn object_colliders(
             });
         }
         if info.collider_type & kq8_game::click::CLICKABLE != 0 {
-            clickables.push(kq8_game::active::Clickable {
-                name: p.name.clone(),
-                class: class.to_string(),
-                min: entry.min,
-                max: entry.max,
-                placement: Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
-                collision_type: info.collider_type,
-            });
+            let mut c = kq8_game::active::Clickable::plain(
+                &p.name,
+                class,
+                entry.min,
+                entry.max,
+                Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                info.collider_type,
+            );
+            // 3f: its script and click keys.
+            c.script = info.script.clone();
+            c.accepts_inventory = info.accepts_inventory.clone();
+            c.accept_all_items = info.accept_all_items;
+            c.too_far_away_action = info.too_far_away_action;
+            c.do_not_point_at = info.do_not_point_at;
+            clickables.push(c);
         }
         if !pair_collides(CONNOR_TYPE, CONNOR_MASK, info.collider_type, info.collider_mask) {
             *left_out.entry("type and mask: not tested against Connor").or_default() += 1;

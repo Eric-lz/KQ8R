@@ -1942,6 +1942,47 @@ catchers, ground animators).
     pub upstairs the big chest opens on the first click and a crystal
     appears in it; the second click takes it; the third logs "empty".
 
+- **3f — clicking objects that move at load, and `deleteObject`
+  (planned and done 2026-10-13, MODLOG).** The user's check in the original
+  (2026-10-13): clicking a swimming fish makes it disappear, Connor makes
+  an eating sound and gains health. `fishies.cs` (data) does it:
+  `deleteObject $1`, `KQSound::play eat.aud`, `KQStatsChangeRequestEvent
+  2 0 0 0 0` to Connor, once (`Daventry::fish::full`, shared by the three
+  fish). Asked as part of Q64 (d).
+  - **Which objects.** Every clickable placed object with a script that
+    isn't a door, chest, item or 3e-5 scripted object: the ones that move
+    at load (Daventry 10: signs, fish, dead birds, `starball`,
+    `girltree`) and still ones without movements. They stay drawn as now
+    (`anim_view` or the still models). None of Daventry's has
+    whole-object steps, so the click box stays at the placement (an object
+    with steps logs that its box doesn't follow; not needed yet).
+  - **Clicks** (stand-in, Q64 a): as doors and 3e-5 objects (the shared
+    `script_args`): `ConnorAction do do` in reach, item in hand by
+    `acceptsInventory`, out of reach by `tooFarAwayAction`. `Init` at the
+    start (Q64 c). `KQAnimPlayEvent` to them: logged, not done (their
+    animation belongs to `anim_view`). `KQCueEvent` → `Cue`.
+  - **`deleteObject <name>`** on such an object or a 3e-5 object
+    (stand-in, Q64 d): gone for good: not drawn, not clickable, no
+    collision, not a view blocker; events to it are dropped (logged). On
+    other placed objects it stays a stub. The viewer gets a request:
+    hides the object's entities (a name tag on every placed object's
+    entities), turns its collider off (moved far below the world, size 0)
+    and drops its view box.
+  - **Stubs:** `KQSound::play` (no audio yet); the stats event stays
+    "stats are M5".
+  - **Code:** `kq8-game` `active.rs` (`Clickable` gets the script and the
+    click keys, `gone`; `Request::Delete`); `kq8-viewer` `load.rs` (the
+    keys for `Clickable`), `terrain_view.rs`/`anim_view.rs` (name tags),
+    `door_view.rs` (applies deletions). Unit tests: a scripted clickable
+    runs `ConnorAction`; a fish-like script deletes itself (gone, not
+    picked, request sent, a later event dropped); one without a script is
+    logged as before. Viewer check: `--click fishies.01,N`: the fish is
+    gone, `eat.aud` and the stats event logged; clicking it again does
+    nothing; Connor can walk through where it was.
+    **Done** as planned. Every placed entity now carries the object's
+    name (`terrain_view::ObjectName`) so a deletion can hide it; deletions
+    are applied in `trap_step` (with the other script requests).
+
 ### M4 — Talk, listen, use the menus
 
 **You will see and hear:** dialogue text, speech with lip sync, the

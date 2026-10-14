@@ -40,6 +40,11 @@
 //! rule 11, `doors.md` rules 12-14); `KQAnimPlayEvent` plays a movement
 //! (`doors.md` rule 6); `Init` and `EndLoop` as chests get them (our
 //! reading of `chests.md` rule 6, asked as Q64).
+//!
+//! Other clickable objects with a script (M3 step 3f: the fish, the
+//! swinging signs, still objects): clicked the same way, `Init` at the
+//! start; `deleteObject` removes them (and 3e-5 objects) for good and asks
+//! the viewer to hide them and drop their collision (Q64 d stand-in).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -69,6 +74,9 @@ pub enum Request {
     /// `KQCamera::setRange <min> <max>` (camera.md "Distance" rule 2),
     /// already checked: min < max.
     SetRange { min: f32, max: f32, at: String },
+    /// `deleteObject` on a placed object (3f): hide it, drop its
+    /// collision and view box.
+    Delete { name: String, at: String },
 }
 
 /// A door and what clicking and collision need to know about it.
@@ -144,6 +152,8 @@ pub struct ActiveObject {
     pub too_far_away_action: i64,
     pub do_not_point_at: bool,
     pub hidden: bool,
+    /// Deleted (`deleteObject`, 3f): never comes back.
+    pub gone: bool,
 }
 
 impl ActiveObject {
@@ -176,6 +186,34 @@ pub struct Clickable {
     pub max: [f32; 3],
     pub placement: Placement,
     pub collision_type: u32,
+    /// `script=` (3f): clicking it runs `ConnorAction`.
+    pub script: Option<String>,
+    pub accepts_inventory: Option<String>,
+    pub accept_all_items: bool,
+    pub too_far_away_action: i64,
+    pub do_not_point_at: bool,
+    /// Deleted (`deleteObject`, 3f).
+    pub gone: bool,
+}
+
+impl Clickable {
+    /// A clickable object with no script and the default click keys.
+    pub fn plain(name: &str, class: &str, min: [f32; 3], max: [f32; 3], placement: Placement, collision_type: u32) -> Self {
+        Clickable {
+            name: name.into(),
+            class: class.into(),
+            min,
+            max,
+            placement,
+            collision_type,
+            script: None,
+            accepts_inventory: None,
+            accept_all_items: false,
+            too_far_away_action: 0,
+            do_not_point_at: false,
+            gone: false,
+        }
+    }
 }
 
 /// An inventory item in Connor's hand (only a test option sets one; no
@@ -508,6 +546,9 @@ impl WorldState {
             self.note(format!("{at}: usage: {command} <object> ..."));
             return "1".into();
         };
+        if command == "deleteObject" && self.items.index(name).is_none() {
+            return self.delete_object(name, at);
+        }
         if let (Some(o), "KQObject::setHidden") = (self.object_index(name), command) {
             let hidden = words.get(2).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
             self.objects[o].hidden = hidden;
@@ -558,6 +599,32 @@ impl WorldState {
         };
         self.item_note(format!("{at}: {line}"));
         "0".into()
+    }
+
+    /// `deleteObject <name>` on a placed object (3f, Q64 d stand-in): a
+    /// scripted object or a clickable one is gone for good and the viewer
+    /// is asked to hide it; anything else stays a stub.
+    fn delete_object(&mut self, name: &str, at: &str) -> String {
+        let what = if let Some(i) = self.object_index(name) {
+            let o = &mut self.objects[i];
+            (o.gone, o.hidden) = (true, true);
+            "scripted object"
+        } else if let Some(c) = self.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(name)) {
+            c.gone = true;
+            "clickable object"
+        } else {
+            self.note(format!("{at}: stub (later milestone, nothing done): deleteObject {name}"));
+            return "0".into();
+        };
+        self.note(format!("{at}: deleteObject {name}: {what} gone (not drawn, not clickable, no collision; Q64 d stand-in)"));
+        self.requests.push(Request::Delete { name: name.to_string(), at: at.to_string() });
+        "0".into()
+    }
+
+    /// Whether `name` was deleted (events to it are dropped).
+    fn is_gone(&self, name: &str) -> bool {
+        self.object_index(name).is_some_and(|i| self.objects[i].gone)
+            || self.clickables.iter().any(|c| c.gone && c.name.eq_ignore_ascii_case(name))
     }
 
     /// `sendEvent <delay> <object> <type> [data…]`.
@@ -807,6 +874,12 @@ impl Active {
         for i in 0..self.world.objects.len() {
             self.call_object(i, &["Init"]);
         }
+        // Other scripted clickables (3f, Q64 c stand-in).
+        for i in 0..self.world.clickables.len() {
+            if self.world.clickables[i].script.is_some() {
+                self.call_clickable(i, &["Init"]);
+            }
+        }
         // traps.md rule 13 (after the doors, chests, objects: our order).
         for i in 0..self.world.traps.len() {
             self.call_trap(i, &["Init"]);
@@ -825,14 +898,14 @@ impl Active {
             .world
             .clickables
             .iter()
-            .filter(|c| c.collision_type & CLICKABLE != 0)
+            .filter(|c| c.collision_type & CLICKABLE != 0 && !c.gone)
             .filter_map(|c| Some((c.name.clone(), ray_box(origin, dir, &c.placement, c.min, c.max)?)));
         // Chests (chests.md rule 4): as doors; hidden ones can't be clicked.
         let chests = self.world.chests.iter().filter(|c| c.collision_type & CLICKABLE != 0 && !c.hidden).filter_map(|c| {
             let (min, max) = c.bounds?;
             Some((c.chest.name.clone(), ray_box(origin, dir, &c.chest.placement(), min, max)?))
         });
-        let objects = self.world.objects.iter().filter(|o| o.collision_type & CLICKABLE != 0 && !o.hidden).filter_map(|o| {
+        let objects = self.world.objects.iter().filter(|o| o.collision_type & CLICKABLE != 0 && !o.hidden && !o.gone).filter_map(|o| {
             let (min, max) = o.bounds?;
             Some((o.name().to_string(), ray_box(origin, dir, &o.player.placement(), min, max)?))
         });
@@ -903,8 +976,12 @@ impl Active {
             return self.click_object(i, feet, reach, item);
         }
         let Some(i) = self.world.door_index(name) else {
-            let found = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).cloned();
-            match found {
+            let found = self.world.clickables.iter().position(|c| c.name.eq_ignore_ascii_case(name));
+            if let Some(i) = found.filter(|&i| self.world.clickables[i].script.is_some()) {
+                return self.click_clickable(i, feet, reach, item);
+            }
+            match found.map(|i| self.world.clickables[i].clone()) {
+                Some(c) if c.gone => self.world.note(format!("click {}: deleted; nothing", c.name)),
                 Some(c) if c.collision_type & CLICKABLE != 0 => {
                     let d = distance_to_box(feet, &c.placement, c.min, c.max);
                     self.world.note(format!(
@@ -1014,6 +1091,56 @@ impl Active {
         let mut full = vec![name];
         full.extend(args);
         ClickResult::Script(full)
+    }
+
+    /// Connor clicks clickable object `i`, which has a script (3f): as a
+    /// door (Q64 a stand-in).
+    fn click_clickable(&mut self, i: usize, feet: [f32; 3], reach: f32, item: Option<&Item>) -> ClickResult {
+        let c = self.world.clickables[i].clone();
+        if c.gone || c.collision_type & CLICKABLE == 0 {
+            self.world.note(format!("click {}: deleted or not clickable now (type {:#x}); nothing", c.name, c.collision_type));
+            return ClickResult::Nothing;
+        }
+        let distance = distance_to_box(feet, &c.placement, c.min, c.max);
+        let in_reach = distance < reach;
+        let head = format!(
+            "click {} (class {}, scripted): Connor at ({:.0}, {:.0}, {:.0}), distance to its box {distance:.1}, reach {reach:.0}: {}",
+            c.name,
+            c.class,
+            feet[0],
+            feet[1],
+            feet[2],
+            if in_reach { "IN REACH" } else { "OUT OF REACH" }
+        );
+        let rules = ClickRules { accepts_inventory: &c.accepts_inventory, accept_all_items: c.accept_all_items, too_far_away_action: c.too_far_away_action };
+        let args = match self.script_args(&head, in_reach, item, &rules) {
+            Ok(a) => a,
+            Err(r) => return r,
+        };
+        self.world.note(format!("{head}; script arguments: {} {}", c.name, args.join(" ")));
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.call_clickable(i, &refs);
+        if !c.do_not_point_at {
+            self.world.note(format!("Connor would turn to face {} (doors.md rule 16; not done: his states not traced)", c.name));
+        }
+        let mut full = vec![c.name];
+        full.extend(args);
+        ClickResult::Script(full)
+    }
+
+    /// Runs clickable `i`'s script with `args` (`$1` is its name).
+    fn call_clickable(&mut self, i: usize, args: &[&str]) {
+        let c = &self.world.clickables[i];
+        let (name, script) = (c.name.clone(), c.script.clone());
+        let mut all = vec![name.clone()];
+        all.extend(args.iter().map(|a| a.to_string()));
+        match script {
+            Some(script) => {
+                self.world.note(format!("script {script} {}", all.join(" ")));
+                self.scripts.call(&script, &all, &mut self.world);
+            }
+            None => self.world.note(format!("{name} has no script; {} not called", all.join(" "))),
+        }
     }
 
     /// Connor clicks item object `i` (items.md rules 6-8).
@@ -1274,6 +1401,26 @@ impl Active {
                 self.world.note(format!("event {} {} to trap {}{from}: not handled for traps", e.kind, e.data.join(" "), e.target));
             }
             self.world.in_trap = was;
+            return;
+        }
+        if self.world.is_gone(&e.target) {
+            self.world.note(format!("event {} {} to {}{from}: deleted; dropped", e.kind, e.data.join(" "), e.target));
+            return;
+        }
+        if let Some(i) = self.world.clickables.iter().position(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&e.target)) {
+            if e.kind == "KQCueEvent" {
+                let n = |k: usize| e.data.get(k).cloned().unwrap_or_else(|| "0".into());
+                let mut args = vec!["Cue".to_string(), n(0), n(1)];
+                if e.data.get(2).is_some_and(|v| number_value(v) != 0.0) {
+                    args.push(e.data[2].clone());
+                }
+                self.world.note(format!("KQCueEvent {} to {}{from}", e.data.join(" "), e.target));
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                self.call_clickable(i, &refs);
+            } else {
+                // Their animation belongs to the viewer's anim_view (3f).
+                self.world.note(format!("event {} {} to {}{from}: not handled for this object (its animation isn't run here yet)", e.kind, e.data.join(" "), e.target));
+            }
             return;
         }
         if let Some(i) = self.world.object_index(&e.target) {
@@ -1850,9 +1997,64 @@ mod tests {
             too_far_away_action: 0,
             do_not_point_at: false,
             hidden: false,
+            gone: false,
         }]);
         a.start();
         a
+    }
+
+    /// A made-up script in the style of `fishies.cs` (not a copy).
+    const FISH: &str = "if test $2 == Init\n set F::init $1\nendif\nif test $2 == ConnorAction\n if test $F::full == true\n  set F::full false\n  sendEvent 1.0 $1 KQCueEvent 1 0\n  deleteObject $1\n  KQSound::play eat.aud\n  sendEvent 0 Connor KQStatsChangeRequestEvent 2 0 0 0 0\n endif\nendif\n";
+
+    fn with_clickables(script: Option<&str>) -> Active {
+        let mut fish = Clickable::plain("fishies.01", "KQAnimObject", [-200.0, -200.0, 0.0], [200.0, 200.0, 300.0], Placement::at([0.0; 3]), 33);
+        fish.script = script.map(|_| "fish.cs".to_string());
+        let sources = [("fish.cs".to_string(), FISH.as_bytes().to_vec())];
+        let mut v = Vars::default();
+        v.set("F::full", "true".into());
+        let mut a = Active::new(v, vec![], vec![fish], ["Connor".to_string()], sources);
+        a.start();
+        a
+    }
+
+    #[test]
+    fn a_scripted_clickable_eats_itself_once() {
+        let mut a = with_clickables(Some("fish.cs"));
+        assert_eq!(a.scripts.vars.get("F::init"), Some("fishies.01"), "Init (Q64 c stand-in)");
+        let near = [0.0, -1000.0, 0.0];
+        let r = a.click("fishies.01", near, 2350.0, None);
+        assert_eq!(r, ClickResult::Script(["fishies.01", "ConnorAction", "do", "do"].map(String::from).to_vec()));
+        assert!(a.world.clickables[0].gone);
+        assert!(matches!(&a.world.requests[..], [Request::Delete { name, .. }] if name == "fishies.01"));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("stub (later milestone, nothing done): KQSound::play eat.aud"), "{log}");
+        assert!(log.contains("deleteObject fishies.01: clickable object gone"), "{log}");
+        // Gone: not picked, a click does nothing, its cue (1 s later) is dropped.
+        assert_eq!(a.pick([0.0, -5000.0, 100.0], [0.0, 1.0, 0.0]), None);
+        assert_eq!(a.click("fishies.01", near, 2350.0, None), ClickResult::Nothing);
+        for _ in 0..20 {
+            a.update();
+        }
+        let log = a.take_log().join("\n");
+        assert!(log.contains("KQStatsChangeRequestEvent 2 0 0 0 0 to Connor") && log.contains("stats are M5"), "{log}");
+        assert!(log.contains("event KQCueEvent 1 0 to fishies.01 (sent by fish.cs line 7): deleted; dropped"), "{log}");
+    }
+
+    #[test]
+    fn a_clickable_without_a_script_is_only_logged() {
+        let mut a = with_clickables(None);
+        assert_eq!(a.click("fishies.01", [0.0, -1000.0, 0.0], 2350.0, None), ClickResult::NotADoor);
+        assert!(a.world.requests.is_empty());
+    }
+
+    #[test]
+    fn delete_object_on_a_scripted_object_and_on_other_objects() {
+        let mut a = with_object("deleteObject $1\ndeleteObject keepwall\n", "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(a.world.objects[0].gone && a.world.objects[0].hidden);
+        assert_eq!(a.pick([0.0, -5000.0, 200.0], [0.0, 1.0, 0.0]), None);
+        assert_eq!(a.world.requests.len(), 1);
+        assert!(a.take_log().join("\n").contains("stub (later milestone, nothing done): deleteObject keepwall"));
     }
 
     #[test]

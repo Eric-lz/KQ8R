@@ -73,6 +73,15 @@ fn combine(pose: &GameTransform, r: &[[f32; 3]; 3], position: [f32; 3]) -> ([[f3
     (m, p)
 }
 
+impl AnimSim {
+    /// `deleteObject` (3f): its collider is no longer moved.
+    pub fn forget_collider(&mut self, name: &str) {
+        for p in self.playing.iter_mut().filter(|p| p.name.eq_ignore_ascii_case(name)) {
+            p.collider = Some(None);
+        }
+    }
+}
+
 /// Builds the playing objects. `placed` is `Objects::placed`.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_animated(
@@ -141,7 +150,7 @@ pub fn spawn_animated(
         let opacity = p.opacity();
         let player = LoopPlayer::new(a.start, a.speed, a.repeat, b.frames.len(), b.duration, if a.random { Some(&mut rng) } else { None });
         let rotation = kq8_data::objects::rotation(p.angles);
-        let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default()));
+        let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
         if *unused || !p.drawn() {
             body.insert((Visibility::Hidden, ShownWithH));
         }

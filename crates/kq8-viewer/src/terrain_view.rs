@@ -59,6 +59,11 @@ pub struct ViewBlockerSet {
 #[derive(Resource, Default)]
 pub struct ObjectColliders(pub Vec<kq8_game::collide::BoxCollider>);
 
+/// The placed object an entity draws (M3 step 3f: `deleteObject` hides
+/// it by name).
+#[derive(Component)]
+pub struct ObjectName(pub String);
+
 #[derive(Resource)]
 pub struct Fly {
     pub yaw: f32,
@@ -327,7 +332,7 @@ pub fn setup_objects(
             } else {
                 material.clone()
             };
-            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform));
+            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             // Unused objects, and hidden ones (objects.md Q18): only with H.
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));

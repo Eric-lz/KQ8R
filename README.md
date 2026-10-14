@@ -123,8 +123,12 @@ The code is written with an AI coding agent (Claude Code); see
 - **Small chests, the jar and the mushroom baskets:** the small chest by
   the pub's keg and the one at the farm drop their coins beside them and
   open, then only "it's empty"; the baskets give Connor their mushrooms
-  and turn into empty baskets. Checked in the logs; not yet checked by
-  eye.
+  and turn into empty baskets. Checked in the logs and by eye.
+- **Fish and other scripted things:** clicking a swimming fish near
+  Connor makes it disappear (its eating sound and the health it gives are
+  only logged: no sound or health yet). Other clickable things with a
+  script (signs, the stone villagers...) run it too; most only make
+  Connor speak, which is logged. Checked in the logs; not yet by eye.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
   sound sources, unused pictures and objects that appear later in the
   story).
@@ -133,8 +137,8 @@ The code is written with an AI coding agent (Claude Code); see
 
 There is nothing to play yet. Doors make no sound, Connor says nothing
 when clicking (too far, locked) and doesn't turn to face the door; only
-doors, chests, items and scripted objects react to clicks (swinging
-signs and other things that move when the world starts are logged only; there is no inventory screen, picked-up items are only
+doors, chests, items and scripted objects react to clicks (what
+Connor would say is only logged; there is no inventory screen, picked-up items are only
 counted in the log). Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
 read it right). The camera doesn't swing

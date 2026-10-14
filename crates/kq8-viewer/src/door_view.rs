@@ -251,6 +251,7 @@ pub fn spawn_doors(
                 too_far_away_action: d.too_far_away_action,
                 do_not_point_at: d.do_not_point_at,
                 hidden: !p.drawn(),
+                gone: false,
             };
             main_log.summary(format!(
                 "objects: [{}] scripted at ({:.0}, {:.0}, {:.0}), type {:#x}, script {:?}, box {}, shows '{}', movements {:?}",
@@ -475,11 +476,34 @@ pub fn spawn_doors(
     commands.insert_resource(sim);
 }
 
+/// Names of deleted objects whose entities are still to be hidden (3f).
+#[derive(Resource, Default)]
+pub struct Deleted(pub Vec<String>);
+
+/// A collider that no longer touches anything (3f: `deleteObject`): size
+/// 0, far below the world.
+fn switch_off(c: &mut BoxCollider) {
+    c.min = [0.0; 3];
+    c.max = [0.0; 3];
+    c.placement = Placement::at([0.0, 0.0, -1.0e7]);
+}
+
 /// After Connor's update (M3 step 3d-2): if he moved, every trap checks
 /// him (traps.md rules 6-9) and runs its script. Then what the scripts
 /// asked of Connor and the camera this update is applied (3d-3), before
-/// the camera's update.
-pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>, camera: Option<ResMut<GameCam>>, shared: Res<Shared>) {
+/// the camera's update; and deleted objects lose their collision (3f).
+#[allow(clippy::too_many_arguments)]
+pub fn trap_step(
+    sim: Option<ResMut<DoorSim>>,
+    connor: Option<ResMut<ConnorSim>>,
+    camera: Option<ResMut<GameCam>>,
+    colliders: Option<ResMut<ObjectColliders>>,
+    view: Option<ResMut<ViewBlockerSet>>,
+    anim: Option<ResMut<crate::anim_view::AnimSim>>,
+    mut deleted: ResMut<Deleted>,
+    shared: Res<Shared>,
+) {
+    let (mut colliders, mut view, mut anim) = (colliders, view, anim);
     let (Some(mut sim), Some(mut connor)) = (sim, connor) else { return };
     let sim = &mut *sim;
     let position = connor.mover.position;
@@ -511,6 +535,25 @@ pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
                 Some(c) => format!("{at}: applied: camera range ({min:.0}, {max:.0}){}", if c.set_range(min, max) { "" } else { " REFUSED" }),
                 None => format!("{at}: camera range ({min:.0}, {max:.0}): no game camera; not applied"),
             },
+            Request::Delete { name, at } => {
+                let mut off = 0;
+                if let Some(c) = colliders.as_mut() {
+                    for b in c.0.iter_mut().filter(|b| b.name.eq_ignore_ascii_case(&name)) {
+                        switch_off(b);
+                        off += 1;
+                    }
+                }
+                let before = view.as_ref().map_or(0, |v| v.boxes.len());
+                if let Some(v) = view.as_mut() {
+                    v.boxes.retain(|b| !b.name.eq_ignore_ascii_case(&name));
+                }
+                let view_dropped = before - view.as_ref().map_or(0, |v| v.boxes.len());
+                if let Some(a) = anim.as_mut() {
+                    a.forget_collider(&name);
+                }
+                deleted.0.push(name.clone());
+                format!("{at}: applied: {name} deleted: {off} collider(s) switched off, {view_dropped} view box(es) dropped, hidden")
+            }
         };
         let line = format!("update {}: {line}", sim.active.world.updates);
         shared.log.lock().unwrap().summary(format!("traps: {line}"));
@@ -633,6 +676,10 @@ pub fn door_step(
             }
         }
         for (object, slot) in sim.active.world.objects.iter().zip(&sim.object_collider) {
+            if object.gone {
+                // Switched off by `trap_step` (3f).
+                continue;
+            }
             if let (Some(i), Some(c)) = (slot, object.collider()) {
                 colliders.0[*i] = c;
             }
@@ -651,6 +698,20 @@ pub fn door_step(
                 main.summary(format!("doors: {line}"));
             }
             sim.log.detail(line);
+        }
+    }
+}
+
+/// Hides the entities of deleted objects (3f), also from the H key.
+pub fn hide_deleted(mut commands: Commands, mut deleted: ResMut<Deleted>, mut tagged: Query<(Entity, &crate::terrain_view::ObjectName, &mut Visibility)>) {
+    if deleted.0.is_empty() {
+        return;
+    }
+    let names = std::mem::take(&mut deleted.0);
+    for (e, name, mut v) in &mut tagged {
+        if names.iter().any(|n| n.eq_ignore_ascii_case(&name.0)) {
+            *v = Visibility::Hidden;
+            commands.entity(e).remove::<crate::terrain_view::ShownWithH>();
         }
     }
 }

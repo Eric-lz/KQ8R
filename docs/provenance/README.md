@@ -708,3 +708,14 @@ Replaces "walls, terrain and other objects do not hide a clickable one" (`doors.
 | `collisionType`, `setHidden` on them | As chests (3e-4) | — |
 | Box moves with the shown frame's steps (collider updated each update) | As doors and chests | — |
 | Click shares the doors' argument rules (`script_args`) | Our code structure (doors unchanged) | Door tests unchanged |
+
+## Clicking objects that move at load, `deleteObject` (M3 step 3f) — `crates/kq8-game/src/{active,script}.rs`, `crates/kq8-viewer/src/{load,terrain_view,anim_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Clicking the swimming fish: it disappears, Connor makes an eating sound and gains health | **The user's check in the original** (2026-10-13); `fishies.cs` (data) does it | Viewer below |
+| Every clickable placed object with a script (not a door, chest, item or 3e-5 object) is clicked like a door: `ConnorAction`, `acceptsInventory`, `tooFarAwayAction`, `doNotPointAt` | **Our stand-in** (Q64 a, d) | Unit test; Daventry: `fishies.01/02` |
+| Their script gets `Init` at the start (after the 3e-5 objects) and `Cue`; `KQAnimPlayEvent` to them is logged, not done | **Our stand-in** (Q64 b, c) | Log: 118 `Init` calls in Daventry; Gnome/IceWorld: one unknown command each in an `Init` branch (`KQMonster::clearSpeak`, `getEndLoop`) |
+| `deleteObject` on such an object or a 3e-5 object: gone for good (not drawn, not clickable, no collision, no view box; events to it dropped); on other placed objects still a stub | **Our stand-in** (Q64 d) | Unit tests; viewer: `fishies.01` "1 collider(s) switched off, hidden", its cue 1 s later "deleted; dropped" |
+| A switched-off collider: size 0, 10,000,000 below the world | Our method (the collider list keeps its order) | — |
+| `KQSound::play` is a stub (no audio yet) | Our choice | Log |
