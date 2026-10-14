@@ -3,8 +3,8 @@
 Study session A, 2026-10-13. Sources: each world's `kq/Terrain/TERRAIN.KQ`,
 the map files in `<world>/resource/`, `Options.cs`, the height map
 (`terrh.dib`), and `Mask.exe` (studied, described here in our own words).
-Covers the ground only. Models, buildings, haze and moving lights are
-separate topics (not studied yet).
+Covers the ground only. Models, buildings, brightness and haze are in
+`object-lighting.md` (2026-10-14); moving lights are only partly studied.
 
 ## Purpose
 
@@ -32,7 +32,11 @@ its texture is multiplied by the light map over that square.
    shows `daveshdw.bin` in Daventry. The game starts with the value 0
    until `Options.cs` runs. A change takes effect at the next update.
 3. In Daventry the two hardware files differ in only 761 of 263,169
-   points, each by one step (rule 9); the picture is the same either way.
+   points. In 757 of them red is the same (only the brightness, green or
+   blue channel differs); 2 differ by 1 in red and 2 by 3 (largest step in
+   any channel: 3). The picture is the same either way. (Corrected
+   2026-10-14 from B's measurement, Q65; the first version said "each by
+   one step".)
    (Dynamic lighting also lets moving lights brighten the ground, rule 15.)
 4. **No file named** (Barren, Gnome, Temples 1–4 have empty names) or a
    file that can't be read: the map stays at its starting value, **full
@@ -73,21 +77,22 @@ its texture is multiplied by the light map over that square.
    - bits 8–11: **red**; bits 4–7: **green**; bits 0–3: **blue**.
 
    Daventry's hardware maps are grey (red = green = blue): **7** in sunlit
-   ground (236,889 points), **4** in hill shadow (20,123), and a few 6s and
-   8s. The software maps use **15** (lit) and **9** (shadow) in the same
+   ground (236,889 points), **4** in hill shadow (20,127 in the shown
+   shadow map; 20,123 in the light map), and a few 6s and 8s. The software maps use **15** (lit) and **9** (shadow) in the same
    places (they agree at 99.998% of points).
 10. **How the value lights the ground (hardware):** the ground texture is
     multiplied by the light map's colour, red by red, green by green, blue
     by blue (colour channel ÷ 15). The top 4 bits are not used for this,
-    as far as traced. **Not settled: whether the hardware result is
-    doubled.** The Glide setup found multiplies without doubling, which
-    would draw sunlit Daventry ground at 7/15 ≈ 47% of the texture's
-    brightness and shadow at 27%. But the software maps carry 15 and 9 in
-    the same places, i.e. 100% and 60%, and doubling the hardware values
-    gives 93% and 53%, nearly the same picture. Which one the original
-    shows has to be checked by eye (see "How to check"). The screen
-    brightness setting (`setBrightness 50` in `Options.cs`) may also play
-    a part; not studied.
+    as far as traced. **No doubling (×1), confirmed 2026-10-14 (Q66):** the
+    map goes to the card unchanged as 4-bit-per-channel colour and the
+    card multiplies it with the texture; nothing doubles it. Sunlit
+    Daventry ground is drawn at 7/15 ≈ 47% of the texture's brightness,
+    shadow at 4/15 ≈ 27%. The user's check by eye agrees (the original is
+    dark and muddy). The screen brightness setting does not change this at
+    the shipped value (`setBrightness 50` is a factor of exactly 1.0,
+    `object-lighting.md` rule 17). Daventry's maps are darker than other
+    worlds' by the designers' choice, not by an engine rule
+    (`object-lighting.md`, "Answers", Q65).
 11. **Between points** the value is spread smoothly. Each ground square
     gets its own small light texture of (2^`lightScale` + 1) points per
     side, corner to corner, drawn over the square together with its
@@ -144,9 +149,8 @@ its texture is multiplied by the light map over that square.
   full bright, or whatever it held).
 - Dead City and Snow exit have `groundScale` 11: same point counts, half
   the spacing.
-- Values above 7 exist in the hardware maps (8 in Daventry): if the result
-  is doubled (rule 10) they would be brighter than the texture, i.e. more
-  than 100%; cap at 100%.
+- Values above 7 exist in the hardware maps (8 in Daventry). With ×1
+  (rule 10) no value can pass 100%.
 
 ## Do not reproduce
 
@@ -159,21 +163,20 @@ its texture is multiplied by the light map over that square.
   spacing, and a histogram of the red channel (Daventry shadow map:
   4 ×20,127, 6 ×4,598, 7 ×236,889, 8 ×1,555). Log the light value under
   Connor every second as he walks.
-- **By eye in the original (user), to settle rule 10:** in Daventry, find
-  a hill with a shadow on the grass behind it (the shadows lie on the +y
-  side of hills, away from the sun). The shadowed grass should look about
-  half as bright as the sunlit grass next to it. Then compare our
-  viewer drawn with "×1" and with "×2" against the original: with ×1
-  everything is dark and muddy (sunlit ground under half the texture's
-  brightness), with ×2 sunlit ground looks like the plain texture. The
-  one that matches the original decides rule 10.
+- **By eye in the original (user):** in Daventry, find a hill with a
+  shadow on the grass behind it (the shadows lie on the +y side of hills,
+  away from the sun). The shadowed grass should look about half as bright
+  as the sunlit grass next to it. Our viewer at "×1" should match the
+  original (done by the user on 2026-10-14: ×1 matches, rule 10).
 - **Data check:** the 97.5% shadow agreement in rule 8 can be repeated
   from the height map and `SUNLIGHT.KQ`.
 
 ## Open questions
 
-1. Doubling or not on hardware (rule 10). Suggested stand-in until checked:
-   ×2 with a cap at 100%, because it matches the software maps.
-2. The exact filtering between points (rule 11).
-3. What the screen brightness setting does (`setBrightness`).
+1. ~~Doubling or not on hardware (rule 10).~~ Answered 2026-10-14: ×1
+   (Q66). The first version suggested ×2; that was wrong.
+2. The exact filtering between points (rule 11). The Glide start-up sets
+   bilinear filtering; not traced for the light map's texture unit.
+3. ~~What the screen brightness setting does.~~ Answered in
+   `object-lighting.md` rule 17: at 50, nothing.
 4. Dynamic lights on the ground (rule 15): belongs to moving lights.

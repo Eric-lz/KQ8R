@@ -47,8 +47,9 @@ all 153 files):
    - bytes 4, 5: texture offset in texels (x, y).
    - u16 at 6: plane index.
    - u32 at 8: first corner in the corner table.
-   - u32 at 12: first entry in the lighting data, with byte 17 as its count
-     (probably the light map in `.dil`; not traced).
+   - u32 at 12: first entry in some other table, with byte 17 as its count
+     (**not** the `.dil` light map: that is found by surface number,
+     `object-lighting.md`; meaning not traced).
    - byte 16: number of corners (3–9, mostly 4).
    - bytes 18, 19: always 0.
 2. Tables 2–4: **BSP nodes** (8 bytes), **BSP leaves** (48 bytes) and
@@ -85,9 +86,9 @@ all 153 files):
    i.e. the texture is laid straight on the building at 8 units per texel and
    repeats. **Likely** (not traced): divide the texel position by the
    material bitmap's width/height and let the texture repeat.
-4. Lighting: `.dil` holds the building's pre-made lighting (there are
-   console commands to switch to an "alternate lightmap"). Not decoded; draw
-   without it for now.
+4. Lighting: `.dil` holds the building's pre-made light maps, one per
+   surface. Decoded 2026-10-14: see `object-lighting.md` ("Rules:
+   buildings", `.dil` layout and rules 12–16).
 
 ## Where a building stands (Q10 follow-up)
 

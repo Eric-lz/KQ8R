@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 Object lighting note: the user's checks in the original
+
+**Changed:** `docs/behaviour/object-lighting.md`: "How to check" records the results, building text corrected, new open question 7. Docs only.
+**Why:** The user checked the note's by-eye items in the original game.
+**Tested how:** User's check by eye in the original; data check (which Daventry files name the `0x1000` textures).
+**Result:** Objects as dark as the grass, sunny side slightly lighter: **confirmed**. Haze: objects fade and vanish with distance from the camera: **confirmed** (distance not measurable in the original). Connor's hut inside: darker than outside and in the corners, but reasonably lit; the note's "mostly dark" overstated it, so it now says the bright areas are baked into the light map. The "full-bright materials" check is **withdrawn**: in Daventry those textures appear only in `interior.dml` (buildings), not in models, so it pointed at nothing concrete.
+**Still broken / not tested:** Whether `0x1000` building materials skip their light map (open question 7). Hut brightness to be compared with our viewer once buildings are lit.
+**Next:** Session B: implement `object-lighting.md`.
+
+## 2026-10-14 Study (A): object and building lighting, Q65 and Q66 answered
+
+**Changed:** New `docs/behaviour/object-lighting.md` (model lighting, building `.dil` light maps, brightness setting, haze, point lights). `terrain-lighting.md`: rule 10 now says ×1 (confirmed), rule 3 and rule 9 corrected (Q65 b), open questions 1 and 3 closed. `buildings.md`: points to the `.dil` section; corrects the guess about the surface field at byte 12. `QUESTIONS.md`: Q65 and Q66 answered. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** The user asked for a study session on object and building lighting, plus Q66 (×1 or ×2, and anything that brightens the picture).
+**Tested how:** Traced in `Mask.exe` with the Ghidra tools (Glide renderer only). Throwaway scripts in the session scratchpad checked the data: all 235 `.dil` headers, the `.dil`/`.dig` match on 153 pairs (surface count and build id), the light-map size rule on every surface, Daventry building light histograms, light files of all 12 worlds, point-light files.
+**Result:** ×1 confirmed: light maps go to the card unchanged and are multiplied, no doubling. `setBrightness 50` is a factor of exactly 1.0. On hardware the world's `*HW.kq` lights are used (Daventry: ambient 0.3, sun 0.1), so Daventry models come out at 30–42% of their texture's brightness. Building walls use a per-surface light map in `.dil`: 4-bit colour, one texel per 16 × 16 texture texels. The size rule fits every surface of 148 of 153 files. Objects get no shadow from the ground or from buildings. Haze in Daventry runs from 18,000 to 22,950 units, and objects beyond the end are not drawn.
+**Still broken / not tested:** **Nothing checked by eye yet** (How to check in the note). Not traced: the wall drawing code (whether sun and ambient also tint walls; assumed not), Direct3D, how a point light decides an object is out of range, what turns on the per-object "unlit" switch, why 5 `.dil` files miss the size rule. Daventry has no point lights; `torchlight.kq` is loaded by no script found.
+**Next:** Session B: light models and buildings from `object-lighting.md` (and haze if wanted). The user: the by-eye checks in that note.
+
 ## 2026-10-14 Clippy clean on the whole workspace
 
 **Changed:** `kq8-viewer`: `load.rs` (a doc comment described two tabs with real tab characters; now in words), `game_camera.rs` `camera_input` and `terrain_view.rs` `fly_input` (allowed "too many arguments": Bevy systems take what they use as arguments), `main.rs` (allowed "large size difference" on the one-off `Scene` choice). `kq8-data/src/objects.rs`: the test `reads_a_section` allows `3.14`, which is the game file's own value (`dirZ=3.14`), not π. Each allow has a comment saying why. No behaviour change.
