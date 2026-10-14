@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 Docs: REA setup and the session split
+
+**Changed:** `docs/RESEARCH.md`, REA section: new point that its setup command registers REA user-wide in Claude Code (`~/.claude.json` and a skill in `~/.claude/skills`). That would give session B a disassembler, so a trial should use this project's `.mcp.json` for session A only. Includes how to undo a setup install. Docs only.
+**Why:** The user asked to record it after asking what REA's setup would change.
+**Tested how:** Read REA's `docs/installation.md` ("Limit REA to one project or agent profile"), `docs/client-configuration.md` and `src/application/SupportedClients.ts` (the `claude_code` entry).
+**Result:** Recorded. The paths come from REA's code and docs.
+**Still broken / not tested:** REA setup was not run, so the paths it writes were not observed.
+**Next:** None.
+
+## 2026-10-14 Reference: REA reverse-engineering tool
+
+**Changed:** Cloned <https://github.com/morluto/rea> (commit `877d404`) into `reference/rea` (ignored by git, local only). `docs/RESEARCH.md`: new section "Reverse-engineering tools" with what REA is and whether it fits. Docs only; no code.
+**Why:** The user asked to add REA to the references and to judge whether it's worth using.
+**Tested how:** Read its README, `docs/windows-ghidra-p0.md`, `docs/ghidra-provider.md` and `docs/native-investigation.md`. `git status --short` after cloning showed nothing new, so `reference/rea` is ignored.
+**Result:** Not worth installing now. Windows support is experimental, and 32-bit PE files like `Mask.exe` are accepted only on its `main` branch, not in npm releases up to 5.0.0. It analyses a fresh copy each time and can't use or update our Ghidra project. The idea worth borrowing is its method of checking a rebuilt function against the original on many inputs.
+**Still broken / not tested:** REA was not installed or run. Nothing about its output on `Mask.exe` is verified.
+**Next:** None. Look again if a release supports 32-bit PE on Windows and can open an existing Ghidra project.
+
 ## 2026-10-14 Docs: launch options in FEATURES.md
 
 **Changed:** `docs/FEATURES.md`: new section "Launch options (viewer)" before "What doesn't work yet". It lists every viewer option (`--world`, `--model`, `--palette`, `--light`, `--game`, `--frames`, `--at`, `--lift`, `--hold`, `--turn`, `--jump`, `--click`, `--aim`, `--item`) with a short plain-language description, and says which ones only work in the ground view. Docs only; no code.

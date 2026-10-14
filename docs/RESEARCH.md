@@ -91,6 +91,46 @@ copy its *layout ideas* only: Cargo workspace under `crates/`, asset readers
 feeding the engine, an `*-artifacts/` folder for logs/caches, docs folder,
 credits for every source. No code copied.
 
+## Reverse-engineering tools
+
+### REA (morluto/rea)
+
+<https://github.com/morluto/rea> (MIT). An MCP server and CLI, written in
+TypeScript on Node.js, that lets an AI agent run Ghidra, IDA or Hopper
+headless (no window) and get back structured results. Cloned to
+`reference/rea` (commit `877d404`, 2026-10-14). Read only; not installed,
+not run.
+
+- **Windows + 32-bit PE is the weak spot.** Windows support is labelled
+  "experimental". 32-bit x86 PE files (`Mask.exe` is one) are accepted only
+  on the repository's `main` branch. The npm releases up to 5.0.0 accept only
+  64-bit PE on Windows (`docs/windows-ghidra-p0.md`).
+- **It doesn't use our Ghidra project.** Each run imports the target into a
+  fresh, temporary Ghidra database. On Windows it is read-only: no renames,
+  no comments. The names and comments session A has added in `re/ghidra/KQ8`
+  would not show up, and nothing it finds would be saved there.
+- **What we already have covers the same ground.** GhidraMCP gives session A
+  decompile, xrefs, strings and rename/comment tools on the persistent
+  project.
+- **Ideas worth borrowing (method, not code):** its "showcase" workflow
+  (DX-Ball, TH04) rebuilds one function in C and checks it against the
+  original on thousands of inputs and against the compiled bytes. That is a
+  good model for checking a formula from `docs/behaviour/` before session B
+  codes it: run the same inputs through both and compare the outputs.
+- **Verdict: not worth installing now.** Look again if a release supports
+  32-bit PE on Windows *and* can open an existing Ghidra project.
+  `npx rea-agents setup` edits the agent's MCP config, so don't run it
+  casually.
+- **Setup would break the session A / B split.** For Claude Code, setup
+  writes `mcpServers.rea` into the user-wide `~/.claude.json` and installs a
+  skill in `~/.claude/skills/reverse-engineer-anything`
+  (`docs/installation.md`, `src/application/SupportedClients.ts`). Both apply
+  to every project and every session, so session B, which must never see
+  `Mask.exe`, would get a disassembler too. If REA is ever tried, add it by
+  hand to this project's `.mcp.json` for session A only, and skip the setup
+  command. Undoing a setup install: `claude mcp remove --scope user rea` and
+  delete that skill folder.
+
 ## Useful original-behaviour facts noticed so far
 
 - `console.cs` sets `KQGame::FPSLimit 15` and `KQGame::BitDepth 8`.
