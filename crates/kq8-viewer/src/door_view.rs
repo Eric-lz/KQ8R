@@ -18,6 +18,11 @@
 //! `Active` (shared variables, scripts and events). [`trap_step`] runs
 //! after Connor's update: if he moved, every trap checks him. Their lines
 //! go to `kq8-artifacts/logs/traps.log`.
+//!
+//! Items (M3 step 3e-3, docs/behaviour/items.md): the item objects the
+//! start-up scripts made join the same `Active`, which also handles
+//! clicking them (`item_view.rs` draws them). Their lines go to
+//! `kq8-artifacts/logs/items.log`.
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
@@ -65,9 +70,32 @@ pub struct DoorSim {
     trap_log: Option<Log>,
     /// Where the traps last checked Connor.
     connor_checked_at: Option<[f32; 3]>,
+    /// `items.log`; `None` if it could not be made.
+    item_log: Option<Log>,
 }
 
 impl DoorSim {
+    /// Writes the item lines gathered since the last call; pickups and
+    /// items made also to the main log. Returns the lines, so the door
+    /// lines (which hold a copy of each) don't put them on the terminal
+    /// a second time.
+    fn flush_items(&mut self, shared: &Shared) -> Vec<String> {
+        let lines = self.active.take_item_log();
+        if lines.is_empty() {
+            return lines;
+        }
+        let mut main = shared.log.lock().unwrap();
+        for line in &lines {
+            if line.contains("picked up") || line.contains(": made ") {
+                main.summary(format!("items: {line}"));
+            }
+            if let Some(log) = &mut self.item_log {
+                log.detail(line);
+            }
+        }
+        lines
+    }
+
     /// Writes the trap lines gathered since the last call; `On`/`Off` also
     /// to the main log.
     fn flush_traps(&mut self, shared: &Shared) {
@@ -293,15 +321,48 @@ pub fn spawn_doors(
         }
     }
     active.add_traps(traps);
+    // Items (3e-3): those the start-up scripts made, and the ground for
+    // z -1 / -2 of items made while playing.
+    let mut item_log = match Log::create("items") {
+        Ok(l) => Some(l),
+        Err(e) => {
+            main_log.summary(format!("items: cannot create items.log: {e}; items still work, not logged"));
+            None
+        }
+    };
+    active.world.items = std::mem::take(&mut objects.items);
+    for o in &active.world.items.objects {
+        active.world.known.insert(o.name.to_ascii_lowercase());
+    }
+    if let Some(ground) = objects.ground.take() {
+        use kq8_data::terrain::Level;
+        active.world.heights = Some(Box::new(move |x, y, floor| ground.ground_at(if floor { Level::Floor } else { Level::Surface }, x, y).map(|g| g.height)));
+    }
+    if let Some(log) = &mut item_log {
+        for line in std::mem::take(&mut objects.item_lines) {
+            log.detail(line);
+        }
+        log.detail("items at the start:");
+        let items = &active.world.items;
+        for o in &items.objects {
+            let click = items.click_box(o).map_or("NO click box".to_string(), |(a, b)| format!("click box {a:?}..{b:?}"));
+            log.detail(format!("  {}; {click}", items.describe(&o.name)));
+        }
+    }
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
     if let Some(log) = &mut sim.trap_log {
         for line in sim.active.take_trap_log() {
+            log.detail(line);
+        }
+    }
+    if let Some(log) = &mut sim.item_log {
+        for line in sim.active.take_item_log() {
             log.detail(line);
         }
     }
@@ -332,6 +393,7 @@ pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
         sim.active.connor_moved(&v);
     }
     sim.flush_traps(&shared);
+    sim.flush_items(&shared);
     let mut camera = camera;
     for r in std::mem::take(&mut sim.active.world.requests) {
         let line = match r {
@@ -431,12 +493,15 @@ pub fn door_step(
         }
     }
     sim.flush_traps(&shared);
+    let item_lines = sim.flush_items(&shared);
     let lines = sim.active.take_log();
     if !lines.is_empty() {
         let mut main = shared.log.lock().unwrap();
         for line in lines {
-            // The main log gets the clicks, door events and finished movements.
-            if line.contains(": click ") || line.contains("KQDoorEvent") || line.contains("finished;") {
+            // The main log gets the clicks, door events and finished
+            // movements; item lines it already has (`flush_items`).
+            let wanted = line.contains(": click ") || line.contains("KQDoorEvent") || line.contains("finished;");
+            if wanted && !item_lines.contains(&line) {
                 main.summary(format!("doors: {line}"));
             }
             sim.log.detail(line);

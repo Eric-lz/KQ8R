@@ -1772,7 +1772,7 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
-- **3e — chests and items (planned 2026-10-13; 3e-1 and 3e-2 done
+- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-3 done
   2026-10-13, MODLOG).** Rules from
   `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
   clicking, `objects.md` for heights and hiding). Five sub-steps, each
@@ -1864,6 +1864,13 @@ catchers, ground animators).
     `kq8-artifacts/logs/items.log`: every item made (type, quantity,
     name, where, `NewInvItem`), every pickup (distance, Connor's count of
     that type before and after), the start count in the main log.
+    **Done.** The `KQMonster::inventory` / `give` line reader is shared
+    (`item::read_make`) by the start-up runner's host (`load.rs`) and the
+    running game. Daventry: 22 items (21 in `WorldInv.cs`, the hidden
+    `BirthdaySuit`), models for 25 types. Item models are looked up like
+    objects' (this world, then `GAME/Common`), so a type whose model only
+    another world has is not drawn (Gnome's `schroomC.kqs`, not needed at
+    the start there).
   - **3e-4, chests** (`kq8-game` new `chest.rs`, `active.rs`;
     `kq8-viewer` `load.rs`, `door_view.rs`). A `KQChest`: its keys (rule
     1), default type 0x8021 unless `colliderType` (rule 2; today chests

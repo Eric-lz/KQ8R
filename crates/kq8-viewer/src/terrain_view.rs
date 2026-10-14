@@ -220,6 +220,17 @@ pub fn setup_objects(
     // Doors (M3 step 3a): drawn and moved by door_view; their colliders
     // join the others and are moved every update.
     let mut colliders = std::mem::take(&mut objects.objects);
+    // Items (3e-3): each type's model and opacity, before the items go to
+    // the doors' `Active`.
+    let item_looks: Vec<(String, usize, f32)> = objects
+        .item_shapes
+        .iter()
+        .map(|(kind, slot)| {
+            let t = objects.items.kind(kind).and_then(|t| t.translucency).unwrap_or(256.0);
+            // As objects' `translucency` (objects.md Q14).
+            (kind.clone(), *slot, if t >= 256.0 { 1.0 } else { (t / 255.0).clamp(0.0, 1.0) })
+        })
+        .collect();
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut materials, &mut images, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
@@ -268,6 +279,7 @@ pub fn setup_objects(
         }
         built.push(parts);
     }
+    crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut materials);
     // Emitters (M3 step 3b-1): their particles use the object models.
     // Particle catchers (3b-2) look up their emitter and building.
     let emitters = std::mem::take(&mut objects.emitters);

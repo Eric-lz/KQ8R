@@ -79,6 +79,64 @@ impl ItemObject {
     }
 }
 
+/// A `KQMonster::inventory` or `give` line, read (rule 9).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Make {
+    /// `world` or a character's name.
+    pub who: String,
+    pub kind: String,
+    /// Default 1.
+    pub quantity: i64,
+    /// As written (−1 / −2 not yet replaced).
+    pub position: Option<[f32; 3]>,
+    /// Missing ones 0.
+    pub angles: [f32; 3],
+}
+
+impl Make {
+    pub fn in_world(&self) -> bool {
+        self.who.eq_ignore_ascii_case("world")
+    }
+}
+
+/// Reads `KQMonster::inventory <who> <type> [qty] [x y z [rx ry rz]]` or
+/// `give <type> [qty]` (words expanded, `words[0]` the command). `Err`
+/// with a reason for the log. A world item needs x y z (our choice: every
+/// such line in the data gives one).
+pub fn read_make(words: &[String]) -> Result<Make, String> {
+    let line = words.join(" ");
+    let (who, rest) = if words[0].eq_ignore_ascii_case("give") {
+        ("Connor".to_string(), &words[1..])
+    } else {
+        match words.get(1) {
+            Some(w) => (w.clone(), &words[2..]),
+            None => return Err("usage: KQMonster::inventory <who> <type> [quantity] [x y z [rx ry rz]]".into()),
+        }
+    };
+    let Some(kind) = rest.first() else { return Err(format!("usage: {} needs an item type: '{line}'", words[0])) };
+    let numbers = &rest[1..];
+    if let Some(bad) = numbers.iter().find(|w| !crate::script::looks_like_number(w)) {
+        return Err(format!("{line}: '{bad}' is not a number"));
+    }
+    let n: Vec<f32> = numbers.iter().map(|w| crate::script::number_value(w) as f32).collect();
+    let position = match n.len() {
+        0 | 1 => None,
+        2 | 3 => return Err(format!("{line}: a position needs x y z")),
+        _ => Some([n[1], n[2], n[3]]),
+    };
+    let make = Make {
+        who,
+        kind: kind.clone(),
+        quantity: n.first().map_or(1, |q| *q as i64),
+        position,
+        angles: [n.get(4), n.get(5), n.get(6)].map(|a| a.copied().unwrap_or(0.0)),
+    };
+    if make.in_world() && make.position.is_none() {
+        return Err(format!("{line}: no position for a world item"));
+    }
+    Ok(make)
+}
+
 /// Every item object of the world and the type list.
 #[derive(Debug, Clone, Default)]
 pub struct Items {
@@ -139,6 +197,24 @@ impl Items {
             .iter()
             .filter(|o| o.kind == t.name)
             .find(|o| if world { o.in_world() } else { o.carried_by(who) })
+    }
+
+    /// One line about item object `name` for the logs: name, type,
+    /// quantity, where it is.
+    pub fn describe(&self, name: &str) -> String {
+        let Some(o) = self.get(name) else { return format!("{name}: no such item") };
+        let where_ = match &o.place {
+            Place::World { position: p, angles: a } => {
+                format!("in the world at ({:.0}, {:.0}, {:.0}) turned ({}, {}, {})", p[0], p[1], p[2], a[0], a[1], a[2])
+            }
+            Place::Carried(w) => format!("carried by {w} (now {} of them)", self.count(w, &o.kind)),
+            Place::Gone => "gone".into(),
+        };
+        let extra = match (&o.script, o.hidden) {
+            (None, false) => String::new(),
+            (s, h) => format!(" [script {s:?}, hidden {h}]"),
+        };
+        format!("{}: {} x{} {where_}{extra}", o.name, o.kind, o.quantity)
     }
 
     /// How many of type `kind` `who` carries (quantities added up; for the

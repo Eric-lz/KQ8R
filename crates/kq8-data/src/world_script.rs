@@ -20,6 +20,10 @@
 //!   object's current place, which the caller knows.
 //! - `move <who> <flags> x y z [rx ry rz]` (missing numbers 0) is passed to
 //!   the caller.
+//! - `KQMonster::inventory`, `give`, `KQObject::setScript` and
+//!   `KQObject::setDontLook` (items, M3 step 3e-3, `items.md` rule 9) go to
+//!   the caller, which makes or changes the item; a new item's name is put
+//!   in `$NewInvItem`.
 //! - Everything else (`alias`, `lockShape`, ...) is counted, not run.
 //!   `if ... endif` is not evaluated; lines inside such a block are still
 //!   run but marked, so the caller can report them.
@@ -127,6 +131,13 @@ pub trait Host {
     /// `KQObject::setHidden <name> 0|1` (objects.md Q18); `at` names the
     /// script line, for the log.
     fn set_hidden(&mut self, name: &str, hidden: bool, at: &str);
+    /// `KQMonster::inventory`, `give`, `KQObject::setScript`,
+    /// `KQObject::setDontLook` with their words expanded (`words[0]` as
+    /// written). Returns a new item's name, for `$NewInvItem`. By default
+    /// nothing is done.
+    fn item_command(&mut self, _words: &[String], _at: &str) -> Option<String> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -152,6 +163,10 @@ pub struct ScriptRun {
     pub moves: usize,
     /// `KQObject::setHidden` lines passed to the caller.
     pub set_hidden: usize,
+    /// Item lines passed to the caller, and how many of them sit inside
+    /// an `if` block (run anyway, as every line here).
+    pub item_commands: usize,
+    pub item_commands_inside_if: usize,
     /// The variables at the end.
     pub vars: Vars,
 }
@@ -248,6 +263,7 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
                 continue;
             }
             "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
+            "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {}
             c if c.ends_with(".cs") => {}
             // Not run: counted without looking at its variables.
             _ => {
@@ -325,6 +341,15 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
                 }
                 Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
             },
+            "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {
+                out.item_commands += 1;
+                if if_depth > 0 {
+                    out.item_commands_inside_if += 1;
+                }
+                if let Some(name) = host.item_command(&words, &at) {
+                    out.vars.set("NewInvItem", name);
+                }
+            }
             _ => run_script(first, &words[1..], host, out, depth + 1),
         }
     }
@@ -384,11 +409,12 @@ mod tests {
         moves: Vec<Move>,
         kq_values: Vec<String>,
         hidden: Vec<(String, bool)>,
+        items: Vec<String>,
     }
 
     impl TestHost {
         fn new(files: Vec<(&'static str, &'static str)>) -> Self {
-            TestHost { files, placed: Vec::new(), moves: Vec::new(), kq_values: Vec::new(), hidden: Vec::new() }
+            TestHost { files, placed: Vec::new(), moves: Vec::new(), kq_values: Vec::new(), hidden: Vec::new(), items: Vec::new() }
         }
     }
 
@@ -412,6 +438,11 @@ mod tests {
         }
         fn set_hidden(&mut self, name: &str, hidden: bool, _at: &str) {
             self.hidden.push((name.to_string(), hidden));
+        }
+        fn item_command(&mut self, words: &[String], _at: &str) -> Option<String> {
+            self.items.push(words.join(" "));
+            let made = words[0].eq_ignore_ascii_case("give") || words[0].eq_ignore_ascii_case("KQMonster::inventory");
+            made.then(|| format!("item.{}", self.items.len()))
         }
     }
 
@@ -496,5 +527,27 @@ mod tests {
         assert_eq!(r.loads[5].name, LoadName::Rename("279587 2 3 0 0 -2.9".into()));
         // `.kq` values can be variables.
         assert_eq!(host.kq_values[0], "144476");
+    }
+
+    #[test]
+    fn item_lines_go_to_the_host_and_set_newinvitem() {
+        let mut host = TestHost::new(vec![(
+            "newworld.cs",
+            "KQMonster::inventory\tworld\tDagger\t1\t260784\t229385\t14935\t-1.87\t1.57\t75\nKQObject::setScript $NewInvItem dagger.cs\nKQObject::setDontLook $NewInvItem 1\nKQObject::setHidden $NewInvItem 1\nif test 1 == 2\ngive mushroom 5\nendif\nset Last $NewInvItem\n",
+        )]);
+        let r = run("newWorld.cs", &mut host);
+        assert!(r.bad_lines.is_empty(), "{:?}", r.bad_lines);
+        assert_eq!(
+            host.items,
+            [
+                "KQMonster::inventory world Dagger 1 260784 229385 14935 -1.87 1.57 75",
+                "KQObject::setScript item.1 dagger.cs",
+                "KQObject::setDontLook item.1 1",
+                "give mushroom 5"
+            ]
+        );
+        assert_eq!(host.hidden, [("item.1".to_string(), true)]);
+        assert_eq!((r.item_commands, r.item_commands_inside_if), (4, 1));
+        assert_eq!(r.vars.get("Last"), Some("item.4"));
     }
 }

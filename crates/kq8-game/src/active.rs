@@ -310,72 +310,40 @@ impl WorldState {
     /// (items.md rule 9); `give <type> [qty]` is the same for Connor.
     /// Result 0 and `NewInvItem` = the new object's name, or 1 on an error.
     fn make_item(&mut self, words: &[String], at: &str) -> String {
-        let (who, rest) = if words[0] == "give" {
-            ("Connor".to_string(), &words[1..])
-        } else {
-            match words.get(1) {
-                Some(w) => (w.clone(), &words[2..]),
-                None => {
-                    self.note(format!("{at}: usage: KQMonster::inventory <who> <type> [quantity] [x y z [rx ry rz]]"));
+        let m = match crate::item::read_make(words) {
+            Ok(m) => m,
+            Err(e) => {
+                self.note(format!("{at}: {e}; nothing made"));
+                return "1".into();
+            }
+        };
+        let place = match m.position.filter(|_| m.in_world()) {
+            Some(mut p) => {
+                if p[2] == -1.0 || p[2] == -2.0 {
+                    // objects.md Q17 rule 2: -1 floor, -2 surface.
+                    let floor = p[2] == -1.0;
+                    match self.heights.as_ref().and_then(|h| h(p[0], p[1], floor)) {
+                        Some(z) => p[2] = z,
+                        None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", p[2], p[0], p[1])),
+                    }
+                }
+                Place::World { position: p, angles: m.angles }
+            }
+            None => {
+                if !self.known.contains(&m.who.to_ascii_lowercase()) {
+                    self.note(format!("{at}: ERROR {}: unknown character '{}'; nothing made", words.join(" "), m.who));
                     return "1".into();
                 }
+                Place::Carried(m.who.clone())
             }
         };
-        let Some(kind) = rest.first() else {
-            self.note(format!("{at}: usage: {} needs an item type: '{}'", words[0], words.join(" ")));
-            return "1".into();
-        };
-        let numbers = &rest[1..];
-        if let Some(bad) = numbers.iter().find(|w| !looks_like_number(w)) {
-            self.note(format!("{at}: {}: '{bad}' is not a number; nothing made", words.join(" ")));
-            return "1".into();
-        }
-        let n: Vec<f32> = numbers.iter().map(|w| number_value(w) as f32).collect();
-        let quantity = n.first().map_or(1, |q| *q as i64);
-        let position = match n.len() {
-            0 | 1 => None,
-            2 | 3 => {
-                self.note(format!("{at}: {}: a position needs x y z; nothing made", words.join(" ")));
-                return "1".into();
-            }
-            _ => Some([n[1], n[2], n[3]]),
-        };
-        let angles = [n.get(4), n.get(5), n.get(6)].map(|a| a.copied().unwrap_or(0.0));
-        let place = if who.eq_ignore_ascii_case("world") {
-            let Some(mut p) = position else {
-                // Our choice: every such line in the data gives a position.
-                self.note(format!("{at}: {}: no position for a world item; nothing made", words.join(" ")));
-                return "1".into();
-            };
-            if p[2] == -1.0 || p[2] == -2.0 {
-                // objects.md Q17 rule 2: -1 floor, -2 surface.
-                let floor = p[2] == -1.0;
-                match self.heights.as_ref().and_then(|h| h(p[0], p[1], floor)) {
-                    Some(z) => p[2] = z,
-                    None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", p[2], p[0], p[1])),
-                }
-            }
-            Place::World { position: p, angles }
-        } else {
-            if !self.known.contains(&who.to_ascii_lowercase()) {
-                self.note(format!("{at}: ERROR {}: unknown character '{who}'; nothing made", words.join(" ")));
-                return "1".into();
-            }
-            Place::Carried(who.clone())
-        };
-        match self.items.make(kind, quantity, place) {
+        match self.items.make(&m.kind, m.quantity, place) {
             Ok(o) => {
-                let (name, kind, place) = (o.name.clone(), o.kind.clone(), o.place.clone());
-                let where_ = match &place {
-                    Place::World { position: p, angles: a } => {
-                        format!("in the world at ({:.0}, {:.0}, {:.0}) turned ({}, {}, {})", p[0], p[1], p[2], a[0], a[1], a[2])
-                    }
-                    Place::Carried(w) => format!("carried by {w} (now {} of them)", self.items.count(w, &kind)),
-                    Place::Gone => "nowhere".into(),
-                };
+                let name = o.name.clone();
+                let line = format!("{at}: made {}; NewInvItem = {name}", self.items.describe(&name));
                 self.known.insert(name.to_ascii_lowercase());
-                self.vars_out.push(("NewInvItem".into(), name.clone()));
-                self.item_note(format!("{at}: made {name}: {kind} x{quantity} {where_}; NewInvItem = {name}"));
+                self.vars_out.push(("NewInvItem".into(), name));
+                self.item_note(line);
                 "0".into()
             }
             Err(e) => {

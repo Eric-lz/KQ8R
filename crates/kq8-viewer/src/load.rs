@@ -862,6 +862,16 @@ pub struct Objects {
     pub animated: Vec<AnimatedAssets>,
     /// Their animations, each (model, loop) once.
     pub object_animations: Vec<Animation>,
+    /// The item types and the item objects the start-up scripts made (M3
+    /// step 3e-3; items.md rule 9).
+    pub items: kq8_game::item::Items,
+    /// Each item type that can appear in this world (`IDName`) -> its
+    /// model in `shapes`.
+    pub item_shapes: BTreeMap<String, usize>,
+    /// Lines about items at load, for `items.log`.
+    pub item_lines: Vec<String>,
+    /// The ground, for z -1 / -2 of items made while playing.
+    pub ground: Option<kq8_data::Terrain>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -982,6 +992,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .into_iter()
         .filter_map(|(n, _, b)| b.ok().map(|b| (n, b.iter().map(|&c| (c as char).to_ascii_lowercase()).collect())))
         .collect();
+    let items = item_types(game, log);
     let mut placer = Placer {
         game,
         world,
@@ -1024,6 +1035,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         ignored_numbers: 0,
         unused_placed: 0,
         several_positions: 0,
+        items,
+        item_lines: Vec::new(),
     };
 
     // Only what the world's start-up scripts load is in the world
@@ -1106,10 +1119,49 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         }
     }
     placer.log.summary(format!("scripts for play: {} from the world, {shared} game-wide (GAME/patch, GAME/Kq)", scripts.len() - shared));
+    let (item_shapes, item_lines) = placer.item_models(&script);
+    let items = std::mem::take(&mut placer.items);
     let mut objects = placer.finish();
     objects.scripts = scripts;
     objects.vars = script.vars;
+    objects.items = items;
+    objects.item_shapes = item_shapes;
+    objects.item_lines = item_lines;
+    objects.ground = Some(terrain.clone());
     objects
+}
+
+/// The item type list (`GAME/Kq/Invinfo.itl`, items.md rule 1) and each
+/// type's click box: its shape in `GAME/patch/BOUNDS.KQ`, lower-cased as
+/// for objects (M3 step 3e-3).
+fn item_types(game: &GameDir, log: &mut Log) -> kq8_game::item::Items {
+    let types = match game.find("GAME/Kq/Invinfo.itl").map(std::fs::read) {
+        Some(Ok(bytes)) => {
+            let (t, problems) = kq8_data::items::ItemTypes::parse(&bytes);
+            for p in &problems {
+                log.summary(format!("items: Invinfo.itl: {p}"));
+            }
+            t
+        }
+        _ => {
+            log.summary("items: GAME/Kq/Invinfo.itl could not be read: no item types");
+            Default::default()
+        }
+    };
+    let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
+        Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
+        _ => Default::default(),
+    };
+    let boxes: Vec<(String, [f32; 3], [f32; 3])> = types
+        .types
+        .iter()
+        .filter_map(|t| {
+            let shape = t.shape.to_ascii_lowercase();
+            table.lookup(&shape).map(|e| (shape, e.min, e.max))
+        })
+        .collect();
+    log.summary(format!("items: {} item types, {} with a click box", types.types.len(), boxes.len()));
+    kq8_game::item::Items::new(types, boxes)
 }
 
 /// Where a remembered object is drawn, so a `move` can change it.
@@ -1178,6 +1230,10 @@ struct Placer<'a> {
     ignored_numbers: usize,
     unused_placed: usize,
     several_positions: usize,
+    /// Item types and the item objects made so far (3e-3).
+    items: kq8_game::item::Items,
+    /// Lines about items, for `items.log`.
+    item_lines: Vec<String>,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
@@ -1195,7 +1251,72 @@ impl kq8_data::world_script::Host for Placer<'_> {
     }
 
     fn set_hidden(&mut self, name: &str, hidden: bool, at: &str) {
+        // An item object (`KQObject::setHidden $NewInvItem 1`, Daventry's
+        // `BirthdaySuit`): not drawn, can't be clicked.
+        if let Some(i) = self.items.index(name) {
+            self.items.objects[i].hidden = hidden;
+            self.item_lines.push(format!("{at}: setHidden {name} {}", u8::from(hidden)));
+            return;
+        }
         self.hide(name, hidden, at);
+    }
+
+    /// Items made and changed by the start-up scripts (items.md rule 9;
+    /// `objects.md` Q17 rule 2 for z -1 / -2).
+    fn item_command(&mut self, words: &[String], at: &str) -> Option<String> {
+        use kq8_data::terrain::Level;
+        use kq8_game::item::{read_make, Place};
+        let command = words[0].to_ascii_lowercase();
+        if command == "kqmonster::inventory" || command == "give" {
+            let m = match read_make(words) {
+                Ok(m) => m,
+                Err(e) => {
+                    self.item_lines.push(format!("{at}: {e}; nothing made"));
+                    return None;
+                }
+            };
+            let place = match m.position.filter(|_| m.in_world()) {
+                Some(mut p) => {
+                    if p[2] == -1.0 || p[2] == -2.0 {
+                        let level = if p[2] == -1.0 { Level::Floor } else { Level::Surface };
+                        match self.terrain.ground_at(level, p[0], p[1]) {
+                            Some(g) => p[2] = g.height,
+                            None => self.item_lines.push(format!("{at}: z {} outside the ground; kept", p[2])),
+                        }
+                    }
+                    Place::World { position: p, angles: m.angles }
+                }
+                None => Place::Carried(m.who.clone()),
+            };
+            return match self.items.make(&m.kind, m.quantity, place) {
+                Ok(o) => {
+                    let name = o.name.clone();
+                    self.item_lines.push(format!("{at}: made {}; NewInvItem = {name}", self.items.describe(&name)));
+                    Some(name)
+                }
+                Err(e) => {
+                    self.item_lines.push(format!("{at}: ERROR {}: {e}; nothing made", words.join(" ")));
+                    None
+                }
+            };
+        }
+        // `KQObject::setScript` / `setDontLook <name> <value>`.
+        let (Some(name), Some(value)) = (words.get(1), words.get(2)) else {
+            self.item_lines.push(format!("{at}: usage: '{}'", words.join(" ")));
+            return None;
+        };
+        let Some(i) = self.items.index(name) else {
+            self.item_lines.push(format!("{at}: {}: not an item; not run at load", words.join(" ")));
+            return None;
+        };
+        let o = &mut self.items.objects[i];
+        if command == "kqobject::setscript" {
+            o.script = (!value.eq_ignore_ascii_case("none")).then(|| value.clone());
+        } else {
+            o.do_not_point_at = value.parse::<f64>() != Ok(0.0);
+        }
+        self.item_lines.push(format!("{at}: {}", words.join(" ")));
+        None
     }
 
     /// `move <who> <flags> x y z [rx ry rz]` (objects.md Q20 d).
@@ -1973,6 +2094,83 @@ impl Placer<'_> {
     }
 
     /// Summary lines, then the result.
+    /// Loads the model of every item type that can appear in this world:
+    /// those the start-up scripts made, those the world's scripts make or
+    /// throw (`KQMonster::inventory`, `give`, `KQObject::tossItems`) and
+    /// those its chests hold (`invItemTypeName`). Returns `IDName` ->
+    /// model, and the lines for `items.log`.
+    fn item_models(&mut self, script: &kq8_data::world_script::ScriptRun) -> (BTreeMap<String, usize>, Vec<String>) {
+        let mut named: Vec<String> = self.items.objects.iter().map(|o| o.kind.clone()).collect();
+        for (_, text) in &self.all_scripts {
+            for line in text.lines() {
+                let w: Vec<&str> = line.split('#').next().unwrap_or("").split_whitespace().collect();
+                match w.first().copied() {
+                    Some("kqmonster::inventory") => named.extend(w.get(2).map(|s| s.to_string())),
+                    Some("give") => named.extend(w.get(1).map(|s| s.to_string())),
+                    Some("kqobject::tossitems") => named.extend(w.get(3).into_iter().flat_map(|v| v.split(',')).map(str::to_string)),
+                    _ => {}
+                }
+            }
+        }
+        for (_, _, bytes) in self.world.entries_ending(".kq") {
+            let Ok(bytes) = bytes else { continue };
+            for s in kq8_data::kq_text::parse(&bytes) {
+                named.extend(s.get("invItemTypeName").map(str::to_string));
+            }
+        }
+        let mut shapes = BTreeMap::new();
+        let mut failed = Vec::new();
+        let mut unknown = std::collections::BTreeSet::new();
+        for name in named {
+            // The scripts' text was lower-cased (`all_scripts`), so the
+            // exact `INVITEM_` of rule 2 is gone: strip it to look up.
+            let name = name.strip_prefix("invitem_").map_or(name.clone(), str::to_string);
+            let Some(t) = self.items.kind(&name).cloned() else {
+                if !name.starts_with('$') {
+                    unknown.insert(name);
+                }
+                continue;
+            };
+            let failure = format!("{} ({})", t.name, t.shape);
+            if shapes.contains_key(&t.name) || failed.contains(&failure) {
+                continue;
+            }
+            let key = t.shape.to_ascii_lowercase();
+            let slot = match self.index_of.get(&key) {
+                Some(slot) => *slot,
+                None => {
+                    let slot = self.load_shape(&t.shape, None, None);
+                    self.index_of.insert(key, slot);
+                    slot
+                }
+            };
+            match slot {
+                Some(i) => {
+                    shapes.insert(t.name.clone(), i);
+                }
+                // Models are looked up in this world and `GAME/Common`
+                // only (as objects').
+                None => failed.push(failure),
+            }
+        }
+        let it = &self.items.objects;
+        let mut lines = std::mem::take(&mut self.item_lines);
+        let summary = format!(
+            "items: start-up scripts: {} item lines ({} inside if-blocks, run anyway); {} items made: {} in the world ({} hidden), {} carried; models for {} types; failed {failed:?}; names not in the type list: {unknown:?}",
+            script.item_commands,
+            script.item_commands_inside_if,
+            it.len(),
+            it.iter().filter(|o| o.in_world()).count(),
+            it.iter().filter(|o| o.hidden).count(),
+            it.iter().filter(|o| !o.in_world()).count(),
+            shapes.len()
+        );
+        self.log.summary(&summary);
+        lines.insert(0, summary);
+        lines.push(format!("item types with a model here: {:?}", shapes.keys().collect::<Vec<_>>()));
+        (shapes, lines)
+    }
+
     fn finish(self) -> Objects {
         let log = self.log;
         // Check from the numbers: lowest point of each placed model vs ground.
@@ -2148,6 +2346,10 @@ impl Placer<'_> {
             animators: self.animators,
             animated: self.animated,
             object_animations: self.object_animations,
+            items: Default::default(),
+            item_shapes: BTreeMap::new(),
+            item_lines: Vec::new(),
+            ground: None,
         }
     }
 }

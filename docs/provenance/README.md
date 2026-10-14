@@ -648,3 +648,17 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | Clicking a world item: out of reach (≥ 2 × `attackDist`) "too far"; item in hand "doesn't work"; in reach → carried by Connor, pickup sound logged, then its script with `ConnorAction do do` | `items.md` rules 6–8 | Unit tests |
 | Picked and measured by its type's shape box in `BOUNDS.KQ` (lower-cased), turned with the item; hidden items not picked | **Our reading** of `chests.md`'s crystal check (no box rule in `items.md`); Q62 c for types without a box | Unit tests |
 | World commands can set script variables (`take_vars`) | Our code structure (the runner owns the variables) | Unit tests |
+
+## Items at the start and in the viewer (M3 step 3e-3) — `crates/kq8-data/src/world_script.rs`, `crates/kq8-game/src/item.rs` (`read_make`), `crates/kq8-viewer/src/{load,door_view,item_view,terrain_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The start-up scripts run `KQMonster::inventory`, `give`, `KQObject::setScript`, `setDontLook` (and `setHidden` on items); `$NewInvItem` set after a make | `items.md` rule 9; `objects.md` "Where a world's objects come from" (the start-up scripts run line by line) | Unit test; Daventry: 35 item lines, 22 items (21 from `WorldInv.cs`, `BirthdaySuit` hidden from `newWorld.cs`) |
+| One reader for `KQMonster::inventory` / `give` lines, used at load and while playing | Our code structure | Unit tests (3e-2) |
+| Lines inside `if` blocks at load are run anyway (the start-up runner does not evaluate `if`) | Same as `loadKQ` (M1 3c) | Daventry, Swamp, Gnome, DeadCity: 0 such item lines |
+| z −1 / −2 at load → floor / surface height | `objects.md` Q17 rule 2 | Daventry: 8 mushrooms at −1 → 7,650 and 13,770 |
+| Drawn with the type's shape at its place and turn; nothing else moves it | `items.md` rules 1, 5 | Not checked by eye yet |
+| See-through by the type's translucency, as objects (n/255, 256 solid) | **Our reading**: `items.md` rule 1 lists translucency; the formula is `objects.md` Q14's | Crystal 200 → 0.78; not checked by eye |
+| Hidden items not drawn | `objects.md` "Hidden objects" | `BirthdaySuit.22` hidden |
+| Models loaded for every type the world's data can make or hold (start items, `inventory`/`give`/`tossItems` lines, chests' `invItemTypeName`), looked up in the world and `GAME/Common` | Same lookup as objects (M1) | Daventry 25 types, none failed; Gnome: `schroomC.kqs` only in Swamp's archives, so not loaded (no Gnome start item needs it) |
+| Picking up in the viewer: the clicks of 3a-3 (mouse ray or `--click NAME,N`) | `items.md` rule 6 | `--at 266011,221900,0 --click Mushroom.14,10`: in reach (507), picked up 0 → 1; `Crystal.20` too far (32,820); `--at 228081,202000,0 --click SilverCoins.10,10`: `Farmcoin.cs` runs, removes its script |
