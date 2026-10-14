@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 STATUS.md brought up to date
+
+**Changed:** `STATUS.md` (local only, not committed): where we are (M3 traps, items, chests, scripted objects, fish done), next steps (terrain lighting or Q60–Q64), the `kq8-core` name and its current files, `item-verify`, the `--aim` option, all log files, test counts (62 + 181), what works and what doesn't, open questions Q60–Q64 added (Q55 answered, Q59 closed), fresh-session prompts. Docs only, no code.
+**Why:** The user: update STATUS.md and any outdated information in it.
+**Tested how:** Compared with MODLOG (newest entries), `docs/behaviour/QUESTIONS.md` status column, the source file lists and the viewer's options and log names in the code.
+**Result:** STATUS.md matches MODLOG up to commit `3f435b6`.
+**Still broken / not tested:** Nothing new.
+**Next:** Nothing.
+
+## 2026-10-13 README shortened for new users; details moved to `docs/FEATURES.md`
+
+**Changed:** `README.md` rewritten: short "What works" and "What doesn't work yet" lists, "What you need", the keys (Insert and U added), the folder structure and its crates, how the work is done. The detailed per-feature text (how each thing was checked) moved to the new `docs/FEATURES.md`. `docs/DESIGN.md` layout lists it. Docs only, no code.
+**Why:** The user: the README was too technical for new users.
+**Tested how:** Compared every README claim with MODLOG, STATUS.md and DESIGN; checked the key bindings, CLI commands and `KQ8_GAME_DIR` in the code.
+**Result:** Corrected outdated notes found on the way: wading and the Swamp shack were checked by eye on 2026-10-12, the fish on 2026-10-13, the rolling rocks' boxes by walking there (the old README said logs only).
+**Still broken / not tested:** Links not checked on GitHub. `STATUS.md` (local only) is out of date: it still lists traps, chests and items as next steps and uses the old `kq8-game` name.
+**Next:** Nothing.
+
 ## 2026-10-13 Rename the rules crate: `kq8-game` → `kq8-core`
 
 **Changed:** `crates/kq8-game/` → `crates/kq8-core/` (package name, workspace `Cargo.toml`, the viewer's dependency, every `kq8_game::` path in `kq8-viewer`, one comment in `kq8-data`). DESIGN "Repository layout" now lists `kq8-core` (it was missing) and describes the viewer as it is today, plus the open decision about a separate game program. DESIGN and provenance use the new name; MODLOG history, QUESTIONS and STATUS.md keep the old one.

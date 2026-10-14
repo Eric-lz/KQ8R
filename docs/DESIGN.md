@@ -64,7 +64,8 @@ crates/
   kq8-viewer/         the window (uses Bevy): draws a world and runs the
                       rules; also the developer's test tool (H key, free
                       camera, `--at`, `--click`, `--aim`, detailed logs)
-docs/                 DESIGN.md (this file), RESEARCH.md (what exists online)
+docs/                 DESIGN.md (this file), RESEARCH.md (what exists online),
+                      FEATURES.md (what works, in detail)
 docs/provenance/      where each piece of knowledge came from
 docs/behaviour/       behaviour notes (session A) and QUESTIONS.md
 kq8-artifacts/        logs and dumps (never committed)
