@@ -31,7 +31,7 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use kq8_game::active::{Active, ActiveChest, ActiveDoor, Item, Request};
+use kq8_game::active::{Active, ActiveChest, ActiveDoor, Item, Pick, Request};
 use kq8_game::chest::Chest;
 use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
@@ -41,7 +41,7 @@ use crate::connor_view::ConnorSim;
 use crate::game_camera::GameCam;
 use crate::load::Objects;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform_from, ObjectColliders};
+use crate::terrain_view::{bevy_transform_from, Buildings, GroundLookup, ObjectColliders, ViewBlockerSet};
 use crate::{material_for, mesh_from, to_bevy, Shared, UNITS_PER_METRE};
 
 /// Connor's `attackDist` when `Connor.kq` gives none: the built-in
@@ -125,6 +125,10 @@ impl DoorSim {
 /// `--click NAME,N` (each may be given more than once).
 #[derive(Resource)]
 pub struct ClickAt(pub Vec<(String, u64)>);
+
+/// `--aim NAME,N` (each may be given more than once).
+#[derive(Resource)]
+pub struct AimAt(pub Vec<(String, u64)>);
 
 /// `--item TYPE`.
 #[derive(Resource)]
@@ -473,41 +477,71 @@ pub fn trap_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     }
 }
 
-/// Left click: the nearest clickable box under the mouse (rule 10), handled
-/// at the next update.
+/// Left click: the nearest clickable box under the mouse (rule 10), if the
+/// camera sees it (3e-4b: the user's check, Q63 stand-in), handled at the
+/// next update. `--aim NAME,N` does the same at update N with a ray from
+/// the camera to the middle of NAME's box (a test option; `--click`
+/// skips the ray).
+#[allow(clippy::too_many_arguments)]
 pub fn door_click_input(
     buttons: Res<ButtonInput<MouseButton>>,
     window: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     sim: Option<ResMut<DoorSim>>,
+    lookup: Option<Res<GroundLookup>>,
+    buildings: Option<Res<Buildings>>,
+    blockers: Option<Res<ViewBlockerSet>>,
+    mut aim: ResMut<AimAt>,
     shared: Res<Shared>,
 ) {
     let Some(mut sim) = sim else { return };
-    if !buttons.just_pressed(MouseButton::Left) {
+    let updates = sim.active.world.updates;
+    let due = aim.0.iter().position(|(_, n)| updates >= *n).map(|i| aim.0.remove(i).0);
+    if due.is_none() && !buttons.just_pressed(MouseButton::Left) {
         return;
     }
-    let (Ok(window), Ok((camera, at))) = (window.single(), camera.single()) else { return };
-    let Some(cursor) = window.cursor_position() else { return };
-    let Ok(ray) = camera.viewport_to_world(at, cursor) else { return };
+    let Ok((camera, at)) = camera.single() else { return };
     // Bevy (x, y, z) = game (x, z, -y) / 100, so back: (x, -z, y) x 100.
-    let o = ray.origin * UNITS_PER_METRE;
-    let d = *ray.direction;
-    let origin = [o.x, -o.z, o.y];
-    let dir = [d.x, -d.z, d.y];
-    let updates = sim.active.world.updates;
-    let line = match sim.active.pick(origin, dir) {
-        Some((name, t)) => {
-            let line = format!(
-                "update {updates}: mouse click at ({:.0}, {:.0}) px: ray from ({:.0}, {:.0}, {:.0}) picks {name} at {t:.0} units",
-                cursor.x, cursor.y, origin[0], origin[1], origin[2]
-            );
+    let to_game = |v: Vec3| [v.x, -v.z, v.y];
+    let (origin, dir, how) = match due {
+        Some(name) => {
+            let origin = to_game(at.translation() * UNITS_PER_METRE);
+            let Some(target) = sim.active.target_point(&name) else {
+                let line = format!("update {updates}: test --aim {name}: no clickable object by that name with a box");
+                shared.log.lock().unwrap().summary(&line);
+                sim.log.detail(line);
+                return;
+            };
+            let d: [f32; 3] = std::array::from_fn(|k| target[k] - origin[k]);
+            let len = d.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-6);
+            (origin, d.map(|v| v / len), format!("test --aim {name} (camera to the middle of its box)"))
+        }
+        None => {
+            let Ok(window) = window.single() else { return };
+            let Some(cursor) = window.cursor_position() else { return };
+            let Ok(ray) = camera.viewport_to_world(at, cursor) else { return };
+            (to_game(ray.origin * UNITS_PER_METRE), to_game(*ray.direction), format!("mouse click at ({:.0}, {:.0}) px", cursor.x, cursor.y))
+        }
+    };
+    let pick = match &lookup {
+        Some(l) => {
+            let view = crate::game_camera::view_blockers(&l.0, buildings.as_deref(), blockers.as_deref(), Some(&*sim));
+            sim.active.pick_seen(origin, dir, &view)
+        }
+        // No ground: nothing to block (a world without terrain).
+        None => sim.active.pick(origin, dir).map_or(Pick::Nothing, |(name, t)| Pick::Seen { name, t }),
+    };
+    let from = format!("update {updates}: {how}: ray from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
+    let line = match pick {
+        Pick::Seen { name, t } => {
+            let line = format!("{from} picks {name} at {t:.0} units");
             sim.pending.push((name, "mouse".into()));
             line
         }
-        None => format!(
-            "update {updates}: mouse click at ({:.0}, {:.0}) px: ray from ({:.0}, {:.0}, {:.0}) meets no clickable object",
-            cursor.x, cursor.y, origin[0], origin[1], origin[2]
-        ),
+        Pick::Blocked { name, t, by, at } => {
+            format!("{from} meets {name} at {t:.0} units, but {by} blocks the line at {at:.0} units: nothing clicked (Q63 stand-in)")
+        }
+        Pick::Nothing => format!("{from} meets no clickable object"),
     };
     shared.log.lock().unwrap().summary(&line);
     sim.log.detail(line);

@@ -25,7 +25,8 @@ const PIXELS_PER_MOUSE_UNIT: f32 = 800.0; // modified manually to what feels mor
 
 /// What blocks the view line now (camera.md "Obstacles"): the drawn
 /// ground, the blocking buildings, object boxes and doors as they stand.
-struct Blockers<'a> {
+/// Also used for clicks (M3 step 3e-4b, Q63 stand-in).
+pub struct Blockers<'a> {
     terrain: &'a kq8_data::Terrain,
     buildings: Vec<&'a BuildingCollider>,
     boxes: &'a [BoxCollider],
@@ -51,6 +52,27 @@ impl ViewBlockers for Blockers<'_> {
             }
         }
         hits.into_iter().min_by(|a, b| dist(a.0).total_cmp(&dist(b.0)))
+    }
+}
+
+/// The view blockers as they stand now (doors move).
+pub fn view_blockers<'a>(
+    terrain: &'a kq8_data::Terrain,
+    buildings: Option<&'a Buildings>,
+    blockers: Option<&'a ViewBlockerSet>,
+    doors: Option<&DoorSim>,
+) -> Blockers<'a> {
+    Blockers {
+        terrain,
+        buildings: match (buildings, blockers) {
+            (Some(b), Some(v)) => b.0.iter().zip(&v.building_types).filter(|(_, t)| *t & VIEW_BLOCKING != 0).map(|(b, _)| b).collect(),
+            (Some(b), None) => b.0.iter().collect(),
+            _ => Vec::new(),
+        },
+        boxes: blockers.map_or(&[][..], |v| &v.boxes[..]),
+        doors: doors
+            .map(|d| d.active.world.doors.iter().filter(|a| a.collision_type & VIEW_BLOCKING != 0).filter_map(|a| a.collider()).collect())
+            .unwrap_or_default(),
     }
 }
 
@@ -248,19 +270,7 @@ pub fn camera_step(
     g.pressed_mode = false;
     g.pressed_reset = false;
     // The view blockers as they stand now (doors move).
-    let view = Blockers {
-        terrain: &lookup.0,
-        buildings: match (&buildings, &blockers) {
-            (Some(b), Some(v)) => b.0.iter().zip(&v.building_types).filter(|(_, t)| *t & VIEW_BLOCKING != 0).map(|(b, _)| b).collect(),
-            (Some(b), None) => b.0.iter().collect(),
-            _ => Vec::new(),
-        },
-        boxes: blockers.as_ref().map_or(&[][..], |v| &v.boxes[..]),
-        doors: doors
-            .as_ref()
-            .map(|d| d.active.world.doors.iter().filter(|a| a.collision_type & VIEW_BLOCKING != 0).filter_map(|a| a.collider()).collect())
-            .unwrap_or_default(),
-    };
+    let view = view_blockers(&lookup.0, buildings.as_deref(), blockers.as_deref(), doors.as_deref());
     let followed = Followed { base: sim.mover.position, heading: sim.walker.heading };
     let report = g.cam.update_with(followed, &input, &lookup.0, Some(&view));
     // Check from the numbers: is the camera inside a building's solid?

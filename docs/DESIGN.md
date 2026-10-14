@@ -1772,8 +1772,8 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
-- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-4 done
-  2026-10-13, MODLOG).** Rules from
+- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-4 and 3e-4b
+  done 2026-10-13, MODLOG).** Rules from
   `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
   clicking, `objects.md` for heights and hiding). Five sub-steps, each
   with its own tests and MODLOG entry.
@@ -1895,8 +1895,8 @@ catchers, ground animators).
     per-frame models); the running game keeps chests apart
     (`ActiveChest`). Daventry: `smlchst3`, `smlchst4`, `wizchest1`
     (hidden, type 0x1).
-  - **3e-4b, clicks need the camera's line of sight (planned 2026-10-13,
-    not started).** The user's check in the original (2026-10-13): an
+  - **3e-4b, clicks need the camera's line of sight (planned and done
+    2026-10-13, MODLOG).** The user's check in the original (2026-10-13): an
     object can't be clicked through a wall or the ground, but can when
     Connor is behind a wall and the camera sees the object. This
     contradicts `doors.md` Q45 b ("walls, terrain and other objects do not
@@ -1915,6 +1915,9 @@ catchers, ground animators).
     Log: a blocked click names what blocked it and at what distance.
     Viewer check: from the pub's ground floor the upstairs chest can't be
     clicked; standing upstairs it can.
+    **Done** as planned (`Active::pick_seen`, `game_camera::view_blockers`
+    shared with the camera), plus a test option `--aim NAME,N` (the
+    mouse's ray, aimed by the program at the middle of NAME's box).
   - **3e-5, scripted chests and baskets** (`active.rs`, viewer). A
     clickable object with a script that is not a door, chest or item:
     clicking it in reach runs `<name> ConnorAction do do` (`chests.md`

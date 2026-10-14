@@ -88,6 +88,8 @@ struct Args {
     /// Test: click object NAME before update N + 1 (may be given more
     /// than once).
     click: Vec<(String, u64)>,
+    /// `--aim NAME,N`: a ray from the camera to NAME at update N (3e-4b).
+    aim: Vec<(String, u64)>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
     terrain: bool,
@@ -106,6 +108,7 @@ fn parse_args() -> Result<Args, String> {
         turn: None,
         at: None,
         click: Vec::new(),
+        aim: Vec::new(),
         item: None,
         terrain: false,
     };
@@ -140,6 +143,12 @@ fn parse_args() -> Result<Args, String> {
                 let (name, n) = v.rsplit_once(',').ok_or("--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 let n = n.trim().parse::<u64>().map_err(|_| "--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 a.click.push((name.trim().to_string(), n));
+            }
+            "--aim" => {
+                let v = value()?;
+                let (name, n) = v.rsplit_once(',').ok_or("--aim needs NAME,UPDATE e.g. smlchst3,30".to_string())?;
+                let n = n.trim().parse::<u64>().map_err(|_| "--aim needs NAME,UPDATE e.g. smlchst3,30".to_string())?;
+                a.aim.push((name.trim().to_string(), n));
             }
             "--item" => a.item = Some(value()?),
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
@@ -284,6 +293,7 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))
                 .insert_resource(door_view::ClickAt(args.click))
+                .insert_resource(door_view::AimAt(args.aim))
                 .insert_resource(door_view::HeldItem(args.item))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").

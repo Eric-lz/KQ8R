@@ -683,3 +683,15 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | `KQCueEvent` → `Cue`; other events not handled | `chests.md` rule 6 (Cue); others not in the note | — |
 | `collisionType` and `setHidden` on chests (`wizchest.cs` Reveal) | `chests.md` "Edge cases"; `objects.md` "Hidden objects" | Unit test |
 | Hidden chests still collide with Connor | As other hidden objects (M2 2d-5) | — |
+
+## Clicks need the camera's line of sight (M3 step 3e-4b) — `crates/kq8-game/src/active.rs` (`pick_seen`, `target_point`), `crates/kq8-viewer/src/{door_view,game_camera,main}.rs`
+
+Replaces "walls, terrain and other objects do not hide a clickable one" (`doors.md` Q45 b) in the doors' table above.
+
+| What | Source | Check |
+| --- | --- | --- |
+| No clicks through walls or the ground; from behind a wall a click works if the camera sees the object | **The user's check in the original** (2026-10-13), against `doors.md` Q45 b; asked as Q63 | Viewer `--aim` runs below |
+| What blocks: the camera's view obstacles (drawn ground, buildings and objects with type bit 0x8 or 0x1000, doors as they stand) | **Our stand-in** (Q63 a): `camera.md` "Obstacles" reused; plain objects (tables, trees) don't block | — |
+| A blocked click clicks nothing; reach unchanged | **Our stand-in** (Q63 b, c) | Unit test |
+| The line is tested up to 1 unit short of the picked box (an object never blocks itself) | Our method | Unit test (wall at the box's face: seen); viewer: `Condoor` seen |
+| `--aim NAME,N`: a ray from the camera to the middle of NAME's box at update N, through the same test as the mouse | Our test helper (`--click` skips the ray) | `--at 202336,262000,1.5708 --aim smlchst3,20`: blocked by building `Pub` at 5,319 (chest at 5,974); `--at 266011,221900,0 --aim Mushroom.14,20`: seen, picked up; `--at 270813,225311,-1.5708 --aim Condoor,20`: seen, clicked |

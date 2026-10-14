@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3e-4b: no clicks through walls or the ground
+
+**Changed:** `kq8-game/src/active.rs`: `pick_seen` (the nearest clickable box, but only if the line from the camera to it isn't blocked), `target_point` (middle of an object's box). `kq8-viewer`: `game_camera.rs` `view_blockers` (the camera's obstacle list, now shared); `door_view.rs` `door_click_input` uses it for every click (doors, chests, items) and logs what blocked a click; new test option `--aim NAME,N` (`main.rs`). DESIGN, provenance.
+**Why:** The user's check in the original (2026-10-13): Connor can't click through walls or the ground, but can from behind a wall when the camera sees the object. That contradicts `doors.md` Q45 b, which we followed; asked as Q63.
+**Tested how:** New unit test (a wall between camera and chest blocks; behind the camera, behind the chest or at the chest's face it doesn't; nothing on the ray). Viewer with `--aim`: pub chest from the ground floor; a mushroom outdoors; Connor's front door. Whole workspace `cargo test`; clippy: no new warnings.
+**Result:** 176 tests pass in `kq8-game`, 62 in `kq8-data`. `--at 202336,262000,1.5708 --aim smlchst3,20`: "meets smlchst3 at 5974 units, but building Pub blocks the line at 5319 units: nothing clicked". `--at 266011,221900,0 --aim Mushroom.14,20`: picked, then picked up (507 from Connor). `--at 270813,225311,-1.5708 --aim Condoor,20`: picked and clicked, the door doesn't block itself.
+**Still broken / not tested:** What blocks is our stand-in (the camera's obstacles: ground, buildings, doors and door-like objects); whether tables, trees or characters block too is Q63. Not tested: a click from upstairs in the pub (`--at` puts Connor on the ground floor); please try it by mouse. The test option `--click` still skips the ray (on purpose: it tests the click rules alone).
+**Next:** You: in the pub, try the chest from downstairs (nothing should happen) and upstairs (opens). Then 3e-5.
+**Checked afterwards (you, 2026-10-13):** works like the original game.
+
 ## 2026-10-13 M3 3e-4: chests
 
 **Changed:** New `crates/kq8-game/src/chest.rs` (a chest's keys, states closed/open/empty, its movements). `door.rs`: the phase step and cues of a movement split out (`DoorMovement::step`) so doors and chests share it; doors behave as before. `active.rs`: chests in the world (picked by the mouse ray, clicked with the three steps of `chests.md`, `Init`/`EndLoop`/`Cue` to their script, `collisionType` and `setHidden` on chests); one helper makes world items for scripts and chests. `kq8-viewer`: `load.rs` loads `KQChest`s like doors with their chest keys (default type 0x8021); `door_view.rs` builds, moves (box) and draws them with the doors' per-frame models, hidden ones not drawn. README, DESIGN, provenance.

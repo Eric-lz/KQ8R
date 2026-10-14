@@ -38,6 +38,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kq8_data::world_script::Vars;
 
+use crate::camera::ViewBlockers;
 use crate::chest::{Chest, ChestState};
 use crate::click::{distance_to_box, ray_box, CLICKABLE};
 use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
@@ -160,6 +161,18 @@ pub enum ClickResult {
     PickedUp(String),
     /// A chest's own click steps ran (chests.md rules 7-9).
     Chest { before: ChestState, after: ChestState },
+}
+
+/// What the mouse ray picked (M3 step 3e-4b).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Pick {
+    /// The nearest clickable box, `t` units along the ray, in sight.
+    Seen { name: String, t: f32 },
+    /// The nearest clickable box, but something nearer blocks the line to
+    /// it: nothing is clicked.
+    Blocked { name: String, t: f32, by: String, at: f32 },
+    /// No clickable box on the ray.
+    Nothing,
 }
 
 /// Ground height at (x, y): the floor (`true`) or the surface (`false`).
@@ -739,6 +752,43 @@ impl Active {
             Some((o.name.clone(), ray_box(origin, dir, &o.placement()?, min, max)?))
         });
         doors.chain(others).chain(items).min_by(|a, b| a.1.total_cmp(&b.1))
+    }
+
+    /// The middle of a clickable object's box in the world (for the
+    /// viewer's `--aim` test option).
+    pub fn target_point(&self, name: &str) -> Option<[f32; 3]> {
+        let mid = |p: &Placement, (min, max): ([f32; 3], [f32; 3])| p.to_world(std::array::from_fn(|k| 0.5 * (min[k] + max[k])));
+        let w = &self.world;
+        if let Some(i) = w.door_index(name) {
+            return w.doors[i].bounds.map(|b| mid(&w.doors[i].door.placement(), b));
+        }
+        if let Some(i) = w.chest_index(name) {
+            return w.chests[i].bounds.map(|b| mid(&w.chests[i].chest.placement(), b));
+        }
+        if let Some(o) = w.items.get(name) {
+            return Some(mid(&o.placement()?, w.items.click_box(o)?));
+        }
+        w.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| mid(&c.placement, (c.min, c.max)))
+    }
+
+    /// [`Active::pick`], but only if the line from `origin` (the camera)
+    /// to the picked box is not blocked by `view` (M3 step 3e-4b). Stand-in
+    /// for Q63 (the user's check in the original: no clicks through walls
+    /// or the ground; clicks from behind a wall work when the camera sees
+    /// the object): the camera's view obstacles (`camera.md` "Obstacles")
+    /// block. The line is tested up to 1 unit short of the box, so the
+    /// picked object never blocks itself. `dir` has length 1.
+    pub fn pick_seen(&self, origin: [f32; 3], dir: [f32; 3], view: &dyn ViewBlockers) -> Pick {
+        let Some((name, t)) = self.pick(origin, dir) else { return Pick::Nothing };
+        let short = (t - 1.0).max(0.0);
+        let to: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * short);
+        match view.first_block(origin, to) {
+            Some((p, by)) => {
+                let at = (0..3).map(|k| (p[k] - origin[k]).powi(2)).sum::<f32>().sqrt();
+                Pick::Blocked { name, t, by, at }
+            }
+            None => Pick::Seen { name, t },
+        }
     }
 
     /// Connor clicks object `name` (rules 11–17). `feet`: his position;
@@ -1552,6 +1602,36 @@ mod tests {
         b.scripts.call("r.cs", &[], &mut b.world);
         assert_eq!((b.world.chests[0].hidden, b.world.chests[0].collision_type), (false, 0x21));
         assert_eq!(b.click("smlchst3", BY_CHEST, 2350.0, None), ClickResult::Chest { before: ChestState::Closed, after: ChestState::Empty }, "no item types loaded here: holds nothing");
+    }
+
+    /// A wall: the plane y = `y` blocks every line crossing it.
+    struct Wall {
+        y: f32,
+    }
+
+    impl ViewBlockers for Wall {
+        fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)> {
+            let (a, b) = (from[1] - self.y, to[1] - self.y);
+            if a * b > 0.0 || a == b {
+                return None;
+            }
+            let t = a / (a - b);
+            Some((std::array::from_fn(|k| from[k] + (to[k] - from[k]) * t), "wall".into()))
+        }
+    }
+
+    #[test]
+    fn a_click_needs_the_cameras_line_of_sight() {
+        let a = with_chest(Some("Crystal"));
+        // The chest's box starts at y -310; the camera looks along +y.
+        let (from, dir) = ([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]);
+        assert_eq!(a.pick_seen(from, dir, &Wall { y: -3000.0 }), Pick::Blocked { name: "smlchst3".into(), t: 4690.0, by: "wall".into(), at: 2000.0 });
+        // A wall behind the camera, or behind the chest: in sight.
+        assert_eq!(a.pick_seen(from, dir, &Wall { y: -6000.0 }), Pick::Seen { name: "smlchst3".into(), t: 4690.0 });
+        assert_eq!(a.pick_seen(from, dir, &Wall { y: 0.0 }), Pick::Seen { name: "smlchst3".into(), t: 4690.0 });
+        // A wall exactly at the box's face is the box itself: in sight.
+        assert_eq!(a.pick_seen(from, dir, &Wall { y: -310.0 }), Pick::Seen { name: "smlchst3".into(), t: 4690.0 });
+        assert_eq!(a.pick_seen(from, [0.0, -1.0, 0.0], &Wall { y: -3000.0 }), Pick::Nothing);
     }
 
     #[test]
