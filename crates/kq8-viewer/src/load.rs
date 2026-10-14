@@ -230,7 +230,7 @@ pub struct ConnorMovement {
     /// `loop=` 6th field: can be cut short.
     pub cut_short: bool,
     /// Its `transitionN` lines whose movements are all loaded.
-    pub transitions: Vec<kq8_game::connor::Transition>,
+    pub transitions: Vec<kq8_core::connor::Transition>,
 }
 
 pub struct ConnorAssets {
@@ -479,7 +479,7 @@ pub struct Ground {
 /// The ground animators of a world (M3 step 3b-3, emitters.md "Ground
 /// animators"), ready to run and draw.
 pub struct GroundAnimAssets {
-    pub animators: Vec<kq8_game::ground_anim::GroundAnimator>,
+    pub animators: Vec<kq8_core::ground_anim::GroundAnimator>,
     /// The material image as loaded; the animators change their copy.
     pub materials: kq8_data::terrain::Grid,
     /// Triangles of each animated square for each material it can show.
@@ -678,7 +678,7 @@ pub fn prepare_ground_animation(
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     log: &mut Log,
 ) -> GroundAnimAssets {
-    use kq8_game::ground_anim::{choose_squares, GroundAnimator};
+    use kq8_core::ground_anim::{choose_squares, GroundAnimator};
     let mut running = Vec::new();
     for (name, settings) in animators {
         let (squares, mut notes) = choose_squares(&settings, &ground.materials);
@@ -826,23 +826,23 @@ pub struct Objects {
     pub camera_start: Option<[f32; 3]>,
     /// Every building the start-up scripts load (hidden ones too: hiding
     /// only changes the drawing), as colliders (M2 step 2d-3).
-    pub buildings: Vec<kq8_game::collide::BuildingCollider>,
+    pub buildings: Vec<kq8_core::collide::BuildingCollider>,
     /// Each building's collision type (default 0x28), same order.
     pub building_types: Vec<u32>,
     /// Placed objects other than buildings and doors whose collision type
     /// blocks the camera's view (bit 0x8 or 0x1000), by their box (2f-2).
-    pub view_boxes: Vec<kq8_game::collide::BoxCollider>,
+    pub view_boxes: Vec<kq8_core::collide::BoxCollider>,
     /// Every other placed object that collides with Connor (box from
     /// `BOUNDS.KQ`, type and mask rule; hidden ones too), M2 step 2d-5.
     /// Doors are not in it (their boxes move; `door_view.rs`).
-    pub objects: Vec<kq8_game::collide::BoxCollider>,
+    pub objects: Vec<kq8_core::collide::BoxCollider>,
     /// The doors the start-up scripts load (M3 step 3a), and the chests
     /// (3e-4: same movements and drawing; `DoorAssets::chest` is set).
     pub doors: Vec<DoorAssets>,
     /// The doors' animations, each different one once.
     pub door_animations: Vec<Animation>,
     /// Objects other than doors with the clickable bit 0x20 and a box.
-    pub clickables: Vec<kq8_game::active::Clickable>,
+    pub clickables: Vec<kq8_core::active::Clickable>,
     /// Every loaded object's name (for scripts: "unknown object").
     pub known: Vec<String>,
     /// The variables the start-up scripts left.
@@ -856,7 +856,7 @@ pub struct Objects {
     /// The particle catchers (M3 step 3b-2): name and settings.
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     /// The traps (M3 step 3d-2), where the start-up scripts left them.
-    pub traps: Vec<kq8_game::trap::TrapSettings>,
+    pub traps: Vec<kq8_core::trap::TrapSettings>,
     /// The ground animators in load order (M3 step 3b-3).
     pub animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     /// Placed objects whose current movement plays (M3 step 3c).
@@ -865,7 +865,7 @@ pub struct Objects {
     pub object_animations: Vec<Animation>,
     /// The item types and the item objects the start-up scripts made (M3
     /// step 3e-3; items.md rule 9).
-    pub items: kq8_game::item::Items,
+    pub items: kq8_core::item::Items,
     /// Each item type that can appear in this world (`IDName`) -> its
     /// model in `shapes`.
     pub item_shapes: BTreeMap<String, usize>,
@@ -928,7 +928,7 @@ pub struct DoorAssets {
     /// Its `BOUNDS.KQ` box (own space), found in `finish`.
     pub bounds: Option<([f32; 3], [f32; 3])>,
     /// A `KQChest`'s own keys (M3 step 3e-4); `None` for a door.
-    pub chest: Option<kq8_game::chest::ChestSettings>,
+    pub chest: Option<kq8_core::chest::ChestSettings>,
     /// A scripted animated object (3e-5), not a door.
     pub object: bool,
 }
@@ -1156,7 +1156,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
 /// The item type list (`GAME/Kq/Invinfo.itl`, items.md rule 1) and each
 /// type's click box: its shape in `GAME/patch/BOUNDS.KQ`, lower-cased as
 /// for objects (M3 step 3e-3).
-fn item_types(game: &GameDir, log: &mut Log) -> kq8_game::item::Items {
+fn item_types(game: &GameDir, log: &mut Log) -> kq8_core::item::Items {
     let types = match game.find("GAME/Kq/Invinfo.itl").map(std::fs::read) {
         Some(Ok(bytes)) => {
             let (t, problems) = kq8_data::items::ItemTypes::parse(&bytes);
@@ -1183,7 +1183,7 @@ fn item_types(game: &GameDir, log: &mut Log) -> kq8_game::item::Items {
         })
         .collect();
     log.summary(format!("items: {} item types, {} with a click box", types.types.len(), boxes.len()));
-    kq8_game::item::Items::new(types, boxes)
+    kq8_core::item::Items::new(types, boxes)
 }
 
 /// Where a remembered object is drawn, so a `move` can change it.
@@ -1227,7 +1227,7 @@ struct Placer<'a> {
     door_animation_index: BTreeMap<String, usize>,
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
-    traps: Vec<kq8_game::trap::TrapSettings>,
+    traps: Vec<kq8_core::trap::TrapSettings>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     animated: Vec<AnimatedAssets>,
     object_animations: Vec<Animation>,
@@ -1253,7 +1253,7 @@ struct Placer<'a> {
     unused_placed: usize,
     several_positions: usize,
     /// Item types and the item objects made so far (3e-3).
-    items: kq8_game::item::Items,
+    items: kq8_core::item::Items,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
 }
@@ -1287,7 +1287,7 @@ impl kq8_data::world_script::Host for Placer<'_> {
     /// `objects.md` Q17 rule 2 for z -1 / -2).
     fn item_command(&mut self, words: &[String], at: &str) -> Option<String> {
         use kq8_data::terrain::Level;
-        use kq8_game::item::{read_make, Place};
+        use kq8_core::item::{read_make, Place};
         let command = words[0].to_ascii_lowercase();
         if command == "kqmonster::inventory" || command == "give" {
             let m = match read_make(words) {
@@ -1500,7 +1500,7 @@ impl Placer<'_> {
                     match (known(&t.to), known(&t.via)) {
                         (Some(to), Some(via)) => {
                             self.log.summary(format!("connor: {name}: transition {line}"));
-                            transitions.push(kq8_game::connor::Transition { from: t.from, to, to_phase: t.to_phase, via });
+                            transitions.push(kq8_core::connor::Transition { from: t.from, to, to_phase: t.to_phase, via });
                         }
                         _ => self.log.summary(format!("connor: {name}: transition {line} skipped (movement not loaded)")),
                     }
@@ -1748,7 +1748,7 @@ impl Placer<'_> {
         // another movement. One that already plays stays with `anim_view`.
         let scripted = p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAnimObject"))
             && s.get("script").is_some_and(|v| !v.trim().is_empty())
-            && collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE).0 & kq8_game::click::CLICKABLE != 0;
+            && collider_value(s, "colliderType", kq8_core::collide::DEFAULT_TYPE).0 & kq8_core::click::CLICKABLE != 0;
         if !unused && scripted {
             match &animation {
                 Some(c) if c.speed == 0.0 => {
@@ -1848,9 +1848,9 @@ impl Placer<'_> {
         }
         // Buildings default to type 0x28 (camera.md "Obstacles"), other
         // objects to 0x41.
-        let default_type = if shape.to_ascii_lowercase().ends_with(".dig") { BUILDING_TYPE } else { kq8_game::collide::DEFAULT_TYPE };
+        let default_type = if shape.to_ascii_lowercase().ends_with(".dig") { BUILDING_TYPE } else { kq8_core::collide::DEFAULT_TYPE };
         let (collider_type, problem_t) = collider_value(s, "colliderType", default_type);
-        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
+        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_core::collide::DEFAULT_MASK);
         for problem in [problem_t, problem_m].into_iter().flatten() {
             self.log.summary(format!("collision: {label}[{}]: {problem}", p.name));
         }
@@ -1950,9 +1950,9 @@ impl Placer<'_> {
         let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string());
         let number = |k: &str| s.number(k).and_then(Result::ok);
         // A chest's default type is its own (chests.md rule 2).
-        let default_type = if chest { kq8_game::chest::CHEST_TYPE } else { kq8_game::collide::DEFAULT_TYPE };
+        let default_type = if chest { kq8_core::chest::CHEST_TYPE } else { kq8_core::collide::DEFAULT_TYPE };
         let (collider_type, problem_t) = collider_value(s, "colliderType", default_type);
-        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
+        let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_core::collide::DEFAULT_MASK);
         for problem in [problem_t, problem_m].into_iter().flatten() {
             self.log.summary(format!("door {label}[{}]: {problem}", p.name));
         }
@@ -1970,9 +1970,9 @@ impl Placer<'_> {
             };
             let remark = |prefix: &str| {
                 let keys = ["Msg", "Noun", "Verb", "Case", "Seq", "End"].map(|k| number(&format!("{prefix}{k}")));
-                keys.iter().any(Option::is_some).then(|| kq8_game::chest::Remark(keys.map(|v| v.unwrap_or(0.0) as i64)))
+                keys.iter().any(Option::is_some).then(|| kq8_core::chest::Remark(keys.map(|v| v.unwrap_or(0.0) as i64)))
             };
-            kq8_game::chest::ChestSettings {
+            kq8_core::chest::ChestSettings {
                 item: text("invItemTypeName").filter(|v| !v.is_empty()),
                 quantity: number("invQuantity").map_or(1, |v| v as i64),
                 item_position,
@@ -2028,7 +2028,7 @@ impl Placer<'_> {
             self.log.detail(format!("trap [{}]: {problem}", p.name));
         }
         let trap_type = s.get("trapType").and_then(|v| v.trim().parse::<u32>().ok()).unwrap_or(0);
-        let settings = kq8_game::trap::TrapSettings {
+        let settings = kq8_core::trap::TrapSettings {
             name: p.name.clone(),
             position: p.position,
             min: [num("BBMinX").unwrap_or(0.0), num("BBMinY").unwrap_or(0.0), num("BBMinZ").unwrap_or(0.0)],
@@ -2140,7 +2140,7 @@ impl Placer<'_> {
             start: c.start,
             speed: c.speed,
             repeat: c.repeat,
-            random: flag_bits & kq8_game::anim::RANDOM_START != 0,
+            random: flag_bits & kq8_core::anim::RANDOM_START != 0,
         });
     }
 
@@ -2361,8 +2361,8 @@ impl Placer<'_> {
                 log.summary(format!("collision: [{}] {shape} could not be read; no collider", p.name));
                 continue;
             };
-            let placement = kq8_game::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
-            let c = kq8_game::collide::BuildingCollider::new(&p.name, dig, placement);
+            let placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
+            let c = kq8_core::collide::BuildingCollider::new(&p.name, dig, placement);
             log.detail(format!(
                 "collision: building [{}] {shape}: {} nodes, {} leaves, world box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0})",
                 p.name,
@@ -2384,7 +2384,7 @@ impl Placer<'_> {
             .iter()
             .zip(&building_types)
             .filter(|(_, t)| *t & VIEW_BLOCKING == 0)
-            .map(|(b, t): (&kq8_game::collide::BuildingCollider, &u32)| format!("{} ({t:#x})", b.name))
+            .map(|(b, t): (&kq8_core::collide::BuildingCollider, &u32)| format!("{} ({t:#x})", b.name))
             .collect();
         log.summary(format!(
             "camera view blockers: {} of {} buildings (not: {not_blocking:?}), {} object boxes (bit 0x8 or 0x1000) {:?}, plus doors as they stand",
@@ -2459,8 +2459,8 @@ fn object_colliders(
     collision: &[CollisionInfo],
     markers: &[Marker],
     log: &mut Log,
-) -> (Vec<kq8_game::collide::BoxCollider>, Vec<kq8_game::active::Clickable>, Vec<kq8_game::collide::BoxCollider>) {
-    use kq8_game::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
+) -> (Vec<kq8_core::collide::BoxCollider>, Vec<kq8_core::active::Clickable>, Vec<kq8_core::collide::BoxCollider>) {
+    use kq8_core::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
     let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
         Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
         _ => {
@@ -2508,7 +2508,7 @@ fn object_colliders(
                 *left_out.entry("not in BOUNDS.KQ").or_default() += 1;
             }
             log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides"));
-            clickable_without_box += usize::from(info.collider_type & kq8_game::click::CLICKABLE != 0);
+            clickable_without_box += usize::from(info.collider_type & kq8_core::click::CLICKABLE != 0);
             continue;
         };
         // Clickable (doors.md rule 10): picked by its box, whatever it
@@ -2523,8 +2523,8 @@ fn object_colliders(
                 placement: Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
             });
         }
-        if info.collider_type & kq8_game::click::CLICKABLE != 0 {
-            let mut c = kq8_game::active::Clickable::plain(
+        if info.collider_type & kq8_core::click::CLICKABLE != 0 {
+            let mut c = kq8_core::active::Clickable::plain(
                 &p.name,
                 class,
                 entry.min,

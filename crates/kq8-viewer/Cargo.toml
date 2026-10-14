@@ -11,5 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 kq8-data.workspace = true
-kq8-game.workspace = true
+kq8-core.workspace = true
 bevy.workspace = true

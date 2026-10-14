@@ -298,7 +298,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::HeldItem(args.item))
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
-                .insert_resource(Time::<Fixed>::from_hz(kq8_game::UPDATES_PER_SECOND))
+                .insert_resource(Time::<Fixed>::from_hz(kq8_core::UPDATES_PER_SECOND))
                 .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).

@@ -1,5 +1,5 @@
 //! The camera that follows Connor (M2 step 2f, docs/DESIGN.md), using
-//! `kq8_game::camera` (rules from docs/behaviour/camera.md). Its logic runs
+//! `kq8_core::camera` (rules from docs/behaviour/camera.md). Its logic runs
 //! in the fixed 15-per-second schedule right after Connor; drawing blends
 //! between its last two updates. F switches to the free flying camera and
 //! back.
@@ -10,8 +10,8 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_game::camera::{ground_line_hit, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
-use kq8_game::collide::{BoxCollider, BuildingCollider};
+use kq8_core::camera::{ground_line_hit, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_core::collide::{BoxCollider, BuildingCollider};
 
 use crate::connor_view::{key_code, ConnorSim};
 use crate::log::Log;
@@ -180,7 +180,7 @@ pub fn make(
         }
     };
     let cam = Camera::new(position);
-    let aim = [connor_at[0], connor_at[1], connor_at[2] + kq8_game::camera::AIM_HEIGHT];
+    let aim = [connor_at[0], connor_at[1], connor_at[2] + kq8_core::camera::AIM_HEIGHT];
     let mut g = GameCam {
         previous: (position, cam.tilt, aim),
         current: (position, cam.tilt, aim),

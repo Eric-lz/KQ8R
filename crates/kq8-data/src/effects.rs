@@ -5,7 +5,7 @@
 //!
 //! Key names and defaults from the behaviour note
 //! `docs/behaviour/emitters.md` ("Emitter keys"); the rules that use them
-//! are in `kq8-game` (`emitter.rs`). Vectors are three keys `<name>X`,
+//! are in `kq8-core` (`emitter.rs`). Vectors are three keys `<name>X`,
 //! `<name>Y`, `<name>Z`; a missing key is 0.
 
 use crate::kq_text::Section;

@@ -55,9 +55,15 @@ Modelled on IW4L (<https://github.com/vladtrc/iw4L>): a Cargo *workspace*
 ```text
 Cargo.toml            workspace definition
 crates/
-  kq8-data/           library: finds and reads game files (VOL archives, ...)
+  kq8-data/           library: finds and reads game files (VOL archives,
+                      models, terrain, object lists, scripts, ...)
+  kq8-core/           library: the game's rules, no drawing (Connor, camera,
+                      scripts and events, doors, chests, traps, items, ...);
+                      named kq8-game until 2026-10-13
   kq8-cli/            the `kq8` command-line tool for checks and dumps
-  kq8-viewer/         window that shows one model (uses Bevy)
+  kq8-viewer/         the window (uses Bevy): draws a world and runs the
+                      rules; also the developer's test tool (H key, free
+                      camera, `--at`, `--click`, `--aim`, detailed logs)
 docs/                 DESIGN.md (this file), RESEARCH.md (what exists online)
 docs/provenance/      where each piece of knowledge came from
 docs/behaviour/       behaviour notes (session A) and QUESTIONS.md
@@ -66,7 +72,12 @@ reference/            third-party repos cloned for reading (never committed)
 MASK/                 the game install (never committed)
 ```
 
-More crates will come later (rendering, audio, game logic). Asset *parsing*
+Data flows game files → `kq8-data` → `kq8-core` → `kq8-viewer`. Open
+decision (user): whether the game you play will be a separate program
+later (e.g. `kq8-play`, using `kq8-data` and `kq8-core`, with the viewer
+staying a test tool); B's recommendation, not decided.
+
+More crates will come later (rendering, audio). Asset *parsing*
 stays in `kq8-data` so the engine never touches raw bytes directly. The
 viewer follows that rule: `kq8-data` turns a model into a plain list of
 triangles (positions, texture coordinates, material), and only the
@@ -442,7 +453,7 @@ since the last update), so motion looks smooth. The blend is display only
 and never changes the logic. If a higher rate is wanted later, it is a
 separate, logged change.
 
-**Where the code goes.** A new crate `crates/kq8-game` (no Bevy) holds the
+**Where the code goes.** A new crate `crates/kq8-core` (no Bevy) holds the
 game rules: Connor's mover first. It asks the world for the ground under a
 point through a small interface, so it can be unit-tested without the
 game files. The viewer runs it at 15 updates per second.
@@ -498,7 +509,7 @@ Steps (each separately revertable, each stopped for an eye check):
     starts in 2g-1, stops in 2g-2.)
   - All frames of each movement's loop are drawn in turn, at the loop's
     speed.
-  - The rules live in `kq8-game` (`connor.rs`): intent → movement, turning,
+  - The rules live in `kq8-core` (`connor.rs`): intent → movement, turning,
     the wanted step for the mover. Unit tests: the table, speeds, turn
     rate.
   - Viewer: F makes the camera follow Connor (keeps its offset; a
@@ -511,7 +522,7 @@ Steps (each separately revertable, each stopped for an eye check):
   the passes" (with the recommended rule for walkable downhill), "Gravity",
   "Slopes", "Falling off an edge". The terrain is still the only solid
   thing (buildings and objects come in 2d).
-  - The mover's update (`kq8-game` `connor_mover.rs`):
+  - The mover's update (`kq8-core` `connor_mover.rs`):
     1. Start: as before. It also remembers whether he began the update on
        walkable ground (for the downhill rule).
     2. Up pass: step up + the animation's height change. At its end, if
@@ -661,7 +672,7 @@ Steps (each separately revertable, each stopped for an eye check):
       every node reachable from node 0; counts of solid and open leaves.
       And `BOUNDS.KQ`: 1,111 entries read, the `Connor` entry as above.
     - Unit tests for both readers on made-up bytes.
-  - **2d-2, the collision tests (`kq8-game`, new `collide.rs`; still not
+  - **2d-2, the collision tests (`kq8-core`, new `collide.rs`; still not
     used by the mover).** *Done 2026-10-12 (MODLOG). Checked against
     the original's measurements (house floor, Tomb wall: Q36). Added on
     the way: the touch test's 0.00001 margin is done in 64-bit numbers,
@@ -873,7 +884,7 @@ Steps (each separately revertable, each stopped for an eye check):
         duplicates the entries the note names (`rat` = item 8,
         `razetta.kqs` = item 775). The raw list stays for
         `building-verify`.
-      - `kq8-game` `collide.rs`: `ObjectCollider` (the box collider plus
+      - `kq8-core` `collide.rs`: `ObjectCollider` (the box collider plus
         its world box for the rough check); Connor's type 4 and mask
         0x281B; the pair test.
       - `connor_mover.rs`: the scene gets an object list next to the buildings;
@@ -943,7 +954,7 @@ Steps (each separately revertable, each stopped for an eye check):
     rule as usual).
   - **Where the code goes.** The update that ties the walker and the
     mover together (fall events, head-on, and now jumps) moves from the
-    viewer (`connor_view.rs` `connor_step`) into `kq8-game` (new
+    viewer (`connor_view.rs` `connor_step`) into `kq8-core` (new
     `connor_update.rs`), so jumps can be unit-tested with both. The viewer keeps
     the keys, drawing and logging. A small move of existing code, no
     change in behaviour.
@@ -1016,7 +1027,7 @@ Steps (each separately revertable, each stopped for an eye check):
     Connor, right after him, so every per-update rate in the note (height
     10% per update, tilt 0.015 rad per update, zoom 125 per update) is used
     as traced; drawing blends between its last two updates, like Connor.
-  - Rules in `kq8-game` (`camera.rs`), unit-tested: aim point 1,400 above
+  - Rules in `kq8-core` (`camera.rs`), unit-tested: aim point 1,400 above
     Connor's base; normal mode keeps the camera where it is unless it is
     farther than the maximum (pulled to max − 1) or closer than the minimum
     (pushed to min + 1), in 3D; fixed mode (F11) keeps its distance, zoom
@@ -1073,7 +1084,7 @@ Steps (each separately revertable, each stopped for an eye check):
     (`walk`, `run`, …) keep the even spread (Q24 is only partly
     answered). This also changes `jumpend` (its steps are uneven); `crash`
     is even, so it doesn't change.
-  - **The walker** (`kq8-game` `connor.rs`) gains, following rules 1–6:
+  - **The walker** (`kq8-core` `connor.rs`) gains, following rules 1–6:
     the *wanted* movement (asked for only when the keys' choice changes;
     a new request replaces the old one); a *chosen* transition waiting
     for its from point; the transition being played and its `<to
@@ -1213,7 +1224,7 @@ Steps (each separately revertable, each stopped for an eye check):
       `BOUNDS.KQ` box, turned with the object (Daventry: the doors);
       doors use their box as it stands now (`door_view`), with their
       current type. Monsters, trees and other plain objects don't block.
-  - **Line tests** (`kq8-game` `collide.rs`): a building's BSP walked with
+  - **Line tests** (`kq8-core` `collide.rs`): a building's BSP walked with
     a zero-width line (the same walk as Connor's balls, radius 0); a box
     by the slab test Connor's boxes use; the ground by stepping along the
     line every 50 units, then halving the step 20 times at the first step
@@ -1221,7 +1232,7 @@ Steps (each separately revertable, each stopped for an eye check):
     gives no method; a line that starts under the ground, e.g. the aim
     point under deep water, is not blocked until it goes back down into
     it). The nearest hit wins.
-  - **The camera update** (`kq8-game` `camera.rs`), after the existing
+  - **The camera update** (`kq8-core` `camera.rs`), after the existing
     steps 1–5: (6) a running swing turns the camera round the aim point by
     its step, or is cancelled if the mouse moved the camera this update;
     (7) the view test; (8) if blocked: (8.1) mouse moved → back to the
@@ -1251,7 +1262,7 @@ Steps (each separately revertable, each stopped for an eye check):
   (frame-rate-dependent banking).
   - **Words.** *Banking* (or the *lean*) is Connor tilting sideways into a
     turn, like a cyclist: a turn about his own forward axis.
-  - **The rule** (`kq8-game` `connor.rs`, `Walker::bank`, radians,
+  - **The rule** (`kq8-core` `connor.rs`, `Walker::bank`, radians,
     positive = leaning to his left): each update the lean moves towards a
     target by at most 0.45 rad/s × 1/15 s (= the original's 0.03 per
     update at its 15 updates per second). Target = 0.15 × the turn key
@@ -1322,7 +1333,7 @@ catchers, ground animators).
     from 0 (first frame) to 1 (last frame). A *cue* is an action written
     in the movement (`cue0=0.0 playsound door4.aud`) that fires when the
     phase passes it.
-  - **3a-1, the script runner** (`kq8-game` `script.rs`, no Bevy). Only
+  - **3a-1, the script runner** (`kq8-core` `script.rs`, no Bevy). Only
     what `doors.md` "The script language" lists:
     - a line is split into words (spaces/tabs), `#` starts a comment, a
       double-quoted part is one word;
@@ -1362,7 +1373,7 @@ catchers, ground animators).
       `$Console::Return`, a script calling another, `sendEvent` parsing.
       Viewer log: every Daventry door script read through the block
       counter (balanced `if`/`endif`).
-  - **3a-2, the door and the event queue** (`kq8-game` `door.rs`,
+  - **3a-2, the door and the event queue** (`kq8-core` `door.rs`,
     `events.rs`, no Bevy).
     - Door state (rule 1): closed / opening / opened / closing, closed at
       the start. `KQDoorEvent 1` opens only when closed, `2` closes only
@@ -1410,7 +1421,7 @@ catchers, ground animators).
       0.0 fires in the first update, `Saradoor`-like cue at 0.95 on
       `close` never fires, turn after 10 open/close cycles is exactly 0,
       event order and delays.
-  - **3a-3, clicking and the viewer** (`kq8-game` `click.rs`;
+  - **3a-3, clicking and the viewer** (`kq8-core` `click.rs`;
     `kq8-viewer` `door_view.rs`, `load.rs`, `main.rs`).
     - Load every `KQDoor`: its four movements (`loop=`, cues), all frames
       of its shape with their frame transforms, `script=`,
@@ -1472,7 +1483,7 @@ catchers, ground animators).
     second (flowing water). A *tick* is one game update (1/15 s).
   - **Where the code goes.** Reading the keys: `kq8-data` `effects.rs`
     (no rules, just the numbers with their defaults). The rules:
-    `kq8-game` `emitter.rs` (particles and catchers) and `ground_anim.rs`
+    `kq8-core` `emitter.rs` (particles and catchers) and `ground_anim.rs`
     (animators), no Bevy, unit-tested. Drawing and the tick:
     `kq8-viewer` `effects_view.rs` (emitters, catchers) and
     `ground_anim_view.rs` (animators), run in the fixed 15-per-second
@@ -1574,7 +1585,7 @@ catchers, ground animators).
     windmill sails, mill wheel and gears, signs, shutters, torches, lamps,
     burners, waterfalls, fish, the fountain water, …). Speed 0 stays a
     still model, as now.
-  - **Playing** (`kq8-game` `anim.rs`, no Bevy): phase starts at `a`
+  - **Playing** (`kq8-core` `anim.rs`, no Bevy): phase starts at `a`
     (`loop=` start); each update it moves by speed × (1/15 s) ÷ the loop's
     stored length; repeating loops wrap round 0..1, one-shots stop at the
     end (and stay there: `nextAnimName` is not traced). Frame shown:
@@ -1631,7 +1642,7 @@ catchers, ground animators).
   | Q52 b, d | missing target: keep ours; order right | already | none |
   | Q52 c | offset turned by the target's whole turn, the camera's too | Connor heading, objects all three angles, camera no turn | none: no emitter in any world follows `KQCamera` (only `snow` → Connor, offset z only) |
 
-  - **3r-1, ground animator clock (Q49).** `kq8-game` `ground_anim.rs`:
+  - **3r-1, ground animator clock (Q49).** `kq8-core` `ground_anim.rs`:
     after a change at clock time t the next is due at t + `delay`
     (`update` takes the clock time; the change records it). `kq8-viewer`
     `ground_anim_view.rs`: the step moves from the 15-per-second update to
@@ -1690,7 +1701,7 @@ catchers, ground animators).
     `loadKQ` (positive z; their angles are ignored, the box never turns);
     8 files have `locZ=-1`; 4 sticky traps (`chrchtrp` 0.9, `mugltrap`,
     `mwiztrap`, `mwzhtrap` 0.8).
-  - **3d-1, the trap rules** (`kq8-game` new `trap.rs`, no Bevy). A `Trap`:
+  - **3d-1, the trap rules** (`kq8-core` new `trap.rs`, no Bevy). A `Trap`:
     name, position, box (`BBMin/BBMax` added to the position, never
     turned), script, mask (`colliderMask`, default 0, stand-in: not
     stated in the note), `trapType`, `innerPercent`, inside list, shrunk
@@ -1724,7 +1735,7 @@ catchers, ground animators).
     second object gives `Cue 301/302`; the pair rule (mask 0 never fires);
     one-shot.
   - **3d-2, traps in Daventry** (`kq8-viewer` `load.rs`, `door_view.rs`
-    or a new `trap_view.rs`; `kq8-game` `active.rs`). Loading: every
+    or a new `trap_view.rs`; `kq8-core` `active.rs`). Loading: every
     placed `KQTrap` becomes a trap: position as written (`keepOnGround`
     ignored, rule 1), z of −1 → the floor grid height there (rule 2), the
     template copies at their `loadKQ` place. The traps join the doors'
@@ -1744,7 +1755,7 @@ catchers, ground animators).
     shrunk box, mask, script, `Init`), and every `On`/`Off`/`Cue` with
     Connor's position, his box centre, the box used, and the script's
     lines. The main log gets a count at load and each `On`/`Off`.
-  - **3d-3, what the walk/run zones do** (`kq8-game` `active.rs`, viewer).
+  - **3d-3, what the walk/run zones do** (`kq8-core` `active.rs`, viewer).
     `KQConner::setRun 0|1` sets Connor's run switch (connor-movement.md
     rule 4); `KQCamera::setRange <min> <max>` sets the camera's range,
     refused unless min < max (camera.md). Both are handed to the viewer
@@ -1809,7 +1820,7 @@ catchers, ground animators).
     one id number don't resolve (Q62). `acceptsInventory` turned out to
     hold comma-separated lists too (Q62); it matters for using items on
     doors (today: exact comparison), not for this step.
-  - **3e-2, item objects and inventories** (`kq8-game` new `item.rs`,
+  - **3e-2, item objects and inventories** (`kq8-core` new `item.rs`,
     `active.rs`; no Bevy). An item object: name, type, quantity, third
     number −1 (rule 3), where it is (in the world at a position and turn,
     or carried by someone), hidden, script, `doNotPointAt` (default on,
@@ -1871,7 +1882,7 @@ catchers, ground animators).
     objects' (this world, then `GAME/Common`), so a type whose model only
     another world has is not drawn (Gnome's `schroomC.kqs`, not needed at
     the start there).
-  - **3e-4, chests** (`kq8-game` new `chest.rs`, `active.rs`;
+  - **3e-4, chests** (`kq8-core` new `chest.rs`, `active.rs`;
     `kq8-viewer` `load.rs`, `door_view.rs`). A `KQChest`: its keys (rule
     1), default type 0x8021 unless `colliderType` (rule 2; today chests
     load with the plain default 0x41, which is not clickable), movements
@@ -1909,7 +1920,7 @@ catchers, ground animators).
     nothing. Doors and chests block only when they are not the one picked.
     Reach (2 × `attackDist` from Connor's feet) is unchanged. Code:
     `kq8-viewer` `door_click_input` gets the ground and view blockers it
-    needs (the same ones `game_camera.rs` uses); `kq8-game` `active.rs`
+    needs (the same ones `game_camera.rs` uses); `kq8-core` `active.rs`
     `pick` takes an "is the line blocked before t?" test. Unit test: a box
     behind a wall is not picked, in front of it is; the ground blocks.
     Log: a blocked click names what blocked it and at what distance.
@@ -1932,7 +1943,7 @@ catchers, ground animators).
     click bit whose movement is still at load (Daventry 14); those whose
     movement plays at load (signs, fish) stay with `anim_view` and are not
     clickable yet. The movement-playing part of chests moved to
-    `kq8-game` `named_anim.rs` (`NamedAnimPlayer`; first called
+    `kq8-core` `named_anim.rs` (`NamedAnimPlayer`; first called
     `movement.rs`, renamed for clarity), used by chests and these
     objects; doors keep their own. Our stand-ins for what the notes
     describe only for doors and chests (`Init`, `EndLoop`, the click
@@ -1971,7 +1982,7 @@ catchers, ground animators).
     and drops its view box.
   - **Stubs:** `KQSound::play` (no audio yet); the stats event stays
     "stats are M5".
-  - **Code:** `kq8-game` `active.rs` (`Clickable` gets the script and the
+  - **Code:** `kq8-core` `active.rs` (`Clickable` gets the script and the
     click keys, `gone`; `Request::Delete`); `kq8-viewer` `load.rs` (the
     keys for `Clickable`), `terrain_view.rs`/`anim_view.rs` (name tags),
     `door_view.rs` (applies deletions). Unit tests: a scripted clickable

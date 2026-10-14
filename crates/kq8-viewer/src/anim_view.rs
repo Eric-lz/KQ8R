@@ -2,7 +2,7 @@
 //! docs/DESIGN.md; rules: docs/behaviour/objects.md "Animated objects at
 //! load", the phase rule of docs/behaviour/doors.md).
 //!
-//! - The loops live in `kq8_game::anim` and move at 15 updates per second.
+//! - The loops live in `kq8_core::anim` and move at 15 updates per second.
 //! - Each object is a body entity at its placement with one child per
 //!   frame; only the shown frame is visible (as doors). If the loop has
 //!   whole-object steps (frame transforms), the body is moved by the shown
@@ -20,8 +20,8 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::shape::Transform as GameTransform;
-use kq8_game::anim::{pose_at_frame, LoopPlayer};
-use kq8_game::emitter::Rng;
+use kq8_core::anim::{pose_at_frame, LoopPlayer};
+use kq8_core::emitter::Rng;
 
 use crate::load::{AnimatedAssets, Animation};
 use crate::log::Log;
@@ -180,7 +180,7 @@ pub fn spawn_animated(
             for k in 0..b.steps.len() {
                 let pose = pose_at_frame(&b.steps, k);
                 far = far.max(pose.p.iter().map(|v| v * v).sum::<f32>().sqrt());
-                turn = turn.max(kq8_game::door::turn_degrees(&pose).abs());
+                turn = turn.max(kq8_core::door::turn_degrees(&pose).abs());
             }
             let last = pose_at_frame(&b.steps, b.steps.len().saturating_sub(1));
             reach = format!(
@@ -188,7 +188,7 @@ pub fn spawn_animated(
                 last.p[0],
                 last.p[1],
                 last.p[2],
-                kq8_game::door::turn_degrees(&last)
+                kq8_core::door::turn_degrees(&last)
             );
             moving.push(p.name.clone());
         }
@@ -229,7 +229,7 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
     let n = sim.updates;
     let mut colliders = colliders;
     for p in &mut sim.playing {
-        p.player.advance(1.0 / kq8_game::UPDATES_PER_SECOND as f32);
+        p.player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
         if p.tracked && n <= TRACK_UPDATES {
             sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, p.player.phase, p.player.frame(), if p.player.finished { " finished" } else { "" }));
         }
@@ -257,7 +257,7 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
         let Some(i) = slot else { continue };
         let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
         let (rotation, position) = combine(&pose_at_frame(&p.steps, frame), &p.rotation, p.position);
-        colliders.0[i].placement = kq8_game::collide::Placement { rotation, position };
+        colliders.0[i].placement = kq8_core::collide::Placement { rotation, position };
         if n % 15 == 0 && n <= 150 {
             sim.log.detail(format!(
                 "update {n} [{}] frame {frame}: collider at ({:.0}, {:.0}, {:.0})",

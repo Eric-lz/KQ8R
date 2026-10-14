@@ -1,7 +1,7 @@
 //! Emitters in the ground view (M3 step 3b, docs/DESIGN.md; rules:
 //! docs/behaviour/emitters.md).
 //!
-//! - The particles live in `kq8_game::emitter` and move at 15 updates per
+//! - The particles live in `kq8_core::emitter` and move at 15 updates per
 //!   second, after the doors and Connor.
 //! - Particle catchers run after the emitters in the same update and hide
 //!   their emitter's particles inside a building's box (the original's
@@ -18,8 +18,8 @@
 
 use bevy::prelude::*;
 use kq8_data::effects::CatcherSettings;
-use kq8_game::collide::BuildingCollider;
-use kq8_game::emitter::{Catcher, Emitter, Rng};
+use kq8_core::collide::BuildingCollider;
+use kq8_core::emitter::{Catcher, Emitter, Rng};
 
 use crate::connor_view::ConnorSim;
 use crate::game_camera::GameCam;

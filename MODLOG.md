@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Rename the rules crate: `kq8-game` → `kq8-core`
+
+**Changed:** `crates/kq8-game/` → `crates/kq8-core/` (package name, workspace `Cargo.toml`, the viewer's dependency, every `kq8_game::` path in `kq8-viewer`, one comment in `kq8-data`). DESIGN "Repository layout" now lists `kq8-core` (it was missing) and describes the viewer as it is today, plus the open decision about a separate game program. DESIGN and provenance use the new name; MODLOG history, QUESTIONS and STATUS.md keep the old one.
+**Why:** The user: "kq8-game" reads like "the program you play"; the crate holds only the rules. "core" chosen by the user.
+**Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; clippy on `kq8-core`.
+**Result:** 181 + 62 tests pass; the viewer builds; clippy clean. No behaviour change.
+**Still broken / not tested:** Nothing new.
+**Next:** Terrain lighting or a study session for Q60-Q64 (user's choice).
+
 ## 2026-10-13 Renames: `movement.rs` → `named_anim.rs`, `mover.rs` → `connor_mover.rs`, `player.rs` → `connor_update.rs`
 
 **Changed:** `crates/kq8-game/src/movement.rs` renamed to `named_anim.rs`, its type `MovementPlayer` to `NamedAnimPlayer` (uses in `chest.rs`, `active.rs`, `door_view.rs`); the file's first lines now say what it is. Also, at the user's request, Connor's `mover.rs` → `connor_mover.rs` and `player.rs` → `connor_update.rs` (module paths in `camera.rs`, `connor.rs`, `connor_view.rs`, `door_view.rs`). DESIGN and provenance point to the new names; older MODLOG entries keep the old ones.

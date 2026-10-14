@@ -3419,6 +3419,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kq8-core"
+version = "0.1.0"
+dependencies = [
+ "kq8-data",
+]
+
+[[package]]
 name = "kq8-data"
 version = "0.1.0"
 dependencies = [
@@ -3426,19 +3433,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "kq8-game"
-version = "0.1.0"
-dependencies = [
- "kq8-data",
-]
-
-[[package]]
 name = "kq8-viewer"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "kq8-core",
  "kq8-data",
- "kq8-game",
 ]
 
 [[package]]

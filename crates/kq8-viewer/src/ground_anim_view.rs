@@ -1,7 +1,7 @@
 //! Ground animators in the ground view (M3 step 3b-3, docs/DESIGN.md;
 //! rules: docs/behaviour/emitters.md "Ground animators").
 //!
-//! - The animators live in `kq8_game::ground_anim`. They are checked every
+//! - The animators live in `kq8_core::ground_anim`. They are checked every
 //!   drawn frame, not on the 15-per-second update (Q49, M3 step 3r-1), on
 //!   continuous game time: the fixed clock's time plus the time already
 //!   run since its last update.
@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
-use kq8_game::ground_anim::GroundAnimator;
+use kq8_core::ground_anim::GroundAnimator;
 
 use crate::load::GroundAnimAssets;
 use crate::log::Log;

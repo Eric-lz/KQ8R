@@ -44,7 +44,7 @@ pub struct GroundLookup(pub kq8_data::Terrain);
 
 /// The world's buildings as colliders, for Connor's mover (M2 step 2d-3).
 #[derive(Resource, Default)]
-pub struct Buildings(pub Vec<kq8_game::collide::BuildingCollider>);
+pub struct Buildings(pub Vec<kq8_core::collide::BuildingCollider>);
 
 /// What blocks the camera's view line besides the ground and the doors
 /// (M2 step 2f-2): each building's collision type (same order as
@@ -52,12 +52,12 @@ pub struct Buildings(pub Vec<kq8_game::collide::BuildingCollider>);
 #[derive(Resource, Default)]
 pub struct ViewBlockerSet {
     pub building_types: Vec<u32>,
-    pub boxes: Vec<kq8_game::collide::BoxCollider>,
+    pub boxes: Vec<kq8_core::collide::BoxCollider>,
 }
 
 /// The world's objects that collide with Connor (M2 step 2d-5).
 #[derive(Resource, Default)]
-pub struct ObjectColliders(pub Vec<kq8_game::collide::BoxCollider>);
+pub struct ObjectColliders(pub Vec<kq8_core::collide::BoxCollider>);
 
 /// The placed object an entity draws (M3 step 3f: `deleteObject` hides
 /// it by name).

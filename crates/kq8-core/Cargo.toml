@@ -1,5 +1,5 @@
 [package]
-name = "kq8-game"
+name = "kq8-core"
 description = "Game rules for the KQ8 rewrite (Connor's mover first); no drawing"
 version.workspace = true
 edition.workspace = true

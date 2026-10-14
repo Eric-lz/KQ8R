@@ -2,7 +2,7 @@
 //! docs/behaviour/doors.md).
 //!
 //! - The doors, their scripts and the event queue live in
-//!   `kq8_game::active` and run at 15 updates per second, before Connor's
+//!   `kq8_core::active` and run at 15 updates per second, before Connor's
 //!   update, so a door's box is where it is drawn when he moves.
 //! - A left click sends a ray from the camera through the mouse and picks
 //!   the nearest clickable box (rule 10); the click is handled at the
@@ -31,12 +31,12 @@
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use kq8_game::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
-use kq8_game::named_anim::NamedAnimPlayer;
-use kq8_game::chest::Chest;
-use kq8_game::trap::{Trap, Visitor};
-use kq8_game::collide::{BoxCollider, Placement};
-use kq8_game::door::{turn_degrees, Cue, Door, DoorMovement};
+use kq8_core::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
+use kq8_core::named_anim::NamedAnimPlayer;
+use kq8_core::chest::Chest;
+use kq8_core::trap::{Trap, Visitor};
+use kq8_core::collide::{BoxCollider, Placement};
+use kq8_core::door::{turn_degrees, Cue, Door, DoorMovement};
 
 use crate::connor_view::ConnorSim;
 use crate::game_camera::GameCam;
@@ -333,7 +333,7 @@ pub fn spawn_doors(
             match sources.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)) {
                 Some((_, bytes)) => {
                     let text: String = bytes.iter().map(|&b| b as char).collect();
-                    let (ifs, endifs, problems) = kq8_game::script::block_balance(&text);
+                    let (ifs, endifs, problems) = kq8_core::script::block_balance(&text);
                     format!("{name}: {} lines, {ifs} if / {endifs} endif{}", text.lines().count(), if problems.is_empty() { ", balanced".to_string() } else { format!(", PROBLEMS {problems:?}") })
                 }
                 None => format!("{name}: NOT FOUND in the world's scripts"),
@@ -510,10 +510,10 @@ pub fn trap_step(
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
         let from = sim.connor_checked_at.replace(position).unwrap_or(position);
-        let (min, max) = kq8_game::connor_mover::CONNOR_BOX;
+        let (min, max) = kq8_core::connor_mover::CONNOR_BOX;
         let v = Visitor {
             name: &connor.placement.name,
-            collision_type: kq8_game::collide::CONNOR_TYPE,
+            collision_type: kq8_core::collide::CONNOR_TYPE,
             from,
             position,
             min,

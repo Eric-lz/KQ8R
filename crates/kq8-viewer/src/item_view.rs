@@ -1,7 +1,7 @@
 //! Items lying in the world (M3 step 3e-3, docs/DESIGN.md; rules:
 //! docs/behaviour/items.md).
 //!
-//! The item objects live in `kq8_game::active` (`DoorSim`), which picks
+//! The item objects live in `kq8_core::active` (`DoorSim`), which picks
 //! them up when clicked. Here each item lying in the world (and not
 //! hidden) is drawn with its type's model, turned and placed as made
 //! (rule 5), see-through by its type's translucency (as objects,
