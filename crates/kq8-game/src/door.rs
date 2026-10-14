@@ -87,6 +87,31 @@ impl DoorMovement {
         }
     }
 
+    /// One update of `dt` seconds from `phase`: the new phase, whether a
+    /// play-once movement reached its end (1 forward, 0 backward), and the
+    /// cues passed (rule 9). Shared by doors and chests (M3 step 3e-4).
+    pub fn step(&self, phase: f32, dt: f32) -> Step {
+        if self.play_time <= 0.0 {
+            return Step { to: phase, done: true, cues: Vec::new() };
+        }
+        let mut to = phase + self.speed * dt / self.play_time;
+        let mut done = false;
+        if self.repeat {
+            // Not used by any Daventry door or chest; cues of a wrapping
+            // loop are not handled (logged by the caller as nothing fired).
+            to = to.rem_euclid(1.0);
+        } else if to >= 1.0 && self.speed > 0.0 {
+            to = 1.0;
+            done = true;
+        } else if to <= 0.0 && self.speed < 0.0 {
+            to = 0.0;
+            done = true;
+        }
+        let (lo, hi) = if phase <= to { (phase, to) } else { (to, phase) };
+        let cues = self.cues.iter().filter(|c| c.phase >= lo && c.phase < hi).map(|c| c.action.clone()).collect();
+        Step { to, done, cues }
+    }
+
     /// The steps of frames 1…`frame` chained: each step is taken in the
     /// door's own axes as they are after the earlier steps. Frame 0 is the
     /// starting pose (no step).
@@ -97,6 +122,15 @@ impl DoorMovement {
         }
         c
     }
+}
+
+/// What one update of a movement does ([`DoorMovement::step`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Step {
+    pub to: f32,
+    /// A play-once movement reached its end (or has no length).
+    pub done: bool,
+    pub cues: Vec<String>,
 }
 
 /// No change.
@@ -236,22 +270,8 @@ impl Door {
             self.playing = false;
             return out;
         }
-        let p0 = self.phase;
-        let mut p1 = p0 + m.speed * dt / m.play_time;
-        let mut done = false;
-        if m.repeat {
-            // Not used by any Daventry door; cues of a wrapping loop are
-            // not handled (logged by the caller as nothing fired).
-            p1 = p1.rem_euclid(1.0);
-        } else if p1 >= 1.0 && m.speed > 0.0 {
-            p1 = 1.0;
-            done = true;
-        } else if p1 <= 0.0 && m.speed < 0.0 {
-            p1 = 0.0;
-            done = true;
-        }
-        let (lo, hi) = if p0 <= p1 { (p0, p1) } else { (p1, p0) };
-        out.cues = m.cues.iter().filter(|c| c.phase >= lo && c.phase < hi).map(|c| c.action.clone()).collect();
+        let Step { to: p1, done, cues } = m.step(self.phase, dt);
+        out.cues = cues;
         let name = m.name.clone();
         self.phase = p1;
         out.to = p1;

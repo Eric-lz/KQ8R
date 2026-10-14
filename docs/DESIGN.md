@@ -1772,7 +1772,7 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
-- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-3 done
+- **3e — chests and items (planned 2026-10-13; 3e-1 to 3e-4 done
   2026-10-13, MODLOG).** Rules from
   `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
   clicking, `objects.md` for heights and hiding). Five sub-steps, each
@@ -1890,6 +1890,31 @@ catchers, ground animators).
     (`wizchest.cs`). Unit tests: the three clicks, no item type, item
     already picked up, item in hand refused, out of reach, `EndLoop
     open` after 1 s.
+    **Done.** In the viewer a chest is loaded and drawn as a door (the
+    loader's door list with `DoorAssets::chest` set; same box lookup and
+    per-frame models); the running game keeps chests apart
+    (`ActiveChest`). Daventry: `smlchst3`, `smlchst4`, `wizchest1`
+    (hidden, type 0x1).
+  - **3e-4b, clicks need the camera's line of sight (planned 2026-10-13,
+    not started).** The user's check in the original (2026-10-13): an
+    object can't be clicked through a wall or the ground, but can when
+    Connor is behind a wall and the camera sees the object. This
+    contradicts `doors.md` Q45 b ("walls, terrain and other objects do not
+    hide a clickable one"); asked as Q63. Applies to every click (doors,
+    chests, items). Stand-in until Q63 is answered: the mouse ray (it
+    already starts at the camera) is tested against the camera's view
+    obstacles (`camera.md` "Obstacles": the drawn ground; buildings;
+    objects with collision type bit 0x8 or 0x1000, including doors as
+    they stand); if one is hit nearer than the picked box, the click picks
+    nothing. Doors and chests block only when they are not the one picked.
+    Reach (2 × `attackDist` from Connor's feet) is unchanged. Code:
+    `kq8-viewer` `door_click_input` gets the ground and view blockers it
+    needs (the same ones `game_camera.rs` uses); `kq8-game` `active.rs`
+    `pick` takes an "is the line blocked before t?" test. Unit test: a box
+    behind a wall is not picked, in front of it is; the ground blocks.
+    Log: a blocked click names what blocked it and at what distance.
+    Viewer check: from the pub's ground floor the upstairs chest can't be
+    clicked; standing upstairs it can.
   - **3e-5, scripted chests and baskets** (`active.rs`, viewer). A
     clickable object with a script that is not a door, chest or item:
     clicking it in reach runs `<name> ConnorAction do do` (`chests.md`

@@ -28,11 +28,17 @@
 //! `setDontLook`, `setHidden`, `deleteObject`); Connor picks a world item
 //! up by clicking it in reach (rules 6-8). Item lines also go to
 //! [`WorldState::item_log`] (`items.log`).
+//!
+//! Chests (M3 step 3e-4, `docs/behaviour/chests.md`, `crate::chest`):
+//! clicked like doors (reach, "too far", "doesn't work"), but a click runs
+//! the chest's own three steps instead of its script (rules 6-9); its
+//! script gets `Init`, `EndLoop <movement>` and `Cue`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use kq8_data::world_script::Vars;
 
+use crate::chest::{Chest, ChestState};
 use crate::click::{distance_to_box, ray_box, CLICKABLE};
 use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
 use crate::door::{turn_degrees, Door};
@@ -90,6 +96,31 @@ impl ActiveDoor {
     }
 }
 
+/// A chest and what clicking and collision need to know about it.
+#[derive(Debug, Clone)]
+pub struct ActiveChest {
+    pub chest: Chest,
+    pub script: Option<String>,
+    /// Its `BOUNDS.KQ` box (own space); `None`: never clicked.
+    pub bounds: Option<([f32; 3], [f32; 3])>,
+    /// 0x8021 unless `colliderType` (chests.md rule 2); scripts change it.
+    pub collision_type: u32,
+    pub collision_mask: u32,
+    /// `hidden=1` / `KQObject::setHidden`: not drawn, can't be clicked.
+    pub hidden: bool,
+    pub do_not_point_at: bool,
+}
+
+impl ActiveChest {
+    pub fn collider(&self) -> Option<BoxCollider> {
+        self.bounds.map(|(min, max)| BoxCollider { name: self.chest.name.clone(), min, max, placement: self.chest.placement() })
+    }
+
+    pub fn collides_with_connor(&self) -> bool {
+        self.bounds.is_some() && pair_collides(CONNOR_TYPE, CONNOR_MASK, self.collision_type, self.collision_mask)
+    }
+}
+
 /// Any other object that can be clicked: never moves in this step.
 #[derive(Debug, Clone)]
 pub struct Clickable {
@@ -127,6 +158,8 @@ pub enum ClickResult {
     Refused,
     /// A world item went into Connor's inventory (items.md rule 7).
     PickedUp(String),
+    /// A chest's own click steps ran (chests.md rules 7-9).
+    Chest { before: ChestState, after: ChestState },
 }
 
 /// Ground height at (x, y): the floor (`true`) or the surface (`false`).
@@ -135,6 +168,7 @@ pub type Heights = Box<dyn Fn(f32, f32, bool) -> Option<f32> + Send + Sync>;
 /// Everything a script can touch, apart from the variables.
 pub struct WorldState {
     pub doors: Vec<ActiveDoor>,
+    pub chests: Vec<ActiveChest>,
     pub traps: Vec<Trap>,
     pub clickables: Vec<Clickable>,
     /// Every loaded object's name, lower case (for "unknown object").
@@ -180,6 +214,25 @@ impl WorldState {
     fn item_note(&mut self, line: impl AsRef<str>) {
         self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
         self.note(line);
+    }
+
+    pub fn chest_index(&self, name: &str) -> Option<usize> {
+        self.chests.iter().position(|c| c.chest.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Makes a world item at `position` (z -1 / -2: floor / surface,
+    /// `objects.md` Q17 rule 2) and returns its name.
+    fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
+        if position[2] == -1.0 || position[2] == -2.0 {
+            let floor = position[2] == -1.0;
+            match self.heights.as_ref().and_then(|h| h(position[0], position[1], floor)) {
+                Some(z) => position[2] = z,
+                None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", position[2], position[0], position[1])),
+            }
+        }
+        let name = self.items.make(kind, quantity, Place::World { position, angles })?.name.clone();
+        self.known.insert(name.to_ascii_lowercase());
+        Ok(name)
     }
 
     pub fn door_index(&self, name: &str) -> Option<usize> {
@@ -246,6 +299,11 @@ impl WorldState {
             let old = d.collision_type;
             d.collision_type = change(old);
             (old, d.collision_type)
+        } else if let Some(i) = self.chest_index(name) {
+            let c = &mut self.chests[i];
+            let old = c.collision_type;
+            c.collision_type = change(old);
+            (old, c.collision_type)
         } else if let Some(c) = self.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(name)) {
             let old = c.collision_type;
             c.collision_type = change(old);
@@ -317,31 +375,23 @@ impl WorldState {
                 return "1".into();
             }
         };
-        let place = match m.position.filter(|_| m.in_world()) {
-            Some(mut p) => {
-                if p[2] == -1.0 || p[2] == -2.0 {
-                    // objects.md Q17 rule 2: -1 floor, -2 surface.
-                    let floor = p[2] == -1.0;
-                    match self.heights.as_ref().and_then(|h| h(p[0], p[1], floor)) {
-                        Some(z) => p[2] = z,
-                        None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", p[2], p[0], p[1])),
-                    }
-                }
-                Place::World { position: p, angles: m.angles }
-            }
+        let made = match m.position.filter(|_| m.in_world()) {
+            Some(p) => self.make_world_item(&m.kind, m.quantity, p, m.angles, at),
             None => {
                 if !self.known.contains(&m.who.to_ascii_lowercase()) {
                     self.note(format!("{at}: ERROR {}: unknown character '{}'; nothing made", words.join(" "), m.who));
                     return "1".into();
                 }
-                Place::Carried(m.who.clone())
+                let made = self.items.make(&m.kind, m.quantity, Place::Carried(m.who.clone())).map(|o| o.name.clone());
+                if let Ok(name) = &made {
+                    self.known.insert(name.to_ascii_lowercase());
+                }
+                made
             }
         };
-        match self.items.make(&m.kind, m.quantity, place) {
-            Ok(o) => {
-                let name = o.name.clone();
+        match made {
+            Ok(name) => {
                 let line = format!("{at}: made {}; NewInvItem = {name}", self.items.describe(&name));
-                self.known.insert(name.to_ascii_lowercase());
                 self.vars_out.push(("NewInvItem".into(), name));
                 self.item_note(line);
                 "0".into()
@@ -390,6 +440,13 @@ impl WorldState {
             self.note(format!("{at}: usage: {command} <object> ..."));
             return "1".into();
         };
+        if let (Some(c), "KQObject::setHidden") = (self.chest_index(name), command) {
+            // A chest (`wizchest.cs` on `Reveal`): not drawn, not clickable.
+            let hidden = words.get(2).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
+            self.chests[c].hidden = hidden;
+            self.note(format!("{at}: setHidden {name}: chest hidden {hidden}"));
+            return "0".into();
+        }
         let Some(i) = self.items.index(name) else {
             if command == "deleteObject" || command == "KQObject::setHidden" {
                 self.note(format!("{at}: stub (later milestone, nothing done): {}", words.join(" ")));
@@ -510,6 +567,7 @@ impl Active {
             scripts: Scripts::new(vars),
             world: WorldState {
                 doors,
+                chests: Vec::new(),
                 traps: Vec::new(),
                 clickables,
                 known,
@@ -525,6 +583,29 @@ impl Active {
                 heights: None,
                 vars_out: Vec::new(),
             },
+        }
+    }
+
+    /// Adds the world's chests (before [`Active::start`]).
+    pub fn add_chests(&mut self, chests: impl IntoIterator<Item = ActiveChest>) {
+        for c in chests {
+            self.world.known.insert(c.chest.name.to_ascii_lowercase());
+            self.world.chests.push(c);
+        }
+    }
+
+    /// Runs chest `i`'s script with `args` (`$1` is the chest's name).
+    fn call_chest(&mut self, i: usize, args: &[&str]) {
+        let c = &self.world.chests[i];
+        let name = c.chest.name.clone();
+        let mut all = vec![name.clone()];
+        all.extend(args.iter().map(|a| a.to_string()));
+        match c.script.clone() {
+            Some(script) => {
+                self.world.note(format!("script {script} {}", all.join(" ")));
+                self.scripts.call(&script, &all, &mut self.world);
+            }
+            None => self.world.note(format!("chest {name} has no script; {} not called", all.join(" "))),
         }
     }
 
@@ -620,7 +701,11 @@ impl Active {
         for i in 0..self.world.doors.len() {
             self.call_door(i, &["Init"]);
         }
-        // traps.md rule 13 (after the doors: our order).
+        // chests.md rule 6 (after the doors: our order).
+        for i in 0..self.world.chests.len() {
+            self.call_chest(i, &["Init"]);
+        }
+        // traps.md rule 13 (after the doors and chests: our order).
         for i in 0..self.world.traps.len() {
             self.call_trap(i, &["Init"]);
         }
@@ -640,6 +725,12 @@ impl Active {
             .iter()
             .filter(|c| c.collision_type & CLICKABLE != 0)
             .filter_map(|c| Some((c.name.clone(), ray_box(origin, dir, &c.placement, c.min, c.max)?)));
+        // Chests (chests.md rule 4): as doors; hidden ones can't be clicked.
+        let chests = self.world.chests.iter().filter(|c| c.collision_type & CLICKABLE != 0 && !c.hidden).filter_map(|c| {
+            let (min, max) = c.bounds?;
+            Some((c.chest.name.clone(), ray_box(origin, dir, &c.chest.placement(), min, max)?))
+        });
+        let doors = doors.chain(chests);
         // World items (items.md rule 6): by their type's box; hidden ones
         // can't be clicked.
         let items = &self.world.items;
@@ -658,6 +749,9 @@ impl Active {
         let feet_text = format!("({:.0}, {:.0}, {:.0})", feet[0], feet[1], feet[2]);
         if let Some(i) = self.world.items.index(name) {
             return self.click_item(i, feet, reach, item);
+        }
+        if let Some(i) = self.world.chest_index(name) {
+            return self.click_chest(i, feet, reach, item);
         }
         let Some(i) = self.world.door_index(name) else {
             let found = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).cloned();
@@ -766,6 +860,107 @@ impl Active {
         ClickResult::PickedUp(o.name)
     }
 
+    /// Connor clicks chest `i` (chests.md rules 4-10).
+    fn click_chest(&mut self, i: usize, feet: [f32; 3], reach: f32, item: Option<&Item>) -> ClickResult {
+        let c = self.world.chests[i].clone();
+        let name = c.chest.name.clone();
+        if c.collision_type & CLICKABLE == 0 || c.hidden {
+            self.world.note(format!("click {name}: not clickable now (type {:#x}, hidden {}); nothing", c.collision_type, c.hidden));
+            return ClickResult::Nothing;
+        }
+        let Some((min, max)) = c.bounds else {
+            self.world.note(format!("click {name}: no box in BOUNDS.KQ; can't be clicked"));
+            return ClickResult::Nothing;
+        };
+        let distance = distance_to_box(feet, &c.chest.placement(), min, max);
+        let before = c.chest.state;
+        let head = format!(
+            "click {name} (chest): Connor at ({:.0}, {:.0}, {:.0}), distance to its box {distance:.1}, reach {reach:.0}",
+            feet[0], feet[1], feet[2]
+        );
+        if distance >= reach {
+            self.world.note(format!("{head}: OUT OF REACH: Connor's \"too far\" remark (line not traced, M4); nothing"));
+            return ClickResult::TooFar;
+        }
+        if let Some(it) = item {
+            // Rule 5: chests accept no item.
+            self.world.note(format!("{head}: holds {} ({}): chests accept nothing: Connor's \"that doesn't work\" remark (M4)", it.object, it.kind));
+            return ClickResult::Refused;
+        }
+        let at = format!("chest {name}");
+        match before {
+            ChestState::Closed => {
+                // Rule 7: open plays; the item appears at invLoc / invDir.
+                let s = c.chest.settings.clone();
+                let opened = self.world.chests[i].chest.play("open");
+                let made = s.item.as_ref().map(|kind| self.world.make_world_item(kind, s.quantity, s.item_position, s.item_angles, &at));
+                let (after, what) = match made {
+                    Some(Ok(item_name)) => {
+                        let line = format!("{at}: made {}", self.world.items.describe(&item_name));
+                        self.world.item_note(line);
+                        self.world.chests[i].chest.remembered = Some(item_name.clone());
+                        (ChestState::Open, format!("item {item_name} put out, remembered"))
+                    }
+                    Some(Err(e)) => (ChestState::Empty, format!("ERROR item {:?}: {e}; counts as holding nothing (our choice)", s.item)),
+                    None => (ChestState::Empty, "holds nothing".to_string()),
+                };
+                self.world.chests[i].chest.state = after;
+                let play = match opened {
+                    Ok(()) => "plays 'open'".to_string(),
+                    Err(e) => e,
+                };
+                self.world.note(format!("{head}: IN REACH: 1st click (closed): {play}; {what}; state closed -> {}", after.name()));
+            }
+            ChestState::Open => {
+                // Rule 8: the remembered item goes to Connor, then Take.
+                let remembered = self.world.chests[i].chest.remembered.take();
+                let what = match remembered.as_deref().and_then(|n| self.world.items.index(n)) {
+                    Some(k) => {
+                        let o = self.world.items.objects[k].clone();
+                        if o.carried_by("Connor") {
+                            // The note's stand-in ("Edge cases").
+                            format!("item {} already in Connor's inventory: only the state changes", o.name)
+                        } else if o.place == Place::Gone {
+                            format!("item {} no longer exists", o.name)
+                        } else {
+                            let count = self.world.items.count("Connor", &o.kind);
+                            self.world.items.objects[k].place = Place::Carried("Connor".into());
+                            let line = format!(
+                                "{at}: 2nd click: {} moved into Connor's inventory ({} {count} -> {}); pickup sound not stated for this case (Q61), none",
+                                o.name,
+                                o.kind,
+                                self.world.items.count("Connor", &o.kind)
+                            );
+                            self.world.item_note(line);
+                            format!("item {} moved into Connor's inventory", o.name)
+                        }
+                    }
+                    None => format!("remembered item {remembered:?} no longer exists"),
+                };
+                let take = match c.chest.settings.take.filter(|r| r.said()) {
+                    Some(r) => format!("; Take remark {:?}{} (line M4)", r.0, self.turn_note(&c)),
+                    None => "; no Take remark".into(),
+                };
+                self.world.chests[i].chest.state = ChestState::Empty;
+                self.world.note(format!("{head}: IN REACH: 2nd click (open): {what}{take}; state open -> empty"));
+            }
+            ChestState::Empty => {
+                let empty = match c.chest.settings.empty.filter(|r| r.said()) {
+                    Some(r) => format!("Empty remark {:?}{} (line M4)", r.0, self.turn_note(&c)),
+                    None => "no Empty remark: nothing".into(),
+                };
+                self.world.note(format!("{head}: IN REACH: click (empty): {empty}"));
+            }
+        }
+        ClickResult::Chest { before, after: self.world.chests[i].chest.state }
+    }
+
+    /// Before a chest's remark Connor turns to face it, unless
+    /// `doNotPointAt` (chests.md rules 8-10); not done yet.
+    fn turn_note(&self, c: &ActiveChest) -> &'static str {
+        if c.do_not_point_at { "" } else { "; Connor would turn to face the chest (not done: his states not traced)" }
+    }
+
     /// Lines for `items.log` since the last call.
     pub fn take_item_log(&mut self) -> Vec<String> {
         std::mem::take(&mut self.world.item_log)
@@ -826,6 +1021,23 @@ impl Active {
                 self.call_door(i, &[call]);
             }
         }
+        for i in 0..self.world.chests.len() {
+            let a = self.world.chests[i].chest.advance(dt);
+            let c = &self.world.chests[i].chest;
+            let name = c.name.clone();
+            if a.from != a.to {
+                let line = format!("chest {name}: movement {} phase {:.4} -> {:.4} frame {}", c.movement_name(), a.from, a.to, c.frame());
+                self.world.note(line);
+            }
+            for cue in &a.cues {
+                self.world.note(format!("chest {name}: cue '{cue}' fires (no audio yet)"));
+            }
+            if let Some(m) = a.finished {
+                // chests.md rule 6: EndLoop with the movement's name.
+                self.world.note(format!("chest {name}: movement '{m}' finished; stays on its last frame; calls its script with EndLoop {m}"));
+                self.call_chest(i, &["EndLoop", &m]);
+            }
+        }
         self.world.updates += 1;
     }
 
@@ -847,6 +1059,21 @@ impl Active {
                 self.world.note(format!("event {} {} to trap {}{from}: not handled for traps", e.kind, e.data.join(" "), e.target));
             }
             self.world.in_trap = was;
+            return;
+        }
+        if let Some(i) = self.world.chest_index(&e.target) {
+            if e.kind == "KQCueEvent" {
+                let n = |k: usize| e.data.get(k).cloned().unwrap_or_else(|| "0".into());
+                let mut args = vec!["Cue".to_string(), n(0), n(1)];
+                if e.data.get(2).is_some_and(|v| number_value(v) != 0.0) {
+                    args.push(e.data[2].clone());
+                }
+                self.world.note(format!("KQCueEvent {} to chest {}{from}", e.data.join(" "), e.target));
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                self.call_chest(i, &refs);
+            } else {
+                self.world.note(format!("event {} {} to chest {}{from}: not handled for chests (not in chests.md)", e.kind, e.data.join(" "), e.target));
+            }
             return;
         }
         let Some(i) = self.world.door_index(&e.target) else {
@@ -1220,6 +1447,111 @@ mod tests {
         assert_eq!(a.click("Crystal.1", [0.0, -500.0, 0.0], 2350.0, None), ClickResult::Nothing);
         // setHidden on another object is still a stub.
         assert!(a.take_log().join("\n").contains("stub (later milestone, nothing done): KQObject::setHidden smlchst3 1"));
+    }
+
+    /// A made-up chest script in the style of Swamp's `chest.cs` (not a
+    /// copy): it records every call.
+    const CHEST: &str = "set C::Last $2 $3\nif test $2 == EndLoop\n set C::EndLoop $3\nendif\nif test $2 == ConnorAction\n set C::Clicked 1\nendif\n";
+
+    fn with_chest(item: Option<&str>) -> Active {
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("chest.cs".to_string(), CHEST.as_bytes().to_vec())]);
+        a.world.items = crate::item::tests::items();
+        a.add_chests([ActiveChest {
+            chest: crate::chest::tests::test_chest(item),
+            script: Some("chest.cs".into()),
+            // chest2.kqs's box (BOUNDS.KQ).
+            bounds: Some(([-480.0, -310.0, 0.0], [470.0, 290.0, 2060.0])),
+            collision_type: crate::chest::CHEST_TYPE,
+            collision_mask: 0,
+            hidden: false,
+            do_not_point_at: false,
+        }]);
+        a.start();
+        a
+    }
+
+    /// Connor 1,000 in front of the chest.
+    const BY_CHEST: [f32; 3] = [0.0, -1310.0, 0.0];
+
+    fn chest_state(a: &Active) -> ChestState {
+        a.world.chests[0].chest.state
+    }
+
+    #[test]
+    fn a_chest_opens_then_gives_its_item_then_is_empty() {
+        let mut a = with_chest(Some("INVITEM_Crystal"));
+        assert_eq!(a.scripts.vars.get("C::Last"), Some("Init"), "Init at the start");
+        // 1st click: open plays, the item appears at invLoc.
+        let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert_eq!(r, ClickResult::Chest { before: ChestState::Closed, after: ChestState::Open });
+        let crystal = a.world.items.get("Crystal.1").unwrap().clone();
+        assert_eq!((crystal.quantity, crystal.place), (3, Place::World { position: [0.0, 0.0, 301.0], angles: [0.0, 0.0, -2.5] }));
+        assert_eq!(a.world.chests[0].chest.remembered.as_deref(), Some("Crystal.1"));
+        assert_eq!(a.scripts.vars.get("C::Clicked"), None, "rule 6: the script is not run on a click");
+        // The crystal lies inside the chest's box: the ray picks the chest.
+        assert_eq!(a.pick([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]).map(|(n, _)| n), Some("smlchst3".to_string()));
+        // `open` ends after 1 s (started in update 1, moves in 2..16): EndLoop open.
+        for _ in 0..15 {
+            a.update();
+        }
+        assert_eq!(a.scripts.vars.get("C::EndLoop"), None);
+        a.update();
+        assert_eq!(a.scripts.vars.get("C::EndLoop"), Some("open"));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("script chest.cs smlchst3 EndLoop open"), "{log}");
+        // 2nd click: into Connor's inventory.
+        let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert_eq!(r, ClickResult::Chest { before: ChestState::Open, after: ChestState::Empty });
+        assert!(a.world.items.get("Crystal.1").unwrap().carried_by("Connor"));
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 3);
+        assert_eq!(a.world.chests[0].chest.remembered, None);
+        // 3rd click: the Empty remark, nothing else.
+        let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert_eq!(r, ClickResult::Chest { before: ChestState::Empty, after: ChestState::Empty });
+        let log = a.take_log().join("\n");
+        assert!(log.contains("Empty remark [0, 109, 14, 33, 1, 1]"), "{log}");
+        assert_eq!(a.world.items.objects.len(), 1, "no second item");
+    }
+
+    #[test]
+    fn a_chest_without_an_item_goes_straight_to_empty() {
+        let mut a = with_chest(None);
+        a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert_eq!(chest_state(&a), ChestState::Empty);
+        assert!(a.world.items.objects.is_empty());
+        assert_eq!(a.world.chests[0].chest.movement_name(), "open", "open still plays");
+    }
+
+    #[test]
+    fn an_item_already_picked_up_only_changes_the_state() {
+        let mut a = with_chest(Some("Crystal"));
+        a.click("smlchst3", BY_CHEST, 2350.0, None);
+        // Picked up directly (possible when an item lies outside the box).
+        assert_eq!(a.click("Crystal.1", BY_CHEST, 2350.0, None), ClickResult::PickedUp("Crystal.1".into()));
+        a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert_eq!((chest_state(&a), a.world.items.count("Connor", "INVITEM_Crystal")), (ChestState::Empty, 3));
+        assert!(a.take_log().join("\n").contains("already in Connor's inventory: only the state changes"));
+    }
+
+    #[test]
+    fn far_away_with_an_item_in_hand_or_unclickable_nothing_happens() {
+        let mut a = with_chest(Some("Crystal"));
+        assert_eq!(a.click("smlchst3", [0.0, -6000.0, 0.0], 2350.0, None), ClickResult::TooFar);
+        let bread = Item { object: "bread.1".into(), kind: "INVITEM_Bread".into() };
+        assert_eq!(a.click("smlchst3", BY_CHEST, 2350.0, Some(&bread)), ClickResult::Refused);
+        assert_eq!(chest_state(&a), ChestState::Closed);
+        // `wizchest.cs`-style: hidden and not clickable until revealed.
+        a.scripts.call("chest.cs", &[], &mut a.world);
+        a.world.chests[0].collision_type = 1;
+        assert_eq!(a.click("smlchst3", BY_CHEST, 2350.0, None), ClickResult::Nothing);
+        assert_eq!(a.pick([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]), None);
+        let reveal = "KQObject::setHidden smlchst3 0\nKQObject::collisionType smlchst3 32\n";
+        let mut b = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("r.cs".to_string(), reveal.as_bytes().to_vec())]);
+        b.add_chests(a.world.chests.drain(..));
+        b.world.chests[0].hidden = true;
+        b.scripts.call("r.cs", &[], &mut b.world);
+        assert_eq!((b.world.chests[0].hidden, b.world.chests[0].collision_type), (false, 0x21));
+        assert_eq!(b.click("smlchst3", BY_CHEST, 2350.0, None), ClickResult::Chest { before: ChestState::Closed, after: ChestState::Empty }, "no item types loaded here: holds nothing");
     }
 
     #[test]

@@ -662,3 +662,24 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | Hidden items not drawn | `objects.md` "Hidden objects" | `BirthdaySuit.22` hidden |
 | Models loaded for every type the world's data can make or hold (start items, `inventory`/`give`/`tossItems` lines, chests' `invItemTypeName`), looked up in the world and `GAME/Common` | Same lookup as objects (M1) | Daventry 25 types, none failed; Gnome: `schroomC.kqs` only in Swamp's archives, so not loaded (no Gnome start item needs it) |
 | Picking up in the viewer: the clicks of 3a-3 (mouse ray or `--click NAME,N`) | `items.md` rule 6 | `--at 266011,221900,0 --click Mushroom.14,10`: in reach (507), picked up 0 → 1; `Crystal.20` too far (32,820); `--at 228081,202000,0 --click SilverCoins.10,10`: `Farmcoin.cs` runs, removes its script |
+
+## Chests (M3 step 3e-4) — `crates/kq8-game/src/{chest,door,active}.rs`, `crates/kq8-viewer/src/{load,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Keys `invItemTypeName`, `invQuantity` (default 1), `invLocX/Y/Z`, `invDirX/Y/Z`, `Take…`/`Empty…` (six numbers) | `chests.md` rule 1 | Viewer log: `smlchst3` 3 crystals at (202336, 263155, 11550), Empty [0, 109, 14, 33, 1, 1] |
+| No `invLoc` → the chest's own place | **Our choice** (every chest in the data has one) | — |
+| Default type 0x8021 unless `colliderType` | `chests.md` rule 2 | `wizchest1` 0x1, the others 0x8021 |
+| `closed` / `open` played as doors' movements (shared phase step); no `opened`: stays on the last frame; `EndLoop <movement>` to the script when it finishes | `chests.md` rules 3, 6; the step as `doors.md` rule 9 | Unit tests; viewer: `open` 15 updates (11–25), `EndLoop open` |
+| Placed by the shown frame's steps, as doors | **Our reading** (`objects.md` Q51 for whole-object steps); `chest2.kqs`/`wizchest.kqs` turn 0° | Log |
+| Click: reach, "too far", item in hand "doesn't work" as doors; the script is not run on clicks | `chests.md` rules 4–6 | Unit tests |
+| 1st click: `open` plays, the item made at `invLoc`/`invDir` (z −1/−2 as `loadKQ`), remembered, state open; no type → empty | `chests.md` rule 7 | Unit tests; viewer: `Crystal.23` x3 |
+| Unknown item type → counts as holding nothing | **Our choice** | — |
+| 2nd click: remembered item into Connor's inventory; already carried → only the state; `Take` remark if Seq ≠ 0; state empty | `chests.md` rule 8 and "Edge cases" | Unit tests; viewer: 0 → 3 |
+| 2nd click: no pickup sound | **Our stand-in**, asked as Q61 | — |
+| Later clicks: `Empty` remark if Seq ≠ 0 | `chests.md` rule 9 | Unit test; viewer |
+| Connor turns before a remark unless `doNotPointAt`, not on the 1st click | `chests.md` rules 8–10 | Logged only (turning not done, as doors) |
+| `Init` after the doors', before the traps' | `chests.md` rule 6; the order is **our stand-in** | Log |
+| `KQCueEvent` → `Cue`; other events not handled | `chests.md` rule 6 (Cue); others not in the note | — |
+| `collisionType` and `setHidden` on chests (`wizchest.cs` Reveal) | `chests.md` "Edge cases"; `objects.md` "Hidden objects" | Unit test |
+| Hidden chests still collide with Connor | As other hidden objects (M2 2d-5) | — |

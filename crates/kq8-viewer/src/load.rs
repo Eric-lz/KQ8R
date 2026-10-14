@@ -836,7 +836,8 @@ pub struct Objects {
     /// `BOUNDS.KQ`, type and mask rule; hidden ones too), M2 step 2d-5.
     /// Doors are not in it (their boxes move; `door_view.rs`).
     pub objects: Vec<kq8_game::collide::BoxCollider>,
-    /// The doors the start-up scripts load (M3 step 3a).
+    /// The doors the start-up scripts load (M3 step 3a), and the chests
+    /// (3e-4: same movements and drawing; `DoorAssets::chest` is set).
     pub doors: Vec<DoorAssets>,
     /// The doors' animations, each different one once.
     pub door_animations: Vec<Animation>,
@@ -926,6 +927,8 @@ pub struct DoorAssets {
     pub do_not_point_at: bool,
     /// Its `BOUNDS.KQ` box (own space), found in `finish`.
     pub bounds: Option<([f32; 3], [f32; 3])>,
+    /// A `KQChest`'s own keys (M3 step 3e-4); `None` for a door.
+    pub chest: Option<kq8_game::chest::ChestSettings>,
 }
 
 /// A building's collision type when its `.kq` gives none (camera.md
@@ -1713,7 +1716,12 @@ impl Placer<'_> {
             self.animators.push((p.name.clone(), kq8_data::effects::AnimatorSettings::from_section(s)));
         }
         if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQDoor")) {
-            self.place_door(&label, &file, p);
+            self.place_door(&label, &file, p, false);
+            return;
+        }
+        // A chest (3e-4): moves and is drawn like a door.
+        if !unused && animation.is_some() && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQChest")) {
+            self.place_door(&label, &file, p, true);
             return;
         }
         let reason = if p.has_matrix_key {
@@ -1838,7 +1846,7 @@ impl Placer<'_> {
     /// its cues and all frames of its shape (with their frame steps, which
     /// turn the door), and the keys clicking needs. Drawn and moved by
     /// `door_view.rs`, not as a still copy.
-    fn place_door(&mut self, label: &str, file: &[kq8_data::kq_text::Section], p: kq8_data::objects::Placement) {
+    fn place_door(&mut self, label: &str, file: &[kq8_data::kq_text::Section], p: kq8_data::objects::Placement, chest: bool) {
         let s = &file[0];
         let movements = match kq8_data::objects::movement_loops(file, s) {
             Ok(Some(m)) => m,
@@ -1895,12 +1903,38 @@ impl Placer<'_> {
         }
         let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string());
         let number = |k: &str| s.number(k).and_then(Result::ok);
-        let (collider_type, problem_t) = collider_value(s, "colliderType", kq8_game::collide::DEFAULT_TYPE);
+        // A chest's default type is its own (chests.md rule 2).
+        let default_type = if chest { kq8_game::chest::CHEST_TYPE } else { kq8_game::collide::DEFAULT_TYPE };
+        let (collider_type, problem_t) = collider_value(s, "colliderType", default_type);
         let (collider_mask, problem_m) = collider_value(s, "colliderMask", kq8_game::collide::DEFAULT_MASK);
         for problem in [problem_t, problem_m].into_iter().flatten() {
             self.log.summary(format!("door {label}[{}]: {problem}", p.name));
         }
         let shape = with_index.get(current).map_or(String::new(), |(_, l, _)| l.shape.clone());
+        let chest = chest.then(|| {
+            // chests.md rule 1.
+            let f = |k: &str| number(k).map(|v| v as f32);
+            let item_position = match (f("invLocX"), f("invLocY"), f("invLocZ")) {
+                (Some(x), Some(y), Some(z)) => [x, y, z],
+                _ => {
+                    // Our choice: every chest in the data gives invLoc.
+                    self.log.summary(format!("chest [{}]: no invLocX/Y/Z; the item would appear at the chest's own place", p.name));
+                    p.position
+                }
+            };
+            let remark = |prefix: &str| {
+                let keys = ["Msg", "Noun", "Verb", "Case", "Seq", "End"].map(|k| number(&format!("{prefix}{k}")));
+                keys.iter().any(Option::is_some).then(|| kq8_game::chest::Remark(keys.map(|v| v.unwrap_or(0.0) as i64)))
+            };
+            kq8_game::chest::ChestSettings {
+                item: text("invItemTypeName").filter(|v| !v.is_empty()),
+                quantity: number("invQuantity").map_or(1, |v| v as i64),
+                item_position,
+                item_angles: [f("invDirX").unwrap_or(0.0), f("invDirY").unwrap_or(0.0), f("invDirZ").unwrap_or(0.0)],
+                take: remark("Take"),
+                empty: remark("Empty"),
+            }
+        });
         let door = DoorAssets {
             movements: with_index,
             current,
@@ -1914,11 +1948,13 @@ impl Placer<'_> {
             do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
             bounds: None,
             placement: p,
+            chest,
         };
         if let Some(v) = s.get("tooFar") {
             self.log.detail(format!("door [{}]: tooFar={v} not used (Q45 a)", door.placement.name));
         }
-        *self.by_class.entry("KQDoor (door, M3)".into()).or_default() += 1;
+        let class = if door.chest.is_some() { "KQChest (chest, M3)" } else { "KQDoor (door, M3)" };
+        *self.by_class.entry(class.into()).or_default() += 1;
         self.doors.push(door);
     }
 

@@ -23,11 +23,16 @@
 //! start-up scripts made join the same `Active`, which also handles
 //! clicking them (`item_view.rs` draws them). Their lines go to
 //! `kq8-artifacts/logs/items.log`.
+//!
+//! Chests (M3 step 3e-4, docs/behaviour/chests.md) are loaded and drawn
+//! like doors (their `open` movement, frame by frame) and live in the
+//! same `Active`; a click runs the chest's own steps.
 
 use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use kq8_game::active::{Active, ActiveDoor, Item, Request};
+use kq8_game::active::{Active, ActiveChest, ActiveDoor, Item, Request};
+use kq8_game::chest::Chest;
 use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
 use kq8_game::door::{turn_degrees, Cue, Door, DoorMovement};
@@ -61,6 +66,9 @@ pub struct DoorSim {
     drawn: Vec<DrawnDoor>,
     /// Each door's entry in `ObjectColliders`, if it collides with Connor.
     collider: Vec<Option<usize>>,
+    /// The same for the chests (3e-4).
+    chest_drawn: Vec<DrawnDoor>,
+    chest_collider: Vec<Option<usize>>,
     attack_dist: f32,
     item: Option<Item>,
     /// Objects clicked since the last update, with how (mouse, test).
@@ -122,6 +130,27 @@ pub struct ClickAt(pub Vec<(String, u64)>);
 #[derive(Resource)]
 pub struct HeldItem(pub Option<String>);
 
+/// A body entity at `placement` with, per movement (index into `built`),
+/// one hidden entity per frame.
+fn spawn_body(commands: &mut Commands, placement: &Placement, animations: &[usize], built: &[Vec<BuiltFrame>]) -> DrawnDoor {
+    let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default())).id();
+    let mut frames = Vec::new();
+    for a in animations {
+        let mut entities = Vec::new();
+        for frame in &built[*a] {
+            let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+            commands.entity(body).add_child(parent);
+            for (mesh, material) in frame {
+                let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+                commands.entity(parent).add_child(part);
+            }
+            entities.push(parent);
+        }
+        frames.push(entities);
+    }
+    DrawnDoor { body, frames, shown: None }
+}
+
 /// Builds the doors from the loaded objects: their entities, their game
 /// state, and their colliders (added to `colliders`).
 #[allow(clippy::too_many_arguments)]
@@ -181,6 +210,7 @@ pub fn spawn_doors(
     let mut active_doors = Vec::new();
     let mut drawn = Vec::new();
     let mut collider = Vec::new();
+    let (mut active_chests, mut chest_drawn, mut chest_collider) = (Vec::new(), Vec::new(), Vec::new());
     let sources = std::mem::take(&mut objects.scripts);
     for d in std::mem::take(&mut objects.doors) {
         let p = &d.placement;
@@ -198,22 +228,49 @@ pub fn spawn_doors(
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
             })
             .collect();
-        let door = Door::new(&p.name, movements, d.current, base);
-        let body = commands.spawn((bevy_transform_from(door.placement().rotation, door.placement().position), Visibility::default())).id();
-        let mut frames = Vec::new();
-        for (_, _, a) in &d.movements {
-            let mut entities = Vec::new();
-            for frame in &built[*a] {
-                let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
-                commands.entity(body).add_child(parent);
-                for (mesh, material) in frame {
-                    let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
-                    commands.entity(parent).add_child(part);
-                }
-                entities.push(parent);
-            }
-            frames.push(entities);
+        let animations: Vec<usize> = d.movements.iter().map(|(_, _, a)| *a).collect();
+        if let Some(settings) = d.chest.clone() {
+            // A chest (3e-4).
+            let chest = Chest::new(&p.name, settings, movements, d.current, base);
+            let open_turn = chest.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open")).map(|m| turn_degrees(&m.turn_at_frame(m.frames() - 1)));
+            let c = ActiveChest {
+                bounds: d.bounds,
+                collision_type: d.collider_type,
+                collision_mask: d.collider_mask,
+                // objects.md "Hidden objects".
+                hidden: !p.drawn(),
+                do_not_point_at: d.do_not_point_at,
+                script: d.script.clone(),
+                chest,
+            };
+            main_log.summary(format!(
+                "chests: [{}] at ({:.0}, {:.0}, {:.0}), type {:#x}, hidden {}, script {:?}, box {}, holds {:?} x{} at {:?}, Take {:?}, Empty {:?}; 'open' turns {open_turn:?} deg by its last frame",
+                p.name,
+                p.position[0],
+                p.position[1],
+                p.position[2],
+                c.collision_type,
+                c.hidden,
+                c.script,
+                d.bounds.map_or("NONE".to_string(), |(a, b)| format!("{a:?}..{b:?}")),
+                c.chest.settings.item,
+                c.chest.settings.quantity,
+                c.chest.settings.item_position,
+                c.chest.settings.take.map(|r| r.0),
+                c.chest.settings.empty.map(|r| r.0),
+            ));
+            chest_collider.push(if c.collides_with_connor() {
+                colliders.push(c.collider().expect("a chest that collides has a box"));
+                Some(colliders.len() - 1)
+            } else {
+                None
+            });
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built));
+            active_chests.push(c);
+            continue;
         }
+        let door = Door::new(&p.name, movements, d.current, base);
+        let DrawnDoor { body, frames, .. } = spawn_body(commands, &door.placement(), &animations, &built);
         let active = ActiveDoor {
             door,
             script: d.script.clone(),
@@ -321,6 +378,8 @@ pub fn spawn_doors(
         }
     }
     active.add_traps(traps);
+    main_log.summary(format!("chests: {} chests", active_chests.len()));
+    active.add_chests(active_chests);
     // Items (3e-3): those the start-up scripts made, and the ground for
     // z -1 / -2 of items made while playing.
     let mut item_log = match Log::create("items") {
@@ -352,7 +411,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, chest_drawn, chest_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -491,6 +550,11 @@ pub fn door_step(
                 colliders.0[*i] = c;
             }
         }
+        for (chest, slot) in sim.active.world.chests.iter().zip(&sim.chest_collider) {
+            if let (Some(i), Some(c)) = (slot, chest.collider()) {
+                colliders.0[*i] = c;
+            }
+        }
     }
     sim.flush_traps(&shared);
     let item_lines = sim.flush_items(&shared);
@@ -509,26 +573,48 @@ pub fn door_step(
     }
 }
 
-/// Each door where it stands, showing the frame of its movement.
+/// Puts `drawn` at `placement`, showing frame `frame` of movement
+/// `current`.
+fn show_frame(
+    drawn: &mut DrawnDoor,
+    placement: &Placement,
+    current: usize,
+    frame: usize,
+    transforms: &mut Query<&mut Transform>,
+    visibility: &mut Query<&mut Visibility>,
+) {
+    if let Ok(mut t) = transforms.get_mut(drawn.body) {
+        *t = bevy_transform_from(placement.rotation, placement.position);
+    }
+    let entity = drawn.frames.get(current).and_then(|f| f.get(frame).or(f.last())).copied();
+    if entity != drawn.shown {
+        if let Some(mut old) = drawn.shown.and_then(|e| visibility.get_mut(e).ok()) {
+            *old = Visibility::Hidden;
+        }
+        if let Some(mut new) = entity.and_then(|e| visibility.get_mut(e).ok()) {
+            *new = Visibility::Inherited;
+        }
+        drawn.shown = entity;
+    }
+}
+
+/// Each door and chest where it stands, showing the frame of its
+/// movement; hidden chests are not drawn.
 pub fn door_draw(sim: Option<ResMut<DoorSim>>, mut transforms: Query<&mut Transform>, mut visibility: Query<&mut Visibility>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
-        let placement = d.placement();
-        if let Ok(mut t) = transforms.get_mut(drawn.body) {
-            *t = bevy_transform_from(placement.rotation, placement.position);
-        }
-        let frame = drawn.frames.get(d.current).and_then(|f| f.get(d.frame()).or(f.last())).copied();
-        if frame != drawn.shown {
-            if let Some(old) = drawn.shown.and_then(|e| visibility.get_mut(e).ok()) {
-                let mut old = old;
-                *old = Visibility::Hidden;
+        show_frame(drawn, &d.placement(), d.current, d.frame(), &mut transforms, &mut visibility);
+    }
+    for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
+        let c = &chest.chest;
+        show_frame(drawn, &c.placement(), c.current, c.frame(), &mut transforms, &mut visibility);
+        let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
+        if let Ok(mut v) = visibility.get_mut(drawn.body) {
+            if *v != want {
+                *v = want;
             }
-            if let Some(mut new) = frame.and_then(|e| visibility.get_mut(e).ok()) {
-                *new = Visibility::Inherited;
-            }
-            drawn.shown = frame;
         }
     }
 }

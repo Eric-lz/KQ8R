@@ -113,7 +113,12 @@ The code is written with an AI coding agent (Claude Code); see
   start-up scripts), each with its own model. Clicking one near Connor
   picks it up: it disappears into his inventory (which can't be seen yet;
   the log `items.log` counts it), and items with their own script run it
-  (the farmhouse coins). Checked in the logs; not yet checked by eye.
+  (the farmhouse coins). Checked in the logs and by eye (the crystal).
+- **Chests:** the big chest upstairs in the pub opens on the first click
+  and three crystals appear in it; the second click takes them, the third
+  only logs Connor's "it's empty" remark. The same for the chest of
+  coins in the keep. The wizard's hidden chest stays hidden (it needs a
+  Reveal potion). Checked in the logs; not yet checked by eye.
 - **Curiosity key H:** shows things the game hides or never uses (traps,
   sound sources, unused pictures and objects that appear later in the
   story).
@@ -122,7 +127,7 @@ The code is written with an AI coding agent (Claude Code); see
 
 There is nothing to play yet. Doors make no sound, Connor says nothing
 when clicking (too far, locked) and doesn't turn to face the door; only
-doors and items react to clicks (chests and other clickable things are
+doors, chests and items react to clicks (other clickable things are
 logged only; there is no inventory screen, picked-up items are only
 counted in the log). Some objects have no
 box in the game's table and stay walk-through (as in the original, if we
@@ -155,7 +160,7 @@ cargo run --release -p kq8-viewer -- --terrain --world Daventry
 | Page Up / Page Down, Home | Tilt the camera, reset the tilt |
 | F11 | Camera keeps a fixed distance |
 | F | Switch to a free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
-| Left mouse | Use the door or pick up the item under the mouse (play cursor) |
+| Left mouse | Use the door or chest, or pick up the item, under the mouse (play cursor) |
 | H | Show or hide hidden and unused objects |
 | G / B | Test: lift Connor high / a little and let him fall |
 | Esc | Quit |
