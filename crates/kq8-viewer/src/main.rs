@@ -236,6 +236,9 @@ fn main() -> ExitCode {
     };
     let started = Instant::now();
     log.summary(format!("log file: {}", log.path().display()));
+    // Made once at start-up, so the size difference between the two
+    // kinds does not matter.
+    #[allow(clippy::large_enum_variant)]
     enum Scene {
         Model(Model),
         Ground(load::Ground, load::Objects, load::GroundAnimAssets),

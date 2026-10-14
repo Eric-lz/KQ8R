@@ -584,6 +584,8 @@ locZ=937
     }
 
     #[test]
+    // `3.14` is the value as written in the game's files (`dirZ=3.14`), not π.
+    #[allow(clippy::approx_constant)]
     fn reads_a_section() {
         let s = &crate::kq_text::parse(b"[barn]\nclassType=KQInterior\nshapeName=barn.dig\nlocX=1\nlocY=2\nlocZ=3\ndirZ=3.14\n")[0];
         let p = Placement::from_section(s);

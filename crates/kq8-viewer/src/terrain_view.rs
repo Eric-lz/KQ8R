@@ -539,6 +539,9 @@ pub fn bevy_transform_from(r: [[f32; 3]; 3], position: [f32; 3]) -> Transform {
     Transform { translation: Vec3::from(to_bevy(position, [0.0; 3])), rotation, scale: Vec3::ONE }
 }
 
+// A Bevy system gets everything it uses as arguments; splitting it up
+// would not make it clearer.
+#[allow(clippy::too_many_arguments)]
 pub fn fly_input(
     mut fly: ResMut<Fly>,
     buttons: Res<ButtonInput<MouseButton>>,

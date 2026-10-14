@@ -1030,7 +1030,7 @@ struct CollisionInfo {
 
 /// `colliderType` / `colliderMask` from an object's section: a whole
 /// number (decimal, or hex with `0x`) at the start of the value; anything
-/// after it (`97		#World, Click, Attack` in Barren and IceWorld) is a
+/// after it (`97`, two tabs, `#World, Click, Attack` in Barren and IceWorld) is a
 /// comment (our reading). `default` if missing. A value that can't be read
 /// gives the default and a problem text.
 fn collider_value(s: &kq8_data::kq_text::Section, key: &str, default: u32) -> (u32, Option<String>) {

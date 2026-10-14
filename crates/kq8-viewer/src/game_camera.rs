@@ -198,6 +198,9 @@ pub fn make(
 
 /// Gathers mouse movement and key presses between updates; F switches
 /// between the game camera and the free one.
+// A Bevy system gets everything it uses as arguments; splitting it up
+// would not make it clearer.
+#[allow(clippy::too_many_arguments)]
 pub fn camera_input(
     keys: Res<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,

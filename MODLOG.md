@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 Clippy clean on the whole workspace
+
+**Changed:** `kq8-viewer`: `load.rs` (a doc comment described two tabs with real tab characters; now in words), `game_camera.rs` `camera_input` and `terrain_view.rs` `fly_input` (allowed "too many arguments": Bevy systems take what they use as arguments), `main.rs` (allowed "large size difference" on the one-off `Scene` choice). `kq8-data/src/objects.rs`: the test `reads_a_section` allows `3.14`, which is the game file's own value (`dirZ=3.14`), not π. Each allow has a comment saying why. No behaviour change.
+**Why:** The user asked to clean up the four older warnings. The `3.14` test made `cargo clippy --workspace --all-targets` stop with an error (noted in the M3 3e-2 entry).
+**Tested how:** `cargo clippy --workspace --all-targets`; `cargo test --workspace`; `cargo build --release -p kq8-viewer`; viewer `--terrain --world Daventry --frames 120`.
+**Result:** Clippy: no warnings, no errors. 181 + 69 + 1 tests pass. Viewer `RESULT: PASS`.
+**Still broken / not tested:** Nothing new.
+**Next:** A study session (A) on object and building lighting (and Q66).
+
 ## 2026-10-14 M1 4c: x1 is the default ground light (user's check)
 
 **Changed:** `crates/kq8-viewer/src/light_view.rs` (default mode x1, F7 cycles x1 → x2 → off, one more unit test), `main.rs` (`--light` default and help). Q66 (correction request) and a note on Q65 in `docs/behaviour/QUESTIONS.md`. DESIGN, provenance, README, `docs/FEATURES.md`.
