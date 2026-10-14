@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-14 Docs: launch options in FEATURES.md
+
+**Changed:** `docs/FEATURES.md`: new section "Launch options (viewer)" before "What doesn't work yet". It lists every viewer option (`--world`, `--model`, `--palette`, `--light`, `--game`, `--frames`, `--at`, `--lift`, `--hold`, `--turn`, `--jump`, `--click`, `--aim`, `--item`) with a short plain-language description, and says which ones only work in the ground view. Docs only; no code.
+**Why:** The user asked for a list of launch options with what each one does.
+**Tested how:** Each option's meaning was read from its code in `crates/kq8-viewer/src/main.rs` and `connor_view.rs`. Viewer runs: `--world Daventry --at 270813,225311,-1.5708 --hold 1,0,0,80 --turn 40,-1 --jump 20 --click Condoor,2 --aim Condoor,5 --light x2 --frames 60` (all accepted, `RESULT: PASS`; log line "test --aim Condoor ... nothing clicked (Q63 stand-in)"); `--lift 3000 --frames 30` (log line "test --lift: lifted 3000 to z=16633"); `--hold 1,0` (error: "--hold needs three or four numbers").
+**Result:** The options parse and do what the section says for `--aim` and `--lift`. The `--hold`, `--turn`, `--jump` and `--click` lines were not read back: the log file was overwritten by the later runs.
+**Still broken / not tested:** `--palette` not run (no palette file named in this check). The `--hold` turn sign (1 left) follows `--turn`'s meaning; not checked in the logs. The section was not read by the user.
+**Next:** Keep this list in step with `parse_args` when a new option is added.
+
+## 2026-10-14 Viewer: the ground is the default, `--model` shows one model
+
+**Changed:** `crates/kq8-viewer/src/main.rs`: no `--model` now opens the world's ground (what `--terrain` did); `--model NAME` opens one model (what a bare model name did). `--terrain` is still accepted and does nothing. A bare model name is now an error that tells you to use `--model`. Help text, module comment and usage line updated. `terrain_view.rs`: header comment. `README.md`: "Try it" command is now `-- --world Daventry`; the single-model example uses `--model`. `docs/DESIGN.md`: viewer usage lines and the three "`--terrain` view" mentions. `STATUS.md` (ignored by git, local only): viewer line.
+**Why:** The user wanted the ground to be the normal start, with single models behind a named flag.
+**Tested how:** `cargo build --release -p kq8-viewer`; `cargo clippy -p kq8-viewer --all-targets` (no warnings); `cargo test -p kq8-viewer` (1 pass). Viewer runs: `--world Daventry --frames 120` (ground; log line `world: Daventry`, `RESULT: PASS`); `--model smlchest.KQS --frames 60` (model; `spawned: vertices=96`, `RESULT: PASS`); `--terrain --world Daventry --frames 30` (old flag, same as the ground); `smlchest.KQS` with no flag (error, exit 1).
+**Result:** All four behave as described above. The model-view log line "front faces pointing away from the model centre: 30 of 32 triangles" was printed as before; this change did not touch that code.
+**Still broken / not tested:** Nothing looked at by eye (the window is for the user to check). The argument parser has no unit test (it reads the real command line), so the checks above are by running the program. Older MODLOG entries and `docs/behaviour/QUESTIONS.md` Q43 still show `--terrain` in their recorded commands: they are history, and the flag still works.
+**Next:** Remove the `--terrain` alias once nobody needs old commands (one line in `parse_args`).
+
 ## 2026-10-14 Object lighting note: the user's checks in the original
 
 **Changed:** `docs/behaviour/object-lighting.md`: "How to check" records the results, building text corrected, new open question 7. Docs only.

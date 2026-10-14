@@ -1,14 +1,16 @@
-//! `kq8-viewer`: shows one KQ8 model (M1 step 1) or a world's ground
-//! (M1 step 2) in a window.
+//! `kq8-viewer`: shows a world's ground (M1 step 2) or one KQ8 model
+//! (M1 step 1) in a window.
 //!
 //! Usage:
-//!   kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>]
-//!              [--game DIR] [--frames N]
-//!   kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
+//!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
 //!              [--at X,Y,H] [--light x1|x2|off]
+//!   kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>]
+//!              [--game DIR] [--frames N]
 //!
-//! Defaults: model `smlchest.KQS`, world `Daventry`, the world's own
-//! palette. `--frames N` closes the window by itself after N frames.
+//! With no `--model`, the world's ground is shown (the default). `--terrain`
+//! is still accepted and does nothing, so older commands keep working.
+//! Defaults: world `Daventry`, the world's own palette. `--frames N` closes
+//! the window by itself after N frames.
 //! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
 //! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
 //! hold the right mouse button to look around, H shows/hides invisible
@@ -70,7 +72,8 @@ fn to_bevy(p: [f32; 3], centre: [f32; 3]) -> [f32; 3] {
 }
 
 struct Args {
-    model: String,
+    /// `--model NAME`: show this model alone instead of the ground.
+    model: Option<String>,
     world: String,
     palette: Option<String>,
     game: PathBuf,
@@ -97,12 +100,11 @@ struct Args {
     /// `--light x1|x2|off`: how the ground's light map is applied at the
     /// start (M1 step 4c; default x1, the user's check); F7 changes it.
     light: light_view::LightMode,
-    terrain: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {
-        model: "smlchest.KQS".into(),
+        model: None,
         world: "Daventry".into(),
         palette: None,
         game: std::env::var_os("KQ8_GAME_DIR").map(PathBuf::from).unwrap_or_else(|| "MASK".into()),
@@ -116,7 +118,6 @@ fn parse_args() -> Result<Args, String> {
         aim: Vec::new(),
         item: None,
         light: light_view::LightMode::X1,
-        terrain: false,
     };
     let mut it = std::env::args().skip(1);
     let mut positional = Vec::new();
@@ -126,7 +127,9 @@ fn parse_args() -> Result<Args, String> {
             "--world" => a.world = value()?,
             "--palette" => a.palette = Some(value()?),
             "--game" => a.game = value()?.into(),
-            "--terrain" => a.terrain = true,
+            // The ground is the default now; kept so older commands still run.
+            "--terrain" => {}
+            "--model" => a.model = Some(value()?),
             "--hold" => {
                 let v = value()?;
                 let n: Vec<i64> = v.split(',').map(|x| x.trim().parse::<i64>()).collect::<Result<_, _>>().map_err(|_| "--hold needs forward,turn,run[,updates] e.g. 1,0,0".to_string())?;
@@ -174,10 +177,8 @@ fn parse_args() -> Result<Args, String> {
             _ => positional.push(arg),
         }
     }
-    match positional.as_slice() {
-        [] => {}
-        [m] => a.model = m.clone(),
-        _ => return Err("give at most one model name".into()),
+    if !positional.is_empty() {
+        return Err(format!("a model is given with --model, e.g. --model {}", positional[0]));
     }
     Ok(a)
 }
@@ -222,8 +223,8 @@ fn main() -> ExitCode {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: {e}");
-            eprintln!("usage: kq8-viewer [<model.kqs>] [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer --terrain [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off]");
+            eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
+            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off]");
             return ExitCode::FAILURE;
         }
     };
@@ -248,14 +249,15 @@ fn main() -> ExitCode {
         .and_then(|game| {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
-            if args.terrain {
-                let mut ground = load::load_ground(&game, &world, &mut log)?;
-                let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
-                let animators = std::mem::take(&mut objects.animators);
-                let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
-                Ok(Scene::Ground(ground, objects, animation))
-            } else {
-                load::load_model(&game, &world, &args.model, args.palette.as_deref(), None, &mut log).map(Scene::Model)
+            match &args.model {
+                None => {
+                    let mut ground = load::load_ground(&game, &world, &mut log)?;
+                    let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
+                    let animators = std::mem::take(&mut objects.animators);
+                    let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
+                    Ok(Scene::Ground(ground, objects, animation))
+                }
+                Some(name) => load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log).map(Scene::Model),
             }
         });
     let scene = match loaded {

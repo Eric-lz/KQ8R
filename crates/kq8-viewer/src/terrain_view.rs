@@ -1,4 +1,4 @@
-//! `kq8-viewer --terrain`: the world's ground (M1 step 2b) and its
+//! The world's ground (the default `kq8-viewer` view): (M1 step 2b) and its
 //! objects (M1 step 3a) with a flying camera. Rules from
 //! docs/behaviour/terrain.md and docs/behaviour/objects.md.
 

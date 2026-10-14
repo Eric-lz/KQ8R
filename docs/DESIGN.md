@@ -186,7 +186,7 @@ notes `kq8kqs.txt`, `kq8dml.txt`, `kq8pers.txt` (facts only, see
 
 **1b. Show it** (new crate `kq8-viewer`, uses Bevy)
 
-- `kq8-viewer <model.kqs> [--world Daventry] [--palette <file>]`: finds
+- `kq8-viewer --model <model.kqs> [--world Daventry] [--palette <file>]`: finds
   the model and its textures in that world's archives, builds frame 0,
   shows it with a camera you can orbit with the mouse.
 - Textures use the world palette (`resource/<world>.ppl`) by default.
@@ -259,7 +259,7 @@ Rules from `docs/behaviour/terrain.md` ("Ground textures") and
 - Unit tests: every triangle's centre lies on the height lookup's
   surface; every triangle is clockwise from above; the eight codes give
   the eight different turns and mirrors.
-- Viewer: `kq8-viewer --terrain [--world Daventry]`. Textures come from the
+- Viewer: `kq8-viewer [--world Daventry]` (the ground is the default; this was `--terrain` before). Textures come from the
   world's archives, coloured with the palette that `world.cs` names in
   `KQWorld::terrainPalette` (falls back to `<world>.ppl` and says so).
   Textures stop at the square's edge instead of repeating. Squares whose
@@ -288,7 +288,7 @@ use `.dig`/`.dil` files instead of `.kqs`.
 **3a. Place models** (no new format needed)
 
 - Read every `.kq` section with a position and a `shapeName`; draw that
-  model's rest pose at its position on the ground in the `--terrain` view.
+  model's rest pose at its position on the ground in the ground view.
 - Log: objects placed, skipped (no model, model missing, unknown class),
   and per class counts.
 - Placement rules from `docs/behaviour/objects.md` (answers Q9, Q10):
@@ -299,7 +299,7 @@ use `.dig`/`.dil` files instead of `.kqs`.
   placed as: mesh node transform, then that rotation, then the position.
 - `kq8-data/objects.rs`: read placements from every `.kq` section, build
   the rotation, unit tests for each axis and the order.
-- Viewer `--terrain` also draws the objects: each different model is
+- Viewer (ground view) also draws the objects: each different model is
   built once and reused. Skipped and counted: sections at (0, 0, 0)
   (probably templates), buildings (`.dig`, step 3b), missing models.
 - Check from the numbers: for each object, log the gap between the
@@ -331,7 +331,7 @@ not decoded, not used yet) and the material list named by `material=`
 - `kq8 building-verify`: read every `.dig` in the game (153 files) and
   log counts, versions, index checks, and whether each surface's corner
   order agrees with its plane and the 0x80 "flipped" bit.
-- Viewer `--terrain`: draw the 33 Daventry buildings with the same
+- Viewer (ground view): draw the 33 Daventry buildings with the same
   placement rule as objects (rotation, then position, raised onto the
   ground if below it). Palette from `KQWorld::interiorPalette`. Log per
   building: lowest point vs ground, textures found or missing.

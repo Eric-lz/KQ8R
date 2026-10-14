@@ -153,6 +153,57 @@ objects don't stop it, as in the original. Checked in the logs
   or off; the mode is shown on screen. x1 is the default because it
   matches the original by eye (user, 2026-10-14).
 
+## Launch options (viewer)
+
+Run them after `--` in the command, for example
+`cargo run --release -p kq8-viewer -- --world Daventry --frames 120`.
+With no model name the world's ground opens; `--model` opens one model.
+"Test" options drive Connor from the command line so a run can be
+repeated and checked in the logs. They do not change the game's rules.
+
+### Showing things
+
+- `--world <name>`: which world to load (default `Daventry`). The names
+  are listed in [README.md](../README.md).
+- `--model <file>`: show one model on its own, e.g. `--model smlchest.KQS`
+  (default: no model, so the ground opens). Add `--palette <file>` to
+  colour it with another palette; that option works only with `--model`.
+- `--light x1|x2|off`: how the ground's light map is applied at the start
+  (default `x1`). F7 changes it while the window is open.
+- `--game <folder>`: where the game's files are (default `MASK`). The
+  environment variable `KQ8_GAME_DIR` sets the same folder.
+- `--frames <number>`: close the window by itself after that many frames,
+  and write the result line in the log. Useful for tests.
+
+### Starting Connor somewhere (ground view only)
+
+- `--at X,Y,H`: start him on the ground at X, Y, facing heading H in
+  radians (instead of where the world's script puts him).
+- `--lift <number>`: lift him that high once at the start, then let him
+  fall. Same as the G and B keys (5,000 and 2,000).
+
+### Moving Connor (ground view only)
+
+- `--hold F,T,R[,N]`: hold forward (1 forward, -1 back), turn (1 left,
+  -1 right) and run (1 on, 0 off) instead of the keys. With the fourth
+  number N, forward and turn are let go after N updates.
+- `--turn N[,1|-1]`: press a turn key before update N + 1 and keep it
+  pressed (1 left by default, -1 right).
+- `--jump N`: press Jump once, before update N + 1.
+
+### Clicking and items (ground view only)
+
+- `--click NAME,N`: click the object called NAME before update N + 1. Can
+  be given more than once. It skips the line-of-sight test (see below).
+- `--aim NAME,N`: like `--click`, but the click only works if the camera
+  can see the object, as in the game.
+- `--item TYPE`: put an item of that type in Connor's hand, for example
+  the key that opens the castle keep's doors.
+
+An "update" is one step of the game's rules, the same step each time you
+run the test. Unknown options and bad values stop the viewer with a
+message that shows the usage.
+
 ## What doesn't work yet
 
 - **Not playable:** there is no story, talking, inventory screen,
