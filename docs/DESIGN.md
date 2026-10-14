@@ -117,12 +117,14 @@ small, separately revertable steps. Steps are planned in detail only when
 a milestone starts.
 
 Who does what (see `docs/SESSIONS.md`, kept locally):
+
 - **A** = study session: works out behaviour from `Mask.exe`, writes
   `docs/behaviour/*.md`. No code.
 - **B** = implementation session: writes Rust from data files, community
   format notes and behaviour notes. Never looks at `Mask.exe`.
 
 Where the game keeps things (found so far):
+
 - **Data files** say *what* exists: models, textures, terrain, object lists
   (`.kq` files are plain-text object descriptions: class, model, position,
   settings).
