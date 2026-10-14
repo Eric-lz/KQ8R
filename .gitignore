@@ -29,8 +29,7 @@
 
 # Local-only working notes (kept on this machine, never published).
 # STATUS.md, STATUS-handoff.md and MODLOG-template.md are simply not
-# whitelisted above; SESSIONS.md needs an explicit rule because docs/*.md is.
-/docs/SESSIONS.md
+# whitelisted above;
 
 # Rust sources
 !/crates/*/Cargo.toml
