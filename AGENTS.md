@@ -57,7 +57,7 @@ of the game, like controls, graphics, gameplay elements and more.
 - `docs/DESIGN.md`: how the project works, in plain language. Update when the
   architecture changes, not on every commit.
 - `README.md`: the "what works / what doesn't work" list. Test before you claim
-  something works.
+  something works. New entries should be kept very brief, one sentence max.
 
 ## Environment
 

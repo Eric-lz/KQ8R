@@ -177,13 +177,14 @@ records where it came from in
 
 ## More
 
+- [STATUS.md](STATUS.md): current state of the project, used for session hand-over
+- [MODLOG.md](MODLOG.md): change log
+- [CREDITS.md](CREDITS.md): sources and licences
 - [docs/DESIGN.md](docs/DESIGN.md): how the project works and the plan
 - [docs/FEATURES.md](docs/FEATURES.md): what works, in detail
+- [docs/SESSIONS.md](docs/SESSIONS.md): two session workflow, in detail
+- [docs/RESEARCH.md](docs/RESEARCH.md): existing tools and documentation
 - [docs/behaviour/QUESTIONS.md](docs/behaviour/QUESTIONS.md): open
   questions about the original's behaviour
 - [docs/provenance/README.md](docs/provenance/README.md): where each rule
   comes from and how it was checked
-- [docs/RESEARCH.md](docs/RESEARCH.md): existing tools and documentation
-- [CREDITS.md](CREDITS.md): sources and licences
-- [MODLOG.md](MODLOG.md): change log
-- [STATUS.md](STATUS.md): current state of the project, used for session hand-over
