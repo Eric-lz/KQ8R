@@ -12,7 +12,7 @@ see [CREDITS.md](CREDITS.md).
 ## Current state
 
 **Not playable yet.** Today you can load any of the game's 12 worlds in a
-viewer, walk Connor around Daventry, open doors and chests and pick up
+viewer, walk Connor around, open doors and chests and pick up
 items. The goal is the whole game; see the roadmap in
 [docs/DESIGN.md](docs/DESIGN.md#roadmap). We are at milestone **M3,
 "Daventry comes alive"**.
@@ -34,7 +34,7 @@ items. The goal is the whole game; see the roadmap in
 - **Ground lighting**: hill shadows from the game's light maps, as dark
   as in the original.
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
-  torches, swimming fish, rolling rocks.
+  torches.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
   and run outdoors.
 
@@ -50,8 +50,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
   haze.
 - Clicking works only on doors, chests, items and a few scripted objects;
   Connor doesn't speak (his remarks are only logged).
-- Objects only play their starting animation, and rolling rocks don't
-  hurt Connor.
+- Objects only play their starting animation.
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 
@@ -60,11 +59,11 @@ Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 - Windows (only tested on Windows 11).
 - [Rust](https://www.rust-lang.org/tools/install), stable, with the MSVC
   toolchain (the default on Windows).
-- *King's Quest: Mask of Eternity* from GOG.com (version 1.3, also called
-  1.03), installed in a `MASK` folder inside this repository. The game is
+- *King's Quest: Mask of Eternity*, installed in a `MASK` folder inside this repository. The game is
   only read, never changed. If it is somewhere else, add
   `--game <folder>` to the commands below, or set the `KQ8_GAME_DIR`
-  environment variable.
+  environment variable. *Tested only with GOG.com copy (version 1.3, also called
+  1.03).*
 - To run the *original* game for comparison on Windows 11 we use the
   [KQ8FixWin11](https://github.com/SegMash/KQ8FixWin11) compatibility
   fix (also used as a no-CD patch).
@@ -74,12 +73,31 @@ Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 Open a terminal in this folder and run:
 
 ```sh
-cargo run --release -p kq8-viewer -- --terrain --world Daventry
+cargo run --release -p kq8-viewer
 ```
 
-The first build takes several minutes. Other worlds: Swamp, DeadCity,
-Gnome, Barren, IceWorld, Snowexit, temple1–temple4, CastleD (they all
-load, but only Daventry has been checked closely).
+This opens Daventry's ground with its objects and lets you walk Connor arund.
+To open a different world, use the `--world` flag.
+For example, to spawn Connor in the Swamp, you can use
+
+```sh
+cargo run --release -p kq8-viewer -- --world swamp
+```
+
+*The first `--` separates Cargo's options from the viewer's options.*
+
+Other worlds: Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
+temple1–temple4, CastleD. (not case-sensitive)
+
+To spawn Connor at a specific coordinate, use `--at x,y,heading`, where `heading` is
+the direction he's facing.
+
+There are other launch options, but most are used for debugging only.
+You can check them out at [docs/FEATURES.md](docs/FEATURES.md#aunch-options-(viewer))
+
+The first build takes several minutes.
+
+### Key bindings
 
 | Key | What it does |
 | --- | --- |
@@ -91,14 +109,14 @@ load, but only Daventry has been checked closely).
 | Shift + right mouse | Tilt the camera |
 | Page Up / Page Down, Home | Tilt the camera, reset the tilt |
 | F11 | Camera keeps a fixed distance |
-| F | Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
-| H | Show hidden and unused objects (traps, sound sources...) |
-| U | Show the ground under the water |
-| F7 | Ground light: x1 (default, as in the original), x2, off |
-| G / B | Test: lift Connor high / a little and let him fall |
+| F | *DEBUG:* Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
+| H | *DEBUG:* Show hidden and unused objects (traps, sound sources...) |
+| U | *DEBUG:* Show the ground under the water |
+| F7 | *DEBUG:* Ground light: x1 (default, as in the original), x2, off |
+| G / B | *DEBUG:* Test: lift Connor high / a little and let him fall |
 | Esc | Quit |
 
-What happens is written to log files in `kq8-artifacts/logs/` (for
+Logs are written to log files in `kq8-artifacts/logs/` (for
 example `connor.log`, `doors.log`, `items.log`). If something looks
 wrong, those logs are the most useful thing to report.
 
@@ -117,9 +135,8 @@ cargo run --release -- building-verify
 cargo run --release -- item-verify
 ```
 
-Other tools: `cargo run --release -- text <file>` prints one of the
-game's text files; `cargo run --release -p kq8-viewer -- smlchest.KQS
---world Daventry` shows one model on its own.
+Other debugging tools: `cargo run --release -- text <file>` prints one of the
+game's text files; `cargo run --release -p kq8-viewer -- --model smlchest.KQS` shows one model on its own.
 
 ## How the repository is organised
 
@@ -169,3 +186,4 @@ records where it came from in
 - [docs/RESEARCH.md](docs/RESEARCH.md): existing tools and documentation
 - [CREDITS.md](CREDITS.md): sources and licences
 - [MODLOG.md](MODLOG.md): change log
+- [STATUS.md](STATUS.md): current state of the project, used for session hand-over
