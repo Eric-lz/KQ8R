@@ -21,6 +21,13 @@
 //! `Off` or `Cue` (rules 6-8); `KQCueEvent`s sent to a trap run it with
 //! `Cue` (rule 14); `KQObject::collision` changes a trap's mask (rule 16).
 //! Lines from trap calls go to [`WorldState::trap_log`] (`traps.log`).
+//!
+//! Items (M3 step 3e-2, `docs/behaviour/items.md`, `crate::item`): scripts
+//! make them (`KQMonster::inventory`, `give`), ask for them
+//! (`KQMonster::checkInventory`) and change them (`KQObject::setScript`,
+//! `setDontLook`, `setHidden`, `deleteObject`); Connor picks a world item
+//! up by clicking it in reach (rules 6-8). Item lines also go to
+//! [`WorldState::item_log`] (`items.log`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -30,6 +37,7 @@ use crate::click::{distance_to_box, ray_box, CLICKABLE};
 use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
+use crate::item::{Items, Place};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::trap::{Trap, Visitor};
 
@@ -117,7 +125,12 @@ pub enum ClickResult {
     TooFar,
     /// The item is not accepted: Connor's remark, no script.
     Refused,
+    /// A world item went into Connor's inventory (items.md rule 7).
+    PickedUp(String),
 }
+
+/// Ground height at (x, y): the floor (`true`) or the surface (`false`).
+pub type Heights = Box<dyn Fn(f32, f32, bool) -> Option<f32> + Send + Sync>;
 
 /// Everything a script can touch, apart from the variables.
 pub struct WorldState {
@@ -139,6 +152,14 @@ pub struct WorldState {
     in_trap: bool,
     /// Requests for Connor and the camera, taken by the caller.
     pub requests: Vec<Request>,
+    /// Every item object and the item types (3e-2).
+    pub items: Items,
+    /// Lines about items for `items.log` (also in the other logs).
+    pub item_log: Vec<String>,
+    /// For z -1 / -2 of a new world item; `None`: kept as written.
+    pub heights: Option<Heights>,
+    /// Variables a command set, for the script runner.
+    vars_out: Vec<(String, String)>,
 }
 
 impl WorldState {
@@ -153,6 +174,12 @@ impl WorldState {
         } else {
             self.log.push(line);
         }
+    }
+
+    /// A line about items: `items.log` and the current log.
+    fn item_note(&mut self, line: impl AsRef<str>) {
+        self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
+        self.note(line);
     }
 
     pub fn door_index(&self, name: &str) -> Option<usize> {
@@ -279,6 +306,161 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQMonster::inventory <who> <type> [qty] [x y z [rx ry rz]]`
+    /// (items.md rule 9); `give <type> [qty]` is the same for Connor.
+    /// Result 0 and `NewInvItem` = the new object's name, or 1 on an error.
+    fn make_item(&mut self, words: &[String], at: &str) -> String {
+        let (who, rest) = if words[0] == "give" {
+            ("Connor".to_string(), &words[1..])
+        } else {
+            match words.get(1) {
+                Some(w) => (w.clone(), &words[2..]),
+                None => {
+                    self.note(format!("{at}: usage: KQMonster::inventory <who> <type> [quantity] [x y z [rx ry rz]]"));
+                    return "1".into();
+                }
+            }
+        };
+        let Some(kind) = rest.first() else {
+            self.note(format!("{at}: usage: {} needs an item type: '{}'", words[0], words.join(" ")));
+            return "1".into();
+        };
+        let numbers = &rest[1..];
+        if let Some(bad) = numbers.iter().find(|w| !looks_like_number(w)) {
+            self.note(format!("{at}: {}: '{bad}' is not a number; nothing made", words.join(" ")));
+            return "1".into();
+        }
+        let n: Vec<f32> = numbers.iter().map(|w| number_value(w) as f32).collect();
+        let quantity = n.first().map_or(1, |q| *q as i64);
+        let position = match n.len() {
+            0 | 1 => None,
+            2 | 3 => {
+                self.note(format!("{at}: {}: a position needs x y z; nothing made", words.join(" ")));
+                return "1".into();
+            }
+            _ => Some([n[1], n[2], n[3]]),
+        };
+        let angles = [n.get(4), n.get(5), n.get(6)].map(|a| a.copied().unwrap_or(0.0));
+        let place = if who.eq_ignore_ascii_case("world") {
+            let Some(mut p) = position else {
+                // Our choice: every such line in the data gives a position.
+                self.note(format!("{at}: {}: no position for a world item; nothing made", words.join(" ")));
+                return "1".into();
+            };
+            if p[2] == -1.0 || p[2] == -2.0 {
+                // objects.md Q17 rule 2: -1 floor, -2 surface.
+                let floor = p[2] == -1.0;
+                match self.heights.as_ref().and_then(|h| h(p[0], p[1], floor)) {
+                    Some(z) => p[2] = z,
+                    None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", p[2], p[0], p[1])),
+                }
+            }
+            Place::World { position: p, angles }
+        } else {
+            if !self.known.contains(&who.to_ascii_lowercase()) {
+                self.note(format!("{at}: ERROR {}: unknown character '{who}'; nothing made", words.join(" ")));
+                return "1".into();
+            }
+            Place::Carried(who.clone())
+        };
+        match self.items.make(kind, quantity, place) {
+            Ok(o) => {
+                let (name, kind, place) = (o.name.clone(), o.kind.clone(), o.place.clone());
+                let where_ = match &place {
+                    Place::World { position: p, angles: a } => {
+                        format!("in the world at ({:.0}, {:.0}, {:.0}) turned ({}, {}, {})", p[0], p[1], p[2], a[0], a[1], a[2])
+                    }
+                    Place::Carried(w) => format!("carried by {w} (now {} of them)", self.items.count(w, &kind)),
+                    Place::Gone => "nowhere".into(),
+                };
+                self.known.insert(name.to_ascii_lowercase());
+                self.vars_out.push(("NewInvItem".into(), name.clone()));
+                self.item_note(format!("{at}: made {name}: {kind} x{quantity} {where_}; NewInvItem = {name}"));
+                "0".into()
+            }
+            Err(e) => {
+                self.item_note(format!("{at}: ERROR {}: {e}; nothing made", words.join(" ")));
+                "1".into()
+            }
+        }
+    }
+
+    /// `KQMonster::checkInventory <who> <type> [variable]` (items.md rule
+    /// 10): 1 if found, 0 if not or on any error; the variable gets the
+    /// found object's name.
+    fn check_inventory(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(kind)) = (words.get(1), words.get(2)) else {
+            self.note(format!("{at}: usage: KQMonster::checkInventory <who> <type> [variable]"));
+            return "0".into();
+        };
+        if self.items.kind(kind).is_none() {
+            self.item_note(format!("{at}: ERROR checkInventory {who} {kind}: no such item type; 0"));
+            return "0".into();
+        }
+        match self.items.find(who, kind).map(|o| o.name.clone()) {
+            Some(name) => {
+                let into = words.get(3).map_or(String::new(), |v| format!(" (into {v})"));
+                if let Some(var) = words.get(3) {
+                    self.vars_out.push((var.clone(), name.clone()));
+                }
+                self.item_note(format!("{at}: checkInventory {who} {kind}: found {name}{into}: 1"));
+                "1".into()
+            }
+            None => {
+                self.item_note(format!("{at}: checkInventory {who} {kind}: none: 0"));
+                "0".into()
+            }
+        }
+    }
+
+    /// `KQObject::setScript`, `setDontLook`, `setHidden` and `deleteObject`
+    /// on an item object. `setHidden` and `deleteObject` on other objects
+    /// stay stubs (as before 3e-2); the other two are not tracked there.
+    fn item_change(&mut self, words: &[String], at: &str) -> String {
+        let command = words[0].as_str();
+        let Some(name) = words.get(1) else {
+            self.note(format!("{at}: usage: {command} <object> ..."));
+            return "1".into();
+        };
+        let Some(i) = self.items.index(name) else {
+            if command == "deleteObject" || command == "KQObject::setHidden" {
+                self.note(format!("{at}: stub (later milestone, nothing done): {}", words.join(" ")));
+                return "0".into();
+            }
+            let why = if self.known.contains(&name.to_ascii_lowercase()) { "object kind not tracked yet" } else { "unknown object" };
+            self.note(format!("{at}: {}: {why}; not changed", words.join(" ")));
+            return "1".into();
+        };
+        let value = words.get(2).cloned().unwrap_or_default();
+        let flag = looks_like_number(&value).then(|| number_value(&value) != 0.0);
+        let o = &mut self.items.objects[i];
+        let line = match (command, flag) {
+            ("deleteObject", _) => {
+                o.place = Place::Gone;
+                format!("deleteObject {}: item gone", o.name)
+            }
+            ("KQObject::setScript", _) if !value.is_empty() => {
+                // `none` removes it (chests.md rule 11, `Tavcoin.cs`).
+                o.script = (!value.eq_ignore_ascii_case("none")).then(|| value.clone());
+                format!("setScript {}: script {:?}", o.name, o.script)
+            }
+            ("KQObject::setDontLook", Some(on)) => {
+                o.do_not_point_at = on;
+                format!("setDontLook {}: doNotPointAt {on}", o.name)
+            }
+            ("KQObject::setHidden", Some(on)) => {
+                o.hidden = on;
+                format!("setHidden {}: hidden {on}", o.name)
+            }
+            _ => {
+                self.note(format!("{at}: usage: '{}'", words.join(" ")));
+                return "1".into();
+            }
+        };
+        self.item_note(format!("{at}: {line}"));
+        "0".into()
+    }
+
     /// `sendEvent <delay> <object> <type> [data…]`.
     fn send_event(&mut self, words: &[String], at: &str) -> String {
         if words.len() < 4 {
@@ -319,12 +501,19 @@ impl ScriptHost for WorldState {
             "KQObject::collision" => Some(self.collision_mask(words, at)),
             "KQConner::setRun" => Some(self.set_run(words, at)),
             "KQCamera::setRange" => Some(self.set_range(words, at)),
+            "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
+            "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
+            "KQObject::setScript" | "KQObject::setDontLook" | "KQObject::setHidden" | "deleteObject" => Some(self.item_change(words, at)),
             _ => None,
         }
     }
 
     fn log(&mut self, line: String) {
         self.note(line);
+    }
+
+    fn take_vars(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.vars_out)
     }
 }
 
@@ -363,6 +552,10 @@ impl Active {
                 trap_log: Vec::new(),
                 in_trap: false,
                 requests: Vec::new(),
+                items: Items::default(),
+                item_log: Vec::new(),
+                heights: None,
+                vars_out: Vec::new(),
             },
         }
     }
@@ -479,7 +672,14 @@ impl Active {
             .iter()
             .filter(|c| c.collision_type & CLICKABLE != 0)
             .filter_map(|c| Some((c.name.clone(), ray_box(origin, dir, &c.placement, c.min, c.max)?)));
-        doors.chain(others).min_by(|a, b| a.1.total_cmp(&b.1))
+        // World items (items.md rule 6): by their type's box; hidden ones
+        // can't be clicked.
+        let items = &self.world.items;
+        let items = items.objects.iter().filter(|o| !o.hidden).filter_map(|o| {
+            let (min, max) = items.click_box(o)?;
+            Some((o.name.clone(), ray_box(origin, dir, &o.placement()?, min, max)?))
+        });
+        doors.chain(others).chain(items).min_by(|a, b| a.1.total_cmp(&b.1))
     }
 
     /// Connor clicks object `name` (rules 11–17). `feet`: his position;
@@ -488,6 +688,9 @@ impl Active {
     pub fn click(&mut self, name: &str, feet: [f32; 3], attack_dist: f32, item: Option<&Item>) -> ClickResult {
         let reach = 2.0 * attack_dist;
         let feet_text = format!("({:.0}, {:.0}, {:.0})", feet[0], feet[1], feet[2]);
+        if let Some(i) = self.world.items.index(name) {
+            return self.click_item(i, feet, reach, item);
+        }
         let Some(i) = self.world.door_index(name) else {
             let found = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).cloned();
             match found {
@@ -551,6 +754,53 @@ impl Active {
         let mut full = vec![d.door.name.clone()];
         full.extend(args);
         ClickResult::Script(full)
+    }
+
+    /// Connor clicks item object `i` (items.md rules 6-8).
+    fn click_item(&mut self, i: usize, feet: [f32; 3], reach: f32, item: Option<&Item>) -> ClickResult {
+        let o = self.world.items.objects[i].clone();
+        let (Some(placement), false) = (o.placement(), o.hidden) else {
+            self.world.item_note(format!("click {}: not lying in the world (or hidden); nothing", o.name));
+            return ClickResult::Nothing;
+        };
+        let Some((min, max)) = self.world.items.click_box(&o) else {
+            self.world.item_note(format!("click {}: its type's shape has no box in BOUNDS.KQ; can't be clicked", o.name));
+            return ClickResult::Nothing;
+        };
+        let distance = distance_to_box(feet, &placement, min, max);
+        let head = format!(
+            "click {} ({} x{}): Connor at ({:.0}, {:.0}, {:.0}), distance to its box {distance:.1}, reach {reach:.0}",
+            o.name, o.kind, o.quantity, feet[0], feet[1], feet[2]
+        );
+        if distance >= reach {
+            self.world.item_note(format!("{head}: OUT OF REACH: Connor's \"too far\" remark (line not traced, M4); nothing"));
+            return ClickResult::TooFar;
+        }
+        if let Some(it) = item {
+            self.world.item_note(format!("{head}: holds {} ({}): items accept nothing: Connor's \"that doesn't work\" remark (M4)", it.object, it.kind));
+            return ClickResult::Refused;
+        }
+        let before = self.world.items.count("Connor", &o.kind);
+        self.world.items.objects[i].place = Place::Carried("Connor".into());
+        let after = self.world.items.count("Connor", &o.kind);
+        let sound = self.world.items.kind(&o.kind).and_then(|t| t.pickup_sound.clone());
+        self.world.item_note(format!(
+            "{head}: IN REACH: picked up; Connor's {} {before} -> {after}; pickup sound {} (no audio yet); gone from the world",
+            o.kind,
+            sound.as_deref().unwrap_or("none")
+        ));
+        // Rule 7: then its script, as a normal click.
+        if let Some(script) = o.script.clone() {
+            let args: Vec<String> = [o.name.as_str(), "ConnorAction", "do", "do"].map(String::from).to_vec();
+            self.world.item_note(format!("script {script} {}", args.join(" ")));
+            self.scripts.call(&script, &args, &mut self.world);
+        }
+        ClickResult::PickedUp(o.name)
+    }
+
+    /// Lines for `items.log` since the last call.
+    pub fn take_item_log(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.world.item_log)
     }
 
     /// One update (15 per second): events due, then the doors move.
@@ -916,6 +1166,92 @@ mod tests {
         assert_eq!(a.scripts.vars.get("T::Out"), Some("Connor"));
         // ... but can't come in again.
         assert!(connor_at(&mut a, 0.0).is_empty());
+    }
+
+    /// Made-up scripts in the style of `WorldInv.cs` and `Tavcoin.cs` (not
+    /// copies).
+    const MAKE: &str = "KQMonster::inventory world Crystal 3 1000 0 500 0 0 1.57\nKQObject::setScript $NewInvItem coin.cs\nset First $NewInvItem\nKQMonster::inventory\tworld\tcrystal\t1\t2000\t0\t-1\t0\t0\t0\ngive silverCoins 5\nset Gave $NewInvItem\n";
+    const COIN: &str = "if test $2 == ConnorAction\n KQMonster::speak Connor Connor 1000 15 14 108 1 0\n KQObject::setScript $1 none\n set Coin::Said $1\nendif\n";
+
+    fn with_items(script: &'static str) -> Active {
+        let sources = [("s.cs".to_string(), script.as_bytes().to_vec()), ("coin.cs".to_string(), COIN.as_bytes().to_vec())];
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], sources);
+        a.world.items = crate::item::tests::items();
+        // Floor 700 below the surface everywhere (for z -1 / -2).
+        a.world.heights = Some(Box::new(|_, _, floor| Some(if floor { 100.0 } else { 800.0 })));
+        a.scripts.call("s.cs", &[], &mut a.world);
+        a
+    }
+
+    #[test]
+    fn scripts_make_items_in_the_world_and_in_inventories() {
+        let a = with_items(MAKE);
+        let v = |k: &str| a.scripts.vars.get(k).map(str::to_string);
+        assert_eq!((v("First"), v("Gave"), v("NewInvItem")), (Some("Crystal.1".into()), Some("SilverCoins.3".into()), Some("SilverCoins.3".into())));
+        let it = &a.world.items;
+        let c = it.get("crystal.1").unwrap();
+        assert_eq!((c.quantity, c.place.clone(), c.script.as_deref()), (3, Place::World { position: [1000.0, 0.0, 500.0], angles: [0.0, 0.0, 1.57] }, Some("coin.cs")));
+        // z -1 is the floor height there.
+        assert_eq!(it.get("Crystal.2").unwrap().place, Place::World { position: [2000.0, 0.0, 100.0], angles: [0.0; 3] });
+        assert_eq!(it.count("Connor", "INVITEM_SilverCoins"), 5);
+        assert_eq!(a.scripts.vars.get(crate::script::RETURN), Some("0"));
+        assert!(a.world.known.contains("crystal.1"), "new items are known objects");
+        assert!(a.world.item_log.iter().any(|l| l.contains("made Crystal.1: INVITEM_Crystal x3 in the world at (1000, 0, 500)")), "{:?}", a.world.item_log);
+    }
+
+    #[test]
+    fn errors_make_nothing() {
+        let a = with_items("KQMonster::inventory world ladybell 1 0 0 0\nset R1 $Console::Return\nKQMonster::inventory world Crystal 1\nset R2 $Console::Return\nKQMonster::inventory nobody Crystal\nset R3 $Console::Return\nKQMonster::inventory world Crystal 1 5 6\nset R4 $Console::Return\n");
+        for r in ["R1", "R2", "R3", "R4"] {
+            assert_eq!(a.scripts.vars.get(r), Some("1"), "{r}");
+        }
+        assert!(a.world.items.objects.is_empty());
+        assert_eq!(a.scripts.vars.get("NewInvItem"), None);
+    }
+
+    #[test]
+    fn check_inventory_answers_1_for_found() {
+        let a = with_items("give Crystal 2\nif KQMonster::checkInventory Connor crystal Found\n set A no\nelse\n set A yes\nendif\nKQMonster::checkInventory Connor SilverCoins\nset B $Console::Return\nKQMonster::checkInventory world Crystal\nset C $Console::Return\nKQMonster::checkInventory Connor NoSuchThing\nset D $Console::Return\n");
+        let v = |k: &str| a.scripts.vars.get(k);
+        // Rule 10: 1 = found, so an `if` on it takes the else branch.
+        assert_eq!((v("A"), v("Found")), (Some("yes"), Some("Crystal.1")));
+        assert_eq!((v("B"), v("C"), v("D")), (Some("0"), Some("0"), Some("0")));
+    }
+
+    #[test]
+    fn clicking_an_item_in_reach_picks_it_up_and_runs_its_script_once() {
+        let mut a = with_items(MAKE);
+        // Crystal.1 at (1000, 0, 500), box x -60..70 turned 90 degrees.
+        let near = [1000.0, -3000.0, 500.0];
+        assert_eq!(a.click("Crystal.1", [1000.0, -9000.0, 500.0], 2350.0, None), ClickResult::TooFar);
+        let bread = Item { object: "bread.1".into(), kind: "INVITEM_Bread".into() };
+        assert_eq!(a.click("Crystal.1", near, 2350.0, Some(&bread)), ClickResult::Refused);
+        assert!(a.world.items.get("Crystal.1").unwrap().in_world());
+        // The pick ray finds it.
+        assert_eq!(a.pick([1000.0, -5000.0, 600.0], [0.0, 1.0, 0.0]).map(|(n, _)| n), Some("Crystal.1".to_string()));
+        assert_eq!(a.click("Crystal.1", near, 2350.0, None), ClickResult::PickedUp("Crystal.1".into()));
+        let c = a.world.items.get("Crystal.1").unwrap();
+        assert!(c.carried_by("Connor") && c.script.is_none(), "script removed by itself (setScript none)");
+        assert_eq!(a.scripts.vars.get("Coin::Said"), Some("Crystal.1"));
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 3);
+        let log = a.take_item_log().join("\n");
+        assert!(log.contains("Connor's INVITEM_Crystal 0 -> 3; pickup sound energy.aud"), "{log}");
+        assert!(log.contains("script coin.cs Crystal.1 ConnorAction do do"), "{log}");
+        // Gone from the world: not picked, a second click does nothing.
+        assert_eq!(a.pick([1000.0, -5000.0, 600.0], [0.0, 1.0, 0.0]), None);
+        assert_eq!(a.click("Crystal.1", near, 2350.0, None), ClickResult::Nothing);
+    }
+
+    #[test]
+    fn hidden_and_deleted_items_cant_be_clicked() {
+        let mut a = with_items("KQMonster::inventory world Crystal 1 0 0 0\nKQObject::setHidden $NewInvItem 1\nKQMonster::inventory world Crystal 1 0 5000 0\ndeleteObject $NewInvItem\nKQObject::setDontLook Crystal.1 0\nKQObject::setHidden smlchst3 1\n");
+        let it = &a.world.items;
+        assert!(it.get("Crystal.1").unwrap().hidden && !it.get("Crystal.1").unwrap().do_not_point_at);
+        assert_eq!(it.get("Crystal.2").unwrap().place, Place::Gone);
+        assert_eq!(a.pick([0.0, -5000.0, 100.0], [0.0, 1.0, 0.0]), None);
+        assert_eq!(a.click("Crystal.1", [0.0, -500.0, 0.0], 2350.0, None), ClickResult::Nothing);
+        // setHidden on another object is still a stub.
+        assert!(a.take_log().join("\n").contains("stub (later milestone, nothing done): KQObject::setHidden smlchst3 1"));
     }
 
     #[test]

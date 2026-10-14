@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 M3 3e-2: item objects, inventories, picking up (game rules only)
+
+**Changed:** New `crates/kq8-game/src/item.rs` (item objects: type, quantity, where they are, hidden, script; the list of all of them). `active.rs`: scripts can now make items (`KQMonster::inventory`, `give`), look for them (`KQMonster::checkInventory`), and change them (`KQObject::setScript`, `setDontLook`, `setHidden`, `deleteObject`); clicking a world item picks it up; item lines collected for an `items.log`. `script.rs`: a world command can set script variables (for `NewInvItem`); `checkInventory`, `deleteObject`, `setHidden` are no longer stubs, `tossItems`, `dropItem`, `changeBmp`, `setGroupsAlways` are new stubs. `docs/DESIGN.md`, `docs/provenance/README.md`. No viewer changes.
+**Why:** Step 2 of chests and items (`items.md` rules 3-10): the rules every item, chest and basket needs, testable without the window.
+**Tested how:** 8 new unit tests (`cargo test -p kq8-game`): making items in the world and carried, `NewInvItem`, z −1 → floor height, errors that make nothing, `checkInventory` 1/0 and its variable, picking up (too far, item in hand refused, in reach → carried, pickup sound logged, the item's script runs once and removes itself like `Tavcoin.cs`, the pick ray then misses it), hidden and deleted items can't be clicked. Whole workspace `cargo test`; clippy clean on `kq8-game`. Viewer run (`--terrain --world Daventry --frames 300`) to check nothing else changed.
+**Result:** 169 tests pass in `kq8-game` (was 161), 61 in `kq8-data`. Viewer: starts and exits normally; 17 doors, 52 traps, as before; no errors.
+**Still broken / not tested:** Nothing visible yet: the viewer doesn't load item types or items (3e-3), so in the running viewer every item command reports "no such item type". Item names are our stand-in (Q60). Not done: tossing (`tossItems`), dropping, the remarks and sounds themselves (M4), Connor turning or bending. Clippy on the whole workspace stops at an older test in `kq8-data/src/objects.rs` (`3.14` taken for π), not from this step.
+**Next:** You: `cargo test -p kq8-game` (should end `169 passed`). Then 3e-3: items at the start (`WorldInv.cs`) drawn and clickable in the viewer.
+
 ## 2026-10-13 Smaller build folder (no debug info for dependencies)
 
 **Changed:** `Cargo.toml`: `debug = false` for all dependencies in dev builds (our own crates keep their debugging information). Deleted `target/side/` (a spare build copy from 2026-10-11, see the M1 3a entry) and the old dev builds (`cargo clean --profile dev`). Nothing in the repo besides `Cargo.toml`.

@@ -1772,8 +1772,8 @@ catchers, ground animators).
     a path beside it nothing; mask removed while inside → `Off` on
     leaving, no new entry.
 
-- **3e — chests and items (planned 2026-10-13; 3e-1 done 2026-10-13,
-  MODLOG).** Rules from
+- **3e — chests and items (planned 2026-10-13; 3e-1 and 3e-2 done
+  2026-10-13, MODLOG).** Rules from
   `chests.md` and `items.md` (and `doors.md` rules 10, 11, 13, 14 for
   clicking, `objects.md` for heights and hiding). Five sub-steps, each
   with its own tests and MODLOG entry.
@@ -1844,6 +1844,11 @@ catchers, ground animators).
     type, `give`, `checkInventory` 1/0 and its variable, pickup in and
     out of reach, script after pickup with `setScript … none` removing it
     (`Tavcoin.cs`), hidden items not clickable.
+    **Done.** Also: a world command can now set script variables (the
+    runner asks the world for them after each command), and
+    `setHidden`/`deleteObject` on objects other than items stay stubs.
+    Our choices: a world item needs x y z (else error); `setScript` and
+    `setDontLook` on other objects are "not tracked" (result 1).
   - **3e-3, items at the start and in the viewer** (`kq8-data`
     `world_script.rs`; `kq8-viewer` `load.rs`, new `item_view.rs`).
     The start-up runner runs `KQMonster::inventory`, `give`,

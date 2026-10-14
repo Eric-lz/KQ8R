@@ -630,3 +630,21 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | Kept: name, id, category, sounds, shape, radius, translucency; the rest (stats, menus) not read yet | `items.md` rule 1 ("for M3 only … matter") | — |
 | Each type's model is found in a world's archives or `GAME/Common`, and its box in `BOUNDS.KQ` with the shape name lower-cased | Where the viewer looks for models (M1); lower-cased lookup: `connor-physics.md` Q39 | `item-verify`: all 135 models found; 3 without a box (`truthkey.kqs`, `tablet2.kqs`, `orcxbow.kqs`; Q62 c) |
 | `acceptsInventory` read as a comma-separated list in the check | **Observed** in the data (19 files); what the game does with it is Q62 a | — |
+
+## Item objects and inventories (M3 step 3e-2) — `crates/kq8-game/src/{item,active,script}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Item object = type, quantity, third number −1; clickable type 0x220, mask 0x809, `doNotPointAt` on | `items.md` rules 3, 4 | Unit test |
+| Never collides with Connor | **Our reading** of `items.md` rule 4 with the pair rule (`connor-physics.md`): 0x220/0x809 share no bit with his type 4 / mask 0x281B | — |
+| `KQMonster::inventory <who> <type> [qty] [x y z [rx ry rz]]`: `world` → placed, anyone else → carried; `give <type> [qty]` = for Connor; `NewInvItem`; unknown type → error, 1 | `items.md` rule 9 | Unit tests |
+| World item z −1 / −2 → floor / surface height | `items.md` rule 9 → `objects.md` Q17 rule 2 | Unit test |
+| A world item without a position, a position of 1–2 numbers, or an unknown character → error, nothing made | **Our choice** (every such line in the data gives x y z) | Unit test |
+| New item name `<type without INVITEM_>.<n>`, n from 1 in the order made | **Our stand-in**, asked as Q60 | Unit test |
+| `KQMonster::checkInventory <who> <type> [var]`: 1 found / 0 not or error; `var` = the object's name | `items.md` rule 10 | Unit test |
+| `KQObject::setScript <item> <script\|none>`, `setDontLook`, `setHidden`, `deleteObject` on items | `items.md` rules 4, 7; `chests.md` rule 11 (`none` removes the script); `objects.md` "Hidden objects" (hidden = not drawn, not touchable) | Unit tests |
+| On other objects: `setHidden`, `deleteObject` stay stubs; `setScript`, `setDontLook` "not tracked", result 1 | **Our choice** until those objects need them | Unit test |
+| `tossItems`, `dropItem`, `changeBmp`, `setGroupsAlways` are stubs | **Our choice**: tossing needs weapons and its flight is not fully traced (`items.md` rule 12, open question 3); `dropItem` only in `rockHit.cs` (M5) | — |
+| Clicking a world item: out of reach (≥ 2 × `attackDist`) "too far"; item in hand "doesn't work"; in reach → carried by Connor, pickup sound logged, then its script with `ConnorAction do do` | `items.md` rules 6–8 | Unit tests |
+| Picked and measured by its type's shape box in `BOUNDS.KQ` (lower-cased), turned with the item; hidden items not picked | **Our reading** of `chests.md`'s crystal check (no box rule in `items.md`); Q62 c for types without a box | Unit tests |
+| World commands can set script variables (`take_vars`) | Our code structure (the runner owns the variables) | Unit tests |

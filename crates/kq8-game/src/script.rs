@@ -41,25 +41,25 @@ use kq8_data::world_script::Vars;
 /// Commands of later milestones: the door scripts' (dialogue, GUI,
 /// inventory, cutscenes; `doors.md` "Commands door scripts use"), then
 /// those of Daventry's trap scripts that only act (music, monsters, ropes,
-/// cutscene camera, moving objects while playing; M3 step 3d-3). Each only
-/// writes a log line and leaves 0 in `$Console::Return` (for
-/// `checkInventory` 0 = not found, right for an empty inventory:
-/// `items.md` rule 10). Commands that answer a question (`getloc`,
+/// cutscene camera, moving objects while playing; M3 step 3d-3), then the
+/// item commands of later milestones (M3 step 3e-2: `tossItems` needs
+/// weapons to smash barrels and its flight is not fully traced, M5;
+/// `dropItem` is only used by `rockHit.cs`, M5). Each only writes a log
+/// line and leaves 0 in `$Console::Return`. `KQMonster::checkInventory`,
+/// `deleteObject` and `KQObject::setHidden` were stubs until 3e-2; the
+/// world handles them now. Commands that answer a question (`getloc`,
 /// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
 /// unknown (error line, result 1) until they are studied.
-pub const STUBS: [&str; 39] = [
+pub const STUBS: [&str; 40] = [
     "KQMonster::speak",
     "doPopup",
     "addMapIcon",
     "earnTeleport",
     "teleportersEarned",
-    "KQMonster::checkInventory",
-    "deleteObject",
     "handsOff",
     "KQMonster::setState",
     "pauseAnim",
     "preloadShape",
-    "KQObject::setHidden",
     "loadKQ",
     // Daventry's trap scripts (3d-3).
     "KQMusic::push",
@@ -88,6 +88,11 @@ pub const STUBS: [&str; 39] = [
     "onTeleport",
     "offTeleport",
     "pointAndCue",
+    // Item commands of later milestones (3e-2).
+    "KQObject::tossItems",
+    "KQMonster::dropItem",
+    "KQObject::changeBmp",
+    "KQObject::setGroupsAlways",
 ];
 
 /// Scripts calling scripts deeper than this stop (a guard of ours).
@@ -106,6 +111,11 @@ pub trait ScriptHost {
     fn world_command(&mut self, words: &[String], at: &str) -> Option<String>;
     /// One line for the log.
     fn log(&mut self, line: String);
+    /// Variables a world command set (`NewInvItem`, `checkInventory`'s
+    /// fourth word), taken right after it ran.
+    fn take_vars(&mut self) -> Vec<(String, String)> {
+        Vec::new()
+    }
 }
 
 /// The scripts' shared state: the variables (set by the start-up scripts
@@ -273,7 +283,13 @@ impl Scripts {
                 host.log(format!("{at}: stub (later milestone, nothing done): {}", words.join(" ")));
                 Some("0".into())
             }
-            _ => host.world_command(words, at),
+            _ => {
+                let r = host.world_command(words, at);
+                for (var, value) in host.take_vars() {
+                    self.vars.set(&var, value);
+                }
+                r
+            }
         };
         if let Some(r) = result {
             self.vars.set(RETURN, r);
@@ -519,7 +535,7 @@ mod tests {
 
     #[test]
     fn console_return_and_if_on_any_command() {
-        let (s, _) = run("test a == b\nset Saved $Console::Return\nif KQMonster::checkInventory Connor Dagger\nset Inv zero\nendif\n", &[], &[]);
+        let (s, _) = run("test a == b\nset Saved $Console::Return\nif KQMonster::speak Connor Connor 0 1 2 3 1 1\nset Inv zero\nendif\n", &[], &[]);
         assert_eq!(s.vars.get("Saved"), Some("1"));
         assert_eq!(s.vars.get("Inv"), Some("zero"), "a stub leaves 0, so the branch is taken");
         // An unknown command fails; its `if` branch is skipped.
