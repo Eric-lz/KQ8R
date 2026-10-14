@@ -239,7 +239,7 @@ pub enum Mode {
     /// back to the keys.
     Crash,
     /// Jumping: the jump animation once, keys ignored; when it ends the
-    /// game starts Fall (`player.rs`).
+    /// game starts Fall (`connor_update.rs`).
     Jump,
 }
 
@@ -387,7 +387,7 @@ impl Walker {
 
     /// Which jump the Jump key would start now, or why none: only in the
     /// keys' control, with no start or stop animation playing, from
-    /// `JUMP_FROM` (the ground conditions are the mover's, `player.rs`).
+    /// `JUMP_FROM` (the ground conditions are the mover's, `connor_update.rs`).
     pub fn jump_kind(&self) -> Result<JumpKind, String> {
         if self.mode != Mode::Free {
             return Err(format!("not in the keys' control (mode {})", self.mode.name()));

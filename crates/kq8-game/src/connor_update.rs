@@ -1,5 +1,5 @@
 //! One update of Connor: his walker (`connor.rs`, the animation and the
-//! step it asks for) and his mover (`mover.rs`, what happens to that step)
+//! step it asks for) and his mover (`connor_mover.rs`, what happens to that step)
 //! together, with what passes between them: falls, landings, head-on hits
 //! and jumps.
 //!
@@ -7,7 +7,7 @@
 //! the user's checks of jumping in the original (docs/DESIGN.md M2 2e).
 
 use crate::connor::{Intent, JumpKind, Mode, MovementLoop, Step, Walker};
-use crate::mover::{FallEvent, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
+use crate::connor_mover::{FallEvent, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
 
 /// What one update did.
 #[derive(Debug, Clone)]
@@ -80,7 +80,7 @@ pub fn tick<'a>(
             "{} ended at z={:.0}: gravity on, steps 325, Fall (death limit from z={:.0}, fall timer 0.36 after 0.30)",
             walker.kind.jump(),
             mover.position[2],
-            mover.position[2] - crate::mover::JUMP_DEATH_OFFSET
+            mover.position[2] - crate::connor_mover::JUMP_DEATH_OFFSET
         ));
     }
     if jump {
@@ -185,7 +185,7 @@ pub fn tick<'a>(
 mod tests {
     use super::*;
     use crate::connor::{MoveKey, Transition};
-    use crate::mover::GroundLookup;
+    use crate::connor_mover::GroundLookup;
 
     /// Flat ground at height 0, or a plane rising along +y by `slope`.
     struct Plane(f32);
@@ -484,7 +484,7 @@ mod tests {
             Some((0.0, [0.0, 0.0, 1.0]))
         }
 
-        fn sweep(&self, _: &crate::collide::BallStack, from: [f32; 3], to: [f32; 3]) -> Option<crate::mover::Hit> {
+        fn sweep(&self, _: &crate::collide::BallStack, from: [f32; 3], to: [f32; 3]) -> Option<crate::connor_mover::Hit> {
             let side = self.at.signum();
             let touch_y = self.at - side * 200.0;
             if (to[1] - touch_y) * side <= 0.0 || from[1] == to[1] {
@@ -495,7 +495,7 @@ mod tests {
             let len = (0..3).map(|i| (to[i] - from[i]).powi(2)).sum::<f32>().sqrt() * f;
             let back = if len > 25.0 { 25.0 / len } else { 1.0 };
             let position: [f32; 3] = std::array::from_fn(|i| touch[i] - (touch[i] - from[i]) * back);
-            Some(crate::mover::Hit { position, touch, normal: [0.0, -side, 0.0], what: "wall".into() })
+            Some(crate::connor_mover::Hit { position, touch, normal: [0.0, -side, 0.0], what: "wall".into() })
         }
     }
 

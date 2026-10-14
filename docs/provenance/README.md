@@ -176,7 +176,7 @@ Not used by Connor's movement yet (2d-3).
 | Object test: each ball swept in the object's own space against its box enlarged by r on every face (square corners); exactly vertical moves test only the top ball (up or not moving) or the bottom ball (down); no test under 0.001 in every axis; a ball starting inside is a hit without a contact | `connor-physics.md` "Against another object" (traced, Q31 b, Q33) | Unit tests (square corner, turned object, vertical one-ball rule, start inside) |
 | Inside-out boxes (min > max) give no hit | Our choice until Q34 (c) | Unit test |
 
-## Buildings in Connor's movement (M2 step 2d-3) — `crates/kq8-game/src/{mover,connor}.rs`, `crates/kq8-viewer/src/{load,connor_view,terrain_view}.rs`
+## Buildings in Connor's movement (M2 step 2d-3) — `crates/kq8-game/src/{connor_mover,connor}.rs`, `crates/kq8-viewer/src/{load,connor_view,terrain_view}.rs`
 
 | Fact | Source | Checked how |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ Not used by Connor's movement yet (2d-3).
 | While `crash` plays he is not in the Move state, so a wall behind him is never head-on (he slides or stops) | `connor-physics.md` "Exact hit handling" (head-on only in Move or Jump; crash is state Special) | Unit test (`a_crash_pushing_him_into_a_wall_behind_stops_there_without_head_on`) |
 | Not done: the other run-like movements (`stoprun` done in 2g-1; `WaterRun`, `runwaterrun`, `runJump`, `PreBirth`), the exceptions (`KQMonster`, `backJump`, the Connor flag, the "no crash" object flag), the `crash.aud` sound and footstep cues | Not in our code yet | — |
 
-## Objects in Connor's movement (M2 step 2d-5) — `crates/kq8-data/src/bounds.rs` (`lookup`), `crates/kq8-game/src/{collide,mover}.rs`, `crates/kq8-viewer/src/{load,terrain_view,connor_view}.rs`
+## Objects in Connor's movement (M2 step 2d-5) — `crates/kq8-data/src/bounds.rs` (`lookup`), `crates/kq8-game/src/{collide,connor_mover}.rs`, `crates/kq8-viewer/src/{load,terrain_view,connor_view}.rs`
 
 | Fact | Source | Checked how |
 | --- | --- | --- |
@@ -258,7 +258,7 @@ no longer skipped.
 | Forward pressed during a stop animation: it plays to its end, then `stop`, `stopwalk`, `walk` | Note rules 4 and 6 | Unit test |
 | `--hold F,T,R,N`: let go of forward and turn after N updates | Our test helper | — |
 
-## The standing jump (M2 step 2e-1) — `crates/kq8-game/src/{player,connor,mover}.rs`, `crates/kq8-viewer/src/{connor_view,load,main}.rs`
+## The standing jump (M2 step 2e-1) — `crates/kq8-game/src/{connor_update,connor,connor_mover}.rs`, `crates/kq8-viewer/src/{connor_view,load,main}.rs`
 
 Behaviour note = `docs/behaviour/connor-physics.md` "Jumping" (traced;
 arcs measured) and "Falling off an edge"; the user's checks in the
@@ -266,7 +266,7 @@ original (2026-10-12).
 
 | Fact | Source | Checked how |
 | --- | --- | --- |
-| The update tying walker and mover together (falls, landings, head-on) moved from the viewer to `kq8-game` `player.rs`, unchanged | Our refactor, so jumps can be unit-tested | All earlier tests pass; viewer runs as before |
+| The update tying walker and mover together (falls, landings, head-on) moved from the viewer to `kq8-game` `connor_update.rs`, unchanged | Our refactor, so jumps can be unit-tested | All earlier tests pass; viewer runs as before |
 | Jump key = `Connor.sae` action `Jump` (Insert) | Observed; note "Controls" | Viewer log: `jump Some(Insert)` |
 | A jump only in the keys' control, with no start or stop animation playing, from `stop`, `walk`, `run` (and `back`, `left`, `right`) | **User's check in the original** (no jump during start/stop animations; standing, full walking, full running; from turning on the spot: allowed, turning stops, and starts again after the landing); `back` from rule 2; the wait before a stop: our reading, Q41 (a) | Unit test; viewer `--hold 1,0,1 --jump 4`: "refused: stoprun is playing" |
 | On the ground, or within 250 above the terrain (its normal then counts); walkable, or steep and not facing uphill | Rule 1 (traced); "feet to the terrain under him" is our reading, Q41 (c) | Unit test (300 refused, 200 allowed; 45° slope facing up refused, facing down allowed) |
@@ -277,7 +277,7 @@ original (2026-10-12).
 | Hits during a jump: walls, ceilings and the ground check act; glancing only (head-on and steep hits during jumps come in 2e-3) | Rule 3 ("walls and ceilings still stop him"); the rest: stand-in until 2e-3 | — |
 | `--jump N`: test option, presses Jump once | Our test helper | Log line `test --jump` |
 
-## Running and backward jumps (M2 step 2e-2) — `crates/kq8-game/src/{connor,player}.rs`, `crates/kq8-viewer/src/load.rs`
+## Running and backward jumps (M2 step 2e-2) — `crates/kq8-game/src/{connor,connor_update}.rs`, `crates/kq8-viewer/src/load.rs`
 
 | Fact | Source | Checked how |
 | --- | --- | --- |
@@ -285,7 +285,7 @@ original (2026-10-12).
 | After a running jump lands he is in the keys' control at once, still in `runJumpHold`; the keys' choice is asked for from there, so `Conner.anm`'s transitions give `jumprun` (run held) → `run` at 0.8, `jumpstop` (forward let go) → `stop`, `walk` at once (run off) | Note's measurement (open question 3: `jumprun` 3 updates, `jumpstop` 13 updates ≈ 1.0 s); the 2g rules; **our reading**, the landing itself not traced | Unit tests; viewer: `jumprun` updates 43–45 then `run`; with forward let go (`--hold 1,0,1,30`) `jumpstop` updates 43–57 then `stop` |
 | At that landing a turn key alone counts as standing: `jumpstop` plays and he turns during it, then the turn on the spot | **User's check in the original** (turning only during the running jump's landing, forward let go, a turn key held); how the game does it: Q41 (d) | Unit test (`running_jump_lands_into_jumpstop_with_forward_let_go_and_turns_there`) |
 
-## Hits during a jump (M2 step 2e-3) — `crates/kq8-game/src/{mover,player,connor}.rs`
+## Hits during a jump (M2 step 2e-3) — `crates/kq8-game/src/{connor_mover,connor_update,connor}.rs`
 
 | Fact | Source | Checked how |
 | --- | --- | --- |
@@ -311,7 +311,7 @@ when implemented.
 
 ## Connor: standing and gravity (M2 step 2a)
 
-Code: `crates/kq8-game/src/mover.rs`, `crates/kq8-viewer/src/connor_view.rs`, `crates/kq8-viewer/src/load.rs` (`place_connor`).
+Code: `crates/kq8-game/src/connor_mover.rs`, `crates/kq8-viewer/src/connor_view.rs`, `crates/kq8-viewer/src/load.rs` (`place_connor`).
 
 | What | Source | Check |
 | --- | --- | --- |
@@ -344,7 +344,7 @@ Code: `crates/kq8-data/src/action_map.rs`, `crates/kq8-game/src/connor.rs`, `cra
 
 ## Slopes and falls (M2 step 2c, falling part of 2e)
 
-Code: `crates/kq8-game/src/mover.rs`, `crates/kq8-game/src/connor.rs` (`Mode`, one-shot animations), `crates/kq8-viewer/src/connor_view.rs`, `crates/kq8-viewer/src/load.rs` (`CONNOR_MOVEMENTS`, `load_animation`), `crates/kq8-viewer/src/main.rs` (`--at`).
+Code: `crates/kq8-game/src/connor_mover.rs`, `crates/kq8-game/src/connor.rs` (`Mode`, one-shot animations), `crates/kq8-viewer/src/connor_view.rs`, `crates/kq8-viewer/src/load.rs` (`CONNOR_MOVEMENTS`, `load_animation`), `crates/kq8-viewer/src/main.rs` (`--at`).
 
 | What | From | Checked |
 | --- | --- | --- |
@@ -379,7 +379,7 @@ Code: `crates/kq8-game/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`, `
 | Camera logic at 15 updates per second after Connor, drawn blended | `docs/DESIGN.md` M2 "Physics rate" | — |
 | Not done: obstacle check (2d), swing back behind Connor (Q27 c), first person, shake, cutscene cameras | — | — |
 
-## Water: the floor grid and wading (M2 step 2h) — `crates/kq8-data/src/{terrain,objects,envinfo}.rs`, `crates/kq8-game/src/{water,mover,connor,player}.rs`, `crates/kq8-viewer/src/{load,connor_view}.rs`
+## Water: the floor grid and wading (M2 step 2h) — `crates/kq8-data/src/{terrain,objects,envinfo}.rs`, `crates/kq8-game/src/{water,connor_mover,connor,connor_update}.rs`, `crates/kq8-viewer/src/{load,connor_view}.rs`
 
 | What | From | Checked how |
 | --- | --- | --- |
@@ -696,12 +696,12 @@ Replaces "walls, terrain and other objects do not hide a clickable one" (`doors.
 | The line is tested up to 1 unit short of the picked box (an object never blocks itself) | Our method | Unit test (wall at the box's face: seen); viewer: `Condoor` seen |
 | `--aim NAME,N`: a ray from the camera to the middle of NAME's box at update N, through the same test as the mouse | Our test helper (`--click` skips the ray) | `--at 202336,262000,1.5708 --aim smlchst3,20`: blocked by building `Pub` at 5,319 (chest at 5,974); `--at 266011,221900,0 --aim Mushroom.14,20`: seen, picked up; `--at 270813,225311,-1.5708 --aim Condoor,20`: seen, clicked |
 
-## Scripted objects (M3 step 3e-5) — `crates/kq8-game/src/{movement,chest,active}.rs`, `crates/kq8-viewer/src/{load,door_view}.rs`
+## Scripted objects (M3 step 3e-5) — `crates/kq8-game/src/{named_anim,chest,active}.rs` (`named_anim.rs` was `movement.rs`), `crates/kq8-viewer/src/{load,door_view}.rs`
 
 | What | Source | Check |
 | --- | --- | --- |
 | Which: placed `KQAnimObject`s with `script=`, the click bit 0x20, and a still movement at load; one that plays stays with `anim_view` (not clickable yet) | **Our choice** (Q64 d) | Daventry 14 (`smlchst1/2`, `jar1`, 6 baskets, `coffnlid`, `Bricks`, `MillTree`, `wizbook`, `wizquill`); 10 left to `anim_view` (signs, fish, birds, `starball`, `girltree`) |
-| Movements played by a shared player (phase step and cues as doors, play-once stops on its last frame); chests use it too | `doors.md` rules 6, 9; `chests.md` rule 3 | Unit tests (`movement.rs`); chest tests unchanged |
+| Movements played by a shared player (phase step and cues as doors, play-once stops on its last frame); chests use it too | `doors.md` rules 6, 9; `chests.md` rule 3 | Unit tests (`named_anim.rs`); chest tests unchanged |
 | Click: `ConnorAction do do` in reach; item in hand by `acceptsInventory`/`acceptAllItems`; out of reach by `tooFarAwayAction`; turn unless `doNotPointAt` (logged) | `chests.md` rule 11 ("the script runner and the commands above"), as `doors.md` rules 12–16; **our reading**, Q64 a | Unit tests; viewer: `smlchst1` (35 coins at 300 beside it, `Tavcoin.cs`), `basket1` (`give mushroom 5`) |
 | `KQAnimPlayEvent <movement>` plays it | `doors.md` rule 6, applied to these objects (Q64 b) | Unit test; viewer `open` |
 | `Init` at the start (after chests), `EndLoop <movement>` when a play-once movement ends, `KQCueEvent` → `Cue` | `chests.md` rule 6, applied to these objects (**our stand-in**, Q64 c) | Unit tests; viewer: `smlchst1.cs smlchst1 EndLoop open` |

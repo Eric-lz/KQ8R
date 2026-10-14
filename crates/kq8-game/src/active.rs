@@ -57,7 +57,7 @@ use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::item::{Items, Place};
-use crate::movement::MovementPlayer;
+use crate::named_anim::NamedAnimPlayer;
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::trap::{Trap, Visitor};
 
@@ -142,7 +142,7 @@ impl ActiveChest {
 /// item (3e-5).
 #[derive(Debug, Clone)]
 pub struct ActiveObject {
-    pub player: MovementPlayer,
+    pub player: NamedAnimPlayer,
     pub script: Option<String>,
     pub bounds: Option<([f32; 3], [f32; 3])>,
     pub collision_type: u32,
@@ -1984,7 +1984,7 @@ mod tests {
         v.set(var, "true".into());
         let mut a = Active::new(v, vec![], vec![], ["Connor".to_string()], sources);
         a.world.items = crate::item::tests::items();
-        let mut player = crate::movement::tests::still_then_open("basket1");
+        let mut player = crate::named_anim::tests::still_then_open("basket1");
         player.movements[0].name = "stop".into();
         a.add_objects([ActiveObject {
             player,

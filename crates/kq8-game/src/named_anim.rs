@@ -1,8 +1,12 @@
-//! Playing an object's named movements (M3 steps 3e-4, 3e-5): which one
-//! is shown, its phase, starting one by name, one update's step, the
-//! frame shown and where the object stands.
+//! Plays an object's named animations when asked (M3 steps 3e-4, 3e-5):
+//! `open`, `closed`, `stop`... (the game's files call them "movements";
+//! this is not about Connor moving). Which one is shown, its phase,
+//! starting one by name, one update's step, the frame shown and where the
+//! object stands.
 //!
-//! Used by chests and scripted animated objects. Rules as for doors
+//! Used by chests and scripted animated objects. (Animations that simply
+//! loop from the start are `crate::anim`; doors have their own in
+//! `crate::door`.) Rules as for doors
 //! (`docs/behaviour/doors.md` rules 6 and 9, `crate::door`): a movement
 //! started in an update first moves in the next; a play-once movement
 //! stops at its end and stays on its last frame (`chests.md` rule 3);
@@ -24,7 +28,7 @@ pub struct Played {
 }
 
 #[derive(Debug, Clone)]
-pub struct MovementPlayer {
+pub struct NamedAnimPlayer {
     /// The object's name (for messages).
     pub name: String,
     pub movements: Vec<DoorMovement>,
@@ -39,12 +43,12 @@ pub struct MovementPlayer {
     pub base: Placement,
 }
 
-impl MovementPlayer {
+impl NamedAnimPlayer {
     /// Showing movement `current` at its start.
     pub fn new(name: &str, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
         let current = current.min(movements.len().saturating_sub(1));
         let (phase, playing) = movements.get(current).map_or((0.0, false), |m| (m.start, m.speed != 0.0));
-        MovementPlayer { name: name.to_string(), movements, current, phase, playing, started_this_update: false, base }
+        NamedAnimPlayer { name: name.to_string(), movements, current, phase, playing, started_this_update: false, base }
     }
 
     pub fn movement(&self) -> Option<&DoorMovement> {
@@ -108,7 +112,7 @@ pub(crate) mod tests {
 
     /// `stop` still at 0, then `open` 0 -> 1 over 1 s with a cue at 0, 16
     /// frames (made-up numbers in the style of the chests and baskets).
-    pub fn still_then_open(name: &str) -> MovementPlayer {
+    pub fn still_then_open(name: &str) -> NamedAnimPlayer {
         let steps = vec![identity(); 16];
         let mv = |n: &str, speed: f32, cues: Vec<Cue>| DoorMovement {
             name: n.into(),
@@ -119,7 +123,7 @@ pub(crate) mod tests {
             frame_steps: steps.clone(),
             cues,
         };
-        MovementPlayer::new(
+        NamedAnimPlayer::new(
             name,
             vec![mv("closed", 0.0, vec![]), mv("open", 1.0, vec![Cue { phase: 0.0, action: "playsound chstopen".into() }])],
             0,

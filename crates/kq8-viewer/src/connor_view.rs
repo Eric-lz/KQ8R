@@ -1,7 +1,7 @@
 //! Connor in the ground view (M2 steps 2a, 2b, 2c and the falls of 2e,
 //! docs/DESIGN.md).
 //!
-//! - His mover (`kq8_game::mover`, docs/behaviour/connor-physics.md) and his
+//! - His mover (`kq8_game::connor_mover`, docs/behaviour/connor-physics.md) and his
 //!   walking (`kq8_game::connor`, docs/behaviour/connor-movement.md) run at
 //!   a fixed 15 updates per second, gravity on.
 //! - Keys from `MASK/Connor.sae`; the intent comes from the keys held (the
@@ -27,7 +27,7 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_game::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
-use kq8_game::mover::{Mover, MoverWorld, Scene as MoverScene, State};
+use kq8_game::connor_mover::{Mover, MoverWorld, Scene as MoverScene, State};
 
 use crate::load::ConnorAssets;
 use crate::log::Log;
@@ -533,12 +533,12 @@ pub fn connor_step(
     let tick = {
         let ConnorSim { mover, walker, movements, .. } = &mut *sim;
         let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop);
-        kq8_game::player::tick(mover, walker, intent, jump, &loops, &scene)
+        kq8_game::connor_update::tick(mover, walker, intent, jump, &loops, &scene)
     };
     if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
         sim.jump_start_z = Some(z_before);
     }
-    let kq8_game::player::Tick { step, report, wall_stop, notes: jump_notes } = tick;
+    let kq8_game::connor_update::Tick { step, report, wall_stop, notes: jump_notes } = tick;
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
         if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_game::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }

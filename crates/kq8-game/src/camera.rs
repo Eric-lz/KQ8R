@@ -13,7 +13,7 @@
 //! the viewer sends mouse-down as positive (the user's check of the
 //! original).
 
-use crate::mover::GroundLookup;
+use crate::connor_mover::GroundLookup;
 
 /// The camera aims this far above the followed object's base.
 pub const AIM_HEIGHT: f32 = 800.0;  // modified manually to what feels more natural, but could be wrong

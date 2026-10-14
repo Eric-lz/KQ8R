@@ -20,7 +20,7 @@
 
 use crate::collide::Placement;
 use crate::door::DoorMovement;
-use crate::movement::{MovementPlayer, Played};
+use crate::named_anim::{NamedAnimPlayer, Played};
 
 /// Rule 2.
 pub const CHEST_TYPE: u32 = 0x8021;
@@ -76,13 +76,13 @@ pub struct Chest {
     /// The item object made by the first click, until the second.
     pub remembered: Option<String>,
     /// Its movements (`closed`, `open`).
-    pub player: MovementPlayer,
+    pub player: NamedAnimPlayer,
 }
 
 impl Chest {
     /// Closed, showing movement `current` at its start (rule 2).
     pub fn new(name: &str, settings: ChestSettings, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
-        Chest { name: name.to_string(), state: ChestState::Closed, settings, remembered: None, player: MovementPlayer::new(name, movements, current, base) }
+        Chest { name: name.to_string(), state: ChestState::Closed, settings, remembered: None, player: NamedAnimPlayer::new(name, movements, current, base) }
     }
 
     pub fn movement_name(&self) -> &str {
@@ -113,9 +113,9 @@ pub(crate) mod tests {
     use super::*;
 
     /// A chest like `smlchst3`: `closed` still, `open` over 1 s
-    /// (`crate::movement::tests::still_then_open`).
+    /// (`crate::named_anim::tests::still_then_open`).
     pub fn test_chest(item: Option<&str>) -> Chest {
-        let player = crate::movement::tests::still_then_open("smlchst3");
+        let player = crate::named_anim::tests::still_then_open("smlchst3");
         let settings = ChestSettings {
             item: item.map(str::to_string),
             quantity: 3,

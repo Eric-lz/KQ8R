@@ -32,7 +32,7 @@ use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kq8_game::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
-use kq8_game::movement::MovementPlayer;
+use kq8_game::named_anim::NamedAnimPlayer;
 use kq8_game::chest::Chest;
 use kq8_game::trap::{Trap, Visitor};
 use kq8_game::collide::{BoxCollider, Placement};
@@ -241,7 +241,7 @@ pub fn spawn_doors(
         if d.object {
             // A scripted object (3e-5).
             let o = ActiveObject {
-                player: MovementPlayer::new(&p.name, movements, d.current, base),
+                player: NamedAnimPlayer::new(&p.name, movements, d.current, base),
                 script: d.script.clone(),
                 bounds: d.bounds,
                 collision_type: d.collider_type,
@@ -510,7 +510,7 @@ pub fn trap_step(
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
         let from = sim.connor_checked_at.replace(position).unwrap_or(position);
-        let (min, max) = kq8_game::mover::CONNOR_BOX;
+        let (min, max) = kq8_game::connor_mover::CONNOR_BOX;
         let v = Visitor {
             name: &connor.placement.name,
             collision_type: kq8_game::collide::CONNOR_TYPE,

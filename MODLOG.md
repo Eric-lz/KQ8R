@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-13 Renames: `movement.rs` → `named_anim.rs`, `mover.rs` → `connor_mover.rs`, `player.rs` → `connor_update.rs`
+
+**Changed:** `crates/kq8-game/src/movement.rs` renamed to `named_anim.rs`, its type `MovementPlayer` to `NamedAnimPlayer` (uses in `chest.rs`, `active.rs`, `door_view.rs`); the file's first lines now say what it is. Also, at the user's request, Connor's `mover.rs` → `connor_mover.rs` and `player.rs` → `connor_update.rs` (module paths in `camera.rs`, `connor.rs`, `connor_view.rs`, `door_view.rs`). DESIGN and provenance point to the new names; older MODLOG entries keep the old ones.
+**Why:** The user: "movement" reads as Connor's movement; `mover` and `player` didn't say they are Connor's. The file plays an object's named animations (`open`, `closed`, ...; "movements" in the game's files) when asked, for chests and scripted objects.
+**Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; clippy on `kq8-game`.
+**Result:** 181 + 62 tests pass; the viewer builds; clippy clean. No behaviour change. (No side build folder exists to remove: `target/` holds `debug`, `release` and the editor's `flycheck0`.)
+**Still broken / not tested:** Nothing new.
+**Next:** Terrain lighting or a study session for Q60-Q64 (user's choice).
+
 ## 2026-10-13 M3 3f: clicking objects that move at load (the fish), `deleteObject`
 
 **Changed:** `kq8-game/src/active.rs`: clickable objects with a script (`Clickable` gets the script and click keys, `Clickable::plain`) are clicked like doors, get `Init` and `Cue`; `deleteObject` on them and on 3e-5 objects makes them gone for good and sends `Request::Delete`; events to deleted objects are dropped. `script.rs`: `KQSound::play` stub. `kq8-viewer`: `load.rs` passes each clickable's script and keys; `terrain_view.rs` `ObjectName` tag on every placed object's entities (`anim_view.rs` too); `door_view.rs` applies deletions (collider switched off, view box dropped, `hide_deleted` hides the entities, also from H); `main.rs` wiring. DESIGN (plan 3f), provenance, README.

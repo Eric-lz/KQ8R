@@ -511,7 +511,7 @@ Steps (each separately revertable, each stopped for an eye check):
   the passes" (with the recommended rule for walkable downhill), "Gravity",
   "Slopes", "Falling off an edge". The terrain is still the only solid
   thing (buildings and objects come in 2d).
-  - The mover's update (`kq8-game` `mover.rs`):
+  - The mover's update (`kq8-game` `connor_mover.rs`):
     1. Start: as before. It also remembers whether he began the update on
        walkable ground (for the downhill rule).
     2. Up pass: step up + the animation's height change. At its end, if
@@ -876,7 +876,7 @@ Steps (each separately revertable, each stopped for an eye check):
       - `kq8-game` `collide.rs`: `ObjectCollider` (the box collider plus
         its world box for the rough check); Connor's type 4 and mask
         0x281B; the pair test.
-      - `mover.rs`: the scene gets an object list next to the buildings;
+      - `connor_mover.rs`: the scene gets an object list next to the buildings;
         every sweep tests both and keeps the contact nearest the old
         position (step 7). The rest of the hit handling is unchanged, so
         objects stop, glance, carry him (floors) and block like
@@ -944,7 +944,7 @@ Steps (each separately revertable, each stopped for an eye check):
   - **Where the code goes.** The update that ties the walker and the
     mover together (fall events, head-on, and now jumps) moves from the
     viewer (`connor_view.rs` `connor_step`) into `kq8-game` (new
-    `player.rs`), so jumps can be unit-tested with both. The viewer keeps
+    `connor_update.rs`), so jumps can be unit-tested with both. The viewer keeps
     the keys, drawing and logging. A small move of existing code, no
     change in behaviour.
   - **2e-1, the standing jump** (`jump`, `C_jump.kqs`): *Done 2026-10-12
@@ -1932,7 +1932,8 @@ catchers, ground animators).
     click bit whose movement is still at load (Daventry 14); those whose
     movement plays at load (signs, fish) stay with `anim_view` and are not
     clickable yet. The movement-playing part of chests moved to
-    `kq8-game` `movement.rs` (`MovementPlayer`), used by chests and these
+    `kq8-game` `named_anim.rs` (`NamedAnimPlayer`; first called
+    `movement.rs`, renamed for clarity), used by chests and these
     objects; doors keep their own. Our stand-ins for what the notes
     describe only for doors and chests (`Init`, `EndLoop`, the click
     call, `KQAnimPlayEvent`) are asked as Q64.
