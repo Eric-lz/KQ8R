@@ -69,6 +69,9 @@ pub struct Model {
     pub max: [f32; 3],
     /// Which sequence was drawn and why, for the log.
     pub frame_note: String,
+    /// Buildings only: the light maps of all surfaces in one picture (M1
+    /// 5c, `building_light`); `None` for models.
+    pub light_atlas: Option<crate::building_light::LightAtlas>,
 }
 
 pub struct Group {
@@ -77,6 +80,9 @@ pub struct Group {
     pub look: Look,
     /// How the material is lit (object-lighting.md rule 7).
     pub lighting: Lighting,
+    /// Buildings only: per triangle, its corners' coordinates in the
+    /// building's light picture (same corner order); empty for models.
+    pub light_uvs: Vec<[[f32; 2]; 3]>,
 }
 
 /// A model material's lighting kind (object-lighting.md rule 7). Shading
@@ -182,9 +188,9 @@ pub fn load_model(
             m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        groups.push(Group { material: index, triangles, look, lighting });
+        groups.push(Group { material: index, triangles, look, lighting, light_uvs: Vec::new() });
     }
-    Ok(Model { label, groups, min, max, frame_note })
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -2760,10 +2766,33 @@ pub fn load_building(
         tris.len(),
         list.materials.len()
     ));
+    // Its light maps (M1 5c, object-lighting.md rules 12-16).
+    let light = building_light_maps(world, dig, &b, log);
+    let atlas = match &light {
+        Some(l) => crate::building_light::LightAtlas::build(l),
+        None => crate::building_light::LightAtlas::white(b.surfaces.len()),
+    };
+    // Surfaces with no light map and material 255 (Castle D's 96, which
+    // have no material either) are not drawn (Q67 c).
+    let no_map = |i: usize| light.as_ref().and_then(|l| l.surfaces.get(i)).is_some_and(|s| !s.has_map());
+    let mut skipped_surfaces = std::collections::BTreeSet::new();
     let mut by_material: BTreeMap<u8, Vec<kq8_data::building::BuildingTriangle>> = BTreeMap::new();
     for t in tris {
+        if t.material == 255 && no_map(t.surface) {
+            skipped_surfaces.insert(t.surface);
+            continue;
+        }
         by_material.entry(t.material).or_default().push(t);
     }
+    let lit = (0..b.surfaces.len()).filter(|&i| atlas.places.get(i).is_some_and(|p| p.is_some())).count();
+    let without = (0..b.surfaces.len()).filter(|&i| no_map(i) && !skipped_surfaces.contains(&i)).count();
+    log.summary(format!(
+        "  light: {lit} of {} surfaces lit by their map; {without} without a map (full bright); {} not drawn (no map, material 255); light picture {}x{}",
+        b.surfaces.len(),
+        skipped_surfaces.len(),
+        atlas.width,
+        atlas.height
+    ));
     let mut groups = Vec::new();
     let mut not_drawn = 0;
     for (index, tris) in by_material {
@@ -2788,6 +2817,14 @@ pub fn load_building(
             Look::Texture { width, height, .. } => [*width as f32, *height as f32],
             _ => [1.0, 1.0],
         };
+        // Each corner's place in the light picture (rule 13).
+        let light_uvs: Vec<[[f32; 2]; 3]> = tris
+            .iter()
+            .map(|t| match (&light, b.surfaces.get(t.surface)) {
+                (Some(l), Some(s)) => t.texels.map(|texel| atlas.light_uv(l, t.surface, s, texel)),
+                _ => [atlas.white_uv(); 3],
+            })
+            .collect();
         let triangles: Vec<Triangle> = tris
             .iter()
             .map(|t| {
@@ -2815,9 +2852,8 @@ pub fn load_building(
             m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        // Buildings are lit by their `.dil` light maps (M1 5c, not done):
-        // full brightness until then.
-        groups.push(Group { material: index as i32, triangles, look, lighting: Lighting::None });
+        // Lit by the building's light maps, not by the sun (M1 5c).
+        groups.push(Group { material: index as i32, triangles, look, lighting: Lighting::None, light_uvs });
     }
     if not_drawn > 0 {
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));
@@ -2828,5 +2864,62 @@ pub fn load_building(
         min: b.bounds_min,
         max: b.bounds_max,
         frame_note: "building".into(),
+        light_atlas: Some(atlas),
     })
+}
+
+/// A building's light maps: `<shape>.dil` from the world's archives
+/// (object-lighting.md rule 12; no world switches the alternate maps on
+/// at the start). `None`, logged, if it is missing, unreadable, or does not
+/// match the `.dig` (build id, surface count): the building is then drawn
+/// full bright (note: edge cases).
+fn building_light_maps(
+    world: &World,
+    dig: &str,
+    b: &kq8_data::building::Building,
+    log: &mut Log,
+) -> Option<kq8_data::dil::BuildingLight> {
+    use kq8_data::lightmap::Channels;
+    let base = dig.rsplit(['/', '\\']).next().unwrap_or(dig);
+    let name = format!("{}.dil", base.rsplit_once('.').map_or(base, |(stem, _)| stem));
+    let (label, bytes) = match world.load(&name) {
+        None => {
+            log.summary(format!("  light: {name} not in {}; drawn full bright", world.name));
+            return None;
+        }
+        Some(Err(e)) => {
+            log.summary(format!("  light: {name}: {e}; drawn full bright"));
+            return None;
+        }
+        Some(Ok(x)) => x,
+    };
+    let l = match kq8_data::dil::BuildingLight::parse(&bytes) {
+        Ok(l) => l,
+        Err(e) => {
+            log.summary(format!("  light: {label}: {e}; drawn full bright"));
+            return None;
+        }
+    };
+    if l.build_id != b.build_id || l.surfaces.len() != b.surfaces.len() {
+        log.summary(format!(
+            "  light: {label} doesn't match the .dig (build id {} vs {}, surfaces {} vs {}); drawn full bright",
+            l.build_id,
+            b.build_id,
+            l.surfaces.len(),
+            b.surfaces.len()
+        ));
+        return None;
+    }
+    let mut red = [0usize; 16];
+    l.values().for_each(|v| red[Channels::of(v).red as usize] += 1);
+    let mut order: Vec<usize> = (0..16).collect();
+    order.sort_by_key(|&v| std::cmp::Reverse(red[v]));
+    let top: Vec<String> = order.iter().take(3).map(|&v| format!("{v} x{}", red[v])).collect();
+    let misses = (0..l.surfaces.len()).filter(|&i| !l.fits(i, &b.surfaces[i])).count();
+    log.summary(format!(
+        "  light: {label}, {} texels, red most common {}; surfaces failing the size rule: {misses}",
+        red.iter().sum::<usize>(),
+        top.join(", ")
+    ));
+    Some(l)
 }

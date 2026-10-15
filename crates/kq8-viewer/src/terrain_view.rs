@@ -237,6 +237,7 @@ pub fn setup_objects(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut object_materials: ResMut<Assets<ObjectMaterial>>,
+    mut building_materials: ResMut<Assets<crate::building_light::BuildingMaterial>>,
     mut images: ResMut<Assets<Image>>,
     held: Res<crate::door_view::HeldItem>,
     light: Res<ObjectLight>,
@@ -291,6 +292,8 @@ pub fn setup_objects(
     }
     // One (mesh, material) list per model, shared by all its copies.
     let mut built: Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>> = Vec::new();
+    // Buildings (M1 5c): their walls use the building material instead.
+    let mut built_walls: Vec<Vec<(Handle<Mesh>, Handle<crate::building_light::BuildingMaterial>)>> = Vec::new();
     let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
     // Each model's smooth corner normals, for the light log (M1 5b).
     let mut smooth: Vec<Vec<Vec3>> = Vec::new();
@@ -298,13 +301,28 @@ pub fn setup_objects(
         smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.lighting)).collect());
         let mut parts = Vec::new();
         first_corner.push(model.groups.first().and_then(|g| g.triangles.first()).map(|t| t.positions[0]));
-        for group in model.groups {
-            // Lit by the world's lights (M1 5b); buildings full bright until 5c.
-            let mesh = model_mesh(&group.triangles, group.lighting, [0.0; 3]);
-            let material = object_material(group.look, group.lighting, &light, &mut images);
-            parts.push((meshes.add(mesh), object_materials.add(material)));
+        let mut walls = Vec::new();
+        match &model.light_atlas {
+            // A building: walls × its light maps (M1 5c).
+            Some(atlas) => {
+                let light_image = images.add(atlas.image());
+                for group in model.groups {
+                    let mesh = crate::building_mesh(&group);
+                    let material = crate::building_light::building_material(group.look, light_image.clone(), light.mode, &mut images);
+                    walls.push((meshes.add(mesh), building_materials.add(material)));
+                }
+            }
+            // A model: lit by the world's lights (M1 5b).
+            None => {
+                for group in model.groups {
+                    let mesh = model_mesh(&group.triangles, group.lighting, [0.0; 3]);
+                    let material = object_material(group.look, group.lighting, &light, &mut images);
+                    parts.push((meshes.add(mesh), object_materials.add(material)));
+                }
+            }
         }
         built.push(parts);
+        built_walls.push(walls);
     }
     crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials);
     // Emitters (M3 step 3b-1): their particles use the object models.
@@ -351,6 +369,13 @@ pub fn setup_objects(
             let material = crate::object_light::see_through(&mut object_materials, material, opacity);
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             // Unused objects, and hidden ones (objects.md Q18): only with H.
+            if *unused || !p.drawn() {
+                e.insert((Visibility::Hidden, ShownWithH));
+            }
+        }
+        for (mesh, material) in &built_walls[*i] {
+            let material = crate::building_light::see_through(&mut building_materials, material, opacity);
+            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
             }

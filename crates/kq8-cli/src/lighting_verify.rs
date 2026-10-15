@@ -272,7 +272,7 @@ fn building_lights(world: &str, vols: &[(String, VolArchive)], log: &mut Log, t:
             l.counts,
             l.surface_record_size,
             l.texel_bytes().len(),
-            l.end_value,
+            l.end_list_len,
             l.trailing_bytes
         );
         *t.record_sizes.entry(l.surface_record_size).or_default() += 1;
@@ -284,7 +284,7 @@ fn building_lights(world: &str, vols: &[(String, VolArchive)], log: &mut Log, t:
         if l.surface_record_size != 48 {
             log.summary(format!("  {label}: surface records are {} bytes, not 48 (Q67)", l.surface_record_size));
         }
-        if l.version != 4 || l.scale_shift != 4 || l.unlisted != 0 || l.counts[..3] != [0, 0, 0] || l.end_value != 0 {
+        if l.version != 4 || l.scale_shift != 4 || l.unlisted != 0 || l.counts[..3] != [0, 0, 0] || l.end_list_len != 0 {
             log.summary(format!(
                 "  note: {label} differs from the 'every file' values (version 4, shift 4, unlisted u32 0, tables A-C empty, end 0)"
             ));

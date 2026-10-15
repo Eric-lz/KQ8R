@@ -187,6 +187,24 @@ the note's).
 | Buildings full bright until M1 5c | Plan (DESIGN M1 step 5) | — |
 | Point lights, haze, brightness setting not drawn | Not done yet (rules 17, 19–24) | — |
 
+## Buildings lit (M1 step 5c) — `crates/kq8-viewer/src/{building_light.rs,building_light.wesl,load,main,terrain_view}.rs`, `crates/kq8-data/src/dil.rs`
+
+Behaviour note = `docs/behaviour/object-lighting.md` (rule numbers are
+the note's; layout corrected by Q67).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| A building uses `<shape>.dil` | Note rule 12 (alternates are switched only by scripts) | Viewer log: every building in 10 worlds finds its `.dil`, build id and surface count match |
+| Wall colour = texture × light map colour (channel ÷ 15), no doubling, no sun or ambient | Note rules 14, 16 (16 is the note's recommendation, **stand-in**) | Shader (`building_light.wesl`) |
+| Light texel (i, j) at texture position (16 i − offset_x, 16 j − offset_y), from the surface's own texture origin | Note rule 13, `buildings.md` step 3 | Unit test `corner_coordinates` (a texel's position lands on its centre; the far edge stays in the map); every surface passes the size rule (log: 0 misses) |
+| Blend between light texels: bilinear | Note rule 13 (assumption, **stand-in**) | The card's linear filter on the light picture |
+| All maps of a building packed into one picture, white texel at 0,0 | **Our choice** (way 2, user 2026-10-15) | Unit test `packing_keeps_maps_apart` |
+| No `.dil` or not matching the `.dig`: full bright | Note "Edge cases" | No such building in the 10 worlds tried |
+| Surfaces with map offset 0xFFFFFFFF and material 255 not drawn | Q67 c (inferred from data by A) | Castle D: 96 of 5,318 surfaces not drawn (log) |
+| `0x1000` building materials use the light map | Note open question 7 (**stand-in**) | — |
+| Closing u32 of a `.dil` = a counted byte list | Q67 | `kq8 lighting-verify` PASS |
+| Multiply on the colour as shown (sRGB curve on the light) | **Stand-in**, as the ground and the objects | — |
+
 ## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
 
 Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).

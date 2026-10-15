@@ -33,7 +33,8 @@ items. The goal is the whole game; see the roadmap in
   log; no inventory screen yet).
 - **Ground lighting**: hill shadows from the game's light maps, as dark
   as in the original.
-- **Object lighting**: objects and Connor lit by the world's light and sun.
+- **Object and building lighting**: objects and Connor lit by the world's
+  light and sun, buildings by their own light maps.
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
   torches.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
@@ -47,7 +48,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - No story, talking, inventory screen, fighting or saving.
 - No sound or music.
 - People and monsters are not shown.
-- Buildings are not lit yet; no distance haze.
+- No distance haze.
 - Clicking works only on doors, chests, items and a few scripted objects;
   Connor doesn't speak (his remarks are only logged).
 - Objects only play their starting animation.

@@ -657,11 +657,6 @@ material has `0x1000` or `0x2000`.
 - Buildings keep the old full-bright material until 5c. The ground
   keeps its vertex colours (M1 4c).
 
-**Done 2026-10-15** (MODLOG): lit in all 8 worlds tried, no shader
-errors. Daventry: Connor and the three objects nearest his start stay
-within 0.30–0.42 (log); the chest's corner normals all point outward.
-Checked by eye by the user (2026-10-15): much closer to the original. `.gitignore` now also lets `*.wesl` shader
-sources under `crates/*/src/` through.
 - F7 also switches the object light: ×1 (as the note), ×2 (for
   comparison), off (full bright, as before).
 - Log (`viewer.log`): light files used, ambient and suns; how many
@@ -670,6 +665,13 @@ sources under `crates/*/src/` through.
   (Daventry: within 0.30–0.42).
 - Check: by eye, objects about as dark as the grass, the sunny side a
   little lighter (the user already confirmed this in the original).
+
+**Done 2026-10-15** (MODLOG): lit in all 8 worlds tried, no shader
+errors. Daventry: Connor and the three objects nearest his start stay
+within 0.30–0.42 (log); the chest's corner normals all point outward.
+Checked by eye by the user (2026-10-15): much closer to the original.
+`.gitignore` now also lets `*.wesl` shader
+sources under `crates/*/src/` through.
 
 **5c. Light the buildings** (`kq8-viewer`)
 
@@ -691,6 +693,51 @@ sources under `crates/*/src/` through.
   the size check; Connor's hut red histogram as in 5a.
 - Check: by eye, inside Connor's hut darker than outside and darker in
   the corners, but reasonably lit (the user's check in the original).
+
+**5c plan, way (2), chosen by the user 2026-10-15** (Q67 answered the
+same day):
+
+- New `kq8-viewer/src/building_light.rs` and shader
+  `building_light.wesl`: `BuildingMaterial` = the wall texture × a light
+  image, no sun or ambient (rule 16, stand-in), x1 / x2 / off with F7
+  like the rest.
+- Per building model, one **light image** ("atlas"): every surface's
+  light map packed into it side by side (rows of maps, tallest first).
+  Texel 0,0 is kept white (all channels 15) for surfaces with no map.
+  Each texel holds red, green, blue = channel × 17 (0–255, plain, not
+  sRGB), so the card's bilinear blend gives channel ÷ 15 blended
+  (rules 13, 14). Edges clamped; no mipmaps.
+- Each wall corner gets a second set of picture coordinates into the
+  light image. With p = the corner's texture position measured from
+  the surface's own texture origin (texel position minus the surface's
+  texture offset, `buildings.md` step 3), the light map coordinate is
+  i = (p + offset_x) ÷ 16 (rule 13: texel i sits at 16 i − offset_x),
+  and the picture coordinate is (map's x in the image + i + 0.5) ÷ image
+  width, same for y. The size rule (checked in 5a for every surface)
+  keeps i between 0 and width − 1, so the blend never reaches a
+  neighbouring map.
+- Which `.dil`: `<shape>.dil` (rule 12; no world switches the alternate
+  maps on at the start). Missing, unreadable, or build id / surface count
+  not matching the `.dig`: the building is drawn full bright (one white
+  texel) and logged (note: edge cases). A surface whose map offset is
+  `0xFFFFFFFF` and whose material is 255 is **not drawn** (Q67 c); any
+  other surface without a map gets the white texel (stand-in; none in
+  the data).
+- `0x1000` building materials use the light map like the others (open
+  question 7, stand-in).
+- `.dil` reader: the closing u32 is a counted byte list (Q67); read the
+  count and skip that many bytes.
+- Log (`viewer.log`): per building, the `.dil` used, surfaces lit / with
+  no map / not drawn, the light image size; Connor's hut's red histogram
+  (must match 5a: 0 ×16,017, 3 ×7,775, 4 ×7,344).
+- Unit tests: the packing (maps don't overlap, all inside the image),
+  the corner coordinate rule (texel centres land on map texels; the far
+  edge of a surface stays inside its map).
+
+**Done 2026-10-15** (MODLOG): every building in the 10 worlds tried is
+lit by its own map (no fallbacks, no size-rule misses); Connor's hut
+matches 5a; Castle D's 96 material-255 surfaces are left out. Checked
+by eye by the user (2026-10-15).
 
 ### M2 — Walk Connor around Daventry
 

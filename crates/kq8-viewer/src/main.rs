@@ -26,7 +26,8 @@
 //! leaves and drips, logged to effects.log; flowing water squares, logged
 //! to ground_anim.log. Ground light (M1 step 4): F7 cycles the light
 //! map x1 / x2 / off (`--light` sets the start; default x1). Models are
-//! lit by the world's ambient light and sun (M1 step 5b, `object_light`);
+//! lit by the world's ambient light and sun (M1 step 5b, `object_light`),
+//! buildings by their `.dil` light maps (M1 step 5c, `building_light`);
 //! F7 switches them too. Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
@@ -34,6 +35,7 @@
 //! (docs/behaviour/models-and-textures.md, Q2).
 
 mod anim_view;
+mod building_light;
 mod connor_view;
 mod door_view;
 mod effects_view;
@@ -291,6 +293,7 @@ fn main() -> ExitCode {
     .insert_resource(shared.clone())
     .insert_resource(object_light::ObjectLight::new(lights, args.light));
     object_light::add(&mut app);
+    building_light::add(&mut app);
     match scene {
         Scene::Model(model) => {
             let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
@@ -328,7 +331,10 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).
-                .add_systems(Update, object_light::follow_ground_mode.after(light_view::toggle_light));
+                .add_systems(
+                    Update,
+                    (object_light::follow_ground_mode, building_light::follow_mode).chain().after(light_view::toggle_light),
+                );
         }
     }
     app.run();
@@ -437,6 +443,14 @@ fn model_mesh(triangles: &[Triangle], lighting: Lighting, centre: [f32; 3]) -> M
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+}
+
+/// A building's mesh for `building_light::BuildingMaterial` (M1 step 5c):
+/// `model_mesh` plus each corner's place in the building's light picture,
+/// in the same corner order.
+fn building_mesh(group: &load::Group) -> Mesh {
+    let light_uvs: Vec<[f32; 2]> = group.light_uvs.iter().flat_map(|uv| [0, 2, 1].map(|k| uv[k])).collect();
+    model_mesh(&group.triangles, Lighting::None, [0.0; 3]).with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, light_uvs)
 }
 
 /// A triangle list (corners already in Bevy's counter-clockwise order).

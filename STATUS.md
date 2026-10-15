@@ -27,14 +27,13 @@ entries at the top). The short public summary is `README.md`; the detailed
   The user checked in the original: objects as dark as the grass with the
   sunny side slightly lighter; haze fades objects with distance from the
   camera; Connor's hut inside darker but reasonably lit.
-- **Object lighting, steps 5a and 5b done** (B, 2026-10-15): light
-  files and building `.dil` light maps are read and checked (`kq8
-  lighting-verify`, PASS); models (objects, Connor, items, leaves) are
-  lit on the graphics card by a custom material (`object_light.rs`,
-  `object_light.wesl`), Daventry 30–42% in the logs, checked by eye by
-  the user (close to the original). The `.dil` layout differs from the note in three measured
-  ways (Q67). **Next: 5c, the buildings** (plan in `docs/DESIGN.md` "M1
-  step 5"). Haze only if the user agrees. (Q67 answered by A, 2026-10-15.)
+- **Object and building lighting done** (B, 2026-10-15, M1 step 5):
+  light files and `.dil` light maps read and checked (`kq8
+  lighting-verify`, PASS; layout corrected by Q67); models (objects,
+  Connor, items, leaves) lit on the graphics card (`object_light.rs`,
+  `.wesl`), checked by eye by the user; buildings lit by their light
+  maps (`building_light.rs`, `.wesl`), checked by eye by the user.
+  **Next: haze** (user's request, with an on/off key).
 - **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
   `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
   `doors.md`): buildings take clicks by default (so walls block), the
@@ -182,12 +181,12 @@ milestone: **M3, Daventry comes alive**.
     clicking a swimming fish makes it disappear (sound and health only
     logged); other scripted things (signs, stone villagers) run their
     scripts, their remarks logged.
-- Tests: 263 unit tests pass (80 + 181 + 2), 2026-10-15.
+- Tests: 265 unit tests pass (80 + 181 + 4), 2026-10-15.
 
 ## What doesn't work yet / next
 
-- **Next step:** building lighting (`object-lighting.md`, M1 5c);
-  buildings are still drawn at full brightness. Objects are lit (5b).
+- **Next step:** haze (distance fog), with an on/off key; then A's
+  clicking answers (Q60–Q64).
 - Clicking: only doors, chests, items and scripted objects react. No
   sound, no remarks (Connor says nothing; remarks are logged), Connor
   doesn't turn to face what he clicks. No inventory screen (M4).
@@ -210,7 +209,7 @@ milestone: **M3, Daventry comes alive**.
   original).
 - Loops (`walk`, `run`) still spread their step evenly over the loop
   (Q24); one-shot animations use their frame steps.
-- Not drawn yet: lighting of buildings (`.dil`), haze/distance
+- Not drawn yet: haze/distance
   fade, moving lights (Dead City's point lights; Daventry has none), people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).

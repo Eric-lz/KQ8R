@@ -11,7 +11,8 @@
 //! the note doesn't list** (0 in every file; measured, QUESTIONS.md Q67),
 //! 5 counts (u32), then tables A-E with records of 16, 8, 24, 48 and 1
 //! bytes, then one u32 (0). Tables A-C are empty in every file and are
-//! skipped. Table D has one record per `.dig` surface, same order. Table E
+//! skipped (the closing u32 is the count of a byte list, 0 everywhere;
+//! Q67). Table D has one record per `.dig` surface, same order. Table E
 //! holds the texels: 16-bit values, 4 bits each brightness, red, green,
 //! blue (bits 12-15, 8-11, 4-7, 0-3), as the ground maps.
 //!
@@ -80,8 +81,8 @@ pub struct BuildingLight {
     pub surfaces: Vec<SurfaceLight>,
     /// Table E, raw bytes.
     texels: Vec<u8>,
-    /// The u32 after table E (0 in the data).
-    pub end_value: u32,
+    /// The closing counted byte list: its count (0 in every file; Q67).
+    pub end_list_len: u32,
     /// Bytes after the PERS block (3 files have some).
     pub trailing_bytes: usize,
 }
@@ -108,7 +109,8 @@ impl BuildingLight {
             r.bytes(counts[k] * RECORD_SIZES[k])?;
         }
         let data_end = block.data_offset + block.data.len();
-        // Table D's record size from what is left: D x size + E + 4 (Q67).
+        // Table D's record size from what is left: D x size + E + 4, the
+        // closing list being empty (Q67; it is in every file).
         let left = data_end.saturating_sub(r.pos + counts[4] + 4);
         let surface_record_size = if counts[3] == 0 {
             RECORD_SIZES[3]
@@ -129,7 +131,9 @@ impl BuildingLight {
             })
             .collect::<Result<Vec<_>, ReadError>>()?;
         let texels = r.bytes(counts[4])?.to_vec();
-        let end_value = r.u32()?;
+        // A counted byte list (Q67, object-lighting.md): count, then bytes.
+        let end_list_len = r.u32()?;
+        r.bytes(end_list_len as usize)?;
         if r.pos != data_end {
             return Err(r.error(format!("light data ends at 0x{:X} but its block ends at 0x{data_end:X}", r.pos)));
         }
@@ -157,7 +161,7 @@ impl BuildingLight {
             surface_record_size,
             surfaces,
             texels,
-            end_value,
+            end_list_len,
             trailing_bytes: bytes.len() - block.end,
         })
     }
@@ -259,7 +263,7 @@ mod tests {
         assert_eq!(l.texel(0, 3, 0), None);
         assert_eq!(l.texel(2, 0, 0), None);
         assert!(l.surfaces[0].has_map());
-        assert_eq!(l.end_value, 0);
+        assert_eq!(l.end_list_len, 0);
     }
 
     #[test]

@@ -28,7 +28,9 @@ texture's brightness, the sunny side a little lighter. Checked in the
 logs (Connor and the three objects nearest his start stay within
 0.30-0.42, as the behaviour note says) and by eye against the original
 (user, 2026-10-15: much closer to the original).
-Buildings are still full bright.
+Buildings are lit by their own pre-made light maps (`.dil`, 2026-10-15):
+every building in 10 worlds, Connor's hut's numbers match the behaviour
+note; checked by eye by the user (2026-10-15).
 
 ## Connor
 
@@ -215,8 +217,8 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, lighting of buildings (they are
-  full bright), moving lights (Dead City), distance haze, fire and
+- **Not drawn:** people and monsters, moving lights (Dead City),
+  distance haze, fire and
   ice arrow sparks and the dragon fire (they come with fighting), the
   teleport pad's look.
 - **No sound or music** at all.
