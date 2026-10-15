@@ -54,12 +54,25 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
    stock "that doesn't work" remark (`doors.md` rule 13).
 7. In reach, the item is **taken out of the world** and **added to
    Connor's inventory** (the whole stack). If that worked:
-   - the item type's **pickup sound** plays, once per item object (a
-     positional sound, heard from 5,000 at full volume fading out to
-     25,000);
+   - the item type's **pickup sound** (`pickupSnd`) plays, **not placed
+     in the world** (a plain sound, same loudness wherever Connor is).
+     This is done by Connor's inventory itself, so it plays for **every**
+     item that goes into it: a direct pickup, a chest's second click, and
+     `give` / `KQMonster::inventory Connor` from scripts (`none` = no
+     sound). (**Corrected 2026-10-15:** the first version said the pickup
+     sound was positional and played once per item; that was the land
+     sound, next point.)
+   - only for an item that was **thrown** (rule 12; it still carries its
+     throw) and whose **land sound** (`landSnd`) has not played yet: the
+     land sound plays at the item's place (full to 5,000, silent at
+     25,000), once. (Traced; why the game does this is not clear, perhaps
+     so a throw caught early still makes its landing sound.)
    - the item disappears from the world;
    - if the item object has a script, it then runs as a normal click
      (`$2` = `ConnorAction`, `$3` = `$4` = `do`).
+   - Connor's inventory also does type-specific things on any add
+     (weapons and armour get readied, one quest item changes Connor's
+     animation set); that is M4 and was not studied.
 8. Picking up takes no time and plays no Connor animation in this step
    (not traced whether Connor bends down; none was found in this code).
 
@@ -75,13 +88,46 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
      character's inventory. **`give`** is a built-in shortcut for
      `KQMonster::inventory Connor` (`give mushroom 5`).
    - Afterwards the variable **`NewInvItem`** holds the new item
-     object's name. Unknown type: error message, `$Console::Return` 1;
-     success: 0.
+     object's name (see "The name of a new item object" below). Unknown type: error message,
+     `$Console::Return` 1; success: 0.
+   - The type must be given **by name**; an id number is not accepted
+     here (traced). Compare rule 10.
+   - **The name of a new item object (Q60, traced).** Items made by the
+     game (this command, `give`, a chest's first click, `tossItems`) get
+     no name of their own. The first time anything needs the name, the
+     object is named **`NoName<n>`**, with `<n>` taken from **one counter
+     for the whole game**, which then goes up by 1. The same counter names
+     every other nameless object too, not only items, so `<n>` can't be
+     worked out from the number of items alone.
+     - The counter starts at **0** when the game program starts and is
+       **not** reset when Connor goes to another world.
+     - It is **kept in saved games** (in the game state, as `nextNoName`)
+       and put back when a saved world is restored (`mask.cs` loads
+       `gameState.kq` for that; its comment says "reset the NoName
+       counter").
+     - **Clashes:** no data file names an object `NoName…` (checked all
+       worlds), so only a script could cause one. What the game does with
+       two objects of one name was not traced.
+     - **The name stays with the object** when it is carried, moved
+       between inventories, thrown by `tossItems` (the same object flies),
+       or put down by `dropItem` (the same object is moved). Exception,
+       traced but not tied to a type: for one item category `dropItem`
+       makes a **new** item object instead (new name).
+     - For us: `NoName<n>` with one game-wide counter starting at 0, saved
+       with the game (M6). B's stand-in works until saving exists; switch
+       when convenient.
+
 10. **`KQMonster::checkInventory <who> <type> [variable]`**: is there an
     item of that type in `<who>`'s inventory (or in the world, for
     `world`)? `$Console::Return` = **1 if found, 0 if not** (and 0 on any
     error). With a fourth word, that variable is set to the found item
     object's name. Note: here 1 means yes, unlike `test`.
+    **The type may also be an id number** (Q62 b, traced): if the word
+    is not a type name, it is read as a number and matched against the
+    id numbers in `Invinfo.itl` (Gnome `ARMORGNM.CS` uses `2050`). Other
+    places that look a type up by id exist in the exe; only this command
+    was checked. `KQMonster::inventory`, `give` and accept lists take
+    names only.
 11. **`KQMonster::dropItem <who> <type> x y z rx ry rz`**: takes an item
     of that type out of `<who>`'s inventory and puts it in the world
     there. Errors if `<who>` doesn't carry one (usage text; not traced
@@ -111,7 +157,8 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
 | --- | --- | --- |
 | item collision type / mask | 0x220 / 0x809 | traced |
 | reach | 4,700 (as doors) | traced |
-| pickup sound range | full to 5,000, silent at 25,000 | traced (values) |
+| pickup sound | plain (not placed in the world), on every add to Connor's inventory | traced |
+| land sound when a thrown item is picked up | full to 5,000, silent at 25,000 | traced (values) |
 | toss direction | random 0–360° | traced |
 | toss elevation | 75°–85° | traced |
 | toss speed | 5,000–6,500 units/s | traced |
@@ -129,6 +176,15 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
 - `give` with a type that doesn't exist: error line, nothing given.
 - `tossItems` on an object that doesn't exist: error line, nothing made.
 - A type's `pickupSnd` of `none` plays nothing.
+- **An item type whose shape has no box in `GAME/patch/BOUNDS.KQ`
+  can't be clicked while it lies in the world** (Q62 c, traced): with no
+  box it gets no collision shape at all (`clicking.md` rule 8; its
+  `NoName…` name isn't in the table either). The type's `Radius` is not
+  used for this. Three types are affected (B's check):
+  `INVITEM_TruthKey` (`truthkey.kqs`), `INVITEM_MarbleTablet2`
+  (`tablet2.kqs`), `INVITEM_Orcbow` (`orcxbow.kqs`). That matters only if
+  one of them is ever put down in the world; a chest's item goes to
+  Connor on the chest's own second click, without clicking the item.
 - Many Daventry scripts (`basket*.cs`) give items directly (`give
   mushroom 5`) without anything appearing in the world.
 

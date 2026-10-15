@@ -38,8 +38,9 @@ item; after that the chest is empty and Connor says so.
    rules 10, 11, 14): nearest clickable object under the cursor; in reach
    when within 2 × `attackDist` (4,700) of the chest's box; too far →
    Connor's stock remark, nothing happens.
-5. **With an item in hand** the chest is asked whether it accepts it;
-   chests have no `acceptsInventory`, so the answer is no: Connor's stock
+5. **With an item in hand** the chest is asked whether it accepts it
+   (`clicking.md` rules 13–18); chests have no `acceptsInventory`, so the
+   answer is no: Connor's stock
    "that doesn't work" remark and nothing else (`doors.md` rule 13).
 6. **The chest's script is not run on a click.** A chest replaces the
    normal "`ConnorAction`" script call with its own three steps below.
@@ -60,6 +61,13 @@ item; after that the chest is empty and Connor says so.
    added to him). The name is forgotten. Then, if the chest has a `Take`
    remark (its `Seq` is not 0), Connor turns to face the chest (unless
    the chest has `doNotPointAt`) and says it. The chest is now "empty".
+   **Answers to Q61 (traced 2026-10-15):** (a) the item type's **pickup
+   sound plays**: it is played by Connor's inventory on every add
+   (`items.md` rule 7), not by the click, so taking from a chest sounds
+   the same as a direct pickup. (b) The item object's own script is
+   **not** run. (c) It is **the same add** into Connor's inventory as a
+   direct pickup (same stacking, M4). The item's name is `NoName<n>`
+   (`items.md` rule 9), given on the first click.
 9. **Every later click (empty):** if it has an `Empty` remark, Connor
    turns to face the chest (same exception) and says it. Nothing else.
 10. On the first click Connor does **not** turn to face the chest (the

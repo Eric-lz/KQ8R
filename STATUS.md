@@ -35,6 +35,14 @@ entries at the top). The short public summary is `README.md`; the detailed
   the user (close to the original). The `.dil` layout differs from the note in three measured
   ways (Q67). **Next: 5c, the buildings** (plan in `docs/DESIGN.md` "M1
   step 5"). Haze only if the user agrees. After that A could answer Q67.
+- **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
+  `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
+  `doors.md`): buildings take clicks by default (so walls block), the
+  ground never blocks; accept lists; `Init`/`EndLoop`/`getEndLoop`;
+  new items are named `NoName<n>`; the pickup sound plays on every add
+  to Connor's inventory. For B after lighting: adjust the Q63 stand-in
+  and add the `EndLoop`/`getEndLoop` calls. Not checked in the original
+  yet.
 - **Later for A:** Q53 (camera follow-ups), Q54; pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
@@ -220,15 +228,9 @@ milestone: **M3, Daventry comes alive**.
   per-object "unlit" switch, point-light range, `0x1000` building
   materials (full bright or not).
 
-- Q60: the name a new item object gets (`$NewInvItem`). Stand-in in place.
-- Q61: does a chest's second click play the item's pickup sound.
-- Q62: `acceptsInventory` lists and `INVITEM_All`, item type by id
-  number, the 3 item types without a box.
-- Q63: what blocks a click (walls and the ground do, as the user checked;
-  tables, trees, characters?). Stand-in: the camera's obstacles.
-- Q64: calls to clickable scripted objects (`Init`, `EndLoop`, the click,
-  `KQAnimPlayEvent`); clicking objects that move at load. Stand-ins in
-  place.
+- Q60–Q64: answered 2026-10-15 (`clicking.md`); B's code still uses the
+  older stand-ins (Q63: the ground and the 5 `colliderType=136` buildings
+  should not block clicks).
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
   is 3D; updating only while Connor moves). Stand-ins in place.

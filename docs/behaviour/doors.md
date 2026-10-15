@@ -71,7 +71,10 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
    movement, script with `$2` = `Close`. (These two are the only script
    calls with just two arguments.) "Finishes" is the usual end of a
    play-once animation (`objects.md`, `connor-movement.md`): forward to the
-   end, or backward to phase 0.
+   end, or backward to phase 0. (Added 2026-10-15: after this call the
+   door's script **also** gets `EndLoop open` / `EndLoop close`, a moment
+   later through the event queue, like every scripted animated object;
+   `clicking.md` rule 21. No Daventry door script reacts to it.)
 6. Rule 5 looks only at the **name of the movement that finished**
    (`open` or `close`, capitals ignored), not at the state. So a script
    that starts `open` directly with `KQAnimPlayEvent open`
@@ -120,9 +123,8 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
     line (which message: not traced) and the script is not run. If yes,
     the script runs with `$3` = **the item object's name** and `$4` =
     **the item's type name** (e.g. `INVITEM_KeepKey`): `KeepDoor.cs`
-    tests `$4` and deletes `$3`. How "accepts" is decided was not traced
-    in detail; the doors use `acceptsInventory=<item type>` (likely also
-    `acceptAllItems=1`).
+    tests `$4` and deletes `$3`. How "accepts" is decided:
+    `clicking.md` rules 13–18 (traced 2026-10-15).
 14. **Out of reach:** if the door's `tooFarAwayAction` is 0 (the default;
     no Daventry door sets it), Connor says a stock "too far" line (which
     message: not traced) and nothing is sent to the door. If it is
@@ -251,7 +253,8 @@ about 500 characters.
 | `sendEvent … KQDoorEvent <n>` | rules 2–4 | traced |
 | `sendEvent … KQAnimPlayEvent <movement>` | starts that movement by name; the door's state is not changed (rule 6) | traced |
 | `sendEvent … KQCueEvent <n1> [<n2>]` | the target's script gets `Cue n1 n2` (rule 23) | traced |
-| `sendEvent … KQStatsChangeRequestEvent 0 0 0 0 <n>` | rewards Connor (stats; combat/stats study) | not studied |
+| `sendEvent … KQStatsChangeRequestEvent 0 0 0 0 <n>` | rewards Connor; the five numbers are in `stats=` order (`clicking.md` rule 24) | partly traced |
+| `deleteObject <name>` | removes the object: `clicking.md` rules 22–23 | traced |
 | `KQObject::collisionType <name> <±bits>` | positive: adds the bits to the object's collision type; negative: removes them; 0 refused. `-32` removes "clickable" (the door can't be clicked any more); `-288` also removes 0x100 ("push", per `urn1.cs`'s comment) | traced |
 | `KQMonster::speak …`, `doPopup`, `addMapIcon`, `earnTeleport`, `teleportersEarned`, `KQMonster::checkInventory`, `deleteObject`, `handsOff`, `KQMonster::setState`, `pauseAnim`, `preloadShape`, `KQObject::setHidden`, `loadKQ` | dialogue, GUI, inventory, cutscene control | not studied here (M4 and later); stand-ins: log them, `checkInventory` → `$Console::Return` 0 |
 
@@ -337,8 +340,8 @@ about 500 characters.
    update.) Still open: which steps a backward `close` applies, and what
    its start at 0.93 does to the turn. Recommendation unchanged: work the
    turn out from the phase ("Do not reproduce").
-2. How "accepts this item" is decided (rule 13), and which stock lines
-   Connor says for "too far" and "doesn't work" (M4).
+2. Which stock lines Connor says for "too far" and "doesn't work" (M4).
+   (How "accepts this item" is decided: answered in `clicking.md`.)
 3. Connor's states in which he turns to face the clicked door (rule 16).
 4. (See Q45 d below: likely the next; not proven.)
 
@@ -352,10 +355,12 @@ about 500 characters.
   right.
 - **(b) Picking:** the click line is tested **only against objects whose
   collision type has bit 0x20**; the nearest one along the line wins.
-  Walls, buildings (type 0x28, never clickable), the ground and
-  non-clickable objects do **not** hide anything; deleted objects are
-  skipped. B's stand-in is right. (The camera's view test is the same
-  line test with other bits, `camera.md` "Obstacles".)
+  **Corrected 2026-10-15 (Q63):** I wrote here that buildings (type 0x28)
+  are never clickable and don't hide anything. That was wrong: 0x28
+  **contains** the clickable bit 0x20, so buildings are click targets
+  and a wall, floor or ceiling in front takes the click (and swallows
+  it silently). The ground and objects without bit 0x20 really don't
+  hide anything. Full rules: `clicking.md` rules 1–12.
 - **(c) Reach box:** Connor's feet are turned into the object's
   **current** axes, so for an open door it is the box as it stands now,
   turned. B's stand-in is right.

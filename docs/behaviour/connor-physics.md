@@ -101,8 +101,11 @@ banking, already in `connor-movement.md`). Values it uses:
     centre on that same axis: the same box, with the pull-back at an
     angle. So **the table's lower-case `st_smom.kqs` box is used for
     `St_smom.KQS`**: implement the lookup as if shape names were
-    lower-cased (B's stand-in is right). Where the game does this was
-    not found (see below).
+    lower-cased (B's stand-in is right). **Found 2026-10-15:** an
+    object's shape name is lower-cased whenever it is set, and again
+    when the object enters the world, before the box lookup. The
+    object's own name keeps its capitals. So: lower-case shape names,
+    compare object names exactly.
   - **Which names are looked up (traced 2026-10-12, Q39; the case part
     was wrong, see the measurement above):**
     first the shape file name (for a plain object its `shapeName=`
@@ -114,10 +117,9 @@ banking, already in `connor-movement.md`). Values it uses:
     (`shapeName=St_smom.KQS`; the table has only `st_smom.kqs`; the
     archive's copy of the file says the same) with no box and no
     collision. **The user checked: Connor does not walk through the
-    stone villagers or the wagon.** So either something lower-cases the
-    name that I missed, or these objects get collision another way.
-    Until settled, B's stand-in (shape names lower-cased before the
-    lookup) matches what the user saw and should stay.
+    stone villagers or the wagon.** Settled 2026-10-15: I had missed
+    the place that lower-cases the shape name (see the point above).
+    B's stand-in is the game's rule.
   - The table is kept sorted by name and searched for the first match.
     For the two names that really appear twice, the game ends up using
     **`rat` = item 8** (−70 −200 0 30 70 70) and **`razetta.kqs` =
