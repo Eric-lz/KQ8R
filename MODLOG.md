@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-15 Study (A): `.dil` layout, Q67 answered
+
+**Changed:** `docs/behaviour/object-lighting.md`: `.dil` layout table (the missing u32 after the shift; the closing 0 is a counted byte list; bytes after the block are ignored; `0xFFFFFFFF` = no light map), rule 13 (the five 12-byte-record files), edge cases, open question 3 closed. `clicking.md` rule 4: `zedrock1`/`zedrock2` are never loaded, so Daventry's non-clickable buildings are only cave, church and wizhouse. `QUESTIONS.md`: Q67 answered. Scratch notes in `re/notes.md`. No code.
+**Why:** The user asked for Q67 before session B continues with building lighting (M1 step 5c).
+**Tested how:** Traced the `.dil` reader in `Mask.exe` (field order, record sizes, what follows the tables). Data checks with throwaway scripts in the session scratchpad: all scripts in all worlds for `loadKQ` of the five odd buildings; `castle.dig` surface materials against `castle.dil`'s no-light surfaces; material 255 in all 153 `.dig` files; `Castle.dml`'s material count.
+**Result:** (a) The extra u32 is the third field the reader takes (build id, shift, extra); it is stored but never used as far as found; ignore it. (b) The game always reads 48-byte records, and none of the five 12-byte files is loaded by any script, so the original never meets them. (c) The 96 Castle surfaces with no light map are exactly its 96 surfaces with material 255, which doesn't exist (26 materials): don't draw them. (d) Bytes after the block are never read.
+**Still broken / not tested:** (a) what the extra field is for: not found. (c) "don't draw" is inferred from the data; the code that draws building surfaces was not traced. Nothing checked in the original (Castle D is far into the game).
+**Next:** Session B: 5c, buildings, using the updated table (skip material-255 surfaces).
+
 ## 2026-10-15 Study (A): clicking, accepted items, scripted objects; Q60–Q64 answered
 
 **Changed:** New `docs/behaviour/clicking.md` (what the click line hits, how an object decides it accepts the held item, the script calls of clickable animated objects, `getEndLoop`, `deleteObject`, `KQStatsChangeRequestEvent`). `items.md`: rule 7 corrected (sounds), new item names (`NoName<n>`), id numbers in `checkInventory`, items with no box. `chests.md` rule 8 (Q61). `doors.md`: my Q45 (b) answer corrected, rule 5 (`EndLoop` for doors too), rule 13, command table. `connor-physics.md`: where shape names are lower-cased (closes the Q39 "not found"). `QUESTIONS.md`: Q60–Q64 answered. Scratch notes with addresses in `re/notes.md` (not committed). No code.

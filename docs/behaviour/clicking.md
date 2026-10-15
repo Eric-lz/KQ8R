@@ -37,9 +37,11 @@ gets.
    why the user can't click through a wall or a ceiling (Q63).
 4. Some buildings switch it off with `colliderType=136` (0x88: solid for
    the camera's view, not clickable). They are **not** in the way of a
-   click. Daventry: `cave`, `church`, `wizhouse`, `zedrock1`, `zedrock2`
-   (the other 28 Daventry buildings are clickable). Counts in all worlds
-   (data): Barren 21 clickable / 4 not, CastleD 0 / 5, DeadCity 32 / 4,
+   click. Daventry: `cave`, `church`, `wizhouse` (all three loaded by
+   `permwrld.cs`). `zedrock1` and `zedrock2` also say 136, but no script
+   loads them (corrected 2026-10-15). The other 28 Daventry building files
+   are clickable. Counts of building files in all worlds (data; not every
+   file is loaded): Barren 21 clickable / 4 not, CastleD 0 / 5, DeadCity 32 / 4,
    Gnome 22 / 0, IceWorld 8 / 2, SnowExit 1 / 1, Swamp 11 / 1, Temple1
    4 / 10, Temple2 14 / 0, Temple3 7 / 0, Temple4 2 / 0.
 5. **Other things in the way** work the same: any object with bit 0x20

@@ -34,7 +34,7 @@ entries at the top). The short public summary is `README.md`; the detailed
   `object_light.wesl`), Daventry 30–42% in the logs, checked by eye by
   the user (close to the original). The `.dil` layout differs from the note in three measured
   ways (Q67). **Next: 5c, the buildings** (plan in `docs/DESIGN.md` "M1
-  step 5"). Haze only if the user agrees. After that A could answer Q67.
+  step 5"). Haze only if the user agrees. (Q67 answered by A, 2026-10-15.)
 - **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
   `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
   `doors.md`): buildings take clicks by default (so walls block), the
@@ -220,9 +220,10 @@ milestone: **M3, Daventry comes alive**.
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
 - Q65, Q66 (ground light scale, ×1 or ×2): answered 2026-10-14 (×1).
-- Q67: the `.dil` layout (an extra u32; 12-byte surface records in 5
-  files, which explains the "5 files that miss the size rule"; Castle D
-  surfaces with no light map). Measured readings in place.
+- Q67 (`.dil` layout): answered 2026-10-15 in `object-lighting.md`. B's
+  readings are right; the five 12-byte files are never loaded by the game;
+  Castle D's 96 no-light-map surfaces have material 255 (no material):
+  don't draw them.
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): wall
   drawing not traced (walls assumed to use only their light map), the
   per-object "unlit" switch, point-light range, `0x1000` building

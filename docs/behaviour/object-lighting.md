@@ -131,16 +131,30 @@ padded to 12 bytes). Then, little-endian:
 
 | Field | Size | Notes |
 | --- | --- | --- |
-| version | u32 | 4 in every file |
+| version | u32 | 4 in every file; read by the shared block loader before the rest |
 | build id | u32 | **equals the `.dig`'s build id** (checked on all 153 `.dig`/`.dil` pairs) |
 | light scale shift | u32 | 4 in every file: one light texel per 16 × 16 texture texels |
+| unknown | u32 | **0 in every file** (corrected 2026-10-15, Q67 a: this field was missing from the table). Read and kept by the game; no use was found. Ignore it. |
 | 5 counts | 5 × u32 | tables A–E below, in this order |
 | table A | 16 bytes each | animated lights; **count 0 in every file** |
 | table B | 8 bytes each | light states; **0 in every file** |
 | table C | 24 bytes each | state data; **0 in every file** |
-| table D | 48 bytes each | **one record per `.dig` surface**, same order (count = the `.dig`'s surface count, all files) |
+| table D | 48 bytes each | **one record per `.dig` surface**, same order (count = the `.dig`'s surface count, all files). The game always reads 48 bytes per record (Q67 b). |
 | table E | 1 byte each | the light-map texels, packed (byte offsets below point here) |
-| (end) | u32 | 0 |
+| byte list | u32 count + that many bytes | **count 0 in every file**, so in practice one closing u32 0 (Q67, traced: a counted list, not a fixed end marker) |
+
+Bytes after the PERS block's end (4 files: DeadCity `platfrmc`,
+`skelring`, `tower2`, Temple 4 `level4`) are never read; ignore them, as
+for `.dig` files (Q67 d).
+
+A table D byte offset of **0xFFFFFFFF** means "this surface has no light
+map". Only Castle D's `castle.dil` has them (96 surfaces), and those are
+exactly the 96 surfaces of `castle.dig` whose material number is **255**.
+`Castle.dml` has 26 materials, so 255 is not a material: it marks a
+surface with no material. No other building uses 255. **Don't draw these
+surfaces** (inferred from the data: the drawing code was not traced; they
+have neither a texture nor a light map). They don't affect collision,
+which uses the BSP, not the surfaces (Q67 c).
 
 Table D record (only the fields we need; the rest describe the light map's
 placement in floats and repeat what the texture fields give):
@@ -163,8 +177,14 @@ placement in floats and repeat what the texture fields give):
     ⌈(offset_x + size_x + 1) ÷ 16⌉ + 1 and height likewise. That holds for
     every surface of 148 of 153 files. The 5 others (`temple4/level4`,
     `swamp/ramp`, `daventry/zedrock1`, `zedrock2`, `deadcity/platform`)
-    miss on almost every surface; cause not found. For them, clamp the
-    lookup to the map's edge (stand-in).
+    store **12-byte** table D records (B, Q67 b: the block size only fits
+    12; read that way, every surface of all 153 files fits this rule).
+    **The game never uses them:** it always reads 48-byte records, which
+    would run past the end of these files, and **no script in any world
+    loads these five buildings** (checked: no `loadKQ` of a `.kq` naming
+    these shapes). So nothing decides between 12 and 48 in the original.
+    B's reading (pick 12 or 48 from the block size) is fine; skipping the
+    five files would be just as right.
 14. **Wall colour** = texture × light-map colour (channel ÷ 15), red by
     red, green by green, blue by blue; no doubling (traced: the light maps
     go to the card unchanged as 4-4-4-4 colour, and the card multiplies).
@@ -289,7 +309,8 @@ B draws it (open question 1).
   Recommended: log it and draw the building unlit.
 - A building with no `.dil`: draw it unlit (full brightness) and log it.
   Not traced.
-- The 5 `.dil` files whose map sizes don't fit rule 13: clamp (stand-in).
+- The 5 `.dil` files with 12-byte records (rule 13): never loaded by the game; read them B's way or skip them.
+- A surface with light-map offset 0xFFFFFFFF (material 255, Castle D only): don't draw it (table D notes).
 
 ## Do not reproduce
 
@@ -364,7 +385,8 @@ B draws it (open question 1).
    their light map, not the sun or ambient (rule 16), and that the filtering
    between light texels is bilinear (rule 13).
 2. What turns on the per-object "unlit" switch (rule 10)?
-3. Why 5 `.dil` files don't fit the size rule (rule 13).
+3. (Answered 2026-10-15, Q67: 12-byte records, in files the game never
+   loads; rule 13.)
 4. How a point light decides an object is out of range (rule 24), and
    the dynamic ground light (`terrain-lighting.md` rule 15).
 5. Whether `torchlight.kq` is loaded by anything (rule 25). No script
