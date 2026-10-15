@@ -23,7 +23,6 @@
 //! (safe). `--at X,Y,H` starts him somewhere else. The camera that follows
 //! him is in `game_camera.rs`.
 
-use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_core::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
@@ -32,7 +31,8 @@ use kq8_core::connor_mover::{Mover, MoverWorld, Scene as MoverScene, State};
 use crate::load::ConnorAssets;
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform, bevy_transform_from, Buildings, GroundLookup, ObjectColliders};
-use crate::{material_for, mesh_from, to_bevy, Shared};
+use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
+use crate::{model_mesh, Shared};
 
 /// One drawable movement: its loop for the walker and one entity per frame.
 pub struct DrawnMovement {
@@ -167,12 +167,14 @@ pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
 /// Spawns Connor (every frame of every movement, hidden but one) and
 /// starts his mover with gravity on (connor-physics.md "Is gravity on at
 /// the start?", recommendation).
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_connor(
     commands: &mut Commands,
     (placement, assets): (Placement, ConnorAssets),
     camera_start: Option<[f32; 3]>,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<ObjectMaterial>,
+    light: &ObjectLight,
     images: &mut Assets<Image>,
     main_log: &mut Log,
 ) {
@@ -194,33 +196,40 @@ pub fn spawn_connor(
     // Each animation: one material per look, one entity per frame.
     let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
+    // His first animation's first frame, for the light log (M1 5b).
+    let mut first_frame_normals: Option<Vec<Vec3>> = None;
     for anim in assets.animations {
-        let looks: Vec<(i32, Handle<StandardMaterial>)> = anim
+        let looks: Vec<(i32, Handle<ObjectMaterial>, kq8_data::Lighting)> = anim
             .looks
             .into_iter()
-            .map(|(m, look)| (m, materials.add(material_for(look, ImageAddressMode::Repeat, images))))
+            .map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l))
             .collect();
         let mut entities = Vec::new();
         for frame in anim.frames {
             let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
             commands.entity(body).add_child(parent);
+            let record = first_frame_normals.is_none();
+            let mut normals = Vec::new();
             for (m, triangles) in frame {
-                let mut positions = Vec::with_capacity(triangles.len() * 3);
-                let mut uvs = Vec::with_capacity(triangles.len() * 3);
-                for t in &triangles {
-                    // Clockwise front (the game) -> counter-clockwise (Bevy).
-                    for k in [0, 2, 1] {
-                        positions.push(to_bevy(t.positions[k], [0.0; 3]));
-                        uvs.push(t.uvs[k]);
-                    }
+                let Some((_, material, lighting)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
+                if record {
+                    normals.extend(crate::object_light::smooth_normals(&triangles, *lighting));
                 }
-                let Some((_, material)) = looks.iter().find(|(i, _)| *i == m) else { continue };
-                let part = commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(material.clone()))).id();
+                let mesh = model_mesh(&triangles, *lighting, [0.0; 3]);
+                let part = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()))).id();
                 commands.entity(parent).add_child(part);
             }
             entities.push(parent);
+            if record {
+                first_frame_normals = Some(normals);
+            }
         }
         frame_entities.push(entities);
+    }
+    let rotation = bevy_transform(&placement).rotation;
+    match first_frame_normals.as_deref().and_then(|n| crate::object_light::light_stats(light, n, rotation)) {
+        Some(stats) => main_log.summary(format!("object light: Connor at his start (first frame): {stats}")),
+        None => main_log.summary("object light: Connor has no smooth corners in his first frame"),
     }
     let movements: Vec<DrawnMovement> = assets
         .movements

@@ -34,3 +34,5 @@
 # Rust sources
 !/crates/*/Cargo.toml
 !/crates/*/src/**/*.rs
+# Shaders (our own, embedded in the viewer)
+!/crates/*/src/**/*.wesl

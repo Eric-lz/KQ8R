@@ -144,6 +144,49 @@ the note's).
 | No tone mapping (`Tonemapping::None` on every camera) | **Our choice** (display only: colours as computed, so ×1 / ×2 can be compared by eye) | — |
 | Ground animators' squares (Daventry's river) and the U key's floor view are lit like the rest of the ground | Note rule 10 ("when a ground square is drawn") | Viewer log: 872 lit meshes in Daventry, including the animators' |
 
+## Object and building lights read (M1 step 5a) — `crates/kq8-data/src/{lights,dil,building}.rs`, `crates/kq8-cli/src/lighting_verify.rs`
+
+Behaviour note = `docs/behaviour/object-lighting.md` (rule numbers are
+the note's). Numbers from `kq8 lighting-verify`
+(`kq8-artifacts/logs/lighting-verify.log`).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| On hardware the lights are the files that `swtohwlt.cs` loads (`loadKQ` lines) | Note rule 1 | Observed: all 12 worlds' `swtohwlt.cs` load `light/SunlgtHW.kq` and `light/AmblgtHW.kq`; both found in every world |
+| Ambient = sum of all ambient lights; suns = `KQLight` with `tsLightType=1`; point lights = `KQPointLight` with `tsLightType=2` | Note rules 3, 24 | Unit tests; log: one ambient and one sun per world; Dead City's 10 point lights are in its `Light` folder but not loaded by `swtohwlt.cs` |
+| Corner light = ambient + sun colour × max(0, −aim · normal), capped 0–1 per channel; aim not made unit length | Note rules 4, 5 | Unit tests; log: Daventry 0.300 / 0.366 / 0.420 (away / up / into the sun) = the note's table; Swamp into the sun 1.02 → 1.000 |
+| Flat grey 0.299 R + 0.587 G + 0.114 B, capped at 1 | Note rule 7 and "Do not reproduce" (usual weights) | Unit test |
+| A missing colour or aim value counts as 0 and is logged | **Stand-in** (the note doesn't say) | Log: no light file has a missing value |
+| `.dil` header: build id, light scale shift, 5 counts, tables A–E (16, 8, 24, 48, 1 bytes), end u32 0 | Note "`.dil` layout" | Log: all 235 files read |
+| **One more u32 after the shift (0 in every file)** | **Observed** (measured; not in the note's table): Q67 (a) | Without it no file reads; with it 230 files end exactly at the end u32 |
+| **Table D records are 12 bytes in 5 files** (`zedrock1`, `zedrock2`, `platform`, `ramp`, `level4`), worked out from the block size | **Observed**: Q67 (b) | Only D × 12 + E + 4 fits those blocks; read that way they pass rule 13 |
+| Byte offset `0xFFFFFFFF` = the surface has no light map | **Observed / stand-in**: Q67 (c) | Castle D `castle.dil`: 96 of 5,318 surfaces; no other file |
+| Bytes after the PERS block are ignored | Observed (as for `.dig`, `buildings.md`) | 4 files |
+| Texels: 16-bit, 4 bits each brightness, red, green, blue | Note "`.dil` layout" | `cnnrhut.dil`: 1,129 surfaces, 162,170 bytes, red 0 ×16,017, 3 ×7,775, 4 ×7,344 = the note's numbers |
+| `.dil` build id and surface count equal the `.dig`'s | Note "`.dil` layout" | 153 of 153 pairs match |
+| Size check: width = ⌈(offset_x + size_x + 1) ÷ 16⌉ + 1, height likewise | Note rule 13 | Unit test; every surface of 153 of 153 pairs fits (the note's 148 + the 5 read with 12-byte records) |
+
+## Models lit (M1 step 5b) — `crates/kq8-data/src/{shape,material}.rs`, `crates/kq8-viewer/src/{object_light.rs,object_light.wesl,load,main,terrain_view,anim_view,door_view,connor_view,item_view,effects_view,light_view}.rs`
+
+Behaviour note = `docs/behaviour/object-lighting.md` (rule numbers are
+the note's).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| The lights are the files `swtohwlt.cs` loads | Note rule 1 | Viewer log, every world: the two `*HW.kq` files |
+| Corner light = ambient + sun colour × max(0, −aim · normal), capped 0–1; aim not unit length | Note rules 4, 5 | Shader (`object_light.wesl`); the same rules on the CPU for the log (`light_stats`, unit test `suns_in_bevy_space`). Log: Daventry Connor 0.300–0.419, `tree.06` 0.300–0.404, `stngrl` 0.300–0.412, `lamp01.13` 0.300–0.420 (note: 0.30–0.42) |
+| Normal turned into world space with the object's own rotation | Note rule 5 | Done on the graphics card per drawn copy (Bevy's mesh transform) |
+| Smooth: light per corner, blended across the triangle; flat: first corner's light as one grey (usual weights); none: 1; `0x1000`/`0x2000` force none | Note rule 7 and "Do not reproduce" | Unit test `lighting_kind`; log: Daventry 721 smooth, 4 flat, 365 none materials |
+| Other shading bits: full brightness | **Stand-in** (the note doesn't say; no model material in the data has them, `kq8 lighting-verify`) | — |
+| Corner normal = average of the unit normals of the triangles that share the vertex (same mesh node, same vertex number) | Note rule 8 (compute from the geometry) | Unit test `corner_normals_average_the_triangles_at_a_vertex`; `--model smlchest.KQS`: 96 of 96 corner normals point away from the model centre |
+| Texture × light, no doubling | Note rule 9 | Shader |
+| Per-object "unlit" switch off | Note rule 10 | — |
+| Multiply on the colour as shown (sRGB curve on the light) | **Stand-in**, as the ground (M1 4c) | — |
+| Particles (falling leaves) lit like models | **Our reading** (they are `.kqs` models; the note doesn't mention particles) | — |
+| Light computed on the graphics card, not stored in the meshes | **Our choice** (user, 2026-10-15): copies of one mesh face different ways | Viewer runs in 8 worlds, no shader errors |
+| Buildings full bright until M1 5c | Plan (DESIGN M1 step 5) | — |
+| Point lights, haze, brightness setting not drawn | Not done yet (rules 17, 19–24) | — |
+
 ## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
 
 Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).

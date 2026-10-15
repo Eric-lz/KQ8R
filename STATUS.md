@@ -27,9 +27,14 @@ entries at the top). The short public summary is `README.md`; the detailed
   The user checked in the original: objects as dark as the grass with the
   sunny side slightly lighter; haze fades objects with distance from the
   camera; Connor's hut inside darker but reasonably lit.
-- **Next: B implements object lighting** from `object-lighting.md`
-  (read the light files and `.dil`, then models, then buildings, haze
-  only if the user agrees). After that A could answer Q60–Q64.
+- **Object lighting, steps 5a and 5b done** (B, 2026-10-15): light
+  files and building `.dil` light maps are read and checked (`kq8
+  lighting-verify`, PASS); models (objects, Connor, items, leaves) are
+  lit on the graphics card by a custom material (`object_light.rs`,
+  `object_light.wesl`), Daventry 30–42% in the logs, checked by eye by
+  the user (close to the original). The `.dil` layout differs from the note in three measured
+  ways (Q67). **Next: 5c, the buildings** (plan in `docs/DESIGN.md` "M1
+  step 5"). Haze only if the user agrees. After that A could answer Q67.
 - **Later for A:** Q53 (camera follow-ups), Q54; pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
@@ -65,12 +70,13 @@ milestone: **M3, Daventry comes alive**.
 
 ## Code layout
 
-- `crates/kq8-data` (69 unit tests): file formats. VOL archives, bitmaps,
+- `crates/kq8-data` (80 unit tests): file formats. VOL archives, bitmaps,
   palettes, materials, `.kqs` shapes, terrain (surface and floor grids),
   `.dig` buildings, `.kq` text, world scripts (start-up, incl. item
   lines), `.sae` key maps, object placement rules, the `BOUNDS.KQ` box
   table, `.anm` transition lines, `envInfo.kq` ground flags, the ground's
-  light and shadow maps (`lightmap.rs`), emitter /
+  light and shadow maps (`lightmap.rs`), object lights (`lights.rs`),
+  building light maps (`dil.rs`), emitter /
   particle catcher / ground animator settings, the item type list
   (`Invinfo.itl`).
 - `crates/kq8-core` (181 unit tests; named `kq8-game` until 2026-10-13):
@@ -92,7 +98,7 @@ milestone: **M3, Daventry comes alive**.
   continuous game time.
 - `crates/kq8-cli`: `kq8` checks (`vol-verify`, `bitmap-verify`,
   `bitmap-png`, `shape-verify`, `terrain-verify`, `building-verify`,
-  `item-verify`, `lightmap-verify`) and `kq8 text <file>` to print a game text file
+  `item-verify`, `lightmap-verify`, `lighting-verify`) and `kq8 text <file>` to print a game text file
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--light x1|x2|off` the
@@ -104,7 +110,7 @@ milestone: **M3, Daventry comes alive**.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
   events), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
-  `anim.log`, `lightmap-verify.log`. `viewer.log` also logs the ground
+  `anim.log`, `lightmap-verify.log`, `lighting-verify.log`. `viewer.log` also logs the ground
   light under Connor and the camera every second.
 
 ## What works (tested)
@@ -168,13 +174,12 @@ milestone: **M3, Daventry comes alive**.
     clicking a swimming fish makes it disappear (sound and health only
     logged); other scripted things (signs, stone villagers) run their
     scripts, their remarks logged.
-- Tests: 251 unit tests pass (69 + 181 + 1), 2026-10-14.
+- Tests: 263 unit tests pass (80 + 181 + 2), 2026-10-15.
 
 ## What doesn't work yet / next
 
-- **Next step:** object and building lighting (`object-lighting.md`);
-  objects and buildings are still drawn at full brightness, so they look
-  too bright next to the lit ground.
+- **Next step:** building lighting (`object-lighting.md`, M1 5c);
+  buildings are still drawn at full brightness. Objects are lit (5b).
 - Clicking: only doors, chests, items and scripted objects react. No
   sound, no remarks (Connor says nothing; remarks are logged), Connor
   doesn't turn to face what he clicks. No inventory screen (M4).
@@ -197,7 +202,7 @@ milestone: **M3, Daventry comes alive**.
   original).
 - Loops (`walk`, `run`) still spread their step evenly over the loop
   (Q24); one-shot animations use their frame steps.
-- Not drawn yet: lighting of objects and buildings (`.dil`), haze/distance
+- Not drawn yet: lighting of buildings (`.dil`), haze/distance
   fade, moving lights (Dead City's point lights; Daventry has none), people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
@@ -207,10 +212,13 @@ milestone: **M3, Daventry comes alive**.
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
 - Q65, Q66 (ground light scale, ×1 or ×2): answered 2026-10-14 (×1).
+- Q67: the `.dil` layout (an extra u32; 12-byte surface records in 5
+  files, which explains the "5 files that miss the size rule"; Castle D
+  surfaces with no light map). Measured readings in place.
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): wall
   drawing not traced (walls assumed to use only their light map), the
-  per-object "unlit" switch, 5 `.dil` files that miss the size rule,
-  point-light range, `0x1000` building materials (full bright or not).
+  per-object "unlit" switch, point-light range, `0x1000` building
+  materials (full bright or not).
 
 - Q60: the name a new item object gets (`$NewInvItem`). Stand-in in place.
 - Q61: does a chest's second click play the item's pickup sound.

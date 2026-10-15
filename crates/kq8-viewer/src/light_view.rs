@@ -126,11 +126,11 @@ pub struct LightLabel;
 
 fn label_text(mode: LightMode) -> String {
     let what = match mode {
-        LightMode::X2 => "x2 (light map doubled, capped at 100%)",
-        LightMode::X1 => "x1 (light map as stored)",
-        LightMode::Off => "off (no light map)",
+        LightMode::X2 => "x2 (doubled, capped at 100%)",
+        LightMode::X1 => "x1 (as the game)",
+        LightMode::Off => "off (full bright)",
     };
-    format!("Ground light: {what} (F7)")
+    format!("Light, ground and objects: {what} (F7)")
 }
 
 pub fn setup_light_label(mut commands: Commands, light: Res<GroundLight>, shared: Res<Shared>) {

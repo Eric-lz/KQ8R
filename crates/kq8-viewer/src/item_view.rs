@@ -14,10 +14,10 @@ use bevy::prelude::*;
 
 use crate::door_view::DoorSim;
 use crate::terrain_view::bevy_transform_from;
-use crate::with_opacity;
+use crate::object_light::{see_through, ObjectMaterial};
 
 /// One drawn model: (mesh, material) per material group.
-type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
+type Parts = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
 
 #[derive(Resource)]
 pub struct ItemDraw {
@@ -28,19 +28,14 @@ pub struct ItemDraw {
 }
 
 /// `looks`: (`IDName`, index into `built`, opacity) per type.
-pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, built: &[Parts], materials: &mut Assets<StandardMaterial>) {
+pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, built: &[Parts], materials: &mut Assets<ObjectMaterial>) {
     let mut parts = BTreeMap::new();
     for (kind, slot, opacity) in looks {
         let Some(model) = built.get(slot) else { continue };
         let p: Parts = model
             .iter()
             .map(|(mesh, material)| {
-                let material = if opacity < 1.0 {
-                    let original = materials.get(material).cloned().unwrap_or_default();
-                    materials.add(with_opacity(&original, opacity))
-                } else {
-                    material.clone()
-                };
+                let material = see_through(materials, material, opacity);
                 (mesh.clone(), material)
             })
             .collect();

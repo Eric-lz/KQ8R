@@ -25,10 +25,12 @@
 //! that type in Connor's hand (tests). Emitters (M3 step 3b): falling
 //! leaves and drips, logged to effects.log; flowing water squares, logged
 //! to ground_anim.log. Ground light (M1 step 4): F7 cycles the light
-//! map x1 / x2 / off (`--light` sets the start; default x1). Esc quits.
+//! map x1 / x2 / off (`--light` sets the start; default x1). Models are
+//! lit by the world's ambient light and sun (M1 step 5b, `object_light`);
+//! F7 switches them too. Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
-//! no lighting on models, no animation in the model view. Back faces are hidden as in the original
+//! no animation in the model view. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
 mod anim_view;
@@ -41,6 +43,7 @@ mod item_view;
 mod light_view;
 mod load;
 mod log;
+mod object_light;
 mod terrain_view;
 
 use std::path::PathBuf;
@@ -49,11 +52,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use bevy::asset::RenderAssetUsages;
-use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
+use bevy::image::ImageAddressMode;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, PrimitiveTopology, TextureDimension, TextureFormat};
-use kq8_data::GameDir;
+use bevy::render::render_resource::PrimitiveTopology;
+use kq8_data::shape::Triangle;
+use kq8_data::{GameDir, Lighting};
 
 use load::{Look, Model, World};
 use log::Log;
@@ -249,18 +253,21 @@ fn main() -> ExitCode {
         .and_then(|game| {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
-            match &args.model {
+            // M1 step 5b: the lights for models, in both views.
+            let lights = load::load_object_lights(&game, &world, &mut log);
+            let scene = match &args.model {
                 None => {
                     let mut ground = load::load_ground(&game, &world, &mut log)?;
                     let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
                     let animators = std::mem::take(&mut objects.animators);
                     let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
-                    Ok(Scene::Ground(ground, objects, animation))
+                    Scene::Ground(ground, objects, animation)
                 }
-                Some(name) => load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log).map(Scene::Model),
-            }
+                Some(name) => Scene::Model(load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log)?),
+            };
+            Ok((scene, lights))
         });
-    let scene = match loaded {
+    let (scene, lights) = match loaded {
         Ok(s) => s,
         Err(e) => {
             log.summary(format!("error: {e}"));
@@ -281,7 +288,9 @@ fn main() -> ExitCode {
         ..default()
     }))
     .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
-    .insert_resource(shared.clone());
+    .insert_resource(shared.clone())
+    .insert_resource(object_light::ObjectLight::new(lights, args.light));
+    object_light::add(&mut app);
     match scene {
         Scene::Model(model) => {
             let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
@@ -289,7 +298,7 @@ fn main() -> ExitCode {
             app.insert_resource(Loaded(Some(model)))
                 .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius })
                 .insert_resource(Orbit { yaw: 0.6, pitch: 0.35, distance: radius * 3.0, default_distance: radius * 3.0 })
-                .add_systems(Startup, setup)
+                .add_systems(Startup, (setup, object_light::report_lights).chain())
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
         Scene::Ground(ground, objects, animation) => {
@@ -316,8 +325,10 @@ fn main() -> ExitCode {
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label).chain())
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain());
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights).chain())
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
+                // F7 also switches the models' light (M1 5b).
+                .add_systems(Update, object_light::follow_ground_mode.after(light_view::toggle_light));
         }
     }
     app.run();
@@ -343,38 +354,49 @@ fn setup(
     mut loaded: ResMut<Loaded>,
     shared: Res<Shared>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<object_light::ObjectMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    light: Res<object_light::ObjectLight>,
 ) {
     let model = loaded.0.take().expect("model is loaded once");
     let centre: [f32; 3] = std::array::from_fn(|i| 0.5 * (model.min[i] + model.max[i]));
     let mut log = shared.log.lock().unwrap();
     let mut vertices = 0;
     let (mut outward, mut triangles) = (0, 0);
+    // Corner light in the model's own orientation (M1 5b), for the log.
+    let (mut lit_min, mut lit_max, mut lit_sum, mut lit_n) = (f32::MAX, f32::MIN, 0.0f32, 0usize);
+    let (mut normals, mut normals_out) = (0, 0);
     for group in model.groups {
-        let mut positions = Vec::with_capacity(group.triangles.len() * 3);
-        let mut uvs = Vec::with_capacity(group.triangles.len() * 3);
         for t in &group.triangles {
-            // The game's front faces list their corners clockwise; Bevy's
-            // are counter-clockwise, so the corners go in reverse order
-            // (models-and-textures.md, Q2). The axis change in `to_bevy`
-            // is a rotation, so it does not change the corner order.
-            let corners = [0, 2, 1].map(|k| to_bevy(t.positions[k], centre));
-            for (k, p) in [0, 2, 1].into_iter().zip(corners) {
-                positions.push(p);
-                uvs.push(t.uvs[k]);
-            }
             // Check from the numbers: does the front face point away from
             // the model's centre? (Expected for most triangles of a
             // box-like model such as the chest.)
-            let [a, b, c] = corners.map(Vec3::from);
+            let [a, b, c] = [0, 2, 1].map(|k| Vec3::from(to_bevy(t.positions[k], centre)));
             triangles += 1;
             outward += ((b - a).cross(c - a).dot((a + b + c) / 3.0) > 0.0) as usize;
+            // The same check for the corner normals (M1 5b).
+            for (n, p) in t.normals.iter().zip(t.positions) {
+                normals += 1;
+                normals_out += usize::from(Vec3::from(direction_to_bevy(*n)).dot(Vec3::from(to_bevy(p, centre))) > 0.0);
+            }
+            if group.lighting == Lighting::Smooth {
+                for n in t.normals {
+                    let l = light.corner_light(Vec3::from(direction_to_bevy(n)))[0];
+                    (lit_min, lit_max, lit_sum, lit_n) = (lit_min.min(l), lit_max.max(l), lit_sum + l, lit_n + 1);
+                }
+            }
         }
-        vertices += positions.len();
-        let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
-        commands.spawn((Mesh3d(meshes.add(mesh_from(positions, uvs))), MeshMaterial3d(materials.add(material))));
+        vertices += group.triangles.len() * 3;
+        let material = object_light::object_material(group.look, group.lighting, &light, &mut images);
+        commands.spawn((Mesh3d(meshes.add(model_mesh(&group.triangles, group.lighting, centre))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
+    }
+    log.summary(format!("corner normals pointing away from the model centre: {normals_out} of {normals}"));
+    if lit_n > 0 {
+        log.summary(format!(
+            "corner light (red) over {lit_n} smooth corners, model unturned: min {lit_min:.3} mean {:.3} max {lit_max:.3}",
+            lit_sum / lit_n as f32
+        ));
     }
     log.summary(format!(
         "front faces pointing away from the model centre: {outward} of {triangles} triangles"
@@ -385,6 +407,36 @@ fn setup(
     ));
     // Colours as computed, no tone-mapping curve (M1 step 4b).
     commands.spawn((Camera3d::default(), bevy::core_pipeline::tonemapping::Tonemapping::None, Transform::default()));
+}
+
+/// A direction (a normal) from game space to Bevy space, length kept.
+fn direction_to_bevy(n: [f32; 3]) -> [f32; 3] {
+    [n[0], n[2], -n[1]]
+}
+
+/// A mesh of model triangles for `object_light::ObjectMaterial` (M1
+/// step 5b). The game's front faces list their corners clockwise; Bevy's
+/// are counter-clockwise, so the corners go in reverse order
+/// (models-and-textures.md, Q2); the axis change in `to_bevy` is a
+/// rotation, so it does not change the order. Each corner carries its
+/// normal; for flat lighting all three carry the first corner's
+/// (object-lighting.md rule 7).
+fn model_mesh(triangles: &[Triangle], lighting: Lighting, centre: [f32; 3]) -> Mesh {
+    let mut positions = Vec::with_capacity(triangles.len() * 3);
+    let mut uvs = Vec::with_capacity(triangles.len() * 3);
+    let mut normals = Vec::with_capacity(triangles.len() * 3);
+    for t in triangles {
+        for k in [0, 2, 1] {
+            positions.push(to_bevy(t.positions[k], centre));
+            uvs.push(t.uvs[k]);
+            let n = if lighting == Lighting::Flat { t.normals[0] } else { t.normals[k] };
+            normals.push(direction_to_bevy(n));
+        }
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
 }
 
 /// A triangle list (corners already in Bevy's counter-clockwise order).
@@ -405,18 +457,7 @@ fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image
     let base = StandardMaterial { unlit: true, ..default() };
     match look {
         Look::Texture { width, height, rgba, .. } => {
-            let mut image = Image::new(
-                Extent3d { width, height, depth_or_array_layers: 1 },
-                TextureDimension::D2,
-                rgba,
-                TextureFormat::Rgba8UnormSrgb,
-                RenderAssetUsages::default(),
-            );
-            image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-                address_mode_u: address,
-                address_mode_v: address,
-                ..ImageSamplerDescriptor::linear()
-            });
+            let image = object_light::texture_image(width, height, rgba, address);
             StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
         }
         Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },

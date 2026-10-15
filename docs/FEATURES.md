@@ -22,7 +22,13 @@ starting pose and see-through things (waterfalls, fountains) see-through.
 Checked by eye in Daventry; the other 11 worlds load but have only been
 looked at in a few places. The ground is lit by the game's light maps
 (hill shadows), compared with the original by eye in Daventry
-(2026-10-14): as stored (x1) matches; objects are not lit yet.
+(2026-10-14): as stored (x1) matches. Objects (and Connor) are lit by the
+world's ambient light and sun (2026-10-15): in Daventry 30-42% of their
+texture's brightness, the sunny side a little lighter. Checked in the
+logs (Connor and the three objects nearest his start stay within
+0.30-0.42, as the behaviour note says) and by eye against the original
+(user, 2026-10-15: much closer to the original).
+Buildings are still full bright.
 
 ## Connor
 
@@ -149,9 +155,10 @@ objects don't stop it, as in the original. Checked in the logs
   floor only, third press back to normal.
 - **F:** a free flying camera.
 - **G / B:** lift Connor high / a little and let him fall.
-- **F7:** the ground's light map as stored (x1, default), doubled (x2),
-  or off; the mode is shown on screen. x1 is the default because it
-  matches the original by eye (user, 2026-10-14).
+- **F7:** the light of the ground and the objects as in the game (x1,
+  default), doubled (x2), or off (full bright); the mode is shown on
+  screen. x1 is the default because it matches the original by eye
+  (user, 2026-10-14, ground).
 
 ## Launch options (viewer)
 
@@ -168,8 +175,8 @@ repeated and checked in the logs. They do not change the game's rules.
 - `--model <file>`: show one model on its own, e.g. `--model smlchest.KQS`
   (default: no model, so the ground opens). Add `--palette <file>` to
   colour it with another palette; that option works only with `--model`.
-- `--light x1|x2|off`: how the ground's light map is applied at the start
-  (default `x1`). F7 changes it while the window is open.
+- `--light x1|x2|off`: how the ground and the objects are lit at the
+  start (default `x1`). F7 changes it while the window is open.
 - `--game <folder>`: where the game's files are (default `MASK`). The
   environment variable `KQ8_GAME_DIR` sets the same folder.
 - `--frames <number>`: close the window by itself after that many frames,
@@ -208,8 +215,8 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, lighting of objects and buildings
-  (they are full bright; only the ground is lit), distance haze, fire and
+- **Not drawn:** people and monsters, lighting of buildings (they are
+  full bright), moving lights (Dead City), distance haze, fire and
   ice arrow sparks and the dragon fire (they come with fighting), the
   teleport pad's look.
 - **No sound or music** at all.

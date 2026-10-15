@@ -26,7 +26,8 @@ use crate::game_camera::GameCam;
 use crate::load::EmitterAssets;
 use crate::log::Log;
 use crate::terrain_view::bevy_transform_from;
-use crate::{with_opacity, Shared};
+use crate::object_light::{see_through, ObjectMaterial};
+use crate::Shared;
 
 /// Seed of the particles' random choices: the same every run, so two runs
 /// give the same log.
@@ -102,8 +103,8 @@ pub fn spawn_emitters(
     catchers: Vec<(String, CatcherSettings)>,
     buildings: &[BuildingCollider],
     targets: TargetLookup,
-    built: &[Vec<(Handle<Mesh>, Handle<StandardMaterial>)>],
-    materials: &mut Assets<StandardMaterial>,
+    built: &[Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>],
+    materials: &mut Assets<ObjectMaterial>,
     main_log: &mut Log,
 ) {
     let mut log = match Log::create("effects") {
@@ -184,15 +185,10 @@ pub fn spawn_emitters(
         // The emitter's translucency on every particle (likely, not traced:
         // emitters.md rule 9, open question 2).
         let opacity = if a.translucency >= 256.0 { 1.0 } else { (a.translucency / 255.0).clamp(0.0, 1.0) };
-        let parts: Vec<(Handle<Mesh>, Handle<StandardMaterial>)> = built[shape]
+        let parts: Vec<(Handle<Mesh>, Handle<ObjectMaterial>)> = built[shape]
             .iter()
             .map(|(mesh, material)| {
-                let material = if opacity < 1.0 {
-                    let original = materials.get(material).cloned().unwrap_or_default();
-                    materials.add(with_opacity(&original, opacity))
-                } else {
-                    material.clone()
-                };
+                let material = see_through(materials, material, opacity);
                 (mesh.clone(), material)
             })
             .collect();

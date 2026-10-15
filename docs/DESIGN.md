@@ -538,6 +538,160 @@ dark and muddy). ×1 is now the default; F7 cycles ×1 → ×2 → off.
 Correction request Q66. Objects and buildings are still drawn full
 bright (not part of this step; their lighting is not studied yet).
 
+#### M1 step 5 — object and building lighting (planned 2026-10-15)
+
+Rules from `docs/behaviour/object-lighting.md` (rule numbers below are
+that note's). Models get a light per corner from the world's ambient
+light and sun; buildings get the per-wall light maps in their `.dil`
+file. Each sub-step is tested and reported before the next starts.
+Haze (rules 19–23) is **not** in this plan; the user decides later.
+Point lights (rule 24, Dead City only) are read and logged but not
+drawn.
+
+What the data says (checked 2026-10-15): all 12 worlds have the same
+`swtohwlt.cs` (`deleteObject KQLight`, `deleteObject KQAmbientLight`,
+`loadKQ light/SunlgtHW.kq`, `loadKQ light/AmblgtHW.kq`), in `kq.vol`.
+The light files are loose in `data/<World>/KQ/Light/`. The `.dil` files
+are in each world's `resource.vol`, next to the `.dig` files. Only
+Gnome (`gnome13.kq`, `gnome14.kq`) and Temple 4 (`temple.kq`) name an
+`althwLightmapName`; no file sets `usingAltLighting`.
+
+**5a. Read the lights and the `.dil` files** (`kq8-data`, `kq8-cli`;
+nothing drawn)
+
+- New `kq8-data/src/lights.rs`:
+  - The files a world loads on hardware: the `loadKQ` lines of its
+    `swtohwlt.cs` (rule 1), paths relative to `data/<World>/KQ/`.
+  - From those files' sections: ambient lights (`classType=KQAmbientLight`,
+    `intensity.red/green/blue`), suns (`classType=KQLight`,
+    `tsLightType=1`, `tsLightAim.x/y/z`, `tsLightIntensity.*`) and point
+    lights (`classType=KQPointLight`, `tsLightType=2`, `tsLightPosition.*`,
+    `tsAttenuationBegin`, `tsAttenuationEnd`; only Dead City has them,
+    and `swtohwlt.cs` doesn't load them). The ambient is the **sum** of all ambient lights
+    (rule 3). The aim is kept as stored, **not** made unit length
+    (rule 5). A missing colour value counts as 0 and is logged
+    (stand-in: the note doesn't say; none is missing in the data).
+  - `corner_light(normal)` = ambient + Σ sun colour × max(0, −aim ·
+    normal), each channel capped to 0–1 (rules 4, 5). `flat_grey` =
+    0.299 R + 0.587 G + 0.114 B, capped at 1 (rule 7, with the usual
+    weights as "Do not reproduce" says). Point lights are left out
+    (not drawn in this step).
+- New `kq8-data/src/dil.rs` (`ITRLighting`, the layout table in the
+  note): version, build id, light scale shift, the five counts, tables
+  A–C skipped by size, table D (one record per surface: byte offset,
+  width, height, offset x/y), table E (the texels, 16-bit values,
+  4 bits each brightness, red, green, blue), the end u32. A texel
+  lookup `texel(surface, i, j)` and the size check of rule 13: width =
+  ⌈(offset_x + size_x + 1) ÷ 16⌉ + 1, height likewise.
+- `building.rs`: keep the `.dig`'s build id (read now, thrown away).
+- New CLI command `kq8 lighting-verify`, log
+  `kq8-artifacts/logs/lighting-verify.log`:
+  - Every world: the light files `swtohwlt.cs` loads, ambient sum, each
+    sun (colour, aim, aim length), point lights, and what a model corner
+    gets facing away from the sun, facing up, and facing the sun squarely
+    (Daventry must log 0.30, 0.366, 0.42 as the note's table).
+  - Every `.dil` in every archive: surface count, texel bytes; for
+    each one with a `.dig` of the same name, whether the build ids and
+    surface counts match and how many surfaces fail the size check
+    (expected: 0 except `temple4/level4`, `swamp/ramp`,
+    `daventry/zedrock1`, `zedrock2`, `deadcity/platform`). Red-channel
+    histogram for Daventry's files; `cnnrhut.dil` must give 1,129
+    surfaces, 162,170 bytes, red 0 ×16,017, 3 ×7,775, 4 ×7,344.
+  - Every material list in every archive: how many materials are
+    shading none / flat / smooth / no shading bits / other, and how
+    many have `0x1000`, `0x2000`, `0x10000` (for 5b's log and to find
+    cases the note doesn't cover).
+  - Buildings' `.kq` keys `althwLightmapName`, `usingAltLighting`.
+- PASS = every light file and `.dil` read, every pair's build id and
+  surface count match, size-check misses only in the 5 named files.
+- Unit tests: light sums and the capped corner light (Daventry's three
+  numbers; Swamp's 1.02 → 1), the flat grey, the `loadKQ` lines, a
+  small hand-made `.dil` (layout, texel order and channels, a short
+  file refused), the size check.
+
+**Done 2026-10-15** (MODLOG): PASS. Lights: every world's
+`swtohwlt.cs` loads its two files; Daventry 0.300 / 0.366 / 0.420 as the
+note. `.dil`: all 235 read, 153 of 153 pairs match the `.dig` and fit
+rule 13 on every surface; `cnnrhut.dil` matches the note. Three
+differences from the note's layout table, measured and asked as Q67:
+one more u32 (0) after the shift; 12-byte surface records in the 5
+"misfit" files (read that way they fit the size rule); 96 Castle D
+surfaces with byte offset `0xFFFFFFFF` (read as "no light map").
+Materials: models are 10,981 smooth, 49 flat, 515 none; no model
+material has `0x1000` or `0x2000`.
+
+**5b. Light the models** (`kq8-viewer`)
+
+- Every model corner gets a colour by the material's lighting kind
+  (rule 7): smooth `0x400` per corner with its own normal; flat `0x200`
+  one grey per triangle from its first corner; none `0x100`, and any
+  material with `0x1000` or `0x2000`, full brightness. Normals: the
+  ones we already compute from the geometry (rule 8). The colour
+  multiplies the texture, no doubling (rule 9), as the ground does
+  (vertex colours, turned into Bevy's linear colour space; same
+  stand-in as M1 4c). The per-object "unlit" switch is treated as off
+  (rule 10).
+- Normals are turned into world space with the object's rotation
+  (rule 5), so the light is worked out when the object is placed, and
+  again for objects that turn (Connor, objects whose movement turns
+  them).
+- **Changed 2026-10-15 (user's choice): the light is computed on the
+  graphics card, not stored as vertex colours.** Many objects share one
+  mesh while facing different ways (all copies of a model, animation
+  frames, items, falling leaves), so colours stored in the mesh can't
+  be right for all of them. Instead every model uses a small custom
+  material (`object_light.rs` + the shader `object_light.wesl`): each
+  corner carries its normal; the shader turns it into world space with
+  the object's own rotation, applies rules 4–5 per corner (the colour
+  is blended across the triangle, as rule 7 "smooth" says), and
+  multiplies the texture. Flat triangles: all three corners carry the
+  first corner's normal and the shader uses the grey of rule 7. "None"
+  materials: light 1. The world's ambient and suns (up to 4) are in the
+  material's settings; F7 changes the mode in every material.
+- Corner normals: the average of the unit normals of the triangles
+  that share the corner (same mesh node, same vertex number), computed
+  in `kq8-data` (`shape.rs`) when the triangles are built.
+- Falling leaves and other particles are `.kqs` models too, so they are
+  lit the same way (our reading of "models are lit"; the note doesn't
+  mention particles).
+- Buildings keep the old full-bright material until 5c. The ground
+  keeps its vertex colours (M1 4c).
+
+**Done 2026-10-15** (MODLOG): lit in all 8 worlds tried, no shader
+errors. Daventry: Connor and the three objects nearest his start stay
+within 0.30–0.42 (log); the chest's corner normals all point outward.
+Checked by eye by the user (2026-10-15): much closer to the original. `.gitignore` now also lets `*.wesl` shader
+sources under `crates/*/src/` through.
+- F7 also switches the object light: ×1 (as the note), ×2 (for
+  comparison), off (full bright, as before).
+- Log (`viewer.log`): light files used, ambient and suns; how many
+  materials are smooth / flat / none; minimum, mean and maximum corner
+  light of Connor and of two or three objects near his start
+  (Daventry: within 0.30–0.42).
+- Check: by eye, objects about as dark as the grass, the sunny side a
+  little lighter (the user already confirmed this in the original).
+
+**5c. Light the buildings** (`kq8-viewer`)
+
+- Each wall's colour = texture × its light map (rules 13–14), no sun or
+  ambient (rule 16, stand-in), blended smoothly between light texels
+  (bilinear, stand-in). The 5 files that miss the size rule: lookups
+  clamped to the map's edge (stand-in). No `.dil`, or a build id that
+  doesn't match: unlit (full brightness) and logged. `0x1000` building
+  materials use the light map too (open question 7, stand-in).
+- How to draw it is decided at the start of 5c, with the user. Two
+  ways: (1) cut every wall into cells at the light texels and give
+  each corner its colour, as the ground does (no new drawing code, but
+  many more corners and fiddly cutting of each polygon); (2) put each
+  building's light maps into one image and give the walls a second set
+  of texture coordinates, drawn with a small custom material (the
+  graphics card does the bilinear blend, as Glide did, and the corner
+  count stays the same). B recommends (2).
+- Log: per building, the `.dil` used, surfaces lit, surfaces failing
+  the size check; Connor's hut red histogram as in 5a.
+- Check: by eye, inside Connor's hut darker than outside and darker in
+  the corners, but reasonably lit (the user's check in the original).
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,

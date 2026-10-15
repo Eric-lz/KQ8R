@@ -28,7 +28,6 @@
 //! like doors (their `open` movement, frame by frame) and live in the
 //! same `Active`; a click runs the chest's own steps.
 
-use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kq8_core::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
@@ -43,7 +42,8 @@ use crate::game_camera::GameCam;
 use crate::load::Objects;
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform_from, Buildings, GroundLookup, ObjectColliders, ViewBlockerSet};
-use crate::{material_for, mesh_from, to_bevy, Shared, UNITS_PER_METRE};
+use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
+use crate::{model_mesh, Shared, UNITS_PER_METRE};
 
 /// Connor's `attackDist` when `Connor.kq` gives none: the built-in
 /// default for characters (doors.md rule 11).
@@ -51,7 +51,7 @@ const DEFAULT_ATTACK_DIST: f32 = 1250.0;
 
 /// One frame of an animation, ready to draw: (mesh, material) per
 /// material group.
-type BuiltFrame = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
+type BuiltFrame = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
 
 /// One door's entities: the body (turned) and, per movement, one entity
 /// per frame (only the shown one visible).
@@ -168,7 +168,8 @@ pub fn spawn_doors(
     colliders: &mut Vec<BoxCollider>,
     item: Option<String>,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<ObjectMaterial>,
+    light: &ObjectLight,
     images: &mut Assets<Image>,
     main_log: &mut Log,
 ) {
@@ -186,25 +187,16 @@ pub fn spawn_doors(
     let built: Vec<Vec<BuiltFrame>> = std::mem::take(&mut objects.door_animations)
         .into_iter()
         .map(|anim| {
-            let looks: Vec<(i32, Handle<StandardMaterial>)> =
-                anim.looks.into_iter().map(|(m, look)| (m, materials.add(material_for(look, ImageAddressMode::Repeat, images)))).collect();
+            let looks: Vec<(i32, Handle<ObjectMaterial>, kq8_data::Lighting)> =
+                anim.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l)).collect();
             anim.frames
                 .into_iter()
                 .map(|frame| {
                     frame
                         .into_iter()
                         .filter_map(|(m, triangles)| {
-                            let (_, material) = looks.iter().find(|(i, _)| *i == m)?;
-                            let mut positions = Vec::with_capacity(triangles.len() * 3);
-                            let mut uvs = Vec::with_capacity(triangles.len() * 3);
-                            for t in &triangles {
-                                // Clockwise front (the game) -> counter-clockwise (Bevy).
-                                for k in [0, 2, 1] {
-                                    positions.push(to_bevy(t.positions[k], [0.0; 3]));
-                                    uvs.push(t.uvs[k]);
-                                }
-                            }
-                            Some((meshes.add(mesh_from(positions, uvs)), material.clone()))
+                            let (_, material, lighting) = looks.iter().find(|(i, _, _)| *i == m)?;
+                            Some((meshes.add(model_mesh(&triangles, *lighting, [0.0; 3])), material.clone()))
                         })
                         .collect()
                 })

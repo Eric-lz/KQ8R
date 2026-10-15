@@ -248,6 +248,23 @@ pub struct Triangle {
     pub material: i32,
     /// Index of the mesh node it came from.
     pub node: usize,
+    /// Unit normal at each corner, pointing out of the front side: the
+    /// average of the unit normals of all triangles of the same mesh node
+    /// that use the same vertex (object-lighting.md rule 8: computed from
+    /// the geometry, not the game's 256-direction table). Zero if the
+    /// corner's triangles are all degenerate.
+    pub normals: [[f32; 3]; 3],
+}
+
+/// Unit normal of a triangle whose corners run clockwise seen from its
+/// front side (models-and-textures.md, Q2), pointing out of the front;
+/// zero for a degenerate triangle.
+pub fn front_normal(p: &[[f32; 3]; 3]) -> [f32; 3] {
+    let a: [f32; 3] = std::array::from_fn(|k| p[2][k] - p[0][k]);
+    let b: [f32; 3] = std::array::from_fn(|k| p[1][k] - p[0][k]);
+    let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if len > 0.0 { n.map(|v| v / len) } else { [0.0; 3] }
 }
 
 /// Triangles of one sequence, plus anything that could not be built.
@@ -448,6 +465,11 @@ impl Shape {
             // node or the mesh has no texture frame.
             let uv_base = (node.texture_frame >= 0 && mesh.texture_vertices_per_frame > 0)
                 .then(|| node.texture_frame as usize * mesh.texture_vertices_per_frame);
+            // Corner normals (rule 8): sum of the unit face normals per
+            // vertex of this node, made unit length at the end.
+            let first_triangle = g.triangles.len();
+            let mut corner_vertices: Vec<[i32; 3]> = Vec::new();
+            let mut sums: std::collections::HashMap<i32, [f32; 3]> = std::collections::HashMap::new();
             for (face_index, face) in mesh.faces.iter().enumerate() {
                 let mut positions = [[0.0; 3]; 3];
                 let mut uvs = [[0.0; 2]; 3];
@@ -468,7 +490,22 @@ impl Shape {
                     g.problems.push(format!("node {node_index} face {face_index}: index out of range"));
                     continue;
                 }
-                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index });
+                let n = front_normal(&positions);
+                for &(vi, _) in &face.corners {
+                    let sum = sums.entry(vi).or_insert([0.0; 3]);
+                    for k in 0..3 {
+                        sum[k] += n[k];
+                    }
+                }
+                corner_vertices.push(face.corners.map(|c| c.0));
+                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index, normals: [[0.0; 3]; 3] });
+            }
+            for (t, vertices) in g.triangles[first_triangle..].iter_mut().zip(&corner_vertices) {
+                for (normal, vi) in t.normals.iter_mut().zip(vertices) {
+                    let s = sums[vi];
+                    let len = (s[0] * s[0] + s[1] * s[1] + s[2] * s[2]).sqrt();
+                    *normal = if len > 1e-6 { s.map(|v| v / len) } else { [0.0; 3] };
+                }
             }
         }
         g
@@ -572,6 +609,32 @@ mod tests {
         // the sequence's step of 50 along X is not applied.
         assert_eq!(t.positions[1], [4.0, 2.0, 102.0]);
         assert_eq!(t.uvs[2], [0.0, 1.0]);
+        // Corners (2,2), (4,2), (2,4) at z = 102: anticlockwise seen from
+        // above, so clockwise from below; the front faces down.
+        assert_eq!(t.normals, [[0.0, 0.0, -1.0]; 3]);
+    }
+
+    #[test]
+    fn corner_normals_average_the_triangles_at_a_vertex() {
+        let mut s = Shape::parse(&shape()).unwrap();
+        // A new vertex 5 = (0,0,2) -> (1,1,2) -> (2,2,104), above corner 0,
+        // and a second face (vertices 2, 3, 5) standing up along y = 2.
+        s.meshes[0].vertices.push([0, 0, 2, 0]);
+        s.meshes[0].faces.push(Face { corners: [(2, 0), (3, 1), (5, 2)], material: 0 });
+        let g = s.geometry(s.rest_sequence());
+        assert!(g.problems.is_empty(), "{:?}", g.problems);
+        assert_eq!(front_normal(&g.triangles[1].positions), [0.0, 1.0, 0.0]);
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        let close = |a: [f32; 3], b: [f32; 3]| (0..3).all(|k| (a[k] - b[k]).abs() < 1e-6);
+        // Vertices 2 and 3 are shared: (0,0,-1) and (0,1,0) averaged.
+        assert!(close(g.triangles[0].normals[0], [0.0, h, -h]));
+        assert!(close(g.triangles[0].normals[1], [0.0, h, -h]));
+        assert!(close(g.triangles[1].normals[1], [0.0, h, -h]));
+        // Vertex 4 only in the first face, vertex 5 only in the second.
+        assert!(close(g.triangles[0].normals[2], [0.0, 0.0, -1.0]));
+        assert!(close(g.triangles[1].normals[2], [0.0, 1.0, 0.0]));
+        // A degenerate triangle has no normal.
+        assert_eq!(front_normal(&[[1.0, 2.0, 3.0]; 3]), [0.0; 3]);
     }
 
     #[test]

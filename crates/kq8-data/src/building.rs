@@ -1,5 +1,5 @@
 //! Buildings: `.dig` files, class `ITRGeometry` (the shape of a
-//! `KQInterior` object). Lighting (`.dil`) is not read yet.
+//! `KQInterior` object). Its light maps (`.dil`) are read by `dil.rs`.
 //!
 //! Layout and drawing rules from the behaviour note
 //! `docs/behaviour/buildings.md` (session A, answers Q11), checked with
@@ -86,6 +86,8 @@ pub struct Plane {
 #[derive(Debug, Clone)]
 pub struct Building {
     pub version: i32,
+    /// Equals the build id of the building's `.dil` (object-lighting.md).
+    pub build_id: u32,
     /// Texels per unit (0.125 = 1 texel per 8 units in Daventry).
     pub texture_scale: f32,
     pub bounds_min: [f32; 3],
@@ -129,7 +131,7 @@ impl Building {
         }
         let version = block.version;
         let mut r = Reader::new(bytes, block.data_offset);
-        let _build_id = r.u32()?;
+        let build_id = r.u32()?;
         let texture_scale = r.f32()?;
         let bounds_min = r.vec3()?;
         let bounds_max = r.vec3()?;
@@ -186,6 +188,7 @@ impl Building {
         }
         Ok(Building {
             version,
+            build_id,
             texture_scale,
             bounds_min,
             bounds_max,
@@ -331,6 +334,7 @@ mod tests {
         let b = Building::parse(&square()).unwrap();
         assert_eq!(b.counts, [1, 0, 0, 0, 4, 4, 4, 1]);
         assert_eq!(b.texture_scale, 0.125);
+        assert_eq!(b.build_id, 7);
         let (tris, bad) = b.triangles();
         assert_eq!((tris.len(), bad), (2, 0));
         // texel = offset + uv * (size + 1): corner 2 -> (1 + 16, 0 + 16)

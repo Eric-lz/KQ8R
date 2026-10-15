@@ -7,7 +7,7 @@ use std::path::Path;
 use kq8_data::game_dir::{VOLUMES, WORLDS};
 use kq8_data::palette::Rgb;
 use kq8_data::shape::{bounds, Triangle};
-use kq8_data::{Bitmap, GameDir, MaterialKind, Palette, Shape, VolArchive};
+use kq8_data::{Bitmap, GameDir, Lighting, MaterialKind, Palette, Shape, VolArchive};
 
 use crate::log::Log;
 
@@ -75,6 +75,15 @@ pub struct Group {
     pub material: i32,
     pub triangles: Vec<Triangle>,
     pub look: Look,
+    /// How the material is lit (object-lighting.md rule 7).
+    pub lighting: Lighting,
+}
+
+/// A model material's lighting kind (object-lighting.md rule 7). Shading
+/// bits the note doesn't cover, or no material: full brightness
+/// (STAND-IN; no model material in the data has other bits).
+pub fn material_lighting(m: Option<&kq8_data::Material>) -> Lighting {
+    m.and_then(|m| m.lighting()).unwrap_or(Lighting::None)
 }
 
 /// Which animation frame to draw: (sequence/loop name, start 0..1, repeats).
@@ -166,13 +175,14 @@ pub fn load_model(
             Look::Color(c) => format!("colour {c:?}"),
             Look::Missing(why) => format!("MISSING ({why}), drawn magenta"),
         };
-        let flags = usize::try_from(index).ok().and_then(|i| list.get(i)).map(|m| m.flags);
+        let m = usize::try_from(index).ok().and_then(|i| list.get(i));
+        let lighting = material_lighting(m);
         log.summary(format!(
-            "  material {index}: flags={} triangles={} -> {what}",
-            flags.map_or("-".into(), |f| format!("0x{f:X}")),
+            "  material {index}: flags={} triangles={} lighting={lighting:?} -> {what}",
+            m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        groups.push(Group { material: index, triangles, look });
+        groups.push(Group { material: index, triangles, look, lighting });
     }
     Ok(Model { label, groups, min, max, frame_note })
 }
@@ -247,8 +257,8 @@ pub struct ConnorAssets {
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
 pub struct Animation {
-    /// One look per material index used by any frame.
-    pub looks: Vec<(i32, Look)>,
+    /// One look and lighting kind per material index used by any frame.
+    pub looks: Vec<(i32, Look, Lighting)>,
     /// Per frame: triangles grouped by material index (model space).
     pub frames: Vec<Vec<(i32, Vec<Triangle>)>>,
     /// Loop length in seconds.
@@ -321,7 +331,8 @@ pub fn load_animation(
     let looks = used
         .into_iter()
         .map(|index| {
-            let look = match usize::try_from(index).ok().and_then(|i| list.get(i)) {
+            let material = usize::try_from(index).ok().and_then(|i| list.get(i));
+            let look = match material {
                 None => Look::Missing(format!("material index {index} not in list of {}", list.len())),
                 Some(m) => match m.kind() {
                     MaterialKind::Texture => load_texture(world, game, &m.texture, palette, log),
@@ -329,7 +340,7 @@ pub fn load_animation(
                     k => Look::Missing(format!("material kind {k:?}")),
                 },
             };
-            (index, look)
+            (index, look, material_lighting(material))
         })
         .collect();
     log.detail(format!(
@@ -341,6 +352,51 @@ pub fn load_animation(
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
     ));
     Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms })
+}
+
+/// The lights for models on hardware (object-lighting.md rule 1): the
+/// files the world's `swtohwlt.cs` loads with `loadKQ`, from
+/// `data/<World>/KQ/<path>` or, failing that, the world's archives. No
+/// script or no file: logged, and that part stays dark (no light).
+pub fn load_object_lights(game: &GameDir, world: &World, log: &mut Log) -> kq8_data::lights::Lights {
+    use kq8_data::{kq_text, lights};
+    let mut out = lights::Lights::default();
+    let script = match world.load("swtohwlt.cs") {
+        Some(Ok((label, bytes))) => {
+            let files = lights::load_kq_lines(&bytes);
+            log.summary(format!("object light: {label} loads {files:?}"));
+            files
+        }
+        Some(Err(e)) => {
+            log.summary(format!("object light: swtohwlt.cs: {e}; no lights"));
+            return out;
+        }
+        None => {
+            log.summary(format!("object light: no swtohwlt.cs in {}; no lights", world.name));
+            return out;
+        }
+    };
+    for path in script {
+        let rel = format!("data/{}/KQ/{path}", world.name);
+        let found = match game.find(&rel).filter(|p| p.is_file()) {
+            Some(p) => std::fs::read(&p).map(|b| (rel, b)).map_err(|e| e.to_string()),
+            None => {
+                let base = path.rsplit(['/', '\\']).next().unwrap_or(&path);
+                world.load(base).unwrap_or_else(|| Err(format!("{path} not found")))
+            }
+        };
+        match found {
+            Ok((label, bytes)) => {
+                out.add_sections(&path, &kq_text::parse(&bytes));
+                log.detail(format!("  object light file {path}: {label}"));
+            }
+            Err(e) => log.summary(format!("  object light file {path}: {e}")),
+        }
+    }
+    for p in &out.problems {
+        log.summary(format!("  object light problem: {p}"));
+    }
+    out
 }
 
 /// A model name is looked up in the world's archives, then in
@@ -2745,6 +2801,7 @@ pub fn load_building(
                     uvs: order.map(|k| [t.texels[k][0] / size[0], t.texels[k][1] / size[1]]),
                     material: index as i32,
                     node: t.surface,
+                    normals: [kq8_data::shape::front_normal(&t.positions); 3],
                 }
             })
             .collect();
@@ -2758,7 +2815,9 @@ pub fn load_building(
             m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        groups.push(Group { material: index as i32, triangles, look });
+        // Buildings are lit by their `.dil` light maps (M1 5c, not done):
+        // full brightness until then.
+        groups.push(Group { material: index as i32, triangles, look, lighting: Lighting::None });
     }
     if not_drawn > 0 {
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));

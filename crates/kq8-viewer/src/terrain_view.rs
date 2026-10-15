@@ -14,7 +14,8 @@ use kq8_data::terrain::Level;
 
 use crate::light_view::GroundLight;
 use crate::load::{Ground, Objects};
-use crate::{material_for, mesh_from, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
+use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
+use crate::{material_for, mesh_from, model_mesh, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
 
 /// Which part of the ground a mesh is, for the U key (the floor grid,
 /// water.md): the drawn surface where it equals the floor or lies over a
@@ -226,14 +227,19 @@ pub struct LoadedObjects(pub Option<Objects>);
 
 /// Builds each different model once and places every copy
 /// (docs/behaviour/objects.md).
+// A Bevy system gets everything it uses as arguments; splitting it up
+// would not make it clearer.
+#[allow(clippy::too_many_arguments)]
 pub fn setup_objects(
     mut commands: Commands,
     mut loaded: ResMut<LoadedObjects>,
     shared: Res<Shared>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut object_materials: ResMut<Assets<ObjectMaterial>>,
     mut images: ResMut<Assets<Image>>,
     held: Res<crate::door_view::HeldItem>,
+    light: Res<ObjectLight>,
 ) {
     let Some(mut objects) = loaded.0.take() else { return };
     let mut log = shared.log.lock().unwrap();
@@ -256,7 +262,7 @@ pub fn setup_objects(
             (kind.clone(), *slot, if t >= 256.0 { 1.0 } else { (t / 255.0).clamp(0.0, 1.0) })
         })
         .collect();
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut materials, &mut images, &mut log);
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut object_materials, &light, &mut images, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
     // placed object or marker (any case; the last one loaded by that name).
@@ -281,35 +287,31 @@ pub fn setup_objects(
     };
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
-        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut materials, &mut images, &mut log);
+        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut object_materials, &light, &mut images, &mut log);
     }
     // One (mesh, material) list per model, shared by all its copies.
-    let mut built: Vec<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> = Vec::new();
+    let mut built: Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>> = Vec::new();
     let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
+    // Each model's smooth corner normals, for the light log (M1 5b).
+    let mut smooth: Vec<Vec<Vec3>> = Vec::new();
     for (_, model) in objects.shapes {
+        smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.lighting)).collect());
         let mut parts = Vec::new();
         first_corner.push(model.groups.first().and_then(|g| g.triangles.first()).map(|t| t.positions[0]));
         for group in model.groups {
-            let mut positions = Vec::with_capacity(group.triangles.len() * 3);
-            let mut uvs = Vec::with_capacity(group.triangles.len() * 3);
-            for t in &group.triangles {
-                // Clockwise front (the game) -> counter-clockwise (Bevy).
-                for k in [0, 2, 1] {
-                    positions.push(to_bevy(t.positions[k], [0.0; 3]));
-                    uvs.push(t.uvs[k]);
-                }
-            }
-            let material = material_for(group.look, ImageAddressMode::Repeat, &mut images);
-            parts.push((meshes.add(mesh_from(positions, uvs)), materials.add(material)));
+            // Lit by the world's lights (M1 5b); buildings full bright until 5c.
+            let mesh = model_mesh(&group.triangles, group.lighting, [0.0; 3]);
+            let material = object_material(group.look, group.lighting, &light, &mut images);
+            parts.push((meshes.add(mesh), object_materials.add(material)));
         }
         built.push(parts);
     }
-    crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut materials);
+    crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials);
     // Emitters (M3 step 3b-1): their particles use the object models.
     // Particle catchers (3b-2) look up their emitter and building.
     let emitters = std::mem::take(&mut objects.emitters);
     let catchers = std::mem::take(&mut objects.catchers);
-    crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &targets, &built, &mut materials, &mut log);
+    crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &targets, &built, &mut object_materials, &mut log);
     commands.insert_resource(Buildings(buildings));
     // Animated objects whose movement plays (3c): drawn by anim_view.
     let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();
@@ -319,7 +321,8 @@ pub fn setup_objects(
         std::mem::take(&mut objects.object_animations),
         &objects.placed,
         &mut meshes,
-        &mut materials,
+        &mut object_materials,
+        &light,
         &mut images,
         &mut log,
     );
@@ -343,19 +346,31 @@ pub fn setup_objects(
             log.detail(format!("see-through [{}]: translucency={} -> opacity {opacity:.2}", p.name, p.translucency));
         }
         for (mesh, material) in &built[*i] {
-            let material = if opacity < 1.0 {
-                // Every material of a see-through object (objects.md Q14);
-                // a separate copy, because other copies of the model may
-                // be solid.
-                let original = materials.get(material).cloned().unwrap_or_default();
-                materials.add(with_opacity(&original, opacity))
-            } else {
-                material.clone()
-            };
+            // Every material of a see-through object (objects.md Q14); a
+            // separate copy, because other copies of the model may be solid.
+            let material = crate::object_light::see_through(&mut object_materials, material, opacity);
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             // Unused objects, and hidden ones (objects.md Q18): only with H.
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
+            }
+        }
+    }
+    // The light of the three drawn objects nearest Connor's start (M1 5b,
+    // object-lighting.md "How to check": Daventry within 0.30-0.42).
+    if let Some((at, _)) = connor_at {
+        let mut near: Vec<(f32, usize)> = objects
+            .placed
+            .iter()
+            .enumerate()
+            .filter(|(_, (p, i, unused))| !*unused && p.drawn() && !smooth[*i].is_empty())
+            .map(|(k, (p, _, _))| (((p.position[0] - at[0]).powi(2) + (p.position[1] - at[1]).powi(2)).sqrt(), k))
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (distance, k) in near.into_iter().take(3) {
+            let (p, i, _) = &objects.placed[k];
+            if let Some(stats) = crate::object_light::light_stats(&light, &smooth[*i], bevy_transform(p).rotation) {
+                log.summary(format!("object light: {} ({:.0} from Connor's start): {stats}", p.name, distance));
             }
         }
     }

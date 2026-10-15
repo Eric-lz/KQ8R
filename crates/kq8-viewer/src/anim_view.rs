@@ -17,7 +17,6 @@
 //!
 //! Log: `kq8-artifacts/logs/anim.log`.
 
-use bevy::image::ImageAddressMode;
 use bevy::prelude::*;
 use kq8_data::shape::Transform as GameTransform;
 use kq8_core::anim::{pose_at_frame, LoopPlayer};
@@ -26,7 +25,8 @@ use kq8_core::emitter::Rng;
 use crate::load::{AnimatedAssets, Animation};
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform_from, ObjectColliders, ShownWithH};
-use crate::{material_for, mesh_from, to_bevy, with_opacity};
+use crate::model_mesh;
+use crate::object_light::{object_material, see_through, ObjectLight, ObjectMaterial};
 
 /// Seed for the `flags` bit 8 random starts and speeds.
 const SEED: u64 = 0x0A11_3C00_5EED_0001;
@@ -90,7 +90,8 @@ pub fn spawn_animated(
     animations: Vec<Animation>,
     placed: &[(kq8_data::objects::Placement, usize, bool)],
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<ObjectMaterial>,
+    light: &ObjectLight,
     images: &mut Assets<Image>,
     main_log: &mut Log,
 ) {
@@ -105,7 +106,7 @@ pub fn spawn_animated(
     // materials by index, its length and steps.
     struct Built {
         frames: Vec<Vec<(Handle<Mesh>, i32)>>,
-        materials: Vec<(i32, Handle<StandardMaterial>)>,
+        materials: Vec<(i32, Handle<ObjectMaterial>)>,
         duration: f32,
         steps: Vec<GameTransform>,
         moves: bool,
@@ -113,7 +114,8 @@ pub fn spawn_animated(
     let built: Vec<Built> = animations
         .into_iter()
         .map(|a| {
-            let materials = a.looks.into_iter().map(|(m, look)| (m, materials.add(material_for(look, ImageAddressMode::Repeat, images)))).collect();
+            let lighting: std::collections::BTreeMap<i32, kq8_data::Lighting> = a.looks.iter().map(|(m, _, l)| (*m, *l)).collect();
+            let materials = a.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)))).collect();
             let frames = a
                 .frames
                 .into_iter()
@@ -121,16 +123,8 @@ pub fn spawn_animated(
                     frame
                         .into_iter()
                         .map(|(m, triangles)| {
-                            let mut positions = Vec::with_capacity(triangles.len() * 3);
-                            let mut uvs = Vec::with_capacity(triangles.len() * 3);
-                            for t in &triangles {
-                                // Clockwise front (the game) -> counter-clockwise (Bevy).
-                                for k in [0, 2, 1] {
-                                    positions.push(to_bevy(t.positions[k], [0.0; 3]));
-                                    uvs.push(t.uvs[k]);
-                                }
-                            }
-                            (meshes.add(mesh_from(positions, uvs)), m)
+                            let l = lighting.get(&m).copied().unwrap_or(kq8_data::Lighting::None);
+                            (meshes.add(model_mesh(&triangles, l, [0.0; 3])), m)
                         })
                         .collect()
                 })
@@ -161,12 +155,7 @@ pub fn spawn_animated(
             commands.entity(body).add_child(parent);
             for (mesh, m) in frame {
                 let Some((_, material)) = b.materials.iter().find(|(i, _)| i == m) else { continue };
-                let material = if opacity < 1.0 {
-                    let original = materials.get(material).cloned().unwrap_or_default();
-                    materials.add(with_opacity(&original, opacity))
-                } else {
-                    material.clone()
-                };
+                let material = see_through(materials, material, opacity);
                 let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
                 commands.entity(parent).add_child(part);
             }

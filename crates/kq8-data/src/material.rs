@@ -58,6 +58,34 @@ impl Material {
     pub fn shading(&self) -> u32 {
         self.flags & 0xF00
     }
+
+    /// How a model material is lit (object-lighting.md rule 7): `0x1000`
+    /// (colour key) and `0x2000` (texture alpha) force none; otherwise
+    /// `0x400` smooth, `0x200` flat, `0x100` none. `None` for any other
+    /// shading bits (the note doesn't say; no model material in the data
+    /// has them, `kq8 lighting-verify`).
+    pub fn lighting(&self) -> Option<Lighting> {
+        if self.flags & (0x1000 | 0x2000) != 0 {
+            return Some(Lighting::None);
+        }
+        match self.shading() {
+            0x400 => Some(Lighting::Smooth),
+            0x200 => Some(Lighting::Flat),
+            0x100 => Some(Lighting::None),
+            _ => None,
+        }
+    }
+}
+
+/// The lighting kind of a model material (object-lighting.md rule 7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lighting {
+    /// Full brightness.
+    None,
+    /// One grey per triangle, from its first corner.
+    Flat,
+    /// Light per corner, blended across the triangle.
+    Smooth,
 }
 
 #[derive(Debug, Clone)]
@@ -143,5 +171,21 @@ mod tests {
         assert_eq!(m.shading(), 0x400);
         assert_eq!(m.texture, "wood2.BMP");
         assert_eq!(m.rgb, [0x7F; 3]);
+    }
+
+    #[test]
+    fn lighting_kind() {
+        let m = |flags| Material { flags, alpha: 1.0, palette: 0, rgb: [0; 3], texture: String::new() };
+        assert_eq!(m(0x403).lighting(), Some(Lighting::Smooth));
+        assert_eq!(m(0x203).lighting(), Some(Lighting::Flat));
+        assert_eq!(m(0x103).lighting(), Some(Lighting::None));
+        // Colour key and texture alpha force none (rule 7).
+        assert_eq!(m(0x1403).lighting(), Some(Lighting::None));
+        assert_eq!(m(0x2203).lighting(), Some(Lighting::None));
+        // Fog (0x10000) does not change the kind.
+        assert_eq!(m(0x10403).lighting(), Some(Lighting::Smooth));
+        // Shading bits the note doesn't cover.
+        assert_eq!(m(0x003).lighting(), None);
+        assert_eq!(m(0x603).lighting(), None);
     }
 }
