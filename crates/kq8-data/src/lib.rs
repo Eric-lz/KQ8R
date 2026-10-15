@@ -12,6 +12,7 @@ pub mod dil;
 pub mod effects;
 pub mod envinfo;
 pub mod game_dir;
+pub mod haze;
 pub mod items;
 pub mod kq_text;
 pub mod lightmap;

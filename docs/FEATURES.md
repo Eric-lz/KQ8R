@@ -31,6 +31,13 @@ logs (Connor and the three objects nearest his start stay within
 Buildings are lit by their own pre-made light maps (`.dil`, 2026-10-15):
 every building in 10 worlds, Connor's hut's numbers match the behaviour
 note; checked by eye by the user (2026-10-15).
+Haze (2026-10-15): objects (and Connor, items, leaves) fade into the
+world's haze colour with distance from the camera and are left out past
+the haze end (Daventry 18,000 to 22,950 units, as the behaviour note
+says), unless their file sets `b_hazeSolid`. The ground and building
+walls fade into the same fog point by point, and the background is the
+fog colour (a stand-in from the user's check, asked as Q68). Checked in
+the logs and by eye by the user (2026-10-15).
 
 ## Connor
 
@@ -161,6 +168,7 @@ objects don't stop it, as in the original. Checked in the logs
   default), doubled (x2), or off (full bright); the mode is shown on
   screen. x1 is the default because it matches the original by eye
   (user, 2026-10-14, ground).
+- **F8:** haze (distance fog) on or off; shown on screen.
 
 ## Launch options (viewer)
 
@@ -179,6 +187,8 @@ repeated and checked in the logs. They do not change the game's rules.
   colour it with another palette; that option works only with `--model`.
 - `--light x1|x2|off`: how the ground and the objects are lit at the
   start (default `x1`). F7 changes it while the window is open.
+- `--haze on|off`: haze at the start (default `on`). F8 changes it while
+  the window is open.
 - `--game <folder>`: where the game's files are (default `MASK`). The
   environment variable `KQ8_GAME_DIR` sets the same folder.
 - `--frames <number>`: close the window by itself after that many frames,
@@ -217,8 +227,7 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, moving lights (Dead City),
-  distance haze, fire and
+- **Not drawn:** people and monsters, moving lights (Dead City), fire and
   ice arrow sparks and the dragon fire (they come with fighting), the
   teleport pad's look.
 - **No sound or music** at all.

@@ -215,6 +215,8 @@ mod tests {
             shadowmap_name: Some("s.bin".into()),
             sw_lightmap_name: Some(String::new()),
             sw_shadowmap_name: None,
+            haze_distance: None,
+            visible_distance: None,
             all: Vec::new(),
         }
     }

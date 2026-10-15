@@ -82,6 +82,12 @@ pub struct Placement {
     pub hidden: bool,
     /// `groupsAlways` bit mask, default 6 (Q18).
     pub groups_always: u32,
+    /// `b_hazeSolid`: not left out at full haze (object-lighting.md
+    /// rule 21). Any value other than 0.
+    pub haze_solid: bool,
+    /// `hazeMultiplier`, default 1 (rule 22). The data's misspelled
+    /// `hazeMulitplier` is not read (Q68).
+    pub haze_multiplier: f32,
 }
 
 impl Placement {
@@ -106,6 +112,8 @@ impl Placement {
             missing_loc: loc.map(|v| v.is_none()),
             hidden: s.number("hidden").and_then(Result::ok).is_some_and(|v| v as i64 != 0),
             groups_always: s.number("groupsAlways").and_then(Result::ok).map_or(6, |v| v as u32),
+            haze_solid: s.number("b_hazeSolid").and_then(Result::ok).is_some_and(|v| v != 0.0),
+            haze_multiplier: s.number("hazeMultiplier").and_then(Result::ok).map_or(1.0, |v| v as f32),
         }
     }
 
@@ -596,6 +604,13 @@ locZ=937
         let none = &crate::kq_text::parse(b"[x]\nclassType=KQObject\n")[0];
         let p = Placement::from_section(none);
         assert_eq!((p.position, p.missing_loc), ([0.0; 3], [true; 3]));
+        // Haze keys (object-lighting.md rules 21, 22): defaults, then set;
+        // the data's misspelling is not read (Q68).
+        assert_eq!((p.haze_solid, p.haze_multiplier), (false, 1.0));
+        let hazy = &crate::kq_text::parse(b"[t]\nb_hazeSolid=1\nhazeMultiplier=2.0\n")[0];
+        assert_eq!((Placement::from_section(hazy).haze_solid, Placement::from_section(hazy).haze_multiplier), (true, 2.0));
+        let misspelt = &crate::kq_text::parse(b"[t]\nhazeMulitplier=2.0\n")[0];
+        assert_eq!(Placement::from_section(misspelt).haze_multiplier, 1.0);
     }
 
     #[test]

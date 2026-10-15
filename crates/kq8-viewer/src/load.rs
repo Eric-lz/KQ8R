@@ -78,18 +78,36 @@ pub struct Group {
     pub material: i32,
     pub triangles: Vec<Triangle>,
     pub look: Look,
-    /// How the material is lit (object-lighting.md rule 7).
-    pub lighting: Lighting,
+    /// How the material is lit and hazed (object-lighting.md rules 7, 20).
+    pub shading: Shading,
     /// Buildings only: per triangle, its corners' coordinates in the
     /// building's light picture (same corner order); empty for models.
     pub light_uvs: Vec<[[f32; 2]; 3]>,
 }
 
-/// A model material's lighting kind (object-lighting.md rule 7). Shading
-/// bits the note doesn't cover, or no material: full brightness
-/// (STAND-IN; no model material in the data has other bits).
-pub fn material_lighting(m: Option<&kq8_data::Material>) -> Lighting {
-    m.and_then(|m| m.lighting()).unwrap_or(Lighting::None)
+/// How a model material is lit and hazed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shading {
+    /// object-lighting.md rule 7.
+    pub lighting: Lighting,
+    /// Material flag `0x10000`: half the haze (rule 20).
+    pub haze_halved: bool,
+}
+
+impl Shading {
+    /// Full brightness, normal haze (buildings, missing materials).
+    pub const PLAIN: Shading = Shading { lighting: Lighting::None, haze_halved: false };
+}
+
+/// A model material's lighting kind (object-lighting.md rule 7) and haze
+/// flag (rule 20). Shading bits the note doesn't cover, or no material:
+/// full brightness (STAND-IN; no model material in the data has other
+/// bits).
+pub fn material_shading(m: Option<&kq8_data::Material>) -> Shading {
+    Shading {
+        lighting: m.and_then(|m| m.lighting()).unwrap_or(Lighting::None),
+        haze_halved: m.is_some_and(|m| m.flags & 0x10000 != 0),
+    }
 }
 
 /// Which animation frame to draw: (sequence/loop name, start 0..1, repeats).
@@ -182,13 +200,13 @@ pub fn load_model(
             Look::Missing(why) => format!("MISSING ({why}), drawn magenta"),
         };
         let m = usize::try_from(index).ok().and_then(|i| list.get(i));
-        let lighting = material_lighting(m);
+        let shading = material_shading(m);
         log.summary(format!(
-            "  material {index}: flags={} triangles={} lighting={lighting:?} -> {what}",
+            "  material {index}: flags={} triangles={} {shading:?} -> {what}",
             m.map_or("-".into(), |m| format!("0x{:X}", m.flags)),
             triangles.len()
         ));
-        groups.push(Group { material: index, triangles, look, lighting, light_uvs: Vec::new() });
+        groups.push(Group { material: index, triangles, look, shading, light_uvs: Vec::new() });
     }
     Ok(Model { label, groups, min, max, frame_note, light_atlas: None })
 }
@@ -263,8 +281,8 @@ pub struct ConnorAssets {
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
 pub struct Animation {
-    /// One look and lighting kind per material index used by any frame.
-    pub looks: Vec<(i32, Look, Lighting)>,
+    /// One look and shading per material index used by any frame.
+    pub looks: Vec<(i32, Look, Shading)>,
     /// Per frame: triangles grouped by material index (model space).
     pub frames: Vec<Vec<(i32, Vec<Triangle>)>>,
     /// Loop length in seconds.
@@ -346,7 +364,7 @@ pub fn load_animation(
                     k => Look::Missing(format!("material kind {k:?}")),
                 },
             };
-            (index, look, material_lighting(material))
+            (index, look, material_shading(material))
         })
         .collect();
     log.detail(format!(
@@ -358,6 +376,39 @@ pub fn load_animation(
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
     ));
     Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms })
+}
+
+/// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
+/// `visibleDistance` from `TERRAIN.KQ` (no terrain or missing: 20,000 and
+/// 25,500, the note's defaults) and `resetHazeColor` from `world.cs`
+/// (missing: black, STAND-IN).
+pub fn load_haze(world: &World, settings: Option<&kq8_data::TerrainSettings>, log: &mut Log) -> kq8_data::haze::Haze {
+    use kq8_data::haze::{reset_haze_color, Haze, NO_TERRAIN_HAZE_DISTANCE, NO_TERRAIN_VISIBLE_DISTANCE};
+    let start = settings.and_then(|s| s.haze_distance).unwrap_or(NO_TERRAIN_HAZE_DISTANCE);
+    let visible = settings.and_then(|s| s.visible_distance).unwrap_or(NO_TERRAIN_VISIBLE_DISTANCE);
+    let colour = match world.load("world.cs") {
+        Some(Ok((label, bytes))) => match reset_haze_color(&bytes) {
+            Some(c) => {
+                log.detail(format!("haze colour from {label}"));
+                c
+            }
+            None => {
+                log.summary(format!("haze: no resetHazeColor in {label}; black"));
+                [0.0; 3]
+            }
+        },
+        _ => {
+            log.summary(format!("haze: no world.cs in {}; colour black", world.name));
+            [0.0; 3]
+        }
+    };
+    let haze = Haze::new(start, visible, colour);
+    log.summary(format!(
+        "haze: hazeDistance {start:.0}, visibleDistance {visible:.0} -> haze full at {:.0}{}",
+        haze.end,
+        if settings.is_none() { " (no terrain: the note's defaults)" } else { "" }
+    ));
+    haze
 }
 
 /// The lights for models on hardware (object-lighting.md rule 1): the
@@ -2853,7 +2904,7 @@ pub fn load_building(
             triangles.len()
         ));
         // Lit by the building's light maps, not by the sun (M1 5c).
-        groups.push(Group { material: index as i32, triangles, look, lighting: Lighting::None, light_uvs });
+        groups.push(Group { material: index as i32, triangles, look, shading: Shading::PLAIN, light_uvs });
     }
     if not_drawn > 0 {
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));

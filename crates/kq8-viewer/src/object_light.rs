@@ -20,8 +20,16 @@
 //!   on screen; the shader turns the light into Bevy's linear colour space.
 //! - F7 (`light_view`) changes the mode of every object material too:
 //!   x1 (the note), x2 (doubled, capped; for comparison), off (full bright).
-//! - Not done: point lights (rule 24), haze (rules 19-23), the brightness
-//!   setting (rule 17; 1.0 at the shipped value).
+//! - Haze (M1 step 6, rules 19-23): per object, from the camera's distance
+//!   to the object's position, in the shader; F8 switches it on and off.
+//!   Objects with their own `b_hazeSolid` / `hazeMultiplier` get their own
+//!   material copy (`for_object`).
+//! - Fog over the ground and the background (M1 step 6b, STAND-IN from the
+//!   user's check, Q68): Bevy's distance fog on every 3D camera (linear,
+//!   haze start to end, haze colour), and the clear colour = the haze
+//!   colour; `sync_fog`. F8 switches it with the rest.
+//! - Not done: point lights (rule 24), the brightness setting (rule 17;
+//!   1.0 at the shipped value).
 
 use bevy::asset::embedded_asset;
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
@@ -30,12 +38,15 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat};
 use bevy::asset::RenderAssetUsages;
 use bevy::shader::ShaderRef;
+use std::time::Instant;
+
+use kq8_data::haze::{Haze, Hazed};
 use kq8_data::lights::Lights;
 use kq8_data::Lighting;
 
 use crate::light_view::{GroundLight, LightMode};
-use crate::load::Look;
-use crate::Shared;
+use crate::load::{Look, Shading};
+use crate::{Shared, UNITS_PER_METRE};
 
 const SHADER: &str = "embedded://kq8_viewer/object_light.wesl";
 
@@ -53,12 +64,27 @@ pub struct Settings {
     pub sun_colour: [Vec4; MAX_SUNS],
     /// In Bevy's world space, not unit length (rule 5).
     pub sun_aim: [Vec4; MAX_SUNS],
+    /// Haze colour, screen colour 0..1 (rule 23); w unused.
+    pub haze_colour: Vec4,
     pub sun_count: u32,
     /// 0 none, 1 flat, 2 smooth.
     pub lighting: u32,
     /// 0 x1, 1 x2, 2 off.
     pub mode: u32,
     pub textured: u32,
+    /// 1 = haze on (F8).
+    pub haze_on: u32,
+    /// Game units: haze start and end (rule 19).
+    pub haze_start: f32,
+    pub haze_end: f32,
+    /// Material flag 0x10000 (rule 20).
+    pub haze_halved: u32,
+    /// The object's `b_hazeSolid` (rule 21).
+    pub haze_solid: u32,
+    /// The object's `hazeMultiplier` (rule 22).
+    pub haze_multiplier: f32,
+    /// Game units per Bevy unit (distances in the shader are in Bevy's).
+    pub game_units: f32,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -120,19 +146,22 @@ fn direction_to_bevy(v: [f32; 3]) -> Vec3 {
     Vec3::new(v[0], v[2], -v[1])
 }
 
-/// The world's lights and the current mode.
+/// The world's lights, haze, and the current modes.
 #[derive(Resource)]
 pub struct ObjectLight {
     pub lights: Lights,
     pub mode: LightMode,
+    pub haze: Haze,
+    /// F8 / `--haze`.
+    pub haze_on: bool,
 }
 
 impl ObjectLight {
-    pub fn new(lights: Lights, mode: LightMode) -> Self {
-        ObjectLight { lights, mode }
+    pub fn new(lights: Lights, mode: LightMode, haze: Haze, haze_on: bool) -> Self {
+        ObjectLight { lights, mode, haze, haze_on }
     }
 
-    fn settings(&self, base_colour: Vec4, lighting: Lighting, textured: bool) -> Settings {
+    fn settings(&self, base_colour: Vec4, shading: Shading, textured: bool) -> Settings {
         let mut sun_colour = [Vec4::ZERO; MAX_SUNS];
         let mut sun_aim = [Vec4::ZERO; MAX_SUNS];
         for (k, sun) in self.lights.suns.iter().take(MAX_SUNS).enumerate() {
@@ -144,10 +173,18 @@ impl ObjectLight {
             ambient: Vec3::from(self.lights.ambient).extend(0.0),
             sun_colour,
             sun_aim,
+            haze_colour: Vec3::from(self.haze.colour).extend(0.0),
             sun_count: self.lights.suns.len().min(MAX_SUNS) as u32,
-            lighting: lighting_code(lighting),
+            lighting: lighting_code(shading.lighting),
             mode: mode_code(self.mode),
             textured: u32::from(textured),
+            haze_on: u32::from(self.haze_on),
+            haze_start: self.haze.start,
+            haze_end: self.haze.end,
+            haze_halved: u32::from(shading.haze_halved),
+            haze_solid: 0,
+            haze_multiplier: 1.0,
+            game_units: UNITS_PER_METRE,
         }
     }
 
@@ -204,17 +241,17 @@ pub fn texture_image(width: u32, height: u32, rgba: Vec<u8>, address: ImageAddre
 
 /// A model material for a texture, colour or missing material (magenta,
 /// never lit, so it stays visible).
-pub fn object_material(look: Look, lighting: Lighting, light: &ObjectLight, images: &mut Assets<Image>) -> ObjectMaterial {
-    let (base, texture, lighting) = match look {
+pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images: &mut Assets<Image>) -> ObjectMaterial {
+    let (base, texture, shading) = match look {
         Look::Texture { width, height, rgba, .. } => {
             let image = images.add(texture_image(width, height, rgba, ImageAddressMode::Repeat));
-            (Vec4::ONE, Some(image), lighting)
+            (Vec4::ONE, Some(image), shading)
         }
-        Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None, lighting),
-        Look::Missing(_) => (LinearRgba::from(Color::srgb(1.0, 0.0, 1.0)).to_vec4(), None, Lighting::None),
+        Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None, shading),
+        Look::Missing(_) => (LinearRgba::from(Color::srgb(1.0, 0.0, 1.0)).to_vec4(), None, Shading { lighting: Lighting::None, ..shading }),
     };
     let textured = texture.is_some();
-    ObjectMaterial { settings: light.settings(base, lighting, textured), texture, alpha_mode: AlphaMode::Opaque }
+    ObjectMaterial { settings: light.settings(base, shading, textured), texture, alpha_mode: AlphaMode::Opaque }
 }
 
 /// A copy of `material` drawn at `opacity` (0..1): an object's
@@ -228,10 +265,29 @@ pub fn with_opacity(material: &ObjectMaterial, opacity: f32) -> ObjectMaterial {
 
 /// `material` as it is (opacity 1), or a see-through copy of it.
 pub fn see_through(materials: &mut Assets<ObjectMaterial>, material: &Handle<ObjectMaterial>, opacity: f32) -> Handle<ObjectMaterial> {
-    match materials.get(material).filter(|_| opacity < 1.0).cloned() {
-        Some(m) => materials.add(with_opacity(&m, opacity)),
-        None => material.clone(),
+    for_object(materials, material, opacity, false, 1.0)
+}
+
+/// `material` as it is, or a copy for one object that is drawn
+/// differently: see-through (`translucency`, objects.md Q14), `b_hazeSolid`
+/// (rule 21) or a `hazeMultiplier` other than 1 (rule 22).
+pub fn for_object(
+    materials: &mut Assets<ObjectMaterial>,
+    material: &Handle<ObjectMaterial>,
+    opacity: f32,
+    haze_solid: bool,
+    haze_multiplier: f32,
+) -> Handle<ObjectMaterial> {
+    if opacity >= 1.0 && !haze_solid && haze_multiplier == 1.0 {
+        return material.clone();
     }
+    let Some(mut m) = materials.get(material).cloned() else { return material.clone() };
+    if opacity < 1.0 {
+        m = with_opacity(&m, opacity);
+    }
+    m.settings.haze_solid = u32::from(haze_solid);
+    m.settings.haze_multiplier = haze_multiplier;
+    materials.add(m)
 }
 
 /// Logs the lights at start.
@@ -259,8 +315,155 @@ pub fn report_lights(light: Res<ObjectLight>, materials: Res<Assets<ObjectMateri
         kinds[m.settings.lighting as usize] += 1;
     }
     log.summary(format!(
-        "object materials: {} smooth, {} flat, {} none (incl. buildings until M1 5c, and missing ones)",
+        "object materials: {} smooth, {} flat, {} none (incl. missing ones)",
         kinds[2], kinds[1], kinds[0]
+    ));
+    let h = &light.haze;
+    log.summary(format!(
+        "haze: {} at start (F8); starts at {:.0}, full at {:.0} game units from the camera; colour ({:.0}, {:.0}, {:.0}) of 255; {} materials halve it, {} solid, {} with a multiplier",
+        if light.haze_on { "on" } else { "off" },
+        h.start,
+        h.end,
+        h.colour[0] * 255.0,
+        h.colour[1] * 255.0,
+        h.colour[2] * 255.0,
+        materials.iter().filter(|(_, m)| m.settings.haze_halved == 1).count(),
+        materials.iter().filter(|(_, m)| m.settings.haze_solid == 1).count(),
+        materials.iter().filter(|(_, m)| m.settings.haze_multiplier != 1.0).count()
+    ));
+}
+
+#[derive(Component)]
+pub struct HazeLabel;
+
+fn haze_label_text(on: bool) -> String {
+    format!("Haze: {} (F8)", if on { "on" } else { "off" })
+}
+
+/// The on-screen line under the F7 line.
+pub fn setup_haze_label(mut commands: Commands, light: Res<ObjectLight>) {
+    commands.spawn((
+        Text::new(haze_label_text(light.haze_on)),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(Color::WHITE),
+        Node { position_type: PositionType::Absolute, top: Val::Px(74.0), left: Val::Px(10.0), ..default() },
+        HazeLabel,
+    ));
+}
+
+/// F8: haze on / off in every object material.
+pub fn toggle_haze(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut light: ResMut<ObjectLight>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut label: Query<&mut Text, With<HazeLabel>>,
+    shared: Res<Shared>,
+) {
+    if !keys.just_pressed(KeyCode::F8) {
+        return;
+    }
+    light.haze_on = !light.haze_on;
+    let on = u32::from(light.haze_on);
+    let mut changed = 0;
+    for (_, m) in materials.iter_mut() {
+        m.settings.haze_on = on;
+        changed += 1;
+    }
+    for mut t in &mut label {
+        t.0 = haze_label_text(light.haze_on);
+    }
+    shared.log.lock().unwrap().summary(format!("key F8: haze {} ({changed} materials)", if light.haze_on { "on" } else { "off" }));
+}
+
+/// The placed objects, for the haze log: name, position (game units),
+/// `b_hazeSolid`.
+#[derive(Resource, Default)]
+pub struct HazeCheck {
+    objects: Vec<(String, [f32; 3], bool)>,
+    last: Option<Instant>,
+}
+
+impl HazeCheck {
+    pub fn new(objects: Vec<(String, [f32; 3], bool)>) -> Self {
+        HazeCheck { objects, last: None }
+    }
+}
+
+/// Keeps every 3D camera's fog and the background in step with the haze
+/// switch (M1 step 6b). Bevy distances are game units / `UNITS_PER_METRE`.
+pub fn sync_fog(
+    mut commands: Commands,
+    light: Res<ObjectLight>,
+    cameras: Query<(Entity, Has<bevy::pbr::DistanceFog>), With<Camera3d>>,
+    mut clear: ResMut<ClearColor>,
+    mut normal_clear: Local<Option<Color>>,
+    shared: Res<Shared>,
+) {
+    let normal = *normal_clear.get_or_insert(clear.0);
+    let haze = Color::srgb(light.haze.colour[0], light.haze.colour[1], light.haze.colour[2]);
+    let want_clear = if light.haze_on { haze } else { normal };
+    if clear.0 != want_clear {
+        clear.0 = want_clear;
+    }
+    for (camera, has_fog) in &cameras {
+        if light.haze_on && !has_fog {
+            commands.entity(camera).insert(bevy::pbr::DistanceFog {
+                color: haze,
+                falloff: bevy::pbr::FogFalloff::Linear {
+                    start: light.haze.start / UNITS_PER_METRE,
+                    end: light.haze.end / UNITS_PER_METRE,
+                },
+                ..default()
+            });
+            shared.log.lock().unwrap().summary(format!(
+                "fog on camera {camera}: linear {:.0} to {:.0} game units, background = haze colour",
+                light.haze.start, light.haze.end
+            ));
+        } else if !light.haze_on && has_fog {
+            commands.entity(camera).remove::<bevy::pbr::DistanceFog>();
+            shared.log.lock().unwrap().summary(format!("fog off camera {camera}"));
+        }
+    }
+}
+
+/// Every second (`viewer.log`, detail): how many placed objects are at
+/// full haze from the camera (left out unless `b_hazeSolid`), and the
+/// nearest such distance (the note's "How to check": 22,950 in Daventry).
+/// Material halving (0x10000) is not counted here.
+pub fn report_haze(
+    mut check: ResMut<HazeCheck>,
+    light: Res<ObjectLight>,
+    camera: Query<&Transform, With<Camera3d>>,
+    shared: Res<Shared>,
+) {
+    let now = Instant::now();
+    if check.last.is_some_and(|t| now.duration_since(t).as_secs_f32() < 1.0) {
+        return;
+    }
+    check.last = Some(now);
+    let Some(cam) = camera.iter().next() else { return };
+    let c = cam.translation * UNITS_PER_METRE;
+    let cam_game = [c.x, -c.z, c.y];
+    let (mut gone, mut nearest_gone, mut fading) = (0, f32::MAX, 0);
+    for (_, p, solid) in &check.objects {
+        let d = ((p[0] - cam_game[0]).powi(2) + (p[1] - cam_game[1]).powi(2) + (p[2] - cam_game[2]).powi(2)).sqrt();
+        match kq8_data::haze::hazed(light.haze.amount(d), false, *solid, 1.0, false) {
+            Hazed::Hidden => {
+                gone += 1;
+                nearest_gone = nearest_gone.min(d);
+            }
+            Hazed::Blend(h) if h > 0.01 => fading += 1,
+            _ => {}
+        }
+    }
+    shared.log.lock().unwrap().detail(format!(
+        "haze {}: camera ({:.0}, {:.0}, {:.0}); of {} placed objects {fading} fading, {gone} at full haze (left out){}",
+        if light.haze_on { "on" } else { "off" },
+        cam_game[0],
+        cam_game[1],
+        cam_game[2],
+        check.objects.len(),
+        if gone > 0 { format!(", nearest at {nearest_gone:.0}") } else { String::new() }
     ));
 }
 
@@ -302,11 +505,12 @@ mod tests {
             ),
         );
         lights.add_sections("amb", &kq_text::parse(b"[a]\nclassType=KQAmbientLight\nintensity.red=0.3\nintensity.green=0.3\nintensity.blue=0.3\n"));
-        let light = ObjectLight::new(lights, LightMode::X1);
-        let s = light.settings(Vec4::ONE, Lighting::Smooth, true);
+        let light = ObjectLight::new(lights, LightMode::X1, Haze::new(18_000.0, 27_000.0, [0.0; 3]), true);
+        let s = light.settings(Vec4::ONE, Shading { lighting: Lighting::Smooth, haze_halved: true }, true);
         // Game aim (0, 1, -0.66) -> Bevy (0, -0.66, -1), length kept.
         assert_eq!(s.sun_aim[0], Vec4::new(0.0, -0.66, -1.0, 0.0));
         assert_eq!((s.sun_count, s.lighting, s.mode, s.textured), (1, 2, 0, 1));
+        assert_eq!((s.haze_on, s.haze_start, s.haze_end, s.haze_halved, s.haze_solid), (1, 18_000.0, 22_950.0, 1, 0));
         // Facing up in Bevy (+Y) is facing up in the game: 0.366.
         assert!((light.corner_light(Vec3::Y)[0] - 0.366).abs() < 1e-5);
         // Bevy's -Z is the game's +Y: facing away from the sun's y part.

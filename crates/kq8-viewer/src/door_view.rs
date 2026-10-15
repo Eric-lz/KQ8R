@@ -139,8 +139,16 @@ pub struct AimAt(pub Vec<(String, u64)>);
 pub struct HeldItem(pub Option<String>);
 
 /// A body entity at `placement` with, per movement (index into `built`),
-/// one hidden entity per frame.
-fn spawn_body(commands: &mut Commands, placement: &Placement, animations: &[usize], built: &[Vec<BuiltFrame>]) -> DrawnDoor {
+/// one hidden entity per frame. `haze`: the object's `b_hazeSolid` and
+/// `hazeMultiplier` (object-lighting.md rules 21, 22).
+fn spawn_body(
+    commands: &mut Commands,
+    placement: &Placement,
+    animations: &[usize],
+    built: &[Vec<BuiltFrame>],
+    materials: &mut Assets<ObjectMaterial>,
+    haze: (bool, f32),
+) -> DrawnDoor {
     let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default())).id();
     let mut frames = Vec::new();
     for a in animations {
@@ -149,7 +157,8 @@ fn spawn_body(commands: &mut Commands, placement: &Placement, animations: &[usiz
             let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
             commands.entity(body).add_child(parent);
             for (mesh, material) in frame {
-                let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+                let material = crate::object_light::for_object(materials, material, 1.0, haze.0, haze.1);
+                let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
                 commands.entity(parent).add_child(part);
             }
             entities.push(parent);
@@ -187,7 +196,7 @@ pub fn spawn_doors(
     let built: Vec<Vec<BuiltFrame>> = std::mem::take(&mut objects.door_animations)
         .into_iter()
         .map(|anim| {
-            let looks: Vec<(i32, Handle<ObjectMaterial>, kq8_data::Lighting)> =
+            let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> =
                 anim.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l)).collect();
             anim.frames
                 .into_iter()
@@ -195,8 +204,8 @@ pub fn spawn_doors(
                     frame
                         .into_iter()
                         .filter_map(|(m, triangles)| {
-                            let (_, material, lighting) = looks.iter().find(|(i, _, _)| *i == m)?;
-                            Some((meshes.add(model_mesh(&triangles, *lighting, [0.0; 3])), material.clone()))
+                            let (_, material, shading) = looks.iter().find(|(i, _, _)| *i == m)?;
+                            Some((meshes.add(model_mesh(&triangles, shading.lighting, [0.0; 3])), material.clone()))
                         })
                         .collect()
                 })
@@ -263,7 +272,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier)));
             active_objects.push(o);
             continue;
         }
@@ -303,12 +312,12 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built));
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier)));
             active_chests.push(c);
             continue;
         }
         let door = Door::new(&p.name, movements, d.current, base);
-        let DrawnDoor { body, frames, .. } = spawn_body(commands, &door.placement(), &animations, &built);
+        let DrawnDoor { body, frames, .. } = spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier));
         let active = ActiveDoor {
             door,
             script: d.script.clone(),

@@ -205,6 +205,28 @@ the note's; layout corrected by Q67).
 | Closing u32 of a `.dil` = a counted byte list | Q67 | `kq8 lighting-verify` PASS |
 | Multiply on the colour as shown (sRGB curve on the light) | **Stand-in**, as the ground and the objects | — |
 
+## Haze on models (M1 step 6) — `crates/kq8-data/src/{haze,terrain,objects}.rs`, `crates/kq8-viewer/src/{object_light.rs,object_light.wesl,load,main,terrain_view,anim_view,door_view}.rs`
+
+Behaviour note = `docs/behaviour/object-lighting.md` (rule numbers are
+the note's).
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| `hazeDistance`, `visibleDistance` from `TERRAIN.KQ`; no terrain: 20,000 and 25,500 | Note rule 19 | Log: Daventry 18,000 / 27,000, Dead City 9,000 / 12,000 |
+| end = 0.85 × visibleDistance, unless not beyond hazeDistance, then visibleDistance | Note rule 19 | Unit test `end_rule` (Daventry 22,950, Dead City 10,200, as the note); viewer log the same |
+| haze = (distance − start) ÷ (end − start), capped at 1, 0.01 nearer than the start; distance from the camera to the object's position | Note rule 19 | Unit test `amount`; shader (per drawn part, from its origin = the object's position for every model we draw) |
+| `0x10000` halves the haze | Note rule 20, `models-and-textures.md` | Unit test `material_and_object_rules`; log: Daventry 6 materials |
+| Haze 1 and not `b_hazeSolid`: not drawn | Note rule 21 | Unit test; log: from Connor's start, 286 of 313 placed objects left out, the nearest at 23,427 (end 22,950) |
+| × `hazeMultiplier` after that test | Note rule 22 | Unit test |
+| Capped at 1 after the multiplier | **Stand-in** (the note doesn't say; a blend can't pass the haze colour) | Unit test |
+| Solid: plain blend towards the haze colour on screen colours | Note rule 23 (the note's assumption, **stand-in**) | Shader |
+| See-through: no colour, opacity × (1 below 0.5, else 1.2 − haze) | Note rule 23, `objects.md` rule 1 | Unit test |
+| Haze colour = `resetHazeColor R G B` in `world.cs`, 0–255 | Note rules 18, 23 (0–255 assumed) | Unit test `haze_colour_line`; log: Daventry (4, 8, 12) |
+| Keys `b_hazeSolid`, `hazeMultiplier` | Note rules 21, 22 | Unit test `reads_a_section`; the data's misspelled `hazeMulitplier` (13 Gnome files) not read (Q68 d) |
+| Particles hazed each at its own position | **Stand-in** (not in the note; Q68 c) | — |
+| F8 / `--haze` switches it | **Our choice** (user's request) | `--haze off` logged; F8 by key press not tested |
+| Ground and building walls fogged per point (linear, haze start to end, haze colour); background = haze colour; objects blended the same way (linear colours) | **Stand-in** from the **user's check** (2026-10-15: "a very dense and dark fog that hides everything"), Q68 | Log: fog put on the camera in Daventry, Dead City, Ice World; off with `--haze off` |
+
 ## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
 
 Behaviour note = `docs/behaviour/objects.md` (session A, answers Q9/Q10).

@@ -19,6 +19,9 @@
 //! - `0x1000` building materials use the light map too (open question 7,
 //!   STAND-IN).
 //! - F7: x1 (as the note), x2 (doubled, capped), off (full bright).
+//! - Fog (M1 step 6b, STAND-IN from the user's check, Q68): each point of
+//!   a wall fades into the haze colour by its own distance from the
+//!   camera, as the ground (Bevy's distance fog); F8 switches it.
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
@@ -33,7 +36,7 @@ use kq8_data::lightmap::Channels;
 use crate::light_view::LightMode;
 use crate::load::Look;
 use crate::object_light::{texture_image, ObjectLight};
-use crate::Shared;
+use crate::{Shared, UNITS_PER_METRE};
 
 const SHADER: &str = "embedded://kq8_viewer/building_light.wesl";
 
@@ -143,9 +146,18 @@ impl LightAtlas {
 pub struct Settings {
     /// Linear colour (white for textures); alpha = opacity.
     pub base_colour: Vec4,
+    /// Haze colour, Bevy's linear colour; w unused.
+    pub haze_colour: Vec4,
     /// 0 x1, 1 x2, 2 off.
     pub mode: u32,
     pub textured: u32,
+    /// 1 = fog on (F8).
+    pub haze_on: u32,
+    /// Fog start and end in game units.
+    pub haze_start: f32,
+    pub haze_end: f32,
+    /// Game units per Bevy unit.
+    pub game_units: f32,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -199,7 +211,7 @@ fn mode_code(mode: LightMode) -> u32 {
 
 /// A wall material: its texture or colour (magenta if missing) and the
 /// building's light image.
-pub fn building_material(look: Look, light_image: Handle<Image>, mode: LightMode, images: &mut Assets<Image>) -> BuildingMaterial {
+pub fn building_material(look: Look, light_image: Handle<Image>, light: &ObjectLight, images: &mut Assets<Image>) -> BuildingMaterial {
     let (base, texture) = match look {
         Look::Texture { width, height, rgba, .. } => (Vec4::ONE, Some(images.add(texture_image(width, height, rgba, ImageAddressMode::Repeat)))),
         Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None),
@@ -207,7 +219,16 @@ pub fn building_material(look: Look, light_image: Handle<Image>, mode: LightMode
     };
     let textured = u32::from(texture.is_some());
     BuildingMaterial {
-        settings: Settings { base_colour: base, mode: mode_code(mode), textured },
+        settings: Settings {
+            base_colour: base,
+            haze_colour: LinearRgba::from(Color::srgb(light.haze.colour[0], light.haze.colour[1], light.haze.colour[2])).to_vec4(),
+            mode: mode_code(light.mode),
+            textured,
+            haze_on: u32::from(light.haze_on),
+            haze_start: light.haze.start,
+            haze_end: light.haze.end,
+            game_units: UNITS_PER_METRE,
+        },
         texture,
         light: light_image,
         alpha_mode: AlphaMode::Opaque,
@@ -226,28 +247,34 @@ pub fn see_through(materials: &mut Assets<BuildingMaterial>, material: &Handle<B
     }
 }
 
-/// F7: the building materials follow the objects' mode (which follows the
-/// ground's).
+/// F7 / F8: the building materials follow the objects' light mode (which
+/// follows the ground's) and haze switch.
 pub fn follow_mode(
     light: Res<ObjectLight>,
-    mut applied: Local<Option<LightMode>>,
+    mut applied: Local<Option<(LightMode, bool)>>,
     mut materials: ResMut<Assets<BuildingMaterial>>,
     shared: Res<Shared>,
 ) {
+    let now = (light.mode, light.haze_on);
     if applied.is_none() {
-        *applied = Some(light.mode);
+        *applied = Some(now);
     }
-    if *applied == Some(light.mode) {
+    if *applied == Some(now) {
         return;
     }
-    *applied = Some(light.mode);
-    let code = mode_code(light.mode);
+    *applied = Some(now);
+    let (code, haze) = (mode_code(light.mode), u32::from(light.haze_on));
     let mut changed = 0;
     for (_, m) in materials.iter_mut() {
         m.settings.mode = code;
+        m.settings.haze_on = haze;
         changed += 1;
     }
-    shared.log.lock().unwrap().summary(format!("building light mode {} ({changed} materials)", light.mode.name()));
+    shared.log.lock().unwrap().summary(format!(
+        "building materials: light mode {}, fog {} ({changed} materials)",
+        light.mode.name(),
+        if light.haze_on { "on" } else { "off" }
+    ));
 }
 
 #[cfg(test)]

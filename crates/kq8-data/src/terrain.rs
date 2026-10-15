@@ -44,6 +44,10 @@ pub struct TerrainSettings {
     pub shadowmap_name: Option<String>,
     pub sw_lightmap_name: Option<String>,
     pub sw_shadowmap_name: Option<String>,
+    /// `hazeDistance` and `visibleDistance` (object-lighting.md rule 19),
+    /// `None` when missing.
+    pub haze_distance: Option<f32>,
+    pub visible_distance: Option<f32>,
     /// Every entry as written, for logging.
     pub all: Vec<(String, String)>,
 }
@@ -76,6 +80,8 @@ impl TerrainSettings {
             shadowmap_name: name("shadowmapName"),
             sw_lightmap_name: name("SWlightmapName"),
             sw_shadowmap_name: name("SWshadowmapName"),
+            haze_distance: s.number("hazeDistance").and_then(Result::ok).map(|v| v as f32),
+            visible_distance: s.number("visibleDistance").and_then(Result::ok).map(|v| v as f32),
             ground_scale: ground_scale as u32,
             height_scale: height_scale as f32,
             height_image: text("heightBMP", "terrh.dib"),
@@ -480,6 +486,8 @@ mod tests {
             shadowmap_name: None,
             sw_lightmap_name: None,
             sw_shadowmap_name: None,
+            haze_distance: None,
+            visible_distance: None,
             all: Vec::new(),
         };
         // points[j][i], j = 0 is the bottom row

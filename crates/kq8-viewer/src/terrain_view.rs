@@ -298,7 +298,7 @@ pub fn setup_objects(
     // Each model's smooth corner normals, for the light log (M1 5b).
     let mut smooth: Vec<Vec<Vec3>> = Vec::new();
     for (_, model) in objects.shapes {
-        smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.lighting)).collect());
+        smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.shading.lighting)).collect());
         let mut parts = Vec::new();
         first_corner.push(model.groups.first().and_then(|g| g.triangles.first()).map(|t| t.positions[0]));
         let mut walls = Vec::new();
@@ -308,15 +308,15 @@ pub fn setup_objects(
                 let light_image = images.add(atlas.image());
                 for group in model.groups {
                     let mesh = crate::building_mesh(&group);
-                    let material = crate::building_light::building_material(group.look, light_image.clone(), light.mode, &mut images);
+                    let material = crate::building_light::building_material(group.look, light_image.clone(), &light, &mut images);
                     walls.push((meshes.add(mesh), building_materials.add(material)));
                 }
             }
             // A model: lit by the world's lights (M1 5b).
             None => {
                 for group in model.groups {
-                    let mesh = model_mesh(&group.triangles, group.lighting, [0.0; 3]);
-                    let material = object_material(group.look, group.lighting, &light, &mut images);
+                    let mesh = model_mesh(&group.triangles, group.shading.lighting, [0.0; 3]);
+                    let material = object_material(group.look, group.shading, &light, &mut images);
                     parts.push((meshes.add(mesh), object_materials.add(material)));
                 }
             }
@@ -366,7 +366,7 @@ pub fn setup_objects(
         for (mesh, material) in &built[*i] {
             // Every material of a see-through object (objects.md Q14); a
             // separate copy, because other copies of the model may be solid.
-            let material = crate::object_light::see_through(&mut object_materials, material, opacity);
+            let material = crate::object_light::for_object(&mut object_materials, material, opacity, p.haze_solid, p.haze_multiplier);
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             // Unused objects, and hidden ones (objects.md Q18): only with H.
             if *unused || !p.drawn() {
@@ -381,6 +381,15 @@ pub fn setup_objects(
             }
         }
     }
+    // The placed objects for the haze log (M1 step 6).
+    commands.insert_resource(crate::object_light::HazeCheck::new(
+        objects
+            .placed
+            .iter()
+            .filter(|(p, _, unused)| !*unused && p.drawn())
+            .map(|(p, _, _)| (p.name.clone(), p.position, p.haze_solid))
+            .collect(),
+    ));
     // The light of the three drawn objects nearest Connor's start (M1 5b,
     // object-lighting.md "How to check": Daventry within 0.30-0.42).
     if let Some((at, _)) = connor_at {

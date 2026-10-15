@@ -28,7 +28,9 @@
 //! map x1 / x2 / off (`--light` sets the start; default x1). Models are
 //! lit by the world's ambient light and sun (M1 step 5b, `object_light`),
 //! buildings by their `.dil` light maps (M1 step 5c, `building_light`);
-//! F7 switches them too. Esc quits.
+//! F7 switches them too. Haze (M1 step 6): objects fade into the haze
+//! colour with distance from the camera; F8 (`--haze on|off`) switches it.
+//! Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
 //! no animation in the model view. Back faces are hidden as in the original
@@ -106,6 +108,8 @@ struct Args {
     /// `--light x1|x2|off`: how the ground's light map is applied at the
     /// start (M1 step 4c; default x1, the user's check); F7 changes it.
     light: light_view::LightMode,
+    /// `--haze on|off`: haze at the start (M1 step 6); F8 switches it.
+    haze: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -124,6 +128,7 @@ fn parse_args() -> Result<Args, String> {
         aim: Vec::new(),
         item: None,
         light: light_view::LightMode::X1,
+        haze: true,
     };
     let mut it = std::env::args().skip(1);
     let mut positional = Vec::new();
@@ -167,6 +172,13 @@ fn parse_args() -> Result<Args, String> {
             }
             "--item" => a.item = Some(value()?),
             "--light" => a.light = light_view::LightMode::parse(&value()?)?,
+            "--haze" => {
+                a.haze = match value()?.to_ascii_lowercase().as_str() {
+                    "on" | "1" => true,
+                    "off" | "0" => false,
+                    v => return Err(format!("--haze needs on or off, not '{v}'")),
+                }
+            }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -255,11 +267,14 @@ fn main() -> ExitCode {
         .and_then(|game| {
             let world = World::open(&game, &args.world)?;
             log.summary(format!("world: {}", world.name));
-            // M1 step 5b: the lights for models, in both views.
+            // M1 step 5b: the lights for models, in both views; step 6: the
+            // haze (no terrain in the model view: the note's defaults).
             let lights = load::load_object_lights(&game, &world, &mut log);
+            let mut haze = None;
             let scene = match &args.model {
                 None => {
                     let mut ground = load::load_ground(&game, &world, &mut log)?;
+                    haze = Some(load::load_haze(&world, Some(&ground.terrain.settings), &mut log));
                     let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
                     let animators = std::mem::take(&mut objects.animators);
                     let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
@@ -267,9 +282,10 @@ fn main() -> ExitCode {
                 }
                 Some(name) => Scene::Model(load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log)?),
             };
-            Ok((scene, lights))
+            let haze = haze.unwrap_or_else(|| load::load_haze(&world, None, &mut log));
+            Ok((scene, lights, haze))
         });
-    let (scene, lights) = match loaded {
+    let (scene, lights, haze) = match loaded {
         Ok(s) => s,
         Err(e) => {
             log.summary(format!("error: {e}"));
@@ -291,7 +307,7 @@ fn main() -> ExitCode {
     }))
     .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
     .insert_resource(shared.clone())
-    .insert_resource(object_light::ObjectLight::new(lights, args.light));
+    .insert_resource(object_light::ObjectLight::new(lights, args.light, haze, args.haze));
     object_light::add(&mut app);
     building_light::add(&mut app);
     match scene {
@@ -334,7 +350,11 @@ fn main() -> ExitCode {
                 .add_systems(
                     Update,
                     (object_light::follow_ground_mode, building_light::follow_mode).chain().after(light_view::toggle_light),
-                );
+                )
+                // Haze (M1 step 6): F8, its on-screen line, the log.
+                .init_resource::<object_light::HazeCheck>()
+                .add_systems(Startup, object_light::setup_haze_label)
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_fog, object_light::report_haze).chain());
         }
     }
     app.run();
@@ -385,7 +405,7 @@ fn setup(
                 normals += 1;
                 normals_out += usize::from(Vec3::from(direction_to_bevy(*n)).dot(Vec3::from(to_bevy(p, centre))) > 0.0);
             }
-            if group.lighting == Lighting::Smooth {
+            if group.shading.lighting == Lighting::Smooth {
                 for n in t.normals {
                     let l = light.corner_light(Vec3::from(direction_to_bevy(n)))[0];
                     (lit_min, lit_max, lit_sum, lit_n) = (lit_min.min(l), lit_max.max(l), lit_sum + l, lit_n + 1);
@@ -393,8 +413,8 @@ fn setup(
             }
         }
         vertices += group.triangles.len() * 3;
-        let material = object_light::object_material(group.look, group.lighting, &light, &mut images);
-        commands.spawn((Mesh3d(meshes.add(model_mesh(&group.triangles, group.lighting, centre))), MeshMaterial3d(materials.add(material))));
+        let material = object_light::object_material(group.look, group.shading, &light, &mut images);
+        commands.spawn((Mesh3d(meshes.add(model_mesh(&group.triangles, group.shading.lighting, centre))), MeshMaterial3d(materials.add(material))));
         log.detail(format!("spawned mesh for material {} ({} triangles)", group.material, group.triangles.len()));
     }
     log.summary(format!("corner normals pointing away from the model centre: {normals_out} of {normals}"));

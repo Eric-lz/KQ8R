@@ -33,7 +33,10 @@ entries at the top). The short public summary is `README.md`; the detailed
   Connor, items, leaves) lit on the graphics card (`object_light.rs`,
   `.wesl`), checked by eye by the user; buildings lit by their light
   maps (`building_light.rs`, `.wesl`), checked by eye by the user.
-  **Next: haze** (user's request, with an on/off key).
+  **Haze done** (B, 2026-10-15, M1 step 6, F8 on/off): objects by the
+  note's rules; ground, walls and background fogged as a stand-in after
+  the user's check ("dense, dark fog hides everything"; Q68). Checked
+  by eye by the user.
 - **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
   `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
   `doors.md`): buildings take clicks by default (so walls block), the
@@ -77,7 +80,7 @@ milestone: **M3, Daventry comes alive**.
 
 ## Code layout
 
-- `crates/kq8-data` (80 unit tests): file formats. VOL archives, bitmaps,
+- `crates/kq8-data` (84 unit tests): file formats. VOL archives, bitmaps,
   palettes, materials, `.kqs` shapes, terrain (surface and floor grids),
   `.dig` buildings, `.kq` text, world scripts (start-up, incl. item
   lines), `.sae` key maps, object placement rules, the `BOUNDS.KQ` box
@@ -181,11 +184,12 @@ milestone: **M3, Daventry comes alive**.
     clicking a swimming fish makes it disappear (sound and health only
     logged); other scripted things (signs, stone villagers) run their
     scripts, their remarks logged.
-- Tests: 265 unit tests pass (80 + 181 + 4), 2026-10-15.
+- Tests: 269 unit tests pass (84 + 181 + 4), 2026-10-15.
 
 ## What doesn't work yet / next
 
-- **Next step:** haze (distance fog), with an on/off key; then A's
+- **Next step:** the user checks the haze by eye; Q68 for A (ground,
+  buildings, particles, the misspelled `hazeMulitplier`); then A's
   clicking answers (Q60–Q64).
 - Clicking: only doors, chests, items and scripted objects react. No
   sound, no remarks (Connor says nothing; remarks are logged), Connor
@@ -209,8 +213,7 @@ milestone: **M3, Daventry comes alive**.
   original).
 - Loops (`walk`, `run`) still spread their step evenly over the loop
   (Q24); one-shot animations use their frame steps.
-- Not drawn yet: haze/distance
-  fade, moving lights (Dead City's point lights; Daventry has none), people and monsters (`.anm` characters; orange cubes with H), the
+- Not drawn yet: moving lights (Dead City's point lights; Daventry has none), people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
 - Nothing yet of: sound, music, talking, inventory screen, fighting,

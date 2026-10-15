@@ -35,6 +35,7 @@ items. The goal is the whole game; see the roadmap in
   as in the original.
 - **Object and building lighting**: objects and Connor lit by the world's
   light and sun, buildings by their own light maps.
+- **Distance fog**: a dark fog hides everything far away (F8 on/off).
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
   torches.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
@@ -48,7 +49,6 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - No story, talking, inventory screen, fighting or saving.
 - No sound or music.
 - People and monsters are not shown.
-- No distance haze.
 - Clicking works only on doors, chests, items and a few scripted objects;
   Connor doesn't speak (his remarks are only logged).
 - Objects only play their starting animation.
@@ -114,6 +114,7 @@ The first build takes several minutes.
 | H | *DEBUG:* Show hidden and unused objects (traps, sound sources...) |
 | U | *DEBUG:* Show the ground under the water |
 | F7 | *DEBUG:* Light of the ground and objects: x1 (default, as in the original), x2, off |
+| F8 | *DEBUG:* Haze (distance fog) on / off |
 | G / B | *DEBUG:* Test: lift Connor high / a little and let him fall |
 | Esc | Quit |
 

@@ -199,7 +199,7 @@ pub fn spawn_connor(
     // His first animation's first frame, for the light log (M1 5b).
     let mut first_frame_normals: Option<Vec<Vec3>> = None;
     for anim in assets.animations {
-        let looks: Vec<(i32, Handle<ObjectMaterial>, kq8_data::Lighting)> = anim
+        let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
             .looks
             .into_iter()
             .map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l))
@@ -211,11 +211,11 @@ pub fn spawn_connor(
             let record = first_frame_normals.is_none();
             let mut normals = Vec::new();
             for (m, triangles) in frame {
-                let Some((_, material, lighting)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
+                let Some((_, material, shading)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
                 if record {
-                    normals.extend(crate::object_light::smooth_normals(&triangles, *lighting));
+                    normals.extend(crate::object_light::smooth_normals(&triangles, shading.lighting));
                 }
-                let mesh = model_mesh(&triangles, *lighting, [0.0; 3]);
+                let mesh = model_mesh(&triangles, shading.lighting, [0.0; 3]);
                 let part = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()))).id();
                 commands.entity(parent).add_child(part);
             }

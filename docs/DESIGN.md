@@ -739,6 +739,76 @@ lit by its own map (no fallbacks, no size-rule misses); Connor's hut
 matches 5a; Castle D's 96 material-255 surfaces are left out. Checked
 by eye by the user (2026-10-15).
 
+#### M1 step 6 — haze (distance fog) on models (planned 2026-10-15)
+
+Rules from `docs/behaviour/object-lighting.md` rules 19–23 (and
+`objects.md` "See-through objects" rule 1, `models-and-textures.md` flag
+`0x10000`). Asked by the user, with a key to switch it on and off.
+
+- Data: `TERRAIN.KQ` `hazeDistance`, `visibleDistance` (no terrain:
+  20,000 and 25,500); `world.cs` `resetHazeColor R G B` (0–255, the
+  note's assumption; last line wins); objects' `b_hazeSolid` (61 files)
+  and `hazeMultiplier` (default 1); material flag `0x10000`.
+- Per object, each frame, on the graphics card (in `object_light.wesl`):
+  distance from the camera to the object's position (one value per
+  object: the drawn part's own origin, which is the object's position for
+  every model we draw); haze = (distance − hazeDistance) ÷ (end −
+  hazeDistance), capped at 1, 0.01 when closer than hazeDistance; end =
+  0.85 × visibleDistance unless that is not beyond hazeDistance
+  (rule 19). `0x10000` halves it (rule 20). Haze 1 and not `b_hazeSolid`:
+  not drawn (rule 21). Then × `hazeMultiplier` (rule 22). Solid: blended
+  towards the haze colour by the haze (plain blend on screen colours,
+  the note's assumption); see-through: no colour, opacity × (1 while
+  haze < 0.5, else 1.2 − haze) (rule 23).
+- Objects with their own `b_hazeSolid` or `hazeMultiplier` get their own
+  copy of their materials (as see-through objects do).
+- **F8** switches the haze on and off (free in `Connor.sae`,
+  `Camera.sae` and the viewer); `--haze on|off` sets the start (default
+  on). On-screen line "Haze: on / off (F8)". Logged.
+- **Not hazed (stand-ins until Q68):** the ground and the buildings (the
+  note covers objects only; the data's `b_hazeSolid` on 7 buildings
+  hints that buildings are hazed like objects). Particles (falling
+  leaves) are hazed each at its own position, like an object (stand-in,
+  Q68). The data's misspelled `hazeMulitplier=2.0` (13 Gnome objects)
+  is not read; the note names `hazeMultiplier` (Q68).
+- Log: the haze settings at start; every second, how many placed objects
+  are past the haze end from the camera (not drawn) and the nearest
+  distance at which one is left out (the note's "How to check": expected
+  22,950 in Daventry).
+- Unit tests: the end rule, the `resetHazeColor` line, the CPU copy of
+  the haze formula (start, middle, end, halving, solid, multiplier,
+  see-through fade).
+
+**Done 2026-10-15** (MODLOG): haze from the data in 7 worlds (Daventry
+full at 22,950, Dead City at 10,200, as the note); from Connor's start
+286 of 313 Daventry objects are left out, the nearest at 23,427. Doors
+with `b_hazeSolid` get their own material copies too. Not checked by eye
+yet. Ground and buildings wait for Q68.
+
+**User's check 2026-10-15:** objects vanish in the distance, but "there
+is no actual haze": in the original a very dense, dark fog hides
+**everything** (ground and buildings too). Added to Q68.
+
+**6b. Fog over the ground and buildings** (stand-in until Q68)
+
+- The ground (everything drawn with Bevy's standard material: surface,
+  floor view, flowing squares) gets Bevy's distance fog on every 3D
+  camera: linear from `hazeDistance` to the haze end, by each point's
+  distance from the camera, colour = the haze colour.
+- Building walls get the same in `building_light.wesl` (per point, same
+  distances and colour).
+- The background (the clear colour) is the haze colour while the haze is
+  on, so the far distance is fog, not grey.
+- To match the ground, the objects' haze blend changes to the same blend
+  as Bevy's fog (on Bevy's linear colours, not screen colours). Still
+  one value per object, and objects are still left out at full haze.
+- F8 switches all of it (fog on the cameras, building and object
+  materials, background).
+- All of this is a **stand-in** from the user's observation, not from
+  the note; Q68 asks how the original does it.
+
+**Done 2026-10-15** (MODLOG): checked by eye by the user.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,
