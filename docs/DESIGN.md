@@ -809,6 +809,15 @@ is no actual haze": in the original a very dense, dark fog hides
 
 **Done 2026-10-15** (MODLOG): checked by eye by the user.
 
+**6c. Draw distance for objects** (stand-in until Q69). The user saw
+Dead City's torch flames shown far past the fog; in the original they
+vanish at about 11,000 from Connor. By the note's rules they never
+vanish (see-through, and their material halves the haze). Stand-in: no
+object is drawn farther than the world's `visibleDistance` from the
+camera (Dead City 12,000, Daventry 27,000), while the haze is on
+(`Haze::beyond_view`, `object_light.wesl`). **Done 2026-10-15**, checked
+by eye by the user.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,

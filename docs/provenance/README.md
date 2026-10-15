@@ -224,6 +224,7 @@ the note's).
 | Haze colour = `resetHazeColor R G B` in `world.cs`, 0–255 | Note rules 18, 23 (0–255 assumed) | Unit test `haze_colour_line`; log: Daventry (4, 8, 12) |
 | Keys `b_hazeSolid`, `hazeMultiplier` | Note rules 21, 22 | Unit test `reads_a_section`; the data's misspelled `hazeMulitplier` (13 Gnome files) not read (Q68 d) |
 | Particles hazed each at its own position | **Stand-in** (not in the note; Q68 c) | — |
+| No object drawn farther than `visibleDistance` from the camera | **Stand-in** from the **user's check** (Dead City's flames vanish at about 11,000 from Connor; by rules 20–23 they never would), Q69 | Unit test `end_rule`; Dead City log: nearest object left out at 10,802 from Connor's start |
 | F8 / `--haze` switches it | **Our choice** (user's request) | `--haze off` logged; F8 by key press not tested |
 | Ground and building walls fogged per point (linear, haze start to end, haze colour); background = haze colour; objects blended the same way (linear colours) | **Stand-in** from the **user's check** (2026-10-15: "a very dense and dark fog that hides everything"), Q68 | Log: fog put on the camera in Daventry, Dead City, Ice World; off with `--haze off` |
 

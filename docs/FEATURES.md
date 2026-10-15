@@ -36,8 +36,10 @@ world's haze colour with distance from the camera and are left out past
 the haze end (Daventry 18,000 to 22,950 units, as the behaviour note
 says), unless their file sets `b_hazeSolid`. The ground and building
 walls fade into the same fog point by point, and the background is the
-fog colour (a stand-in from the user's check, asked as Q68). Checked in
-the logs and by eye by the user (2026-10-15).
+fog colour (a stand-in from the user's check, asked as Q68). No object is
+drawn farther than the world's `visibleDistance` from the camera (Dead
+City 12,000), so Dead City's torch flames no longer show through the fog
+(stand-in, Q69). Checked in the logs and by eye by the user (2026-10-15).
 
 ## Connor
 

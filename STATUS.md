@@ -1,13 +1,12 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-14 after
-commit `6586d0d` (terrain lighting done, object lighting studied), plus
-the uncommitted viewer change (ground view is the default, `--model`). Read with
+Hand-over in case the chat is lost. Brought up to date 2026-10-15 at the
+end of B's lighting and haze session (M1 steps 5 and 6). Read with
 `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
 entries at the top). The short public summary is `README.md`; the detailed
 "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-14)
+## Where we are (2026-10-15)
 
 - **M2 (walk Connor around Daventry) is done**, including water (wading),
   the camera keeping out of walls, and leaning into turns while running.
@@ -16,35 +15,29 @@ entries at the top). The short public summary is `README.md`; the detailed
   water, animated objects, traps (walk/run zones), items lying around and
   picking them up, chests, small chests, the jar and the mushroom
   baskets, the fish, no clicks through walls or the ground.
-- **M1 step 4, ground lighting, is done** (B, 2026-10-14): the ground is
-  drawn with the game's light/shadow maps at ×1 (no doubling), which the
-  user checked by eye against the original (dark and muddy, as the
-  original); A confirmed ×1 in the exe (Q66). F7 cycles ×1 / ×2 / off.
-- **Object and building lighting is studied** (A, 2026-10-14,
-  `docs/behaviour/object-lighting.md`): models lit by the hardware light
-  files (Daventry ambient 0.3 + sun 0.1, so 30–42% of the texture),
-  buildings by their `.dil` light maps, haze, brightness setting.
-  The user checked in the original: objects as dark as the grass with the
-  sunny side slightly lighter; haze fades objects with distance from the
-  camera; Connor's hut inside darker but reasonably lit.
-- **Object and building lighting done** (B, 2026-10-15, M1 step 5):
-  light files and `.dil` light maps read and checked (`kq8
-  lighting-verify`, PASS; layout corrected by Q67); models (objects,
-  Connor, items, leaves) lit on the graphics card (`object_light.rs`,
-  `.wesl`), checked by eye by the user; buildings lit by their light
-  maps (`building_light.rs`, `.wesl`), checked by eye by the user.
-  **Haze done** (B, 2026-10-15, M1 step 6, F8 on/off): objects by the
-  note's rules; ground, walls and background fogged as a stand-in after
-  the user's check ("dense, dark fog hides everything"; Q68). Checked
-  by eye by the user.
+- **Lighting is done (M1 steps 4–5), all checked by eye by the user:**
+  the ground by its light/shadow maps (F7 ×1 / ×2 / off); models
+  (objects, Connor, items, leaves) by the world's ambient light and sun,
+  worked out on the graphics card (`object_light.rs` + `.wesl`);
+  buildings by their `.dil` light maps (`building_light.rs` + `.wesl`).
+  `kq8 lighting-verify` checks the light files and all 235 `.dil` files.
+- **Haze is done (M1 step 6, F8 on/off, `--haze`), checked by eye by the
+  user:** objects fade and are left out by the note's rules (Daventry
+  18,000–22,950); the ground, building walls and background are fogged
+  point by point (stand-in after the user's check, Q68); no object is
+  drawn beyond `visibleDistance` (stand-in for Dead City's flames,
+  Q69).
 - **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
   `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
   `doors.md`): buildings take clicks by default (so walls block), the
   ground never blocks; accept lists; `Init`/`EndLoop`/`getEndLoop`;
   new items are named `NoName<n>`; the pickup sound plays on every add
-  to Connor's inventory. For B after lighting: adjust the Q63 stand-in
-  and add the `EndLoop`/`getEndLoop` calls. Not checked in the original
-  yet.
+  to Connor's inventory. **Next for B:** build these (adjust the Q63
+  stand-in, add the `EndLoop`/`getEndLoop` calls). Not checked in the
+  original yet.
+- **Next for A:** Q68 (how the ground, walls and particles are fogged;
+  the misspelled `hazeMulitplier`) and Q69 (what stops Dead City's
+  flames at about 11,000 from Connor).
 - **Later for A:** Q53 (camera follow-ups), Q54; pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
@@ -88,7 +81,7 @@ milestone: **M3, Daventry comes alive**.
   light and shadow maps (`lightmap.rs`), object lights (`lights.rs`),
   building light maps (`dil.rs`), emitter /
   particle catcher / ground animator settings, the item type list
-  (`Invinfo.itl`).
+  (`Invinfo.itl`), the haze rules (`haze.rs`).
 - `crates/kq8-core` (181 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump),
@@ -112,7 +105,7 @@ milestone: **M3, Daventry comes alive**.
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--light x1|x2|off` the
-  ground light at start. The full option list with descriptions is in
+  light at start; `--haze on|off` the haze at start. The full option list with descriptions is in
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
   `--hold F,T,R[,N]`, `--jump N`, `--turn N[,1|-1]`, `--click NAME,N`
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
@@ -120,8 +113,9 @@ milestone: **M3, Daventry comes alive**.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
   events), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
-  `anim.log`, `lightmap-verify.log`, `lighting-verify.log`. `viewer.log` also logs the ground
-  light under Connor and the camera every second.
+  `anim.log`, `lightmap-verify.log`, `lighting-verify.log`. `viewer.log`
+  also logs the ground light under Connor and the camera, and how many
+  objects the haze leaves out, every second.
 
 ## What works (tested)
 
@@ -129,10 +123,9 @@ milestone: **M3, Daventry comes alive**.
   measured in the original).
 - M1 (checked by eye in Daventry): ground with textures; 30 buildings; the
   objects the world scripts load; see-through objects. All 12 worlds load.
-  Ground lighting: hill shadows from the light/shadow maps at ×1, checked
-  by eye against the original; worlds without maps (Barren, Gnome,
-  temples) at full brightness; F7 cycles ×1 / ×2 / off (start option
-  tested, key press not tested by a test option).
+  Lighting of the ground, models and buildings, and the haze/fog (see
+  "Where we are"). F7 (light) and F8 (haze) switch them; start options
+  tested, the key presses not tested by a test option.
 - Viewer helpers: H shows invisible, unused and hidden objects; U shows
   the floor grid under the water (key presses not tested by a test
   option); camera position shown bottom left; F switches to a free flying
@@ -188,9 +181,10 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step:** the user checks the haze by eye; Q68 for A (ground,
-  buildings, particles, the misspelled `hazeMulitplier`); then A's
-  clicking answers (Q60–Q64).
+- **Next step:** B builds A's clicking answers (Q60–Q64). Lighting and
+  haze still lack: point lights (Dead City), the brightness setting, the
+  per-object "unlit" switch; the fog over the ground/walls and the draw
+  distance are stand-ins (Q68, Q69).
 - Clicking: only doors, chests, items and scripted objects react. No
   sound, no remarks (Connor says nothing; remarks are logged), Connor
   doesn't turn to face what he clicks. No inventory screen (M4).
@@ -221,11 +215,12 @@ milestone: **M3, Daventry comes alive**.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- Q65, Q66 (ground light scale, ×1 or ×2): answered 2026-10-14 (×1).
-- Q67 (`.dil` layout): answered 2026-10-15 in `object-lighting.md`. B's
-  readings are right; the five 12-byte files are never loaded by the game;
-  Castle D's 96 no-light-map surfaces have material 255 (no material):
-  don't draw them.
+- Q68 (open): how the original fogs the ground, building walls and
+  particles; whether the misspelled `hazeMulitplier` is read. The user's
+  check: a dense dark fog hides everything. Stand-ins in place.
+- Q69 (open): what stops Dead City's torch flames at about 11,000 from
+  Connor (see-through, half-haze material: the note's rules never hide
+  them). Stand-in: nothing drawn beyond `visibleDistance` from the camera.
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): wall
   drawing not traced (walls assumed to use only their light map), the
   per-object "unlit" switch, point-light range, `0x1000` building
@@ -257,7 +252,8 @@ milestone: **M3, Daventry comes alive**.
   difference).
 - Q14b: the teleport pad's see-through look.
 - Q4: missing texture names.
-- All others are answered or closed (Q55 answered in
+- All others are answered or closed (Q65–Q67 answered and built, the
+  lighting session 2026-10-14/15; Q55 answered in
   `connor-collision.md`, not built yet; Q56 answered by A's trace and
   built 2026-10-13; Q59 closed by the user's check).
 

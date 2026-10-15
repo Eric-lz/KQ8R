@@ -19,6 +19,9 @@ pub struct Haze {
     pub start: f32,
     /// Haze is 1 here (rule 19).
     pub end: f32,
+    /// `visibleDistance`. STAND-IN (Q69, the user's check in Dead City):
+    /// no object is drawn farther than this from the camera.
+    pub visible: f32,
     /// `resetHazeColor`, 0..1 per channel (the file's 0..255 / 255; the
     /// 0-255 scale is the note's assumption).
     pub colour: [f32; 3],
@@ -30,7 +33,16 @@ impl Haze {
     pub fn new(haze_distance: f32, visible_distance: f32, colour: [f32; 3]) -> Self {
         let near_end = 0.85 * visible_distance;
         let end = if near_end > haze_distance { near_end } else { visible_distance };
-        Haze { start: haze_distance, end, colour }
+        Haze { start: haze_distance, end, colour, visible: visible_distance }
+    }
+
+    /// STAND-IN (Q69): an object farther than `visibleDistance` from the
+    /// camera is not drawn, whatever its haze. The user saw Dead City's
+    /// torch flames (see-through, material `0x10000`, so by rules 20-21
+    /// never left out) vanish at about 11,000 in the original; Dead City's
+    /// `visibleDistance` is 12,000.
+    pub fn beyond_view(&self, distance: f32) -> bool {
+        distance > self.visible
     }
 
     /// The haze of an object at `distance` from the camera, before the
@@ -116,6 +128,8 @@ mod tests {
         assert_eq!(Haze::new(9_000.0, 12_000.0, [0.0; 3]).end, 10_200.0);
         // 0.85 x visible not beyond the start: visible itself.
         assert_eq!(Haze::new(20_000.0, 22_000.0, [0.0; 3]).end, 22_000.0);
+        let dead = Haze::new(9_000.0, 12_000.0, [0.0; 3]);
+        assert!(!dead.beyond_view(12_000.0) && dead.beyond_view(12_001.0));
         let none = Haze::new(NO_TERRAIN_HAZE_DISTANCE, NO_TERRAIN_VISIBLE_DISTANCE, [0.0; 3]);
         assert!((none.end - 21_675.0).abs() < 0.01);
     }

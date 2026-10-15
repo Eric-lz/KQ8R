@@ -21,6 +21,16 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original yet ("How to check" in `clicking.md`: click over a low hill, through the church wall, on a house wall). Not traced: the click line's length, when a deleted object is finally removed and whether deletions survive leaving the world or saving, add-or-set for `KQStatsChangeRequestEvent`, `getEndLoop`'s own bookkeeping.
 **Next:** Session B: adjust the Q63 stand-in (the ground and the five `colliderType=136` buildings should not block; buildings take the click silently), and the `EndLoop`/`getEndLoop` calls. The user: the checks in `clicking.md`.
 
+## 2026-10-15 M1 6c: draw distance for objects (Dead City's flames)
+
+**Changed:** `kq8-data/src/haze.rs`: `Haze::visible` and `beyond_view`. `object_light.rs` / `.wesl`: an object farther than the world's `visibleDistance` from the camera is not drawn (with the haze on); the start-up and per-second haze logs include it. Q69 in `docs/behaviour/QUESTIONS.md`. DESIGN (6c), provenance.
+**Why:** The user's check: Dead City's torch flames were drawn far beyond the fog; in the original they vanish at about 11,000 units from Connor. `flame.kq` / `flame_nd.kq` are see-through and their material (`torch01.kqs`, flags `0x10103`) halves the haze, so by the note's rules (20–23) they never vanish. Stand-in: Dead City's `visibleDistance` is 12,000.
+**Tested how:** Unit test `end_rule` (12,000 kept, 12,001 not drawn). Viewer: DeadCity and Daventry `--frames 150`. `cargo test --workspace`; `cargo clippy --workspace --all-targets` (no warnings).
+**Result:** Both runs `RESULT: PASS`, no console errors. Dead City from Connor's start: 1,060 of 1,071 placed objects left out, the nearest at 10,802. Daventry unchanged in the log (nearest left out at 24,170 from the start view; its `visibleDistance` 27,000 is past its haze end 22,950).
+**Still broken / not tested:** **Not checked by eye.** Measured from the camera, not Connor (the user allowed it). 12,000 vs the user's about 11,000: which rule the original uses is Q69. The per-second log doesn't know which materials halve the haze, so it can't show the flames on their own.
+**Next:** You: look at the torches in Dead City from far away.
+**Checked afterwards (you, 2026-10-15):** looks right.
+
 ## 2026-10-15 M1 6b: fog over the ground and buildings (stand-in, the user's check)
 
 **Changed:** `object_light.rs` `sync_fog`: Bevy's distance fog on every 3D camera (linear from `hazeDistance` to the haze end, the haze colour), so the ground (surface, floor view, flowing squares) fades per point; the background (clear colour) is the haze colour while the haze is on; F8 switches both. `building_light.rs` / `.wesl`: walls fade per point by the same rule (haze settings in the building material, F8 via `follow_mode`). `object_light.wesl`: the objects' haze blend now uses the same blend as Bevy's fog (linear colours) so objects and ground match. DESIGN (6b), Q68 (the user's observation added), provenance, FEATURES, README, STATUS.

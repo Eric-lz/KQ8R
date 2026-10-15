@@ -24,6 +24,8 @@
 //!   to the object's position, in the shader; F8 switches it on and off.
 //!   Objects with their own `b_hazeSolid` / `hazeMultiplier` get their own
 //!   material copy (`for_object`).
+//! - STAND-IN (Q69, the user's check): no object is drawn farther than the
+//!   world's `visibleDistance` from the camera (with the haze on).
 //! - Fog over the ground and the background (M1 step 6b, STAND-IN from the
 //!   user's check, Q68): Bevy's distance fog on every 3D camera (linear,
 //!   haze start to end, haze colour), and the clear colour = the haze
@@ -85,6 +87,8 @@ pub struct Settings {
     pub haze_multiplier: f32,
     /// Game units per Bevy unit (distances in the shader are in Bevy's).
     pub game_units: f32,
+    /// `visibleDistance`: not drawn beyond it (STAND-IN, Q69).
+    pub visible_distance: f32,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -185,6 +189,7 @@ impl ObjectLight {
             haze_solid: 0,
             haze_multiplier: 1.0,
             game_units: UNITS_PER_METRE,
+            visible_distance: self.haze.visible,
         }
     }
 
@@ -320,10 +325,11 @@ pub fn report_lights(light: Res<ObjectLight>, materials: Res<Assets<ObjectMateri
     ));
     let h = &light.haze;
     log.summary(format!(
-        "haze: {} at start (F8); starts at {:.0}, full at {:.0} game units from the camera; colour ({:.0}, {:.0}, {:.0}) of 255; {} materials halve it, {} solid, {} with a multiplier",
+        "haze: {} at start (F8); starts at {:.0}, full at {:.0} game units from the camera, nothing drawn beyond {:.0} (visibleDistance, stand-in Q69); colour ({:.0}, {:.0}, {:.0}) of 255; {} materials halve it, {} solid, {} with a multiplier",
         if light.haze_on { "on" } else { "off" },
         h.start,
         h.end,
+        h.visible,
         h.colour[0] * 255.0,
         h.colour[1] * 255.0,
         h.colour[2] * 255.0,
@@ -447,7 +453,8 @@ pub fn report_haze(
     let (mut gone, mut nearest_gone, mut fading) = (0, f32::MAX, 0);
     for (_, p, solid) in &check.objects {
         let d = ((p[0] - cam_game[0]).powi(2) + (p[1] - cam_game[1]).powi(2) + (p[2] - cam_game[2]).powi(2)).sqrt();
-        match kq8_data::haze::hazed(light.haze.amount(d), false, *solid, 1.0, false) {
+        let hazed = if light.haze.beyond_view(d) { Hazed::Hidden } else { kq8_data::haze::hazed(light.haze.amount(d), false, *solid, 1.0, false) };
+        match hazed {
             Hazed::Hidden => {
                 gone += 1;
                 nearest_gone = nearest_gone.min(d);

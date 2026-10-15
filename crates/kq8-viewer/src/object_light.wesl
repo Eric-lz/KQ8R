@@ -52,6 +52,8 @@ struct Settings {
     haze_multiplier: f32,
     // Game units per Bevy unit.
     game_units: f32,
+    // visibleDistance: not drawn beyond it (STAND-IN, Q69).
+    visible_distance: f32,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
@@ -65,6 +67,8 @@ struct LitVertex {
     @location(1) light: vec3<f32>,
     // The object's haze before the material's halving (rule 19).
     @location(2) @interpolate(flat) haze: f32,
+    // 1 if the object is farther than visibleDistance (STAND-IN, Q69).
+    @location(3) @interpolate(flat) beyond_view: u32,
 };
 
 // Rules 4, 5: ambient + suns, capped to 0..1 per channel.
@@ -113,6 +117,7 @@ fn vertex(vertex_in: Vertex) -> LitVertex {
     out.uv = v.uv;
     out.light = light;
     out.haze = haze;
+    out.beyond_view = u32(distance > settings.visible_distance);
     return out;
 }
 
@@ -134,6 +139,11 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
     // it multiplies Bevy's linear colour.
     var lit = vec4<f32>(colour.rgb * screen_to_linear(in.light), colour.a);
     if settings.haze_on == 1u {
+        // STAND-IN (Q69, the user's check in Dead City): nothing is drawn
+        // beyond visibleDistance, whatever its haze.
+        if in.beyond_view == 1u {
+            discard;
+        }
         var h = in.haze;
         if settings.haze_halved == 1u {
             h = h * 0.5; // rule 20
