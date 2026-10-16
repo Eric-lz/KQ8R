@@ -99,6 +99,9 @@ pub struct Placement {
     /// 0x440): the group bits added when near / far (rule 37).
     pub groups_near: u32,
     pub groups_far: u32,
+    /// `turnOffDynLighting` not 0: the lights this object carries reach
+    /// models only, not walls or the ground (object-lighting.md rule 26b).
+    pub turn_off_dyn_lighting: bool,
 }
 
 /// Group bits that put an object in a draw list: any of them means
@@ -182,6 +185,7 @@ impl Placement {
             too_far: s.number("tooFar").and_then(Result::ok).map_or(0.83, |v| v as f32),
             groups_near: s.number("groupsActive3D").and_then(Result::ok).map_or(0x448, |v| v as u32),
             groups_far: s.number("groupsActive3DFar").and_then(Result::ok).map_or(0x440, |v| v as u32),
+            turn_off_dyn_lighting: s.number("turnOffDynLighting").and_then(Result::ok).is_some_and(|v| v != 0.0),
         }
     }
 

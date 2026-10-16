@@ -165,7 +165,9 @@ pub fn add(app: &mut App) {
     app.add_plugins(MaterialPlugin::<ObjectMaterial>::default());
     let buffer = app.world_mut().resource_mut::<Assets<ShaderBuffer>>().add(crate::scene_lights::empty_buffer());
     app.world_mut().resource_mut::<ObjectLight>().scene_lights = buffer.clone();
-    app.insert_resource(crate::scene_lights::SceneLights::new(buffer)).init_resource::<crate::scene_lights::LightsGroup>();
+    app.insert_resource(crate::scene_lights::SceneLights::new(buffer))
+        .init_resource::<crate::scene_lights::LightsGroup>()
+        .init_resource::<crate::scene_lights::GroundLights>();
 }
 
 fn mode_code(mode: LightMode) -> u32 {

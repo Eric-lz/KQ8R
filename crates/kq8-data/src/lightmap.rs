@@ -212,6 +212,95 @@ fn spacing(settings: &TerrainSettings) -> f32 {
     settings.square_size() / (1u32 << settings.light_scale) as f32
 }
 
+/// At most this many patches a frame (object-lighting.md rule 26).
+pub const MAX_PATCHES: usize = 256;
+/// At most this many map points painted (and saved) a frame (rule 26).
+pub const MAX_PAINTED_POINTS: usize = 65_536;
+/// A channel 0..1 is stored back as ⌊channel × this⌋ (rule 26).
+pub const STORE_SCALE: f32 = 15.9;
+
+/// Falloff of a point light on the ground and on walls (object-lighting.md
+/// rules 16, 26): 1 up to Begin, then 1 − (d − Begin) ÷ End, not below 0
+/// (End is a fade length here, unlike on models).
+pub fn fade_falloff(d: f32, begin: f32, end: f32) -> f32 {
+    if d <= begin {
+        1.0
+    } else {
+        (1.0 - (d - begin) / end.max(0.001)).max(0.0)
+    }
+}
+
+/// Rule 26: a map value with `colour × falloff` added: each channel
+/// value ÷ 15 + added, capped at 1, stored as ⌊channel × 15.9⌋; the
+/// brightness bits stay as they were.
+pub fn add_light(value: u16, colour: [f32; 3], falloff: f32) -> u16 {
+    let c = Channels::of(value);
+    let ch = |v: u8, k: usize| -> u16 { (((v as f32 / 15.0 + colour[k] * falloff).min(1.0) * STORE_SCALE) as u16).min(15) };
+    (value & 0xF000) | (ch(c.red, 0) << 8) | (ch(c.green, 1) << 4) | ch(c.blue, 2)
+}
+
+/// What one light painted (rule 26), for the log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Patch {
+    /// The light's height above the ground below it.
+    pub height: f32,
+    /// Half the square's side in world units (0 if nothing was painted).
+    pub half_width: f32,
+    /// Map points painted.
+    pub points: usize,
+}
+
+impl LightMap {
+    /// Paints one point light into the map (object-lighting.md rule 26):
+    /// `ground` is the drawn ground's height straight below the light.
+    /// Nothing if it is more than End above the ground (or more than End
+    /// below it: our choice, the square would have no size). Every map
+    /// point within √(End² − h²) of the point below, on x and on y, gets
+    /// [`add_light`] with [`fade_falloff`] of its 3D distance. `painted`
+    /// collects the indices of the points written; stops (and returns
+    /// `None` for the rest) once it holds `MAX_PAINTED_POINTS`.
+    pub fn paint_light(&mut self, position: [f32; 3], ground: f32, colour: [f32; 3], begin: f32, end: f32, painted: &mut Vec<usize>) -> Patch {
+        let h = position[2] - ground;
+        let mut patch = Patch { height: h, half_width: 0.0, points: 0 };
+        if h > end || end * end < h * h {
+            return patch;
+        }
+        let half = (end * end - h * h).sqrt();
+        patch.half_width = half;
+        let last = (self.side - 1) as f32;
+        let range = |c: f32| -> (usize, usize) {
+            let lo = ((c - half) / self.spacing).ceil().max(0.0);
+            let hi = ((c + half) / self.spacing).floor().min(last);
+            (lo as usize, hi as usize)
+        };
+        let ((i0, i1), (j0, j1)) = (range(position[0]), range(position[1]));
+        if (position[0] + half) / self.spacing < 0.0 || (position[1] + half) / self.spacing < 0.0 || i0 > i1 || j0 > j1 {
+            return patch;
+        }
+        for j in j0..=j1 {
+            for i in i0..=i1 {
+                if painted.len() >= MAX_PAINTED_POINTS {
+                    return patch;
+                }
+                let (dx, dy) = (i as f32 * self.spacing - position[0], j as f32 * self.spacing - position[1]);
+                let d = (dx * dx + dy * dy + h * h).sqrt();
+                let k = j * self.side + i;
+                self.values[k] = add_light(self.values[k], colour, fade_falloff(d, begin, end));
+                painted.push(k);
+                patch.points += 1;
+            }
+        }
+        patch
+    }
+
+    /// Puts the points `indices` back to their values in `stored`.
+    pub fn restore(&mut self, stored: &LightMap, indices: &[usize]) {
+        for &k in indices {
+            self.values[k] = stored.values[k];
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +413,45 @@ mod tests {
         assert_eq!(use_dynamic_lighting(b"useDynamicLighting 1\nuseDynamicLighting 0\n"), Some(false));
         assert_eq!(use_dynamic_lighting(b"// useDynamicLighting 1\n"), None);
         assert_eq!(use_dynamic_lighting(b"setBrightness 50\n"), None);
+    }
+
+    #[test]
+    fn point_lights_paint_the_ground() {
+        // Falloff on the ground: End is a fade length (PLIGHT01: Begin
+        // 1,000, End 4,000: light out to 5,000).
+        assert_eq!(fade_falloff(900.0, 1000.0, 4000.0), 1.0);
+        assert!((fade_falloff(3000.0, 1000.0, 4000.0) - 0.5).abs() < 1e-6);
+        assert_eq!(fade_falloff(5000.0, 1000.0, 4000.0), 0.0);
+        assert_eq!(fade_falloff(6000.0, 1000.0, 4000.0), 0.0);
+        // Adding: 7/15 + 0.3 = 0.767 -> 12 (x15.9 rounded down); capped at
+        // 1 -> 15; brightness bits kept; nothing added -> unchanged.
+        assert_eq!(add_light(0x7777, [0.3, 0.7, 0.4], 1.0), 0x7CFD);
+        assert_eq!(add_light(0x7777, [0.0; 3], 0.0), 0x7777);
+        assert_eq!(add_light(0x5FFF, [0.5; 3], 1.0), 0x5FFF);
+        // A 9 x 9 map, 1,000 apart; light at (4,000, 4,000), 2,250 above
+        // ground 0, Begin 1,000, End 4,000: half-width √(4000² − 2250²).
+        let mut map = LightMap::with_size(9, 1000.0);
+        for k in 0..81 {
+            map.values[k] = 0x7777;
+        }
+        let stored = map.clone();
+        let mut painted = Vec::new();
+        let p = map.paint_light([4000.0, 4000.0, 2250.0], 0.0, [0.3, 0.7, 0.4], 1000.0, 4000.0, &mut painted);
+        assert!((p.half_width - (4000.0f32 * 4000.0 - 2250.0 * 2250.0).sqrt()).abs() < 0.01);
+        // 3,307 half-width: points 1..=7 on each axis.
+        assert_eq!((p.points, painted.len()), (49, 49));
+        // Below the light: d = 2,250, falloff 1 - 1250/4000 = 0.6875.
+        let f = 1.0 - 1250.0 / 4000.0;
+        assert_eq!(map.get(4, 4), Some(add_light(0x7777, [0.3, 0.7, 0.4], f)));
+        assert_eq!(map.get(0, 4), Some(0x7777), "outside the square");
+        map.restore(&stored, &painted);
+        assert_eq!(map.values, stored.values);
+        // Too high: nothing.
+        let p = map.paint_light([4000.0, 4000.0, 4001.0], 0.0, [1.0; 3], 0.0, 4000.0, &mut painted);
+        assert_eq!((p.points, p.half_width), (0, 0.0));
+        // The frame's point limit.
+        let mut full = vec![0; MAX_PAINTED_POINTS - 3];
+        let p = map.paint_light([4000.0, 4000.0, 0.0], 0.0, [1.0; 3], 0.0, 4000.0, &mut full);
+        assert_eq!(p.points, 3);
     }
 }

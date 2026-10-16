@@ -340,7 +340,7 @@ fn main() -> ExitCode {
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
         Scene::Ground(ground, objects, animation) => {
-            app.insert_resource(light_view::GroundLight::new(ground.light.clone(), args.light))
+            app.insert_resource(light_view::GroundLight::new(ground.light.clone(), args.light, ground.dynamic))
                 .insert_resource(terrain_view::LoadedGround(Some(ground)))
                 .insert_resource(ground_anim_view::LoadedGroundAnim(Some(animation)))
                 .insert_resource(terrain_view::FloorView(0))
@@ -373,7 +373,7 @@ fn main() -> ExitCode {
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
-                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights).chain().after(game_camera::camera_draw));
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::paint_ground).chain().after(game_camera::camera_draw));
         }
     }
     app.run();

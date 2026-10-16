@@ -155,7 +155,7 @@ pub fn spawn_animated(
         if !*unused {
             body.insert(balls.test_at(p, *shape_index));
             // The lights it carries (M1 7c), by the frame shown.
-            if let Some(c) = crate::scene_lights::CarriedLights::new(vec![b.lights.clone()], bevy_transform_from(rotation, p.position)) {
+            if let Some(c) = crate::scene_lights::CarriedLights::new(vec![b.lights.clone()], bevy_transform_from(rotation, p.position), p.turn_off_dyn_lighting) {
                 body.insert(c);
             }
         }

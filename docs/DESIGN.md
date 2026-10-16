@@ -967,8 +967,30 @@ before they start.
   off), nearest corner/centre within Begin + End, line not blocked; then
   added to the light map per texel with the wall falloff (End = fade
   length), and the surface's haze × 0.04.
-- **7e. Point lights on the ground** (rule 26): patches painted into the
-  shown map every frame, put back the next.
+- **7e (done 2026-10-16, MODLOG). Point lights on the ground** (rule 26): patches painted into the
+  shown map every frame, put back the next. Detailed plan (2026-10-16):
+  - Only with `useDynamicLighting 1` (`Options.cs`, as shipped; the shown
+    map is then the shadow map).
+  - Which lights: the same gathered list as 7c (owner in the lights
+    group, not deleted), point lights only, and not those carried by an
+    object whose `.kq` has `turnOffDynLighting=1` (rule 26b; `Placement`
+    reads the key).
+  - Each frame: first the points painted last frame get their stored
+    value back; then per light: h = light z − the drawn ground's height
+    straight below; h > End: nothing; else every map point within
+    √(End² − h²) of the point below, on x and on y (a square), gets
+    d = √(dx² + dy² + h²), falloff 1 to Begin, then 1 − (d − Begin) ÷ End,
+    not below 0; each colour channel: value ÷ 15 + colour × falloff, capped
+    at 1, stored back as ⌊channel × 15.9⌋ (brightness bits kept). Lights
+    paint one after another on the current values. At most 256 patches
+    and 65,536 points a frame (more skipped, logged).
+  - `kq8-data` `lightmap.rs`: the painting as a plain function on the map
+    (unit tests: PLIGHT01-like numbers, the cap, the 15.9 rounding, h >
+    End, the limits). Viewer `light_view.rs`: keeps the loaded map as the
+    stored values, paints a working copy, and rewrites only the touched
+    texels of the picture (7e-0).
+  - Log once a second: per light its h, half-width and points painted;
+    totals and anything skipped.
 - **7f. Q73 leftovers**: light maps bilinear, no colour key on walls or
   ground, the ground's far-edge cut at t = (visibleDistance − d₁) ÷
   (d₂ − d₁) (rule 28); check each against our code and change what

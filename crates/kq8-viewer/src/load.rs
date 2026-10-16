@@ -637,6 +637,10 @@ pub struct Ground {
     /// The light or shadow map drawn on the ground (M1 step 4c,
     /// terrain-lighting.md); full brightness if none.
     pub light: kq8_data::lightmap::LightMap,
+    /// `useDynamicLighting` from `Options.cs` (terrain-lighting.md rule 2;
+    /// the game's start value 0 if missing): point lights paint the ground
+    /// (object-lighting.md rule 26, M1 7e).
+    pub dynamic: bool,
 }
 
 /// The ground animators of a world (M3 step 3b-3, emitters.md "Ground
@@ -828,7 +832,19 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         groups.push(GroundGroup { label: name, triangles: tris, look });
     }
     let light = load_light_map(game, world, &settings, &fetch, log);
-    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default(), light })
+    let dynamic = use_dynamic_lighting(game);
+    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default(), light, dynamic })
+}
+
+/// `useDynamicLighting` as `Options.cs` sets it, if it does.
+fn options_dynamic_lighting(game: &GameDir) -> Option<bool> {
+    game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::lightmap::use_dynamic_lighting(&b))
+}
+
+/// `useDynamicLighting` in effect: `Options.cs`, else the game's start
+/// value 0 (terrain-lighting.md rule 2).
+pub fn use_dynamic_lighting(game: &GameDir) -> bool {
+    options_dynamic_lighting(game).unwrap_or(false)
 }
 
 /// A file found by name: (where, bytes).
@@ -846,7 +862,7 @@ fn load_light_map(
     log: &mut Log,
 ) -> kq8_data::lightmap::LightMap {
     use kq8_data::lightmap::{self, Kind, LightMap};
-    let dynamic = game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| lightmap::use_dynamic_lighting(&b));
+    let dynamic = options_dynamic_lighting(game);
     let kind = Kind::for_dynamic_lighting(dynamic.unwrap_or(false));
     let why = match dynamic {
         Some(on) => format!("Options.cs useDynamicLighting {}", u8::from(on)),

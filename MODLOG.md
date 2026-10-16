@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 M1 step 7e: point lights on the ground
+
+**Changed:** `kq8-data`: `lightmap.rs` `fade_falloff`, `add_light`, `LightMap::paint_light` / `restore`, limits, unit test; `objects.rs` `Placement::turn_off_dyn_lighting`. `kq8-viewer`: `load.rs` keeps `useDynamicLighting` (`Ground::dynamic`); `scene_lights.rs` also lists the lights that reach the ground (`GroundLights`; `CarriedLights::dyn_off`); `light_view.rs` keeps the stored map, paints a working copy every frame (`paint_ground`) and rewrites only the touched texels; callers pass `turnOffDynLighting`. Plan in `docs/DESIGN.md`; provenance.
+**Why:** M1 step 7e (`object-lighting.md` rule 26, `terrain-lighting.md` rule 15); the user's check in the original: the portal's light moves over the ground.
+**Tested how:** `cargo test --workspace` (188 + 90 + 9), clippy clean. Viewer `--world DeadCity [--at 182213,42600,3.1416]`, `--world Daventry`, `--frames 200`; console (no errors); `viewer.log`.
+**Result:** Dead City: "[PLight01] at (182213, 41595, 2250) h 1386 (End 4000): half-width 3752, 225 point(s)"; "[portal] … h 328 (End 3000): half-width 2982, 132 point(s)", the next second h 186 at x 182,347 (it moves); 357 points painted and 357 put back each frame. Daventry: the lamps and chandeliers near the start are higher above the ground than their End (1,951 > 1,500; 3,434 > 500): nothing painted there (2 points from one). Frames 7.3–7.6 ms.
+**Still broken / not tested:** Checked by eye by the user afterwards (2026-10-16): "the portal and torches in Dead City look great, they cast dynamic light just like the original game". Walls don't get point lights yet (7d, waits for Q78). The light under Connor in the per-second "ground light" line uses the working map, so it includes patches.
+**Next:** You: Dead City by the arrival portal (`--at 182213,42600,3.1416`): a soft green patch on the ground that moves and changes colour with the portal's light, plus PLIGHT01's steady greenish patch. Then 7d after A answers Q78.
+
 ## 2026-10-16 M1 step 7e-0: the ground's light map is bilinear
 
 **Changed:** `kq8-viewer/src/light_view.rs`: the shown light map becomes one picture (`light_image`, one texel per map point, channel × 17, bilinear, clamped); no more vertex colours; F7 changes a setting in every ground material; unit test. `ground_haze.rs` / `.wesl`: the picture at bindings 3–4, looked up per pixel from the world position (`ground_light`), then the mode. `terrain_view.rs`, `ground_anim_view.rs` pass the ground light to `ground_material`. `kq8-data` `lightmap.rs`: `LightMap::with_size`, `set` (also for 7e). Plan in `docs/DESIGN.md`; provenance.

@@ -57,8 +57,9 @@ Point lights on models (2026-10-16, answer to Q72; checked in the logs
 and by eye by the user: the portal lights Connor): Dead City's seven point lights and the lights
 some models carry (the arrival portal's circling green light, torches,
 coals; in Daventry lamps, candles, chandeliers, fireplaces) light
-nearby objects and Connor, as in the original. Walls and the ground
-don't get them yet.
+nearby objects and Connor, as in the original. Since 2026-10-16 they also
+paint soft patches of light on the ground (Dead City's arrival portal
+and torches; checked by eye by the user: like the original). Walls don't get them yet.
 
 ## Connor
 
@@ -270,8 +271,8 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, point lights on walls and the
-  ground (they light models only so far), fire and ice arrow sparks and
+- **Not drawn:** people and monsters, point lights on walls (they light
+  models and the ground so far), fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **No sound or music** at all.
 - **Clicking:** doors, chests, items, scripted objects and buildings

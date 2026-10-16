@@ -991,3 +991,16 @@ Replaces the M1 4c stand-in (vertex colours blended per triangle).
 | Looked up per pixel from the world position, u = (x ÷ spacing + 0.5) ÷ side, bilinear, clamped at the edges | Rule 11 (recommended: world coordinates, bilinear); `object-lighting.md` rule 13 (traced 2026-10-17: the light-map texture unit is bilinear) | Unit test (point centres, half-way = texel edge = `colour_at`'s average); viewer: Daventry 513, Swamp 257, Barren 129 (no file: full) run without shader errors |
 | F7 modes ×1 / ×2 / off applied in the shader; the sRGB-curve multiply stand-in as before | M1 4c (unchanged) | — |
 | The meshes stay cut into map cells | Our choice (harmless; may be simplified) | — |
+
+## Point lights on the ground (M1 step 7e) — `crates/kq8-data/src/{lightmap,objects}.rs` (`paint_light`, `add_light`, `fade_falloff`, `turn_off_dyn_lighting`), `crates/kq8-viewer/src/{light_view,scene_lights,load,terrain_view,anim_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Only with `useDynamicLighting 1` (shown map = shadow map) | `object-lighting.md` rule 26, `terrain-lighting.md` rules 2, 15 | Log says "(useDynamicLighting 0: none)" otherwise |
+| Each frame: last frame's patches put back first, then each light painted on the current values | Rule 26 (traced by A) | Log: "357 point(s) painted, 357 put back" |
+| Which lights: point lights of the gathered list (lights group, not deleted); carried lights of an object with `turnOffDynLighting=1` don't reach the ground | Rules 26, 26b | — (none of Dead City's start lights have the key) |
+| h = light z − drawn ground below; h > End: nothing; square of points within √(End² − h²) on x and y | Rule 26 | Unit test; Dead City `PLight01` h 1,386 → half-width 3,752, 225 points |
+| A light more than End **below** the ground paints nothing | **Our choice** (the square would have no size) | Unit test |
+| d = √(dx² + dy² + h²); falloff 1 to Begin, 1 − (d − Begin) ÷ End, ≥ 0 (End a fade length); channel ÷ 15 + colour × falloff, capped at 1, stored ⌊× 15.9⌋; brightness bits kept | Rule 26; **our reading** that the brightness bits stay (the note names only the colour channels) | Unit test `point_lights_paint_the_ground` |
+| At most 256 patches and 65,536 points a frame | Rule 26 | Unit test (points) |
+| Only touched texels of the picture are rewritten | Our method (7e-0's picture) | — |

@@ -386,7 +386,7 @@ pub fn setup_objects(
             log.detail(format!("see-through [{}]: translucency={} -> opacity {opacity:.2}", p.name, p.translucency));
         }
         // The lights it carries (M1 7c), on its first part only.
-        let mut carried = test.as_ref().and_then(|_| crate::scene_lights::CarriedLights::new(vec![shape_lights[*i].clone()], transform));
+        let mut carried = test.as_ref().and_then(|_| crate::scene_lights::CarriedLights::new(vec![shape_lights[*i].clone()], transform, p.turn_off_dyn_lighting));
         for (mesh, material) in &built[*i] {
             // Every material of a see-through object (objects.md Q14); a
             // separate copy, because other copies of the model may be solid.

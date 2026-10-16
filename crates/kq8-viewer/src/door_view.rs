@@ -152,11 +152,12 @@ fn spawn_body(
     haze: (bool, f32),
     test: crate::draw_distance::DistanceTest,
     lights: &[std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>],
+    dyn_off: bool,
 ) -> DrawnDoor {
     let transform = bevy_transform_from(placement.rotation, placement.position);
     let body = commands.spawn((transform, Visibility::default(), test)).id();
     // The lights it carries (M1 7c), by movement and frame.
-    if let Some(c) = crate::scene_lights::CarriedLights::new(animations.iter().map(|a| lights[*a].clone()).collect(), transform) {
+    if let Some(c) = crate::scene_lights::CarriedLights::new(animations.iter().map(|a| lights[*a].clone()).collect(), transform, dyn_off) {
         commands.entity(body).insert(c);
     }
     let mut frames = Vec::new();
@@ -285,7 +286,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting));
             active_objects.push(o);
             continue;
         }
@@ -326,13 +327,13 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights));
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting));
             active_chests.push(c);
             continue;
         }
         let door = Door::new(&p.name, movements, d.current, base);
         let DrawnDoor { body, frames, .. } =
-            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights);
+            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting);
         let active = ActiveDoor {
             door,
             script: d.script.clone(),

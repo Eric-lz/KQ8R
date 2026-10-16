@@ -16,8 +16,10 @@
 //!   object material shares; `object_light.wesl` adds each light per model
 //!   part and corner (rule 24). The buffer keeps its size, so only its
 //!   contents are rewritten.
-//! - These lights reach models only; walls (rule 16) and the ground (rule
-//!   26) are M1 7d / 7e.
+//! - The ground (rule 26, M1 7e): the point lights of the list, except
+//!   those carried by an object with `turnOffDynLighting=1` (rule 26b),
+//!   also go to `GroundLights` for `light_view::paint_ground`. Walls (rule
+//!   16) are M1 7d.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -48,15 +50,26 @@ pub struct CarriedLights {
     pub frame: usize,
     /// The object's placement as it was placed (rule 26b: placement only).
     pub placement: Transform,
+    /// `turnOffDynLighting`: its lights reach models only (rule 26b).
+    pub dyn_off: bool,
 }
+
+/// The point lights that reach the ground this frame (rule 26): name,
+/// position (game units), colour, Begin, End.
+#[derive(Resource, Default)]
+pub struct GroundLights(pub Vec<GroundLight>);
+
+/// One light for the ground: owner's name, position (game units), colour,
+/// Begin, End.
+pub type GroundLight = (String, [f32; 3], [f32; 3], f32, f32);
 
 impl CarriedLights {
     /// `None` if no frame of any movement carries a light.
-    pub fn new(movements: Vec<Arc<Vec<Vec<ModelLight>>>>, placement: Transform) -> Option<Self> {
+    pub fn new(movements: Vec<Arc<Vec<Vec<ModelLight>>>>, placement: Transform, dyn_off: bool) -> Option<Self> {
         movements
             .iter()
             .any(|m| m.iter().any(|f| !f.is_empty()))
-            .then_some(CarriedLights { movements, movement: 0, frame: 0, placement })
+            .then_some(CarriedLights { movements, movement: 0, frame: 0, placement, dyn_off })
     }
 
     fn current(&self) -> &[ModelLight] {
@@ -124,6 +137,12 @@ pub fn model_falloff(d: f32, begin: f32, end: f32) -> f32 {
     }
 }
 
+/// Bevy point -> game point (Z up), game units.
+fn point_to_game(p: Vec3) -> [f32; 3] {
+    let g = p * UNITS_PER_METRE;
+    [g.x, -g.z, g.y]
+}
+
 /// Game point (Z up) -> Bevy (Y up), in Bevy units.
 fn point_to_bevy(p: [f32; 3]) -> Vec3 {
     Vec3::new(p[0], p[2], -p[1]) / UNITS_PER_METRE
@@ -140,8 +159,10 @@ pub fn gather_lights(
     carried: Query<(&DistanceTest, &CarriedLights)>,
     connor: Query<&Transform, With<crate::connor_view::ConnorBody>>,
     sim: Option<Res<crate::door_view::DoorSim>>,
+    mut ground: ResMut<GroundLights>,
     shared: Res<Shared>,
 ) {
+    ground.0.clear();
     let deleted = |name: &str| sim.as_ref().is_some_and(|s| s.active.world.is_deleted(name));
     let mut lights = Vec::new();
     // Position, name, colour, Begin, End of each point light, for the log.
@@ -155,6 +176,7 @@ pub fn gather_lights(
         let at = point_to_bevy(l.position);
         lights.push(entry(at, true, l.colour, l.begin, l.end));
         described.push((at, test.name.clone(), l.colour, l.begin, l.end));
+        ground.0.push((test.name.clone(), l.position, l.colour, l.begin, l.end));
         from_points += 1;
     }
     for (test, c) in &carried {
@@ -167,6 +189,9 @@ pub fn gather_lights(
                 let at = c.placement.transform_point(point_to_bevy(l.position));
                 lights.push(entry(at, true, l.colour, l.begin, l.end));
                 described.push((at, test.name.clone(), l.colour, l.begin, l.end));
+                if !c.dyn_off {
+                    ground.0.push((test.name.clone(), point_to_game(at), l.colour, l.begin, l.end));
+                }
             } else {
                 // A sun-type node: its aim as stored, world axes (rule 26b).
                 let aim = Vec3::new(l.position[0], l.position[2], -l.position[1]);

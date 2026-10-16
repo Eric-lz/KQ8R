@@ -21,6 +21,13 @@
 //! - STAND-IN (open question 3): the brightness setting (`setBrightness`)
 //!   is ignored.
 //!
+//! - Point lights on the ground (object-lighting.md rule 26, M1 7e): with
+//!   `useDynamicLighting 1`, every frame the points painted the frame
+//!   before get their stored values back, then each light of
+//!   `scene_lights::GroundLights` paints its patch into the working map
+//!   (`LightMap::paint_light`), and only the touched texels of the picture
+//!   are rewritten.
+//!
 //! F7 cycles x1 -> x2 -> off (a setting of every ground material);
 //! `--light x1|x2|off` sets the start. The mode is shown on screen and
 //! logged; every second the light under Connor and under the camera goes
@@ -98,17 +105,36 @@ impl LightMode {
 /// and how many ground meshes are lit by it (for the log).
 #[derive(Resource)]
 pub struct GroundLight {
+    /// The working map: the stored values plus this frame's patches.
     pub map: LightMap,
+    /// The map as loaded (rule 26: patches are put back to these).
+    stored: LightMap,
     pub mode: LightMode,
+    /// `useDynamicLighting` (rule 26: patches only when on).
+    pub dynamic: bool,
     image: Option<Handle<Image>>,
     meshes: usize,
     corners: usize,
     last_report: Option<Instant>,
+    /// Map points painted last frame.
+    painted: Vec<usize>,
+    last_paint_log: Option<Instant>,
 }
 
 impl GroundLight {
-    pub fn new(map: LightMap, mode: LightMode) -> Self {
-        GroundLight { map, mode, image: None, meshes: 0, corners: 0, last_report: None }
+    pub fn new(map: LightMap, mode: LightMode, dynamic: bool) -> Self {
+        GroundLight {
+            stored: map.clone(),
+            map,
+            mode,
+            dynamic,
+            image: None,
+            meshes: 0,
+            corners: 0,
+            last_report: None,
+            painted: Vec::new(),
+            last_paint_log: None,
+        }
     }
 
     /// The map's picture (made the first time it is asked for).
@@ -223,6 +249,73 @@ pub fn toggle_light(
         t.0 = label_text(mode);
     }
     shared.log.lock().unwrap().summary(format!("key F7: ground light mode {} ({changed} ground materials)", mode.name()));
+}
+
+/// Every frame (rule 26): put last frame's patches back, paint this
+/// frame's, and rewrite the touched texels of the picture. Logs once a
+/// second what each light painted.
+pub fn paint_ground(
+    mut light: ResMut<GroundLight>,
+    lights: Res<crate::scene_lights::GroundLights>,
+    lookup: Option<Res<crate::terrain_view::GroundLookup>>,
+    mut images: ResMut<Assets<Image>>,
+    shared: Res<Shared>,
+) {
+    use kq8_data::lightmap::MAX_PATCHES;
+    let light = &mut *light;
+    if light.painted.is_empty() && (lights.0.is_empty() || !light.dynamic) {
+        return;
+    }
+    let Some(lookup) = lookup else { return };
+    let before = std::mem::take(&mut light.painted);
+    light.map.restore(&light.stored, &before);
+    let mut painted = Vec::new();
+    let mut report = Vec::new();
+    let mut skipped = 0;
+    if light.dynamic {
+        for (n, (name, at, colour, begin, end)) in lights.0.iter().enumerate() {
+            if n >= MAX_PATCHES {
+                skipped += 1;
+                continue;
+            }
+            // The drawn ground straight below the light.
+            let Some(ground) = lookup.0.height_at(at[0], at[1]).map(|g| g.height) else {
+                report.push(format!("[{name}] not over the ground"));
+                continue;
+            };
+            let p = light.map.paint_light(*at, ground, *colour, *begin, *end, &mut painted);
+            report.push(format!(
+                "[{name}] at ({:.0}, {:.0}, {:.0}) h {:.0} (End {end:.0}): half-width {:.0}, {} point(s)",
+                at[0], at[1], at[2], p.height, p.half_width, p.points
+            ));
+        }
+    }
+    // Rewrite the texels put back and the ones painted.
+    if let Some(handle) = light.image.clone() {
+        if let Some(mut image) = images.get_mut(&handle) {
+            if let Some(data) = image.data.as_mut() {
+                for &k in before.iter().chain(&painted) {
+                    if let Some(v) = light.map.values().get(k) {
+                        data[4 * k..4 * k + 4].copy_from_slice(&texel(*v));
+                    }
+                }
+            }
+        }
+    }
+    let now = Instant::now();
+    if light.last_paint_log.is_none_or(|t| now.duration_since(t).as_secs_f32() >= 1.0) {
+        light.last_paint_log = Some(now);
+        shared.log.lock().unwrap().detail(format!(
+            "ground point lights{}: {} patch(es), {} point(s) painted, {} put back{}; {}",
+            if light.dynamic { "" } else { " (useDynamicLighting 0: none)" },
+            report.len(),
+            painted.len(),
+            before.len(),
+            if skipped > 0 { format!(", {skipped} light(s) over the {MAX_PATCHES}-patch limit") } else { String::new() },
+            report.join("; ")
+        ));
+    }
+    light.painted = painted;
 }
 
 /// Every second: the light under Connor and under the camera.
