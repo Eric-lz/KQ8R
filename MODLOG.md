@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 M1 step 7e-0: the ground's light map is bilinear
+
+**Changed:** `kq8-viewer/src/light_view.rs`: the shown light map becomes one picture (`light_image`, one texel per map point, channel × 17, bilinear, clamped); no more vertex colours; F7 changes a setting in every ground material; unit test. `ground_haze.rs` / `.wesl`: the picture at bindings 3–4, looked up per pixel from the world position (`ground_light`), then the mode. `terrain_view.rs`, `ground_anim_view.rs` pass the ground light to `ground_material`. `kq8-data` `lightmap.rs`: `LightMap::with_size`, `set` (also for 7e). Plan in `docs/DESIGN.md`; provenance.
+**Why:** A traced that the ground's light maps are filtered bilinearly (`object-lighting.md` rule 13, `terrain-lighting.md` rule 11); ours were blended per triangle. 7e will paint point lights into this picture.
+**Tested how:** `cargo test --workspace` (188 + 89 + 9), clippy clean. Viewer `--world Daventry|DeadCity|Swamp|Barren --frames 150`, console checked for shader errors (none), `viewer.log`.
+**Result:** Maps of 513, 257 and 129 points as pictures; the "ground light under Connor" lines unchanged (Daventry 7, 7, 7 = 47%); average frame 7.2–8.1 ms (no change).
+**Still broken / not tested:** Checked by eye by the user afterwards (2026-10-16): "looks good". The F7 key not pressed by a test option.
+**Next:** You: Daventry, look at hill shadow edges on the grass (they should look smooth, no diagonal steps along the ground's triangles) and press F7 to cycle the modes. Then 7e (point light patches on the ground).
+
 ## 2026-10-16 User's check of M3 3g and M1 7a–7c
 
 **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`: marked as checked by eye. No code.

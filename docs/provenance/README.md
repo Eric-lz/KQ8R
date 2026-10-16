@@ -980,3 +980,14 @@ Replaces the 6h stand-in (every ball from the model's geometry).
 | No colour key on walls or the ground: pure black is drawn black | Rule 14 (traced) | Code: both opaque, texture alpha unused (already so) |
 | The ground's far-edge cut | Rule 28 (traced): t = (visibleDistance − d₁) ÷ (d₂ − d₁) along each edge, the rest blended with t | Our per-pixel cut on blended corner distances is the same line; comment updated, no code change |
 | The ground's light map between points: per triangle (vertex colours), **not** bilinear | Differs from `terrain-lighting.md` rule 11 / `object-lighting.md` rule 13 (now traced bilinear) | Planned as M1 7e-0 |
+
+## The ground's light map, bilinear (M1 step 7e-0) — `crates/kq8-viewer/src/{light_view,ground_haze,terrain_view,ground_anim_view}.rs`, `ground_haze.wesl`, `crates/kq8-data/src/lightmap.rs` (`with_size`, `set`)
+
+Replaces the M1 4c stand-in (vertex colours blended per triangle).
+
+| What | Source | Check |
+| --- | --- | --- |
+| The shown map is one picture, texel (i, j) = map point (i, j), red/green/blue = channel × 17 (read back as channel ÷ 15), not sRGB | `terrain-lighting.md` rules 7, 9, 10 | Unit test `the_picture_holds_the_map_and_the_lookup_hits_its_points` |
+| Looked up per pixel from the world position, u = (x ÷ spacing + 0.5) ÷ side, bilinear, clamped at the edges | Rule 11 (recommended: world coordinates, bilinear); `object-lighting.md` rule 13 (traced 2026-10-17: the light-map texture unit is bilinear) | Unit test (point centres, half-way = texel edge = `colour_at`'s average); viewer: Daventry 513, Swamp 257, Barren 129 (no file: full) run without shader errors |
+| F7 modes ×1 / ×2 / off applied in the shader; the sRGB-curve multiply stand-in as before | M1 4c (unchanged) | — |
+| The meshes stay cut into map cells | Our choice (harmless; may be simplified) | — |

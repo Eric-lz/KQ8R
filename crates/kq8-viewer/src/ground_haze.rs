@@ -3,8 +3,9 @@
 //! are that note's). See docs/provenance/README.md.
 //!
 //! Replaces Bevy's unlit standard material and distance fog on the ground
-//! (surface, floor view, flowing squares): texture x the light map's vertex
-//! colours (unchanged from M1 4c), then per corner haze from the camera,
+//! (surface, floor view, flowing squares): texture x the light map, looked
+//! up per pixel in its picture with bilinear filtering (M1 7e-0,
+//! `light_view`), then per corner haze from the camera,
 //! 0.01 to 0.99 at `visibleDistance`, and nothing drawn beyond
 //! `visibleDistance` (`ground_haze.wesl`). F8 switches it with the rest.
 
@@ -37,6 +38,13 @@ pub struct Settings {
     pub visible_distance: f32,
     /// Game units per Bevy unit.
     pub game_units: f32,
+    /// The light map's mode (F7): 0 x1, 1 x2, 2 off (terrain-lighting.md
+    /// rule 10).
+    pub light_mode: u32,
+    /// 1 ÷ the map's point spacing (world units) and its side in points
+    /// (rules 6, 7), to find a world point in the picture.
+    pub light_inv_spacing: f32,
+    pub light_side: f32,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -46,6 +54,10 @@ pub struct GroundMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub texture: Option<Handle<Image>>,
+    /// The shown light map as one picture (`light_view::light_image`).
+    #[texture(3)]
+    #[sampler(4)]
+    pub light_map: Handle<Image>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -77,8 +89,17 @@ pub fn add(app: &mut App) {
     app.add_plugins(MaterialPlugin::<GroundMaterial>::default());
 }
 
-/// A ground material for a texture, colour or missing material (magenta).
-pub fn ground_material(look: Look, address: ImageAddressMode, light: &ObjectLight, images: &mut Assets<Image>) -> GroundMaterial {
+/// A ground material for a texture, colour or missing material (magenta),
+/// lit by the ground's light map.
+pub fn ground_material(
+    look: Look,
+    address: ImageAddressMode,
+    light: &ObjectLight,
+    ground: &mut crate::light_view::GroundLight,
+    images: &mut Assets<Image>,
+) -> GroundMaterial {
+    let light_map = ground.image(images);
+    let (light_inv_spacing, light_side) = ground.lookup();
     let (base, texture) = match look {
         Look::Texture { width, height, rgba, .. } => (Vec4::ONE, Some(images.add(texture_image(width, height, rgba, address)))),
         Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None),
@@ -93,8 +114,12 @@ pub fn ground_material(look: Look, address: ImageAddressMode, light: &ObjectLigh
             haze_start: light.haze.ground_start(),
             visible_distance: light.haze.visible,
             game_units: UNITS_PER_METRE,
+            light_mode: ground.mode.code(),
+            light_inv_spacing,
+            light_side,
         },
         texture,
+        light_map,
         alpha_mode: AlphaMode::Opaque,
     }
 }

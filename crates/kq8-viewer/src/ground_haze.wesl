@@ -2,8 +2,10 @@
 // (M1 step 6e, docs/DESIGN.md; rules: docs/behaviour/object-lighting.md,
 // rule numbers are that note's). Used by `ground_haze.rs`.
 //
-// Colour = base colour x texture x the light map's vertex colour, as
-// Bevy's unlit material drew it before (M1 step 4c).
+// Colour = base colour x texture x the light map (M1 7e-0): the shown map
+// is one picture, one texel per map point, looked up per pixel from the
+// world position with bilinear filtering (terrain-lighting.md rules 7,
+// 10, 11; object-lighting.md rule 13), then the F7 mode.
 //
 // Haze per corner (rule 27): 0.01 nearer than the start, rising in a
 // straight line to 0.99 at visibleDistance, 0.99 beyond; the card blends
@@ -36,17 +38,24 @@ struct Settings {
     visible_distance: f32,
     // Game units per Bevy unit.
     game_units: f32,
+    // F7: 0 = x1, 1 = x2 (doubled, capped), 2 = off (full brightness).
+    light_mode: u32,
+    // 1 / the map's point spacing (world units), its side in points.
+    light_inv_spacing: f32,
+    light_side: f32,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
 @group(constants::MATERIAL_BIND_GROUP) @binding(1) var colour_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(2) var colour_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var light_texture: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(4) var light_sampler: sampler;
 
 struct GroundVertex {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    // The light map's colour (linear), from the vertex colours.
-    @location(1) light: vec4<f32>,
+    // The world position in game units, x and y (for the light map).
+    @location(1) ground_xy: vec2<f32>,
     // This corner's haze (rule 27) and distance in game units (rule 28).
     @location(2) haze: f32,
     @location(3) distance: f32,
@@ -67,9 +76,8 @@ fn vertex(vertex_in: Vertex) -> GroundVertex {
     var out: GroundVertex;
     out.position = position_world_to_clip(world_position.xyz);
     out.uv = v.uv;
-    out.light = vec4<f32>(1.0);
-    @if(VERTEX_COLORS)
-    out.light = v.color;
+    // Bevy (x, y, z) = game (x, z, -y) / 100.
+    out.ground_xy = vec2<f32>(world_position.x, -world_position.z) * settings.game_units;
     out.haze = haze;
     out.distance = distance;
     return out;
@@ -95,9 +103,24 @@ fn haze_blend(lit: vec3<f32>, haze: vec3<f32>, h: f32) -> vec3<f32> {
     return screen_to_linear(mix(linear_to_screen(lit), haze, h));
 }
 
+// The light map at a world point (game x, y): channel / 15 per colour,
+// bilinear between the map's points (texel (i, j) = point (i, j)).
+fn ground_light(xy: vec2<f32>) -> vec3<f32> {
+    let uv = (xy * settings.light_inv_spacing + vec2<f32>(0.5)) / settings.light_side;
+    let raw = textureSample(light_texture, light_sampler, uv).rgb;
+    if settings.light_mode == 1u {
+        return min(raw * 2.0, vec3<f32>(1.0));
+    } else if settings.light_mode == 2u {
+        return vec3<f32>(1.0);
+    }
+    return raw;
+}
+
 @fragment
 fn fragment(in: GroundVertex) -> @location(0) vec4<f32> {
-    var colour = settings.base_colour * in.light;
+    // STAND-IN (M1 4c): the multiply is meant on the colour as shown on
+    // screen, so the light goes through the sRGB curve first.
+    var colour = settings.base_colour * vec4<f32>(screen_to_linear(ground_light(in.ground_xy)), 1.0);
     if settings.textured == 1u {
         colour = colour * textureSample(colour_texture, colour_sampler, in.uv);
     }

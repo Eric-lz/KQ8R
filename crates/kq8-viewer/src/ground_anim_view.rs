@@ -107,7 +107,7 @@ pub fn setup_ground_anim(
             m,
             look.map(|look| {
                 // One texture covers exactly one square: clamp at the edges.
-                let material = ground_material(look, ImageAddressMode::ClampToEdge, &haze, &mut images);
+                let material = ground_material(look, ImageAddressMode::ClampToEdge, &haze, &mut light, &mut images);
                 let see_through = materials.add(with_opacity(&material, SURFACE_SEE_THROUGH));
                 (materials.add(material), see_through)
             }),

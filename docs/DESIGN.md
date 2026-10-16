@@ -982,6 +982,25 @@ before they start.
   as **7e-0**: the ground's light map as a texture looked up in world
   coordinates with bilinear filtering; 7e (point-light patches painted
   into the shown map each frame) then works on that texture.
+- **7e-0. The ground's light map, bilinear (planned and done 2026-10-16, MODLOG).**
+  `terrain-lighting.md` rules 7, 10, 11; `object-lighting.md` rule 13.
+  - The shown map becomes one picture on the graphics card: one texel per
+    map point (Daventry 513 × 513), red/green/blue = channel × 17 (so
+    channel ÷ 15 when read), not sRGB, bilinear filtering, clamped at the
+    edges (outside the map: the nearest edge point, as `colour_at`).
+  - The ground shader looks it up per pixel from the world position:
+    u = (x ÷ spacing + 0.5) ÷ side, v = (y ÷ spacing + 0.5) ÷ side (map
+    point (i, j) at x = i × spacing, y = j × spacing, rule 7). Then the
+    mode (×1 / ×2 / off, F7) and the screen-colour stand-in as before.
+  - The vertex colours go; F7 changes a setting in every ground material
+    instead of recolouring the meshes. The meshes stay cut into map cells
+    (harmless; may be simplified later).
+  - Check: unit test of the picture's texels and the lookup formula
+    against `LightMap::colour_at`; viewer runs (no shader errors); the
+    once-a-second "ground light under Connor" log line is unchanged (it
+    already uses the bilinear `colour_at`). By eye: soft shadow edges,
+    no diagonal steps along the cells' triangles.
+  - 7e then paints its patches into this picture.
 
 ### M2 — Walk Connor around Daventry
 

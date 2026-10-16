@@ -202,11 +202,11 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step (B):** M1 7d, point lights on walls (`object-lighting.md`
-  rule 16: added into the walls' light maps, haze × 0.04 per lit wall),
-  then 7e-0 (the ground's light map bilinear, as a texture) and 7e (point
-  light patches painted into the ground's map). Planned in
-  `docs/DESIGN.md` M1 step 7.
+- **Done after the check (2026-10-16):** M1 7e-0, the ground's light map
+  is one bilinear picture on the card (checked by eye by the user).
+- **Next step (B):** 7e (point light patches painted into the ground's
+  picture, `object-lighting.md` rule 26). 7d (walls, rule 16) waits for
+  A's answer to Q78. Planned in `docs/DESIGN.md` M1 step 7.
 - **Checked by the user (2026-10-16), all good:** `cargo run -p kq8-viewer
   --release -- --world DeadCity --at 182213,42600,3.1416`: Connor stands
   by the arrival portal; his side facing the portal should get a green

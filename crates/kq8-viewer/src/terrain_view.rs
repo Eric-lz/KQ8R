@@ -162,7 +162,7 @@ pub fn setup_ground(
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
-        let material = ground_material(group.look, ImageAddressMode::ClampToEdge, &haze, &mut images);
+        let material = ground_material(group.look, ImageAddressMode::ClampToEdge, &haze, &mut light, &mut images);
         let tinted = |tint: Color| tinted(&material, tint);
         let opaque = materials.add(material.clone());
         let mut over: Vec<_> = lower.iter().chain(&higher).filter(|(t, _)| !ground.animated.contains(&t.square)).cloned().collect();

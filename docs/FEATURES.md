@@ -22,7 +22,9 @@ starting pose and see-through things (waterfalls, fountains) see-through.
 Checked by eye in Daventry; the other 11 worlds load but have only been
 looked at in a few places. The ground is lit by the game's light maps
 (hill shadows), compared with the original by eye in Daventry
-(2026-10-14): as stored (x1) matches. Objects (and Connor) are lit by the
+(2026-10-14): as stored (x1) matches. Since 2026-10-16 the map is blended
+bilinearly between its points, as the original's card does it (checked
+by eye by the user). Objects (and Connor) are lit by the
 world's ambient light and sun (2026-10-15): in Daventry 30-42% of their
 texture's brightness, the sunny side a little lighter. Checked in the
 logs (Connor and the three objects nearest his start stay within

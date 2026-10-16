@@ -149,6 +149,21 @@ impl LightMap {
         (i < self.side && j < self.side).then(|| self.values[j * self.side + i])
     }
 
+    /// A map of `side` x `side` points `spacing` apart, full brightness
+    /// everywhere (rule 4's starting value).
+    pub fn with_size(side: usize, spacing: f32) -> Self {
+        LightMap { side, spacing, values: vec![FULL; side * side] }
+    }
+
+    /// Sets point (i, j); `false` outside the map.
+    pub fn set(&mut self, i: usize, j: usize, value: u16) -> bool {
+        let inside = i < self.side && j < self.side;
+        if inside {
+            self.values[j * self.side + i] = value;
+        }
+        inside
+    }
+
     pub fn values(&self) -> &[u16] {
         &self.values
     }
