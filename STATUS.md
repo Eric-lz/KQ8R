@@ -1,12 +1,13 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-16 at the
-end of B's haze and draw distance session (M1 steps 6d–6h). Read with
+Hand-over in case the chat is lost. Brought up to date 2026-10-17 at the
+end of A's lighting study session (Q70–Q74 and the last open lighting
+points; previous: B's haze and draw distance session, M1 steps 6d–6h). Read with
 `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
 entries at the top). The short public summary is `README.md`; the detailed
 "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-16)
+## Where we are (2026-10-17)
 
 - **M2 (walk Connor around Daventry) is done**, including water (wading),
   the camera keeping out of walls, and leaning into turns while running.
@@ -259,11 +260,10 @@ milestone: **M3, Daventry comes alive**.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- Open points inside `object-lighting.md` (not in QUESTIONS.md): the
-  exact cut point of ground triangles at `visibleDistance` (stand-in
-  given, hardly visible), where models' own lights sit in the `.kqs`
-  file, whether pure-black texels are see-through on walls, the flames'
-  12,100 (traced and built) vs the user's ~11,000 (compare by eye).
+- Open points inside `object-lighting.md` (not in QUESTIONS.md): only
+  the flames' 12,100 (traced and built) vs the user's ~11,000 (open
+  question 9, kept for a later session) and the Direct3D renderer (6,
+  not studied; Glide only). The rest was answered 2026-10-17.
 
 - Q60–Q64: answered 2026-10-15 (`clicking.md`); B's code still uses the
   older stand-ins (Q63: the ground and the 5 `colliderType=136` buildings
