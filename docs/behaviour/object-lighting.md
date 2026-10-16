@@ -7,6 +7,11 @@ our own words), the light files in each world's `kq/Light/`, the scripts
 (the Glide path was traced; Direct3D was not checked). Answers Q66 and the
 open part of Q65. The ground itself is in `terrain-lighting.md`.
 
+Updated 2026-10-16 (study session A, Q68 and Q69): haze on the ground,
+building walls, particles and the background (rules 27–33), what the card
+does with the haze (rule 23), the draw distance that switches objects off
+(rules 34–40), and the walls' lights (rule 16).
+
 "Traced" = read in the exe. "Measured" = checked on the data with a
 throwaway script. "Not traced" = an assumption, marked as such.
 
@@ -193,9 +198,28 @@ placement in floats and repeat what the texture fields give):
     separate surfaces (`buildings.md`), each with its own light map.
     Measured on Daventry: many texels are 0 (black), e.g. 16,017 of 81,085
     in `cnnrhut.dil`. Those are probably faces that are never seen.
-16. Whether the sun and ambient lights also tint building walls on hardware
-    was **not traced** (the wall drawing code was not read). Recommended:
-    walls use only their light map.
+16. **The sun and ambient never touch building walls** (traced 2026-10-16).
+    A wall gets its light map and, only when dynamic lighting is on, the
+    point lights (`KQPointLight`) near it. Dynamic lighting is on in the
+    shipped `Options.cs` (`useDynamicLighting 1`), but only Dead City has
+    point lights (rule 25), so in Daventry walls use only their light map.
+    How a point light adds to a wall (traced):
+    - the light must be in front of the wall (the wall's facing and the
+      direction from the light to the wall differ by more than about 96°,
+      i.e. their dot product is below −0.1);
+    - the nearest of the wall's four corners and its centre must be within
+      the light's reach (its full-strength distance plus its fade length);
+    - a line from the light to a point 64 units in front of that nearest
+      spot (towards the light) must not be blocked;
+    - then every light texel of that wall gets colour × falloff added, per
+      channel, capped at 1, where the falloff is measured at the texel's
+      own position: 1 up to the full-strength distance, then falling in a
+      straight line to 0 over the fade length. This is the same shape as
+      rule 24 (full to `tsAttenuationBegin`, 0 at `tsAttenuationEnd`).
+      Which stored number is which key was **not** matched; rule 24's
+      reading is the stand-in.
+    - such a lit wall also gets its haze multiplied by **0.04** (almost no
+      haze), so lit walls glow through the fog.
 
 ### Daventry building light values (measured, red channel)
 
@@ -247,14 +271,29 @@ B draws it (open question 1).
     `.kq` has `b_hazeSolid=1` (traced; 2 Daventry objects have it). The
     test is made per material, after the `0x10000` halving.
 22. After that test the haze is multiplied by the object's `hazeMultiplier`
-    (default 1.0; no Daventry object sets it).
+    (default 1.0). **Only that exact spelling is read** (traced). No file
+    in the game uses it; the 13 Gnome files that write `hazeMulitplier`
+    (misspelled) are ignored by the original, so in practice the multiplier
+    is **always 1.0**. Read only the correct spelling, as the original does.
 23. Solid objects are then drawn **blended towards the haze colour** by
-    the haze amount. Haze colour = `resetHazeColor R G B` in `world.cs`
-    (Daventry 4 8 12, almost black; the 0–255 scale is assumed). How the
-    card blends was not traced; a plain blend is assumed. **See-through
-    objects** (`translucency` below 256) get no haze colour: their opacity
-    is `translucency` ÷ 255, times a fade (1 while haze < 0.5, then
-    1.2 − haze).
+    the haze amount (traced 2026-10-16):
+    - **The blend**: drawn colour = (1 − haze) × colour + haze × haze
+      colour, done by the card on the final colour (after texture × light),
+      in plain screen colour values (gamma 1.0, rule 17). The haze amount
+      goes to the card as a number from 0 to 255 (haze × 255). The card's
+      fog table is never used.
+    - **The haze colour**: `resetHazeColor R G B` in `world.cs`, on a
+      **0–255 scale**. The game does not use these values directly: it
+      picks the **palette colour nearest** to them (smallest sum of squared
+      differences, among palette entries 10–244 that the palette marks as
+      usable; if none, entry 253), and fogs with that palette entry's
+      colour. Which entries are marked usable was not traced; using all of
+      10–244 is a good stand-in. Daventry: nearest to 4 8 12 in
+      `daventry.ppl`. Dead City: 0 0 0.
+    - **See-through objects** (`translucency` below 256) get no haze colour
+      (the card's fog is switched off for them): their opacity is
+      `translucency` ÷ 255, times a fade (1 while haze < 0.5, then
+      1.2 − haze).
 
 ## Rules: point lights and flicker lights (partly traced)
 
@@ -273,6 +312,126 @@ B draws it (open question 1).
 26. Moving lights painting light onto the ground (`terrain-lighting.md`
     rule 15) were not studied further.
 
+## Rules: haze on the ground, walls, particles and the background (Q68)
+
+All traced 2026-10-16 unless marked. "Distance" is always the straight-line
+3D distance from the **camera**. Every kind uses the same card blend and
+haze colour as objects (rule 23); only how the haze amount is worked out
+differs.
+
+27. **The ground is hazed per corner.** Each ground corner gets its own
+    haze from its own distance d:
+    - d below `hazeDistance`: 0.01;
+    - d from `hazeDistance` up to `visibleDistance`:
+      0.01 + (d − `hazeDistance`) ÷ (1.02 × (`visibleDistance` −
+      `hazeDistance`)), which rises in a straight line from 0.01 to
+      **0.99** at `visibleDistance`;
+    - d at or beyond `visibleDistance`: 0.99.
+    The card blends the haze smoothly across each triangle between its
+    corners. **The ground never reaches full haze** (max 0.99), and it uses
+    `visibleDistance` itself as the end, **not** the 0.85 × `visibleDistance`
+    the objects use. If `visibleDistance` is not beyond `hazeDistance`, the
+    ground uses 0.6 × `visibleDistance` as its haze start instead.
+28. **The ground ends at `visibleDistance`.** Corners beyond it are marked
+    "past the far edge"; a triangle whose corners are all past it is not
+    drawn, and one that crosses it is cut there (the cut itself was not read
+    in detail). So the ground is a disc of radius `visibleDistance` around
+    the camera.
+29. **Building walls are hazed per wall surface**, from the distance of the
+    surface's **nearest corner** to the camera, with the **objects'**
+    numbers: haze = (d − `hazeDistance`) ÷ (end − `hazeDistance`),
+    end = 0.85 × `visibleDistance` (rule 19), 0.01 when closer than
+    `hazeDistance`, and **0.99** when the formula goes past 1.
+    - A wall surface whose haze is **0.99 or more is not drawn**, unless
+      the building's `.kq` has `b_hazeSolid=1` (then it is drawn at haze
+      0.99, never vanishing). This is how the Daventry tomb and the temple
+      rooms named in Q68 stay solid.
+    - The material flag `0x10000` and `hazeMultiplier` are **not** used
+      for walls.
+    - A wall lit by a point light gets haze × 0.04 (rule 16).
+    - Daventry: walls start to fade at 18,000 and drop out when their
+      nearest corner is past 18,000 + 0.99 × 4,950 ≈ 22,900. Dead City:
+      9,000 to about 10,190.
+30. **Particles** (leaves, drips, snow, any `KQEmitter`): all particles of
+    one emitter share **one** haze, computed like an object's (rules 19–23)
+    from the **emitter's own location**, not from each particle. An emitter
+    that follows the camera (snow) is at the camera, so its particles get
+    no haze. The emitter's `translucency`, `b_hazeSolid` and the particle
+    shape's material flags apply as for objects.
+31. **The background** is not the haze colour. Each world's `world.cs`
+    runs `newSky <n>` (`KQWorld::background`: Daventry 17, Dead City 10,
+    Barren 14, Castle 11, Ice World 65, Snow exit 229, Swamp 83, Gnome and
+    Temples 1–2 10). This fills the whole screen with **palette entry n**
+    of the world's palette, flat, with the card's fog **off**, behind
+    everything. Where the ground ends (rule 28) this colour shows. The
+    stars and planet lines in `world.cs` are commented out. When in the
+    frame the fill is drawn was not traced; drawing it first, behind
+    everything, gives the same picture.
+32. The brightness factor (rule 17) scales every palette colour, so it also
+    scales the haze colour and the background colour.
+33. **Summary of the three haze ends** (Daventry / Dead City):
+
+    | Thing | Haze starts | Full haze / gone |
+    | --- | --- | --- |
+    | Objects (one value each) | 18,000 / 9,000 | 22,950 / 10,200, then not drawn (rule 21) |
+    | Building walls (per surface, nearest corner) | 18,000 / 9,000 | ≈ 22,900 / ≈ 10,190, then not drawn |
+    | Ground (per corner) | 18,000 / 9,000 | 0.99 at 27,000 / 12,000, never drawn beyond |
+
+## Rules: draw distance, objects switched off far from Connor (Q69)
+
+All traced 2026-10-16. This is separate from the haze: it decides whether
+an object takes part in the game at all.
+
+34. **Every frame each object is put in one of three states: near, far or
+    off**, by its distance from a reference point. The reference point is
+    **Connor** (his position). Scripts can switch it to the camera with
+    `setActiveCamera 1` and back with `setActiveCamera 0` (Dead City's
+    `death.cs`, `laser2.cs`, `portrap*.cs` do this during cut scenes).
+35. **The distance** = distance from the reference point to the centre of
+    the object's bounding ball, **minus the ball's radius**. The ball:
+    - an object with a collider: the collider's ball;
+    - otherwise an object with a shape: centre = middle of the shape's box
+      (in the object's own axes), radius = half the box's diagonal;
+    - otherwise (no shape name, like Dead City's `flame.kq`): radius 100,
+      centre at the object's position;
+    - emitters: radius 250 around the emitter's location.
+36. **The limit** L = the world's `visibleDistance` (`TERRAIN.KQ`; 30,000
+    if there is no terrain). With the distance D from rule 35:
+    - D ≥ L: **off**;
+    - D < L and D > `tooFar` × L: **far** (`tooFar` from the object's `.kq`,
+      default **0.83**; 164 files set it, mostly 0.3–0.6);
+    - otherwise: **near**.
+    An object switched on with the script command `makeActive <name> 1` is
+    always **near**, whatever the distance (`makeActive <name> 0` gives it
+    back to the distance test). A hidden object (`objects.md`, Q18) is
+    always off.
+37. **What the states do** (this makes `objects.md` "Hidden objects"
+    rule 3 traced): the object's group bits become `groupsAlways` plus
+    `groupsActive3D` when near, `groupsAlways` plus `groupsActive3DFar`
+    when far, and only `groupsAlways` when off. The bits that put an object
+    in the draw lists are **0x10, 0x40, 0x80 and 0x100** (any of them means
+    "drawn"); bit **0x8** switches its collider on. With the default masks
+    (`groupsAlways` 6, near 0x448, far 0x440) an object is drawn and solid
+    when near, drawn but **not solid** when far, and **neither drawn nor
+    solid** when off.
+38. **Dead City's flames** (`flame.kq`, `flame_nd.kq`): no shape name, so
+    radius 100; `groupsActive3DFar = 1089` (0x441) keeps them drawn when
+    far. So they disappear when their position is more than
+    12,000 + 100 = **12,100 from Connor**. Their haze never removes them
+    (rule 20 halves it to at most 0.5, and see-through objects only fade
+    from haze 0.5 on, rule 23). The user's estimate was about 11,000; the
+    traced value is 12,100. Whether the difference is the estimate or
+    something not found is open (open question 9). Their `isActive3D=1`
+    line does nothing: the game never reads that key (the key it reads is
+    `active3DFlag`, and no file uses it).
+39. In Daventry (`visibleDistance` 27,000) objects are switched off
+    beyond 27,000 from Connor, but the haze already removes them at
+    22,950 from the camera (rule 21), so the switch-off is rarely visible
+    there, except for objects with `b_hazeSolid=1`.
+40. The same test applies to buildings (`KQInterior`) and emitters: they
+    are switched off beyond `visibleDistance` from Connor (minus their
+    radius). Buildings are large, so this rarely happens.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -286,6 +445,15 @@ B draws it (open question 1).
 | brightness factor | 0.3 + 1.4 × setting ÷ 100; 50 → 1.0 | traced |
 | haze | (d − hazeDistance) ÷ (0.85 × visibleDistance − hazeDistance), cap 1, min 0.01 | traced |
 | point light falloff | 1 to begin, linear to 0 at end | traced |
+| ground haze per corner | 0.01 + (d − hazeDistance) ÷ (1.02 × (visibleDistance − hazeDistance)), 0.01 to 0.99 | traced |
+| wall haze per surface | object formula from the nearest corner, past 1 → 0.99; ≥ 0.99 not drawn unless `b_hazeSolid` | traced |
+| wall lit by a point light | haze × 0.04 | traced |
+| card blend | (1 − h) × colour + h × haze colour; h sent as h × 255 | traced (Glide) |
+| haze colour | nearest palette entry (10–244) to `resetHazeColor` R G B (0–255) | traced |
+| background | flat palette entry `newSky n`, no haze | traced |
+| draw distance | off when (distance from Connor to ball centre − radius) ≥ visibleDistance | traced |
+| far band | distance > `tooFar` × visibleDistance, `tooFar` default 0.83 | traced |
+| ball radius without shape | 100 (emitters 250) | traced |
 
 ## Data used
 
@@ -295,10 +463,16 @@ B draws it (open question 1).
   `0x2000`, `0x10000`).
 - `<world>/resource/<shape>.dil`, the building's `.kq` (`shapeName`,
   `althwLightmapName`, `usingAltLighting`).
-- `TERRAIN.KQ`: `hazeDistance`, `visibleDistance`. `world.cs`:
-  `resetHazeColor`. Objects' `.kq`: `translucency`, `hazeMultiplier`,
-  `b_hazeSolid`.
-- `Options.cs`: `setBrightness`.
+- `TERRAIN.KQ`: `hazeDistance`, `visibleDistance` (`perspectiveDistance`
+  is not used by any of the haze or draw-distance rules). `world.cs`:
+  `resetHazeColor`, `KQWorld::background` / `newSky`. The world's palette
+  (`*.ppl`) for the haze and background colours. Objects' `.kq`:
+  `translucency`, `hazeMultiplier` (correct spelling only), `b_hazeSolid`,
+  `tooFar`, `groupsAlways`, `groupsActive3D`, `groupsActive3DFar`,
+  `shapeName` (for the bounding ball).
+- `Options.cs`: `setBrightness`, `useDynamicLighting` (point lights on
+  walls).
+- Scripts: `setActiveCamera 0|1`, `makeActive <name> 0|1`.
 
 ## Edge cases
 
@@ -323,6 +497,16 @@ B draws it (open question 1).
   (rule 8).
 - The sun's aim not normalised (rule 5): **do reproduce** it. It is how
   the original looks, and the designers chose the light values with it.
+- The misspelled `hazeMulitplier` in 13 Gnome files: the original ignores
+  it (rule 22). Ignore it too; it would make those flames fade twice as
+  fast, which the original never showed.
+- The bounding ball's centre (rule 35) is added to the object's position
+  without turning it with the object. For a turned object the ball sits a
+  little off. Turn the centre with the object; the difference is at most
+  the object's own size.
+- `setActivePoint` (a second reference point used when an object is
+  beyond the limit from Connor) exists, but the only two uses in the data
+  are commented out. Leave it out.
 
 ## How to check
 
@@ -357,6 +541,20 @@ B draws it (open question 1).
   5. **Brightness setting.** Changing the in-game brightness slider makes
      everything brighter or darker together; at the middle (50) it is the
      shipped look.
+  6. **Ground fog (Q68).** In the original, the ground should never go
+     completely to the haze colour: just before its far edge it is 99%
+     hazed, and beyond the edge the background colour (`newSky`) shows.
+     In Dead City both are black, so it looks like a dark wall.
+  7. **Draw distance (Q69).** Stand near Dead City's torches and walk away
+     with the camera close behind Connor: the flames should vanish when
+     Connor (not the camera) is about 12,100 from them. Swinging the camera
+     round without moving Connor should not bring them back.
+- **Our logs (B):** at world load, log the haze colour as the chosen
+  palette index and its RGB, and the background palette index and its RGB.
+  Every second, log how many objects are near / far / off and how many
+  wall surfaces were left out by the haze. Daventry from the start point:
+  expect 0 objects off (everything within 27,000 of Connor is near or
+  far).
 
 ## Answers to questions
 
@@ -378,12 +576,36 @@ B draws it (open question 1).
   Recomputing Daventry's maps from its hardware lights gives about 5–6,
   not the stored 7, so the maps were made with somewhat different values.
 - **Q65 (b):** both corrections applied to `terrain-lighting.md`.
+- **Q68 (a) buildings:** yes, hazed, **per wall surface** from its nearest
+  corner, with the objects' numbers; a surface at haze 0.99 or more is left
+  out unless the building has `b_hazeSolid=1` (rule 29).
+- **Q68 (b) ground:** hazed **per corner**, linear from 0.01 at
+  `hazeDistance` to 0.99 at `visibleDistance`, blended across each
+  triangle; never fully hazed; not drawn beyond `visibleDistance`
+  (rules 27–28).
+- **Q68 (c) particles:** one haze per emitter, from the emitter's location
+  (rule 30).
+- **Q68 (d) `hazeMulitplier`:** not read; only `hazeMultiplier` is, and no
+  file uses it (rule 22).
+- **Q68 (e) blend and scale:** plain linear blend by the card on the final
+  colour, gamma 1.0; `resetHazeColor` is 0–255, snapped to the nearest
+  palette colour; the card's fog table is not used (rule 23).
+- **Q68, what is behind the ground:** a flat fill with palette entry
+  `newSky n`, not the haze colour, with no haze on it (rule 31).
+- **Q69 (a)–(c):** objects are switched off when (distance from Connor to
+  their bounding ball) − radius ≥ `visibleDistance`; between `tooFar` ×
+  `visibleDistance` and `visibleDistance` they use `groupsActive3DFar`.
+  Measured from **Connor**, not the camera (unless a script says
+  `setActiveCamera 1`). `flame.kq`'s `groupsActive3DFar = 1089` keeps it
+  drawn when far; it is switched off at about 12,100 from Connor
+  (rules 34–40). There is no separate camera far-plane cut for objects in
+  the code that was read.
 
 ## Open questions
 
-1. The wall drawing code was not read. It is assumed that walls use only
-   their light map, not the sun or ambient (rule 16), and that the filtering
-   between light texels is bilinear (rule 13).
+1. (Partly answered 2026-10-16: walls get their light map plus point
+   lights, never the sun or ambient, rule 16.) Still open: whether the
+   filtering between light texels is bilinear (rule 13).
 2. What turns on the per-object "unlit" switch (rule 10)?
 3. (Answered 2026-10-15, Q67: 12-byte records, in files the game never
    loads; rule 13.)
@@ -395,3 +617,11 @@ B draws it (open question 1).
 7. Building materials with flag `0x1000` (in Daventry's `interior.dml`:
    `11gnd`, `Plstrwl1/2`, `Srwroof`): do they ignore the wall's light map
    (full brightness) or not? Not traced. Stand-in: use the light map.
+8. Which palette entries count as "usable" when snapping the haze colour
+   (rule 23). Stand-in: all of 10–244.
+9. The user saw Dead City's flames vanish at about 11,000 from Connor; the
+   traced rule gives 12,100 (rule 38). Probably the estimate; a log of
+   the distance at which our flames switch off, compared side by side with
+   the original, would settle it.
+10. The exact cut of ground triangles that cross `visibleDistance`
+    (rule 28) was not read.

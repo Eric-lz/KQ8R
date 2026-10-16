@@ -35,9 +35,17 @@ entries at the top). The short public summary is `README.md`; the detailed
   to Connor's inventory. **Next for B:** build these (adjust the Q63
   stand-in, add the `EndLoop`/`getEndLoop` calls). Not checked in the
   original yet.
-- **Next for A:** Q68 (how the ground, walls and particles are fogged;
-  the misspelled `hazeMulitplier`) and Q69 (what stops Dead City's
-  flames at about 11,000 from Connor).
+- **Haze and draw distance studied, Q68 and Q69 answered** (A,
+  2026-10-16, `docs/behaviour/object-lighting.md` rules 22–23, 27–40):
+  the ground is fogged per corner from `hazeDistance` (0.01) to
+  `visibleDistance` (0.99, never full) and not drawn beyond; walls per
+  surface from the nearest corner, left out at 0.99 unless `b_hazeSolid`;
+  one haze per emitter; the background is the flat palette colour
+  `newSky n`, not the haze colour; the haze colour is snapped to the
+  palette; `hazeMulitplier` is ignored. Objects switch off when their
+  distance from **Connor** (minus their bounding radius) reaches
+  `visibleDistance` (Dead City's flames: about 12,100). **Next for B:**
+  replace the 6b/6c stand-ins with these. Not checked in the original.
 - **Later for A:** Q53 (camera follow-ups), Q54; pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
@@ -183,8 +191,9 @@ milestone: **M3, Daventry comes alive**.
 
 - **Next step:** B builds A's clicking answers (Q60–Q64). Lighting and
   haze still lack: point lights (Dead City), the brightness setting, the
-  per-object "unlit" switch; the fog over the ground/walls and the draw
-  distance are stand-ins (Q68, Q69).
+  per-object "unlit" switch; the fog over the ground/walls, the
+  background colour and the draw distance are still B's stand-ins (now
+  answered in Q68, Q69, not built yet).
 - Clicking: only doors, chests, items and scripted objects react. No
   sound, no remarks (Connor says nothing; remarks are logged), Connor
   doesn't turn to face what he clicks. No inventory screen (M4).
@@ -215,16 +224,10 @@ milestone: **M3, Daventry comes alive**.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- Q68 (open): how the original fogs the ground, building walls and
-  particles; whether the misspelled `hazeMulitplier` is read. The user's
-  check: a dense dark fog hides everything. Stand-ins in place.
-- Q69 (open): what stops Dead City's torch flames at about 11,000 from
-  Connor (see-through, half-haze material: the note's rules never hide
-  them). Stand-in: nothing drawn beyond `visibleDistance` from the camera.
-- Open points inside `object-lighting.md` (not in QUESTIONS.md): wall
-  drawing not traced (walls assumed to use only their light map), the
+- Open points inside `object-lighting.md` (not in QUESTIONS.md): the
   per-object "unlit" switch, point-light range, `0x1000` building
-  materials (full bright or not).
+  materials (full bright or not), which palette entries the haze colour
+  may snap to, the flames' 12,100 (traced) vs the user's ~11,000.
 
 - Q60–Q64: answered 2026-10-15 (`clicking.md`); B's code still uses the
   older stand-ins (Q63: the ground and the 5 `colliderType=136` buildings

@@ -273,11 +273,13 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    added when Connor is near) and `groupsActive3DFar` (default 0x440,
    added when far). A hidden object is treated as **not active**: it
    keeps only its `groupsAlways` bits.
-3. Which bit means what is **inferred, not traced**: 0x40 is in both the
-   near and the far defaults, so it is very likely "drawn"; 0x8 is
-   near-only, likely "can be touched/collided with"; 0x400 is tied to
-   running animations. With the default `groupsAlways` = 6, **a hidden
-   object is not drawn and cannot be touched** until a script calls
+3. Which bit means what (**traced 2026-10-16**, see
+   `object-lighting.md` rules 34–40 for near / far / off): bits 0x10,
+   0x40, 0x80 and 0x100 each put the object in a draw list (any one means
+   "drawn"); 0x8 switches its collider on; 0x2 enters it in the near / far
+   / off distance test. 0x400 is still believed to be tied to running
+   animations (not traced). With the default `groupsAlways` = 6, **a
+   hidden object is not drawn and cannot be touched** until a script calls
    `setHidden <name> 0`.
 4. So: don't draw `wizchest1` at the start. An object whose
    `groupsAlways` includes 0x40 (e.g. `groupsAlways=1097` = 0x449, one
