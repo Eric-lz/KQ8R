@@ -180,8 +180,10 @@ placement in floats and repeat what the texture fields give):
     u × (size_x + 1), v × (size_y + 1), measured from the surface's own
     texture origin, before adding the texture offset). Light texel (i, j)
     sits at texture position (16 × i − offset_x, 16 × j − offset_y). Between
-    those points the light is blended smoothly (bilinear, the Glide texture
-    filter; not traced for this texture unit). Check: width =
+    those points the light is blended smoothly: **bilinear** (traced
+    2026-10-17: the card's second texture unit, which holds the light
+    maps, is set to bilinear filtering once at start-up and never changed;
+    the same for the ground's light maps). Check: width =
     ⌈(offset_x + size_x + 1) ÷ 16⌉ + 1 and height likewise. That holds for
     every surface of 148 of 153 files. The 5 others (`temple4/level4`,
     `swamp/ramp`, `daventry/zedrock1`, `zedrock2`, `deadcity/platform`)
@@ -198,7 +200,8 @@ placement in floats and repeat what the texture fields give):
     go to the card unchanged as 4-4-4-4 colour, and the card multiplies).
     The top 4 bits (brightness) are not used for colour. This holds for
     every material, including those flagged `0x1000` (traced 2026-10-17:
-    the wall drawing never looks at the lighting flags).
+    the wall drawing never looks at the lighting flags, and it keeps the
+    card's colour key off, so pure black on a wall is drawn as black).
 15. **Inside and outside are the same rule.** Inner and outer walls are
     separate surfaces (`buildings.md`), each with its own light map.
     Measured on Daventry: many texels are 0 (black), e.g. 16,017 of 81,085
@@ -406,11 +409,11 @@ B draws it (open question 1).
       0.2.
     - **Begin / End** as for `KQPointLight` (rules 16, 24, 26: an end
       distance on models, a fade length on walls and ground).
-    - **Position:** the node's position is in the model's own space and
-      moves and turns with the object. (Whether the frame's own transform
-      is also applied was not checked; the portal's lights already circle
-      in the stored positions, so the object's placement alone is the
-      stand-in.)
+    - **Position** (traced 2026-10-17): a point light's position is the
+      node's position put through the **object's placement only** (its
+      place, turn and scale in the world); the frame's own transform is
+      **not** applied. A sun-type node's aim is used **as stored, in world
+      axes**: it does not turn with the object.
     - They shine while the object is in the lights group (group bit
       0x400, rule 37) and its model is shown.
     - An object whose `.kq` has **`turnOffDynLighting=1`** (39 files, e.g.
@@ -452,12 +455,16 @@ differs.
     corners are all past it is not drawn. A triangle with some corners past
     it goes through the same cutter as the screen edges, which cuts each
     edge where the mark changes and keeps the inside part (traced
-    2026-10-17). **Where along the edge the cut falls was not found** (the
-    helper that places the new corner is reached through a pointer that
-    was not resolved; open question 10). Stand-in: cut where the edge
-    crosses the `visibleDistance` sphere, with haze 0.99 at the new corner.
-    It hardly shows: those corners are 99% fog, and in most worlds the fog
-    and the background are the same colour (rule 23 table).
+    2026-10-17). **Where the cut falls** (traced the same day): each corner
+    keeps its distance d from the camera; along an edge from an inside
+    corner (d₁) to an outside one (d₂) the new corner is placed at
+    t = (`visibleDistance` − d₁) ÷ (d₂ − d₁) of the way, i.e. where the
+    two corners' distances, blended in a straight line, reach
+    `visibleDistance` (not the exact sphere; very close for short edges).
+    Everything else of the new corner (position, texture place, haze) is
+    blended with the same t, so its haze lies between the two corners'
+    (at most 0.99). (If d₂ = d₁ the game divides by 0.1 instead; it can't
+    happen for an edge that crosses.)
 29. **Building walls are hazed per wall surface**, from the distance of the
     surface's **nearest corner** to the camera, with the **objects'**
     numbers: haze = (d − `hazeDistance`) ÷ (end − `hazeDistance`),
@@ -795,6 +802,12 @@ an object takes part in the game at all.
   cut partly traced (rule 28, open question 10); `0x1000` building
   materials still use their light map (rule 14); the "unlit" switch is
   never turned on (rule 10); `torchlight.kq` is never loaded (rule 25).
+- **Follow-up (2026-10-17, after the commit):** the light-map filter is
+  bilinear (rule 13), walls and ground never use the colour key (open
+  question 7), the ground's far-edge cut point (rule 28), model lights
+  are placed by the object's placement only, sun-type aims in world axes
+  (rule 26b). Left open: Direct3D (6) and the flames' 11,000 vs 12,100
+  (9), both only checkable in the running game.
 - **Q74** (collider switch, `makeActive`, `setActiveCamera`): rules 41–42.
 
 - **Q66 (a):** ×1 confirmed: on Glide the light map goes to the card
@@ -842,9 +855,9 @@ an object takes part in the game at all.
 
 ## Open questions
 
-1. (Partly answered 2026-10-16: walls get their light map plus point
-   lights, never the sun or ambient, rule 16.) Still open: whether the
-   filtering between light texels is bilinear (rule 13).
+1. (Answered: walls get their light map plus point lights, never the sun
+   or ambient, rule 16; light maps are filtered bilinear, rule 13,
+   2026-10-17.)
 2. (Answered 2026-10-17: nothing turns it on; rule 10.)
 3. (Answered 2026-10-15, Q67: 12-byte records, in files the game never
    loads; rule 13.)
@@ -854,18 +867,17 @@ an object takes part in the game at all.
 6. Direct3D renderer not checked (Glide only).
 7. (Answered 2026-10-17, rule 14: building walls always use their light
    map; the wall drawing never looks at a material's lighting flags, so
-   `0x1000` does not make a wall full bright.) Still open: whether its
-   pure-black texels are see-through on walls as on models (the colour
-   key); not traced. Stand-in: treat them as on models.
+   `0x1000` does not make a wall full bright.) **Also answered
+   2026-10-17:** pure black is **not** see-through on walls: the wall
+   drawing switches the card's colour key off for every surface, whatever
+   the material (the ground does the same). Draw walls' black texels as
+   black.
 8. (Answered 2026-10-17: entries 10–244, the `pcmt` chunk is never read;
    rule 23.)
 9. The user saw Dead City's flames vanish at about 11,000 from Connor; the
    traced rule gives 12,100 (rule 38). Probably the estimate; a log of
    the distance at which our flames switch off, compared side by side with
    the original, would settle it.
-10. Where exactly a ground triangle crossing `visibleDistance` is cut
-    (rule 28): the cutter was traced, the helper that places the new corner
-    was not. Stand-in in rule 28; the difference hardly shows.
-11. (Answered 2026-10-17: the `.kqs` light nodes and light
-    sub-sequences, rule 26b.) Still open: whether the frame's own transform
-    moves a model's light.
+10. (Answered 2026-10-17: the cut point, rule 28.)
+11. (Answered 2026-10-17: the `.kqs` light nodes and light sub-sequences;
+    placed by the object's placement only, rule 26b.)

@@ -54,7 +54,11 @@ entries at the top). The short public summary is `README.md`; the detailed
   light map; the "unlit" switch is never on; `torchlight.kq` never
   loaded (Q73); collider switch, `makeActive`, `setActiveCamera`, bit
   0x400 = lights group (Q74). New find: some models carry their own
-  lights (`turnOffDynLighting`), file block not located.
+  lights (`.kqs` light nodes, rule 26b). Follow-up the same day: light
+  maps bilinear, no colour key on walls or ground, the ground's far-edge
+  cut point, model lights placed by the object only. Lighting's open
+  list is down to Direct3D and the flames' 11,000 vs 12,100 (both need
+  the running game).
   **Next for B:** point lights (Dead City), starting with lights on
   models: `KQPointLight`s and the lights models carry (`.kqs` light nodes,
   rule 26b; e.g. the arrival portal's moving green light). **The user
@@ -63,7 +67,7 @@ entries at the top). The short public summary is `README.md`; the detailed
   dynamic lighting off, and Connor is lit green either way; our viewer
   doesn't do this yet. Then the collider switch, the two script commands,
   items' far mask.
-- **Later for A:** Q53 (camera follow-ups); pushable objects
+- **Later for A:** Dead City's flames: the user's ~11,000 vs the traced 12,100 from Connor (`object-lighting.md` open question 9; small, kept for a later session); Q53 (camera follow-ups); pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
 ## Goal

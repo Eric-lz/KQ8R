@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Study (A): last open lighting points
+
+**Changed:** `docs/behaviour/object-lighting.md`: rule 13 (light maps filtered bilinear), rule 14 and open question 7 (no colour key on walls), rule 26b (model lights placed by the object's placement only; sun-type aims in world axes), rule 28 (where the ground's far-edge cut falls), open questions 1, 7, 10, 11 closed, answers list. `QUESTIONS.md` Q73 row. Scratch notes in `re/notes.md` (not committed). No code.
+**Why:** The user asked to study what is still open after the previous commit.
+**Tested how:** Traced in `Mask.exe` with the Ghidra tools: the card's texture-filter and colour-key calls and where the wall and ground drawing set them; the cutter's helper (the case for the ground's own far-edge mark); how a model light's position is placed.
+**Result:** Light maps bilinear (set once at start-up). Walls and the ground switch the colour key off for every surface. The ground's cut is at t = (visibleDistance − d₁) ÷ (d₂ − d₁) along the edge, everything blended with t. Model lights: object placement only, no frame transform; sun aims not turned. A first reading in this session had the renderer's function table shifted by one entry and concluded "colour key on for walls"; checking the table against a known entry showed the shift, and the conclusion was reversed before writing it down.
+**Still broken / not tested:** Open and only checkable in the running game: Direct3D (open question 6), the flames' 11,000 vs 12,100 (9). Nothing checked by eye.
+**Next:** Session B: as before (point and model lights first). The note's open list for lighting is now only 6 and 9.
+
 ## 2026-10-17 Study (A): lights carried by models located; the user's Dead City check
 
 **Changed:** `docs/behaviour/object-lighting.md` rule 26b (the `.kqs` light nodes and light sub-sequences are the lights models carry; version 1–3 defaults; data), "How to check" 8 (the user's result), open question 11 narrowed. `QUESTIONS.md` Q72 row. No code.
