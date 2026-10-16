@@ -42,6 +42,27 @@ entries at the top). The short public summary is `README.md`; the detailed
   to Connor's inventory. **Next for B:** build these (adjust the Q63
   stand-in, add the `EndLoop`/`getEndLoop` calls). Not checked in the
   original yet.
+- **Lighting leftovers studied, Q70–Q74 answered** (A, 2026-10-17,
+  `object-lighting.md` rules 10, 14, 16, 23–26b, 28, 35, 37, 41–43;
+  `items.md` 5b; `objects.md`; `terrain-lighting.md` 15): the draw
+  distance ball is always a `BOUNDS.KQ` box ball, centre not turned
+  (Q70); items: far mask 0, so far items are not drawn or clickable
+  (Q71); point lights fully traced for models, walls and the ground,
+  with `tsAttenuationEnd` an end distance on models but a fade length
+  on walls and ground (Q72); haze colour entries 10–244 (the `pcmt`
+  chunk is never read), measured per world; `0x1000` walls keep their
+  light map; the "unlit" switch is never on; `torchlight.kq` never
+  loaded (Q73); collider switch, `makeActive`, `setActiveCamera`, bit
+  0x400 = lights group (Q74). New find: some models carry their own
+  lights (`turnOffDynLighting`), file block not located.
+  **Next for B:** point lights (Dead City), starting with lights on
+  models: `KQPointLight`s and the lights models carry (`.kqs` light nodes,
+  rule 26b; e.g. the arrival portal's moving green light). **The user
+  checked the original (2026-10-17):** the portal's light moves and
+  changes colour on walls and ground, a smaller baked patch stays with
+  dynamic lighting off, and Connor is lit green either way; our viewer
+  doesn't do this yet. Then the collider switch, the two script commands,
+  items' far mask.
 - **Later for A:** Q53 (camera follow-ups); pushable objects
   (`KQBoulder`); Connor against monsters; Q27.
 
@@ -190,9 +211,9 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step:** A studies what the haze/lighting work left open (Q70,
-  point lights, the open points in `object-lighting.md`); B builds A's
-  clicking answers (Q60–Q64) and the Q54 change. Lighting and haze
+- **Next step:** B builds A's clicking answers (Q60–Q64), the Q54
+  change, and the Q70–Q74 answers (point lights, collider switch,
+  `makeActive` / `setActiveCamera`, items' far mask). Lighting and haze
   still lack: point lights (Dead City) and their effect on walls'
   haze (× 0.04), the brightness setting, the per-object "unlit" switch.
   The draw distance doesn't yet switch colliders (bit 0x8), and
@@ -234,14 +255,11 @@ milestone: **M3, Daventry comes alive**.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- Q70 (new, B 2026-10-16): which bounding ball an object with a box
-  collider uses for the draw distance. Stand-in: the shape's box ball.
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): the
-  per-object "unlit" switch, point-light range, `0x1000` building
-  materials (full bright or not), which palette entries the haze colour
-  may snap to (stand-in: all of 10–244), the cut of ground triangles at
-  `visibleDistance`, the flames' 12,100 (traced and built) vs the user's
-  ~11,000 (compare by eye).
+  exact cut point of ground triangles at `visibleDistance` (stand-in
+  given, hardly visible), where models' own lights sit in the `.kqs`
+  file, whether pure-black texels are see-through on walls, the flames'
+  12,100 (traced and built) vs the user's ~11,000 (compare by eye).
 
 - Q60–Q64: answered 2026-10-15 (`clicking.md`); B's code still uses the
   older stand-ins (Q63: the ground and the 5 `colliderType=136` buildings
@@ -267,8 +285,8 @@ milestone: **M3, Daventry comes alive**.
   difference).
 - Q14b: the teleport pad's see-through look.
 - Q4: missing texture names.
-- All others are answered or closed (Q68–Q69 answered and built
-  2026-10-16; Q65–Q67 answered and built, the
+- All others are answered or closed (Q70–Q74 answered 2026-10-17, not
+  built yet; Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the
   lighting session 2026-10-14/15; Q55 answered in
   `connor-collision.md`, not built yet; Q56 answered by A's trace and
   built 2026-10-13; Q59 closed by the user's check).

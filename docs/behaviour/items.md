@@ -43,6 +43,13 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
 5. It is drawn with its type's shape, at the place it was put. A placed
    item does not fall or settle by itself; only thrown items fly (rule
    12).
+5b. **Near / far / off** (traced 2026-10-17, Q71): an item lying in the
+   world takes part in the distance test of `object-lighting.md` rules
+   34–37 with fixed values (items have no `.kq` file): `tooFar` 0.83,
+   near mask 0x448, **far mask 0**. So an item more than 0.83 ×
+   `visibleDistance` from Connor (minus its ball radius) is **not drawn
+   and can't be clicked**; within that it is drawn and clickable. Details
+   in `object-lighting.md` rule 43.
 
 ### Picking an item up
 

@@ -277,8 +277,9 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    `object-lighting.md` rules 34–40 for near / far / off): bits 0x10,
    0x40, 0x80 and 0x100 each put the object in a draw list (any one means
    "drawn"); 0x8 switches its collider on; 0x2 enters it in the near / far
-   / off distance test. 0x400 is still believed to be tied to running
-   animations (not traced). With the default `groupsAlways` = 6, **a
+   / off distance test; **0x400** puts it in the lights group, so its own
+   lights shine (traced 2026-10-17, `object-lighting.md` rule 37; the
+   earlier guess "running animations" was wrong). With the default `groupsAlways` = 6, **a
    hidden object is not drawn and cannot be touched** until a script calls
    `setHidden <name> 0`.
 4. So: don't draw `wizchest1` at the start. An object whose

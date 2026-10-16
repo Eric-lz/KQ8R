@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Study (A): lights carried by models located; the user's Dead City check
+
+**Changed:** `docs/behaviour/object-lighting.md` rule 26b (the `.kqs` light nodes and light sub-sequences are the lights models carry; version 1–3 defaults; data), "How to check" 8 (the user's result), open question 11 narrowed. `QUESTIONS.md` Q72 row. No code.
+**Why:** The user checked Dead City's portal: the green light moves and changes colour, a smaller patch stays with dynamic lighting off, and Connor is lit by it either way, which our viewer doesn't do. `PLIGHT01` has a fixed colour, so the changing light had to come from elsewhere.
+**Tested how:** `portal.kq` sits at 182,186 / 41,007, under `PLIGHT01`, with the model `portlite.kqs`. Dumped its light nodes with a throwaway script in the session scratchpad (mirrors B's `shape.rs` header layout); counted shapes with lights over all worlds. Traced the game's version-3 light reader (level and scale set to 1.0).
+**Result:** `portlite.kqs`: 17 point lights, one per frame (1.07 s loop), circling about 400 units round the portal, colour cycling yellow-green to blue-green, Begin 1,500, End 3,000, strength 0.2. 174 shapes carry lights. The user's three observations match the rules: moving light (model light), baked patch with dynamic lighting off (light maps), Connor lit either way (models ignore the setting).
+**Still broken / not tested:** Whether a frame's own transform moves its light was not checked. The baked patch was not measured in the maps.
+**Next:** Session B: model lights (rule 26b) and `KQPointLight`s on models first (that is what the user saw on Connor), then walls and ground.
+
+## 2026-10-17 Study (A): lighting leftovers, Q70–Q74 answered
+
+**Changed:** `docs/behaviour/object-lighting.md`: rules 10 (unlit switch never on), 14 (`0x1000` walls keep the light map), 16 (point lights on walls: keys matched, End is a fade length, × 0.04 per light), 23 (palette entries 10–244, table per world), 24–26 (point lights on models per part, data, the ground's dynamic light), new 26b (lights carried by models, `turnOffDynLighting`), 28 (ground cut), 35 (the ball is always a `BOUNDS.KQ` box ball, centre not turned), 37 (bits 0x400 lights group, 0x2, 0x1000), new 41–43 (collider switch, `setActiveCamera` / `makeActive`, items), numbers, data, do-not-reproduce, how to check, answers, open questions 10–11. `items.md` rule 5b, `objects.md` (bit 0x400 corrected), `terrain-lighting.md` rule 15. `QUESTIONS.md`: Q70 answered, Q71–Q74 added and answered. Scratch notes in `re/notes.md` (not committed). No code.
+**Why:** The user's session prompt: the haze, draw distance and lighting work (M1 4–6h) left Q70, items' near/far values, point lights and five open points.
+**Tested how:** Traced in `Mask.exe` with the Ghidra tools (bounding ball, item defaults and the world's item list, point light reader and the model / wall / ground light code, palette loader, clipper, the commands). Data checks with throwaway scripts in the session scratchpad: `.ppl` chunks and the nearest palette entry for every world's `resetHazeColor`; `BOUNDS.KQ` for the flames; grep for `torchlight`, `turnOffDynLighting` (39 files), `setActiveCamera`, `makeActive`; a byte scan of the program for stores into the "unlit" field.
+**Result:** Q70: both cases use a `BOUNDS.KQ` box (collider box, else by `shapeName`), centre = box middle, not turned; radius 100 without a box. Q71: items have far mask 0 and `tooFar` 0.83. Q72: `tsAttenuationBegin` / `End` matched; models fade Begin→End, walls and ground Begin→Begin+End; out of range per model part. Q73: the `pcmt` chunk is never read (the `head` count stops the loader first), so entries 10–244; in most worlds the haze entry equals the background entry (Daventry 17/17, Dead City 10/10). Q74: as in rules 41–42.
+**Still broken / not tested:** Nothing checked in the original. Not found: the exact cut point at the ground's far edge (stand-in given), where models' own lights are stored in the `.kqs`, the centre of a model part's light ball versus B's decoded fields, see-through black on walls.
+**Next:** Session B: point lights in Dead City (models, walls with haze × 0.04, ground patches), the collider switch with near / far / off, `setActiveCamera` / `makeActive`, items' far mask 0. You: check 8 under "How to check" in `object-lighting.md` (Dead City's green patch near `PLIGHT01`).
+
 ## 2026-10-16 User's check of M1 6d–6h
 
 **Changed:** `STATUS.md`, `FEATURES.md`, `DESIGN.md`: 6d–6h marked as checked by eye. No code.

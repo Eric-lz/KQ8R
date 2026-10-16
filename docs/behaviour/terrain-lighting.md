@@ -119,8 +119,9 @@ its texture is multiplied by the light map over that square.
 15. **Dynamic lighting** (`useDynamicLighting 1`): each frame, moving
     "point" lights (torches, fires) that are close enough above the
     ground paint a soft round patch of extra light into the shown map,
-    and the previous frame's patches are put back first. Belongs to the
-    moving-lights topic (not studied in detail).
+    and the previous frame's patches are put back first. Traced
+    2026-10-17: the full rule (which lights, patch size, falloff, how the
+    values are written) is `object-lighting.md` rule 26.
 
 ## Numbers and units
 

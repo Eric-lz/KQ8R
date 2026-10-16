@@ -41,7 +41,7 @@ nothing doubles it. This is why the original looks dark and muddy.
 3. All lights in the world are gathered **once per frame** for the whole
    scene (traced): the ambient is the **sum** of all ambient lights' colours,
    and every sun or point light goes into one shared list. There is no
-   per-object choice of lights, apart from point lights' distance (rule 13).
+   per-object choice of lights, apart from point lights' distance (rule 24).
 
 ### Light values per world (data, hardware set / software set)
 
@@ -100,8 +100,11 @@ all three channels anyway.
    texture colour × light (per channel, 0–1). Nothing doubles it.
 10. **A per-object "unlit" switch** exists: when it is on, smooth materials
     draw at full brightness. It is off by default and is **not** a key in any
-    object file (the object reader doesn't read it). What turns it on was not
-    found (open question 2). Treat it as always off.
+    object file (the object reader doesn't read it). **Nothing in the game
+    turns it on** (2026-10-17): no file key, no script command (`dither`
+    changes the drawing style, `lightOnFire` sets group bit 0x1000; neither
+    touches it), and a scan of the program for code that stores 1 into it
+    found only unrelated objects. Treat it as always off.
 11. **Haze on models**, see rules 19–23.
 
 ### What this gives in Daventry (hardware)
@@ -193,7 +196,9 @@ placement in floats and repeat what the texture fields give):
 14. **Wall colour** = texture × light-map colour (channel ÷ 15), red by
     red, green by green, blue by blue; no doubling (traced: the light maps
     go to the card unchanged as 4-4-4-4 colour, and the card multiplies).
-    The top 4 bits (brightness) are not used for colour.
+    The top 4 bits (brightness) are not used for colour. This holds for
+    every material, including those flagged `0x1000` (traced 2026-10-17:
+    the wall drawing never looks at the lighting flags).
 15. **Inside and outside are the same rule.** Inner and outer walls are
     separate surfaces (`buildings.md`), each with its own light map.
     Measured on Daventry: many texels are 0 (black), e.g. 16,017 of 81,085
@@ -207,19 +212,26 @@ placement in floats and repeat what the texture fields give):
     - the light must be in front of the wall (the wall's facing and the
       direction from the light to the wall differ by more than about 96°,
       i.e. their dot product is below −0.1);
-    - the nearest of the wall's four corners and its centre must be within
-      the light's reach (its full-strength distance plus its fade length);
+    - the light must be switched on (lights carried by an object with
+      `turnOffDynLighting=1` are off for walls and ground, rule 26b);
+    - the nearest of the wall's four corners and its centre must be closer
+      to the light than **`tsAttenuationBegin` + `tsAttenuationEnd`**
+      (keys matched 2026-10-17);
     - a line from the light to a point 64 units in front of that nearest
       spot (towards the light) must not be blocked;
     - then every light texel of that wall gets colour × falloff added, per
       channel, capped at 1, where the falloff is measured at the texel's
-      own position: 1 up to the full-strength distance, then falling in a
-      straight line to 0 over the fade length. This is the same shape as
-      rule 24 (full to `tsAttenuationBegin`, 0 at `tsAttenuationEnd`).
-      Which stored number is which key was **not** matched; rule 24's
-      reading is the stand-in.
+      own position (distance d from the light):
+      **1 up to `tsAttenuationBegin`, then 1 − (d − Begin) ÷ End, not
+      below 0**. So on walls (and the ground, rule 26) **`tsAttenuationEnd`
+      is a fade length**, added on top of Begin: the light reaches 0 at
+      Begin + End. On models (rule 24) the same key is an end distance.
+      Example `PLIGHT01` (Begin 1,000, End 4,000): walls lit out to 5,000,
+      models out to 4,000. Reproduce the difference.
     - such a lit wall also gets its haze multiplied by **0.04** (almost no
-      haze), so lit walls glow through the fog.
+      haze), so lit walls glow through the fog. This happens once per wall
+      surface per light that passes the tests above (two lights: × 0.04
+      twice), whether or not any texel ends up brighter.
 
 ### Daventry building light values (measured, red channel)
 
@@ -285,32 +297,134 @@ B draws it (open question 1).
     - **The haze colour**: `resetHazeColor R G B` in `world.cs`, on a
       **0–255 scale**. The game does not use these values directly: it
       picks the **palette colour nearest** to them (smallest sum of squared
-      differences, among palette entries 10–244 that the palette marks as
-      usable; if none, entry 253), and fogs with that palette entry's
-      colour. Which entries are marked usable was not traced; using all of
-      10–244 is a good stand-in. Daventry: nearest to 4 8 12 in
-      `daventry.ppl`. Dead City: 0 0 0.
+      differences, among palette entries **10–244**; on a tie the lower
+      entry wins), and fogs with that palette entry's colour. The palette
+      it searches is the one loaded just before (`loadPalette
+      $KQWorld::loadingPalette` in `world.cs`).
+      **Which entries count (answered 2026-10-17):** a palette carries a
+      256-bit "usable" mask that starts as entries 10–245 and could be
+      replaced by the `.ppl` file's `pcmt` chunk. In the shipped palettes
+      the `head` chunk says 3 chunks follow (`data`, `pspl`, `hzpl`), so the
+      loader stops before `pcmt` and **never reads it** (it is all zeros
+      anyway). So every entry 10–244 counts. Measured result per world
+      (haze colour → entry, and the background entry of rule 31):
+
+      | World | `resetHazeColor` | Haze entry (colour) | Background entry (colour) |
+      | --- | --- | --- | --- |
+      | Daventry | 4 8 12 | 17 (4, 8, 12) | 17, same |
+      | Dead City | 0 0 0 | 10 (0, 0, 0) | 10, same |
+      | Barren | 30 0 0 | 14 (30, 0, 0) | 14, same |
+      | Swamp | 40 48 24 | 83 (40, 48, 24) | 83, same |
+      | Snow exit | 32 88 112 | 229 (32, 88, 112) | 229, same |
+      | Gnome | 0 0 0 | 10 (0, 0, 0) | 10, same |
+      | Ice World | 90 100 190 | 64 (72, 128, 160) | 65 (72, 136, 160) |
+      | Temples 1–4 | 18 18 18 | 11 (16, 16, 16) | 10 (0, 0, 0) |
+      | Castle | (commented out) | not set: keeps the entry number left by the previous world, looked up in Castle's palette | 11 (8, 8, 8) |
+
+      So in most worlds fog and background are the same colour, and the
+      ground fades seamlessly into the background. For Castle use the
+      background entry 11 as the stand-in (what the original shows depends
+      on where Connor came from; not worth reproducing).
     - **See-through objects** (`translucency` below 256) get no haze colour
       (the card's fog is switched off for them): their opacity is
       `translucency` ÷ 255, times a fade (1 while haze < 0.5, then
       1.2 − haze).
 
-## Rules: point lights and flicker lights (partly traced)
+## Rules: point lights (traced 2026-10-17, Q72)
 
-24. `KQPointLight` (`tsLightType=2`, `tsLightPosition`,
-    `tsAttenuationBegin`, `tsAttenuationEnd`) adds to models: colour ×
-    falloff × facing. **Falloff**: 1 up to `tsAttenuationBegin`, falling in
-    a straight line to 0 at `tsAttenuationEnd`, 0 beyond (traced).
-    **Facing** uses one direction per object (from the light to the
-    object), not per corner (traced). Exactly when a whole object counts as
-    out of range was not traced.
-25. Data: **Daventry has no point lights.** Only Dead City has any: 10
-    `KQPointLight` files (`PLIGHT01`, `Plight02`, `facelt01`–`facelt08`).
-    `torchlight.kq` (`KQFlickerLight`, a sun-type light whose colour
-    wanders between `baseColor` and `baseColor + colorRange` in `numsteps`
-    steps) is in every world's `Light` folder, but no script found loads it.
-26. Moving lights painting light onto the ground (`terrain-lighting.md`
-    rule 15) were not studied further.
+24. **Point lights on models.** `KQPointLight` (`tsLightType=2`,
+    `tsLightPosition.x/y/z`, `tsLightIntensity.red/green/blue`,
+    `tsAttenuationBegin`, `tsAttenuationEnd`) adds colour × falloff ×
+    facing to each corner's light (rule 4, before the cap). It is worked
+    out **per model part** (each mesh of the `.kqs`), every frame:
+    - **Out of range**: the part gets nothing from this light when
+      (distance from the light to the centre of the part's bounding ball)
+      − the ball's radius is **more than `tsAttenuationEnd`**. The ball:
+      radius = the radius stored with the mesh in the `.kqs` (the mesh
+      `radius` field), centre = the middle of the part's box in the
+      current frame (the decoder reads it from the frame's data; we did not
+      check how it maps to the fields B already reads, so the middle of the
+      part's vertices in that frame is the stand-in).
+    - **Facing**: one direction per part, from the light to the ball's
+      centre (made unit length). facing = max(0, −(direction · corner
+      normal)); a corner facing away gets nothing.
+    - **Falloff**, from the corner's own distance d to the light: 1 up to
+      `tsAttenuationBegin`; 1 − (d − Begin) ÷ (End − Begin) up to
+      `tsAttenuationEnd`; 0 beyond. Here End **is** an end distance (on
+      walls and the ground it is a fade length, rules 16 and 26).
+    - Flat materials (rule 7) take the result at their first corner as
+      usual; "none" materials are not lit at all.
+    - Lights are gathered once per frame for the whole scene (rule 3);
+      every model part checks every point light.
+25. **Data.** Daventry has no point lights. Dead City loads seven at the
+    start (`newworld.cs`: `Plight01`, `facelt03`–`facelt08`) and two more
+    in `azrieltp.cs` (`facelt01`, `facelt02`); `Plight02` is never loaded.
+    Example: `PLIGHT01` at (182,213, 41,595, 2,250), colour 0.3/0.7/0.4,
+    Begin 1,000, End 4,000. They load the same on hardware and software
+    (`swtohwlt.cs` only swaps the sun and ambient).
+    `torchlight.kq` (`KQFlickerLight`) is in every world's `Light` folder,
+    but **nothing loads it** (2026-10-17: no script, no object file and no
+    text in the program names it). Leave it out.
+26. **Point lights on the ground** (dynamic lighting, `terrain-lighting.md`
+    rule 15), only when `useDynamicLighting` is 1 (as shipped). Every
+    frame:
+    - first the patches painted last frame are put back as they were;
+    - then for every point light that is switched on: h = the light's
+      height above the ground straight below it (light z − ground height
+      there). If h is more than `tsAttenuationEnd`, the light paints
+      nothing. Otherwise it paints the square of ground-map points around
+      the point below it, half-width √(End² − h²);
+    - each map point in that square: d = √(dx² + dy² + h²) (dx, dy: the
+      point's horizontal offset from the light; h as above, the same for
+      every point of the patch). Falloff = 1 up to `tsAttenuationBegin`,
+      then 1 − (d − Begin) ÷ End, not below 0 (End as a fade length, as on
+      walls). Each colour channel: stored value ÷ 15 + light colour ×
+      falloff, capped at 1, then stored back as a whole number
+      (channel × 15.9, rounded down) in the same 4-bit format;
+    - it paints into the map being shown (the shadow map, rule 2 of
+      `terrain-lighting.md`); at most 256 patches and 65,536 points saved
+      per frame (more are skipped).
+    PLIGHT01 example: h = 2,250 − ground; a patch out to about
+    √(4,000² − h²) around the light.
+26b. **Lights carried by models** (2026-10-17; file block located the
+    same day, after the user's check). An animated object's `.kqs` holds
+    its own lights per animation frame. They are the **light nodes B's
+    shape reader already reads** (`LightNode`: flags, colour bytes,
+    position, attenuation end, attenuation begin, intensity level,
+    intensity scale) and each sequence's **light sub-sequence**:
+    - **Which lights shine:** those of the object's current frame. The
+      frame's sequence names a light sub-sequence (first light node and a
+      count); those nodes are the object's lights for that frame (at most
+      5 are used). A sequence with no light sub-sequence (−1) has none.
+      So the light moves and changes colour as the animation plays.
+    - **Kind:** flag bit 1 set = point light; clear = sun-type (its
+      position field is then the aim, rule 5).
+    - **Colour** per channel = byte ÷ 255 × intensity scale × strength,
+      strength = intensity level × 0.2, capped at 1. Files of version 1–3
+      have no level or scale: the game uses **1.0 for both** (traced; B's
+      reader does the same), so strength = 0.2 and each channel is at most
+      0.2.
+    - **Begin / End** as for `KQPointLight` (rules 16, 24, 26: an end
+      distance on models, a fade length on walls and ground).
+    - **Position:** the node's position is in the model's own space and
+      moves and turns with the object. (Whether the frame's own transform
+      is also applied was not checked; the portal's lights already circle
+      in the stored positions, so the object's placement alone is the
+      stand-in.)
+    - They shine while the object is in the lights group (group bit
+      0x400, rule 37) and its model is shown.
+    - An object whose `.kq` has **`turnOffDynLighting=1`** (39 files, e.g.
+      `flame_nd.kq`) keeps its lights for **models** but switches them off
+      for **walls and the ground**.
+    - **Data:** 174 of the game's shapes carry lights (measured), e.g. the
+      portal `portlite.kqs`, the torch flame `torch01.kqs`, candles,
+      lamps, coals, the tiki, `signpst1.kqs`. Example `portlite.kqs`
+      (Dead City's arrival portal, `portal.kq` at 182,186 / 41,007, right
+      below `PLIGHT01`): one point light per frame, 17 frames in a 1.07 s
+      loop, circling about 400 units round the portal's centre, colour
+      cycling from (1.0, 1.0, 0.07) to (0, 1.0, 0.56) as bytes ÷ 255,
+      i.e. at strength 0.2 at most (0.2, 0.2, 0.11); Begin 1,500, End
+      3,000.
 
 ## Rules: haze on the ground, walls, particles and the background (Q68)
 
@@ -333,10 +447,17 @@ differs.
     the objects use. If `visibleDistance` is not beyond `hazeDistance`, the
     ground uses 0.6 × `visibleDistance` as its haze start instead.
 28. **The ground ends at `visibleDistance`.** Corners beyond it are marked
-    "past the far edge"; a triangle whose corners are all past it is not
-    drawn, and one that crosses it is cut there (the cut itself was not read
-    in detail). So the ground is a disc of radius `visibleDistance` around
-    the camera.
+    "past the far edge" (a mark of the ground's own, separate from the
+    screen edges and the camera's near and far planes); a triangle whose
+    corners are all past it is not drawn. A triangle with some corners past
+    it goes through the same cutter as the screen edges, which cuts each
+    edge where the mark changes and keeps the inside part (traced
+    2026-10-17). **Where along the edge the cut falls was not found** (the
+    helper that places the new corner is reached through a pointer that
+    was not resolved; open question 10). Stand-in: cut where the edge
+    crosses the `visibleDistance` sphere, with haze 0.99 at the new corner.
+    It hardly shows: those corners are 99% fog, and in most worlds the fog
+    and the background are the same colour (rule 23 table).
 29. **Building walls are hazed per wall surface**, from the distance of the
     surface's **nearest corner** to the camera, with the **objects'**
     numbers: haze = (d − `hazeDistance`) ÷ (end − `hazeDistance`),
@@ -388,13 +509,27 @@ an object takes part in the game at all.
     `setActiveCamera 1` and back with `setActiveCamera 0` (Dead City's
     `death.cs`, `laser2.cs`, `portrap*.cs` do this during cut scenes).
 35. **The distance** = distance from the reference point to the centre of
-    the object's bounding ball, **minus the ball's radius**. The ball:
-    - an object with a collider: the collider's ball;
-    - otherwise an object with a shape: centre = middle of the shape's box
-      (in the object's own axes), radius = half the box's diagonal;
-    - otherwise (no shape name, like Dead City's `flame.kq`): radius 100,
-      centre at the object's position;
-    - emitters: radius 250 around the emitter's location.
+    the object's bounding ball, **minus the ball's radius**. The ball
+    (corrected 2026-10-17, Q70): it always comes from a **`BOUNDS.KQ`
+    box**, never from the model's own geometry. Centre = middle of the
+    box, radius = half the box's diagonal.
+    - An object that has a collider when it enters the test (Q70: a box
+      collider from `BOUNDS.KQ`) uses **its collision box**, the same box
+      and the same lookup as for collision (`connor-physics.md` "Where
+      every object's box comes from": for an animated object the name of
+      its current movement's shape, then its own name).
+    - An object with no collider yet looks up `BOUNDS.KQ` by its
+      **`shapeName`** (lower-cased), then by its own name.
+    - No entry found, or no shape name (Dead City's `flame.kq`: no
+      `shapeName`, and neither `torch01.kqs` nor `flame` is in
+      `BOUNDS.KQ`): radius 100, centre at the object's position.
+    - Emitters: radius 250 around the emitter's location.
+    - **The centre does not turn with the object** (traced): the box's
+      middle, in the object's own axes, is added to the object's position
+      as if the object were not turned. See "Do not reproduce".
+    - The ball is worked out **once**, when the object enters the test
+      (normally when it enters the world); it does not follow animations
+      or later box changes.
 36. **The limit** L = the world's `visibleDistance` (`TERRAIN.KQ`; 30,000
     if there is no terrain). With the distance D from rule 35:
     - D ≥ L: **off**;
@@ -414,6 +549,13 @@ an object takes part in the game at all.
     (`groupsAlways` 6, near 0x448, far 0x440) an object is drawn and solid
     when near, drawn but **not solid** when far, and **neither drawn nor
     solid** when off.
+    More bits (traced 2026-10-17): **0x400** puts the object in the
+    **lights group**, the list the frame's light gathering walks (rule 3):
+    its own lights (a `KQPointLight`, or lights carried by its model,
+    rule 26b) shine only while it has 0x400. **0x2** keeps it in the
+    near / far / off test itself. 0x1000 is only a flag ("on fire", set by
+    `KQObject::lightOnFire`), not a list. The other bits put the object in
+    lists not studied here.
 38. **Dead City's flames** (`flame.kq`, `flame_nd.kq`): no shape name, so
     radius 100; `groupsActive3DFar = 1089` (0x441) keeps them drawn when
     far. So they disappear when their position is more than
@@ -431,6 +573,43 @@ an object takes part in the game at all.
 40. The same test applies to buildings (`KQInterior`) and emitters: they
     are switched off beyond `visibleDistance` from Connor (minus their
     radius). Buildings are large, so this rarely happens.
+41. **The collider switch (bit 0x8), as B needs it** (traced 2026-10-17):
+    when an object's groups gain 0x8, its collider (if it has one) is added
+    to the collision world at the object's current place; when they lose
+    0x8 it is taken out. While out, nothing collides with it, the camera
+    and clicks pass through it, and it does not collide with anything. It
+    is the same switch whatever the reason (far, off, hidden, a script
+    changing the masks). The groups are recomputed every frame, but
+    nothing happens unless the near / far / off state changed.
+42. **`setActiveCamera 0|1` and `makeActive <name> 0|1`** (traced):
+    - `setActiveCamera <n>` sets the reference point for **all** objects:
+      0 = Connor, any other number = the camera. Takes effect at the next
+      frame's test. Its usage line is printed if the word count is not 2.
+    - `makeActive <name> <n>`: n ≠ 0 makes that object always **near**
+      (never far, never off), n = 0 returns it to the distance test. Takes
+      effect at the next frame's test. A hidden object stays off. It only
+      matters for an object that is in the test (bit 0x2).
+    - Data: `setActiveCamera` in 16 Dead City scripts (cut scenes and
+      traps; always paired with a `setActiveCamera 0`), `makeActive` in 32
+      Dead City switch scripts (`aswitch*`, `cswitch*`).
+43. **Items lying in the world** (`KQInventoryItem`, Q71, traced
+    2026-10-17). Items are not made from `.kq` files, so no file sets their
+    masks or `tooFar`. Fixed values:
+    - `tooFar` = **0.83** (the default for every object);
+    - near mask **0x448** (drawn, solid, clickable, lights);
+    - far mask **0** (!): an item farther from Connor than 0.83 ×
+      `visibleDistance` is **not drawn, not clickable, not solid**;
+    - `groupsAlways` = **0x2** while the item lies in the world (put there
+      by the world's item list, which adds 0x2 so it joins the test), and
+      **0** while it sits in an inventory (then it is taken out of the
+      test, set to off and removed from the world).
+    - Its ball: its collider box from `BOUNDS.KQ` by the item type's shape
+      (items always get a collider when their shape is in the table), else
+      radius 100 (rule 35). Its see-through value comes from
+      `Invinfo.itl`'s `Translucency` column.
+    - Daventry: the far band starts at 0.83 × 27,000 = 22,410 from Connor,
+      about where the haze removes items anyway (22,950 from the camera).
+      Dead City: 9,960 from Connor.
 
 ## Numbers and units
 
@@ -444,7 +623,11 @@ an object takes part in the game at all.
 | `.dil` light texel | 16 × 16 texture texels (= 128 × 128 units at 8 units per texel) | traced, data |
 | brightness factor | 0.3 + 1.4 × setting ÷ 100; 50 → 1.0 | traced |
 | haze | (d − hazeDistance) ÷ (0.85 × visibleDistance − hazeDistance), cap 1, min 0.01 | traced |
-| point light falloff | 1 to begin, linear to 0 at end | traced |
+| point light falloff, models | 1 to `tsAttenuationBegin`, linear to 0 at `tsAttenuationEnd` | traced |
+| point light falloff, walls and ground | 1 to Begin, then 1 − (d − Begin) ÷ End (0 at Begin + End) | traced |
+| point light out of range, model part | (distance to part's ball centre − its radius) > End | traced |
+| ground patch | only if light height above ground ≤ End; half-width √(End² − h²) | traced |
+| haze colour entries searched | 10–244 (`pcmt` never read) | traced, data |
 | ground haze per corner | 0.01 + (d − hazeDistance) ÷ (1.02 × (visibleDistance − hazeDistance)), 0.01 to 0.99 | traced |
 | wall haze per surface | object formula from the nearest corner, past 1 → 0.99; ≥ 0.99 not drawn unless `b_hazeSolid` | traced |
 | wall lit by a point light | haze × 0.04 | traced |
@@ -453,7 +636,8 @@ an object takes part in the game at all.
 | background | flat palette entry `newSky n`, no haze | traced |
 | draw distance | off when (distance from Connor to ball centre − radius) ≥ visibleDistance | traced |
 | far band | distance > `tooFar` × visibleDistance, `tooFar` default 0.83 | traced |
-| ball radius without shape | 100 (emitters 250) | traced |
+| ball radius without a `BOUNDS.KQ` box | 100 (emitters 250) | traced |
+| items | `tooFar` 0.83, near 0x448, far 0, always 0x2 in the world | traced |
 
 ## Data used
 
@@ -473,6 +657,10 @@ an object takes part in the game at all.
 - `Options.cs`: `setBrightness`, `useDynamicLighting` (point lights on
   walls).
 - Scripts: `setActiveCamera 0|1`, `makeActive <name> 0|1`.
+- `GAME/patch/BOUNDS.KQ` (bounding balls). Dead City's
+  `kq/Light/PLIGHT01.KQ`, `facelt*.KQ` and `newworld.cs` / `azrieltp.cs`
+  (point lights). Objects' `.kq`: `turnOffDynLighting`.
+- `GAME/Kq/Invinfo.itl` (items' shapes and translucency).
 
 ## Edge cases
 
@@ -504,6 +692,11 @@ an object takes part in the game at all.
   without turning it with the object. For a turned object the ball sits a
   little off. Turn the centre with the object; the difference is at most
   the object's own size.
+- Point lights treat `tsAttenuationEnd` as an end distance on models but
+  as a fade length on walls and the ground (rules 16, 24, 26): **do
+  reproduce** it; the light values were tuned with it.
+- Castle's haze colour depends on the previous world (rule 23): don't
+  reproduce; use the background entry.
 - `setActivePoint` (a second reference point used when an object is
   beyond the limit from Connor) exists, but the only two uses in the data
   are commented out. Leave it out.
@@ -555,8 +748,54 @@ an object takes part in the game at all.
   wall surfaces were left out by the haze. Daventry from the start point:
   expect 0 objects off (everything within 27,000 of Connor is near or
   far).
+- **More logs (B), 2026-10-17 rules:** at world load, the haze entry and
+  background entry per the rule 23 table (Daventry 17 and 17; Ice World
+  64 and 65; Temples 11 and 10). In Dead City, per point light: position,
+  Begin, End, and how many wall surfaces it reached this frame and how
+  many ground points it painted (PLIGHT01: ground patch only if its height
+  above the ground is under 4,000). Items: count near / far / off.
+- **By eye in the original (user), Dead City:**
+  8. **Point lights on walls and ground.** Near `PLIGHT01` (around x
+     182,000, y 41,600) the walls and the ground should show a soft
+     greenish patch (colour 0.3/0.7/0.4), reaching farther on walls and
+     ground (up to 5,000) than on Connor (up to 4,000). With dynamic
+     lighting switched off in the video options the patches should go
+     away, while Connor still gets the light.
+     **Checked by the user (2026-10-17):** yes, a greenish patch on walls
+     and ground at the arrival portal, **changing in colour and
+     intensity** (the portal's own moving light, rule 26b). With dynamic
+     lighting off the moving light goes, and **a smaller green patch
+     stays** on floor and walls (the light baked into the light maps: the
+     light map is shown instead of the shadow map, `terrain-lighting.md`
+     rule 2, and the walls' `.dil` maps). **Connor is lit green** on the
+     side facing the light **both with dynamic lighting on and off**, as
+     rules 24 and 26b say (models ignore that setting). Our viewer does
+     not do this yet.
 
 ## Answers to questions
+
+- **Q70** (2026-10-17): an object with a box collider uses **the ball
+  round its collision box** (`BOUNDS.KQ`): centre = box middle, radius =
+  half the box diagonal. Objects without a collider use the `BOUNDS.KQ`
+  box found by their `shapeName` (then their own name), so in both cases
+  it is a `BOUNDS.KQ` box, never the model's own geometry; no box: radius
+  100. The centre is **not** turned with the object in the original (rule
+  35); turning it is our choice (Do not reproduce).
+- **Q71** (items): yes, items in the world take part in the near / far /
+  off test with fixed values: `tooFar` 0.83, near 0x448, **far 0** (an
+  item in the far band is not drawn, not clickable), `groupsAlways` 0x2
+  while in the world and 0 in an inventory (rule 43).
+- **Q72** (point lights): keys matched; models fade from Begin to End,
+  walls and the ground from Begin to Begin + End; out of range per model
+  part by its bounding ball against End; ground patches per frame; lit
+  walls' haze × 0.04 per light (rules 16, 24–26). New: lights carried by
+  models and `turnOffDynLighting` (rule 26b).
+- **Q73** (remaining points): usable palette entries 10–244 (the `pcmt`
+  chunk is never read), with a measured table per world (rule 23); ground
+  cut partly traced (rule 28, open question 10); `0x1000` building
+  materials still use their light map (rule 14); the "unlit" switch is
+  never turned on (rule 10); `torchlight.kq` is never loaded (rule 25).
+- **Q74** (collider switch, `makeActive`, `setActiveCamera`): rules 41–42.
 
 - **Q66 (a):** ×1 confirmed: on Glide the light map goes to the card
   unchanged as 4-bit-per-channel colour and is multiplied with the texture,
@@ -606,22 +845,27 @@ an object takes part in the game at all.
 1. (Partly answered 2026-10-16: walls get their light map plus point
    lights, never the sun or ambient, rule 16.) Still open: whether the
    filtering between light texels is bilinear (rule 13).
-2. What turns on the per-object "unlit" switch (rule 10)?
+2. (Answered 2026-10-17: nothing turns it on; rule 10.)
 3. (Answered 2026-10-15, Q67: 12-byte records, in files the game never
    loads; rule 13.)
-4. How a point light decides an object is out of range (rule 24), and
-   the dynamic ground light (`terrain-lighting.md` rule 15).
-5. Whether `torchlight.kq` is loaded by anything (rule 25). No script
-   found.
+4. (Answered 2026-10-17, Q72: per model part, by its bounding ball
+   against `tsAttenuationEnd`, rule 24; the ground, rule 26.)
+5. (Answered 2026-10-17: nothing loads `torchlight.kq`, rule 25.)
 6. Direct3D renderer not checked (Glide only).
-7. Building materials with flag `0x1000` (in Daventry's `interior.dml`:
-   `11gnd`, `Plstrwl1/2`, `Srwroof`): do they ignore the wall's light map
-   (full brightness) or not? Not traced. Stand-in: use the light map.
-8. Which palette entries count as "usable" when snapping the haze colour
-   (rule 23). Stand-in: all of 10–244.
+7. (Answered 2026-10-17, rule 14: building walls always use their light
+   map; the wall drawing never looks at a material's lighting flags, so
+   `0x1000` does not make a wall full bright.) Still open: whether its
+   pure-black texels are see-through on walls as on models (the colour
+   key); not traced. Stand-in: treat them as on models.
+8. (Answered 2026-10-17: entries 10–244, the `pcmt` chunk is never read;
+   rule 23.)
 9. The user saw Dead City's flames vanish at about 11,000 from Connor; the
    traced rule gives 12,100 (rule 38). Probably the estimate; a log of
    the distance at which our flames switch off, compared side by side with
    the original, would settle it.
-10. The exact cut of ground triangles that cross `visibleDistance`
-    (rule 28) was not read.
+10. Where exactly a ground triangle crossing `visibleDistance` is cut
+    (rule 28): the cutter was traced, the helper that places the new corner
+    was not. Stand-in in rule 28; the difference hardly shows.
+11. (Answered 2026-10-17: the `.kqs` light nodes and light
+    sub-sequences, rule 26b.) Still open: whether the frame's own transform
+    moves a model's light.
