@@ -377,10 +377,23 @@ about 500 characters.
     leaves `1` or `-1` (text order), `!=` on equal text leaves `1`; all
     of them are "not 0", so all count as false in `if`. Wrong word count:
     usage line, `1`. `&&`/`||` on text: error line, `1`.
+    **Text order (Q54 a, traced 2026-10-16):** the two words are compared
+    character by character as byte values (0–255, capitals before small
+    letters, as in ASCII). At the first difference, a false `==` leaves
+    **`-1` when the left word comes first** and **`1` when the right word
+    comes first**. A word that runs out first comes first (`ab` before
+    `abc`). So `test abc == abd` leaves `-1`, `test abd == abc` leaves `1`.
+    Only `==` gives `-1`: a false text `<`, `<=`, `>`, `>=` (and `!=`)
+    always leaves `1`.
+  - an operator that is not one of the eight: error line, and it leaves
+    **`0`, i.e. true**. No script in the game does this (every odd
+    "operator" found by a search is inside a comment), so it never
+    matters; treating it as false with a logged error is fine.
   - unknown command: error line, `1`.
   - a script call (`foo.cs …`) does **not** set it itself: what the
     script's last command left stays.
-  - `set`, `echo`: not traced; keep the stand-in `0`.
+  - `set`, `echo`: **`0`** (traced 2026-10-16, Q54 b), always, also for
+    `set` with no name (which prints the variables).
   - game commands with a yes/no answer use **1 = yes**:
     `KQMonster::checkInventory` (1 = found), `KQConnor::pay` (1 = paid),
     `KQConner::checkInvisible` (1 = yes) — from their own usage texts

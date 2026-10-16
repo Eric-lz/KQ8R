@@ -19,15 +19,25 @@
 //! - `0x1000` building materials use the light map too (open question 7,
 //!   STAND-IN).
 //! - F7: x1 (as the note), x2 (doubled, capped), off (full bright).
-//! - Fog (M1 step 6b, STAND-IN from the user's check, Q68): each point of
-//!   a wall fades into the haze colour by its own distance from the
-//!   camera, as the ground (Bevy's distance fog); F8 switches it.
+//! - Haze per wall surface (M1 step 6f, rule 29): from the distance of
+//!   the surface's nearest corner to the camera, with the objects' numbers
+//!   (end = 0.85 x visibleDistance), 0.01 nearer than `hazeDistance`;
+//!   at 0.99 or more the surface is left out, unless the building has
+//!   `b_hazeSolid` (then drawn at 0.99). Plain screen-colour blend
+//!   (rule 23). The building's surface corners are one list on the
+//!   graphics card (`WallCorners`); each wall corner carries its surface's
+//!   place in it (`ATTRIBUTE_WALL_SURFACE`). F8 switches it.
+//! - Not done: point lights on walls and their haze x 0.04 (rule 16).
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
-use bevy::pbr::{Material, MaterialPlugin};
+use bevy::mesh::{MeshVertexAttribute, MeshVertexBufferLayoutRef};
+use bevy::pbr::{Material, MaterialPipeline, MaterialPipelineKey, MaterialPlugin};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat};
+use bevy::render::render_resource::{
+    AsBindGroup, Extent3d, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError, TextureDimension, TextureFormat, VertexFormat,
+};
+use bevy::render::storage::ShaderBuffer;
 use bevy::shader::ShaderRef;
 use kq8_data::building::Surface;
 use kq8_data::dil::BuildingLight;
@@ -141,21 +151,67 @@ impl LightAtlas {
     }
 }
 
+/// Per wall corner: its surface's first corner and corner count in the
+/// building's `WallCorners` list.
+pub const ATTRIBUTE_WALL_SURFACE: MeshVertexAttribute = MeshVertexAttribute::new("Wall_Surface", 0x4B51_3806, VertexFormat::Uint32x2);
+
+/// One building's surface corners for the graphics card: every surface's
+/// corners one after another (Bevy model space, w = 1), and per surface
+/// where its corners start and how many there are.
+#[derive(Debug, Clone, Default)]
+pub struct WallCorners {
+    pub corners: Vec<[f32; 4]>,
+    pub ranges: Vec<[u32; 2]>,
+}
+
+impl WallCorners {
+    /// From the model's surfaces (game units, model space).
+    pub fn new(surfaces: &[Vec<[f32; 3]>]) -> Self {
+        let mut w = WallCorners::default();
+        for s in surfaces {
+            w.ranges.push([w.corners.len() as u32, s.len() as u32]);
+            w.corners.extend(s.iter().map(|&p| {
+                let [x, y, z] = crate::to_bevy(p, [0.0; 3]);
+                [x, y, z, 1.0]
+            }));
+        }
+        w
+    }
+
+    /// The list as a buffer for the card (never empty: a buffer of size 0
+    /// can't be bound).
+    pub fn buffer(&self) -> ShaderBuffer {
+        let mut data: Vec<f32> = self.corners.iter().flatten().copied().collect();
+        if data.is_empty() {
+            data.extend([0.0; 4]);
+        }
+        ShaderBuffer::new(data, RenderAssetUsages::default())
+    }
+
+    /// `ATTRIBUTE_WALL_SURFACE` for a mesh of these triangles (each
+    /// triangle's `node` is its surface).
+    pub fn attribute(&self, triangles: &[kq8_data::shape::Triangle]) -> Vec<[u32; 2]> {
+        triangles.iter().flat_map(|t| [self.ranges.get(t.node).copied().unwrap_or([0, 0]); 3]).collect()
+    }
+}
+
 /// The material's settings, as the shader reads them.
 #[derive(Debug, Clone, Copy, ShaderType)]
 pub struct Settings {
     /// Linear colour (white for textures); alpha = opacity.
     pub base_colour: Vec4,
-    /// Haze colour, Bevy's linear colour; w unused.
+    /// Haze colour, screen colour 0..1 (rule 23); w unused.
     pub haze_colour: Vec4,
     /// 0 x1, 1 x2, 2 off.
     pub mode: u32,
     pub textured: u32,
-    /// 1 = fog on (F8).
+    /// 1 = haze on (F8).
     pub haze_on: u32,
-    /// Fog start and end in game units.
+    /// Haze start and end in game units (rules 19, 29).
     pub haze_start: f32,
     pub haze_end: f32,
+    /// The building's `b_hazeSolid` (rule 29).
+    pub haze_solid: u32,
     /// Game units per Bevy unit.
     pub game_units: f32,
 }
@@ -170,6 +226,9 @@ pub struct BuildingMaterial {
     #[texture(3)]
     #[sampler(4)]
     pub light: Handle<Image>,
+    /// The building's `WallCorners` list.
+    #[storage(5, read_only)]
+    pub corners: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -193,6 +252,24 @@ impl Material for BuildingMaterial {
     fn enable_shadows() -> bool {
         false
     }
+
+    /// The wall shader reads position, both picture coordinates and the
+    /// surface's place in the corner list.
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        let vertex_layout = layout.0.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            Mesh::ATTRIBUTE_UV_1.at_shader_location(3),
+            ATTRIBUTE_WALL_SURFACE.at_shader_location(8),
+        ])?;
+        descriptor.vertex.buffers = vec![vertex_layout];
+        Ok(())
+    }
 }
 
 /// Registers the shader and the material.
@@ -209,9 +286,15 @@ fn mode_code(mode: LightMode) -> u32 {
     }
 }
 
-/// A wall material: its texture or colour (magenta if missing) and the
-/// building's light image.
-pub fn building_material(look: Look, light_image: Handle<Image>, light: &ObjectLight, images: &mut Assets<Image>) -> BuildingMaterial {
+/// A wall material: its texture or colour (magenta if missing), the
+/// building's light image and its corner list.
+pub fn building_material(
+    look: Look,
+    light_image: Handle<Image>,
+    corners: Handle<ShaderBuffer>,
+    light: &ObjectLight,
+    images: &mut Assets<Image>,
+) -> BuildingMaterial {
     let (base, texture) = match look {
         Look::Texture { width, height, rgba, .. } => (Vec4::ONE, Some(images.add(texture_image(width, height, rgba, ImageAddressMode::Repeat)))),
         Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None),
@@ -221,29 +304,54 @@ pub fn building_material(look: Look, light_image: Handle<Image>, light: &ObjectL
     BuildingMaterial {
         settings: Settings {
             base_colour: base,
-            haze_colour: LinearRgba::from(Color::srgb(light.haze.colour[0], light.haze.colour[1], light.haze.colour[2])).to_vec4(),
+            haze_colour: Vec3::from(light.haze.colour).extend(0.0),
             mode: mode_code(light.mode),
             textured,
             haze_on: u32::from(light.haze_on),
             haze_start: light.haze.start,
             haze_end: light.haze.end,
+            haze_solid: 0,
             game_units: UNITS_PER_METRE,
         },
         texture,
         light: light_image,
+        corners,
         alpha_mode: AlphaMode::Opaque,
     }
 }
 
-/// `material` as it is (opacity 1), or a see-through copy of it.
-pub fn see_through(materials: &mut Assets<BuildingMaterial>, material: &Handle<BuildingMaterial>, opacity: f32) -> Handle<BuildingMaterial> {
-    match materials.get(material).filter(|_| opacity < 1.0).cloned() {
-        Some(mut m) => {
-            m.settings.base_colour.w *= opacity;
-            m.alpha_mode = AlphaMode::Blend;
-            materials.add(m)
-        }
-        None => material.clone(),
+/// `material` as it is, or a copy for one building drawn differently:
+/// see-through (opacity below 1) or `b_hazeSolid` (rule 29).
+pub fn for_building(materials: &mut Assets<BuildingMaterial>, material: &Handle<BuildingMaterial>, opacity: f32, haze_solid: bool) -> Handle<BuildingMaterial> {
+    if opacity >= 1.0 && !haze_solid {
+        return material.clone();
+    }
+    let Some(mut m) = materials.get(material).cloned() else { return material.clone() };
+    if opacity < 1.0 {
+        m.settings.base_colour.w *= opacity;
+        m.alpha_mode = AlphaMode::Blend;
+    }
+    m.settings.haze_solid = u32::from(haze_solid);
+    materials.add(m)
+}
+
+/// A wall surface at this haze or more is left out unless `b_hazeSolid`
+/// (rule 29).
+pub const WALL_MAX_HAZE: f32 = 0.99;
+
+/// The walls' haze on the CPU (rule 29), for the log and tests: one
+/// surface's haze from its nearest corner's distance to the camera (game
+/// units); `None` if it is left out.
+pub fn surface_haze(haze: &kq8_data::haze::Haze, corners: &[[f32; 3]], camera: [f32; 3], solid: bool) -> Option<f32> {
+    let d = corners
+        .iter()
+        .map(|p| ((p[0] - camera[0]).powi(2) + (p[1] - camera[1]).powi(2) + (p[2] - camera[2]).powi(2)).sqrt())
+        .fold(f32::MAX, f32::min);
+    let h = haze.amount(d);
+    match (h >= WALL_MAX_HAZE, solid) {
+        (true, false) => None,
+        (true, true) => Some(WALL_MAX_HAZE),
+        (false, _) => Some(h),
     }
 }
 
@@ -271,7 +379,7 @@ pub fn follow_mode(
         changed += 1;
     }
     shared.log.lock().unwrap().summary(format!(
-        "building materials: light mode {}, fog {} ({changed} materials)",
+        "building materials: light mode {}, haze {} ({changed} materials)",
         light.mode.name(),
         if light.haze_on { "on" } else { "off" }
     ));
@@ -342,6 +450,25 @@ mod tests {
         let [x, y] = a.places[0].unwrap();
         let at = (((y + 1) * a.width + x + 2) * 4) as usize;
         assert_eq!(a.rgba[at], 6 * 17);
+    }
+
+    #[test]
+    fn wall_haze() {
+        // Daventry: start 18,000, end 22,950; the nearest corner counts.
+        let h = kq8_data::haze::Haze::new(18_000.0, 27_000.0, [0.0; 3]);
+        let wall = [[20_475.0, 0.0, 0.0], [30_000.0, 0.0, 0.0]];
+        assert!((surface_haze(&h, &wall, [0.0; 3], false).unwrap() - 0.5).abs() < 1e-5);
+        assert_eq!(surface_haze(&h, &[[100.0, 0.0, 0.0]], [0.0; 3], false), Some(0.01));
+        // 0.99 or more: left out, unless solid (then 0.99).
+        let far = [[18_000.0 + 0.99 * 4_950.0 + 1.0, 0.0, 0.0]];
+        assert_eq!(surface_haze(&h, &far, [0.0; 3], false), None);
+        assert_eq!(surface_haze(&h, &far, [0.0; 3], true), Some(0.99));
+        assert!(surface_haze(&h, &[[22_850.0, 0.0, 0.0]], [0.0; 3], false).is_some());
+        // The corner list: ranges in order, Bevy space.
+        let w = WallCorners::new(&[vec![[100.0, 200.0, 300.0]; 3], vec![[0.0; 3]; 4]]);
+        assert_eq!(w.ranges, vec![[0, 3], [3, 4]]);
+        let b = crate::to_bevy([100.0, 200.0, 300.0], [0.0; 3]);
+        assert_eq!(w.corners[0], [b[0], b[1], b[2], 1.0]);
     }
 
     #[test]

@@ -807,7 +807,8 @@ is no actual haze": in the original a very dense, dark fog hides
 - All of this is a **stand-in** from the user's observation, not from
   the note; Q68 asks how the original does it.
 
-**Done 2026-10-15** (MODLOG): checked by eye by the user.
+**Done 2026-10-15** (MODLOG): checked by eye by the user. **Replaced by
+6d–6f** (2026-10-16).
 
 **6c. Draw distance for objects** (stand-in until Q69). The user saw
 Dead City's torch flames shown far past the fog; in the original they
@@ -816,7 +817,93 @@ vanish (see-through, and their material halves the haze). Stand-in: no
 object is drawn farther than the world's `visibleDistance` from the
 camera (Dead City 12,000, Daventry 27,000), while the haze is on
 (`Haze::beyond_view`, `object_light.wesl`). **Done 2026-10-15**, checked
-by eye by the user.
+by eye by the user. **Replaced by 6h** (2026-10-16).
+
+**6d–6h. Replace the stand-ins with A's answers to Q68 and Q69** (planned
+2026-10-16). Rules: `object-lighting.md` rules 19–23, 27–40. One step at
+a time, each logged and tested on its own. F8 still switches all the
+haze off (and with it the ground's edge and the switch-off by distance,
+so the whole world can be seen for comparison).
+
+- **6d. Haze colour and background from the palette; plain blend.**
+  - The haze colour is the palette colour nearest to `resetHazeColor`
+    (smallest sum of squared differences over entries 10–244, the first
+    one on a tie; rule 23, open question 8 stand-in: all of 10–244 count
+    as usable). The palette is `KQWorld::loadingPalette` from `world.cs`
+    (the one `loadPalette` loads just before `resetHazeColor`), else
+    `<world>.ppl`.
+  - The background (clear colour) is palette entry `KQWorld::background`
+    (`newSky $KQWorld::background`, rule 31), with or without the haze.
+  - Objects and walls blend towards the haze colour on **screen colours**
+    (rule 23), not Bevy's linear colours: colour → screen, mix, → back.
+  - Log at load: haze colour index and RGB, background index and RGB.
+  - Unit tests: nearest-colour pick, `KQWorld::background` line.
+- **6e. The ground's own haze.** The ground (surface, floor view, flowing
+  squares) gets its own small material (`GroundMaterial`, texture ×
+  the light map's vertex colour, as Bevy's unlit material did), so Bevy's
+  distance fog is no longer used anywhere.
+  - Per corner (rule 27): 0.01 below `hazeDistance`; 0.01 + (d −
+    hazeDistance) ÷ (1.02 × (visibleDistance − hazeDistance)) up to
+    `visibleDistance`; 0.99 beyond. Blended across each triangle by the
+    card; plain screen-colour blend.
+  - Not drawn beyond `visibleDistance` from the camera (rule 28): a point
+    whose distance is past it is left out, so triangles that cross it are
+    cut there (open question 10: the original's exact cut was not read).
+  - Log: the ground's haze numbers at load.
+- **6f. Walls hazed per surface.** Each building surface's haze comes
+  from its **nearest corner** to the camera, with the objects' numbers
+  (end = 0.85 × visibleDistance), 0.01 nearer than `hazeDistance`, 0.99
+  when the formula passes 1; at 0.99 the surface is left out unless the
+  building's `.kq` has `b_hazeSolid=1` (rule 29). Done on the graphics
+  card: each building's surface corners go into one list on the card,
+  each wall corner carries its surface's place in that list, and the
+  vertex shader finds the nearest corner. `0x10000` and `hazeMultiplier`
+  are not used for walls. (Point lights on walls, rule 16: not done.)
+  - Log every second: how many wall surfaces are left out by the haze.
+- **6g. Particles: one haze per emitter** (rule 30), from the emitter's
+  location (which moves for following emitters; snow follows the camera
+  so it gets 0.01). Each emitter gets its own material copies whose
+  "haze from here" point is set every frame.
+- **6h. Near / far / off by distance from Connor** (rules 34–40),
+  replacing 6c's "nothing beyond `visibleDistance` from the camera".
+  - Every frame, for every placed object, building, door, chest,
+    scripted object, animated object, item and emitter: D = distance from
+    Connor to the centre of its bounding ball − the ball's radius.
+    Off when D ≥ `visibleDistance`; far when D > `tooFar` ×
+    `visibleDistance` (`tooFar` from its `.kq`, default 0.83); else near.
+  - Ball (rule 35): the shape's box (centre = box middle turned with the
+    object, radius = half the diagonal); no shape: radius 100 at the
+    position; emitters: 250 round the emitter's location. "The collider's
+    ball" for objects with a box collider: **stand-in**, the same ball
+    from the shape's box (asked as Q70).
+  - Drawn (rule 37) when the active bits have any of 0x10, 0x40, 0x80,
+    0x100: near = `groupsAlways` | `groupsActive3D` (default 0x448), far
+    = `groupsAlways` | `groupsActive3DFar` (default 0x440), off =
+    `groupsAlways`. Read `tooFar`, `groupsActive3D`, `groupsActive3DFar`
+    from the `.kq`. A hidden object keeps its own rule (`objects.md`).
+  - How it hides: an object that is off by distance is moved to a
+    drawing layer the camera doesn't show (Bevy's `RenderLayers`), so it
+    does not fight the systems that already show and hide objects
+    (hidden objects, items picked up, particles). Emitters: their
+    particle material is switched off.
+  - Not done (logged): the collider switch (0x8; far objects are at
+    least `tooFar` × `visibleDistance` from Connor, so he can't touch
+    them anyway), `makeActive`, `setActiveCamera` (cut-scene scripts).
+    With no Connor (fly camera), the camera is the reference point
+    (viewer only).
+  - Log every second: how many objects are near / far / off; for Dead
+    City's flames, the distance from Connor at which each switches off
+    (rule 38: 12,100; the user's ~11,000 is open question 9).
+
+**6d–6h done 2026-10-16** (MODLOG, one entry each), from the logs;
+checked by eye by the user the same day (matches the original). Differences from the plan: the walls' corner list is
+a storage buffer read in the vertex shader (`BuildingMaterial::specialize`
+adds the surface attribute); the ground's material is `ground_haze.rs`;
+the draw distance is `draw_distance.rs` and uses each object's own
+transform (all tested entities are roots), so it is right on the frame
+an object appears; it also logs objects that are near or far but not
+drawn (8 Daventry props whose files set `groupsActive3DFar=0`). Items use
+the default masks (stand-in). Open: Q70 (the collider's ball).
 
 ### M2 — Walk Connor around Daventry
 

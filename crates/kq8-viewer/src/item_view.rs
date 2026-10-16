@@ -14,6 +14,7 @@ use bevy::prelude::*;
 
 use crate::door_view::DoorSim;
 use crate::terrain_view::bevy_transform_from;
+use crate::draw_distance::{DistanceTest, ShapeBalls};
 use crate::object_light::{see_through, ObjectMaterial};
 
 /// One drawn model: (mesh, material) per material group.
@@ -25,13 +26,17 @@ pub struct ItemDraw {
     parts: BTreeMap<String, Parts>,
     /// Each item object drawn so far, by name.
     drawn: BTreeMap<String, Entity>,
+    /// Each item type's draw distance test (M1 6h).
+    tests: BTreeMap<String, DistanceTest>,
 }
 
 /// `looks`: (`IDName`, index into `built`, opacity) per type.
-pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, built: &[Parts], materials: &mut Assets<ObjectMaterial>) {
+pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, built: &[Parts], materials: &mut Assets<ObjectMaterial>, balls: &ShapeBalls) {
     let mut parts = BTreeMap::new();
+    let mut tests = BTreeMap::new();
     for (kind, slot, opacity) in looks {
         let Some(model) = built.get(slot) else { continue };
+        tests.insert(kind.clone(), DistanceTest::item(&kind, balls.by_index.get(slot).copied()));
         let p: Parts = model
             .iter()
             .map(|(mesh, material)| {
@@ -41,7 +46,7 @@ pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, bu
             .collect();
         parts.insert(kind, p);
     }
-    commands.insert_resource(ItemDraw { parts, drawn: BTreeMap::new() });
+    commands.insert_resource(ItemDraw { parts, drawn: BTreeMap::new(), tests });
 }
 
 /// Shows the items lying in the world, hides the others.
@@ -61,7 +66,11 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
             }
             (None, Some(p)) => {
                 let Some(parts) = draw.parts.get(&o.kind) else { continue };
-                let body = commands.spawn((bevy_transform_from(p.rotation, p.position), Visibility::Inherited)).id();
+                let mut body = commands.spawn((bevy_transform_from(p.rotation, p.position), Visibility::Inherited));
+                if let Some(test) = draw.tests.get(&o.kind) {
+                    body.insert(test.another());
+                }
+                let body = body.id();
                 for (mesh, material) in parts {
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
                     commands.entity(body).add_child(part);

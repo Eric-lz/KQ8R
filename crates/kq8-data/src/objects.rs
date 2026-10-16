@@ -58,6 +58,10 @@ pub struct Placement {
     pub class: Option<String>,
     /// `shapeName` as written, e.g. `smlchest.KQS` or `barn.dig`.
     pub shape: Option<String>,
+    /// True if the section itself names a shape (`shapeName`); `shape` may
+    /// be filled later from an animation. Decides the bounding ball
+    /// (object-lighting.md rule 35).
+    pub shape_named: bool,
     pub position: [f32; 3],
     /// `dirX`, `dirY`, `dirZ` in radians (0 when missing).
     pub angles: [f32; 3],
@@ -88,6 +92,66 @@ pub struct Placement {
     /// `hazeMultiplier`, default 1 (rule 22). The data's misspelled
     /// `hazeMulitplier` is not read (Q68).
     pub haze_multiplier: f32,
+    /// `tooFar`, default 0.83: far beyond this share of `visibleDistance`
+    /// from Connor (object-lighting.md rule 36).
+    pub too_far: f32,
+    /// `groupsActive3D` (default 0x448) and `groupsActive3DFar` (default
+    /// 0x440): the group bits added when near / far (rule 37).
+    pub groups_near: u32,
+    pub groups_far: u32,
+}
+
+/// Group bits that put an object in a draw list: any of them means
+/// "drawn" (object-lighting.md rule 37).
+pub const DRAW_BITS: u32 = 0x10 | 0x40 | 0x80 | 0x100;
+
+/// The draw distance limit with no terrain (rule 36).
+pub const NO_TERRAIN_ACTIVE_LIMIT: f32 = 30_000.0;
+
+/// Ball radius of an object with no shape name, and of an emitter
+/// (rule 35).
+pub const NO_SHAPE_RADIUS: f32 = 100.0;
+pub const EMITTER_RADIUS: f32 = 250.0;
+
+/// Where an object is, by distance from Connor (rules 34-36).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Activity {
+    Near,
+    Far,
+    Off,
+}
+
+impl Activity {
+    /// Rule 36: `distance` = from Connor to the centre of the object's
+    /// ball, minus its radius; `limit` = `visibleDistance`. Off at or past
+    /// the limit; far beyond `too_far` x limit; else near.
+    pub fn of(distance: f32, limit: f32, too_far: f32) -> Self {
+        if distance >= limit {
+            Activity::Off
+        } else if distance > too_far * limit {
+            Activity::Far
+        } else {
+            Activity::Near
+        }
+    }
+
+    /// The object's group bits in this state (rule 37): `groupsAlways`
+    /// plus the near or far bits; only `groupsAlways` when off.
+    pub fn groups(self, always: u32, near: u32, far: u32) -> u32 {
+        match self {
+            Activity::Near => always | near,
+            Activity::Far => always | far,
+            Activity::Off => always,
+        }
+    }
+}
+
+/// The ball of an object with a shape (rule 35): centre = the middle of
+/// the shape's box (model space), radius = half the box's diagonal.
+pub fn shape_ball(min: [f32; 3], max: [f32; 3]) -> ([f32; 3], f32) {
+    let centre = std::array::from_fn(|k| (min[k] + max[k]) / 2.0);
+    let radius = (0..3).map(|k| (max[k] - min[k]).powi(2)).sum::<f32>().sqrt() / 2.0;
+    (centre, radius)
 }
 
 impl Placement {
@@ -101,6 +165,7 @@ impl Placement {
             name: s.name.clone(),
             class: s.get("classType").map(str::to_string),
             shape: s.get("shapeName").filter(|v| !v.is_empty()).map(str::to_string),
+            shape_named: s.get("shapeName").is_some_and(|v| !v.is_empty()),
             position,
             angles,
             has_matrix_key: s.entries.iter().any(|(k, _)| k.to_ascii_lowercase().ends_with("rmat")),
@@ -114,6 +179,9 @@ impl Placement {
             groups_always: s.number("groupsAlways").and_then(Result::ok).map_or(6, |v| v as u32),
             haze_solid: s.number("b_hazeSolid").and_then(Result::ok).is_some_and(|v| v != 0.0),
             haze_multiplier: s.number("hazeMultiplier").and_then(Result::ok).map_or(1.0, |v| v as f32),
+            too_far: s.number("tooFar").and_then(Result::ok).map_or(0.83, |v| v as f32),
+            groups_near: s.number("groupsActive3D").and_then(Result::ok).map_or(0x448, |v| v as u32),
+            groups_far: s.number("groupsActive3DFar").and_then(Result::ok).map_or(0x440, |v| v as u32),
         }
     }
 
@@ -150,10 +218,15 @@ impl Placement {
     }
 
     /// Drawn at the start: not hidden, or hidden but `groupsAlways` keeps
-    /// bit 0x40, which session A infers is "drawn" (objects.md Q18 rule 3,
-    /// not traced).
+    /// one of the draw bits (objects.md "Hidden objects" rule 3,
+    /// object-lighting.md rule 37: 0x10, 0x40, 0x80, 0x100).
     pub fn drawn(&self) -> bool {
-        !self.hidden || self.groups_always & 0x40 != 0
+        !self.hidden || self.groups_always & DRAW_BITS != 0
+    }
+
+    /// Drawn in this distance state (rule 37), hidden or not.
+    pub fn drawn_when(&self, activity: Activity) -> bool {
+        activity.groups(self.groups_always, self.groups_near, self.groups_far) & DRAW_BITS != 0
     }
 
     /// Opacity 0..1 from `translucency` (1 = solid).
@@ -622,6 +695,30 @@ locZ=937
         assert!(parse("[a]\nhidden=0\n").drawn());
         assert!(parse("[a]\nhidden=1\ngroupsAlways=1097\n").drawn());
         assert_eq!(parse("[a]\n").groups_always, 6);
+        // Any of the four draw bits (object-lighting.md rule 37).
+        assert!(parse("[a]\nhidden=1\ngroupsAlways=16\n").drawn());
+        assert!(!parse("[a]\nhidden=1\ngroupsAlways=14\n").drawn());
+    }
+
+    #[test]
+    fn near_far_off() {
+        let parse = |t: &str| Placement::from_section(&crate::kq_text::parse(t.as_bytes())[0]);
+        // Rule 36, Dead City (12,000), default tooFar 0.83 (9,960).
+        assert_eq!(Activity::of(9_960.0, 12_000.0, 0.83), Activity::Near);
+        assert_eq!(Activity::of(9_961.0, 12_000.0, 0.83), Activity::Far);
+        assert_eq!(Activity::of(12_000.0, 12_000.0, 0.83), Activity::Off);
+        // Defaults: drawn near and far, not off.
+        let p = parse("[a]\n");
+        assert_eq!((p.too_far, p.groups_near, p.groups_far), (0.83, 0x448, 0x440));
+        assert!(p.drawn_when(Activity::Near) && p.drawn_when(Activity::Far) && !p.drawn_when(Activity::Off));
+        // Dead City's flame.kq: far mask 1089 (0x441) keeps it drawn.
+        let f = parse("[flame]\ngroupsActive3DFar=1089\ntooFar=0.5\n");
+        assert_eq!((f.groups_far, f.too_far), (1089, 0.5));
+        assert!(f.drawn_when(Activity::Far));
+        // A far mask without draw bits: not drawn when far.
+        assert!(!parse("[a]\ngroupsActive3DFar=8\n").drawn_when(Activity::Far));
+        // Rule 35: a 2 x 4 x 4 box -> centre in the middle, radius 3.
+        assert_eq!(shape_ball([0.0, 0.0, 0.0], [2.0, 4.0, 4.0]), ([1.0, 2.0, 2.0], 3.0));
     }
 
     #[test]

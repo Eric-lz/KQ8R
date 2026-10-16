@@ -25,7 +25,9 @@ use crate::light_view::GroundLight;
 use crate::load::GroundAnimAssets;
 use crate::log::Log;
 use crate::terrain_view::FloorView;
-use crate::{material_for, mesh_from, to_bevy, with_opacity, Shared};
+use crate::ground_haze::{ground_material, with_opacity, GroundMaterial};
+use crate::object_light::ObjectLight;
+use crate::{mesh_from, to_bevy, Shared};
 
 /// Opacity of an animated square over a different floor in the U key's
 /// "both" view (the same as the rest of the surface there).
@@ -35,7 +37,7 @@ const SURFACE_SEE_THROUGH: f32 = 0.35;
 pub struct LoadedGroundAnim(pub Option<GroundAnimAssets>);
 
 /// A material's (opaque, see-through) look.
-type SquareLook = (Handle<StandardMaterial>, Handle<StandardMaterial>);
+type SquareLook = (Handle<GroundMaterial>, Handle<GroundMaterial>);
 
 /// One square's entity and what it shows now.
 struct DrawnSquare {
@@ -62,14 +64,17 @@ pub struct GroundAnimSim {
     log: Log,
 }
 
+// A Bevy system gets everything it uses as arguments.
+#[allow(clippy::too_many_arguments)]
 pub fn setup_ground_anim(
     mut commands: Commands,
     mut loaded: ResMut<LoadedGroundAnim>,
     shared: Res<Shared>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<GroundMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut light: ResMut<GroundLight>,
+    haze: Res<ObjectLight>,
 ) {
     let Some(assets) = loaded.0.take() else { return };
     let mut main_log = shared.log.lock().unwrap();
@@ -102,7 +107,7 @@ pub fn setup_ground_anim(
             m,
             look.map(|look| {
                 // One texture covers exactly one square: clamp at the edges.
-                let material = material_for(look, ImageAddressMode::ClampToEdge, &mut images);
+                let material = ground_material(look, ImageAddressMode::ClampToEdge, &haze, &mut images);
                 let see_through = materials.add(with_opacity(&material, SURFACE_SEE_THROUGH));
                 (materials.add(material), see_through)
             }),
@@ -213,7 +218,7 @@ pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, shared: Res<Shared>,
 pub fn ground_anim_draw(
     sim: Option<ResMut<GroundAnimSim>>,
     view: Res<FloorView>,
-    mut query: Query<(&mut Visibility, Option<&mut Mesh3d>, Option<&mut MeshMaterial3d<StandardMaterial>>)>,
+    mut query: Query<(&mut Visibility, Option<&mut Mesh3d>, Option<&mut MeshMaterial3d<GroundMaterial>>)>,
     mut commands: Commands,
 ) {
     let Some(mut sim) = sim else { return };

@@ -1,7 +1,8 @@
-//! Haze (distance fog) on models.
+//! Haze (distance fog) on models, the ground and walls, and the
+//! background colour.
 //!
 //! Rules from the behaviour note `docs/behaviour/object-lighting.md` rules
-//! 19-23 (session A); rule numbers below are that note's. The viewer's
+//! 19-23, 27-33 (session A); rule numbers below are that note's. The viewer's
 //! shader (`object_light.wesl`) does the same per object on the graphics
 //! card; this copy is for tests and the log. See docs/provenance/README.md.
 
@@ -19,12 +20,15 @@ pub struct Haze {
     pub start: f32,
     /// Haze is 1 here (rule 19).
     pub end: f32,
-    /// `visibleDistance`. STAND-IN (Q69, the user's check in Dead City):
-    /// no object is drawn farther than this from the camera.
+    /// `visibleDistance`: the ground's end (rules 27, 28) and the draw
+    /// distance from Connor (rule 36).
     pub visible: f32,
-    /// `resetHazeColor`, 0..1 per channel (the file's 0..255 / 255; the
-    /// 0-255 scale is the note's assumption).
+    /// Screen colour 0..1 per channel: the palette colour nearest to
+    /// `resetHazeColor` (rule 23, `palette_haze_colour`).
     pub colour: [f32; 3],
+    /// Screen colour 0..1 behind everything: palette entry `newSky n`
+    /// (rule 31). Black until set.
+    pub background: [f32; 3],
 }
 
 impl Haze {
@@ -33,16 +37,7 @@ impl Haze {
     pub fn new(haze_distance: f32, visible_distance: f32, colour: [f32; 3]) -> Self {
         let near_end = 0.85 * visible_distance;
         let end = if near_end > haze_distance { near_end } else { visible_distance };
-        Haze { start: haze_distance, end, colour, visible: visible_distance }
-    }
-
-    /// STAND-IN (Q69): an object farther than `visibleDistance` from the
-    /// camera is not drawn, whatever its haze. The user saw Dead City's
-    /// torch flames (see-through, material `0x10000`, so by rules 20-21
-    /// never left out) vanish at about 11,000 in the original; Dead City's
-    /// `visibleDistance` is 12,000.
-    pub fn beyond_view(&self, distance: f32) -> bool {
-        distance > self.visible
+        Haze { start: haze_distance, end, colour, visible: visible_distance, background: [0.0; 3] }
     }
 
     /// The haze of an object at `distance` from the camera, before the
@@ -57,6 +52,39 @@ impl Haze {
             return 1.0;
         }
         ((distance - self.start) / span).min(1.0)
+    }
+}
+
+/// The ground's haze never reaches 1 (rule 27).
+pub const GROUND_MAX_HAZE: f32 = 0.99;
+
+impl Haze {
+    /// Where the ground's haze starts (rule 27): `hazeDistance`, unless
+    /// `visibleDistance` is not beyond it, then 0.6 x `visibleDistance`.
+    pub fn ground_start(&self) -> f32 {
+        if self.visible > self.start { self.start } else { 0.6 * self.visible }
+    }
+
+    /// The haze of one ground corner at `distance` from the camera
+    /// (rule 27): 0.01 nearer than the start, then 0.01 + (d - start) /
+    /// (1.02 x (visible - start)), which is 0.99 at `visibleDistance`;
+    /// 0.99 beyond. The ground uses `visibleDistance` itself as its end,
+    /// not the objects' 0.85 x.
+    pub fn ground_amount(&self, distance: f32) -> f32 {
+        let start = self.ground_start();
+        if distance < start {
+            return NEAR_HAZE;
+        }
+        let span = 1.02 * (self.visible - start);
+        if span <= 0.0 {
+            return GROUND_MAX_HAZE;
+        }
+        (NEAR_HAZE + (distance - start) / span).min(GROUND_MAX_HAZE)
+    }
+
+    /// The ground ends at `visibleDistance` from the camera (rule 28).
+    pub fn ground_drawn(&self, distance: f32) -> bool {
+        distance <= self.visible
     }
 }
 
@@ -93,24 +121,79 @@ pub fn hazed(amount: f32, halved: bool, solid: bool, multiplier: f32, see_throug
     }
 }
 
-/// `resetHazeColor R G B` from a console script such as `world.cs`
-/// (object-lighting.md rule 18). The last such line wins; `None` if there
-/// is none. Lines starting with `#` and text after `//` are comments.
-pub fn reset_haze_color(script: &[u8]) -> Option<[f32; 3]> {
+/// The script's lines without comments: lines starting with `#` and text
+/// after `//` are left out.
+fn script_lines(script: &[u8]) -> Vec<String> {
     let text: String = script.iter().map(|&b| b as char).collect();
+    text.lines()
+        .map(|l| l.split("//").next().unwrap_or("").trim().to_string())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect()
+}
+
+/// `resetHazeColor R G B` from a console script such as `world.cs`
+/// (object-lighting.md rules 18, 23): the values as written, on the 0-255
+/// scale. The last such line wins; `None` if there is none.
+pub fn reset_haze_color(script: &[u8]) -> Option<[f32; 3]> {
     let mut found = None;
-    for line in text.lines() {
-        let line = line.split("//").next().unwrap_or("").trim();
-        if line.starts_with('#') {
-            continue;
-        }
+    for line in script_lines(script) {
         let mut words = line.split_whitespace();
         if !words.next().is_some_and(|w| w.eq_ignore_ascii_case("resetHazeColor")) {
             continue;
         }
         let v: Vec<f32> = words.take(3).filter_map(|w| w.parse::<f32>().ok()).collect();
         if let [r, g, b] = v[..] {
-            found = Some([r, g, b].map(|c| (c / 255.0).clamp(0.0, 1.0)));
+            found = Some([r, g, b].map(|c| c.clamp(0.0, 255.0)));
+        }
+    }
+    found
+}
+
+/// Palette entries the haze colour may be snapped to (rule 23). STAND-IN
+/// (the note's open question 8): every entry from 10 to 244 counts as
+/// usable.
+pub const HAZE_ENTRIES: std::ops::RangeInclusive<usize> = 10..=244;
+
+/// The palette entry the game fogs with (rule 23): the one among
+/// `HAZE_ENTRIES` nearest to `want` (0-255 per channel), by the smallest
+/// sum of squared differences; the first one on a tie (STAND-IN, the note
+/// doesn't say).
+pub fn palette_haze_colour(colours: &[[u8; 3]; 256], want: [f32; 3]) -> usize {
+    let mut best = (*HAZE_ENTRIES.start(), f32::MAX);
+    for i in HAZE_ENTRIES {
+        let d: f32 = (0..3).map(|k| (colours[i][k] as f32 - want[k]).powi(2)).sum();
+        if d < best.1 {
+            best = (i, d);
+        }
+    }
+    best.0
+}
+
+/// The palette entry `newSky` fills the background with (rule 31):
+/// `newSky <n>`, or `newSky $<variable>` with the variable's value from a
+/// `set <variable> <n>` line (e.g. `set KQWorld::background 17`). The last
+/// `newSky` line wins; `None` if there is none or it can't be read.
+pub fn new_sky(script: &[u8]) -> Option<usize> {
+    let lines = script_lines(script);
+    let variable = |name: &str| {
+        lines.iter().find_map(|l| {
+            let mut w = l.split_whitespace();
+            (w.next()?.eq_ignore_ascii_case("set") && w.next()?.eq_ignore_ascii_case(name)).then(|| w.next()).flatten()
+        })
+    };
+    let mut found = None;
+    for line in &lines {
+        let mut words = line.split_whitespace();
+        if !words.next().is_some_and(|w| w.eq_ignore_ascii_case("newSky")) {
+            continue;
+        }
+        let Some(arg) = words.next() else { continue };
+        let value = match arg.strip_prefix('$') {
+            Some(name) => variable(name),
+            None => Some(arg),
+        };
+        if let Some(n) = value.and_then(|v| v.parse::<usize>().ok()).filter(|&n| n < 256) {
+            found = Some(n);
         }
     }
     found
@@ -128,8 +211,6 @@ mod tests {
         assert_eq!(Haze::new(9_000.0, 12_000.0, [0.0; 3]).end, 10_200.0);
         // 0.85 x visible not beyond the start: visible itself.
         assert_eq!(Haze::new(20_000.0, 22_000.0, [0.0; 3]).end, 22_000.0);
-        let dead = Haze::new(9_000.0, 12_000.0, [0.0; 3]);
-        assert!(!dead.beyond_view(12_000.0) && dead.beyond_view(12_001.0));
         let none = Haze::new(NO_TERRAIN_HAZE_DISTANCE, NO_TERRAIN_VISIBLE_DISTANCE, [0.0; 3]);
         assert!((none.end - 21_675.0).abs() < 0.01);
     }
@@ -143,6 +224,28 @@ mod tests {
         assert!((h.amount(20_475.0) - 0.5).abs() < 1e-6);
         assert_eq!(h.amount(22_950.0), 1.0);
         assert_eq!(h.amount(40_000.0), 1.0);
+    }
+
+    #[test]
+    fn ground() {
+        // Daventry: 0.01 up to 18,000, 0.99 at 27,000 (not 22,950), never 1.
+        let h = Haze::new(18_000.0, 27_000.0, [0.0; 3]);
+        assert_eq!(h.ground_amount(17_999.0), 0.01);
+        assert!((h.ground_amount(18_000.0) - 0.01).abs() < 1e-6);
+        // 0.01 + 1 / 1.02 = 0.9904 at visibleDistance, capped to 0.99.
+        assert_eq!(h.ground_amount(27_000.0), 0.99);
+        assert!((h.ground_amount(26_900.0) - (0.01 + 8_900.0 / (1.02 * 9_000.0))).abs() < 1e-6);
+        assert!((h.ground_amount(22_500.0) - (0.01 + 0.5 / 1.02)).abs() < 1e-6);
+        assert_eq!(h.ground_amount(40_000.0), 0.99);
+        assert!(h.ground_drawn(27_000.0) && !h.ground_drawn(27_001.0));
+        // Dead City: 0.99 at 12,000.
+        let d = Haze::new(9_000.0, 12_000.0, [0.0; 3]);
+        assert!((d.ground_amount(10_500.0) - (0.01 + 0.5 / 1.02)).abs() < 1e-6);
+        // visibleDistance not beyond hazeDistance: start at 0.6 x visible.
+        let odd = Haze::new(20_000.0, 10_000.0, [0.0; 3]);
+        assert_eq!(odd.ground_start(), 6_000.0);
+        assert_eq!(odd.ground_amount(5_000.0), 0.01);
+        assert!((odd.ground_amount(8_000.0) - (0.01 + 2_000.0 / (1.02 * 4_000.0))).abs() < 1e-6);
     }
 
     #[test]
@@ -166,10 +269,34 @@ mod tests {
     #[test]
     fn haze_colour_line() {
         let script = b"# the loadPalette and resetHazeColor calls must appear together\nloadPalette daventry.ppl\nresetHazeColor 4 8 12\n";
-        let c = reset_haze_color(script).unwrap();
-        assert!((c[0] - 4.0 / 255.0).abs() < 1e-6 && (c[2] - 12.0 / 255.0).abs() < 1e-6);
+        assert_eq!(reset_haze_color(script), Some([4.0, 8.0, 12.0]));
         assert_eq!(reset_haze_color(b"// resetHazeColor 1 2 3\n"), None);
         assert_eq!(reset_haze_color(b"resetHazeColor 1 2\n"), None);
-        assert_eq!(reset_haze_color(b"resetHazeColor 255 0 0\nresetHazeColor 0 255 0\n"), Some([0.0, 1.0, 0.0]));
+        assert_eq!(reset_haze_color(b"resetHazeColor 255 0 0\nresetHazeColor 0 255 0\n"), Some([0.0, 255.0, 0.0]));
+    }
+
+    #[test]
+    fn nearest_palette_colour() {
+        let mut colours = [[200u8, 200, 200]; 256];
+        // Entries outside 10..=244 are never picked, even if exact.
+        colours[3] = [4, 8, 12];
+        colours[250] = [4, 8, 12];
+        colours[40] = [0, 10, 10];
+        colours[41] = [10, 10, 10];
+        colours[42] = [0, 10, 10];
+        // (4, 8, 12): entry 40 is 16 + 4 + 4 = 24 away, 41 is 36 + 4 + 4 =
+        // 44; 42 ties with 40 and loses.
+        assert_eq!(palette_haze_colour(&colours, [4.0, 8.0, 12.0]), 40);
+        // Nothing near: the nearest anyway; ties go to the first.
+        assert_eq!(palette_haze_colour(&[[0, 0, 0]; 256], [255.0; 3]), 10);
+    }
+
+    #[test]
+    fn sky_line() {
+        let script = b"\tset KQWorld::background 17\n\t# The background:\n\tnewSky $KQWorld::background\n";
+        assert_eq!(new_sky(script), Some(17));
+        assert_eq!(new_sky(b"newSky 229\n"), Some(229));
+        assert_eq!(new_sky(b"# newSky 5\n"), None);
+        assert_eq!(new_sky(b"newSky $nothing\n"), None);
     }
 }

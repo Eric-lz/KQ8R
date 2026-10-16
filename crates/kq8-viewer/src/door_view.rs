@@ -140,7 +140,8 @@ pub struct HeldItem(pub Option<String>);
 
 /// A body entity at `placement` with, per movement (index into `built`),
 /// one hidden entity per frame. `haze`: the object's `b_hazeSolid` and
-/// `hazeMultiplier` (object-lighting.md rules 21, 22).
+/// `hazeMultiplier` (object-lighting.md rules 21, 22). `test`: its draw
+/// distance (M1 6h, rules 34-37).
 fn spawn_body(
     commands: &mut Commands,
     placement: &Placement,
@@ -148,8 +149,9 @@ fn spawn_body(
     built: &[Vec<BuiltFrame>],
     materials: &mut Assets<ObjectMaterial>,
     haze: (bool, f32),
+    test: crate::draw_distance::DistanceTest,
 ) -> DrawnDoor {
-    let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default())).id();
+    let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), test)).id();
     let mut frames = Vec::new();
     for a in animations {
         let mut entities = Vec::new();
@@ -180,6 +182,7 @@ pub fn spawn_doors(
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
+    balls: &crate::draw_distance::ShapeBalls,
     main_log: &mut Log,
 ) {
     let log = match Log::create("doors") {
@@ -272,7 +275,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier)));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p)));
             active_objects.push(o);
             continue;
         }
@@ -312,12 +315,13 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier)));
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p)));
             active_chests.push(c);
             continue;
         }
         let door = Door::new(&p.name, movements, d.current, base);
-        let DrawnDoor { body, frames, .. } = spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier));
+        let DrawnDoor { body, frames, .. } =
+            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p));
         let active = ActiveDoor {
             door,
             script: d.script.clone(),

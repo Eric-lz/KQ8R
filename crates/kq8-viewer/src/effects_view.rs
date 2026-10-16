@@ -9,6 +9,13 @@
 //! - Each particle is drawn as its emitter's `shape` (frame 0) at its
 //!   position and turn, only while it is on screen (visible and age not 0),
 //!   blended between updates except right after a restart.
+//! - Haze (M1 step 6g, object-lighting.md rule 30): all particles of one
+//!   emitter share one haze, measured from the emitter's location (`loc`,
+//!   which moves for following emitters); each emitter has its own
+//!   material copies for that.
+//! - Draw distance (M1 step 6h, rules 35-37): an emitter is near / far /
+//!   off by its distance from Connor minus 250; when its group bits have
+//!   no draw bit, none of its particles is shown.
 //!
 //! Everything is logged to `kq8-artifacts/logs/effects.log`: each emitter's
 //! settings and, for `stream1` and `leaf1` (the note's "How to check"),
@@ -26,7 +33,7 @@ use crate::game_camera::GameCam;
 use crate::load::EmitterAssets;
 use crate::log::Log;
 use crate::terrain_view::bevy_transform_from;
-use crate::object_light::{see_through, ObjectMaterial};
+use crate::object_light::{for_object, ObjectMaterial};
 use crate::Shared;
 
 /// Seed of the particles' random choices: the same every run, so two runs
@@ -75,6 +82,14 @@ struct DrawnEmitter {
     entities: Vec<Entity>,
     /// Positions before the last update, for blending.
     previous: Vec<[f32; 3]>,
+    /// The emitter's own material copies, and the location their haze was
+    /// last measured from (rule 30).
+    materials: Vec<Handle<ObjectMaterial>>,
+    haze_from: Option<[f32; 3]>,
+    /// `tooFar`, its three group masks, and its state now (rules 36, 37).
+    too_far: f32,
+    groups: [u32; 3],
+    activity: Option<kq8_data::objects::Activity>,
 }
 
 /// A catcher with the index of its emitter, and how many particles it has
@@ -185,11 +200,16 @@ pub fn spawn_emitters(
         // The emitter's translucency on every particle (likely, not traced:
         // emitters.md rule 9, open question 2).
         let opacity = if a.translucency >= 256.0 { 1.0 } else { (a.translucency / 255.0).clamp(0.0, 1.0) };
+        // Its own material copies (rule 30: haze from the emitter's
+        // location), with its b_hazeSolid and hazeMultiplier.
         let parts: Vec<(Handle<Mesh>, Handle<ObjectMaterial>)> = built[shape]
             .iter()
             .map(|(mesh, material)| {
-                let material = see_through(materials, material, opacity);
-                (mesh.clone(), material)
+                let material = match materials.get(material).cloned() {
+                    Some(m) => materials.add(m),
+                    None => material.clone(),
+                };
+                (mesh.clone(), for_object(materials, &material, opacity, a.haze.0, a.haze.1))
             })
             .collect();
         let mut entities = Vec::with_capacity(emitter.particles.len());
@@ -205,7 +225,8 @@ pub fn spawn_emitters(
         }
         particles += emitter.particles.len();
         let previous = emitter.particles.iter().map(|p| p.position).collect();
-        drawn.push(DrawnEmitter { emitter, target, entities, previous });
+        let materials = parts.iter().map(|(_, m)| m.clone()).collect();
+        drawn.push(DrawnEmitter { emitter, target, entities, previous, materials, haze_from: None, too_far: a.too_far, groups: a.groups, activity: None });
     }
     // Particle catchers: names looked up once, after the start-up scripts
     // (rule 2); any case. Nothing found: the catcher does nothing.
@@ -370,18 +391,51 @@ pub fn effects_step(sim: Option<ResMut<EffectsSim>>, shared: Res<Shared>, connor
 }
 
 /// Each particle where it is, blended between the last two updates (not
-/// across a restart), shown only while on screen.
+/// across a restart), shown only while on screen. The emitter's materials
+/// measure the haze from its location (rule 30) whenever it has moved.
 pub fn effects_draw(
-    sim: Option<Res<EffectsSim>>,
+    sim: Option<ResMut<EffectsSim>>,
     fixed: Res<Time<Fixed>>,
     mut query: Query<(&mut Transform, &mut Visibility)>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
+    point: Res<crate::draw_distance::ActivePoint>,
+    shared: Res<Shared>,
 ) {
-    let Some(sim) = sim else { return };
+    use kq8_data::objects::{Activity, DRAW_BITS, EMITTER_RADIUS};
+    let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
+    for d in &mut sim.emitters {
+        // Rules 35-37: radius 250 round the emitter's location.
+        let activity = point.at.map(|at| {
+            let l = d.emitter.loc;
+            let distance = ((0..3).map(|k| (at[k] - l[k]).powi(2)).sum::<f32>()).sqrt() - EMITTER_RADIUS;
+            (Activity::of(distance, point.limit, d.too_far), distance + EMITTER_RADIUS)
+        });
+        if activity.map(|a| a.0) != d.activity {
+            if let (Some(before), Some((now, distance))) = (d.activity, activity) {
+                shared.log.lock().unwrap().detail(format!(
+                    "draw distance: emitter [{}] {before:?} -> {now:?}; location {distance:.0} from Connor",
+                    d.emitter.name
+                ));
+            }
+            d.activity = activity.map(|a| a.0);
+        }
+        if d.haze_from != Some(d.emitter.loc) {
+            d.haze_from = Some(d.emitter.loc);
+            let at = Vec3::from(crate::to_bevy(d.emitter.loc, [0.0; 3]));
+            for m in &d.materials {
+                if let Some(mut m) = materials.get_mut(m) {
+                    m.settings.haze_from = at.extend(1.0);
+                }
+            }
+        }
+    }
     for d in &sim.emitters {
+        let [always, near, far] = d.groups;
+        let emitter_drawn = d.activity.is_none_or(|a| a.groups(always, near, far) & DRAW_BITS != 0);
         for ((p, e), before) in d.emitter.particles.iter().zip(&d.entities).zip(&d.previous) {
             let Ok((mut t, mut v)) = query.get_mut(*e) else { continue };
-            let shown = if p.drawn() { Visibility::Inherited } else { Visibility::Hidden };
+            let shown = if p.drawn() && emitter_drawn { Visibility::Inherited } else { Visibility::Hidden };
             if *v != shown {
                 *v = shown;
             }

@@ -34,12 +34,18 @@ note; checked by eye by the user (2026-10-15).
 Haze (2026-10-15): objects (and Connor, items, leaves) fade into the
 world's haze colour with distance from the camera and are left out past
 the haze end (Daventry 18,000 to 22,950 units, as the behaviour note
-says), unless their file sets `b_hazeSolid`. The ground and building
-walls fade into the same fog point by point, and the background is the
-fog colour (a stand-in from the user's check, asked as Q68). No object is
-drawn farther than the world's `visibleDistance` from the camera (Dead
-City 12,000), so Dead City's torch flames no longer show through the fog
-(stand-in, Q69). Checked in the logs and by eye by the user (2026-10-15).
+says), unless their file sets `b_hazeSolid`. Checked in the logs and by
+eye by the user (2026-10-15).
+Haze as the original does it (2026-10-16, behaviour note answers to Q68
+and Q69): the haze colour is the world palette's colour nearest to the
+script's, the background is the palette colour `newSky` names (Daventry:
+the same dark blue); the ground fades per corner up to 99% at
+`visibleDistance` and ends there; building walls fade per surface and
+drop out at 99% (except buildings marked `b_hazeSolid`, like Daventry's
+tomb); falling leaves fade together per emitter; objects switch off when
+they are `visibleDistance` from **Connor** (Dead City's flames at about
+12,100, checked in the log). Checked by eye by the user (2026-10-16):
+matches the original.
 
 ## Connor
 

@@ -11,7 +11,8 @@
 // texture is multiplied by the light, no doubling (rule 9).
 //
 // Haze (M1 step 6, rules 19-23): one amount per object from the camera's
-// distance to the object's position (the drawn part's origin), then the
+// distance to the object's position (the drawn part's origin; particles:
+// their emitter's location, rule 30), then the
 // material's halving, "left out at full haze" unless solid, the object's
 // multiplier, and a blend towards the haze colour (solid) or a fade
 // (see-through).
@@ -52,8 +53,9 @@ struct Settings {
     haze_multiplier: f32,
     // Game units per Bevy unit.
     game_units: f32,
-    // visibleDistance: not drawn beyond it (STAND-IN, Q69).
-    visible_distance: f32,
+    // Particles (rule 30): w = 1: the haze is measured from xyz (their
+    // emitter's location, Bevy world space), not from the part's position.
+    haze_from: vec4<f32>,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
@@ -67,8 +69,6 @@ struct LitVertex {
     @location(1) light: vec3<f32>,
     // The object's haze before the material's halving (rule 19).
     @location(2) @interpolate(flat) haze: f32,
-    // 1 if the object is farther than visibleDistance (STAND-IN, Q69).
-    @location(3) @interpolate(flat) beyond_view: u32,
 };
 
 // Rules 4, 5: ambient + suns, capped to 0..1 per channel.
@@ -105,8 +105,10 @@ fn vertex(vertex_in: Vertex) -> LitVertex {
     }
 
     // Rule 19: distance from the camera to the object's position, in game
-    // units; 0.01 closer than the start, capped at 1.
-    let distance = length(world_from_local[3].xyz - view.world_position) * settings.game_units;
+    // units; 0.01 closer than the start, capped at 1. Particles: from their
+    // emitter's location (rule 30).
+    let at = select(world_from_local[3].xyz, settings.haze_from.xyz, settings.haze_from.w > 0.5);
+    let distance = length(at - view.world_position) * settings.game_units;
     var haze = 0.01;
     if distance >= settings.haze_start {
         haze = min((distance - settings.haze_start) / max(settings.haze_end - settings.haze_start, 0.001), 1.0);
@@ -117,7 +119,6 @@ fn vertex(vertex_in: Vertex) -> LitVertex {
     out.uv = v.uv;
     out.light = light;
     out.haze = haze;
-    out.beyond_view = u32(distance > settings.visible_distance);
     return out;
 }
 
@@ -126,6 +127,19 @@ fn screen_to_linear(c: vec3<f32>) -> vec3<f32> {
     let low = c / 12.92;
     let high = pow((c + 0.055) / 1.055, vec3<f32>(2.4));
     return select(high, low, c <= vec3<f32>(0.04045));
+}
+
+// And back: Bevy's linear colour to a screen colour (0..1).
+fn linear_to_screen(c: vec3<f32>) -> vec3<f32> {
+    let low = c * 12.92;
+    let high = 1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055;
+    return select(high, low, c <= vec3<f32>(0.0031308));
+}
+
+// Rule 23: the card blends the final colour towards the haze colour by h,
+// on screen colours (gamma 1.0). `lit` is linear, `haze` a screen colour.
+fn haze_blend(lit: vec3<f32>, haze: vec3<f32>, h: f32) -> vec3<f32> {
+    return screen_to_linear(mix(linear_to_screen(lit), haze, h));
 }
 
 @fragment
@@ -139,11 +153,6 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
     // it multiplies Bevy's linear colour.
     var lit = vec4<f32>(colour.rgb * screen_to_linear(in.light), colour.a);
     if settings.haze_on == 1u {
-        // STAND-IN (Q69, the user's check in Dead City): nothing is drawn
-        // beyond visibleDistance, whatever its haze.
-        if in.beyond_view == 1u {
-            discard;
-        }
         var h = in.haze;
         if settings.haze_halved == 1u {
             h = h * 0.5; // rule 20
@@ -158,10 +167,8 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
                 lit.a = lit.a * max(1.2 - h, 0.0);
             }
         } else {
-            // STAND-IN (rule 23, "a plain blend is assumed"): blended
-            // towards the haze colour as Bevy's fog blends the ground (on
-            // linear colours; M1 6b), so objects and ground match.
-            lit = vec4<f32>(mix(lit.rgb, screen_to_linear(settings.haze_colour.rgb), h), lit.a);
+            // Rule 23: plain blend on screen colours (M1 6d).
+            lit = vec4<f32>(haze_blend(lit.rgb, settings.haze_colour.rgb, h), lit.a);
         }
     }
     return lit;

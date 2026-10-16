@@ -72,6 +72,10 @@ pub struct Model {
     /// Buildings only: the light maps of all surfaces in one picture (M1
     /// 5c, `building_light`); `None` for models.
     pub light_atlas: Option<crate::building_light::LightAtlas>,
+    /// Buildings only: each surface's corners in model space (game units),
+    /// for the walls' haze (M1 6f, object-lighting.md rule 29); empty for
+    /// models.
+    pub surfaces: Vec<Vec<[f32; 3]>>,
 }
 
 pub struct Group {
@@ -208,7 +212,7 @@ pub fn load_model(
         ));
         groups.push(Group { material: index, triangles, look, shading, light_uvs: Vec::new() });
     }
-    Ok(Model { label, groups, min, max, frame_note, light_atlas: None })
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new() })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -381,28 +385,57 @@ pub fn load_animation(
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
 /// `visibleDistance` from `TERRAIN.KQ` (no terrain or missing: 20,000 and
 /// 25,500, the note's defaults) and `resetHazeColor` from `world.cs`
-/// (missing: black, STAND-IN).
-pub fn load_haze(world: &World, settings: Option<&kq8_data::TerrainSettings>, log: &mut Log) -> kq8_data::haze::Haze {
-    use kq8_data::haze::{reset_haze_color, Haze, NO_TERRAIN_HAZE_DISTANCE, NO_TERRAIN_VISIBLE_DISTANCE};
+/// (missing: black, STAND-IN), snapped to the nearest colour of the
+/// palette `world.cs` loads (`KQWorld::loadingPalette`, else
+/// `<world>.ppl`; rule 23); the background is that palette's entry
+/// `newSky n` (rule 31; missing: black, STAND-IN).
+pub fn load_haze(game: &GameDir, world: &World, settings: Option<&kq8_data::TerrainSettings>, log: &mut Log) -> kq8_data::haze::Haze {
+    use kq8_data::haze::{new_sky, palette_haze_colour, reset_haze_color, Haze, NO_TERRAIN_HAZE_DISTANCE, NO_TERRAIN_VISIBLE_DISTANCE};
     let start = settings.and_then(|s| s.haze_distance).unwrap_or(NO_TERRAIN_HAZE_DISTANCE);
     let visible = settings.and_then(|s| s.visible_distance).unwrap_or(NO_TERRAIN_VISIBLE_DISTANCE);
-    let colour = match world.load("world.cs") {
-        Some(Ok((label, bytes))) => match reset_haze_color(&bytes) {
-            Some(c) => {
-                log.detail(format!("haze colour from {label}"));
-                c
-            }
-            None => {
-                log.summary(format!("haze: no resetHazeColor in {label}; black"));
-                [0.0; 3]
-            }
-        },
+    let script = match world.load("world.cs") {
+        Some(Ok((label, bytes))) => {
+            log.detail(format!("haze colour and background from {label}"));
+            Some(bytes)
+        }
         _ => {
-            log.summary(format!("haze: no world.cs in {}; colour black", world.name));
-            [0.0; 3]
+            log.summary(format!("haze: no world.cs in {}; haze colour and background black", world.name));
+            None
         }
     };
-    let haze = Haze::new(start, visible, colour);
+    let palette_name = world_palette_name(world, "loadingPalette").unwrap_or_else(|| format!("{}.ppl", world.name));
+    let palette = match load_palette(world, Some(&palette_name), game, log) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            log.summary(format!("haze: palette {palette_name}: {e}; haze colour and background black"));
+            None
+        }
+    };
+    let screen = |c: [u8; 3]| c.map(|v| v as f32 / 255.0);
+    let mut colour = [0.0; 3];
+    match (script.as_deref().and_then(reset_haze_color), &palette) {
+        (Some(want), Some(p)) => {
+            let i = palette_haze_colour(p, want);
+            colour = screen(p[i]);
+            log.summary(format!(
+                "haze colour: resetHazeColor {} {} {} -> {palette_name} entry {i} = ({}, {}, {}) (nearest of entries 10-244)",
+                want[0], want[1], want[2], p[i][0], p[i][1], p[i][2]
+            ));
+        }
+        (None, _) => log.summary("haze colour: no resetHazeColor line; black"),
+        _ => {}
+    }
+    let mut background = [0.0; 3];
+    match (script.as_deref().and_then(new_sky), &palette) {
+        (Some(n), Some(p)) => {
+            background = screen(p[n]);
+            log.summary(format!("background: newSky {n} -> {palette_name} entry {n} = ({}, {}, {})", p[n][0], p[n][1], p[n][2]));
+        }
+        (None, _) => log.summary("background: no newSky line; black"),
+        _ => {}
+    }
+    let mut haze = Haze::new(start, visible, colour);
+    haze.background = background;
     log.summary(format!(
         "haze: hazeDistance {start:.0}, visibleDistance {visible:.0} -> haze full at {:.0}{}",
         haze.end,
@@ -1074,6 +1107,13 @@ pub struct EmitterAssets {
     pub settings: kq8_data::effects::EmitterSettings,
     /// `translucency` (256 = solid), read like any object's.
     pub translucency: f32,
+    /// `b_hazeSolid` and `hazeMultiplier`, read like any object's
+    /// (object-lighting.md rule 30).
+    pub haze: (bool, f32),
+    /// `tooFar` and groupsAlways / groupsActive3D / groupsActive3DFar,
+    /// for the draw distance (rules 36, 37).
+    pub too_far: f32,
+    pub groups: [u32; 3],
     /// The particle model: index into `Objects::shapes`.
     pub shape: Option<usize>,
     /// Floor and surface heights under the emitter, for the log.
@@ -2256,6 +2296,9 @@ impl Placer<'_> {
             position: p.position,
             settings,
             translucency: p.translucency,
+            haze: (p.haze_solid, p.haze_multiplier),
+            too_far: p.too_far,
+            groups: [p.groups_always, p.groups_near, p.groups_far],
             shape,
             ground: [kq8_data::terrain::Level::Floor, kq8_data::terrain::Level::Surface]
                 .map(|level| self.terrain.ground_at(level, p.position[0], p.position[1]).map(|g| g.height)),
@@ -2916,6 +2959,7 @@ pub fn load_building(
         max: b.bounds_max,
         frame_note: "building".into(),
         light_atlas: Some(atlas),
+        surfaces: (0..b.surfaces.len()).map(|i| b.surface_corners(i).map(|c| c.into_iter().map(|(p, _)| p).collect()).unwrap_or_default()).collect(),
     })
 }
 

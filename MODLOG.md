@@ -3,6 +3,69 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 User's check of M1 6d–6h
+
+**Changed:** `STATUS.md`, `FEATURES.md`, `DESIGN.md`: 6d–6h marked as checked by eye. No code.
+**Why:** The user compared the viewer with the original.
+**Tested how:** By eye, by the user (Daventry and Dead City).
+**Result:** "Everything looks correct just as the original."
+**Still broken / not tested:** Q70 and the stand-ins listed under 6h; point lights.
+**Next:** Session A: Q70 and the open points in `object-lighting.md`.
+
+## 2026-10-16 M1 step 6h: objects near / far / off by distance from Connor
+
+**Changed:** `kq8-data/src/objects.rs`: `tooFar`, `groupsActive3D`, `groupsActive3DFar`, `shape_named` read; `Activity` (near / far / off), `shape_ball`, `DRAW_BITS`; `drawn()` now takes any of the four draw bits (was 0x40 only); unit test `near_far_off`. New `kq8-viewer/src/draw_distance.rs`: every frame each object (placed objects, buildings, doors, chests, scripted and animated objects, items) is near / far / off by its ball's distance from Connor minus the radius; an object whose group bits then have no draw bit goes on a drawing layer the camera doesn't show (Bevy's `RenderLayers`, passed to its children). Emitters the same in `effects_view` (radius 250). Logs every change of state, objects that are near/far but not drawn, and once a second the counts, the nearest object that is off and the farthest that isn't. The 6c stand-in (nothing beyond `visibleDistance` from the camera) is removed.
+**Why:** Q69 answered (`object-lighting.md` rules 34–40).
+**Tested how:** `cargo test` (core 181, data 88, viewer 5, all pass), clippy clean. Dead City: Connor placed with `--at X,172122,0` east of `flame.05` (118533, 172122, 4881); walked towards it with `--hold 1,0,0,90`. Daventry from the start. `--haze off`. `viewer.log`.
+**Result:** `flame.05` (no shape name → radius 100) is off with Connor at 12,169 and drawn at about 12,070; walking in: "Off -> Far at 12,098", "Far -> Near at 10,054" (ball edge 9,954, under 0.83 × 12,000 = 9,960), as rules 36 and 38 say. Hidden meshes drop as objects come back (layer removal works). Daventry from Connor's start: 368 objects, 32 near, 12 far, 324 off; 8 interior props (`plates`, `easel`, ...) are far but not drawn because their files set `groupsActive3DFar=0`. `--haze off`: 0 not drawn. Not checked by eye.
+**Still broken / not tested:** Stand-ins: the ball of objects with a box collider (asked as Q70), items use default `tooFar` and group masks. Not done: the collider switch (bit 0x8), `makeActive`, `setActiveCamera`. The user's ~11,000 for the flames vs 12,100 (open question 9) is for the user to compare.
+**Next:** You: the checks below; then the clicking work (Q60–Q64) or the Q54 change.
+
+## 2026-10-16 M1 step 6g: one haze per emitter
+
+**Changed:** `kq8-viewer`: the object material has a "haze from here" point (`haze_from`); each emitter gets its own material copies (with its `b_hazeSolid` / `hazeMultiplier`, now read for emitters too) whose point is the emitter's location, updated whenever it moves (following emitters). Before, each particle was hazed at its own position (stand-in).
+**Why:** Q68 (c) answered (`object-lighting.md` rule 30).
+**Tested how:** `kq8-viewer --world Daventry|IceWorld --frames 90`; console (no shader errors), `viewer.log`.
+**Result:** Runs: Daventry 14 emitters, Ice World 2 (the snow follows Connor in the data, so its haze is measured 4,000 above him; the note's "follows the camera" example doesn't apply to Ice World). No log line shows the haze per emitter. Not checked by eye.
+**Still broken / not tested:** Nothing measures the result; checking needs the eye (leaves far away should fade together, not one by one).
+**Next:** 6h, near / far / off by distance from Connor.
+
+## 2026-10-16 M1 step 6f: building walls hazed per surface
+
+**Changed:** `kq8-viewer`: building models keep each surface's corners (`Model::surfaces`); `building_light.rs` puts them in one list on the graphics card per building (`WallCorners`, a storage buffer) and gives every wall corner its surface's place in it (`ATTRIBUTE_WALL_SURFACE`, read through `BuildingMaterial::specialize`). `building_light.wesl`: one haze per surface from its nearest corner to the camera, the objects' numbers; at 0.99 or more left out unless the building's `b_hazeSolid` (`for_building` gives those buildings their own material copies). The 6b per-point fog on walls is gone. Log every second: wall surfaces left out / kept at 0.99. Unit test `wall_haze`.
+**Why:** Q68 answered (`object-lighting.md` rule 29).
+**Tested how:** `cargo test -p kq8-viewer` (5 pass); `kq8-viewer --world Daventry|DeadCity --frames 120`, console checked for shader errors (none), `viewer.log`.
+**Result:** Daventry from the start: of 19,660 wall surfaces 16,824 left out, 1,533 kept at 0.99 (`b_hazeSolid`: the tomb). Dead City from Connor's start: all 10,999 left out (every building is past ≈ 10,190 from the camera there; not checked by eye). Not checked by eye.
+**Still broken / not tested:** Point lights on walls and their haze × 0.04 (rule 16) not done. The GPU and the log use the same rule but the GPU's result can't be read back; only the eye can confirm it.
+**Next:** 6g, particles.
+
+## 2026-10-16 M1 step 6e: the ground's own haze, ends at `visibleDistance`
+
+**Changed:** New `kq8-viewer/src/ground_haze.rs` + `ground_haze.wesl`: `GroundMaterial` (texture × the light map's vertex colours, as before) replaces Bevy's unlit standard material on the surface, the floor view (U) and the flowing squares. Per corner haze 0.01 → 0.99 at `visibleDistance` (`Haze::ground_amount`, unit test `ground`), plain screen-colour blend; nothing drawn past `visibleDistance` from the camera. Bevy's distance fog removed (`sync_fog` → `sync_background`). F8 switches the ground's haze and edge.
+**Why:** Q68 answered (`object-lighting.md` rules 27, 28): the ground is hazed per corner up to `visibleDistance` (not the objects' 0.85 ×), never fully, and is not drawn beyond it.
+**Tested how:** unit test `ground` (first run only in 6h: it failed on my own wrong expectation at exactly `visibleDistance`, 0.9904 before the 0.99 cap; test fixed, the code was right); `kq8-viewer --world Daventry --frames 120` (console checked for shader errors: none) and `--world DeadCity --frames 60`; `viewer.log`.
+**Result:** Daventry: "starts at 18000, 0.99 at 27000; haze at 22500: 0.500"; 206 ground materials. Dead City: 9,000 → 12,000. Not checked by eye.
+**Still broken / not tested:** The cut where a triangle crosses `visibleDistance` is ours (open question 10). Walls still use the 6b per-point stand-in (6f next).
+**Next:** 6f, walls per surface.
+
+## 2026-10-16 M1 step 6d: haze colour from the palette, background from `newSky`, plain blend
+
+**Changed:** `kq8-data/src/haze.rs`: `resetHazeColor` kept on its 0–255 scale, `palette_haze_colour` (nearest of entries 10–244), `new_sky` (`newSky n` / `newSky $KQWorld::background`), `Haze::background`; 3 unit tests. `kq8-viewer`: `load_haze` snaps the haze colour to the `KQWorld::loadingPalette` palette and reads the background entry; the background (clear colour) is that entry, haze on or off; objects and walls blend towards the haze on screen colours (`haze_blend` in both shaders). Plan for 6d–6h in `docs/DESIGN.md`.
+**Why:** Q68 answered by A (`object-lighting.md` rules 23, 31): the game fogs with the nearest palette colour, the background is palette entry `newSky n`, and the card blends plain screen colours.
+**Tested how:** `cargo test -p kq8-data haze` (6 pass). `kq8-viewer --world <W> --frames 30` for Daventry, DeadCity, IceWorld, Snowexit; read `viewer.log`.
+**Result:** Daventry: haze 4 8 12 → `daventry.ppl` entry 17 = (4, 8, 12); background entry 17, the same colour. Dead City: entry 10 = black, background 10 black. Ice World: 90 100 190 → entry 64 (72, 128, 160), background 65 (72, 136, 160). Snow exit: entry 229 both. Not checked by eye.
+**Still broken / not tested:** The ground still uses Bevy's fog (6e next). Which palette entries count as usable is a stand-in (all of 10–244, open question 8).
+**Next:** 6e, the ground's own haze.
+
+## 2026-10-16 Study (A): `test` / `set` / `echo` results, Q54 answered
+
+**Changed:** `docs/behaviour/doors.md` "Q45" (e): text order for a false `==`, the other text operators, an unknown operator, `set`/`echo`. `QUESTIONS.md`: Q54 answered. `STATUS.md`: Q54 removed. Scratch notes in `re/notes.md` (not committed). No code.
+**Why:** The user asked for Q54.
+**Tested how:** Traced the console's `test`, `set` and `echo` handlers in `Mask.exe` with the Ghidra tools. Data check by grep over every `.cs` file: the operators used after `test`.
+**Result:** A false text `==` leaves `-1` when the left word comes first in byte order (`test abc == abd` → −1) and `1` otherwise; a false text `<`, `<=`, `>`, `>=`, `!=` always leaves `1`. `set` and `echo` leave `0`. An unknown operator prints an error and leaves `0` (true), but no script uses one (the odd hits are all in comments). Scripts use `==` 4,748 times, `!=` 141, `>` 18, `<` 9, `>=`, `<=`, `&&`, `||` once each.
+**Still broken / not tested:** Nothing checked in the running game (only matters to a script that reads `$Console::Return` as a number after a text test; none found).
+**Next:** Session B: the one change is a false text `==` leaving `-1` when the left word comes first; the rest of B's stand-ins already match.
+
 ## 2026-10-16 Study (A): haze on ground, walls, particles; draw distance; Q68, Q69 answered
 
 **Changed:** `docs/behaviour/object-lighting.md`: rules 16 (walls get light map + point lights, never sun/ambient), 22 (`hazeMulitplier` not read), 23 (the card's blend, haze colour snapped to the palette), new rules 27–33 (ground, walls, particles, background) and 34–40 (near / far / off by distance from Connor), numbers, data, do-not-reproduce, how to check, answers, open questions 8–10. `objects.md` "Hidden objects" rule 3: group bits now traced. `QUESTIONS.md`: Q68, Q69 answered. Scratch notes with addresses in `re/notes.md` (not committed). No code.

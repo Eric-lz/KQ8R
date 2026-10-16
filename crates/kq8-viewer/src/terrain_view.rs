@@ -15,7 +15,8 @@ use kq8_data::terrain::Level;
 use crate::light_view::GroundLight;
 use crate::load::{Ground, Objects};
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
-use crate::{material_for, mesh_from, model_mesh, to_bevy, with_opacity, Shared, UNITS_PER_METRE};
+use crate::ground_haze::{ground_material, tinted, with_opacity, GroundMaterial};
+use crate::{mesh_from, model_mesh, to_bevy, Shared, UNITS_PER_METRE};
 
 /// Which part of the ground a mesh is, for the U key (the floor grid,
 /// water.md): the drawn surface where it equals the floor or lies over a
@@ -24,7 +25,7 @@ use crate::{material_for, mesh_from, model_mesh, to_bevy, with_opacity, Shared, 
 #[derive(Component)]
 pub enum GroundPart {
     SurfaceSame,
-    SurfaceOverFloor { opaque: Handle<StandardMaterial>, see_through: Handle<StandardMaterial> },
+    SurfaceOverFloor { opaque: Handle<GroundMaterial>, see_through: Handle<GroundMaterial> },
     FloorSame,
     FloorDiffers,
 }
@@ -83,14 +84,17 @@ impl Fly {
     }
 }
 
+// A Bevy system gets everything it uses as arguments.
+#[allow(clippy::too_many_arguments)]
 pub fn setup_ground(
     mut commands: Commands,
     mut loaded: ResMut<LoadedGround>,
     shared: Res<Shared>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<GroundMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut light: ResMut<GroundLight>,
+    haze: Res<ObjectLight>,
 ) {
     let ground = loaded.0.take().expect("ground is loaded once");
     let mut log = shared.log.lock().unwrap();
@@ -158,16 +162,12 @@ pub fn setup_ground(
         triangles += group.triangles.len();
         // One texture covers exactly one square, so it must not repeat
         // into the neighbour: clamp at the edges.
-        let material = material_for(group.look, ImageAddressMode::ClampToEdge, &mut images);
-        let tinted = |tint: Color| {
-            let mut m = material.clone();
-            m.base_color = tint;
-            m
-        };
+        let material = ground_material(group.look, ImageAddressMode::ClampToEdge, &haze, &mut images);
+        let tinted = |tint: Color| tinted(&material, tint);
         let opaque = materials.add(material.clone());
         let mut over: Vec<_> = lower.iter().chain(&higher).filter(|(t, _)| !ground.animated.contains(&t.square)).cloned().collect();
         over.sort_by_key(|(t, _)| t.square);
-        let mut spawn = |tris: &[_], floor: bool, handle: Handle<StandardMaterial>, part: GroundPart, shown: bool| {
+        let mut spawn = |tris: &[_], floor: bool, handle: Handle<GroundMaterial>, part: GroundPart, shown: bool| {
             if tris.is_empty() {
                 return;
             }
@@ -239,6 +239,7 @@ pub fn setup_objects(
     mut object_materials: ResMut<Assets<ObjectMaterial>>,
     mut building_materials: ResMut<Assets<crate::building_light::BuildingMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut buffers: ResMut<Assets<bevy::render::storage::ShaderBuffer>>,
     held: Res<crate::door_view::HeldItem>,
     light: Res<ObjectLight>,
 ) {
@@ -263,7 +264,9 @@ pub fn setup_objects(
             (kind.clone(), *slot, if t >= 256.0 { 1.0 } else { (t / 255.0).clamp(0.0, 1.0) })
         })
         .collect();
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut object_materials, &light, &mut images, &mut log);
+    // Every model's bounding ball, for the draw distance (M1 6h, rule 35).
+    let balls = crate::draw_distance::ShapeBalls::new(objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
     // placed object or marker (any case; the last one loaded by that name).
@@ -297,6 +300,8 @@ pub fn setup_objects(
     let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
     // Each model's smooth corner normals, for the light log (M1 5b).
     let mut smooth: Vec<Vec<Vec3>> = Vec::new();
+    // Each building's surface corners (model space), for the haze log (6f).
+    let mut wall_surfaces: Vec<Vec<Vec<[f32; 3]>>> = Vec::new();
     for (_, model) in objects.shapes {
         smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.shading.lighting)).collect());
         let mut parts = Vec::new();
@@ -306,9 +311,11 @@ pub fn setup_objects(
             // A building: walls × its light maps (M1 5c).
             Some(atlas) => {
                 let light_image = images.add(atlas.image());
+                let corners = crate::building_light::WallCorners::new(&model.surfaces);
+                let corner_buffer = buffers.add(corners.buffer());
                 for group in model.groups {
-                    let mesh = crate::building_mesh(&group);
-                    let material = crate::building_light::building_material(group.look, light_image.clone(), &light, &mut images);
+                    let mesh = crate::building_mesh(&group, &corners);
+                    let material = crate::building_light::building_material(group.look, light_image.clone(), corner_buffer.clone(), &light, &mut images);
                     walls.push((meshes.add(mesh), building_materials.add(material)));
                 }
             }
@@ -323,8 +330,9 @@ pub fn setup_objects(
         }
         built.push(parts);
         built_walls.push(walls);
+        wall_surfaces.push(model.surfaces);
     }
-    crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials);
+    crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials, &balls);
     // Emitters (M3 step 3b-1): their particles use the object models.
     // Particle catchers (3b-2) look up their emitter and building.
     let emitters = std::mem::take(&mut objects.emitters);
@@ -342,6 +350,7 @@ pub fn setup_objects(
         &mut object_materials,
         &light,
         &mut images,
+        &balls,
         &mut log,
     );
     let mut worst = 0.0f32;
@@ -358,6 +367,8 @@ pub fn setup_objects(
             let bevy = transform.transform_point(Vec3::from(to_bevy(corner, [0.0; 3])));
             worst = worst.max((game - bevy).length() * UNITS_PER_METRE);
         }
+        // Draw distance (M1 6h): one test per object, on each of its parts.
+        let test = (!*unused).then(|| crate::draw_distance::DistanceTest::new(p, balls.by_index.get(*i).copied()));
         let opacity = p.opacity();
         if opacity < 1.0 {
             see_through += 1;
@@ -372,22 +383,32 @@ pub fn setup_objects(
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
             }
+            if let Some(t) = &test {
+                e.insert(t.clone());
+            }
         }
         for (mesh, material) in &built_walls[*i] {
-            let material = crate::building_light::see_through(&mut building_materials, material, opacity);
+            let material = crate::building_light::for_building(&mut building_materials, material, opacity, p.haze_solid);
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
             }
+            if let Some(t) = &test {
+                e.insert(t.clone());
+            }
         }
     }
-    // The placed objects for the haze log (M1 step 6).
+    // The placed objects and the buildings' wall surfaces (world space,
+    // game units) for the haze log (M1 steps 6, 6f).
+    let drawn = || objects.placed.iter().filter(|(p, _, unused)| !*unused && p.drawn());
     commands.insert_resource(crate::object_light::HazeCheck::new(
-        objects
-            .placed
-            .iter()
-            .filter(|(p, _, unused)| !*unused && p.drawn())
-            .map(|(p, _, _)| (p.name.clone(), p.position, p.haze_solid))
+        drawn().map(|(p, _, _)| (p.name.clone(), p.position, p.haze_solid)).collect(),
+        drawn()
+            .filter(|(_, i, _)| !wall_surfaces[*i].is_empty())
+            .map(|(p, i, _)| {
+                let t = p.transform();
+                (p.haze_solid, wall_surfaces[*i].iter().map(|s| s.iter().map(|&c| t.apply(c)).collect()).collect())
+            })
             .collect(),
     ));
     // The light of the three drawn objects nearest Connor's start (M1 5b,
@@ -543,7 +564,7 @@ pub fn toggle_floor(
     keys: Res<ButtonInput<KeyCode>>,
     shared: Res<Shared>,
     mut view: ResMut<FloorView>,
-    mut parts: Query<(&GroundPart, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>)>,
+    mut parts: Query<(&GroundPart, &mut Visibility, &mut MeshMaterial3d<GroundMaterial>)>,
     mut label: Query<&mut Text, With<FloorLabel>>,
 ) {
     if !keys.just_pressed(KeyCode::KeyU) {

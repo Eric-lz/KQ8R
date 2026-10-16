@@ -93,6 +93,7 @@ pub fn spawn_animated(
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
+    balls: &crate::draw_distance::ShapeBalls,
     main_log: &mut Log,
 ) {
     let mut log = match Log::create("anim") {
@@ -147,6 +148,10 @@ pub fn spawn_animated(
         let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
         if *unused || !p.drawn() {
             body.insert((Visibility::Hidden, ShownWithH));
+        }
+        // Draw distance (M1 6h); unused objects are only shown with H.
+        if !*unused {
+            body.insert(balls.test(p));
         }
         let body = body.id();
         let mut frames = Vec::with_capacity(b.frames.len());

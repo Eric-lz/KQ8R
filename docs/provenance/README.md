@@ -219,14 +219,37 @@ the note's).
 | Haze 1 and not `b_hazeSolid`: not drawn | Note rule 21 | Unit test; log: from Connor's start, 286 of 313 placed objects left out, the nearest at 23,427 (end 22,950) |
 | × `hazeMultiplier` after that test | Note rule 22 | Unit test |
 | Capped at 1 after the multiplier | **Stand-in** (the note doesn't say; a blend can't pass the haze colour) | Unit test |
-| Solid: plain blend towards the haze colour on screen colours | Note rule 23 (the note's assumption, **stand-in**) | Shader |
+| Solid: plain blend towards the haze colour on screen colours | Note rule 23 (traced 2026-10-16, Q68 e; M1 6d) | Shader (`haze_blend`) |
 | See-through: no colour, opacity × (1 below 0.5, else 1.2 − haze) | Note rule 23, `objects.md` rule 1 | Unit test |
-| Haze colour = `resetHazeColor R G B` in `world.cs`, 0–255 | Note rules 18, 23 (0–255 assumed) | Unit test `haze_colour_line`; log: Daventry (4, 8, 12) |
+| Haze colour = `resetHazeColor R G B` in `world.cs`, 0–255, snapped to the nearest colour of the `KQWorld::loadingPalette` palette among entries 10–244 (smallest sum of squared differences) | Note rules 18, 23 (traced, Q68 e). Entries 10–244 all usable and first-on-a-tie: **stand-in** (open question 8) | Unit tests `haze_colour_line`, `nearest_palette_colour`; log: Daventry entry 17 = (4, 8, 12), Ice World entry 64 |
 | Keys `b_hazeSolid`, `hazeMultiplier` | Note rules 21, 22 | Unit test `reads_a_section`; the data's misspelled `hazeMulitplier` (13 Gnome files) not read (Q68 d) |
-| Particles hazed each at its own position | **Stand-in** (not in the note; Q68 c) | — |
-| No object drawn farther than `visibleDistance` from the camera | **Stand-in** from the **user's check** (Dead City's flames vanish at about 11,000 from Connor; by rules 20–23 they never would), Q69 | Unit test `end_rule`; Dead City log: nearest object left out at 10,802 from Connor's start |
+| ~~Particles hazed each at its own position~~ **Replaced (M1 6g)**: all particles of an emitter share one haze, from the emitter's location; the emitter's `b_hazeSolid` / `hazeMultiplier` apply | Note rule 30 (Q68 c) | Viewer runs (Daventry, Ice World); not measurable in the log |
+| ~~No object drawn farther than `visibleDistance` from the camera~~ **Replaced (M1 6h)** by the near / far / off rule below | was a stand-in (Q69) | — |
 | F8 / `--haze` switches it | **Our choice** (user's request) | `--haze off` logged; F8 by key press not tested |
-| Ground and building walls fogged per point (linear, haze start to end, haze colour); background = haze colour; objects blended the same way (linear colours) | **Stand-in** from the **user's check** (2026-10-15: "a very dense and dark fog that hides everything"), Q68 | Log: fog put on the camera in Daventry, Dead City, Ice World; off with `--haze off` |
+| ~~Ground and building walls fogged per point; background = haze colour; linear-colour blend~~ **Replaced (M1 6d–6f)** by the rules below | was a stand-in (Q68) | — |
+
+## Haze on the ground, walls and background; draw distance (M1 steps 6d–6h) — `crates/kq8-data/src/{haze,objects}.rs`, `crates/kq8-viewer/src/{ground_haze.rs,ground_haze.wesl,building_light.rs,building_light.wesl,object_light.rs,object_light.wesl,draw_distance.rs,effects_view,item_view,door_view,anim_view,terrain_view,ground_anim_view,load,main}.rs`
+
+Behaviour note = `docs/behaviour/object-lighting.md` rules 23, 27–40
+(session A's answers to Q68 and Q69, 2026-10-16), and `objects.md`
+"Hidden objects" rule 3.
+
+| Fact | Source | Checked how |
+| --- | --- | --- |
+| Background = palette entry `newSky n` (`newSky $KQWorld::background` → `set KQWorld::background n`), flat, no haze | Note rule 31 | Unit test `sky_line`; log: Daventry entry 17 (4, 8, 12), Dead City 10 (black) |
+| Ground haze per corner: 0.01 below the start, 0.01 + (d − start) ÷ (1.02 × (visible − start)), capped 0.99; start = `hazeDistance`, or 0.6 × `visibleDistance` if that is not beyond it | Note rule 27 | Unit test `ground`; log: Daventry 0.5 at 22,500 |
+| Ground not drawn beyond `visibleDistance` from the camera | Note rule 28 | Shader (`ground_haze.wesl`) |
+| Where a ground triangle crosses `visibleDistance`: corner distances blended across it, every point past the limit left out | **Stand-in** (open question 10: the original's cut was not read) | Shader |
+| Wall haze per surface from its nearest corner, objects' numbers; ≥ 0.99 left out unless `b_hazeSolid` (then 0.99); `0x10000` and `hazeMultiplier` not used | Note rule 29 | Unit test `wall_haze`; log: Daventry start, 16,824 of 19,660 surfaces left out, 1,533 kept (the tomb) |
+| Bevy's own unlit material and distance fog no longer used for the ground | **Our choice** (the ground needs its own haze curve and edge) | Viewer runs, no shader errors |
+| Near / far / off: D = distance from Connor to the ball centre − radius; off at ≥ `visibleDistance`, far beyond `tooFar` (default 0.83) × `visibleDistance` | Note rules 34–36 | Unit test `near_far_off`; Dead City log: `flame.05` off at 12,169, back at 12,098, near at 10,054 |
+| Ball: shape's box middle (turned with the object) and half its diagonal; no `shapeName` in the file: radius 100 at the position; emitters 250 | Note rule 35 and "Do not reproduce" (turn the centre) | Unit test `near_far_off`; log: flame radius 100 |
+| Objects with a box collider use the shape's ball too | **Stand-in**, Q70 | — |
+| Group bits: near = always \| `groupsActive3D` (0x448), far = always \| `groupsActive3DFar` (0x440), off = always; drawn if any of 0x10, 0x40, 0x80, 0x100 | Note rule 37, `objects.md` "Hidden objects" rule 3 | Unit tests `near_far_off`, `hidden_objects_...`; log: 8 Daventry props with `groupsActive3DFar=0` far and not drawn |
+| Items lying around: default `tooFar` and group masks | **Stand-in** (item types' settings not read) | — |
+| Collider switch (0x8), `makeActive`, `setActiveCamera` | Not done (note rules 34, 36, 37) | — |
+| No Connor (fly camera): the camera is the reference point | **Our choice** (viewer only) | Log says "from the camera" |
+| Not drawn = on a drawing layer the camera doesn't show (`RenderLayers`, passed to children) | **Our choice** (how, not what) | Log: hidden meshes drop when objects come back |
 
 ## Object placement — `crates/kq8-data/src/objects.rs`, `crates/kq8-viewer/src/{load,terrain_view}.rs`
 

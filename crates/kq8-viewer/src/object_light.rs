@@ -24,8 +24,10 @@
 //!   to the object's position, in the shader; F8 switches it on and off.
 //!   Objects with their own `b_hazeSolid` / `hazeMultiplier` get their own
 //!   material copy (`for_object`).
-//! - STAND-IN (Q69, the user's check): no object is drawn farther than the
-//!   world's `visibleDistance` from the camera (with the haze on).
+//! - Particles (M1 6g, rule 30): one haze per emitter, from the emitter's
+//!   location (`haze_from`, set by `effects_view`).
+//! - Objects far from Connor are switched off by `draw_distance` (M1 6h,
+//!   rules 34-40), not here.
 //! - Fog over the ground and the background (M1 step 6b, STAND-IN from the
 //!   user's check, Q68): Bevy's distance fog on every 3D camera (linear,
 //!   haze start to end, haze colour), and the clear colour = the haze
@@ -87,8 +89,10 @@ pub struct Settings {
     pub haze_multiplier: f32,
     /// Game units per Bevy unit (distances in the shader are in Bevy's).
     pub game_units: f32,
-    /// `visibleDistance`: not drawn beyond it (STAND-IN, Q69).
-    pub visible_distance: f32,
+    /// Particles (rule 30): xyz = their emitter's location in Bevy's world
+    /// space, w = 1: the haze is measured from there instead of from the
+    /// drawn part's own position (w = 0).
+    pub haze_from: Vec4,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -189,7 +193,7 @@ impl ObjectLight {
             haze_solid: 0,
             haze_multiplier: 1.0,
             game_units: UNITS_PER_METRE,
-            visible_distance: self.haze.visible,
+            haze_from: Vec4::ZERO,
         }
     }
 
@@ -325,7 +329,7 @@ pub fn report_lights(light: Res<ObjectLight>, materials: Res<Assets<ObjectMateri
     ));
     let h = &light.haze;
     log.summary(format!(
-        "haze: {} at start (F8); starts at {:.0}, full at {:.0} game units from the camera, nothing drawn beyond {:.0} (visibleDistance, stand-in Q69); colour ({:.0}, {:.0}, {:.0}) of 255; {} materials halve it, {} solid, {} with a multiplier",
+        "haze: {} at start (F8); starts at {:.0}, full at {:.0} game units from the camera; objects off at {:.0} (visibleDistance) from Connor; colour ({:.0}, {:.0}, {:.0}) of 255; {} materials halve it, {} solid, {} with a multiplier",
         if light.haze_on { "on" } else { "off" },
         h.start,
         h.end,
@@ -382,60 +386,38 @@ pub fn toggle_haze(
 }
 
 /// The placed objects, for the haze log: name, position (game units),
-/// `b_hazeSolid`.
+/// `b_hazeSolid`; and the buildings: `b_hazeSolid` and each wall
+/// surface's corners (world space, game units).
 #[derive(Resource, Default)]
 pub struct HazeCheck {
     objects: Vec<(String, [f32; 3], bool)>,
+    walls: Vec<(bool, Vec<Vec<[f32; 3]>>)>,
     last: Option<Instant>,
 }
 
 impl HazeCheck {
-    pub fn new(objects: Vec<(String, [f32; 3], bool)>) -> Self {
-        HazeCheck { objects, last: None }
+    pub fn new(objects: Vec<(String, [f32; 3], bool)>, walls: Vec<(bool, Vec<Vec<[f32; 3]>>)>) -> Self {
+        HazeCheck { objects, walls, last: None }
     }
 }
 
-/// Keeps every 3D camera's fog and the background in step with the haze
-/// switch (M1 step 6b). Bevy distances are game units / `UNITS_PER_METRE`.
-pub fn sync_fog(
-    mut commands: Commands,
-    light: Res<ObjectLight>,
-    cameras: Query<(Entity, Has<bevy::pbr::DistanceFog>), With<Camera3d>>,
-    mut clear: ResMut<ClearColor>,
-    mut normal_clear: Local<Option<Color>>,
-    shared: Res<Shared>,
-) {
-    let normal = *normal_clear.get_or_insert(clear.0);
-    let haze = Color::srgb(light.haze.colour[0], light.haze.colour[1], light.haze.colour[2]);
-    let want_clear = if light.haze_on { haze } else { normal };
+/// The background is the world's `newSky` palette colour, with or without
+/// the haze (rule 31, M1 6d). Bevy's distance fog is no longer used: the
+/// ground has its own haze (`ground_haze`, M1 6e).
+pub fn sync_background(light: Res<ObjectLight>, mut clear: ResMut<ClearColor>, shared: Res<Shared>) {
+    let [r, g, b] = light.haze.background;
+    let want_clear = Color::srgb(r, g, b);
     if clear.0 != want_clear {
         clear.0 = want_clear;
-    }
-    for (camera, has_fog) in &cameras {
-        if light.haze_on && !has_fog {
-            commands.entity(camera).insert(bevy::pbr::DistanceFog {
-                color: haze,
-                falloff: bevy::pbr::FogFalloff::Linear {
-                    start: light.haze.start / UNITS_PER_METRE,
-                    end: light.haze.end / UNITS_PER_METRE,
-                },
-                ..default()
-            });
-            shared.log.lock().unwrap().summary(format!(
-                "fog on camera {camera}: linear {:.0} to {:.0} game units, background = haze colour",
-                light.haze.start, light.haze.end
-            ));
-        } else if !light.haze_on && has_fog {
-            commands.entity(camera).remove::<bevy::pbr::DistanceFog>();
-            shared.log.lock().unwrap().summary(format!("fog off camera {camera}"));
-        }
+        shared.log.lock().unwrap().summary(format!("background colour ({:.0}, {:.0}, {:.0}) of 255", r * 255.0, g * 255.0, b * 255.0));
     }
 }
 
 /// Every second (`viewer.log`, detail): how many placed objects are at
 /// full haze from the camera (left out unless `b_hazeSolid`), and the
 /// nearest such distance (the note's "How to check": 22,950 in Daventry).
-/// Material halving (0x10000) is not counted here.
+/// Material halving (0x10000) is not counted here. Also how many wall
+/// surfaces are left out by the haze (rule 29, M1 6f).
 pub fn report_haze(
     mut check: ResMut<HazeCheck>,
     light: Res<ObjectLight>,
@@ -453,7 +435,7 @@ pub fn report_haze(
     let (mut gone, mut nearest_gone, mut fading) = (0, f32::MAX, 0);
     for (_, p, solid) in &check.objects {
         let d = ((p[0] - cam_game[0]).powi(2) + (p[1] - cam_game[1]).powi(2) + (p[2] - cam_game[2]).powi(2)).sqrt();
-        let hazed = if light.haze.beyond_view(d) { Hazed::Hidden } else { kq8_data::haze::hazed(light.haze.amount(d), false, *solid, 1.0, false) };
+        let hazed = kq8_data::haze::hazed(light.haze.amount(d), false, *solid, 1.0, false);
         match hazed {
             Hazed::Hidden => {
                 gone += 1;
@@ -463,8 +445,19 @@ pub fn report_haze(
             _ => {}
         }
     }
+    let (mut surfaces, mut walls_gone, mut walls_solid) = (0, 0, 0);
+    for (solid, walls) in &check.walls {
+        for corners in walls {
+            surfaces += 1;
+            match crate::building_light::surface_haze(&light.haze, corners, cam_game, *solid) {
+                None => walls_gone += 1,
+                Some(h) if h >= crate::building_light::WALL_MAX_HAZE => walls_solid += 1,
+                Some(_) => {}
+            }
+        }
+    }
     shared.log.lock().unwrap().detail(format!(
-        "haze {}: camera ({:.0}, {:.0}, {:.0}); of {} placed objects {fading} fading, {gone} at full haze (left out){}",
+        "haze {}: camera ({:.0}, {:.0}, {:.0}); of {} placed objects {fading} fading, {gone} at full haze (left out){}; of {surfaces} wall surfaces {walls_gone} left out, {walls_solid} kept at 0.99 (b_hazeSolid)",
         if light.haze_on { "on" } else { "off" },
         cam_game[0],
         cam_game[1],

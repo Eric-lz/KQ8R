@@ -40,8 +40,10 @@ mod anim_view;
 mod building_light;
 mod connor_view;
 mod door_view;
+mod draw_distance;
 mod effects_view;
 mod game_camera;
+mod ground_haze;
 mod ground_anim_view;
 mod item_view;
 mod light_view;
@@ -56,14 +58,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use bevy::asset::RenderAssetUsages;
-use bevy::image::ImageAddressMode;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
 use bevy::render::render_resource::PrimitiveTopology;
 use kq8_data::shape::Triangle;
 use kq8_data::{GameDir, Lighting};
 
-use load::{Look, Model, World};
+use load::{Model, World};
 use log::Log;
 
 /// Game units per viewer unit. Models are a few hundred game units
@@ -274,7 +275,7 @@ fn main() -> ExitCode {
             let scene = match &args.model {
                 None => {
                     let mut ground = load::load_ground(&game, &world, &mut log)?;
-                    haze = Some(load::load_haze(&world, Some(&ground.terrain.settings), &mut log));
+                    haze = Some(load::load_haze(&game, &world, Some(&ground.terrain.settings), &mut log));
                     let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
                     let animators = std::mem::take(&mut objects.animators);
                     let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
@@ -282,7 +283,7 @@ fn main() -> ExitCode {
                 }
                 Some(name) => Scene::Model(load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log)?),
             };
-            let haze = haze.unwrap_or_else(|| load::load_haze(&world, None, &mut log));
+            let haze = haze.unwrap_or_else(|| load::load_haze(&game, &world, None, &mut log));
             Ok((scene, lights, haze))
         });
     let (scene, lights, haze) = match loaded {
@@ -310,6 +311,8 @@ fn main() -> ExitCode {
     .insert_resource(object_light::ObjectLight::new(lights, args.light, haze, args.haze));
     object_light::add(&mut app);
     building_light::add(&mut app);
+    ground_haze::add(&mut app);
+    draw_distance::add(&mut app);
     match scene {
         Scene::Model(model) => {
             let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
@@ -344,7 +347,7 @@ fn main() -> ExitCode {
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights).chain())
+                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).
                 .add_systems(
@@ -354,7 +357,7 @@ fn main() -> ExitCode {
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
-                .add_systems(Update, (object_light::toggle_haze, object_light::sync_fog, object_light::report_haze).chain());
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity).chain().after(game_camera::camera_draw));
         }
     }
     app.run();
@@ -468,9 +471,11 @@ fn model_mesh(triangles: &[Triangle], lighting: Lighting, centre: [f32; 3]) -> M
 /// A building's mesh for `building_light::BuildingMaterial` (M1 step 5c):
 /// `model_mesh` plus each corner's place in the building's light picture,
 /// in the same corner order.
-fn building_mesh(group: &load::Group) -> Mesh {
+fn building_mesh(group: &load::Group, corners: &building_light::WallCorners) -> Mesh {
     let light_uvs: Vec<[f32; 2]> = group.light_uvs.iter().flat_map(|uv| [0, 2, 1].map(|k| uv[k])).collect();
-    model_mesh(&group.triangles, Lighting::None, [0.0; 3]).with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, light_uvs)
+    model_mesh(&group.triangles, Lighting::None, [0.0; 3])
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, light_uvs)
+        .with_inserted_attribute(building_light::ATTRIBUTE_WALL_SURFACE, corners.attribute(&group.triangles))
 }
 
 /// A triangle list (corners already in Bevy's counter-clockwise order).
@@ -480,32 +485,6 @@ fn mesh_from(positions: Vec<[f32; 3]>, uvs: Vec<[f32; 2]>) -> Mesh {
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.compute_flat_normals();
     mesh
-}
-
-/// Unlit material for a texture, colour or missing material (magenta).
-/// Bevy's default: counter-clockwise is the front, back faces hidden.
-/// Material flag 0x10000 is fog, not transparency
-/// (models-and-textures.md "Material flags", corrected), so it is ignored
-/// until haze is drawn. See-through objects: `with_opacity`.
-fn material_for(look: Look, address: ImageAddressMode, images: &mut Assets<Image>) -> StandardMaterial {
-    let base = StandardMaterial { unlit: true, ..default() };
-    match look {
-        Look::Texture { width, height, rgba, .. } => {
-            let image = object_light::texture_image(width, height, rgba, address);
-            StandardMaterial { base_color_texture: Some(images.add(image)), ..base }
-        }
-        Look::Color([r, g, b]) => StandardMaterial { base_color: Color::srgb_u8(r, g, b), ..base },
-        Look::Missing(_) => StandardMaterial { base_color: Color::srgb(1.0, 0.0, 1.0), ..base },
-    }
-}
-
-/// A copy of `material` drawn at `opacity` (0..1): an object's
-/// `translucency` (objects.md "See-through objects", Q14).
-fn with_opacity(material: &StandardMaterial, opacity: f32) -> StandardMaterial {
-    let mut m = material.clone();
-    m.base_color = m.base_color.with_alpha(m.base_color.alpha() * opacity);
-    m.alpha_mode = AlphaMode::Blend;
-    m
 }
 
 fn orbit_input(
