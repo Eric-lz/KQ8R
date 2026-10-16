@@ -177,6 +177,10 @@ objects don't stop it, as in the original. Checked in the logs
   screen. x1 is the default because it matches the original by eye
   (user, 2026-10-14, ground).
 - **F8:** haze (distance fog) on or off; shown on screen.
+- **Graphics API** (`--renderer`): draw with Vulkan or DirectX 12 instead
+  of letting the graphics library choose; `viewer.log` says which one
+  ran. Checked by the user 2026-10-16 on Windows with one NVIDIA card;
+  not tested on Linux or other graphics cards. OpenGL is not built in.
 
 ## Launch options (viewer)
 

@@ -94,6 +94,9 @@ temple1–temple4, CastleD. (not case-sensitive)
 To spawn Connor at a specific coordinate, use `--at x,y,heading`, where `heading` is
 the direction he's facing.
 
+To change graphics API, use `--renderer vulkan|dx12|auto`.
+Default is `auto`.
+
 There are other launch options, but most are used for debugging only.
 You can check them out at [docs/FEATURES.md](docs/FEATURES.md#aunch-options-(viewer))
 

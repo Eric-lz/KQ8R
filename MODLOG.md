@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 Docs: `--renderer` in README and FEATURES
+
+**Changed:** `README.md` ("Try it": how to pick Vulkan or DirectX 12), `docs/FEATURES.md` ("Viewer helpers": what it does and how it was checked). No code.
+**Why:** The user asked for the option to be described in both.
+**Tested how:** Read the text back; no code changed.
+**Result:** Both files describe the option.
+**Still broken / not tested:** Linux and other graphics cards still not tested.
+**Next:** —
+
 ## 2026-10-16 Viewer option `--renderer auto|vulkan|dx12`
 
 **Changed:** New `crates/kq8-viewer/src/renderer.rs` (the option, Bevy's `RenderPlugin` set to the chosen API, a `viewer.log` line with the API, card and driver actually used, unit test `parse_names`); `main.rs` reads the option and adds the plugin. Plan and result in `docs/DESIGN.md` ("choosing the graphics API"); `FEATURES.md`, `README.md`, provenance.
