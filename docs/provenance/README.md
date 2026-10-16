@@ -87,6 +87,13 @@ come from `kq8 shape-verify` on the GOG 1.03 install
 | Front faces are the clockwise ones; back faces hidden; no mirror | Behaviour note `models-and-textures.md`, Q2 (session A: 98.9% of 1.49M triangles clockwise seen from the front; back-face removal on in the Glide renderer) | Viewer reverses each triangle's corners (Bevy's front is counter-clockwise) and keeps Bevy's back-face hiding. Observed: 30 of 32 chest triangles then face away from its centre (old order would give 2 of 32). Checked by eye by the user 2026-10-11: `smlchest.KQS` and `alcmsign.KQS` look right from all sides |
 | No lighting, linear filtering, texture repeats | Our choice while lighting is not studied | — |
 
+## Graphics API choice, `--renderer` — `crates/kq8-viewer/src/{renderer,main}.rs`
+
+| Fact or choice | Source | Checked how |
+| --- | --- | --- |
+| `--renderer auto\|vulkan\|dx12`, default `auto` (wgpu chooses; `WGPU_BACKEND` still read) | Our choice, asked for by the user; nothing from the original game | `viewer.log` 2026-10-16: auto → Vulkan, vulkan → Vulkan, dx12 → Dx12, auto with `WGPU_BACKEND=dx12` → Dx12, vulkan with `WGPU_BACKEND=dx12` → Vulkan. Checked by the user 2026-10-16 (one NVIDIA card, Windows only) |
+| OpenGL refused | Our choice: Bevy built without `gles`; `WGPU_BACKEND=gl` crashed with "Unable to find a GPU" | Run 2026-10-16 |
+
 ## Terrain — `crates/kq8-data/src/{kq_text,terrain}.rs`
 
 Behaviour note = `docs/behaviour/terrain.md` (session A, answers Q6/Q7).

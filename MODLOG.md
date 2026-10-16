@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 Viewer option `--renderer auto|vulkan|dx12`
+
+**Changed:** New `crates/kq8-viewer/src/renderer.rs` (the option, Bevy's `RenderPlugin` set to the chosen API, a `viewer.log` line with the API, card and driver actually used, unit test `parse_names`); `main.rs` reads the option and adds the plugin. Plan and result in `docs/DESIGN.md` ("choosing the graphics API"); `FEATURES.md`, `README.md`, provenance.
+**Why:** The user asked to choose between Vulkan and DirectX 12 at launch. Before, only the `WGPU_BACKEND` environment variable could do that. Our own option; nothing from the original game.
+**Tested how:** `cargo clippy` clean, `cargo test -p kq8-viewer` (6 pass). `--model smlchest.KQS --frames 60` with each value, and `--world Daventry --frames 150` on dx12 and vulkan; read `viewer.log`.
+**Result:** auto → Vulkan, vulkan → Vulkan, dx12 / directx → Dx12, all "RESULT: PASS". `WGPU_BACKEND=dx12` with auto → Dx12; with `--renderer vulkan` → Vulkan (the option wins). Daventry: Dx12 average 8.81 ms per frame, Vulkan 7.94 ms; no shader errors on either. `gl` and unknown values are refused with a message (exit 1).
+**Still broken / not tested:** Checked by the user afterwards (2026-10-16): "it works" on both. Not tested on Linux or on another graphics card. OpenGL not available (Bevy built without it; `WGPU_BACKEND=gl` crashed earlier with "Unable to find a GPU"). Only tested on one NVIDIA card. On a PC without the chosen API Bevy stops with its own "Unable to find a GPU" message (not tested).
+**Next:** When possible: try another graphics card and Linux (Vulkan).
+
 ## 2026-10-17 Study (A): last open lighting points
 
 **Changed:** `docs/behaviour/object-lighting.md`: rule 13 (light maps filtered bilinear), rule 14 and open question 7 (no colour key on walls), rule 26b (model lights placed by the object's placement only; sun-type aims in world axes), rule 28 (where the ground's far-edge cut falls), open questions 1, 7, 10, 11 closed, answers list. `QUESTIONS.md` Q73 row. Scratch notes in `re/notes.md` (not committed). No code.

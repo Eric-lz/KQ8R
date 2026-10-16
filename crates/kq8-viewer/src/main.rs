@@ -3,7 +3,7 @@
 //!
 //! Usage:
 //!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
-//!              [--at X,Y,H] [--light x1|x2|off]
+//!              [--at X,Y,H] [--light x1|x2|off] [--renderer auto|vulkan|dx12]
 //!   kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
 //!
@@ -30,6 +30,7 @@
 //! buildings by their `.dil` light maps (M1 step 5c, `building_light`);
 //! F7 switches them too. Haze (M1 step 6): objects fade into the haze
 //! colour with distance from the camera; F8 (`--haze on|off`) switches it.
+//! `--renderer auto|vulkan|dx12` picks the graphics API (default auto).
 //! Esc quits.
 //!
 //! What is deliberately simple here (see docs/DESIGN.md, M1 step 1b):
@@ -50,6 +51,7 @@ mod light_view;
 mod load;
 mod log;
 mod object_light;
+mod renderer;
 mod terrain_view;
 
 use std::path::PathBuf;
@@ -111,6 +113,8 @@ struct Args {
     light: light_view::LightMode,
     /// `--haze on|off`: haze at the start (M1 step 6); F8 switches it.
     haze: bool,
+    /// `--renderer auto|vulkan|dx12`: the graphics API (default auto).
+    renderer: renderer::Renderer,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -130,6 +134,7 @@ fn parse_args() -> Result<Args, String> {
         item: None,
         light: light_view::LightMode::X1,
         haze: true,
+        renderer: renderer::Renderer::Auto,
     };
     let mut it = std::env::args().skip(1);
     let mut positional = Vec::new();
@@ -180,6 +185,7 @@ fn parse_args() -> Result<Args, String> {
                     v => return Err(format!("--haze needs on or off, not '{v}'")),
                 }
             }
+            "--renderer" => a.renderer = renderer::Renderer::parse(&value()?)?,
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -242,8 +248,8 @@ fn main() -> ExitCode {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: {e}");
-            eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N]");
-            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off]");
+            eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N] [--renderer auto|vulkan|dx12]");
+            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off] [--haze on|off] [--renderer auto|vulkan|dx12]");
             return ExitCode::FAILURE;
         }
     };
@@ -295,6 +301,9 @@ fn main() -> ExitCode {
         }
     };
     log.summary(format!("loading took {} ms", started.elapsed().as_millis()));
+    // Written before the window opens: if the API is missing, Bevy stops
+    // with "Unable to find a GPU" and this is the last line.
+    log.summary(format!("renderer: asking for {}", args.renderer.name()));
 
     let shared = Shared { log: Arc::new(Mutex::new(log)), stats: Arc::new(Mutex::new(Stats::default())) };
     let title = match &scene {
@@ -302,10 +311,16 @@ fn main() -> ExitCode {
         Scene::Ground(..) => format!("KQ8 viewer - {} ground", args.world),
     };
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window { title, ..default() }),
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window { title, ..default() }),
+                ..default()
+            })
+            .set(args.renderer.plugin()),
+    )
+    .insert_resource(renderer::RendererChoice(args.renderer))
+    .add_systems(Update, renderer::report_renderer)
     .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
     .insert_resource(shared.clone())
     .insert_resource(object_light::ObjectLight::new(lights, args.light, haze, args.haze));

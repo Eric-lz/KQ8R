@@ -197,6 +197,11 @@ repeated and checked in the logs. They do not change the game's rules.
   start (default `x1`). F7 changes it while the window is open.
 - `--haze on|off`: haze at the start (default `on`). F8 changes it while
   the window is open.
+- `--renderer auto|vulkan|dx12`: which graphics API draws the picture
+  (default `auto`: the graphics library chooses, Vulkan on our test PC,
+  and the `WGPU_BACKEND` environment variable still works). `vulkan` and
+  `dx12` force that one. OpenGL is not built in. `viewer.log` says which
+  one was used (`renderer: asked ... got ...`).
 - `--game <folder>`: where the game's files are (default `MASK`). The
   environment variable `KQ8_GAME_DIR` sets the same folder.
 - `--frames <number>`: close the window by itself after that many frames,

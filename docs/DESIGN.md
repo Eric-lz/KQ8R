@@ -2498,3 +2498,34 @@ options. A and B as needed per topic.
 Play the original next to ours, list differences, fix them. After that,
 the improvements this project was started for: controls, graphics,
 gameplay changes.
+
+### Outside the milestones: choosing the graphics API, `--renderer` (planned 2026-10-16, done 2026-10-16)
+
+Not from the original game (its Glide / Direct3D choice is not studied):
+our own launch option, asked for by the user. The viewer draws through
+Bevy, which draws through **wgpu**, a layer that turns one set of drawing
+calls into Vulkan, DirectX 12, Metal or OpenGL. Until now wgpu chose by
+itself (Vulkan on the user's PC), and only the `WGPU_BACKEND` environment
+variable could change that.
+
+One step:
+
+1. `--renderer auto|vulkan|dx12` (default `auto`). `auto` keeps today's
+   behaviour (wgpu chooses; `WGPU_BACKEND` still works). `vulkan` or
+   `dx12` tells Bevy's `RenderPlugin` to use only that API (it wins over
+   `WGPU_BACKEND`). `vk`, `d3d12` and `directx` are accepted as other
+   spellings. OpenGL (`gl`) is refused with a message: Bevy is built
+   without its OpenGL part here (feature `gles`), and on Windows it would
+   also need the ANGLE library; a test run with `WGPU_BACKEND=gl` crashed
+   with "Unable to find a GPU". Adding it would be its own step.
+   `viewer.log` records the API asked for at start-up and, once the
+   graphics card is set up, the API actually used, the card's name and
+   driver (`renderer: asked ... got ...`).
+   If the chosen API is not available on the computer, Bevy stops with
+   "Unable to find a GPU" (its own message); the log line written
+   before that says which API was asked for.
+   **Test:** run with each value and `--frames 60`; `viewer.log` must say
+   `got Vulkan` / `got Dx12`; a wrong value must be refused.
+   **Done** as planned (`crates/kq8-viewer/src/renderer.rs`); all values
+   tested from the log, Daventry runs on both APIs; checked by the user
+   2026-10-16. Not tested on Linux or another graphics card.

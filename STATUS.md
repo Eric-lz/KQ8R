@@ -35,6 +35,10 @@ entries at the top). The short public summary is `README.md`; the detailed
   (`draw_distance.rs`; Dead City's flame goes off at 12,100 in the log).
   Checked in the logs and **by eye by the user (2026-10-16): "everything
   looks correct just as the original"**.
+- **`--renderer auto|vulkan|dx12`** (B, 2026-10-16): choose the graphics
+  API at launch; `viewer.log` says which one ran. Tested in the log on
+  both APIs and checked by the user (2026-10-16). Not tested on Linux or
+  another graphics card. OpenGL is not built in.
 - **Clicking studied, Q60–Q64 answered** (A, 2026-10-15,
   `docs/behaviour/clicking.md`, plus fixes in `items.md`, `chests.md`,
   `doors.md`): buildings take clicks by default (so walls block), the
@@ -135,7 +139,8 @@ milestone: **M3, Daventry comes alive**.
   `item-verify`, `lightmap-verify`, `lighting-verify`) and `kq8 text <file>` to print a game text file
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
-  default); `--model NAME` shows one model; `--light x1|x2|off` the
+  default); `--model NAME` shows one model; `--renderer auto|vulkan|dx12` the
+  graphics API (`renderer.rs`); `--light x1|x2|off` the
   light at start; `--haze on|off` the haze at start. The full option list with descriptions is in
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
   `--hold F,T,R[,N]`, `--jump N`, `--turn N[,1|-1]`, `--click NAME,N`
@@ -212,7 +217,7 @@ milestone: **M3, Daventry comes alive**.
     clicking a swimming fish makes it disappear (sound and health only
     logged); other scripted things (signs, stone villagers) run their
     scripts, their remarks logged.
-- Tests: 274 unit tests pass (88 + 181 + 5), 2026-10-16.
+- Tests: 275 unit tests pass (88 + 181 + 6), 2026-10-16.
 
 ## What doesn't work yet / next
 

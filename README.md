@@ -35,6 +35,7 @@ items. The goal is the whole game; see the roadmap in
   as in the original.
 - **Object and building lighting**: objects and Connor lit by the world's
   light and sun, buildings by their own light maps.
+- **Choice of graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 - **Distance fog**: a dark fog hides everything far away, and far objects switch off as in the original (F8 on/off).
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
   torches.
