@@ -31,12 +31,12 @@ pub struct ItemDraw {
 }
 
 /// `looks`: (`IDName`, index into `built`, opacity) per type.
-pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32)>, built: &[Parts], materials: &mut Assets<ObjectMaterial>, balls: &ShapeBalls) {
+pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32, String)>, built: &[Parts], materials: &mut Assets<ObjectMaterial>, balls: &ShapeBalls) {
     let mut parts = BTreeMap::new();
     let mut tests = BTreeMap::new();
-    for (kind, slot, opacity) in looks {
+    for (kind, slot, opacity, shape) in looks {
         let Some(model) = built.get(slot) else { continue };
-        tests.insert(kind.clone(), DistanceTest::item(&kind, balls.by_index.get(slot).copied()));
+        tests.insert(kind.clone(), balls.item(&kind, &shape));
         let p: Parts = model
             .iter()
             .map(|(mesh, material)| {
@@ -68,7 +68,10 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
                 let Some(parts) = draw.parts.get(&o.kind) else { continue };
                 let mut body = commands.spawn((bevy_transform_from(p.rotation, p.position), Visibility::Inherited));
                 if let Some(test) = draw.tests.get(&o.kind) {
-                    body.insert(test.another());
+                    // Its own name: the collider switch and clicks go by it.
+                    let mut test = test.another();
+                    test.name = o.name.clone();
+                    body.insert(test);
                 }
                 let body = body.id();
                 for (mesh, material) in parts {

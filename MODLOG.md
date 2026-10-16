@@ -3,6 +3,105 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-16 User's check of M3 3g and M1 7a–7c
+
+**Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`: marked as checked by eye. No code.
+**Why:** The user compared the viewer with the original.
+**Tested how:** By eye, by the user (Dead City portal, Daventry clicks).
+**Result:** "Everything looks good"; the portal casts its light onto Connor's model.
+**Still broken / not tested:** Point lights on walls and the ground (7d, 7e).
+**Next:** 7e-0 (ground light map bilinear), 7d once its open points are answered.
+
+## 2026-10-16 M1 step 7f: Q73 leftovers checked against our code
+
+**Changed:** `ground_haze.wesl` comment only (the far-edge cut is not a stand-in any more). `docs/DESIGN.md` 7f result and new step 7e-0. Provenance. No behaviour change.
+**Why:** A's answers to Q73 (`object-lighting.md` rules 13, 14, 28).
+**Tested how:** Read the code: samplers in `building_light.rs`, alpha modes and discards in `building_light.wesl` / `ground_haze.wesl`, the ground's light in `light_view.rs`.
+**Result:** Walls: bilinear light maps, no colour key ✓. The ground's cut at `visibleDistance` (blended corner distances, cut per pixel) is geometrically the same as the traced edge cut ✓. Differs: the ground's light map is blended per triangle, not bilinear (the note now says bilinear for the ground too).
+**Still broken / not tested:** The ground's bilinear light map (planned 7e-0). Nothing run.
+**Next:** 7d (walls), 7e-0 and 7e (ground).
+
+## 2026-10-16 M1 steps 7c-2 and 7c-3: point lights and carried lights on models
+
+**Changed:** New `kq8-viewer/src/scene_lights.rs`: `CarriedLights` (a model's lights per movement and frame, on its root entity), `PointLightSource` (an entity per `KQPointLight` with its own near / far / off test), `gather_lights` (every frame: lights of owners in the lights group, 0x400, into one fixed-size storage buffer; log once a second with what the nearest light gives Connor), unit tests. `object_light.rs` / `.wesl`: the buffer at binding 3 of every object material, a new vertex attribute `ATTRIBUTE_PART_BALL` (the part's ball) read through `specialize`, the shader's own vertex input, rule 24 in `corner_light`. `main.rs` `model_mesh` writes the part ball; `kq8-data` `Triangle::part_ball` (middle of the mesh node's vertices in that frame, the mesh's radius). `draw_distance.rs` fills `LightsGroup`; `terrain_view.rs` (still models, point light entities), `anim_view.rs`, `door_view.rs` attach and update `CarriedLights`. Provenance.
+**Why:** M1 step 7c (`object-lighting.md` rules 3, 24, 26b, 37); the user's check in the original: the portal's moving green light lights Connor.
+**Tested how:** `cargo test --workspace` (188 + 89 + 8), clippy clean. Viewer: `--world DeadCity --frames 200`, `--world DeadCity --at 182213,42600,3.1416 --frames 300`, `--world Daventry --frames 200`; console checked for shader errors (none); `viewer.log`.
+**Result:** Dead City start: 2 lights (`PLight01`, the portal's), the portal's 3,225 from Connor (End 3,000): nothing on him. By the portal: "[portal] 877 from Connor … falloff 1.000, adds up to (0.200, 0.200, 0.013)", the next seconds (0.110, 0.200, 0.030), (0.059, 0.200, 0.042) as the light circles and changes colour. Daventry: 5 lamp lights gathered at the start (Begin 1,000, End 1,500), average frame 7.38 ms (before 7.94 ms on Vulkan; no slowdown measured).
+**Still broken / not tested:** **Not checked by eye** (the GPU result can't be read back; the log shows the CPU copy of the same rule). Walls and ground don't get these lights yet (7d, 7e). Point lights' place in the draw-distance test is a stand-in (Q77 b); the part ball's centre is the note's stand-in. Daventry's lamps, candles and fireplaces now light models within 1,500 or so, which is new there.
+**Next:** You: Dead City, stand Connor by the arrival portal and compare with the original (a green light circling, changing colour, on his side facing the portal). Then 7d (walls).
+
+## 2026-10-16 M1 step 7c-1: the lights models carry, and `KQPointLight` objects (data only)
+
+**Changed:** `kq8-data/src/shape.rs`: `ModelLight`, `LightNode::model_light`, `Shape::sequence_lights` (rule 26b), unit test. `kq8-cli/src/lighting_verify.rs`: new section "Lights carried by models" (shapes with light nodes, flag values, `portlite.kqs` frame by frame). `kq8-viewer/src/load.rs`: `Model::lights` (shown frame) and `Animation::frame_lights` (per frame); `loadKQ light/…` finds loose files in `data/<World>/KQ/`; `KQPointLight` objects are kept by name (`Objects::point_lights`) with a marker. Q77 added. Provenance. Nothing is drawn differently yet.
+**Why:** M1 step 7c, from A's answers to Q72 (`object-lighting.md` rules 24–26b).
+**Tested how:** `cargo test -p kq8-data shape` (6 pass); `kq8 lighting-verify` (PASS); viewer `--world DeadCity|Daventry --frames 30`, `viewer.log`.
+**Result:** `portlite.kqs`: 17 frames, one light each, colour (0.200, 0.200, 0.013) → (0.000, 0.200, 0.111), Begin 1,500, End 3,000, as A's example. First run read every node as sun-type: I had taken "flag bit 1" as 0x2, but the data has only flags 1 and 5; changed to 0x1 (Q77 a). Dead City: the 7 point lights now load (before: "light/Plight01.kq not found"); 8 still models and 6 animations carry lights (portal, torches, coals, teleport). Daventry: 13 still models, 11 animations (candles, lamps, chandeliers, fireplaces, signpost). 442 shape files carry light nodes (A: 174; Q77 c).
+**Still broken / not tested:** Not drawn yet (7c-2, 7c-3). A point light's place in the near / far / off test is a stand-in (Q77 b).
+**Next:** 7c-2, gathering the lights each frame.
+
+## 2026-10-16 M1 step 7b: the collider switch, `setActiveCamera`, `makeActive`
+
+**Changed:** `kq8-core/src/active.rs`: a set of objects whose collider is out (`switch_collider`, `is_switched_off`): not picked, not clicked; `is_hidden`, `is_deleted`; commands `setActiveCamera` and `makeActive` → `Request::ActiveCamera` / `MakeActive`; one new unit test. `kq8-viewer`: `draw_distance.rs` treats hidden objects as off and `makeActive` objects as near, measures from the camera after `setActiveCamera 1`, and records every gain or loss of bit 0x8; new fixed-update system `apply_collider_switches` (first in the update chain) takes colliders and view boxes out by name and puts them back; `door_view.rs` applies the two requests (`ActiveRules`) and no longer rewrites a switched-off door/chest/object collider; `anim_view.rs` leaves a switched-off moving collider off; `game_camera.rs` skips switched-off doors as view blockers; items' tests carry the item's own name. Provenance.
+**Why:** Q74 answered by A (`object-lighting.md` rules 36, 41, 42).
+**Tested how:** `cargo test --workspace` (188 + 88 + 6), clippy clean. Viewer `--world Daventry --frames 200`; `--at 285098,203500,0 --hold 1,0,0,150 --frames 600` (walking towards `spinweel`, `tooFar` 0.3); `viewer.log`.
+**Result:** Daventry start: 335 colliders switched out in update 0 (322 off, 13 far, e.g. `Condoor`, three far items, `spinweel` at 9,314). Walking in: "update 15: collider switch: [spinweel] Near at ball distance 8768: collider back".
+**Still broken / not tested:** `setActiveCamera` / `makeActive` only unit-tested (only Dead City's cut scenes and switches use them; not run in the viewer). **Behaviour change:** hidden objects no longer block Connor (before: solid, our earlier reading); this follows `objects.md` "Hidden objects" 3 and rule 41 but is not checked in the original. Buildings far away stay solid (not needed). Not checked by eye.
+**Next:** 7c, lights on models (`KQPointLight` and the lights `.kqs` models carry).
+
+## 2026-10-16 M1 step 7a: draw-distance balls from `BOUNDS.KQ`, items' far mask 0
+
+**Changed:** `kq8-viewer/src/draw_distance.rs`: `ShapeBalls` now holds the `BOUNDS.KQ` table and finds each ball by collision shape (lower-cased), then own name, else radius 100; buildings keep their geometry ball (stand-in, Q76); items get their type's shape, `tooFar` 0.83 and masks 0x2 / 0x448 / 0; every test records where its ball came from, logged once a second. `load.rs` passes the table (`Objects::game_bounds`); `terrain_view.rs`, `anim_view.rs` (by the drawn shape), `door_view.rs` (by the movement's shape), `item_view.rs` (by the item type's shape) use it. Q76 added. Provenance.
+**Why:** Q70 and Q71 answered by A (`object-lighting.md` rules 35, 43; `items.md` 5b): the ball comes from `BOUNDS.KQ`, never the model; items are not drawn when far.
+**Tested how:** `cargo build`; viewer `--world Daventry --frames 200`; `--world DeadCity --at 130800,172122,-1.5708 --hold 1,0,0,90 --frames 500` (the 6h flame walk; angles 0, ±1.5708 and 3.1416 tried first to find the one that walks west); `viewer.log`.
+**Result:** Daventry from the start: 368 objects, 32 near, 13 far, 323 off (6h: 32 / 12 / 324); balls: 297 by shape, 21 items by type shape, 26 buildings (stand-in), 24 radius 100; 3 far items now "Far but not drawn … far 0x0". Dead City: `flame.05` Off → Far at 12,097, Far → Near at 10,041 (6h: 12,098 / 10,054; frame sampling).
+**Still broken / not tested:** Not checked by eye. Far items are not drawn but can still be picked by the click line (their collider stays until 7b). Buildings' ball is a stand-in (Q76).
+**Next:** 7b, the collider switch, `setActiveCamera`, `makeActive` (Q74).
+
+## 2026-10-16 M3 step 3g-5: `deleteObject` for every object, `NoName<n>`, pickup sound on every add
+
+**Changed:** `kq8-core/src/active.rs`: `deleteObject` is its own command (`delete_objects` / `delete_one`) for every kind of object and every listed name, with the original's error line and result; doors and chests get a `gone` flag (no collider, not picked or clicked); one set of deleted names drops events. The pickup sound is logged on every add to Connor's inventory (`pickup_sound`). `item.rs`: new items are named `NoName<n>` from 0. `kq8-viewer/src/door_view.rs`: deleted doors are hidden. Tests updated for the new names and log lines; one new test. Provenance.
+**Why:** A's answers: `clicking.md` rule 22 (Q64 d), `items.md` rules 7 and 9 (Q60, Q61). Before, `deleteObject` on doors, chests and other placed objects was a stub, items were named `Crystal.1` etc., and a chest's 2nd click logged "pickup sound not stated".
+**Tested how:** `cargo test -p kq8-core` (187 pass). Viewer Daventry: `--at 202336,262000,1.5708 --click smlchst3,10 --click smlchst3,40 --click smlchst3,45 --frames 1200`; `--at 208502,209600,1.5708 --click fishies.01,10 --click fishies.01,40 --frames 900`; `items.log`, `doors.log`, `traps.log`.
+**Result:** Start items `NoName0` … `NoName21` (23 made in that run with the chest's crystal `NoName22`). Chest: 2nd click "NoName22 moved into Connor's inventory (INVITEM_Crystal 0 -> 3); pickup sound energy.aud". Fish: deleted in update 10, its cue dropped in update 25, the click in update 40 does nothing, its collider switched off.
+**Still broken / not tested:** No sound at all yet (only logged). Deleting a building leaves its walls solid (not needed in Daventry). The name counter isn't game-wide across worlds or saved (no travel or saving yet). Deleting a door was tested only in a unit test, not in the viewer.
+**Next:** M1 step 7a, the draw-distance ball and items' far mask (Q70, Q71).
+
+## 2026-10-16 M3 step 3g-4: `EndLoop` through the event queue, doors too, `getEndLoop`
+
+**Changed:** `kq8-core/src/active.rs`: a finished play-once movement of a door, chest or scripted object now goes through `movement_ended` (cue 3333 to itself through the queue, if it has a script; `Cue 300 0 <movement>` to its `getEndLoop` listener); `handle` turns cue 3333 into `EndLoop <movement>` (`call_named`, any object kind with a script) and logs cue 500; new `getEndLoop` command; the five copies of the cue-argument code are one `cue_args`. Two tests now expect `EndLoop` one update later; one new test. Module notes, provenance.
+**Why:** Q64 (c) answered by A (`clicking.md` rule 21): `EndLoop` goes through the event queue, doors get it too, and `getEndLoop` exists (used by `bricks.cs` and five more Daventry scripts; it was an unknown command before).
+**Tested how:** `cargo test -p kq8-core` (186 pass). Viewer `--world Daventry --at 233848,203000,1.5708 --click basket1,10 --frames 500`, `doors.log`.
+**Result:** `basket1`: click in update 10, `open` starts, "movement 'open' ended: cues itself 3333" in update 11, "EndLoop open" and the script call in update 12. Unit test: door gets `Open` at once, then `EndLoop open` and its own listener's `Cue 300 0 open` one update later; after `getEndLoop … 0` only `EndLoop close`.
+**Still broken / not tested:** `getEndLoop Connor …` (`bricks.cs`, `ax.cs`, …) is only recorded: Connor's scripted movements (`push` via `KQMonster::setState`) don't exist yet, so nothing is relayed. Nothing checked by eye.
+**Next:** 3g-5, `deleteObject` for every object, `NoName<n>`, the chest's pickup sound.
+
+## 2026-10-16 M3 step 3g-3: accept lists and `KQObject::setAccepts`
+
+**Changed:** `kq8-core/src/item.rs`: new `Accepts` (read a value, answer by type) and a unit test. `active.rs`: each object's accept list is kept by name, read at `start()` (logged) or when first asked; `KQObject::setAccepts` adds to it; a click with an item in hand asks it; `$4` is the type's own spelling; door test helper now has a type list; new unit test. Provenance.
+**Why:** Q62 (a) answered by A (`clicking.md` rules 13–18). Before, the whole `acceptsInventory` value was compared with the held item's type as text, so a comma list or `INVITEM_All` never accepted.
+**Tested how:** `cargo test -p kq8-core` (185 pass). Viewer `--world Daventry --frames 60` (accept lists in `doors.log`); keep door `--at 217415,279800,1.5708 --click keepdrl,20 --frames 300` with `--item INVITEM_KeepKey`, `keepkey`, `INVITEM_Crystal`.
+**Result:** Daventry: 7 objects accept something (`keepdrl`/`keepdrr` KeepKey, the three bell stands LadyBell, `starball.01` SpellPage, `poorbox` SilverCoins); no unknown names. Key (both spellings): script runs, both keep doors get `KQDoorEvent 0`. Crystal: "not accepted (accepts INVITEM_KeepKey)". First run with `keepkey` was accepted but the script got `$4 = keepkey` and did nothing; fixed by passing the type's own name (rule 18).
+**Still broken / not tested:** No Daventry object uses a comma list or `INVITEM_All` among the loaded clickable ones; those cases are covered by unit tests only. `setAccepts` is used only in Gnome and Barren (not run in the viewer).
+**Next:** 3g-4, `EndLoop` through the queue and `getEndLoop`.
+
+## 2026-10-16 M3 step 3g-2: the click line hits buildings, not the ground
+
+**Changed:** `kq8-core/src/active.rs`: buildings are click targets (`ActiveBuilding`, `add_buildings`, `clickable_building`), `pick_line` replaces `pick_seen` (nearest clickable box or clickable building, via the new `ClickWalls` trait), `click_building` (door calls; no script → `ClickResult::Swallowed`), two new unit tests replacing the line-of-sight one. `kq8-viewer`: `load.rs` builds each building's click keys (`tooFarAwayAction` default 1 for buildings), `door_view.rs` tests the clickable buildings' BSP for the click line and no longer the ground or view blockers; start-up log line "clicks: …". Q75 added to `QUESTIONS.md`. Provenance.
+**Why:** Q63 answered by A (`clicking.md` rules 1–12): buildings are type 0x28 by default, which has the click bit, so walls take the click; the ground is never tested; `colliderType=136` buildings are not clickable.
+**Tested how:** `cargo test --workspace` (183 + 88 + 6 pass), clippy clean. Viewer `--world Daventry --frames 400` with the 3e-4b checks: `--at 202336,262000,1.5708 --aim smlchst3,20`, `--at 266011,221900,0 --aim Mushroom.14,20`, `--at 270813,225311,-1.5708 --aim Condoor,20`; read `doors.log`.
+**Result:** "23 of 26 buildings take clicks (not: Church, Cave, WizHouse)". Pub ground floor: "hits building Pub first, at 5319 units; it hides smlchst3 at 5974" → Swallowed, "nothing happens, Connor doesn't turn". Mushroom.14: hit at 4418, picked up. Condoor: hit at 5520, script runs.
+**Still broken / not tested:** Not checked by eye. No test clicks through the church or wizard's house, or over a hill (the ground case; `clicking.md` "How to check" in the original). Reach to a building is our stand-in (Q75). Note: `--frames 90` was too short for `--aim …,20` (only update 0 reached); 400 works.
+**Next:** 3g-3, accept lists (Q62).
+
+## 2026-10-16 M3 step 3g-1: `test` leaves −1 for a false text `==`
+
+**Changed:** `kq8-core/src/script.rs`: new `test_return` (what `test` leaves in `$Console::Return`), used by the runner; module notes updated; new unit test; the older test `console_return_and_if_on_any_command` now expects `-1` for `test a == b`. Plan for 3g (Q54, Q60–Q64) and M1 step 7 (Q70–Q74) written in `docs/DESIGN.md`. Provenance.
+**Why:** Q54 answered by A (`doors.md` "Q45" e): a false text `==` leaves `-1` when the left word comes first in byte order.
+**Tested how:** `cargo test -p kq8-core` (182 pass).
+**Result:** `test abc == abd` → −1, `abd == abc` → 1, `ab == abc` → −1, `abc != abc` / `abd < abc` / `1 == 2` → 1; `if` still takes −1 as false.
+**Still broken / not tested:** No script in the data reads `$Console::Return` as a number after a text test (A's search), so nothing visible changes. Not run in the viewer.
+**Next:** 3g-2, what the click line hits (Q63).
+
 ## 2026-10-16 Docs: `--renderer` in README and FEATURES
 
 **Changed:** `README.md` ("Try it": how to pick Vulkan or DirectX 12), `docs/FEATURES.md` ("Viewer helpers": what it does and how it was checked). No code.

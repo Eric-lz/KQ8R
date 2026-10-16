@@ -52,6 +52,7 @@ mod load;
 mod log;
 mod object_light;
 mod renderer;
+mod scene_lights;
 mod terrain_view;
 
 use std::path::PathBuf;
@@ -361,7 +362,7 @@ fn main() -> ExitCode {
                 .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
-                .add_systems(FixedUpdate, (door_view::door_step, connor_view::connor_step, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
+                .add_systems(FixedUpdate, (draw_distance::apply_collider_switches, door_view::door_step, connor_view::connor_step, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).
@@ -372,7 +373,7 @@ fn main() -> ExitCode {
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
-                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity).chain().after(game_camera::camera_draw));
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights).chain().after(game_camera::camera_draw));
         }
     }
     app.run();
@@ -469,18 +470,24 @@ fn model_mesh(triangles: &[Triangle], lighting: Lighting, centre: [f32; 3]) -> M
     let mut positions = Vec::with_capacity(triangles.len() * 3);
     let mut uvs = Vec::with_capacity(triangles.len() * 3);
     let mut normals = Vec::with_capacity(triangles.len() * 3);
+    let mut balls = Vec::with_capacity(triangles.len() * 3);
     for t in triangles {
+        // The part's ball for point lights (object-lighting.md rule 24).
+        let [x, y, z, radius] = t.part_ball;
+        let c = to_bevy([x, y, z], centre);
         for k in [0, 2, 1] {
             positions.push(to_bevy(t.positions[k], centre));
             uvs.push(t.uvs[k]);
             let n = if lighting == Lighting::Flat { t.normals[0] } else { t.normals[k] };
             normals.push(direction_to_bevy(n));
+            balls.push([c[0], c[1], c[2], radius]);
         }
     }
     Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(object_light::ATTRIBUTE_PART_BALL, balls)
 }
 
 /// A building's mesh for `building_light::BuildingMaterial` (M1 step 5c):

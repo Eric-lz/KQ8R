@@ -16,21 +16,72 @@
 //!   (rule 9).
 //! - `KQMonster::checkInventory <who> <type>`: is there one (rule 10).
 //!
-//! Our stand-ins (not in the note): the name of a new item object is
-//! `<type without INVITEM_>.<n>`, n counting from 1 in the order items are
-//! made (Q60); an item is clicked by the box of its type's shape in
+//! - A new item object is named `NoName<n>` from one counter that starts
+//!   at 0 (rule 9, Q60). The counter is the game's for every nameless
+//!   object; only items are nameless here so far, and there is no travel
+//!   between worlds or saving yet, so it lives with the item list (M6:
+//!   game-wide and saved). The original names an object the first time
+//!   the name is needed; ours are named when made, which gives the same
+//!   order because every item's name is used at once (`NewInvItem`).
+//!
+//! Our stand-in (not in the note): an item is clicked by the box of its type's shape in
 //! `BOUNDS.KQ` (shape name lower-cased; our reading of `chests.md`'s
 //! crystal check), which the caller supplies.
 
 use std::collections::BTreeMap;
 
-use kq8_data::items::{ItemType, ItemTypes, PREFIX};
+use kq8_data::items::{ItemType, ItemTypes};
 
 use crate::collide::Placement;
 
 /// Rule 4.
 pub const ITEM_TYPE: u32 = 0x220;
 pub const ITEM_MASK: u32 = 0x809;
+
+/// What an object accepts from Connor's hand (M3 step 3g-3, `clicking.md`
+/// rules 13-16, traced): an "accept everything" switch and a list of item
+/// types (canonical names from `Invinfo.itl`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Accepts {
+    pub all: bool,
+    pub types: Vec<String>,
+}
+
+impl Accepts {
+    /// Reads an `acceptsInventory` / `KQObject::setAccepts` value and
+    /// **adds** it (rules 14, 16): split at commas; `all` / `INVITEM_All`
+    /// (any capitals) turns the switch on; `none` ends the list; any other
+    /// word is a type name (rule 2 lookup). Returns the words that name no
+    /// type, which are skipped (the original would crash, "Do not
+    /// reproduce").
+    ///
+    /// The original honours `all` only as the first word and then ignores
+    /// the rest; later it would crash. We treat it as "accept everything"
+    /// anywhere ("Do not reproduce"); no data has it later.
+    pub fn read(&mut self, value: &str, types: &ItemTypes) -> Vec<String> {
+        let mut unknown = Vec::new();
+        for word in value.split(',').map(str::trim) {
+            if word.eq_ignore_ascii_case("all") || word.eq_ignore_ascii_case("INVITEM_All") {
+                self.all = true;
+            } else if word.eq_ignore_ascii_case("none") {
+                break;
+            } else if let Some(t) = types.find(word) {
+                if !self.types.contains(&t.name) {
+                    self.types.push(t.name.clone());
+                }
+            } else {
+                unknown.push(word.to_string());
+            }
+        }
+        unknown
+    }
+
+    /// Whether an item of type `kind` is accepted (rule 13): the switch,
+    /// or its type in the list.
+    pub fn takes(&self, kind: &str, types: &ItemTypes) -> bool {
+        self.all || types.find(kind).is_some_and(|t| self.types.contains(&t.name))
+    }
+}
 
 /// Where an item object is.
 #[derive(Debug, Clone, PartialEq)]
@@ -145,15 +196,15 @@ pub struct Items {
     boxes: BTreeMap<String, ([f32; 3], [f32; 3])>,
     /// Every item object made so far, also carried and gone ones.
     pub objects: Vec<ItemObject>,
-    /// Item objects made so far (for the names).
-    made: usize,
+    /// The next `NoName<n>` number (rule 9).
+    next_no_name: usize,
 }
 
 impl Items {
     /// `boxes`: (shape name, min, max) from `BOUNDS.KQ`.
     pub fn new(types: ItemTypes, boxes: impl IntoIterator<Item = (String, [f32; 3], [f32; 3])>) -> Self {
         let boxes = boxes.into_iter().map(|(s, a, b)| (s.to_ascii_lowercase(), (a, b))).collect();
-        Items { types, boxes, objects: Vec::new(), made: 0 }
+        Items { types, boxes, objects: Vec::new(), next_no_name: 0 }
     }
 
     /// The type a script means by `name` (rule 2).
@@ -180,10 +231,8 @@ impl Items {
     pub fn make(&mut self, kind: &str, quantity: i64, place: Place) -> Result<&ItemObject, String> {
         let t = self.types.find(kind).ok_or_else(|| format!("no item type '{kind}' (looked for {})", kq8_data::items::full_name(kind)))?;
         let kind = t.name.clone();
-        self.made += 1;
-        // Q60 stand-in.
-        let short = kind.strip_prefix(PREFIX).unwrap_or(&kind);
-        let name = format!("{short}.{}", self.made);
+        let name = format!("NoName{}", self.next_no_name);
+        self.next_no_name += 1;
         self.objects.push(ItemObject { name, kind, quantity, third: -1, place, hidden: false, script: None, do_not_point_at: true });
         Ok(self.objects.last().expect("just pushed"))
     }
@@ -245,10 +294,10 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         let mut it = items();
         let at = Place::World { position: [100.0, 200.0, 300.0], angles: [0.0; 3] };
         let c = it.make("crystal", 3, at.clone()).unwrap().clone();
-        assert_eq!((c.name.as_str(), c.kind.as_str(), c.quantity, c.third), ("Crystal.1", "INVITEM_Crystal", 3, -1));
+        assert_eq!((c.name.as_str(), c.kind.as_str(), c.quantity, c.third), ("NoName0", "INVITEM_Crystal", 3, -1));
         assert!(c.do_not_point_at && !c.hidden && c.script.is_none());
         let s = it.make("INVITEM_SilverCoins", 200, Place::Carried("Connor".into())).unwrap();
-        assert_eq!(s.name, "SilverCoins.2");
+        assert_eq!(s.name, "NoName1");
         assert!(it.make("ladybell", 1, at).is_err());
         assert_eq!(it.objects.len(), 2);
     }
@@ -259,11 +308,33 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         it.make("Crystal", 1, Place::World { position: [0.0; 3], angles: [0.0; 3] }).unwrap();
         it.make("SilverCoins", 6, Place::Carried("Connor".into())).unwrap();
         it.make("SilverCoins", 4, Place::Carried("connor".into())).unwrap();
-        assert_eq!(it.find("WORLD", "crystal").map(|o| o.name.as_str()), Some("Crystal.1"));
+        assert_eq!(it.find("WORLD", "crystal").map(|o| o.name.as_str()), Some("NoName0"));
         assert!(it.find("Connor", "crystal").is_none());
-        assert_eq!(it.find("Connor", "silverCoins").map(|o| o.name.as_str()), Some("SilverCoins.2"));
+        assert_eq!(it.find("Connor", "silverCoins").map(|o| o.name.as_str()), Some("NoName1"));
         assert!(it.find("world", "silverCoins").is_none());
         assert_eq!(it.count("Connor", "INVITEM_SilverCoins"), 10);
+    }
+
+    #[test]
+    fn accept_lists_split_at_commas_and_compare_types() {
+        let types = types();
+        let mut a = Accepts::default();
+        assert_eq!(a.read("crystal,INVITEM_SilverCoins", &types), Vec::<String>::new());
+        assert_eq!(a.types, ["INVITEM_Crystal", "INVITEM_SilverCoins"]);
+        assert!(a.takes("INVITEM_Crystal", &types) && a.takes("silvercoins", &types) && !a.all);
+        // `none` ends the list; unknown names are skipped and returned.
+        let mut b = Accepts::default();
+        assert_eq!(b.read("INVITEM_LadyBell,Crystal,NONE,SilverCoins", &types), ["INVITEM_LadyBell"]);
+        assert_eq!(b.types, ["INVITEM_Crystal"]);
+        assert!(!b.takes("INVITEM_SilverCoins", &types) && !b.takes("INVITEM_LadyBell", &types));
+        // `INVITEM_All` / `all`, any capitals: everything.
+        let mut c = Accepts::default();
+        c.read("invitem_all", &types);
+        assert!(c.all && c.takes("INVITEM_LadyBell", &types));
+        // Reading again adds; it never empties or switches off.
+        b.read("SilverCoins", &types);
+        b.read("none", &types);
+        assert_eq!(b.types, ["INVITEM_Crystal", "INVITEM_SilverCoins"]);
     }
 
     #[test]

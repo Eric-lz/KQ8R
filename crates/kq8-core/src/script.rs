@@ -28,9 +28,9 @@
 //! `0` for true or success and `1` for false or failure; an unknown command
 //! leaves `1`; a script call sets nothing itself (its last command's result
 //! stays); a word that looks like a number is read up to where the number
-//! ends (`-.5` is text). Not copied: a false text `==` can leave `-1`
-//! instead of `1` in the original (which order gives which is not given,
-//! Q54); both count as false. `set` and `echo` leave `0` (not traced).
+//! ends (`-.5` is text). A false text `==` leaves `-1` when the left word
+//! comes first in byte order, `1` otherwise; every other false test leaves
+//! `1` (Q54, traced). `set` and `echo` leave `0` (Q54 b, traced).
 //!
 //! Commands that act on the world (`sendEvent`, `KQObject::collisionType`)
 //! go to the caller ([`ScriptHost::world_command`]). Commands of later
@@ -259,11 +259,11 @@ impl Scripts {
     fn command(&mut self, words: &[String], host: &mut dyn ScriptHost, at: &str, depth: usize) {
         let result = match words[0].as_str() {
             "test" => {
-                let (ok, problem) = test(&words[1..]);
+                let (result, problem) = test_return(&words[1..]);
                 if let Some(p) = problem {
                     host.log(format!("{at}: {p}"));
                 }
-                Some(if ok { "0" } else { "1" }.to_string())
+                Some(result.to_string())
             }
             "set" => match words.get(1) {
                 Some(var) => {
@@ -385,6 +385,21 @@ pub fn test(words: &[String]) -> (bool, Option<String>) {
     (ok, None)
 }
 
+/// What `test` leaves in `$Console::Return` (`doors.md` Q45 e, Q54):
+/// `0` when true; when false `1`, except a false text `==` whose left
+/// word comes first in byte order, which leaves `-1`.
+pub fn test_return(words: &[String]) -> (&'static str, Option<String>) {
+    let (ok, problem) = test(words);
+    if ok {
+        return ("0", problem);
+    }
+    let left_first = match words {
+        [a, op, b] if op == "==" && !(looks_like_number(a) && looks_like_number(b)) => a.as_bytes() < b.as_bytes(),
+        _ => false,
+    };
+    (if left_first { "-1" } else { "1" }, problem)
+}
+
 /// How a script's `if` / `else` / `endif` lines pair up, counted without
 /// running anything (for the load log): (if count, endif count, problems).
 pub fn block_balance(text: &str) -> (usize, usize, Vec<String>) {
@@ -497,6 +512,32 @@ mod tests {
     }
 
     #[test]
+    fn a_false_text_equal_leaves_minus_one_when_the_left_word_comes_first() {
+        let r = |a: &str, op: &str, b: &str| test_return(&args(&[a, op, b])).0;
+        assert_eq!(r("abc", "==", "abd"), "-1");
+        assert_eq!(r("abd", "==", "abc"), "1");
+        assert_eq!(r("ab", "==", "abc"), "-1", "a word that runs out first comes first");
+        assert_eq!(r("Abc", "==", "abc"), "-1", "capitals before small letters");
+        assert_eq!(r("abc", "==", "abc"), "0");
+        // Only `==` gives -1; numbers never do.
+        assert_eq!(r("abc", "!=", "abc"), "1");
+        assert_eq!(r("abd", "<", "abc"), "1");
+        assert_eq!(r("abc", ">", "abd"), "1");
+        assert_eq!(r("1", "==", "2"), "1");
+        // Run through a script: `if` treats -1 as false.
+        let (s, _) = run("test abc == abd
+set R $Console::Return
+if test abc == abd
+ set T yes
+else
+ set T no
+endif
+", &[], &[]);
+        assert_eq!(s.vars.get("R"), Some("-1"));
+        assert_eq!(s.vars.get("T"), Some("no"));
+    }
+
+    #[test]
     fn unset_variables_vanish_quoted_ones_stay() {
         // `test $X == 0` with X unset becomes `test == 0`: false.
         let (s, h) = run("if test $X == 0\nset A yes\nelse\nset A no\nendif\n", &[], &[]);
@@ -538,7 +579,7 @@ mod tests {
     #[test]
     fn console_return_and_if_on_any_command() {
         let (s, _) = run("test a == b\nset Saved $Console::Return\nif KQMonster::speak Connor Connor 0 1 2 3 1 1\nset Inv zero\nendif\n", &[], &[]);
-        assert_eq!(s.vars.get("Saved"), Some("1"));
+        assert_eq!(s.vars.get("Saved"), Some("-1"), "a false text == with the left word first (Q54)");
         assert_eq!(s.vars.get("Inv"), Some("zero"), "a stub leaves 0, so the branch is taken");
         // An unknown command fails; its `if` branch is skipped.
         let (s, h) = run("if noSuchCommand 1\nset A ran\nendif\n", &[], &[]);

@@ -10,6 +10,15 @@
 // corner's normal at all three corners and use one grey (rule 7). The
 // texture is multiplied by the light, no doubling (rule 9).
 //
+// Point lights (M1 7c, rule 24; and the lights models carry, rule 26b):
+// every light of the scene's list (`scene_lights.rs`) adds colour x
+// falloff x facing per corner, before the cap. Per model part (its ball:
+// centre and radius on each vertex): nothing from a light whose distance
+// to the ball's centre minus the radius is more than End; facing from the
+// light to the ball's centre; falloff from the corner's own distance, 1 up
+// to Begin, then straight down to 0 at End (End is an end distance on
+// models). Sun-type model lights add like suns (rule 5).
+//
 // Haze (M1 step 6, rules 19-23): one amount per object from the camera's
 // distance to the object's position (the drawn part's origin; particles:
 // their emitter's location, rule 30), then the
@@ -19,7 +28,6 @@
 
 import bevy_pbr::render::{
     mesh_functions,
-    forward_io::{Vertex, decompress_vertex},
     view_transformations::position_world_to_clip,
     mesh_view_bindings::view,
 };
@@ -58,9 +66,34 @@ struct Settings {
     haze_from: vec4<f32>,
 };
 
+// One light of the scene (`scene_lights.rs`): position (world space; w = 1
+// point, 0 sun-type: xyz is then the aim), colour, Begin and End (game
+// units).
+struct SceneLight {
+    position: vec4<f32>,
+    colour: vec4<f32>,
+    range: vec4<f32>,
+};
+
+struct SceneLights {
+    // x = how many lights are in use.
+    header: vec4<f32>,
+    lights: array<SceneLight>,
+};
+
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
 @group(constants::MATERIAL_BIND_GROUP) @binding(1) var colour_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(2) var colour_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<storage, read> scene: SceneLights;
+
+struct ObjectIn {
+    @builtin(instance_index) instance_index: u32,
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    // The model part's ball: centre (model space), w = radius (game units).
+    @location(8) part_ball: vec4<f32>,
+};
 
 struct LitVertex {
     @builtin(position) position: vec4<f32>,
@@ -71,32 +104,67 @@ struct LitVertex {
     @location(2) @interpolate(flat) haze: f32,
 };
 
-// Rules 4, 5: ambient + suns, capped to 0..1 per channel.
-fn corner_light(normal: vec3<f32>) -> vec3<f32> {
+// Rule 24: how much of a point light reaches a corner at distance d
+// (game units): 1 up to Begin, then straight down to 0 at End.
+fn model_falloff(d: f32, begin: f32, end: f32) -> f32 {
+    if d <= begin {
+        return 1.0;
+    }
+    if d >= end {
+        return 0.0;
+    }
+    return 1.0 - (d - begin) / max(end - begin, 0.001);
+}
+
+// Rules 4, 5, 24: ambient + suns + the scene's lights, capped to 0..1 per
+// channel. `at`: the corner (world space); `centre`, `radius`: its part's
+// ball (world space, game units).
+fn corner_light(normal: vec3<f32>, at: vec3<f32>, centre: vec3<f32>, radius: f32) -> vec3<f32> {
     var light = settings.ambient.xyz;
     for (var i: u32 = 0u; i < settings.sun_count; i++) {
         let facing = -dot(settings.sun_aim[i].xyz, normal);
         light += settings.sun_colour[i].xyz * max(facing, 0.0);
     }
+    let count = u32(scene.header.x);
+    for (var i: u32 = 0u; i < count; i++) {
+        let l = scene.lights[i];
+        if l.position.w < 0.5 {
+            // A sun-type light a model carries (rule 26b): as a sun.
+            light += l.colour.xyz * max(-dot(l.position.xyz, normal), 0.0);
+            continue;
+        }
+        let to_centre = centre - l.position.xyz;
+        let centre_distance = length(to_centre) * settings.game_units;
+        if centre_distance - radius > l.range.y {
+            continue; // the whole part is out of range
+        }
+        var facing = 0.0;
+        if centre_distance > 0.001 {
+            facing = max(-dot(normalize(to_centre), normal), 0.0);
+        }
+        let d = length(at - l.position.xyz) * settings.game_units;
+        light += l.colour.xyz * model_falloff(d, l.range.x, l.range.y) * facing;
+    }
     return clamp(light, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 @vertex
-fn vertex(vertex_in: Vertex) -> LitVertex {
-    let v = decompress_vertex(vertex_in, vertex_in.instance_index);
-    let world_from_local = mesh_functions::get_world_from_local(vertex_in.instance_index);
+fn vertex(v: ObjectIn) -> LitVertex {
+    let world_from_local = mesh_functions::get_world_from_local(v.instance_index);
     let world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.position, 1.0));
     // Unit length; a zero normal (degenerate triangles) stays zero and
     // then gets the ambient light only.
-    let normal = mesh_functions::mesh_normal_local_to_world(v.normal, vertex_in.instance_index);
+    let normal = mesh_functions::mesh_normal_local_to_world(v.normal, v.instance_index);
+    // The part's ball in world space (rule 24).
+    let centre = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.part_ball.xyz, 1.0)).xyz;
 
     var light = vec3<f32>(1.0);
     if settings.lighting == 1u {
         // Rule 7, flat: one grey from the first corner's light, capped at 1.
-        let c = corner_light(normal);
+        let c = corner_light(normal, world_position.xyz, centre, v.part_ball.w);
         light = vec3<f32>(min(dot(c, vec3<f32>(0.299, 0.587, 0.114)), 1.0));
     } else if settings.lighting == 2u {
-        light = corner_light(normal);
+        light = corner_light(normal, world_position.xyz, centre, v.part_ball.w);
     }
     if settings.mode == 1u {
         light = min(light * 2.0, vec3<f32>(1.0));

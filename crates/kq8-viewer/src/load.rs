@@ -76,6 +76,9 @@ pub struct Model {
     /// for the walls' haze (M1 6f, object-lighting.md rule 29); empty for
     /// models.
     pub surfaces: Vec<Vec<[f32; 3]>>,
+    /// The lights the model carries in the shown frame (object-lighting.md
+    /// rule 26b, M1 7c-1), model space.
+    pub lights: Vec<kq8_data::shape::ModelLight>,
 }
 
 pub struct Group {
@@ -212,7 +215,11 @@ pub fn load_model(
         ));
         groups.push(Group { material: index, triangles, look, shading, light_uvs: Vec::new() });
     }
-    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new() })
+    let lights = shape.sequence_lights(rest);
+    if !lights.is_empty() {
+        log.summary(format!("  carries {} light(s) in its shown frame (rule 26b)", lights.len()));
+    }
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -298,6 +305,9 @@ pub struct Animation {
     /// Each frame's whole step, turn included (doors turn by these;
     /// doors.md rule 24).
     pub frame_transforms: Vec<kq8_data::shape::Transform>,
+    /// Each frame's lights (object-lighting.md rule 26b, M1 7c-1), model
+    /// space.
+    pub frame_lights: Vec<Vec<kq8_data::shape::ModelLight>>,
 }
 
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
@@ -333,6 +343,7 @@ pub fn load_animation(
     let mut step_sum = [0.0f32; 3];
     let mut frame_steps = Vec::with_capacity(count);
     let mut frame_transforms = Vec::with_capacity(count);
+    let mut frame_lights = Vec::with_capacity(count);
     let mut turning = 0;
     for seq in first..first + count {
         let s = shape.sequences.get(seq).ok_or(format!("{label}: loop '{loop_name}' runs past the sequences"))?;
@@ -344,6 +355,7 @@ pub fn load_animation(
         }
         frame_steps.push(s.transform.p);
         frame_transforms.push(s.transform);
+        frame_lights.push(shape.sequence_lights(seq));
         let geometry = shape.geometry(seq);
         for p in &geometry.problems {
             log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
@@ -371,15 +383,17 @@ pub fn load_animation(
             (index, look, material_shading(material))
         })
         .collect();
+    let lit = frame_lights.iter().filter(|l| !l.is_empty()).count();
     log.detail(format!(
-        "animation {label} loop '{loop_name}': {count} frames, {:.4} s, steps add up to ({:.1}, {:.1}, {:.1}){}",
+        "animation {label} loop '{loop_name}': {count} frames, {:.4} s, steps add up to ({:.1}, {:.1}, {:.1}){}{}",
         l.duration,
         step_sum[0],
         step_sum[1],
         step_sum[2],
-        if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() }
+        if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() },
+        if lit > 0 { format!("; carries lights in {lit} frame(s) (rule 26b)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms })
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
@@ -1035,6 +1049,8 @@ pub struct Objects {
     pub buildings: Vec<kq8_core::collide::BuildingCollider>,
     /// Each building's collision type (default 0x28), same order.
     pub building_types: Vec<u32>,
+    /// Each building as a click target (M3 step 3g-2), same order.
+    pub building_clicks: Vec<kq8_core::active::ActiveBuilding>,
     /// Placed objects other than buildings and doors whose collision type
     /// blocks the camera's view (bit 0x8 or 0x1000), by their box (2f-2).
     pub view_boxes: Vec<kq8_core::collide::BoxCollider>,
@@ -1057,12 +1073,18 @@ pub struct Objects {
     pub scripts: Vec<(String, Vec<u8>)>,
     /// Connor's `attackDist` from `GAME/Kq/Connor.kq` (doors.md rule 11).
     pub attack_dist: Option<f32>,
+    /// `GAME/patch/BOUNDS.KQ`, for the draw-distance balls (M1 7a);
+    /// `None` if it could not be read.
+    pub game_bounds: Option<kq8_data::bounds::BoundingBoxes>,
     /// The emitters the start-up scripts load (M3 step 3b-1).
     pub emitters: Vec<EmitterAssets>,
     /// The particle catchers (M3 step 3b-2): name and settings.
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     /// The traps (M3 step 3d-2), where the start-up scripts left them.
     pub traps: Vec<kq8_core::trap::TrapSettings>,
+    /// `KQPointLight` objects the start-up scripts load (object-lighting.md
+    /// rules 24, 25; M1 7c-1): name and light.
+    pub point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     /// The ground animators in load order (M3 step 3b-3).
     pub animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     /// Placed objects whose current movement plays (M3 step 3c).
@@ -1249,6 +1271,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         emitters: Vec::new(),
         catchers: Vec::new(),
         traps: Vec::new(),
+        point_lights: Vec::new(),
         animators: Vec::new(),
         animated: Vec::new(),
         object_animations: Vec::new(),
@@ -1441,6 +1464,7 @@ struct Placer<'a> {
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
+    point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     animated: Vec<AnimatedAssets>,
     object_animations: Vec<Animation>,
@@ -1785,7 +1809,15 @@ impl Placer<'_> {
             self.place_connor(load);
             return;
         }
-        let (label, bytes) = match preloaded.map(Ok).or_else(|| self.world.load(base)) {
+        // A path like `light/Plight01.kq` may be a loose file in
+        // `data/<World>/KQ/` (where the sun files are, object-lighting.md
+        // rule 1).
+        let loose = || {
+            let rel = format!("data/{}/KQ/{}", self.world.name, load.file.replace('\\', "/"));
+            let path = self.game.find(&rel).filter(|p| p.is_file())?;
+            Some(std::fs::read(&path).map(|b| (rel, b)).map_err(|e| e.to_string()))
+        };
+        let (label, bytes) = match preloaded.map(Ok).or_else(|| self.world.load(base)).or_else(loose) {
             Some(Ok(x)) => x,
             _ => {
                 self.log.detail(format!("skip {} line {}: {} not found", load.from, load.line, load.file));
@@ -1869,6 +1901,10 @@ impl Placer<'_> {
         // floor grid; it stays an invisible-object marker.
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap")) {
             self.place_trap(&label, s, p);
+            return;
+        }
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQPointLight")) {
+            self.place_point_light(&label, s, p);
             return;
         }
 
@@ -2076,7 +2112,8 @@ impl Placer<'_> {
             script: text("script"),
             accepts_inventory: text("acceptsInventory"),
             accept_all_items: number("acceptAllItems").is_some_and(|v| v != 0.0),
-            too_far_away_action: number("tooFarAwayAction").map_or(0, |v| v as i64),
+            // clicking.md rule 10: buildings default to 1, others to 0.
+            too_far_away_action: number("tooFarAwayAction").map_or(if default_type == BUILDING_TYPE { kq8_core::active::BUILDING_TOO_FAR_AWAY_ACTION } else { 0 }, |v| v as i64),
             do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
         });
         let flags = p.flags.clone();
@@ -2262,6 +2299,31 @@ impl Placer<'_> {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
         *self.by_class.entry("KQTrap (trap, M3)".into()).or_default() += 1;
+    }
+
+    /// A `KQPointLight` (object-lighting.md rules 24, 25): kept by name with
+    /// its light; a marker at the light's position (no model).
+    fn place_point_light(&mut self, label: &str, s: &kq8_data::kq_text::Section, p: kq8_data::objects::Placement) {
+        let mut lights = kq8_data::lights::Lights::default();
+        lights.add_sections(label, std::slice::from_ref(s));
+        for problem in &lights.problems {
+            self.log.summary(format!("point light {label}[{}]: {problem}", p.name));
+        }
+        let Some(light) = lights.points.first().copied() else {
+            self.log.summary(format!("point light {label}[{}]: not a point light (tsLightType not 2?); left out", p.name));
+            return;
+        };
+        self.log.summary(format!(
+            "point light {label}[{}] at ({:.0}, {:.0}, {:.0}), colour ({:.2}, {:.2}, {:.2}), Begin {:.0}, End {:.0}",
+            p.name, light.position[0], light.position[1], light.position[2], light.colour[0], light.colour[1], light.colour[2], light.begin, light.end
+        ));
+        self.point_lights.push((p.name.clone(), light));
+        self.located.insert(p.name.to_ascii_lowercase(), Located { position: light.position, angles: [0.0; 3], drawn: Drawn::Nothing });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQPointLight".into(), position: light.position, anm: false });
+        if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+            l.drawn = Drawn::Marker(self.markers.len() - 1);
+        }
+        *self.by_class.entry("KQPointLight (point light, M1 7c)".into()).or_default() += 1;
     }
 
     fn place_emitter(
@@ -2563,6 +2625,7 @@ impl Placer<'_> {
         // "Against a building").
         let mut buildings = Vec::new();
         let mut building_types = Vec::new();
+        let mut building_clicks = Vec::new();
         let mut digs: BTreeMap<String, Option<kq8_data::building::Building>> = BTreeMap::new();
         for (k, (p, i, unused)) in self.placed.iter().enumerate() {
             let shape = &self.shapes[*i].0;
@@ -2591,8 +2654,19 @@ impl Placer<'_> {
                 c.world_max[1],
                 c.world_max[2]
             ));
+            let info = &self.collision[k];
+            building_clicks.push(kq8_core::active::ActiveBuilding {
+                name: p.name.clone(),
+                collision_type: info.collider_type,
+                script: info.script.clone(),
+                accepts_inventory: info.accepts_inventory.clone(),
+                accept_all_items: info.accept_all_items,
+                too_far_away_action: info.too_far_away_action,
+                world_min: c.world_min,
+                world_max: c.world_max,
+            });
             buildings.push(c);
-            building_types.push(self.collision[k].collider_type);
+            building_types.push(info.collider_type);
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
         let (objects, clickables, view_boxes) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
@@ -2634,6 +2708,7 @@ impl Placer<'_> {
             camera_start,
             buildings,
             building_types,
+            building_clicks,
             view_boxes,
             objects,
             doors,
@@ -2643,9 +2718,14 @@ impl Placer<'_> {
             vars: Default::default(),
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
+            game_bounds: match self.game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
+                Some(Ok(bytes)) => Some(kq8_data::bounds::BoundingBoxes::parse(&bytes).0),
+                _ => None,
+            },
             emitters,
             catchers: self.catchers,
             traps,
+            point_lights: self.point_lights,
             animators: self.animators,
             animated: self.animated,
             object_animations: self.object_animations,
@@ -2933,6 +3013,8 @@ pub fn load_building(
                     material: index as i32,
                     node: t.surface,
                     normals: [kq8_data::shape::front_normal(&t.positions); 3],
+                    // Walls get point lights by their own rule (rule 16).
+                    part_ball: [0.0; 4],
                 }
             })
             .collect();
@@ -2960,6 +3042,7 @@ pub fn load_building(
         frame_note: "building".into(),
         light_atlas: Some(atlas),
         surfaces: (0..b.surfaces.len()).map(|i| b.surface_corners(i).map(|c| c.into_iter().map(|(p, _)| p).collect()).unwrap_or_default()).collect(),
+        lights: Vec::new(),
     })
 }
 

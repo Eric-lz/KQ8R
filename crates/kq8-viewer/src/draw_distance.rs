@@ -14,15 +14,29 @@
 //! - An object that is not drawn goes on a drawing layer the camera does
 //!   not show (Bevy's `RenderLayers`, passed down to its children), so this
 //!   does not fight the systems that already show and hide objects.
-//! - Ball (rule 35): the shape's box (centre turned with the object, as
-//!   the note's "Do not reproduce" asks), no shape: radius 100 at the
-//!   position. STAND-IN (Q70): objects with a box collider use the same
-//!   ball as the others, from the shape's box.
-//! - Not done: the collider switch (bit 0x8; a far object is at least
-//!   tooFar x visibleDistance from Connor, so he can't reach it anyway),
-//!   `makeActive`, `setActiveCamera`. With no Connor (fly camera), the
-//!   camera is the reference point (viewer only).
-//! - F8 (haze off) switches this off too, so the whole world can be seen.
+//! - Ball (rule 35, Q70; M1 step 7a): always a `BOUNDS.KQ` box, never the
+//!   model's geometry: the collision box (the shape of the current
+//!   movement for animated objects, else `shapeName`, lower-cased), then
+//!   the object's own name; no entry: radius 100 at the position. Worked
+//!   out once, when the object is spawned. Centre turned with the object
+//!   (our choice, the note's "Do not reproduce"). Buildings: STAND-IN
+//!   (Q76), the ball round their geometry, as before (only 6 buildings of
+//!   the whole game are in `BOUNDS.KQ`, none of Daventry's).
+//! - Items (rule 43, Q71): their type's shape in `BOUNDS.KQ`, else 100;
+//!   `tooFar` 0.83, `groupsAlways` 0x2, near 0x448, **far 0** (not drawn
+//!   when far).
+//! - The collider switch (rule 41, M1 step 7b): when an object's groups
+//!   lose bit 0x8 (far or off with the default masks, or hidden: a hidden
+//!   object is always off, rule 36) its collider leaves the collision
+//!   world: Connor, the camera's view line and clicks pass through it;
+//!   when they gain 0x8 it comes back. Only a change of state switches.
+//!   The test runs every drawn frame; the switches are applied at the
+//!   next game update (`apply_collider_switches`).
+//! - `setActiveCamera` and `makeActive` (rule 42) arrive from the scripts
+//!   as requests (`ActiveRules`), used from the next frame. With no Connor
+//!   (fly camera), the camera is the reference point (viewer only).
+//! - F8 (haze off) shows every object (so the whole world can be seen);
+//!   the collider switch keeps working (it is a game rule).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -31,6 +45,7 @@ use std::time::Instant;
 use bevy::app::{HierarchyPropagatePlugin, Propagate, PropagateSet};
 use bevy::camera::visibility::{RenderLayers, VisibilitySystems};
 use bevy::prelude::*;
+use kq8_data::bounds::BoundingBoxes;
 use kq8_data::objects::{shape_ball, Activity, Placement, DRAW_BITS, NO_SHAPE_RADIUS};
 
 use crate::connor_view::ConnorBody;
@@ -55,16 +70,52 @@ pub struct DistanceTest {
     pub too_far: f32,
     /// groupsAlways, groupsActive3D, groupsActive3DFar.
     pub groups: [u32; 3],
+    /// Where the ball came from (for the log).
+    pub ball_from: &'static str,
+    /// `hidden=` from its file (always off, rule 36); scripted objects,
+    /// chests and items are asked of the running game instead.
+    pub hidden: bool,
 }
 
+/// What the scripts asked of the distance test (rule 42).
+#[derive(Resource, Default)]
+pub struct ActiveRules {
+    /// `setActiveCamera 1`: measure from the camera, not Connor.
+    pub camera: bool,
+    /// `makeActive <name> 1`: always near (lower case).
+    pub always_near: HashSet<String>,
+}
+
+/// Collider switches seen by the test, for the next game update: name,
+/// collider on (bit 0x8), the new state, its ball distance.
+#[derive(Resource, Default)]
+pub struct ColliderSwitches(pub Vec<(String, bool, Activity, f32)>);
+
+/// Colliders taken out of the collision world, by lower-case name: their
+/// slots in `ObjectColliders` with the boxes as they were, and their view
+/// boxes, to put back.
+#[derive(Resource, Default)]
+pub struct SwitchedOut(HashMap<String, Saved>);
+
+/// One switched-out object's boxes: (slot, box) in `ObjectColliders`, and
+/// its view boxes.
+type Saved = (Vec<(usize, kq8_core::collide::BoxCollider)>, Vec<kq8_core::collide::BoxCollider>);
+
+/// A ball: centre (game units, model space) and radius.
+type Ball = ([f32; 3], f32);
+
+/// An item's fixed `tooFar` and masks (`object-lighting.md` rule 43).
+pub const ITEM_TOO_FAR: f32 = 0.83;
+/// groupsAlways (in the world), groupsActive3D, groupsActive3DFar.
+pub const ITEM_GROUPS: [u32; 3] = [0x2, 0x448, 0];
+
 impl DistanceTest {
-    /// For `placement`, with `ball` = the shape's (centre, radius) in game
-    /// units, model space, or `None` for no shape (radius 100 at the
-    /// position).
-    pub fn new(placement: &Placement, ball: Option<([f32; 3], f32)>) -> Self {
-        let (centre, radius) = match (placement.shape_named, ball) {
-            (true, Some((c, r))) => (Vec3::from(crate::to_bevy(c, [0.0; 3])), r),
-            _ => (Vec3::ZERO, NO_SHAPE_RADIUS),
+    /// For `placement`, with `ball` = (centre, radius) in game units,
+    /// model space, or `None` (radius 100 at the position).
+    pub fn new(placement: &Placement, ball: Option<([f32; 3], f32)>, ball_from: &'static str) -> Self {
+        let (centre, radius) = match ball {
+            Some((c, r)) => (Vec3::from(crate::to_bevy(c, [0.0; 3])), r),
+            None => (Vec3::ZERO, NO_SHAPE_RADIUS),
         };
         DistanceTest {
             object: NEXT_OBJECT.fetch_add(1, Ordering::Relaxed),
@@ -73,17 +124,9 @@ impl DistanceTest {
             radius,
             too_far: placement.too_far,
             groups: [placement.groups_always, placement.groups_near, placement.groups_far],
+            ball_from,
+            hidden: placement.hidden,
         }
-    }
-
-    /// An item lying in the world (`items.md`): its type's model ball and
-    /// the default `tooFar` and group masks (STAND-IN: the item types'
-    /// `.kq` settings for these are not read).
-    pub fn item(kind: &str, ball: Option<([f32; 3], f32)>) -> Self {
-        let mut p = Placement::from_section(&kq8_data::kq_text::parse(b"[item]\n")[0]);
-        p.name = kind.to_string();
-        p.shape_named = ball.is_some();
-        DistanceTest::new(&p, ball)
     }
 
     /// A copy for another object of the same kind (a new number).
@@ -92,29 +135,74 @@ impl DistanceTest {
     }
 }
 
-/// Every model's bounding ball (rule 35), by shape name (lower case) and by
-/// index in `Objects::shapes`.
+/// The bounding balls (rule 35): `BOUNDS.KQ` boxes, and the geometry
+/// balls of buildings (Q76 stand-in), by index in `Objects::shapes`.
 #[derive(Resource, Default, Clone)]
 pub struct ShapeBalls {
-    by_name: HashMap<String, ([f32; 3], f32)>,
-    pub by_index: Vec<([f32; 3], f32)>,
+    table: Option<BoundingBoxes>,
+    /// Each shape's name as first written, and its geometry ball if it is a
+    /// building (`.dig`).
+    shapes: Vec<(String, Option<Ball>)>,
 }
 
 impl ShapeBalls {
-    pub fn new<'a>(shapes: impl Iterator<Item = (&'a str, [f32; 3], [f32; 3])>) -> Self {
-        let mut balls = ShapeBalls::default();
-        for (name, min, max) in shapes {
-            let ball = shape_ball(min, max);
-            balls.by_name.entry(name.to_ascii_lowercase()).or_insert(ball);
-            balls.by_index.push(ball);
-        }
-        balls
+    /// `table`: `BOUNDS.KQ` (`None` if it could not be read: every object
+    /// gets radius 100); `shapes`: name and model box of each shape.
+    pub fn new<'a>(table: Option<BoundingBoxes>, shapes: impl Iterator<Item = (&'a str, [f32; 3], [f32; 3])>) -> Self {
+        let shapes = shapes.map(|(name, min, max)| (name.to_string(), name.to_ascii_lowercase().ends_with(".dig").then(|| shape_ball(min, max)))).collect();
+        ShapeBalls { table, shapes }
     }
 
-    /// The test for a placed object, its ball found by its shape name.
+    /// The ball of a `BOUNDS.KQ` entry for `name` exactly.
+    fn bounds(&self, name: &str) -> Option<([f32; 3], f32)> {
+        self.table.as_ref()?.lookup(name).map(|e| shape_ball(e.min, e.max))
+    }
+
+    /// Rule 35: `shape` (the collision shape, lower-cased), then the own
+    /// name; else none (radius 100).
+    fn ball(&self, shape: Option<&str>, own: &str) -> (Option<([f32; 3], f32)>, &'static str) {
+        if let Some(b) = shape.and_then(|s| self.bounds(&s.to_ascii_lowercase())) {
+            return (Some(b), "BOUNDS.KQ by shape");
+        }
+        match self.bounds(own) {
+            Some(b) => (Some(b), "BOUNDS.KQ by own name"),
+            None => (None, "no entry: radius 100"),
+        }
+    }
+
+    /// The test for a placed object drawn with shape `shape_index`
+    /// (its collision shape: an animated object's current movement's).
+    pub fn test_at(&self, placement: &Placement, shape_index: usize) -> DistanceTest {
+        match self.shapes.get(shape_index) {
+            Some((_, Some(building))) => DistanceTest::new(placement, Some(*building), "building geometry (Q76 stand-in)"),
+            Some((name, None)) => self.test_shape(placement, name),
+            None => self.test(placement),
+        }
+    }
+
+    /// The test for an object whose collision shape is `shape`.
+    pub fn test_shape(&self, placement: &Placement, shape: &str) -> DistanceTest {
+        let (ball, from) = self.ball(Some(shape), &placement.name);
+        DistanceTest::new(placement, ball, from)
+    }
+
+    /// The test for a placed object by its `shapeName`.
     pub fn test(&self, placement: &Placement) -> DistanceTest {
-        let ball = placement.shape.as_ref().and_then(|s| self.by_name.get(&s.to_ascii_lowercase()).copied());
-        DistanceTest::new(placement, ball)
+        let (ball, from) = self.ball(placement.shape.as_deref(), &placement.name);
+        DistanceTest::new(placement, ball, from)
+    }
+
+    /// An item lying in the world (rule 43): its type's shape in
+    /// `BOUNDS.KQ` (items have no name of their own there), fixed `tooFar`
+    /// and masks.
+    pub fn item(&self, kind: &str, shape: &str) -> DistanceTest {
+        let ball = self.bounds(&shape.to_ascii_lowercase());
+        let from = if ball.is_some() { "BOUNDS.KQ by the item type's shape" } else { "no entry: radius 100" };
+        let mut p = Placement::from_section(&kq8_data::kq_text::parse(b"[item]\n")[0]);
+        p.name = kind.to_string();
+        p.too_far = ITEM_TOO_FAR;
+        [p.groups_always, p.groups_near, p.groups_far] = ITEM_GROUPS;
+        DistanceTest::new(&p, ball, from)
     }
 }
 
@@ -138,7 +226,10 @@ pub fn add(app: &mut App) {
     app.add_plugins(HierarchyPropagatePlugin::<RenderLayers>::new(PostUpdate))
         .configure_sets(PostUpdate, PropagateSet::<RenderLayers>::default().before(VisibilitySystems::CheckVisibility))
         .init_resource::<ActivePoint>()
-        .init_resource::<ActivityLog>();
+        .init_resource::<ActivityLog>()
+        .init_resource::<ActiveRules>()
+        .init_resource::<ColliderSwitches>()
+        .init_resource::<SwitchedOut>();
 }
 
 fn game(p: Vec3) -> [f32; 3] {
@@ -163,10 +254,17 @@ pub fn update_activity(
     layered: Query<(), (With<Mesh3d>, With<RenderLayers>)>,
     mut point: ResMut<ActivePoint>,
     mut states: Local<HashMap<u32, Activity>>,
+    mut solid: Local<HashMap<u32, bool>>,
     mut log_state: ResMut<ActivityLog>,
+    rules: Res<ActiveRules>,
+    mut switches: ResMut<ColliderSwitches>,
+    sim: Option<Res<crate::door_view::DoorSim>>,
+    mut lights_group: ResMut<crate::scene_lights::LightsGroup>,
     shared: Res<Shared>,
 ) {
-    let from_connor = connor.iter().next();
+    lights_group.0.clear();
+    // Rule 42: Connor unless a script asked for the camera.
+    let from_connor = if rules.camera { None } else { connor.iter().next() };
     let Some(reference) = from_connor.or(camera.iter().next()).map(|t| t.translation) else { return };
     let limit = light.haze.visible;
     point.at = light.haze_on.then(|| game(reference));
@@ -175,6 +273,7 @@ pub fn update_activity(
     let mut changes = Vec::new();
     let mut counts: BTreeMap<Activity, usize> = BTreeMap::new();
     let mut hidden_objects = 0;
+    let mut sources: BTreeMap<&'static str, usize> = BTreeMap::new();
     // (ball distance, position distance, name) of the nearest object that
     // is off and the farthest that is not.
     let mut nearest_off: Option<(f32, f32, String)> = None;
@@ -182,7 +281,15 @@ pub fn update_activity(
     for (entity, test, transform, has_layer) in &tests {
         let centre = transform.transform_point(test.centre);
         let d = (reference - centre).length() * UNITS_PER_METRE - test.radius;
-        let activity = Activity::of(d, limit, test.too_far);
+        // Rule 36: hidden = off; makeActive = near; else by distance.
+        let hidden = test.hidden || sim.as_ref().is_some_and(|s| s.active.world.is_hidden(&test.name));
+        let activity = if hidden {
+            Activity::Off
+        } else if rules.always_near.contains(&test.name.to_ascii_lowercase()) {
+            Activity::Near
+        } else {
+            Activity::of(d, limit, test.too_far)
+        };
         let [always, near, far] = test.groups;
         let drawn = !light.haze_on || activity.groups(always, near, far) & DRAW_BITS != 0;
         if !drawn && !has_layer {
@@ -193,7 +300,19 @@ pub fn update_activity(
         if !seen.insert(test.object) {
             continue;
         }
+        // Rule 41: the collider follows bit 0x8; colliders exist at load,
+        // so only a loss or a later gain is a switch.
+        let has_collider = activity.groups(always, near, far) & COLLIDER_BIT != 0;
+        // Rule 37: its own lights shine while it has bit 0x400 (M1 7c).
+        if activity.groups(always, near, far) & crate::scene_lights::LIGHTS_BIT != 0 {
+            lights_group.0.insert(test.object);
+        }
+        let was = solid.insert(test.object, has_collider);
+        if was.unwrap_or(true) != has_collider {
+            switches.0.push((test.name.clone(), has_collider, activity, d + test.radius));
+        }
         *counts.entry(activity).or_default() += 1;
+        *sources.entry(test.ball_from).or_default() += 1;
         hidden_objects += usize::from(!drawn);
         let to_position = (reference - transform.translation).length() * UNITS_PER_METRE;
         let entry = Some((d + test.radius, to_position, test.name.clone()));
@@ -250,6 +369,82 @@ pub fn update_activity(
             describe(&nearest_off),
             describe(&farthest_on)
         ));
+        log.detail(format!("draw distance: balls by source {sources:?}"));
+    }
+}
+
+/// The group bit that puts an object's collider in the collision world
+/// (rule 37).
+pub const COLLIDER_BIT: u32 = 0x8;
+
+/// At each game update, before the doors and Connor: applies the collider
+/// switches the test saw (rule 41). Out: the object's boxes in
+/// `ObjectColliders` are switched off (size 0, far below) and its view
+/// boxes dropped, and the running game no longer clicks it; back: they
+/// are put back as they were (doors, chests and moving objects are moved
+/// to where they stand by their own update). A deleted object stays out.
+pub fn apply_collider_switches(
+    mut switches: ResMut<ColliderSwitches>,
+    mut out: ResMut<SwitchedOut>,
+    sim: Option<ResMut<crate::door_view::DoorSim>>,
+    colliders: Option<ResMut<crate::terrain_view::ObjectColliders>>,
+    view: Option<ResMut<crate::terrain_view::ViewBlockerSet>>,
+    shared: Res<Shared>,
+) {
+    if switches.0.is_empty() {
+        return;
+    }
+    let (mut sim, mut colliders, mut view) = (sim, colliders, view);
+    let updates = sim.as_ref().map_or(0, |s| s.active.world.updates);
+    let mut lines = Vec::new();
+    for (name, on, activity, distance) in std::mem::take(&mut switches.0) {
+        let key = name.to_ascii_lowercase();
+        if let Some(s) = sim.as_mut() {
+            if on && s.active.world.is_deleted(&name) {
+                continue;
+            }
+            s.active.switch_collider(&name, on);
+        }
+        let (boxes, views) = if on {
+            let (boxes, views) = out.0.remove(&key).unwrap_or_default();
+            if let Some(c) = colliders.as_mut() {
+                for (i, b) in &boxes {
+                    c.0[*i] = b.clone();
+                }
+            }
+            let n = views.len();
+            if let Some(v) = view.as_mut() {
+                v.boxes.extend(views);
+            }
+            (boxes.len(), n)
+        } else {
+            let mut saved = Vec::new();
+            if let Some(c) = colliders.as_mut() {
+                for (i, b) in c.0.iter_mut().enumerate().filter(|(_, b)| b.name.eq_ignore_ascii_case(&name) && b.min != b.max) {
+                    saved.push((i, b.clone()));
+                    crate::door_view::switch_off(b);
+                }
+            }
+            let mut views = Vec::new();
+            if let Some(v) = view.as_mut() {
+                let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut v.boxes).into_iter().partition(|b| b.name.eq_ignore_ascii_case(&name));
+                v.boxes = kept;
+                views = gone;
+            }
+            let counts = (saved.len(), views.len());
+            out.0.entry(key).or_default().0.extend(saved);
+            out.0.get_mut(&name.to_ascii_lowercase()).expect("just made").1.extend(views);
+            counts
+        };
+        lines.push(format!(
+            "update {updates}: collider switch: [{name}] {activity:?} at ball distance {distance:.0}: collider {} ({boxes} box(es) for Connor, {views} view box(es){})",
+            if on { "back" } else { "out" },
+            if sim.is_some() { ", clicks follow" } else { "" }
+        ));
+    }
+    let mut log = shared.log.lock().unwrap();
+    for l in lines {
+        log.detail(l);
     }
 }
 

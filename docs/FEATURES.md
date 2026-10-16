@@ -46,6 +46,17 @@ tomb); falling leaves fade together per emitter; objects switch off when
 they are `visibleDistance` from **Connor** (Dead City's flames at about
 12,100, checked in the log). Checked by eye by the user (2026-10-16):
 matches the original.
+Draw distance details (2026-10-16, answers to Q70, Q71, Q74; checked in
+the logs only): how far an object reaches is measured from its box in
+the game's box table (not its model); items far from Connor are not
+drawn; objects that are far or switched off (and hidden ones) are not
+solid and can't be clicked, and come back when Connor gets near.
+Point lights on models (2026-10-16, answer to Q72; checked in the logs
+and by eye by the user: the portal lights Connor): Dead City's seven point lights and the lights
+some models carry (the arrival portal's circling green light, torches,
+coals; in Daventry lamps, candles, chandeliers, fireplaces) light
+nearby objects and Connor, as in the original. Walls and the ground
+don't get them yet.
 
 ## Connor
 
@@ -110,8 +121,21 @@ objects don't stop it, as in the original. Checked in the logs
   remark is only written to the log); the castle keep's doors open only
   with the key (test option `--item`; there is no inventory screen yet).
   Checked in the logs (`doors.log`) and by eye with real mouse clicks.
-- **No clicks through walls or the ground:** a click only reaches an
-  object the camera can see, as in the original (checked by eye).
+- **Clicks and walls:** a wall, floor or ceiling between the camera and
+  an object takes the click and nothing happens, as the original does it
+  (behaviour note answer to Q63, 2026-10-16). The ground no longer stops
+  a click, and the church, cave and wizard's house don't either (their
+  files say so). Checked in the logs (the pub's ceiling takes the click
+  aimed at the chest upstairs); the earlier version (walls and ground
+  block) was checked by eye.
+- **Items an object accepts:** lists of several items and "accepts
+  anything" work, and scripts can add to them (2026-10-16; the keep's
+  doors with the key checked in the logs).
+- **Script details (2026-10-16, logs and unit tests):** an object's
+  script hears when its play-once movement ends one update later (as the
+  original's event queue does), doors too; `getEndLoop`; scripts can
+  delete any object; new items are named `NoName0`, `NoName1`, ... as in
+  the original.
 - **Falling leaves and stream drips:** the small particles the game keeps
   flying around Daventry's trees and over the stream, with the original's
   speeds, lifetimes, swaying and gravity. Leaves that drift into the
@@ -244,12 +268,12 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, moving lights (Dead City), fire and
-  ice arrow sparks and the dragon fire (they come with fighting), the
-  teleport pad's look.
+- **Not drawn:** people and monsters, point lights on walls and the
+  ground (they light models only so far), fire and ice arrow sparks and
+  the dragon fire (they come with fighting), the teleport pad's look.
 - **No sound or music** at all.
-- **Clicking:** doors, chests, items and scripted objects react; nothing
-  else does. Connor says nothing (his remarks, e.g. "too far" or
+- **Clicking:** doors, chests, items, scripted objects and buildings
+  react; nothing else does. Connor says nothing (his remarks, e.g. "too far" or
   "locked", are only logged) and doesn't turn to face what he clicks.
   Picked-up items are only counted in the log.
 - **Animated objects** play only the movement they start with (scripts

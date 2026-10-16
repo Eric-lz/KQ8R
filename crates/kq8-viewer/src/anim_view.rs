@@ -111,6 +111,8 @@ pub fn spawn_animated(
         duration: f32,
         steps: Vec<GameTransform>,
         moves: bool,
+        /// Each frame's lights (M1 7c, rule 26b).
+        lights: std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>,
     }
     let built: Vec<Built> = animations
         .into_iter()
@@ -131,7 +133,7 @@ pub fn spawn_animated(
                 })
                 .collect();
             let moves = a.frame_transforms.iter().skip(1).any(|t| !is_still(t));
-            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves }
+            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights) }
         })
         .collect();
     let mut rng = Rng::new(SEED);
@@ -139,7 +141,7 @@ pub fn spawn_animated(
     let mut moving = Vec::new();
     let mut random = 0;
     for a in animated {
-        let (p, _, unused) = &placed[a.placed];
+        let (p, shape_index, unused) = &placed[a.placed];
         random += usize::from(a.random);
         let b = &built[a.animation];
         let opacity = p.opacity();
@@ -151,7 +153,11 @@ pub fn spawn_animated(
         }
         // Draw distance (M1 6h); unused objects are only shown with H.
         if !*unused {
-            body.insert(balls.test(p));
+            body.insert(balls.test_at(p, *shape_index));
+            // The lights it carries (M1 7c), by the frame shown.
+            if let Some(c) = crate::scene_lights::CarriedLights::new(vec![b.lights.clone()], bevy_transform_from(rotation, p.position)) {
+                body.insert(c);
+            }
         }
         let body = body.id();
         let mut frames = Vec::with_capacity(b.frames.len());
@@ -249,6 +255,10 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
             }
         });
         let Some(i) = slot else { continue };
+        // Switched off (out of the collision world, or deleted): stays off.
+        if colliders.0[i].min == colliders.0[i].max {
+            continue;
+        }
         let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
         let (rotation, position) = combine(&pose_at_frame(&p.steps, frame), &p.rotation, p.position);
         colliders.0[i].placement = kq8_core::collide::Placement { rotation, position };
@@ -262,12 +272,20 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
 }
 
 /// Each object shows its current frame (and pose, if its loop moves it).
-pub fn anim_draw(sim: Option<ResMut<AnimSim>>, mut transforms: Query<&mut Transform>, mut visibility: Query<&mut Visibility>) {
+pub fn anim_draw(
+    sim: Option<ResMut<AnimSim>>,
+    mut transforms: Query<&mut Transform>,
+    mut visibility: Query<&mut Visibility>,
+    mut carried: Query<&mut crate::scene_lights::CarriedLights>,
+) {
     let Some(mut sim) = sim else { return };
     for p in &mut sim.playing {
         let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
         if p.shown == Some(frame) {
             continue;
+        }
+        if let Ok(mut c) = carried.get_mut(p.body) {
+            c.frame = frame;
         }
         if let Some(mut v) = p.shown.and_then(|k| visibility.get_mut(p.frames[k]).ok()) {
             *v = Visibility::Hidden;

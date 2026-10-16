@@ -32,14 +32,21 @@
 //!   user's check, Q68): Bevy's distance fog on every 3D camera (linear,
 //!   haze start to end, haze colour), and the clear colour = the haze
 //!   colour; `sync_fog`. F8 switches it with the rest.
-//! - Not done: point lights (rule 24), the brightness setting (rule 17;
-//!   1.0 at the shipped value).
+//! - Point lights (rule 24, M1 7c): the scene's light list
+//!   (`scene_lights`) is a storage buffer every material shares; each
+//!   vertex carries its model part's ball (`ATTRIBUTE_PART_BALL`).
+//! - Not done: the brightness setting (rule 17; 1.0 at the shipped value).
 
 use bevy::asset::embedded_asset;
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::pbr::{Material, MaterialPlugin};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat};
+use bevy::mesh::{MeshVertexAttribute, MeshVertexBufferLayoutRef, VertexFormat};
+use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
+use bevy::render::render_resource::{
+    AsBindGroup, Extent3d, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError, TextureDimension, TextureFormat,
+};
+use bevy::render::storage::ShaderBuffer;
 use bevy::asset::RenderAssetUsages;
 use bevy::shader::ShaderRef;
 use std::time::Instant;
@@ -95,6 +102,10 @@ pub struct Settings {
     pub haze_from: Vec4,
 }
 
+/// Each corner's model part ball (rule 24): centre in model space (Bevy
+/// units), w = radius in game units (`Triangle::part_ball`).
+pub const ATTRIBUTE_PART_BALL: MeshVertexAttribute = MeshVertexAttribute::new("Part_Ball", 0x4B51_3807, VertexFormat::Float32x4);
+
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct ObjectMaterial {
     #[uniform(0)]
@@ -102,6 +113,9 @@ pub struct ObjectMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub texture: Option<Handle<Image>>,
+    /// The scene's lights (`scene_lights`), shared by every material.
+    #[storage(3, read_only)]
+    pub scene_lights: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -125,12 +139,33 @@ impl Material for ObjectMaterial {
     fn enable_shadows() -> bool {
         false
     }
+
+    /// Position, normal, texture place and the part's ball (rule 24).
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        let vertex_layout = layout.0.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            ATTRIBUTE_PART_BALL.at_shader_location(8),
+        ])?;
+        descriptor.vertex.buffers = vec![vertex_layout];
+        Ok(())
+    }
 }
 
-/// Registers the shader and the material.
+/// Registers the shader and the material, and the scene's light list
+/// (M1 7c) that every object material shares.
 pub fn add(app: &mut App) {
     embedded_asset!(app, "object_light.wesl");
     app.add_plugins(MaterialPlugin::<ObjectMaterial>::default());
+    let buffer = app.world_mut().resource_mut::<Assets<ShaderBuffer>>().add(crate::scene_lights::empty_buffer());
+    app.world_mut().resource_mut::<ObjectLight>().scene_lights = buffer.clone();
+    app.insert_resource(crate::scene_lights::SceneLights::new(buffer)).init_resource::<crate::scene_lights::LightsGroup>();
 }
 
 fn mode_code(mode: LightMode) -> u32 {
@@ -162,11 +197,13 @@ pub struct ObjectLight {
     pub haze: Haze,
     /// F8 / `--haze`.
     pub haze_on: bool,
+    /// The scene's light list (M1 7c), set by `add`.
+    pub scene_lights: Handle<ShaderBuffer>,
 }
 
 impl ObjectLight {
     pub fn new(lights: Lights, mode: LightMode, haze: Haze, haze_on: bool) -> Self {
-        ObjectLight { lights, mode, haze, haze_on }
+        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default() }
     }
 
     fn settings(&self, base_colour: Vec4, shading: Shading, textured: bool) -> Settings {
@@ -260,7 +297,7 @@ pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images
         Look::Missing(_) => (LinearRgba::from(Color::srgb(1.0, 0.0, 1.0)).to_vec4(), None, Shading { lighting: Lighting::None, ..shading }),
     };
     let textured = texture.is_some();
-    ObjectMaterial { settings: light.settings(base, shading, textured), texture, alpha_mode: AlphaMode::Opaque }
+    ObjectMaterial { settings: light.settings(base, shading, textured), texture, scene_lights: light.scene_lights.clone(), alpha_mode: AlphaMode::Opaque }
 }
 
 /// A copy of `material` drawn at `opacity` (0..1): an object's

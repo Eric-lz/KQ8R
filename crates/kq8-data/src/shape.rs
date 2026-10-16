@@ -108,6 +108,50 @@ pub struct LightNode {
     pub intensity_scale: f32,
 }
 
+/// The flag bit of a light node that makes it a point light; clear: a
+/// sun-type light whose position is its aim (object-lighting.md rule 26b:
+/// "flag bit 1"). Our reading: the lowest bit, 0x1. Every node in the
+/// game's data has flags 1 or 5 (none has 0x2), and A's example
+/// `portlite.kqs` (flags 1) carries point lights (`kq8 lighting-verify`).
+pub const LIGHT_POINT_FLAG: u8 = 0x01;
+
+/// At most this many of a frame's lights shine (rule 26b).
+pub const MAX_FRAME_LIGHTS: usize = 5;
+
+/// The strength of one intensity level (rule 26b: strength = level × 0.2).
+pub const LIGHT_LEVEL_STRENGTH: f32 = 0.2;
+
+/// A light a model carries in one frame (object-lighting.md rule 26b), in
+/// the model's own space, before the object's placement.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelLight {
+    /// Point light (else sun-type: `position` is its aim, in world axes).
+    pub point: bool,
+    /// The node's flags as stored (for the log).
+    pub flags: u8,
+    /// Byte ÷ 255 × intensity scale × level × 0.2, each channel capped at 1.
+    pub colour: [f32; 3],
+    pub position: [f32; 3],
+    /// `tsAttenuationBegin` / `End` as for `KQPointLight`.
+    pub begin: f32,
+    pub end: f32,
+}
+
+impl LightNode {
+    /// This node as a light (rule 26b).
+    pub fn model_light(&self) -> ModelLight {
+        let strength = self.intensity_level * LIGHT_LEVEL_STRENGTH;
+        ModelLight {
+            point: self.flags & LIGHT_POINT_FLAG != 0,
+            flags: self.flags,
+            colour: self.color.map(|c| (c as f32 / 255.0 * self.intensity_scale * strength).clamp(0.0, 1.0)),
+            position: self.position,
+            begin: self.attenuation_begin,
+            end: self.attenuation_end,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Face {
     /// (vertex index, texture vertex index) per corner. Vertex indices are
@@ -248,6 +292,11 @@ pub struct Triangle {
     pub material: i32,
     /// Index of the mesh node it came from.
     pub node: usize,
+    /// The bounding ball of its model part (its mesh node) in this frame,
+    /// for point lights (object-lighting.md rule 24): centre (model space)
+    /// = middle of the part's vertices in this frame (the note's
+    /// stand-in), w = the radius stored with the part's mesh.
+    pub part_ball: [f32; 4],
     /// Unit normal at each corner, pointing out of the front side: the
     /// average of the unit normals of all triangles of the same mesh node
     /// that use the same vertex (object-lighting.md rule 8: computed from
@@ -396,6 +445,18 @@ impl Shape {
         })
     }
 
+    /// The lights the model carries while it shows `sequence` (rule 26b):
+    /// the nodes of the sequence's light sub-sequence, at most
+    /// [`MAX_FRAME_LIGHTS`]; none for −1 or an index out of range.
+    pub fn sequence_lights(&self, sequence: usize) -> Vec<ModelLight> {
+        let Some(sub) = self.sequences.get(sequence).and_then(|s| usize::try_from(s.light_subsequence).ok()).and_then(|k| self.subsequences.get(k)) else {
+            return Vec::new();
+        };
+        let first = usize::try_from(sub.first_node).unwrap_or(0);
+        let count = usize::try_from(sub.node_count).unwrap_or(0).min(MAX_FRAME_LIGHTS);
+        self.lights.iter().skip(first).take(count).map(LightNode::model_light).collect()
+    }
+
     /// The sequence the model shows when it is not animating: the first
     /// sequence of the first loop (or sequence 0 if there are no loops).
     pub fn rest_sequence(&self) -> usize {
@@ -498,7 +559,14 @@ impl Shape {
                     }
                 }
                 corner_vertices.push(face.corners.map(|c| c.0));
-                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index, normals: [[0.0; 3]; 3] });
+                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index, normals: [[0.0; 3]; 3], part_ball: [0.0; 4] });
+            }
+            // Rule 24: the part's ball in this frame.
+            if let Some((lo, hi)) = bounds(&g.triangles[first_triangle..]) {
+                let ball = [0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1]), 0.5 * (lo[2] + hi[2]), mesh.radius];
+                for t in &mut g.triangles[first_triangle..] {
+                    t.part_ball = ball;
+                }
             }
             for (t, vertices) in g.triangles[first_triangle..].iter_mut().zip(&corner_vertices) {
                 for (normal, vi) in t.normals.iter_mut().zip(vertices) {
@@ -593,6 +661,39 @@ mod tests {
         ml.extend([0u8; 16]);
         d.extend(block(crate::material::CLASS, 1, &ml));
         block(CLASS, 3, &d)
+    }
+
+    #[test]
+    fn a_sequence_names_its_lights() {
+        let mut s = Shape::parse(&shape()).unwrap();
+        assert!(s.sequence_lights(0).is_empty(), "light sub-sequence -1");
+        let node = |flags: u8, color: [u8; 3], level: f32| LightNode {
+            name: 0,
+            flags,
+            color,
+            position: [1.0, 2.0, 3.0],
+            attenuation_end: 3000.0,
+            attenuation_begin: 1500.0,
+            intensity_level: level,
+            intensity_scale: 1.0,
+        };
+        s.lights = vec![node(0x1, [255, 255, 18], 1.0), node(0x4, [255, 0, 0], 10.0)];
+        s.lights.extend((0..6).map(|_| node(0x5, [0, 0, 255], 1.0)));
+        s.subsequences.push(SubSequence { first_node: 0, node_count: 2 });
+        s.subsequences.push(SubSequence { first_node: 2, node_count: 6 });
+        s.sequences[0].light_subsequence = 1;
+        s.sequences[1].light_subsequence = 2;
+        let l = s.sequence_lights(0);
+        assert_eq!(l.len(), 2);
+        // Version 1-3 strength 0.2: (1.0, 1.0, 0.07) x 0.2.
+        assert!(l[0].point && (l[0].colour[0] - 0.2).abs() < 1e-6 && (l[0].colour[2] - 18.0 / 255.0 * 0.2).abs() < 1e-6);
+        assert_eq!((l[0].position, l[0].begin, l[0].end), ([1.0, 2.0, 3.0], 1500.0, 3000.0));
+        // Level 10 = strength 2, capped at 1; flag bit clear = sun-type.
+        assert!(!l[1].point && l[1].colour == [1.0, 0.0, 0.0]);
+        // At most five.
+        assert_eq!(s.sequence_lights(1).len(), MAX_FRAME_LIGHTS);
+        s.sequences[1].light_subsequence = 9;
+        assert!(s.sequence_lights(1).is_empty(), "out of range");
     }
 
     #[test]

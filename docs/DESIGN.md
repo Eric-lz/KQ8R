@@ -905,6 +905,84 @@ an object appears; it also logs objects that are near or far but not
 drawn (8 Daventry props whose files set `groupsActive3DFar=0`). Items use
 the default masks (stand-in). Open: Q70 (the collider's ball).
 
+#### M1 step 7 — draw distance answers and point lights (planned 2026-10-16)
+
+From A's answers to Q70–Q74 (`object-lighting.md` rules 14, 16, 24–26b,
+35, 37, 41–43; `items.md` 5b; `terrain-lighting.md` 15). Order as STATUS
+asks: the draw-distance fixes first (small), then lights on models (what
+the user saw on Connor), then walls, then the ground. Each sub-step gets
+its own MODLOG entry; the lighting sub-steps are planned in detail here
+before they start.
+
+- **7a (done 2026-10-16). The draw-distance ball and items** (Q70, Q71; rules 35, 43): the
+  ball always comes from a `BOUNDS.KQ` box: the collision box for objects
+  that have one (animated: current movement's shape, then own name),
+  else by `shapeName` then own name; none: radius 100 at the position.
+  Worked out once, when the object enters. Centre turned with the object
+  (our choice, "Do not reproduce"). Items: `tooFar` 0.83, near 0x448,
+  **far 0**: a far item is neither drawn nor clickable. Log: per item
+  near / far / off counts.
+- **7b (done 2026-10-16). The collider switch, `setActiveCamera`, `makeActive`** (Q74;
+  rules 36, 41, 42): when an object's state changes, losing bit 0x8 takes
+  its collider out (Connor, the camera and clicks pass through), gaining
+  it puts it back. `setActiveCamera 0|1` (reference point Connor or the
+  camera) and `makeActive <name> 0|1` (always near) as script commands,
+  effective from the next frame. Log every switch.
+- **7c (done 2026-10-16). Lights on models** (rules 24, 26b, 3, 37): `KQPointLight`s that
+  the world's scripts load (Dead City seven at the start) and the lights
+  carried by models (`.kqs` light nodes of the current frame, at most 5,
+  placed by the object's placement only), each while its owner is in the
+  lights group (0x400). Per model part: out of range when (distance to
+  the part's ball) − radius > End; facing from the light to the ball's
+  centre; falloff Begin → End. On the graphics card, as the sun is now.
+  Three sub-steps (planned 2026-10-16):
+  - **7c-1 (done 2026-10-16), the data.** `kq8-data` `shape.rs`: the lights of a sequence
+    (its light sub-sequence's nodes, at most 5): kind (flag bit → point or
+    sun-type), colour = byte ÷ 255 × scale × level × 0.2, capped at 1
+    (versions 1–3: level and scale 1.0), position, Begin, End. The viewer
+    keeps them per drawn frame (`Animation::frame_lights`, and for still
+    models their shown frame). `KQPointLight` objects that world scripts
+    `loadKQ` (`light/Plight01.kq`) are found where the sun files are found
+    (`data/<World>/KQ/`) and kept by name (deletable, near / far / off).
+    Logs: per world, how many point lights load and how many drawn shapes
+    carry lights; `portlite.kqs`' 17 frames (position, colour) as a check
+    against A's numbers (rule 26b example). Unit tests on a made-up shape.
+  - **7c-2 (done 2026-10-16), gathering.** Once per frame (rule 3): every `KQPointLight` and
+    every light carried by a shown object, each only while its owner is in
+    the lights group (bit 0x400: near or far with the default masks);
+    point positions put through the owner's placement only, sun-type aims
+    as stored. Into one list on the graphics card (a storage buffer
+    shared by every object material, fixed size, contents rewritten each
+    frame). Log once a second: how many lights, the nearest to Connor.
+  - **7c-3 (done 2026-10-16), the shader.** Each vertex carries its model part's ball
+    (centre in model space = middle of the part's vertices in that frame,
+    radius = the part's mesh radius; rule 24's stand-in for the centre).
+    Per light: part out of range when (distance to the ball centre) −
+    radius > End; facing = max(0, −(unit direction light→centre ·
+    normal)); falloff from the corner's own distance: 1 to Begin, linear
+    to 0 at End; colour × falloff × facing added before the cap (rule 4).
+    Sun-type model lights add like suns (rule 5). Flat and none as now.
+- **7d. Point lights on walls** (rule 16): when dynamic lighting is on,
+  per wall surface per light: in front, switched on (`turnOffDynLighting`
+  off), nearest corner/centre within Begin + End, line not blocked; then
+  added to the light map per texel with the wall falloff (End = fade
+  length), and the surface's haze × 0.04.
+- **7e. Point lights on the ground** (rule 26): patches painted into the
+  shown map every frame, put back the next.
+- **7f. Q73 leftovers**: light maps bilinear, no colour key on walls or
+  ground, the ground's far-edge cut at t = (visibleDistance − d₁) ÷
+  (d₂ − d₁) (rule 28); check each against our code and change what
+  differs. **Checked 2026-10-16:** walls' light maps are sampled
+  bilinear ✓; walls and ground are opaque, texture alpha ignored, so no
+  colour key ✓; the ground's cut (corner distances blended across the
+  triangle, cut at `visibleDistance`) is the same cut as rule 28 ✓
+  (comment updated, no code change). **Differs:** the ground's light map
+  is blended per triangle (vertex colours), not bilinear per square
+  (`terrain-lighting.md` rule 11, `object-lighting.md` rule 13). Planned
+  as **7e-0**: the ground's light map as a texture looked up in world
+  coordinates with bilinear filtering; 7e (point-light patches painted
+  into the shown map each frame) then works on that texture.
+
 ### M2 — Walk Connor around Daventry
 
 **You will see:** Connor walking, running and turning, the camera following,
@@ -2383,7 +2461,7 @@ catchers, ground animators).
     per-frame models); the running game keeps chests apart
     (`ActiveChest`). Daventry: `smlchst3`, `smlchst4`, `wizchest1`
     (hidden, type 0x1).
-  - **3e-4b, clicks need the camera's line of sight (planned and done
+  - **3e-4b (replaced by 3g-2 after Q63), clicks need the camera's line of sight (planned and done
     2026-10-13, MODLOG).** The user's check in the original (2026-10-13): an
     object can't be clicked through a wall or the ground, but can when
     Connor is behind a wall and the camera sees the object. This
@@ -2471,6 +2549,63 @@ catchers, ground animators).
     **Done** as planned. Every placed entity now carries the object's
     name (`terrain_view::ObjectName`) so a deletion can hide it; deletions
     are applied in `trap_step` (with the other script requests).
+
+- **3g — the clicking and script answers (Q54, Q60–Q64) (planned and done
+  2026-10-16).** A answered these 2026-10-15/16 (`clicking.md`,
+  `doors.md` "Q45" e, `items.md` rules 7 and 9, `chests.md` rule 8); our
+  stand-ins from 3e/3f/3r are replaced one at a time. Each sub-step has
+  its own unit tests and MODLOG entry.
+  - **3g-1 (done 2026-10-16), `test` leaves −1** (Q54, `doors.md` Q45 e): a false text `==`
+    leaves `-1` when the left word comes first in byte order, `1`
+    otherwise; every other false text test leaves `1`. Unit test
+    `test abc == abd` → −1, `abd == abc` → 1, `abc < abb` → 1.
+  - **3g-2 (done 2026-10-16), what the click line hits** (Q63, `clicking.md` rules 1–12).
+    Replaces 3e-4b's stand-in. The click line is tested against every
+    clickable shape (bit 0x20) only, nearest wins: the boxes we already
+    test, **plus buildings** (type 0x28 by default, so clickable, unless
+    `colliderType` says otherwise: Daventry's cave, church and wizhouse
+    have 136 and are not). Buildings are tested with the BSP line test the
+    camera already uses. **The ground no longer blocks**, and neither do
+    objects without bit 0x20. A picked building with no script: nothing
+    happens, logged "swallowed, no script" (rule 10; in reach or out:
+    `tooFarAwayAction` 1). With an item in hand: "that doesn't work"
+    (rule 12). Buildings with a script (none in Daventry) get the calls as
+    doors do (logged only for now: no Daventry building has one).
+    Hidden objects stay unclickable: with default masks hiding drops
+    their collider (`objects.md` "Hidden objects" 3, `object-lighting.md`
+    rule 41), which is what the click line tests. Code: `kq8-core`
+    `active.rs` (`pick_seen` takes "the nearest clickable building hit"
+    instead of the view blockers), viewer `door_view.rs` / `game_camera.rs`
+    (a list of clickable buildings). Unit tests: a box behind a clickable
+    wall is not picked and the wall is; behind a 136 building it is
+    picked; the ground doesn't block. Log: what the line hit first (name,
+    kind, distance).
+  - **3g-3 (done 2026-10-16), accept lists** (Q62, `clicking.md` rules 13–18): split at
+    commas; first word `all` / `INVITEM_All` (any capitals; anywhere in the
+    list, our choice from "Do not reproduce") = accept everything; other
+    words are type names looked up with `items.md` rule 2 until `none`;
+    unknown names skipped and logged; `acceptAllItems` non-zero = the same
+    switch; compare the held item's **type**. `KQObject::setAccepts`
+    adds. Unit tests: list, `INVITEM_All`, `none`, unknown name, prefix
+    and capitals, `setAccepts` adds.
+  - **3g-4 (done 2026-10-16), `EndLoop` through the queue, doors too, `getEndLoop`** (Q64 c,
+    `clicking.md` rule 21): a finished non-repeating movement sends the
+    object a cue 3333 through the event queue (arrives the next update,
+    after what is already waiting); a cue 3333 becomes `EndLoop
+    <movement>`, 500 is "projectile, combat" (logged). Doors get
+    `EndLoop open/close` after their `Open`/`Close`. `getEndLoop <from>
+    <to> 1|0`: one listener per object; when `<from>`'s non-repeating
+    movement ends, `<to>` gets `Cue 300 0 <movement>`. Connor as `<from>`:
+    his movements (`push`) are not played by scripts yet, so it is
+    recorded and logged only. Unit tests: `EndLoop` one update later,
+    door `Open` then `EndLoop open`, `getEndLoop` relays, 0 stops it.
+  - **3g-5 (done 2026-10-16), `deleteObject` for everything, `NoName<n>`, chest pickup
+    sound** (`clicking.md` rule 22, `items.md` rules 7 and 9, Q60, Q61):
+    `deleteObject` on doors, chests and items too (deleted at once: not
+    clickable, not solid, not drawn), every listed name, unknown name →
+    error line and `1`; new item objects are named `NoName<n>`, one
+    counter from 0 for the whole run; a chest's 2nd click logs the type's
+    pickup sound. Unit tests for each.
 
 ### M4 — Talk, listen, use the menus
 

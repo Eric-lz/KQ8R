@@ -10,8 +10,10 @@
 // it across the triangle. Plain blend on screen colours (rule 23). The
 // ground ends at visibleDistance (rule 28): the corners' distances are
 // blended across the triangle too and every point past visibleDistance is
-// left out, so a triangle that crosses it is cut there (STAND-IN, open
-// question 10: the original's cut was not read).
+// left out, so a triangle that crosses it is cut there. This is the
+// original's cut (rule 28, traced 2026-10-17): along each edge at
+// t = (visibleDistance - d1) / (d2 - d1), everything else blended with t;
+// inside the triangle the cut is the straight line between those points.
 
 import bevy_pbr::render::{
     mesh_functions,

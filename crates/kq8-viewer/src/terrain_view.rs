@@ -255,17 +255,25 @@ pub fn setup_objects(
     let mut colliders = std::mem::take(&mut objects.objects);
     // Items (3e-3): each type's model and opacity, before the items go to
     // the doors' `Active`.
-    let item_looks: Vec<(String, usize, f32)> = objects
+    let item_looks: Vec<(String, usize, f32, String)> = objects
         .item_shapes
         .iter()
         .map(|(kind, slot)| {
             let t = objects.items.kind(kind).and_then(|t| t.translucency).unwrap_or(256.0);
+            let shape = objects.items.kind(kind).map(|t| t.shape.clone()).unwrap_or_default();
             // As objects' `translucency` (objects.md Q14).
-            (kind.clone(), *slot, if t >= 256.0 { 1.0 } else { (t / 255.0).clamp(0.0, 1.0) })
+            (kind.clone(), *slot, if t >= 256.0 { 1.0 } else { (t / 255.0).clamp(0.0, 1.0) }, shape)
         })
         .collect();
     // Every model's bounding ball, for the draw distance (M1 6h, rule 35).
-    let balls = crate::draw_distance::ShapeBalls::new(objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
+    let bounds = match objects.game_bounds.take() {
+        Some(t) => Some(t),
+        None => {
+            log.summary("draw distance: GAME/patch/BOUNDS.KQ could not be read: every ball radius 100");
+            None
+        }
+    };
+    let balls = crate::draw_distance::ShapeBalls::new(bounds, objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
@@ -302,7 +310,10 @@ pub fn setup_objects(
     let mut smooth: Vec<Vec<Vec3>> = Vec::new();
     // Each building's surface corners (model space), for the haze log (6f).
     let mut wall_surfaces: Vec<Vec<Vec<[f32; 3]>>> = Vec::new();
+    // Each model's lights in its shown frame (M1 7c, rule 26b).
+    let mut shape_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> = Vec::new();
     for (_, model) in objects.shapes {
+        shape_lights.push(std::sync::Arc::new(vec![model.lights.clone()]));
         smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.shading.lighting)).collect());
         let mut parts = Vec::new();
         first_corner.push(model.groups.first().and_then(|g| g.triangles.first()).map(|t| t.positions[0]));
@@ -368,12 +379,14 @@ pub fn setup_objects(
             worst = worst.max((game - bevy).length() * UNITS_PER_METRE);
         }
         // Draw distance (M1 6h): one test per object, on each of its parts.
-        let test = (!*unused).then(|| crate::draw_distance::DistanceTest::new(p, balls.by_index.get(*i).copied()));
+        let test = (!*unused).then(|| balls.test_at(p, *i));
         let opacity = p.opacity();
         if opacity < 1.0 {
             see_through += 1;
             log.detail(format!("see-through [{}]: translucency={} -> opacity {opacity:.2}", p.name, p.translucency));
         }
+        // The lights it carries (M1 7c), on its first part only.
+        let mut carried = test.as_ref().and_then(|_| crate::scene_lights::CarriedLights::new(vec![shape_lights[*i].clone()], transform));
         for (mesh, material) in &built[*i] {
             // Every material of a see-through object (objects.md Q14); a
             // separate copy, because other copies of the model may be solid.
@@ -385,6 +398,9 @@ pub fn setup_objects(
             }
             if let Some(t) = &test {
                 e.insert(t.clone());
+            }
+            if let Some(c) = carried.take() {
+                e.insert(c);
             }
         }
         for (mesh, material) in &built_walls[*i] {
@@ -428,6 +444,16 @@ pub fn setup_objects(
                 log.summary(format!("object light: {} ({:.0} from Connor's start): {stats}", p.name, distance));
             }
         }
+    }
+    // KQPointLight objects (M1 7c, rules 24, 25): an entity at the light
+    // with its own near / far / off test (STAND-IN for its place, Q77 b:
+    // the light's position, radius 100, default masks).
+    for (name, light) in std::mem::take(&mut objects.point_lights) {
+        let mut p = kq8_data::objects::Placement::from_section(&kq8_data::kq_text::parse(b"[light]\n")[0]);
+        p.name = name;
+        p.position = light.position;
+        let test = crate::draw_distance::DistanceTest::new(&p, None, "KQPointLight (Q77 b stand-in)");
+        commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), test, crate::scene_lights::PointLightSource { light }));
     }
     // Invisible objects: a 1 m cube each, hidden until H is pressed.
     // Green = no model in the game; orange = a character we cannot draw yet.

@@ -25,7 +25,8 @@ const PIXELS_PER_MOUSE_UNIT: f32 = 800.0; // modified manually to what feels mor
 
 /// What blocks the view line now (camera.md "Obstacles"): the drawn
 /// ground, the blocking buildings, object boxes and doors as they stand.
-/// Also used for clicks (M3 step 3e-4b, Q63 stand-in).
+/// (Clicks used it too until M3 step 3g-2; they now test only clickable
+/// shapes, clicking.md rules 1-8.)
 pub struct Blockers<'a> {
     terrain: &'a kq8_data::Terrain,
     buildings: Vec<&'a BuildingCollider>,
@@ -71,7 +72,11 @@ pub fn view_blockers<'a>(
         },
         boxes: blockers.map_or(&[][..], |v| &v.boxes[..]),
         doors: doors
-            .map(|d| d.active.world.doors.iter().filter(|a| a.collision_type & VIEW_BLOCKING != 0).filter_map(|a| a.collider()).collect())
+            .map(|d| {
+                let w = &d.active.world;
+                // Not while its collider is out (object-lighting.md rule 41).
+                w.doors.iter().filter(|a| a.collision_type & VIEW_BLOCKING != 0 && !w.is_switched_off(&a.door.name)).filter_map(|a| a.collider()).collect()
+            })
             .unwrap_or_default(),
     }
 }

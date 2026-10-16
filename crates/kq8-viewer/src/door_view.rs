@@ -41,7 +41,7 @@ use crate::connor_view::ConnorSim;
 use crate::game_camera::GameCam;
 use crate::load::Objects;
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform_from, Buildings, GroundLookup, ObjectColliders, ViewBlockerSet};
+use crate::terrain_view::{bevy_transform_from, Buildings, ObjectColliders, ViewBlockerSet};
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
 use crate::{model_mesh, Shared, UNITS_PER_METRE};
 
@@ -142,6 +142,7 @@ pub struct HeldItem(pub Option<String>);
 /// one hidden entity per frame. `haze`: the object's `b_hazeSolid` and
 /// `hazeMultiplier` (object-lighting.md rules 21, 22). `test`: its draw
 /// distance (M1 6h, rules 34-37).
+#[allow(clippy::too_many_arguments)]
 fn spawn_body(
     commands: &mut Commands,
     placement: &Placement,
@@ -150,8 +151,14 @@ fn spawn_body(
     materials: &mut Assets<ObjectMaterial>,
     haze: (bool, f32),
     test: crate::draw_distance::DistanceTest,
+    lights: &[std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>],
 ) -> DrawnDoor {
-    let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), test)).id();
+    let transform = bevy_transform_from(placement.rotation, placement.position);
+    let body = commands.spawn((transform, Visibility::default(), test)).id();
+    // The lights it carries (M1 7c), by movement and frame.
+    if let Some(c) = crate::scene_lights::CarriedLights::new(animations.iter().map(|a| lights[*a].clone()).collect(), transform) {
+        commands.entity(body).insert(c);
+    }
     let mut frames = Vec::new();
     for a in animations {
         let mut entities = Vec::new();
@@ -195,6 +202,9 @@ pub fn spawn_doors(
     // Each animation's length and frame steps (the door's turn, rule 24).
     let timing: Vec<(f32, Vec<kq8_data::shape::Transform>)> =
         objects.door_animations.iter().map(|a| (a.duration, a.frame_transforms.clone())).collect();
+    // Each animation's lights per frame (M1 7c, rule 26b).
+    let anim_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> =
+        objects.door_animations.iter().map(|a| std::sync::Arc::new(a.frame_lights.clone())).collect();
     // Each animation once: per frame, (mesh, material) per material group.
     let built: Vec<Vec<BuiltFrame>> = std::mem::take(&mut objects.door_animations)
         .into_iter()
@@ -275,7 +285,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p)));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights));
             active_objects.push(o);
             continue;
         }
@@ -292,6 +302,7 @@ pub fn spawn_doors(
                 do_not_point_at: d.do_not_point_at,
                 script: d.script.clone(),
                 chest,
+                gone: false,
             };
             main_log.summary(format!(
                 "chests: [{}] at ({:.0}, {:.0}, {:.0}), type {:#x}, hidden {}, script {:?}, box {}, holds {:?} x{} at {:?}, Take {:?}, Empty {:?}; 'open' turns {open_turn:?} deg by its last frame",
@@ -315,13 +326,13 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p)));
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights));
             active_chests.push(c);
             continue;
         }
         let door = Door::new(&p.name, movements, d.current, base);
         let DrawnDoor { body, frames, .. } =
-            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test(p));
+            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights);
         let active = ActiveDoor {
             door,
             script: d.script.clone(),
@@ -332,6 +343,7 @@ pub fn spawn_doors(
             accept_all_items: d.accept_all_items,
             too_far_away_action: d.too_far_away_action,
             do_not_point_at: d.do_not_point_at,
+            gone: false,
         };
         // The door's script, read through the block counter (DESIGN 3a-1).
         let balance = d.script.as_ref().map(|name| {
@@ -433,6 +445,17 @@ pub fn spawn_doors(
     active.add_chests(active_chests);
     main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
     active.add_objects(active_objects);
+    // Buildings as click targets (3g-2, clicking.md rules 3-4, 10).
+    let buildings = std::mem::take(&mut objects.building_clicks);
+    let not_clickable: Vec<String> =
+        buildings.iter().filter(|b| b.collision_type & kq8_core::click::CLICKABLE == 0).map(|b| format!("{} ({:#x})", b.name, b.collision_type)).collect();
+    let scripted: Vec<String> = buildings.iter().filter_map(|b| Some(format!("{} ({})", b.name, b.script.as_ref()?))).collect();
+    main_log.summary(format!(
+        "clicks: {} of {} buildings take clicks (not: {not_clickable:?}); with a script: {scripted:?}; the ground is not tested (clicking.md rule 6)",
+        buildings.len() - not_clickable.len(),
+        buildings.len()
+    ));
+    active.add_buildings(buildings);
     // Items (3e-3): those the start-up scripts made, and the ground for
     // z -1 / -2 of items made while playing.
     let mut item_log = match Log::create("items") {
@@ -487,7 +510,7 @@ pub struct Deleted(pub Vec<String>);
 
 /// A collider that no longer touches anything (3f: `deleteObject`): size
 /// 0, far below the world.
-fn switch_off(c: &mut BoxCollider) {
+pub fn switch_off(c: &mut BoxCollider) {
     c.min = [0.0; 3];
     c.max = [0.0; 3];
     c.placement = Placement::at([0.0, 0.0, -1.0e7]);
@@ -506,6 +529,7 @@ pub fn trap_step(
     view: Option<ResMut<ViewBlockerSet>>,
     anim: Option<ResMut<crate::anim_view::AnimSim>>,
     mut deleted: ResMut<Deleted>,
+    mut rules: ResMut<crate::draw_distance::ActiveRules>,
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -540,6 +564,18 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: camera range ({min:.0}, {max:.0}){}", if c.set_range(min, max) { "" } else { " REFUSED" }),
                 None => format!("{at}: camera range ({min:.0}, {max:.0}): no game camera; not applied"),
             },
+            Request::ActiveCamera { camera, at } => {
+                rules.camera = camera;
+                format!("{at}: applied: draw distance measured from {}", if camera { "the camera" } else { "Connor" })
+            }
+            Request::MakeActive { name, on, at } => {
+                if on {
+                    rules.always_near.insert(name.to_ascii_lowercase());
+                } else {
+                    rules.always_near.remove(&name.to_ascii_lowercase());
+                }
+                format!("{at}: applied: [{name}] {}", if on { "always near" } else { "back to the distance test" })
+            }
             Request::Delete { name, at } => {
                 let mut off = 0;
                 if let Some(c) = colliders.as_mut() {
@@ -568,20 +604,36 @@ pub fn trap_step(
     }
 }
 
-/// Left click: the nearest clickable box under the mouse (rule 10), if the
-/// camera sees it (3e-4b: the user's check, Q63 stand-in), handled at the
-/// next update. `--aim NAME,N` does the same at update N with a ray from
-/// the camera to the middle of NAME's box (a test option; `--click`
-/// skips the ray).
-#[allow(clippy::too_many_arguments)]
+/// The clickable buildings' BSP for the click line (3g-2): the same line
+/// test the camera uses, only for buildings whose type has bit 0x20 now.
+struct ClickBuildings<'a> {
+    buildings: &'a [kq8_core::collide::BuildingCollider],
+    active: &'a Active,
+}
+
+impl kq8_core::active::ClickWalls for ClickBuildings<'_> {
+    fn first_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<(String, f32)> {
+        let dist = |p: [f32; 3]| (0..3).map(|k| (p[k] - from[k]).powi(2)).sum::<f32>().sqrt();
+        self.buildings
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.active.clickable_building(*i))
+            .filter_map(|(_, b)| Some((b.name.clone(), dist(b.line_hit(from, to)?))))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+    }
+}
+
+/// Left click: the click line from the camera through the mouse picks the
+/// nearest clickable box or clickable building (clicking.md rules 1-8;
+/// the ground is not tested), handled at the next update. `--aim NAME,N`
+/// does the same at update N with a line from the camera to the middle of
+/// NAME's box (a test option; `--click` skips the line).
 pub fn door_click_input(
     buttons: Res<ButtonInput<MouseButton>>,
     window: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     sim: Option<ResMut<DoorSim>>,
-    lookup: Option<Res<GroundLookup>>,
     buildings: Option<Res<Buildings>>,
-    blockers: Option<Res<ViewBlockerSet>>,
     mut aim: ResMut<AimAt>,
     shared: Res<Shared>,
 ) {
@@ -614,26 +666,20 @@ pub fn door_click_input(
             (to_game(ray.origin * UNITS_PER_METRE), to_game(*ray.direction), format!("mouse click at ({:.0}, {:.0}) px", cursor.x, cursor.y))
         }
     };
-    let pick = match &lookup {
-        Some(l) => {
-            let view = crate::game_camera::view_blockers(&l.0, buildings.as_deref(), blockers.as_deref(), Some(&*sim));
-            sim.active.pick_seen(origin, dir, &view)
+    let walls = ClickBuildings { buildings: buildings.as_deref().map_or(&[][..], |b| &b.0[..]), active: &sim.active };
+    let pick = sim.active.pick_line(origin, dir, &walls);
+    let from = format!("update {updates}: {how}: line from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
+    let (line, picked) = match pick {
+        Pick::Seen { name, t } => (format!("{from} hits {name} first, at {t:.0} units (box)"), Some(name)),
+        Pick::Building { name, t, behind } => {
+            let hidden = behind.map_or(String::new(), |(b, tb)| format!("; it hides {b} at {tb:.0}"));
+            (format!("{from} hits building {name} first, at {t:.0} units{hidden}"), Some(name))
         }
-        // No ground: nothing to block (a world without terrain).
-        None => sim.active.pick(origin, dir).map_or(Pick::Nothing, |(name, t)| Pick::Seen { name, t }),
+        Pick::Nothing => (format!("{from} meets nothing clickable"), None),
     };
-    let from = format!("update {updates}: {how}: ray from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
-    let line = match pick {
-        Pick::Seen { name, t } => {
-            let line = format!("{from} picks {name} at {t:.0} units");
-            sim.pending.push((name, "mouse".into()));
-            line
-        }
-        Pick::Blocked { name, t, by, at } => {
-            format!("{from} meets {name} at {t:.0} units, but {by} blocks the line at {at:.0} units: nothing clicked (Q63 stand-in)")
-        }
-        Pick::Nothing => format!("{from} meets no clickable object"),
-    };
+    if let Some(name) = picked {
+        sim.pending.push((name, "mouse".into()));
+    }
     shared.log.lock().unwrap().summary(&line);
     sim.log.detail(line);
 }
@@ -670,22 +716,24 @@ pub fn door_step(
     }
     sim.active.update();
     if let Some(mut colliders) = colliders {
-        for (door, slot) in sim.active.world.doors.iter().zip(&sim.collider) {
-            if let (Some(i), Some(c)) = (slot, door.collider()) {
+        // A collider out of the collision world (M1 7b, rule 41) stays out.
+        let w = &sim.active.world;
+        for (door, slot) in w.doors.iter().zip(&sim.collider) {
+            if let (Some(i), Some(c), false) = (slot, door.collider(), w.is_switched_off(&door.door.name)) {
                 colliders.0[*i] = c;
             }
         }
-        for (chest, slot) in sim.active.world.chests.iter().zip(&sim.chest_collider) {
-            if let (Some(i), Some(c)) = (slot, chest.collider()) {
+        for (chest, slot) in w.chests.iter().zip(&sim.chest_collider) {
+            if let (Some(i), Some(c), false) = (slot, chest.collider(), w.is_switched_off(&chest.chest.name)) {
                 colliders.0[*i] = c;
             }
         }
-        for (object, slot) in sim.active.world.objects.iter().zip(&sim.object_collider) {
+        for (object, slot) in w.objects.iter().zip(&sim.object_collider) {
             if object.gone {
                 // Switched off by `trap_step` (3f).
                 continue;
             }
-            if let (Some(i), Some(c)) = (slot, object.collider()) {
+            if let (Some(i), Some(c), false) = (slot, object.collider(), w.is_switched_off(object.name())) {
                 colliders.0[*i] = c;
             }
         }
@@ -748,15 +796,38 @@ fn show_frame(
 
 /// Each door and chest where it stands, showing the frame of its
 /// movement; hidden chests are not drawn.
-pub fn door_draw(sim: Option<ResMut<DoorSim>>, mut transforms: Query<&mut Transform>, mut visibility: Query<&mut Visibility>) {
+pub fn door_draw(
+    sim: Option<ResMut<DoorSim>>,
+    mut transforms: Query<&mut Transform>,
+    mut visibility: Query<&mut Visibility>,
+    mut carried: Query<&mut crate::scene_lights::CarriedLights>,
+) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
+    // The frame whose lights shine (M1 7c).
+    let mut lit = |body: Entity, movement: usize, frame: usize| {
+        if let Ok(mut c) = carried.get_mut(body) {
+            if (c.movement, c.frame) != (movement, frame) {
+                (c.movement, c.frame) = (movement, frame);
+            }
+        }
+    };
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
+        lit(drawn.body, d.current, d.frame());
         show_frame(drawn, &d.placement(), d.current, d.frame(), &mut transforms, &mut visibility);
+        // Deleted (3g-5): not drawn.
+        if door.gone {
+            if let Ok(mut v) = visibility.get_mut(drawn.body) {
+                if *v != Visibility::Hidden {
+                    *v = Visibility::Hidden;
+                }
+            }
+        }
     }
     for (object, drawn) in sim.active.world.objects.iter().zip(sim.object_drawn.iter_mut()) {
         let p = &object.player;
+        lit(drawn.body, p.current, p.frame());
         show_frame(drawn, &p.placement(), p.current, p.frame(), &mut transforms, &mut visibility);
         let want = if object.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
@@ -767,6 +838,7 @@ pub fn door_draw(sim: Option<ResMut<DoorSim>>, mut transforms: Query<&mut Transf
     }
     for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
         let c = &chest.chest;
+        lit(drawn.body, c.player.current, c.frame());
         show_frame(drawn, &c.placement(), c.player.current, c.frame(), &mut transforms, &mut visibility);
         let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {

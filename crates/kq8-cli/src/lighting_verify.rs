@@ -9,7 +9,9 @@
 //!   surface count against the `.dig` of the same name, the size check of
 //!   rule 13, Daventry's red histograms;
 //! - the lighting kinds of all materials (rule 7);
-//! - the buildings' `.kq` lighting keys (rule 12).
+//! - the buildings' `.kq` lighting keys (rule 12);
+//! - the lights models carry (rule 26b, M1 step 7c-1): how many shapes
+//!   carry lights, their flag values, and `portlite.kqs` frame by frame.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -55,6 +57,13 @@ struct Tally {
     /// Shading bits of materials with 0x1000 or 0x2000.
     forced: BTreeMap<(&'static str, u32, u32), usize>,
     material_failures: usize,
+    /// Shape names (lower case) that carry light nodes (rule 26b).
+    carrying: BTreeSet<String>,
+    /// Light node flags -> count, and shape version -> shapes with lights.
+    light_flags: BTreeMap<u8, usize>,
+    light_versions: BTreeMap<i32, usize>,
+    /// `portlite.kqs`'s lights per sequence (logged once).
+    portlite: Vec<String>,
 }
 
 pub fn run(game: &GameDir) -> ExitCode {
@@ -114,6 +123,18 @@ pub fn run(game: &GameDir) -> ExitCode {
     log.summary("");
     log.summary("== Material lighting kinds (rule 7)");
     material_kinds(game, &mut log, &mut t);
+
+    log.summary("");
+    log.summary("== Lights carried by models (rule 26b)");
+    log.summary(format!(
+        "shapes carrying light nodes: {} (A measured 174); light flags (value: nodes) {:?}; shape version: shapes {:?}",
+        t.carrying.len(),
+        t.light_flags,
+        t.light_versions
+    ));
+    for line in &t.portlite {
+        log.summary(format!("  {line}"));
+    }
 
     log.summary("");
     log.summary("== Buildings' .kq lighting keys (rule 12)");
@@ -421,7 +442,10 @@ fn material_file(label: &str, name: &str, bytes: &[u8], log: &mut Log, t: &mut T
     let lower = name.to_ascii_lowercase();
     let (group, list) = if lower.ends_with(".kqs") {
         match Shape::parse(bytes) {
-            Ok(s) => ("models (.kqs)", s.materials),
+            Ok(s) => {
+                model_lights(name, &s, t);
+                ("models (.kqs)", s.materials)
+            }
             Err(e) => {
                 t.material_failures += 1;
                 log.detail(format!("  skipped {label}: {e}"));
@@ -453,6 +477,44 @@ fn material_file(label: &str, name: &str, bytes: &[u8], log: &mut Log, t: &mut T
         }
     }
     true
+}
+
+/// Tallies the lights a shape carries (rule 26b); `portlite.kqs` frame by
+/// frame (A's example: 17 frames, a point light circling about 400 units,
+/// colour from (1.0, 1.0, 0.07) to (0, 1.0, 0.56) of 255, Begin 1,500, End
+/// 3,000).
+fn model_lights(name: &str, s: &Shape, t: &mut Tally) {
+    if s.lights.is_empty() {
+        return;
+    }
+    let lower = name.to_ascii_lowercase();
+    if t.carrying.insert(lower.clone()) {
+        *t.light_versions.entry(s.version).or_default() += 1;
+        for l in &s.lights {
+            *t.light_flags.entry(l.flags).or_default() += 1;
+        }
+    }
+    if lower == "portlite.kqs" && t.portlite.is_empty() {
+        t.portlite.push(format!("portlite.kqs v{}: {} light nodes, {} sequences", s.version, s.lights.len(), s.sequences.len()));
+        for seq in 0..s.sequences.len() {
+            for l in s.sequence_lights(seq) {
+                let r = (l.position[0].powi(2) + l.position[1].powi(2)).sqrt();
+                t.portlite.push(format!(
+                    "sequence {seq}: flags {:#x} {} at ({:.0}, {:.0}, {:.0}) ({r:.0} from the axis), colour ({:.3}, {:.3}, {:.3}), Begin {:.0}, End {:.0}",
+                    l.flags,
+                    if l.point { "point" } else { "sun-type" },
+                    l.position[0],
+                    l.position[1],
+                    l.position[2],
+                    l.colour[0],
+                    l.colour[1],
+                    l.colour[2],
+                    l.begin,
+                    l.end
+                ));
+            }
+        }
+    }
 }
 
 fn walk(dir: &Path, label: &str, f: &mut dyn FnMut(&str, &str, &[u8])) {
