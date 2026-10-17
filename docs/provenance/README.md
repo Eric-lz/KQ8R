@@ -1284,3 +1284,13 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | keepOnGround after the move: exactly on the floor grid | **Stand-in**, Q87 c | Unit test (slope) |
 | Buildings count as obstacles when the object's mask has 0x8 (their types 0x28 / 0x88) | `camera.md` "Obstacles" (building type), `connor-collision.md` rule 3 | — |
 | The viewer moves its colliders and drawn parts after Connor's update | **Our method** | `connor.log` "pushed haybail.01 … moved" |
+
+## Pushing scripted objects (M3 step 3j-3) — `crates/kq8-core/src/{connor_mover,active}.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Scripted pushable (0x100 + 0x10000): the touch is not a hit; the script runs with `$1` its name, `$2` `Push`, no `$3`; again at every later pushing touch | `pushing.md` rule 3 | Unit tests `walking_into_a_pushable_*`, `a_scripted_pushable_gets_push_and_takes_control_or_becomes_a_wall`; `doors.log` (bricks) |
+| He goes on through it for the rest of that move | Rule 3 ("does not stop or slide him"), edge case "walks into it" | Same unit test |
+| The script runs right after his move in the same update, before the scripts' requests are applied | **Our order** (rule 3 says mid-move; what follows a mid-move `move Connor` is not traced, `connor-collision.md`) | `doors.log` update 13 |
+| Still a pushable after its `Push` call → a wall for him from then on, logged | "Do not reproduce" of `pushing.md` | Unit test |
+| Two contacts at exactly the same distance: the pushable's first, the other found after passing through it | **Stand-in**, Q88 (bricks and table) | `connor.log` update 13 |

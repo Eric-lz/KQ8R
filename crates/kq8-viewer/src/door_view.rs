@@ -599,6 +599,13 @@ pub fn trap_step(
     for m in std::mem::take(&mut connor.ended) {
         sim.active.connor_movement_ended(&m);
     }
+    // Scripted pushables he pushed (3j-3): their scripts get Push now,
+    // right after his move (pushing.md rule 3 says mid-move: our order).
+    for name in std::mem::take(&mut connor.push_calls) {
+        if !sim.active.push_call(&name) && !connor.not_pushable.contains(&name) {
+            connor.not_pushable.push(name);
+        }
+    }
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
     let mut camera = camera;

@@ -175,7 +175,10 @@ objects don't stop it, as in the original. Checked in the logs
   half walking speed until a wall stops it; letting go plays his step
   back. Checked in the logs (`connor.log`). Barrels go into the push
   animation but don't move yet (a question to the study session). Not
-  checked by eye.
+  checked by eye. Walking into Daventry's bricks (by the waterfall) runs
+  their script: Connor's push animation, then the bricks go down and the
+  water changes; the camera moves, `handsOff` and the new waterfall
+  are not built yet (step 3k).
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),

@@ -1366,7 +1366,10 @@ catchers, ground animators).
       `--at` next to it, `--hold 1,0,0`; the log shows it sliding at
       about half walking speed and stopping at a wall; a barrel on a
       slope doesn't move.
-    - **3j-3, scripted pushables** (rules 3, 9–10): the touch calls the
+    - **3j-3, scripted pushables** (rules 3, 9–10; **done** 2026-10-17.
+      At the bricks Connor touches `Table` and `Bricks` at exactly the
+      same distance: asked as Q88; stand-in: a pushable wins a tie, and
+      after it is passed through the table still stops him): the touch calls the
       object's script with `Push` (`$1` its name) at once, mid-move, and
       is not a hit; "a scripted pushable whose script does nothing":
       treated as a wall hit and logged ("Do not reproduce").

@@ -117,6 +117,12 @@ pub struct ConnorSim {
     /// Physical pushables he moved this update (`pushing.md` rule 4):
     /// name and movement; applied by [`push_apply`] (M3 3j-2).
     pub pushed: Vec<(String, [f32; 3])>,
+    /// Scripted pushables he pushed this update, whose scripts get `Push`
+    /// (`door_view::trap_step`, M3 3j-3).
+    pub push_calls: Vec<String>,
+    /// Scripted pushables whose script didn't take control: walls for him
+    /// from then on (`pushing.md` "Do not reproduce").
+    pub not_pushable: Vec<String>,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -348,6 +354,8 @@ pub fn spawn_connor(
         step_ground: Default::default(),
         ended: Vec::new(),
         pushed: Vec::new(),
+        push_calls: Vec::new(),
+        not_pushable: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -612,11 +620,12 @@ pub fn connor_step(
 ) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let sim = &mut *sim;
-    let scene = MoverScene::new(
+    let mut scene = MoverScene::new(
         &lookup.0,
         buildings.as_ref().map_or(&[][..], |b| &b.0),
         objects.as_ref().map_or(&[][..], |o| &o.0),
     );
+    scene.not_pushable = sim.not_pushable.clone();
     if let Some((_, what)) = sim.repeat {
         let cleared = sim.walker.key_event(what, true);
         if cleared != (false, false) {
@@ -639,6 +648,12 @@ pub fn connor_step(
     let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes } = tick;
     // M3 3j-2: physical pushables moved by his move.
     sim.pushed.extend(scene.moved.take());
+    // M3 3j-3: scripted pushables pushed: their scripts get Push.
+    for t in report.pushes.iter().filter(|t| t.scripted && t.result == kq8_core::connor_mover::PushResult::Push) {
+        if !sim.push_calls.contains(&t.object) {
+            sim.push_calls.push(t.object.clone());
+        }
+    }
     // M3 3i-7: a play-once movement ended: for getEndLoop listeners.
     if let Some(e) = step.as_ref().and_then(|s| s.ended) {
         sim.ended.push(kq8_core::connor::plain_movement_name(e).to_string());

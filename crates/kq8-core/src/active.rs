@@ -936,6 +936,21 @@ impl WorldState {
         "0".into()
     }
 
+    /// The current `colliderType` of a door, chest, scripted object or
+    /// clickable object.
+    pub fn collision_type_of(&self, name: &str) -> Option<u32> {
+        if let Some(i) = self.object_index(name) {
+            return Some(self.objects[i].collision_type);
+        }
+        if let Some(i) = self.door_index(name) {
+            return Some(self.doors[i].collision_type);
+        }
+        if let Some(i) = self.chest_index(name) {
+            return Some(self.chests[i].collision_type);
+        }
+        self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.collision_type)
+    }
+
     /// The movement player of the door, chest or scripted object `name`
     /// (not deleted).
     fn player_mut(&mut self, name: &str) -> Option<&mut NamedAnimPlayer> {
@@ -1344,6 +1359,23 @@ impl Active {
 
     fn building_index(&self, name: &str) -> Option<usize> {
         self.world.buildings.iter().position(|b| b.name.eq_ignore_ascii_case(name))
+    }
+
+    /// A scripted pushable was pushed (`pushing.md` rules 3, 10): its
+    /// script runs with `$1` = its name, `$2` = `Push`. Returns `false`
+    /// when it is still a pushable afterwards (its script didn't take
+    /// control, or it has none): the caller makes its later touches wall
+    /// hits ("Do not reproduce").
+    pub fn push_call(&mut self, name: &str) -> bool {
+        self.world.note(format!("{name}: pushed by Connor: its script gets Push (pushing.md rule 3)"));
+        if !self.call_named(name, &["Push"]) {
+            self.world.note(format!("{name}: no object with a script by that name: Push not called"));
+        }
+        let still = self.world.collision_type_of(name).is_some_and(|t| t & crate::collide::PUSHABLE != 0);
+        if still {
+            self.world.note(format!("{name}: still a pushable after its Push call: from now on a wall for Connor (pushing.md \"Do not reproduce\")"));
+        }
+        !still
     }
 
     /// One of Connor's play-once movements ended (`plain` name, e.g.
@@ -3104,6 +3136,20 @@ mod tests {
         a.connor_movement_ended("push");
         a.update();
         assert_eq!(a.scripts.vars.get("C::heard"), Some("push"));
+    }
+
+    #[test]
+    fn a_scripted_pushable_gets_push_and_takes_control_or_becomes_a_wall() {
+        // Made-up script in the style of the push scripts: removes its
+        // push and click bits once.
+        let mut a = with_object("if test $2 == Push\n set P::n 1\n KQObject::collisionType $1 -288\nendif\n", "x");
+        a.world.objects[0].collision_type = 0x10121;
+        assert!(a.push_call("basket1"));
+        assert_eq!((a.scripts.vars.get("P::n"), a.world.objects[0].collision_type), (Some("1"), 0x10001));
+        // A script that does nothing: still pushable, so a wall from now on.
+        let mut b = with_object("echo nothing\n", "x");
+        b.world.objects[0].collision_type = 0x10121;
+        assert!(!b.push_call("basket1"));
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

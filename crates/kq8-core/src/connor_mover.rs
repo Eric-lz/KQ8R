@@ -80,7 +80,13 @@ pub trait MoverWorld {
     fn push_object(&self, _name: &str, _step: [f32; 3]) -> ([f32; 3], String) {
         ([0.0; 3], "objects can't be moved here".into())
     }
+    /// A scripted pushable's touch is not a hit (`pushing.md` rule 3):
+    /// `name` is passed through for the rest of this update's move.
+    fn pass_through(&self, _name: &str) {}
 }
+
+/// Two contacts this close count as at the same distance (Q88 stand-in).
+pub const TIE: f32 = 0.001;
 
 /// Connor follows a physical pushable by this share of its movement
 /// (`pushing.md` rule 4.3).
@@ -204,11 +210,16 @@ pub struct Scene<'a> {
     /// Physical pushables moved this update (`push_object`): name and
     /// movement, for the caller to apply.
     pub moved: RefCell<Vec<(String, [f32; 3])>>,
+    /// Scripted pushables passed through this update (`pass_through`).
+    pub passed: RefCell<Vec<String>>,
+    /// Scripted pushables whose script didn't take control: touches are
+    /// wall hits ("Do not reproduce" of `pushing.md`), set by the caller.
+    pub not_pushable: Vec<String>,
 }
 
 impl<'a> Scene<'a> {
     pub fn new(ground: &'a dyn GroundLookup, buildings: &'a [BuildingCollider], objects: &'a [BoxCollider]) -> Self {
-        Scene { ground, buildings, objects, notes: RefCell::new(Vec::new()), moved: RefCell::new(Vec::new()) }
+        Scene { ground, buildings, objects, notes: RefCell::new(Vec::new()), moved: RefCell::new(Vec::new()), passed: RefCell::new(Vec::new()), not_pushable: Vec::new() }
     }
 }
 
@@ -229,8 +240,15 @@ impl MoverWorld for Scene<'_> {
     fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
         let (lo, hi) = balls.reach(from, to);
         let mut best: Option<Hit> = None;
+        // Q88 stand-in: on an exact tie a pushable's contact is taken first.
+        let pushable = |name: &str| self.push_target(name).is_some();
         let mut keep = |c: crate::collide::Contact, what: &str| {
-            if best.as_ref().is_none_or(|h| length(sub(c.position, from)) < length(sub(h.position, from))) {
+            let d = length(sub(c.position, from));
+            let better = best.as_ref().is_none_or(|h| {
+                let old = length(sub(h.position, from));
+                d < old - TIE || ((d - old).abs() <= TIE && pushable(what) && !pushable(&h.what))
+            });
+            if better {
                 best = Some(Hit { position: c.position, touch: c.touch, normal: c.normal, what: what.to_string() });
             }
         };
@@ -239,7 +257,8 @@ impl MoverWorld for Scene<'_> {
                 keep(c, &b.name);
             }
         }
-        for o in self.objects.iter().filter(|o| o.overlaps(balls.radius, lo, hi)) {
+        let passed = self.passed.borrow();
+        for o in self.objects.iter().filter(|o| o.overlaps(balls.radius, lo, hi) && !passed.contains(&o.name)) {
             match o.sweep(balls, from, to) {
                 Some(ObjectHit::Contact(c)) => keep(c, &o.name),
                 Some(ObjectHit::StartedInside { ball }) => self.notes.borrow_mut().push(format!(
@@ -256,7 +275,14 @@ impl MoverWorld for Scene<'_> {
         std::mem::take(&mut *self.notes.borrow_mut())
     }
 
+    fn pass_through(&self, name: &str) {
+        self.passed.borrow_mut().push(name.to_string());
+    }
+
     fn push_target(&self, name: &str) -> Option<PushTarget> {
+        if self.not_pushable.iter().any(|n| n == name) {
+            return None;
+        }
         let o = self.objects.iter().find(|o| o.name == name && o.kind.collision_type & PUSHABLE != 0)?;
         Some(PushTarget { kind: o.kind, position: o.placement.position })
     }
@@ -852,9 +878,13 @@ impl Mover {
                         };
                         self.position = add(pass_start, scale(moved, PUSH_FOLLOW));
                     } else {
-                        // The script's part comes in 3j-3: until then he
-                        // stays at the start of the pass.
-                        self.position = pass_start;
+                        // Rule 3: the object's script gets `Push` (the
+                        // caller runs it after this move); he is not
+                        // stopped: the rest of the pass goes on through it.
+                        world.pass_through(&h.what);
+                        report.pushes.push(touch);
+                        outcome = "push";
+                        continue;
                     }
                     report.pushes.push(touch);
                     return "push";
@@ -1351,7 +1381,14 @@ mod tests {
                     assert!(t.cos > 0.95, "{}", t.describe());
                     // Not a hit for him: no head-on, no hit recorded.
                     assert!(!r.head_on && r.hits.iter().all(|h| h.hit.what != "post"), "{:?}", r.hits);
-                    assert!((m.position[1] - before[1]).abs() < 1e-3, "stays at the pass start");
+                    if scripted {
+                        // Rule 3: he goes on through it this update.
+                        assert!((m.position[1] - (before[1] - 72.0)).abs() < 1e-3, "full step: {:?}", m.position);
+                        assert_eq!(scene.passed.take(), ["post"]);
+                    } else {
+                        // A box-shaped one doesn't move (Q87 a): he stays.
+                        assert!((m.position[1] - before[1]).abs() < 1e-3, "stays at the pass start");
+                    }
                     pushed = Some(m.position);
                     break;
                 }
