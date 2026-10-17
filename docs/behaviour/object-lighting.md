@@ -188,7 +188,31 @@ placement in floats and repeat what the texture fields give):
     those points the light is blended smoothly: **bilinear** (traced
     2026-10-17: the card's second texture unit, which holds the light
     maps, is set to bilinear filtering once at start-up and never changed;
-    the same for the ground's light maps). Check: width =
+    the same for the ground's light maps).
+    **How the drawing places it** (traced 2026-10-17, Q79). The light
+    map's texels are copied row by row, unchanged, into the top-left
+    corner of a power-of-two picture for the card (no flip, no shift),
+    which is drawn **clamped** at its edges. At each corner of the
+    surface the game sends the card the light-map position
+    ((texture x + offset_x) ÷ 16, (texture y + offset_y) ÷ 16) **plus
+    half a light texel**. The half texel is there because the card puts
+    a texel's centre half a texel in from its edge (texel 0 spans 0 to
+    1, centre 0.5), as modern cards do. Net effect: the **centre** of
+    light texel (i, j) lands exactly at texture position (16 × i −
+    offset_x, 16 × j − offset_y), the position given above. Not 4
+    texture texels further on. (The card's texel-centre convention is
+    hardware behaviour, not something read in `Mask.exe`. If the card
+    put centres on whole numbers instead, the texels would sit 8 texture
+    texels **back**, not 4 forward, so the stored P0 of rule 16 fits
+    neither way.) The data agrees (measured on all 164,838 surfaces of
+    the 148 files with 48-byte records): with this placement **no
+    surface corner ever falls outside the map's first or last texel
+    centre**, and 7,511 surfaces have a corner exactly on texel 0's
+    centre. The map sizes are the tightest that cover the surface this
+    way. With texel i at 16 × i − offset_x + 4 instead, 47,226 surfaces
+    would have corners up to a quarter texel before the first texel.
+    On the drawing path read here the light map and the texture are
+    drawn as two passes, the second multiplying the first. Check: width =
     ⌈(offset_x + size_x + 1) ÷ 16⌉ + 1 and height likewise. That holds for
     every surface of 148 of 153 files. The 5 others (`temple4/level4`,
     `swamp/ramp`, `daventry/zedrock1`, `zedrock2`, `deadcity/platform`)
@@ -240,7 +264,20 @@ placement in floats and repeat what the texture fields give):
       texel of a row and V from the first to the last row (|U| = (width −
       1) × 128 and |V| = (height − 1) × 128 in Daventry). The rectangle's
       four corners are P0, P0 + U, P0 + V, P0 + U + V; its centre is the
-      average of the four.
+      average of the four. **P0 is not the drawn texel (0, 0)** (Q79,
+      traced and measured 2026-10-17): it lies **a quarter light texel
+      (4 texture texels, 32 units in Daventry) further along the
+      texture's x and y** than the drawn texel (0, 0) of rule 13, on
+      160,649 of 164,838 surfaces to within 0.05 texture texel (the rest
+      within about half a texture texel). U and V have exactly the drawn
+      spacing, so the whole rectangle is shifted by that quarter texel,
+      not shrunk. The game reads P0, U and V as stored and changes
+      nothing; it uses them **only** for these point-light tests and
+      sums, never for drawing (drawing uses the byte offsets of rule 13).
+      The game contains no code that makes `.dil` files, so why the
+      files put P0 there is not known: it comes from the tool that built
+      them. (A guess, not checked: that tool took its light samples a
+      quarter texel in.)
     - **In front**: d = the direction from the light to **P0** (the first
       corner), made unit length. The light counts only if facing · d is
       **below −0.1** (so the light is in front of the surface, more than
@@ -269,8 +306,9 @@ placement in floats and repeat what the texture fields give):
       falloff added. Texel (i, j) (i along a row, j row number) is placed
       at **P0 + U × i ÷ width + V × j ÷ height** in the original. That is a
       slip: by the data the true texel spacing is U ÷ (width − 1), so the
-      original measures each texel a little nearer P0 than it is (see "Do
-      not reproduce"). d = the texel's distance from the light;
+      original measures each texel a little nearer P0 than it is, and
+      from P0, a quarter texel off the drawn texel (0, 0) (see "Do not
+      reproduce"). d = the texel's distance from the light;
       **falloff = 1 up to `tsAttenuationBegin`, then 1 − (d − Begin) ÷
       End, not below 0**. So on surfaces (and the ground, rule 26)
       **`tsAttenuationEnd` is a fade length**, added on top of Begin: the
@@ -820,12 +858,19 @@ an object takes part in the game at all.
 - **Wall light texels measured in the wrong place** (rule 16): the
   original steps U ÷ width and V ÷ height from P0, but the texels are
   U ÷ (width − 1) apart, so the lit pattern is pulled towards the first
-  corner by up to one light texel (128 units in Daventry). Use the true
-  texel positions (the same ones rule 13 uses to lay the map on the
-  surface; a map 1 texel wide or high has a single column or row at P0).
-  The other wall tests (P0 for "in front", the five points for reach) are
-  how the original decides which surfaces light up: **do reproduce**
-  those.
+  corner by up to one light texel (128 units in Daventry). On top of
+  that it starts from P0, which is a quarter texel (32 units in
+  Daventry) further along both texture axes than the drawn texel (0, 0)
+  (rule 16, Q79). Use the true, drawn texel positions, the ones rule 13
+  uses to lay the map on the surface: texel (i, j) at
+  **P0 + U × (i − ¼) ÷ (width − 1) + V × (j − ¼) ÷ (height − 1)**,
+  which is "P0 moved back a quarter step along U and V". For a map 1
+  texel wide, U has no length, so the step can't come from U: take 4
+  texture texels along the texture's x from the `.dig` corners, or leave
+  that axis at P0 (at most 32 units in Daventry); the same for height 1
+  and V. The other wall tests (P0 **as stored** for "in front", the
+  five points for reach) are how the original decides which surfaces
+  light up: **do reproduce** those.
 - **A building's draw-distance ball is centred on its position, not on
   its box** (rule 40). For buildings whose geometry lies far from their
   origin the ball misses part of them, so they could be switched off
@@ -850,6 +895,14 @@ an object takes part in the game at all.
   many surfaces fail the size check of rule 13 (expected: 0 except the 5
   files named). For `cnnrhut.dil`: 1,129 surfaces, 162,170 bytes, red
   histogram starting 0 ×16,017, 3 ×7,775, 4 ×7,344.
+- **Light-map placement (B, Q79):** for every surface corner, the light
+  texel position ((texture x + offset_x) ÷ 16, (texture y + offset_y) ÷
+  16), texture x = u × (size_x + 1), before the clamp. Over the 148 files
+  with 48-byte records (164,838 surfaces) expect **0 corners below 0 or
+  above width − 1 / height − 1**, and 7,511 surfaces with a corner at
+  exactly 0. Also log P0 minus that drawn texel (0, 0), in texture
+  texels along the texture's x and y: expect (4, 4) to within 0.05 on
+  160,649 surfaces.
 - **By eye in the original (user):**
   1. **Objects vs ground. Confirmed by the user (2026-10-14):** objects
      look about as dark as the grass, the sunny side slightly lighter.
@@ -938,6 +991,19 @@ an object takes part in the game at all.
 
 ## Answers to questions
 
+- **Q79** (2026-10-17, where a wall's light texels sit; rules 13, 16):
+  (a) the drawing puts the **centre** of light texel (i, j) at texture
+  position 16 i − offset_x, 16 j − offset_y, exactly as rule 13 says. The
+  game adds half a light texel to the coordinates it sends the card, so
+  that the card's texel centres land there. Not + 4. The map sizes in
+  the data fit only this placement. (b) P0 is used as stored, only for
+  point lights, never for drawing. Its quarter texel comes from the
+  files (the tool that built them, not in the game); why is not known.
+  (c) Paint at rule 13's positions (P0 moved back a quarter step along U
+  and V; B's current choice); keep P0 as stored for "in front" and
+  reach. **Nothing changes in how B draws the light maps**: B's light
+  coordinates (`(position + map offset) ÷ 16 + half a texel`) already
+  match the original. Check: "How to check", light-map placement.
 - **Q78** (2026-10-16, point lights on building surfaces; rule 16): (a)
   "in front" is measured from the light to the surface's light-map first
   corner P0 (stored in the `.dil` record), against the surface's front

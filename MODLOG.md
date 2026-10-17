@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Study A: answer Q79 (where a wall's light texels sit)
+
+**Changed:** `docs/behaviour/object-lighting.md`: rule 13 (how the drawing places the light map), rule 16 (P0 is not the drawn texel (0, 0)), "Do not reproduce" (texel positions written out), "How to check" (light-map placement), "Answers" (Q79). `docs/behaviour/QUESTIONS.md`: Q79 answered. `STATUS.md`. No code.
+**Why:** B measured that the `.dil`'s stored P0 sits 4 texture texels past rule 13's first light texel and asked which one is the drawn position.
+**Tested how:** Traced the wall drawing in `Mask.exe` (how the light-map coordinates sent to the card are made, how the map is copied to the card, how P0 is read). Measured on all `.dig`/`.dil` pairs with a throwaway script (in `re/`, not committed).
+**Result:** Rule 13 is right: the game adds half a light texel to the coordinates so the card's texel centres land at 16 i − offset_x. On all 164,838 surfaces (148 files), no corner falls outside the map's first or last texel centre with that placement (7,511 touch texel 0 exactly); with "+ 4" 47,226 would. P0 is read as stored, used only for point lights, never for drawing; its quarter texel comes from the files (no `.dil` builder in the game), reason unknown. B's current choice stands; **no change to how light maps are drawn**.
+**Still broken / not tested:** The card's texel-centre convention (half a texel in) is hardware behaviour, not read in the exe; either way the stored P0 doesn't match the drawn texel. Why the files shift P0 is not known. Only the Glide two-pass path was read.
+**Next:** B (optional): log the placement check in "How to check" (expected 0 corners outside, 7,511 at exactly 0, P0 offset (4, 4)).
+
 ## 2026-10-17 Fix: Bevy's dithering warning at start
 
 **Changed:** `kq8-viewer`: both cameras (`terrain_view.rs` world view, `main.rs` model view) get `DebandDither::Disabled` next to `Tonemapping::None`.

@@ -39,11 +39,16 @@ end of B's session that built A's answers to Q75–Q78 (M1 steps 7d, 7g,
     in the building's own axes (our stand-in used a box around the turned
     box, slightly too generous for turned buildings).
 - **Found this session:** the `.dil` P0 sits 4 texture texels past where
-  rule 13 lays the first light texel (Q79, open; we paint at rule 13's
-  positions). **No building stands near Dead City's arrival portal**
+  rule 13 lays the first light texel. **Answered by A 2026-10-17 (Q79,
+  `object-lighting.md` rules 13 and 16):** rule 13 is the drawn position
+  (the game adds half a light texel so the card's texel centres land
+  there; the map sizes fit only that); P0 is used only for point lights
+  and its shift comes from the files. Our drawing and our choice (paint
+  at rule 13's positions, P0 as stored for "in front" and reach) already
+  match; nothing to change. **No building stands near Dead City's arrival portal**
   (nearest 29,000 away), so the "light over the walls" there must come
   from models, which are lit since 7c.
-- **Later for A:** Q79; Dead City's flames (11,000 vs 12,100, open
+- **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
 
@@ -203,8 +208,9 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step (B), suggested:** Q79 once A answers (possibly a quarter
-  texel shift of all wall light maps); otherwise M1 is done and the next
+- **Next step (B), suggested:** M1 is done (Q79 answered: no change to
+  the wall light maps; optionally log the placement check in
+  `object-lighting.md` "How to check") and the next
   milestone work is M3/M4 (Connor's scripted movements, remarks,
   inventory screen). The brightness setting (rule 17) is still not built.
 - Clicking: only doors, chests, items, scripted objects and buildings
@@ -247,8 +253,6 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- Q79: the `.dil` P0 sits a quarter light texel past rule 13's first
-  texel; which one is the drawn position? (We paint at rule 13's.)
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
   is 3D; updating only while Connor moves). Stand-ins in place.
@@ -270,7 +274,8 @@ milestone: **M3, Daventry comes alive**.
   difference).
 - Q14b: the teleport pad's see-through look.
 - Q4: missing texture names.
-- All others are answered or closed (Q75–Q78 answered by A and built
+- All others are answered or closed (Q79 answered by A 2026-10-17, nothing
+  to build; Q75–Q78 answered by A and built
   2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the
   lighting session 2026-10-14/15; Q55 answered in
