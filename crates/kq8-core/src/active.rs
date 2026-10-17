@@ -215,6 +215,20 @@ impl ActiveObject {
     }
 }
 
+/// Any other animated object (M3 step 3i-4): the ones the viewer's
+/// `anim_view` draws (`water`, the waterfall, torches, the windmill...).
+/// Its movements follow `anim-scripts.md` rules 1–10 like the others;
+/// clicking it is as before (a `Clickable` by the same name, if any).
+#[derive(Debug, Clone)]
+pub struct AnimObject {
+    pub player: NamedAnimPlayer,
+    /// `script=`: gets `EndLoop` and `Cue` when no clickable by that name
+    /// has it.
+    pub script: Option<String>,
+    /// Deleted (`deleteObject`).
+    pub gone: bool,
+}
+
 /// A `KQCueEvent`'s script arguments (`doors.md` rule 23): `Cue`, its first
 /// two numbers, and the third only if it is not zero. A word there (the
 /// movement name of a `getEndLoop` relay, `clicking.md` rule 21) counts as
@@ -394,6 +408,8 @@ pub struct WorldState {
     pub doors: Vec<ActiveDoor>,
     pub chests: Vec<ActiveChest>,
     pub objects: Vec<ActiveObject>,
+    /// The other animated objects (3i-4), in the viewer's order.
+    pub anims: Vec<AnimObject>,
     pub traps: Vec<Trap>,
     pub clickables: Vec<Clickable>,
     /// The buildings, in the caller's order (3g-2).
@@ -460,6 +476,10 @@ impl WorldState {
     fn item_note(&mut self, line: impl AsRef<str>) {
         self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
         self.note(line);
+    }
+
+    pub fn anim_index(&self, name: &str) -> Option<usize> {
+        self.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(name))
     }
 
     pub fn object_index(&self, name: &str) -> Option<usize> {
@@ -888,6 +908,9 @@ impl WorldState {
         if let Some(i) = self.chest_index(name) {
             return Some(&mut self.chests[i].chest.player);
         }
+        if let Some(i) = self.anim_index(name) {
+            return Some(&mut self.anims[i].player);
+        }
         let i = self.door_index(name)?;
         Some(&mut self.doors[i].door.player)
     }
@@ -999,6 +1022,10 @@ impl WorldState {
             return false;
         }
         let same = |n: &str| n.eq_ignore_ascii_case(name);
+        // An animated object stops playing; the rest as for its kind.
+        if let Some(i) = self.anim_index(name) {
+            self.anims[i].gone = true;
+        }
         let what = if let Some(i) = self.items.index(name) {
             if self.items.objects[i].place == Place::Gone {
                 return false;
@@ -1215,6 +1242,7 @@ impl Active {
                 doors,
                 chests: Vec::new(),
                 objects: Vec::new(),
+                anims: Vec::new(),
                 traps: Vec::new(),
                 clickables,
                 buildings: Vec::new(),
@@ -1273,6 +1301,14 @@ impl Active {
 
     fn building_index(&self, name: &str) -> Option<usize> {
         self.world.buildings.iter().position(|b| b.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Adds the other animated objects (3i-4), in the viewer's order.
+    pub fn add_anims(&mut self, anims: impl IntoIterator<Item = AnimObject>) {
+        for a in anims {
+            self.world.known.insert(a.player.name.to_ascii_lowercase());
+            self.world.anims.push(a);
+        }
     }
 
     /// Adds the scripted objects (before [`Active::start`]).
@@ -1400,6 +1436,11 @@ impl Active {
             self.call_clickable(i, args);
         } else if let Some(i) = w.trap_index(name).filter(|&i| w.traps[i].settings.script.is_some()) {
             self.call_trap(i, args);
+        } else if let Some((n, script)) = w.anim_index(name).and_then(|i| Some((w.anims[i].player.name.clone(), w.anims[i].script.clone()?))) {
+            let mut all = vec![n];
+            all.extend(args.iter().map(|a| a.to_string()));
+            self.world.note(format!("script {script} {}", all.join(" ")));
+            self.scripts.call(&script, &all, &mut self.world);
         } else if let Some(b) = w.buildings.iter().find(|b| b.name.eq_ignore_ascii_case(name)).and_then(|b| Some((b.name.clone(), b.script.clone()?))) {
             let mut all = vec![b.0];
             all.extend(args.iter().map(|a| a.to_string()));
@@ -2031,6 +2072,32 @@ impl Active {
                 self.world.movement_ended(&name, &m, has_script);
             }
         }
+        // The other animated objects (3i-4): only starts, cues and ends
+        // are logged here (their phases go to anim.log).
+        for i in 0..self.world.anims.len() {
+            if self.world.anims[i].gone {
+                continue;
+            }
+            let a = self.world.anims[i].player.advance(dt);
+            let p = &self.world.anims[i].player;
+            let (name, at) = (p.name.clone(), p.placement().position);
+            for cue in &a.cues {
+                let what = self.world.cue_sound(&format!("object {name}"), cue, at);
+                self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
+            }
+            if let Some(st) = &a.started {
+                let why = if a.finished.is_some() { "rule 8: the movement before it ended" } else { "rule 3: no current movement name" };
+                let line = started_line(&format!("object {name}"), st, &self.world.anims[i].player.movements, why);
+                self.world.note(line);
+            }
+            if let Some(m) = a.finished {
+                let after = if a.started.is_some() { "the waiting movement plays" } else { "stays on its last frame" };
+                self.world.note(format!("object {name}: movement '{m}' finished; {after}"));
+                let w = &self.world;
+                let has_script = w.anims[i].script.is_some() || w.clickables.iter().any(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&name));
+                self.world.movement_ended(&name, &m, has_script);
+            }
+        }
         self.world.updates += 1;
     }
 
@@ -2097,6 +2164,12 @@ impl Active {
         }
         if self.world.is_gone(&e.target) {
             self.world.note(format!("event {} {} to {}{from}: deleted; dropped", e.kind, e.data.join(" "), e.target));
+            return;
+        }
+        // anim-scripts.md rule 4 for the other animated objects (3i-4).
+        if let Some(i) = self.world.anim_index(&e.target).filter(|_| e.kind == "KQAnimPlayEvent") {
+            let line = anim_request(&mut self.world.anims[i].player, &e.data, &format!("object {}", e.target), &from);
+            self.world.note(line);
             return;
         }
         if let Some(i) = self.world.clickables.iter().position(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&e.target)) {
@@ -2869,6 +2942,31 @@ mod tests {
         assert!(log.contains("resumed (rule 14)") && log.contains("setAnimPos: basket1, 0.5"), "{log}");
         a.update();
         assert!(a.world.objects[0].player.phase > 0.5);
+    }
+
+    #[test]
+    fn scripts_reach_the_other_animated_objects() {
+        let script = "if test $2 == ConnorAction\n sendEvent 0 water KQAnimPlayEvent blocked\n pauseAnim water\n pauseAnim water\nendif\n";
+        let mut a = with_object(script, "x");
+        let mut player = crate::named_anim::tests::still_then_open("water");
+        player.movements[1].name = "blocked".into();
+        a.add_anims([AnimObject { player, script: None, gone: false }]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        a.update();
+        let log = a.take_log().join("\n");
+        assert!(log.contains("pauseAnim: water, 0: paused") && log.contains("pauseAnim: water, 0: resumed"), "{log}");
+        assert!(log.contains("KQAnimPlayEvent blocked to object water"), "{log}");
+        assert_eq!(a.world.anims[0].player.movement_name(), "blocked");
+        let mut log = String::new();
+        for _ in 0..20 {
+            a.update();
+            log.push_str(&a.take_log().join("\n"));
+        }
+        assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("object water: movement 'blocked' finished"), "{log}");
+        let mut d = with_object("deleteObject water\n", "x");
+        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false }]);
+        d.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

@@ -1207,3 +1207,17 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | `setAnimPos <name> <phase>` sets the phase, same log line | Rule 15 | Same unit test |
 | A movement requested while paused starts (its phase is set) but doesn't move until resumed | **Our reading** of rules 4 and 14 together (the note doesn't say) | Same unit test |
 | Return values (0 done, 1 failed) and the usage lines | **Our choice** | — |
+
+## Scripts reach every animated object (M3 step 3i-4) — `crates/kq8-core/src/{active,door,named_anim}.rs`, `crates/kq8-viewer/src/{anim_view,load,terrain_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Every animated object (not only doors, chests, scripted clickables) keeps current/waiting movement and follows rules 1–10 | `anim-scripts.md` rules 1–10 ("Every animated object") | Unit test `scripts_reach_the_other_animated_objects`; star globe run (`doors.log`) |
+| Still objects with more than one movement are played too (a script may switch them); still single-movement objects stay plain models | **Our choice** (nothing could change those) | `viewer.log`: 75 objects, 8 with several movements |
+| Repeating frame: round(phase × frames), wrapping | `objects.md` rule 2 (as 3c) | Unit test `cues_at_a_wrap_fire_once_including_one_at_exactly_1`; `anim.log` start lines unchanged |
+| Cue ranges at a wrap: [old, 1.0001) and [0, new) forwards; [0, old) and [new, 1.0001) backwards | `objects.md` "Loops" rule 4 | Same unit test |
+| `flags` bit 8: random phase, speed × 0.9–1.1, same random numbers in the same order as 3c | `objects.md` rule 4 | `anim.log` start lines identical to before |
+| A movement started later runs at its own speed (no random factor) | `anim-scripts.md` rule 5 ("its own `loop=` line") | Unit test `a_random_start_survives_the_first_update_restart_q85_stand_in` |
+| Rule 3's first-update start keeps the random start of the movement shown at load, and uses up that update | **Stand-in**, asked as Q85 (the two rules meet on `davtorch`, the fish, the dead birds) | `anim.log`: `Davtorch.01` phase 0.2819 at update 1 |
+| A movement with no length: a loop stays, a play-once one has ended | Phase rule (it can't move); play-once as before 3i | Same unit test |
+| Unused objects (H key only) keep a player of their own, outside the world's scripts | **Our choice** (they are not part of the world) | — |

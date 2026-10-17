@@ -277,7 +277,22 @@ pub fn setup_objects(
         }
     };
     let balls = crate::draw_distance::ShapeBalls::new(bounds, objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
+    // Animated objects whose movement plays or can be switched (3c,
+    // 3i-4): drawn by anim_view, played by the world's rules.
+    let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();
+    let anims = crate::anim_view::spawn_animated(
+        &mut commands,
+        std::mem::take(&mut objects.animated),
+        std::mem::take(&mut objects.object_animations),
+        &objects.placed,
+        &mut meshes,
+        &mut object_materials,
+        &light,
+        &mut images,
+        &balls,
+        &mut log,
+    );
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), anims, &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
     // placed object or marker (any case; the last one loaded by that name).
@@ -363,20 +378,6 @@ pub fn setup_objects(
     let collider_keys: Vec<(String, [f32; 3])> = buildings.iter().map(|b| (b.name.clone(), b.placement.position)).collect();
     commands.insert_resource(Buildings(buildings));
     let mut wall_lit = (0, Vec::new());
-    // Animated objects whose movement plays (3c): drawn by anim_view.
-    let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();
-    crate::anim_view::spawn_animated(
-        &mut commands,
-        std::mem::take(&mut objects.animated),
-        std::mem::take(&mut objects.object_animations),
-        &objects.placed,
-        &mut meshes,
-        &mut object_materials,
-        &light,
-        &mut images,
-        &balls,
-        &mut log,
-    );
     let mut worst = 0.0f32;
     let mut see_through = 0;
     for (k, (p, i, unused)) in objects.placed.iter().enumerate() {

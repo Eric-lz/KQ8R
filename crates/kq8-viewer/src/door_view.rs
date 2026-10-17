@@ -186,6 +186,7 @@ pub fn spawn_doors(
     objects: &mut Objects,
     colliders: &mut Vec<BoxCollider>,
     item: Option<String>,
+    anims: Vec<kq8_core::active::AnimObject>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
@@ -452,6 +453,8 @@ pub fn spawn_doors(
     active.add_chests(active_chests);
     main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
     active.add_objects(active_objects);
+    // The other animated objects (3i-4), drawn by anim_view.
+    active.add_anims(anims);
     // Buildings as click targets (3g-2, clicking.md rules 3-4, 10).
     let buildings = std::mem::take(&mut objects.building_clicks);
     let not_clickable: Vec<String> =

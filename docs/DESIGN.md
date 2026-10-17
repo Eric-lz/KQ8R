@@ -1267,6 +1267,13 @@ catchers, ground animators).
     for every movement an object has. Needed for `water` →
     `blocked` in the bricks puzzle. Test: `anim.log` for the tracked
     objects must stay the same as before (windmill, well water, torch).
+    (**Approved by the user and done** 2026-10-17: `Active` gets `anims`
+    (`AnimObject`), `anim_view` draws what core says; objects with more
+    than one movement join even when still. The repeating frame rule of
+    3c and the cue ranges at a wrap (`objects.md` "Loops" rule 4) moved
+    into `DoorMovement`. Rules 3 and `flags` bit 8 meet on six objects:
+    asked as Q85, stand-in: the random start is kept, and the
+    first-update start uses up that update.)
   - **3i-5, the script reader** (rules 17–18), core `script.rs`:
     single quotes switch `$` replacement off until the next one (marks
     dropped, words still split at spaces); `;` ends a command; `( … )`

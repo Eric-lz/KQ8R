@@ -79,13 +79,17 @@ pub struct Started {
     pub unknown: bool,
     pub start: f32,
     pub speed: f32,
+    /// Rule 3 restarted the movement shown at load, and its random start
+    /// (`flags` bit 8) was kept (Q85 stand-in).
+    pub kept_random: bool,
 }
 
 impl Started {
     pub fn describe(&self, movements: &[DoorMovement]) -> String {
         let shown = movements.get(self.index).map_or("none", |m| m.name.as_str());
         let unknown = if self.unknown { format!(" (unknown name: movement 0 '{shown}' plays)") } else { String::new() };
-        format!("'{}'{unknown} at phase {:.4} speed {}", self.name, self.start, self.speed)
+        let random = if self.kept_random { " (its random start from load kept: Q85 stand-in)" } else { "" };
+        format!("'{}'{unknown} at phase {:.4} speed {}{random}", self.name, self.start, self.speed)
     }
 }
 
@@ -116,6 +120,14 @@ pub struct NamedAnimPlayer {
     /// `pauseAnim` (rule 14): the phase doesn't move, no cues fire, nothing
     /// ends, no waiting movement starts.
     pub paused: bool,
+    /// The running animation's speed × this (`flags` bit 8: 0.9–1.1 for
+    /// the movement shown at load, `objects.md` rule 4); 1 for a movement
+    /// started later (rule 5: "its own `loop=` line").
+    pub speed_scale: f32,
+    /// The random start given at load: (movement, phase, speed factor).
+    /// Kept when rule 3 restarts that same movement on the first update
+    /// (Q85 stand-in).
+    load_random: Option<(usize, f32, f32)>,
 }
 
 impl NamedAnimPlayer {
@@ -125,7 +137,7 @@ impl NamedAnimPlayer {
         let m = movements.get(current);
         let (phase, playing, cut_short) = m.map_or((0.0, false, false), |m| (m.start, m.speed != 0.0, m.cut_short));
         let current_name = m.map_or(String::new(), |m| m.name.clone());
-        NamedAnimPlayer { name: name.to_string(), movements, current, current_name, waiting: None, phase, playing, cut_short, started_this_update: false, base, once: false, paused: false }
+        NamedAnimPlayer { name: name.to_string(), movements, current, current_name, waiting: None, phase, playing, cut_short, started_this_update: false, base, once: false, paused: false, speed_scale: 1.0, load_random: None }
     }
 
     /// Rule 3: the names the file gives. `curr` = `currAnimName` (empty or
@@ -140,6 +152,18 @@ impl NamedAnimPlayer {
             self.current_name = curr.to_string();
         }
         self.waiting = next.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+        self
+    }
+
+    /// `flags` bit 8 (`objects.md` rule 4): a random start phase and the
+    /// speed × a random 0.9–1.1 (two numbers from `rng`, phase first, as
+    /// `crate::anim::LoopPlayer`).
+    pub fn with_random_start(mut self, rng: &mut crate::emitter::Rng) -> Self {
+        let (phase, scale) = (rng.fraction(), rng.between(0.9, 1.1));
+        let repeat = self.movement().is_some_and(|m| m.repeat);
+        self.phase = if repeat { phase.rem_euclid(1.0) } else { phase.clamp(0.0, 1.0) };
+        self.speed_scale = scale;
+        self.load_random = Some((self.current, self.phase, scale));
         self
     }
 
@@ -178,8 +202,9 @@ impl NamedAnimPlayer {
         self.phase = start;
         self.playing = speed != 0.0;
         self.cut_short = cut_short;
+        self.speed_scale = 1.0;
         self.started_this_update = true;
-        Started { name: name.to_string(), index: self.current, unknown: found.is_none(), start, speed }
+        Started { name: name.to_string(), index: self.current, unknown: found.is_none(), start, speed, kept_random: false }
     }
 
     /// Starts movement `name` at once if it is in the list; `Err` if not
@@ -216,8 +241,15 @@ impl NamedAnimPlayer {
         // Rule 3: an empty current name lets the waiting movement start.
         if self.current_name.is_empty() {
             if let Some(w) = self.waiting.take() {
-                out.started = Some(self.start(&w));
+                let mut started = self.start(&w);
+                // Q85 stand-in: the random start of the movement shown at
+                // load survives its restart. The start uses up the update.
+                if let Some((_, phase, scale)) = self.load_random.take().filter(|r| r.0 == self.current) {
+                    (self.phase, self.speed_scale) = (phase, scale);
+                    (started.start, started.kept_random) = (phase, true);
+                }
                 self.started_this_update = false;
+                out.started = Some(started);
                 return out;
             }
         }
@@ -225,7 +257,7 @@ impl NamedAnimPlayer {
             return out;
         }
         let Some(m) = self.movements.get(self.current) else { return out };
-        let step = m.step(self.phase, dt);
+        let step = m.step_with(self.phase, dt, m.speed * self.speed_scale);
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
@@ -431,6 +463,22 @@ pub(crate) mod tests {
         }
         p.paused = false;
         assert_eq!(p.advance(DT).cues, ["playsound chstopen"], "the cue at 0 fires once it moves again");
+    }
+
+    #[test]
+    fn a_random_start_survives_the_first_update_restart_q85_stand_in() {
+        let mut rng = crate::emitter::Rng::new(4);
+        let mut p = object().with_names_at_load(None, Some("stop")).with_random_start(&mut rng);
+        p.movements[0].speed = 1.0;
+        let (phase, scale) = (p.phase, p.speed_scale);
+        assert!((0.9..=1.1).contains(&scale));
+        let a = p.advance(DT);
+        assert!(a.started.as_ref().is_some_and(|s| s.kept_random), "{a:?}");
+        assert_eq!((p.phase, p.speed_scale), (phase, scale));
+        // A movement started later runs at its own speed.
+        p.cut_short = true;
+        p.request("spin");
+        assert_eq!(p.speed_scale, 1.0);
     }
 
     #[test]

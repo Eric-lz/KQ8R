@@ -1,32 +1,41 @@
-//! Animated objects playing their movement in the ground view (M3 step 3c,
-//! docs/DESIGN.md; rules: docs/behaviour/objects.md "Animated objects at
-//! load", the phase rule of docs/behaviour/doors.md).
+//! Animated objects playing their movements in the ground view (M3 steps
+//! 3c and 3i-4, docs/DESIGN.md; rules: docs/behaviour/objects.md
+//! "Animated objects at load", docs/behaviour/anim-scripts.md).
 //!
-//! - The loops live in `kq8_core::anim` and move at 15 updates per second.
+//! - Since 3i-4 the movements are played by `kq8_core` (`Active`'s
+//!   `anims`, the same player as doors and chests), so scripts reach them
+//!   (`KQAnimPlayEvent`, `pauseAnim`, `deleteObject`, `EndLoop`). This
+//!   file only draws what core says. Unused objects (shown only with H)
+//!   are not in the world's scripts: they keep a player of their own here.
 //! - Each object is a body entity at its placement with one child per
-//!   frame; only the shown frame is visible (as doors). If the loop has
-//!   whole-object steps (frame transforms), the body is moved by the shown
-//!   frame's chained steps, as doors are turned. The original adds the
-//!   steps up and the data's cue puts the object back at each wrap; for
-//!   Gnome's rolling rocks both give the same picture, so this stays
-//!   (objects.md Q51 rules 1–7, checked by the user). Such an object's
-//!   collider is moved to the same pose every update (Q51 rule 5, M3
-//!   step 3r-4).
+//!   frame of every movement; only the shown frame is visible (as doors).
+//!   If the shown movement has whole-object steps (frame transforms), the
+//!   body is moved by the shown frame's chained steps, as doors are
+//!   turned. The original adds the steps up and the data's cue puts the
+//!   object back at each wrap; for Gnome's rolling rocks both give the
+//!   same picture, so this stays (objects.md Q51 rules 1–7, checked by the
+//!   user). Such an object's collider is moved to the same pose every
+//!   update (Q51 rule 5, M3 step 3r-4).
 //! - Hidden and unused objects keep their H-key visibility; see-through
 //!   objects keep their opacity.
 //!
 //! Log: `kq8-artifacts/logs/anim.log`.
 
 use bevy::prelude::*;
-use kq8_data::shape::Transform as GameTransform;
-use kq8_core::anim::{pose_at_frame, LoopPlayer};
+use kq8_core::active::AnimObject;
+use kq8_core::anim::pose_at_frame;
+use kq8_core::collide::Placement;
+use kq8_core::door::{Cue, DoorMovement};
 use kq8_core::emitter::Rng;
+use kq8_core::named_anim::NamedAnimPlayer;
+use kq8_data::shape::Transform as GameTransform;
 
+use crate::door_view::DoorSim;
 use crate::load::{AnimatedAssets, Animation};
 use crate::log::Log;
-use crate::terrain_view::{bevy_transform_from, ObjectColliders, ShownWithH};
 use crate::model_mesh;
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
+use crate::terrain_view::{bevy_transform_from, ObjectColliders, ShownWithH};
 
 /// Seed for the `flags` bit 8 random starts and speeds.
 const SEED: u64 = 0x0A11_3C00_5EED_0001;
@@ -35,17 +44,31 @@ const SEED: u64 = 0x0A11_3C00_5EED_0001;
 const TRACKED: [&str; 4] = ["wellwatr", "windprop", "millwheel", "Davtorch.01"];
 const TRACK_UPDATES: u64 = 120;
 
+/// Who plays an object's movements.
+enum Source {
+    /// `Active`'s `anims[i]` (the world's scripts reach it).
+    Core(usize),
+    /// Its own player (unused objects, shown only with H).
+    Own(Box<NamedAnimPlayer>),
+}
+
+/// One movement as drawn: its frame entities and whole-object steps
+/// (empty when no frame has one).
+struct DrawnMovement {
+    frames: Vec<Entity>,
+    steps: Vec<GameTransform>,
+}
+
 struct Playing {
     name: String,
-    player: LoopPlayer,
+    source: Source,
     /// The object's placement (rotation, position).
     rotation: [[f32; 3]; 3],
     position: [f32; 3],
-    /// Each frame's whole-object step; empty when no frame has one.
-    steps: Vec<GameTransform>,
+    movements: Vec<DrawnMovement>,
     body: Entity,
-    frames: Vec<Entity>,
-    shown: Option<usize>,
+    /// (movement, frame) shown.
+    shown: Option<(usize, usize)>,
     tracked: bool,
     /// Its entry in `ObjectColliders` (only for objects with steps):
     /// `None` = not looked up yet, `Some(None)` = it has none.
@@ -82,7 +105,17 @@ impl AnimSim {
     }
 }
 
-/// Builds the playing objects. `placed` is `Objects::placed`.
+/// The player of `p`: in core, or its own.
+fn player<'a>(p: &'a Playing, doors: Option<&'a DoorSim>) -> Option<&'a NamedAnimPlayer> {
+    match &p.source {
+        Source::Core(i) => doors.and_then(|d| d.active.world.anims.get(*i)).map(|a| &a.player),
+        Source::Own(player) => Some(player),
+    }
+}
+
+/// Builds the objects and returns the ones the world's scripts can reach,
+/// in order, for `Active::add_anims` (3i-4). `placed` is
+/// `Objects::placed`.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_animated(
     commands: &mut Commands,
@@ -95,12 +128,12 @@ pub fn spawn_animated(
     images: &mut Assets<Image>,
     balls: &crate::draw_distance::ShapeBalls,
     main_log: &mut Log,
-) {
+) -> Vec<AnimObject> {
     let mut log = match Log::create("anim") {
         Ok(l) => l,
         Err(e) => {
             main_log.summary(format!("animated objects: cannot create anim.log: {e}; not started"));
-            return;
+            return Vec::new();
         }
     };
     // Per animation: its frames as (mesh, material index) lists, the
@@ -138,15 +171,34 @@ pub fn spawn_animated(
         .collect();
     let mut rng = Rng::new(SEED);
     let mut playing = Vec::new();
+    let mut core = Vec::new();
     let mut moving = Vec::new();
-    let mut random = 0;
+    let (mut random, mut switchable) = (0, 0);
     for a in animated {
         let (p, shape_index, unused) = &placed[a.placed];
         random += usize::from(a.random);
-        let b = &built[a.animation];
         let opacity = p.opacity();
-        let player = LoopPlayer::new(a.start, a.speed, a.repeat, b.frames.len(), b.duration, if a.random { Some(&mut rng) } else { None });
         let rotation = kq8_data::objects::rotation(p.angles);
+        // The movements as core plays them (anim-scripts.md rules 1–10).
+        let movements: Vec<DoorMovement> = a
+            .movements
+            .iter()
+            .map(|(name, l, i)| DoorMovement {
+                name: name.clone(),
+                start: l.start,
+                speed: l.speed,
+                repeat: l.repeat,
+                cut_short: l.unknown != 0,
+                play_time: built[*i].duration,
+                frame_steps: built[*i].steps.clone(),
+                cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
+            })
+            .collect();
+        let names = (a.anim_names.0.as_deref(), a.anim_names.1.as_deref());
+        let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_names_at_load(names.0, names.1);
+        if a.random {
+            player = player.with_random_start(&mut rng);
+        }
         let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
         if *unused || !p.drawn() {
             body.insert((Visibility::Hidden, ShownWithH));
@@ -154,26 +206,33 @@ pub fn spawn_animated(
         // Draw distance (M1 6h); unused objects are only shown with H.
         if !*unused {
             body.insert(balls.test_at(p, *shape_index));
-            // The lights it carries (M1 7c), by the frame shown.
-            if let Some(c) = crate::scene_lights::CarriedLights::new(vec![b.lights.clone()], bevy_transform_from(rotation, p.position), p.turn_off_dyn_lighting) {
+            // The lights it carries (M1 7c), by the movement and frame shown.
+            let lights = a.movements.iter().map(|(_, _, i)| built[*i].lights.clone()).collect();
+            if let Some(c) = crate::scene_lights::CarriedLights::new(lights, bevy_transform_from(rotation, p.position), p.turn_off_dyn_lighting) {
                 body.insert(c);
             }
         }
         let body = body.id();
-        let mut frames = Vec::with_capacity(b.frames.len());
-        for frame in &b.frames {
-            let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
-            commands.entity(body).add_child(parent);
-            for (mesh, m) in frame {
-                let Some((_, material)) = b.materials.iter().find(|(i, _)| i == m) else { continue };
-                let material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
-                let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
-                commands.entity(parent).add_child(part);
+        let mut drawn = Vec::with_capacity(a.movements.len());
+        for (_, _, i) in &a.movements {
+            let b = &built[*i];
+            let mut frames = Vec::with_capacity(b.frames.len());
+            for frame in &b.frames {
+                let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+                commands.entity(body).add_child(parent);
+                for (mesh, m) in frame {
+                    let Some((_, material)) = b.materials.iter().find(|(i, _)| i == m) else { continue };
+                    let material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
+                    let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
+                    commands.entity(parent).add_child(part);
+                }
+                frames.push(parent);
             }
-            frames.push(parent);
+            drawn.push(DrawnMovement { frames, steps: if b.moves { b.steps.clone() } else { Vec::new() } });
         }
-        // Whole-object steps: how far the chained pose goes over the loop.
-        let steps = if b.moves { b.steps.clone() } else { Vec::new() };
+        // Whole-object steps of the movement shown at load: how far the
+        // chained pose goes over the loop.
+        let b = &built[a.movements[player.current].2];
         let mut reach = String::from("none");
         if b.moves {
             let (mut far, mut turn) = (0.0f32, 0.0f32);
@@ -192,48 +251,71 @@ pub fn spawn_animated(
             );
             moving.push(p.name.clone());
         }
+        let (_, l, _) = &a.movements[player.current];
+        let more = if a.movements.len() > 1 {
+            switchable += 1;
+            format!("; movements {:?}", a.movements.iter().map(|(n, _, _)| n.as_str()).collect::<Vec<_>>())
+        } else {
+            String::new()
+        };
         log.detail(format!(
-            "[{}] {} frames, {:.4} s, start {} speed {} repeat {} random {} -> phase {:.4} speed {:.4}, frame {}; whole-object steps: {reach}{}",
+            "[{}] {} frames, {:.4} s, start {} speed {} repeat {} random {} -> phase {:.4} speed {:.4}, frame {}; whole-object steps: {reach}{}{more}",
             p.name,
             b.frames.len(),
             b.duration,
-            a.start,
-            a.speed,
-            a.repeat,
+            l.start,
+            l.speed,
+            l.repeat,
             a.random,
             player.phase,
-            player.speed,
+            l.speed * player.speed_scale,
             player.frame(),
             if *unused || !p.drawn() { "; hidden (H)" } else { "" }
         ));
         let tracked = TRACKED.iter().any(|t| t.eq_ignore_ascii_case(&p.name));
-        playing.push(Playing { name: p.name.clone(), player, rotation, position: p.position, steps, body, frames, shown: None, tracked, collider: None });
+        let source = if *unused {
+            Source::Own(Box::new(player))
+        } else {
+            core.push(AnimObject { player, script: a.script.clone(), gone: false });
+            Source::Core(core.len() - 1)
+        };
+        playing.push(Playing { name: p.name.clone(), source, rotation, position: p.position, movements: drawn, body, shown: None, tracked, collider: None });
     }
     main_log.summary(format!(
-        "animated objects: {} playing ({} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
+        "animated objects: {} playing ({} run by the world's scripts, {} with more than one movement, {} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
         playing.len(),
+        core.len(),
+        switchable,
         random,
         built.len(),
         moving.len(),
         log.path().display()
     ));
     commands.insert_resource(AnimSim { playing, updates: 0, log });
+    core
 }
 
-/// One update (15 per second): every loop moves on, and an object whose
-/// loop moves it takes its collider along (3r-4).
-pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>) {
+/// One update (15 per second), after `door_step` has run core's update:
+/// unused objects move their own loops; an object whose shown movement
+/// moves it takes its collider along (3r-4).
+pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>, doors: Option<Res<DoorSim>>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.updates += 1;
     let n = sim.updates;
+    let doors = doors.as_deref();
     let mut colliders = colliders;
     for p in &mut sim.playing {
-        p.player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
-        if p.tracked && n <= TRACK_UPDATES {
-            sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, p.player.phase, p.player.frame(), if p.player.finished { " finished" } else { "" }));
+        if let Source::Own(player) = &mut p.source {
+            player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
         }
-        if p.steps.is_empty() {
+        let Some(player) = player(p, doors) else { continue };
+        let (movement, frame) = (player.current, player.frame());
+        if p.tracked && n <= TRACK_UPDATES {
+            sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, player.phase, frame, if player.has_ended() { " finished" } else { "" }));
+        }
+        let Some(drawn) = p.movements.get(movement) else { continue };
+        if drawn.steps.is_empty() {
             continue;
         }
         let Some(colliders) = colliders.as_mut() else { continue };
@@ -259,8 +341,8 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
         if colliders.0[i].min == colliders.0[i].max {
             continue;
         }
-        let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
-        let (rotation, position) = combine(&pose_at_frame(&p.steps, frame), &p.rotation, p.position);
+        let frame = frame.min(drawn.frames.len().saturating_sub(1));
+        let (rotation, position) = combine(&pose_at_frame(&drawn.steps, frame), &p.rotation, p.position);
         colliders.0[i].placement = kq8_core::collide::Placement { rotation, position };
         if n % 15 == 0 && n <= 150 {
             sim.log.detail(format!(
@@ -271,31 +353,38 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
     }
 }
 
-/// Each object shows its current frame (and pose, if its loop moves it).
+/// Each object shows its current movement's frame (and pose, if that
+/// movement moves it).
 pub fn anim_draw(
     sim: Option<ResMut<AnimSim>>,
+    doors: Option<Res<DoorSim>>,
     mut transforms: Query<&mut Transform>,
     mut visibility: Query<&mut Visibility>,
     mut carried: Query<&mut crate::scene_lights::CarriedLights>,
 ) {
     let Some(mut sim) = sim else { return };
+    let doors = doors.as_deref();
     for p in &mut sim.playing {
-        let frame = p.player.frame().min(p.frames.len().saturating_sub(1));
-        if p.shown == Some(frame) {
+        let Some(player) = player(p, doors) else { continue };
+        let movement = player.current.min(p.movements.len().saturating_sub(1));
+        let Some(drawn) = p.movements.get(movement) else { continue };
+        let frame = player.frame().min(drawn.frames.len().saturating_sub(1));
+        if p.shown == Some((movement, frame)) {
             continue;
         }
         if let Ok(mut c) = carried.get_mut(p.body) {
-            c.frame = frame;
+            (c.movement, c.frame) = (movement, frame);
         }
-        if let Some(mut v) = p.shown.and_then(|k| visibility.get_mut(p.frames[k]).ok()) {
+        if let Some(mut v) = p.shown.and_then(|(m, k)| p.movements.get(m)?.frames.get(k)).and_then(|e| visibility.get_mut(*e).ok()) {
             *v = Visibility::Hidden;
         }
-        if let Some(mut v) = p.frames.get(frame).and_then(|e| visibility.get_mut(*e).ok()) {
+        if let Some(mut v) = drawn.frames.get(frame).and_then(|e| visibility.get_mut(*e).ok()) {
             *v = Visibility::Inherited;
         }
-        p.shown = Some(frame);
-        if !p.steps.is_empty() {
-            let pose = pose_at_frame(&p.steps, frame);
+        p.shown = Some((movement, frame));
+        let pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
+        // Only bodies that move or just stopped moving need a new pose.
+        if !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
             let (m, at) = combine(&pose, &p.rotation, p.position);
             if let Ok(mut t) = transforms.get_mut(p.body) {
                 *t = bevy_transform_from(m, at);

@@ -46,6 +46,7 @@ items. The goal is the whole game; see the roadmap in
 - **World music**: Daventry's tune, with cross-fades in the wizard's, unicorn's and church's zones.
 - **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
+- **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
@@ -57,7 +58,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).
-- Objects only play their starting animation.
+- Scripts switch only some objects' animations (no pushing, no fights yet).
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 

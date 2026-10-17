@@ -81,39 +81,63 @@ impl DoorMovement {
     }
 
     /// The frame shown at `phase`: round(phase × (frames − 1)) for a
-    /// one-shot, as for Connor's one-shots (`connor::MovementLoop::frame_at`).
+    /// one-shot, as for Connor's one-shots (`connor::MovementLoop::frame_at`);
+    /// round(phase × frames), wrapping to 0, for a repeating loop
+    /// (`objects.md` rule 2, as `crate::anim` since 3c).
     pub fn frame_at(&self, phase: f32) -> usize {
         let n = self.frames();
         if self.repeat {
-            ((phase.rem_euclid(1.0) * n as f32) as usize).min(n - 1)
+            (phase.rem_euclid(1.0) * n as f32).round() as usize % n
         } else {
             (phase.clamp(0.0, 1.0) * (n - 1) as f32).round() as usize
         }
     }
 
-    /// One update of `dt` seconds from `phase`: the new phase, whether a
-    /// play-once movement reached its end (1 forward, 0 backward), and the
-    /// cues passed (rule 9). Shared by doors and chests (M3 step 3e-4).
+    /// One update of `dt` seconds from `phase` at the movement's own speed.
     pub fn step(&self, phase: f32, dt: f32) -> Step {
+        self.step_with(phase, dt, self.speed)
+    }
+
+    /// One update of `dt` seconds from `phase` at `speed`: the new phase,
+    /// whether a play-once movement reached its end (1 forward, 0
+    /// backward), and the cues passed (rule 9). A repeating loop wraps;
+    /// at a wrap the cue ranges are [old, 1.0001) then [0, new) forwards,
+    /// [0, old) then [new, 1.0001) backwards (`objects.md` "Loops" rule
+    /// 4), so a cue at exactly 1.0 fires once per cycle. Shared by doors,
+    /// chests and animated objects.
+    pub fn step_with(&self, phase: f32, dt: f32, speed: f32) -> Step {
         if self.play_time <= 0.0 {
-            return Step { to: phase, done: true, cues: Vec::new() };
+            // No length: a loop stays; a play-once movement has ended.
+            return Step { to: phase, done: !self.repeat, cues: Vec::new() };
         }
-        let mut to = phase + self.speed * dt / self.play_time;
+        let raw = phase + speed * dt / self.play_time;
+        let mut to = raw;
         let mut done = false;
+        let mut ranges = Vec::with_capacity(2);
         if self.repeat {
-            // Not used by any Daventry door or chest; cues of a wrapping
-            // loop are not handled (logged by the caller as nothing fired).
-            to = to.rem_euclid(1.0);
-        } else if to >= crate::named_anim::ENDED_FORWARD && self.speed > 0.0 {
+            to = raw.rem_euclid(1.0);
+            if raw >= 1.0 {
+                ranges.extend([(phase, WRAP_TOP), (0.0, to)]);
+            } else if raw < 0.0 {
+                ranges.extend([(0.0, phase), (to, WRAP_TOP)]);
+            }
+        } else if raw >= crate::named_anim::ENDED_FORWARD && speed > 0.0 {
             // "Has ended" (`anim-scripts.md`): 0.9999 or more.
             to = 1.0;
             done = true;
-        } else if to <= 0.0 && self.speed < 0.0 {
+        } else if raw <= 0.0 && speed < 0.0 {
             to = 0.0;
             done = true;
         }
-        let (lo, hi) = if phase <= to { (phase, to) } else { (to, phase) };
-        let cues = self.cues.iter().filter(|c| c.phase >= lo && c.phase < hi).map(|c| c.action.clone()).collect();
+        if ranges.is_empty() {
+            ranges.push(if phase <= to { (phase, to) } else { (to, phase) });
+        }
+        let cues = self
+            .cues
+            .iter()
+            .filter(|c| ranges.iter().any(|&(lo, hi)| c.phase >= lo && c.phase < hi))
+            .map(|c| c.action.clone())
+            .collect();
         Step { to, done, cues }
     }
 
@@ -128,6 +152,9 @@ impl DoorMovement {
         c
     }
 }
+
+/// The top of a cue range at a wrap (`objects.md` "Loops" rule 4).
+pub const WRAP_TOP: f32 = 1.0001;
 
 /// What one update of a movement does ([`DoorMovement::step`]).
 #[derive(Debug, Clone, PartialEq)]
@@ -340,6 +367,36 @@ pub(crate) mod tests {
             }
         }
         (all.iter().filter(|a| a.from != a.to).count(), all)
+    }
+
+    #[test]
+    fn cues_at_a_wrap_fire_once_including_one_at_exactly_1() {
+        let mv = |speed: f32| DoorMovement {
+            name: "spin".into(),
+            start: 0.0,
+            speed,
+            repeat: true,
+            cut_short: true,
+            play_time: 1.0,
+            frame_steps: vec![identity(); 16],
+            cues: vec![Cue { phase: 1.0, action: "one".into() }, Cue { phase: 0.0, action: "zero".into() }, Cue { phase: 0.5, action: "half".into() }],
+        };
+        // Forwards over the wrap: 1.0 (old..1.0001) and 0.0 (0..new).
+        let s = mv(1.0).step(0.95, 0.1);
+        assert!((s.to - 0.05).abs() < 1e-5 && !s.done);
+        assert_eq!(s.cues, ["one", "zero"]);
+        // Backwards over the wrap: 0 (0..old) and 1.0 (new..1.0001).
+        let s = mv(-1.0).step(0.05, 0.1);
+        assert!((s.to - 0.95).abs() < 1e-5);
+        assert_eq!(s.cues, ["one", "zero"]);
+        // No wrap: the plain range.
+        assert_eq!(mv(1.0).step(0.45, 0.1).cues, ["half"]);
+        // A repeating loop with no length never ends; the frame rule wraps.
+        let mut still = mv(1.0);
+        still.play_time = 0.0;
+        assert!(!still.step(0.3, 0.1).done);
+        assert_eq!(mv(1.0).frame_at(0.99), 0);
+        assert_eq!(mv(1.0).frame_at(0.3), 5);
     }
 
     #[test]

@@ -1159,14 +1159,18 @@ pub struct Objects {
 pub struct AnimatedAssets {
     /// Index into `Objects::placed`.
     pub placed: usize,
-    /// Index into `Objects::object_animations`.
-    pub animation: usize,
-    /// `loop=` start, speed, repeat.
-    pub start: f32,
-    pub speed: f32,
-    pub repeat: bool,
+    /// Every movement in list order (M3 step 3i-4): name, `loop=` line
+    /// and cues, index into `Objects::object_animations`.
+    pub movements: Vec<(String, kq8_data::objects::CurrentLoop, usize)>,
+    /// The movement shown at load (`currAnimName`, else movement 0).
+    pub current: usize,
+    /// `currAnimName` and `nextAnimName` as written (`anim-scripts.md`
+    /// rule 3).
+    pub anim_names: (Option<String>, Option<String>),
     /// `flags` bit 8: random start and speed.
     pub random: bool,
+    /// `script=`, if any.
+    pub script: Option<String>,
 }
 
 /// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
@@ -2194,10 +2198,13 @@ impl Placer<'_> {
         });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
-        // A movement that plays (speed not 0): all its frames (3c). Not a
-        // `KQBoulder`: it controls its own animation (shown still in the
-        // original), not studied yet (objects.md Q51 rule 8, step 3r-2).
-        if let Some(c) = animation.as_ref().filter(|c| c.speed != 0.0) {
+        // A movement that plays (speed not 0), or more than one movement
+        // (a script may switch it, 3i-4): every movement's frames (3c).
+        // Not a `KQBoulder`: it controls its own animation (shown still
+        // in the original), not studied yet (objects.md Q51 rule 8, step
+        // 3r-2).
+        let movement_count = kq8_data::objects::movement_loops(&file, s).ok().flatten().map_or(0, |m| m.len());
+        if let Some(c) = animation.as_ref().filter(|c| c.speed != 0.0 || movement_count > 1) {
             if boulder {
                 self.log.summary(format!(
                     "animated {label}[{}]: class KQBoulder: movement {} not played, drawn still at its start (objects.md Q51 rule 8)",
@@ -2205,7 +2212,7 @@ impl Placer<'_> {
                     c.movement
                 ));
             } else {
-                self.place_animated(&label, c, flags.as_deref());
+                self.place_animated(&label, &file, c, flags.as_deref());
             }
         }
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
@@ -2514,42 +2521,67 @@ impl Placer<'_> {
 
     /// The object just placed plays its movement (M3 step 3c): its loop's
     /// frames, loaded once per (model, loop).
-    fn place_animated(&mut self, label: &str, c: &kq8_data::objects::CurrentLoop, flags: Option<&str>) {
-        let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
-        let index = match self.object_animation_index.get(&key) {
-            Some(i) => *i,
-            None => {
-                let loaded = self.object_palette().and_then(|palette| {
-                    self.log.quiet = true;
-                    let a = load_animation(self.game, self.world, &c.shape, &c.sequence, &palette, self.log);
-                    self.log.quiet = false;
-                    a
-                });
-                let i = match loaded {
-                    Ok(a) => {
-                        self.object_animations.push(a);
-                        Some(self.object_animations.len() - 1)
-                    }
-                    Err(e) => {
-                        self.log.summary(format!("animated {label}: {} {}: {e}; drawn still", c.shape, c.sequence));
-                        None
-                    }
-                };
-                self.object_animation_index.insert(key, i);
-                i
+    /// An animated object for `anim_view` and the script rules (3c, 3i-4):
+    /// every movement's frames. If one can't be loaded the object is drawn
+    /// still (as before for its current movement).
+    fn place_animated(&mut self, label: &str, file: &[kq8_data::kq_text::Section], c: &kq8_data::objects::CurrentLoop, flags: Option<&str>) {
+        let s = &file[0];
+        let listed = match kq8_data::objects::movement_loops(file, s) {
+            Ok(Some(m)) => m,
+            Ok(None) => return,
+            Err(e) => {
+                self.log.summary(format!("animated {label}: movements could not be read: {e}; drawn still"));
+                return;
             }
         };
-        let Some(animation) = index else { return };
+        let mut movements = Vec::with_capacity(listed.len());
+        for (name, l) in listed {
+            let key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
+            let index = match self.object_animation_index.get(&key) {
+                Some(i) => *i,
+                None => {
+                    let loaded = self.object_palette().and_then(|palette| {
+                        self.log.quiet = true;
+                        let a = load_animation(self.game, self.world, &l.shape, &l.sequence, &palette, self.log);
+                        self.log.quiet = false;
+                        a
+                    });
+                    let i = match loaded {
+                        Ok(a) => {
+                            self.object_animations.push(a);
+                            Some(self.object_animations.len() - 1)
+                        }
+                        Err(e) => {
+                            self.log.summary(format!("animated {label}: movement {name}: {} {}: {e}; drawn still", l.shape, l.sequence));
+                            None
+                        }
+                    };
+                    self.object_animation_index.insert(key, i);
+                    i
+                }
+            };
+            let Some(index) = index else { return };
+            for problem in l.cue_problems.iter().chain(&l.transition_problems) {
+                self.log.detail(format!("animated {label}: {problem}"));
+            }
+            if !l.transitions.is_empty() {
+                // anim-scripts.md rule 4.2: no placed object has any (data).
+                self.log.summary(format!("animated {label}: movement {name} has transitions; not played for objects (anim-scripts.md rule 4.2)"));
+            }
+            movements.push((name, l, index));
+        }
         // `flags` bit 8 (objects.md rule 4); a value that is not a whole
         // number counts as no flags.
         let flag_bits = flags.and_then(|f| f.trim().parse::<i64>().ok()).unwrap_or(0) as u32;
+        let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string()).filter(|v| !v.is_empty());
+        let name_key = |k: &str| s.get(k).map(|v| v.trim().to_string());
         self.animated.push(AnimatedAssets {
             placed: self.placed.len() - 1,
-            animation,
-            start: c.start,
-            speed: c.speed,
-            repeat: c.repeat,
+            movements,
+            current: c.movement,
+            anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
+            script: text("script"),
         });
     }
 

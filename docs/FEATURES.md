@@ -165,6 +165,11 @@ objects don't stop it, as in the original. Checked in the logs
   textures change every 0.3 s (timed from each change, as the original
   does). Also Swamp's water and DeadCity's blood. Checked in the logs
   (`ground_anim.log`) and by eye.
+- **Scripts switch animations** (2026-10-17, M3 step 3i): a movement
+  asked for waits until the running one can be cut short or has ended;
+  `pauseAnim` pauses. Checked in the logs (`doors.log`): the star globe
+  given the spell page (`--item INVITEM_SpellPage --click starball.01,N`)
+  plays `open` for 1.93 s, then `lid`. Not checked by eye.
 - **Animated objects:** the windmill sails, mill wheel and gears,
   swinging signs, shutters, torches, lamps, waterfalls, fish and the
   fountain's water move as the game's files say, torches and other rows
@@ -340,8 +345,9 @@ message that shows the usage.
   react; nothing else does. Connor says nothing (his remarks, e.g. "too far" or
   "locked", are only logged) and doesn't turn to face what he clicks.
   Picked-up items are only counted in the log.
-- **Animated objects** play only the movement they start with (scripts
-  don't switch them yet). A rolling rock that runs
+- **Animated objects:** scripts switch them (M3 step 3i), but most
+  Daventry scripts that do it start from things not built yet (pushing,
+  fights, talking, `loadKQ` while playing). A rolling rock that runs
   into Connor does nothing to him yet (in the original he stumbles and
   takes damage). Pushable objects can't be pushed.
 - **Jumping into things:** a standing jump into a tree or wall makes
