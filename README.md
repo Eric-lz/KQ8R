@@ -172,6 +172,7 @@ crates/
 docs/
   DESIGN.md     how the project works, and the roadmap
   FEATURES.md   what works and what doesn't, in detail
+  milestones/   step-by-step plans of finished milestones
   behaviour/    notes on how the original game behaves, and open questions
   provenance/   where each piece of knowledge came from
   RESEARCH.md   existing tools and documentation for this game
@@ -198,6 +199,7 @@ records where it came from in
 - [MODLOG.md](MODLOG.md): change log
 - [CREDITS.md](CREDITS.md): sources and licences
 - [docs/DESIGN.md](docs/DESIGN.md): how the project works and the plan
+- [docs/milestones/](docs/milestones/): step-by-step plans of finished milestones
 - [docs/FEATURES.md](docs/FEATURES.md): what works, in detail
 - [docs/SESSIONS.md](docs/SESSIONS.md): two session workflow, in detail
 - [docs/RESEARCH.md](docs/RESEARCH.md): existing tools and documentation

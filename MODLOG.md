@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Docs: finished milestones' step plans moved out of DESIGN.md
+
+**Changed:** The step-by-step plans of M1 (steps 1–7) and M2 (2a–2i) moved word for word from `docs/DESIGN.md` into the new `docs/milestones/M1.md` and `docs/milestones/M2.md`. M1 headings are `##` instead of `####`; nothing else changed. In `DESIGN.md` each of those milestones now has a short list of its steps and a link. The M1 intro and the M2 decisions ("Physics rate", "Where the code goes") stay in `DESIGN.md`, and so does M3, which is still in progress. The repository layout now lists `docs/milestones/`. `README.md`: `docs/milestones/` added to the folder list and to "More". No code changed.
+**Why:** The user's choice (suggestion 5). `DESIGN.md` was 3,006 lines and is read at the start of every session.
+**Tested how:** A Python script rebuilt the original text from the two new files and compared it with `git show HEAD:docs/DESIGN.md`. Searched `DESIGN.md` for "above" or "below" pointing at moved text. `git status` checked that the whitelist `.gitignore` picks up `docs/milestones/`.
+**Result:** Both moved blocks match the original line for line (blank lines aside). M3 to the end of the file is unchanged. `DESIGN.md` is now 1,217 lines; `M1.md` has 973 and `M2.md` 855. The only "below" pointers were the two lines in the M1 intro, now pointing at `M1.md`.
+**Still broken / not tested:** Code comments that say "docs/DESIGN.md M1 step 5c" (and similar) were left alone. They still lead there, because `DESIGN.md` links to the milestone file. The link targets have not been checked in a Markdown viewer (not tested).
+**Next:** When M3 is finished, move its steps to `docs/milestones/M3.md` the same way.
+
 ## 2026-10-17 Fix: footsteps in the air follow A's rule 39a (Q81 d)
 
 **Changed:** `kq8-core/src/sound.rs`: new `StepGround` (which building the steps sound like; 1 unit test), `building_floor_flags` comment (no key = 0, traced). `kq8-viewer/src/connor_view.rs`: the footstep uses it instead of "the last thing he stood on". Provenance, `docs/FEATURES.md`, `docs/DESIGN.md` (3h-4 note), `STATUS.md`.
