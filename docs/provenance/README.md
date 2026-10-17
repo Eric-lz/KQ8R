@@ -1141,7 +1141,8 @@ Facts only; code and wording are our own. Numbers checked with
 | Flags → set: 0x1 dirt, 0x2 grass, 0x4 rock, 0x8/0x100/0x40 water, 0x20 weirdb, else none | Rule 37, "Do not reproduce" 5 (kept) | Unit test `footstep_sets_and_files` |
 | Terrain: the square's `envInfo.kq` flags | Rule 37, `water.md` "Ground flags" | Walk near the fountain: dirt and water steps |
 | Building: 2ⁿ for `footsoundType=n` (0–8), else 0x1 | Rule 39 | Bridge `bigbrig2` (2): 15 rock steps; `cav2` (4): silent (unit test) |
-| Building without `footsoundType`: 0x1; on an object: the terrain under him; in the air: the last ground | **Stand-ins** (Q81 a, b, d) | Pub upper floor: 5 dirt steps logged "stand-in, Q81 a" |
+| Building without `footsoundType`: 0, so 0x1; on an object: the terrain under him | Rule 39, 39a (Q81 a, b answered; were stand-ins) | Pub upper floor: dirt steps "building without footsoundType: 0, so 0x1" |
+| In the air: a remembered building kept 2 updates (gravity on; gravity off nothing counts), forgotten on the 3rd, then the terrain under him now (was: the last ground) | Rule 39a (Q81 d), fixed 2026-10-17 | Unit test `steps_remember_a_building_for_2_updates_in_the_air`; `connor.log`: off the pub floor, in the air from update 49, forgotten at 51 |
 | File `<set>1/2/3` at 25 / 50 / 25 % | Rule 38 | Unit test `the_dice_give_25_50_25` (40,000 rolls within 5 %) |
 | The random number source (xorshift, fixed start) | **Our method** | — |
 

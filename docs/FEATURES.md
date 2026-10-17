@@ -222,7 +222,8 @@ objects don't stop it, as in the original. Checked in the logs
   and landings; his crash and falling sounds too). The step sound
   follows the ground: dirt, grass, rock or water from the ground's
   material, rock on the big bridge, silence in the cave. House floors
-  without their own setting use dirt for now (not studied yet, Q81).
+  without their own setting use dirt, and on a crate or table the steps
+  sound like the ground under it (`sound.md` rules 39, 39a).
   Checked in the logs (`connor.log`, `sound.log`) and by ear by the user
   against the original (2026-10-17).
 - **World music** (2026-10-17, `sound.md` rules 57–57l): Daventry's

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Fix: footsteps in the air follow A's rule 39a (Q81 d)
+
+**Changed:** `kq8-core/src/sound.rs`: new `StepGround` (which building the steps sound like; 1 unit test), `building_floor_flags` comment (no key = 0, traced). `kq8-viewer/src/connor_view.rs`: the footstep uses it instead of "the last thing he stood on". Provenance, `docs/FEATURES.md`, `docs/DESIGN.md` (3h-4 note), `STATUS.md`.
+**Why:** A's answer to Q81 (`sound.md` rule 39a): a building is remembered only from a building hit (any other hit clears it), and in the air it is kept for 2 updates with gravity on (nothing counts with gravity off), then the terrain under him now is used. Ours kept the last ground for as long as he was in the air. (a) and (b) were already right.
+**Tested how:** `cargo test --workspace` (338 pass), clippy clean. `cargo play --world Daventry --at 202336,262400,1.5708 --lift 3400 --hold 1,0,0,60 --frames 900 --sound off`, `connor.log`.
+**Result:** Steps on the pub's upper floor: "footstep on Pub (building without footsoundType: 0, so 0x1)", dirt. Walks off the edge: in the air at updates 49, 50, 51; "steps forget building Pub: 3rd update in the air" at 51; that update's step and the landing's two steps use the terrain (dirt).
+**Still broken / not tested:** Not listened to (it sounds the same here: dirt either way). The `special` state of rule 39a doesn't exist in our code yet. Q81 (c) still a stand-in.
+**Next:** —
+
 ## 2026-10-17 M3 step 3h-5: world music
 
 **Changed:** New `kq8-core/src/music.rs` (`Music`, `MusicRequest`: the tune list, push / pop / play; 8 unit tests). `kq8-core/src/sound.rs`: each sound has its own level and can fade (`start_at_level`, `fade`, `set_level`, `is_playing`, `level`; fades step in the 200 ms housekeeping, wait while paused, stop the sound at 0; every step logged; 1 unit test). `active.rs`: `KQMusic::push` / `pop` go through the event queue 0.2 s later, `play` at once, usage line, `create` / `delete` obsolete; requests handed over in `WorldState::music` (1 unit test; the walk-zone test updated). `script.rs`: push / pop no longer stubs. Viewer: `load.rs` `place_music` (`nMusic`, `music<n>`), `sound_view.rs` starts the tune on the first frame and applies requests, `main.rs`. `docs/DESIGN.md` (3h-5 plan, done), provenance, `README.md`, `docs/FEATURES.md`, `STATUS.md`.

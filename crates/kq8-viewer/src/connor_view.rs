@@ -109,6 +109,8 @@ pub struct ConnorSim {
     pub sounds: Vec<kq8_core::sound::Start>,
     /// Picks the footstep file (`sound.md` rule 38).
     dice: kq8_core::sound::Dice,
+    /// The building his steps sound like (`sound.md` rule 39a).
+    step_ground: kq8_core::sound::StepGround,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -337,6 +339,7 @@ pub fn spawn_connor(
         shown: None,
         sounds: Vec::new(),
         dice: Default::default(),
+        step_ground: Default::default(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -657,6 +660,12 @@ pub fn connor_step(
     if down_now != sim.last_down && down_now != "none" {
         events.push(format!("standing on {down_now} (was {})", sim.last_down));
     }
+    // sound.md rule 39a: the building his steps sound like.
+    let down = (down_now != "none").then_some(down_now.as_str());
+    let is_building = down.is_some_and(|d| footsounds.as_ref().is_some_and(|f| f.0.contains_key(&d.to_ascii_lowercase())));
+    if let Some(line) = sim.step_ground.after_update(down, is_building, sim.mover.use_gravity) {
+        events.push(line);
+    }
     if down_now != "none" {
         sim.last_down = down_now;
     }
@@ -727,23 +736,24 @@ pub fn connor_step(
     }
 }
 
-/// A `FootStep` cue (`sound.md` rules 36-39): the ground he stands on (this
-/// update's down contact, else the last one: Q81 d) gives the flags, the
-/// flags the set, a roll the file; a plain one-shot. Returns the log text.
+/// A `FootStep` cue (`sound.md` rules 36-39a): the remembered building's
+/// `footsoundType`, else the terrain's flags under him now, give the flags,
+/// the flags the set, a roll the file; a plain one-shot. Returns the log
+/// text.
 fn footstep(sim: &mut ConnorSim, terrain: &kq8_data::Terrain, footsounds: Option<&FootSounds>) -> String {
     use kq8_core::sound::{building_floor_flags, footstep_file, footstep_set, Start};
     let [x, y, _] = sim.mover.position;
-    let on = sim.last_down.clone();
-    let (flags, from) = if on == "terrain" {
-        (terrain.flags_at(x, y), "its square's envInfo.kq flags".to_string())
-    } else if let Some(t) = footsounds.and_then(|f| f.0.get(&on.to_ascii_lowercase())) {
-        let from = match t {
-            Some(n) => format!("building footsoundType={n}"),
-            None => "building without footsoundType: 0x1 (stand-in, Q81 a)".to_string(),
-        };
-        (building_floor_flags(*t), from)
-    } else {
-        (terrain.flags_at(x, y), "an object: the terrain's flags under him (stand-in, Q81 b)".to_string())
+    let building = sim.step_ground.building().map(str::to_string);
+    let t = building.as_ref().and_then(|b| footsounds.and_then(|f| f.0.get(&b.to_ascii_lowercase())));
+    let (on, flags, from) = match (building, t) {
+        (Some(b), Some(t)) => {
+            let from = match t {
+                Some(n) => format!("building footsoundType={n}"),
+                None => "building without footsoundType: 0, so 0x1 (rule 39)".to_string(),
+            };
+            (b, building_floor_flags(*t), from)
+        }
+        _ => ("terrain".to_string(), terrain.flags_at(x, y), "the terrain's envInfo.kq flags under him (rule 39a)".to_string()),
     };
     let Some(set) = footstep_set(flags) else {
         return format!("footstep on {on} ({from}), flags {flags:#x}: no step sound (rule 37)");

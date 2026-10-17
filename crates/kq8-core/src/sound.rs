@@ -551,12 +551,61 @@ pub fn footstep_set(flags: u32) -> Option<&'static str> {
 }
 
 /// Rule 39: the flags of a building's floor from its `footsoundType`: 2ⁿ
-/// for n from 0 to 8, else 0x1 (dirt). A building without the key: 0x1
-/// too (our stand-in, Q81 a: not traced).
+/// for n from 0 to 8, else 0x1 (dirt). A building without the key has 0,
+/// so 0x1 too (traced, Q81 a).
 pub fn building_floor_flags(footsound_type: Option<i64>) -> u32 {
     match footsound_type {
         Some(n) if (0..=8).contains(&n) => 1 << n,
         _ => 0x1,
+    }
+}
+
+/// Rule 39a: updates in the air (gravity on) a remembered building is
+/// kept for.
+pub const STEP_BUILDING_AIR_UPDATES: u32 = 2;
+
+/// Rule 39a: which building, if any, a character's steps sound like.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StepGround {
+    building: Option<String>,
+    air: u32,
+}
+
+impl StepGround {
+    /// The remembered building; `None`: the terrain's flags under him now.
+    pub fn building(&self) -> Option<&str> {
+        self.building.as_deref()
+    }
+
+    /// After an update: `down` is what the down pass hit (`None` in the
+    /// air), `is_building` whether that is a building. A building is
+    /// remembered, any other hit clears it; in the air with gravity on it
+    /// is kept 2 more updates and forgotten on the 3rd; with gravity off
+    /// nothing counts. Returns a log line when it changes.
+    pub fn after_update(&mut self, down: Option<&str>, is_building: bool, gravity: bool) -> Option<String> {
+        let before = self.building.clone();
+        match down {
+            Some(name) => {
+                self.air = 0;
+                self.building = is_building.then(|| name.to_string());
+            }
+            None if gravity && self.building.is_some() => {
+                self.air += 1;
+                if self.air > STEP_BUILDING_AIR_UPDATES {
+                    self.building = None;
+                    self.air = 0;
+                }
+            }
+            None => {}
+        }
+        (before != self.building).then(|| match (&before, &self.building) {
+            (_, Some(b)) => format!("steps sound like building {b} (rule 39a)"),
+            (Some(b), None) if down.is_none() => {
+                format!("steps forget building {b}: 3rd update in the air; the terrain under him from now (rule 39a)")
+            }
+            (Some(b), None) => format!("steps leave building {b}: the terrain under him (rule 39a)"),
+            (None, None) => unreachable!(),
+        })
     }
 }
 
@@ -919,8 +968,31 @@ mod tests {
         assert_eq!(footstep_set(building_floor_flags(Some(2))), Some("rock"));
         assert_eq!(footstep_set(building_floor_flags(Some(4))), None);
         assert_eq!(building_floor_flags(Some(9)), 0x1);
-        assert_eq!(building_floor_flags(None), 0x1, "stand-in, Q81 a");
+        assert_eq!(building_floor_flags(None), 0x1, "no key: 0, so dirt (Q81 a)");
         assert_eq!([0, 1, 2, 3].map(|r| footstep_file("grass", r)), ["grass1", "grass2", "grass2", "grass3"]);
+    }
+
+    #[test]
+    fn steps_remember_a_building_for_2_updates_in_the_air() {
+        // Rule 39a.
+        let mut g = StepGround::default();
+        assert!(g.after_update(Some("bigbrig2"), true, true).is_some());
+        assert_eq!(g.building(), Some("bigbrig2"));
+        g.after_update(None, false, true);
+        g.after_update(None, false, true);
+        assert_eq!(g.building(), Some("bigbrig2"), "kept 2 updates in the air");
+        let line = g.after_update(None, false, true).unwrap();
+        assert!(line.contains("3rd update"), "{line}");
+        assert_eq!(g.building(), None);
+        // Gravity off (a jump): nothing counts.
+        g.after_update(Some("pub"), true, true);
+        for _ in 0..10 {
+            g.after_update(None, false, false);
+        }
+        assert_eq!(g.building(), Some("pub"));
+        // Any other hit clears it: the terrain, or an object (a crate).
+        g.after_update(Some("crate.01"), false, true);
+        assert_eq!(g.building(), None);
     }
 
     #[test]

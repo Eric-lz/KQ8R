@@ -222,9 +222,7 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step, suggested:** for B: footsteps in the air after A's Q81 (d) answer (a
-  building is kept for 2 updates, then the terrain under him; `sound.md`
-  rule 39a; ours keeps the last ground), then cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
+- **Next step, suggested:** for B: cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
   scripted movements, remarks, inventory screen). The brightness setting
   (rule 17) is still not built.
 - Sound, not done: the item land sound (nothing is thrown),
@@ -275,9 +273,8 @@ milestone: **M3, Daventry comes alive**.
   check) but the note says he stops and stands. Ours now crashes (stand-in
   from the user's check, 2026-10-17); why is still open.
 - Q81 (c) only: the cue range of a backward loop at its wrap. Stand-in
-  in place (3h-4). (a), (b), (d) answered 2026-10-17: B's stand-ins are
-  right, except in the air (a building is kept for 2 updates, then the
-  terrain under him now is used; `sound.md` rule 39a).
+  in place (3h-4). (a), (b), (d) answered and built 2026-10-17 (rule
+  39a).
 - `sound.md` open questions 5–6 (music after a video; whether a world
   change cuts the old tune): not traced, checks by ear suggested.
 - Q80: how A counted two numbers of the light-map placement check

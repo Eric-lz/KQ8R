@@ -2882,7 +2882,11 @@ catchers, ground animators).
       stand-in Q81 d): the terrain gives the square's `envInfo.kq` flags;
       a building gives 2ⁿ for `footsoundType=n` (n 0–8, other values
       0x1); a building without the key 0x1 (stand-in, Q81 a); an object
-      the terrain flags under him (stand-in, Q81 b). The first match of
+      the terrain flags under him (stand-in, Q81 b). **Updated
+      2026-10-17** to A's answer (rule 39a): a building is remembered only
+      from a building hit, any other hit clears it, and in the air it is
+      kept 2 updates, then the terrain under him; (a) and (b) were right.
+      The first match of
       0x1 dirt, 0x2 grass, 0x4 rock, 0x8 / 0x100 / 0x40 water, 0x20
       weirdb picks the set, none = no step (so `cav2.kq`'s 4 is silent,
       "Do not reproduce" 5, kept). File `<set>1/2/3` at 25 / 50 / 25 %,
