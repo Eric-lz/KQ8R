@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3i-3: `pauseAnim` and `setAnimPos`
+
+**Changed:** `kq8-core/src/named_anim.rs`: `paused` flag: while set, no phase change, no cues, no end, no waiting movement starts. `active.rs`: commands `pauseAnim <name>` (toggles) and `setAnimPos <name> <phase>`, for doors, chests and scripted objects; both log `<name>, <phase>`; an unknown name logs `pauseAnim:  could not find anim <name>`. `script.rs`: `pauseAnim` removed from the stub list. 2 new unit tests. Provenance added.
+**Why:** The user's task, step 1 part 3: `anim-scripts.md` rules 14–15.
+**Tested how:** `cargo test -p kq8-core` (230 pass): `a_paused_animation_doesnt_move_fire_cues_or_end`, `pause_anim_toggles_and_set_anim_pos_sets_the_phase`.
+**Result:** Paused for 40 updates: phase stays 0, no cue; resumed: the cue at 0 fires on the next move. In the script test: "pauseAnim: basket1, 0: paused", the unknown name's line, then "resumed" and "setAnimPos: basket1, 0.5", and the phase moves on from 0.5.
+**Still broken / not tested:** Not tested in the viewer: Daventry's only `pauseAnim` calls are for the monster `sprdump` (M5), which we don't have, so they log "could not find anim sprdump". Objects played by `anim_view` can't be paused yet (3i-4). Return values and the usage lines are our choice (the note gives none).
+**Next:** 3i-4 needs your decision (see the plan); meanwhile 3i-5, the script reader.
+
+## 2026-10-17 M3 step 3i-2: `KQAnimOnce` and `setDeleteWhenDone` (core only)
+
+**Changed:** `kq8-core/src/named_anim.rs`: `once` flag (a `KQAnimOnce`): no waiting movement starts at its end. `active.rs`: `ActiveObject::delete_when_done`; when a `KQAnimOnce`'s movement ends, its script gets `Die`, its `getEndLoop` listener gets `Cue 300 0 <movement>`, then it is deleted if asked (as `deleteObject`), with no `EndLoop`; new command `setDeleteWhenDone <name> 1|0` (only `KQAnimOnce` objects, else `setDeleteWhenDone: could not find object '<name>'`; wrong word count: a usage line in our words). 2 new unit tests. Provenance added.
+**Why:** The user's task, step 1 part 2: `anim-scripts.md` rules 11–13.
+**Tested how:** `cargo test -p kq8-core` (228 pass), unit tests `a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted` and `a_kq_anim_once_keeps_its_last_frame_and_never_starts_the_waiting_one`.
+**Result:** In the test: `Die` reaches the script (it sets a variable), Connor's listener line "tells Connor (getEndLoop: Cue 300 0 open)" appears, no `EndLoop open`, the object is deleted; before it is a `KQAnimOnce`, `setDeleteWhenDone` says it could not find it.
+**Still broken / not tested:** Not tested in the viewer: Daventry's `KQAnimOnce` objects (barrel bursts, the alchemist's boards falling) are only made by `loadKQ` while playing, after a fight (M5). Nothing marks an object as `KQAnimOnce` yet; that comes with `loadKQ` while playing (3k). The `boardx.kq` guard ("Do not reproduce") belongs there too.
+**Next:** 3i-3, `pauseAnim` and `setAnimPos`.
+
+## 2026-10-17 M3 step 3i-1: scripts start movements (the waiting movement)
+
+**Changed:** `kq8-core/src/named_anim.rs`: the movement player now keeps the current movement's name as asked, one waiting movement and "can be cut short"; `request` (`KQAnimPlayEvent`), `start`, `has_ended`, `with_names_at_load`; 8 new unit tests. `door.rs`: `DoorMovement` gets `cut_short` (6th field of `loop=`), "has ended" at 0.9999; `Door` now holds that same player (its four states stay on top). `active.rs`: `KQAnimPlayEvent` to doors, chests and scripted objects goes through the new rules, with a log line per request and per waiting movement that starts. `kq8-viewer` `load.rs` / `door_view.rs`: pass `currAnimName`, `nextAnimName` and the 6th field. Plan for all of 3i/3j/3k in `docs/DESIGN.md`; provenance section added.
+**Why:** The user's task, step 1 part 1: `anim-scripts.md` rules 1–10.
+**Tested how:** `cargo test --workspace` (347 pass), `cargo clippy --workspace --all-targets` clean. Viewer: chest `cargo play --world Daventry --at 202336,262000,1.5708 --click smlchst3,10 --click smlchst3,40 --frames 600 --sound off`; door `cargo play --world Daventry --at 270813,225311,-1.5708 --click Condoor,20 --click Condoor,60 --frames 400 --sound off`; `kq8-artifacts/logs/doors.log`.
+**Result:** Chest and door as before: `smlchst3` `open` starts at update 10 and ends at 25, item, then empty; `Condoor` opens 20 → 35, `Open`, `EndLoop open` at 36. New at update 0 (rule 3): `smlchst1`, `jar1` and the six baskets have no `currAnimName` and start their `nextAnimName` `stop`; `smlchst2`'s `nextAnimName=closed` names no movement, so movement 0 plays under that name (the note's one such object).
+**Still broken / not tested:** Objects played by `anim_view` (`water`, `waterfall`, torches, ...) are still out of the scripts' reach (step 3i-4, an architecture change I will ask about first). No Daventry script sends `KQAnimPlayEvent` to an object in a way the viewer can reach yet (the bricks need pushing, 3j). Not checked by eye (nothing looks different).
+**Next:** 3i-2, `KQAnimOnce` and `setDeleteWhenDone`.
+
 ## 2026-10-17 A: pushing objects (`pushing.md`)
 
 **Changed:** New `docs/behaviour/pushing.md` (rules 1–11): when a touch becomes a push (type bit 0x100; moving, on the ground, empty hands, across pass, facing within 60°, walking or running); the Push state (`push` movement, a 4-update counter, where it can go next); physical pushables (the object moves by Connor's step, only if its height stays exactly the same, Connor follows at 0.95); scripted pushables (bit 0x10000: a `Push` script call, which Daventry's bricks, coffin lid and urn scripts use to take over); the bricks puzzle from start to end. Cross-references in `anim-scripts.md` (open question 1 answered) and `connor-collision.md` rule 4. `STATUS.md`. No code.

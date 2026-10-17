@@ -69,7 +69,7 @@ use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::item::{Accepts, Items, Place};
 use crate::music::MusicRequest;
-use crate::named_anim::NamedAnimPlayer;
+use crate::named_anim::{NamedAnimPlayer, Request as AnimRequest, Started};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::sound::Start;
 use crate::trap::{Trap, Visitor};
@@ -196,6 +196,9 @@ pub struct ActiveObject {
     pub hidden: bool,
     /// Deleted (`deleteObject`, 3f): never comes back.
     pub gone: bool,
+    /// `setDeleteWhenDone <name> 1` on a `KQAnimOnce` (`anim-scripts.md`
+    /// rules 11.3, 13): deleted when its movement ends.
+    pub delete_when_done: bool,
 }
 
 impl ActiveObject {
@@ -223,6 +226,26 @@ fn cue_args(data: &[String]) -> Vec<String> {
         args.push(v.clone());
     }
     args
+}
+
+/// `KQAnimPlayEvent <movement>` to an object's player (`anim-scripts.md`
+/// rule 4), and its log line.
+fn anim_request(player: &mut NamedAnimPlayer, data: &[String], what: &str, from: &str) -> String {
+    let Some(m) = data.first() else {
+        return format!("KQAnimPlayEvent to {what}{from}: no movement named; nothing");
+    };
+    let before = format!("current '{}' phase {:.4}", player.movement_name(), player.phase);
+    let outcome = match player.request(m) {
+        AnimRequest::AtOnce(s) => format!("starts at once: {}", s.describe(&player.movements)),
+        AnimRequest::Waiting => "waiting (the running movement can't be cut short; starts when it ends)".to_string(),
+        AnimRequest::WaitingForever => "waiting forever (rule 6: a stopped movement that can't be cut short never ends)".to_string(),
+    };
+    format!("KQAnimPlayEvent {m} to {what}{from}: {before}: {outcome}")
+}
+
+/// The line for a waiting movement that started in an update (rules 3, 8).
+fn started_line(what: &str, s: &Started, movements: &[crate::door::DoorMovement], why: &str) -> String {
+    format!("{what}: waiting movement starts ({why}): {}", s.describe(movements))
 }
 
 /// A building (`KQInterior`) as a click target (`clicking.md` rules 3, 4,
@@ -853,10 +876,87 @@ impl WorldState {
         "0".into()
     }
 
+    /// The movement player of the door, chest or scripted object `name`
+    /// (not deleted).
+    fn player_mut(&mut self, name: &str) -> Option<&mut NamedAnimPlayer> {
+        if self.is_gone(name) {
+            return None;
+        }
+        if let Some(i) = self.object_index(name) {
+            return Some(&mut self.objects[i].player);
+        }
+        if let Some(i) = self.chest_index(name) {
+            return Some(&mut self.chests[i].chest.player);
+        }
+        let i = self.door_index(name)?;
+        Some(&mut self.doors[i].door.player)
+    }
+
+    /// `pauseAnim <name>` toggles the pause; `setAnimPos <name> <phase>`
+    /// sets the phase (`anim-scripts.md` rules 14, 15). Both print
+    /// `<name>, <phase>`. Return values and the usage line are ours (the
+    /// note gives none): 0 done, 1 failed.
+    fn anim_pos(&mut self, words: &[String], at: &str) -> String {
+        let set = words[0] == "setAnimPos";
+        let (name, phase) = match (set, words) {
+            (false, [_, name]) => (name, None),
+            (true, [_, name, phase]) => (name, Some(number_value(phase) as f32)),
+            _ => {
+                let usage = if set { "setAnimPos <object> <phase 0-1>" } else { "pauseAnim <object>" };
+                self.note(format!("{at}: usage: {usage}: '{}'", words.join(" ")));
+                return "1".into();
+            }
+        };
+        let Some(p) = self.player_mut(name) else {
+            // The note's line, with its two spaces.
+            self.note(format!("{at}: {}:  could not find anim {name}", words[0]));
+            return "1".into();
+        };
+        let what = match phase {
+            Some(v) => {
+                p.phase = v;
+                "phase set (rule 15)"
+            }
+            None => {
+                p.paused = !p.paused;
+                if p.paused { "paused (rule 14)" } else { "resumed (rule 14)" }
+            }
+        };
+        let line = format!("{name}, {}", p.phase);
+        self.note(format!("{at}: {}: {line}: {what}", words[0]));
+        "0".into()
+    }
+
+    /// `setDeleteWhenDone <name> 1|0` (`anim-scripts.md` rule 13): only
+    /// for `KQAnimOnce` objects. The usage line's wording is ours (the
+    /// note gives none).
+    fn set_delete_when_done(&mut self, words: &[String], at: &str) -> String {
+        let [_, name, on] = words else {
+            self.note(format!("{at}: usage: setDeleteWhenDone <object> <1|0>: '{}'", words.join(" ")));
+            return "1".into();
+        };
+        let Some(i) = self.object_index(name).filter(|&i| self.objects[i].player.once && !self.objects[i].gone) else {
+            self.note(format!("{at}: setDeleteWhenDone: could not find object '{name}'"));
+            return "1".into();
+        };
+        let on = number_value(on) != 0.0;
+        self.objects[i].delete_when_done = on;
+        self.note(format!("{at}: setDeleteWhenDone {name}: {}", if on { "deleted when its movement ends" } else { "stays when its movement ends" }));
+        "0".into()
+    }
+
     /// A play-once movement of `name` ended (`clicking.md` rule 21): the
     /// object cues itself (3333 = `EndLoop`, through the queue) if it has a
     /// script, and its `getEndLoop` listener gets `Cue 300 0 <movement>`.
     fn movement_ended(&mut self, name: &str, movement: &str, has_script: bool) {
+        self.report_end(name, movement, has_script);
+    }
+
+    /// The end of a movement: `EndLoop` to the object itself if `end_loop`
+    /// (it has a script and is not a `KQAnimOnce`), and `Cue 300` to its
+    /// `getEndLoop` listener.
+    fn report_end(&mut self, name: &str, movement: &str, end_loop: bool) {
+        let has_script = end_loop;
         let now = self.now();
         let at = format!("{name}: '{movement}' ended");
         if has_script {
@@ -1065,6 +1165,8 @@ impl ScriptHost for WorldState {
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
+            "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
+            "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
             "KQSound::play" => Some(self.play_sound(words, at)),
@@ -1840,10 +1942,14 @@ impl Active {
                 );
                 self.world.note(line);
             }
-            let at = self.world.doors[i].door.base.position;
+            let at = self.world.doors[i].door.player.base.position;
             for cue in &a.cues {
                 let what = self.world.cue_sound(&format!("door {name}"), cue, at);
                 self.world.note(format!("door {name}: cue '{cue}' fires ({what})"));
+            }
+            if let Some(st) = &a.started {
+                let line = started_line(&format!("door {name}"), st, &self.world.doors[i].door.player.movements, "rule 8: the movement before it ended");
+                self.world.note(line);
             }
             if let Some(p) = &a.problem {
                 self.world.note(format!("door {name}: {p}"));
@@ -1881,9 +1987,15 @@ impl Active {
                 let what = self.world.cue_sound(&format!("chest {name}"), cue, at);
                 self.world.note(format!("chest {name}: cue '{cue}' fires ({what})"));
             }
+            if let Some(st) = &a.started {
+                let why = if a.finished.is_some() { "rule 8: the movement before it ended" } else { "rule 3: no current movement name" };
+                let line = started_line(&format!("chest {name}"), st, &self.world.chests[i].chest.player.movements, why);
+                self.world.note(line);
+            }
             if let Some(m) = a.finished {
                 // chests.md rule 6, clicking.md rule 21: EndLoop through the queue.
-                self.world.note(format!("chest {name}: movement '{m}' finished; stays on its last frame"));
+                let after = if a.started.is_some() { "the waiting movement plays" } else { "stays on its last frame" };
+                self.world.note(format!("chest {name}: movement '{m}' finished; {after}"));
                 let has_script = self.world.chests[i].script.is_some();
                 self.world.movement_ended(&name, &m, has_script);
             }
@@ -1901,14 +2013,44 @@ impl Active {
                 let what = self.world.cue_sound(&format!("object {name}"), cue, at);
                 self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
             }
+            if let Some(st) = &a.started {
+                let why = if a.finished.is_some() { "rule 8: the movement before it ended" } else { "rule 3: no current movement name" };
+                let line = started_line(&format!("object {name}"), st, &self.world.objects[i].player.movements, why);
+                self.world.note(line);
+            }
             if let Some(m) = a.finished {
-                // clicking.md rule 21: EndLoop through the queue.
-                self.world.note(format!("object {name}: movement '{m}' finished; stays on its last frame"));
+                if self.world.objects[i].player.once {
+                    self.anim_once_ended(i, &m);
+                    continue;
+                }
+                // anim-scripts.md rule 8, clicking.md rule 21: EndLoop
+                // through the queue, naming the movement that ended.
+                let after = if a.started.is_some() { "the waiting movement plays" } else { "stays on its last frame" };
+                self.world.note(format!("object {name}: movement '{m}' finished; {after}"));
                 let has_script = self.world.objects[i].script.is_some();
                 self.world.movement_ended(&name, &m, has_script);
             }
         }
         self.world.updates += 1;
+    }
+
+    /// A `KQAnimOnce`'s movement ended (`anim-scripts.md` rule 11): its
+    /// script gets `Die`, its listener `Cue 300 0 <movement>`, then it is
+    /// deleted if `setDeleteWhenDone` asked. No `EndLoop`, no waiting
+    /// movement.
+    fn anim_once_ended(&mut self, i: usize, movement: &str) {
+        let name = self.world.objects[i].name().to_string();
+        self.world.note(format!("object {name} (KQAnimOnce): movement '{movement}' finished: its script gets Die (rule 11)"));
+        self.call_object(i, &["Die"]);
+        self.world.report_end(&name, movement, false);
+        if self.world.objects[i].delete_when_done {
+            let at = format!("{name}: KQAnimOnce done");
+            if self.world.delete_one(&name, &at) {
+                self.world.note(format!("object {name} (KQAnimOnce): deleted (setDeleteWhenDone, rule 11.3)"));
+            } else {
+                self.world.note(format!("object {name} (KQAnimOnce): setDeleteWhenDone, but already deleted (by its script)"));
+            }
+        }
     }
 
     fn handle(&mut self, e: Pending) {
@@ -1972,14 +2114,7 @@ impl Active {
         if let Some(i) = self.world.object_index(&e.target) {
             match e.kind.as_str() {
                 "KQAnimPlayEvent" => {
-                    // doors.md rule 6, as for doors.
-                    let line = match e.data.first() {
-                        Some(m) => match self.world.objects[i].player.play(m) {
-                            Ok(()) => format!("KQAnimPlayEvent {m} to object {}{from}: starts '{m}'", e.target),
-                            Err(err) => format!("KQAnimPlayEvent {m} to object {}{from}: {err}; nothing", e.target),
-                        },
-                        None => format!("KQAnimPlayEvent to object {}{from}: no movement named; nothing", e.target),
-                    };
+                    let line = anim_request(&mut self.world.objects[i].player, &e.data, &format!("object {}", e.target), &from);
                     self.world.note(line);
                 }
                 "KQCueEvent" => {
@@ -1998,6 +2133,10 @@ impl Active {
                 self.world.note(format!("KQCueEvent {} to chest {}{from}", e.data.join(" "), e.target));
                 let refs: Vec<&str> = args.iter().map(String::as_str).collect();
                 self.call_chest(i, &refs);
+            } else if e.kind == "KQAnimPlayEvent" {
+                // anim-scripts.md rule 4: chests are ordinary animated objects.
+                let line = anim_request(&mut self.world.chests[i].chest.player, &e.data, &format!("chest {}", e.target), &from);
+                self.world.note(line);
             } else {
                 self.world.note(format!("event {} {} to chest {}{from}: not handled for chests (not in chests.md)", e.kind, e.data.join(" "), e.target));
             }
@@ -2031,15 +2170,10 @@ impl Active {
                 ));
             }
             "KQAnimPlayEvent" => {
+                // anim-scripts.md rule 4 (doors.md rule 6: the state stays).
                 let door = &mut self.world.doors[i].door;
-                let name = door.name.clone();
-                let line = match e.data.first() {
-                    Some(m) => match door.play(m) {
-                        Ok(()) => format!("KQAnimPlayEvent {m} to {name}{from}: starts '{m}', state stays {}", door.state.name()),
-                        Err(err) => format!("KQAnimPlayEvent {m} to {name}{from}: {err}; nothing"),
-                    },
-                    None => format!("KQAnimPlayEvent to {name}{from}: no movement named; nothing"),
-                };
+                let what = format!("door {} (state {})", door.name, door.state.name());
+                let line = anim_request(&mut door.player, &e.data, &what, &from);
                 self.world.note(line);
             }
             "KQCueEvent" => {
@@ -2093,7 +2227,7 @@ mod tests {
             do_not_point_at: false,
             gone: false,
         };
-        d.door.base = Placement::at([0.0; 3]);
+        d.door.player.base = Placement::at([0.0; 3]);
         let mut v = Vars::default();
         for (k, val) in vars {
             v.set(k, val.to_string());
@@ -2150,7 +2284,7 @@ mod tests {
         assert!(log.contains("script door.cs Condoor Open") && log.contains("echo opened Condoor"), "{log}");
         assert!(log.contains("cue 'playsound door4.aud' fires (sound started)"), "{log}");
         // sound.md rule 35: a placed one-shot at the door, 5,000 / 25,000.
-        let door_at = a.world.doors[0].door.base.position;
+        let door_at = a.world.doors[0].door.player.base.position;
         assert_eq!(a.world.sounds, [Start::placed_one_shot("door4.aud", door_at, "door Condoor cue".into())]);
         // Second click: script runs, event ignored, door stays open.
         a.click("Condoor", NEAR, 2350.0, None);
@@ -2686,9 +2820,55 @@ mod tests {
             do_not_point_at: false,
             hidden: false,
             gone: false,
+            delete_when_done: false,
         }]);
         a.start();
         a
+    }
+
+    #[test]
+    fn a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted() {
+        // Made-up script: on a click, ask to be deleted when done, have
+        // Connor listen, and play `open` (16 frames over 1 s).
+        let script = "if test $2 == ConnorAction\n setDeleteWhenDone $1 1\n getEndLoop $1 Connor 1\n sendEvent 0 $1 KQAnimPlayEvent open\nendif\nif test $2 == Die\n set D::died $1\nendif\n";
+        let mut a = with_object(script, "x");
+        // Not a KQAnimOnce yet: setDeleteWhenDone finds nothing (rule 13).
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(a.take_log().join("\n").contains("setDeleteWhenDone: could not find object 'basket1'"));
+        a.world.objects[0].player.once = true;
+        a.world.objects[0].player.start("stop");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(a.world.objects[0].delete_when_done);
+        let mut log = String::new();
+        for _ in 0..20 {
+            a.update();
+            log.push_str(&a.take_log().join("\n"));
+        }
+        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1"), "{log}");
+        assert!(log.contains("tells Connor (getEndLoop: Cue 300 0 open)"), "{log}");
+        assert!(!log.contains("EndLoop open"), "no EndLoop for a KQAnimOnce: {log}");
+        assert!(a.world.is_deleted("basket1") && a.world.objects[0].gone, "{log}");
+    }
+
+    #[test]
+    fn pause_anim_toggles_and_set_anim_pos_sets_the_phase() {
+        let script = "if test $2 == ConnorAction\n sendEvent 0 $1 KQAnimPlayEvent open\n pauseAnim $1\n pauseAnim nosuch\nendif\nif test $2 == Cue\n pauseAnim $1\n setAnimPos $1 0.5\nendif\n";
+        let mut a = with_object(script, "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let log = a.take_log().join("\n");
+        assert!(log.contains("pauseAnim: basket1, 0: paused (rule 14)"), "{log}");
+        assert!(log.contains("pauseAnim:  could not find anim nosuch"), "{log}");
+        for _ in 0..30 {
+            a.update();
+        }
+        let p = &a.world.objects[0].player;
+        assert_eq!((p.movement_name(), p.phase, p.paused), ("open", 0.0, true), "paused: the request started it but it doesn't move");
+        a.world.queue.send(a.world.now(), 0.0, "basket1", "KQCueEvent", &["1".into()], "test");
+        a.update();
+        let log = a.take_log().join("\n");
+        assert!(log.contains("resumed (rule 14)") && log.contains("setAnimPos: basket1, 0.5"), "{log}");
+        a.update();
+        assert!(a.world.objects[0].player.phase > 0.5);
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).
@@ -2810,11 +2990,14 @@ mod tests {
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let log = a.take_log().join("\n");
         assert!(log.contains("stub (later milestone, nothing done): KQMonster::speak Connor Connor 0 109 14 33 1 1"), "{log}");
-        // A movement it doesn't have.
+        // A movement it doesn't have: movement 0 under that name
+        // (anim-scripts.md rule 5), logged.
         let mut b = with_object("sendEvent 0 $1 KQAnimPlayEvent fly\n", "x");
         b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         b.update();
-        assert!(b.take_log().join("\n").contains("basket1 has no movement 'fly'; nothing"));
+        let log = b.take_log().join("\n");
+        assert!(log.contains("starts at once: 'fly' (unknown name: movement 0 'stop' plays)"), "{log}");
+        assert_eq!((b.world.objects[0].player.current, b.world.objects[0].player.movement_name()), (0, "fly"));
     }
 
     #[test]

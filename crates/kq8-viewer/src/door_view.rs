@@ -247,16 +247,19 @@ pub fn spawn_doors(
                 start: l.start,
                 speed: l.speed,
                 repeat: l.repeat,
+                // anim-scripts.md rule 4: the 6th field.
+                cut_short: l.unknown != 0,
                 play_time: timing[*a].0,
                 frame_steps: timing[*a].1.clone(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
             })
             .collect();
         let animations: Vec<usize> = d.movements.iter().map(|(_, _, a)| *a).collect();
+        let names = (d.anim_names.0.as_deref(), d.anim_names.1.as_deref());
         if d.object {
             // A scripted object (3e-5).
             let o = ActiveObject {
-                player: NamedAnimPlayer::new(&p.name, movements, d.current, base),
+                player: NamedAnimPlayer::new(&p.name, movements, d.current, base).with_names_at_load(names.0, names.1),
                 script: d.script.clone(),
                 bounds: d.bounds,
                 collision_type: d.collider_type,
@@ -267,6 +270,7 @@ pub fn spawn_doors(
                 do_not_point_at: d.do_not_point_at,
                 hidden: !p.drawn(),
                 gone: false,
+                delete_when_done: false,
             };
             main_log.summary(format!(
                 "objects: [{}] scripted at ({:.0}, {:.0}, {:.0}), type {:#x}, script {:?}, box {}, shows '{}', movements {:?}",
@@ -292,7 +296,8 @@ pub fn spawn_doors(
         }
         if let Some(settings) = d.chest.clone() {
             // A chest (3e-4).
-            let chest = Chest::new(&p.name, settings, movements, d.current, base);
+            let mut chest = Chest::new(&p.name, settings, movements, d.current, base);
+            chest.player = chest.player.with_names_at_load(names.0, names.1);
             let open_turn = chest.player.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open")).map(|m| turn_degrees(&m.turn_at_frame(m.frames() - 1)));
             let c = ActiveChest {
                 bounds: d.bounds,
@@ -331,7 +336,8 @@ pub fn spawn_doors(
             active_chests.push(c);
             continue;
         }
-        let door = Door::new(&p.name, movements, d.current, base);
+        let mut door = Door::new(&p.name, movements, d.current, base);
+        door.player = door.player.with_names_at_load(names.0, names.1);
         let DrawnDoor { body, frames, .. } =
             spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting);
         let active = ActiveDoor {
@@ -357,7 +363,7 @@ pub fn spawn_doors(
                 None => format!("{name}: NOT FOUND in the world's scripts"),
             }
         });
-        let open = active.door.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open"));
+        let open = active.door.player.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open"));
         let open_note = open.map_or("no 'open' movement".to_string(), |m| {
             let last = m.frames() - 1;
             let t = m.turn_at_frame(last);
@@ -376,7 +382,7 @@ pub fn spawn_doors(
             active.door.movement_name(),
             active
                 .door
-                .movements
+                .player.movements
                 .iter()
                 .map(|m| format!(
                     "{} (start {} speed {} cues {:?})",
@@ -815,8 +821,8 @@ pub fn door_draw(
     };
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
-        lit(drawn.body, d.current, d.frame());
-        show_frame(drawn, &d.placement(), d.current, d.frame(), &mut transforms, &mut visibility);
+        lit(drawn.body, d.player.current, d.frame());
+        show_frame(drawn, &d.placement(), d.player.current, d.frame(), &mut transforms, &mut visibility);
         // Deleted (3g-5): not drawn.
         if door.gone {
             if let Ok(mut v) = visibility.get_mut(drawn.body) {

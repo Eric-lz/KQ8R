@@ -1201,6 +1201,9 @@ pub struct DoorAssets {
     pub movements: Vec<(String, kq8_data::objects::CurrentLoop, usize)>,
     /// The movement shown when loaded (`currAnimName`).
     pub current: usize,
+    /// `currAnimName` and `nextAnimName` as written (`anim-scripts.md`
+    /// rule 3).
+    pub anim_names: (Option<String>, Option<String>),
     /// Shape of that movement (for the box lookup).
     pub shape: String,
     pub script: Option<String>,
@@ -2304,9 +2307,11 @@ impl Placer<'_> {
                 empty: remark("Empty"),
             }
         });
+        let name_key = |k: &str| s.get(k).map(|v| v.trim().to_string());
         let door = DoorAssets {
             movements: with_index,
             current,
+            anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
             shape,
             script: text("script").filter(|v| !v.is_empty()),
             collider_type,

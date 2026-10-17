@@ -1,21 +1,46 @@
-//! Plays an object's named animations when asked (M3 steps 3e-4, 3e-5):
-//! `open`, `closed`, `stop`... (the game's files call them "movements";
-//! this is not about Connor moving). Which one is shown, its phase,
-//! starting one by name, one update's step, the frame shown and where the
-//! object stands.
+//! Plays an object's named animations when asked (M3 steps 3e-4, 3e-5,
+//! 3i-1): `open`, `closed`, `stop`... (the game's files call them
+//! "movements"; this is not about Connor moving). Which one is shown, its
+//! phase, the movement waiting to start, one update's step, the frame
+//! shown and where the object stands.
 //!
-//! Used by chests and scripted animated objects. (Animations that simply
-//! loop from the start are `crate::anim`; doors have their own in
-//! `crate::door`.) Rules as for doors
-//! (`docs/behaviour/doors.md` rules 6 and 9, `crate::door`): a movement
-//! started in an update first moves in the next; a play-once movement
-//! stops at its end and stays on its last frame (`chests.md` rule 3);
-//! the object stands where the shown frame's steps put it (as doors).
+//! Used by doors (`crate::door`, with their four states on top), chests
+//! and scripted animated objects. (Animations that simply loop from the
+//! start are `crate::anim`.)
+//!
+//! Rules from `docs/behaviour/anim-scripts.md` (traced unless marked):
+//!
+//! - The current movement's name (as asked, even when unknown), a waiting
+//!   movement (at most one; a newer request replaces it) and the running
+//!   animation (rule 1).
+//! - At load, no `currAnimName`: movement 0 shows but the name stays
+//!   empty, and on the first update an empty name makes the waiting
+//!   movement (`nextAnimName`) start at once (rule 3).
+//! - `KQAnimPlayEvent` (rule 4): the movement waits; it starts at once if
+//!   the running animation can be cut short (6th field of its `loop=`
+//!   line) or has ended (phase ≥ 0.9999 forwards, ≤ 0 backwards), else
+//!   when it ends. A stopped (`speed` 0) movement that can't be cut short
+//!   never ends, so a request then waits forever (rule 6). Transitions
+//!   (rule 4.2): no placed object has any (data), so none here.
+//! - Starting (rule 5): looked up ignoring capitals, first match; an
+//!   unknown name starts movement 0 under the asked name; the movement's
+//!   own `loop=` start phase and speed; afresh even if already playing.
+//! - When a play-once movement ends (rule 8): the waiting movement starts
+//!   first, else the last frame holds; then the caller sends `EndLoop` /
+//!   `Cue 300` naming the movement that ended. A repeating movement never
+//!   ends (rule 10).
+//!
+//! As before (`doors.md` rules 6 and 9, Q45 d): a movement started in an
+//! update first moves in the next; the object stands where the shown
+//! frame's steps put it.
 
 use kq8_data::shape::Transform;
 
 use crate::collide::Placement;
 use crate::door::{chain, identity, DoorMovement};
+
+/// "Has ended", forwards: phase at least this (`anim-scripts.md`).
+pub const ENDED_FORWARD: f32 = 0.9999;
 
 /// What one update did.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -23,8 +48,45 @@ pub struct Played {
     pub from: f32,
     pub to: f32,
     pub cues: Vec<String>,
-    /// The play-once movement that reached its end in this update.
+    /// The play-once movement that reached its end in this update (its
+    /// name as asked).
     pub finished: Option<String>,
+    /// The waiting movement that started in this update (rule 3 or 8),
+    /// with what it started as.
+    pub started: Option<Started>,
+}
+
+/// What a request did (`anim-scripts.md` rule 4), for the log.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Request {
+    /// Started at once (the running one could be cut short, or had ended).
+    AtOnce(Started),
+    /// Waits for the running one to end.
+    Waiting,
+    /// Waits for a stopped movement that can't be cut short: never starts
+    /// (rule 6).
+    WaitingForever,
+}
+
+/// A movement just started (rule 5), for the log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Started {
+    /// The name as asked.
+    pub name: String,
+    /// The movement that plays (movement 0 for an unknown name).
+    pub index: usize,
+    /// The name was not in the list (movement 0 plays).
+    pub unknown: bool,
+    pub start: f32,
+    pub speed: f32,
+}
+
+impl Started {
+    pub fn describe(&self, movements: &[DoorMovement]) -> String {
+        let shown = movements.get(self.index).map_or("none", |m| m.name.as_str());
+        let unknown = if self.unknown { format!(" (unknown name: movement 0 '{shown}' plays)") } else { String::new() };
+        format!("'{}'{unknown} at phase {:.4} speed {}", self.name, self.start, self.speed)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -34,49 +96,131 @@ pub struct NamedAnimPlayer {
     pub movements: Vec<DoorMovement>,
     /// Index into `movements` of the one shown.
     pub current: usize,
+    /// The current movement's name as asked (rule 5); empty when loaded
+    /// without `currAnimName` (rule 3).
+    pub current_name: String,
+    /// The waiting movement (rule 1), at most one.
+    pub waiting: Option<String>,
     pub phase: f32,
     /// The current movement still moves.
     pub playing: bool,
+    /// The running animation can be cut short (6th field of its `loop=`).
+    pub cut_short: bool,
     /// Started in this update: first moves in the next.
     pub started_this_update: bool,
     /// The object's place in the world.
     pub base: Placement,
+    /// A `KQAnimOnce`: at the end of a movement no waiting movement starts
+    /// (rule 11); the caller reports the end as `Die`.
+    pub once: bool,
+    /// `pauseAnim` (rule 14): the phase doesn't move, no cues fire, nothing
+    /// ends, no waiting movement starts.
+    pub paused: bool,
 }
 
 impl NamedAnimPlayer {
-    /// Showing movement `current` at its start.
+    /// Showing movement `current` at its start, named as in the list.
     pub fn new(name: &str, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
         let current = current.min(movements.len().saturating_sub(1));
-        let (phase, playing) = movements.get(current).map_or((0.0, false), |m| (m.start, m.speed != 0.0));
-        NamedAnimPlayer { name: name.to_string(), movements, current, phase, playing, started_this_update: false, base }
+        let m = movements.get(current);
+        let (phase, playing, cut_short) = m.map_or((0.0, false, false), |m| (m.start, m.speed != 0.0, m.cut_short));
+        let current_name = m.map_or(String::new(), |m| m.name.clone());
+        NamedAnimPlayer { name: name.to_string(), movements, current, current_name, waiting: None, phase, playing, cut_short, started_this_update: false, base, once: false, paused: false }
+    }
+
+    /// Rule 3: the names the file gives. `curr` = `currAnimName` (empty or
+    /// missing: the name stays empty, movement 0 shows); `next` =
+    /// `nextAnimName` fills the waiting slot.
+    pub fn with_names_at_load(mut self, curr: Option<&str>, next: Option<&str>) -> Self {
+        let curr = curr.map(str::trim).unwrap_or("");
+        if curr.is_empty() {
+            self.current_name.clear();
+        } else if !self.movements.iter().any(|m| m.name.eq_ignore_ascii_case(curr)) {
+            // Rule 5: an unknown name plays movement 0 under that name.
+            self.current_name = curr.to_string();
+        }
+        self.waiting = next.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+        self
     }
 
     pub fn movement(&self) -> Option<&DoorMovement> {
         self.movements.get(self.current)
     }
 
+    /// The current movement's name as asked (rule 5).
     pub fn movement_name(&self) -> &str {
-        self.movement().map_or("none", |m| m.name.as_str())
+        if self.current_name.is_empty() {
+            self.movement().map_or("none", |m| m.name.as_str())
+        } else {
+            &self.current_name
+        }
     }
 
-    /// Starts movement `name` (any capitals) at its start phase. `Err` if
-    /// there is none.
-    pub fn play(&mut self, name: &str) -> Result<(), String> {
-        let i = self
-            .movements
-            .iter()
-            .position(|m| m.name.eq_ignore_ascii_case(name))
-            .ok_or_else(|| format!("{} has no movement '{name}'", self.name))?;
-        self.current = i;
-        self.phase = self.movements[i].start;
-        self.playing = self.movements[i].speed != 0.0;
+    /// The running play-once movement has reached its end (phase ≥ 0.9999
+    /// forwards, ≤ 0 backwards). A repeating or stopped one never has.
+    pub fn has_ended(&self) -> bool {
+        let Some(m) = self.movement() else { return true };
+        if m.repeat {
+            return false;
+        }
+        (m.speed > 0.0 && self.phase >= ENDED_FORWARD) || (m.speed < 0.0 && self.phase <= 0.0)
+    }
+
+    /// Rule 5: starts movement `name` at once with its own `loop=` line,
+    /// afresh even if it is the one playing. An unknown name starts
+    /// movement 0 under the asked name.
+    pub fn start(&mut self, name: &str) -> Started {
+        let found = self.movements.iter().position(|m| m.name.eq_ignore_ascii_case(name));
+        let i = found.unwrap_or(0);
+        self.current = i.min(self.movements.len().saturating_sub(1));
+        self.current_name = name.to_string();
+        let (start, speed, cut_short) = self.movement().map_or((0.0, 0.0, false), |m| (m.start, m.speed, m.cut_short));
+        self.phase = start;
+        self.playing = speed != 0.0;
+        self.cut_short = cut_short;
         self.started_this_update = true;
+        Started { name: name.to_string(), index: self.current, unknown: found.is_none(), start, speed }
+    }
+
+    /// Starts movement `name` at once if it is in the list; `Err` if not
+    /// (the doors' and chests' own movements: `open`, `opened`, ...).
+    pub fn play(&mut self, name: &str) -> Result<(), String> {
+        if !self.movements.iter().any(|m| m.name.eq_ignore_ascii_case(name)) {
+            return Err(format!("{} has no movement '{name}'", self.name));
+        }
+        self.start(name);
         Ok(())
+    }
+
+    /// `KQAnimPlayEvent <name>` (rule 4).
+    pub fn request(&mut self, name: &str) -> Request {
+        self.waiting = Some(name.to_string());
+        if self.cut_short || self.has_ended() {
+            self.waiting = None;
+            return Request::AtOnce(self.start(name));
+        }
+        let stopped = self.movement().is_none_or(|m| m.speed == 0.0);
+        if stopped {
+            Request::WaitingForever
+        } else {
+            Request::Waiting
+        }
     }
 
     /// One update of `dt` seconds.
     pub fn advance(&mut self, dt: f32) -> Played {
         let mut out = Played { from: self.phase, to: self.phase, ..Default::default() };
+        if self.paused {
+            return out;
+        }
+        // Rule 3: an empty current name lets the waiting movement start.
+        if self.current_name.is_empty() {
+            if let Some(w) = self.waiting.take() {
+                out.started = Some(self.start(&w));
+                self.started_this_update = false;
+                return out;
+            }
+        }
         if std::mem::take(&mut self.started_this_update) || !self.playing {
             return out;
         }
@@ -87,7 +231,12 @@ impl NamedAnimPlayer {
         out.cues = step.cues;
         if step.done {
             self.playing = false;
-            out.finished = Some(m.name.clone());
+            out.finished = Some(self.movement_name().to_string());
+            // Rule 8: the waiting movement starts first; it moves from the
+            // next update. Not for a `KQAnimOnce` (rule 11).
+            if let Some(w) = self.waiting.take().filter(|_| !self.once) {
+                out.started = Some(self.start(&w));
+            }
         }
         out
     }
@@ -96,9 +245,14 @@ impl NamedAnimPlayer {
         self.movement().map_or(0, |m| m.frame_at(self.phase))
     }
 
+    /// The turn the shown frame's steps give it (own space).
+    pub fn turn(&self) -> Transform {
+        self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()))
+    }
+
     /// Where it stands now: the steps of the shown frame, then its place.
     pub fn placement(&self) -> Placement {
-        let t = self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()));
+        let t = self.turn();
         let base = Transform { flags: 0, m: self.base.rotation, p: self.base.position };
         let w = chain(&base, &t);
         Placement { rotation: w.m, position: w.p }
@@ -110,25 +264,38 @@ pub(crate) mod tests {
     use super::*;
     use crate::door::Cue;
 
+    const DT: f32 = 1.0 / 15.0;
+
+    /// A movement of 16 frames over 1 s (made-up numbers in the style of
+    /// the chests and baskets).
+    pub fn movement(name: &str, start: f32, speed: f32, repeat: bool, cut_short: bool, cues: Vec<Cue>) -> DoorMovement {
+        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], cues }
+    }
+
     /// `stop` still at 0, then `open` 0 -> 1 over 1 s with a cue at 0, 16
-    /// frames (made-up numbers in the style of the chests and baskets).
+    /// frames. Both `0 1` (play once, can be cut short), as most of
+    /// Daventry's object movements.
     pub fn still_then_open(name: &str) -> NamedAnimPlayer {
-        let steps = vec![identity(); 16];
-        let mv = |n: &str, speed: f32, cues: Vec<Cue>| DoorMovement {
-            name: n.into(),
-            start: 0.0,
-            speed,
-            repeat: false,
-            play_time: 1.0,
-            frame_steps: steps.clone(),
-            cues,
-        };
         NamedAnimPlayer::new(
             name,
-            vec![mv("closed", 0.0, vec![]), mv("open", 1.0, vec![Cue { phase: 0.0, action: "playsound chstopen".into() }])],
+            vec![
+                movement("closed", 0.0, 0.0, false, true, vec![]),
+                movement("open", 0.0, 1.0, false, true, vec![Cue { phase: 0.0, action: "playsound chstopen".into() }]),
+            ],
             0,
             Placement::at([0.0; 3]),
         )
+    }
+
+    /// Updates until something finishes: (updates, the advance).
+    fn until_finished(p: &mut NamedAnimPlayer) -> (usize, Played) {
+        for n in 1..100 {
+            let a = p.advance(DT);
+            if a.finished.is_some() {
+                return (n, a);
+            }
+        }
+        panic!("nothing finished");
     }
 
     #[test]
@@ -137,18 +304,148 @@ pub(crate) mod tests {
         assert_eq!((p.movement_name(), p.playing), ("closed", false));
         assert!(p.play("OPEN").is_ok());
         assert!(p.play("opened").is_err());
-        let first = p.advance(1.0 / 15.0);
+        let first = p.advance(DT);
         assert_eq!(first.to, 0.0, "started in this update: waits");
-        assert_eq!(p.advance(1.0 / 15.0).cues, ["playsound chstopen"]);
-        let mut n = 2;
-        let finished = loop {
-            n += 1;
-            if let Some(f) = p.advance(1.0 / 15.0).finished {
-                break f;
-            }
-        };
-        assert_eq!((finished.as_str(), n), ("open", 16));
-        assert_eq!((p.movement_name(), p.phase, p.frame()), ("open", 1.0, 15), "the last frame stays");
-        assert_eq!(p.advance(1.0 / 15.0).finished, None);
+        assert_eq!(p.advance(DT).cues, ["playsound chstopen"]);
+        let (n, a) = until_finished(&mut p);
+        assert_eq!((a.finished.as_deref(), n + 2), (Some("OPEN"), 16));
+        assert_eq!((p.movement_name(), p.phase, p.frame()), ("OPEN", 1.0, 15), "the last frame stays");
+        assert_eq!(p.advance(DT).finished, None);
+    }
+
+    /// `stop` repeating and cut short, `swing` play once and not cut short,
+    /// `down` a stopped final pose (`0 0`, like `bricks.kq`), `spin`
+    /// repeating and not cut short.
+    fn object() -> NamedAnimPlayer {
+        NamedAnimPlayer::new(
+            "thing",
+            vec![
+                movement("stop", 0.0, 0.0, true, true, vec![]),
+                movement("swing", 0.0, 1.0, false, false, vec![]),
+                movement("down", 1.0, 0.0, false, false, vec![]),
+                movement("spin", 0.0, 1.0, true, false, vec![]),
+            ],
+            0,
+            Placement::at([0.0; 3]),
+        )
+    }
+
+    #[test]
+    fn a_cut_short_movement_is_replaced_at_once() {
+        let mut p = object();
+        let r = p.request("Down");
+        let Request::AtOnce(s) = r else { panic!("{r:?}") };
+        assert_eq!((s.index, s.start, s.speed, s.unknown), (2, 1.0, 0.0, false));
+        assert_eq!((p.movement_name(), p.waiting.as_deref(), p.phase), ("Down", None, 1.0));
+    }
+
+    #[test]
+    fn a_play_once_that_cant_be_cut_short_finishes_then_the_waiting_one_starts() {
+        let mut p = object();
+        p.request("swing");
+        p.advance(DT);
+        p.advance(DT);
+        assert_eq!(p.request("spin"), Request::Waiting);
+        // A newer request replaces the older one (rule 4.1).
+        assert_eq!(p.request("stop"), Request::Waiting);
+        let (_, a) = until_finished(&mut p);
+        // The ended one is named, and the waiting one already started.
+        assert_eq!(a.finished.as_deref(), Some("swing"));
+        assert_eq!(a.started.map(|s| s.name), Some("stop".to_string()));
+        assert_eq!((p.movement_name(), p.waiting.as_deref()), ("stop", None));
+    }
+
+    #[test]
+    fn a_play_once_that_has_ended_is_replaced_at_once() {
+        let mut p = object();
+        p.request("swing");
+        until_finished(&mut p);
+        assert!(p.has_ended());
+        assert!(matches!(p.request("spin"), Request::AtOnce(_)));
+    }
+
+    #[test]
+    fn a_stopped_pose_that_cant_be_cut_short_waits_forever() {
+        let mut p = object();
+        p.request("down");
+        assert_eq!(p.request("stop"), Request::WaitingForever);
+        for _ in 0..100 {
+            assert_eq!(p.advance(DT), Played { from: 1.0, to: 1.0, ..Default::default() });
+        }
+        assert_eq!(p.movement_name(), "down");
+    }
+
+    #[test]
+    fn a_repeating_movement_that_cant_be_cut_short_never_lets_a_request_start() {
+        let mut p = object();
+        p.request("spin");
+        assert_eq!(p.request("stop"), Request::Waiting);
+        for _ in 0..100 {
+            assert_eq!(p.advance(DT).finished, None);
+        }
+        assert_eq!(p.movement_name(), "spin");
+    }
+
+    #[test]
+    fn an_unknown_name_plays_movement_0_under_that_name() {
+        let mut p = object();
+        p.request("spin");
+        p.cut_short = true;
+        let Request::AtOnce(s) = p.request("nosuch") else { panic!() };
+        assert!(s.unknown);
+        assert_eq!((p.current, p.movement_name()), (0, "nosuch"));
+    }
+
+    #[test]
+    fn the_playing_movement_restarts_from_its_start() {
+        let mut p = object();
+        p.request("swing");
+        for _ in 0..5 {
+            p.advance(DT);
+        }
+        p.cut_short = true;
+        p.request("swing");
+        assert_eq!(p.phase, 0.0);
+    }
+
+    #[test]
+    fn a_kq_anim_once_keeps_its_last_frame_and_never_starts_the_waiting_one() {
+        let mut p = object();
+        p.once = true;
+        p.request("swing");
+        p.advance(DT);
+        assert_eq!(p.request("stop"), Request::Waiting);
+        let (_, a) = until_finished(&mut p);
+        assert_eq!((a.finished.as_deref(), a.started), (Some("swing"), None));
+        assert_eq!((p.movement_name(), p.phase), ("swing", 1.0));
+    }
+
+    #[test]
+    fn a_paused_animation_doesnt_move_fire_cues_or_end() {
+        let mut p = still_then_open("jar");
+        p.request("open");
+        p.advance(DT);
+        p.paused = true;
+        for _ in 0..40 {
+            assert_eq!(p.advance(DT), Played { from: 0.0, to: 0.0, ..Default::default() });
+        }
+        p.paused = false;
+        assert_eq!(p.advance(DT).cues, ["playsound chstopen"], "the cue at 0 fires once it moves again");
+    }
+
+    #[test]
+    fn no_curr_anim_name_lets_next_anim_name_start_on_the_first_update() {
+        let p = object().with_names_at_load(None, Some("spin"));
+        assert_eq!((p.current, p.current_name.as_str()), (0, ""));
+        let mut p = p;
+        let a = p.advance(DT);
+        assert_eq!(a.started.map(|s| s.index), Some(3));
+        assert_eq!((p.movement_name(), p.phase), ("spin", 0.0));
+        // It moves from the next update.
+        assert!(p.advance(DT).to > 0.0);
+        // With a currAnimName the waiting one waits as usual.
+        let mut q = object().with_names_at_load(Some("stop"), Some("spin"));
+        assert_eq!(q.advance(DT).started, None);
+        assert_eq!(q.movement_name(), "stop");
     }
 }

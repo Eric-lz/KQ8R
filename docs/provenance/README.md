@@ -1172,3 +1172,38 @@ Replaced the Q82 stand-in on 2026-10-17 (the stand-in: "every non-back jump hit 
 | A steep up/across hit that is **not** head-on (a `KQMonster`, the Connor flag; neither exists in our code yet): the jump ends (gravity on, steps 325), no crash, the animation plays on as after a `backJump` hit | Jump ends: rule 5. What follows: **STAND-IN**, asked as Q84 (a) | Unit test `only_head_on_or_down_pass_jump_hits_crash` (not reachable in a run) |
 | A fall starting during the crash switches to the hold animation at once (the stumble is cut short) | **User's check in the original** (2026-10-17, Q82 b); rule 5 says it is not traced | `connor.log`: crash updates 24–27, `jumphold` at 28, `jumpend` at 31 |
 | The crash ignores the keys (no turning while it plays), as for the run crash | Unchanged; rule 5 now says "turning stays allowed, and a turn key still held is passed on again", unclear to B: asked as Q84 (b) | — |
+
+## Scripts start movements: the waiting movement (M3 step 3i-1) — `crates/kq8-core/src/{named_anim,door,active}.rs`, `crates/kq8-viewer/src/{load,door_view}.rs`
+
+All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note says "data"). Doors, chests and scripted objects now share one player (`NamedAnimPlayer`); the door's four states stay on top (`doors.md`).
+
+| What | Source | Check |
+| --- | --- | --- |
+| Current movement name (as asked), one waiting slot, the running animation's "can be cut short" (6th field of `loop=`) | Rules 1, 4; `connor-movement.md` "two flags" | Unit tests in `named_anim.rs` |
+| No `currAnimName`: movement 0 shows, the name stays empty; on the first update the waiting movement (`nextAnimName`) starts | Rule 3 | Unit test `no_curr_anim_name_lets_next_anim_name_start_on_the_first_update`; `doors.log` update 0: `smlchst1`, baskets, `jar1` start `stop`; `smlchst2`'s `closed` names no movement, movement 0 stays (as the note's data count says) |
+| `KQAnimPlayEvent`: waits; starts at once if the running one can be cut short or has ended (≥ 0.9999 forwards, ≤ 0 backwards), else at its end | Rule 4 | Unit tests `a_cut_short_movement_is_replaced_at_once`, `a_play_once_that_*` |
+| Transitions: none built for objects | Rule 4.2 (no placed object has a `transitionN=` line, data) | — |
+| Starting: ignore capitals, first match; unknown name → movement 0 under the asked name; the movement's own `loop=` start and speed; afresh even if playing | Rule 5 | Unit tests `an_unknown_name_plays_movement_0_under_that_name`, `the_playing_movement_restarts_from_its_start`; active test with `fly` |
+| A stopped movement that can't be cut short: a request waits forever (logged "waiting forever (rule 6)") | Rule 6; logging from "Do not reproduce" | Unit test `a_stopped_pose_that_cant_be_cut_short_waits_forever` |
+| At the end of a play-once movement the waiting one starts first, then `EndLoop` / `Cue 300` name the ended one; a repeating one never ends | Rules 8, 10 | Unit tests `a_play_once_that_cant_be_cut_short_finishes_then_the_waiting_one_starts`, `a_repeating_movement_that_cant_be_cut_short_never_lets_a_request_start` |
+| "Has ended" at 0.9999 also ends a movement's play (phase then set to 1, as before) | Rule "Has ended" (traced in `objects.md`); setting 1.0 is our earlier choice (3a-2) | Door and chest unit tests unchanged |
+| Chests answer `KQAnimPlayEvent` too | Rule 8 ("doors, chests and the rest") | — (no Daventry script sends one) |
+| A door whose `open`/`close` ends while a movement waits: the waiting one starts, then the door rule shows `opened`/`closed` over it, logged | **Our choice**: no note covers it, no data does it | — |
+| The `.kq` keys `currAnimName`, `nextAnimName` read for doors, chests and scripted objects | Observed (data) and rule 2 | `doors.log` above |
+
+## Objects that play once and report (M3 step 3i-2) — `crates/kq8-core/src/{named_anim,active}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A `KQAnimOnce`'s movement end: script gets `Die`, then the listener `Cue 300 0 <movement>`, then deletion if `setDeleteWhenDone` asked; no `EndLoop`, no waiting movement | `anim-scripts.md` rule 11 | Unit tests `a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted`, `a_kq_anim_once_keeps_its_last_frame_and_never_starts_the_waiting_one` |
+| `setDeleteWhenDone <name> 1|0` only on `KQAnimOnce`; else "could not find object" | Rule 13 | Same unit test |
+| Its usage line's wording, and `$Console::Return` 1 for the failures | **Our choice** (the note says only "prints its usage line"; 1 = failure as `doors.md` Q45 f) | — |
+
+## Pausing an animation (M3 step 3i-3) — `crates/kq8-core/src/{named_anim,active,script}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `pauseAnim <name>` toggles; while paused no phase change, no cues, no end, no waiting start; logs `<name>, <phase>`; unknown name → `pauseAnim:  could not find anim <name>` | `anim-scripts.md` rule 14 | Unit tests `a_paused_animation_doesnt_move_fire_cues_or_end`, `pause_anim_toggles_and_set_anim_pos_sets_the_phase` |
+| `setAnimPos <name> <phase>` sets the phase, same log line | Rule 15 | Same unit test |
+| A movement requested while paused starts (its phase is set) but doesn't move until resumed | **Our reading** of rules 4 and 14 together (the note doesn't say) | Same unit test |
+| Return values (0 done, 1 failed) and the usage lines | **Our choice** | — |

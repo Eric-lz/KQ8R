@@ -1192,6 +1192,139 @@ catchers, ground animators).
     no crash (built with a test world, since nothing in Daventry gives
     one). Viewer: the tree at Daventry's start (`--jump 10`),
     `connor.log`.
+- **3i — animated objects controlled by scripts, pushing, the bricks
+  puzzle (planned 2026-10-17).** Rules from `anim-scripts.md` and
+  `pushing.md`. Goal: Daventry's bricks puzzle works from start to end
+  (`pushing.md` rule 11). Each sub-step has its own unit tests, viewer
+  check and MODLOG entry, in this order.
+  - **Words used here.** *Waiting movement*: a movement a script asked
+    for that starts as soon as the rules allow (`anim-scripts.md` rule
+    4). *Can be cut short*: the 6th field of a `loop=` line, 1 = a new
+    movement may replace it at once. *Has ended*: a play-once movement
+    reached its end. *Pushable*: an object whose type has bit 0x100.
+  - **Where things stand (2026-10-17).** Animated objects live in three
+    places: doors (`door.rs`), chests and the clickable scripted objects
+    such as `Bricks` (`named_anim.rs`, run by `active.rs`), and every
+    other animated object (`anim.rs`, run and drawn by the viewer's
+    `anim_view.rs`: `water`, `waterfall`, torches, the windmill...).
+    Scripts reach only the first two kinds. Connor has modes Free, Fall,
+    Land, Jump, Crash, Dying, Dead; no Push or Special. `loadKQ`, `move`,
+    `handsOff`, `setThirdPerson`, `KQCamera::follow`,
+    `KQMonster::setState`, `pauseAnim` are stubs while playing.
+  - **3i-1, the waiting movement and `KQAnimPlayEvent`** (rules 1–10),
+    `kq8-core` (**done** 2026-10-17, as planned; `Door` now holds a
+    `NamedAnimPlayer`). One movement player for doors, chests and scripted
+    objects (the shared part of `door.rs` and `named_anim.rs`), with:
+    current movement name (as asked, even when unknown), the waiting
+    slot, "can be cut short" from the `loop=` line's 6th field (new
+    field on `DoorMovement`), "has ended" (phase ≥ 0.9999 forwards, ≤ 0
+    backwards). `KQAnimPlayEvent`: waiting slot filled, then start at
+    once if the running animation can be cut short or has ended, else
+    wait (rule 4); unknown name → movement 0, logged (rule 5); a
+    request to a stopped `0 0` movement waits forever, logged once
+    (rule 6); at the end of a play-once movement the waiting one starts
+    first, then `EndLoop`/`Cue 300` name the ended one (rule 8).
+    Transitions (rule 4.2): objects have none (data), so not built;
+    logged if a `transitionN=` line is ever found on an object. The door
+    rules on top (`open`/`close` → state, `opened`/`closed`, `Open`/
+    `Close`) stay. Objects run by `anim_view` (`water`) are **not**
+    reached in this step: logged "not run by the script rules yet"
+    (3i-4).
+    - **Log** (`doors.log`): per request: object, asked name, current
+      movement, "at once" / "waiting" / "waiting forever (rule 6)",
+      start phase and speed; per end: ended movement, the waiting one
+      started (if any), then `EndLoop` / `Cue 300`.
+    - **Test:** unit tests: cut-short starts at once; not cut-short waits
+      for the end then starts before `EndLoop`; two requests keep the
+      second; `0 0` waits forever; unknown name → movement 0 with the
+      name kept; a request for the playing movement restarts it.
+      Viewer: the bricks' end (`Bricks` `stop` is `1 1` so `down` starts
+      at once) can only be reached in 3k; until then the chests
+      (`--click smlchst3,30`) must behave exactly as before (compare
+      `doors.log`).
+  - **3i-2, `KQAnimOnce` and `setDeleteWhenDone`** (rules 11–13), core:
+    a flag on the object; at its end its script gets `Die`, its listener
+    `Cue 300`, then deletion if asked; no `EndLoop`, no waiting
+    movement. (**Done** 2026-10-17 in core: `NamedAnimPlayer::once`,
+    `ActiveObject::delete_when_done`, `setDeleteWhenDone`. Which objects
+    get the flag is set where `KQAnimOnce` objects are made: 3k.) `boardx.kq` loading itself: stop after one round, logged
+    ("Do not reproduce"). Unit tests only: in Daventry `KQAnimOnce`
+    objects are only made by `loadKQ` from a fight (M5), and `loadKQ`
+    while playing comes in 3k.
+  - **3i-3, `pauseAnim` and `setAnimPos`** (rules 14–15), core: toggle;
+    while paused no phase change, no cues, no end, no waiting start;
+    prints `<name>, <phase>`; unknown name prints the note's line. Unit
+    tests. (Daventry's only use is the monster `sprdump`, M5.) (**Done**
+    2026-10-17: doors, chests and scripted objects; `pauseAnim` is no
+    longer a stub.)
+  - **3i-4, scripts reach every animated object** (rules 1–10 for the
+    objects `anim_view` plays now). **Architecture change, asked first
+    (AGENTS.md "Ask before large refactors").** B's proposal: the rules
+    and the state of every animated object live in `kq8-core` (`Active`
+    gets them all, with all their movements, the random start of
+    `flags` bit 8, and the repeating frame rule of 3c); `anim_view`
+    only draws what core says (movement, frame, pose), building frames
+    for every movement an object has. Needed for `water` →
+    `blocked` in the bricks puzzle. Test: `anim.log` for the tracked
+    objects must stay the same as before (windmill, well water, torch).
+  - **3i-5, the script reader** (rules 17–18), core `script.rs`:
+    single quotes switch `$` replacement off until the next one (marks
+    dropped, words still split at spaces); `;` ends a command; `( … )`
+    one word without the brackets; more than 40 words → `Console: Too
+    many arguments`, the command fails. Unit tests.
+  - **3i-6, `KQStatsChangeRequestEvent` adds** (rule 19): five stats per
+    object (start 0; where objects' starting stats come from is not in
+    the note, so 0 and logged), added, the fourth capped at 100, health
+    below 0 → script gets `Die`. Connor: added, then his level rules
+    (fifth = experience). Starting values of Connor's stats are not in
+    any note: asked as a question, logged as a stand-in. Unit tests;
+    viewer: clicking a fish (`--click fishies.01,N`) logs Connor's
+    health going up by 2.
+  - **3i-7, Connor's Special state** (rule 16): new mode `Special` in
+    `connor.rs`: the item list one at a time (`AnimList=`, `AnimListOn`,
+    `AnimListOff`, `KillConnor`, `Inv` logged only, any other word a
+    movement that must end before the next item), then back to standing.
+    The extra `.anm` lists (`bricks.anm`, `c_pshoff.anm`, ...) are read
+    from the world's `kq.vol` like `Conner.anm`, and their models loaded
+    by `connor_view` when first asked (logged). A movement ending tells
+    the `getEndLoop` listener `Cue 300 0 <movement>` (3g-4 recorded it
+    for Connor but nothing played). Test: unit tests on the list;
+    viewer in 3k.
+  - **3j, pushing** (`pushing.md`):
+    - **3j-1, the push check and the Push state** (rules 1–3, 6–8):
+      Connor's touch with a 0x100 object goes through the six conditions
+      of rule 2 (hand mode: empty hands, 4, at the start; `setDoMode`
+      stays a stub), then mode `Push`, `push` movement, the counter of
+      rule 7. Log per touch: object, each condition, facing cos, state
+      change.
+    - **3j-2, physical pushables** (rules 4–5): the object is swept by
+      Connor's across step over 1/15 s ignoring Connor, put back if its
+      height changed at all, Connor at start + 0.95 × its movement.
+      The pushed object's collider and its drawn model move. Test: the
+      hay bale in the windmill (`haybail.01`, `pushing.md` "Data used"):
+      `--at` next to it, `--hold 1,0,0`; the log shows it sliding at
+      about half walking speed and stopping at a wall; a barrel on a
+      slope doesn't move.
+    - **3j-3, scripted pushables** (rules 3, 9–10): the touch calls the
+      object's script with `Push` (`$1` its name) at once, mid-move, and
+      is not a hit; "a scripted pushable whose script does nothing":
+      treated as a wall hit and logged ("Do not reproduce").
+  - **3k, the bricks puzzle end to end** (`pushing.md` rule 11). Needs,
+    besides 3i and 3j, the commands `bricks.cs` uses while playing:
+    `move` (Connor, `KQCamera`, an object; `objects.md` (d)),
+    `KQCamera::follow` (`camera.md` rule 1), `handsOff`,
+    `setThirdPerson`, `KQObject::setHidden` on `Bricks` and `Table`,
+    `loadKQ waterfa2.kq` / `watrfsn2.kq` while playing,
+    `deleteObject WaterfallSound` (`sound.md` rule 48). Not in any note:
+    `handsOff`, `setThirdPerson`, the camera's view from `move KQCamera`
+    angles, what Connor's move does after a script moved him mid-move,
+    `loadKQ` while playing: asked as questions before 3k is built.
+    Test: `--at 156625,303748,1.57 --hold 1,0,0` (the game's own
+    `alias bricks`); the logs show the Push call, Connor's `push` from
+    `bricks.anm`, `Cue 300 0 push`, `Bricks` → `down` at once with no
+    `EndLoop` after, the waterfall swapped, `water` → `blocked`, the
+    cues 5 and 10, controls back; then Connor can walk through where
+    the waterfall stood.
 
 ### M4 — Talk, listen, use the menus
 
