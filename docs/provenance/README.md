@@ -1150,4 +1150,4 @@ Facts only; code and wording are our own. Numbers checked with
 | What | Source | Check |
 | --- | --- | --- |
 | A standing `jump` hitting something steep (up or across pass) crashes, like `runJump` | **User's check in the original** (2026-10-17), chosen as a stand-in; contradicts `connor-physics.md` "Jumping" rule 5 (Q82) | Unit test `a_standing_jump_into_a_wall_crashes_stand_in_q82`; `connor.log`: the tree at Daventry's start |
-| The crash plays to its end through a fall or a landing; still falling then, the hold animation | **Stand-in** (Q82 b; the user saw the stumble play) | `connor.log`: crash updates 24–30, landed at 30, `stop` at 31 |
+| A fall starting during the crash switches to the hold animation at once (the stumble is cut short) | **User's check in the original** (2026-10-17, Q82 b) | `connor.log`: crash updates 24–27, `jumphold` at 28, `jumpend` at 31 |

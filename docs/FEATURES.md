@@ -336,8 +336,9 @@ message that shows the usage.
   takes damage). Pushable objects can't be pushed.
 - **Jumping into things:** a standing jump into a tree or wall makes
   Connor stumble (the crash and its sound), as the user saw in the
-  original; why it does that is not studied yet (Q82), so the details
-  while he's still in the air are our guess.
+  original; when he starts falling the stumble is cut short and the
+  falling animation takes over (also the user's check). Why the original
+  crashes is not studied yet (Q82).
 - **Camera:** it doesn't swing back behind Connor by itself; no first
   person view (F2), camera shake or cutscene cameras.
 - **Water:** no damage yet (poison, lava, swamp).

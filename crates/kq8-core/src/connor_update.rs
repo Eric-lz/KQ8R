@@ -109,15 +109,13 @@ pub fn tick<'a>(
         step = Some(walker.update(intent, loops));
         mover.update([0.0; 3], world)
     } else {
-        mover.update_with(world, |m, fall| {
+        mover.update_with(world, |_, fall| {
             // Fall replaces the walk at once, so its first update already
             // uses the hold animation's step. A walk-off falls as `Stand`.
-            // STAND-IN (Q82 b, the user's check: the stumble plays): a
-            // crash plays to its end even when a fall starts during it;
-            // still falling then, the fall's hold animation takes over.
-            let crash_ended = walker.mode == Mode::Crash && walker.phase >= 1.0;
-            let falling = matches!(m.state, State::Fall { .. });
-            if (fall == Some(FallEvent::Started) && walker.mode != Mode::Crash) || (crash_ended && falling) {
+            // A crash too (the user's check in the original, 2026-10-17:
+            // after a standing jump into a tree the stumble is cut short
+            // when he starts falling; Q82 b).
+            if fall == Some(FallEvent::Started) {
                 walker.kind = crate::connor::JumpKind::Stand;
                 walker.set_mode(Mode::Fall);
             }
@@ -144,8 +142,6 @@ pub fn tick<'a>(
     }
     mover.submerged = submerged;
     match report.fall {
-        // Landing during a crash (Q82 b stand-in): the crash plays on.
-        Some(FallEvent::Landed(_)) if walker.mode == Mode::Crash => notes.push("landed during the crash: it plays on (stand-in Q82 b)".into()),
         Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}

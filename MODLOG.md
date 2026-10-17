@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Fix: a fall cuts the stumble short (Q82 b, user's check)
+
+**Changed:** `kq8-core/src/connor_update.rs`: removed the "crash plays to its end through a fall or a landing" part of the Q82 stand-in; a fall starting during the crash switches to the fall's hold animation at once, as before. The crash on a standing jump stays. `docs/behaviour/QUESTIONS.md` (Q82), provenance, `docs/FEATURES.md`.
+**Why:** The user's check in the original (2026-10-17): the stumble does not play to its end; when he starts falling, the falling animation takes over. My extra rule was a guess and wrong.
+**Tested how:** `cargo test --workspace`, clippy clean. `cargo play --world Daventry --jump 10 --frames 900 --sound off`, `connor.log`.
+**Result:** `crash` updates 24–27 (with `crash.aud`), fall starts at 28 → `jumphold`, lands at 30 → `jumpend` at 31.
+**Still broken / not tested:** Why the original crashes at all (Q82 a). Checked by eye by the user after this fix (2026-10-17): "looks just like the original".
+**Next:** A: Q81, Q82 a.
+
 ## 2026-10-17 Stand-in for Q82: a standing jump into something crashes
 
 **Changed:** `kq8-core/src/connor_update.rs`: a standing `jump` that hits something steep in the up or across pass now crashes like `runJump` (the note says it stops); a crash plays to its end even when a fall starts or he lands during it, and if he is still falling then, the fall's hold animation takes over. Test renamed and changed: `a_standing_jump_into_a_wall_crashes_stand_in_q82`. `docs/behaviour/QUESTIONS.md` (Q82: stand-in in place), provenance, `docs/FEATURES.md`, `STATUS.md`.
