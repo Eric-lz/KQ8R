@@ -4,9 +4,15 @@ A fan rewrite of *King's Quest: Mask of Eternity* (Sierra, 1998) in Rust,
 to make it run well on modern computers and, later, to improve its
 controls, graphics and gameplay.
 
-Unofficial fan project, not affiliated with or endorsed by the game's
-owners. **This repository contains no game files: you need your own copy
-of the game.** The code is written with an AI coding agent (Claude Code);
+
+> [!IMPORTANT]
+> This project requires an original copy of *King's Quest: Mask of Eternity* to run.
+> It will not start without one. It will not modify any of the original game's files,
+> only read them. **This repository contains no game files.**
+
+Unofficial fan project, not affiliated with or endorsed by the game's owners.
+
+The code is written with an AI coding agent (Claude Code);
 see [CREDITS.md](CREDITS.md).
 
 ## Current state
@@ -64,9 +70,10 @@ Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
   `--game <folder>` to the commands below, or set the `KQ8_GAME_DIR`
   environment variable. *Tested only with GOG.com copy (version 1.3, also called
   1.03).*
-- To run the *original* game for comparison on Windows 11 we use the
-  [KQ8FixWin11](https://github.com/SegMash/KQ8FixWin11) compatibility
-  fix (also used as a no-CD patch).
+
+To run the *original* game for comparison on Windows 11 we use the
+[KQ8FixWin11](https://github.com/SegMash/KQ8FixWin11) compatibility
+fix (also used as a no-CD patch).
 
 ## Try it
 
