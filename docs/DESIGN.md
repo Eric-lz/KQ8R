@@ -1357,7 +1357,8 @@ catchers, ground animators).
       stays a stub), then mode `Push`, `push` movement, the counter of
       rule 7. Log per touch: object, each condition, facing cos, state
       change.
-    - **3j-2, physical pushables** (rules 4–5): the object is swept by
+    - **3j-2, physical pushables** (rules 4–5; **done** 2026-10-17 for
+      ball-stack objects, the hay bale; box-shaped ones wait for Q87 a): the object is swept by
       Connor's across step over 1/15 s ignoring Connor, put back if its
       height changed at all, Connor at start + 0.95 × its movement.
       The pushed object's collider and its drawn model move. Test: the

@@ -170,6 +170,12 @@ objects don't stop it, as in the original. Checked in the logs
   `pauseAnim` pauses. Checked in the logs (`doors.log`): the star globe
   given the spell page (`--item INVITEM_SpellPage --click starball.01,N`)
   plays `open` for 1.93 s, then `lid`. Not checked by eye.
+- **Pushing** (2026-10-17, M3 step 3j): walking into the windmill's hay
+  bale with empty hands, facing it, pushes it along the floor at about
+  half walking speed until a wall stops it; letting go plays his step
+  back. Checked in the logs (`connor.log`). Barrels go into the push
+  animation but don't move yet (a question to the study session). Not
+  checked by eye.
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),
@@ -355,7 +361,7 @@ message that shows the usage.
   Daventry scripts that do it start from things not built yet (pushing,
   fights, talking, `loadKQ` while playing). A rolling rock that runs
   into Connor does nothing to him yet (in the original he stumbles and
-  takes damage). Pushable objects can't be pushed.
+  takes damage). Barrels can't be pushed yet.
 - **Jumping into things:** a standing jump into a tree or wall makes
   Connor stumble (the crash and its sound), as the user saw in the
   original; when he starts falling the stumble is cut short and the

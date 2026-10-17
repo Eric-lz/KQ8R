@@ -114,6 +114,9 @@ pub struct ConnorSim {
     /// His play-once movements that ended (plain names), for `getEndLoop`
     /// listeners; taken by `door_view::trap_step` (M3 3i-7).
     pub ended: Vec<String>,
+    /// Physical pushables he moved this update (`pushing.md` rule 4):
+    /// name and movement; applied by [`push_apply`] (M3 3j-2).
+    pub pushed: Vec<(String, [f32; 3])>,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -344,6 +347,7 @@ pub fn spawn_connor(
         dice: Default::default(),
         step_ground: Default::default(),
         ended: Vec::new(),
+        pushed: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -552,6 +556,51 @@ impl ConnorSim {
     }
 }
 
+/// Moves the physical pushables Connor pushed this update (M3 3j-2,
+/// `pushing.md` rule 4): their colliders (his and the camera's) and their
+/// drawn entities. Runs right after `connor_step`.
+pub fn push_apply(
+    sim: Option<ResMut<ConnorSim>>,
+    colliders: Option<ResMut<ObjectColliders>>,
+    view: Option<ResMut<crate::terrain_view::ViewBlockerSet>>,
+    mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
+    shared: Res<Shared>,
+) {
+    let Some(mut sim) = sim else { return };
+    let (mut colliders, mut view) = (colliders, view);
+    for (name, d) in std::mem::take(&mut sim.pushed) {
+        let mut boxes = 0;
+        let mut at = None;
+        for list in [colliders.as_mut().map(|c| &mut c.0), view.as_mut().map(|v| &mut v.boxes)].into_iter().flatten() {
+            for b in list.iter_mut().filter(|b| b.name == name) {
+                for (p, v) in b.placement.position.iter_mut().zip(d) {
+                    *p += v;
+                }
+                at = Some(b.placement.position);
+                boxes += 1;
+            }
+        }
+        let shift = Vec3::from(crate::to_bevy(d, [0.0; 3]));
+        let mut entities = 0;
+        for (_, mut t) in drawn.iter_mut().filter(|(n, _)| n.0 == name) {
+            t.translation += shift;
+            entities += 1;
+        }
+        let line = format!(
+            "connor update {}: pushed {name} by ({:.1}, {:.1}, {:.1}): {boxes} collider(s), {entities} drawn part(s) moved; now at {}",
+            sim.updates,
+            d[0],
+            d[1],
+            d[2],
+            at.map_or("?".into(), |p| format!("({:.1}, {:.1}, {:.1})", p[0], p[1], p[2]))
+        );
+        if sim.updates % 15 == 0 {
+            shared.log.lock().unwrap().detail(&line);
+        }
+        sim.log.detail(line);
+    }
+}
+
 /// One update; runs in Bevy's fixed-rate schedule (15 per second).
 pub fn connor_step(
     sim: Option<ResMut<ConnorSim>>,
@@ -588,6 +637,8 @@ pub fn connor_step(
         sim.jump_start_z = Some(z_before);
     }
     let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes } = tick;
+    // M3 3j-2: physical pushables moved by his move.
+    sim.pushed.extend(scene.moved.take());
     // M3 3i-7: a play-once movement ended: for getEndLoop listeners.
     if let Some(e) = step.as_ref().and_then(|s| s.ended) {
         sim.ended.push(kq8_core::connor::plain_movement_name(e).to_string());

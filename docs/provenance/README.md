@@ -1269,3 +1269,18 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | "The object's centre" = its position | **Stand-in**, Q87 e | — |
 | An accepted touch leaves him at the pass start until the object's part exists | Rule 4.3 (the "didn't move" case) | Unit test `walking_into_a_pushable_passes_the_push_check_and_stays_at_the_pass_start` |
 | Colliders carry type, mask, shape, keepOnGround; scripted objects' values refreshed every update | **Our method** | — |
+
+## Pushing physical objects (M3 step 3j-2) — `crates/kq8-core/src/connor_mover.rs`, `crates/kq8-viewer/src/{connor_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The object is moved by Connor's horizontal step of the pass, if more than 0.000001 on some axis | `pushing.md` rule 4, 4.1 | Unit test `a_ball_stack_pushable_slides_ahead_and_stops_at_a_wall`; `connor.log` (hay bale) |
+| Its own sweep ignores Connor; walls and objects its mask makes obstacles stop it | Rule 4.1, `connor-collision.md` rules 2, 3, 12 | Same |
+| Any change of height → put back, counts as not moved | Rule 4.2 | Unit test `a_box_shaped_pushable_or_one_on_a_slope_stays` |
+| Connor at the pass start + 0.95 × the object's movement | Rule 4.3 | Unit test; `connor.log`: Connor ends behind the bale |
+| The sweep uses the object's ball stack (`collisionShape=1`, built from its box like Connor's) | `connor-collision.md` "Ball stack against ball stack" (who is a ball stack); the sweep against buildings and boxes is the one Connor uses | — |
+| Box-shaped pushables not moved | **Stand-in**, Q87 a | `connor.log` (barrel) |
+| Stops at the first contact (no slide) | **Stand-in**, Q87 b | — |
+| keepOnGround after the move: exactly on the floor grid | **Stand-in**, Q87 c | Unit test (slope) |
+| Buildings count as obstacles when the object's mask has 0x8 (their types 0x28 / 0x88) | `camera.md` "Obstacles" (building type), `connor-collision.md` rule 3 | — |
+| The viewer moves its colliders and drawn parts after Connor's update | **Our method** | `connor.log` "pushed haybail.01 … moved" |

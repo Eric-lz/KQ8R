@@ -58,7 +58,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).
-- Scripts switch only some objects' animations (no pushing, no fights yet).
+- Scripts switch only some objects' animations (no fights yet); barrels can't be pushed yet.
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 
