@@ -3,6 +3,25 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 A: world music (Q83) and footsteps (Q81 a, b, d)
+
+**Changed:** `docs/behaviour/sound.md`: new section "World music (`KQMusic`)" (rules 57–57l replace the old rule 57), rule 39 (a building without `footsoundType` = dirt), new rule 39a (what counts as the ground under him), rule 55 wording, numbers table, data, edge cases, "Do not reproduce" 8–10, "How to check" (music), open questions 3–6. `docs/behaviour/QUESTIONS.md` (Q83 answered; Q81 a, b, d answered, c open). `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** B needs Q83 before building world music (rule 57 said "not studied further"); Q81 had stand-ins waiting for answers.
+**Tested how:** Traced in `Mask.exe` with Ghidra (the music object, its push / pop / play handlers, the script commands, fades, pause, the video player, the footstep ground lookup). Data: all 12 `music.kq` files and all 131 `KQMusic` lines in the scripts (`grep`).
+**Result:** Push of a name already on the list does nothing; otherwise a 1.4 s crossfade, and the covered tune stops and later comes back from its beginning. Pop of a lower tune removes it silently; pop of an unknown name does nothing; the last tune can be popped (silence). Script push / pop act 0.2 game-clock units later; `play` at once and is never used. The world tune starts at full loudness, no fade. Footsteps: only buildings count as "standing on"; crates and tables give the terrain under him; in the air the building is kept 2 updates. B's Q81 stand-ins are right except that detail.
+**Still broken / not tested:** Not tested in the original. Not settled: what brings music back after a video (open question 5); that a world change removes the old music object is inferred (6); Q81 (c) not studied; Q82 (a) not studied this session. Two attempts to find where the mover's "standing on" record is written went nowhere before the third (the down pass) found it.
+**User's check in the original (2026-10-17):** at the wizard's trap the tune cross-fades in over about 1.5 s; on leaving, the forest tune starts again from the start. Matches rules 57c and 57d.
+**Next:** B: world music from rules 57–57l. You (done, see above): in Daventry, walk into and out of the wizard's trap and listen whether the forest tune comes back from its start. A: Q82 (a), Q81 (c).
+
+## 2026-10-17 B: review of the sound work, next steps; question Q83 (music)
+
+**Changed:** `docs/behaviour/QUESTIONS.md` (new **Q83**: world music), `STATUS.md` (open questions). No code.
+**Why:** The user asked B to review the sound work (M3 3h) and suggest next steps. World music is the most audible missing piece, and `sound.md` rule 57 says it was not studied further.
+**Tested how:** Read `sound.md`, the 3h plan, the MODLOG and STATUS. Data checked: every world's `music.kq` has `nMusic=1`; Daventry's `KQMusic` lines (`chrchtrp.cs`, `mugltrap.cs`, `mwiztrap.cs` push/pop; `ax.cs` push and `henchman.cs` pop of `mbattle.aud`); `playsound` cues in Daventry's `.anm` files are almost all on characters and monsters (not drawn yet); none on the scenery that animates today (fountain, windmill, wheel, signs, torches, fish).
+**Result:** Sound effects (3h-1 to 3h-4) are done and checked by ear. Q81 stays open with working stand-ins (not blocking). Music needs Q83 answered first.
+**Still broken / not tested:** As in STATUS "Sound, not done".
+**Next:** A: Q83 (music), then Q81, Q82 a. B: world music once Q83 is answered; meanwhile `loadKQ` while playing (brings in `Waterfall2Sound`) or scenery cues.
+
 ## 2026-10-17 Fix: a fall cuts the stumble short (Q82 b, user's check)
 
 **Changed:** `kq8-core/src/connor_update.rs`: removed the "crash plays to its end through a fall or a landing" part of the Q82 stand-in; a fall starting during the crash switches to the fall's hold animation at once, as before. The crash on a standing jump stays. `docs/behaviour/QUESTIONS.md` (Q82), provenance, `docs/FEATURES.md`.

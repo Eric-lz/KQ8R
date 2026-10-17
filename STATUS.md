@@ -40,6 +40,12 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
     backward loop's wrap; in the air = the last ground). Checked by ear
     by the user (2026-10-17): like the original (stone on the bridge,
     water in the river, house floors like the ground outside).
+- **New 2026-10-17 (A): world music studied** (Q83 answered;
+  `sound.md` section "World music", rules 57–57l): the list of tunes,
+  push / pop / play with 1.4 s crossfades, the 0.2 game-clock delay of
+  script pushes and pops, the world tune at full loudness on start,
+  pause, leaving a world. Ready for B. Footsteps (Q81 a, b, d) answered
+  in rules 39–39a.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -261,9 +267,12 @@ milestone: **M3, Daventry comes alive**.
 - Q82: a standing jump into a tree crashes in the original (user's
   check) but the note says he stops and stands. Ours now crashes (stand-in
   from the user's check, 2026-10-17); why is still open.
-- Q81: footsteps: what a building floor without `footsoundType` and an
-  object top give, the cue range of a backward loop at its wrap, the
-  ground while in the air. Stand-ins in place (3h-4).
+- Q81 (c) only: the cue range of a backward loop at its wrap. Stand-in
+  in place (3h-4). (a), (b), (d) answered 2026-10-17: B's stand-ins are
+  right, except in the air (a building is kept for 2 updates, then the
+  terrain under him now is used; `sound.md` rule 39a).
+- `sound.md` open questions 5–6 (music after a video; whether a world
+  change cuts the old tune): not traced, checks by ear suggested.
 - Q80: how A counted two numbers of the light-map placement check
   (surfaces with a corner at exactly 0: note 7,511, we get 365 / 7,276;
   P0 within 0.05 of (4, 4): note 160,649, we get 164,640). The command

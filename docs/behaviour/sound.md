@@ -3,9 +3,9 @@
 Study session A, 2026-10-17. Sources: the `.aud` files in `MASK/`, the
 community format note `kq8aud.txt` from `libkq8fpc/doc/` (listed in
 `docs/RESEARCH.md`), Daventry's and `GAME/`'s data and scripts, and
-`Mask.exe` (studied, described here in our own words). Music and speech
-are covered only as far as they share the sound system (section "Music
-and speech").
+`Mask.exe` (studied, described here in our own words). World music has
+its own section (added 2026-10-17); speech is covered only as far as it
+shares the sound system.
 
 Words used in this note:
 
@@ -272,7 +272,25 @@ world (Daventry's waterfall, mill, windmill and fountain).
     Daventry: `bigbrig2.kq` (bridge) `footsoundType=2` → 0x4, rock steps;
     `cav2.kq` `footsoundType=4` → 0x10 → **silent steps**. A script can
     change it: `KQObject::setFootStepSound <object> <n>` (used only in
-    temple1). What a building without the key gives was not traced.
+    temple1). **A building without the key** has `footsoundType` 0 → flag
+    0x1, **dirt** (traced 2026-10-17, Q81 a; every object starts with 0).
+39a. **What counts as "the ground under the character"** for rule 37
+    (traced 2026-10-17, Q81 b, d). Each update the character's last down
+    pass (`connor-physics.md`, the movement passes) remembers what it
+    hit, but **only if that is a building** (`KQInterior`); any other hit
+    (the terrain, a crate, a table, a monster) clears it. At a step:
+    - a building is remembered → that building's `footsoundType`
+      (rule 39);
+    - otherwise → the **terrain's flags at the character's current x, y**
+      (`water.md`), whatever he is standing on. So on a crate or a table
+      the steps sound like the ground under it.
+    - **In the air** (no down-pass hit): the remembered building is kept
+      while gravity is on for up to **2 more updates**; on the 3rd update
+      without a hit it is forgotten, and the terrain under his current
+      x, y is used from then on. (The count does not run in the
+      `special` state, and nothing counts while gravity is off.)
+    - Before the world's terrain object is known (the first moments of a
+      world), the last terrain square found by the ground check is used.
 
 ### Scripts
 
@@ -389,23 +407,133 @@ world (Daventry's waterfall, mill, windmill and fountain).
     playing. (Which screens pause the game was not traced.)
 55. **World change:** while a new world loads, the slider values of groups
     0, 1, 2 (effects) and 3 (speech) are set to 0 and restored on the new world's first frame;
-    music keeps playing.
+    the music slider is left alone (what happens to the tunes
+    themselves: rule 57j).
 56. `KQSound::enable 0|1` switches the whole sound system off or on (not
     used by any script). `KQSound::stats` prints a debug list.
 
-## Music and speech (enough to see what they share)
+## World music (`KQMusic`)
 
-57. **Music** (`KQMusic`): each world's `kq/music.kq` (`[Music]`,
-    `classType=KQMusic`, `nMusic`, `musicN=`; Daventry `music0=forest.aud`)
-    names its background track; scripts use `KQMusic::push <file>` (a
-    tune on top: the current one fades out at 0.75/s and stops, the new
-    one loops and fades in from 0) and `KQMusic::pop <file>` (remove it;
-    if it was on top it fades out and the one below fades in again, from
-    its beginning). `KQMusic::play` replaces the top. Daventry pushes and
-    pops `mbattle.aud`, `mchurch.aud`, `municorn.aud`, `mwizard.aud`.
-    Music files are stereo SOL `.aud`, played by the same engine as
-    looping plain sounds in group 5, at the music slider × duck factor.
-    Not studied further.
+Studied 2026-10-17 (Q83). Words: the **list** is the music object's
+list of tunes, from bottom to top; the **top** is the last one added.
+"Fade in" and "fade out" are rule 33's fades (0.75 per second, so 0 → 1
+or 1 → 0 takes 1.4 s).
+
+57. **The music object.** Each world's `kq/music.kq` holds one object
+    `[Music]` with `classType=KQMusic`, `nMusic=<n>` and `music0=` …
+    `music<n−1>=`. The tunes go on the list in that order, so `music0`
+    is at the **bottom** and the last one is on top. Every world has
+    `nMusic=1`:
+
+    | World | `music0` | World | `music0` |
+    | --- | --- | --- | --- |
+    | Daventry | `forest.aud` | CastleD | `mcastle.aud` |
+    | DeadCity | `ambdead.aud` | SnowExit | `nature.aud` |
+    | Barren | `ambbarr.aud` | Temple1, 2, 4 | `ambtemp.aud` |
+    | Gnome | `ambgnome.aud` | Temple3 | `mtemple3.aud` |
+    | IceWorld | `ambice.aud` | Swamp | `ambswamp.aud` |
+
+    It is loaded by the world's `newworld.cs` (Daventry: the last
+    `loadKQ`, after the music traps). The object's number is **67649**
+    (the debug alias `shutup` in `console.cs` sends it a push with no
+    file name; debug only, nothing to build).
+57a. **Each tune is its own looping plain sound** in group 5 (music
+    slider × duck factor, rules 50–53), started from the beginning of its
+    file. Only the top tune is meant to be heard; during a change two can
+    be heard for up to 1.4 s (rule 57c). Names are compared **ignoring
+    capitals** (`mSylph.aud` = `msylph.aud`).
+57b. **World start:** when the music object enters the world, the **top**
+    tune starts at once from its beginning at **full loudness (1), with no
+    fade in**. The tunes below it are prepared but silent and stopped.
+    The game is paused while a world loads (rule 54 groups, which include
+    music) and every group is resumed on the world's first drawn frame,
+    so in practice the tune is first heard on the first frame (partly
+    traced: the resume on the first frame is traced; that the music group
+    is paused at that moment is inferred from the loading code).
+57c. **`KQMusic::push <file>`:**
+
+   - (1) If a tune of that name is **anywhere on the list** (top or lower
+     down), **nothing happens**. So pushing a tune that is lower down
+     does not bring it back; it stays unheard.
+   - (2) Otherwise, if the list has a top, that tune **fades out**; when it
+     reaches 0 it stops and goes back to its beginning, but **stays on
+     the list**.
+   - (3) The new tune goes on top and **starts at once**, from its
+     beginning, at loudness 0, **fading in** to 1. So the old and the
+     new tune overlap for 1.4 s (a crossfade).
+   - (4) If the list was empty, the new tune starts at full loudness at
+     once, no fade.
+   - (5) There is no limit on how long the list gets.
+
+57d. **`KQMusic::pop <file>`:**
+
+   - (1) A name that is **not on the list**: nothing happens.
+   - (2) The **top** tune: it fades out and is thrown away when it reaches 0.
+     If a tune is left below it, that one becomes the top and **fades
+     in from 0 to 1, from its beginning** (it stopped when it was
+     covered, rule 57c (2)). Exception: if it was covered less than 1.4 s
+     ago it has not finished fading out; then its loudness drops to 0
+     at once and it fades in again from where it is in the music, not
+     from the beginning.
+   - (3) If the popped tune was the **only one**, nothing else plays:
+     **silence** until something is pushed. The world's own `music0` can
+     be popped this way (no script does).
+   - (4) A tune **lower down** (not the top): taken off the list at once,
+     without a sound; the top keeps playing unchanged. If it was still
+     fading out (covered less than 1.4 s ago), the rest of its fade is
+     cut off.
+
+57e. **`KQMusic::play <file>`:** the top (if any) fades out and is thrown
+    away; the new tune goes on top and fades in, as in push (full
+    loudness at once if the list was empty). Unlike push it does **not**
+    check whether the name is already on the list, so a name can end up
+    twice. **No script in the game uses `play`.**
+57f. **When they act:** `push` and `pop` written in a script are not done
+    at once: they go into the game's timed event queue (the same one
+    `sendEvent` uses) and happen **0.2 units of the game clock later**.
+    Several at the same moment keep their order (`oldout.cs` pops
+    `moldguy.aud`, then `myounguy.aud`). `play` acts at once. If the
+    world has no music object, all three are ignored without a message.
+    A missing argument prints `Usage: KQMusic::push music_file` (or pop
+    / play). `KQMusic::create` and `KQMusic::delete` only print "...is
+    obsolete, use music.kq instead".
+57g. **Fades** step every 0.2 s of real time (rule 20) and only while the
+    tune is playing: a paused tune's fade waits.
+57h. **Pause:** music is in the groups the game's pause pauses (rule 54):
+    each tune keeps its place and its fade, and goes on when the game
+    resumes. Group 4 (the menu theme, `themeMusic`) is not paused.
+57i. **Video cutscenes** (the three `.avi` files in `MASK/`, played by
+    Windows' video window): the whole sound system is shut down while the
+    video plays and started again afterwards. Sounds that do not loop are
+    stopped for good. What brings the music back afterwards was **not
+    settled** (see Open questions). Recommendation for us: pause the
+    music during a video and resume it after.
+57j. **Leaving a world:** the music object goes with the world's other
+    objects; when it is removed, **all its tunes stop at once, no fade**.
+    The new world's `music.kq` then starts its own tune as in rule 57b.
+    The list is **saved with the world** (names only, like the
+    `music.kq` keys): coming back to a world restores the list as it was,
+    pushed tunes included, and its top starts again from the beginning at
+    full loudness. (The removal and the saved keys are traced; that a
+    world change removes the object is inferred, not traced.)
+57k. **Pushes from the game itself:** besides scripts, the game's own code
+    pushes and pops `mlava.aud` for Barren's lava-tile puzzle (tiles
+    `tile<i><j>`), with the same 0.2 delay. The other 131 `push` / `pop`
+    lines are in the worlds' scripts and in four `GAME/Kq` scripts
+    (`walk_la.cs` and `walk2_la.cs` push `minside.aud`; `walk3_la.cs` and
+    `run_la.cs` pop it).
+57l. **Daventry's music in practice** (crossfade and restart from the
+    start checked by the user in the original, 2026-10-17): `forest.aud` all the time;
+    `chrchtrp.cs`, `mugltrap.cs`, `mwiztrap.cs` push their tune when
+    Connor enters the trap (`On`) and pop it when he leaves (`Off`).
+    `ax.cs` pushes `mbattle.aud` when the henchman fight starts (cue 300,
+    `cdhm1`) and `henchman.cs` pops it when he dies. Leaving the church
+    trap while `mbattle.aud` is on top only removes `mchurch.aud`
+    silently (57d (4)). Entering a trap again before its `Off` does nothing
+    (57c (1)).
+
+## Speech (enough to see what it shares)
+
 58. **Speech** files are the SOL files in the `English` folders, played
     by the same engine in group 3. Connor's own lines are plain; other
     characters' lines are **placed** at the speaker's position when the
@@ -429,7 +557,11 @@ world (Daventry's waterfall, mill, windmill and fountain).
 | Balance | 0.82 × sideways ÷ horizontal distance, camera axes | traced (sign open) |
 | Hurt sound repeat | at most once per 1.0 game-clock unit | traced |
 | Footstep choice | 25 % / 50 % / 25 % | traced |
-| Fade rate (music) | 0.75 per second, 0.2 s steps | traced |
+| Fade rate (music) | 0.75 per second, 0.2 s steps (0 ↔ 1 in 1.4 s) | traced |
+| World tune at start | full loudness, no fade | traced |
+| Script `push` / `pop` delay | 0.2 game-clock units (`play`: none) | traced |
+| Music list length | no limit | traced |
+| Building remembered in the air (footsteps) | 2 more updates | traced |
 | Duck factor | 0.2 on groups 0, 2, 5 | traced |
 | Shipped sliders | speech 0.34, effects 0.14, music 0.14 | data |
 | Units | world units; "250 units per foot" (the `.kq` comment) | data |
@@ -441,8 +573,9 @@ world (Daventry's waterfall, mill, windmill and fountain).
 - `.kq` keys: `classType=KQAudibleObject` with `soundFileName`, `isSound3D`,
   `minDistance`, `maxDistance`, `deltaX/Y/Z`; `ouchSound`; `footsoundType`
   (buildings); `themeMusic`, `moveSound`, `selectSound` (menu screens);
-  `[Music]` `music.kq`.
-- Scripts: `KQSound::play`, `KQMusic::push/pop/play`,
+  `[Music]` `music.kq` (`classType=KQMusic`, `nMusic`, `music<n>`).
+- Scripts: `KQSound::play`, `KQMusic::push/pop/play` (131 lines in the
+  worlds and `GAME/Kq`; `play` never used),
   `KQObject::setFootStepSound`, `deleteObject`.
 - `GAME/Kq/Invinfo.itl` land / pickup / use sounds (`items.md`).
 - `kq/envInfo.kq` ground flags (`water.md`), `kq/Terrain/TERRAIN.KQ`
@@ -468,6 +601,11 @@ world (Daventry's waterfall, mill, windmill and fountain).
 - A placed sound object deleted by a script stops at once, mid-sound.
 - `KQSound::setMixLimit` with a non-number gives 0 (then every new sound
   stops one older non-looping sound first).
+- Music: pushing a tune already on the list (top or lower) does nothing;
+  popping one not on the list does nothing; popping the last tune leaves
+  silence; a tune name that fails to load still takes its place on the
+  list and plays nothing (rule 27 and "Do not reproduce" 2).
+- Music commands in a world without a music object are ignored.
 
 ## Do not reproduce
 
@@ -498,6 +636,15 @@ world (Daventry's waterfall, mill, windmill and fountain).
    asks.
 6. **The WAV header copy** (rule 17): read only the fields needed.
 7. `deltaX/Y/Z` in sound objects do nothing; don't invent a meaning.
+8. **Footsteps with no terrain and no building** (rule 39a): the original
+   reads leftover memory for the flags. Never happens in the shipped
+   worlds as far as seen. Instead: no step sound.
+9. **`KQMusic::play` adds a second copy** of a name already on the list
+   (rule 57e). No script uses `play`, so this never shows. Instead:
+   when building `play`, do not add a name that is already on the
+   list.
+10. **`shutup`** (`console.cs`) pushes a tune with no name; debug only, do
+    not build.
 
 ## How to check
 
@@ -523,6 +670,19 @@ world (Daventry's waterfall, mill, windmill and fountain).
   than from right next to it (0.7 against 1.0). Turn the camera so a
   sound source is on the screen's left and listen which speaker is
   louder: the left one (checked by the user, 2026-10-17).
+- **Music, by log:** log every list change (push / pop / play, the list
+  after it, the game-clock time) and every tune's loudness each 0.2 s
+  step. Expected in Daventry: `forest.aud` at 1.0 on the first frame;
+  walking into the wizard trap: the push happens 0.2 game-clock units
+  after `On`, `forest.aud` goes 1.0, 0.85, 0.70, … 0.10, 0 (7 steps,
+  then stopped) while `mwizard.aud` goes 0, 0.15, … 1.0; walking out:
+  the reverse, and `forest.aud` starts from its beginning. Entering the
+  trap twice without leaving: one push only.
+- **Music, in the original by ear (the user):** in Daventry walk into the
+  wizard's house trap and out again: the wizard tune should cross-fade
+  in over about 1.5 s, and on leaving the forest tune should come back
+  **from its start**, not from where it was. **Checked by the user in the
+  original (2026-10-17): both as described.**
 
 ## Open questions
 
@@ -532,8 +692,22 @@ world (Daventry's waterfall, mill, windmill and fountain).
    (2026-10-17):** keep the original; a fix may come later as an option
    ("Do not reproduce" 1).
 3. Not traced: what makes a speech line skip ducking (rule 53); which
-   screens pause the game (rule 54); what a building without
-   `footsoundType` gives (rule 39); what damage kind 4 is (rule 41); eight
+   screens pause the game (rule 54; found so far: the game's own pause,
+   opening the in-game menu, and loading a world); what damage kind 4 is
+   (rule 41); eight
    other engine places that play placed one-shots with the same 5,000 /
    25,000 (likely weapon swings, projectiles, landings; same rules apply).
-4. Music and speech were not studied beyond what is written here.
+4. Speech was not studied beyond what is written here.
+5. **Music after a video** (rule 57i): the sound system is restarted
+   after the video, but the code that brings the music back (if any) was
+   not found. A check by ear in the original would settle it: after a
+   video in a world, does the world tune go on, start over, or stay
+   silent until the game is next paused?
+6. **World change** (rule 57j): that the old world's music object is
+   removed (so its tunes cut off) is inferred, not traced. A check in the
+   original: go through a portal and listen whether the old tune cuts or
+   fades. **The user (2026-10-17):** the only walk-through portals are
+   Dead City's four, which seem to work like ordinary trap zones (same
+   world); every other portal loads the next world, and the game stops
+   while it loads. So a cut and a fade would be hard to tell apart; a
+   cut is a safe choice for us. Not settled, low priority.
