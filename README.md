@@ -52,8 +52,8 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 ### What doesn't work yet
 
 - No story, talking, inventory screen, fighting or saving.
-- No sound or music.
-- People and monsters are not shown.
+- No music or dialogue.
+- No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).
 - Objects only play their starting animation.
