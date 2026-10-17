@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3k-3: the camera and controls in a cutscene
+
+**Changed:** `kq8-core/src/active.rs`: `KQCamera::follow Connor|none` (`camera.md` rule 1) and `handsOff 1|0` are world commands (no longer stubs) that hand requests to the viewer; following another object is logged as not done. `kq8-viewer`: `game_camera.rs`: `following` (when off, the camera stays where it is: no update), `move_to` for `move KQCamera` (position set or added; the view keeps looking at its last aim point: Q89 c stand-in), `follow`; `connor_view.rs`: `hands_off` (movement keys and Jump count as let go; Q89 a stand-in); `door_view.rs`: applies the requests and ignores clicks while hands are off. `setThirdPerson` stays a logged stub (Q89 b stand-in: we are always in third person).
+**Why:** The user's task, step 4: the bricks' cutscene.
+**Tested how:** `cargo test --workspace` (369 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --frames 7000 --sound off` (forward held for 200 updates, through the whole cutscene), `traps.log`, `connor.log`.
+**Result:** Update 13: handsOff on, the camera stops following, moves to (158986, 302415, 15926); update 64: to (158986, 293915, 16236); update 124: handsOff off, to (159236, 302565, 16276), follows Connor again. Connor stands from 64 to 124 although forward is held; at 125 he walks again and at 137 stops at the table (the bricks are no longer pushable).
+**Still broken / not tested:** Not checked by eye. The camera's view angles from `move KQCamera` are not used (Q89 c): it looks at Connor's last aim point, which is probably not what the original shows. `handsOff`'s exact reach is a stand-in (Q89 a). `KQCamera::follow <other object>` not done.
+**Next:** 3k-4, `loadKQ` while playing (the new waterfall and its sound).
+
 ## 2026-10-17 M3 step 3k-2: `setHidden` on plain placed objects
 
 **Changed:** `kq8-core/src/active.rs`: `KQObject::setHidden <name> 0|1` on any other placed object (not a scripted object, chest or item) is remembered (`hidden_now`: a script's value wins over the file's `hidden=`); unknown names give an error line. `kq8-viewer` `draw_distance.rs`: the draw-distance test asks `hidden_now`, so a hidden object is "off" (not drawn, its collider out of the collision world: `objects.md` "Hidden objects" rule 3, `object-lighting.md` rule 41), and shown again by `setHidden 0`. 1 new unit test, 1 updated (it expected the old stub line).

@@ -1312,3 +1312,13 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | A hidden object keeps only `groupsAlways`: not drawn, collider out, until `setHidden <name> 0` | `objects.md` "Hidden objects" rules 1–3, `object-lighting.md` rule 41 | Unit test `set_hidden_on_a_plain_placed_object_overrides_its_file`; `viewer.log` (Table) |
 | A script's value wins over the file's `hidden=` | `objects.md` rule 1 ("scripts switch it") | Same unit test |
 | Done through the draw-distance test (it already turns "hidden" into off) | **Our method** | — |
+
+## Camera and controls in a cutscene (M3 step 3k-3) — `crates/kq8-core/src/{active,script}.rs`, `crates/kq8-viewer/src/{game_camera,connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQCamera::follow Connor|none`; following none, the camera stays where it is | `camera.md` rule 1 and "Following `none`" | `traps.log` (bricks) |
+| `move KQCamera`: position set or added (flags as `move`) | `objects.md` "(d)" | `traps.log` |
+| Its view: keeps looking at its last aim point; the angles are not used | **Stand-in**, Q89 c | — |
+| `handsOff 1`: movement keys and Jump count as let go, clicks ignored; `0` restores | **Stand-in**, Q89 a | `connor.log`: stands from 64 to 124 with forward held |
+| `setThirdPerson`: logged only | **Stand-in**, Q89 b | — |

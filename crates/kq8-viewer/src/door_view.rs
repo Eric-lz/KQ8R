@@ -639,8 +639,19 @@ pub fn trap_step(
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
                 format!("{at}: applied: {}", connor.move_to(flags, position, turn, &at))
             }
-            Request::Move { who, at, .. } if who.eq_ignore_ascii_case("KQCamera") => {
-                format!("{at}: move KQCamera: not done yet (M3 3k-3)")
+            Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("KQCamera") => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),
+                None => format!("{at}: move KQCamera: no game camera; not applied"),
+            },
+            Request::CameraFollow { connor: follow, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.follow(follow)),
+                None => format!("{at}: KQCamera::follow: no game camera; not applied"),
+            },
+            Request::HandsOff { on, at } => {
+                connor.hands_off = on;
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: handsOff {on} ({at})"));
+                format!("{at}: applied: handsOff {on}: movement keys, Jump and clicks {}", if on { "ignored" } else { "work again" })
             }
             Request::Move { who, flags, position, turn, at } => {
                 // A plain placed object (3k-1): its colliders and drawn
@@ -805,6 +816,8 @@ pub fn door_step(
     }
     for (name, how) in std::mem::take(&mut sim.pending) {
         match &connor {
+            // handsOff (3k-3, Q89 a stand-in): clicks are ignored.
+            Some(c) if c.hands_off => sim.log.detail(format!("update {updates}: click on {name} ({how}): ignored (handsOff)")),
             Some(c) => {
                 let feet = c.mover.position;
                 let result = sim.active.click(&name, feet, sim.attack_dist, sim.item.as_ref());

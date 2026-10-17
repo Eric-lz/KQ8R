@@ -130,6 +130,32 @@ pub struct GameCam {
     pressed_reset: bool,
     updates: u64,
     log: Log,
+    /// `KQCamera::follow none` (M3 3k-3, `camera.md` rule 1): `false` =
+    /// the camera stays where it is.
+    pub following: bool,
+}
+
+impl GameCam {
+    /// `KQCamera::follow Connor|none` (`camera.md` rule 1).
+    pub fn follow(&mut self, connor: bool) -> String {
+        self.following = connor;
+        if connor { "the camera follows Connor again, from where it is".into() } else { "the camera stays where it is".into() }
+    }
+
+    /// `move KQCamera <flags> x y z rx ry rz` (M3 3k-3): its position set
+    /// or added; its view still looks at its last aim point (Q89 c
+    /// stand-in: how the angles give the view is not described).
+    pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3]) -> String {
+        let old = self.cam.position;
+        self.cam.position = if flags & 1 != 0 { std::array::from_fn(|k| old[k] + position[k]) } else { position };
+        self.current.0 = self.cam.position;
+        self.previous.0 = self.cam.position;
+        let p = self.cam.position;
+        format!(
+            "camera moved from ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}); view angles {turn:?} not used (Q89 c stand-in): it looks at its last aim point ({:.0}, {:.0}, {:.0})",
+            old[0], old[1], old[2], p[0], p[1], p[2], self.current.2[0], self.current.2[1], self.current.2[2]
+        )
+    }
 }
 
 /// Makes the game camera. `start`: where the world script put `KQCamera`
@@ -196,6 +222,7 @@ pub fn make(
         pressed_reset: false,
         updates: 0,
         log,
+        following: true,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building");
     Some(g)
@@ -259,6 +286,13 @@ pub fn camera_step(
 ) {
     let (Some(mut game), Some(sim), Some(lookup)) = (game, sim, lookup) else { return };
     let g = &mut *game;
+    // `KQCamera::follow none` (camera.md rule 1): it stays where it is.
+    if !g.following {
+        g.updates += 1;
+        g.previous = g.current;
+        g.mouse_px = Vec2::ZERO;
+        return;
+    }
     // One range for walking and running: the user saw no difference in
     // the original (Q27 e), so the run switch does not change it.
     let held = |k: Option<KeyCode>| choice.game && k.is_some_and(|k| keys.pressed(k));

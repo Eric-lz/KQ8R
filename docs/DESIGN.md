@@ -1397,7 +1397,8 @@ catchers, ground animators).
       2026-10-17 through the draw-distance test; an object hidden in its
       file and shown by a script stays invisible: not done, logged) (`objects.md`
       "Hidden objects" rule 3: not drawn, can't be touched): the `Table`.
-    - **3k-3, the camera and controls**: `KQCamera::follow none|Connor`
+    - **3k-3, the camera and controls** (**done** 2026-10-17; `move
+      KQCamera` keeps looking at its last aim point): `KQCamera::follow none|Connor`
       (`camera.md` rule 1: following none, the camera stays where it
       is); `move KQCamera` sets its position only (Q89 c stand-in);
       `setThirdPerson` logged (Q89 b); `handsOff 1|0`: movement keys,

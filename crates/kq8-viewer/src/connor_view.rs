@@ -123,6 +123,9 @@ pub struct ConnorSim {
     /// Scripted pushables whose script didn't take control: walls for him
     /// from then on (`pushing.md` "Do not reproduce").
     pub not_pushable: Vec<String>,
+    /// `handsOff 1` (M3 3k-3, Q89 a stand-in): movement keys and Jump
+    /// count as let go.
+    pub hands_off: bool,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -356,6 +359,7 @@ pub fn spawn_connor(
         pushed: Vec::new(),
         push_calls: Vec::new(),
         not_pushable: Vec::new(),
+        hands_off: false,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -655,8 +659,10 @@ pub fn connor_step(
             sim.log.detail(line);
         }
     }
-    let intent = sim.intent;
-    let jump = std::mem::take(&mut sim.jump_pressed);
+    // handsOff (Q89 a stand-in): the keys count as let go (the run
+    // switch stays as it is).
+    let intent = if sim.hands_off { Intent { forward: 0, turn: 0, ..sim.intent } } else { sim.intent };
+    let jump = std::mem::take(&mut sim.jump_pressed) && !sim.hands_off;
     let z_before = sim.mover.position[2];
     let tick = {
         let ConnorSim { mover, walker, movements, .. } = &mut *sim;

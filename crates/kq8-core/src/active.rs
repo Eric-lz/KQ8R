@@ -118,6 +118,12 @@ pub enum Request {
     /// `move <who> <flags> x y z rx ry rz` (`objects.md` "(d)") for
     /// Connor, the camera or a plain placed object: the caller moves it.
     Move { who: String, flags: u32, position: [f32; 3], turn: [f32; 3], at: String },
+    /// `KQCamera::follow Connor|none` (`camera.md` rule 1): `true` =
+    /// follow Connor, `false` = stay where it is.
+    CameraFollow { connor: bool, at: String },
+    /// `handsOff 1|0` (Q89 a stand-in): the player's movement keys, Jump
+    /// and clicks are ignored while on.
+    HandsOff { on: bool, at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -954,6 +960,36 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQCamera::follow <name>` (`camera.md` rule 1): Connor, or `none`
+    /// (the camera stays where it is). Following another object is not
+    /// done (logged; no Daventry script does it while playing).
+    fn camera_follow(&mut self, words: &[String], at: &str) -> String {
+        let Some(who) = words.get(1) else {
+            self.note(format!("{at}: usage: KQCamera::follow <object|none>"));
+            return "1".into();
+        };
+        let connor = if who.eq_ignore_ascii_case("Connor") {
+            true
+        } else if who.eq_ignore_ascii_case("none") {
+            false
+        } else {
+            self.note(format!("{at}: KQCamera::follow {who}: following another object is not done; nothing"));
+            return "1".into();
+        };
+        self.note(format!("{at}: KQCamera::follow {who}: {}", if connor { "the camera follows Connor" } else { "the camera stays where it is (camera.md rule 1)" }));
+        self.requests.push(Request::CameraFollow { connor, at: at.to_string() });
+        "0".into()
+    }
+
+    /// `handsOff 1|0`: not in any note (Q89 a). Stand-in: the player's
+    /// movement keys, Jump and clicks are ignored while on.
+    fn hands_off(&mut self, words: &[String], at: &str) -> String {
+        let on = words.get(1).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
+        self.note(format!("{at}: handsOff {}: the player's keys and clicks {} (Q89 a stand-in)", if on { 1 } else { 0 }, if on { "ignored" } else { "work again" }));
+        self.requests.push(Request::HandsOff { on, at: at.to_string() });
+        "0".into()
+    }
+
     /// `move <who> <flags> x y z [rx ry rz]` (`objects.md` "(d)"): set
     /// directly, without collision passes. Doors, chests, scripted and
     /// animated objects are moved here; Connor, the camera and plain
@@ -1348,6 +1384,8 @@ impl ScriptHost for WorldState {
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
             "move" => Some(self.move_command(words, at)),
+            "KQCamera::follow" => Some(self.camera_follow(words, at)),
+            "handsOff" => Some(self.hands_off(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
