@@ -268,8 +268,10 @@ placement in floats and repeat what the texture fields give):
       traced and measured 2026-10-17): it lies **a quarter light texel
       (4 texture texels, 32 units in Daventry) further along the
       texture's x and y** than the drawn texel (0, 0) of rule 13, on
-      160,649 of 164,838 surfaces to within 0.05 texture texel (the rest
-      within about half a texture texel). U and V have exactly the drawn
+      164,622 of 164,838 surfaces to within 0.05 texture texel on each
+      axis (corrected 2026-10-17, Q80; the earlier 160,649 and "the rest
+      within about half a texture texel" came from a rougher measurement,
+      see "How to check"). U and V have exactly the drawn
       spacing, so the whole rectangle is shifted by that quarter texel,
       not shrunk. The game reads P0, U and V as stored and changes
       nothing; it uses them **only** for these point-light tests and
@@ -902,7 +904,22 @@ an object takes part in the game at all.
   above width − 1 / height − 1**, and 7,511 surfaces with a corner at
   exactly 0. Also log P0 minus that drawn texel (0, 0), in texture
   texels along the texture's x and y: expect (4, 4) to within 0.05 on
-  160,649 surfaces.
+  each axis on about 164,600 surfaces.
+  **How A counted (Q80, 2026-10-17).** "A corner at exactly 0": take the
+  smallest light texel coordinate of the surface, over all its corners
+  and **both axes together**, and count it when it rounds to 0.00
+  (under 0.005 light texel). "Within 0.05 of (4, 4)": A first fitted the
+  surface's texture x and y directions in building space from its
+  corners. A's 160,649 then **projected** P0 minus texel (0, 0) onto
+  each direction separately and rounded to 0.1. That is not P0's true
+  position in texture texels when the two directions are not at right
+  angles (4,066 surfaces). Solving for the true position, as B does,
+  gives **164,622** within 0.05 on each axis (B: 164,640; the small
+  difference is the fitting). B's way is the right one; nothing depends
+  on either number. The five files without 48-byte records (`zedrock1`,
+  `zedrock2`, `platform`, `ramp`, `level4`) are left out of all of this;
+  read as 48-byte records they look like "corners outside", which is a
+  misreading, not data.
 - **By eye in the original (user):**
   1. **Objects vs ground. Confirmed by the user (2026-10-14):** objects
      look about as dark as the grass, the sunny side slightly lighter.

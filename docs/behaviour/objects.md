@@ -136,6 +136,18 @@ All traced in `Mask.exe` unless marked otherwise.
    from 0 to the new phase. So `cue1=1.0` fires once per cycle, when the
    loop wraps. (For a play-once movement that stops at exactly 1.0, the
    range ends at 1.0 and excludes it, `doors.md` rule 9.)
+   **Played backwards** (speed below 0, repeating; traced 2026-10-17,
+   Q81 c): when the phase wraps from near 0 back to near 1, the ranges
+   are from 0 up to the old phase, then from the new phase up to 1.0001.
+   Each range includes its lower end and excludes its upper end, as
+   always. So going backwards a cue at exactly 0 fires at the wrap, and
+   a cue at 1.0 fires too (it lies in the second range). Without a wrap,
+   backwards or forwards, the range is from the smaller phase to the
+   larger one.
+   **One difference (forward wraps only):** if a transition is waiting
+   for a phase that lies inside either part of the wrap, **no cues fire
+   in that update**; the transition is taken instead. A backward wrap
+   has no such check.
 5. So for B: apply the steps by adding them up (as for Connor), run the
    cue's `sendEvent @ KQMoveEvent …` (moving the object and its box), and
    the rocks roll out and come back each cycle. The **collision box

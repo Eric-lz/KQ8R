@@ -14,7 +14,7 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
 - **Lighting, haze and draw distance** (M1 4–7) are built as the original
   does them and checked by eye by the user, including point lights on
   building surfaces, F9 (dynamic lighting on/off) and `--dynamic on|off`.
-  Q80 (two counts in the light-map check) is open; nothing depends on it.
+  Q80 answered 2026-10-17 (A counted differently; B's counts are right).
 - **New 2026-10-17 (B, M3 3h): sound effects play** (`sound.md`):
   - `kq8 aud-verify` decodes all 1,750 `.aud` and 2,849 speech files;
     all 22 checks against the note match. `--wav <file>` writes one to
@@ -53,6 +53,14 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
   from its beginning. Checked in the logs with the wizard's zone
   (`mwiztrap`) and by ear by the user (2026-10-17). Not built: pause, videos,
   world changes (rules 57h–57j).
+- **New 2026-10-17 (A, cleanup): Q80, Q81 (c), Q82 answered; Q4 tried
+  again.** Q82: A had misread the crash list in `connor-physics.md`
+  ("Walls", "Jumping" rule 5, now corrected): `jump` crashes like
+  `runJump` (not `PreBirth`), and during a jump any surface with normal z
+  under 0.8 is head-on. B's stand-in is nearly right; small differences
+  listed in QUESTIONS.md Q82. Q81 (c): B's stand-in is right
+  (`objects.md` rule 4). Q80: see `object-lighting.md` "How to check".
+  Q4 closed: none of the 29 missing texture names is ever drawn in play.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -269,18 +277,12 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- Q82: a standing jump into a tree crashes in the original (user's
-  check) but the note says he stops and stands. Ours now crashes (stand-in
-  from the user's check, 2026-10-17); why is still open.
-- Q81 (c) only: the cue range of a backward loop at its wrap. Stand-in
-  in place (3h-4). (a), (b), (d) answered and built 2026-10-17 (rule
-  39a).
+- For B (answered 2026-10-17, not built): Q82 (replace the stand-in with
+  the corrected crash rule; differences: hits on walkable surfaces that
+  are not head-on, and `KQMonster`s, don't crash) and Q81 (c) (stand-in
+  already right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
   change cuts the old tune): not traced, checks by ear suggested.
-- Q80: how A counted two numbers of the light-map placement check
-  (surfaces with a corner at exactly 0: note 7,511, we get 365 / 7,276;
-  P0 within 0.05 of (4, 4): note 160,649, we get 164,640). The command
-  logs them as "DIFFERS", not a failure. Nothing to build.
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
   is 3D; updating only while Connor moves). Stand-ins in place.
@@ -297,12 +299,11 @@ milestone: **M3, Daventry comes alive**.
   answered).
 - Q30 (b): what keeps Connor on a slope going downhill; "likely answered"
   by the stronger gravity, but the re-check A asked for was not recorded.
-- Q41 is listed above; Q4 and Q14 (b) below.
+- Q41 is listed above; Q14 (b) below.
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- Q4: missing texture names.
-- All others are answered or closed (Q79 answered by A 2026-10-17 and checked
+- All others are answered or closed (Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
   by B in 7k; Q75–Q78 answered by A and built
   2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the

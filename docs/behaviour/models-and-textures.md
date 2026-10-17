@@ -186,6 +186,32 @@ missing in the original too.
 
 Still open: what the game does when a texture name is found nowhere (29
 names). Not traced; draw a plain colour.
+Second try 2026-10-17, also without result: the material list's own
+loading only reads the names from the file; the step that turns a name
+into a picture is somewhere else, and no error message about a missing
+texture was found to lead there.
+**Settled from the data instead (2026-10-17): none of the 29 names is ever
+drawn in normal play**, so the answer doesn't matter:
+
+- 25 names (`gate02`, `grani13`–`24`, `marbl11`–`36`, `stone04`–`78`)
+  are only in `deadcity/resource/zedcity.dml`, a material list that no
+  file in the game names.
+- `bro20.bmp` is only in `deadcity/resource/bro.kqs`. Dead City's brother
+  is drawn with `bro_die`, `bro_lkup`, `bro_stp`, `bro_talk` and
+  `bro_dead.kqs`, never `bro.kqs`. (His lip pictures are `bro0`–`bro8`.)
+- `ghoul.bmp` is only in `deadcity/resource/lifesucm.kqs`, which no
+  file names.
+- `chf0.bmp` is only in `GAME/Common/Helmet.kqs`, the model of the
+  Helmet item. No world places a helmet and no monster carries one; it
+  appears only in Connor's own lists. (`chf` is the name of Connor's
+  face pictures with the helmet in `Connor.kq`'s skin list, but no `chf`
+  picture exists in the game at all; the plain face `cf0`, `cf1`, ...
+  does.)
+- `fndmask.bmp` is only in `swamp/resource/fndmask.kqs`, which no file
+  names.
+
+So a plain colour (our stand-in) is fine; nobody will see it. Not
+checked in the original, since there is nothing to look at.
 
 ## Material flags (Q5, partly)
 

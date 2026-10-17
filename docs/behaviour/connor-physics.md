@@ -563,9 +563,31 @@ Consequences:
    steps back to 325.
    - Landing on it (down pass) during `jump` or `runJump`: **crash** (state
      Special, movement `crash`, `c_crash.KQS`, `crash.aud`).
-   - Running into it (up or across pass): `runJump` crashes; `jump` plays
-     `Stop` and he stands (as for walls below).
+   - Running into it (up or across pass): **`jump` and `runJump` both
+     crash** (corrected 2026-10-17, Q82; this rule used to say `jump`
+     plays `Stop`, which was a misreading, see "Walls"). During a jump
+     every surface with normal z under 0.8 counts as head-on, whatever
+     the angle, so a standing jump into a tree or a wall crashes. This
+     matches the user's check in the original (Daventry's start, jumping
+     into the tree).
    - `backJump` never does either.
+   - **At the moment of the crash** (traced 2026-10-17, Q82 b): gravity
+     goes back on, step up and step down go back to 325, the jump
+     animation is marked as cut short, and then the state becomes Special
+     with the movement `crash`. Turning stays allowed, and a turn key
+     still held is passed on again. The crash sound is the `crash`
+     movement's own cue (`cue0=0.0 playsound crash.aud`); nothing else
+     plays a sound here. So in the air he starts the stumble and falls
+     at the same time. What ends the `crash` early when he starts falling
+     is not traced; the user saw that the falling animation takes over.
+   - The tile puzzles have their own jump movements (`tilejump1`,
+     `tilejump2`, played by the game itself, not by a script). They are
+     not in the crash list, so if Connor hit a wall or tree during one of
+     them he would stop and stand instead of stumbling. The user
+     (2026-10-17): there are tile puzzles in Barren, Dead City and the
+     Swamp, probably all with the same logic, and all in wide open
+     spaces, so hitting something during a tile jump can't happen. No
+     need to build this case.
 
 ### Walls (traced)
 
@@ -577,9 +599,13 @@ When the across pass hits something:
   down. During a jump, any surface with normal z < 0.8 also counts.
   This only applies while he is moving or jumping (states Move and Jump).
   - Movement `Run`, `stoprun`, `WaterRun`, `runwaterrun`, `runJump` or
-    `PreBirth`: **crash**, as above.
-  - Any other movement (walking, standing jump): he plays `Stop` and stands
-    still (state Wait).
+    **`jump`**: **crash**, as above. (Corrected 2026-10-17, Q82: this
+    list used to name `PreBirth` instead of `jump`. That was a misreading
+    of the game's table of movement names by one place; `PreBirth` is
+    not in the list.) Names are compared without regard to capitals.
+  - Any other movement (walking, backing up, wading at walking speed):
+    he plays `Stop` and stands still (state Wait), with the block on that
+    direction described below.
   - Neither happens against some objects (the hit object's collision info
     says so; meaning not traced), during `backJump`, or while a game flag
     blocks it.
@@ -650,7 +676,11 @@ contact the hit handler kept, i.e. **already pulled back 25** (see
   head-on. (The measurements fit both because he was walking forwards.)
   Head-on only acts in state Move or Jump, and never against a
   `KQMonster`, against a ball-stack object without type bit 0x100, during
-  `backJump`, or while a Connor flag is set (not traced which). In any
+  `backJump`, or while a Connor flag is set (not traced which).
+  **In state Jump** a hit on a surface with normal z under 0.8 is head-on
+  whatever the angle, and this **wins over the ball-stack exception**
+  (but not over `KQMonster`, `backJump` or the flag), traced 2026-10-17
+  (Q82). In any
   of those cases the hit is handled as **glancing** (he slides).
   **The head-on test runs only on up-pass and across-pass hits**
   (slides are across passes, so they get it too). A **down-pass** hit
