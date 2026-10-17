@@ -455,6 +455,29 @@ pub fn spawn_doors(
     active.add_objects(active_objects);
     // The other animated objects (3i-4), drawn by anim_view.
     active.add_anims(anims);
+    // Stats (3i-6, anim-scripts.md rule 19): doors without a line have
+    // 10,000 health (doors.md rule 18); Connor from Connor.kq.
+    for d in &active.world.doors.iter().map(|d| d.door.name.clone()).collect::<Vec<_>>() {
+        active.set_stats(d, kq8_core::stats::Stats([kq8_core::stats::DOOR_HEALTH, 0, 0, 0, 0]));
+    }
+    for (name, line) in &objects.object_stats {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let (s, problems) = kq8_core::stats::Stats::parse(&words);
+        for p in problems {
+            main_log.summary(format!("stats: [{name}] stats={line}: {p}"));
+        }
+        active.set_stats(name, s);
+    }
+    match &objects.connor_stats {
+        Some((line, level)) => {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            let (s, _) = kq8_core::stats::Stats::parse(&words);
+            let level = level.as_deref().and_then(|l| l.trim().parse::<i64>().ok()).unwrap_or(1);
+            main_log.summary(format!("stats: Connor stats={line} level={level}; {} objects with a stats= line", objects.object_stats.len()));
+            active.set_connor_stats(kq8_core::stats::ConnorStats { stats: s, level });
+        }
+        None => main_log.summary("stats: Connor.kq gives no stats= line; Connor's stats unknown"),
+    }
     // Buildings as click targets (3g-2, clicking.md rules 3-4, 10).
     let buildings = std::mem::take(&mut objects.building_clicks);
     let not_clickable: Vec<String> =

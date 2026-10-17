@@ -72,6 +72,7 @@ use crate::music::MusicRequest;
 use crate::named_anim::{NamedAnimPlayer, Request as AnimRequest, Started};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::sound::Start;
+use crate::stats::{ConnorStats, Stats};
 use crate::trap::{Trap, Visitor};
 
 /// A `KQCueEvent` with this first number is an `EndLoop` call, not a `Cue`
@@ -452,6 +453,11 @@ pub struct WorldState {
     /// Every deleted object, lower case (`deleteObject`, 3g-5): events to
     /// it are dropped.
     deleted: BTreeSet<String>,
+    /// Connor's stats and level (`Connor.kq`; 3i-6).
+    pub connor_stats: Option<ConnorStats>,
+    /// Other objects' stats by lower-case name (`stats=`, doors 10,000
+    /// health without one; 3i-6).
+    pub stats: BTreeMap<String, Stats>,
     /// Objects whose collider is out of the collision world now (group
     /// bit 0x8 lost: far, off or hidden; `object-lighting.md` rule 41),
     /// lower case: clicks pass through them (M1 step 7b).
@@ -1264,6 +1270,8 @@ impl Active {
                 end_loop_listeners: BTreeMap::new(),
                 deleted: BTreeSet::new(),
                 switched_off: BTreeSet::new(),
+                connor_stats: None,
+                stats: BTreeMap::new(),
             },
         }
     }
@@ -1301,6 +1309,62 @@ impl Active {
 
     fn building_index(&self, name: &str) -> Option<usize> {
         self.world.buildings.iter().position(|b| b.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Connor's starting stats and level (`Connor.kq`).
+    pub fn set_connor_stats(&mut self, c: ConnorStats) {
+        self.world.connor_stats = Some(c);
+    }
+
+    /// An object's starting stats (its `stats=` line).
+    pub fn set_stats(&mut self, name: &str, s: Stats) {
+        self.world.stats.insert(name.to_ascii_lowercase(), s);
+    }
+
+    /// `KQStatsChangeRequestEvent` (`anim-scripts.md` rule 19,
+    /// `clicking.md` rule 24): the five numbers are added. An object other
+    /// than Connor whose health drops below 0 gets `Die`.
+    fn stats_change(&mut self, e: &Pending, from: &str) {
+        let (d, problems) = Stats::parse(&e.data);
+        let head = format!("KQStatsChangeRequestEvent {} to {}{from}", e.data.join(" "), e.target);
+        for p in problems {
+            self.world.note(format!("{head}: {p}"));
+        }
+        if e.target.eq_ignore_ascii_case("Connor") {
+            let Some(c) = self.world.connor_stats.as_mut() else {
+                self.world.note(format!("{head}: Connor's stats unknown (no Connor.kq); nothing"));
+                return;
+            };
+            let before = *c;
+            let level = c.change(d);
+            let after = *c;
+            self.world.note(format!(
+                "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}",
+                before.stats.0,
+                before.level,
+                after.stats.0,
+                after.level,
+                level.map_or(String::new(), |l| format!("; {l}"))
+            ));
+            if after.stats.dead() {
+                self.world.note(format!("{head}: Connor's health is below 0: he would die (his Die state, M5; not done)"));
+            }
+            return;
+        }
+        let key = e.target.to_ascii_lowercase();
+        let known = self.world.stats.contains_key(&key);
+        let s = self.world.stats.entry(key).or_default();
+        let before = *s;
+        s.add(d);
+        let after = *s;
+        let start = if known { "" } else { " (no stats= line: started from 0 0 0 0 0, Q86 d stand-in)" };
+        self.world.note(format!("{head}: {:?} -> {:?}{start}", before.0, after.0));
+        if after.dead() {
+            self.world.note(format!("{head}: health below 0: its script gets Die (rule 19)"));
+            if !self.call_named(&e.target, &["Die"]) {
+                self.world.note(format!("{}: no script by that name; Die not called", e.target));
+            }
+        }
     }
 
     /// Adds the other animated objects (3i-4), in the viewer's order.
@@ -2166,6 +2230,10 @@ impl Active {
             self.world.note(format!("event {} {} to {}{from}: deleted; dropped", e.kind, e.data.join(" "), e.target));
             return;
         }
+        if e.kind == "KQStatsChangeRequestEvent" {
+            self.stats_change(&e, &from);
+            return;
+        }
         // anim-scripts.md rule 4 for the other animated objects (3i-4).
         if let Some(i) = self.world.anim_index(&e.target).filter(|_| e.kind == "KQAnimPlayEvent") {
             let line = anim_request(&mut self.world.anims[i].player, &e.data, &format!("object {}", e.target), &from);
@@ -2488,7 +2556,7 @@ mod tests {
         a.update();
         let log = a.take_log().join("\n");
         assert!(log.contains("unknown object 'nobody'") && log.contains("'KQFlyEvent' unknown") && log.contains("usage: sendEvent"), "{log}");
-        assert!(log.contains("KQStatsChangeRequestEvent 0 0 0 0 25 to Connor") && log.contains("stats are M5"), "{log}");
+        assert!(log.contains("KQStatsChangeRequestEvent 0 0 0 0 25 to Connor") && log.contains("Connor's stats unknown"), "{log}");
     }
 
     #[test]
@@ -2969,6 +3037,20 @@ mod tests {
         assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
     }
 
+    #[test]
+    fn stats_events_add_and_an_object_below_0_gets_die() {
+        let script = "if test $2 == ConnorAction\n sendEvent 0 Connor KQStatsChangeRequestEvent 2 0 0 0 50\n sendEvent 0 $1 KQStatsChangeRequestEvent -3 0 0 0 0\nendif\nif test $2 == Die\n set D::died $1\nendif\n";
+        let mut a = with_object(script, "x");
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.set_stats("basket1", Stats([2, 0, 0, 0, 0]));
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        a.update();
+        let log = a.take_log().join("\n");
+        assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 12, 5, 1, 40], 2)), "{log}");
+        assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
+        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1"), "{log}");
+    }
+
     /// A made-up script in the style of `fishies.cs` (not a copy).
     const FISH: &str = "if test $2 == Init\n set F::init $1\nendif\nif test $2 == ConnorAction\n if test $F::full == true\n  set F::full false\n  sendEvent 1.0 $1 KQCueEvent 1 0\n  deleteObject $1\n  KQSound::play eat.aud\n  sendEvent 0 Connor KQStatsChangeRequestEvent 2 0 0 0 0\n endif\nendif\n";
 
@@ -3003,7 +3085,7 @@ mod tests {
             a.update();
         }
         let log = a.take_log().join("\n");
-        assert!(log.contains("KQStatsChangeRequestEvent 2 0 0 0 0 to Connor") && log.contains("stats are M5"), "{log}");
+        assert!(log.contains("KQStatsChangeRequestEvent 2 0 0 0 0 to Connor") && log.contains("Connor's stats unknown"), "{log}");
         assert!(log.contains("event KQCueEvent 1 0 to fishies.01 (sent by fish.cs line 7): deleted; dropped"), "{log}");
     }
 

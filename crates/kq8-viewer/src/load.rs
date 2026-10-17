@@ -1114,6 +1114,10 @@ pub struct Objects {
     pub scripts: Vec<(String, Vec<u8>)>,
     /// Connor's `attackDist` from `GAME/Kq/Connor.kq` (doors.md rule 11).
     pub attack_dist: Option<f32>,
+    /// Connor's `stats=` and `level=` from `GAME/Kq/Connor.kq` (3i-6).
+    pub connor_stats: Option<(String, Option<String>)>,
+    /// Every placed object's `stats=` line (3i-6): name, the line.
+    pub object_stats: Vec<(String, String)>,
     /// `GAME/patch/BOUNDS.KQ`, for the draw-distance balls (M1 7a);
     /// `None` if it could not be read.
     pub game_bounds: Option<kq8_data::bounds::BoundingBoxes>,
@@ -1324,6 +1328,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         markers: Vec::new(),
         connor: None,
         attack_dist: None,
+        connor_stats: None,
+        object_stats: Vec::new(),
         doors: Vec::new(),
         door_animations: Vec::new(),
         door_animation_index: BTreeMap::new(),
@@ -1519,6 +1525,8 @@ struct Placer<'a> {
     markers: Vec<Marker>,
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     attack_dist: Option<f32>,
+    connor_stats: Option<(String, Option<String>)>,
+    object_stats: Vec<(String, String)>,
     doors: Vec<DoorAssets>,
     door_animations: Vec<Animation>,
     door_animation_index: BTreeMap<String, usize>,
@@ -1727,6 +1735,7 @@ impl Placer<'_> {
             let section = file.first().ok_or("GAME/Kq/Connor.kq has no section")?;
             let mut p = kq8_data::objects::Placement::from_load(section, load);
             self.attack_dist = section.number("attackDist").and_then(Result::ok).map(|v| v as f32);
+            self.connor_stats = section.get("stats").map(|s| (s.to_string(), section.get("level").map(str::to_string)));
             let (terrain, [x, y, _]) = (&self.terrain, p.position);
             p.position = p.grounded_position(|level| terrain.ground_at(level, x, y).map(|g| g.height));
             let (keys, problems) = kq8_data::action_map::parse(&read("Connor.sae")?);
@@ -2026,6 +2035,9 @@ impl Placer<'_> {
             p.position = grounded;
         }
         let key = p.name.to_ascii_lowercase();
+        if let Some(v) = s.get("stats").filter(|_| !unused) {
+            self.object_stats.push((p.name.clone(), v.to_string()));
+        }
         if !unused {
             self.located.insert(key.clone(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
         }
@@ -2886,6 +2898,8 @@ impl Placer<'_> {
             vars: Default::default(),
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
+            connor_stats: self.connor_stats,
+            object_stats: self.object_stats,
             game_bounds: match self.game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
                 Some(Ok(bytes)) => Some(kq8_data::bounds::BoundingBoxes::parse(&bytes).0),
                 _ => None,

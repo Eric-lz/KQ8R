@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3i-6: `KQStatsChangeRequestEvent` adds
+
+**Changed:** New `kq8-core/src/stats.rs` (`Stats`, `ConnorStats`, 2 unit tests): the five numbers are added, the fourth capped at 100; Connor's health is capped at 10 × level and his level goes up when experience passes 10 × 2^(level − 1) (150,000 from level 15). `active.rs`: the event is applied to Connor or to any object (`stats=` line; doors 10,000 health without one; others 0, Q86 stand-in); an object whose health drops below 0 gets `Die`; 1 new unit test. `kq8-viewer` `load.rs` reads Connor's `stats=` / `level=` from `GAME/Kq/Connor.kq` and every placed object's `stats=`; `door_view.rs` hands them to `Active`. Q86 asked; provenance added.
+**Why:** The user's task, step 1 part 5: `anim-scripts.md` rule 19 (the bricks give Connor 50 experience).
+**Tested how:** `cargo test -p kq8-core` (237 pass). Viewer: fish `cargo play --world Daventry --at 208502,209600,1.5708 --click fishies.01,10 --click fishies.01,40 --frames 1500 --sound off`; star globe as in 3i-4 (`--frames 1500`); `doors.log`, `viewer.log`.
+**Result:** `viewer.log`: "stats: Connor stats=10 10 0 0 0 level=1; 7 objects with a stats= line". Fish: "Connor [10, 10, 0, 0, 0] level 1 -> [10, 10, 0, 0, 0]": the +2 health is capped (he is at full health). Star globe: +15 experience → "[20, 12, 5, 1, 5] level 2; experience passed 10".
+**Still broken / not tested:** Nothing shows the stats (no screen yet); Connor can't die from it (his Die state is M5). Q86 open: "passes" (more than or at least), one level per event or several, the cap order, other objects' default stats, `Die`'s `$3`; the bricks' +50 gives level 2 with our stand-in and level 3 if levels repeat.
+**Next:** 3i-7, Connor's Special state.
+
 ## 2026-10-17 M3 step 3i-5: the script reader (single quotes, `;`, `( … )`, 40 words)
 
 **Changed:** `kq8-core/src/script.rs`: `split_words` replaced by `split_commands` (a `Word` keeps whether it was quoted and whether its `$` was inside single quotes): single quotes are dropped and switch `$` replacement off until the next one, words still split at spaces; `;` ends a command; `( … )` is one word without the brackets; a command of more than 40 words fails (`Console: Too many arguments`, `$Console::Return` 1). 1 new unit test. Provenance added.

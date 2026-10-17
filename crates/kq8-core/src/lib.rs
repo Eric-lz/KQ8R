@@ -22,6 +22,7 @@ pub mod music;
 pub mod named_anim;
 pub mod script;
 pub mod sound;
+pub mod stats;
 pub mod trap;
 pub mod water;
 

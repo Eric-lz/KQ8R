@@ -1289,7 +1289,9 @@ catchers, ground animators).
     (fifth = experience). Starting values of Connor's stats are not in
     any note: asked as a question, logged as a stand-in. Unit tests;
     viewer: clicking a fish (`--click fishies.01,N`) logs Connor's
-    health going up by 2.
+    health going up by 2. (**Done** 2026-10-17, new `kq8-core`
+    `stats.rs`. Connor's start is in `Connor.kq` after all: `stats=10 10
+    0 0 0`, `level=1`. Open details asked as Q86 with stand-ins.)
   - **3i-7, Connor's Special state** (rule 16): new mode `Special` in
     `connor.rs`: the item list one at a time (`AnimList=`, `AnimListOn`,
     `AnimListOff`, `KillConnor`, `Inv` logged only, any other word a

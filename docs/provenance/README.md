@@ -1229,3 +1229,13 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Single quotes dropped, `$` replacement off until the next one, words still split at spaces | `anim-scripts.md` rule 17 | Unit test `single_quotes_semicolons_brackets_and_the_word_limit` |
 | `;` ends a command; `( … )` one word without brackets; more than 40 words → `Console: Too many arguments`, the command fails | Rule 18 | Same unit test |
 | The count is taken after variables are replaced; `;` inside single quotes ends a command; an open quote ends with the line | **Our choice** (not in the note; no data line has more than 29 words or a `;` in single quotes) | Data survey of all `.cs` files |
+
+## Stats (M3 step 3i-6) — `crates/kq8-core/src/{stats,active}.rs`, `crates/kq8-viewer/src/{load,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Five numbers in `stats=` order (health first, fourth armour, fifth experience), added; fourth capped at 100; health below 0 → `Die` | `anim-scripts.md` rule 19, `clicking.md` rule 24 | Unit tests `numbers_are_added_and_the_fourth_capped`, `stats_events_add_and_an_object_below_0_gets_die` |
+| Connor: health cap 10 × level; experience over 10 × 2^(level − 1) (150,000 from 15) → level + 1, health = new max, third + 5, fourth + 1 (cap 100), second + 2 | Rule 19 | Unit test `connor_levels`; star globe run |
+| Connor starts with `stats=10 10 0 0 0`, `level=1` | Observed (`GAME/Kq/Connor.kq`) | `viewer.log` |
+| Doors without `stats=`: health 10,000 | `doors.md` rule 18 | — |
+| "Passes" = more than; one level check per event; cap at the old level first; other objects start at 0; `Die` without `$3` | **Stand-ins**, asked as Q86 | Unit test `connor_levels` |
