@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 A: pushing objects (`pushing.md`)
+
+**Changed:** New `docs/behaviour/pushing.md` (rules 1–11): when a touch becomes a push (type bit 0x100; moving, on the ground, empty hands, across pass, facing within 60°, walking or running); the Push state (`push` movement, a 4-update counter, where it can go next); physical pushables (the object moves by Connor's step, only if its height stays exactly the same, Connor follows at 0.95); scripted pushables (bit 0x10000: a `Push` script call, which Daventry's bricks, coffin lid and urn scripts use to take over); the bricks puzzle from start to end. Cross-references in `anim-scripts.md` (open question 1 answered) and `connor-collision.md` rule 4. `STATUS.md`. No code.
+**Why:** The user's request: the bricks puzzle needed its `Push` trigger (`anim-scripts.md` open question 1).
+**Tested how:** Traced in Ghidra. Data survey of every `colliderType` with bit 0x100 in the 12 worlds, the `push` animation's frame steps, and Daventry's push scripts.
+**Result:** Rules ready for B. Daventry pushables: `Bricks`, `coffnlid`, `urn` (scripted), four barrels and the windmill's hay bale (physical). The game's own `alias bricks` gives a test spot next to the bricks.
+**Still broken / not tested:** Checked in the original by the user (2026-10-17), all as the note says: the hay bale slides at about half walking speed and stops at walls; barrels move only on perfectly flat ground; a drawn weapon or walking backwards pushes nothing. Pushing downhill was not tried. Not traced: the other pushable classes (Gnome's boulder, Temple 3's tiles, Dead City's paddle), state 0x8000, the moment the standing height is recorded.
+**Next:** B: build `anim-scripts.md`, then `pushing.md`, then the bricks puzzle. 
+
 ## 2026-10-17 A: animated objects controlled by scripts (`anim-scripts.md`)
 
 **Changed:** New `docs/behaviour/anim-scripts.md` (rules 1–19): the waiting movement and `nextAnimName`; `KQAnimPlayEvent` (when the new movement starts, from its own `loop=` line, unknown names fall back to movement 0, stopped `0 0` poses never change); the order at a movement's end; `KQAnimOnce` and `setDeleteWhenDone` with Daventry's barrel and board chains; `pauseAnim` (a toggle) and `setAnimPos`; Connor's `setState … special` word list; single quotes, `;`, `( … )` and the 40-word limit in scripts; `KQStatsChangeRequestEvent` adds its numbers (fifth = experience, Connor's levels for M5). Cross-references in `clicking.md` (rule 24, open question 3 answered), `objects.md` (`nextAnimName`), `doors.md` (script language) and `QUESTIONS.md` Q64. `STATUS.md`. No code.

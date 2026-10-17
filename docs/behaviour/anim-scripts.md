@@ -307,9 +307,8 @@ Words used here:
 
 ## Open questions
 
-1. What sends `Bricks` its `Push` call (Connor's push state,
-   `KQStateConnerPush`): part of the pushable-objects study, not this
-   one. Until then the bricks puzzle cannot start by itself.
+1. ~~What sends `Bricks` its `Push` call~~ Answered 2026-10-17 in
+   `pushing.md` (rules 1–3, 9–11).
 2. When a movement starts, the object's collision type bit 0x400 is
    switched on or off depending on something about the new movement;
    what it means was not traced.

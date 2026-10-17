@@ -47,7 +47,9 @@ object, which `connor-physics.md` left open.
    so for any object he is a "Connor touch", never an obstacle.
 4. **Connor** is told when his mask (0x281B) covers the other's type; for
    type-1 things and the others in his mask he reacts as a wall
-   (`connor-physics.md`). He ignores type 0x10 (traps; see `traps.md`
+   (`connor-physics.md`). **Except bit 0x100 (pushable)**, which comes
+   first: for Connor it goes through the push check of `pushing.md`
+   (rules 1–3) and is only a wall when that check fails. He ignores type 0x10 (traps; see `traps.md`
    rule 4).
 
 ### What happens when a moving object runs into Connor

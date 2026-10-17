@@ -72,6 +72,16 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
   `setState … special` word list, single quotes / `;` in scripts, and
   `KQStatsChangeRequestEvent` adds (5th number = experience). Ready for B.
   Daventry's bricks puzzle still needs its `Push` trigger (pushables study).
+- **New 2026-10-17 (A): pushing studied** (`docs/behaviour/pushing.md`):
+  type bit 0x100 = pushable; Connor pushes when moving forward on the
+  ground with empty hands, facing it within 60°, on the across pass.
+  Scripted pushables (also 0x10000: Daventry's bricks, coffin lid, urn)
+  get a `Push` script call each pushing update; physical ones (barrels,
+  the hay bale) move with his step, only while their height stays the
+  same, and Connor follows at 0.95. The bricks puzzle is now fully
+  described. Ready for B. The user's checks in the original (hay bale,
+  barrels on flat ground only, no push with a weapon or backwards) all
+  match.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
