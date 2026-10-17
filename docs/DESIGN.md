@@ -1383,6 +1383,30 @@ catchers, ground animators).
     `handsOff`, `setThirdPerson`, the camera's view from `move KQCamera`
     angles, what Connor's move does after a script moved him mid-move,
     `loadKQ` while playing: asked as questions before 3k is built.
+    Asked 2026-10-17 as Q89 (`handsOff`, `setThirdPerson`, `move
+    KQCamera` angles) and Q90 (`loadKQ` while playing), with stand-ins.
+    Sub-steps, each with its own test and MODLOG entry:
+    - **3k-1, `move` while playing** (**done** 2026-10-17; a plain
+      object's drawn turn is not changed yet, logged) (`objects.md` "(d)", Q21): flags
+      0–3 (absolute / relative position and turn; relative position along
+      the world axes); set directly, no collision passes. Connor
+      (position and heading; the mover's state is kept), doors, chests,
+      scripted and animated objects (their placement), plain placed
+      objects (their colliders and drawn parts). `KQCamera` in 3k-3.
+    - **3k-2, `KQObject::setHidden` on plain placed objects** (`objects.md`
+      "Hidden objects" rule 3: not drawn, can't be touched): the `Table`.
+    - **3k-3, the camera and controls**: `KQCamera::follow none|Connor`
+      (`camera.md` rule 1: following none, the camera stays where it
+      is); `move KQCamera` sets its position only (Q89 c stand-in);
+      `setThirdPerson` logged (Q89 b); `handsOff 1|0`: movement keys,
+      Jump and clicks ignored while on (Q89 a stand-in).
+    - **3k-4, `loadKQ` while playing** (Q90 stand-in: as at the start, no
+      call, a sound starts at once): files named in the scripts but not
+      loaded at the start are already prepared, hidden ("unused" copies,
+      M1); `loadKQ <file>` makes that copy live: drawn, known to the
+      scripts (animated, clickable), its sound playing. Only a file with
+      one prepared copy and no name or position on the line (the bricks'
+      case); others logged as not done.
     Test: `--at 156625,303748,1.57 --hold 1,0,0` (the game's own
     `alias bricks`); the logs show the Push call, Connor's `push` from
     `bricks.anm`, `Cue 300 0 push`, `Bricks` → `down` at once with no

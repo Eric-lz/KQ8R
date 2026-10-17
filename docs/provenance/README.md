@@ -1294,3 +1294,13 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | The script runs right after his move in the same update, before the scripts' requests are applied | **Our order** (rule 3 says mid-move; what follows a mid-move `move Connor` is not traced, `connor-collision.md`) | `doors.log` update 13 |
 | Still a pushable after its `Push` call → a wall for him from then on, logged | "Do not reproduce" of `pushing.md` | Unit test |
 | Two contacts at exactly the same distance: the pushable's first, the other found after passing through it | **Stand-in**, Q88 (bricks and table) | `connor.log` update 13 |
+
+## `move` while playing (M3 step 3k-1) — `crates/kq8-core/src/{active,script}.rs`, `crates/kq8-data/src/world_script.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `move <who> <flags> x y z [rx ry rz]`: up to six numbers, missing 0; flags 0 absolute, 1 position relative, 2 turn relative, 3 both; relative position along the world axes | `objects.md` "(d)", Q21 | Unit test `move_sets_or_adds_along_the_world_axes`; `doors.log` (bricks) |
+| Set directly, no collision passes | `objects.md` "(d)" (traced) | `connor.log`: Connor put at the spot, then falls to the floor |
+| Relative turns added only about Z | Q21 answer (all 9 cases in the game) | Same unit test |
+| Connor turns only about Z (rx, ry ignored, logged) | **Our choice** (his heading is his only turn) | — |
+| The viewer moves Connor, the camera (3k-3) and plain placed objects; core moves its own objects | **Our method** | — |

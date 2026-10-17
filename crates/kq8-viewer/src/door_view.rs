@@ -568,6 +568,7 @@ pub fn trap_step(
     mut deleted: ResMut<Deleted>,
     mut rules: ResMut<crate::draw_distance::ActiveRules>,
     mut special_at: ResMut<SpecialAt>,
+    mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -634,6 +635,45 @@ pub fn trap_step(
             Request::ConnorSpecial { items, at } => {
                 let line = connor.start_special(&items, &at);
                 format!("{at}: applied: Connor {line}")
+            }
+            Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
+                format!("{at}: applied: {}", connor.move_to(flags, position, turn, &at))
+            }
+            Request::Move { who, at, .. } if who.eq_ignore_ascii_case("KQCamera") => {
+                format!("{at}: move KQCamera: not done yet (M3 3k-3)")
+            }
+            Request::Move { who, flags, position, turn, at } => {
+                // A plain placed object (3k-1): its colliders and drawn
+                // parts. Its old place is its collider's.
+                let old = colliders.as_ref().and_then(|c| c.0.iter().find(|b| b.name.eq_ignore_ascii_case(&who))).map(|b| b.placement);
+                match old {
+                    Some(old) => {
+                        let (new, note) = kq8_core::active::moved_placement(old, flags, position, turn);
+                        let d: [f32; 3] = std::array::from_fn(|k| new.position[k] - old.position[k]);
+                        let mut boxes = 0;
+                        for list in [colliders.as_mut().map(|c| &mut c.0), view.as_mut().map(|v| &mut v.boxes)].into_iter().flatten() {
+                            for b in list.iter_mut().filter(|b| b.name.eq_ignore_ascii_case(&who)) {
+                                b.placement = new;
+                                boxes += 1;
+                            }
+                        }
+                        let shift = Vec3::from(crate::to_bevy(d, [0.0; 3]));
+                        let mut parts = 0;
+                        for (_, mut t) in drawn.iter_mut().filter(|(n, _)| n.0.eq_ignore_ascii_case(&who)) {
+                            t.translation += shift;
+                            parts += 1;
+                        }
+                        let turned = if new.rotation != old.rotation { "; its drawn turn not changed (not done)" } else { "" };
+                        format!(
+                            "{at}: applied: moved {who} by ({:.0}, {:.0}, {:.0}): {boxes} collider(s), {parts} drawn part(s){turned}{}",
+                            d[0],
+                            d[1],
+                            d[2],
+                            note.map_or(String::new(), |n| format!("; {n}"))
+                        )
+                    }
+                    None => format!("{at}: move {who}: no collider to know its place; not moved (not done)"),
+                }
             }
             Request::Delete { name, at } => {
                 let mut off = 0;

@@ -56,7 +56,7 @@ use kq8_data::world_script::Vars;
 /// world handles them now. Commands that answer a question (`getloc`,
 /// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
 /// unknown (error line, result 1) until they are studied.
-pub const STUBS: [&str; 36] = [
+pub const STUBS: [&str; 35] = [
     "KQMonster::speak",
     "doPopup",
     "addMapIcon",
@@ -87,7 +87,6 @@ pub const STUBS: [&str; 36] = [
     "KQCamera::addCamLoc",
     "KQGame::letCatchUp",
     "setThirdPerson",
-    "move",
     "onTeleport",
     "offTeleport",
     "pointAndCue",

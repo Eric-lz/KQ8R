@@ -383,7 +383,9 @@ fn parse_load(args: &[String]) -> Result<Parsed, String> {
     Ok((file, name, position, angles, ignored))
 }
 
-fn parse_move(args: &[String]) -> Result<(String, u32, [f32; 3], [f32; 3]), String> {
+/// `move <who> <flags> x y z [rx ry rz]` after the command word: up to
+/// six numbers, missing ones 0 (`objects.md` "(d)").
+pub fn parse_move(args: &[String]) -> Result<(String, u32, [f32; 3], [f32; 3]), String> {
     let who = args.first().ok_or("move without a name")?.to_string();
     let flags = args.get(1).ok_or("move without flags")?;
     let flags = flags.parse::<u32>().map_err(|_| format!("flags '{flags}' is not a whole number"))?;

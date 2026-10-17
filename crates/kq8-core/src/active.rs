@@ -115,6 +115,29 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// `move <who> <flags> x y z rx ry rz` (`objects.md` "(d)") for
+    /// Connor, the camera or a plain placed object: the caller moves it.
+    Move { who: String, flags: u32, position: [f32; 3], turn: [f32; 3], at: String },
+}
+
+/// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
+/// add the position along the world axes, 0 and 2 set it; flags 2 and 3
+/// add the turn, 0 and 1 set it. Adding turns is done only about Z (all
+/// cases in the game); otherwise the turn stays, and the note says so.
+pub fn moved_placement(p: Placement, flags: u32, position: [f32; 3], turn: [f32; 3]) -> (Placement, Option<&'static str>) {
+    let position = if flags & 1 != 0 { std::array::from_fn(|k| p.position[k] + position[k]) } else { position };
+    let (rotation, note) = if flags & 2 == 0 {
+        (kq8_data::objects::rotation(turn), None)
+    } else if turn == [0.0; 3] {
+        (p.rotation, None)
+    } else if turn[..2] == [0.0; 2] {
+        // Row vectors: the old turn, then a turn about Z.
+        let z = kq8_data::objects::rotation([0.0, 0.0, turn[2]]);
+        (std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| p.rotation[i][k] * z[k][j]).sum())), None)
+    } else {
+        (p.rotation, Some("a relative turn not about Z: not applied (not traced)"))
+    };
+    (Placement { rotation, position }, note)
 }
 
 /// A door and what clicking and collision need to know about it.
@@ -919,6 +942,59 @@ impl WorldState {
         "0".into()
     }
 
+    /// `move <who> <flags> x y z [rx ry rz]` (`objects.md` "(d)"): set
+    /// directly, without collision passes. Doors, chests, scripted and
+    /// animated objects are moved here; Connor, the camera and plain
+    /// placed objects by the caller (a request). Flags above 3: not moved.
+    fn move_command(&mut self, words: &[String], at: &str) -> String {
+        let (who, flags, position, turn) = match kq8_data::world_script::parse_move(&words[1..]) {
+            Ok(m) => m,
+            Err(e) => {
+                self.note(format!("{at}: move: {e}: '{}'", words.join(" ")));
+                return "1".into();
+            }
+        };
+        if flags > 3 {
+            self.note(format!("{at}: move {who}: flags {flags} unknown; not moved"));
+            return "1".into();
+        }
+        let base = if let Some(i) = self.object_index(&who) {
+            Some(&mut self.objects[i].player.base)
+        } else if let Some(i) = self.anim_index(&who) {
+            Some(&mut self.anims[i].player.base)
+        } else if let Some(i) = self.chest_index(&who) {
+            Some(&mut self.chests[i].chest.player.base)
+        } else if let Some(i) = self.door_index(&who) {
+            Some(&mut self.doors[i].door.player.base)
+        } else {
+            None
+        };
+        if let Some(base) = base {
+            let old = base.position;
+            let (new, note) = moved_placement(*base, flags, position, turn);
+            *base = new;
+            self.note(format!(
+                "{at}: move {who} {flags}: ({:.0}, {:.0}, {:.0}) -> ({:.0}, {:.0}, {:.0}){}",
+                old[0],
+                old[1],
+                old[2],
+                new.position[0],
+                new.position[1],
+                new.position[2],
+                note.map_or(String::new(), |n| format!("; {n}"))
+            ));
+            return "0".into();
+        }
+        let known = who.eq_ignore_ascii_case("Connor") || who.eq_ignore_ascii_case("KQCamera") || self.known.contains(&who.to_ascii_lowercase());
+        if !known {
+            self.note(format!("{at}: move: unknown object '{who}'; not moved"));
+            return "1".into();
+        }
+        self.note(format!("{at}: move {who} {flags} {position:?} {turn:?}: handed to the viewer"));
+        self.requests.push(Request::Move { who, flags, position, turn, at: at.to_string() });
+        "0".into()
+    }
+
     /// `KQMonster::setState <who> <state> [list]`: Connor's Special state
     /// is handed to the caller (`anim-scripts.md` rule 16); other states
     /// and other characters are later milestones (logged only, `0` as the
@@ -1249,6 +1325,7 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
+            "move" => Some(self.move_command(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
@@ -3150,6 +3227,28 @@ mod tests {
         let mut b = with_object("echo nothing\n", "x");
         b.world.objects[0].collision_type = 0x10121;
         assert!(!b.push_call("basket1"));
+    }
+
+    #[test]
+    fn move_sets_or_adds_along_the_world_axes() {
+        let p = Placement { rotation: kq8_data::objects::rotation([0.0, 0.0, 1.57]), position: [100.0, 200.0, 300.0] };
+        // Flags 3: both relative; a turn of 0 keeps the turn.
+        let (q, note) = moved_placement(p, 3, [0.0, -200.0, -300.0], [0.0; 3]);
+        assert_eq!((q.position, q.rotation, note), ([100.0, 0.0, 0.0], p.rotation, None));
+        // Flags 0: both absolute.
+        let (q, _) = moved_placement(p, 0, [1.0, 2.0, 3.0], [0.0, 0.0, 0.5]);
+        assert_eq!((q.position, q.rotation), ([1.0, 2.0, 3.0], kq8_data::objects::rotation([0.0, 0.0, 0.5])));
+        // Flags 2: relative turn about Z adds.
+        let (q, _) = moved_placement(p, 2, [1.0, 2.0, 3.0], [0.0, 0.0, 0.43]);
+        let want = kq8_data::objects::rotation([0.0, 0.0, 2.0]);
+        assert!((0..3).all(|i| (0..3).all(|j| (q.rotation[i][j] - want[i][j]).abs() < 1e-5)));
+        // In a script: a scripted object moves at once, Connor by request.
+        let mut a = with_object("move $1 3 0 -200 -300\nmove Connor 0 1 2 3 0 0 1.57\nmove nobody 0 1 2 3\n", "x");
+        let before = a.world.objects[0].player.base.position;
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.world.objects[0].player.base.position, [before[0], before[1] - 200.0, before[2] - 300.0]);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Move { who, flags: 0, .. } if who == "Connor")));
+        assert!(a.take_log().join("\n").contains("move: unknown object 'nobody'"));
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

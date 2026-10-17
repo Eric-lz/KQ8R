@@ -551,6 +551,27 @@ impl ConnorSim {
         line
     }
 
+    /// `move Connor <flags> x y z rx ry rz` from a script (M3 3k-1,
+    /// `objects.md` "(d)"): his position set or added, his heading (rz)
+    /// set or added; no collision passes; the mover's state is kept.
+    /// Returns a line for the script logs.
+    pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3], at: &str) -> String {
+        let old = (self.mover.position, self.walker.heading);
+        self.mover.position = if flags & 1 != 0 { std::array::from_fn(|k| old.0[k] + position[k]) } else { position };
+        self.walker.heading = if flags & 2 != 0 { old.1 + turn[2] } else { turn[2] };
+        let tilt = if turn[0] != 0.0 || turn[1] != 0.0 { " (his turn about x and y ignored: he only turns about z)" } else { "" };
+        // No blending from the old place in the drawing.
+        self.current = (self.mover.position, self.walker.heading, self.walker.phase, self.walker.bank);
+        self.previous = self.current;
+        let p = self.mover.position;
+        let line = format!(
+            "moved Connor from ({:.0}, {:.0}, {:.0}) heading {:.3} to ({:.0}, {:.0}, {:.0}) heading {:.3}{tilt}",
+            old.0[0], old.0[1], old.0[2], old.1, p[0], p[1], p[2], self.walker.heading
+        );
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
     /// `KQConner::setRun` from a script (M3 step 3d-3).
     pub fn set_run(&mut self, run: bool, at: &str) {
         let was = self.intent.run;

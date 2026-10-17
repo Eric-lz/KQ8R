@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3k-1: `move` while playing
+
+**Changed:** `kq8-core/src/active.rs`: `move <who> <flags> x y z [rx ry rz]` is a world command (no longer a stub): flags 0–3 as `objects.md` "(d)" (relative position along the world axes, Q21; relative turns added only about Z); doors, chests, scripted and animated objects are moved at once (their placement); Connor, `KQCamera` and plain placed objects become a `Request::Move`; unknown names and flags above 3 are logged and not moved; `moved_placement`; 1 new unit test. `kq8-data` `world_script.rs`: `parse_move` public. `kq8-viewer`: `connor_view.rs` `move_to` (position and heading set or added, no collision passes, no blending from the old place), `door_view.rs` applies the requests (plain objects: colliders and drawn parts; the camera waits for 3k-3).
+**Why:** The user's task, step 4: the bricks script moves Connor (twice) and the bricks.
+**Tested how:** `cargo test --workspace` (368 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,60 --frames 6000 --sound off`, `doors.log`, `connor.log`.
+**Result:** Update 13 (the `Push` call): "moved Connor from (157007, 303799, 14837) heading 1.570 to (156652, 303600, 15000)"; he drops onto the cave floor (14837) and plays `bricks.anm/push` there. Update 63: "move Bricks 3: (156652, 303600, 14862) -> (156652, 303400, 14562)". Update 123/124 (cue 10): Connor moved to the same spot again. The three `move KQCamera` lines are handed over and logged "not done yet (M3 3k-3)".
+**Still broken / not tested:** Not checked by eye. A plain placed object's drawn turn isn't changed by `move` (position only; logged; none in the bricks path). Whether the ground rule applies after a `move` is not traced (the note); Connor simply falls onto the floor by gravity.
+**Next:** 3k-2, `setHidden` on plain placed objects (the bricks' `Table`).
+
 ## 2026-10-17 M3 step 3j-3: scripted pushables (the bricks' `Push`)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: an accepted touch on a scripted pushable is not a hit: the object is passed through for the rest of that update's move (`MoverWorld::pass_through`) and the touch is reported; objects whose script didn't take control become walls (`Scene::not_pushable`); on an exact tie between two contacts the pushable's is taken first (Q88 stand-in). `active.rs`: `push_call` runs the object's script with `Push` and says whether it is still a pushable afterwards; `collision_type_of`; 1 new unit test (and the scripted case of the mover test now checks he goes on through). `kq8-viewer`: `connor_view.rs` collects the scripted pushes, `door_view.rs` (`trap_step`) calls the scripts right after his move, before the scripts' requests are applied. Q88 asked; provenance added.
