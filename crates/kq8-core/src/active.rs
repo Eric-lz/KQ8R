@@ -229,9 +229,11 @@ pub struct ActiveBuilding {
     pub accept_all_items: bool,
     /// Default **1** for buildings (rule 10; other objects 0).
     pub too_far_away_action: i64,
-    /// Its box in the world (for reach; our stand-in, Q75).
-    pub world_min: [f32; 3],
-    pub world_max: [f32; 3],
+    /// Its `.dig` header box, in its own axes, and its placement: reach is
+    /// measured to this box in the building's own axes (`clicking.md`
+    /// rule 9, Q75; M1 7i).
+    pub bounds: ([f32; 3], [f32; 3]),
+    pub placement: Placement,
 }
 
 /// A building's `tooFarAwayAction` when its file gives none (`clicking.md`
@@ -1466,11 +1468,11 @@ impl Active {
             self.world.note(format!("click building {}: not clickable (type {:#x}); nothing", b.name, b.collision_type));
             return ClickResult::Nothing;
         }
-        let world = Placement { rotation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], position: [0.0; 3] };
-        let distance = distance_to_box(feet, &world, b.world_min, b.world_max);
+        // Rule 9 (Q75): to the .dig box in the building's own axes.
+        let distance = distance_to_box(feet, &b.placement, b.bounds.0, b.bounds.1);
         let in_reach = distance < reach;
         let head = format!(
-            "click building {}: Connor at ({:.0}, {:.0}, {:.0}), distance to its world box {distance:.1} (our stand-in, Q75), reach {reach:.0}: {}",
+            "click building {}: Connor at ({:.0}, {:.0}, {:.0}), distance to its .dig box (its own axes) {distance:.1}, reach {reach:.0}: {}",
             b.name,
             feet[0],
             feet[1],
@@ -2509,9 +2511,30 @@ mod tests {
             accepts_inventory: None,
             accept_all_items: false,
             too_far_away_action: BUILDING_TOO_FAR_AWAY_ACTION,
-            world_min: [0.0, 0.0, 0.0],
-            world_max: [1000.0, 1000.0, 1000.0],
+            bounds: ([0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0]),
+            placement: Placement::at([0.0; 3]),
         }
+    }
+
+    #[test]
+    fn reach_to_a_building_is_in_its_own_axes() {
+        // The 1000-unit box turned 45 degrees about z: its corner (1000, 0)
+        // goes to (707, 707), (0, 1000) to (-707, 707). The point (650, 50)
+        // is inside the axis-aligned box around it, but about 424 outside
+        // the turned box itself (rule 9).
+        let mut a = with_building(None, 0x28);
+        let c = std::f32::consts::FRAC_1_SQRT_2;
+        a.world.buildings[0].placement = Placement { rotation: [[c, c, 0.0], [-c, c, 0.0], [0.0, 0.0, 1.0]], position: [0.0; 3] };
+        let feet = [650.0, 50.0, 10.0];
+        let own = a.world.buildings[0].placement.to_own(feet);
+        assert!(own[1] < 0.0, "outside the turned box: {own:?}");
+        // Reach 400: out; reach 450: in ("that doesn't work" with an item).
+        let bread = Item { object: "bread.1".into(), kind: "INVITEM_Bread".into() };
+        assert_eq!(a.click("Pub", feet, 200.0, Some(&bread)), ClickResult::Swallowed);
+        assert_eq!(a.click("Pub", feet, 225.0, Some(&bread)), ClickResult::Refused);
+        let log = a.take_log().join("
+");
+        assert!(log.contains("distance to its .dig box (its own axes) 424.3"), "{log}");
     }
 
     fn with_building(script: Option<&str>, collision_type: u32) -> Active {

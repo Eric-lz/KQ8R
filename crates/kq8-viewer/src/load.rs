@@ -79,6 +79,9 @@ pub struct Model {
     /// The lights the model carries in the shown frame (object-lighting.md
     /// rule 26b, M1 7c-1), model space.
     pub lights: Vec<kq8_data::shape::ModelLight>,
+    /// Buildings with a usable `.dil` only: what point lights on its
+    /// surfaces need (M1 7d, rule 16).
+    pub wall_light: Option<std::sync::Arc<crate::wall_lights::WallData>>,
 }
 
 pub struct Group {
@@ -219,7 +222,7 @@ pub fn load_model(
     if !lights.is_empty() {
         log.summary(format!("  carries {} light(s) in its shown frame (rule 26b)", lights.len()));
     }
-    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights })
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights, wall_light: None })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -641,6 +644,9 @@ pub struct Ground {
     /// the game's start value 0 if missing): point lights paint the ground
     /// (object-lighting.md rule 26, M1 7e).
     pub dynamic: bool,
+    /// The other map of the pair (light map when `dynamic`, else the
+    /// shadow map), for F9 (M1 7j); full brightness if none.
+    pub other_light: kq8_data::lightmap::LightMap,
 }
 
 /// The ground animators of a world (M3 step 3b-3, emitters.md "Ground
@@ -831,13 +837,33 @@ pub fn load_ground(game: &GameDir, world: &World, log: &mut Log) -> Result<Groun
         }
         groups.push(GroundGroup { label: name, triangles: tris, look });
     }
-    let light = load_light_map(game, world, &settings, &fetch, log);
     let dynamic = use_dynamic_lighting(game);
-    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default(), light, dynamic })
+    let why = match options_dynamic_lighting(game) {
+        Some(on) if DYNAMIC_OVERRIDE.get().is_some() => format!("--dynamic {}", if on { "on" } else { "off" }),
+        Some(on) => format!("Options.cs useDynamicLighting {}", u8::from(on)),
+        None => "no useDynamicLighting in Options.cs, the game's start value 0".into(),
+    };
+    let light = load_light_map(world, &settings, &fetch, dynamic, &why, log);
+    // The other one, for F9 (M1 7j).
+    let other_light = load_light_map(world, &settings, &fetch, !dynamic, "kept for F9", log);
+    Ok(Ground { terrain, groups, materials, orientation, textures, palette, animated: Default::default(), light, dynamic, other_light })
 }
 
-/// `useDynamicLighting` as `Options.cs` sets it, if it does.
+/// The viewer's `--dynamic on|off` (M1 7d), which stands in for
+/// `Options.cs` (the game's files are never written).
+static DYNAMIC_OVERRIDE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+/// Sets `--dynamic`; call before loading.
+pub fn override_dynamic_lighting(on: bool) {
+    let _ = DYNAMIC_OVERRIDE.set(on);
+}
+
+/// `useDynamicLighting` as `Options.cs` sets it, if it does (or as
+/// `--dynamic` says).
 fn options_dynamic_lighting(game: &GameDir) -> Option<bool> {
+    if let Some(on) = DYNAMIC_OVERRIDE.get() {
+        return Some(*on);
+    }
     game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::lightmap::use_dynamic_lighting(&b))
 }
 
@@ -850,24 +876,21 @@ pub fn use_dynamic_lighting(game: &GameDir) -> bool {
 /// A file found by name: (where, bytes).
 type Fetched = Result<(String, Vec<u8>), String>;
 
-/// The ground's light map (terrain-lighting.md rules 1-6): the hardware
-/// pair (we draw like the Glide/Direct3D renderers), the shadow map if
-/// `Options.cs` says `useDynamicLighting 1`, else the light map. No name,
-/// or a file that can't be used: full brightness (rule 4).
+/// A ground light map (terrain-lighting.md rules 1-6): the hardware pair
+/// (we draw like the Glide/Direct3D renderers), the shadow map for
+/// `dynamic` (`useDynamicLighting 1`), else the light map; `why` says why
+/// (for the log). No name, or a file that can't be used: full brightness
+/// (rule 4).
 fn load_light_map(
-    game: &GameDir,
     world: &World,
     settings: &kq8_data::TerrainSettings,
     fetch: &dyn Fn(&str) -> Fetched,
+    dynamic: bool,
+    why: &str,
     log: &mut Log,
 ) -> kq8_data::lightmap::LightMap {
     use kq8_data::lightmap::{self, Kind, LightMap};
-    let dynamic = options_dynamic_lighting(game);
-    let kind = Kind::for_dynamic_lighting(dynamic.unwrap_or(false));
-    let why = match dynamic {
-        Some(on) => format!("Options.cs useDynamicLighting {}", u8::from(on)),
-        None => "no useDynamicLighting in Options.cs, the game's start value 0".into(),
-    };
+    let kind = Kind::for_dynamic_lighting(dynamic);
     let full = LightMap::full(settings);
     let Some(name) = lightmap::file_name(settings, true, kind) else {
         log.summary(format!(
@@ -2678,8 +2701,8 @@ impl Placer<'_> {
                 accepts_inventory: info.accepts_inventory.clone(),
                 accept_all_items: info.accept_all_items,
                 too_far_away_action: info.too_far_away_action,
-                world_min: c.world_min,
-                world_max: c.world_max,
+                bounds: c.bounds,
+                placement: c.placement,
             });
             buildings.push(c);
             building_types.push(info.collider_type);
@@ -3050,6 +3073,16 @@ pub fn load_building(
     if not_drawn > 0 {
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));
     }
+    // Point lights on its surfaces (M1 7d, rule 16).
+    let wall_light = light.map(|l| {
+        let (data, agree) = crate::wall_lights::WallData::new(l, &b);
+        log.summary(format!(
+            "  point lights (rule 16): {} of {} surfaces can be lit (a map and a P0/U/V rectangle); facing by bit 0x80 agrees with the corner order on {agree}",
+            data.lightable.len(),
+            b.surfaces.len()
+        ));
+        std::sync::Arc::new(data)
+    });
     Ok(Model {
         label,
         groups,
@@ -3059,6 +3092,7 @@ pub fn load_building(
         light_atlas: Some(atlas),
         surfaces: (0..b.surfaces.len()).map(|i| b.surface_corners(i).map(|c| c.into_iter().map(|(p, _)| p).collect()).unwrap_or_default()).collect(),
         lights: Vec::new(),
+        wall_light,
     })
 }
 

@@ -3,11 +3,13 @@
 //! numbers are that note's). See docs/provenance/README.md.
 //!
 //! - Once per frame all lights of the scene are gathered into one list
-//!   (rule 3): every `KQPointLight` the world's scripts loaded, and every
-//!   light carried by a shown model in its current frame (rule 26b), each
-//!   only while its owner is in the lights group, group bit 0x400 (rule
-//!   37: near or far with the default masks; off and hidden objects are
-//!   not). A deleted owner gives no light.
+//!   (rule 3): every `KQPointLight` the world's scripts loaded, always
+//!   (it is not in the near / far / off test and stays in the lights group
+//!   until removed: rule 37, Q77 b, M1 7g), and every light carried by a
+//!   shown model in its current frame (rule 26b), only while its owner is
+//!   in the lights group, group bit 0x400 (rule 37: near or far with the
+//!   default masks; off and hidden objects are not). A deleted owner gives
+//!   no light.
 //! - A carried point light's position is the node's position put through
 //!   the object's placement only (its place, turn and scale when it was
 //!   placed), never the frame's own step; a sun-type node's aim is used as
@@ -78,9 +80,10 @@ impl CarriedLights {
 }
 
 /// A `KQPointLight` object (rules 24, 25), on an entity of its own at the
-/// light's position, with a `DistanceTest`.
+/// light's position. No `DistanceTest` (rule 37).
 #[derive(Component, Clone)]
 pub struct PointLightSource {
+    pub name: String,
     pub light: PointLight,
 }
 
@@ -155,7 +158,7 @@ pub fn gather_lights(
     mut scene: ResMut<SceneLights>,
     mut buffers: ResMut<Assets<ShaderBuffer>>,
     group: Res<LightsGroup>,
-    points: Query<(&DistanceTest, &PointLightSource)>,
+    points: Query<&PointLightSource>,
     carried: Query<(&DistanceTest, &CarriedLights)>,
     connor: Query<&Transform, With<crate::connor_view::ConnorBody>>,
     sim: Option<Res<crate::door_view::DoorSim>>,
@@ -168,15 +171,15 @@ pub fn gather_lights(
     // Position, name, colour, Begin, End of each point light, for the log.
     let mut described: Vec<(Vec3, String, [f32; 3], f32, f32)> = Vec::new();
     let (mut from_points, mut from_models, mut sun_type) = (0, 0, 0);
-    for (test, source) in &points {
-        if !group.0.contains(&test.object) || deleted(&test.name) {
+    for source in &points {
+        if deleted(&source.name) {
             continue;
         }
         let l = &source.light;
         let at = point_to_bevy(l.position);
         lights.push(entry(at, true, l.colour, l.begin, l.end));
-        described.push((at, test.name.clone(), l.colour, l.begin, l.end));
-        ground.0.push((test.name.clone(), l.position, l.colour, l.begin, l.end));
+        described.push((at, source.name.clone(), l.colour, l.begin, l.end));
+        ground.0.push((source.name.clone(), l.position, l.colour, l.begin, l.end));
         from_points += 1;
     }
     for (test, c) in &carried {

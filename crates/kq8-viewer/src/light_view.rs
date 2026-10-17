@@ -119,11 +119,15 @@ pub struct GroundLight {
     /// Map points painted last frame.
     painted: Vec<usize>,
     last_paint_log: Option<Instant>,
+    /// The other map of the pair (light map while `dynamic`, else the
+    /// shadow map), for F9 (M1 7j).
+    other: LightMap,
 }
 
 impl GroundLight {
-    pub fn new(map: LightMap, mode: LightMode, dynamic: bool) -> Self {
+    pub fn new(map: LightMap, other: LightMap, mode: LightMode, dynamic: bool) -> Self {
         GroundLight {
+            other,
             stored: map.clone(),
             map,
             mode,
@@ -151,6 +155,18 @@ impl GroundLight {
         self.meshes += 1;
         self.corners += game.len();
         meshes.add(mesh)
+    }
+
+    /// F9 (M1 7j): dynamic lighting on <-> off. The shown map becomes the
+    /// other one of the pair (`terrain-lighting.md` rule 2: on = shadow
+    /// map, off = light map), last frame's patches are forgotten (the whole
+    /// map is new), and the switch that the ground's and the walls' point
+    /// lights read flips (`object-lighting.md` rules 16, 26).
+    pub fn toggle_dynamic(&mut self) {
+        self.dynamic = !self.dynamic;
+        std::mem::swap(&mut self.stored, &mut self.other);
+        self.map = self.stored.clone();
+        self.painted.clear();
     }
 
     /// What the shader needs to find a world point in the picture: 1 ÷
@@ -200,18 +216,18 @@ pub fn lookup_uv(x: f32, y: f32, inv_spacing: f32, side: f32) -> [f32; 2] {
 #[derive(Component)]
 pub struct LightLabel;
 
-fn label_text(mode: LightMode) -> String {
+fn label_text(mode: LightMode, dynamic: bool) -> String {
     let what = match mode {
         LightMode::X2 => "x2 (doubled, capped at 100%)",
         LightMode::X1 => "x1 (as the game)",
         LightMode::Off => "off (full bright)",
     };
-    format!("Light, ground and objects: {what} (F7)")
+    format!("Light, ground and objects: {what} (F7); dynamic lighting {} (F9)", if dynamic { "on" } else { "off" })
 }
 
 pub fn setup_light_label(mut commands: Commands, light: Res<GroundLight>, shared: Res<Shared>) {
     commands.spawn((
-        Text::new(label_text(light.mode)),
+        Text::new(label_text(light.mode, light.dynamic)),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(52.0), left: Val::Px(10.0), ..default() },
@@ -246,9 +262,48 @@ pub fn toggle_light(
         changed += 1;
     }
     for mut t in &mut label {
-        t.0 = label_text(mode);
+        t.0 = label_text(mode, light.dynamic);
     }
     shared.log.lock().unwrap().summary(format!("key F7: ground light mode {} ({changed} ground materials)", mode.name()));
+}
+
+/// F9 (M1 7j): dynamic lighting on / off, as the original's video option:
+/// the other ground map (the whole picture rewritten, and the ground
+/// materials' lookup if its size differs), and point lights on the ground
+/// and building surfaces start or stop from the next frame.
+pub fn toggle_dynamic(
+    keys: Res<ButtonInput<KeyCode>>,
+    shared: Res<Shared>,
+    mut light: ResMut<GroundLight>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<crate::ground_haze::GroundMaterial>>,
+    mut label: Query<&mut Text, With<LightLabel>>,
+) {
+    if !keys.just_pressed(KeyCode::F9) {
+        return;
+    }
+    light.toggle_dynamic();
+    if let Some(handle) = light.image.clone() {
+        if let Some(mut image) = images.get_mut(&handle) {
+            *image = light_image(&light.map);
+        }
+    }
+    let (inv_spacing, side) = light.lookup();
+    for (_, m) in materials.iter_mut() {
+        m.settings.light_inv_spacing = inv_spacing;
+        m.settings.light_side = side;
+    }
+    for mut t in &mut label {
+        t.0 = label_text(light.mode, light.dynamic);
+    }
+    shared.log.lock().unwrap().summary(format!(
+        "key F9: dynamic lighting {} (ground shows its {} map, {} x {} points; point lights on the ground and building surfaces {})",
+        if light.dynamic { "on" } else { "off" },
+        if light.dynamic { "shadow" } else { "light" },
+        light.map.side,
+        light.map.side,
+        if light.dynamic { "on" } else { "off" }
+    ));
 }
 
 /// Every frame (rule 26): put last frame's patches back, paint this
@@ -377,6 +432,24 @@ mod tests {
         let uv = lookup_uv(0.5 * map.spacing, 0.0, inv, n);
         assert!((uv[0] * n - 1.0).abs() < 1e-4);
         assert_eq!(map.colour_at(0.5 * map.spacing, 0.0), [11.0, 11.0, 11.0]);
+    }
+
+    #[test]
+    fn f9_swaps_the_maps_and_forgets_the_patches() {
+        let mut shadow = LightMap::with_size(3, 1024.0);
+        shadow.set(0, 0, 0x4444);
+        let lit = LightMap::with_size(3, 1024.0);
+        let mut g = GroundLight::new(shadow.clone(), lit.clone(), LightMode::X1, true);
+        // A patch painted on the shown map.
+        g.map.set(1, 1, 0x0F00);
+        g.painted = vec![4];
+        g.toggle_dynamic();
+        assert!(!g.dynamic);
+        assert_eq!(g.map.values(), lit.values());
+        assert!(g.painted.is_empty());
+        g.toggle_dynamic();
+        assert!(g.dynamic);
+        assert_eq!(g.map.values(), shadow.values(), "the patch is gone");
     }
 
     #[test]

@@ -962,11 +962,76 @@ before they start.
     normal)); falloff from the corner's own distance: 1 to Begin, linear
     to 0 at End; colour × falloff × facing added before the cap (rule 4).
     Sun-type model lights add like suns (rule 5). Flat and none as now.
-- **7d. Point lights on walls** (rule 16): when dynamic lighting is on,
-  per wall surface per light: in front, switched on (`turnOffDynLighting`
-  off), nearest corner/centre within Begin + End, line not blocked; then
-  added to the light map per texel with the wall falloff (End = fade
-  length), and the surface's haze × 0.04.
+- **7d (done 2026-10-16, MODLOG). Point lights on building surfaces** (rule 16 as rewritten
+  2026-10-16, Q78; planned 2026-10-16). Found while building it: the
+  stored P0 lies 4 texture texels past rule 13's first texel (Q79);
+  texels are painted at rule 13's positions. Every `.dig` surface counts
+  (walls, floors, ceilings, roofs).
+  - **Which lights:** the same list as the ground (7e): every
+    `KQPointLight` and every point light carried by a model whose owner is
+    in the lights group, except those of an object with
+    `turnOffDynLighting=1`. Only with dynamic lighting on.
+  - **Which surfaces:** every surface of every building copy that is drawn
+    this frame (not off by distance, not hidden or unused). The original
+    lights only the surfaces in view; a surface out of view can't be seen,
+    so lighting all of a drawn building's surfaces gives the same picture
+    (our simplification). Surfaces with no light map (Castle D) or with
+    12-byte `.dil` records (no P0 / U / V; the 5 files the game never
+    loads) get no lights.
+  - **Data** (`kq8-data`): `dil.rs` keeps each record's P0, U, V (bytes
+    12–47). New `wall_light.rs` (pure functions, unit tests): facing
+    (plane normal if byte-0 bit 0x80, else reversed); "in front"
+    (facing · unit(P0 − light) < −0.1); reach (nearest of the 4 corners
+    and the centre, distance < Begin + End); the line test's end (64 units
+    from that spot towards the light); true texel positions
+    P0 + U × i ÷ (width − 1) + V × j ÷ (height − 1) (one column / row: P0;
+    "Do not reproduce"); painting a surface's texels with `fade_falloff`
+    and `add_light` (the ground's, ⌊channel × 15.9⌋).
+  - **Each frame** (viewer, new `wall_lights.rs`), per drawn building:
+    the surfaces lit last frame get their `.dil` texels back (so nothing
+    piles up); each light is turned into the building's own axes; a quick
+    skip when the light is farther than Begin + End (+ 256 margin) from the
+    building's `.dig` box (then every surface would fail reach; counted as
+    "skipped"); per surface the tests in the note's order (in front,
+    reach, line test against **this building's BSP only**, via its
+    collider); a surface that passes gets its texels painted (lights one
+    after another on the rounded result) and its haze factor × 0.04.
+  - **Per building copy** its own light picture and haze-factor list (two
+    copies of the same `.dig` are lit separately). Only the touched
+    pictures are rewritten.
+  - **Haze** (shader): the wall's haze × the surface's factor (0.04 per
+    light, 1 when unlit) **before** the "0.99 or more: not drawn" test.
+    The surface's index travels with each wall corner
+    (`ATTRIBUTE_WALL_SURFACE` gets a third number); the factors are a
+    storage buffer at binding 6.
+  - **Viewer helper:** `--dynamic on|off` overrides `Options.cs`'s
+    `useDynamicLighting` (ground map choice, ground patches, walls), so the
+    "off" check can be run without touching the game's files.
+  - **Logs** (once a second): per light: surfaces tested, skipped (out of
+    the building's reach), failed "in front", failed reach, failed line,
+    lit, and the largest change of one texel channel (0–15 steps); totals;
+    "dynamic lighting off: 0 lit". At load: per building, surfaces with a
+    light rectangle, and how many agree between bit 0x80 facing and our
+    corner order (expect all).
+  - **Checks:** unit tests on the pure functions; Daventry by a fireplace
+    (lit within Begin + End = 1,550, nothing past ~10,800 from it); Dead
+    City by the portal (portal light moves over walls); `--dynamic off`:
+    0 lit.
+- **7g (done 2026-10-16, MODLOG). `KQPointLight` out of the near / far / off test** (Q77 b, rule
+  37): no `DistanceTest` on its entity; it is always gathered (unless
+  deleted). Log: all 7 Dead City lights gathered from the start.
+- **7h (done 2026-10-16, MODLOG; the code already did this). A building's draw-distance ball** (Q76, rule 40): radius = half
+  the `.dig` header box's diagonal; centre = the box middle turned with
+  the building ("Do not reproduce"; the original uses the building's
+  position). Check our code against it (a building's `Model` box is the
+  header box) and relabel the stand-in; log the radius per building.
+- **7i (done 2026-10-16, MODLOG). Reach to a clicked building** (Q75, `clicking.md` rule 9): the
+  distance from Connor's feet to the `.dig` header box **in the
+  building's own axes** (0 inside). Our stand-in measures to the
+  axis-aligned world box around the turned box, which differs for turned
+  buildings: use the box and placement instead (the same
+  `distance_to_box` as objects). Log line per click: the distance to its
+  `.dig` box and "in reach" / "too far".
 - **7e (done 2026-10-16, MODLOG). Point lights on the ground** (rule 26): patches painted into the
   shown map every frame, put back the next. Detailed plan (2026-10-16):
   - Only with `useDynamicLighting 1` (`Options.cs`, as shipped; the shown
@@ -1023,6 +1088,20 @@ before they start.
     already uses the bilinear `colour_at`). By eye: soft shadow edges,
     no diagonal steps along the cells' triangles.
   - 7e then paints its patches into this picture.
+- Order for Q75–Q78 (2026-10-16): 7d, 7g, 7h, 7i (planned above, each its
+  own MODLOG entry).
+- **7j (done 2026-10-16, MODLOG). F9: dynamic lighting on / off while the viewer runs** (the user's
+  request, 2026-10-16; viewer helper, like the original's video option).
+  `useDynamicLighting` picks the shown ground map (`terrain-lighting.md`
+  rule 2: on = shadow map, off = light map) and whether point lights
+  paint the ground and building surfaces (`object-lighting.md` rules 16,
+  26). So: load both ground maps at start (the other one may be missing:
+  then full brightness, as rule 4); F9 swaps them, rewrites the whole
+  ground picture, forgets last frame's patches, and flips the switch that
+  `paint_ground` and `light_walls` read (walls then get their `.dil` maps
+  back on the next frame). Models keep their point lights either way
+  (rule 24). The label shows the state; each press is logged. Unit test
+  on the swap.
 
 ### M2 — Walk Connor around Daventry
 

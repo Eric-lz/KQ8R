@@ -44,7 +44,7 @@ const SURFACE_RECORD_SIZES: [usize; 2] = [48, 12];
 
 /// Where one surface's light map lies (a table D record; only the fields
 /// the note says we need).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SurfaceLight {
     /// Byte offset of the texels in table E.
     pub offset: u32,
@@ -53,6 +53,20 @@ pub struct SurfaceLight {
     pub height: u8,
     /// Light map offset in texture texels (0..15), x and y.
     pub map_offset: [u8; 2],
+    /// The light map's rectangle in building space (bytes 12-47 of a
+    /// 48-byte record; `None` in the 12-byte files): object-lighting.md
+    /// rule 16.
+    pub rect: Option<LightRect>,
+}
+
+/// Where a surface's light map lies in building space (object-lighting.md
+/// rule 16): `p0` = the first light texel, `u` runs from the first to the
+/// last texel of a row, `v` from the first to the last row.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightRect {
+    pub p0: [f32; 3],
+    pub u: [f32; 3],
+    pub v: [f32; 3],
 }
 
 impl SurfaceLight {
@@ -122,11 +136,14 @@ impl BuildingLight {
         let surfaces = (0..counts[3])
             .map(|_| {
                 let b = r.bytes(surface_record_size)?;
+                let f = |k: usize| f32::from_le_bytes(b[k..k + 4].try_into().unwrap());
+                let v3 = |k: usize| [f(k), f(k + 4), f(k + 8)];
                 Ok(SurfaceLight {
                     offset: u32::from_le_bytes(b[0..4].try_into().unwrap()),
                     width: b[8],
                     height: b[9],
                     map_offset: [b[10], b[11]],
+                    rect: (surface_record_size == 48).then(|| LightRect { p0: v3(12), u: v3(24), v: v3(36) }),
                 })
             })
             .collect::<Result<Vec<_>, ReadError>>()?;
@@ -228,6 +245,12 @@ mod tests {
             rec[0..4].copy_from_slice(&offset.to_le_bytes());
             rec[4..8].copy_from_slice(&0u32.to_le_bytes());
             rec[8..12].copy_from_slice(&[w, h, ox, oy]);
+            if record == 48 {
+                // P0, U, V as floats 1..9 (rule 16).
+                for (k, v) in (1..=9).enumerate() {
+                    rec[12 + 4 * k..16 + 4 * k].copy_from_slice(&(v as f32).to_le_bytes());
+                }
+            }
             d.extend(rec);
         }
         texels.iter().for_each(|t| d.extend(t.to_le_bytes()));
@@ -254,7 +277,8 @@ mod tests {
         let l = BuildingLight::parse(&sample()).unwrap();
         assert_eq!((l.version, l.build_id, l.scale_shift, l.unlisted, l.counts), (4, 77, 4, 0, [0, 0, 0, 2, 20]));
         assert_eq!((l.surface_record_size, l.trailing_bytes), (48, 0));
-        assert_eq!(l.surfaces[1], SurfaceLight { offset: 12, width: 2, height: 2, map_offset: [0, 15] });
+        let rect = LightRect { p0: [1.0, 2.0, 3.0], u: [4.0, 5.0, 6.0], v: [7.0, 8.0, 9.0] };
+        assert_eq!(l.surfaces[1], SurfaceLight { offset: 12, width: 2, height: 2, map_offset: [0, 15], rect: Some(rect) });
         assert_eq!(l.values().count(), 10);
         // Surface 0, row 1, column 2 = value 5; surface 1 starts at value 6.
         assert_eq!(l.texel(0, 2, 1), Some(0x5000 + 0x0555));
@@ -287,7 +311,7 @@ mod tests {
         // 12-byte records (5 files in the data, Q67): same fields, same texels.
         let l = BuildingLight::parse(&sample_with(12)).unwrap();
         assert_eq!(l.surface_record_size, 12);
-        assert_eq!(l.surfaces[1], SurfaceLight { offset: 12, width: 2, height: 2, map_offset: [0, 15] });
+        assert_eq!(l.surfaces[1], SurfaceLight { offset: 12, width: 2, height: 2, map_offset: [0, 15], rect: None });
         assert_eq!(l.texel(1, 1, 1), Some(0x9000 + 0x0999));
         // Any other size is refused.
         assert!(BuildingLight::parse(&sample_with(20)).is_err());

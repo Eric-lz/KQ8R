@@ -19,9 +19,11 @@
 //!   movement for animated objects, else `shapeName`, lower-cased), then
 //!   the object's own name; no entry: radius 100 at the position. Worked
 //!   out once, when the object is spawned. Centre turned with the object
-//!   (our choice, the note's "Do not reproduce"). Buildings: STAND-IN
-//!   (Q76), the ball round their geometry, as before (only 6 buildings of
-//!   the whole game are in `BOUNDS.KQ`, none of Daventry's).
+//!   (our choice, the note's "Do not reproduce"). Buildings (rule 40,
+//!   Q76; M1 7h): never `BOUNDS.KQ`; radius = half the diagonal of the
+//!   `.dig` header box, centre = that box's middle turned with the building
+//!   (the note's "Do not reproduce" recommendation; the original centres it
+//!   on the building's position).
 //! - Items (rule 43, Q71): their type's shape in `BOUNDS.KQ`, else 100;
 //!   `tooFar` 0.83, `groupsAlways` 0x2, near 0x448, **far 0** (not drawn
 //!   when far).
@@ -135,19 +137,20 @@ impl DistanceTest {
     }
 }
 
-/// The bounding balls (rule 35): `BOUNDS.KQ` boxes, and the geometry
-/// balls of buildings (Q76 stand-in), by index in `Objects::shapes`.
+/// The bounding balls (rule 35): `BOUNDS.KQ` boxes, and buildings' balls
+/// from their `.dig` header box (rule 40), by index in `Objects::shapes`.
 #[derive(Resource, Default, Clone)]
 pub struct ShapeBalls {
     table: Option<BoundingBoxes>,
-    /// Each shape's name as first written, and its geometry ball if it is a
-    /// building (`.dig`).
+    /// Each shape's name as first written, and its ball if it is a building
+    /// (`.dig`): from the header box (a building `Model`'s min / max).
     shapes: Vec<(String, Option<Ball>)>,
 }
 
 impl ShapeBalls {
     /// `table`: `BOUNDS.KQ` (`None` if it could not be read: every object
-    /// gets radius 100); `shapes`: name and model box of each shape.
+    /// gets radius 100); `shapes`: name and model box of each shape (for a
+    /// building, its `.dig` header box).
     pub fn new<'a>(table: Option<BoundingBoxes>, shapes: impl Iterator<Item = (&'a str, [f32; 3], [f32; 3])>) -> Self {
         let shapes = shapes.map(|(name, min, max)| (name.to_string(), name.to_ascii_lowercase().ends_with(".dig").then(|| shape_ball(min, max)))).collect();
         ShapeBalls { table, shapes }
@@ -174,7 +177,7 @@ impl ShapeBalls {
     /// (its collision shape: an animated object's current movement's).
     pub fn test_at(&self, placement: &Placement, shape_index: usize) -> DistanceTest {
         match self.shapes.get(shape_index) {
-            Some((_, Some(building))) => DistanceTest::new(placement, Some(*building), "building geometry (Q76 stand-in)"),
+            Some((_, Some(building))) => DistanceTest::new(placement, Some(*building), "building .dig box (rule 40)"),
             Some((name, None)) => self.test_shape(placement, name),
             None => self.test(placement),
         }

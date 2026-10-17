@@ -64,6 +64,31 @@ struct Tally {
     light_versions: BTreeMap<i32, usize>,
     /// `portlite.kqs`'s lights per sequence (logged once).
     portlite: Vec<String>,
+    /// Rule 16's rectangles against rule 13's placement (M1 7d).
+    rects: RectCheck,
+}
+
+/// Rule 16's light-map rectangle (P0, U, V in the `.dil`) against where
+/// rule 13 lays the light texels on the surface's texture (M1 step 7d).
+#[derive(Default)]
+struct RectCheck {
+    surfaces: usize,
+    /// Surfaces whose texture placement could not be solved (fewer than 3
+    /// corners in a usable shape).
+    unsolved: usize,
+    /// Largest distance between stored and predicted P0, U, V; and how
+    /// many surfaces are within 1 unit on all three.
+    worst: [f32; 3],
+    within_1: usize,
+    /// Largest distance of P0 from the surface's plane.
+    worst_plane: f32,
+    /// Bit 0x80 facing agrees with the corner order's front.
+    facing_agree: usize,
+    facing_tested: usize,
+    /// P0 against rule 13's texel (0, 0) moved by 4 texture texels on x and
+    /// y: the largest difference, and how many within 1 unit.
+    worst_shifted: f32,
+    shifted_within_1: usize,
 }
 
 pub fn run(game: &GameDir) -> ExitCode {
@@ -119,6 +144,20 @@ pub fn run(game: &GameDir) -> ExitCode {
         t.failures += 1;
         log.summary(format!("FAIL {unexpected} file(s) miss the size rule that the note does not name"));
     }
+
+    let r = &t.rects;
+    log.summary(format!(
+        "rule 16 rectangles vs rule 13 placement: {} surfaces with P0/U/V, {} unsolved; within 1 unit on P0, U and V: {}; largest differences P0 {:.2}, U {:.2}, V {:.2}; P0 farthest from its plane {:.2}",
+        r.surfaces, r.unsolved, r.within_1, r.worst[0], r.worst[1], r.worst[2], r.worst_plane
+    ));
+    log.summary(format!(
+        "  P0 against rule 13's texel (0, 0) + 4 texture texels on x and y: within 1 unit on {} surfaces, largest difference {:.2}",
+        r.shifted_within_1, r.worst_shifted
+    ));
+    log.summary(format!(
+        "facing by bit 0x80 (rule 16) agrees with the corner order's front on {} of {} surfaces",
+        r.facing_agree, r.facing_tested
+    ));
 
     log.summary("");
     log.summary("== Material lighting kinds (rule 7)");
@@ -339,6 +378,7 @@ fn building_lights(world: &str, vols: &[(String, VolArchive)], log: &mut Log, t:
                     if world == "Daventry" {
                         daventry_histogram(base, &l, log, t);
                     }
+                    rect_check(&l, &b, &mut t.rects);
                 }
                 Err(e) => {
                     t.failures += 1;
@@ -351,6 +391,79 @@ fn building_lights(world: &str, vols: &[(String, VolArchive)], log: &mut Log, t:
         log.detail(line);
     }
     log.summary(format!("{world}: {world_dils} .dil files, {world_pairs} with a .dig of the same name"));
+}
+
+/// Rule 16's P0, U, V of every surface against rule 13: light texel (i, j)
+/// sits at texture position 16 i - offset_x (from the surface's texture
+/// origin), so P0 = the surface's texture placement at texel position
+/// (texture offset - map offset), U = 16 (width - 1) texels along the
+/// texture's x, V likewise along y. The placement (texel -> building
+/// space) is solved from three of the surface's corners.
+fn rect_check(l: &BuildingLight, b: &Building, r: &mut RectCheck) {
+    for (i, s) in l.surfaces.iter().enumerate() {
+        let (Some(rect), Some(dig)) = (s.rect, b.surfaces.get(i)) else { continue };
+        if !s.has_map() {
+            continue;
+        }
+        r.surfaces += 1;
+        let Some(corners) = b.surface_corners(i) else {
+            r.unsolved += 1;
+            continue;
+        };
+        if let (Some(n), Some(plane)) = (b.corner_order_normal(i), b.planes.get(dig.plane as usize)) {
+            // Corner order: the normal points away from the front.
+            let front = n.map(|v| -v);
+            let by_bit = kq8_data::wall_light::facing(plane.normal, dig.flipped());
+            r.facing_tested += 1;
+            r.facing_agree += usize::from(front.iter().zip(by_bit).map(|(a, b)| a * b).sum::<f32>() > 0.0);
+            let off = plane.normal.iter().zip(rect.p0).map(|(a, b)| a * b).sum::<f32>() + plane.d;
+            r.worst_plane = r.worst_plane.max(off.abs());
+        }
+        // The best-shaped corner triangle in texel space.
+        let mut best: Option<(f32, [usize; 3])> = None;
+        for a in 0..corners.len() {
+            for b2 in a + 1..corners.len() {
+                for c in b2 + 1..corners.len() {
+                    let (ta, tb, tc) = (corners[a].1, corners[b2].1, corners[c].1);
+                    let area = ((tb[0] - ta[0]) * (tc[1] - ta[1]) - (tb[1] - ta[1]) * (tc[0] - ta[0])).abs();
+                    if best.is_none_or(|(x, _)| area > x) {
+                        best = Some((area, [a, b2, c]));
+                    }
+                }
+            }
+        }
+        let Some((_, [a, b2, c])) = best.filter(|(area, _)| *area > 1e-3) else {
+            r.unsolved += 1;
+            continue;
+        };
+        let (p0, p1, p2) = (corners[a].0, corners[b2].0, corners[c].0);
+        let (t0, t1, t2) = (corners[a].1, corners[b2].1, corners[c].1);
+        let (s1, u1, s2, u2) = (t1[0] - t0[0], t1[1] - t0[1], t2[0] - t0[0], t2[1] - t0[1]);
+        let det = s1 * u2 - s2 * u1;
+        // Per texel along x (bx) and along y (by), in building space.
+        let bx: [f32; 3] = std::array::from_fn(|k| ((p1[k] - p0[k]) * u2 - (p2[k] - p0[k]) * u1) / det);
+        let by: [f32; 3] = std::array::from_fn(|k| ((p2[k] - p0[k]) * s1 - (p1[k] - p0[k]) * s2) / det);
+        let at = |tx: f32, ty: f32| -> [f32; 3] { std::array::from_fn(|k| p0[k] + bx[k] * (tx - t0[0]) + by[k] * (ty - t0[1])) };
+        let step = l.texels_per_light() as f32;
+        let first = at(dig.texture_offset[0] as f32 - s.map_offset[0] as f32, dig.texture_offset[1] as f32 - s.map_offset[1] as f32);
+        let u: [f32; 3] = std::array::from_fn(|k| bx[k] * step * (s.width as f32 - 1.0));
+        let v: [f32; 3] = std::array::from_fn(|k| by[k] * step * (s.height as f32 - 1.0));
+        let diff = |x: [f32; 3], y: [f32; 3]| length([x[0] - y[0], x[1] - y[1], x[2] - y[2]]);
+        let d = [diff(first, rect.p0), diff(u, rect.u), diff(v, rect.v)];
+        for (w, d) in r.worst.iter_mut().zip(d) {
+            *w = w.max(d);
+        }
+        r.within_1 += usize::from(d.iter().all(|&x| x <= 1.0));
+        // Measured: the stored P0 sits 4 texture texels further along x and
+        // y than rule 13's texel (0, 0) (QUESTIONS.md Q79).
+        let shifted = at(
+            dig.texture_offset[0] as f32 - s.map_offset[0] as f32 + 4.0,
+            dig.texture_offset[1] as f32 - s.map_offset[1] as f32 + 4.0,
+        );
+        let ds = diff(shifted, rect.p0);
+        r.worst_shifted = r.worst_shifted.max(ds);
+        r.shifted_within_1 += usize::from(ds <= 1.0);
+    }
 }
 
 /// Red channel of a Daventry building's light map (the note's table), and

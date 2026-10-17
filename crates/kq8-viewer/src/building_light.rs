@@ -27,7 +27,11 @@
 //!   (rule 23). The building's surface corners are one list on the
 //!   graphics card (`WallCorners`); each wall corner carries its surface's
 //!   place in it (`ATTRIBUTE_WALL_SURFACE`). F8 switches it.
-//! - Not done: point lights on walls and their haze x 0.04 (rule 16).
+//! - Point lights on surfaces (M1 7d, rule 16): `wall_lights` rewrites a
+//!   building copy's own light picture each frame; a lit surface's haze is
+//!   multiplied by 0.04 per light before the 0.99 test (a per-surface
+//!   factor list at binding 6; each wall corner carries its surface's
+//!   index).
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
 use bevy::image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor};
@@ -152,8 +156,9 @@ impl LightAtlas {
 }
 
 /// Per wall corner: its surface's first corner and corner count in the
-/// building's `WallCorners` list.
-pub const ATTRIBUTE_WALL_SURFACE: MeshVertexAttribute = MeshVertexAttribute::new("Wall_Surface", 0x4B51_3806, VertexFormat::Uint32x2);
+/// building's `WallCorners` list, and the surface's index (for its haze
+/// factor, M1 7d).
+pub const ATTRIBUTE_WALL_SURFACE: MeshVertexAttribute = MeshVertexAttribute::new("Wall_Surface", 0x4B51_3806, VertexFormat::Uint32x3);
 
 /// One building's surface corners for the graphics card: every surface's
 /// corners one after another (Bevy model space, w = 1), and per surface
@@ -190,9 +195,25 @@ impl WallCorners {
 
     /// `ATTRIBUTE_WALL_SURFACE` for a mesh of these triangles (each
     /// triangle's `node` is its surface).
-    pub fn attribute(&self, triangles: &[kq8_data::shape::Triangle]) -> Vec<[u32; 2]> {
-        triangles.iter().flat_map(|t| [self.ranges.get(t.node).copied().unwrap_or([0, 0]); 3]).collect()
+    pub fn attribute(&self, triangles: &[kq8_data::shape::Triangle]) -> Vec<[u32; 3]> {
+        triangles
+            .iter()
+            .flat_map(|t| {
+                let [first, count] = self.ranges.get(t.node).copied().unwrap_or([0, 0]);
+                [[first, count, t.node as u32]; 3]
+            })
+            .collect()
     }
+}
+
+/// Each surface's haze factor (rule 16: 0.04 per light that lights it, 1
+/// when unlit) as a buffer for the card (never empty).
+pub fn factor_buffer(factors: &[f32]) -> ShaderBuffer {
+    let mut data = factors.to_vec();
+    if data.is_empty() {
+        data.push(1.0);
+    }
+    ShaderBuffer::new(data, RenderAssetUsages::default())
 }
 
 /// The material's settings, as the shader reads them.
@@ -229,6 +250,9 @@ pub struct BuildingMaterial {
     /// The building's `WallCorners` list.
     #[storage(5, read_only)]
     pub corners: Handle<ShaderBuffer>,
+    /// Each surface's haze factor (`factor_buffer`), per building copy.
+    #[storage(6, read_only)]
+    pub factors: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -287,11 +311,12 @@ fn mode_code(mode: LightMode) -> u32 {
 }
 
 /// A wall material: its texture or colour (magenta if missing), the
-/// building's light image and its corner list.
+/// building's light image, its corner list and its surfaces' haze factors.
 pub fn building_material(
     look: Look,
     light_image: Handle<Image>,
     corners: Handle<ShaderBuffer>,
+    factors: Handle<ShaderBuffer>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
 ) -> BuildingMaterial {
@@ -316,6 +341,7 @@ pub fn building_material(
         texture,
         light: light_image,
         corners,
+        factors,
         alpha_mode: AlphaMode::Opaque,
     }
 }

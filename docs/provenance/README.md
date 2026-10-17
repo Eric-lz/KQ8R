@@ -1004,3 +1004,64 @@ Replaces the M1 4c stand-in (vertex colours blended per triangle).
 | d = √(dx² + dy² + h²); falloff 1 to Begin, 1 − (d − Begin) ÷ End, ≥ 0 (End a fade length); channel ÷ 15 + colour × falloff, capped at 1, stored ⌊× 15.9⌋; brightness bits kept | Rule 26; **our reading** that the brightness bits stay (the note names only the colour channels) | Unit test `point_lights_paint_the_ground` |
 | At most 256 patches and 65,536 points a frame | Rule 26 | Unit test (points) |
 | Only touched texels of the picture are rewritten | Our method (7e-0's picture) | — |
+
+## Point lights on building surfaces (M1 step 7d) — `crates/kq8-data/src/{dil,wall_light}.rs`, `crates/kq8-cli/src/lighting_verify.rs` (`rect_check`), `crates/kq8-viewer/src/{wall_lights,building_light,building_light.wesl,terrain_view,load,main}.rs`
+
+All from `object-lighting.md` rule 16 (rewritten 2026-10-16, Q78) unless marked.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Table D bytes 12–47: P0, U, V (floats, building space); none in 12-byte records | Rule 16, `.dil` layout | Unit test `layout_and_texels`; `lighting-verify`: U and V equal rule 13's 16 × (width − 1) texels |
+| Every `.dig` surface counts (walls, floors, ceilings, roofs) | Rule 16 | Log: Connor's hut, floor and wall surfaces lit by `fireset.01` |
+| Lights: `KQPointLight`s and point lights carried by models in the lights group, not `turnOffDynLighting=1`; only with dynamic lighting on | Rules 16, 26b, 37 | Log: "(dynamic lighting off: none)", 0 lit with `Options.cs` 0 / `--dynamic off` |
+| Every frame: last frame's surfaces back to their `.dil` texels, then lights added one after another on the rounded result | Rule 16 | Log: "63 surface(s) lit, 62 put back" (the fire animates) |
+| Lights turned into the building's own axes (the collider's placement) | Rule 16 | — |
+| Facing = plane normal if byte-0 bit 0x80, else reversed | Rule 16, `buildings.md` (corrected) | Unit test; `lighting-verify`: agrees with the corner order on 164,835 of 164,838 surfaces; viewer log: all of Daventry's |
+| In front: facing · unit(P0 − light) < −0.1 | Rule 16 | Unit test `in_front_is_measured_to_p0` |
+| Light exactly on P0: not in front | **Our choice** (direction undefined) | Unit test |
+| Reach: nearest of the 4 corners and centre < Begin + End | Rule 16 | Unit test `reach_uses_the_four_corners_and_the_centre` |
+| Line test from the light to 64 units from that spot towards the light, against this building's BSP only (`BuildingCollider::line_hit`) | Rule 16 | Log: `fireset.01` 20 surfaces blocked, 24 lit |
+| Falloff 1 to Begin, then 1 − (d − Begin) ÷ End; channel ÷ 15 + colour × falloff, capped, ⌊× 15.9⌋; brightness bits kept | Rules 16, 26 (the ground's `fade_falloff`, `add_light`) | Unit test `painting_adds_and_rounds_like_the_ground` |
+| Texel positions: true spacing U ÷ (width − 1), V ÷ (height − 1); one column / row at P0 | Rule 16 "Do not reproduce" (not the original's U ÷ width) | Unit test `texels_sit_at_the_true_spacing` |
+| Texels start ¼ step **before** P0 (P0 lies 4 texture texels past rule 13's texel (0, 0)) | **Measured** (`lighting-verify`: 164,685 of 164,838 surfaces within 1 unit); the note says to use rule 13's positions. Asked as **Q79** | Unit test |
+| Haze × 0.04 per light that passes all tests, after rule 29's cap (past 1 → 0.99), before the "0.99 or more: not drawn" test | Rules 16, 29 | Not checked by eye |
+| All surfaces of a drawn building copy are tested, not only those in view | **Our simplification** (a surface out of view can't be seen) | — |
+| Quick skip: light ≥ Begin + End + 256 from the `.dig` box | **Our method** (only saves time) | Log "skipped" |
+| Each building copy has its own light picture and haze factors | **Our method** | Log: 26 Daventry copies, 35 Dead City |
+| `--dynamic on|off` overrides `Options.cs` | **Viewer helper** (the game's files are never written) | Log: "ground light: … (--dynamic on)" |
+
+## `KQPointLight` always shines (M1 step 7g) — `crates/kq8-viewer/src/{scene_lights,terrain_view}.rs`
+
+Replaces the M1 7c stand-in (the light's position, radius 100, default masks).
+
+| What | Source | Check |
+| --- | --- | --- |
+| A `KQPointLight` is not in the near / far / off test; it stays in the lights group from when it is added until it is removed, and shines every frame however far Connor is | `object-lighting.md` rule 37 (corrected 2026-10-16, Q77 b) | Dead City from the start: "scene lights: 8 (7 KQPointLight, …)" (before: 1) |
+| A deleted `KQPointLight` gives no light | Rule 37 ("until it is removed"); `deleteObject` as for other objects | — (no script deletes one in the data we ran) |
+
+## A building's draw-distance ball (M1 step 7h) — `crates/kq8-viewer/src/{draw_distance,terrain_view}.rs`
+
+The code was already this way (a building `Model`'s box is the `.dig` header box); relabelled from "Q76 stand-in".
+
+| What | Source | Check |
+| --- | --- | --- |
+| Buildings never use `BOUNDS.KQ`; radius = half the `.dig` header box's diagonal | `object-lighting.md` rule 40 (traced, Q76) | Log: Daventry `csbridge` 4,398, `Church` (`nchurch.dig`) 18,990 (note: 4,400, 19,000) |
+| Centre = the box middle turned with the building | Rule 40 "Do not reproduce" recommendation; **the original uses the building's position** | Log: `csbridge`'s box middle 13,992 from its position (note: 14,000) |
+
+## Reach to a clicked building (M1 step 7i) — `crates/kq8-core/src/active.rs` (`ActiveBuilding::bounds`, `placement`, `click_building`), `crates/kq8-viewer/src/load.rs`
+
+Replaces the M3 3g-2 stand-in (distance to the axis-aligned world box around the turned building box).
+
+| What | Source | Check |
+| --- | --- | --- |
+| Reach to a picked building: Connor's feet turned into the building's own axes, distance to the nearest point of its `.dig` header box (0 inside), against 2 × `attackDist`; not where the click line met the wall | `clicking.md` rule 9 (traced, Q75) | Unit test `reach_to_a_building_is_in_its_own_axes` (a point inside the old world box is 424 outside the turned box); viewer: Pub 22.6, in reach, "that doesn't work" with a crystal |
+
+## F9: dynamic lighting on / off (M1 step 7j) — `crates/kq8-viewer/src/{light_view,load,main}.rs`
+
+A viewer helper (the user's request), standing in for the original's video option.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Dynamic lighting on = the ground shows the shadow map, off = the light map | `terrain-lighting.md` rule 2 | Log: both maps load (Daventry `davelght.bin` / `daveshdw.bin`, Dead City `dedlight.bin` / `dedshado.bin`, all 513 × 513) |
+| Point lights paint the ground and building surfaces only while on; models keep theirs | `object-lighting.md` rules 16, 24, 26 | Unit test `f9_swaps_the_maps_and_forgets_the_patches`; walls follow the same switch (`light_walls`) |
+| Switching while running: the whole picture rewritten, last frame's patches forgotten, ground lookup updated | **Our method** | Not tested by a test option (key press) |

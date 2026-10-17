@@ -24,6 +24,7 @@ pub mod pers;
 pub mod shape;
 pub mod terrain;
 pub mod vol;
+pub mod wall_light;
 pub mod world_script;
 
 pub use bitmap::{Bitmap, BitmapFormat};

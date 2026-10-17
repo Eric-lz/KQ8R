@@ -9,9 +9,10 @@
 // Haze per wall surface (M1 step 6f, rule 29): one value for the whole
 // surface, from the distance of its nearest corner to the camera, with
 // the objects' numbers (rule 19): 0.01 nearer than the start, (d - start)
-// / (end - start) after. At 0.99 or more the surface is left out, unless
-// the building has b_hazeSolid (then it is drawn at 0.99). Blended on
-// screen colours (rule 23).
+// / (end - start) after. Then times the surface's factor (M1 7d, rule 16:
+// 0.04 per point light that lights it). At 0.99 or more the surface is left
+// out, unless the building has b_hazeSolid (then it is drawn at 0.99).
+// Blended on screen colours (rule 23).
 
 import bevy_pbr::render::{
     mesh_functions,
@@ -45,6 +46,8 @@ struct Settings {
 @group(constants::MATERIAL_BIND_GROUP) @binding(4) var light_sampler: sampler;
 // Every surface's corners, Bevy model space (`WallCorners`).
 @group(constants::MATERIAL_BIND_GROUP) @binding(5) var<storage, read> corners: array<vec4<f32>>;
+// Each surface's haze factor (rule 16), by surface index.
+@group(constants::MATERIAL_BIND_GROUP) @binding(6) var<storage, read> factors: array<f32>;
 
 // The mesh data the wall shader reads (`BuildingMaterial::specialize`).
 struct WallIn {
@@ -52,8 +55,9 @@ struct WallIn {
     @location(0) position: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) uv_b: vec2<f32>,
-    // This corner's surface: its first corner and corner count in `corners`.
-    @location(8) surface: vec2<u32>,
+    // This corner's surface: its first corner and corner count in
+    // `corners`, and its index (for `factors`).
+    @location(8) surface: vec3<u32>,
 };
 
 struct WallVertex {
@@ -79,6 +83,12 @@ fn vertex(vertex_in: WallIn) -> WallVertex {
     if distance >= settings.haze_start {
         haze = (distance - settings.haze_start) / max(settings.haze_end - settings.haze_start, 0.001);
     }
+    // Rule 29: past 1 the haze is 0.99. Rule 16: then x 0.04 per point
+    // light, before the 0.99 test.
+    if haze > 1.0 {
+        haze = 0.99;
+    }
+    haze = haze * factors[vertex_in.surface.z];
     if haze >= 0.99 {
         // Left out, unless b_hazeSolid: then drawn at 0.99.
         haze = select(2.0, 0.99, settings.haze_solid == 1u);

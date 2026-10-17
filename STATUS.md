@@ -1,67 +1,51 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-16 at the
-end of B's session that built A's answers to Q54, Q60–Q64 and Q70–Q74
-(M3 step 3g, M1 steps 7a–7c, 7f). Read with `AGENTS.md`,
-`docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the
-top). The short public summary is `README.md`; the detailed "what works"
-list is `docs/FEATURES.md`.
+end of B's session that built A's answers to Q75–Q78 (M1 steps 7d, 7g,
+7h, 7i). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+`MODLOG.md` (newest entries at the top). The short public summary is
+`README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-16)
 
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
   alive) is well under way** (doors, emitters, flowing water, animated
-  objects, traps, items, chests, scripted objects; checked by eye).
-- **Lighting, haze and draw distance** (M1 4–6h) are built as the
-  original does them and were checked by eye by the user (2026-10-16).
-- **New this session (B, 2026-10-16), from A's answers; in the logs and
-  unit tests, and checked by eye by the user (2026-10-16: "looks good",
-  the portal lights Connor):**
-  - **Clicking (M3 3g, `clicking.md`):** the click line hits buildings
-    (walls, floors, ceilings take and silently swallow the click; the
-    church, cave and wizard's house don't, `colliderType=136`) and no
-    longer the ground; accept lists (`a,b,c`, `INVITEM_All`, `none`,
-    `KQObject::setAccepts`); `EndLoop` arrives one update later through
-    the event queue, doors get it too, `getEndLoop` relays; `deleteObject`
-    works on every object; new items are named `NoName<n>`; the pickup
-    sound is logged on every add to Connor's inventory; a false text
-    `test ==` leaves −1 (Q54).
-  - **Draw distance (M1 7a, 7b):** balls from `BOUNDS.KQ` (not the
-    model); items not drawn when far; the collider switch (far, off and
-    hidden objects are not solid, not clickable, the camera passes);
-    `setActiveCamera` / `makeActive`. **Behaviour change:** hidden
-    objects no longer block Connor (they did before, by our older
-    reading).
-  - **Point lights on models (M1 7c):** Dead City's seven `KQPointLight`s
-    now load, and the lights models carry (`.kqs` light nodes: the portal,
-    torches, coals; Daventry's lamps, candles, chandeliers, fireplaces)
-    light nearby models, Connor included, per model part on the graphics
-    card (`scene_lights.rs`, `object_light.wesl`). By Dead City's arrival
-    portal the log shows the circling green light reaching Connor and
-    changing colour every second.
-  - **Q73 leftovers (M1 7f):** checked; only the ground's light map is
-    not bilinear yet.
-- **A answered Q75–Q78 (2026-10-16, study session), ready for B:**
-  - **Point lights on building surfaces (Q78, `object-lighting.md` rule
-    16):** every drawn surface of a building (walls, floors, ceilings) is
-    rebuilt from its `.dil` map every frame and then gets each point light
-    that is in front of it (measured to the map's first corner), within
-    Begin + End of its nearest corner or centre, and not hidden by that
-    building's own BSP; stored back in 4 bits as on the ground. Lights
-    carried by models (Daventry's fireplaces) count like `KQPointLight`s.
-    A lit surface's haze × 0.04 comes before the "too hazy, not drawn"
-    test. `buildings.md`'s bit 0x80 line was backwards (corrected; B's
-    drawing uses corner order and is unaffected).
-  - **Q77:** bit 0x1 = point light, 0x4 unused; **a `KQPointLight` is
-    never in the near / far / off test and always shines** (B's stand-in
-    should go); 442 shapes with lights is right.
-  - **Q76:** a building's ball = half its `.dig` box diagonal, centred on
-    the building's position (not `BOUNDS.KQ`, not the box middle).
-  - **Q75:** reach to a building = Connor to its `.dig` box (B's stand-in
-    is right).
-- **Later for A:** Dead City's flames (11,000 vs 12,100, open question
-  9); Q53 (camera follow-ups); pushable objects (`KQBoulder`); Connor
-  against monsters; Q27.
+  objects, traps, items, chests, scripted objects, clicking; checked by
+  eye).
+- **Lighting, haze and draw distance** (M1 4–7) are built as the original
+  does them. Checked by eye by the user: everything up to 7e (point
+  lights on models and on the ground).
+- **New this session (B, 2026-10-16), checked by eye by the user
+  ("looks great"):**
+  - **Point lights on building surfaces (M1 7d, `object-lighting.md`
+    rule 16):** walls, floors and ceilings get the lights of the frame
+    (Dead City's `KQPointLight`s and every light a model carries, e.g.
+    Daventry's fireplaces, lamps, chandeliers), rebuilt from the `.dil`
+    every frame, tested "in front", in reach and against the building's
+    own BSP, and a lit surface's haze × 0.04. Daventry, Connor's hut:
+    the fireplace lights 24 surfaces (20 more blocked by the hut's own
+    walls). New viewer option `--dynamic on|off` (stands in for
+    `Options.cs`; your `MASK/Options.cs` has `useDynamicLighting 0`
+    now, so the viewer starts with dynamic lighting off unless you pass
+    `--dynamic on`). **F9** switches dynamic lighting while the viewer
+    runs (7j, the user's request; also swaps the ground's shadow and
+    light maps; checked by eye by the user 2026-10-17).
+  - **`KQPointLight` always shines (7g, Q77 b):** all 7 of Dead City's
+    from the start.
+  - **Building draw-distance ball (7h, Q76):** our ball already was the
+    recommended one (half the `.dig` box diagonal, box middle turned with
+    the building); relabelled and logged.
+  - **Reach to a clicked building (7i, Q75):** measured to the `.dig` box
+    in the building's own axes (our stand-in used a box around the turned
+    box, slightly too generous for turned buildings).
+- **Found this session:** the `.dil` P0 sits 4 texture texels past where
+  rule 13 lays the first light texel (Q79, open; we paint at rule 13's
+  positions). **No building stands near Dead City's arrival portal**
+  (nearest 29,000 away), so the "light over the walls" there must come
+  from models, which are lit since 7c.
+- **Later for A:** Q79; Dead City's flames (11,000 vs 12,100, open
+  question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
+  Connor against monsters; Q27.
 
 ## Goal
 
@@ -95,7 +79,7 @@ milestone: **M3, Daventry comes alive**.
 
 ## Code layout
 
-- `crates/kq8-data` (89 unit tests): file formats. VOL archives, bitmaps,
+- `crates/kq8-data` (95 unit tests): file formats. VOL archives, bitmaps,
   palettes, materials, `.kqs` shapes, terrain (surface and floor grids),
   `.dig` buildings, `.kq` text, world scripts (start-up, incl. item
   lines), `.sae` key maps, object placement rules, the `BOUNDS.KQ` box
@@ -105,8 +89,9 @@ milestone: **M3, Daventry comes alive**.
   particle catcher / ground animator settings, the item type list
   (`Invinfo.itl`), the haze rules (`haze.rs`: objects, ground, palette
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
-  lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`).
-- `crates/kq8-core` (188 unit tests; named `kq8-game` until 2026-10-13):
+  lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
+  lights on building surfaces (`wall_light.rs`).
+- `crates/kq8-core` (189 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump),
   `connor.rs` (keys → movement, turning, banking, steps from the
@@ -131,7 +116,8 @@ milestone: **M3, Daventry comes alive**.
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--renderer auto|vulkan|dx12` the
   graphics API (`renderer.rs`); `--light x1|x2|off` the
-  light at start; `--haze on|off` the haze at start. The full option list with descriptions is in
+  light at start; `--haze on|off` the haze at start; `--dynamic on|off`
+  overrides `Options.cs`'s `useDynamicLighting`. The full option list with descriptions is in
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
   `--hold F,T,R[,N]`, `--jump N`, `--turn N[,1|-1]`, `--click NAME,N`
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
@@ -139,7 +125,7 @@ milestone: **M3, Daventry comes alive**.
   ground's material `ground_haze.rs`, walls `building_light.rs`, models
   `object_light.rs` (each with its `.wesl` shader), near / far / off and
   the collider switch `draw_distance.rs`, point lights on models
-  `scene_lights.rs`.
+  `scene_lights.rs`, on building surfaces `wall_lights.rs`.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
   events), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
@@ -148,12 +134,11 @@ milestone: **M3, Daventry comes alive**.
   second how many objects and wall surfaces the haze leaves out and how
   many objects are near / far / off (plus every change of state), every
   collider switch, and the scene's lights (how many, what the nearest
-  gives Connor).
+  gives Connor), and per point light what it does to building surfaces
+  (tested, skipped, not in front, out of reach, blocked, lit).
 
 ## What works (tested)
 
-- M0: VOL archives, images and palettes (palette entry 0 drawn black, as
-  measured in the original).
 - M1 (checked by eye in Daventry): ground with textures; 30 buildings; the
   objects the world scripts load; see-through objects. All 12 worlds load.
   Lighting of the ground, models and buildings, and the haze/fog (see
@@ -211,31 +196,17 @@ milestone: **M3, Daventry comes alive**.
     clicking a swimming fish makes it disappear (sound and health only
     logged); other scripted things (signs, stone villagers) run their
     scripts, their remarks logged.
-- New 2026-10-16, checked in the logs and unit tests only (see "Where we
-  are"): accept lists, `EndLoop` through the queue, `getEndLoop`,
-  `deleteObject` for everything, `NoName<n>`, `BOUNDS.KQ` balls, items'
-  far mask, the collider switch, `setActiveCamera` / `makeActive`, point
-  lights and carried lights on models.
-- Tests: 285 unit tests pass (89 + 188 + 8), 2026-10-16.
+- Checked by eye by the user (2026-10-16): point lights on building
+  surfaces, `KQPointLight` always shining, reach to a building in its
+  own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
+- Tests: 295 unit tests pass (95 + 189 + 11), 2026-10-16.
 
 ## What doesn't work yet / next
 
-- **Done after the check (2026-10-16):** M1 7e-0, the ground's light map
-  is one bilinear picture on the card (checked by eye by the user).
-- **Also done (2026-10-16): M1 7e**, point lights paint the ground
-  (Dead City: PLIGHT01's patch, the portal's moving one, the torches;
-  checked by eye by the user: like the original).
-- **Next step (B):** 7d (walls and floors, rule 16; Q78 answered
-  2026-10-16), plus the small follow-ups: `KQPointLight` out of the
-  near / far / off test (Q77 b), buildings' draw-distance ball (Q76).
-  Planned in `docs/DESIGN.md` M1 step 7.
-- **Checked by the user (2026-10-16), all good:** `cargo run -p kq8-viewer
-  --release -- --world DeadCity --at 182213,42600,3.1416`: Connor stands
-  by the arrival portal; his side facing the portal should get a green
-  light that circles and changes colour, as in the original (walls and
-  ground don't get it yet). `--world Daventry`: click a house wall in
-  reach (nothing happens, nothing in the way), and a door or item behind
-  the church or wizard's house wall (the click goes through those two).
+- **Next step (B), suggested:** Q79 once A answers (possibly a quarter
+  texel shift of all wall light maps); otherwise M1 is done and the next
+  milestone work is M3/M4 (Connor's scripted movements, remarks,
+  inventory screen). The brightness setting (rule 17) is still not built.
 - Clicking: only doors, chests, items, scripted objects and buildings
   react. No sound, no remarks (Connor says nothing; remarks are logged),
   Connor doesn't turn to face what he clicks. No inventory screen (M4).
@@ -260,8 +231,9 @@ milestone: **M3, Daventry comes alive**.
   solid.
 - Loops (`walk`, `run`) still spread their step evenly over the loop
   (Q24); one-shot animations use their frame steps.
-- Lighting still lacks: point lights on walls and the ground (7d, 7e),
-  the ground's light map bilinear (7e-0), the brightness setting.
+- Lighting still lacks: the brightness setting (rule 17). Point lights
+  on building surfaces light every surface of a drawn building, not only
+  those in view (same picture, more work).
 - Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
@@ -275,6 +247,8 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
+- Q79: the `.dil` P0 sits a quarter light texel past rule 13's first
+  texel; which one is the drawn position? (We paint at rule 13's.)
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
   is 3D; updating only while Connor moves). Stand-ins in place.
@@ -296,9 +270,8 @@ milestone: **M3, Daventry comes alive**.
   difference).
 - Q14b: the teleport pad's see-through look.
 - Q4: missing texture names.
-- All others are answered or closed (Q75–Q78 answered by A 2026-10-16,
-  not built yet; Q54, Q60–Q64, Q70, Q71, Q74 built
-  2026-10-16; Q72 built for models, walls and ground next; Q73 checked;
+- All others are answered or closed (Q75–Q78 answered by A and built
+  2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the
   lighting session 2026-10-14/15; Q55 answered in
   `connor-collision.md`, not built yet; Q56 answered by A's trace and

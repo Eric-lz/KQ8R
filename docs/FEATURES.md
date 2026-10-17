@@ -59,7 +59,18 @@ some models carry (the arrival portal's circling green light, torches,
 coals; in Daventry lamps, candles, chandeliers, fireplaces) light
 nearby objects and Connor, as in the original. Since 2026-10-16 they also
 paint soft patches of light on the ground (Dead City's arrival portal
-and torches; checked by eye by the user: like the original). Walls don't get them yet.
+and torches; checked by eye by the user: like the original).
+Point lights on building surfaces (2026-10-16, answer to Q78; checked in
+the logs and by eye by the user: "looks great"): walls, floors and
+ceilings near a light get brighter, rebuilt every frame (a moving light
+leaves no trail), only on the side facing the light, not through the
+building's own walls; a lit surface stays visible further into the fog.
+Daventry, Connor's hut: the fireplace lights 24 surfaces. Only with
+dynamic lighting on (`Options.cs`, `--dynamic on`, or **F9** while the
+viewer runs, which also swaps the ground's shadow and light maps as the
+original's option does; checked by eye by the user 2026-10-17). Dead City's point
+lights now shine whatever Connor's distance (Q77). Clicking a building
+measures reach to its box in the building's own axes (Q75).
 
 ## Connor
 
@@ -204,6 +215,12 @@ objects don't stop it, as in the original. Checked in the logs
   screen. x1 is the default because it matches the original by eye
   (user, 2026-10-14, ground).
 - **F8:** haze (distance fog) on or off; shown on screen.
+- **F9:** dynamic lighting on or off, like the original's video option:
+  point lights on the ground, walls and floors come and go, and the
+  ground swaps between its shadow map and light map; shown on screen.
+  Models keep their point lights either way. Checked by eye by the user
+  (2026-10-17): the moving lights go, the baked ones stay, and all come
+  back.
 - **Graphics API** (`--renderer`): draw with Vulkan or DirectX 12 instead
   of letting the graphics library choose; `viewer.log` says which one
   ran. Checked by the user 2026-10-16 on Windows with one NVIDIA card;
@@ -228,6 +245,9 @@ repeated and checked in the logs. They do not change the game's rules.
   start (default `x1`). F7 changes it while the window is open.
 - `--haze on|off`: haze at the start (default `on`). F8 changes it while
   the window is open.
+- `--dynamic on|off`: dynamic lighting (point lights painting the
+  ground and building surfaces), instead of what `Options.cs` says. The
+  game's own files are not changed.
 - `--renderer auto|vulkan|dx12`: which graphics API draws the picture
   (default `auto`: the graphics library chooses, Vulkan on our test PC,
   and the `WGPU_BACKEND` environment variable still works). `vulkan` and
@@ -271,8 +291,7 @@ message that shows the usage.
 
 - **Not playable:** there is no story, talking, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, point lights on walls (they light
-  models and the ground so far), fire and ice arrow sparks and
+- **Not drawn:** people and monsters, fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **No sound or music** at all.
 - **Clicking:** doors, chests, items, scripted objects and buildings

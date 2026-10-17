@@ -310,6 +310,9 @@ pub fn setup_objects(
     let mut smooth: Vec<Vec<Vec3>> = Vec::new();
     // Each building's surface corners (model space), for the haze log (6f).
     let mut wall_surfaces: Vec<Vec<Vec<[f32; 3]>>> = Vec::new();
+    // Buildings' light pictures and point-light data (M1 7d, rule 16).
+    type WallInfo = (std::sync::Arc<crate::building_light::LightAtlas>, std::sync::Arc<crate::wall_lights::WallData>);
+    let mut wall_info: Vec<Option<WallInfo>> = Vec::new();
     // Each model's lights in its shown frame (M1 7c, rule 26b).
     let mut shape_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> = Vec::new();
     for (_, model) in objects.shapes {
@@ -324,9 +327,11 @@ pub fn setup_objects(
                 let light_image = images.add(atlas.image());
                 let corners = crate::building_light::WallCorners::new(&model.surfaces);
                 let corner_buffer = buffers.add(corners.buffer());
+                let factors = buffers.add(crate::building_light::factor_buffer(&vec![1.0; model.surfaces.len()]));
                 for group in model.groups {
                     let mesh = crate::building_mesh(&group, &corners);
-                    let material = crate::building_light::building_material(group.look, light_image.clone(), corner_buffer.clone(), &light, &mut images);
+                    let material =
+                        crate::building_light::building_material(group.look, light_image.clone(), corner_buffer.clone(), factors.clone(), &light, &mut images);
                     walls.push((meshes.add(mesh), building_materials.add(material)));
                 }
             }
@@ -339,6 +344,7 @@ pub fn setup_objects(
                 }
             }
         }
+        wall_info.push(model.light_atlas.map(std::sync::Arc::new).zip(model.wall_light));
         built.push(parts);
         built_walls.push(walls);
         wall_surfaces.push(model.surfaces);
@@ -349,7 +355,11 @@ pub fn setup_objects(
     let emitters = std::mem::take(&mut objects.emitters);
     let catchers = std::mem::take(&mut objects.catchers);
     crate::effects_view::spawn_emitters(&mut commands, emitters, catchers, &buildings, &targets, &built, &mut object_materials, &mut log);
+    // Which collider is which building copy (M1 7d: the line test uses its
+    // own BSP).
+    let collider_keys: Vec<(String, [f32; 3])> = buildings.iter().map(|b| (b.name.clone(), b.placement.position)).collect();
     commands.insert_resource(Buildings(buildings));
+    let mut wall_lit = (0, Vec::new());
     // Animated objects whose movement plays (3c): drawn by anim_view.
     let animated: std::collections::BTreeSet<usize> = objects.animated.iter().map(|a| a.placed).collect();
     crate::anim_view::spawn_animated(
@@ -403,8 +413,41 @@ pub fn setup_objects(
                 e.insert(c);
             }
         }
+        // A building's draw-distance ball (rule 40, M1 7h).
+        if let (false, Some(t)) = (built_walls[*i].is_empty(), &test) {
+            log.detail(format!(
+                "draw distance: building [{}] ball radius {:.0} (half the .dig box diagonal), centre = box middle {:.0} from its position, turned with it (the original: at its position)",
+                p.name,
+                t.radius,
+                t.centre.length() * UNITS_PER_METRE
+            ));
+        }
+        // Point lights (M1 7d): this copy's own light picture and haze
+        // factors, so copies of one building are lit separately.
+        let own = (!built_walls[*i].is_empty()).then(|| wall_info[*i].clone()).flatten().map(|(atlas, data)| {
+            let image = images.add(atlas.image());
+            let factors = buffers.add(crate::building_light::factor_buffer(&vec![1.0; data.light.surfaces.len()]));
+            (atlas, data, image, factors)
+        });
+        let mut wall_lights = own.as_ref().map(|(atlas, data, image, factors)| {
+            let collider = collider_keys.iter().position(|(n, at)| *n == p.name && *at == p.position);
+            if collider.is_some() {
+                wall_lit.0 += 1;
+            } else if !*unused {
+                wall_lit.1.push(p.name.clone());
+            }
+            crate::wall_lights::WallLights::new(p.name.clone(), data.clone(), atlas.clone(), image.clone(), factors.clone(), collider)
+        });
         for (mesh, material) in &built_walls[*i] {
-            let material = crate::building_light::for_building(&mut building_materials, material, opacity, p.haze_solid);
+            let material = match (&own, building_materials.get(material).cloned()) {
+                (Some((_, _, image, factors)), Some(mut m)) => {
+                    m.light = image.clone();
+                    m.factors = factors.clone();
+                    building_materials.add(m)
+                }
+                _ => material.clone(),
+            };
+            let material = crate::building_light::for_building(&mut building_materials, &material, opacity, p.haze_solid);
             let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));
@@ -412,8 +455,15 @@ pub fn setup_objects(
             if let Some(t) = &test {
                 e.insert(t.clone());
             }
+            if let Some(w) = wall_lights.take() {
+                e.insert(w);
+            }
         }
     }
+    log.summary(format!(
+        "wall point lights (M1 7d): {} building copies can be lit; without a collider (no lights): {:?}",
+        wall_lit.0, wall_lit.1
+    ));
     // The placed objects and the buildings' wall surfaces (world space,
     // game units) for the haze log (M1 steps 6, 6f).
     let drawn = || objects.placed.iter().filter(|(p, _, unused)| !*unused && p.drawn());
@@ -445,15 +495,13 @@ pub fn setup_objects(
             }
         }
     }
-    // KQPointLight objects (M1 7c, rules 24, 25): an entity at the light
-    // with its own near / far / off test (STAND-IN for its place, Q77 b:
-    // the light's position, radius 100, default masks).
-    for (name, light) in std::mem::take(&mut objects.point_lights) {
-        let mut p = kq8_data::objects::Placement::from_section(&kq8_data::kq_text::parse(b"[light]\n")[0]);
-        p.name = name;
-        p.position = light.position;
-        let test = crate::draw_distance::DistanceTest::new(&p, None, "KQPointLight (Q77 b stand-in)");
-        commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), test, crate::scene_lights::PointLightSource { light }));
+    // KQPointLight objects (M1 7c, rules 24, 25): an entity at the light.
+    // Not in the near / far / off test: it is always in the lights group
+    // and shines everywhere (rule 37, Q77 b; M1 7g).
+    let point_lights = std::mem::take(&mut objects.point_lights);
+    log.summary(format!("KQPointLight: {} loaded, always shining (not in the near / far / off test, rule 37)", point_lights.len()));
+    for (name, light) in point_lights {
+        commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), crate::scene_lights::PointLightSource { name, light }));
     }
     // Invisible objects: a 1 m cube each, hidden until H is pressed.
     // Green = no model in the game; orange = a character we cannot draw yet.

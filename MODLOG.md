@@ -3,6 +3,69 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 User's check of F9 (M1 7j)
+
+**Changed:** `STATUS.md`, `docs/FEATURES.md`: F9 marked as checked by eye. No code.
+**Why:** The user tried the key.
+**Tested how:** By eye, by the user.
+**Result:** "The animated lights go away when pressing F9, leaving only the baked lights. Everything comes back when pressing F9 again."
+**Still broken / not tested:** Q79 open.
+**Next:** Q79 once A answers; then M3/M4 work.
+
+## 2026-10-16 M1 step 7j: F9 switches dynamic lighting
+
+**Changed:** `kq8-viewer`: `load.rs` loads both ground maps (the one shown and the other of the pair, `Ground::other_light`); `light_view.rs` `GroundLight::toggle_dynamic` and the F9 system `toggle_dynamic` (swaps the maps, rewrites the ground picture and its lookup, forgets last frame's patches, flips the switch the ground's and walls' point lights read), the label shows "dynamic lighting on/off (F9)", one unit test; `main.rs` runs it in the lighting chain before the ground and walls are painted. Plan in `docs/DESIGN.md`; provenance.
+**Why:** The user asked for a hotkey. In the original the setting also picks the ground map (`terrain-lighting.md` rule 2), so F9 switches that too.
+**Tested how:** `cargo test -p kq8-viewer` (11), clippy clean. Viewer `--world Daventry --frames 150|200` (three runs), `--world DeadCity --frames 150`; `viewer.log`.
+**Result:** Both maps load: Daventry "Light map davelght.bin (Options.cs useDynamicLighting 0)" and "Shadow map daveshdw.bin (kept for F9)", Dead City `dedlight.bin` / `dedshado.bin`, all 513 × 513. Frame times 7.31, 11.83 and 15.28 ms in Daventry: the same noise as in 7g (one run matches the earlier 7.3–7.4 ms).
+**Still broken / not tested:** **The key press itself is not tested** (no test option presses keys); checked only through the unit test of the swap.
+**Next:** You: press F9 in Dead City by the portal and in Connor's hut.
+
+## 2026-10-16 User's check of M1 7d–7i
+
+**Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`: marked as checked by eye. No code.
+**Why:** The user compared the viewer's results.
+**Tested how:** By eye, by the user.
+**Result:** "looks great".
+**Still broken / not tested:** Q79 open.
+**Next:** F9 (7j), the user's request.
+
+## 2026-10-16 M1 step 7i: reach to a clicked building in its own axes
+
+**Changed:** `kq8-core/src/active.rs`: `ActiveBuilding` carries its `.dig` box and placement instead of its world box; `click_building` measures with `distance_to_box` (the objects' function) and logs "distance to its .dig box (its own axes)"; one new unit test. `kq8-viewer/src/load.rs` fills the two fields from the collider. Provenance.
+**Why:** Q75 answered by A (`clicking.md` rule 9): the distance from Connor to the `.dig` header box in the building's own axes. The task said our stand-in already matched; it was close but not the same: it measured to the axis-aligned box around the **turned** box, which is larger for a turned building, so Connor could be "in reach" up to a few hundred units too early.
+**Tested how:** `cargo test --workspace` (189 + 95 + 10), clippy clean. Viewer `--world Daventry --at 202336,262000,1.5708 --aim smlchst3,20 --item INVITEM_Crystal --frames 400`; `doors.log`.
+**Result:** Unit test: Connor at (650, 50) by a 1,000-unit box turned 45°: 424.3 outside it (the old world box said 0). Viewer: "click building Pub: … distance to its .dig box (its own axes) 22.6, reach 4700: IN REACH; holds INVITEM_Crystal …: Connor's "that doesn't work" remark".
+**Still broken / not tested:** The out-of-reach case was run only in unit tests, not in the viewer. Not compared with the original.
+**Next:** Session end: STATUS, FEATURES, README.
+
+## 2026-10-16 M1 step 7h: a building's draw-distance ball (relabel and log)
+
+**Changed:** `kq8-viewer/src/draw_distance.rs`: comments and the ball's source label ("building .dig box (rule 40)" instead of "Q76 stand-in"); `terrain_view.rs`: one log line per building with its radius and how far its centre is from its position. No behaviour change. Provenance.
+**Why:** Q76 answered by A (`object-lighting.md` rule 40): radius = half the `.dig` header box's diagonal; the note recommends the box middle turned with the building as centre (the original uses the position). Our "stand-in" already used the `.dig` header box (a building's `Model` box), so it is the recommended ball.
+**Tested how:** `cargo build`; viewer `--world Daventry --frames 100`; `viewer.log`.
+**Result:** 26 buildings "building .dig box (rule 40)"; radii from 2,666 (`cav2`) to 18,990 (`Church`); `csbridge` radius 4,398, centre 13,992 from its position (note: 4,400 and 14,000).
+**Still broken / not tested:** Not checked by eye (it only shows for a building near the `visibleDistance` edge whose walls the haze hasn't removed).
+**Next:** 7i, reach to a clicked building (Q75).
+
+## 2026-10-16 M1 step 7g: `KQPointLight` always shines
+
+**Changed:** `kq8-viewer/src/terrain_view.rs`: `KQPointLight` entities get no `DistanceTest` any more (log line "KQPointLight: n loaded, always shining"); `scene_lights.rs`: `PointLightSource` carries its name, and `gather_lights` takes every one that isn't deleted. Provenance.
+**Why:** Q77 (b) answered by A (`object-lighting.md` rule 37): a `KQPointLight` is never in the near / far / off test and always shines. Our stand-in switched Dead City's far lights off.
+**Tested how:** `cargo build`; viewer `--world DeadCity --frames 300` (five runs) and `--dynamic on`; `viewer.log`. Frame times compared with the code before 7d (same command, two runs).
+**Result:** "scene lights: 8 (7 KQPointLight, 1 carried by models …)" from the start (before: 2, one `KQPointLight`); the ground log now paints `Facelt03`–`Facelt08` too (25–42 points each). Average frame 6.87–6.94 ms (before 6.87–7.00); two runs at 10.8 and 17.7 ms were not repeatable (something else on the machine).
+**Still broken / not tested:** Not checked by eye. No building is lit by the `Facelt` lights from Dead City's start (no drawn building there).
+**Next:** 7h, the building's draw-distance ball (Q76).
+
+## 2026-10-16 M1 step 7d: point lights on building surfaces
+
+**Changed:** `kq8-data`: `dil.rs` keeps each surface's light-map rectangle (P0, U, V; `LightRect`); new `wall_light.rs` (facing, "in front", reach, line end, texel positions, painting; unit tests). `kq8-viewer`: new `wall_lights.rs` (`WallData`, `WallLights`, `light_walls`, run every frame after the ground); `building_light.rs` / `.wesl`: each wall corner carries its surface index, a per-surface haze factor list at binding 6, haze capped at 0.99 then × factor before the 0.99 test; `terrain_view.rs` gives each building copy its own light picture, factors and materials; `load.rs` keeps the `.dil` per building and reads `--dynamic`; `main.rs` new option `--dynamic on|off`. `kq8-cli` `lighting-verify`: rectangles against rule 13, facing against corner order. Q79 added. Plan in `docs/DESIGN.md`; provenance.
+**Why:** M1 step 7d, A's answer to Q78 (`object-lighting.md` rule 16); the user's check in the original: a Daventry fire lights walls and floor with dynamic lighting on, not with it off.
+**Tested how:** `cargo test --workspace` (188 + 95 + 10), clippy clean, `kq8 lighting-verify` (PASS). Viewer `--world Daventry --frames 200` (your `Options.cs` has `useDynamicLighting 0`), the same with `--dynamic on`, `--world DeadCity --at 182213,42600,3.1416 --dynamic on --frames 400`; `viewer.log`.
+**Result:** Daventry with dynamic lighting on, from the start: "[fireset.01] … Begin 700 End 850: tested 3079, skipped 1277, not in front 1028, out of reach 730, blocked 20, lit 24, largest texel change 3 ({"Cottage": 24})"; `lamp01.13` lights 36, the chandeliers 0–2; "63 surface(s) lit, 62 put back". With dynamic lighting off: "(dynamic lighting off: none) … 0 surface(s) lit". Frame 7.40 ms (no slowdown). Facing by bit 0x80 agrees with the corner order on every Daventry surface (164,835 of 164,838 in all files). **Found:** the stored P0 lies 4 texture texels (¼ light texel, 32 units) past rule 13's first texel on 164,685 of 164,838 surfaces; texels are painted at rule 13's positions; asked as Q79.
+**Still broken / not tested:** Not checked by eye. **Dead City's arrival portal has no building within 29,000** (nearest `DeadHall`), so this step can't light anything there: the things around the portal are models (`spike31`–`spike36`, the portal), lit per corner since 7c. The haze × 0.04 is not seen in any log (only in the shader). Q79 open.
+**Next:** You: `cargo run --release -p kq8-viewer -- --world Daventry --dynamic on`, walk into Connor's hut: the floor and wall near the fire should be a little brighter (warm) than with `--dynamic off`. Then 7g.
+
 ## 2026-10-16 Study (A): Q75–Q78, point lights on building surfaces
 
 **Changed:** Notes only, no code. `docs/behaviour/object-lighting.md` rule 16 rewritten (point lights on every building surface, floors included), rules 26b, 29, 37, 40, numbers, "Do not reproduce", "How to check", answers; `clicking.md` rule 9 (reach to a building); `buildings.md` byte-0 bit 0x80 line corrected (it was backwards); `QUESTIONS.md` Q75–Q78 marked answered; `STATUS.md`. Addresses kept in `re/notes.md`.

@@ -37,7 +37,7 @@ items. The goal is the whole game; see the roadmap in
   light and sun, buildings by their own light maps.
 - **Choice of graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 - **Distance fog**: a dark fog hides everything far away, and far objects switch off as in the original (F8 on/off).
-- **Point lights on objects** (Dead City's lights, lamps, candles), as in the original.
+- **Point lights on objects, walls, floors and the ground** (Dead City's lights, fireplaces, lamps), as in the original; F9 switches them.
 - **Living world**: falling leaves, snow, flowing rivers, windmills,
   torches.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
@@ -53,7 +53,6 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 - People and monsters are not shown.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).
-- Point lights don't light walls yet.
 - Objects only play their starting animation.
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
