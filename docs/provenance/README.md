@@ -1304,3 +1304,11 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Relative turns added only about Z | Q21 answer (all 9 cases in the game) | Same unit test |
 | Connor turns only about Z (rx, ry ignored, logged) | **Our choice** (his heading is his only turn) | — |
 | The viewer moves Connor, the camera (3k-3) and plain placed objects; core moves its own objects | **Our method** | — |
+
+## `setHidden` on plain placed objects (M3 step 3k-2) — `crates/kq8-core/src/active.rs`, `crates/kq8-viewer/src/draw_distance.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A hidden object keeps only `groupsAlways`: not drawn, collider out, until `setHidden <name> 0` | `objects.md` "Hidden objects" rules 1–3, `object-lighting.md` rule 41 | Unit test `set_hidden_on_a_plain_placed_object_overrides_its_file`; `viewer.log` (Table) |
+| A script's value wins over the file's `hidden=` | `objects.md` rule 1 ("scripts switch it") | Same unit test |
+| Done through the draw-distance test (it already turns "hidden" into off) | **Our method** | — |

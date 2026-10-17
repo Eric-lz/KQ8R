@@ -494,6 +494,9 @@ pub struct WorldState {
     /// Every deleted object, lower case (`deleteObject`, 3g-5): events to
     /// it are dropped.
     deleted: BTreeSet<String>,
+    /// `KQObject::setHidden` on other placed objects (3k-2), by
+    /// lower-case name: overrides their file's `hidden=`.
+    plain_hidden: BTreeMap<String, bool>,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
@@ -823,7 +826,16 @@ impl WorldState {
         }
         let Some(i) = self.items.index(name) else {
             if command == "KQObject::setHidden" {
-                self.note(format!("{at}: stub (later milestone, nothing done): {}", words.join(" ")));
+                // Any other placed object (3k-2, objects.md "Hidden
+                // objects"): the draw-distance test makes it not drawn and
+                // not touched (its collider leaves the collision world).
+                if !self.known.contains(&name.to_ascii_lowercase()) {
+                    self.note(format!("{at}: setHidden: unknown object '{name}'; nothing"));
+                    return "1".into();
+                }
+                let hidden = words.get(2).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
+                self.plain_hidden.insert(name.to_ascii_lowercase(), hidden);
+                self.note(format!("{at}: setHidden {name}: placed object hidden {hidden} (not drawn, not touched, from the next frame)"));
                 return "0".into();
             }
             let why = if self.known.contains(&name.to_ascii_lowercase()) { "object kind not tracked yet" } else { "unknown object" };
@@ -1213,6 +1225,16 @@ impl WorldState {
         self.switched_off.contains(&name.to_ascii_lowercase())
     }
 
+    /// Whether placed object `name` is hidden now: a script's `setHidden`
+    /// wins over its file's `hidden=` (`file_hidden`); scripted objects,
+    /// chests and items as [`Self::is_hidden`].
+    pub fn hidden_now(&self, name: &str, file_hidden: bool) -> bool {
+        match self.plain_hidden.get(&name.to_ascii_lowercase()) {
+            Some(h) => *h,
+            None => file_hidden || self.is_hidden(name),
+        }
+    }
+
     /// Whether `name` is hidden now (scripted objects, chests, items;
     /// `objects.md` "Hidden objects"). Other objects: `false` (their
     /// hiding is fixed at load and known to the caller).
@@ -1399,6 +1421,7 @@ impl Active {
                 switched_off: BTreeSet::new(),
                 connor_stats: None,
                 stats: BTreeMap::new(),
+                plain_hidden: BTreeMap::new(),
             },
         }
     }
@@ -2875,8 +2898,8 @@ mod tests {
         assert_eq!(it.get("NoName1").unwrap().place, Place::Gone);
         assert_eq!(a.pick([0.0, -5000.0, 100.0], [0.0, 1.0, 0.0]), None);
         assert_eq!(a.click("NoName0", [0.0, -500.0, 0.0], 2350.0, None), ClickResult::Nothing);
-        // setHidden on another object is still a stub.
-        assert!(a.take_log().join("\n").contains("stub (later milestone, nothing done): KQObject::setHidden smlchst3 1"));
+        // setHidden on another placed object (3k-2): here it isn't loaded.
+        assert!(a.take_log().join("\n").contains("setHidden: unknown object 'smlchst3'"));
     }
 
     /// A made-up chest script in the style of Swamp's `chest.cs` (not a
@@ -3249,6 +3272,20 @@ mod tests {
         assert_eq!(a.world.objects[0].player.base.position, [before[0], before[1] - 200.0, before[2] - 300.0]);
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::Move { who, flags: 0, .. } if who == "Connor")));
         assert!(a.take_log().join("\n").contains("move: unknown object 'nobody'"));
+    }
+
+    #[test]
+    fn set_hidden_on_a_plain_placed_object_overrides_its_file() {
+        let mut a = with_object("KQObject::setHidden Table 1\nKQObject::setHidden nosuch 1\n", "x");
+        a.world.known.insert("table".into());
+        assert!(!a.world.hidden_now("Table", false));
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(a.world.hidden_now("Table", false));
+        assert!(a.take_log().join("\n").contains("setHidden: unknown object 'nosuch'"));
+        let mut b = with_object("KQObject::setHidden Table 0\n", "x");
+        b.world.known.insert("table".into());
+        b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(!b.world.hidden_now("Table", true), "a script's 0 wins over hidden=1");
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

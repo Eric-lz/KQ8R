@@ -1393,7 +1393,9 @@ catchers, ground animators).
       (position and heading; the mover's state is kept), doors, chests,
       scripted and animated objects (their placement), plain placed
       objects (their colliders and drawn parts). `KQCamera` in 3k-3.
-    - **3k-2, `KQObject::setHidden` on plain placed objects** (`objects.md`
+    - **3k-2, `KQObject::setHidden` on plain placed objects** (**done**
+      2026-10-17 through the draw-distance test; an object hidden in its
+      file and shown by a script stays invisible: not done, logged) (`objects.md`
       "Hidden objects" rule 3: not drawn, can't be touched): the `Table`.
     - **3k-3, the camera and controls**: `KQCamera::follow none|Connor`
       (`camera.md` rule 1: following none, the camera stays where it

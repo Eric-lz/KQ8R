@@ -285,7 +285,7 @@ pub fn update_activity(
         let centre = transform.transform_point(test.centre);
         let d = (reference - centre).length() * UNITS_PER_METRE - test.radius;
         // Rule 36: hidden = off; makeActive = near; else by distance.
-        let hidden = test.hidden || sim.as_ref().is_some_and(|s| s.active.world.is_hidden(&test.name));
+        let hidden = sim.as_ref().map_or(test.hidden, |s| s.active.world.hidden_now(&test.name, test.hidden));
         let activity = if hidden {
             Activity::Off
         } else if rules.always_near.contains(&test.name.to_ascii_lowercase()) {

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3k-2: `setHidden` on plain placed objects
+
+**Changed:** `kq8-core/src/active.rs`: `KQObject::setHidden <name> 0|1` on any other placed object (not a scripted object, chest or item) is remembered (`hidden_now`: a script's value wins over the file's `hidden=`); unknown names give an error line. `kq8-viewer` `draw_distance.rs`: the draw-distance test asks `hidden_now`, so a hidden object is "off" (not drawn, its collider out of the collision world: `objects.md` "Hidden objects" rule 3, `object-lighting.md` rule 41), and shown again by `setHidden 0`. 1 new unit test, 1 updated (it expected the old stub line).
+**Why:** The user's task, step 4: `bricks.cs` hides and shows `Table` while Connor pushes.
+**Tested how:** `cargo test --workspace` (369 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,60 --frames 6000 --sound off`, `doors.log`, `viewer.log`.
+**Result:** Update 13 "setHidden Table: placed object hidden true", and the draw-distance test: "[Table] Off … collider out (1 box(es) for Connor)"; update 63 hidden false, update 64 "[Table] Near … collider back".
+**Still broken / not tested:** Not checked by eye. An object hidden in its own file (`hidden=1`) that a script shows would stay invisible (its drawn parts start hidden for the H key); none in the bricks path.
+**Next:** 3k-3, the camera and controls (`KQCamera::follow`, `move KQCamera`, `setThirdPerson`, `handsOff`).
+
 ## 2026-10-17 M3 step 3k-1: `move` while playing
 
 **Changed:** `kq8-core/src/active.rs`: `move <who> <flags> x y z [rx ry rz]` is a world command (no longer a stub): flags 0–3 as `objects.md` "(d)" (relative position along the world axes, Q21; relative turns added only about Z); doors, chests, scripted and animated objects are moved at once (their placement); Connor, `KQCamera` and plain placed objects become a `Request::Move`; unknown names and flags above 3 are logged and not moved; `moved_placement`; 1 new unit test. `kq8-data` `world_script.rs`: `parse_move` public. `kq8-viewer`: `connor_view.rs` `move_to` (position and heading set or added, no collision passes, no blending from the old place), `door_view.rs` applies the requests (plain objects: colliders and drawn parts; the camera waits for 3k-3).
