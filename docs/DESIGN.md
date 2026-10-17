@@ -1308,8 +1308,50 @@ catchers, ground animators).
     say). `KillConnor`: our Dead mode (stand-in). New test option
     `--special ITEMS,N` (items separated by `;`), as if a script asked at
     update N.)
-  - **3j, pushing** (`pushing.md`):
-    - **3j-1, the push check and the Push state** (rules 1–3, 6–8):
+  - **3j, pushing** (`pushing.md`). Details worked out 2026-10-17 after
+    reading the mover:
+    - **Colliders learn their kind.** `BoxCollider` gets the object's
+      `colliderType`, `colliderMask` and whether it is a ball stack
+      (`collisionShape=1`); doors, chests and scripted objects refresh
+      theirs every update from `Active` (as their placement now), so a
+      script's `KQObject::collisionType` reaches Connor's collision.
+    - **Where the check happens.** In the mover's across pass (and the
+      slides of that pass, not the down pass's slide): a hit on a
+      collider with bit 0x100 goes through rule 2. What the mover can't
+      know is passed in the walker's wish: the walker accepts Push
+      (mode Free or Push), already pushing, his facing, his chosen
+      movement, empty hands (hand mode 4 always: `setDoMode` is a stub).
+      "On the ground" (rule 2.2): the mover is in its normal state (not
+      jumping or falling).
+    - **The Push state** in `connor.rs`: mode `Push`; the movement
+      chosen is `push` instead of the keys' choice (asked as any
+      movement, so `pushright` / `pushleft` lead back to `stop`); the
+      counter of rule 7; turning as when walking (Q87 d stand-in).
+      `push`, `pushleft`, `pushright` are added to the movements loaded
+      from `Conner.anm`.
+    - **Physical push** (rules 4–5): the mover asks the scene to move
+      the object by his across step; the scene sweeps the object's own
+      ball stack against buildings and the other colliders its mask
+      makes obstacles (bits 0x100, 0x8, 0x1, 0x2, 0x2000 of the other's
+      type; Connor's bit 4 taken out), stops at the first contact (Q87 b
+      stand-in), applies the ground rule (Q87 c stand-in) and puts it
+      back if its height changed; Connor goes to the pass start + 0.95 ×
+      the movement. The viewer then moves the object's collider and its
+      drawn entities. Box-shaped pushables (the barrels) are not moved
+      (Q87 a), logged.
+    - **Scripted push** (rules 3, 9–10): the touch is not a hit; the
+      object is passed through for the rest of that pass, and its script
+      gets `Push` **right after Connor's move in the same update** (our
+      order: the scripts run from `Active`, which Connor's move can't
+      reach; the note says mid-move, and what follows a mid-move
+      `move Connor` is not traced anyway). If the object is still a
+      scripted pushable after its script ran, its later touches are wall
+      hits, logged ("Do not reproduce").
+    - **3j-1, the push check and the Push state** (rules 1–3, 6–8;
+      **done** 2026-10-17. Until 3j-2/3j-3 an accepted touch acts as on
+      an object that doesn't move: rule 4.3, he stays at the start of
+      the pass. Rule 2.6's "standing state" changes only the state, not
+      the animation, so `pushright`/`pushleft` play when he lets go):
       Connor's touch with a 0x100 object goes through the six conditions
       of rule 2 (hand mode: empty hands, 4, at the start; `setDoMode`
       stays a stub), then mode `Push`, `push` movement, the counter of

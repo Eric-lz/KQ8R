@@ -6,10 +6,14 @@
 //! "Slopes", "Falling off an edge", "Walls" with "Exact hit handling",
 //! "Collision shape", "Is gravity on at the start?"). M2 steps 2a, 2c,
 //! 2d-3 and 2d-5: the terrain, buildings and objects are solid.
+//!
+//! Pushing (M3 step 3j, `pushing.md` rules 1–3): in the across pass a hit
+//! on a pushable (type bit 0x100) goes through the push check
+//! ([`Mover::push_check`]); it is a wall only when the check fails.
 
 use std::cell::RefCell;
 
-use crate::collide::{BallStack, BoxCollider, BuildingCollider, ObjectHit};
+use crate::collide::{BallStack, BoxCollider, BuildingCollider, ColliderKind, ObjectHit, PUSHABLE, SCRIPTED_PUSH};
 
 /// The ground under a point: height and unit normal (z > 0), or `None`
 /// where there is no ground (outside the terrain grid). For the terrain
@@ -64,6 +68,100 @@ pub trait MoverWorld {
     /// Surface height and ground flags for the water test (`GroundLookup::water`).
     fn water(&self, _x: f32, _y: f32) -> Option<(f32, u32)> {
         None
+    }
+    /// The object `name` if it is a pushable (type bit 0x100) now
+    /// (`pushing.md` rule 1).
+    fn push_target(&self, _name: &str) -> Option<PushTarget> {
+        None
+    }
+}
+
+/// A pushable that was touched (`pushing.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PushTarget {
+    pub kind: ColliderKind,
+    /// The object's position (its placement point; Q87 e stand-in for
+    /// "its centre").
+    pub position: [f32; 3],
+}
+
+impl PushTarget {
+    /// Scripted pushable: bits 0x100 and 0x10000.
+    pub fn scripted(&self) -> bool {
+        self.kind.collision_type & SCRIPTED_PUSH != 0
+    }
+}
+
+/// What Connor brings to a push (`pushing.md` rule 2), from the walker.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PushAbility {
+    /// His state would take the Push state (Wait, Move, or Push itself).
+    pub accepts: bool,
+    /// He is in the Push state already.
+    pub pushing: bool,
+    /// Empty hands (hand mode 4).
+    pub empty_hands: bool,
+    /// His chosen movement is `walk`, `run` or `push`.
+    pub movement_ok: bool,
+    /// The way he faces, horizontal, unit length.
+    pub facing: [f32; 2],
+}
+
+/// Facing within 60° (`pushing.md` rule 2.5).
+pub const PUSH_FACING_COS: f32 = 0.5;
+
+/// One pushing touch's check, for the log and the walker.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PushTouch {
+    pub object: String,
+    pub scripted: bool,
+    /// Rule 2.2: on the ground (not jumping or falling) or pushing.
+    pub on_ground: bool,
+    /// Rule 2.3.
+    pub empty_hands: bool,
+    /// Rule 2.4: the across pass (or its slides).
+    pub across: bool,
+    /// Rule 2.5: the cosine of his facing against the surface (scripted)
+    /// or against the direction to the object (physical).
+    pub cos: f32,
+    /// Rule 2.6.
+    pub movement_ok: bool,
+    /// Rule 3: his state takes Push.
+    pub accepts: bool,
+    /// What came of it.
+    pub result: PushResult,
+}
+
+/// What a touch on a pushable led to.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PushResult {
+    /// A check failed: an ordinary wall hit.
+    Wall,
+    /// Rule 2.5 failed while pushing: a wall hit, and back to Move.
+    WallBackToMove,
+    /// Rule 2.6 failed: a wall hit, and standing (Wait).
+    WallStand,
+    /// All checks passed: Push state (rule 3). In step 3j-1 the touch
+    /// still counts as a wall hit (the object's part comes in 3j-2/3).
+    Push,
+}
+
+impl PushTouch {
+    pub fn describe(&self) -> String {
+        let yes = |b: bool| if b { "yes" } else { "NO" };
+        format!(
+            "push touch {} ({}): on ground {}, empty hands {}, across pass {}, facing cos {:.3} ({}), movement {}, state takes Push {} -> {:?}",
+            self.object,
+            if self.scripted { "scripted" } else { "physical" },
+            yes(self.on_ground),
+            yes(self.empty_hands),
+            yes(self.across),
+            self.cos,
+            yes(self.cos >= PUSH_FACING_COS),
+            yes(self.movement_ok),
+            yes(self.accepts),
+            self.result
+        )
     }
 }
 
@@ -137,6 +235,11 @@ impl MoverWorld for Scene<'_> {
     fn take_notes(&self) -> Vec<String> {
         std::mem::take(&mut *self.notes.borrow_mut())
     }
+
+    fn push_target(&self, name: &str) -> Option<PushTarget> {
+        let o = self.objects.iter().find(|o| o.name == name && o.kind.collision_type & PUSHABLE != 0)?;
+        Some(PushTarget { kind: o.kind, position: o.placement.position })
+    }
 }
 
 /// What the walker asks of one update.
@@ -151,11 +254,13 @@ pub struct Wish {
     /// Jumping (not `backJump`): any surface with normal z < 0.8 also
     /// counts as head-on (connor-physics.md "Walls").
     pub steep_head_on: bool,
+    /// What he brings to a push (`pushing.md` rule 2).
+    pub push: PushAbility,
 }
 
 impl From<[f32; 3]> for Wish {
     fn from(step: [f32; 3]) -> Self {
-        Wish { step, moving: true, steep_head_on: false }
+        Wish { step, moving: true, steep_head_on: false, push: PushAbility::default() }
     }
 }
 
@@ -246,6 +351,10 @@ pub struct Mover {
     pub state: State,
     /// This update: steep surfaces count as head-on (jumping).
     steep_head_on: bool,
+    /// This update: what he brings to a push, and whether he began it on
+    /// the ground (rule 2.2).
+    push: PushAbility,
+    push_ground: bool,
     /// The balls he collides with (built from his box).
     pub balls: BallStack,
     /// The water test's result after the last move (water.md).
@@ -316,6 +425,8 @@ pub struct Report {
     pub jump_hit: Option<&'static str>,
     /// Things worth a line in the main log (state changes, landings).
     pub events: Vec<String>,
+    /// Every touch on a pushable this update (`pushing.md`).
+    pub pushes: Vec<PushTouch>,
 }
 
 /// One hit, for the log.
@@ -346,6 +457,8 @@ impl Mover {
             step_down: STEP,
             state: State::Normal,
             steep_head_on: false,
+            push: PushAbility::default(),
+            push_ground: false,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
             submerged: false,
         }
@@ -456,6 +569,10 @@ impl Mover {
         // surface counts too.
         let head_on_allowed = wish.moving && matches!(self.state, State::Normal | State::Jump);
         self.steep_head_on = head_on_allowed && wish.steep_head_on && self.state == State::Jump;
+        self.push = wish.push;
+        // Rule 2.2: not jumping or falling ("on the ground" when the
+        // update began), or already pushing.
+        self.push_ground = (self.state == State::Normal && report.began_on_ground) || wish.push.pushing;
         let mut hits = 0;
 
         // 2. Up pass: step up plus the wanted height change. A building
@@ -540,7 +657,7 @@ impl Mover {
             if result == "glance" {
                 let target = project_onto(end, contact, normal);
                 report.push = length(sub(target, contact));
-                self.across(world, contact, target, head_on_allowed, "slide", &mut hits, &mut report);
+                self.across(world, contact, target, head_on_allowed, "down slide", &mut hits, &mut report);
             }
         }
 
@@ -627,11 +744,29 @@ impl Mover {
         report: &mut Report,
     ) -> &'static str {
         let mut outcome = "free";
+        let pass_start = start;
+        // Rule 2.4: the across pass and its slides, not the down pass's.
+        let across_pass = pass == "across";
+        if pass == "down slide" {
+            pass = "slide";
+        }
         loop {
             let Some(h) = world.sweep(&self.balls, start, target) else {
                 self.position = target;
                 return outcome;
             };
+            if let Some(t) = world.push_target(&h.what) {
+                let touch = self.push_check(&h, &t, across_pass);
+                let accepted = touch.result == PushResult::Push;
+                report.pushes.push(touch);
+                if accepted {
+                    // Rule 3: not a hit for him. Rule 4.3 with no
+                    // movement: he stays at the start of the pass (the
+                    // object's part comes in 3j-2 / 3j-3).
+                    self.position = pass_start;
+                    return "push";
+                }
+            }
             *hits += 1;
             let angle = head_on_angle(sub(target, start), h.normal);
             let head_on = head_on_allowed
@@ -658,6 +793,51 @@ impl Mover {
             start = contact;
             pass = "slide";
         }
+    }
+}
+
+impl Mover {
+    /// The push check of `pushing.md` rule 2 for a hit `h` on pushable
+    /// `t` (rule 2.1, Connor moving, holds: this is his move).
+    fn push_check(&self, h: &Hit, t: &PushTarget, across_pass: bool) -> PushTouch {
+        let p = self.push;
+        let flat = |v: [f32; 2]| {
+            let l = (v[0] * v[0] + v[1] * v[1]).sqrt();
+            if l > 0.0 { [v[0] / l, v[1] / l] } else { [0.0, 0.0] }
+        };
+        // Rule 2.5: into the surface (scripted), or towards the object.
+        let towards = if t.scripted() {
+            flat([-h.normal[0], -h.normal[1]])
+        } else {
+            flat([t.position[0] - self.position[0], t.position[1] - self.position[1]])
+        };
+        let cos = p.facing[0] * towards[0] + p.facing[1] * towards[1];
+        let mut touch = PushTouch {
+            object: h.what.clone(),
+            scripted: t.scripted(),
+            on_ground: self.push_ground,
+            empty_hands: p.empty_hands,
+            across: across_pass,
+            cos,
+            movement_ok: p.movement_ok,
+            accepts: p.accepts,
+            result: PushResult::Wall,
+        };
+        if !(touch.on_ground && touch.empty_hands && touch.across) {
+            return touch;
+        }
+        if cos < PUSH_FACING_COS {
+            touch.result = if p.pushing { PushResult::WallBackToMove } else { PushResult::Wall };
+            return touch;
+        }
+        if !p.movement_ok {
+            touch.result = PushResult::WallStand;
+            return touch;
+        }
+        if p.accepts {
+            touch.result = PushResult::Push;
+        }
+        touch
     }
 }
 
@@ -1026,6 +1206,7 @@ mod tests {
             min: [-250.0, 0.0, 0.0],
             max: [-10.0, 250.0, 2420.0],
             placement: crate::collide::Placement::at(position),
+            kind: crate::collide::ColliderKind::default(),
         }
     }
 
@@ -1046,6 +1227,62 @@ mod tests {
         }
         let p = stopped.expect("head-on");
         assert!(p[1] >= 450.0 && p[1] <= 475.0 + 72.0, "{p:?}");
+    }
+
+    /// The post as a pushable: physical (0x101) or scripted (0x10121).
+    fn pushable(scripted: bool) -> BoxCollider {
+        let mut b = post([0.0; 3]);
+        b.kind.collision_type = if scripted { 0x10121 } else { 0x101 };
+        b
+    }
+
+    /// Walking towards −y (facing −y: heading 0) with what he brings.
+    fn push_wish(facing: [f32; 2], movement_ok: bool, empty_hands: bool) -> Wish {
+        Wish { step: [0.0, -72.0, 0.0], moving: true, steep_head_on: false, push: PushAbility { accepts: true, pushing: false, empty_hands, movement_ok, facing } }
+    }
+
+    #[test]
+    fn walking_into_a_pushable_passes_the_push_check_and_stays_at_the_pass_start() {
+        for scripted in [false, true] {
+            let o = [pushable(scripted)];
+            let scene = Scene::new(&Flat(0.0), &[], &o);
+            let mut m = Mover::new([-130.0, 1000.0, 0.0], true);
+            let mut pushed = None;
+            for _ in 1..=20 {
+                let before = m.position;
+                let r = m.update_with(&scene, |_, _| push_wish([0.0, -1.0], true, true));
+                if let Some(t) = r.pushes.first() {
+                    assert_eq!((t.result, t.scripted), (PushResult::Push, scripted), "{}", t.describe());
+                    assert!(t.cos > 0.95, "{}", t.describe());
+                    // Not a hit for him: no head-on, no hit recorded.
+                    assert!(!r.head_on && r.hits.iter().all(|h| h.hit.what != "post"), "{:?}", r.hits);
+                    assert!((m.position[1] - before[1]).abs() < 1e-3, "stays at the pass start");
+                    pushed = Some(m.position);
+                    break;
+                }
+            }
+            assert!(pushed.is_some(), "scripted {scripted}: no push touch");
+        }
+    }
+
+    #[test]
+    fn the_push_check_fails_facing_away_with_a_weapon_or_backing_up() {
+        let o = [pushable(false)];
+        let scene = Scene::new(&Flat(0.0), &[], &o);
+        let first_touch = |wish: Wish| {
+            let mut m = Mover::new([-130.0, 1000.0, 0.0], true);
+            (0..20).find_map(|_| m.update_with(&scene, |_, _| wish).pushes.first().cloned()).expect("a touch")
+        };
+        // Facing 90 degrees off (cos 0): an ordinary wall hit.
+        assert_eq!(first_touch(push_wish([1.0, 0.0], true, true)).result, PushResult::Wall);
+        // A sword drawn: a wall.
+        assert_eq!(first_touch(push_wish([0.0, -1.0], true, false)).result, PushResult::Wall);
+        // Backing up or turning: a wall, and he stands (rule 2.6).
+        assert_eq!(first_touch(push_wish([0.0, -1.0], false, true)).result, PushResult::WallStand);
+        // Facing off while already pushing: back to Move (rule 2.5).
+        let mut w = push_wish([1.0, 0.0], true, true);
+        w.push.pushing = true;
+        assert_eq!(first_touch(w).result, PushResult::WallBackToMove);
     }
 
     #[test]
@@ -1071,7 +1308,7 @@ mod tests {
     #[test]
     fn standing_on_top_of_an_object_stays_25_above_it() {
         // A low crate, 300 high, under him: he lands on it 25 above.
-        let o = [BoxCollider { name: "crate".into(), min: [-500.0; 3], max: [500.0, 500.0, 300.0], placement: crate::collide::Placement::at([0.0, 0.0, 0.0]) }];
+        let o = [BoxCollider { name: "crate".into(), min: [-500.0; 3], max: [500.0, 500.0, 300.0], placement: crate::collide::Placement::at([0.0, 0.0, 0.0]), kind: crate::collide::ColliderKind::default() }];
         let scene = Scene::new(&Flat(0.0), &[], &o);
         let mut m = Mover::new([0.0, 0.0, 800.0], true);
         for _ in 0..30 {
@@ -1099,7 +1336,7 @@ mod tests {
         let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 300.0, 0.0], true);
         for n in 1..=7 {
-            let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false, steep_head_on: false });
+            let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -63.07, 0.0], moving: false, steep_head_on: false, push: PushAbility::default() });
             assert!(!r.head_on, "update {n}: no head-on outside Move");
             assert!(m.position[1] >= 199.0, "update {n}: never inside the wall: {:?}", m.position);
         }
@@ -1121,7 +1358,7 @@ mod tests {
         let b = [wall()];
         let scene = Scene::new(&Flat(0.0), &b, &[]);
         let mut m = Mover::new([0.0, 260.0, 0.0], true);
-        let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false, steep_head_on: false });
+        let r = m.update_with(&scene, |_, _| Wish { step: [0.0, -60.0, 0.0], moving: false, steep_head_on: false, push: PushAbility::default() });
         assert!(!r.head_on);
         assert_eq!(r.across, "glance");
     }

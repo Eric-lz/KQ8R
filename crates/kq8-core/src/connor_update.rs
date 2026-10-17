@@ -7,7 +7,7 @@
 //! the user's checks of jumping in the original (docs/DESIGN.md M2 2e).
 
 use crate::connor::{Intent, JumpKind, Mode, MovementLoop, Step, Walker};
-use crate::connor_mover::{FallEvent, HitRecord, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
+use crate::connor_mover::{FallEvent, HitRecord, Mover, MoverWorld, PushResult, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
 
 /// What one update did.
 #[derive(Debug, Clone)]
@@ -123,7 +123,7 @@ pub fn tick<'a>(
             // Head-on acts while jumping too, steep surfaces counting, but
             // never during `backJump` ("Walls").
             let jumping = walker.mode == Mode::Jump && walker.kind != JumpKind::Back;
-            let wish = Wish { step: s.wanted, moving: walker.moving() || jumping, steep_head_on: jumping };
+            let wish = Wish { step: s.wanted, moving: walker.moving() || jumping, steep_head_on: jumping, push: walker.push_ability() };
             step = Some(s);
             wish
         })
@@ -146,6 +146,22 @@ pub fn tick<'a>(
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
     }
+    // pushing.md rules 2.5, 2.6, 3: what his touches on pushables do to
+    // his state.
+    for t in &report.pushes {
+        notes.push(t.describe());
+    }
+    let pushed = report.pushes.iter().any(|t| t.result == PushResult::Push);
+    let state_note = if pushed {
+        walker.push_touch()
+    } else if report.pushes.iter().any(|t| t.result == PushResult::WallBackToMove) {
+        walker.push_back_to_move()
+    } else if report.pushes.iter().any(|t| t.result == PushResult::WallStand) {
+        Some(walker.stand())
+    } else {
+        None
+    };
+    notes.extend(state_note.map(str::to_string));
     // A steep hit ends a jump (connor-physics.md "Jumping" rule 5).
     let mut wall_stop = None;
     let first_back_hit = walker.kind != JumpKind::Back || !mover.use_gravity;

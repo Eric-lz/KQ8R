@@ -230,7 +230,7 @@ pub fn load_model(
 /// edge"), the crash (2d-4), the jumps (2e), the start and stop transitions (2g,
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped.
-pub const CONNOR_MOVEMENTS: [&str; 34] = [
+pub const CONNOR_MOVEMENTS: [&str; 37] = [
     "stop",
     "walk",
     "run",
@@ -265,6 +265,10 @@ pub const CONNOR_MOVEMENTS: [&str; 34] = [
     "waterwalkwalk",
     "runwaterrun",
     "waterrunrun",
+    // Pushing (M3 3j, pushing.md rule 6) and its stops.
+    "push",
+    "pushleft",
+    "pushright",
 ];
 
 /// One of Connor's movements: its animation and playback speed.
@@ -1264,6 +1268,8 @@ struct CollisionInfo {
     do_not_point_at: bool,
     /// `footsoundType=` (buildings, `sound.md` rule 39; M3 3h-4).
     footsound_type: Option<i64>,
+    /// `collisionShape=1`: a ball stack (M3 3j).
+    ball_stack: bool,
 }
 
 /// `colliderType` / `colliderMask` from an object's section: a whole
@@ -2208,6 +2214,7 @@ impl Placer<'_> {
             too_far_away_action: number("tooFarAwayAction").map_or(if default_type == BUILDING_TYPE { kq8_core::active::BUILDING_TOO_FAR_AWAY_ACTION } else { 0 }, |v| v as i64),
             do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
             footsound_type: number("footsoundType").map(|v| v as i64),
+            ball_stack: number("collisionShape").is_some_and(|v| v == 1.0),
         });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
@@ -3074,7 +3081,14 @@ fn object_colliders(
     markers: &[Marker],
     log: &mut Log,
 ) -> (Vec<kq8_core::collide::BoxCollider>, Vec<kq8_core::active::Clickable>, Vec<kq8_core::collide::BoxCollider>) {
-    use kq8_core::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
+    use kq8_core::collide::{pair_collides, BoxCollider, ColliderKind, Placement, CONNOR_MASK, CONNOR_TYPE};
+    // Its collision settings (3j).
+    let kind = |info: &CollisionInfo, p: &kq8_data::objects::Placement| ColliderKind {
+        collision_type: info.collider_type,
+        collision_mask: info.collider_mask,
+        ball_stack: info.ball_stack,
+        keep_on_ground: p.keep_on_ground.level().is_some(),
+    };
     let table = match game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
         Some(Ok(bytes)) => kq8_data::bounds::BoundingBoxes::parse(&bytes).0,
         _ => {
@@ -3135,6 +3149,7 @@ fn object_colliders(
                 min: entry.min,
                 max: entry.max,
                 placement: Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                kind: kind(info, p),
             });
         }
         if info.collider_type & kq8_core::click::CLICKABLE != 0 {
@@ -3189,7 +3204,7 @@ fn object_colliders(
             if p.drawn() { "" } else { " (hidden: still collides)" }
         ));
         *by_class.entry(class.to_string()).or_default() += 1;
-        objects.push(BoxCollider { name: p.name.clone(), min: entry.min, max: entry.max, placement });
+        objects.push(BoxCollider { name: p.name.clone(), min: entry.min, max: entry.max, placement, kind: kind(info, p) });
     }
     log.summary(format!(
         "collision: {} object colliders (per class {by_class:?}; {by_name} found by the object's own name, the rest by shape; {lowered} only with the shape name lower-cased, Q39); left out: {left_out:?}",

@@ -64,7 +64,7 @@ use kq8_data::world_script::Vars;
 
 use crate::chest::{Chest, ChestState};
 use crate::click::{distance_to_box, ray_box, CLICKABLE};
-use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_TYPE};
+use crate::collide::{pair_collides, BoxCollider, ColliderKind, Placement, CONNOR_MASK, CONNOR_TYPE};
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::item::{Accepts, Items, Place};
@@ -142,11 +142,16 @@ pub struct ActiveDoor {
 }
 
 impl ActiveDoor {
+    /// Its collision settings now (3j).
+    pub fn kind(&self) -> ColliderKind {
+        ColliderKind { collision_type: self.collision_type, collision_mask: self.collision_mask, ..Default::default() }
+    }
+
     /// Its collider where it stands now (the box turns with the door);
     /// `None` once deleted.
     pub fn collider(&self) -> Option<BoxCollider> {
         let (min, max) = self.bounds.filter(|_| !self.gone)?;
-        Some(BoxCollider { name: self.door.name.clone(), min, max, placement: self.door.placement() })
+        Some(BoxCollider { name: self.door.name.clone(), min, max, placement: self.door.placement(), kind: self.kind() })
     }
 
     /// Collides with Connor by the type and mask rule.
@@ -173,10 +178,15 @@ pub struct ActiveChest {
 }
 
 impl ActiveChest {
+    /// Its collision settings now (3j).
+    pub fn kind(&self) -> ColliderKind {
+        ColliderKind { collision_type: self.collision_type, collision_mask: self.collision_mask, ..Default::default() }
+    }
+
     /// `None` once deleted.
     pub fn collider(&self) -> Option<BoxCollider> {
         let (min, max) = self.bounds.filter(|_| !self.gone)?;
-        Some(BoxCollider { name: self.chest.name.clone(), min, max, placement: self.chest.placement() })
+        Some(BoxCollider { name: self.chest.name.clone(), min, max, placement: self.chest.placement(), kind: self.kind() })
     }
 
     pub fn collides_with_connor(&self) -> bool {
@@ -206,12 +216,17 @@ pub struct ActiveObject {
 }
 
 impl ActiveObject {
+    /// Its collision settings now (3j).
+    pub fn kind(&self) -> ColliderKind {
+        ColliderKind { collision_type: self.collision_type, collision_mask: self.collision_mask, ..Default::default() }
+    }
+
     pub fn name(&self) -> &str {
         &self.player.name
     }
 
     pub fn collider(&self) -> Option<BoxCollider> {
-        self.bounds.map(|(min, max)| BoxCollider { name: self.player.name.clone(), min, max, placement: self.player.placement() })
+        self.bounds.map(|(min, max)| BoxCollider { name: self.player.name.clone(), min, max, placement: self.player.placement(), kind: self.kind() })
     }
 
     pub fn collides_with_connor(&self) -> bool {

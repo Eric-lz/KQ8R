@@ -352,7 +352,17 @@ pub enum Mode {
     /// A script's list of movements (`anim-scripts.md` rule 16), keys
     /// ignored; when the list is used up, back to the keys.
     Special,
+    /// Pushing (`pushing.md` rules 6–8): `push` plays instead of the keys'
+    /// choice; turning as when walking (Q87 d stand-in).
+    Push,
 }
+
+/// Updates without a pushing touch before the Push state ends
+/// (`pushing.md` rule 7).
+pub const PUSH_UPDATES: u32 = 4;
+
+/// Hand mode with empty hands (`pushing.md`: sword 0, bow 1, empty 4).
+pub const EMPTY_HANDS: i64 = 4;
 
 impl Mode {
     pub fn name(&self) -> &'static str {
@@ -365,6 +375,7 @@ impl Mode {
             Mode::Crash => "crash",
             Mode::Jump => "jump",
             Mode::Special => "special",
+            Mode::Push => "push",
         }
     }
 }
@@ -406,6 +417,11 @@ pub struct Walker {
     /// The Special state's list and the item playing now (rule 16).
     pub special: Vec<SpecialStep>,
     pub special_at: usize,
+    /// Updates since the last pushing touch (`pushing.md` rule 7).
+    pub push_counter: u32,
+    /// Which weapon he holds: 4 = empty hands, the only one so far
+    /// (`KQConner::setDoMode` is a stub).
+    pub hand_mode: i64,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -462,7 +478,52 @@ impl Walker {
             lean_allowed: false,
             special: Vec::new(),
             special_at: 0,
+            push_counter: 0,
+            hand_mode: EMPTY_HANDS,
         }
+    }
+
+    /// What he brings to a push now (`pushing.md` rule 2): his state takes
+    /// Push (Wait, Move or Push), already pushing, empty hands, his chosen
+    /// movement `walk`, `run` or `push`, his facing.
+    pub fn push_ability(&self) -> crate::connor_mover::PushAbility {
+        let (s, c) = self.heading.sin_cos();
+        crate::connor_mover::PushAbility {
+            accepts: matches!(self.mode, Mode::Free | Mode::Push),
+            pushing: self.mode == Mode::Push,
+            empty_hands: self.hand_mode == EMPTY_HANDS,
+            movement_ok: self.mode == Mode::Push || matches!(self.choice, "walk" | "run"),
+            // The model faces its −Y, turned by the heading.
+            facing: [s, -c],
+        }
+    }
+
+    /// A pushing touch (`pushing.md` rule 3): the Push state (`push` is
+    /// asked for in the next update), the counter back to 0.
+    pub fn push_touch(&mut self) -> Option<&'static str> {
+        self.push_counter = 0;
+        if self.mode == Mode::Push {
+            return None;
+        }
+        self.mode = Mode::Push;
+        Some("enters the Push state")
+    }
+
+    /// Rule 2.5 failed while pushing: back to Move (the keys decide).
+    pub fn push_back_to_move(&mut self) -> Option<&'static str> {
+        (self.mode == Mode::Push).then(|| {
+            self.mode = Mode::Free;
+            "leaves Push for Move (facing off by more than 60 degrees)"
+        })
+    }
+
+    /// Rule 2.6 failed: the standing state (Wait). Only the state: the
+    /// animation goes on (a stop transition already asked for still
+    /// plays); the keys ask again next update.
+    pub fn stand(&mut self) -> &'static str {
+        self.mode = Mode::Free;
+        self.choice = "stop";
+        "standing state (Wait): his movement can't push"
     }
 
     /// Rule 3 (traced, Q56), every update whatever the mode:
@@ -495,7 +556,8 @@ impl Walker {
     /// The movement the mode plays (`None`: the keys decide).
     fn mode_movement(&self) -> Option<&'static str> {
         match self.mode {
-            Mode::Free => None,
+            // Push: the keys' path, with `push` as the choice (rule 6).
+            Mode::Free | Mode::Push => None,
             Mode::Fall => Some(self.kind.hold()),
             // runJump has no landing animation; it never gets Land.
             Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
@@ -756,6 +818,18 @@ impl Walker {
         let mut mode_changed = None;
         let mut notes = Vec::new();
         let start = self.movement;
+        // pushing.md rule 7: the counter, every update in Push.
+        if self.mode == Mode::Push {
+            let key = intent.forward != 0 || intent.turn != 0;
+            if self.push_counter < PUSH_UPDATES && key {
+                self.push_counter += 1;
+            } else {
+                let to = if key { "Move" } else { "Wait" };
+                notes.push(format!("push: {} updates without a pushing touch{}: {to}", self.push_counter, if key { "" } else { " or no key" }));
+                self.mode = Mode::Free;
+                mode_changed = Some((Mode::Push, Mode::Free));
+            }
+        }
         // Rule 16: the Special movement playing has ended: the next item.
         if self.mode == Mode::Special && self.phase >= 1.0 {
             self.special_at += 1;
@@ -783,7 +857,14 @@ impl Walker {
             }
         } else {
             // While a wall block is on he stands, whatever the keys ask.
-            let mut choice = if self.blocked() { "stop" } else { choose_movement(intent, self.submerged) };
+            // Pushing: `push` instead of the keys' choice (rule 6).
+            let mut choice = if self.mode == Mode::Push {
+                "push"
+            } else if self.blocked() {
+                "stop"
+            } else {
+                choose_movement(intent, self.submerged)
+            };
             // Just landed from a running jump (`choice` is ""): a turn key
             // alone counts as standing, so `jumpstop` plays (he turns
             // during it) and the turn on the spot is asked for once it has
@@ -832,7 +913,7 @@ impl Walker {
         }
         // The keys turn him only when they choose the movement; that
         // includes the start and stop transitions.
-        if self.mode == Mode::Free && !self.blocked() {
+        if matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked() {
             self.heading += f32::from(intent.turn) * TURN_RATE * dt;
         }
         let Some(l) = loops(played) else {
@@ -883,7 +964,7 @@ impl Walker {
                 step.ended = Some(played);
             }
             let own = l.one_shot_step(from, self.phase).map(|v| v * l.speed.signum());
-            if self.phase >= 1.0 && self.mode == Mode::Free {
+            if self.phase >= 1.0 && matches!(self.mode, Mode::Free | Mode::Push) {
                 match self.playing {
                     Some(t) => self.end_transition(t, loops, &mut notes),
                     // Rule 6, last case: a one-shot ending with no
@@ -1774,5 +1855,40 @@ mod tests {
         assert_eq!(ended, ["a", "b"]);
         // Back to the keys (forward and run held: they ask for `run`).
         assert_eq!((w.mode, w.movement), (Mode::Free, "run"));
+    }
+
+    #[test]
+    fn the_push_state_asks_for_push_and_ends_after_4_updates_without_a_touch() {
+        let push = MovementLoop { duration: 29.0 / 15.0, step_sum: [0.0, -1150.0, 0.0], speed: 1.0, repeat: true, frames: 30, cut_short: true, ..Default::default() };
+        let list = [("stop", MovementLoop { step_sum: [0.0; 3], ..walk(1.0) }), ("walk", walk(1.0)), ("push", push)];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, false), &loops);
+        assert!(w.push_ability().movement_ok && w.push_ability().accepts);
+        assert_eq!(w.push_touch(), Some("enters the Push state"));
+        w.update(intent(1, 0, false), &loops);
+        assert_eq!((w.mode, w.movement), (Mode::Push, "push"));
+        // Touched every update: stays.
+        for _ in 0..10 {
+            w.push_touch();
+            w.update(intent(1, 0, false), &loops);
+            assert_eq!(w.mode, Mode::Push);
+        }
+        // No touch: 4 more updates of Push, then Move (key held).
+        let mut n = 0;
+        while w.mode == Mode::Push {
+            w.update(intent(1, 0, false), &loops);
+            n += 1;
+        }
+        // (The update right after the last touch already counted one.)
+        assert_eq!((n, w.movement), (4, "walk"));
+        // Let go while pushing: Wait at once.
+        w.push_touch();
+        w.update(intent(1, 0, false), &loops);
+        w.update(intent(0, 0, false), &loops);
+        assert_eq!((w.mode, w.movement), (Mode::Free, "stop"));
+        // Backing up isn't a pushing movement.
+        w.update(intent(-1, 0, false), &loops);
+        assert!(!w.push_ability().movement_ok);
     }
 }

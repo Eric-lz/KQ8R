@@ -1253,3 +1253,19 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | `KillConnor`: our Dead mode (fall-death pose) | **Stand-in** (his Die state is M5) | — |
 | The Special lists' transitions are not used | Rule 16 says nothing of them; objects have none (rule 4.2) | `viewer.log` detail lines |
 | `--special ITEMS,N` | **Our test option** | — |
+
+## Pushing: the check and the Push state (M3 step 3j-1) — `crates/kq8-core/src/{collide,connor_mover,connor,connor_update,active}.rs`, `crates/kq8-viewer/src/load.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A touch with type bit 0x100 goes through the push check, else a wall | `pushing.md` rule 1, `connor-collision.md` rule 4 | Unit tests `walking_into_a_pushable_*`, `the_push_check_fails_*` |
+| The six conditions: Connor moving, on the ground or pushing, empty hands (hand mode 4), across pass, facing cos ≥ 0.5 (into the surface / towards the object), `walk`/`run`/`push` | Rule 2 | Same; `connor.log` (hay bale) |
+| Facing off while pushing → Move; wrong movement → standing state | Rules 2.5, 2.6 | Unit test `the_push_check_fails_*` |
+| Push state: `push` (from `Conner.anm`), counter: a touch sets 0; < 4 with a key +1; < 4 no key → Wait; ≥ 4 → Move or Wait | Rules 6, 7 | Unit test `the_push_state_asks_for_push_and_ends_after_4_updates_without_a_touch`; `connor.log` |
+| `push`'s stop transitions `pushright` / `pushleft` play when he lets go | Observed (`Conner.anm`), `connor-movement.md` rules 2–6 | `connor.log`: `pushright` 132–146 |
+| "On the ground" = began the update on the ground, mover not jumping or falling | **Our reading** of rule 2.2 (open question 3 of the note) | — |
+| The standing state of rule 2.6 changes the state only, not the animation | **Our reading** (the note says "puts him in the standing state") | `connor.log` |
+| Turning in the Push state as when walking | **Stand-in**, Q87 d | — |
+| "The object's centre" = its position | **Stand-in**, Q87 e | — |
+| An accepted touch leaves him at the pass start until the object's part exists | Rule 4.3 (the "didn't move" case) | Unit test `walking_into_a_pushable_passes_the_push_check_and_stays_at_the_pass_start` |
+| Colliders carry type, mask, shape, keepOnGround; scripted objects' values refreshed every update | **Our method** | — |

@@ -314,7 +314,42 @@ pub struct BoxCollider {
     pub min: [f32; 3],
     pub max: [f32; 3],
     pub placement: Placement,
+    /// What kind of thing it is for collisions (M3 step 3j).
+    pub kind: ColliderKind,
 }
+
+/// An object's collision settings (`pushing.md`, `connor-collision.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColliderKind {
+    /// `colliderType` now (scripts change it).
+    pub collision_type: u32,
+    /// `colliderMask`.
+    pub collision_mask: u32,
+    /// `collisionShape=1`: a ball stack (`connor-collision.md` "Ball stack
+    /// against ball stack").
+    pub ball_stack: bool,
+    /// `keepOnGround` puts it on its ground grid (for a pushed object's
+    /// move, `pushing.md` rule 4.1; Q87 c stand-in: exactly on the floor
+    /// grid).
+    pub keep_on_ground: bool,
+}
+
+impl Default for ColliderKind {
+    fn default() -> Self {
+        ColliderKind { collision_type: DEFAULT_TYPE, collision_mask: DEFAULT_MASK, ball_stack: false, keep_on_ground: false }
+    }
+}
+
+/// Bits of another's type that make it an obstacle for a plain object's
+/// own move, when its mask covers them (`connor-collision.md` rule 3; 0x1
+/// and 0x2000 as world touches, which are obstacles without
+/// `worldCollisionAction`, rule 12). Connor's bit 4 is a Connor touch.
+pub const OBSTACLE_BITS: u32 = 0x100 | 0x8 | 0x1 | 0x2 | 0x2000;
+
+/// Pushable (`pushing.md`).
+pub const PUSHABLE: u32 = 0x100;
+/// Pushable by its script (`pushing.md`).
+pub const SCRIPTED_PUSH: u32 = 0x10000;
 
 /// What an object test found.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -529,7 +564,7 @@ mod tests {
 
     #[test]
     fn a_line_meets_a_turned_box() {
-        let mut b = BoxCollider { name: "b".into(), min: [-100.0, -50.0, 0.0], max: [100.0, 50.0, 300.0], placement: Placement::at([1000.0, 0.0, 0.0]) };
+        let mut b = BoxCollider { name: "b".into(), min: [-100.0, -50.0, 0.0], max: [100.0, 50.0, 300.0], placement: Placement::at([1000.0, 0.0, 0.0]), kind: ColliderKind::default() };
         let hit = b.line_hit([0.0, 0.0, 100.0], [2000.0, 0.0, 100.0]).expect("blocked");
         assert!(near(hit, [900.0, 0.0, 100.0]), "{hit:?}");
         // Turned a quarter: its long side now runs along y.
@@ -654,7 +689,7 @@ mod tests {
     }
 
     fn crate_box(min: [f32; 3], max: [f32; 3], placement: Placement) -> BoxCollider {
-        BoxCollider { name: "box".into(), min, max, placement }
+        BoxCollider { name: "box".into(), min, max, placement, kind: ColliderKind::default() }
     }
 
     #[test]
