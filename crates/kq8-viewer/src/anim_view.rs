@@ -62,6 +62,8 @@ struct DrawnMovement {
 struct Playing {
     name: String,
     source: Source,
+    /// `script=` (for a copy brought in by `loadKQ`, M3 3k-4).
+    script: Option<String>,
     /// The object's placement (rotation, position).
     rotation: [[f32; 3]; 3],
     position: [f32; 3],
@@ -97,6 +99,19 @@ fn combine(pose: &GameTransform, r: &[[f32; 3]; 3], position: [f32; 3]) -> ([[f3
 }
 
 impl AnimSim {
+    /// A copy prepared for a script's `loadKQ` comes into the world (M3
+    /// 3k-4): its player goes to `active`, which plays it from now on.
+    /// `false` if no unused copy by that name plays here.
+    pub fn bring_in(&mut self, name: &str, active: &mut kq8_core::active::Active) -> bool {
+        let Some(p) = self.playing.iter_mut().find(|p| p.name.eq_ignore_ascii_case(name) && matches!(p.source, Source::Own(_))) else {
+            return false;
+        };
+        let index = active.world.anims.len();
+        let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
+        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false }]);
+        true
+    }
+
     /// `deleteObject` (3f): its collider is no longer moved.
     pub fn forget_collider(&mut self, name: &str) {
         for p in self.playing.iter_mut().filter(|p| p.name.eq_ignore_ascii_case(name)) {
@@ -279,7 +294,7 @@ pub fn spawn_animated(
             core.push(AnimObject { player, script: a.script.clone(), gone: false });
             Source::Core(core.len() - 1)
         };
-        playing.push(Playing { name: p.name.clone(), source, rotation, position: p.position, movements: drawn, body, shown: None, tracked, collider: None });
+        playing.push(Playing { name: p.name.clone(), source, script: a.script.clone(), rotation, position: p.position, movements: drawn, body, shown: None, tracked, collider: None });
     }
     main_log.summary(format!(
         "animated objects: {} playing ({} run by the world's scripts, {} with more than one movement, {} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",

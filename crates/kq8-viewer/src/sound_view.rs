@@ -42,6 +42,17 @@ pub struct SoundSim {
 }
 
 impl SoundSim {
+    /// A sound object prepared for a script's `loadKQ` comes into the
+    /// world (M3 3k-4): it plays as any other from now on.
+    pub fn wake(&mut self, name: &str) -> bool {
+        let mut found = false;
+        for a in self.audibles.iter_mut().filter(|a| a.name.eq_ignore_ascii_case(name)) {
+            a.dormant = false;
+            found = true;
+        }
+        found
+    }
+
     /// Reads the sliders from `MASK/Options.cs` and, if `on`, opens the
     /// sound card. Without a card the rules and the log still run.
     pub fn new(game: &GameDir, world: &str, on: bool, audibles: Vec<Audible>, music: Option<Music>) -> Option<SoundSim> {

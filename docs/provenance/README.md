@@ -1322,3 +1322,12 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Its view: keeps looking at its last aim point; the angles are not used | **Stand-in**, Q89 c | — |
 | `handsOff 1`: movement keys and Jump count as let go, clicks ignored; `0` restores | **Stand-in**, Q89 a | `connor.log`: stands from 64 to 124 with forward held |
 | `setThirdPerson`: logged only | **Stand-in**, Q89 b | — |
+
+## `loadKQ` while playing (M3 step 3k-4) — `crates/kq8-core/src/{active,sound,script}.rs`, `crates/kq8-viewer/src/{load,anim_view,sound_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| An object loaded while playing is set up as at the world's start; no script call; a sound object starts at once | **Stand-in**, Q90 a–c (`objects.md` describes `loadKQ` at the start only) | `doors.log`, `sound.log` (bricks) |
+| Prepared at the start: files a script names in `loadKQ <file>` that no start-up script loads, with a place of their own | **Our method** (they were already loaded as H-key copies, M1) | `viewer.log`: 17 dormant copies |
+| A deleted sound object stops at once; the new one starts | `sound.md` rule 48; stand-in above | `sound.log` frame 665 |
+| A copy that comes in has no collider and isn't clickable | **Not done** (the H-key copies have none) | — |

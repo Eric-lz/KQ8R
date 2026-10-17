@@ -124,6 +124,9 @@ pub enum Request {
     /// `handsOff 1|0` (Q89 a stand-in): the player's movement keys, Jump
     /// and clicks are ignored while on.
     HandsOff { on: bool, at: String },
+    /// `loadKQ <file>` while playing (M3 3k-4, Q90 stand-in): the copy
+    /// of `name` prepared at the start comes into the world.
+    Load { file: String, name: String, at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -503,6 +506,9 @@ pub struct WorldState {
     /// `KQObject::setHidden` on other placed objects (3k-2), by
     /// lower-case name: overrides their file's `hidden=`.
     plain_hidden: BTreeMap<String, bool>,
+    /// Objects prepared for a script's `loadKQ` (3k-4): lower-case file
+    /// name → the object's name.
+    dormant: BTreeMap<String, String>,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
@@ -981,6 +987,33 @@ impl WorldState {
         "0".into()
     }
 
+    /// `loadKQ <file>` while playing (Q90 stand-in: as at the start, no
+    /// script call, a sound starts at once): a file prepared at the start
+    /// comes into the world. With a name or a position on the line, or a
+    /// file not prepared: not done (logged).
+    fn load_kq(&mut self, words: &[String], at: &str) -> String {
+        let Some(file) = words.get(1) else {
+            self.note(format!("{at}: usage: loadKQ <file> [name [x y z [rx ry rz]]]"));
+            return "1".into();
+        };
+        if words.len() > 2 {
+            self.note(format!("{at}: loadKQ {}: a name or position while playing: not done yet", words[1..].join(" ")));
+            return "0".into();
+        }
+        let key = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
+        let Some(name) = self.dormant.remove(&key) else {
+            self.note(format!("{at}: loadKQ {file}: no copy prepared at the start (already loaded, or not found): not done"));
+            return "0".into();
+        };
+        if self.deleted.contains(&name.to_ascii_lowercase()) || self.known.contains(&name.to_ascii_lowercase()) {
+            self.note(format!("{at}: loadKQ {file}: an object called {name} exists or existed (Q90 d): loaded anyway"));
+        }
+        self.known.insert(name.to_ascii_lowercase());
+        self.note(format!("{at}: loadKQ {file}: {name} comes into the world (Q90 stand-in: as at the start, no call)"));
+        self.requests.push(Request::Load { file: key, name, at: at.to_string() });
+        "0".into()
+    }
+
     /// `handsOff 1|0`: not in any note (Q89 a). Stand-in: the player's
     /// movement keys, Jump and clicks are ignored while on.
     fn hands_off(&mut self, words: &[String], at: &str) -> String {
@@ -1386,6 +1419,7 @@ impl ScriptHost for WorldState {
             "move" => Some(self.move_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
+            "loadKQ" => Some(self.load_kq(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
@@ -1460,6 +1494,7 @@ impl Active {
                 connor_stats: None,
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
+                dormant: BTreeMap::new(),
             },
         }
     }
@@ -1522,6 +1557,15 @@ impl Active {
     /// script, so no `EndLoop`.
     pub fn connor_movement_ended(&mut self, movement: &str) {
         self.world.report_end("Connor", movement, false);
+    }
+
+    /// The objects prepared for a script's `loadKQ` (3k-4): file name and
+    /// object name. Their names are not known to the scripts until loaded.
+    pub fn set_dormant(&mut self, files: impl IntoIterator<Item = (String, String)>) {
+        for (file, name) in files {
+            self.world.known.remove(&name.to_ascii_lowercase());
+            self.world.dormant.insert(file.to_ascii_lowercase(), name);
+        }
     }
 
     /// Connor's starting stats and level (`Connor.kq`).
@@ -3324,6 +3368,18 @@ mod tests {
         b.world.known.insert("table".into());
         b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(!b.world.hidden_now("Table", true), "a script's 0 wins over hidden=1");
+    }
+
+    #[test]
+    fn load_kq_while_playing_brings_a_prepared_copy_in_once() {
+        let mut a = with_object("loadKQ waterfa2.kq\nloadKQ waterfa2.kq\nloadKQ other.kq\nloadKQ x.kq name 1 2 3\n", "x");
+        a.set_dormant([("WATERFA2.KQ".to_string(), "waterfall2".to_string())]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let loads: Vec<&Request> = a.world.requests.iter().filter(|r| matches!(r, Request::Load { .. })).collect();
+        assert_eq!(loads.len(), 1);
+        assert!(a.world.known.contains("waterfall2"));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

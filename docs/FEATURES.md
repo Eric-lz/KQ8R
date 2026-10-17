@@ -176,9 +176,13 @@ objects don't stop it, as in the original. Checked in the logs
   back. Checked in the logs (`connor.log`). Barrels go into the push
   animation but don't move yet (a question to the study session). Not
   checked by eye. Walking into Daventry's bricks (by the waterfall) runs
-  their script: Connor's push animation, then the bricks go down and the
-  water changes; the camera moves, `handsOff` and the new waterfall
-  are not built yet (step 3k).
+  their puzzle to the end (M3 step 3k): Connor's push animation, the
+  table and bricks hidden then shown, the bricks go down, the waterfall
+  and its sound are replaced (so the way behind it is open), the water
+  changes, the camera stops following and takes the script's three
+  places, the controls are off until the end. The camera's view angles
+  and `handsOff`'s exact reach are stand-ins (questions to the study
+  session).
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),

@@ -402,6 +402,7 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::StartAt(args.at))
                 .insert_resource(door_view::ClickAt(args.click))
                 .insert_resource(door_view::SpecialAt(args.special))
+                .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
                 .init_resource::<door_view::Deleted>()
                 .insert_resource(door_view::HeldItem(args.item))
@@ -411,7 +412,7 @@ fn main() -> ExitCode {
                 .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
-                .add_systems(FixedUpdate, (draw_distance::apply_collider_switches, door_view::door_step, connor_view::connor_step, connor_view::push_apply, door_view::trap_step, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
+                .add_systems(FixedUpdate, (draw_distance::apply_collider_switches, door_view::door_step, connor_view::connor_step, connor_view::push_apply, door_view::trap_step, door_view::apply_loads, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, item_view::item_draw, effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).

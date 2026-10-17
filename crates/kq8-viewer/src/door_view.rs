@@ -130,6 +130,48 @@ impl DoorSim {
 #[derive(Resource)]
 pub struct ClickAt(pub Vec<(String, u64)>);
 
+/// Objects a script's `loadKQ` brought in this update (M3 3k-4), for
+/// [`apply_loads`].
+#[derive(Resource, Default)]
+pub struct LoadQueue(pub Vec<String>);
+
+/// Brings in the objects a script loaded (M3 3k-4, Q90 stand-in): their
+/// drawn parts are shown (no longer only with H), an animated one is
+/// played by the world's rules, a sound object starts. Runs after
+/// `trap_step`.
+pub fn apply_loads(
+    mut commands: Commands,
+    mut queue: ResMut<LoadQueue>,
+    sim: Option<ResMut<DoorSim>>,
+    anim: Option<ResMut<crate::anim_view::AnimSim>>,
+    sound: Option<ResMut<crate::sound_view::SoundSim>>,
+    mut parts: Query<(Entity, &crate::terrain_view::ObjectName, &mut Visibility)>,
+    shared: Res<Shared>,
+) {
+    if queue.0.is_empty() {
+        return;
+    }
+    let (Some(mut sim), mut anim, mut sound) = (sim, anim, sound) else { return };
+    for name in std::mem::take(&mut queue.0) {
+        let mut shown = 0;
+        for (e, _, mut v) in parts.iter_mut().filter(|(_, n, _)| n.0.eq_ignore_ascii_case(&name)) {
+            *v = Visibility::Inherited;
+            commands.entity(e).remove::<crate::terrain_view::ShownWithH>();
+            shown += 1;
+        }
+        let animated = anim.as_mut().is_some_and(|a| a.bring_in(&name, &mut sim.active));
+        let sounding = sound.as_mut().is_some_and(|s| s.wake(&name));
+        let line = format!(
+            "update {}: loadKQ: {name} came in: {shown} drawn part(s) shown{}{} (not clickable, no collider: prepared copies have none; not done)",
+            sim.active.world.updates,
+            if animated { ", animation played by the world's rules" } else { "" },
+            if sounding { ", sound object on" } else { "" }
+        );
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
+}
+
 /// `--special ITEMS,N` (M3 3i-7 test).
 #[derive(Resource)]
 pub struct SpecialAt(pub Option<(String, u64)>);
@@ -459,6 +501,8 @@ pub fn spawn_doors(
     active.add_objects(active_objects);
     // The other animated objects (3i-4), drawn by anim_view.
     active.add_anims(anims);
+    // Copies prepared for a script's loadKQ (3k-4).
+    active.set_dormant(std::mem::take(&mut objects.dormant));
     // Stats (3i-6, anim-scripts.md rule 19): doors without a line have
     // 10,000 health (doors.md rule 18); Connor from Connor.kq.
     for d in &active.world.doors.iter().map(|d| d.door.name.clone()).collect::<Vec<_>>() {
@@ -568,6 +612,7 @@ pub fn trap_step(
     mut deleted: ResMut<Deleted>,
     mut rules: ResMut<crate::draw_distance::ActiveRules>,
     mut special_at: ResMut<SpecialAt>,
+    mut loads: ResMut<LoadQueue>,
     mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
     shared: Res<Shared>,
 ) {
@@ -647,6 +692,10 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: {}", c.follow(follow)),
                 None => format!("{at}: KQCamera::follow: no game camera; not applied"),
             },
+            Request::Load { file, name, at } => {
+                loads.0.push(name.clone());
+                format!("{at}: applied: loadKQ {file}: {name} comes in (next system)")
+            }
             Request::HandsOff { on, at } => {
                 connor.hands_off = on;
                 let n = connor.updates;

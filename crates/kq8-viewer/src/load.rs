@@ -1134,6 +1134,9 @@ pub struct Objects {
     /// `KQAudibleObject`s the start-up scripts load (M3 step 3h-3,
     /// sound.md rules 43-44).
     pub audibles: Vec<kq8_core::sound::Audible>,
+    /// Objects prepared for a script's `loadKQ` while playing (M3 3k-4):
+    /// lower-case file name, object name.
+    pub dormant: Vec<(String, String)>,
     /// The world's music object (`KQMusic`, `music.kq`; M3 step 3h-5,
     /// sound.md rule 57), if a start-up script loads one.
     pub music: Option<kq8_core::music::Music>,
@@ -1318,8 +1321,19 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .into_iter()
         .filter_map(|(n, _, b)| b.ok().map(|b| (n, b.iter().map(|&c| (c as char).to_ascii_lowercase()).collect())))
         .collect();
+    // Files a script loads while playing with `loadKQ <file>` (M3 3k-4).
+    let load_targets: std::collections::BTreeSet<String> = all_scripts
+        .iter()
+        .flat_map(|(_, t)| t.lines())
+        .filter_map(|l| {
+            let mut w = l.split('#').next().unwrap_or("").split_whitespace();
+            (w.next() == Some("loadkq")).then(|| w.next()).flatten().map(|f| f.rsplit(['/', '\\']).next().unwrap_or(f).to_string())
+        })
+        .collect();
     let items = item_types(game, log);
     let mut placer = Placer {
+        load_targets,
+        dormant: Vec::new(),
         game,
         world,
         terrain,
@@ -1540,6 +1554,10 @@ struct Placer<'a> {
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
     audibles: Vec<kq8_core::sound::Audible>,
+    /// Files named by `loadKQ <file>` in the world's scripts, lower case
+    /// (M3 3k-4).
+    load_targets: std::collections::BTreeSet<String>,
+    dormant: Vec<(String, String)>,
     music: Option<kq8_core::music::Music>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
@@ -1994,8 +2012,21 @@ impl Placer<'_> {
             self.place_point_light(&label, s, p);
             return;
         }
-        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAudibleObject")) {
+        // A copy prepared for a script's `loadKQ <file>` while playing
+        // (M3 3k-4): the file is named by such a line and has a place of
+        // its own.
+        let dormant = unused && p.position != [0.0; 3] && self.load_targets.contains(&base.to_ascii_lowercase());
+        if dormant {
+            self.dormant.push((base.to_ascii_lowercase(), p.name.clone()));
+            self.log.summary(format!("dormant {label}[{}]: prepared for a script's loadKQ (M3 3k-4)", p.name));
+        }
+        if (!unused || dormant) && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAudibleObject")) {
             self.place_audible(&label, s, p);
+            if dormant {
+                if let Some(a) = self.audibles.last_mut() {
+                    a.dormant = true;
+                }
+            }
             return;
         }
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQMusic")) {
@@ -3048,6 +3079,7 @@ impl Placer<'_> {
             catchers: self.catchers,
             traps,
             audibles: self.audibles,
+            dormant: self.dormant,
             music: self.music,
             footsounds,
             point_lights: self.point_lights,

@@ -1403,7 +1403,9 @@ catchers, ground animators).
       is); `move KQCamera` sets its position only (Q89 c stand-in);
       `setThirdPerson` logged (Q89 b); `handsOff 1|0`: movement keys,
       Jump and clicks ignored while on (Q89 a stand-in).
-    - **3k-4, `loadKQ` while playing** (Q90 stand-in: as at the start, no
+    - **3k-4, `loadKQ` while playing** (**done** 2026-10-17; Daventry has
+      17 prepared copies; a copy that comes in is not clickable yet: the
+      H-key copies get no collider) (Q90 stand-in: as at the start, no
       call, a sound starts at once): files named in the scripts but not
       loaded at the start are already prepared, hidden ("unused" copies,
       M1); `loadKQ <file>` makes that copy live: drawn, known to the

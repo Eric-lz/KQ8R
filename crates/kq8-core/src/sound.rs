@@ -666,11 +666,13 @@ pub struct Audible {
     failed: bool,
     /// `deleteObject` stopped it for good (rule 48).
     deleted: bool,
+    /// Prepared for a script's `loadKQ` (M3 3k-4): silent until loaded.
+    pub dormant: bool,
 }
 
 impl Audible {
     pub fn new(name: &str, file: &str, placed: bool, min: f32, max: f32, position: [f32; 3]) -> Self {
-        Audible { name: name.into(), file: file.into(), placed, min, max, position, playing: None, failed: false, deleted: false }
+        Audible { name: name.into(), file: file.into(), placed, min, max, position, playing: None, failed: false, deleted: false, dormant: false }
     }
 
     pub fn is_playing(&self) -> bool {
@@ -696,7 +698,7 @@ impl Audible {
         deleted: bool,
         file: &mut dyn FnMut(&str) -> Result<Found, String>,
     ) {
-        if self.deleted {
+        if self.deleted || self.dormant {
             return;
         }
         let d = length(sub(self.position, ears.listener));
