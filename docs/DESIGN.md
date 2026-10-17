@@ -1278,7 +1278,10 @@ catchers, ground animators).
     single quotes switch `$` replacement off until the next one (marks
     dropped, words still split at spaces); `;` ends a command; `( … )`
     one word without the brackets; more than 40 words → `Console: Too
-    many arguments`, the command fails. Unit tests.
+    many arguments`, the command fails. Unit tests. (**Done** 2026-10-17
+    for scripts run while playing; the start-up follower in `kq8-data`
+    `world_script.rs` is unchanged: it only follows `loadKQ`, `set` and
+    `move`, none of which uses these.)
   - **3i-6, `KQStatsChangeRequestEvent` adds** (rule 19): five stats per
     object (start 0; where objects' starting stats come from is not in
     the note, so 0 and logged), added, the fourth capped at 100, health

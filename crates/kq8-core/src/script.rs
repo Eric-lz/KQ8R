@@ -24,6 +24,12 @@
 //!   an error and fails.
 //! - Every command leaves a result in `$Console::Return`.
 //!
+//! Also (`anim-scripts.md` rules 17, 18, traced): single quotes switch
+//! `$` replacement off until the next single quote (the marks are dropped,
+//! words are still split at spaces); `;` ends a command like the end of a
+//! line; `( … )` is one word with its spaces, without the brackets; a
+//! command of more than 40 words fails with `Console: Too many arguments`.
+//!
 //! Confirmed by the study session (`doors.md` "Q45" e, f): the result is
 //! `0` for true or success and `1` for false or failure; an unknown command
 //! leaves `1`; a script call sets nothing itself (its last command's result
@@ -92,6 +98,9 @@ pub const STUBS: [&str; 37] = [
     "KQObject::changeBmp",
     "KQObject::setGroupsAlways",
 ];
+
+/// Words a command may have (`anim-scripts.md` rule 18).
+pub const MAX_WORDS: usize = 40;
 
 /// Scripts calling scripts deeper than this stop (a guard of ours).
 const MAX_DEPTH: usize = 16;
@@ -162,12 +171,11 @@ impl Scripts {
         let mut blocks: Vec<Block> = Vec::new();
         for (n, raw) in text.lines().enumerate() {
             let line = raw.split('#').next().unwrap_or("");
-            let words = split_words(line);
-            if words.is_empty() {
-                continue;
-            }
             let at = format!("{name} line {}", n + 1);
-            self.line(&words, args, &mut blocks, host, &at, depth);
+            // `;` ends a command like the end of a line (rule 18).
+            for words in split_commands(line) {
+                self.line(&words, args, &mut blocks, host, &at, depth);
+            }
         }
         if !blocks.is_empty() {
             host.log(format!("script {name}: {} if-block(s) not closed at the end", blocks.len()));
@@ -178,7 +186,7 @@ impl Scripts {
     /// One line (or the rest of an `else` line).
     fn line(
         &mut self,
-        words: &[(String, bool)],
+        words: &[Word],
         args: &[String],
         blocks: &mut Vec<Block>,
         host: &mut dyn ScriptHost,
@@ -186,7 +194,7 @@ impl Scripts {
         depth: usize,
     ) {
         let runs = blocks.last().is_none_or(Block::runs);
-        match words[0].0.as_str() {
+        match words[0].text.as_str() {
             "if" => {
                 if !runs {
                     // Counted, not run, so its else/endif pair up.
@@ -198,7 +206,7 @@ impl Scripts {
                     host.log(format!("{at}: if without a command"));
                     self.vars.set(RETURN, "1".into());
                 } else {
-                    self.command(&command, host, at, depth);
+                    self.checked_command(&command, host, at, depth);
                 }
                 let result = self.vars.get(RETURN).unwrap_or("");
                 let taking = result.is_empty() || result == "0";
@@ -220,20 +228,22 @@ impl Scripts {
                 }
             }
             _ if runs => {
-                let mut command = vec![words[0].0.clone()];
-                command.extend(self.expand(&words[1..], args));
-                self.command(&command, host, at, depth);
+                let command = self.expand(words, args);
+                if !command.is_empty() {
+                    self.checked_command(&command, host, at, depth);
+                }
             }
             _ => {}
         }
     }
 
     /// Replaces `$` words: arguments and variables, split into words again
-    /// unless quoted.
-    fn expand(&self, words: &[(String, bool)], args: &[String]) -> Vec<String> {
+    /// unless quoted. A `$` read inside single quotes stays as written
+    /// (rule 17).
+    fn expand(&self, words: &[Word], args: &[String]) -> Vec<String> {
         let mut out = Vec::new();
-        for (w, quoted) in words {
-            let Some(name) = w.strip_prefix('$') else {
+        for Word { text: w, quoted, literal } in words {
+            let Some(name) = w.strip_prefix('$').filter(|_| !literal) else {
                 out.push(w.clone());
                 continue;
             };
@@ -248,6 +258,18 @@ impl Scripts {
             }
         }
         out
+    }
+
+    /// [`Self::command`], unless it has more than [`MAX_WORDS`] words
+    /// (rule 18: it fails). Counted after variables are replaced (the note
+    /// doesn't say; no script line has more than 29 words, data).
+    fn checked_command(&mut self, words: &[String], host: &mut dyn ScriptHost, at: &str, depth: usize) {
+        if words.len() > MAX_WORDS {
+            host.log(format!("{at}: Console: Too many arguments ({} words): {}", words.len(), words.join(" ")));
+            self.vars.set(RETURN, "1".into());
+            return;
+        }
+        self.command(words, host, at, depth);
     }
 
     /// Runs one command (words expanded) and leaves its result in
@@ -306,31 +328,62 @@ impl Scripts {
     }
 }
 
-/// Splits a line (comment removed) into words; a double-quoted part is one
-/// word without its quotes, flagged as quoted.
-pub fn split_words(line: &str) -> Vec<(String, bool)> {
-    let mut words = Vec::new();
+/// One word as read.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Word {
+    pub text: String,
+    /// From `"…"` or `( … )`: one word, never split again.
+    pub quoted: bool,
+    /// Its `$` was inside single quotes: no replacement (rule 17).
+    pub literal: bool,
+}
+
+/// Splits a line (comment removed) into commands (at `;`, rule 18) and
+/// each into words: spaces and tabs separate words; a double-quoted part
+/// at the start of a word is one word without its quotes; `( … )` is one
+/// word without its brackets (rule 18); single quotes are dropped and
+/// switch `$` replacement off until the next one, words still split at
+/// spaces (rule 17). A quote left open ends with the line. Empty commands
+/// are left out.
+pub fn split_commands(line: &str) -> Vec<Vec<Word>> {
+    let mut commands = vec![Vec::new()];
     let mut chars = line.chars().peekable();
+    let mut single = false;
     while let Some(&c) = chars.peek() {
-        if c == ' ' || c == '\t' || c.is_whitespace() {
+        if c.is_whitespace() {
             chars.next();
-        } else if c == '"' {
+        } else if c == ';' {
             chars.next();
-            let w: String = chars.by_ref().take_while(|&c| c != '"').collect();
-            words.push((w, true));
+            commands.push(Vec::new());
+        } else if (c == '"' || c == '(') && !single {
+            chars.next();
+            let end = if c == '"' { '"' } else { ')' };
+            let text: String = chars.by_ref().take_while(|&c| c != end).collect();
+            commands.last_mut().unwrap().push(Word { text, quoted: true, literal: false });
         } else {
-            let mut w = String::new();
+            let (mut text, mut literal, mut had_quote) = (String::new(), false, false);
             while let Some(&c) = chars.peek() {
-                if c.is_whitespace() {
+                if c.is_whitespace() || c == ';' {
                     break;
                 }
-                w.push(c);
                 chars.next();
+                if c == '\'' {
+                    single = !single;
+                    had_quote = true;
+                    continue;
+                }
+                if text.is_empty() {
+                    literal = single;
+                }
+                text.push(c);
             }
-            words.push((w, false));
+            if !text.is_empty() || had_quote {
+                commands.last_mut().unwrap().push(Word { text, quoted: false, literal });
+            }
         }
     }
-    words
+    commands.retain(|c| !c.is_empty());
+    commands
 }
 
 /// The note's "looks like a number": a digit first, or `-` or `.`
@@ -402,9 +455,9 @@ pub fn block_balance(text: &str) -> (usize, usize, Vec<String>) {
     let (mut ifs, mut endifs, mut depth) = (0usize, 0usize, 0i64);
     let mut problems = Vec::new();
     for (n, raw) in text.lines().enumerate() {
-        let words = split_words(raw.split('#').next().unwrap_or(""));
+        let words: Vec<Word> = split_commands(raw.split('#').next().unwrap_or("")).into_iter().flatten().collect();
         let mut i = 0;
-        while let Some((w, _)) = words.get(i) {
+        while let Some(Word { text: w, .. }) = words.get(i) {
             match w.as_str() {
                 "else" => {
                     if depth == 0 {
@@ -482,6 +535,30 @@ mod tests {
         let mut s = Scripts::new(v);
         assert!(s.call("s.cs", &args(a), &mut host));
         (s, host)
+    }
+
+    #[test]
+    fn single_quotes_semicolons_brackets_and_the_word_limit() {
+        let words = |line: &str| -> Vec<Vec<String>> { split_commands(line).into_iter().map(|c| c.into_iter().map(|w| w.text).collect()).collect() };
+        // Rule 17: the marks go, words still split at spaces.
+        assert_eq!(words("KQMonster::setState Connor special 'AnimList=bricks.anm,AnimListOn,push'"), [["KQMonster::setState", "Connor", "special", "AnimList=bricks.anm,AnimListOn,push"]]);
+        assert_eq!(words("echo 'a b' c"), [["echo", "a", "b", "c"]]);
+        // Rule 18: `;` ends a command, `( … )` is one word.
+        assert_eq!(words("set A 1 ; set B 2;set C 3"), [vec!["set", "A", "1"], vec!["set", "B", "2"], vec!["set", "C", "3"]]);
+        assert_eq!(words("echo (two words) x"), [["echo", "two words", "x"]]);
+        // In a script: no replacement inside single quotes.
+        let (s, host) = run("set Q '$1' $1\nset R $1;set T done\necho (keep $1 here)\n", &["arg"], &[]);
+        assert_eq!(s.vars.get("Q"), Some("$1 arg"));
+        assert_eq!((s.vars.get("R"), s.vars.get("T")), (Some("arg"), Some("done")));
+        assert!(host.log.iter().any(|l| l.contains("echo keep $1 here")), "{:?}", host.log);
+        // More than 40 words: the command fails.
+        let long = format!("set Long {}\n", vec!["w"; 39].join(" "));
+        let (s, host) = run(Box::leak(long.into_boxed_str()), &[], &[]);
+        assert_eq!((s.vars.get("Long"), s.vars.get(RETURN)), (None, Some("1")));
+        assert!(host.log.iter().any(|l| l.contains("Console: Too many arguments (41 words)")));
+        let ok = format!("set Long {}\n", vec!["w"; 38].join(" "));
+        let (s, _) = run(Box::leak(ok.into_boxed_str()), &[], &[]);
+        assert!(s.vars.get("Long").is_some(), "40 words are fine");
     }
 
     #[test]

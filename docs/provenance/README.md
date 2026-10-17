@@ -1221,3 +1221,11 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Rule 3's first-update start keeps the random start of the movement shown at load, and uses up that update | **Stand-in**, asked as Q85 (the two rules meet on `davtorch`, the fish, the dead birds) | `anim.log`: `Davtorch.01` phase 0.2819 at update 1 |
 | A movement with no length: a loop stays, a play-once one has ended | Phase rule (it can't move); play-once as before 3i | Same unit test |
 | Unused objects (H key only) keep a player of their own, outside the world's scripts | **Our choice** (they are not part of the world) | — |
+
+## The script reader: single quotes, `;`, `( … )`, 40 words (M3 step 3i-5) — `crates/kq8-core/src/script.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Single quotes dropped, `$` replacement off until the next one, words still split at spaces | `anim-scripts.md` rule 17 | Unit test `single_quotes_semicolons_brackets_and_the_word_limit` |
+| `;` ends a command; `( … )` one word without brackets; more than 40 words → `Console: Too many arguments`, the command fails | Rule 18 | Same unit test |
+| The count is taken after variables are replaced; `;` inside single quotes ends a command; an open quote ends with the line | **Our choice** (not in the note; no data line has more than 29 words or a `;` in single quotes) | Data survey of all `.cs` files |

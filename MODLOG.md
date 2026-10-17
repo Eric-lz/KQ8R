@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3i-5: the script reader (single quotes, `;`, `( … )`, 40 words)
+
+**Changed:** `kq8-core/src/script.rs`: `split_words` replaced by `split_commands` (a `Word` keeps whether it was quoted and whether its `$` was inside single quotes): single quotes are dropped and switch `$` replacement off until the next one, words still split at spaces; `;` ends a command; `( … )` is one word without the brackets; a command of more than 40 words fails (`Console: Too many arguments`, `$Console::Return` 1). 1 new unit test. Provenance added.
+**Why:** The user's task, step 1 part 4: `anim-scripts.md` rules 17–18 (the bricks script's `'AnimList=bricks.anm,AnimListOn,push'` needs rule 17).
+**Tested how:** `cargo test -p kq8-core` (234 pass); viewer star globe run as in 3i-4, `doors.log` compared line by line with the run before.
+**Result:** Unit test: `'AnimList=bricks.anm,AnimListOn,push'` reaches the command as one word; `set Q '$1' $1` gives `$1 arg`; `set R $1;set T done` runs both; `echo (keep $1 here)` prints it as written; 41 words fail, 40 are fine. Viewer: `doors.log` the same as before (apart from update numbers), 0 errors.
+**Still broken / not tested:** The 40-word count is taken after variables are replaced (the note doesn't say; no script line in the 12 worlds has more than 29 words, so it can't matter). Whether `;` inside single quotes ends a command is not said; ours ends it (no data has it). The start-up follower (`kq8-data` `world_script.rs`) keeps its own simpler reader.
+**Next:** 3i-6, `KQStatsChangeRequestEvent` adds.
+
 ## 2026-10-17 M3 step 3i-4: scripts reach every animated object
 
 **Changed:** Architecture change, approved by the user. `kq8-core/src/active.rs`: new `AnimObject` list (`anims`) for the animated objects the viewer's `anim_view` draws (`water`, waterfall, torches, windmill, star globe, ...): they follow the same movement rules as doors and chests (`KQAnimPlayEvent`, waiting movement, `pauseAnim`, `EndLoop` / `getEndLoop`, cues with sounds, `deleteObject`). `door.rs`: one step for all (`step_with`): the repeating frame rule of 3c (round, wrap) and cue ranges at a wrap (`objects.md` "Loops" rule 4). `named_anim.rs`: `flags` bit 8 random start and speed (`with_random_start`, `speed_scale`). `kq8-viewer`: `load.rs` gives `anim_view` every movement of such an object, and objects with more than one movement join even when still; `anim_view.rs` no longer plays anything itself (only unused, H-key objects keep their own player), it draws the movement and frame core says; `terrain_view.rs` builds them before the doors so `Active` gets them. 3 new unit tests. Q85 asked; provenance added.
