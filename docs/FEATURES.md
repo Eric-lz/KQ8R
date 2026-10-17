@@ -216,6 +216,14 @@ objects don't stop it, as in the original. Checked in the logs
   far and switch off with the draw distance (27,100 in Daventry).
   Every start and stop is in `kq8-artifacts/logs/sound.log`. Checked in
   the logs and by ear by the user (doors, chests, pickups).
+- **Footsteps and Connor's own sounds** (2026-10-17): his animations'
+  cues fire (two steps per walk cycle, others in starts, stops, jumps
+  and landings; his crash and falling sounds too). The step sound
+  follows the ground: dirt, grass, rock or water from the ground's
+  material, rock on the big bridge, silence in the cave. House floors
+  without their own setting use dirt for now (not studied yet, Q81).
+  Checked in the logs (`connor.log`, `sound.log`) and by ear by the user
+  against the original (2026-10-17).
 
 ## Viewer helpers (not in the original)
 
@@ -314,7 +322,8 @@ message that shows the usage.
   fighting, saving, or travel between worlds.
 - **Not drawn:** people and monsters, fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
-- **Sound:** no footsteps, music, speech or hurt sounds yet; scenery
+- **Sound:** no music, speech or hurt sounds yet; monsters have no
+  footsteps (there are no monsters yet); scenery
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.
 - **Clicking:** doors, chests, items, scripted objects and buildings
@@ -325,6 +334,10 @@ message that shows the usage.
   don't switch them yet). A rolling rock that runs
   into Connor does nothing to him yet (in the original he stumbles and
   takes damage). Pushable objects can't be pushed.
+- **Jumping into things:** a standing jump into a tree or wall makes
+  Connor stumble (the crash and its sound), as the user saw in the
+  original; why it does that is not studied yet (Q82), so the details
+  while he's still in the air are our guess.
 - **Camera:** it doesn't swing back behind Connor by itself; no first
   person view (F2), camera shake or cutscene cameras.
 - **Water:** no damage yet (poison, lava, swamp).

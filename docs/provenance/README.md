@@ -1128,3 +1128,26 @@ Facts only; code and wording are our own. Numbers checked with
 | Started beyond max: plays silently until first heard; later beyond max: paused | Rule 30 | Viewer: water wheel started at 26,385 silently, heard from 19,245 in, paused at 20,049 |
 | `deleteObject` stops it for good | Rule 48 | Unit test only (`bricks.cs` not reached in our runs) |
 | Distance measured from Connor only, not the camera after `setActiveCamera`; `makeActive` not applied | **Not done yet** (`object-lighting.md` rule 42 says both apply to every object) | No Daventry script uses them on a sound object |
+
+## Connor's animation cues and footsteps (M3 step 3h-4) — `crates/kq8-core/src/{connor,sound}.rs`, `crates/kq8-viewer/src/{connor_view,load,sound_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A cue fires when its phase is in [lower, higher) of the update's phases | `doors.md` rule 9 | Unit test `cue_ranges_follow_rule_9_and_the_wrap`; `connor.log`: walk cues at 0.1 and 0.6 fire once per cycle (0.0605 → 0.1132, 0.5868 → 0.6395) |
+| Forward loop wrap: [old, 1.0001) then [0, new) | `objects.md` "Loops" rule 4 | Unit test |
+| Backward loop wrap: [0, old) then [new, 1.0001) | **Stand-in**, mirror of rule 4 (Q81 c) | Unit test |
+| Cue action names ignore capitals; `PlaySound` = placed one-shot at the object (Connor too) | `sound.md` rules 34, 35 | `connor.log` |
+| `FootStep` only for characters; plain one-shot, group 0 | Rules 36, 37 | `sound.log`: plain, loudness 0.140 |
+| Flags → set: 0x1 dirt, 0x2 grass, 0x4 rock, 0x8/0x100/0x40 water, 0x20 weirdb, else none | Rule 37, "Do not reproduce" 5 (kept) | Unit test `footstep_sets_and_files` |
+| Terrain: the square's `envInfo.kq` flags | Rule 37, `water.md` "Ground flags" | Walk near the fountain: dirt and water steps |
+| Building: 2ⁿ for `footsoundType=n` (0–8), else 0x1 | Rule 39 | Bridge `bigbrig2` (2): 15 rock steps; `cav2` (4): silent (unit test) |
+| Building without `footsoundType`: 0x1; on an object: the terrain under him; in the air: the last ground | **Stand-ins** (Q81 a, b, d) | Pub upper floor: 5 dirt steps logged "stand-in, Q81 a" |
+| File `<set>1/2/3` at 25 / 50 / 25 % | Rule 38 | Unit test `the_dice_give_25_50_25` (40,000 rolls within 5 %) |
+| The random number source (xorshift, fixed start) | **Our method** | — |
+
+## A standing jump into something crashes (stand-in for Q82) — `crates/kq8-core/src/connor_update.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A standing `jump` hitting something steep (up or across pass) crashes, like `runJump` | **User's check in the original** (2026-10-17), chosen as a stand-in; contradicts `connor-physics.md` "Jumping" rule 5 (Q82) | Unit test `a_standing_jump_into_a_wall_crashes_stand_in_q82`; `connor.log`: the tree at Daventry's start |
+| The crash plays to its end through a fall or a landing; still falling then, the hold animation | **Stand-in** (Q82 b; the user saw the stumble play) | `connor.log`: crash updates 24–30, landed at 30, `stop` at 31 |

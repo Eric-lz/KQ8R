@@ -43,7 +43,7 @@ items. The goal is the whole game; see the roadmap in
   log; no inventory screen yet).
 - **Traps**: invisible zones that, for example, make Connor walk indoors
   and run outdoors.
-- **Sound effects**: doors, chests, item pickups, script sounds and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
+- **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 
 Everything above was checked against the original, mostly by eye. Full

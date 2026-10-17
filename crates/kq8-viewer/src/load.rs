@@ -279,6 +279,8 @@ pub struct ConnorMovement {
     pub cut_short: bool,
     /// Its `transitionN` lines whose movements are all loaded.
     pub transitions: Vec<kq8_core::connor::Transition>,
+    /// Its `cueN` lines (M3 3h-4).
+    pub cues: Vec<(f32, String)>,
 }
 
 pub struct ConnorAssets {
@@ -1124,6 +1126,9 @@ pub struct Objects {
     /// `KQAudibleObject`s the start-up scripts load (M3 step 3h-3,
     /// sound.md rules 43-44).
     pub audibles: Vec<kq8_core::sound::Audible>,
+    /// Each building's `footsoundType` by lower-case name, `None` if it
+    /// has none (M3 3h-4, sound.md rule 39).
+    pub footsounds: BTreeMap<String, Option<i64>>,
     /// `KQPointLight` objects the start-up scripts load (object-lighting.md
     /// rules 24, 25; M1 7c-1): name and light.
     pub point_lights: Vec<(String, kq8_data::lights::PointLight)>,
@@ -1243,6 +1248,8 @@ struct CollisionInfo {
     accept_all_items: bool,
     too_far_away_action: i64,
     do_not_point_at: bool,
+    /// `footsoundType=` (buildings, `sound.md` rule 39; M3 3h-4).
+    footsound_type: Option<i64>,
 }
 
 /// `colliderType` / `colliderMask` from an object's section: a whole
@@ -1789,6 +1796,13 @@ impl Placer<'_> {
                 for p in &c.transition_problems {
                     self.log.summary(format!("connor: {name}: {p}"));
                 }
+                if !c.cues.is_empty() {
+                    let cues: Vec<String> = c.cues.iter().map(|(ph, a)| format!("{ph} {a}")).collect();
+                    self.log.detail(format!("connor: {name}: cues {}", cues.join(", ")));
+                }
+                for p in &c.cue_problems {
+                    self.log.summary(format!("connor: {name}: {p}"));
+                }
                 if !c.repeat || !c.transitions.is_empty() {
                     let steps: Vec<String> =
                         a.frame_steps.iter().map(|p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])).collect();
@@ -1801,6 +1815,7 @@ impl Placer<'_> {
                     repeat: c.repeat,
                     cut_short: c.unknown != 0,
                     transitions,
+                    cues: c.cues.clone(),
                 });
             }
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
@@ -2163,6 +2178,7 @@ impl Placer<'_> {
             // clicking.md rule 10: buildings default to 1, others to 0.
             too_far_away_action: number("tooFarAwayAction").map_or(if default_type == BUILDING_TYPE { kq8_core::active::BUILDING_TOO_FAR_AWAY_ACTION } else { 0 }, |v| v as i64),
             do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
+            footsound_type: number("footsoundType").map(|v| v as i64),
         });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
@@ -2703,6 +2719,7 @@ impl Placer<'_> {
         let mut buildings = Vec::new();
         let mut building_types = Vec::new();
         let mut building_clicks = Vec::new();
+        let mut footsounds = BTreeMap::new();
         let mut digs: BTreeMap<String, Option<kq8_data::building::Building>> = BTreeMap::new();
         for (k, (p, i, unused)) in self.placed.iter().enumerate() {
             let shape = &self.shapes[*i].0;
@@ -2742,6 +2759,10 @@ impl Placer<'_> {
                 bounds: c.bounds,
                 placement: c.placement,
             });
+            footsounds.insert(p.name.to_ascii_lowercase(), info.footsound_type);
+            if let Some(n) = info.footsound_type {
+                log.summary(format!("footsteps: building [{}] footsoundType={n} (sound.md rule 39)", p.name));
+            }
             buildings.push(c);
             building_types.push(info.collider_type);
         }
@@ -2803,6 +2824,7 @@ impl Placer<'_> {
             catchers: self.catchers,
             traps,
             audibles: self.audibles,
+            footsounds,
             point_lights: self.point_lights,
             animators: self.animators,
             animated: self.animated,

@@ -109,10 +109,15 @@ pub fn tick<'a>(
         step = Some(walker.update(intent, loops));
         mover.update([0.0; 3], world)
     } else {
-        mover.update_with(world, |_, fall| {
+        mover.update_with(world, |m, fall| {
             // Fall replaces the walk at once, so its first update already
             // uses the hold animation's step. A walk-off falls as `Stand`.
-            if fall == Some(FallEvent::Started) {
+            // STAND-IN (Q82 b, the user's check: the stumble plays): a
+            // crash plays to its end even when a fall starts during it;
+            // still falling then, the fall's hold animation takes over.
+            let crash_ended = walker.mode == Mode::Crash && walker.phase >= 1.0;
+            let falling = matches!(m.state, State::Fall { .. });
+            if (fall == Some(FallEvent::Started) && walker.mode != Mode::Crash) || (crash_ended && falling) {
                 walker.kind = crate::connor::JumpKind::Stand;
                 walker.set_mode(Mode::Fall);
             }
@@ -139,6 +144,8 @@ pub fn tick<'a>(
     }
     mover.submerged = submerged;
     match report.fall {
+        // Landing during a crash (Q82 b stand-in): the crash plays on.
+        Some(FallEvent::Landed(_)) if walker.mode == Mode::Crash => notes.push("landed during the crash: it plays on (stand-in Q82 b)".into()),
         Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
@@ -158,20 +165,24 @@ pub fn tick<'a>(
                 mover.back_jump_hit();
                 "gravity on, backJump plays on, then Fall"
             }
-            (JumpKind::Run, _) | (_, "down") => {
-                mover.end_jump_on_hit();
-                walker.set_mode(Mode::Crash);
-                "crash"
-            }
+            // connor-physics.md "Jumping" rule 5 says a standing `jump`
+            // that runs into something (up or across pass) stops and
+            // stands. STAND-IN (Q82): the user's check in the original
+            // (2026-10-17) is that it crashes, like `runJump`; until A
+            // explains why, every non-back jump hit crashes.
             _ => {
                 mover.end_jump_on_hit();
-                walker.stop_after_jump();
-                "stop (forward blocked)"
+                walker.set_mode(Mode::Crash);
+                if walker.kind == JumpKind::Run || pass == "down" {
+                    "crash"
+                } else {
+                    "crash (stand-in Q82: the note says stop)"
+                }
             }
         };
         notes.push(format!("{jump} hit {what} (steep, {pass} pass): the jump ends, {to}"));
         if walker.kind != JumpKind::Back {
-            wall_stop = Some((jump, if to == "crash" { "crash" } else { "stop" }));
+            wall_stop = Some((jump, if to.starts_with("crash") { "crash" } else { "stop" }));
         }
     } else if report.head_on {
         // Head-on into a wall: walking or stepping back stops at once;
@@ -641,11 +652,11 @@ mod tests {
     }
 
     #[test]
-    fn a_standing_jump_into_a_wall_stops_him_standing_with_forward_blocked() {
+    fn a_standing_jump_into_a_wall_crashes_stand_in_q82() {
+        // The note says stop; the user saw a crash in the original (Q82).
         let (t, m, w) = jump_into("stop", STAND, &Wall { at: -600.0 });
-        assert!(t.notes.iter().any(|n| n.contains("jump hit wall (steep, across pass): the jump ends, stop")), "{:?}", t.notes);
-        assert_eq!((w.mode, w.movement, w.blocked_name()), (Mode::Free, "stop", "fwd"));
-        assert_eq!((m.state, m.use_gravity, m.step_up), (State::Normal, true, 325.0));
+        assert!(t.notes.iter().any(|n| n.contains("jump hit wall (steep, across pass): the jump ends, crash (stand-in Q82")), "{:?}", t.notes);
+        assert_eq!((w.mode, m.state, m.use_gravity, m.step_up), (Mode::Crash, State::Normal, true, 325.0));
         assert!((m.position[1] + 375.0).abs() < 0.5, "stopped 225 from the wall: {:?}", m.position);
     }
 

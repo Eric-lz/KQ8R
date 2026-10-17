@@ -3,6 +3,33 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Stand-in for Q82: a standing jump into something crashes
+
+**Changed:** `kq8-core/src/connor_update.rs`: a standing `jump` that hits something steep in the up or across pass now crashes like `runJump` (the note says it stops); a crash plays to its end even when a fall starts or he lands during it, and if he is still falling then, the fall's hold animation takes over. Test renamed and changed: `a_standing_jump_into_a_wall_crashes_stand_in_q82`. `docs/behaviour/QUESTIONS.md` (Q82: stand-in in place), provenance, `docs/FEATURES.md`, `STATUS.md`.
+**Why:** The user's check in the original (2026-10-17): at the start, a standing jump into the tree makes Connor stumble with the crash sound. Chosen by the user as a stand-in until A answers Q82; it contradicts `connor-physics.md` "Jumping" rule 5.
+**Tested how:** `cargo test --workspace` (327 pass), clippy clean. `cargo play --world Daventry --jump 10 --frames 900 --sound off`, `connor.log`, `sound.log`.
+**Result:** Update 23: across hit on `tree.06` → "crash (stand-in Q82: the note says stop)". `crash` plays updates 24–30 (all 7), `crash.aud` starts at update 24 (placed at Connor, 0.140), its two footstep cues fire; the fall starts at 28, he lands at 30 ("landed during the crash: it plays on"), then `stop` at 31. Before: `stop` at 23, `jumphold` 28, `jumpend` 31.
+**Still broken / not tested:** Why the original crashes is not known (Q82 a). What a crash does when it ends high in the air is our guess (falls with `jumphold`, then `jumpend`); not seen in a run. Not checked by eye yet.
+**Next:** You: jump into the tree at the start and watch. A: Q82.
+
+## 2026-10-17 User's check of footsteps (3h-4); jump into a tree (Q82)
+
+**Changed:** `docs/behaviour/QUESTIONS.md` (Q81 a: the user's check; new **Q82**), `STATUS.md`, `docs/FEATURES.md`. No code.
+**Why:** The user listened, compared with the original, and reported a difference in jumping.
+**Tested how:** By ear and by eye, by the user, in our viewer and the original. Then `cargo play --world Daventry --jump 10 --frames 900 --sound off`, `connor.log`.
+**Result:** Footsteps "sound just like the original": stone on the bridge, splashing in the river; house and pub floors sound like the ground outside in the original, which our stand-in (dirt) gives. Jump: in the original a standing jump into the tree at the start makes Connor crash; ours stands (`stop`), then falls (`jumphold`, `jumpend`). Log: update 23, across pass, head-on into `tree.06` (normal (0, 1, 0)) → "the jump ends, stop (forward blocked)". That is what `connor-physics.md` "Jumping" rule 5 says, so the note and the original disagree: asked as Q82, not changed.
+**Still broken / not tested:** The jump into the tree (Q82).
+**Next:** A: Q82 (and Q81). Or, if the user wants, a stand-in from the user's check (see the reply).
+
+## 2026-10-17 M3 step 3h-4: Connor's animation cues and footsteps
+
+**Changed:** `kq8-core/src/connor.rs`: `MovementLoop::cues` and `cues_between` (the cue range with the wrap rule; 1 test). `kq8-core/src/sound.rs`: `footstep_set`, `building_floor_flags`, `footstep_file`, `Dice` (2 tests). Viewer: `load.rs` keeps Connor's `cueN` lines and each building's `footsoundType`; `connor_view.rs` fires his cues after each update (`footstep` → a plain step sound by the ground under him, `playsound` → a placed sound at him, the rest logged), `FootSounds` resource; `sound_view.rs` plays them; `main.rs`. New question **Q81** in `docs/behaviour/QUESTIONS.md`. `docs/DESIGN.md` (3h-4 plan, done), provenance, `README.md`, `docs/FEATURES.md`, `STATUS.md`.
+**Why:** The user asked for footsteps (`sound.md` rules 34–39).
+**Tested how:** `cargo test --workspace` (327 pass), clippy clean. Viewer runs with `--sound off`, `connor.log` and `sound.log` read: walk near the fountain `--at 208050,240000,-1.5708 --hold 1,0,0,300 --frames 3500`; across the bridge `--at 156500,266400,1.5708 --hold 1,0,0,220 --frames 2600`; the pub's upper floor `--at 202336,262400,1.5708 --lift 3400 --hold 1,0,0,60 --frames 900`.
+**Result:** Walk: 33 steps in 20 s, cues at 0.1 and 0.6 each cycle (phases 0.0605 → 0.1132 and 0.5868 → 0.6395); dirt, and water on 6 wet squares; files 1 / 2 / 3 picked 10 / 16 / 7 times. Bridge: 8 dirt steps on the slope, **15 rock steps on `bigbrig2`** (`footsoundType=2`). Pub upper floor: 5 steps "building without footsoundType: 0x1 (stand-in, Q81 a)" → dirt; walking off the edge, the landing (`jumpend`) fired its two footstep cues on the terrain. Both `footsoundType` buildings found (`cav2` 4, `bigbrig2` 2). First pub run stood on the ground floor, which is terrain there (z 8,160); `--lift` was needed to reach the upper floor.
+**Still broken / not tested:** **Not listened to.** House floors use dirt as a stand-in, objects the terrain under him (Q81 a, b); a backward loop's wrap is our mirror (Q81 c). Not tried: the cave (`cav2`, should be silent), stepping on an object. Monsters have no steps (none exist yet).
+**Next:** You: listen (see the reply), and if you can, compare house floors in the original (Q81 a). A: Q81.
+
 ## 2026-10-17 User's check of sound effects (M3 3h)
 
 **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`: sound marked as checked by ear. No code.

@@ -118,7 +118,7 @@ fn direction_to_game(v: Vec3) -> [f32; 3] {
 pub fn sound_step(
     sim: Option<ResMut<SoundSim>>,
     doors: Option<ResMut<DoorSim>>,
-    connor: Option<Res<ConnorSim>>,
+    connor: Option<ResMut<ConnorSim>>,
     camera: Query<&Transform, With<Camera3d>>,
     light: Option<Res<ObjectLight>>,
     time: Res<Time<Real>>,
@@ -133,10 +133,13 @@ pub fn sound_step(
         forward: direction_to_game(*cam.forward()),
     };
     // Rule 28: distance from Connor; no Connor in this world: the camera.
-    let listener = connor.map_or(view.position, |c| c.mover.position);
+    let mut connor = connor;
+    let listener = connor.as_ref().map_or(view.position, |c| c.mover.position);
     let ears = Ears { listener, view };
     let mut doors = doors;
-    let starts = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.sounds)).unwrap_or_default();
+    let mut starts = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.sounds)).unwrap_or_default();
+    // Connor's own cues: footsteps and playsound (M3 3h-4).
+    starts.extend(connor.as_mut().map(|c| std::mem::take(&mut c.sounds)).unwrap_or_default());
     let mut decoded: HashMap<String, Arc<Sound>> = HashMap::new();
     let (game, world) = (&sim.game, sim.world.as_str());
     for s in &starts {

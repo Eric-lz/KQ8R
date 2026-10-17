@@ -2862,6 +2862,39 @@ catchers, ground animators).
     one). Only 5 of the 6 are loaded at the start: `Waterfall2Sound`
     comes from `bricks.cs` (`loadKQ watrfsn2.kq` when the waterfall is
     blocked), and `loadKQ` while playing is still a stub.
+  - **3h-4, Connor's animation cues and footsteps (planned 2026-10-17;
+    done 2026-10-17, as planned).**
+    Asked for by the user after 3h-3. Two parts, one MODLOG entry.
+    - **Connor's cues.** His movements now keep their `cueN=` lines
+      (`Conner.anm`). After each of his updates, the cues between the
+      phase before and after the update fire, by `doors.md` rule 9:
+      [lower, higher). At the wrap of a forward loop: [old, 1.0001) then
+      [0, new) (`objects.md` "Loops" rule 4); a backward loop's wrap
+      (his `back`) mirrors it, [0, old) then [new, 1.0001) (stand-in,
+      Q81 c). A transition cut short at its from point fires only up to
+      there; the new movement starts at 0 the next update, so its cue at
+      0.0 fires then. Action names ignore capitals (rule 34);
+      `PlaySound` = a placed one-shot at Connor (rule 35), `FootStep` =
+      below; `EndLoop`, `Do`, `SendEvent`, `Interruptable` are logged
+      only (not built for Connor).
+    - **Footsteps** (rules 36–39): a plain one-shot, group 0. The ground
+      he stands on (this update's down-pass contact, else the last one,
+      stand-in Q81 d): the terrain gives the square's `envInfo.kq` flags;
+      a building gives 2ⁿ for `footsoundType=n` (n 0–8, other values
+      0x1); a building without the key 0x1 (stand-in, Q81 a); an object
+      the terrain flags under him (stand-in, Q81 b). The first match of
+      0x1 dirt, 0x2 grass, 0x4 rock, 0x8 / 0x100 / 0x40 water, 0x20
+      weirdb picks the set, none = no step (so `cav2.kq`'s 4 is silent,
+      "Do not reproduce" 5, kept). File `<set>1/2/3` at 25 / 50 / 25 %,
+      from a small random number generator of ours (fixed start, so test
+      runs repeat). Found by rule 13 (`dirt1` → `DIRT1.AUD`).
+    - Logs: `connor.log` gets a line per cue fired; `sound.log` the start
+      with what he stood on, the flags, the set and the roll.
+    - **Test:** unit tests for the cue range (forward, wrap, cue at 0.0
+      and 1.0, backward, backward wrap), the set order, the 25/50/25
+      split, `footsoundType`. Viewer: walk on grass, on the bridge
+      (`bigbrig2`, rock) and in a house; count steps in `sound.log`
+      (walk: 2 per cycle); the user listens.
   - Not in 3h: music (rule 57), speech (rule 58), ducking (rule 53),
     pause (rule 54), fades (rule 33, music only), hurt sounds (rule 41,
     need fighting).

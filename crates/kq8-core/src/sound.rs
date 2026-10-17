@@ -448,6 +448,70 @@ impl SoundSystem {
     }
 }
 
+/// Footsteps (M3 step 3h-4, rules 36-39): the sound set for the ground
+/// flags under a character, the first that matches in this order; `None`
+/// = no step (e.g. only 0x10, or only 0x80 lava). `weirda` is never picked
+/// and 0x10 is silent ("Do not reproduce" 5, kept).
+pub fn footstep_set(flags: u32) -> Option<&'static str> {
+    if flags & 0x1 != 0 {
+        Some("dirt")
+    } else if flags & 0x2 != 0 {
+        Some("grass")
+    } else if flags & 0x4 != 0 {
+        Some("rock")
+    } else if flags & (0x8 | 0x100 | 0x40) != 0 {
+        Some("water")
+    } else if flags & 0x20 != 0 {
+        Some("weirdb")
+    } else {
+        None
+    }
+}
+
+/// Rule 39: the flags of a building's floor from its `footsoundType`: 2ⁿ
+/// for n from 0 to 8, else 0x1 (dirt). A building without the key: 0x1
+/// too (our stand-in, Q81 a: not traced).
+pub fn building_floor_flags(footsound_type: Option<i64>) -> u32 {
+    match footsound_type {
+        Some(n) if (0..=8).contains(&n) => 1 << n,
+        _ => 0x1,
+    }
+}
+
+/// Rule 38: which of the set's three files a roll of 0-3 picks: 25 % file
+/// 1, 50 % file 2, 25 % file 3. No extension (found by rule 13).
+pub fn footstep_file(set: &str, roll: u32) -> String {
+    let n = match roll % 4 {
+        0 => 1,
+        3 => 3,
+        _ => 2,
+    };
+    format!("{set}{n}")
+}
+
+/// A small random number source for the footstep pick (our own: a
+/// 64-bit xorshift with a fixed start, so test runs repeat).
+#[derive(Debug, Clone)]
+pub struct Dice(u64);
+
+impl Default for Dice {
+    fn default() -> Self {
+        Dice(0x9E37_79B9_7F4A_7C15)
+    }
+}
+
+impl Dice {
+    /// 0, 1, 2 or 3, each a quarter of the time.
+    pub fn roll4(&mut self) -> u32 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        (x >> 62) as u32
+    }
+}
+
 /// Radius of a sound object's ball in the near/far/off test: it has no
 /// shape (rule 47, `object-lighting.md` rule 35).
 pub const AUDIBLE_RADIUS: f32 = kq8_data::objects::NO_SHAPE_RADIUS;
@@ -755,6 +819,39 @@ mod tests {
             });
         }
         assert_eq!(tries, 1, "a failed file is not looked for again");
+    }
+
+    #[test]
+    fn footstep_sets_and_files() {
+        assert_eq!(footstep_set(0x1 | 0x2), Some("dirt"), "first match wins");
+        assert_eq!(footstep_set(0x2), Some("grass"));
+        assert_eq!(footstep_set(0x4), Some("rock"));
+        assert_eq!(footstep_set(0x8), Some("water"));
+        assert_eq!(footstep_set(0x100), Some("water"));
+        assert_eq!(footstep_set(0x40), Some("water"));
+        assert_eq!(footstep_set(0x20), Some("weirdb"));
+        assert_eq!(footstep_set(0x10), None, "weird1 / cav2.kq: silent");
+        assert_eq!(footstep_set(0x80), None, "lava alone: silent");
+        assert_eq!(footstep_set(0), None);
+        // Rule 39: bigbrig2.kq 2 -> rock, cav2.kq 4 -> silent.
+        assert_eq!(footstep_set(building_floor_flags(Some(2))), Some("rock"));
+        assert_eq!(footstep_set(building_floor_flags(Some(4))), None);
+        assert_eq!(building_floor_flags(Some(9)), 0x1);
+        assert_eq!(building_floor_flags(None), 0x1, "stand-in, Q81 a");
+        assert_eq!([0, 1, 2, 3].map(|r| footstep_file("grass", r)), ["grass1", "grass2", "grass2", "grass3"]);
+    }
+
+    #[test]
+    fn the_dice_give_25_50_25() {
+        let mut d = Dice::default();
+        let mut count = [0u32; 3];
+        for _ in 0..40_000 {
+            let f = footstep_file("x", d.roll4());
+            count[(f.as_bytes()[1] - b'1') as usize] += 1;
+        }
+        for (got, want) in count.iter().zip([10_000.0, 20_000.0, 10_000.0]) {
+            assert!((*got as f64 - want).abs() < want * 0.05, "{count:?}");
+        }
     }
 
     #[test]

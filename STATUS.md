@@ -31,6 +31,15 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
     `kq8-artifacts/logs/sound.log`. Viewer option `--sound off` mutes.
   - **Checked by ear by the user (2026-10-17):** chest, pickup, door
     (louder on the left as expected), doors and items in normal play.
+  - **Footsteps (3h-4):** Connor's animation cues now fire (doors.md
+    rule 9, the wrap rule of `objects.md`); a `footstep` cue plays
+    dirt / grass / rock / water by the ground under him (terrain
+    flags, or a building's `footsoundType`), a `playsound` cue a placed
+    sound at him. Stand-ins asked as **Q81** (house floors without
+    `footsoundType` = dirt; objects = the terrain under him; the
+    backward loop's wrap; in the air = the last ground). Checked by ear
+    by the user (2026-10-17): like the original (stone on the bridge,
+    water in the river, house floors like the ground outside).
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -80,7 +89,7 @@ milestone: **M3, Daventry comes alive**.
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (203 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (206 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump),
   `connor.rs` (keys → movement, turning, banking, steps from the
@@ -196,17 +205,16 @@ milestone: **M3, Daventry comes alive**.
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked in the
   logs only, not by ear yet.
-- Tests: 324 unit tests pass (105 + 203 + 5 + 11), 2026-10-17.
+- Tests: 327 unit tests pass (105 + 206 + 5 + 11), 2026-10-17.
 
 ## What doesn't work yet / next
 
-- **Next step, suggested:** the user listens to the sounds (MODLOG
-  2026-10-17, 3h). Then for B: footsteps (`sound.md` rules 36–39; needs
-  Connor's animation cues to be run first, a step of its own), cues of
-  scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
+- **Next step, suggested:** the user listens to the footsteps (and
+  checks Q81 a in the original: inside Connor's hut and on the bridge).
+  Then for B: cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
   scripted movements, remarks, inventory screen). The brightness setting
   (rule 17) is still not built.
-- Sound, not done: footsteps, the item land sound (nothing is thrown),
+- Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), ducking under speech, pause, music, speech,
   `loadKQ` while playing (so `Waterfall2Sound` never appears), and
   `setActiveCamera` / `makeActive` for sound objects.
@@ -250,6 +258,12 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
+- Q82: a standing jump into a tree crashes in the original (user's
+  check) but the note says he stops and stands. Ours now crashes (stand-in
+  from the user's check, 2026-10-17); why is still open.
+- Q81: footsteps: what a building floor without `footsoundType` and an
+  object top give, the cue range of a backward loop at its wrap, the
+  ground while in the air. Stand-ins in place (3h-4).
 - Q80: how A counted two numbers of the light-map placement check
   (surfaces with a corner at exactly 0: note 7,511, we get 365 / 7,276;
   P0 within 0.05 of (4, 4): note 160,649, we get 164,640). The command

@@ -91,9 +91,35 @@ pub struct MovementLoop {
     pub cut_short: bool,
     /// Its `transitionN` lines, in file order.
     pub transitions: Vec<Transition>,
+    /// Its `cueN=<phase> <action>` lines, in file order (M3 3h-4).
+    pub cues: Vec<(f32, String)>,
 }
 
+/// Just above 1: the end of the range checked up to a forward loop's wrap
+/// (`objects.md` "Loops" rule 4), so a cue at 1.0 fires once per cycle.
+pub const WRAP_END: f32 = 1.0001;
+
 impl MovementLoop {
+    /// The cues passed when the phase went from `from` to `to` in one
+    /// update (`doors.md` rule 9: a cue at c fires when c is in [lower,
+    /// higher)). A forward loop that wrapped checks [from, 1.0001) and
+    /// [0, to) (`objects.md` "Loops" rule 4); a backward loop that wrapped
+    /// [0, from) and [to, 1.0001) (our mirror of it, Q81 c).
+    pub fn cues_between(&self, from: f32, to: f32) -> Vec<&str> {
+        let ranges: [(f32, f32); 2] = if self.repeat && self.speed >= 0.0 && to < from {
+            [(from, WRAP_END), (0.0, to)]
+        } else if self.repeat && self.speed < 0.0 && to > from {
+            [(0.0, from), (to, WRAP_END)]
+        } else {
+            [(from.min(to), from.max(to)), (0.0, 0.0)]
+        };
+        self.cues
+            .iter()
+            .filter(|(c, _)| ranges.iter().any(|&(lo, hi)| *c >= lo && *c < hi))
+            .map(|(_, a)| a.as_str())
+            .collect()
+    }
+
     /// The step of a one-shot between phases `p0` and `p1` (0 ≤ p0 ≤ p1
     /// ≤ 1): each frame's step over the part of that frame's time the
     /// interval covers (connor-movement.md "Steps in the start
@@ -734,6 +760,35 @@ impl Walker {
 mod tests {
     use super::*;
 
+    fn with_cues(repeat: bool, speed: f32, cues: &[f32]) -> MovementLoop {
+        MovementLoop { repeat, speed, cues: cues.iter().map(|&c| (c, format!("at {c}"))).collect(), ..Default::default() }
+    }
+
+    #[test]
+    fn cue_ranges_follow_rule_9_and_the_wrap() {
+        // Walk: footsteps at 0.1 and 0.6 (Conner.anm).
+        let walk = with_cues(true, 1.0, &[0.6, 0.1]);
+        assert_eq!(walk.cues_between(0.05, 0.15), ["at 0.1"]);
+        assert!(walk.cues_between(0.1001, 0.5).is_empty());
+        assert_eq!(walk.cues_between(0.1, 0.2), ["at 0.1"], "the lower end counts");
+        assert!(walk.cues_between(0.0, 0.1).is_empty(), "the higher end doesn't");
+        assert_eq!(walk.cues_between(0.55, 0.15), ["at 0.6", "at 0.1"], "wrap: both");
+        // A cue at 1.0 fires at a forward wrap, one at 0.0 after it.
+        let ends = with_cues(true, 1.0, &[1.0, 0.0]);
+        assert_eq!(ends.cues_between(0.95, 0.02), ["at 1", "at 0"]);
+        // A play-once movement ending at exactly 1.0 excludes it (rule 4).
+        let once = with_cues(false, 1.0, &[0.0, 1.0]);
+        assert_eq!(once.cues_between(0.0, 0.1), ["at 0"]);
+        assert!(once.cues_between(0.9, 1.0).is_empty());
+        // Back (c_walk at speed -1): phase falls; wrap mirrors.
+        let back = with_cues(true, -1.0, &[0.6, 0.1]);
+        assert_eq!(back.cues_between(0.65, 0.55), ["at 0.6"]);
+        assert_eq!(back.cues_between(0.12, 0.08), ["at 0.1"]);
+        assert_eq!(back.cues_between(0.03, 0.95), Vec::<&str>::new());
+        // A (large) backward wrap from 0.15 to 0.58 passes both.
+        assert_eq!(back.cues_between(0.15, 0.58), ["at 0.6", "at 0.1"]);
+    }
+
     /// A lookup over a list of named loops, as the viewer gives it.
     fn lookup<'a>(list: &'a [(&'static str, MovementLoop)]) -> impl Fn(&str) -> Option<&'a MovementLoop> + 'a {
         move |m| list.iter().find(|(n, _)| *n == m).map(|(_, l)| l)
@@ -1020,6 +1075,7 @@ mod tests {
             frame_steps,
             cut_short: false,
             transitions: Vec::new(),
+            cues: Vec::new(),
         }
     }
 
