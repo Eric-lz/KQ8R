@@ -1,0 +1,5 @@
+# Short commands for this project.
+[alias]
+# `cargo play [options]`: build and run the game's viewer (release build),
+# e.g. `cargo play --world DeadCity --dynamic on`.
+play = "run --release -p kq8-viewer --"

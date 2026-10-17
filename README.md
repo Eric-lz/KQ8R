@@ -21,27 +21,24 @@ items. The goal is the whole game; see the roadmap in
 
 - **Reading the game's files**: archives, images, 3D models, buildings,
   ground, world scripts, item types.
-- **Seeing a world**: ground, buildings and objects placed as in the
-  original. All 12 worlds load; Daventry is the best checked.
-- **Connor moves like the original**: walk, run, turn, jump, lean into
-  turns, slide on steep slopes, fall, wade through water. Walls, floors
-  and objects are solid.
 - **Camera** that follows Connor and stays out of walls, as in the
   original.
+- **World**: terrain, buildings and objects placed as in the
+  original. All 12 worlds load; Daventry is the best checked.
+- **Lighting**: terrain, objects and Connor lit by the world's
+  light and sun, buildings by their own light maps. Dynamic lights like portals and torches.
+- **Distance fog**: a dark fog hides everything far away, and far objects switch off as in the original (F8 on/off).
+- **Particles**: falling leaves, snow, flowing rivers, windmills,
+  torches.
+- **Movement**: walk, run, turn, jump, lean into
+  turns, slide on steep slopes, fall, wade through water. Walls, floors
+  and objects are solid.
 - **Doors** open with a mouse click when Connor is close enough.
 - **Chests, baskets and items**: open them, pick things up (counted in a
   log; no inventory screen yet).
-- **Ground lighting**: hill shadows from the game's light maps, as dark
-  as in the original.
-- **Object and building lighting**: objects and Connor lit by the world's
-  light and sun, buildings by their own light maps.
-- **Choice of graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
-- **Distance fog**: a dark fog hides everything far away, and far objects switch off as in the original (F8 on/off).
-- **Point lights on objects, walls, floors and the ground** (Dead City's lights, fireplaces, lamps), as in the original; F9 switches them.
-- **Living world**: falling leaves, snow, flowing rivers, windmills,
-  torches.
 - **Traps**: invisible zones that, for example, make Connor walk indoors
   and run outdoors.
+- **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
@@ -76,7 +73,7 @@ Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 Open a terminal in this folder and run:
 
 ```sh
-cargo run --release -p kq8-viewer
+cargo play
 ```
 
 This opens Daventry's ground with its objects and lets you walk Connor arund.
@@ -84,10 +81,11 @@ To open a different world, use the `--world` flag.
 For example, to spawn Connor in the Swamp, you can use
 
 ```sh
-cargo run --release -p kq8-viewer -- --world swamp
+cargo play --world swamp
 ```
 
-*The first `--` separates Cargo's options from the viewer's options.*
+*`cargo play` is a short name for `cargo run --release -p kq8-viewer --`
+(set in `.cargo/config.toml`); either form works.*
 
 Other worlds: Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
 temple1–temple4, CastleD. (not case-sensitive)
@@ -120,6 +118,7 @@ The first build takes several minutes.
 | U | *DEBUG:* Show the ground under the water |
 | F7 | *DEBUG:* Light of the ground and objects: x1 (default, as in the original), x2, off |
 | F8 | *DEBUG:* Haze (distance fog) on / off |
+| F9 | *DEBUG:* Dynamic lights on / off |
 | G / B | *DEBUG:* Test: lift Connor high / a little and let him fall |
 | Esc | Quit |
 
@@ -144,7 +143,7 @@ cargo run --release -- item-verify
 ```
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the
-game's text files; `cargo run --release -p kq8-viewer -- --model smlchest.KQS` shows one model on its own.
+game's text files; `cargo play --model smlchest.KQS` shows one model on its own.
 
 ## How the repository is organised
 

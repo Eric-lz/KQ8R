@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 `cargo play`: a short command for the viewer
+
+**Changed:** New `.cargo/config.toml` with the alias `play = "run --release -p kq8-viewer --"` (first named `viewer`; renamed at the user's request); `.gitignore` whitelists it; `README.md` ("Try it") and `docs/FEATURES.md` ("Launch options") use `cargo play`. The user's own README edits (feature list, F9 row) kept.
+**Why:** The user asked for a way to run the viewer without `-p kq8-viewer`. Making it the workspace's default member would have broken `cargo run -- vol-verify` (the checks), so an alias instead.
+**Tested how:** `cargo play --world DeadCity --dynamic on --frames 60` (and the same with the first name, `viewer`); `viewer.log`.
+**Result:** Exit 0; "world: DeadCity", "Shadow map dedshado.bin (--dynamic on)", "RESULT: PASS". `cargo run -- <check>` unchanged.
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-17 User's check of F9 (M1 7j)
 
 **Changed:** `STATUS.md`, `docs/FEATURES.md`: F9 marked as checked by eye. No code.

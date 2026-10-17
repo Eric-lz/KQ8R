@@ -22,6 +22,7 @@
 !/Cargo.toml
 !/Cargo.lock
 !/rust-toolchain.toml
+!/.cargo/config.toml
 
 # Documentation
 !/docs/*.md
