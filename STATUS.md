@@ -277,10 +277,12 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- For B (answered 2026-10-17, not built): Q82 (replace the stand-in with
-  the corrected crash rule; differences: hits on walkable surfaces that
-  are not head-on, and `KQMonster`s, don't crash) and Q81 (c) (stand-in
-  already right; only the forward-wrap transition detail is new).
+- Q82: **built 2026-10-17** (B): a jump hit crashes on the down pass or
+  when head-on (`connor_update.rs` `jump_hit_outcome`). New **Q84** for A:
+  (a) a steep jump hit that isn't head-on (`KQMonster`, flag; not
+  reachable yet), (b) does Connor turn while `crash` plays?
+- For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
+  right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
   change cuts the old tune): not traced, checks by ear suggested.
 - Q53: camera obstacle details (how the view line meets the ground and a

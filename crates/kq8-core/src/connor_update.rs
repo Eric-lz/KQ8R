@@ -7,7 +7,7 @@
 //! the user's checks of jumping in the original (docs/DESIGN.md M2 2e).
 
 use crate::connor::{Intent, JumpKind, Mode, MovementLoop, Step, Walker};
-use crate::connor_mover::{FallEvent, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
+use crate::connor_mover::{FallEvent, HitRecord, Mover, MoverWorld, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
 
 /// What one update did.
 #[derive(Debug, Clone)]
@@ -146,46 +146,47 @@ pub fn tick<'a>(
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
     }
-    // A steep hit ends a jump (rule 5): during `backJump` he slides, gravity
-    // comes on and the animation plays on to its end, then Fall as usual
-    // (the user's check in the original: no crash, no stumble); a
-    // down-pass hit, or any during `runJump`, crashes; an up or across hit
-    // during `jump` stands him still.
+    // A steep hit ends a jump (connor-physics.md "Jumping" rule 5).
     let mut wall_stop = None;
     let first_back_hit = walker.kind != JumpKind::Back || !mover.use_gravity;
-    if let (Mode::Jump, Some(pass), true) = (walker.mode, report.jump_hit, first_back_hit) {
+    let steep_hit = report.hits.iter().find(|h| h.hit.normal[2] < WALKABLE_NORMAL_Z);
+    if let (Mode::Jump, Some(_), Some(hit), true) = (walker.mode, report.jump_hit, steep_hit, first_back_hit) {
         let jump = walker.kind.jump();
-        let what = report.hits.iter().find(|h| h.pass == pass).map_or("?".into(), |h| h.hit.what.clone());
-        let to = match (walker.kind, pass) {
-            (JumpKind::Back, _) => {
-                mover.back_jump_hit();
-                "gravity on, backJump plays on, then Fall"
-            }
-            // connor-physics.md "Jumping" rule 5 says a standing `jump`
-            // that runs into something (up or across pass) stops and
-            // stands. STAND-IN (Q82): the user's check in the original
-            // (2026-10-17) is that it crashes, like `runJump`; until A
-            // explains why, every non-back jump hit crashes.
-            _ => {
-                mover.end_jump_on_hit();
-                walker.set_mode(Mode::Crash);
-                if walker.kind == JumpKind::Run || pass == "down" {
-                    "crash"
-                } else {
-                    "crash (stand-in Q82: the note says stop)"
-                }
-            }
-        };
-        notes.push(format!("{jump} hit {what} (steep, {pass} pass): the jump ends, {to}"));
-        if walker.kind != JumpKind::Back {
-            wall_stop = Some((jump, if to.starts_with("crash") { "crash" } else { "stop" }));
+        let (crash, to) = jump_hit_outcome(walker.kind, hit);
+        if crash {
+            mover.end_jump_on_hit();
+            walker.set_mode(Mode::Crash);
+            wall_stop = Some((jump, "crash"));
+        } else {
+            mover.back_jump_hit();
         }
+        notes.push(format!("{jump} hit {} (steep, {} pass): the jump ends, {to}", hit.hit.what, hit.pass));
     } else if report.head_on {
         // Head-on into a wall: walking or stepping back stops at once;
         // running crashes from the next update.
         wall_stop = walker.head_on_at_wall();
     }
     Tick { step, report, wall_stop, notes }
+}
+
+/// What a steep hit during a jump does (connor-physics.md "Jumping" rule
+/// 5 and "Walls", corrected 2026-10-17 by A's answer to Q82): whether he
+/// crashes, and the end of the log line. Either way the jump ends.
+/// - `backJump`: never crashes; the flip plays on (user's check, Q41 b).
+/// - A down-pass hit during `jump` or `runJump`: crash.
+/// - An up, across or slide hit: crash only if the head-on test said
+///   head-on. During a jump every steep surface is head-on (the mover's
+///   `steep_head_on`), and both `jump` and `runJump` are in the crash list.
+/// - Otherwise (not head-on: against a `KQMonster` or with the Connor flag,
+///   neither of which our code has yet): rule 5 doesn't say what follows.
+///   STAND-IN (Q84 a): as a `backJump` hit, the animation plays on.
+pub fn jump_hit_outcome(kind: JumpKind, hit: &HitRecord) -> (bool, &'static str) {
+    match (kind, hit.pass, hit.result) {
+        (JumpKind::Back, _, _) => (false, "gravity on, backJump plays on, then Fall"),
+        (_, "down", _) => (true, "crash (landed on something steep)"),
+        (_, _, "head-on") => (true, "crash (head-on; jump and runJump are in the crash list)"),
+        _ => (false, "not head-on: gravity on, the jump plays on, then Fall (stand-in Q84 a)"),
+    }
 }
 
 #[cfg(test)]
@@ -648,10 +649,11 @@ mod tests {
     }
 
     #[test]
-    fn a_standing_jump_into_a_wall_crashes_stand_in_q82() {
-        // The note says stop; the user saw a crash in the original (Q82).
+    fn a_standing_jump_into_a_wall_crashes_head_on() {
+        // Rule 5 as corrected by Q82: `jump` is in the crash list.
         let (t, m, w) = jump_into("stop", STAND, &Wall { at: -600.0 });
-        assert!(t.notes.iter().any(|n| n.contains("jump hit wall (steep, across pass): the jump ends, crash (stand-in Q82")), "{:?}", t.notes);
+        assert!(t.notes.iter().any(|n| n.contains("jump hit wall (steep, across pass): the jump ends, crash (head-on")), "{:?}", t.notes);
+        assert_eq!(t.report.hits.last().map(|h| h.result), Some("head-on"));
         assert_eq!((w.mode, m.state, m.use_gravity, m.step_up), (Mode::Crash, State::Normal, true, 325.0));
         assert!((m.position[1] + 375.0).abs() < 0.5, "stopped 225 from the wall: {:?}", m.position);
     }
@@ -659,7 +661,7 @@ mod tests {
     #[test]
     fn a_running_jump_into_a_wall_crashes() {
         let (t, m, w) = jump_into("run", RUN, &Wall { at: -2000.0 });
-        assert!(t.notes.iter().any(|n| n.contains("runJump hit wall (steep, across pass): the jump ends, crash")), "{:?}", t.notes);
+        assert!(t.notes.iter().any(|n| n.contains("runJump hit wall (steep, across pass): the jump ends, crash (head-on")), "{:?}", t.notes);
         assert_eq!((w.mode, m.state, m.use_gravity), (Mode::Crash, State::Normal, true));
     }
 
@@ -699,7 +701,33 @@ mod tests {
         // Rising toward −y at 63° (normal z 0.447): the jump's arc goes
         // into it, and the down pass finds the hillside above him.
         let (t, m, w) = jump_into("stop", STAND, &Plane(-2.0));
-        assert!(t.notes.iter().any(|n| n.contains("jump hit terrain (steep, down pass): the jump ends, crash")), "{:?}", t.notes);
+        assert!(t.notes.iter().any(|n| n.contains("jump hit terrain (steep, down pass): the jump ends, crash (landed")), "{:?}", t.notes);
         assert_eq!((w.mode, m.state), (Mode::Crash, State::Normal));
+    }
+
+    #[test]
+    fn only_head_on_or_down_pass_jump_hits_crash() {
+        let record = |pass, result| HitRecord {
+            pass,
+            hit: crate::connor_mover::Hit { position: [0.0; 3], touch: [0.0; 3], normal: [0.0, 1.0, 0.0], what: "x".into() },
+            angle: None,
+            result,
+        };
+        for kind in [JumpKind::Stand, JumpKind::Run] {
+            for (pass, result, crash) in [
+                ("down", "glance", true),
+                ("up", "head-on", true),
+                ("across", "head-on", true),
+                ("slide", "head-on", true),
+                // Not head-on (a `KQMonster` or the Connor flag): no crash.
+                ("across", "glance", false),
+                ("up", "stop", false),
+            ] {
+                assert_eq!(jump_hit_outcome(kind, &record(pass, result)).0, crash, "{kind:?} {pass} {result}");
+            }
+        }
+        for pass in ["down", "up", "across"] {
+            assert!(!jump_hit_outcome(JumpKind::Back, &record(pass, "head-on")).0);
+        }
     }
 }

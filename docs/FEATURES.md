@@ -347,8 +347,9 @@ message that shows the usage.
 - **Jumping into things:** a standing jump into a tree or wall makes
   Connor stumble (the crash and its sound), as the user saw in the
   original; when he starts falling the stumble is cut short and the
-  falling animation takes over (also the user's check). Why the original
-  crashes is not studied yet (Q82).
+  falling animation takes over (also the user's check). The rule behind
+  it is now A's (Q82). Not built: what a jump does against a monster
+  (Q84 a); whether he can turn during the stumble (Q84 b).
 - **Camera:** it doesn't swing back behind Connor by itself; no first
   person view (F2), camera shake or cutscene cameras.
 - **Water:** no damage yet (poison, lava, swamp).

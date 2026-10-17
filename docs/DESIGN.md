@@ -1157,6 +1157,41 @@ catchers, ground animators).
       from its beginning. The user listens.
   - Not in 3h: speech (rule 58), ducking (rule 53), pause (rules 54,
     57h), hurt sounds (rule 41, need fighting).
+- **Fix: a jump that hits something, from A's Q82 answer** (planned
+  2026-10-17; replaces the Q82 stand-in; **done** 2026-10-17, as
+  planned). Source: `connor-physics.md`
+  "Jumping" rule 5 and "Walls" (corrected 2026-10-17). One step, one
+  MODLOG entry.
+  - **The rule:** during `jump` or `runJump`, a steep hit (surface
+    normal z under 0.8) ends the jump (gravity on, steps 325). Then:
+    - a **down-pass** hit → `crash` (rule 5, first bullet);
+    - an **up, across or slide** hit → `crash` **only if the head-on
+      test said head-on** for that hit. During a jump every steep
+      surface is head-on (so both `jump` and `runJump` crash, they are
+      in the crash list), except against a `KQMonster` or while the
+      not-traced Connor flag is set;
+    - `backJump`: unchanged (no head-on, slides, plays on).
+  - **What changes in the code** (`kq8-core/src/connor_update.rs`): the
+    stand-in "every non-back jump hit crashes" becomes the decision
+    above, made from the hit's own record (its pass and its head-on
+    result) instead of "any steep hit". The "stand-in Q82" wording goes;
+    the log line says *why* it crashed ("down pass" or "head-on").
+  - **Not reachable today, logged if it happens:** a steep up/across hit
+    that is *not* head-on (a `KQMonster` or the flag: neither exists in
+    our code yet). Rule 5 says the jump ends; what follows is not said,
+    so it is asked as **Q84 (a)**; until then it is handled like a
+    `backJump` hit (gravity on, the animation plays on, then Fall) and
+    logged as a stand-in.
+  - **Not changed, asked as Q84 (b):** rule 5 says that at a crash
+    "turning stays allowed, and a turn key still held is passed on
+    again"; our `crash` ignores the keys (as "Walls" says for the run
+    crash). Which is right is not clear to B.
+  - **Test:** unit tests: standing jump into a wall → crash with
+    "head-on" in the note; running jump → crash; steep hill on the
+    down pass → crash; a glancing (non-head-on) steep hit in a jump →
+    no crash (built with a test world, since nothing in Daventry gives
+    one). Viewer: the tree at Daventry's start (`--jump 10`),
+    `connor.log`.
 
 ### M4 — Talk, listen, use the menus
 

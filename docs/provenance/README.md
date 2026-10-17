@@ -440,7 +440,7 @@ original (2026-10-12).
 | Head-on acts while jumping (state Jump) as in Move, and any surface with normal z < 0.8 counts as head-on; never during `backJump` | `connor-physics.md` "Walls" (traced) | Unit tests |
 | Up-pass hits during a jump are tested too (a vertical move is never head-on by angle, so only the steep rule; a ceiling counts) | "Exact hit handling" (head-on is tested on up and across passes, Q37 c) | Unit tests (through the wall tests) |
 | The first steep hit (normal z < 0.8) in any pass ends the jump: gravity on, steps 325 | "Jumping" rule 5 (traced) | Unit tests |
-| Down-pass steep hit during `jump` or `runJump`: `crash`. Up or across: `runJump` crashes, `jump` stands (`stop`, forward blocked as for a walking head-on stop) | Rule 5; the forward block from "Walk held against a wall" (Q38) | Unit tests (wall, 63° hill); viewer `--at 277744,199295,0 --jump 3`: `jump` hits `tree.06` (across), stands, falls 5 updates later, `jumpend`; `--at 277744,201500,0 --hold 1,0,1 --jump 13`: `runJump` hits it, `crash` |
+| Down-pass steep hit during `jump` or `runJump`: `crash`. Up or across: `runJump` crashes, `jump` stands (`stop`, forward blocked as for a walking head-on stop). **Replaced 2026-10-17** (Q82 stand-in, then A's corrected rule 5; see "A jump that hits something steep" below) | Rule 5 as it read then; the forward block from "Walk held against a wall" (Q38) | Unit tests (wall, 63° hill); viewer `--at 277744,199295,0 --jump 3`: `jump` hits `tree.06` (across), stands, falls 5 updates later, `jumpend`; `--at 277744,201500,0 --hold 1,0,1 --jump 13`: `runJump` hits it, `crash` |
 | `backJump` into a wall or steep hill: no head-on (it slides), gravity on and steps 325 (rule 5), but the animation plays on to its end (state still Jump), then Fall as at any jump's end (`backJumpHold` until the ground, usual death rule) | **User's check in the original** (no crash, no stumble, the flip keeps going, then the falling animation; Q41 b). Gravity on during the rest of the flip: rule 5 as traced, not visible to the user | Unit test (`a_back_flip_slides_along_the_wall_and_plays_on`); viewer `--at 277744,199295,3.14 --hold -1,0,0 --jump 2`: hits `tree.06` at update 13, `backJump` plays on to update 20, then `backJumpHold`, `backJumpEnd` |
 
 ## Collision boxes — `crates/kq8-data/src/bounds.rs`
@@ -1161,9 +1161,14 @@ Facts only; code and wording are our own. Numbers checked with
 | No music object: requests ignored (we write a `sound.log` line; the original says nothing) | Rule 57f; the log line is **our choice** | — |
 | The queue target name `<KQMusic>` | **Our method** (no object has that name) | — |
 
-## A standing jump into something crashes (stand-in for Q82) — `crates/kq8-core/src/connor_update.rs`
+## A jump that hits something steep (Q82, corrected rule) — `crates/kq8-core/src/connor_update.rs`
+
+Replaced the Q82 stand-in on 2026-10-17 (the stand-in: "every non-back jump hit crashes", from the user's check in the original).
 
 | What | Source | Check |
 | --- | --- | --- |
-| A standing `jump` hitting something steep (up or across pass) crashes, like `runJump` | **User's check in the original** (2026-10-17), chosen as a stand-in; contradicts `connor-physics.md` "Jumping" rule 5 (Q82) | Unit test `a_standing_jump_into_a_wall_crashes_stand_in_q82`; `connor.log`: the tree at Daventry's start |
-| A fall starting during the crash switches to the hold animation at once (the stumble is cut short) | **User's check in the original** (2026-10-17, Q82 b) | `connor.log`: crash updates 24–27, `jumphold` at 28, `jumpend` at 31 |
+| During `jump` or `runJump`, a steep hit (normal z < 0.8) on the **down pass** crashes | `connor-physics.md` "Jumping" rule 5, first bullet | Unit tests `landing_on_a_steep_hill_during_a_jump_crashes`, `only_head_on_or_down_pass_jump_hits_crash` |
+| An **up, across or slide** hit crashes only when the head-on test said head-on; during a jump every steep surface is head-on and `jump` and `runJump` are both in the crash list (`jump_hit_outcome`) | Rule 5, second bullet, and "Walls" (corrected 2026-10-17, Q82) | Unit tests `a_standing_jump_into_a_wall_crashes_head_on`, `a_running_jump_into_a_wall_crashes`, `only_head_on_or_down_pass_jump_hits_crash`; `connor.log`: "jump hit tree.06 (steep, across pass): the jump ends, crash (head-on; …)" at Daventry's start |
+| A steep up/across hit that is **not** head-on (a `KQMonster`, the Connor flag; neither exists in our code yet): the jump ends (gravity on, steps 325), no crash, the animation plays on as after a `backJump` hit | Jump ends: rule 5. What follows: **STAND-IN**, asked as Q84 (a) | Unit test `only_head_on_or_down_pass_jump_hits_crash` (not reachable in a run) |
+| A fall starting during the crash switches to the hold animation at once (the stumble is cut short) | **User's check in the original** (2026-10-17, Q82 b); rule 5 says it is not traced | `connor.log`: crash updates 24–27, `jumphold` at 28, `jumpend` at 31 |
+| The crash ignores the keys (no turning while it plays), as for the run crash | Unchanged; rule 5 now says "turning stays allowed, and a turn key still held is passed on again", unclear to B: asked as Q84 (b) | — |
