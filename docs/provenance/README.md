@@ -1145,6 +1145,21 @@ Facts only; code and wording are our own. Numbers checked with
 | File `<set>1/2/3` at 25 / 50 / 25 % | Rule 38 | Unit test `the_dice_give_25_50_25` (40,000 rolls within 5 %) |
 | The random number source (xorshift, fixed start) | **Our method** | — |
 
+## World music (M3 step 3h-5) — `crates/kq8-core/src/{music,sound,active,script}.rs`, `crates/kq8-viewer/src/{load,sound_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Fades: own level × loudness, 0.75 per second in the 200 ms steps, stop exactly at the target, wait while paused, at 0 the sound stops | `sound.md` rules 21, 33, 57g | Unit test `fades_step_with_housekeeping_wait_while_paused_and_stop_at_0`; `sound.log`: steps 0.15 apart, done 1.2–1.4 s after the start |
+| The list from `music.kq` (`nMusic`, `music<n>`), `music0` at the bottom; names ignore capitals | Rules 57, 57a | `sound.log`: "music object Music with [forest.aud]" |
+| Each tune a looping plain sound, group 5 | Rule 57a | `sound.log`: `forest.aud` group 5, loudness 0.140 |
+| World start: the top at full loudness, no fade | Rule 57b | Unit test `the_world_tune_starts_at_full_loudness_and_loops`; `sound.log` frame 1 |
+| push: nothing if on the list; old top fades out and stays; new one starts at 0 and fades in; empty list → full at once | Rule 57c | Unit tests `push_*`, `pop_of_an_unknown_or_the_only_tune`; wizard trap run |
+| pop: not on list nothing; top fades out and leaves, the one below fades in from its beginning (still fading out: from where it is); only one → silence; lower one leaves at once | Rule 57d | Unit tests `pop_*`; wizard trap run: `forest.aud` restarted (a new sound) |
+| play: top fades out and leaves, new one fades in, no name check | Rule 57e | Unit test `play_replaces_the_top_without_a_name_check` (no script uses it) |
+| Script push / pop 0.2 s of game time later through the event queue, in order; play at once; usage line; create / delete obsolete | Rule 57f | Unit test `music_push_and_pop_act_02_s_later_in_order_play_at_once`; `traps.log` "due at" |
+| No music object: requests ignored (we write a `sound.log` line; the original says nothing) | Rule 57f; the log line is **our choice** | — |
+| The queue target name `<KQMusic>` | **Our method** (no object has that name) | — |
+
 ## A standing jump into something crashes (stand-in for Q82) — `crates/kq8-core/src/connor_update.rs`
 
 | What | Source | Check |

@@ -371,8 +371,9 @@ fn main() -> ExitCode {
         }
         Scene::Ground(ground, mut objects, animation) => {
             let audibles = std::mem::take(&mut objects.audibles);
+            let music = objects.music.take();
             app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
-            if let Some(sound) = GameDir::open(&args.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &args.world, args.sound, audibles)) {
+            if let Some(sound) = GameDir::open(&args.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &args.world, args.sound, audibles, music)) {
                 app.insert_resource(sound);
             }
             app.insert_resource(light_view::GroundLight::new(ground.light.clone(), ground.other_light.clone(), args.light, ground.dynamic))

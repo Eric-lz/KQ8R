@@ -43,6 +43,7 @@ items. The goal is the whole game; see the roadmap in
   log; no inventory screen yet).
 - **Traps**: invisible zones that, for example, make Connor walk indoors
   and run outdoors.
+- **World music**: Daventry's tune, with cross-fades in the wizard's, unicorn's and church's zones.
 - **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 
@@ -52,7 +53,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 ### What doesn't work yet
 
 - No story, talking, inventory screen, fighting or saving.
-- No music or dialogue.
+- No dialogue.
 - No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).

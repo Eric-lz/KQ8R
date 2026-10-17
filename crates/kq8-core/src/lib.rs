@@ -18,6 +18,7 @@ pub mod emitter;
 pub mod events;
 pub mod ground_anim;
 pub mod item;
+pub mod music;
 pub mod named_anim;
 pub mod script;
 pub mod sound;

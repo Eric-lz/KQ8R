@@ -1126,6 +1126,9 @@ pub struct Objects {
     /// `KQAudibleObject`s the start-up scripts load (M3 step 3h-3,
     /// sound.md rules 43-44).
     pub audibles: Vec<kq8_core::sound::Audible>,
+    /// The world's music object (`KQMusic`, `music.kq`; M3 step 3h-5,
+    /// sound.md rule 57), if a start-up script loads one.
+    pub music: Option<kq8_core::music::Music>,
     /// Each building's `footsoundType` by lower-case name, `None` if it
     /// has none (M3 3h-4, sound.md rule 39).
     pub footsounds: BTreeMap<String, Option<i64>>,
@@ -1321,6 +1324,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         catchers: Vec::new(),
         traps: Vec::new(),
         audibles: Vec::new(),
+        music: None,
         point_lights: Vec::new(),
         animators: Vec::new(),
         animated: Vec::new(),
@@ -1515,6 +1519,7 @@ struct Placer<'a> {
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
     audibles: Vec<kq8_core::sound::Audible>,
+    music: Option<kq8_core::music::Music>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     animated: Vec<AnimatedAssets>,
@@ -1970,6 +1975,10 @@ impl Placer<'_> {
             self.place_audible(&label, s, p);
             return;
         }
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQMusic")) {
+            self.place_music(&label, s, p);
+            return;
+        }
 
         // Ground rules, when the object is loaded, so `getLoc` sees the
         // result: loadKQ z of -1 = on the floor, -2 = on the surface
@@ -2392,6 +2401,30 @@ impl Placer<'_> {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
         *self.by_class.entry("KQAudibleObject (sound object, M3 3h-3)".into()).or_default() += 1;
+    }
+
+    /// The music object (M3 step 3h-5, sound.md rule 57): `nMusic` tunes
+    /// `music0` .. `music<n-1>`, bottom first. A marker at its position.
+    fn place_music(&mut self, label: &str, s: &kq8_data::kq_text::Section, p: kq8_data::objects::Placement) {
+        let n = s.get("nMusic").and_then(|v| v.split_whitespace().next()?.parse::<usize>().ok()).unwrap_or(0);
+        let mut names = Vec::new();
+        for i in 0..n {
+            match s.get(&format!("music{i}")).map(str::trim).filter(|v| !v.is_empty()) {
+                Some(v) => names.push(v.to_string()),
+                None => self.log.summary(format!("music object {label}[{}]: no music{i}; left out", p.name)),
+            }
+        }
+        self.log.summary(format!("music object {label}[{}]: nMusic={n}, tunes bottom first [{}]", p.name, names.join(", ")));
+        if let Some(old) = &self.music {
+            self.log.summary(format!("  NOTE a second music object; it replaces [{}]", old.object));
+        }
+        self.music = Some(kq8_core::music::Music::new(&p.name, &names));
+        self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQMusic".into(), position: p.position, anm: false });
+        if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+            l.drawn = Drawn::Marker(self.markers.len() - 1);
+        }
+        *self.by_class.entry("KQMusic (music, M3 3h-5)".into()).or_default() += 1;
     }
 
     /// A `KQPointLight` (object-lighting.md rules 24, 25): kept by name with
@@ -2824,6 +2857,7 @@ impl Placer<'_> {
             catchers: self.catchers,
             traps,
             audibles: self.audibles,
+            music: self.music,
             footsounds,
             point_lights: self.point_lights,
             animators: self.animators,

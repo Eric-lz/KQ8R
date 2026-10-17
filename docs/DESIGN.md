@@ -2895,9 +2895,53 @@ catchers, ground animators).
       split, `footsoundType`. Viewer: walk on grass, on the bridge
       (`bigbrig2`, rock) and in a house; count steps in `sound.log`
       (walk: 2 per cycle); the user listens.
-  - Not in 3h: music (rule 57), speech (rule 58), ducking (rule 53),
-    pause (rule 54), fades (rule 33, music only), hurt sounds (rule 41,
-    need fighting).
+  - **3h-5, world music** (`KQMusic`, rules 33, 57–57l; planned
+    2026-10-17, after A answered Q83; **done** 2026-10-17, as planned,
+    tested with the wizard's trap `mwiztrap`: the church's trap can't be
+    left yet, its only way out is the rope). One MODLOG entry.
+    - **Fades** in `kq8-core` `sound.rs`: each playing sound gets a
+      *level* of its own (1 unless faded), multiplied into its loudness
+      (rule 21). A fade moves the level towards a target by 0.75 per
+      second in the 200 ms housekeeping steps (0.15 a step, so 0 → 1 in
+      7 steps), stops exactly at the target, waits while the sound is
+      paused (rule 57g), and a fade that reaches 0 stops the sound
+      (rule 33). A sound can start at level 0.
+    - **The tune list**, new `kq8-core` `music.rs` (`Music`): the tunes
+      from `music.kq` (`music0` at the bottom, rule 57); each tune a
+      looping plain sound in group 5 (rule 57a); names compared ignoring
+      capitals. World start: the top starts at full loudness, no fade
+      (57b). `push`: nothing if the name is anywhere on the list (57c 1);
+      else the old top fades out (and stays on the list, stopped at 0),
+      the new one starts at once at 0 and fades in, or at full loudness
+      if the list was empty (57c). `pop`: not on the list, nothing; the
+      top fades out and leaves the list, the one below fades in from its
+      beginning, or, if it is still fading out, from where it is (57d 2);
+      the only one: silence (57d 3); a lower one leaves silently, its fade
+      cut off (57d 4). `play`: the top fades out and leaves, the new one
+      fades in, no name check (57e).
+    - **Scripts** (`active.rs`): `KQMusic::push` / `pop` go into the event
+      queue, done **0.2 s of game time later** (3 updates), in the order
+      sent; `play` at once (57f). A missing file name logs `Usage:
+      KQMusic::push music_file`; `KQMusic::create` / `delete` log "is
+      obsolete, use music.kq instead". Handed to the viewer like sounds.
+    - **Viewer**: `load.rs` reads the `KQMusic` object's `nMusic` and
+      `music<n>` keys; `sound_view.rs` starts the top on the first frame
+      and applies the requests. No music object: requests are ignored
+      (logged in `sound.log`; the original says nothing).
+    - **Not in 3h-5:** pause (57h; there is no pause yet), videos (57i;
+      none played yet), leaving a world and coming back (57j; one world
+      per run), Barren's lava-tile pushes from the game itself (57k; that
+      puzzle isn't built).
+    - **Test:** unit tests: a fade's steps (0.15 per step, 7 steps, stop
+      at 0), push / pop / play cases of 57c–57e (already on the list,
+      crossfade, pop of the top, of a lower one, of the only one, pop
+      while the one below is still fading out), the 0.2 s delay and
+      order. Viewer: `sound.log` shows `forest.aud` at the start, at
+      0.140; walk into the church trap and out (`chrchtrp`): `mchurch.aud`
+      fades in over about 1.4 s, then out, and `forest.aud` starts again
+      from its beginning. The user listens.
+  - Not in 3h: speech (rule 58), ducking (rule 53), pause (rules 54,
+    57h), hurt sounds (rule 41, need fighting).
 
 ### M4 — Talk, listen, use the menus
 

@@ -4,12 +4,15 @@
 //! the rules each frame (`kq8-core` `sound.rs`) with Connor's position and
 //! the drawn camera's axes, and hands the orders to the mixer and sound
 //! card (`kq8-audio`). Everything goes to `kq8-artifacts/logs/sound.log`.
+//! World music (M3 step 3h-5): the world's music object starts its tune on
+//! the first frame and takes the scripts' requests (`kq8-core` `music.rs`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use bevy::prelude::*;
 use kq8_audio::{Command, Output};
+use kq8_core::music::Music;
 use kq8_core::sound::{Audible, Ears, Found, Groups, Order, SoundSystem, View, GROUPS};
 use kq8_data::aud::{self, Sound};
 use kq8_data::GameDir;
@@ -28,6 +31,8 @@ pub struct SoundSim {
     system: SoundSystem,
     /// The world's sound objects (M3 step 3h-3).
     audibles: Vec<Audible>,
+    /// The world's music object (M3 step 3h-5); `None`: requests ignored.
+    music: Option<Music>,
     output: Option<Output>,
     cache: HashMap<String, Cached>,
     game: GameDir,
@@ -39,7 +44,7 @@ pub struct SoundSim {
 impl SoundSim {
     /// Reads the sliders from `MASK/Options.cs` and, if `on`, opens the
     /// sound card. Without a card the rules and the log still run.
-    pub fn new(game: &GameDir, world: &str, on: bool, audibles: Vec<Audible>) -> Option<SoundSim> {
+    pub fn new(game: &GameDir, world: &str, on: bool, audibles: Vec<Audible>, music: Option<Music>) -> Option<SoundSim> {
         let mut log = match Log::create("sound") {
             Ok(l) => l,
             Err(e) => {
@@ -75,7 +80,11 @@ impl SoundSim {
             None
         };
         log.summary(format!("sound: {} sound objects (KQAudibleObject)", audibles.len()));
-        Some(SoundSim { system: SoundSystem::new(groups), audibles, output, cache: HashMap::new(), game: game.clone(), world: world.to_string(), log, frames: 0 })
+        match &music {
+            Some(m) => log.summary(format!("sound: music object {} with [{}] (rule 57)", m.object, m.names().join(", "))),
+            None => log.summary("sound: no music object; KQMusic requests will be ignored (rule 57f)"),
+        }
+        Some(SoundSim { system: SoundSystem::new(groups), audibles, music, output, cache: HashMap::new(), game: game.clone(), world: world.to_string(), log, frames: 0 })
     }
 }
 
@@ -162,6 +171,29 @@ pub fn sound_step(
             }
             found(&file)
         });
+    }
+    // World music (M3 3h-5): the tune on the first frame (rule 57b), then
+    // the scripts' requests now due (rule 57f).
+    let requests = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.music)).unwrap_or_default();
+    let mut music_lines = Vec::new();
+    if let Some(m) = &mut sim.music {
+        let (cache, decoded, system) = (&mut sim.cache, &mut decoded, &mut sim.system);
+        let mut file = |name: &str| {
+            let file = load(cache, game, world, name);
+            if let Ok((snd, _)) = &file {
+                decoded.insert(name.to_string(), snd.clone());
+            }
+            found(&file)
+        };
+        m.enter(system, &ears, &mut file);
+        for r in &requests {
+            music_lines.push(m.apply(r, system, &ears, &mut file));
+        }
+    } else {
+        music_lines.extend(requests.iter().map(|r| format!("{}: no music object in this world; ignored (rule 57f)", r.describe())));
+    }
+    for line in music_lines {
+        sim.system.log.push(format!("music: {line}"));
     }
     sim.system.update(time.delta_secs_f64(), &ears);
     let orders = std::mem::take(&mut sim.system.orders);

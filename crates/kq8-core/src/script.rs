@@ -50,7 +50,7 @@ use kq8_data::world_script::Vars;
 /// world handles them now. Commands that answer a question (`getloc`,
 /// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
 /// unknown (error line, result 1) until they are studied.
-pub const STUBS: [&str; 40] = [
+pub const STUBS: [&str; 38] = [
     "KQMonster::speak",
     "doPopup",
     "addMapIcon",
@@ -61,9 +61,8 @@ pub const STUBS: [&str; 40] = [
     "pauseAnim",
     "preloadShape",
     "loadKQ",
-    // Daventry's trap scripts (3d-3).
-    "KQMusic::push",
-    "KQMusic::pop",
+    // Daventry's trap scripts (3d-3). `KQMusic::push` / `pop` were here
+    // until M3 3h-5.
     "KQMonster::setHome",
     "KQMonster::setHomeRadius",
     "KQMonster::setChaseRadius",

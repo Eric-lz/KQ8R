@@ -68,6 +68,7 @@ use crate::collide::{pair_collides, BoxCollider, Placement, CONNOR_MASK, CONNOR_
 use crate::door::{turn_degrees, Door};
 use crate::events::{EventQueue, Pending};
 use crate::item::{Accepts, Items, Place};
+use crate::music::MusicRequest;
 use crate::named_anim::NamedAnimPlayer;
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::sound::Start;
@@ -84,6 +85,12 @@ pub const CUE_HEARD_END: &str = "300";
 
 /// Event types we know (doors.md "Commands door scripts use"). Any other
 /// is an error and is not sent.
+/// Script `KQMusic::push` / `pop` act this much game time later
+/// (`sound.md` rule 57f).
+pub const MUSIC_DELAY: f64 = 0.2;
+/// The event queue's target for them (our name; no object is called this).
+const MUSIC_TARGET: &str = "<KQMusic>";
+
 pub const EVENT_TYPES: [&str; 4] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent"];
 
 /// What a script asked of Connor or the camera, for the caller to apply
@@ -389,6 +396,9 @@ pub struct WorldState {
     pub item_log: Vec<String>,
     /// Sounds to start (M3 step 3h-2, `sound.md`), taken by the caller.
     pub sounds: Vec<Start>,
+    /// Music requests now due (M3 step 3h-5, `sound.md` rule 57f), taken
+    /// by the caller.
+    pub music: Vec<MusicRequest>,
     /// For z -1 / -2 of a new world item; `None`: kept as written.
     pub heights: Option<Heights>,
     /// Variables a command set, for the script runner.
@@ -987,6 +997,30 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQMusic::push|pop|play <file>` (`sound.md` rule 57f): push and pop
+    /// go into the event queue and act 0.2 s of game time later, in the
+    /// order sent; play acts at once. `create` and `delete` are obsolete.
+    fn music_command(&mut self, words: &[String], at: &str) -> String {
+        let verb = words[0].trim_start_matches("KQMusic::");
+        if verb == "create" || verb == "delete" {
+            self.note(format!("{at}: {} is obsolete, use music.kq instead", words[0]));
+            return "0".into();
+        }
+        let Some(name) = words.get(1) else {
+            self.note(format!("{at}: Usage: KQMusic::{verb} music_file"));
+            return "1".into();
+        };
+        if verb == "play" {
+            self.music.push(MusicRequest::Play(name.clone()));
+            self.note(format!("{at}: KQMusic::play {name}: at once (rule 57f)"));
+        } else {
+            let now = self.now();
+            self.queue.send(now, MUSIC_DELAY, MUSIC_TARGET, &words[0], std::slice::from_ref(name), at);
+            self.note(format!("{at}: {} {name}: due at {:.4} s (rule 57f: 0.2 later)", words[0], now + MUSIC_DELAY));
+        }
+        "0".into()
+    }
+
     /// `sendEvent <delay> <object> <type> [data…]`.
     fn send_event(&mut self, words: &[String], at: &str) -> String {
         if words.len() < 4 {
@@ -1034,6 +1068,9 @@ impl ScriptHost for WorldState {
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
             "KQSound::play" => Some(self.play_sound(words, at)),
+            "KQMusic::push" | "KQMusic::pop" | "KQMusic::play" | "KQMusic::create" | "KQMusic::delete" => {
+                Some(self.music_command(words, at))
+            }
             "deleteObject" => Some(self.delete_objects(words, at)),
             "KQObject::setScript" | "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
             _ => None,
@@ -1090,6 +1127,7 @@ impl Active {
                 items: Items::default(),
                 item_log: Vec::new(),
                 sounds: Vec::new(),
+                music: Vec::new(),
                 heights: None,
                 vars_out: Vec::new(),
                 accepts: BTreeMap::new(),
@@ -1875,6 +1913,14 @@ impl Active {
 
     fn handle(&mut self, e: Pending) {
         let from = if e.from.is_empty() { String::new() } else { format!(" (sent by {})", e.from) };
+        // sound.md rule 57f: a script's push or pop, now due.
+        if e.target == MUSIC_TARGET {
+            let name = e.data.first().cloned().unwrap_or_default();
+            let req = if e.kind == "KQMusic::push" { MusicRequest::Push(name) } else { MusicRequest::Pop(name) };
+            self.world.note(format!("{} now due{from}: handed to the music", req.describe()));
+            self.world.music.push(req);
+            return;
+        }
         // clicking.md rule 21: reserved cue numbers.
         if e.kind == "KQCueEvent" && !self.world.is_gone(&e.target) {
             match e.data.first().map(String::as_str) {
@@ -2777,10 +2823,31 @@ mod tests {
         connor_at(&mut a, 0.0);
         let r = std::mem::take(&mut a.world.requests);
         assert!(matches!(&r[..], [Request::SetRun { run: false, .. }, Request::SetRange { min, max, .. }] if *min == 1000.0 && *max == 2500.0), "{r:?}");
-        assert!(a.take_trap_log().join("\n").contains("stub (later milestone, nothing done): KQMusic::push minside.aud"));
+        assert!(a.take_trap_log().join("\n").contains("KQMusic::push minside.aud: due at"));
         // Refused: min not below max; nothing asked.
         connor_at(&mut a, 5000.0);
         assert!(a.world.requests.is_empty());
         assert_eq!(a.scripts.vars.get(crate::script::RETURN), Some("1"));
+    }
+
+    #[test]
+    fn music_push_and_pop_act_02_s_later_in_order_play_at_once() {
+        // sound.md rule 57f, the church trap's pattern (not a copy).
+        let mut a = with_trap("if test $2 == On\n KQMusic::push mchurch.aud\n KQMusic::pop mbattle.aud\n KQMusic::play mwizard.aud\nelse if test $2 == Off\n KQMusic::push\n KQMusic::create x\nendif\nendif\n");
+        connor_at(&mut a, 0.0);
+        assert_eq!(a.world.music, [MusicRequest::Play("mwizard.aud".into())], "play: at once");
+        a.world.music.clear();
+        // Sent at game time 0; each update handles what is due at its
+        // start (0, 1/15, 2/15, 3/15 s).
+        for _ in 0..3 {
+            a.update();
+        }
+        assert!(a.world.music.is_empty(), "not before 0.2 s");
+        a.update();
+        assert_eq!(a.world.music, [MusicRequest::Push("mchurch.aud".into()), MusicRequest::Pop("mbattle.aud".into())], "at 0.2 s, in order");
+        connor_at(&mut a, 5000.0);
+        let log = a.take_trap_log().join("\n");
+        assert!(log.contains("Usage: KQMusic::push music_file"), "{log}");
+        assert!(log.contains("KQMusic::create is obsolete, use music.kq instead"), "{log}");
     }
 }

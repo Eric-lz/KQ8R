@@ -180,7 +180,8 @@ objects don't stop it, as in the original. Checked in the logs
   inside Connor's house (and the other houses with such zones) he drops
   to a walk and the camera follows closer (1,000–2,500); outside he runs
   again (1,500–5,000). Checked in the logs (`traps.log`) and by eye, the
-  same as in the original. Music, ropes, teleporters and cutscenes
+  same as in the original. Music zones play their tune (see "World
+  music"); ropes, teleporters and cutscenes
   started by traps are later milestones (their commands are only logged).
 - **Items lying around:** the coins, mushrooms, crystals, weapons and
   other things the original puts in Daventry at the start (22, from its
@@ -224,6 +225,14 @@ objects don't stop it, as in the original. Checked in the logs
   without their own setting use dirt for now (not studied yet, Q81).
   Checked in the logs (`connor.log`, `sound.log`) and by ear by the user
   against the original (2026-10-17).
+- **World music** (2026-10-17, `sound.md` rules 57–57l): Daventry's
+  `forest.aud` plays from the start at the music volume (0.14). The
+  music zones (wizard, unicorn, church) cross-fade to their tune over
+  about 1.4 s when Connor walks in, and back to `forest.aud`, from its
+  beginning, when he walks out; `mbattle.aud` too when scripts ask for
+  it. Checked in the logs (`sound.log`, `traps.log`; the wizard's zone)
+  and by ear by the user (2026-10-17). Not built: pausing music (there is no pause),
+  videos, changing worlds.
 
 ## Viewer helpers (not in the original)
 
@@ -322,7 +331,7 @@ message that shows the usage.
   fighting, saving, or travel between worlds.
 - **Not drawn:** people and monsters, fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
-- **Sound:** no music, speech or hurt sounds yet; monsters have no
+- **Sound:** no speech or hurt sounds yet; music doesn't pause (no pause yet); monsters have no
   footsteps (there are no monsters yet); scenery
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.

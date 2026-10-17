@@ -44,8 +44,15 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
   `sound.md` section "World music", rules 57–57l): the list of tunes,
   push / pop / play with 1.4 s crossfades, the 0.2 game-clock delay of
   script pushes and pops, the world tune at full loudness on start,
-  pause, leaving a world. Ready for B. Footsteps (Q81 a, b, d) answered
+  pause, leaving a world. Footsteps (Q81 a, b, d) answered
   in rules 39–39a.
+- **New 2026-10-17 (B, M3 3h-5): world music plays** (`kq8-core`
+  `music.rs`, fades in `sound.rs`): `forest.aud` from the first frame at
+  0.14; the music zones push and pop their tunes 0.2 s after Connor
+  enters or leaves, with 1.4 s cross-fades, and `forest.aud` restarts
+  from its beginning. Checked in the logs with the wizard's zone
+  (`mwiztrap`) and by ear by the user (2026-10-17). Not built: pause, videos,
+  world changes (rules 57h–57j).
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -209,19 +216,19 @@ milestone: **M3, Daventry comes alive**.
 - Checked by eye by the user (2026-10-16): point lights on building
   surfaces, `KQPointLight` always shining, reach to a building in its
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
-- Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked in the
-  logs only, not by ear yet.
-- Tests: 327 unit tests pass (105 + 206 + 5 + 11), 2026-10-17.
+- Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
+  ear by the user. World music (3h-5) too.
+- Tests: 337 unit tests pass (105 + 216 + 5 + 11), 2026-10-17.
 
 ## What doesn't work yet / next
 
-- **Next step, suggested:** the user listens to the footsteps (and
-  checks Q81 a in the original: inside Connor's hut and on the bridge).
-  Then for B: cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
+- **Next step, suggested:** for B: footsteps in the air after A's Q81 (d) answer (a
+  building is kept for 2 updates, then the terrain under him; `sound.md`
+  rule 39a; ours keeps the last ground), then cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
   scripted movements, remarks, inventory screen). The brightness setting
   (rule 17) is still not built.
 - Sound, not done: the item land sound (nothing is thrown),
-  hurt sounds (fighting), ducking under speech, pause, music, speech,
+  hurt sounds (fighting), ducking under speech, pause, speech,
   `loadKQ` while playing (so `Waterfall2Sound` never appears), and
   `setActiveCamera` / `makeActive` for sound objects.
 - Clicking: only doors, chests, items, scripted objects and buildings
@@ -254,7 +261,7 @@ milestone: **M3, Daventry comes alive**.
 - Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
-- Nothing yet of: music, talking, inventory screen, fighting,
+- Nothing yet of: talking, inventory screen, fighting,
   stats, story, saving, travel between worlds.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)

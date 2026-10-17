@@ -22,6 +22,10 @@
 //!   step (rule 20).
 //! - A sound whose file is missing or broken is skipped, logged once per
 //!   name ("Do not reproduce" 2).
+//! - Fades (M3 step 3h-5, rules 33, 57g): a sound's own level moves towards
+//!   a target in the 200 ms housekeeping steps, waits while the sound is
+//!   paused, and a fade that reaches 0 stops the sound. Only music uses
+//!   them (`crate::music`).
 
 use std::collections::BTreeSet;
 
@@ -29,6 +33,10 @@ use std::collections::BTreeSet;
 pub const GROUPS: usize = 6;
 /// World sound effects (rule 50).
 pub const GROUP_EFFECTS: usize = 0;
+/// World music, `KQMusic` (rules 50, 57a).
+pub const GROUP_WORLD_MUSIC: usize = 5;
+/// The music's fade rate, loudness per second (rules 33, 57).
+pub const MUSIC_FADE_RATE: f32 = 0.75;
 /// Min and max of every placed one-shot: cues, hurt sounds, item landing
 /// (rules 35, 41, 42).
 pub const ONE_SHOT_MIN: f32 = 5_000.0;
@@ -231,6 +239,10 @@ struct Playing {
     gains: [f32; 2],
     /// Loudness and balance of its last log line.
     logged: (f32, f32),
+    /// Its own level from fades, 0 to 1 (rule 33); 1 unless faded.
+    level: f32,
+    /// A fade under way: target and rate per second.
+    fade: Option<(f32, f32)>,
 }
 
 /// The playing sounds and the rules that drive them.
@@ -297,8 +309,9 @@ impl SoundSystem {
 
     /// Final loudness and balance of a sound: own × group, at most 1
     /// (rule 21), and its distance (0 for a plain sound).
-    fn mix_values(&self, group: usize, placed: Option<&Placed>, ears: &Ears) -> (f32, f32, f32, f32) {
+    fn mix_values(&self, group: usize, placed: Option<&Placed>, level: f32, ears: &Ears) -> (f32, f32, f32, f32) {
         let (d, own, pan) = placed.map_or((0.0, 1.0, 0.0), |p| hearing(p, ears));
+        let own = own * level;
         let loud = (own * self.groups.loudness(group)).min(1.0);
         (d, own, loud, pan)
     }
@@ -306,6 +319,12 @@ impl SoundSystem {
     /// Starts a sound. `file` is what the caller found for its name (rule
     /// 13) or why it found nothing. Returns its id, `None` if skipped.
     pub fn start(&mut self, s: &Start, file: Result<Found, String>, ears: &Ears) -> Option<u64> {
+        self.start_at_level(s, file, ears, 1.0)
+    }
+
+    /// [`SoundSystem::start`] with its own level (rule 33): 0 for a tune
+    /// that fades in (rule 57c).
+    pub fn start_at_level(&mut self, s: &Start, file: Result<Found, String>, ears: &Ears, level: f32) -> Option<u64> {
         let found = match file {
             Ok(f) => f,
             Err(why) => {
@@ -334,7 +353,7 @@ impl SoundSystem {
         }
         let id = self.next_id;
         self.next_id += 1;
-        let (d, own, loud, pan) = self.mix_values(s.group, s.placed.as_ref(), ears);
+        let (d, own, loud, pan) = self.mix_values(s.group, s.placed.as_ref(), level, ears);
         let gains = channel_gains(loud, pan);
         let beyond = s.placed.is_some_and(|p| d > p.max);
         let where_ = match &s.placed {
@@ -344,6 +363,7 @@ impl SoundSystem {
                 p.min,
                 p.max
             ),
+            None if level != 1.0 => format!("plain, level {level:.2}"),
             None => "plain".into(),
         };
         self.note(format!(
@@ -370,6 +390,8 @@ impl SoundSystem {
             never_heard: s.looping && beyond,
             gains,
             logged: (loud, pan),
+            level,
+            fade: None,
         });
         if beyond {
             if s.looping {
@@ -394,6 +416,65 @@ impl SoundSystem {
         }
     }
 
+    /// Whether sound `id` is still in the list (paused ones included).
+    pub fn is_playing(&self, id: u64) -> bool {
+        self.playing.iter().any(|p| p.id == id)
+    }
+
+    /// Sound `id`'s own level (rule 33), `None` if it is not in the list.
+    pub fn level(&self, id: u64) -> Option<f32> {
+        self.playing.iter().find(|p| p.id == id).map(|p| p.level)
+    }
+
+    /// Sets sound `id`'s own level at once (rule 57d 2: a tune still
+    /// fading out drops to 0 before it fades in again).
+    pub fn set_level(&mut self, id: u64, level: f32) {
+        if let Some(p) = self.playing.iter_mut().find(|p| p.id == id) {
+            p.level = level;
+            p.fade = None;
+            let name = p.name.clone();
+            self.note(format!("#{id} {name}: level set to {level:.2}"));
+        }
+    }
+
+    /// Fades sound `id` towards `target` at `rate` per second, in the
+    /// housekeeping steps (rule 33); at 0 the sound stops.
+    pub fn fade(&mut self, id: u64, target: f32, rate: f32) {
+        if let Some(p) = self.playing.iter_mut().find(|p| p.id == id) {
+            p.fade = Some((target, rate));
+            let (name, level) = (p.name.clone(), p.level);
+            self.note(format!("#{id} {name}: fade from {level:.2} to {target:.2} at {rate:.2} per second"));
+        }
+    }
+
+    /// One housekeeping step of every fade (rules 33, 57g): paused sounds
+    /// wait; one that reaches 0 stops.
+    fn step_fades(&mut self) {
+        let mut n = 0;
+        while n < self.playing.len() {
+            let p = &mut self.playing[n];
+            let Some((target, rate)) = p.fade.filter(|_| !p.paused) else {
+                n += 1;
+                continue;
+            };
+            let step = rate * HOUSEKEEPING as f32;
+            p.level = if p.level < target { (p.level + step).min(target) } else { (p.level - step).max(target) };
+            let (id, name, level) = (p.id, p.name.clone(), p.level);
+            self.note(format!("#{id} {name}: fade step, level {level:.2}"));
+            let p = &mut self.playing[n];
+            if p.level == target {
+                p.fade = None;
+                let (id, name) = (p.id, p.name.clone());
+                if target <= 0.0 {
+                    self.stop_at(n, "faded out to 0");
+                    continue;
+                }
+                self.note(format!("#{id} {name}: fade done at {target:.2}"));
+            }
+            n += 1;
+        }
+    }
+
     /// One frame: `dt` real seconds passed. Moves the clock, does the
     /// housekeeping steps due, and redoes every placed sound (rule 32).
     pub fn update(&mut self, dt: f64, ears: &Ears) {
@@ -404,6 +485,7 @@ impl SoundSystem {
         self.since_housekeeping += dt;
         while self.since_housekeeping >= HOUSEKEEPING {
             self.since_housekeeping -= HOUSEKEEPING;
+            self.step_fades();
             // Rule 20: finished one-shots leave the list.
             while let Some(n) = self.playing.iter().position(|p| !p.looping && p.played >= p.seconds) {
                 self.stop_at(n, "finished");
@@ -412,7 +494,7 @@ impl SoundSystem {
         let mut n = 0;
         while n < self.playing.len() {
             let p = self.playing[n].clone();
-            let (d, _own, loud, pan) = self.mix_values(p.group, p.placed.as_ref(), ears);
+            let (d, _own, loud, pan) = self.mix_values(p.group, p.placed.as_ref(), p.level, ears);
             let beyond = p.placed.is_some_and(|pl| d > pl.max);
             if beyond && !p.looping {
                 self.stop_at(n, &format!("beyond max (distance {d:.0})"));
@@ -861,5 +943,43 @@ mod tests {
         let mut s = SoundSystem::new(g);
         s.start(&Start::plain_one_shot("a", "t".into()), found(1.0), &ears());
         assert_eq!(s.orders[0], Order::Start { id: 0, name: "a".into(), looping: false, gains: [1.0, 1.0] });
+    }
+
+    #[test]
+    fn fades_step_with_housekeeping_wait_while_paused_and_stop_at_0() {
+        // Rules 33, 57g: 0.75 per second in 0.2 s steps (0.15 a step).
+        let mut s = SoundSystem::default();
+        let st = Start {
+            name: "m".into(),
+            placed: Some(Placed { position: [0.0; 3], min: 1_000.0, max: 2_000.0 }),
+            looping: true,
+            group: 5,
+            why: "t".into(),
+        };
+        let id = s.start_at_level(&st, found(9.0), &ears(), 0.0).unwrap();
+        let Order::Start { gains, .. } = &s.orders[0] else { panic!() };
+        assert_eq!(*gains, [0.0, 0.0], "starts silent");
+        s.fade(id, 1.0, MUSIC_FADE_RATE);
+        s.update(HOUSEKEEPING, &ears());
+        assert!(close(s.level(id).unwrap(), 0.15));
+        // Beyond max: paused, the fade waits. (The frame that moves away
+        // still steps once: the pause is decided after the housekeeping.)
+        let away = Ears { listener: [0.0, 5_000.0, 0.0], view: ears().view };
+        s.update(HOUSEKEEPING, &away);
+        s.update(HOUSEKEEPING, &away);
+        s.update(HOUSEKEEPING, &away);
+        assert!(close(s.level(id).unwrap(), 0.30), "{:?}", s.level(id));
+        for _ in 0..6 {
+            s.update(HOUSEKEEPING, &ears());
+        }
+        assert_eq!(s.level(id), Some(1.0), "stops exactly at the target");
+        s.fade(id, 0.0, MUSIC_FADE_RATE);
+        for _ in 0..6 {
+            s.update(HOUSEKEEPING, &ears());
+        }
+        assert!(s.is_playing(id));
+        s.update(HOUSEKEEPING, &ears());
+        assert!(!s.is_playing(id), "a fade that reaches 0 stops the sound");
+        assert!(s.log.iter().any(|l| l.contains("faded out to 0")));
     }
 }
