@@ -111,6 +111,9 @@ pub struct ConnorSim {
     dice: kq8_core::sound::Dice,
     /// The building his steps sound like (`sound.md` rule 39a).
     step_ground: kq8_core::sound::StepGround,
+    /// His play-once movements that ended (plain names), for `getEndLoop`
+    /// listeners; taken by `door_view::trap_step` (M3 3i-7).
+    pub ended: Vec<String>,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -340,6 +343,7 @@ pub fn spawn_connor(
         sounds: Vec::new(),
         dice: Default::default(),
         step_ground: Default::default(),
+        ended: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -514,6 +518,27 @@ pub fn connor_keys(
 }
 
 impl ConnorSim {
+    /// `KQMonster::setState Connor special <items>` (`anim-scripts.md`
+    /// rule 16): the items worked out against the movements loaded (his
+    /// own and the Special lists'), then the Special state. Returns a
+    /// line for the script logs.
+    pub fn start_special(&mut self, items: &str, at: &str) -> String {
+        let movements = &self.movements;
+        let resolve = |list: Option<&str>, word: &str| -> Option<&'static str> {
+            let wanted = match list {
+                Some(l) => kq8_core::connor::special_movement_name(l, word),
+                None => word.to_string(),
+            };
+            movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
+        };
+        let steps = kq8_core::connor::special_steps(items, &resolve);
+        let plays: Vec<&str> = steps.iter().filter_map(|s| if let kq8_core::connor::SpecialStep::Play(n, _) = s { Some(*n) } else { None }).collect();
+        let line = format!("special {items}: plays {plays:?}");
+        let notes = self.walker.start_special(steps);
+        self.log.detail(format!("connor update {}: KQMonster::setState Connor special {items} ({at}): {}", self.updates, notes.join("; ")));
+        line
+    }
+
     /// `KQConner::setRun` from a script (M3 step 3d-3).
     pub fn set_run(&mut self, run: bool, at: &str) {
         let was = self.intent.run;
@@ -563,6 +588,10 @@ pub fn connor_step(
         sim.jump_start_z = Some(z_before);
     }
     let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes } = tick;
+    // M3 3i-7: a play-once movement ended: for getEndLoop listeners.
+    if let Some(e) = step.as_ref().and_then(|s| s.ended) {
+        sim.ended.push(kq8_core::connor::plain_movement_name(e).to_string());
+    }
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
         if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }

@@ -112,6 +112,11 @@ struct Args {
     click: Vec<(String, u64)>,
     /// `--aim NAME,N`: a ray from the camera to NAME at update N (3e-4b).
     aim: Vec<(String, u64)>,
+    /// `--special ITEMS,N`: before update N + 1, Connor gets
+    /// `KQMonster::setState Connor special ITEMS` as if from a script
+    /// (M3 3i-7 test; ITEMS uses `;` between items, e.g.
+    /// `AnimList=bricks.anm;AnimListOn;push`).
+    special: Option<(String, u64)>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
     /// `--light x1|x2|off`: how the ground's light map is applied at the
@@ -143,6 +148,7 @@ fn parse_args() -> Result<Args, String> {
         at: None,
         click: Vec::new(),
         aim: Vec::new(),
+        special: None,
         item: None,
         light: light_view::LightMode::X1,
         haze: true,
@@ -189,6 +195,12 @@ fn parse_args() -> Result<Args, String> {
                 let (name, n) = v.rsplit_once(',').ok_or("--aim needs NAME,UPDATE e.g. smlchst3,30".to_string())?;
                 let n = n.trim().parse::<u64>().map_err(|_| "--aim needs NAME,UPDATE e.g. smlchst3,30".to_string())?;
                 a.aim.push((name.trim().to_string(), n));
+            }
+            "--special" => {
+                let v = value()?;
+                let (items, n) = v.rsplit_once(',').ok_or("--special needs ITEMS,UPDATE e.g. kneel;kneelstop,30".to_string())?;
+                let n = n.trim().parse::<u64>().map_err(|_| "--special needs ITEMS,UPDATE e.g. kneel;kneelstop,30".to_string())?;
+                a.special = Some((items.replace(';', ","), n));
             }
             "--item" => a.item = Some(value()?),
             "--light" => a.light = light_view::LightMode::parse(&value()?)?,
@@ -389,6 +401,7 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))
                 .insert_resource(door_view::ClickAt(args.click))
+                .insert_resource(door_view::SpecialAt(args.special))
                 .insert_resource(door_view::AimAt(args.aim))
                 .init_resource::<door_view::Deleted>()
                 .insert_resource(door_view::HeldItem(args.item))

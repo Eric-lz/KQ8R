@@ -1301,7 +1301,13 @@ catchers, ground animators).
     by `connor_view` when first asked (logged). A movement ending tells
     the `getEndLoop` listener `Cue 300 0 <movement>` (3g-4 recorded it
     for Connor but nothing played). Test: unit tests on the list;
-    viewer in 3k.
+    viewer in 3k. (**Done** 2026-10-17. The movements are found in the
+    world's scripts and loaded at the start (Daventry: 87, from 13 lists
+    and his own `Conner.anm`; loading 0.5 s longer). An item that names a
+    movement not loaded is skipped and logged (stand-in; the note doesn't
+    say). `KillConnor`: our Dead mode (stand-in). New test option
+    `--special ITEMS,N` (items separated by `;`), as if a script asked at
+    update N.)
   - **3j, pushing** (`pushing.md`):
     - **3j-1, the push check and the Push state** (rules 1–3, 6–8):
       Connor's touch with a 0x100 object goes through the six conditions

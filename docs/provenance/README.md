@@ -1239,3 +1239,17 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Connor starts with `stats=10 10 0 0 0`, `level=1` | Observed (`GAME/Kq/Connor.kq`) | `viewer.log` |
 | Doors without `stats=`: health 10,000 | `doors.md` rule 18 | — |
 | "Passes" = more than; one level check per event; cap at the old level first; other objects start at 0; `Die` without `$3` | **Stand-ins**, asked as Q86 | Unit test `connor_levels` |
+
+## Connor's Special state (M3 step 3i-7) — `crates/kq8-core/src/{connor,active,script}.rs`, `crates/kq8-viewer/src/{load,connor_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `setState Connor special <list>`: items left to right; `AnimList=`, `AnimListOn`/`Off`, `Inv <item>`, `KillConnor`, any other word a movement played to its end; then standing | `anim-scripts.md` rule 16 | Unit tests `a_special_list_is_worked_out_left_to_right`, `special_plays_each_movement_to_its_end_then_stands`; `connor.log` (`--special`) |
+| Movement names compared ignoring capitals | Rule 16 | Same |
+| His play-once movement ends go to his `getEndLoop` listener as `Cue 300 0 <movement>` | Rule 16, `clicking.md` rule 21 | Unit test `set_state_connor_special_is_handed_over_and_his_ends_are_relayed` |
+| Which movements to load: those the world's scripts name in `setState Connor special` lines | **Our method** (data survey at load) | `viewer.log`: 87 movements, no problems |
+| An item naming a movement that isn't in the list: skipped, logged | **Stand-in** (not in the note) | `connor.log` |
+| `Inv <item>`: logged only | Rule 16 says "not traced further" | — |
+| `KillConnor`: our Dead mode (fall-death pose) | **Stand-in** (his Die state is M5) | — |
+| The Special lists' transitions are not used | Rule 16 says nothing of them; objects have none (rule 4.2) | `viewer.log` detail lines |
+| `--special ITEMS,N` | **Our test option** | — |

@@ -170,6 +170,12 @@ objects don't stop it, as in the original. Checked in the logs
   `pauseAnim` pauses. Checked in the logs (`doors.log`): the star globe
   given the spell page (`--item INVITEM_SpellPage --click starball.01,N`)
   plays `open` for 1.93 s, then `lid`. Not checked by eye.
+- **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
+  script's `KQMonster::setState Connor special` list plays its movements
+  one after another (also from the extra lists such as `bricks.anm`),
+  then he stands. Checked in the logs with the test option `--special`;
+  no Daventry script can start one yet without talking, fighting or
+  pushing. Not checked by eye.
 - **Animated objects:** the windmill sails, mill wheel and gears,
   swinging signs, shutters, torches, lamps, waterfalls, fish and the
   fountain's water move as the game's files say, torches and other rows

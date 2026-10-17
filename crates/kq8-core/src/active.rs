@@ -112,6 +112,9 @@ pub enum Request {
     /// `makeActive <name> <n>` (rule 42): `name` always near (`true`) or
     /// back to the distance test.
     MakeActive { name: String, on: bool, at: String },
+    /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
+    /// rule 16): the comma-separated items as written.
+    ConnorSpecial { items: String, at: String },
 }
 
 /// A door and what clicking and collision need to know about it.
@@ -892,12 +895,28 @@ impl WorldState {
         }
         let key = from.to_ascii_lowercase();
         if number_value(on) != 0.0 {
-            let connor = if from.eq_ignore_ascii_case("Connor") { " (Connor's own movements are not played by scripts yet, so nothing will be relayed)" } else { "" };
-            self.note(format!("{at}: getEndLoop: {to} hears when {from}'s play-once movements end{connor}"));
+            self.note(format!("{at}: getEndLoop: {to} hears when {from}'s play-once movements end"));
             self.end_loop_listeners.insert(key, to.clone());
         } else {
             self.note(format!("{at}: getEndLoop: {from} no longer reports its movements' ends"));
             self.end_loop_listeners.remove(&key);
+        }
+        "0".into()
+    }
+
+    /// `KQMonster::setState <who> <state> [list]`: Connor's Special state
+    /// is handed to the caller (`anim-scripts.md` rule 16); other states
+    /// and other characters are later milestones (logged only, `0` as the
+    /// stubs).
+    fn set_state(&mut self, words: &[String], at: &str) -> String {
+        match words {
+            [_, who, state, items @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("special") => {
+                // One word in the data; several are joined as more items.
+                let items = items.join(",");
+                self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
+                self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
+            }
+            _ => self.note(format!("{at}: stub (later milestone, nothing done): {}", words.join(" "))),
         }
         "0".into()
     }
@@ -1199,6 +1218,7 @@ impl ScriptHost for WorldState {
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
+            "KQMonster::setState" => Some(self.set_state(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
@@ -1309,6 +1329,14 @@ impl Active {
 
     fn building_index(&self, name: &str) -> Option<usize> {
         self.world.buildings.iter().position(|b| b.name.eq_ignore_ascii_case(name))
+    }
+
+    /// One of Connor's play-once movements ended (`plain` name, e.g.
+    /// `push`): his `getEndLoop` listener gets `Cue 300 0 <movement>`
+    /// (`clicking.md` rule 21, `anim-scripts.md` rule 16). He has no
+    /// script, so no `EndLoop`.
+    pub fn connor_movement_ended(&mut self, movement: &str) {
+        self.world.report_end("Connor", movement, false);
     }
 
     /// Connor's starting stats and level (`Connor.kq`).
@@ -3049,6 +3077,18 @@ mod tests {
         assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 12, 5, 1, 40], 2)), "{log}");
         assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
         assert_eq!(a.scripts.vars.get("D::died"), Some("basket1"), "{log}");
+    }
+
+    #[test]
+    fn set_state_connor_special_is_handed_over_and_his_ends_are_relayed() {
+        let script = "if test $2 == ConnorAction\n getEndLoop Connor $1 1\n KQMonster::setState Connor special 'AnimList=bricks.anm,AnimListOn,push'\n KQMonster::setState ogre attack\nendif\nif test $2 == Cue\n set C::heard $5\nendif\n";
+        let mut a = with_object(script, "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.world.requests.iter().filter(|r| matches!(r, Request::ConnorSpecial { items, .. } if items == "AnimList=bricks.anm,AnimListOn,push")).count(), 1);
+        assert!(a.take_log().join("\n").contains("stub (later milestone, nothing done): KQMonster::setState ogre attack"));
+        a.connor_movement_ended("push");
+        a.update();
+        assert_eq!(a.scripts.vars.get("C::heard"), Some("push"));
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

@@ -1839,6 +1839,7 @@ impl Placer<'_> {
                     cues: c.cues.clone(),
                 });
             }
+            self.special_movements(&anm, &list, &palette, &mut assets, &mut index_of);
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
             Ok((p, assets))
         })();
@@ -2230,6 +2231,138 @@ impl Placer<'_> {
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);
         }
+    }
+
+    /// The movements Connor's Special state can play (M3 step 3i-7,
+    /// `anim-scripts.md` rule 16), found in the world's scripts
+    /// (`KQMonster::setState Connor special <list>`): his own beyond
+    /// [`CONNOR_MOVEMENTS`] from `Conner.anm`, and those of the lists named
+    /// by `AnimList=` (read from the world's archives, else `GAME/Kq`),
+    /// loaded as `<list>/<movement>`. Their transitions are not used
+    /// (logged); their cues are.
+    fn special_movements(
+        &mut self,
+        anm: &[kq8_data::kq_text::Section],
+        list: &str,
+        palette: &[Rgb; 256],
+        assets: &mut ConnorAssets,
+        index_of: &mut BTreeMap<String, usize>,
+    ) {
+        use kq8_data::kq_text;
+        // What the scripts ask for: (list file or None, movement word).
+        let mut wanted: std::collections::BTreeSet<(Option<String>, String)> = Default::default();
+        let mut lines = 0;
+        for (_, text) in &self.all_scripts {
+            for line in text.lines().map(|l| l.split('#').next().unwrap_or("")) {
+                let words: Vec<&str> = line.split_whitespace().collect();
+                let Some(i) = words.windows(3).position(|w| w[0] == "kqmonster::setstate" && w[1] == "connor" && w[2] == "special") else { continue };
+                lines += 1;
+                let items = words[i + 3..].join(",").replace('\'', "");
+                let record = std::cell::RefCell::new(Vec::new());
+                let resolve = |l: Option<&str>, w: &str| -> Option<&'static str> {
+                    record.borrow_mut().push((l.map(str::to_string), w.to_string()));
+                    Some("")
+                };
+                kq8_core::connor::special_steps(&items, &resolve);
+                wanted.extend(record.into_inner());
+            }
+        }
+        let mut loaded = Vec::new();
+        let mut problems = Vec::new();
+        let mut files: BTreeMap<String, Option<Vec<kq_text::Section>>> = BTreeMap::new();
+        for (file, word) in wanted {
+            let (sections, list_name, loaded_name) = match &file {
+                None => {
+                    if CONNOR_MOVEMENTS.iter().any(|m| m.eq_ignore_ascii_case(&word)) {
+                        continue;
+                    }
+                    (anm.to_vec(), list.to_string(), None)
+                }
+                Some(f) => {
+                    let sections = files.entry(f.clone()).or_insert_with(|| {
+                        let bytes = match self.world.load(f) {
+                            Some(Ok((_, b))) => Some(b),
+                            _ => self.game.find(&format!("GAME/Kq/{f}")).and_then(|p| std::fs::read(p).ok()),
+                        };
+                        bytes.map(|b| kq_text::parse(&b))
+                    });
+                    let Some(sections) = sections.clone() else {
+                        problems.push(format!("{f}: not found"));
+                        continue;
+                    };
+                    let Some(name) = sections.first().map(|s| s.name.clone()) else {
+                        problems.push(format!("{f}: no section"));
+                        continue;
+                    };
+                    (sections, name, Some(f.clone()))
+                }
+            };
+            let mut with_ask = sections;
+            with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={list_name}\ncurrAnimName={word}\n").as_bytes()));
+            let c = match kq8_data::objects::current_loop(&with_ask, with_ask.last().unwrap()) {
+                Ok(Some(c)) if !c.fell_back => c,
+                _ => {
+                    problems.push(format!("{}: no movement {word}", file.as_deref().unwrap_or("Conner.anm")));
+                    continue;
+                }
+            };
+            // The movement's name as its list spells it.
+            let spelled = with_ask
+                .iter()
+                .find(|s| s.name.eq_ignore_ascii_case(&list_name))
+                .and_then(|s| s.get(&format!("Movement{}", c.movement)))
+                .unwrap_or(&word)
+                .to_string();
+            let name = match &loaded_name {
+                Some(f) => kq8_core::connor::special_movement_name(f, &spelled),
+                None => spelled,
+            };
+            if assets.movements.iter().any(|m| m.name.eq_ignore_ascii_case(&name)) {
+                continue;
+            }
+            let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
+            let animation = match index_of.get(&key) {
+                Some(&i) => i,
+                None => {
+                    self.log.quiet = true;
+                    let a = load_animation(self.game, self.world, &c.shape, &c.sequence, palette, self.log);
+                    self.log.quiet = false;
+                    match a {
+                        Ok(a) => {
+                            assets.animations.push(a);
+                            index_of.insert(key, assets.animations.len() - 1);
+                            assets.animations.len() - 1
+                        }
+                        Err(e) => {
+                            problems.push(format!("{name}: {} {}: {e}", c.shape, c.sequence));
+                            continue;
+                        }
+                    }
+                }
+            };
+            if !c.transitions.is_empty() {
+                self.log.detail(format!("connor: special {name}: {} transition(s) not used", c.transitions.len()));
+            }
+            let a = &assets.animations[animation];
+            self.log.detail(format!(
+                "connor: special {name}: loop={} {} start {} speed {} repeat {} cut short {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}), cues {:?}",
+                c.shape, c.sequence, c.start, c.speed, c.repeat, c.unknown != 0, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2], c.cues
+            ));
+            assets.movements.push(ConnorMovement {
+                name: kq8_core::connor::intern(&name),
+                animation,
+                speed: c.speed,
+                repeat: c.repeat,
+                cut_short: c.unknown != 0,
+                transitions: Vec::new(),
+                cues: c.cues.clone(),
+            });
+            loaded.push(name);
+        }
+        self.log.summary(format!(
+            "connor: special state (anim-scripts.md rule 16): {lines} setState lines in the scripts; {} movements loaded {loaded:?}; problems {problems:?}",
+            loaded.len()
+        ));
     }
 
     /// A door (M3 step 3a; docs/behaviour/doors.md): every movement with

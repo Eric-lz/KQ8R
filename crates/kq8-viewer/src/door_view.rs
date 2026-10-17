@@ -130,6 +130,10 @@ impl DoorSim {
 #[derive(Resource)]
 pub struct ClickAt(pub Vec<(String, u64)>);
 
+/// `--special ITEMS,N` (M3 3i-7 test).
+#[derive(Resource)]
+pub struct SpecialAt(pub Option<(String, u64)>);
+
 /// `--aim NAME,N` (each may be given more than once).
 #[derive(Resource)]
 pub struct AimAt(pub Vec<(String, u64)>);
@@ -563,11 +567,18 @@ pub fn trap_step(
     anim: Option<ResMut<crate::anim_view::AnimSim>>,
     mut deleted: ResMut<Deleted>,
     mut rules: ResMut<crate::draw_distance::ActiveRules>,
+    mut special_at: ResMut<SpecialAt>,
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
     let (Some(mut sim), Some(mut connor)) = (sim, connor) else { return };
     let sim = &mut *sim;
+    // `--special`: as if a script asked for it now.
+    if let Some((items, _)) = special_at.0.take_if(|(_, n)| sim.active.world.updates >= *n) {
+        let at = "test --special".to_string();
+        sim.active.world.log.push(format!("update {}: {at}: KQMonster::setState Connor special {items}", sim.active.world.updates));
+        sim.active.world.requests.push(Request::ConnorSpecial { items, at });
+    }
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
@@ -583,6 +594,10 @@ pub fn trap_step(
             balls: &connor.mover.balls,
         };
         sim.active.connor_moved(&v);
+    }
+    // His play-once movements that ended (3i-7): getEndLoop listeners.
+    for m in std::mem::take(&mut connor.ended) {
+        sim.active.connor_movement_ended(&m);
     }
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
@@ -608,6 +623,10 @@ pub fn trap_step(
                     rules.always_near.remove(&name.to_ascii_lowercase());
                 }
                 format!("{at}: applied: [{name}] {}", if on { "always near" } else { "back to the distance test" })
+            }
+            Request::ConnorSpecial { items, at } => {
+                let line = connor.start_special(&items, &at);
+                format!("{at}: applied: Connor {line}")
             }
             Request::Delete { name, at } => {
                 let mut off = 0;

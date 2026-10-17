@@ -15,8 +15,90 @@
 //! The falling animations (M2 step 2c/2e, `connor-physics.md` "Falling off
 //! an edge"): `jumphold` while falling, then `jumpend` (safe landing) or
 //! `jumpdie` (death), each played once, with the keys ignored meanwhile.
+//!
+//! Scripted animations, the Special state (M3 step 3i-7,
+//! `anim-scripts.md` rule 16): `KQMonster::setState Connor special
+//! <list>`; the items one at a time ([`special_steps`]), each movement
+//! played to its end before the next, then standing.
+
+use std::collections::BTreeSet;
+use std::sync::Mutex;
 
 use crate::UPDATES_PER_SECOND;
+
+/// A movement name that lives as long as the program: Connor's movements
+/// are `&'static str`, and the Special state's lists add names read from
+/// the game's files (a few dozen per world).
+pub fn intern(name: &str) -> &'static str {
+    static NAMES: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
+    let mut names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(n) = names.get(name) {
+        return n;
+    }
+    let n: &'static str = Box::leak(name.to_string().into_boxed_str());
+    names.insert(n);
+    n
+}
+
+/// The name a movement of a Special list is loaded under: `<list>/<name>`
+/// (list file name in small letters), so it can't clash with his own.
+pub fn special_movement_name(list: &str, name: &str) -> String {
+    format!("{}/{name}", list.to_ascii_lowercase())
+}
+
+/// The name scripts know a movement by (`push` for `bricks.anm/push`).
+pub fn plain_movement_name(name: &str) -> &str {
+    name.rsplit('/').next().unwrap_or(name)
+}
+
+/// One item of a Special list, worked out (`anim-scripts.md` rule 16).
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpecialStep {
+    /// A movement to play to its end: the loaded name, and the word as
+    /// written.
+    Play(&'static str, String),
+    /// `KillConnor`: his Die state.
+    Kill,
+    /// Something only logged (`AnimList=`, `AnimListOn`/`Off`, `Inv`, a
+    /// movement that isn't loaded).
+    Note(String),
+}
+
+/// Works out a Special list (`AnimList=bricks.anm,AnimListOn,push`) left
+/// to right: `AnimList=<file>` loads that list, `AnimListOn` makes names
+/// come from it, `AnimListOff` from his own again, `Inv <item>` (two
+/// items) is logged only (not traced), `KillConnor` his Die state, any
+/// other word a movement. `resolve(list, word)` finds the loaded
+/// movement (`list` is `None` for his own), ignoring capitals.
+pub fn special_steps(items: &str, resolve: &dyn Fn(Option<&str>, &str) -> Option<&'static str>) -> Vec<SpecialStep> {
+    let mut out = Vec::new();
+    let (mut loaded, mut on) = (None::<String>, false);
+    let mut words = items.split(',').map(str::trim).filter(|w| !w.is_empty());
+    while let Some(w) = words.next() {
+        if let Some(file) = w.strip_prefix("AnimList=").or_else(|| w.strip_prefix("animlist=")) {
+            loaded = Some(file.to_string());
+            out.push(SpecialStep::Note(format!("AnimList={file}: list loaded")));
+        } else if w.eq_ignore_ascii_case("AnimListOn") {
+            on = true;
+            out.push(SpecialStep::Note(format!("AnimListOn: names from {}", loaded.as_deref().unwrap_or("(no list loaded)"))));
+        } else if w.eq_ignore_ascii_case("AnimListOff") {
+            on = false;
+            out.push(SpecialStep::Note("AnimListOff: names from his own list".into()));
+        } else if w.eq_ignore_ascii_case("Inv") {
+            let item = words.next().unwrap_or("");
+            out.push(SpecialStep::Note(format!("Inv {item}: holds that item (not traced, not done)")));
+        } else if w.eq_ignore_ascii_case("KillConnor") {
+            out.push(SpecialStep::Kill);
+        } else {
+            let list = if on { loaded.as_deref() } else { None };
+            match resolve(list, w) {
+                Some(name) => out.push(SpecialStep::Play(name, w.to_string())),
+                None => out.push(SpecialStep::Note(format!("movement {w} not loaded from {}: skipped (stand-in)", list.unwrap_or("his own list")))),
+            }
+        }
+    }
+    out
+}
 
 /// Turning speed while a turn key is held, radians per second.
 pub const TURN_RATE: f32 = 1.75;
@@ -267,6 +349,9 @@ pub enum Mode {
     /// Jumping: the jump animation once, keys ignored; when it ends the
     /// game starts Fall (`connor_update.rs`).
     Jump,
+    /// A script's list of movements (`anim-scripts.md` rule 16), keys
+    /// ignored; when the list is used up, back to the keys.
+    Special,
 }
 
 impl Mode {
@@ -279,6 +364,7 @@ impl Mode {
             Mode::Dead => "dead",
             Mode::Crash => "crash",
             Mode::Jump => "jump",
+            Mode::Special => "special",
         }
     }
 }
@@ -317,6 +403,9 @@ pub struct Walker {
     /// pick `run` or `waterrun`), off while jumping, falling and landing
     /// (the user's check, Q59), kept as it is in the other modes.
     pub lean_allowed: bool,
+    /// The Special state's list and the item playing now (rule 16).
+    pub special: Vec<SpecialStep>,
+    pub special_at: usize,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -349,6 +438,9 @@ pub struct Step {
     pub own_step: [f32; 3],
     /// Requests and transitions this update, for the log.
     pub notes: Vec<String>,
+    /// A play-once movement reached its end in this update (for
+    /// `getEndLoop` listeners, `clicking.md` rule 21).
+    pub ended: Option<&'static str>,
 }
 
 impl Walker {
@@ -368,6 +460,8 @@ impl Walker {
             submerged: false,
             bank: 0.0,
             lean_allowed: false,
+            special: Vec::new(),
+            special_at: 0,
         }
     }
 
@@ -408,7 +502,53 @@ impl Walker {
             Mode::Dying | Mode::Dead => Some(self.kind.die()),
             Mode::Crash => Some("crash"),
             Mode::Jump => Some(self.kind.jump()),
+            Mode::Special => match self.special.get(self.special_at) {
+                Some(SpecialStep::Play(name, _)) => Some(name),
+                _ => Some(self.movement),
+            },
         }
+    }
+
+    /// `KQMonster::setState Connor special <list>` (rule 16): the Special
+    /// state; the first movement starts at once (it plays from the next
+    /// update). Returns the log lines for the items handled before it.
+    pub fn start_special(&mut self, steps: Vec<SpecialStep>) -> Vec<String> {
+        self.clear_transitions();
+        self.mode = Mode::Special;
+        self.special = steps;
+        self.special_at = 0;
+        let mut notes = Vec::new();
+        self.special_items(&mut notes);
+        notes
+    }
+
+    /// Handles items from `special_at` on until one is a movement (it
+    /// starts from phase 0) or the list is used up (back to standing).
+    fn special_items(&mut self, notes: &mut Vec<String>) {
+        while let Some(step) = self.special.get(self.special_at).cloned() {
+            match step {
+                SpecialStep::Play(name, written) => {
+                    notes.push(format!("special: plays {written} ({name})"));
+                    self.movement = name;
+                    self.phase = 0.0;
+                    return;
+                }
+                SpecialStep::Kill => {
+                    // His Die state; our Dead mode holds the last frame of
+                    // the fall-death animation (stand-in: what he shows
+                    // while dead is M5).
+                    notes.push("special: KillConnor: his Die state".into());
+                    self.special.clear();
+                    self.mode = Mode::Dead;
+                    return;
+                }
+                SpecialStep::Note(n) => notes.push(format!("special: {n}")),
+            }
+            self.special_at += 1;
+        }
+        notes.push("special: list used up: back to standing".into());
+        self.special.clear();
+        self.set_mode(Mode::Free);
     }
 
     /// Which jump the Jump key would start now, or why none: only in the
@@ -616,6 +756,14 @@ impl Walker {
         let mut mode_changed = None;
         let mut notes = Vec::new();
         let start = self.movement;
+        // Rule 16: the Special movement playing has ended: the next item.
+        if self.mode == Mode::Special && self.phase >= 1.0 {
+            self.special_at += 1;
+            self.special_items(&mut notes);
+            if self.mode != Mode::Special {
+                mode_changed = Some((Mode::Special, self.mode));
+            }
+        }
         // A mode's one-shot animation that finished last update hands over.
         if self.phase >= 1.0 {
             let next = match self.mode {
@@ -663,6 +811,7 @@ impl Walker {
             played_to: played_from,
             own_step: [0.0; 3],
             notes: Vec::new(),
+            ended: None,
         };
         let finish = |mut step: Step, walker: &Walker, notes: Vec<String>| {
             step.changed = (walker.movement != start).then_some((start, walker.movement));
@@ -730,6 +879,9 @@ impl Walker {
                 self.phase = 1.0;
             }
             step.played_to = self.phase;
+            if from < 1.0 && self.phase >= 1.0 {
+                step.ended = Some(played);
+            }
             let own = l.one_shot_step(from, self.phase).map(|v| v * l.speed.signum());
             if self.phase >= 1.0 && self.mode == Mode::Free {
                 match self.playing {
@@ -1578,5 +1730,49 @@ mod tests {
         // back towards upright although `run` or its stop still plays.
         let l = leans(&mut w, intent(0, 1, true), 2, &loops);
         assert!(near(l[0], 0.03) && l[1] == 0.0, "{l:?}");
+    }
+
+    #[test]
+    fn a_special_list_is_worked_out_left_to_right() {
+        let resolve = |list: Option<&str>, w: &str| -> Option<&'static str> {
+            match (list, w.to_ascii_lowercase().as_str()) {
+                (Some(l), "push") if l.eq_ignore_ascii_case("bricks.anm") => Some("bricks.anm/push"),
+                (None, "kneel") => Some("kneel"),
+                _ => None,
+            }
+        };
+        let steps = special_steps("AnimList=bricks.anm,AnimListOn,PUSH,AnimListOff,kneel,Inv,SmCrossBow,push,KillConnor", &resolve);
+        let plays: Vec<&str> = steps.iter().filter_map(|s| if let SpecialStep::Play(n, _) = s { Some(*n) } else { None }).collect();
+        assert_eq!(plays, ["bricks.anm/push", "kneel"]);
+        assert!(steps.iter().any(|s| matches!(s, SpecialStep::Note(n) if n.starts_with("Inv SmCrossBow"))));
+        // `push` after AnimListOff is looked up in his own list: not there.
+        assert!(steps.iter().any(|s| matches!(s, SpecialStep::Note(n) if n.starts_with("movement push not loaded from his own list"))));
+        assert_eq!(steps.last(), Some(&SpecialStep::Kill));
+        assert_eq!(plain_movement_name("bricks.anm/push"), "push");
+        assert!(std::ptr::eq(intern("bricks.anm/push"), intern("bricks.anm/push")));
+    }
+
+    #[test]
+    fn special_plays_each_movement_to_its_end_then_stands() {
+        let list = [("stop", MovementLoop { step_sum: [0.0; 3], ..walk(1.0) }), ("walk", walk(1.0)), ("a", once()), ("b", once())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, false), &loops);
+        let notes = w.start_special(vec![SpecialStep::Play("a", "a".into()), SpecialStep::Note("x".into()), SpecialStep::Play("b", "b".into())]);
+        assert_eq!((w.mode, w.movement, w.phase), (Mode::Special, "a", 0.0), "{notes:?}");
+        let mut ended = Vec::new();
+        let heading = w.heading;
+        for _ in 0..40 {
+            let s = w.update(intent(1, 1, true), &loops);
+            ended.extend(s.ended);
+            if w.mode == Mode::Free {
+                break;
+            }
+            // Keys ignored (no turning) while the list plays.
+            assert_eq!(w.heading, heading);
+        }
+        assert_eq!(ended, ["a", "b"]);
+        // Back to the keys (forward and run held: they ask for `run`).
+        assert_eq!((w.mode, w.movement), (Mode::Free, "run"));
     }
 }
