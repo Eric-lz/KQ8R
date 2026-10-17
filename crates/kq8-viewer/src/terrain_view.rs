@@ -211,8 +211,11 @@ pub fn setup_ground(
     ));
     commands.spawn((
         Camera3d::default(),
-        // Colours as computed, no tone-mapping curve (M1 step 4b).
+        // Colours as computed, no tone-mapping curve (M1 step 4b). Dithering
+        // only works with tone mapping, so it is switched off too (it did
+        // nothing; Bevy warned about it).
         Tonemapping::None,
+        bevy::core_pipeline::tonemapping::DebandDither::Disabled,
         // The whole ground must stay inside the view distance. Field of
         // view 70 degrees vertically (Bevy's default is 45; user's choice).
         // modified manually to what feels more natural, but could be wrong

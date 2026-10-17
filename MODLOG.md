@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Fix: Bevy's dithering warning at start
+
+**Changed:** `kq8-viewer`: both cameras (`terrain_view.rs` world view, `main.rs` model view) get `DebandDither::Disabled` next to `Tonemapping::None`.
+**Why:** The user saw Bevy's warning "`Tonemapping::None` with `DebandDither::Enabled`, so dithering has no effect". Dithering only works with tone mapping, which we keep off so colours stay as computed (M1 step 4b); it did nothing.
+**Tested how:** `cargo clippy -p kq8-viewer` clean; `cargo play --world Daventry --frames 60` and `cargo play --model smlchest.KQS --frames 60`, terminal output searched for the warning.
+**Result:** The warning no longer appears (0 times in both runs); RESULT: PASS. No change to the picture expected (the setting had no effect). Checked by the user (2026-10-17): the warning is gone.
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-17 `cargo play`: a short command for the viewer
 
 **Changed:** New `.cargo/config.toml` with the alias `play = "run --release -p kq8-viewer --"` (first named `viewer`; renamed at the user's request); `.gitignore` whitelists it; `README.md` ("Try it") and `docs/FEATURES.md` ("Launch options") use `cargo play`. The user's own README edits (feature list, F9 row) kept.

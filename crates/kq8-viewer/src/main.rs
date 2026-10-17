@@ -469,7 +469,13 @@ fn setup(
         centre[0], centre[1], centre[2]
     ));
     // Colours as computed, no tone-mapping curve (M1 step 4b).
-    commands.spawn((Camera3d::default(), bevy::core_pipeline::tonemapping::Tonemapping::None, Transform::default()));
+    // No tone mapping, so no dithering either (it would do nothing).
+    commands.spawn((
+        Camera3d::default(),
+        bevy::core_pipeline::tonemapping::Tonemapping::None,
+        bevy::core_pipeline::tonemapping::DebandDither::Disabled,
+        Transform::default(),
+    ));
 }
 
 /// A direction (a normal) from game space to Bevy space, length kept.
