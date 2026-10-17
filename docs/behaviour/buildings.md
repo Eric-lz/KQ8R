@@ -39,9 +39,19 @@ Tables (meaning from the data; every index stays inside its table, checked on
 all 153 files):
 
 1. **Surfaces**, 20 bytes each (one flat polygon each):
-   - byte 0: flags. Bit 0x80 set = the surface faces the **opposite** way
-     to its plane (planes are shared by both sides of a wall). Matches the
-     corner order in 19,958 of 19,958 Daventry surfaces.
+   - byte 0: flags. **Bit 0x80 set = the surface faces the same way as
+     its plane's normal; clear = the opposite way** (planes are shared by
+     both sides of a wall). Corrected 2026-10-16 (study session A, Q78):
+     the first version said the reverse, probably measured before the
+     corner-order fix of Q15 below. Traced: the game's wall drawing shows
+     a bit-set surface only when the camera is on its plane normal's side,
+     and its point-light test uses the plane normal for set, the reversed
+     normal for clear. Data: the lowest horizontal surfaces of Daventry's
+     buildings (their bottoms, which face down and outward) all have a
+     downward plane normal and the bit set. B's earlier count (bit and
+     corner order agree on 19,958 of 19,958 Daventry surfaces) still
+     holds; only the direction was misread. B draws from the corner order
+     (clockwise seen from the front, step 2 below), which stays right.
    - byte 1: material index into the material list (0–51 in Daventry).
    - bytes 2, 3: texture size in texels minus 1 (width, height).
    - bytes 4, 5: texture offset in texels (x, y).

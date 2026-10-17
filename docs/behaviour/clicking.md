@@ -4,6 +4,7 @@ Study session A, 2026-10-15. Sources: `Mask.exe` (studied, described here
 in our own words) and the game data of all 12 worlds. "Traced" = read in
 the exe; "data" = read from the files; "inferred" = follows from the two
 but was not seen in the exe. Answers `QUESTIONS.md` Q62 (a), Q63 and Q64.
+Updated 2026-10-16 (Q75: reach to a picked building, rule 9).
 Builds on `doors.md` (rules 10–16: picking, reach, the `ConnorAction`
 call, "too far"), `items.md` and `chests.md`.
 
@@ -70,6 +71,14 @@ gets.
 9. Reach and everything after it are unchanged: `doors.md` rules 11–16.
    The distance is from Connor's feet to the picked thing's box, against
    2 × Connor's `attackDist` (4,700).
+   **For a building** (traced 2026-10-16, Q75) the box is the **`.dig`
+   file's bounding box** (the 6 floats in its header, `buildings.md`),
+   the same box the game gives the building's collider. Connor's position
+   is turned into the building's own axes and the distance is from that
+   point to the nearest point of the box (0 when Connor stands inside the
+   box). It is **not** the point where the click line met the wall. B's
+   stand-in (distance to the building's bounding box, placed with the
+   building) is right.
 10. **A picked building with no script does nothing at all.** In reach
     the click becomes a `ConnorAction` call; out of reach a building's
     default `tooFarAwayAction` is **1** (buildings are the only class that
@@ -207,6 +216,7 @@ gets.
 | building `tooFarAwayAction` default | 1 (other objects 0) | traced |
 | not-clickable building type in the data | 0x88 (`colliderType=136`) | data |
 | reach | 2 × `attackDist` = 4,700 | traced (`doors.md`) |
+| reach to a building | Connor to its `.dig` header box, in the building's axes | traced |
 | reserved cue numbers | 3333 = `EndLoop`, 500 = projectile | traced |
 
 ## Data used
@@ -257,6 +267,12 @@ gets.
 - **In the original (rule 10):** click a house wall in reach: nothing at
   all should happen (no remark, no turn). Click it from far away: also
   nothing (no "too far" remark).
+- **In the original (rule 9, buildings, Q75):** with an item in hand,
+  click a house wall from far off (more than 4,700 from the whole house):
+  silence. Walk closer until Connor is within 4,700 of any part of the
+  house's bounding box (which can be a different side from the wall you
+  click): "that doesn't work". Our log: for a picked building, the distance to its
+  `.dig` box and "in reach" / "too far".
 - **In our logs:** for every click: what the line hit first (name, kind,
   distance along the line), and for buildings "swallowed, no script".
   For every animated object with a script: `Init` at load, `EndLoop

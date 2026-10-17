@@ -41,9 +41,27 @@ list is `docs/FEATURES.md`.
     changing colour every second.
   - **Q73 leftovers (M1 7f):** checked; only the ground's light map is
     not bilinear yet.
-- **Later for A:** Q75–Q77 (new, small); Dead City's flames (11,000 vs
-  12,100, open question 9); Q53 (camera follow-ups); pushable objects
-  (`KQBoulder`); Connor against monsters; Q27.
+- **A answered Q75–Q78 (2026-10-16, study session), ready for B:**
+  - **Point lights on building surfaces (Q78, `object-lighting.md` rule
+    16):** every drawn surface of a building (walls, floors, ceilings) is
+    rebuilt from its `.dil` map every frame and then gets each point light
+    that is in front of it (measured to the map's first corner), within
+    Begin + End of its nearest corner or centre, and not hidden by that
+    building's own BSP; stored back in 4 bits as on the ground. Lights
+    carried by models (Daventry's fireplaces) count like `KQPointLight`s.
+    A lit surface's haze × 0.04 comes before the "too hazy, not drawn"
+    test. `buildings.md`'s bit 0x80 line was backwards (corrected; B's
+    drawing uses corner order and is unaffected).
+  - **Q77:** bit 0x1 = point light, 0x4 unused; **a `KQPointLight` is
+    never in the near / far / off test and always shines** (B's stand-in
+    should go); 442 shapes with lights is right.
+  - **Q76:** a building's ball = half its `.dig` box diagonal, centred on
+    the building's position (not `BOUNDS.KQ`, not the box middle).
+  - **Q75:** reach to a building = Connor to its `.dig` box (B's stand-in
+    is right).
+- **Later for A:** Dead City's flames (11,000 vs 12,100, open question
+  9); Q53 (camera follow-ups); pushable objects (`KQBoulder`); Connor
+  against monsters; Q27.
 
 ## Goal
 
@@ -207,7 +225,10 @@ milestone: **M3, Daventry comes alive**.
 - **Also done (2026-10-16): M1 7e**, point lights paint the ground
   (Dead City: PLIGHT01's patch, the portal's moving one, the torches;
   checked by eye by the user: like the original).
-- **Next step (B):** 7d (walls, rule 16), once A answers Q78. Planned in `docs/DESIGN.md` M1 step 7.
+- **Next step (B):** 7d (walls and floors, rule 16; Q78 answered
+  2026-10-16), plus the small follow-ups: `KQPointLight` out of the
+  near / far / off test (Q77 b), buildings' draw-distance ball (Q76).
+  Planned in `docs/DESIGN.md` M1 step 7.
 - **Checked by the user (2026-10-16), all good:** `cargo run -p kq8-viewer
   --release -- --world DeadCity --at 182213,42600,3.1416`: Connor stands
   by the arrival portal; his side facing the portal should get a green
@@ -254,10 +275,6 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- New from B (2026-10-16), small: Q75 (reach to a clicked building),
-  Q76 (the draw-distance ball of a building), Q77 (which light flag bit
-  means "point"; a `KQPointLight`'s place in the near / far / off test;
-  the 442 vs 174 count of shapes with lights).
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
   is 3D; updating only while Connor moves). Stand-ins in place.
@@ -279,7 +296,8 @@ milestone: **M3, Daventry comes alive**.
   difference).
 - Q14b: the teleport pad's see-through look.
 - Q4: missing texture names.
-- All others are answered or closed (Q54, Q60–Q64, Q70, Q71, Q74 built
+- All others are answered or closed (Q75–Q78 answered by A 2026-10-16,
+  not built yet; Q54, Q60–Q64, Q70, Q71, Q74 built
   2026-10-16; Q72 built for models, walls and ground next; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the
   lighting session 2026-10-14/15; Q55 answered in

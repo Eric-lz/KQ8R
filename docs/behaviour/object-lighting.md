@@ -12,6 +12,11 @@ building walls, particles and the background (rules 27–33), what the card
 does with the haze (rule 23), the draw distance that switches objects off
 (rules 34–40), and the walls' lights (rule 16).
 
+Updated 2026-10-16 (study session A, Q76–Q78): point lights on building
+surfaces in full (rule 16), which flag bit makes a model's light a point
+light (rule 26b), `KQPointLight` and the near / far / off test (rule 37),
+and the draw-distance ball of a building (rule 40).
+
 "Traced" = read in the exe. "Measured" = checked on the data with a
 throwaway script. "Not traced" = an assumption, marked as such.
 
@@ -206,35 +211,97 @@ placement in floats and repeat what the texture fields give):
     separate surfaces (`buildings.md`), each with its own light map.
     Measured on Daventry: many texels are 0 (black), e.g. 16,017 of 81,085
     in `cnnrhut.dil`. Those are probably faces that are never seen.
-16. **The sun and ambient never touch building walls** (traced 2026-10-16).
-    A wall gets its light map and, only when dynamic lighting is on, the
-    point lights (`KQPointLight`) near it. Dynamic lighting is on in the
-    shipped `Options.cs` (`useDynamicLighting 1`), but only Dead City has
-    point lights (rule 25), so in Daventry walls use only their light map.
-    How a point light adds to a wall (traced):
-    - the light must be in front of the wall (the wall's facing and the
-      direction from the light to the wall differ by more than about 96°,
-      i.e. their dot product is below −0.1);
-    - the light must be switched on (lights carried by an object with
-      `turnOffDynLighting=1` are off for walls and ground, rule 26b);
-    - the nearest of the wall's four corners and its centre must be closer
-      to the light than **`tsAttenuationBegin` + `tsAttenuationEnd`**
-      (keys matched 2026-10-17);
-    - a line from the light to a point 64 units in front of that nearest
-      spot (towards the light) must not be blocked;
-    - then every light texel of that wall gets colour × falloff added, per
-      channel, capped at 1, where the falloff is measured at the texel's
-      own position (distance d from the light):
-      **1 up to `tsAttenuationBegin`, then 1 − (d − Begin) ÷ End, not
-      below 0**. So on walls (and the ground, rule 26) **`tsAttenuationEnd`
-      is a fade length**, added on top of Begin: the light reaches 0 at
-      Begin + End. On models (rule 24) the same key is an end distance.
-      Example `PLIGHT01` (Begin 1,000, End 4,000): walls lit out to 5,000,
-      models out to 4,000. Reproduce the difference.
-    - such a lit wall also gets its haze multiplied by **0.04** (almost no
-      haze), so lit walls glow through the fog. This happens once per wall
-      surface per light that passes the tests above (two lights: × 0.04
-      twice), whether or not any texel ends up brighter.
+16. **The sun and ambient never touch building surfaces** (traced
+    2026-10-16). A building surface (wall, floor, ceiling, roof: every
+    surface of the `.dig` is handled the same way, so inside a house the
+    floor counts too) gets its light map and, only when dynamic lighting
+    is on, the point lights near it. Dynamic lighting is on in the shipped
+    `Options.cs` (`useDynamicLighting 1`). "Point lights" means every
+    point light in the frame's light list (rule 3): `KQPointLight`s (Dead
+    City, rule 25) **and the lights carried by models** (rule 26b), for
+    example Daventry's fireplaces (`fireset2.kqs`, Begin 700, End 850), in
+    exactly the same way. Sun-type lights in the list are skipped. So
+    Daventry's walls and floors do get dynamic light, from its models'
+    lights. Completed 2026-10-16 (Q78), all traced:
+    - **When**: every frame, for every building surface that is drawn this
+      frame (only the surfaces in view). With dynamic lighting on, the
+      game throws away all the wall light maps it made the frame before,
+      then rebuilds each drawn surface's map **from the `.dil` texels as
+      stored**, then adds the lights. So nothing piles up and a moving
+      light (the portal's) leaves no trail. With dynamic lighting off the
+      `.dil` map is used as it is.
+    - **Where the work is done**: in the building's own axes. Each light's
+      position is turned into the building's axes (the inverse of the
+      building's placement) once per building per frame.
+    - **The surface's light-map rectangle.** Each table D record holds, as
+      floats, the place of the surface's **first light texel**, P0 (bytes
+      12–23), and two edge vectors U (bytes 24–35) and V (bytes 36–47),
+      in building space. Measured: U runs from the first to the last
+      texel of a row and V from the first to the last row (|U| = (width −
+      1) × 128 and |V| = (height − 1) × 128 in Daventry). The rectangle's
+      four corners are P0, P0 + U, P0 + V, P0 + U + V; its centre is the
+      average of the four.
+    - **In front**: d = the direction from the light to **P0** (the first
+      corner), made unit length. The light counts only if facing · d is
+      **below −0.1** (so the light is in front of the surface, more than
+      about 6° off its plane). "Facing" is the surface's front direction:
+      the plane normal when the surface's byte-0 bit 0x80 is set, the
+      reversed plane normal when it is clear (the side the surface is
+      drawn from; see the correction in `buildings.md`). Same as "the
+      side from which the corners run clockwise".
+    - **Switched on**: lights carried by an object with
+      `turnOffDynLighting=1` are off for surfaces and the ground (rule
+      26b). `KQPointLight`s are always on.
+    - **Reach**: of the rectangle's four corners and its centre, take the
+      one nearest the light. Its distance must be less than
+      **`tsAttenuationBegin` + `tsAttenuationEnd`** (keys matched
+      2026-10-17). Only those five points are tried, not the nearest point
+      of the surface, so on a large surface a light near the middle of a
+      long edge can fail this test.
+    - **Line test**: from the light to the point **64 units from that
+      nearest spot, towards the light**. Only **this building's own
+      collision BSP** is tested (its solid space, the same test as
+      `camera.md` "Obstacles" and Connor's collision with buildings).
+      Other buildings, the ground and objects never block it. If the line
+      passes through this building's solid space, the light adds nothing
+      to this surface.
+    - **Adding**: then every light texel of the surface gets colour ×
+      falloff added. Texel (i, j) (i along a row, j row number) is placed
+      at **P0 + U × i ÷ width + V × j ÷ height** in the original. That is a
+      slip: by the data the true texel spacing is U ÷ (width − 1), so the
+      original measures each texel a little nearer P0 than it is (see "Do
+      not reproduce"). d = the texel's distance from the light;
+      **falloff = 1 up to `tsAttenuationBegin`, then 1 − (d − Begin) ÷
+      End, not below 0**. So on surfaces (and the ground, rule 26)
+      **`tsAttenuationEnd` is a fade length**, added on top of Begin: the
+      light reaches 0 at Begin + End. On models (rule 24) the same key is
+      an end distance. Example `PLIGHT01` (Begin 1,000, End 4,000): walls
+      lit out to 5,000, models out to 4,000. Reproduce the difference.
+    - **Stored back in 4 bits, like the ground** (rule 26): each colour
+      channel = stored value ÷ 15 + light colour × falloff, capped at 1,
+      then stored as a whole number, **channel × 15.9 rounded down**. With
+      two lights the second adds to the first's rounded result. (The top
+      4 bits get a brightness worked out from the three channels, which
+      rule 14 does not use.)
+    - **Haze**: a surface that passes every test above (including the line
+      test) gets its haze multiplied by **0.04**, once per such light (two
+      lights: × 0.04 twice), whether or not any texel ends up brighter.
+      The test "haze 0.99 or more: not drawn" (rule 29) comes **after**
+      this, so a lit surface beyond the haze limit is still drawn. Lit
+      walls glow through the fog.
+    - **Far or off buildings** (Q78 e): a building that is drawn is lit,
+      near or far (rule 37: far still draws with the default masks). An
+      off building is not drawn, so there is nothing to light. There is no
+      other distance limit for surfaces besides the reach test. What
+      decides whether a **light** shines is the light's own object: a
+      `KQPointLight` always (rule 37); a model's light only while its
+      object has group bit 0x400 (near or far with the default masks).
+      Example: Daventry's fireplace objects (`fireset1.kq`,
+      `fireset2.kq`) have `tooFar=0.4` and `groupsActive3DFar=0`, so their
+      lights shine only while Connor is within about 0.4 × 27,000 =
+      10,800 of them (minus their ball's radius).
+    - A surface with no light map (table D offset 0xFFFFFFFF, Castle D
+      only) gets an all-white map and no lights.
 
 ### Daventry building light values (measured, red channel)
 
@@ -400,8 +467,12 @@ B draws it (open question 1).
       count); those nodes are the object's lights for that frame (at most
       5 are used). A sequence with no light sub-sequence (−1) has none.
       So the light moves and changes colour as the animation plays.
-    - **Kind:** flag bit 1 set = point light; clear = sun-type (its
-      position field is then the aim, rule 5).
+    - **Kind:** flag bit **0x1** (the lowest bit) set = point light; clear
+      = sun-type (its position field is then the aim, rule 5). Confirmed
+      2026-10-16 (Q77 a): this is the only bit of the node's flags the
+      game ever reads, so **0x4 does nothing** (no other code looks at the
+      flags). In the data every node has 0x1, so every model light is a
+      point light.
     - **Colour** per channel = byte ÷ 255 × intensity scale × strength,
       strength = intensity level × 0.2, capped at 1. Files of version 1–3
       have no level or scale: the game uses **1.0 for both** (traced; B's
@@ -419,7 +490,10 @@ B draws it (open question 1).
     - An object whose `.kq` has **`turnOffDynLighting=1`** (39 files, e.g.
       `flame_nd.kq`) keeps its lights for **models** but switches them off
       for **walls and the ground**.
-    - **Data:** 174 of the game's shapes carry lights (measured), e.g. the
+    - **Data:** 442 differently named shapes carry light nodes (measured
+      again 2026-10-16; B's `kq8 lighting-verify` agrees). The earlier
+      figure 174 counted only the 12 worlds' own `resource` folders;
+      `GAME/Common` adds 271 more (3 names are in both). Examples: the
       portal `portlite.kqs`, the torch flame `torch01.kqs`, candles,
       lamps, coals, the tiki, `signpst1.kqs`. Example `portlite.kqs`
       (Dead City's arrival portal, `portal.kq` at 182,186 / 41,007, right
@@ -476,7 +550,8 @@ differs.
       rooms named in Q68 stay solid.
     - The material flag `0x10000` and `hazeMultiplier` are **not** used
       for walls.
-    - A wall lit by a point light gets haze × 0.04 (rule 16).
+    - A wall lit by a point light gets haze × 0.04 (rule 16) before the
+      "0.99 or more" test, so it can stay drawn past the limit.
     - Daventry: walls start to fade at 18,000 and drop out when their
       nearest corner is past 18,000 + 0.99 × 4,950 ≈ 22,900. Dead City:
       9,000 to about 10,190.
@@ -558,9 +633,16 @@ an object takes part in the game at all.
     solid** when off.
     More bits (traced 2026-10-17): **0x400** puts the object in the
     **lights group**, the list the frame's light gathering walks (rule 3):
-    its own lights (a `KQPointLight`, or lights carried by its model,
-    rule 26b) shine only while it has 0x400. **0x2** keeps it in the
-    near / far / off test itself. 0x1000 is only a flag ("on fire", set by
+    lights carried by its model (rule 26b) shine only while it has 0x400.
+    **0x2** keeps it in the near / far / off test itself.
+    **`KQPointLight` is different** (corrected 2026-10-16, Q77 b): it is
+    not an ordinary object and has no group masks. When it enters the
+    world it puts itself straight into the lights group and stays there
+    until it is removed. It **never takes part in the near / far / off
+    test** (it doesn't read `groupsAlways` or `tooFar`), so it has no
+    position or ball for that test, and it **shines everywhere, every
+    frame**, however far Connor is. Its only position is
+    `tsLightPosition`. 0x1000 is only a flag ("on fire", set by
     `KQObject::lightOnFire`), not a list. The other bits put the object in
     lists not studied here.
 38. **Dead City's flames** (`flame.kq`, `flame_nd.kq`): no shape name, so
@@ -580,6 +662,24 @@ an object takes part in the game at all.
 40. The same test applies to buildings (`KQInterior`) and emitters: they
     are switched off beyond `visibleDistance` from Connor (minus their
     radius). Buildings are large, so this rarely happens.
+    **A building's ball** (traced 2026-10-16, Q76): buildings have their
+    own rule and **do not use `BOUNDS.KQ`** at all (even the 6 buildings
+    listed there):
+    - radius = **half the diagonal of the `.dig` file's bounding box**
+      (the 6 floats in its header, `buildings.md`);
+    - centre = **the building's own position** as it is now (the test
+      reads the position every frame, so the ground raise of
+      `buildings.md` is included), **not** the middle of that box: the
+      box middle is worked out but not used. (If the building already had
+      its collider when it entered the test, the radius comes from the
+      collider instead; that is the same box, so the same radius. In
+      practice the test is entered before the collider exists.)
+    - No `.dig` box (cannot happen with the data): radius 10,001.
+    - Measured on Daventry's `.dig` files: radii from about 900
+      (`zedrock2`) to 19,000 (`nchurch`); the box middle lies 400–14,000
+      units from the building's origin (`csbridge.dig`: 14,000, more than
+      its radius of 4,400), so the ball can miss part of the building.
+      See "Do not reproduce".
 41. **The collider switch (bit 0x8), as B needs it** (traced 2026-10-17):
     when an object's groups gain 0x8, its collider (if it has one) is added
     to the collision world at the object's current place; when they lose
@@ -638,6 +738,13 @@ an object takes part in the game at all.
 | ground haze per corner | 0.01 + (d − hazeDistance) ÷ (1.02 × (visibleDistance − hazeDistance)), 0.01 to 0.99 | traced |
 | wall haze per surface | object formula from the nearest corner, past 1 → 0.99; ≥ 0.99 not drawn unless `b_hazeSolid` | traced |
 | wall lit by a point light | haze × 0.04 | traced |
+| wall light: in front | facing · unit(P0 − light) < −0.1 | traced |
+| wall light: reach | nearest of 4 corners + centre < Begin + End | traced |
+| wall light: line test | to 64 units in front of that point, own BSP only | traced |
+| wall light map | rebuilt from `.dil` every frame (dynamic lighting on), channel × 15.9 rounded down | traced |
+| model light kind | node flag bit 0x1 = point; 0x4 unused | traced |
+| `KQPointLight` | always in the light list, not in the near / far / off test | traced |
+| building ball | centre = building position, radius = half `.dig` box diagonal | traced |
 | card blend | (1 − h) × colour + h × haze colour; h sent as h × 255 | traced (Glide) |
 | haze colour | nearest palette entry (10–244) to `resetHazeColor` R G B (0–255) | traced |
 | background | flat palette entry `newSky n`, no haze | traced |
@@ -653,7 +760,13 @@ an object takes part in the game at all.
 - Material flags in each `.kqs`'s material list (`0x0F00`, `0x1000`,
   `0x2000`, `0x10000`).
 - `<world>/resource/<shape>.dil`, the building's `.kq` (`shapeName`,
-  `althwLightmapName`, `usingAltLighting`).
+  `althwLightmapName`, `usingAltLighting`). For point lights on surfaces
+  also table D's floats P0, U, V (bytes 12–47) and the `.dig` planes,
+  surface flag 0x80 and collision BSP; for the building's ball the `.dig`
+  header bounding box.
+- Objects' `.kqs` light nodes (flag bit 0x1, colour, position, Begin,
+  End) and their `.kq` `turnOffDynLighting`, `tooFar`,
+  `groupsActive3DFar` (whether their lights shine).
 - `TERRAIN.KQ`: `hazeDistance`, `visibleDistance` (`perspectiveDistance`
   is not used by any of the haze or draw-distance rules). `world.cs`:
   `resetHazeColor`, `KQWorld::background` / `newSky`. The world's palette
@@ -704,6 +817,23 @@ an object takes part in the game at all.
   reproduce** it; the light values were tuned with it.
 - Castle's haze colour depends on the previous world (rule 23): don't
   reproduce; use the background entry.
+- **Wall light texels measured in the wrong place** (rule 16): the
+  original steps U ÷ width and V ÷ height from P0, but the texels are
+  U ÷ (width − 1) apart, so the lit pattern is pulled towards the first
+  corner by up to one light texel (128 units in Daventry). Use the true
+  texel positions (the same ones rule 13 uses to lay the map on the
+  surface; a map 1 texel wide or high has a single column or row at P0).
+  The other wall tests (P0 for "in front", the five points for reach) are
+  how the original decides which surfaces light up: **do reproduce**
+  those.
+- **A building's draw-distance ball is centred on its position, not on
+  its box** (rule 40). For buildings whose geometry lies far from their
+  origin the ball misses part of them, so they could be switched off
+  while part of them is still within `visibleDistance`. Recommended: use
+  the middle of the `.dig` box, turned with the building, as the centre
+  (the same choice as for objects, rule 35); radius as in the original.
+  The difference only shows for a building near the `visibleDistance`
+  edge whose walls the haze hasn't already removed.
 - `setActivePoint` (a second reference point used when an object is
   beyond the limit from Connor) exists, but the only two uses in the data
   are commented out. Leave it out.
@@ -779,7 +909,60 @@ an object takes part in the game at all.
      rules 24 and 26b say (models ignore that setting). Our viewer does
      not do this yet.
 
+- **Logs for walls and floors (B), 2026-10-16 rules:** per frame (or every
+  second), per point light: how many drawn surfaces it was tested on, how
+  many failed "in front", "reach" and the line test, how many were lit,
+  and the largest change of one texel channel (in 0–15 steps). Expect
+  0 lit surfaces with dynamic lighting switched off.
+  For Daventry's pub or Connor's hut with the fire burning: the fireplace
+  light (Begin 700, End 850) should light floor and wall surfaces within
+  1,550 units of it, and **nothing** once Connor is more than about
+  10,800 from the fireplace object (its far mask has no 0x400).
+- **By eye in the original (user), 2026-10-16 rules:**
+  9. **Fireplace light on floors.** Inside a Daventry house with a
+     fireplace, the floor in front of the fire should be brighter than
+     with dynamic lighting off, as well as the walls next to it (whether
+     the light also changes with the fire's animation frames depends on
+     `fireset2.kqs`'s light nodes per frame; not measured). Switching
+     dynamic lighting off in the video options should remove that extra
+     light from walls and floor; models (e.g. Connor) keep it.
+     **Checked by the user (2026-10-16):** the flame casts light with
+     dynamic lighting on; with it off that light disappears.
+  10. **Lights don't go through a building's own walls.** A surface of
+      the same building that faces the fire but has another of that
+      building's walls between it and the fire (e.g. the far wall of the
+      next room, which faces back towards the fire through the dividing
+      wall) should stay dark, if it is within 1,550 units of the fire. The outside
+      face of the wall behind the fire stays dark too, but for a simpler
+      reason: it faces away from the light.
+
 ## Answers to questions
+
+- **Q78** (2026-10-16, point lights on building surfaces; rule 16): (a)
+  "in front" is measured from the light to the surface's light-map first
+  corner P0 (stored in the `.dil` record), against the surface's front
+  direction; (b) the line goes from the light to 64 units in front of the
+  nearest of the four corners and centre, and only this building's own
+  collision BSP can block it (not other buildings, the ground or
+  objects); (c) yes, put back: with dynamic lighting on every drawn
+  surface's map is rebuilt from the `.dil` every frame before the lights
+  are added; (d) stored back in 4 bits, channel × 15.9 rounded down, as
+  on the ground; (e) a drawn building is lit whether near or far; off
+  buildings aren't drawn. Lights carried by models (fireplaces) reach
+  walls and floors exactly like `KQPointLight`s, unless their object has
+  `turnOffDynLighting=1` or lacks group bit 0x400. Floors inside houses
+  are building surfaces and are lit the same way. New: texel positions
+  slip (Do not reproduce), lit surfaces stay drawn past the haze limit,
+  `buildings.md`'s bit 0x80 line corrected.
+- **Q77** (2026-10-16): (a) bit 0x1 = point light; 0x4 is never read
+  (rule 26b). (b) a `KQPointLight` is not in the near / far / off test at
+  all and always shines (rule 37); B's stand-in (light position, radius
+  100) would switch Dead City's lights off when Connor is far, which the
+  original never does. (c) 442 is right; 174 counted only the 12 world
+  folders, without `GAME/Common` (rule 26b).
+- **Q76** (2026-10-16): a building's ball comes from its `.dig` bounding
+  box: radius = half the box diagonal, centre = the building's position
+  (not the box middle); `BOUNDS.KQ` is not used for buildings (rule 40).
 
 - **Q70** (2026-10-17): an object with a box collider uses **the ball
   round its collision box** (`BOUNDS.KQ`): centre = box middle, radius =
