@@ -4,7 +4,6 @@ A fan rewrite of *King's Quest: Mask of Eternity* (Sierra, 1998) in Rust,
 to make it run well on modern computers and, later, to improve its
 controls, graphics and gameplay.
 
-
 > [!IMPORTANT]
 > This project requires an original copy of *King's Quest: Mask of Eternity* to run.
 > It will not start without one. It will not modify any of the original game's files,
