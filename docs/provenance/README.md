@@ -1065,3 +1065,13 @@ A viewer helper (the user's request), standing in for the original's video optio
 | Dynamic lighting on = the ground shows the shadow map, off = the light map | `terrain-lighting.md` rule 2 | Log: both maps load (Daventry `davelght.bin` / `daveshdw.bin`, Dead City `dedlight.bin` / `dedshado.bin`, all 513 × 513) |
 | Point lights paint the ground and building surfaces only while on; models keep theirs | `object-lighting.md` rules 16, 24, 26 | Unit test `f9_swaps_the_maps_and_forgets_the_patches`; walls follow the same switch (`light_walls`) |
 | Switching while running: the whole picture rewritten, last frame's patches forgotten, ground lookup updated | **Our method** | Not tested by a test option (key press) |
+
+## Light-map placement check (M1 step 7k) — `crates/kq8-cli/src/lighting_verify.rs` (`rect_check`)
+
+Checks only; no game behaviour changed.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Each corner's light texel position (u × (size + 1) + map offset) ÷ 16, before the clamp: none below 0 or above width − 1 / height − 1 | `object-lighting.md` rule 13 ("How the drawing places it", Q79), "How to check" light-map placement | Log: 0 of 656,181 corners outside on 164,838 surfaces (matches). Surfaces with a corner at exactly 0: 365 (x and y) / 7,276 (x or y), note says 7,511: **Q80 open** |
+| P0 minus the drawn texel (0, 0), in texture texels (P0 put into texture texels through the surface's placement) | Rule 16 (P0 a quarter light texel past texel (0, 0), Q79), "How to check" | Log: mean (4.000, 4.000) (matches); within 0.05 of (4, 4) on 164,640, note says 160,649: **Q80 open** |
+| Our point-light painting (`wall_light::texel_position`) against the drawn texel positions (0, 0) and last, maps 1 texel wide or high counted apart | "Do not reproduce" (wall light texels), rule 13 | Log: 164,528 of 164,838 within 0.05 texture texel (the rest are surfaces whose stored P0 is itself off); no `.dil` has a map 1 texel wide or high. `wall_light.rs` unchanged |

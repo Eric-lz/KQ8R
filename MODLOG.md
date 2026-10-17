@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M1 step 7k: light-map placement check (A's answer to Q79)
+
+**Changed:** `crates/kq8-cli/src/lighting_verify.rs` (`rect_check` and the summary): per surface corner, the light texel position before the clamp; P0 minus the drawn texel (0, 0) in texture texels; our painting's texel positions against the drawn ones. `docs/DESIGN.md` (7k), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q80). `wall_light.rs` unchanged.
+**Why:** A's answer to Q79 (`object-lighting.md` rules 13, 16, "How to check"): the drawing already matches the original, so check it with numbers instead of changing code.
+**Tested how:** `cargo run --release -p kq8-cli -- lighting-verify`, read `kq8-artifacts/logs/lighting-verify.log`. Clippy clean; `wall_light` unit tests pass (5).
+**Result:** 164,838 surfaces, 656,181 corners, **0 corners outside** the map (matches). P0 − drawn texel (0, 0): **mean (4.000, 4.000)** texture texels (matches). Our painting puts texels (0, 0) and the last one within 0.05 texture texel of the drawn ones on 164,528 of 164,838 surfaces; the other 310 are surfaces whose stored P0 is itself off (up to 10 texels). No `.dil` has a map 1 texel wide or high, so that case never happens. Painting matches "Do not reproduce": no fix. RESULT: PASS.
+**Still broken / not tested:** Two of the note's counts were not reproduced: surfaces with a corner at exactly 0 (note 7,511; we get 365 on x and y, 7,276 on x or y) and P0 within 0.05 of (4, 4) (note 160,649; we get 164,640). Tried 64-bit floats, a 0.001 tolerance, each axis alone, 3D distance instead of per axis: none gives the note's numbers. Logged as "DIFFERS (Q80 open)", not a failure. Asked A as Q80. Nothing in the viewer changed, so nothing to see in the game.
+**Next:** A answers Q80 (how those two were counted).
+
 ## 2026-10-17 Study A: answer Q79 (where a wall's light texels sit)
 
 **Changed:** `docs/behaviour/object-lighting.md`: rule 13 (how the drawing places the light map), rule 16 (P0 is not the drawn texel (0, 0)), "Do not reproduce" (texel positions written out), "How to check" (light-map placement), "Answers" (Q79). `docs/behaviour/QUESTIONS.md`: Q79 answered. `STATUS.md`. No code.

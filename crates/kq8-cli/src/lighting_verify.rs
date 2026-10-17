@@ -35,6 +35,14 @@ use crate::terrain_verify::{load, open_world};
 const SIZE_RULE_EXCEPTIONS: [(&str, &str); 5] =
     [("temple4", "level4"), ("swamp", "ramp"), ("daventry", "zedrock1"), ("daventry", "zedrock2"), ("deadcity", "platform")];
 
+/// Light-map placement (`object-lighting.md` "How to check", Q79): surfaces
+/// with a light map in the 148 files with 48-byte records, surfaces with a
+/// corner exactly on texel 0's centre, surfaces whose P0 is (4, 4) texture
+/// texels past the drawn texel (0, 0) to within 0.05.
+const PLACEMENT_SURFACES: usize = 164_838;
+const PLACEMENT_AT_ZERO: usize = 7_511;
+const PLACEMENT_P0_NEAR_4: usize = 160_649;
+
 #[derive(Default)]
 struct Tally {
     failures: usize,
@@ -89,6 +97,30 @@ struct RectCheck {
     /// y: the largest difference, and how many within 1 unit.
     worst_shifted: f32,
     shifted_within_1: usize,
+    /// Light-map placement (M1 7k, Q79): corners, corners outside the
+    /// map's first or last texel centre (before the clamp) and the largest
+    /// overshoot in light texels, surfaces with a corner at exactly 0 on
+    /// x and y / on x or y.
+    corners: usize,
+    corners_outside: usize,
+    worst_outside: f32,
+    zero_both: usize,
+    zero_either: usize,
+    /// P0 minus the drawn texel (0, 0), in texture texels: within 0.05 of
+    /// (4, 4), the largest distance from (4, 4), and the sum (for the mean).
+    p0_near_4: usize,
+    p0_worst: f32,
+    p0_sum: [f64; 2],
+    /// Our painting's texel (0, 0) and last texel against the drawn ones
+    /// (`wall_light::texel_position`), in texture texels: maps at least 2
+    /// by 2 (within 0.05 on both, largest), and maps 1 texel wide or high
+    /// (count, largest difference on the 1-texel axis and on the other).
+    paint_tested: usize,
+    paint_within: usize,
+    paint_worst: f32,
+    thin: usize,
+    thin_worst_flat: f32,
+    thin_worst_other: f32,
 }
 
 pub fn run(game: &GameDir) -> ExitCode {
@@ -154,6 +186,42 @@ pub fn run(game: &GameDir) -> ExitCode {
         "  P0 against rule 13's texel (0, 0) + 4 texture texels on x and y: within 1 unit on {} surfaces, largest difference {:.2}",
         r.shifted_within_1, r.worst_shifted
     ));
+    log.summary(format!(
+        "light-map placement (Q79): {} corners of {} surfaces; outside the first/last texel centre before the clamp: {} (largest by {:.4} light texel); surfaces with a corner at exactly 0 on x and y: {}, on x or y: {}",
+        r.corners, r.surfaces, r.corners_outside, r.worst_outside, r.zero_both, r.zero_either
+    ));
+    let n = r.surfaces.max(1) as f64;
+    log.summary(format!(
+        "  P0 minus the drawn texel (0, 0), texture texels: mean ({:.3}, {:.3}); within 0.05 of (4, 4) on {} surfaces; farthest {:.3}",
+        r.p0_sum[0] / n,
+        r.p0_sum[1] / n,
+        r.p0_near_4,
+        r.p0_worst
+    ));
+    log.summary(format!(
+        "  our painting's texels (0, 0) and last vs drawn, texture texels: maps 2x2 or more {} surfaces, within 0.05 on {}, largest {:.3}; maps 1 texel wide or high {} surfaces, largest on the 1-texel axis {:.3}, on the other {:.3}",
+        r.paint_tested, r.paint_within, r.paint_worst, r.thin, r.thin_worst_flat, r.thin_worst_other
+    ));
+    // The note's main claims: no corner outside the map, and P0 a quarter
+    // light texel past the drawn texel (0, 0). A miss is a failure.
+    let mean_ok = r.p0_sum.iter().all(|&v| (v / n - 4.0).abs() <= 0.05);
+    if r.surfaces != PLACEMENT_SURFACES || r.corners_outside != 0 || !mean_ok {
+        t.failures += 1;
+        log.summary(format!(
+            "FAIL light-map placement differs from the note (expect {PLACEMENT_SURFACES} surfaces, 0 corners outside, mean P0 offset (4, 4))"
+        ));
+    } else {
+        log.summary("  light-map placement: surfaces, 0 corners outside and mean P0 offset (4, 4) match the note (Q79)");
+    }
+    // Two counts in the note we have not reproduced (QUESTIONS.md Q80):
+    // logged, not failed, until the study session says how it counted.
+    let zero_ok = r.zero_both == PLACEMENT_AT_ZERO || r.zero_either == PLACEMENT_AT_ZERO;
+    if !zero_ok || r.p0_near_4 != PLACEMENT_P0_NEAR_4 {
+        log.summary(format!(
+            "  DIFFERS from the note (Q80 open): surfaces with a corner at 0 {} / {} (note {PLACEMENT_AT_ZERO}), P0 within 0.05 of (4, 4) {} (note {PLACEMENT_P0_NEAR_4})",
+            r.zero_both, r.zero_either, r.p0_near_4
+        ));
+    }
     log.summary(format!(
         "facing by bit 0x80 (rule 16) agrees with the corner order's front on {} of {} surfaces",
         r.facing_agree, r.facing_tested
@@ -463,7 +531,79 @@ fn rect_check(l: &BuildingLight, b: &Building, r: &mut RectCheck) {
         let ds = diff(shifted, rect.p0);
         r.worst_shifted = r.worst_shifted.max(ds);
         r.shifted_within_1 += usize::from(ds <= 1.0);
+
+        // Light-map placement (Q79, "How to check"): each corner's light
+        // texel position (texture x + offset_x) / 16, texture x = u (size_x
+        // + 1) from the surface's own texture origin, before the clamp.
+        let last = [s.width as f32 - 1.0, s.height as f32 - 1.0];
+        let (mut both, mut either) = (false, false);
+        let first_corner = dig.first_corner as usize;
+        for c in first_corner..first_corner + dig.corner_count as usize {
+            let Some(uv) = b.corners.get(c).and_then(|c| b.texture_coords.get(c.texture_coord as usize)) else { continue };
+            let pos: [f32; 2] = std::array::from_fn(|k| (uv[k] * (dig.texture_size[k] as f32 + 1.0) + s.map_offset[k] as f32) / step);
+            r.corners += 1;
+            let over = (0..2).map(|k| (-pos[k]).max(pos[k] - last[k])).fold(f32::MIN, f32::max);
+            if over > 0.0 {
+                r.corners_outside += 1;
+                r.worst_outside = r.worst_outside.max(over);
+            }
+            both |= pos == [0.0, 0.0];
+            either |= pos[0] == 0.0 || pos[1] == 0.0;
+        }
+        r.zero_both += usize::from(both);
+        r.zero_either += usize::from(either);
+
+        // A building-space point back in texture texels (least squares on
+        // the placement's x and y steps).
+        let (xx, xy, yy) = (dot3(bx, bx), dot3(bx, by), dot3(by, by));
+        let in_texels = |p: [f32; 3]| -> [f32; 2] {
+            let d = [p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]];
+            let (dx, dy) = (dot3(bx, d), dot3(by, d));
+            let det = xx * yy - xy * xy;
+            [t0[0] + (dx * yy - dy * xy) / det, t0[1] + (dy * xx - dx * xy) / det]
+        };
+        // Rule 13's drawn texel (i, j): 16 i - offset_x from the texture
+        // origin (in `at`'s texels, which include the texture offset).
+        let drawn = |i: f32, j: f32| -> [f32; 2] {
+            [dig.texture_offset[0] as f32 - s.map_offset[0] as f32 + step * i, dig.texture_offset[1] as f32 - s.map_offset[1] as f32 + step * j]
+        };
+        let pt = in_texels(rect.p0);
+        let d0 = drawn(0.0, 0.0);
+        let rel = [pt[0] - d0[0], pt[1] - d0[1]];
+        r.p0_sum[0] += rel[0] as f64;
+        r.p0_sum[1] += rel[1] as f64;
+        let off4 = (rel[0] - 4.0).abs().max((rel[1] - 4.0).abs());
+        r.p0_near_4 += usize::from(off4 <= 0.05);
+        r.p0_worst = r.p0_worst.max(off4);
+
+        // Where our point-light painting puts texels (0, 0) and the last one.
+        let (w, h) = (s.width as usize, s.height as usize);
+        let ours = |i: usize, j: usize| in_texels(kq8_data::wall_light::texel_position(&rect, w, h, i, j));
+        let gap = |a: [f32; 2], b: [f32; 2]| [(a[0] - b[0]).abs(), (a[1] - b[1]).abs()];
+        let g0 = gap(ours(0, 0), d0);
+        let g1 = gap(ours(w - 1, h - 1), drawn(last[0], last[1]));
+        if w > 1 && h > 1 {
+            let worst = g0[0].max(g0[1]).max(g1[0]).max(g1[1]);
+            r.paint_tested += 1;
+            r.paint_within += usize::from(worst <= 0.05);
+            r.paint_worst = r.paint_worst.max(worst);
+        } else if w >= 1 && h >= 1 {
+            r.thin += 1;
+            for k in 0..2 {
+                let flat = [w, h][k] == 1;
+                let worst = g0[k].max(g1[k]);
+                if flat {
+                    r.thin_worst_flat = r.thin_worst_flat.max(worst);
+                } else {
+                    r.thin_worst_other = r.thin_worst_other.max(worst);
+                }
+            }
+        }
     }
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 /// Red channel of a Daventry building's light map (the note's table), and

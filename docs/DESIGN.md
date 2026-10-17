@@ -1102,6 +1102,29 @@ before they start.
   back on the next frame). Models keep their point lights either way
   (rule 24). The label shows the state; each press is logged. Unit test
   on the swap.
+- **7k (done 2026-10-17, MODLOG; two counts asked as Q80). A's answer to
+  Q79: check where wall light texels sit** (`object-lighting.md` rules 13, 16, "Do not reproduce",
+  "How to check" light-map placement). A says the drawing already matches
+  the original, so this step only adds checks; code changes only if a
+  check fails.
+  - **7k-1, light-map placement in `kq8 lighting-verify`.** For every
+    corner of every surface that has a light map and P0 / U / V (the 148
+    files with 48-byte records): its light texel position ((texture x +
+    offset_x) ÷ 16, (texture y + offset_y) ÷ 16), with texture x =
+    u × (size_x + 1), before the clamp. Count corners below 0 or above width − 1 /
+    height − 1 (expect 0) and surfaces with a corner exactly at 0
+    (expect 7,511). And P0 minus the drawn texel (0, 0), in texture
+    texels along the texture's x and y (P0 put back into texture texels
+    through the surface's placement, already solved by the existing
+    rectangle check): expect (4, 4) to within 0.05 on 160,649 of 164,838
+    surfaces. A miss is a FAIL line.
+  - **7k-2, our painting positions.** In the same pass, compare
+    `wall_light::texel_position` (what the point-light painting uses)
+    with the drawn texel positions of rule 13 for texels (0, 0) and
+    (width − 1, height − 1), in texture texels; maps 1 texel wide or high
+    counted apart (the note allows leaving that axis at P0, which our
+    code does: expect 4 texture texels there). Change `wall_light.rs`
+    only if this differs from "Do not reproduce".
 
 ### M2 — Walk Connor around Daventry
 

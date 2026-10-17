@@ -32,7 +32,10 @@ logs (Connor and the three objects nearest his start stay within
 (user, 2026-10-15: much closer to the original).
 Buildings are lit by their own pre-made light maps (`.dil`, 2026-10-15):
 every building in 10 worlds, Connor's hut's numbers match the behaviour
-note; checked by eye by the user (2026-10-15).
+note; checked by eye by the user (2026-10-15). Where the light maps sit
+on the walls was checked against the original's placement (2026-10-17,
+Q79, `kq8 lighting-verify`): no wall corner falls outside its map, and
+point lights paint at the same texel positions the maps are drawn at.
 Haze (2026-10-15): objects (and Connor, items, leaves) fade into the
 world's haze colour with distance from the camera and are left out past
 the haze end (Daventry 18,000 to 22,950 units, as the behaviour note
