@@ -25,7 +25,7 @@ items. The goal is the whole game; see the roadmap in
 ### What works
 
 - **Reading the game's files**: archives, images, 3D models, buildings,
-  ground, world scripts, item types.
+  ground, world scripts, item types, sound files (`.aud`).
 - **Camera** that follows Connor and stays out of walls, as in the
   original.
 - **World**: terrain, buildings and objects placed as in the
@@ -43,6 +43,7 @@ items. The goal is the whole game; see the roadmap in
   log; no inventory screen yet).
 - **Traps**: invisible zones that, for example, make Connor walk indoors
   and run outdoors.
+- **Sound effects**: doors, chests, item pickups, script sounds and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 
 Everything above was checked against the original, mostly by eye. Full
@@ -146,6 +147,7 @@ cargo run --release -- lightmap-verify
 cargo run --release -- lighting-verify
 cargo run --release -- building-verify
 cargo run --release -- item-verify
+cargo run --release -- aud-verify
 ```
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the
@@ -161,7 +163,8 @@ crates/
   kq8-data/     reads the game's files (archives, images, models, ground,
                 object lists, scripts) into plain data
   kq8-core/     the game's rules, without drawing (Connor's movement,
-                camera, scripts, doors, chests, traps, items)
+                camera, scripts, doors, chests, traps, items, sound rules)
+  kq8-audio/    plays sounds: our mixer and the sound card (cpal)
   kq8-viewer/   the window: draws a world and runs the rules; also our
                 test tool (H and U keys, free camera, test options)
   kq8-cli/      the `kq8` command-line tool for the file checks above

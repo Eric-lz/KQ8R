@@ -56,6 +56,7 @@ mod log;
 mod object_light;
 mod renderer;
 mod scene_lights;
+mod sound_view;
 mod terrain_view;
 mod wall_lights;
 
@@ -123,6 +124,9 @@ struct Args {
     /// `--dynamic on|off`: overrides `Options.cs`'s `useDynamicLighting`
     /// (M1 7d); `None` = as `Options.cs` says.
     dynamic: Option<bool>,
+    /// `--sound on|off`: open the sound card (default on); off still runs
+    /// the sound rules and `sound.log` (M3 3h-2).
+    sound: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -144,6 +148,7 @@ fn parse_args() -> Result<Args, String> {
         haze: true,
         renderer: renderer::Renderer::Auto,
         dynamic: None,
+        sound: true,
     };
     let mut it = std::env::args().skip(1);
     let mut positional = Vec::new();
@@ -195,6 +200,13 @@ fn parse_args() -> Result<Args, String> {
                 }
             }
             "--renderer" => a.renderer = renderer::Renderer::parse(&value()?)?,
+            "--sound" => {
+                a.sound = match value()?.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    v => return Err(format!("--sound needs on or off, not '{v}'")),
+                }
+            }
             "--dynamic" => {
                 a.dynamic = Some(match value()?.to_ascii_lowercase().as_str() {
                     "on" | "1" => true,
@@ -265,7 +277,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N] [--renderer auto|vulkan|dx12]");
-            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off] [--haze on|off] [--dynamic on|off] [--renderer auto|vulkan|dx12]");
+            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off] [--haze on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
             return ExitCode::FAILURE;
         }
     };
@@ -357,7 +369,11 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (setup, object_light::report_lights).chain())
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
-        Scene::Ground(ground, objects, animation) => {
+        Scene::Ground(ground, mut objects, animation) => {
+            let audibles = std::mem::take(&mut objects.audibles);
+            if let Some(sound) = GameDir::open(&args.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &args.world, args.sound, audibles)) {
+                app.insert_resource(sound);
+            }
             app.insert_resource(light_view::GroundLight::new(ground.light.clone(), ground.other_light.clone(), args.light, ground.dynamic))
                 .insert_resource(terrain_view::LoadedGround(Some(ground)))
                 .insert_resource(ground_anim_view::LoadedGroundAnim(Some(animation)))
@@ -391,6 +407,8 @@ fn main() -> ExitCode {
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
+                // Sound effects (M3 3h-2), once the camera is placed.
+                .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw))
                 .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw));
         }
     }

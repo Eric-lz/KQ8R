@@ -61,6 +61,8 @@ crates/
                       scripts and events, doors, chests, traps, items, ...);
                       named kq8-game until 2026-10-13
   kq8-cli/            the `kq8` command-line tool for checks and dumps
+  kq8-audio/          sound output: our mixer and the sound card (cpal);
+                      told what to play by kq8-core's sound rules (M3 3h-2)
   kq8-viewer/         the window (uses Bevy): draws a world and runs the
                       rules; also the developer's test tool (H key, free
                       camera, `--at`, `--click`, `--aim`, detailed logs)
@@ -78,7 +80,7 @@ decision (user): whether the game you play will be a separate program
 later (e.g. `kq8-play`, using `kq8-data` and `kq8-core`, with the viewer
 staying a test tool); B's recommendation, not decided.
 
-More crates will come later (rendering, audio). Asset *parsing*
+More crates may come later (rendering). Asset *parsing*
 stays in `kq8-data` so the engine never touches raw bytes directly. The
 viewer follows that rule: `kq8-data` turns a model into a plain list of
 triangles (positions, texture coordinates, material), and only the
@@ -2749,6 +2751,120 @@ catchers, ground animators).
     error line and `1`; new item objects are named `NoName<n>`, one
     counter from 0 for the whole run; a chest's 2nd click logs the type's
     pickup sound. Unit tests for each.
+- **3h — sound effects (planned 2026-10-17).** Rules from
+  `docs/behaviour/sound.md` only (numbers there are "rule N"). Three
+  steps, each with its own test and MODLOG entry.
+  - **Words used here.** A *sample* is one number of the sound wave; a
+    sound file holds 22,050 of them per second (per channel). *Decoding*
+    turns the game's packed bytes into those numbers. A *mixer* adds
+    the sounds playing at the same moment into what the speakers get.
+    *Loudness* is a factor from 0 (silent) to 1 (as recorded); *balance*
+    (pan) from −1 (left) to +1 (right).
+  - **3h-1 (done 2026-10-17), reading `.aud` files** (no sound card needed).
+    `kq8-data` `aud.rs`: accepts a file as SOL or WAV exactly as rule 12
+    says, else refuses it with a reason. SOL: data always from byte 14
+    (rule 10), one byte per sample per channel, stereo bytes alternate
+    left/right, each byte adds or (bit 0x80) subtracts a step from a
+    128-entry table, each channel starting at 0, 16-bit wrap-round
+    (rules 7–9). The table's numbers come from the community note
+    `kq8aud.txt` (rule 7 says the game's table is the same); our code
+    builds it from its pattern instead of copying the list. Uncompressed
+    SOL (no game file) reads signed 16-bit (rule 9). WAV: only the
+    fields needed (format chunk: tag 1, channels, rate, bits 8 or 16, the
+    `data` chunk; "Do not reproduce" 6); 8-bit is unsigned, silence
+    0x80. Output: rate, channels, samples as signed 16-bit, and counts
+    of wrap-rounds. New command **`kq8 aud-verify [--wav <file>]`**:
+    decodes every `.aud` under `MASK/` and every SOL file in the
+    `English` folders (speech), logs one line per file and a summary
+    compared with the note's numbers (1,750 `.aud`, 1,749 SOL + 1 WAV,
+    rates, stereo count, `AXEDOOR.AUD` 11,847 samples, `FOREST.AUD`
+    stereo 178.5 s, `NONE.AUD` 8 samples, `AMBDEAD.AUD` 187.6 s,
+    header + data = file length, 0 wrap-rounds). `--wav <file>` also writes that
+    one file, decoded, to `kq8-artifacts/wav/<name>.wav` to listen to.
+    Never into the repository. **Done** as planned; all 16 checks match
+    (the note's counts include the copies under `MASK/data/`; its 2,498
+    decoded files are the loose SOL ones, 1,006 `.aud` + 1,492 speech).
+  - **3h-2, playing the sounds the viewer already logs** (planned
+    2026-10-17; **done** 2026-10-17, see the end of this item). **Library, chosen by the user (2026-10-17): `cpal`**
+    (Apache-2.0, version 0.18.2), which only opens the sound card and asks
+    for numbers, **plus our own small mixer**, so the note's loudness and
+    balance rules are applied exactly and can be unit-tested without a
+    sound card. Three parts:
+    - `kq8-data` `aud.rs` `find`: rule 13's lookup. The name as given,
+      then with its extension replaced by `.AUD` (added if it has none),
+      then `.WAV`; each tried in the search list of
+      `models-and-textures.md` ("Where texture names are looked up"):
+      the world's loose `patch`, `8gui`, `resource`, `English`, `8bit`,
+      `kq`, `sound` folders, then `GAME/patch` and the other `GAME`
+      folders (their order inside `GAME` is not traced; only the `sound`
+      folders hold `.aud` files, so it makes no difference). A name with
+      a folder in it is looked up from the game folder.
+    - `kq8-core` `sound.rs` (the rules, no sound card): the six groups,
+      their slider values read from `MASK/Options.cs` (`setSfxVol`,
+      `setSpeechVol`, `setMusicVol`; 1 before it runs; rules 50–52); a
+      sound's loudness = own × group, at most 1 (rule 21); placed sounds:
+      distance from Connor in 3D (rule 28), the original curve (rule 29,
+      kept by the user's decision), balance from the camera's own axes
+      (rule 31; 0 when the sound is straight above or below, "Do not
+      reproduce" 4), the pan law (rule 23), all redone every frame (rule
+      32); beyond max a one-shot is stopped (rule 30); the mix limit 8
+      (rule 26: when more than 8 are playing, the oldest non-looping one of
+      the lowest group stops first); finished one-shots leave the playing
+      list on the 200 ms housekeeping step (rule 20); a missing or broken
+      file is skipped and logged once per name ("Do not reproduce" 2). It
+      gives the mixer plain orders (start, change loudness, pause, resume,
+      stop) and writes every start and stop to the log.
+    - New crate **`kq8-audio`** (the only one that uses `cpal`): the mixer
+      (adds the playing sounds, each at its two channel loudnesses,
+      converting 22,050 or 44,100 Hz to the card's rate by drawing a
+      straight line between neighbouring samples, our method; rule 18 says
+      any rate is fine), and the sound card output. If no sound card can
+      be opened, the viewer goes on without sound and logs why.
+    - Sources in 3h-2: door, chest and scripted-object `playsound` cues,
+      placed one-shots 5,000 / 25,000 at the object's position (rules 35,
+      49); item pickup, a plain one-shot (rule 42); `KQSound::play`, a
+      plain one-shot (rule 40). **Not in 3h-2:** footsteps (Connor's
+      animation cues are not run by our code yet; their own step later),
+      the item land sound (nothing is thrown yet), scenery animations'
+      cues (`anim.rs` does not run cues yet).
+    - Viewer: `--sound on|off` (default on; `off` runs every rule and
+      log line but opens no sound card). Log `kq8-artifacts/logs/sound.log`:
+      groups at the start, every start (name, file found, plain/placed,
+      position, Connor's distance, loudness, balance), every stop (why:
+      finished, beyond max, mix limit), and for playing placed sounds a
+      line whenever loudness or balance changed by 0.05 or more.
+    - **Test:** unit tests for the lookup (`raven.snd` → `RAVEN.AUD`,
+      `poffup.aud` not found), the curve (1.0 at 4,999, 0.75 at 5,000, 0.5
+      at 10,000, 0 at 20,000, stopped beyond 25,000), the balance (beside
+      the camera ±0.82, ahead 0), the pan law, the mix limit (12 one-shots:
+      the first three stop as the 10th, 11th, 12th start), group loudness
+      (a door next to Connor = 0.14); the mixer (pan law on samples,
+      rate conversion length). Viewer: open a door with `--click`, read
+      `sound.log`; then the user listens.
+    - **Done** as planned. The lookup checks went into `kq8 aud-verify`
+      (all match). Listener and camera axes are taken from the drawn
+      camera (the game camera or, after H, the free one); with no Connor
+      in the world, the camera is the listener. Checked by ear by the
+      user (2026-10-17).
+  - **3h-3, Daventry's looping sound objects** (`KQAudibleObject`,
+    rules 43–48; **done** 2026-10-17): the six objects of the table in rule 44, looping placed
+    sounds in group 0; on only while near/far (switched off beyond 27,100
+    by the draw-distance test, restarted from the beginning when they come
+    back), paused beyond max (or playing silently when started out of
+    range, rule 30), stopped by `deleteObject` (rule 48).
+    Code: `kq8-core` `sound.rs` (`Audible`), the loader (`load.rs`
+    `place_audible`: the `.kq` keys, position as written, `deltaX/Y/Z`
+    ignored), the viewer (`sound_view.rs`: each frame, before the placed
+    sounds are redone; `deleteObject` seen through the script world's
+    deleted list). The near/far/off test is measured from Connor only;
+    `setActiveCamera` and `makeActive` (`object-lighting.md` rule 42) are
+    not applied to sound objects yet (no Daventry script uses them on
+    one). Only 5 of the 6 are loaded at the start: `Waterfall2Sound`
+    comes from `bricks.cs` (`loadKQ watrfsn2.kq` when the waterfall is
+    blocked), and `loadKQ` while playing is still a stub.
+  - Not in 3h: music (rule 57), speech (rule 58), ducking (rule 53),
+    pause (rule 54), fades (rule 33, music only), hurt sounds (rule 41,
+    need fighting).
 
 ### M4 — Talk, listen, use the menus
 

@@ -1,0 +1,10 @@
+[package]
+name = "kq8-audio"
+description = "Sound output for the KQ8 rewrite: our mixer and the sound card (cpal)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+kq8-data.workspace = true
+cpal.workspace = true

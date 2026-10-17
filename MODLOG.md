@@ -3,6 +3,42 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 User's check of sound effects (M3 3h)
+
+**Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`: sound marked as checked by ear. No code.
+**Why:** The user listened.
+**Tested how:** By ear, by the user: the three test commands of 3h, then normal play (doors, items).
+**Result:** `aud-verify`: 22 MATCHES, RESULT: PASS. Chest opening, then the crystal pickup, heard. Door creak heard, a little louder in the left speaker. In normal play "all the sounds are as expected". `aud-verify` itself plays nothing (it only writes `kq8-artifacts/wav/AXEDOOR.wav` to play in a media player); my test text could have said that more clearly.
+**Still broken / not tested:** Footsteps, scenery animation sounds, music, speech not built. The decoded `.wav` not listened to.
+**Next:** Footsteps (needs Connor's animation cues first).
+
+## 2026-10-17 M3 step 3h-3: Daventry's looping sound objects
+
+**Changed:** `kq8-core/src/sound.rs`: `Audible` (a `KQAudibleObject`: on while near or far, restart from the beginning, stop on `deleteObject`; 2 unit tests); log of balance changes only while a sound can be heard. Viewer: `load.rs` `place_audible` (the `.kq` keys, `Objects::audibles`), `sound_view.rs` runs them each frame with the world's `visibleDistance`, `main.rs` passes them on. Docs at the end of the session: `docs/DESIGN.md` (3h done), provenance, `README.md`, `docs/FEATURES.md` (sound, `--sound`), `STATUS.md`, `QUESTIONS.md` (Q61: the pickup sound plays now).
+**Why:** Step 3 of sound effects (`sound.md` rules 30, 43–48).
+**Tested how:** `cargo test --workspace` (324 pass), clippy clean. Viewer `--world Daventry --at 208050,240000,1.5708 --frames 300 --sound off` and `--at 208050,240000,-1.5708 --hold 1,0,1 --frames 9000 --sound off` (Connor runs off for about a minute); `viewer.log`, `sound.log`.
+**Result:** 5 sound objects loaded with the note's files and distances (`WaterwheelSound`, `WatermillSound`, `WaterfallSound`, `WindmillSound`, `FountainSound`). From the fountain: fountain on at 10,466 (loudness 0.061); water wheel (26,385) and mill (21,033) on but beyond max: silent (rule 30). Running away: fountain paused at 20,115, switched off at 27,169; windmill switched on at 27,046 (silent); water wheel heard from 19,245 in (0.033 at 14,705 = 0.14 × (1 − 14,705 ÷ 19,250)), paused at 20,049, switched off at 27,191; mill switched off at 27,196. 79 log lines in about 60 s.
+**Still broken / not tested:** **Not listened to.** `Waterfall2Sound` (`watrfsn2.kq`) is not loaded: it comes from `bricks.cs` while playing, and `loadKQ` while playing is a stub; `deleteObject WaterfallSound` tested by a unit test only. `setActiveCamera`/`makeActive` don't apply to sound objects yet (no Daventry script uses them on one). No new questions for A: every rule used was clear.
+**Next:** You listen (see the reply). B: footsteps need Connor's animation cues run first (own step); scenery animation cues.
+
+## 2026-10-17 M3 step 3h-2: doors, chests, pickups and script sounds play
+
+**Changed:** Audio library chosen by the user: **cpal 0.18.2** plus our own mixer. New crate `crates/kq8-audio` (mixer and sound card, 5 unit tests). New `crates/kq8-core/src/sound.rs` (the rules: groups, distance curve, balance, pan law, beyond max, mix limit, housekeeping, missing files; 12 unit tests). `kq8-data/src/aud.rs`: `find`/`name_variants` (rule 13 lookup, 1 test). `kq8-core/src/active.rs`: door, chest and scripted-object `playsound` cues, item pickups and `KQSound::play` now queue sounds (`WorldState::sounds`); `script.rs`: `KQSound::play` no longer a stub. Viewer: new `sound_view.rs`, option `--sound on|off`, log `kq8-artifacts/logs/sound.log`. `aud-verify` checks the lookup too. `Cargo.toml` (workspace member, `cpal`), `docs/DESIGN.md` (plan, layout), provenance, `README.md`.
+**Why:** Step 2 of sound effects (`sound.md` rules 13, 18–32, 35, 40, 42, 49–52).
+**Tested how:** `cargo test --workspace` (322 pass), `cargo clippy --workspace --all-targets` clean. `aud-verify`. Viewer runs, `sound.log` read: chest `--at 202336,262000,1.5708 --click smlchst3,10 --click smlchst3,40 --click smlchst3,45 --frames 1200`; door `--at 270813,225311,-1.5708 --click Condoor,20 --click Condoor,60 --frames 400 --sound off`; fish `--at 208502,209600,1.5708 --click fishies.01,10 --click fishies.01,40 --click fishies.02,45 --frames 900`.
+**Result:** Groups from `Options.cs`: effects 0.14, speech 0.34, music 0.14. Sound card opened: "Speakers (Realtek(R) Audio), 48000 Hz, 2 channels, f32". Chest: `chstopen` found as `GAME/SOUND/CHSTOPEN.AUD`, placed, distance 3,298, loudness 0.140, balance +0.128; finished after 1.406 s (file 1.331 s, the 200 ms step). Crystals: `energy.aud` plain, 0.140. Door: `door4.aud` placed at the door, distance 2,200, loudness 0.140, balance −0.305. Fish: `eat.aud` twice, plain, 0.140, from `fishies.cs` / `fishies2.cs` line 6. With `--sound off` the same lines, no card opened. Lookup: `raven.snd`, `sprgouch.wav`, `chstopen`, `door4.aud`, `dirt1` found, `poffup.aud` not found (all match). The one failed run: a click on `keepdrl` gave no sound because that door is locked (it needs the keep key); not a sound fault.
+**Still broken / not tested:** **Nobody has listened yet**: the numbers are checked, the sound itself is not (you: see below). Not in this step: footsteps (Connor's animation cues aren't run by our code yet), the item land sound (nothing is thrown), cues of scenery animations (`anim.rs` doesn't run cues), ducking, pause, music, speech. Mix limit and beyond-max behaviour are tested by unit tests only; nothing in Daventry starts that many sounds yet.
+**Next:** You: listen (commands in the reply). Then 3h-3, the looping sound objects.
+
+## 2026-10-17 M3 step 3h-1: reading `.aud` sound files, `kq8 aud-verify`
+
+**Changed:** New `crates/kq8-data/src/aud.rs` (SOL and WAV decoder, 9 unit tests); new `crates/kq8-cli/src/aud_verify.rs` and the `aud-verify [--wav <file>]` command in `main.rs`. Plan for all of 3h in `docs/DESIGN.md`; `docs/provenance/README.md`; `README.md` (check command, one line in "What works").
+**Why:** Step 1 of sound effects (`docs/behaviour/sound.md` rules 1–17). The 128 step numbers come from the community note `kq8aud.txt` (rule 7 says the game uses the same table); our code builds them from their pattern.
+**Tested how:** `cargo test -p kq8-data -p kq8-cli` (104 pass), clippy clean. `cargo run --release -- aud-verify --wav daventry/sound/AXEDOOR.AUD`, read `kq8-artifacts/logs/aud-verify.log`. Also `--wav` with `daventry/sound/FOREST.AUD` and `GAME/SOUND/hm_iced.aud`; the three `.wav` files opened with Python's `wave` module.
+**Result:** 16 of 16 checks against the note match: 1,750 `.aud` (1,749 SOL, 1 WAV, 0 refused), 1,745 / 4 at 22,050 / 44,100 Hz, format 0x0D 1,657 / 0x1D 92, 2,849 speech files (2,839 / 10), header + data = file length in all 4,598 SOL files, 0 wrap-rounds, peak 32,768, `AXEDOOR.AUD` 11,847 samples (0.537 s), `FOREST.AUD` stereo 178.5 s, `NONE.AUD` 8 samples, longest `AMBDEAD.AUD` 187.6 s. Runs in about 10 s. The `.wav` files read back with the right rate, channels and length. RESULT: PASS. First run said FAIL on one count: my tally counted the WAV file's rate with the SOL ones (1,746); fixed to count SOL only, as the note does.
+**Still broken / not tested:** Nobody has listened to a decoded file yet (you: see below). No sound plays in the viewer yet. Note's counts include the copies under `MASK/data/`; its "2,498 decoded" are the loose SOL files (1,006 + 1,492), not stated in the note but the numbers add up.
+**Next:** You: listen to `kq8-artifacts/wav/AXEDOOR.wav`. Choose the audio library for 3h-2.
+
 ## 2026-10-17 User's answers to `sound.md` open questions 1 and 2
 
 **Changed:** `docs/behaviour/sound.md` (rule 31, "Do not reproduce" 1, "How to check", open questions 1–2), `STATUS.md`. No code.

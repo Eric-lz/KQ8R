@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-17 at the
-end of A's sound-effects study (after B's M1 step 7k). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -12,56 +12,25 @@ end of A's sound-effects study (after B's M1 step 7k). Read with `AGENTS.md`, `d
   objects, traps, items, chests, scripted objects, clicking; checked by
   eye).
 - **Lighting, haze and draw distance** (M1 4–7) are built as the original
-  does them. Checked by eye by the user: everything up to 7e (point
-  lights on models and on the ground).
-- **New this session (B, 2026-10-16), checked by eye by the user
-  ("looks great"):**
-  - **Point lights on building surfaces (M1 7d, `object-lighting.md`
-    rule 16):** walls, floors and ceilings get the lights of the frame
-    (Dead City's `KQPointLight`s and every light a model carries, e.g.
-    Daventry's fireplaces, lamps, chandeliers), rebuilt from the `.dil`
-    every frame, tested "in front", in reach and against the building's
-    own BSP, and a lit surface's haze × 0.04. Daventry, Connor's hut:
-    the fireplace lights 24 surfaces (20 more blocked by the hut's own
-    walls). New viewer option `--dynamic on|off` (stands in for
-    `Options.cs`; your `MASK/Options.cs` has `useDynamicLighting 0`
-    now, so the viewer starts with dynamic lighting off unless you pass
-    `--dynamic on`). **F9** switches dynamic lighting while the viewer
-    runs (7j, the user's request; also swaps the ground's shadow and
-    light maps; checked by eye by the user 2026-10-17).
-  - **`KQPointLight` always shines (7g, Q77 b):** all 7 of Dead City's
-    from the start.
-  - **Building draw-distance ball (7h, Q76):** our ball already was the
-    recommended one (half the `.dig` box diagonal, box middle turned with
-    the building); relabelled and logged.
-  - **Reach to a clicked building (7i, Q75):** measured to the `.dig` box
-    in the building's own axes (our stand-in used a box around the turned
-    box, slightly too generous for turned buildings).
-- **New 2026-10-17 (B, M1 7k): light-map placement check** in `kq8
-  lighting-verify` (A's answer to Q79). Confirmed with numbers: no wall
-  corner falls outside its light map, P0 sits on average exactly (4, 4)
-  texture texels past the drawn texel (0, 0), and our point-light
-  painting uses the drawn texel positions. No code change to drawing or
-  painting was needed. Two of the note's counts were not reproduced
-  (asked as **Q80**; nothing depends on them).
-- **No building stands near Dead City's arrival portal**
-  (nearest 29,000 away), so the "light over the walls" there must come
-  from models, which are lit since 7c.
-- **New 2026-10-17 (A): sound effects studied**, note
-  `docs/behaviour/sound.md`, ready for B (nothing built yet). In short:
-  `.aud` = Sierra SOL, compressed 16-bit, 22,050 Hz in Daventry (the
-  community note is right on decoding; data always at byte 14). One
-  engine for effects, music and speech with six volume groups (shipped
-  sliders: speech 0.34, effects 0.14, music 0.14; speech ducks effects
-  and world music to 0.2). Sounds come from `playsound` cues, `footstep`
-  cues (Connor; set by ground flags), `KQSound::play`, `ouchSound`,
-  items, and `KQAudibleObject` looping sources (Daventry has six:
-  waterfalls, mill, waterwheel, windmill, fountain). Placed sounds:
-  loudness from Connor's distance, left/right from the camera; one-shots
-  5,000 / 25,000; at most 8 (+1) at once. The user settled both
-  open points (2026-10-17): screen left = left speaker (follows the
-  camera), and keep the original distance curve (an option to fix it
-  may come later).
+  does them and checked by eye by the user, including point lights on
+  building surfaces, F9 (dynamic lighting on/off) and `--dynamic on|off`.
+  Q80 (two counts in the light-map check) is open; nothing depends on it.
+- **New 2026-10-17 (B, M3 3h): sound effects play** (`sound.md`):
+  - `kq8 aud-verify` decodes all 1,750 `.aud` and 2,849 speech files;
+    all 22 checks against the note match. `--wav <file>` writes one to
+    `kq8-artifacts/wav/` to listen to.
+  - Audio library chosen by the user: **cpal** (the sound card) plus our
+    own mixer (new crate `kq8-audio`), so the note's rules apply exactly.
+  - Playing: door, chest and scripted-object `playsound` cues (placed,
+    5,000 / 25,000), item pickups and `KQSound::play` (plain), and
+    Daventry's looping sound objects (water wheel, mill, waterfall,
+    windmill, fountain): loudness from Connor's distance with the
+    original curve, left/right from the camera, sliders from
+    `Options.cs` (effects 0.14), mix limit 8, loops paused beyond max
+    and switched off beyond 27,100. Every start and stop is in
+    `kq8-artifacts/logs/sound.log`. Viewer option `--sound off` mutes.
+  - **Checked by ear by the user (2026-10-17):** chest, pickup, door
+    (louder on the left as expected), doors and items in normal play.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -98,7 +67,8 @@ milestone: **M3, Daventry comes alive**.
 
 ## Code layout
 
-- `crates/kq8-data` (95 unit tests): file formats. VOL archives, bitmaps,
+- `crates/kq8-data` (105 unit tests): file formats. Sound files and
+  their lookup (`aud.rs`). VOL archives, bitmaps,
   palettes, materials, `.kqs` shapes, terrain (surface and floor grids),
   `.dig` buildings, `.kq` text, world scripts (start-up, incl. item
   lines), `.sae` key maps, object placement rules, the `BOUNDS.KQ` box
@@ -110,7 +80,7 @@ milestone: **M3, Daventry comes alive**.
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (189 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (203 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump),
   `connor.rs` (keys → movement, turning, banking, steps from the
@@ -125,18 +95,23 @@ milestone: **M3, Daventry comes alive**.
   `active.rs` (doors, chests, items, scripted objects, buildings as click
   targets, accept lists, `EndLoop`/`getEndLoop`, `deleteObject`, the
   collider switch, events and scripts together), `emitter.rs` (particles and catchers), `ground_anim.rs`
-  (flowing ground textures), `anim.rs` (looping animations of objects).
+  (flowing ground textures), `anim.rs` (looping animations of objects),
+  `sound.rs` (sound rules: groups, distance, balance, mix limit, sound
+  objects; no sound card).
+- `crates/kq8-audio` (5 unit tests): our mixer and the sound card (cpal).
   Runs at a fixed **15 updates per second**; the ground animators run on
   continuous game time.
 - `crates/kq8-cli`: `kq8` checks (`vol-verify`, `bitmap-verify`,
   `bitmap-png`, `shape-verify`, `terrain-verify`, `building-verify`,
-  `item-verify`, `lightmap-verify`, `lighting-verify`) and `kq8 text <file>` to print a game text file
+  `item-verify`, `lightmap-verify`, `lighting-verify`, `aud-verify
+  [--wav <file>]`) and `kq8 text <file>` to print a game text file
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--renderer auto|vulkan|dx12` the
   graphics API (`renderer.rs`); `--light x1|x2|off` the
   light at start; `--haze on|off` the haze at start; `--dynamic on|off`
-  overrides `Options.cs`'s `useDynamicLighting`. The full option list with descriptions is in
+  overrides `Options.cs`'s `useDynamicLighting`; `--sound on|off` the
+  sound card (`sound_view.rs`). The full option list with descriptions is in
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
   `--hold F,T,R[,N]`, `--jump N`, `--turn N[,1|-1]`, `--click NAME,N`
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
@@ -148,7 +123,8 @@ milestone: **M3, Daventry comes alive**.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
   events), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
-  `anim.log`, `lightmap-verify.log`, `lighting-verify.log`. `viewer.log`
+  `anim.log`, `sound.log`, `lightmap-verify.log`, `lighting-verify.log`,
+  `aud-verify.log`. `viewer.log`
   also logs the ground light under Connor and the camera, and every
   second how many objects and wall surfaces the haze leaves out and how
   many objects are near / far / off (plus every change of state), every
@@ -218,16 +194,24 @@ milestone: **M3, Daventry comes alive**.
 - Checked by eye by the user (2026-10-16): point lights on building
   surfaces, `KQPointLight` always shining, reach to a building in its
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
-- Tests: 295 unit tests pass (95 + 189 + 11), 2026-10-16.
+- Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked in the
+  logs only, not by ear yet.
+- Tests: 324 unit tests pass (105 + 203 + 5 + 11), 2026-10-17.
 
 ## What doesn't work yet / next
 
-- **Next step (B), suggested:** M1 is done (Q79 checked in 7k; Q80 is
-  only about how two counts were made) and the next
-  milestone work is M3/M4 (Connor's scripted movements, remarks,
-  inventory screen). The brightness setting (rule 17) is still not built.
+- **Next step, suggested:** the user listens to the sounds (MODLOG
+  2026-10-17, 3h). Then for B: footsteps (`sound.md` rules 36–39; needs
+  Connor's animation cues to be run first, a step of its own), cues of
+  scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
+  scripted movements, remarks, inventory screen). The brightness setting
+  (rule 17) is still not built.
+- Sound, not done: footsteps, the item land sound (nothing is thrown),
+  hurt sounds (fighting), ducking under speech, pause, music, speech,
+  `loadKQ` while playing (so `Waterfall2Sound` never appears), and
+  `setActiveCamera` / `makeActive` for sound objects.
 - Clicking: only doors, chests, items, scripted objects and buildings
-  react. No sound, no remarks (Connor says nothing; remarks are logged),
+  react. No remarks (Connor says nothing; remarks are logged),
   Connor doesn't turn to face what he clicks. No inventory screen (M4).
   `getEndLoop Connor …` (`bricks.cs`) is recorded but Connor's scripted
   movements don't exist yet. `checkInventory` by id number (Q62 b) not
@@ -238,8 +222,8 @@ milestone: **M3, Daventry comes alive**.
   cameras. Our camera updates every tick; the original only while Connor
   moves or the camera is used (Q53 d).
 - Animated objects play only the movement they start with (scripts can't
-  switch them yet, `KQAnimPlayEvent` to them is only logged) and make no
-  sound. A rolling rock that runs into Connor does nothing to him (in
+  switch them yet, `KQAnimPlayEvent` to them is only logged) and their
+  cues (sounds) don't fire. A rolling rock that runs into Connor does nothing to him (in
   the original he stumbles and takes damage; rule in `connor-collision.md`,
   Q55, not built yet).
 - Water: no damage yet (poison, lava, swamp).
@@ -256,7 +240,7 @@ milestone: **M3, Daventry comes alive**.
 - Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
-- Nothing yet of: sound, music, talking, inventory screen, fighting,
+- Nothing yet of: music, talking, inventory screen, fighting,
   stats, story, saving, travel between worlds.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)

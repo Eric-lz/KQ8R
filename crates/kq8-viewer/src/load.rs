@@ -1121,6 +1121,9 @@ pub struct Objects {
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     /// The traps (M3 step 3d-2), where the start-up scripts left them.
     pub traps: Vec<kq8_core::trap::TrapSettings>,
+    /// `KQAudibleObject`s the start-up scripts load (M3 step 3h-3,
+    /// sound.md rules 43-44).
+    pub audibles: Vec<kq8_core::sound::Audible>,
     /// `KQPointLight` objects the start-up scripts load (object-lighting.md
     /// rules 24, 25; M1 7c-1): name and light.
     pub point_lights: Vec<(String, kq8_data::lights::PointLight)>,
@@ -1310,6 +1313,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         emitters: Vec::new(),
         catchers: Vec::new(),
         traps: Vec::new(),
+        audibles: Vec::new(),
         point_lights: Vec::new(),
         animators: Vec::new(),
         animated: Vec::new(),
@@ -1503,6 +1507,7 @@ struct Placer<'a> {
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
+    audibles: Vec<kq8_core::sound::Audible>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
     animated: Vec<AnimatedAssets>,
@@ -1946,6 +1951,10 @@ impl Placer<'_> {
             self.place_point_light(&label, s, p);
             return;
         }
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAudibleObject")) {
+            self.place_audible(&label, s, p);
+            return;
+        }
 
         // Ground rules, when the object is loaded, so `getLoc` sees the
         // result: loadKQ z of -1 = on the floor, -2 = on the surface
@@ -2338,6 +2347,35 @@ impl Placer<'_> {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
         *self.by_class.entry("KQTrap (trap, M3)".into()).or_default() += 1;
+    }
+
+    /// A `KQAudibleObject` (M3 step 3h-3, sound.md rules 43-44): its sound
+    /// keys, its position as written; `deltaX/Y/Z` are not used ("Do not
+    /// reproduce" 7). A marker at its position (no model).
+    fn place_audible(&mut self, label: &str, s: &kq8_data::kq_text::Section, p: kq8_data::objects::Placement) {
+        let num = |key: &str| s.get(key).and_then(|v| v.split_whitespace().next()?.parse::<f32>().ok());
+        let file = s.get("soundFileName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        let Some(file) = file else {
+            self.log.summary(format!("sound object {label}[{}]: no soundFileName; left out", p.name));
+            return;
+        };
+        let placed = num("isSound3D").is_some_and(|v| v != 0.0);
+        let (min, max) = (num("minDistance").unwrap_or(0.0), num("maxDistance").unwrap_or(0.0));
+        self.log.summary(format!(
+            "sound object {label}[{}] at ({:.0}, {:.0}, {:.0}): {file}, {}, min {min:.0} max {max:.0}",
+            p.name,
+            p.position[0],
+            p.position[1],
+            p.position[2],
+            if placed { "placed (isSound3D=1)" } else { "plain (isSound3D=0)" }
+        ));
+        self.audibles.push(kq8_core::sound::Audible::new(&p.name, &file, placed, min, max, p.position));
+        self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQAudibleObject".into(), position: p.position, anm: false });
+        if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+            l.drawn = Drawn::Marker(self.markers.len() - 1);
+        }
+        *self.by_class.entry("KQAudibleObject (sound object, M3 3h-3)".into()).or_default() += 1;
     }
 
     /// A `KQPointLight` (object-lighting.md rules 24, 25): kept by name with
@@ -2764,6 +2802,7 @@ impl Placer<'_> {
             emitters,
             catchers: self.catchers,
             traps,
+            audibles: self.audibles,
             point_lights: self.point_lights,
             animators: self.animators,
             animated: self.animated,

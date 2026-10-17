@@ -20,6 +20,7 @@ pub mod ground_anim;
 pub mod item;
 pub mod named_anim;
 pub mod script;
+pub mod sound;
 pub mod trap;
 pub mod water;
 

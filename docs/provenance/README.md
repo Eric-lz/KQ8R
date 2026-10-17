@@ -1075,3 +1075,56 @@ Checks only; no game behaviour changed.
 | Each corner's light texel position (u × (size + 1) + map offset) ÷ 16, before the clamp: none below 0 or above width − 1 / height − 1 | `object-lighting.md` rule 13 ("How the drawing places it", Q79), "How to check" light-map placement | Log: 0 of 656,181 corners outside on 164,838 surfaces (matches). Surfaces with a corner at exactly 0: 365 (x and y) / 7,276 (x or y), note says 7,511: **Q80 open** |
 | P0 minus the drawn texel (0, 0), in texture texels (P0 put into texture texels through the surface's placement) | Rule 16 (P0 a quarter light texel past texel (0, 0), Q79), "How to check" | Log: mean (4.000, 4.000) (matches); within 0.05 of (4, 4) on 164,640, note says 160,649: **Q80 open** |
 | Our point-light painting (`wall_light::texel_position`) against the drawn texel positions (0, 0) and last, maps 1 texel wide or high counted apart | "Do not reproduce" (wall light texels), rule 13 | Log: 164,528 of 164,838 within 0.05 texture texel (the rest are surfaces whose stored P0 is itself off); no `.dil` has a map 1 texel wide or high. `wall_light.rs` unchanged |
+
+## Sound files (M3 step 3h-1) — `crates/kq8-data/src/aud.rs`, `crates/kq8-cli/src/aud_verify.rs`
+
+"Community note" = `libkq8fpc/doc/kq8aud.txt` (Nico Bendlin, GPL-3.0
+repository, read 2026-10-17 from <https://svn.nicode.net/libkq8fpc/doc/>).
+Facts only; code and wording are our own. Numbers checked with
+`kq8 aud-verify` (`kq8-artifacts/logs/aud-verify.log`).
+
+| What | Source | Check |
+| --- | --- | --- |
+| SOL accepted when bytes 0–1 `0D 0C`, 2–5 `SOL\0`, format has no bits outside 0x1D and has 0x04 or 0x08; else WAV (tag 1, 1–2 channels, 8 or 16 bits, `data` chunk); else refused | `sound.md` rule 12 | Unit test `acceptance_rules`; log: 1,749 SOL + 1 WAV of 1,750 `.aud`, 0 refused (matches) |
+| Header: rate u16 at 6, format at 8, data length u32 at 9; byte 1 ignored, data at byte 14 | `sound.md` rules 2, 10; community note (layout) | Log: header + data = file length in all 4,598 SOL files (matches) |
+| 0x01 compressed, 0x10 stereo; stereo bytes alternate left, right | `sound.md` rules 3, 7 | Log: 92 stereo `.aud`, `FOREST.AUD` 2 ch 178.5 s (matches) |
+| Compressed: low 7 bits pick a step, 0x80 subtracts, each channel from 0, 16-bit wrap-round | `sound.md` rules 7, 8 | Unit tests; log: 0 wrap-rounds, largest peak 32,768 (matches) |
+| The 128 step numbers | Community note (`sound.md` rule 7: same as the game's); our code builds them from their pattern | Unit test `step_table_matches_the_community_note` (19 entries, one or two per stretch) |
+| Samples per channel = data length ÷ channels; uncompressed SOL = signed 16-bit | `sound.md` rule 9 | Log: `AXEDOOR.AUD` 11,847, `NONE.AUD` 8 (matches); uncompressed: unit test only (no game file) |
+| WAV: read only the needed fields | `sound.md` "Do not reproduce" 6 | `hm_iced.aud`: 22,050 Hz, mono, 16-bit (matches rule 1) |
+| A 14-byte WAV format chunk (no bits field) takes its bits from the block size; a cut-off file decodes what is there | **Our choice** (no game file has either) | Unit test `a_cut_off_file_decodes_what_is_there` |
+| `--wav`: writes a plain 16-bit PCM WAV to `kq8-artifacts/wav/` | **Our method** (a listening aid) | Python's `wave` module reads the three files written (`AXEDOOR`, `FOREST`, `hm_iced`) with the right rate, channels and length |
+
+## Playing sound effects (M3 step 3h-2) — `crates/kq8-data/src/aud.rs` (`find`, `name_variants`), `crates/kq8-core/src/{sound,active,script}.rs`, `crates/kq8-audio/src/lib.rs`, `crates/kq8-viewer/src/sound_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Name lookup: as given, then `.AUD`, then `.WAV`; a name with a folder from the game folder | `sound.md` rules 13, 14 | Unit test `name_variants_follow_rule_13`; `aud-verify`: `raven.snd` → `daventry/sound/RAVEN.AUD`, `sprgouch.wav` → `GAME/SOUND/SPRGOUCH.AUD`, `poffup.aud` not found (matches); `chstopen`, `door4.aud`, `dirt1` found in `GAME/SOUND` (observed) |
+| Search order: the world's loose folders, then `GAME`'s, `patch` first | `models-and-textures.md` "Where texture names are looked up" | Order inside `GAME` past `patch` is **our choice** (not traced; only `SOUND` folders hold `.aud`) |
+| Six groups; sliders from `Options.cs` `setSfxVol` (0, 1, 2), `setSpeechVol` (3), `setMusicVol` (4, 5); 1 before | `sound.md` rules 50–52 | Unit test; `sound.log`: 0.14 / 0.34 / 0.14 from the shipped `MASK/Options.cs` |
+| Loudness = own × group, at most 1 | Rule 21 | Unit tests `shipped_options_give_014_for_effects` (a door next to Connor 0.14), `loudness_is_capped_at_1` |
+| Distance factor 1 − D ÷ (max − min), 1 inside min, 0 beyond max | Rule 29, "Do not reproduce" 1 (kept, the user's decision) | Unit test with the note's numbers (4,999 / 5,000 / 10,000 / 20,000; fountain 1,500 / 9,250 / 18,500) |
+| Distance from Connor in 3D; position copied at the start | Rule 28 | `sound.log`: Condoor 2,200 from Connor at (270813, 225311, 13770) |
+| Balance 0.82 × s ÷ √(s² + f²) in the camera's axes; centre straight above/below | Rule 31, "Do not reproduce" 4 | Unit test `balance_follows_the_camera` |
+| Pan law: p > 0 left × (1 − p), p < 0 right × (1 + p) | Rule 23 | Unit tests `pan_law` (rules) and `mono_goes_to_both_sides_at_their_gains` (mixer) |
+| Beyond max: one-shot stopped; loop paused, unless it started beyond max and was never heard | Rule 30 | Unit tests `a_one_shot_stops_beyond_max`, `a_loop_pauses_beyond_max_and_resumes` |
+| Mix limit 8: more than 8 playing → the oldest non-looping sound of the lowest group stops; only loops → none | Rules 26, 27 | Unit tests (12 one-shots: 0, 1, 2 stop; groups; loops spared) |
+| Finished one-shots leave the list on the 200 ms step | Rule 20 | Unit test `one_shots_finish_on_the_housekeeping_step` |
+| Missing or broken file: skipped, logged once | "Do not reproduce" 2 | Unit test `a_missing_file_is_skipped_and_logged_once` |
+| `playsound` cue → placed one-shot 5,000 / 25,000, group 0, at the object | Rules 35, 49 | Unit tests (Condoor `door4.aud`, `chstopen`); `sound.log` for Condoor and `smlchst3` |
+| Item pickup → plain one-shot, group 0, every add to Connor's inventory | Rule 42, `items.md` rule 7 | Unit test; `sound.log`: `energy.aud` on the chest's second click |
+| `KQSound::play` → plain one-shot, group 0 | Rule 40 | Unit test (`fishies.cs` `eat.aud`); `sound.log` for both fish |
+| Rate conversion by a straight line between samples; sum clipped | **Our method** (rule 18: any rate is fine) | Unit tests `rate_conversion_keeps_the_length`, `the_sum_is_clipped` |
+| Log line when a playing placed sound's loudness or balance moved by 0.05 | **Our method** (a log aid) | — |
+| Listener and camera from the drawn camera; the camera is the listener when there is no Connor | **Our choice** for the viewer's free camera and worlds without Connor | — |
+
+## Sound objects (M3 step 3h-3) — `crates/kq8-core/src/sound.rs` (`Audible`), `crates/kq8-viewer/src/{load,sound_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQAudibleObject` keys `soundFileName`, `isSound3D`, `minDistance`, `maxDistance`, position; `deltaX/Y/Z` ignored | `sound.md` rules 43, 44, "Do not reproduce" 7 | `viewer.log`: the 5 objects Daventry's start-up scripts load, with the note's files and distances |
+| Looping, group 0, placed when `isSound3D=1`, else plain | Rule 45 | Unit test `a_plain_sound_object_and_a_missing_file` |
+| On while near or far (ball radius 100, off from `visibleDistance`), restarted from the beginning when it comes back; on at once when it enters the world | Rules 46, 47; `object-lighting.md` rules 34–36 | Unit test (off at 27,100, restart = a new start); viewer: fountain off at 27,169, mill at 27,196, water wheel at 27,191, windmill on at 27,046 |
+| Started beyond max: plays silently until first heard; later beyond max: paused | Rule 30 | Viewer: water wheel started at 26,385 silently, heard from 19,245 in, paused at 20,049 |
+| `deleteObject` stops it for good | Rule 48 | Unit test only (`bricks.cs` not reached in our runs) |
+| Distance measured from Connor only, not the camera after `setActiveCamera`; `makeActive` not applied | **Not done yet** (`object-lighting.md` rule 42 says both apply to every object) | No Daventry script uses them on a sound object |

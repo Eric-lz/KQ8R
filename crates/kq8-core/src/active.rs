@@ -70,6 +70,7 @@ use crate::events::{EventQueue, Pending};
 use crate::item::{Accepts, Items, Place};
 use crate::named_anim::NamedAnimPlayer;
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
+use crate::sound::Start;
 use crate::trap::{Trap, Visitor};
 
 /// A `KQCueEvent` with this first number is an `EndLoop` call, not a `Cue`
@@ -386,6 +387,8 @@ pub struct WorldState {
     pub items: Items,
     /// Lines about items for `items.log` (also in the other logs).
     pub item_log: Vec<String>,
+    /// Sounds to start (M3 step 3h-2, `sound.md`), taken by the caller.
+    pub sounds: Vec<Start>,
     /// For z -1 / -2 of a new world item; `None`: kept as written.
     pub heights: Option<Heights>,
     /// Variables a command set, for the script runner.
@@ -437,10 +440,48 @@ impl WorldState {
     /// Makes a world item at `position` (z -1 / -2: floor / surface,
     /// `objects.md` Q17 rule 2) and returns its name.
     /// What Connor's inventory plays when an item of type `kind` goes in
-    /// (items.md rule 7, Q61: every add, not placed in the world).
-    fn pickup_sound(&self, kind: &str) -> String {
+    /// (items.md rule 7, Q61: every add, not placed in the world): a plain
+    /// one-shot in group 0 (`sound.md` rule 42).
+    fn pickup_sound(&mut self, kind: &str) -> String {
         let sound = self.items.kind(kind).and_then(|t| t.pickup_sound.clone());
-        format!("pickup sound {} (no audio yet)", sound.as_deref().unwrap_or("none"))
+        if let Some(name) = &sound {
+            self.sounds.push(Start::plain_one_shot(name, format!("pickup of {kind}")));
+        }
+        format!("pickup sound {}", sound.as_deref().unwrap_or("none"))
+    }
+
+    /// A `playsound` cue of an animated object at `position` (`sound.md`
+    /// rule 35): a placed one-shot, 5,000 / 25,000, group 0. Returns what
+    /// the log line says about it.
+    fn cue_sound(&mut self, what: &str, cue: &str, position: [f32; 3]) -> &'static str {
+        let mut words = cue.split_whitespace();
+        if !words.next().is_some_and(|w| w.eq_ignore_ascii_case("playsound")) {
+            return "cue action not done";
+        }
+        match words.next() {
+            Some(name) => {
+                self.sounds.push(Start::placed_one_shot(name, position, format!("{what} cue")));
+                "sound started"
+            }
+            None => "playsound without a file name; nothing",
+        }
+    }
+
+    /// `KQSound::play <file>` (`sound.md` rule 40): a plain one-shot in
+    /// group 0 (group 1 only while the game is paused; there is no pause
+    /// yet).
+    fn play_sound(&mut self, words: &[String], at: &str) -> String {
+        match words.get(1) {
+            Some(name) => {
+                self.sounds.push(Start::plain_one_shot(name, format!("KQSound::play, {at}")));
+                self.note(format!("{at}: KQSound::play {name}: plain sound started"));
+                "0".into()
+            }
+            None => {
+                self.note(format!("{at}: KQSound::play without a file name; nothing"));
+                "1".into()
+            }
+        }
     }
 
     fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
@@ -992,6 +1033,7 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
+            "KQSound::play" => Some(self.play_sound(words, at)),
             "deleteObject" => Some(self.delete_objects(words, at)),
             "KQObject::setScript" | "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
             _ => None,
@@ -1047,6 +1089,7 @@ impl Active {
                 requests: Vec::new(),
                 items: Items::default(),
                 item_log: Vec::new(),
+                sounds: Vec::new(),
                 heights: None,
                 vars_out: Vec::new(),
                 accepts: BTreeMap::new(),
@@ -1688,12 +1731,12 @@ impl Active {
                         } else {
                             let count = self.world.items.count("Connor", &o.kind);
                             self.world.items.objects[k].place = Place::Carried("Connor".into());
+                            let sound = self.world.pickup_sound(&o.kind);
                             let line = format!(
-                                "{at}: 2nd click: {} moved into Connor's inventory ({} {count} -> {}); {}",
+                                "{at}: 2nd click: {} moved into Connor's inventory ({} {count} -> {}); {sound}",
                                 o.name,
                                 o.kind,
                                 self.world.items.count("Connor", &o.kind),
-                                self.world.pickup_sound(&o.kind)
                             );
                             self.world.item_note(line);
                             format!("item {} moved into Connor's inventory", o.name)
@@ -1759,12 +1802,9 @@ impl Active {
                 );
                 self.world.note(line);
             }
+            let at = self.world.doors[i].door.base.position;
             for cue in &a.cues {
-                let what = if cue.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case("playsound")) {
-                    "no audio yet"
-                } else {
-                    "cue action not done"
-                };
+                let what = self.world.cue_sound(&format!("door {name}"), cue, at);
                 self.world.note(format!("door {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(p) = &a.problem {
@@ -1798,8 +1838,10 @@ impl Active {
                 let line = format!("chest {name}: movement {} phase {:.4} -> {:.4} frame {}", c.movement_name(), a.from, a.to, c.frame());
                 self.world.note(line);
             }
+            let at = self.world.chests[i].chest.placement().position;
             for cue in &a.cues {
-                self.world.note(format!("chest {name}: cue '{cue}' fires (no audio yet)"));
+                let what = self.world.cue_sound(&format!("chest {name}"), cue, at);
+                self.world.note(format!("chest {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(m) = a.finished {
                 // chests.md rule 6, clicking.md rule 21: EndLoop through the queue.
@@ -1816,8 +1858,10 @@ impl Active {
                 let line = format!("object {name}: movement {} phase {:.4} -> {:.4} frame {}", p.movement_name(), a.from, a.to, p.frame());
                 self.world.note(line);
             }
+            let at = self.world.objects[i].player.placement().position;
             for cue in &a.cues {
-                self.world.note(format!("object {name}: cue '{cue}' fires (cue actions not done)"));
+                let what = self.world.cue_sound(&format!("object {name}"), cue, at);
+                self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(m) = a.finished {
                 // clicking.md rule 21: EndLoop through the queue.
@@ -2058,7 +2102,10 @@ mod tests {
         let log = a.take_log().join("\n");
         assert!(log.contains("KQDoorEvent 1 to Condoor"), "{log}");
         assert!(log.contains("script door.cs Condoor Open") && log.contains("echo opened Condoor"), "{log}");
-        assert!(log.contains("cue 'playsound door4.aud' fires (no audio yet)"), "{log}");
+        assert!(log.contains("cue 'playsound door4.aud' fires (sound started)"), "{log}");
+        // sound.md rule 35: a placed one-shot at the door, 5,000 / 25,000.
+        let door_at = a.world.doors[0].door.base.position;
+        assert_eq!(a.world.sounds, [Start::placed_one_shot("door4.aud", door_at, "door Condoor cue".into())]);
         // Second click: script runs, event ignored, door stays open.
         a.click("Condoor", NEAR, 2350.0, None);
         a.update();
@@ -2340,6 +2387,7 @@ mod tests {
         assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 3);
         let log = a.take_item_log().join("\n");
         assert!(log.contains("Connor's INVITEM_Crystal 0 -> 3; pickup sound energy.aud"), "{log}");
+        assert!(a.world.sounds.iter().any(|s| s.name == "energy.aud" && s.placed.is_none()), "items.md rule 7: a plain sound");
         assert!(log.contains("script coin.cs NoName0 ConnorAction do do"), "{log}");
         // Gone from the world: not picked, a second click does nothing.
         assert_eq!(a.pick([1000.0, -5000.0, 600.0], [0.0, 1.0, 0.0]), None);
@@ -2409,7 +2457,8 @@ mod tests {
         a.update();
         assert_eq!(a.scripts.vars.get("C::EndLoop"), Some("open"));
         let log = a.take_log().join("\n");
-        assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("script chest.cs smlchst3 EndLoop open"), "{log}");
+        assert!(log.contains("cue 'playsound chstopen' fires (sound started)") && log.contains("script chest.cs smlchst3 EndLoop open"), "{log}");
+        assert!(a.world.sounds.iter().any(|s| s.name == "chstopen" && s.placed.is_some_and(|p| p.min == 5_000.0 && p.max == 25_000.0)));
         // 2nd click: into Connor's inventory.
         let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
         assert_eq!(r, ClickResult::Chest { before: ChestState::Open, after: ChestState::Empty });
@@ -2620,7 +2669,8 @@ mod tests {
         assert!(a.world.clickables[0].gone);
         assert!(matches!(&a.world.requests[..], [Request::Delete { name, .. }] if name == "fishies.01"));
         let log = a.take_log().join("\n");
-        assert!(log.contains("stub (later milestone, nothing done): KQSound::play eat.aud"), "{log}");
+        assert!(log.contains("KQSound::play eat.aud: plain sound started"), "{log}");
+        assert!(matches!(&a.world.sounds[..], [s] if s.name == "eat.aud" && s.placed.is_none() && !s.looping && s.group == 0));
         assert!(log.contains("deleteObject fishies.01: clickable object deleted"), "{log}");
         // Gone: not picked, a click does nothing, its cue (1 s later) is dropped.
         assert_eq!(a.pick([0.0, -5000.0, 100.0], [0.0, 1.0, 0.0]), None);

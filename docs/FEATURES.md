@@ -12,7 +12,9 @@ checked from the numbers in `kq8-artifacts/logs/`). Newest details are in
 Archives, images, palettes, 3D models, buildings, the ground of every
 world, the scripts that set up each world, and the list of all 135 item
 types (coins, crystals, weapons...; checked with `item-verify` against
-every item name in the game's data).
+every item name in the game's data). All sound files: every `.aud` and
+speech file decodes, with the lengths and rates the study measured
+(`aud-verify`; `--wav <file>` writes one as a `.wav` to listen to).
 
 ## Seeing a world
 
@@ -198,9 +200,22 @@ objects don't stop it, as in the original. Checked in the logs
   and turn into empty baskets. Checked in the logs and by eye.
 - **Fish and other scripted things:** clicking a swimming fish near
   Connor makes it disappear, as in the original (checked by eye; its
-  eating sound and the health it gives are only logged: no sound or
-  health yet). Other clickable things with a script (signs, the stone
+  eating sound plays since 2026-10-17; the health it gives is only
+  logged). Other clickable things with a script (signs, the stone
   villagers...) run it too; most only make Connor speak, which is logged.
+
+- **Sound effects** (2026-10-17, `docs/behaviour/sound.md`): doors,
+  chests and scripted objects play the sounds in their movements, placed
+  where they are; picking up an item and `KQSound::play` in scripts play
+  plain sounds; Daventry's water wheel, mill, waterfall, windmill and
+  fountain loop. Placed sounds get quieter with Connor's distance (the
+  original's curve: a sudden step down at the near distance, silent
+  before the far one) and come from the side of the screen they are on.
+  Loudness follows the sliders in `MASK/Options.cs` (effects 0.14). At
+  most 8 (+1) one-shots at once. Looping sounds pause when Connor is too
+  far and switch off with the draw distance (27,100 in Daventry).
+  Every start and stop is in `kq8-artifacts/logs/sound.log`. Checked in
+  the logs and by ear by the user (doors, chests, pickups).
 
 ## Viewer helpers (not in the original)
 
@@ -252,6 +267,8 @@ repeated and checked in the logs. They do not change the game's rules.
 - `--dynamic on|off`: dynamic lighting (point lights painting the
   ground and building surfaces), instead of what `Options.cs` says. The
   game's own files are not changed.
+- `--sound on|off`: play sound through the sound card (default `on`).
+  `off` still runs the sound rules and writes `sound.log`.
 - `--renderer auto|vulkan|dx12`: which graphics API draws the picture
   (default `auto`: the graphics library chooses, Vulkan on our test PC,
   and the `WGPU_BACKEND` environment variable still works). `vulkan` and
@@ -297,13 +314,15 @@ message that shows the usage.
   fighting, saving, or travel between worlds.
 - **Not drawn:** people and monsters, fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
-- **No sound or music** at all.
+- **Sound:** no footsteps, music, speech or hurt sounds yet; scenery
+  animations (signs, the mill wheel's own movement) make no sound;
+  nothing is thrown, so there is no landing sound.
 - **Clicking:** doors, chests, items, scripted objects and buildings
   react; nothing else does. Connor says nothing (his remarks, e.g. "too far" or
   "locked", are only logged) and doesn't turn to face what he clicks.
   Picked-up items are only counted in the log.
 - **Animated objects** play only the movement they start with (scripts
-  don't switch them yet) and make no sound. A rolling rock that runs
+  don't switch them yet). A rolling rock that runs
   into Connor does nothing to him yet (in the original he stumbles and
   takes damage). Pushable objects can't be pushed.
 - **Camera:** it doesn't swing back behind Connor by itself; no first
