@@ -61,6 +61,17 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
   listed in QUESTIONS.md Q82. Q81 (c): B's stand-in is right
   (`objects.md` rule 4). Q80: see `object-lighting.md` "How to check".
   Q4 closed: none of the 29 missing texture names is ever drawn in play.
+- **New 2026-10-17 (A): animated objects controlled by scripts studied**
+  (`docs/behaviour/anim-scripts.md`): `KQAnimPlayEvent` (waiting movement,
+  starts at once if the current one can be cut short or has ended, else
+  at its end; starts from its own `loop=` line; unknown name = movement 0),
+  `nextAnimName` = the waiting movement, the order at a movement's end
+  (waiting movement first, then `EndLoop` / `Cue 300`), `KQAnimOnce`
+  (gets `Die` at its end; Daventry's barrels and the alchemist's boards),
+  `setDeleteWhenDone`, `pauseAnim` (toggles), Connor's
+  `setState … special` word list, single quotes / `;` in scripts, and
+  `KQStatsChangeRequestEvent` adds (5th number = experience). Ready for B.
+  Daventry's bricks puzzle still needs its `Push` trigger (pushables study).
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.

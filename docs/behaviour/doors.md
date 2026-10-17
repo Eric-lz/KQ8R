@@ -194,6 +194,9 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
 
 ## The script language: what doors need (traced unless marked)
 
+(Single quotes, `;`, `( … )` and the 40-word limit: `anim-scripts.md`
+rules 17–18.)
+
 Scripts are the engine's console language, run **line by line, to the
 end, at the moment they are called** (nothing waits). A line is at most
 about 500 characters.

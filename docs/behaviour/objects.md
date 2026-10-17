@@ -82,8 +82,8 @@ All traced in `Mask.exe` unless marked otherwise.
    there; not used in Daventry) and `flags`. If `flags` has the bit 8 set,
    the animation starts at a **random frame** and plays at a random speed
    between 0.9 and 1.1 (so rows of swaying things don't move in step).
-   `nextAnimName` is read too (what to play after this one); not traced
-   further.
+   `nextAnimName` is read too: it is the **waiting movement** (traced
+   2026-10-17, `anim-scripts.md` rules 2–3).
 5. **Key names are matched ignoring capitals but otherwise exactly**
    (`_stricmp`). So `milltree.kq`'s `curAnimName` (one r) is **not read**
    (answer to d): that object starts in movement 0.

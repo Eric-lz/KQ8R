@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 A: animated objects controlled by scripts (`anim-scripts.md`)
+
+**Changed:** New `docs/behaviour/anim-scripts.md` (rules 1–19): the waiting movement and `nextAnimName`; `KQAnimPlayEvent` (when the new movement starts, from its own `loop=` line, unknown names fall back to movement 0, stopped `0 0` poses never change); the order at a movement's end; `KQAnimOnce` and `setDeleteWhenDone` with Daventry's barrel and board chains; `pauseAnim` (a toggle) and `setAnimPos`; Connor's `setState … special` word list; single quotes, `;`, `( … )` and the 40-word limit in scripts; `KQStatsChangeRequestEvent` adds its numbers (fifth = experience, Connor's levels for M5). Cross-references in `clicking.md` (rule 24, open question 3 answered), `objects.md` (`nextAnimName`), `doors.md` (script language) and `QUESTIONS.md` Q64. `STATUS.md`. No code.
+**Why:** Suggestion 2: scripts that switch, pause and remove animated objects are the main piece missing from M3 ("Objects only play their starting animation").
+**Tested how:** Traced in Ghidra. Survey of all 1,081 scripts and all `.kq` / `.anm` files for how each command is used (counts in the note).
+**Result:** Rules ready for B. Data checks: no placed object has transitions; `KQAnimPlayEvent` always has one word; `nextAnimName` never changes which movement shows first in the shipped data; 30 stopped `0 0` poses (all final poses); `boardx.kq` is never loaded (it would load itself forever).
+**Still broken / not tested:** Nothing was checked in the original game. Open: what sends `Bricks` its `Push` (pushables study), the collision bit switched when a movement starts, Connor's `Inv` item, `KQMoveEvent` flags 1 and 3 on objects, monsters (M5).
+**Next:** B: build `anim-scripts.md` (plan in DESIGN.md first). A: pushable objects (`KQStateConnerPush`, `KQBoulder`), which the bricks puzzle needs.
+
 ## 2026-10-17 Fix: a jump that hits something follows A's corrected rule (Q82)
 
 **Changed:** `kq8-core/src/connor_update.rs`: the Q82 stand-in ("every non-back jump hit crashes") replaced by `jump_hit_outcome`: during `jump` or `runJump` a steep hit crashes if it is on the down pass, or if the head-on test said head-on for it (up, across or slide pass). A steep hit that is not head-on ends the jump without a crash and the animation plays on (stand-in, Q84 a). The log line now says why: "crash (head-on; …)" or "crash (landed on something steep)". Tests: `a_standing_jump_into_a_wall_crashes_stand_in_q82` renamed `…_crashes_head_on`, new `only_head_on_or_down_pass_jump_hits_crash`. `docs/DESIGN.md` (plan, done), provenance, `docs/behaviour/QUESTIONS.md` (Q82 built; new **Q84**), `docs/FEATURES.md`, `STATUS.md`.

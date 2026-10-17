@@ -202,9 +202,10 @@ gets.
 24. The event carries **five whole numbers in the same order as an
     object's `stats=` line**: first health, fourth armour (`doors.md`
     rules 18–19). So `fishies.cs`'s `… KQStatsChangeRequestEvent 2 0 0 0
-    0` concerns health only. Whether the numbers are added to Connor's
-    stats or set them was not traced; the user saw his health go **up**
-    after eating the fish, which fits "add". The other three numbers'
+    0` concerns health only. **They are added** (traced 2026-10-17,
+    `anim-scripts.md` rule 19, which also gives the caps and Connor's
+    levels; the fifth number is experience). The user saw his health go
+    **up** after eating the fish, which fits. The other three numbers'
     meanings are for the stats study (M5).
 
 ## Numbers and units
@@ -284,8 +285,7 @@ gets.
 1. Which view setting gives the click line's length (rule 1).
 2. When a deleted object is finally removed, and whether deletions last
    across leaving the world and saving (rules 22–23).
-3. How Connor applies `KQStatsChangeRequestEvent` (add or set) and what
-   numbers 2, 3 and 5 are (rule 24, M5). (`bricks.cs` sends `0 0 0 0
-   50` when the waterfall is blocked, so the 5th number is likely
-   experience; not traced.)
+3. ~~How Connor applies `KQStatsChangeRequestEvent`~~ Answered
+   2026-10-17: added; the 5th number is experience (`anim-scripts.md`
+   rule 19). The meaning of numbers 2 and 3 stays for M5.
 4. `getEndLoop`'s own bookkeeping (rule 21, last point) was not traced.
