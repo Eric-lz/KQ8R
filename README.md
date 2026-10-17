@@ -54,6 +54,9 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 
 ### What doesn't work yet
 
+- Pushing barrels plays the animation but the barrel does not move.
+- Some cutscenes never give control back (e.g. the watermill room), and the cutscene camera is not placed exactly right.
+- At the start of the bricks puzzle, Connor, the bricks and the table briefly pop up in the air.
 - No story, talking, inventory screen, fighting or saving.
 - No dialogue.
 - No people or monsters.

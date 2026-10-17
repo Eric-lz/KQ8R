@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 M3 step 3k: the user's checks by eye (docs only)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q91–Q93 from the user's tests. README "what doesn't work" lines. No code.
+**Why:** The user tested steps 3i–3k by eye and reported what matches the original and what doesn't.
+**Tested how:** By the user, in the viewer: the three runs listed under 3k-4 and free play.
+**Result:** Matches the original: the bricks puzzle runs end to end and the way behind the waterfall opens (the user walked through); the hay bale pushes and stops at walls; the star globe opens and shows the potion. The potion can't be picked up while `--item INVITEM_SpellPage` is held (other potions in that room can't either; without `--item` they can), so this looks like the missing inventory, not this step.
+**Still broken:** (1) The camera's place in the bricks cutscene differs from the original (Q89). (2) Right after the push, Connor, the bricks and the table briefly rise a few units and fall back before the animations play (Q92; not logged). (3) The watermill room's cutscene takes the camera (`handsOff`) and never gives it back (Q93). (4) Barrels play the push animation but don't move; in the original they move (Q87, Q91).
+**Next:** Study session A answers Q85–Q93; then fix (2)–(4).
+
 ## 2026-10-17 M3 step 3k-4: `loadKQ` while playing (the new waterfall)
 
 **Changed:** `kq8-core/src/active.rs`: `loadKQ <file>` is a world command (no longer a stub): a copy prepared at the start comes into the world (`Request::Load`); its name becomes known to the scripts; a line with a name or position, or a file with no prepared copy, is logged as not done; `set_dormant`; 1 new unit test. `sound.rs`: `Audible::dormant` (silent until loaded). `kq8-viewer`: `load.rs` prepares a "dormant" copy of every file a world script names in `loadKQ <file>` that the start-up scripts don't load and that has a place of its own (the H-key copies; sound objects are now prepared too, silent); `anim_view.rs` `bring_in` hands such a copy's player to `Active`; `sound_view.rs` `wake`; `door_view.rs` new system `apply_loads` (after `trap_step`) shows the copy's parts, brings in its animation and switches its sound on; `main.rs` schedules it. README and FEATURES updated; provenance added.
