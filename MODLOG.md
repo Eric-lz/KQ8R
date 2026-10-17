@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 User's answers to `sound.md` open questions 1 and 2
+
+**Changed:** `docs/behaviour/sound.md` (rule 31, "Do not reproduce" 1, "How to check", open questions 1–2), `STATUS.md`. No code.
+**Why:** The user checked the original and made the call on the distance curve.
+**Tested how:** By ear in the original, by the user: waterfall on the left of the screen.
+**Result:** (1) The sound comes from the left speaker; the balance follows the camera. (2) Keep the original distance formula; a corrected curve may be added later as an option.
+**Still broken / not tested:** —
+**Next:** B implements sound from `sound.md`.
+
+## 2026-10-17 Study A: sound effects (new note `sound.md`)
+
+**Changed:** New `docs/behaviour/sound.md`. `STATUS.md`. No code. Scratch notes and a copy of the community `kq8aud.txt` in `re/` (not committed).
+**Why:** The user asked for a study of how sound effects behave, so B can play Daventry's sounds as the original does.
+**Tested how:** Traced the sound engine in `Mask.exe` (file opening and decoding, mixing, groups, mix limit, placed sounds, fades, the script commands, cues, footsteps, hurt sounds, the `KQAudibleObject` class, the option sliders). Measured with throwaway scripts (in the scratch folder): headers of all 4,598 SOL files, a full decode of the 2,498 compressed ones, every sound name in Daventry's and `GAME`'s data against the files.
+**Result:** The community `.aud` note is right on header, step table and decoding; corrections: the game ignores header byte 1 (data always at byte 14), never uses the 16-bit/signed bits after opening, and retries the name as `.AUD` then `.WAV`. All files are compressed 16-bit, no file overflows. Placed sounds: loudness from Connor's distance, balance from the camera; all one-shots use 5,000 / 25,000; the curve forgets to subtract min (sudden drop at min, silent before max, reproduced in the original). Mix limit 8 (a 9th can start; the oldest lowest-group non-looping sound is stopped). Six groups (effects, menu, speech, menu music, world music); shipped sliders 0.34 / 0.14 / 0.14; speech ducks effects and music to 0.2. Daventry's six looping sound objects listed with their numbers; they switch off beyond 27,100 (the near/far/off test).
+**Still broken / not tested:** Nothing heard in the original by me. Not settled: which sign of the camera's sideways axis is "right" (open question 1, the user can check by ear), whether to keep the original distance curve (open question 2, the user decides), what makes some speech lines skip ducking, which screens pause the game, eight other engine places that play placed one-shots (same numbers). Music and speech only summarised.
+**Next:** B implements sound playback from `sound.md` (plan in `docs/DESIGN.md` first). The user: answer open questions 1 and 2 of `sound.md` when convenient.
+
 ## 2026-10-17 M1 step 7k: light-map placement check (A's answer to Q79)
 
 **Changed:** `crates/kq8-cli/src/lighting_verify.rs` (`rect_check` and the summary): per surface corner, the light texel position before the clamp; P0 minus the drawn texel (0, 0) in texture texels; our painting's texel positions against the drawn ones. `docs/DESIGN.md` (7k), `docs/provenance/README.md`, `docs/behaviour/QUESTIONS.md` (Q80). `wall_light.rs` unchanged.

@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-17 at the
-end of B's session that checked A's answer to Q79 (M1 step 7k). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of A's sound-effects study (after B's M1 step 7k). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -47,6 +47,21 @@ end of B's session that checked A's answer to Q79 (M1 step 7k). Read with `AGENT
 - **No building stands near Dead City's arrival portal**
   (nearest 29,000 away), so the "light over the walls" there must come
   from models, which are lit since 7c.
+- **New 2026-10-17 (A): sound effects studied**, note
+  `docs/behaviour/sound.md`, ready for B (nothing built yet). In short:
+  `.aud` = Sierra SOL, compressed 16-bit, 22,050 Hz in Daventry (the
+  community note is right on decoding; data always at byte 14). One
+  engine for effects, music and speech with six volume groups (shipped
+  sliders: speech 0.34, effects 0.14, music 0.14; speech ducks effects
+  and world music to 0.2). Sounds come from `playsound` cues, `footstep`
+  cues (Connor; set by ground flags), `KQSound::play`, `ouchSound`,
+  items, and `KQAudibleObject` looping sources (Daventry has six:
+  waterfalls, mill, waterwheel, windmill, fountain). Placed sounds:
+  loudness from Connor's distance, left/right from the camera; one-shots
+  5,000 / 25,000; at most 8 (+1) at once. The user settled both
+  open points (2026-10-17): screen left = left speaker (follows the
+  camera), and keep the original distance curve (an option to fix it
+  may come later).
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
