@@ -30,6 +30,15 @@
 //!   the voice of `0.MSG` (N V C S of the type's message column), played
 //!   as a plain sound, a new one stopping the last.
 //!
+//! The item in hand (M4 4c-4; `inventory.md` rules 7, 9, 12): a left
+//! click on a quest item, the coins, the rocks or the rope makes it the
+//! hand (its type's `cursor` is the pointer, and it leaves the quest
+//! strip); the same item again puts it back. The scroll can't be taken:
+//! a remark, at most every 3 s and not while Connor talks. A type with
+//! cursor `none` does nothing. A world click with the hand: accepted →
+//! the hand is emptied, except coins while `goldCoinPersists 1`; refused or
+//! out of reach → it stays.
+//!
 //! STAND-INS: "applied" is kept in the item's `userId` (rule 13) as 0 for
 //! Connor (the original keeps an object id there); an old piece taken off
 //! by a `give` (no place where the new one lay) drops at Connor's feet
@@ -243,12 +252,26 @@ pub fn timers(w: &mut WorldState) {
     }
 }
 
+/// The scroll that can't be taken, and its remark (rule 9 writes
+/// `0.MSG` (0, 92, 14, 0); read as file 0, noun 92, verb 14, case 0,
+/// sequence 1: the reading that names a line in `0.MSG`, Q110).
+const SCROLL: &str = "INVITEM_Scroll";
+const SCROLL_REMARK: kq8_data::msg::Tuple = kq8_data::msg::Tuple { file: 0, noun: 92, verb: 14, case: 0, seq: 1 };
+/// The rope away from a rope place (rule 9 writes (0, 0, 58, 37); read the
+/// same way, Q110).
+const ROPE_REMARK: kq8_data::msg::Tuple = kq8_data::msg::Tuple { file: 0, noun: 0, verb: 58, case: 37, seq: 1 };
+
+/// Rule 9: at most one scroll remark every 3 s.
+const SCROLL_GAP: f64 = 3.0;
+
 /// What a click on a bar slot did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BarResult {
     Ignored,
-    /// Held as the pointer (4c-4).
+    /// Now the item in hand (4c-4).
     Hold,
+    /// The item in hand went back (4c-4).
+    PutBack,
     /// The main menu (the mask button).
     Menu,
     Applied,
@@ -286,10 +309,7 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
         return BarResult::Ignored;
     }
     match t.category.as_str() {
-        "QuestItem" | "Money" | "Rock" | "Rope" => {
-            w.item_note(format!("{head}: would be held as the pointer (inventory.md rule 9; 4c-4)"));
-            BarResult::Hold
-        }
+        "QuestItem" | "Money" | "Rock" | "Rope" => hold(w, name, &t, &head),
         "MaskPiece" => {
             w.item_note(format!("{head}: the mask button opens the main menu (interface.md rule 41); no menu yet"));
             BarResult::Menu
@@ -312,6 +332,77 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
             };
             w.item_note(format!("{head}: {line}{sound}{ready} (inventory.md rule 9)"));
             BarResult::Applied
+        }
+    }
+}
+
+/// Rule 9: a left click on a quest item, coins, rocks or the rope.
+fn hold(w: &mut WorldState, name: &str, t: &kq8_data::items::ItemType, head: &str) -> BarResult {
+    if w.hand.as_deref().is_some_and(|h| h.eq_ignore_ascii_case(name)) {
+        w.hand = None;
+        w.item_note(format!("{head}: it is the item in hand: put back, the play pointer again (inventory.md rule 9)"));
+        return BarResult::PutBack;
+    }
+    if t.name.eq_ignore_ascii_case(SCROLL) {
+        let now = w.now();
+        let recent = w.scroll_remark_at.is_some_and(|t| now - t < SCROLL_GAP);
+        let line = if recent {
+            "the scroll can't be taken; its remark was less than 3 s ago: nothing".to_string()
+        } else if w.talk.is_talking(crate::talk::CONNOR) {
+            "the scroll can't be taken; Connor is talking: no remark".to_string()
+        } else {
+            w.scroll_remark_at = Some(now);
+            format!("the scroll can't be taken: {}", w.connor_remark(SCROLL_REMARK, "scroll"))
+        };
+        w.item_note(format!("{head}: {line} (inventory.md rule 9)"));
+        return BarResult::Nothing;
+    }
+    let Some(cursor) = t.cursor.clone() else {
+        w.item_note(format!("{head}: its type has cursor none: can't be held; nothing (inventory.md rule 9)"));
+        return BarResult::Nothing;
+    };
+    let mut extra = String::new();
+    if t.category == "Rope" {
+        // Rule 9: there are no rope places yet (M6). STAND-IN (Q110): held
+        // and the remark.
+        extra = format!("; not at a rope place (none yet): {}", w.connor_remark(ROPE_REMARK, "can't use the rope here"));
+    } else if t.category == "Rock" {
+        extra = "; none of the three states that refuse it exists yet".into();
+    }
+    let before = w.hand.replace(name.to_string());
+    let back = before.map_or(String::new(), |b| format!("; {b} goes back to its slot"));
+    w.item_note(format!("{head}: now the item in hand, the pointer {cursor}{back}{extra} (inventory.md rule 9)"));
+    BarResult::Hold
+}
+
+/// Rule 12: after a world click made while holding `held`: `accepted`
+/// (the object's script got `ConnorAction <item> <type>`) empties the
+/// hand, except coins while `goldCoinPersists 1`; otherwise it stays.
+pub fn after_world_click(w: &mut WorldState, held: &str, accepted: bool) {
+    let kind = w.items.get(held).map(|o| o.kind.clone()).unwrap_or_default();
+    let money = w.items.kind(&kind).is_some_and(|t| t.category == "Money");
+    let line = if !accepted {
+        "not accepted or out of reach: it stays in hand".to_string()
+    } else if money && w.gold_persists {
+        "accepted; coins while goldCoinPersists 1: they stay in hand".to_string()
+    } else {
+        w.hand = None;
+        let gone = if w.items.get(held).is_some_and(|o| o.carried_by(crate::talk::CONNOR)) { "still in the inventory" } else { "taken by the script" };
+        format!("accepted: the hand is emptied, the play pointer back; the item is {gone}")
+    };
+    w.item_note(format!("world click with {held} ({kind}) in hand: {line} (inventory.md rule 12)"));
+}
+
+/// The item in hand, if it still exists and is carried (a script may
+/// delete or take it; then the hand is emptied).
+pub fn hand(w: &mut WorldState) -> Option<(String, String)> {
+    let name = w.hand.clone()?;
+    match w.items.get(&name) {
+        Some(o) if o.carried_by(crate::talk::CONNOR) => Some((o.name.clone(), o.kind.clone())),
+        _ => {
+            w.hand = None;
+            w.item_note(format!("the item in hand {name} is no longer carried: the hand is emptied"));
+            None
         }
     }
 }
@@ -348,8 +439,9 @@ mod tests {
         ];
         let mut text = format!("[InventoryItemTypeList]\nnumItems={}\n", rows.len());
         for (n, (name, s, comb, cat, dur, snd)) in rows.iter().enumerate() {
+            let cursor = if matches!(*cat, "QuestItem" | "Money") { "IDBMA_CURS" } else { "none" };
             text.push_str(&format!(
-                "item{n}=\tKQInventoryItemType\t{name}\t1\t{}\t{}\t{}\t{}\t{}\t{comb}\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t{dur}\t1\tnone\tnone\t{snd}\tx.kqs\tnone\t1\t256\n",
+                "item{n}=\tKQInventoryItemType\t{name}\t1\t{}\t{}\t{}\t{}\t{}\t{comb}\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t{dur}\t1\tnone\tnone\t{snd}\tx.kqs\t{cursor}\t1\t256\n",
                 s[0], s[1], s[2], s[3], s[4]
             ));
         }
@@ -447,5 +539,33 @@ mod tests {
         assert_eq!(bar_click(&mut a.world, &coins, false, false, "right click"), BarResult::Described);
         assert_eq!(a.world.item_voices.len(), 1);
         assert_eq!(stats(&a)[4], 0, "a bar click never applies a quest item");
+        assert_eq!(a.world.hand.as_deref(), Some(c.as_str()));
+        // The coins: they become the hand, the candle goes back.
+        assert_eq!(bar_click(&mut a.world, &coins, true, false, "click"), BarResult::Hold);
+        assert_eq!(a.world.hand.as_deref(), Some(coins.as_str()));
+        // The same again: put back.
+        assert_eq!(bar_click(&mut a.world, &coins, true, false, "click"), BarResult::PutBack);
+        assert_eq!(a.world.hand, None);
+    }
+
+    #[test]
+    fn the_hand_empties_when_accepted_except_coins_that_persist() {
+        let mut a = active();
+        let c = carry(&mut a, "Candle", 1);
+        let coins = carry(&mut a, "SilverCoins", 10);
+        bar_click(&mut a.world, &c, true, false, "click");
+        after_world_click(&mut a.world, &c, false);
+        assert_eq!(a.world.hand.as_deref(), Some(c.as_str()), "refused: it stays");
+        after_world_click(&mut a.world, &c, true);
+        assert_eq!(a.world.hand, None, "accepted: emptied");
+        assert!(a.world.items.get(&c).unwrap().carried_by("Connor"), "the item itself is not removed by this");
+        bar_click(&mut a.world, &coins, true, false, "click");
+        a.world.gold_persists = true;
+        after_world_click(&mut a.world, &coins, true);
+        assert_eq!(a.world.hand.as_deref(), Some(coins.as_str()), "goldCoinPersists 1: the coins stay");
+        // A script deleted the held item: the hand is emptied.
+        a.world.items.objects.iter_mut().find(|o| o.name == coins).unwrap().place = Place::Gone;
+        assert_eq!(hand(&mut a.world), None);
+        assert_eq!(a.world.hand, None);
     }
 }

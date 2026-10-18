@@ -382,8 +382,16 @@ doesn't take it gives "This will not work."
   a new weapon or armour piece pushes out the old one, which drops
   where the new one lay, and its numbers change the bar. New items and
   higher counts blink. A right click on an item: Connor describes it
-  (voice only). Quest items and gold are not held on the pointer yet
-  (4c-4). Logged in `gui.log` and `items.log`. Not seen by eye yet.
+  (voice only). Logged in `gui.log` and `items.log`. Not seen by eye yet.
+- **The item in hand (4c-4):** a left click on a quest item, the gold,
+  the rope or the rocks puts it on the mouse pointer (the game's own
+  pointer pictures; the play pointer otherwise) and takes it out of the
+  quest strip; clicking it again puts it back. Clicking something in the
+  world with it offers it: if the object takes it (its accept list, as in
+  the original) the hand empties, otherwise "This will not work." and it
+  stays on the pointer. The scroll can't be taken: Connor reads it out.
+  Escape still quits (the original opens its main menu, which pauses the
+  game; there is no menu yet). Not seen by eye yet.
 
 ## Viewer helpers (not in the original)
 
@@ -472,8 +480,9 @@ repeated and checked in the logs. They do not change the game's rules.
   be given more than once. It skips the line-of-sight test (see below).
 - `--aim NAME,N`: like `--click`, but the click only works if the camera
   can see the object, as in the game.
-- `--item TYPE`: put an item of that type in Connor's hand, for example
-  the key that opens the castle keep's doors.
+- `--item TYPE`: give Connor an item of that type (called `TestItem`)
+  and put it in his hand, for example the key that opens the castle
+  keep's doors.
 - `--key NAME,N`: press a panel key before update N + 1 (`space`: put the
   bottom bar away or bring it back; `1`–`8`: use a slot), or click a
   control of the bars (`left:IDCTL_INVBAR_GOLD`, `right:IDCTL_HEALTHBAR_1`,

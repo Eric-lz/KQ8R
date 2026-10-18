@@ -11,8 +11,9 @@
 //!   frame of its current movement.
 //!
 //! Test options: `--click NAME,N` clicks object NAME before update N + 1;
-//! `--item TYPE` puts an item of that type in Connor's hand. Everything is
-//! logged to `kq8-artifacts/logs/doors.log`.
+//! `--item TYPE` gives Connor an item of that type, called `TestItem`, and
+//! puts it in his hand (M4 4c-4). Everything is logged to
+//! `kq8-artifacts/logs/doors.log`.
 //!
 //! Traps (M3 step 3d-2, docs/behaviour/traps.md) live in the same
 //! `Active` (shared variables, scripts and events). [`trap_step`] runs
@@ -74,7 +75,6 @@ pub struct DoorSim {
     object_drawn: Vec<DrawnDoor>,
     object_collider: Vec<Option<usize>>,
     attack_dist: f32,
-    item: Option<Item>,
     /// Objects clicked since the last update, with how (mouse, test).
     pending: Vec<(String, String)>,
     /// Clicks in the world since the last update, picked or not, for
@@ -471,14 +471,14 @@ pub fn spawn_doors(
         drawn.push(DrawnDoor { body, frames, shown: None });
         active_doors.push(active);
     }
-    let item = item.map(|kind| Item { object: kind.clone(), kind });
+    let test_item = item;
     main_log.summary(format!(
-        "doors: {} doors; Connor's reach 2 x attackDist {attack_dist} = {}; {} other clickable objects; {} scripts; item in hand: {:?}; log in {}",
+        "doors: {} doors; Connor's reach 2 x attackDist {attack_dist} = {}; {} other clickable objects; {} scripts; test --item: {:?}; log in {}",
         active_doors.len(),
         2.0 * attack_dist,
         objects.clickables.len(),
         sources.len(),
-        item,
+        test_item,
         log.path().display()
     ));
     let mut active = Active::new(
@@ -578,6 +578,18 @@ pub fn spawn_doors(
         };
         start_lines.push(line);
     }
+    // `--item TYPE` (4c-4): a real item, carried and in his hand.
+    if let Some(kind) = &test_item {
+        let line = match active.world.items.add_named("TestItem", kind, 1, -1, kq8_core::item::Place::Carried("Connor".into())) {
+            Ok(_) => {
+                active.world.hand = Some("TestItem".into());
+                format!("test --item: {}; in Connor's hand", active.world.items.describe("TestItem"))
+            }
+            Err(e) => format!("test --item {kind}: {e}; nothing in hand"),
+        };
+        main_log.summary(&line);
+        start_lines.push(line);
+    }
     for o in &active.world.items.objects {
         active.world.known.insert(o.name.to_ascii_lowercase());
     }
@@ -622,7 +634,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), world_clicks: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1096,7 +1108,17 @@ pub fn door_step(
             Some(c) if c.hands_off => sim.log.detail(format!("update {updates}: click on {name} ({how}): ignored (handsOff)")),
             Some(c) => {
                 let feet = c.mover.position;
-                let result = sim.active.click(&name, feet, sim.attack_dist, sim.item.as_ref());
+                // 4c-4: the item in hand (inventory.md rule 12).
+                let held = kq8_core::connor_inventory::hand(&mut sim.active.world).map(|(object, kind)| Item { object, kind });
+                let result = sim.active.click(&name, feet, sim.attack_dist, held.as_ref());
+                if let Some(h) = &held {
+                    let accepted = match &result {
+                        kq8_core::active::ClickResult::Script(args) => args.get(2) == Some(&h.object),
+                        kq8_core::active::ClickResult::Swallowed => true,
+                        _ => false,
+                    };
+                    kq8_core::connor_inventory::after_world_click(&mut sim.active.world, &h.object, accepted);
+                }
                 sim.log.detail(format!("update {updates}: click on {name} ({how}) -> {result:?}"));
             }
             None => sim.log.detail(format!("update {updates}: click on {name} ({how}): no Connor in this world; nothing")),

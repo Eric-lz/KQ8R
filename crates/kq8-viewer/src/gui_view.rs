@@ -37,6 +37,9 @@ use crate::Shared;
 /// frames per second.
 const ANIMATION_FPS: f64 = 15.0;
 
+/// The play pointer (`Gplayscr.kq` `cursor=`, `interface.md` rule 1).
+const PLAY_POINTER: &str = "IDBMA_CURS04";
+
 /// Rule 44: a blink changes the picture every 0.25 s, 5 times.
 const BLINK_MS: f64 = 250.0;
 const BLINKS: u32 = 5;
@@ -141,6 +144,10 @@ pub struct Gui {
     blinks: HashMap<String, f64>,
     /// The description voice playing (`talking.md` rule 20).
     description: Option<u64>,
+    /// The item in hand (4c-4) and the pointer's tag: its type's `cursor`,
+    /// or the play pointer `IDBMA_CURS04` (`Gplayscr.kq`).
+    hand: Option<String>,
+    pointer: String,
     /// Each slot number's flash: when it started (real ms; rule 33).
     flashes: [Option<f64>; 3],
     /// The bottom-bar key (`movekeys.kq` row 12, rule 10).
@@ -262,6 +269,8 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         quest_first: 0,
         blinks: HashMap::new(),
         description: None,
+        hand: None,
+        pointer: PLAY_POINTER.into(),
         flashes: [None; 3],
         space_key,
         stats_events: None,
@@ -367,9 +376,10 @@ impl Gui {
         }
     }
 
-    /// The quest strip's items now: the held one left out (4c-4).
+    /// The quest strip's items now: the held one left out, the others
+    /// closing the gap (`inventory.md` rule 7).
     fn strip(&self) -> Vec<(String, Option<String>)> {
-        self.inv.quest.clone()
+        self.inv.quest.iter().filter(|(n, _)| self.hand.as_deref() != Some(n.as_str())).cloned().collect()
     }
 
     /// What item a control shows (for clicks): its name.
@@ -377,7 +387,9 @@ impl Gui {
         let strip = self.strip();
         let slot_no = |prefix: &str| control.strip_prefix(prefix).and_then(|k| k.parse::<usize>().ok());
         if let Some(k) = slot_no("IDCTL_INVBAR_QUEST") {
-            return strip.get(self.quest_first + k - 1).map(|(n, _)| n.clone());
+            // Rule 12: the empty place a held quest item left puts it back.
+            let held_quest = self.hand.clone().filter(|h| self.inv.quest.iter().any(|(n, _)| n == h));
+            return strip.get(self.quest_first + k - 1).map(|(n, _)| n.clone()).or(held_quest);
         }
         if let Some(k) = slot_no("IDCTL_HEALTHBAR_") {
             return self.inv.slots.get(k.wrapping_sub(1))?.as_ref().filter(|(_, c, _)| *c > 0).map(|(n, ..)| n.clone());
@@ -649,8 +661,9 @@ pub fn gui_step(
         let w = &mut sim.active.world;
         match action {
             BarAction::Scroll { by, how } => {
-                // Rule 6: +-1, then kept between 0 and count - 7.
-                let count = gui.strip().len();
+                // Rule 6: +-1, then kept between 0 and count - 7; the held
+                // item still counts (rule 7).
+                let count = gui.inv.quest.len();
                 let before = gui.quest_first;
                 gui.quest_first = (before as i64 + by as i64).clamp(0, count.saturating_sub(7) as i64) as usize;
                 let line = format!("update {updates}: quest strip arrow {by:+} ({how}): first shown {before} -> {} of {count} (inventory.md rule 6)", gui.quest_first);
@@ -703,6 +716,19 @@ pub fn gui_step(
     }
     // Rules 34-35: the slot pictures follow what Connor wears.
     let (types, why) = kq8_core::inventory::slot_types(&sim.active.world.items, "Connor");
+    // 4c-4: the item in hand and the pointer (inventory.md rules 7, 9).
+    let hand = kq8_core::connor_inventory::hand(&mut sim.active.world);
+    let pointer = hand
+        .as_ref()
+        .and_then(|(_, kind)| sim.active.world.items.kind(kind).and_then(|t| t.cursor.clone()))
+        .unwrap_or_else(|| PLAY_POINTER.to_string());
+    let hand = hand.map(|(n, _)| n);
+    if hand != gui.hand || pointer != gui.pointer {
+        let line = format!("update {updates}: the item in hand {:?} -> {hand:?}; the pointer {pointer} (inventory.md rules 7, 9, 12)", gui.hand);
+        gui.note(line);
+        gui.hand = hand;
+        gui.pointer = pointer;
+    }
     let worn: [Option<String>; 3] = types.clone().map(|t| {
         t.and_then(|t| sim.active.world.items.objects.iter().find(|o| o.carried_by("Connor") && o.kind == t).map(|o| o.name.clone()))
     });
@@ -738,7 +764,7 @@ pub fn gui_step(
         gui.note(line);
         gui.inv = inv;
         gui.first_inv = false;
-        let count = gui.strip().len();
+        let count = gui.inv.quest.len();
         gui.quest_first = gui.quest_first.min(count.saturating_sub(7));
         if !news.is_empty() {
             gui.panels.pop_top(&format!("new in the inventory: {news:?} (rule 13)"));
@@ -944,4 +970,59 @@ pub fn gui_draw(
     for line in lines {
         gui.note(line);
     }
+}
+
+/// 4c-4: the mouse pointer is the game's: the play pointer `curs04.pba`,
+/// or the held item's cursor picture (`inventory.md` rule 9), as a
+/// cursor image scaled like the screen (whole steps, nearest pixel).
+/// STAND-IN (Q110): the click point is the picture's top-left corner.
+pub fn pointer_draw(
+    gui: Option<ResMut<Gui>>,
+    window: Query<(Entity, &Window), With<bevy::window::PrimaryWindow>>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut shown: Local<Option<(String, u32)>>,
+) {
+    use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage};
+    let Some(mut gui) = gui else { return };
+    let Ok((entity, w)) = window.single() else { return };
+    let step = ((w.height() / gui.screen[1] as f32).round() as u32).max(1);
+    let wanted = (gui.pointer.clone(), step);
+    if shown.as_ref() == Some(&wanted) {
+        return;
+    }
+    let Some(file) = gui.file_of(&gui.pointer.clone()) else {
+        let line = format!("pointer {}: no file in the tag file; the system pointer stays", gui.pointer);
+        gui.note(line);
+        *shown = Some(wanted);
+        return;
+    };
+    gui.load_file(&file);
+    let Some(Some(frames)) = gui.files.get(&file.to_ascii_lowercase()) else {
+        *shown = Some(wanted);
+        return;
+    };
+    let Some(pic) = frames.first().and_then(Pic::of) else {
+        *shown = Some(wanted);
+        return;
+    };
+    let (pw, ph) = (pic.width * step, pic.height * step);
+    let mut rgba = vec![0u8; (pw * ph * 4) as usize];
+    for y in 0..ph {
+        for x in 0..pw {
+            let index = pic.pixels[((y / step) * pic.width + x / step) as usize];
+            if pic.see_through && index == 0 {
+                continue;
+            }
+            let [r, g, b] = gui.palette[index as usize];
+            let at = ((y * pw + x) * 4) as usize;
+            rgba[at..at + 4].copy_from_slice(&[r, g, b, 255]);
+        }
+    }
+    let image = Image::new(Extent3d { width: pw, height: ph, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
+    let handle = images.add(image);
+    commands.entity(entity).insert(CursorIcon::Custom(CustomCursor::Image(CustomCursorImage { handle, hotspot: (0, 0), ..default() })));
+    let line = format!("pointer: {} ({file}, {}x{} drawn x{step}; click point at its top-left, stand-in Q110)", gui.pointer, pic.width, pic.height);
+    gui.note(line);
+    *shown = Some(wanted);
 }

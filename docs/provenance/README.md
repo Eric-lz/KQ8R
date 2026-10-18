@@ -1765,3 +1765,22 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | The top bar comes down when the pointer reaches the window's top row, goes up below y 60 of 480 unless popped; not while the right button is held or it is sliding | `interface.md` rule 12 | Not tested by a run (needs the mouse) |
 | A click on a bar goes to the control under it (first listed on top); texts and the flashes parked at y 900 are not targets | Our reading of the layout (rule 5) | `--key left:NAME` / `right:NAME` runs |
 | `--key left:NAME,N` / `right:NAME,N` | **Our test option** | — |
+
+### 4c-4, the item in hand — `crates/kq8-core/src/{connor_inventory,active}.rs`, `crates/kq8-viewer/src/{gui_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A left click on a quest item, the coins, the rocks or the rope makes it the hand; the same item again puts it back; another one replaces it (the first goes back) | `inventory.md` rule 9 | Unit tests `quest_items_money_are_held_the_order_kept`, `the_hand_empties…`; coins run: "now the item in hand, the pointer IDBMA_GOLDCURS", then "put back" |
+| The pointer: the held type's `cursor` picture, else the play pointer `IDBMA_CURS04` (`Gplayscr.kq` `cursor=`); drawn as the window's cursor image, scaled in whole steps like the screen, index 0 see-through (the cursors' bit 1) | `inventory.md` rule 9; `interface.md` rule 1; data | `gui.log` "pointer: IDBMA_GOLDCURS (goldcurs.pba, 32x32 …)" |
+| The click point at the picture's top-left | **Stand-in** (Q110) | — |
+| A held quest item leaves the strip, the others close the gap; the arrows' limit still counts it; a click on the empty place it left puts it back | `inventory.md` rules 7, 12 (rule 7 checked from memory by the user) | — (needs 8+ quest items) |
+| `INVITEM_Scroll` can't be taken: Connor reads it, at most every 3 s and not while he talks | `inventory.md` rule 9 | Scroll run: "line 0 92 14 0 1 starts … PERMANENT SPELL OF MIGHT"; a second click 0.67 s later: "less than 3 s ago: nothing" |
+| The note's `0.MSG (0, 92, 14, 0)` and `(0, 0, 58, 37)` read as file, noun, verb, case with sequence 1 | **Our reading**, checked against the data: as noun, verb, case, sequence the scroll's line is not in `0.MSG`; read this way it is the scroll's spell and "I am not near anything to climb." (Q110) | Scroll and rope runs (`talk.log`) |
+| A type with cursor `none` can't be held | `inventory.md` rule 9 | — |
+| The rope: held, and away from a rope place (none yet) the remark | `inventory.md` rule 9; holding **and** the remark is a **stand-in** (Q110) | Rope run: "now the item in hand, the pointer IDBMA_CURS06; … 'I am not near anything to climb.'" |
+| A world click with the hand is the click of `clicking.md` rules 12–18 (accept lists, `$3` = the item's name, `$4` its type); accepted → the hand is emptied, except coins while `goldCoinPersists 1`; refused or out of reach → it stays; the item itself is not removed by this | `inventory.md` rule 12 (the user's check 4: a refused item stays on the pointer) | Unit test `the_hand_empties_when_accepted_except_coins_that_persist`; coins run ("not accepted … it stays in hand"); star globe run ("accepted: the hand is emptied … taken by the script") |
+| An accepted item at a building without a script (no call) counts as accepted | **Our reading** of rule 12 ("accepted" = the accept question said yes) | — |
+| `goldCoinPersists 0\|1`; 0 also empties the hand at once | `inventory.md` rule 12 | — (Gnome's apothecary) |
+| A held item a script deleted or took: the hand is emptied | **Our choice** (the note doesn't say; the user: no item is ever lost) | Same unit test |
+| `--item TYPE`: a real item named `TestItem`, carried, in the hand | **Our test option** (replaces the 3e fake held item named after its type) | Star globe run |
+| Escape still quits; the original opens the main menu and pauses the game | `interface.md` rule 14 (the user's check); no menu yet | — |

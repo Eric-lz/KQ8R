@@ -1938,7 +1938,7 @@ inventory and menus.
     (`talking.md` rule 20; rule 10). The mask button opens no menu
     yet (logged). A click on a shown panel never reaches the world.
     Clicks on the bars are ignored during handsOff (rule 9).
-  - **4c-4, the item in hand** (inventory.md rules 7, 9, 12; clicking.md
+  - **4c-4, the item in hand** (**done** 2026-10-18; inventory.md rules 7, 9, 12; clicking.md
     rules 12–18). A left click on a quest item, the gold, the rope or
     the rocks makes it the hand: the pointer becomes the type's
     `cursor` picture (a picture following the mouse; the play pointer

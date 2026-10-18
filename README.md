@@ -123,6 +123,7 @@ The first build takes several minutes.
 | 1–8 | Use the health or potion slot 1–8 |
 | Mouse at the top edge | Show the top bar (quest items, gold) |
 | Right mouse on an item in a bar | Connor describes it |
+| Left mouse on a quest item, gold, rope or rocks | Hold it on the pointer (again: put it back); then left-click something in the world to use it |
 | Left mouse | Use the door or chest, or pick up the item, under the mouse |
 | Right mouse + move | Swing (left/right) and zoom (up/down) the camera |
 | Shift + right mouse | Tilt the camera |

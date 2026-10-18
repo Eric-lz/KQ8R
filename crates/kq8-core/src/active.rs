@@ -576,6 +576,13 @@ pub struct WorldState {
     pub item_timers: Vec<(String, f64)>,
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
     pub item_voices: Vec<crate::connor_inventory::ItemVoice>,
+    /// The item Connor holds as the pointer (M4 4c-4, `inventory.md`
+    /// rules 9, 12): its object's name.
+    pub hand: Option<String>,
+    /// `goldCoinPersists 1` (`inventory.md` rule 12).
+    pub gold_persists: bool,
+    /// When Connor last said the scroll can't be taken (game time; rule 9).
+    pub scroll_remark_at: Option<f64>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
     /// health without one; 3i-6).
     pub stats: BTreeMap<String, Stats>,
@@ -1240,6 +1247,27 @@ impl WorldState {
         if let Some(script) = script {
             self.calls_out.push((script, vec![name, "Init".into()]));
         }
+        "0".into()
+    }
+
+    /// `goldCoinPersists 0|1` (`inventory.md` rule 12, M4 4c-4): while on,
+    /// coins accepted from the hand stay there; 0 also empties the hand at
+    /// once.
+    fn gold_coin_persists(&mut self, words: &[String], at: &str) -> String {
+        let Some(v) = words.get(1).filter(|v| looks_like_number(v)) else {
+            self.note(format!("{at}: usage: goldCoinPersists 0|1; nothing"));
+            return "1".into();
+        };
+        self.gold_persists = number_value(v) != 0.0;
+        let hand = if self.gold_persists {
+            String::new()
+        } else {
+            match self.hand.take() {
+                Some(h) => format!("; the hand ({h}) emptied, the play pointer back"),
+                None => "; the hand was empty".into(),
+            }
+        };
+        self.item_note(format!("{at}: goldCoinPersists {}{hand} (inventory.md rule 12)", u8::from(self.gold_persists)));
         "0".into()
     }
 
@@ -1920,6 +1948,7 @@ impl ScriptHost for WorldState {
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
+            "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setThirdPerson" => Some(self.set_third_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
@@ -2016,6 +2045,9 @@ impl Active {
                 gui_orders: Vec::new(),
                 item_timers: Vec::new(),
                 item_voices: Vec::new(),
+                hand: None,
+                gold_persists: false,
+                scroll_remark_at: None,
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
