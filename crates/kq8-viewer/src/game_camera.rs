@@ -10,7 +10,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_core::camera::{ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_core::camera::{connor_moved, ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
 use kq8_core::camera_flight::{Flight, Spots, View};
 use kq8_core::connor_mover::GroundLookup as _;
 use kq8_core::collide::{BoxCollider, BuildingCollider};
@@ -152,6 +152,15 @@ pub struct GameCam {
     view: View,
     places: bool,
     aims: bool,
+    /// `camera.md` "When the camera updates at all" (M3 3n-1): Connor's
+    /// base and heading at the last tick (for the "Connor moved" test),
+    /// causes waiting for this tick's camera update (`follow`, the start),
+    /// the scripts' `move Connor` this tick (for the log), and the "turn
+    /// back" switch (an update every tick while on).
+    last_connor: Option<([f32; 3], f32)>,
+    pending: Vec<&'static str>,
+    script_moves: Vec<String>,
+    turn_back: bool,
 }
 
 impl GameCam {
@@ -185,17 +194,47 @@ impl GameCam {
             None => String::new(),
         };
         let p = self.cam.position;
-        let aim = [connor_base[0], connor_base[1], connor_base[2] + kq8_core::camera::AIM_HEIGHT];
+        let aim = Camera::aim_for(connor_base);
         let towards = view_angles(std::array::from_fn(|k| aim[k] - p[k])).1;
         let (_, heading) = self.view_now();
         let off = wrap(heading - towards);
         let start = kq8_core::camera::follow_turn_start(off);
         self.view_turn = (start, start);
         self.cam.tilt = DEFAULT_TILT;
+        // "When the camera updates at all" item 2: one update right after
+        // the command, with the aim point counting as not moved.
+        self.pending.push("follow");
+        // Item 3: the "turn back" switch. A follow that finds the camera
+        // farther than the maximum switches it off; one that finds the view
+        // more than 0.4 rad off switches it on (our order when both hold).
+        let distance = (0..3).map(|k| (p[k] - aim[k]).powi(2)).sum::<f32>().sqrt();
+        let was = self.turn_back;
+        if distance > self.cam.range.1 {
+            self.turn_back = false;
+        }
+        if start != 0.0 {
+            self.turn_back = true;
+        }
+        let switch = match (was, self.turn_back) {
+            (false, true) => "the \"turn back\" switch goes ON: the camera updates every update until a flight ends (the original clears it no other way)".to_string(),
+            (true, false) => format!("the \"turn back\" switch goes OFF (camera {distance:.1} from the aim point, farther than the maximum {:.0})", self.cam.range.1),
+            (true, true) => "the \"turn back\" switch stays ON".to_string(),
+            (false, false) => String::new(),
+        };
+        if !switch.is_empty() {
+            self.log.detail(format!("camera tick {}: {switch}", self.updates));
+        }
         format!(
-            "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}{ended}",
-            if start != 0.0 { "turns back 1/3 per update" } else { "looks at him at once (0.4 rad or less)" }
+            "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}{ended}{}",
+            if start != 0.0 { "turns back 1/3 per update" } else { "looks at him at once (0.4 rad or less)" },
+            if switch.is_empty() { String::new() } else { format!("; {switch}") }
         )
+    }
+
+    /// A script's `move Connor` this tick (for the log: the camera update
+    /// it causes comes after the script, in `camera_step`).
+    pub fn connor_moved_by_script(&mut self, at: &str) {
+        self.script_moves.push(at.to_string());
     }
 
     /// `KQCamera::addCamLoc` (rule 1).
@@ -295,6 +334,9 @@ impl GameCam {
         if s.k >= s.n {
             // Rule 4, the last update: "places" back on, pulled onto the range.
             self.places = true;
+            if std::mem::take(&mut self.turn_back) {
+                line += "; the \"turn back\" switch goes OFF (a flight ended)";
+            }
             line += &format!(
                 "; last update: on the spot, places on: {}{}; the flight is over, the camera stays here",
                 s.pulled_from.map_or("within the range: stays".to_string(), |d| format!("{d:.1} from the point 1400 above the aim: pulled onto the range ({:.0}, {:.0})", self.cam.range.0, self.cam.range.1)),
@@ -430,8 +472,15 @@ pub fn make(
         view: View { tilt: -DEFAULT_TILT, heading: 0.0, roll: 0.0, locked: false },
         places: true,
         aims: true,
+        last_connor: None,
+        // STAND-IN (Q27 d): Daventry's start-up script has `KQCamera::follow
+        // none`; how the original's camera starts following was not traced.
+        // One update on the first tick, as before 3n-1.
+        pending: vec!["start (stand-in)"],
+        script_moves: Vec::new(),
+        turn_back: false,
     };
-    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building");
+    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line)");
     Some(g)
 }
 
@@ -493,12 +542,22 @@ pub fn camera_step(
 ) {
     let (Some(mut game), Some(sim), Some(lookup)) = (game, sim, lookup) else { return };
     let g = &mut *game;
+    g.updates += 1;
+    g.previous = g.current;
+    g.view_turn.0 = g.view_turn.1;
+    // "Connor moved" (camera.md "When the camera updates at all" item 1):
+    // his position or facing changed since the last tick. Our camera runs
+    // after Connor's update and this tick's scripts, so the update it
+    // causes comes after a trap's `move KQCamera` (the note's queue).
+    let now = (sim.mover.position, sim.walker.heading);
+    let moved = g.last_connor.is_some_and(|l| connor_moved(l, now));
+    g.last_connor = Some(now);
+    let script_moves = std::mem::take(&mut g.script_moves);
     // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
     // unless a flight is under way (M3 3m-4).
     if !g.following {
-        g.updates += 1;
-        g.previous = g.current;
         g.mouse_px = Vec2::ZERO;
+        g.pending.clear();
         let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
         g.flight_step(&ground);
         return;
@@ -523,17 +582,46 @@ pub fn camera_step(
     g.mouse_px = Vec2::ZERO;
     g.pressed_mode = false;
     g.pressed_reset = false;
+    // Ticks without a "moved" message (Connor is moving, the previous aim
+    // point), then the causes of a camera update this tick.
+    let base = sim.mover.position;
+    if g.cam.tick(moved, base, input.mouse_held) {
+        g.log.detail(format!("camera tick {}: 3 updates without \"Connor moved\": still; the previous aim point reset to where he stands", g.updates));
+    }
+    let mut causes: Vec<String> = Vec::new();
+    if moved {
+        causes.push(if script_moves.is_empty() { "moved".into() } else { "moved(script)".into() });
+    }
+    if !script_moves.is_empty() {
+        g.log.detail(format!(
+            "camera tick {}: script's move Connor ({}): {}",
+            g.updates,
+            script_moves.join("; "),
+            if moved { "\"Connor moved\" after the script: one camera update below, from where the script left the camera" } else { "changed nothing: no message" }
+        ));
+    }
+    let pending = std::mem::take(&mut g.pending);
+    if !pending.is_empty() {
+        // `follow` (and our start): the aim point counts as not moved.
+        g.cam.not_moved(base);
+        causes.extend(pending.iter().map(|c| c.replace(' ', "_")));
+    }
+    if g.turn_back {
+        causes.push("turn_back".into());
+    }
+    if input.mouse_held || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
+        causes.push("player".into());
+    }
+    if causes.is_empty() {
+        return;
+    }
     // The view blockers as they stand now (doors move).
     let view = view_blockers(&lookup.0, buildings.as_deref(), blockers.as_deref(), doors.as_deref());
-    let followed = Followed { base: sim.mover.position, heading: sim.walker.heading };
-    let report = g.cam.update_with(followed, &input, &lookup.0, Some(&view));
+    let report = g.cam.update_with(Followed { base }, moved, &input, &lookup.0, Some(&view));
     // Check from the numbers: is the camera inside a building's solid?
     let inside: Vec<&str> = view.buildings.iter().filter(|b| b.solid_at(g.cam.position)).map(|b| b.name.as_str()).collect();
-    g.updates += 1;
-    g.previous = g.current;
     g.current = (g.cam.position, g.cam.tilt, report.aim);
     // The turn back toward Connor after `follow Connor` (3l-3).
-    g.view_turn.0 = g.view_turn.1;
     if g.view_turn.1 != 0.0 {
         g.view_turn.1 = kq8_core::camera::follow_turn_step(g.view_turn.1);
         let line = format!("camera update {}: view turning back toward Connor: {:.3} left", g.updates, g.view_turn.1);
@@ -541,7 +629,7 @@ pub fn camera_step(
     }
     let p = g.cam.position;
     let line = format!(
-        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {}",
+        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {}",
         g.updates,
         p[0],
         p[1],
@@ -562,7 +650,8 @@ pub fn camera_step(
         report.swing.map_or("-".to_string(), |(s, _)| format!("{s:.3}")),
         report.swing.map_or("-".to_string(), |(_, l)| format!("{l:.3}")),
         report.pulled_in.map_or("-".to_string(), |d| format!("{d:.1}")),
-        if inside.is_empty() { "-".to_string() } else { inside.join(",") }
+        if inside.is_empty() { "-".to_string() } else { inside.join(",") },
+        causes.join(",")
     );
     g.log.detail(line);
     if !report.events.is_empty() {

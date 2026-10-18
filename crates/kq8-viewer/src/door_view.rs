@@ -744,6 +744,11 @@ pub fn trap_step(
                     }
                     None => connor.move_to(flags, position, turn, &at, &NoGround, inside.contains(&i)),
                 };
+                // Its "Connor moved" reaches the camera after the script
+                // (camera.md "When the message arrives").
+                if let Some(c) = camera.as_mut() {
+                    c.connor_moved_by_script(&at);
+                }
                 format!("{at}: applied: {line}")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("KQCamera") => match camera.as_mut() {

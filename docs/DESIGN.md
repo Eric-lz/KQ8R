@@ -1605,6 +1605,75 @@ catchers, ground animators).
       4, the same step every update, heading 2.153 and tilt +0.016 once
       locked, update 31 at about (188999.0, 229341.5, 10863), then still
       until cue 6; the mill wheel (`wheeltp1.cs`): N = 46.
+  - **3n — the answers to Q97–Q99: when the camera updates (planned
+    2026-10-18).** Study session A answered Q97–Q99 (`camera.md` "Height
+    above the ground" rule 2, "When the camera updates at all", "`move
+    KQCamera` while following", "Camera flights and cuts" rules 3, 4, 7;
+    `anim-scripts.md` rules 24–25). One commit per step. A stand-in
+    added in 3n-1: one camera update on the first tick (Daventry's
+    start-up script says `follow none`; Q27 d).
+    - **3n-1, the camera updates only when it should** (**done** 2026-10-18). Before, the follow
+      camera runs every tick (Q53 d). From now on `camera_step` still
+      runs every tick, but it runs a camera update only for a cause:
+      (1) **Connor moved**: his position changed by more than 0.1 on an
+      axis since the last tick, or his facing changed (cos or sin of
+      the heading by more than 0.0001); a script's `move Connor` is
+      labelled as such in the log; (2) **`follow`**: one update right
+      after the command, with the aim point counting as not moved;
+      (3) **the "turn back" switch**: every tick while it is on; `follow`
+      turns it on when the view is more than 0.4 rad off Connor, a later
+      `follow` that finds the camera farther than the maximum turns it
+      off, and so does the end of a flight (both logged); (4) **the
+      player's camera controls** (mouse button held, tilt keys, Home,
+      F11); (5) flights and cuts, as before. Within one tick all causes
+      give **one** update (our method: the original handles one message
+      per committed move, and in normal play that is one per update).
+      "Queued, not immediate" needs no queue in our build: the camera's
+      system runs after the traps' and cues' scripts in each tick, so
+      the update for a trap's `move Connor` already comes after its
+      `move KQCamera`. "Connor is moving" (obstacles) and the previous
+      aim point now count **ticks** without a "moved" cause: after 3 the
+      previous aim point is reset to where he stands. Logs: every update
+      with its causes; ticks without an update are simply missing from
+      the table.
+    - **3n-2, the refined height rule** (`camera.md` "Height above the
+      ground" rule 2). The order of an update becomes the note's: leash
+      (max) or fixed distance, then the height, then the push out to the
+      minimum. Height: (1) lift at once to ground + 1,400 if under it by
+      at most the range's maximum; deeper: to where the line from the
+      update's start to the new spot meets the floor grid, wanted height
+      taken again there (STAND-IN if the line meets nothing: lift to
+      ground + 1,400); (2) snap within 100; (3) otherwise ease only if
+      the aim point moved more than 20 since the previous record, by the
+      **sum of sizes** |Δx| + |Δy| + |Δz| ("Do not reproduce"), from the
+      height **at the start of the update**: + (1 − 0.9^(15 × seconds))
+      × (wanted − height after 1–2), i.e. 10% per update at 15 per
+      second; not moved: kept (snapped only if the mouse swings and it
+      was lifted earlier). This replaces the hand-tuned 0.5 per update.
+      Log: lifted / snapped / eased / kept, the sum, the wanted height.
+    - **3n-3, `move KQCamera` while following.** The script's place and
+      view stay until the next camera update (3n-1 gives this). In that
+      update the tilt is set at once by the follow view (looks at the
+      aim point) and the heading is **kept** as the script left it: the
+      swing-behind rules (open question 7) are not decoded. STAND-IN:
+      the heading stays kept in later updates too, until the next
+      `follow`, flight or cut (no Daventry script needs more); each
+      update logs how far off Connor it is.
+    - **3n-4, Q97: the flight's last update and the cut.** The height
+      rule as "not moved": lifted at once if under the ground + 1,400,
+      snapped within 100 of the wanted height, otherwise kept (the
+      stand-in wording goes). The log gives the floor-grid ground under
+      the end spot (watermill: is it above 9,463.4?).
+    - **3n-5, Q98: logs only.** In the update a scripted walk ends:
+      `walk`'s phase, the stop transition chosen and the "from" point it
+      waits for, and that transition's steps. No rule change.
+    - Tests: the mill wheel (`--at 186300,227500,0`): at most 2 updates
+      after the trap's `On`, none until cue 1; the first shot about
+      (185500, 226520, ~9,627); the second logged at exactly (185000,
+      237850, 10850), tilt −0.25, heading −2.8, still until the flight.
+      Walking: updates every tick while he walks, none from 1 tick after
+      he stops. The watermill flight still ends at (188999.0, 229341.5,
+      10863.4).
 
 ### M4 — Talk, listen, use the menus
 

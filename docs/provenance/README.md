@@ -1476,3 +1476,20 @@ This replaces the Q94 stand-ins of 3l-2.
 | `follow Connor` during a flight ends it | **Stand-in** (the original keeps adding the steps until N; no Daventry case) | — |
 | Roll kept (also from `move KQCamera`), logged, not drawn | **Our choice** (0 in Daventry's scenes) | — |
 
+
+## The answers to Q97–Q99: when the camera updates (M3 step 3n)
+
+### 3n-1, the camera updates only when it should — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/{game_camera,door_view}.rs`
+
+This replaces "the camera updates every tick" (Q53 d).
+
+| What | Source | Check |
+| --- | --- | --- |
+| "Connor moved": position change > 0.1 on an axis, or a facing change (an entry of the turn matrix by > 0.0001; we test cos and sin of the heading) | `camera.md` "When the camera updates at all" item 1 (Q99 b) | Unit test `moved_needs_more_than_0_1_on_an_axis_or_a_turn`; `camera-3n1-wheel.log` tick 19 (landing, no update) |
+| A camera update only for: Connor moved, `follow` (once, aim counts as not moved), every tick while the "turn back" switch is on, the player's camera controls, flights and cuts | Items 1–5 | `camera-3n1-walk.log`: updates every tick while he walks, none from 1 tick after he stops |
+| "Turn back" switch: on when `follow` finds the view > 0.4 rad off; off when a later `follow` finds the camera beyond the maximum, or a flight ends; logged | Item 3, "Do not reproduce" | — (no Daventry script sets it) |
+| When one `follow` finds both, the switch ends up on | **Our reading** (the note only says "a later `follow`" clears it) | — |
+| All causes in one tick give one camera update | **Our method** (the original handles one message per committed move: one per update in normal play) | — |
+| The update for a script's `move Connor` comes after the script's `move KQCamera` | Item 1, "When the message arrives" (Q99 a); in our build the camera's system runs after the traps' and cues' scripts | `camera-3n1-wheel.log` ticks 17–18 |
+| "Connor is moving" and the previous aim point count game updates without a message; after 3 the previous aim point is reset to where he stands | "Connor is moving" | Unit test `still_after_3_updates_without_a_message_and_the_aim_record_reset` |
+| One update on the first tick | **Stand-in** (Q27 d: Daventry's start-up script says `KQCamera::follow none`; how the original starts following is not traced) | `camera-3n1-walk.log` tick 1 |

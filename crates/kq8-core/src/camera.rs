@@ -2,10 +2,11 @@
 //!
 //! Rules from the behaviour note `docs/behaviour/camera.md` ("What the camera
 //! looks at", "Distance", "Height above the ground", "Swinging and zooming
-//! with the mouse", "Tilt", "Obstacles"). Runs once per game update (15 per
-//! second), so the note's per-update rates are used as traced. Not here
-//! yet: the automatic swing behind Connor (Q27 c), first person, shake and
-//! cutscene cameras.
+//! with the mouse", "Tilt", "Obstacles", "When the camera updates at
+//! all"). [`Camera::tick`] runs once per game update (15 per second); a
+//! camera update ([`Camera::update_with`]) runs only when the caller has a
+//! cause for one (M3 3n-1). Not here yet: the automatic swing behind
+//! Connor (Q27 c), first person, shake.
 //!
 //! Stand-ins until Q27 is answered: what the tilt turns (the caller draws
 //! the view looking at the aim point, pitched by `tilt - DEFAULT_TILT`),
@@ -57,6 +58,21 @@ pub const SWING_SHARE: f32 = 0.66;
 pub const DRAG_SHORTEN: f32 = 0.95;
 /// Connor counts as still after this many updates without movement.
 pub const STILL_UPDATES: u32 = 3;
+/// A move sends "Connor moved" when his position changes by more than
+/// this on an axis... (camera.md "When the camera updates at all")
+pub const MOVED_POSITION: f32 = 0.1;
+/// ...or an entry of his turn matrix by more than this.
+pub const MOVED_FACING: f32 = 0.0001;
+
+/// Whether going from `before` to `now` (base, heading) sends a "Connor
+/// moved" message: a position change of more than 0.1 on any axis, or a
+/// facing change (cos or sin of the heading, the entries of a turn round
+/// the vertical, by more than 0.0001).
+pub fn connor_moved(before: ([f32; 3], f32), now: ([f32; 3], f32)) -> bool {
+    let (sb, cb) = before.1.sin_cos();
+    let (sn, cn) = now.1.sin_cos();
+    (0..3).any(|k| (now.0[k] - before.0[k]).abs() > MOVED_POSITION) || (sn - sb).abs() > MOVED_FACING || (cn - cb).abs() > MOVED_FACING
+}
 
 /// What blocks the view line (camera.md "Obstacles"): the drawn ground,
 /// buildings, objects with collision bit 0x8 or 0x1000.
@@ -105,8 +121,6 @@ pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3],
 pub struct Followed {
     /// Its base (Connor's feet).
     pub base: [f32; 3],
-    /// Its heading (radians); a change counts as moving.
-    pub heading: f32,
 }
 
 /// An avoidance swing: turn `step` radians round the aim point every
@@ -152,17 +166,20 @@ pub struct Camera {
     pub mode: Mode,
     /// (min, max) distance, set by `KQCamera::setRange`.
     pub range: (f32, f32),
+    /// Connor's base at the previous camera update (the tilt reset).
     last_base: Option<[f32; 3]>,
     mouse_was_held: bool,
     /// Obstacle avoidance on (it is by default; nothing found switches it
     /// off).
     pub avoid: bool,
     pub swing: Option<Swing>,
-    /// The previous update's offset (camera − aim) and aim point.
+    /// The previous update's offset (camera − aim), and the camera's
+    /// previous record of the aim point (reset by `tick` after 3 still
+    /// updates and by `not_moved`).
     prev_offset: Option<[f32; 3]>,
     prev_aim: Option<[f32; 3]>,
-    last_heading: Option<f32>,
-    /// "Connor is moving" (see `update_with`), and updates without movement.
+    /// "Connor is moving" (see `tick`), and game updates without a "Connor
+    /// moved" message.
     moving: bool,
     still: u32,
 }
@@ -273,7 +290,6 @@ impl Camera {
             swing: None,
             prev_offset: None,
             prev_aim: None,
-            last_heading: None,
             moving: false,
             still: 0,
         }
@@ -289,33 +305,64 @@ impl Camera {
         }
     }
 
-    /// One update following an object whose base is at `base`, without
-    /// obstacles.
+    /// One game update (tick) and one camera update following an object
+    /// whose base is at `base`, without obstacles; "Connor moved" if the
+    /// base changed since the last call (tests).
     pub fn update(&mut self, base: [f32; 3], input: &Input, ground: &dyn GroundLookup) -> Report {
-        self.update_with(Followed { base, heading: 0.0 }, input, ground, None)
+        let moved = self.last_base.is_some_and(|l| connor_moved((l, 0.0), (base, 0.0)));
+        self.tick(moved, base, input.mouse_held);
+        self.update_with(Followed { base }, moved, input, ground, None)
     }
 
-    /// One update with the obstacle rules (camera.md "Obstacles", steps
-    /// 6–9) when `view` is given.
-    pub fn update_with(&mut self, followed: Followed, input: &Input, ground: &dyn GroundLookup, view: Option<&dyn ViewBlockers>) -> Report {
+    /// The aim point for an object whose base is at `base`.
+    pub fn aim_for(base: [f32; 3]) -> [f32; 3] {
+        [base[0], base[1], base[2] + AIM_HEIGHT]
+    }
+
+    /// Once per game update, before any camera update (camera.md "Connor
+    /// is moving"): `moved` = a "Connor moved" message came this update.
+    /// After 3 updates without one he counts as still and the camera's
+    /// previous record of the aim point is reset to where he stands. Also
+    /// forgets the mouse button once it is let go (the first update after
+    /// pressing uses no movement). Returns true when he has just become
+    /// still (for the log).
+    pub fn tick(&mut self, moved: bool, base: [f32; 3], mouse_held: bool) -> bool {
+        if !mouse_held {
+            self.mouse_was_held = false;
+        }
+        if moved {
+            self.still = 0;
+            return false;
+        }
+        self.still += 1;
+        if self.still == STILL_UPDATES {
+            self.moving = false;
+            self.prev_aim = Some(Self::aim_for(base));
+            return true;
+        }
+        false
+    }
+
+    /// `follow` (and a flight or cut): the previous record of the aim point
+    /// becomes the present one, so this update counts as "not moved".
+    pub fn not_moved(&mut self, base: [f32; 3]) {
+        self.prev_aim = Some(Self::aim_for(base));
+    }
+
+    /// One camera update, with the obstacle rules (camera.md "Obstacles",
+    /// steps 6–9) when `view` is given. `moved`: a "Connor moved" message is
+    /// among this update's causes.
+    pub fn update_with(&mut self, followed: Followed, moved: bool, input: &Input, ground: &dyn GroundLookup, view: Option<&dyn ViewBlockers>) -> Report {
         let base = followed.base;
         let mut report = Report::default();
-        // "Connor is moving": from the update after he starts moving until
-        // 3 updates have passed without movement (position or heading).
+        // "Connor is moving": from the update after his first "moved"
+        // message until 3 updates have passed without one (`tick`).
         let moving_now = self.moving;
-        let moved = self.last_base.is_some_and(|l| l != base) || self.last_heading.is_some_and(|h| h != followed.heading);
         if moved {
             self.moving = true;
-            self.still = 0;
-        } else {
-            self.still += 1;
-            if self.still >= STILL_UPDATES {
-                self.moving = false;
-            }
         }
-        self.last_heading = Some(followed.heading);
         report.moving = moving_now;
-        let aim = [base[0], base[1], base[2] + AIM_HEIGHT];
+        let aim = Self::aim_for(base);
         let (min, max) = self.range;
 
         if input.change_mode {
@@ -649,8 +696,12 @@ mod tests {
         }
     }
 
-    fn follow(x: f32, y: f32) -> Followed {
-        Followed { base: [x, y, 0.0], heading: 0.0 }
+    /// One game update and one camera update with `view`, Connor at (x, y, 0).
+    fn step(c: &mut Camera, x: f32, y: f32, input: &Input, view: &dyn ViewBlockers) -> Report {
+        let base = [x, y, 0.0];
+        let moved = c.last_base.is_some_and(|l| connor_moved((l, 0.0), (base, 0.0)));
+        c.tick(moved, base, input.mouse_held);
+        c.update_with(Followed { base }, moved, input, &Flat(0.0), Some(view))
     }
 
     #[test]
@@ -658,7 +709,7 @@ mod tests {
         let wall = Walls(vec![([-5000.0, -1000.0], [5000.0, -1000.0])]);
         let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
         for _ in 0..5 {
-            let r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            let r = step(&mut c, 0.0, 0.0, &Input::default(), &wall);
             assert!(r.blocked.is_some() && !r.moving);
         }
         assert_eq!(c.position, [0.0, -3000.0, MIN_HEIGHT]);
@@ -669,9 +720,9 @@ mod tests {
         let wall = Walls(vec![([-50000.0, -1000.0], [50000.0, -1000.0])]);
         let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
         // The first update he moves in doesn't count as moving yet.
-        let mut r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        let mut r = step(&mut c, 0.0, 0.0, &Input::default(), &wall);
         for x in [75.0, 150.0] {
-            r = c.update_with(follow(x, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            r = step(&mut c, x, 0.0, &Input::default(), &wall);
         }
         assert!(r.moving && r.blocked.is_some());
         let d = r.pulled_in.expect("pulled in");
@@ -687,9 +738,9 @@ mod tests {
         let wall = Walls(vec![([-500.0, -1000.0], [500.0, -1000.0])]);
         let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
         c.set_range(100.0, 50000.0);
-        c.update_with(follow(-2000.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
-        c.update_with(follow(-1000.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
-        let r = c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+        step(&mut c, -2000.0, 0.0, &Input::default(), &wall);
+        step(&mut c, -1000.0, 0.0, &Input::default(), &wall);
+        let r = step(&mut c, 0.0, 0.0, &Input::default(), &wall);
         assert!(r.blocked.is_some() && r.pulled_in.is_none(), "{r:?}");
         let sw = c.swing.expect("swing started");
         // From straight behind (-90°) towards halfway to A (-1000, 0): -135°, so the
@@ -701,7 +752,7 @@ mod tests {
         // the direction he came from (180°).
         let mut updates = 0;
         while c.swing.is_some() && updates < 20 {
-            c.update_with(follow(0.0, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            step(&mut c, 0.0, 0.0, &Input::default(), &wall);
             updates += 1;
         }
         assert!(c.swing.is_none() && updates <= 3, "{updates}");
@@ -715,9 +766,9 @@ mod tests {
         let mut c = Camera::new([0.0, -900.0, MIN_HEIGHT]);
         c.set_range(100.0, 5000.0);
         let zoom_out = Input { mouse_held: true, mouse_forward: -0.2, ..Input::default() };
-        c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall)); // first update: no movement
+        step(&mut c, 0.0, 0.0, &zoom_out, &wall); // first update: no movement
         let before = sub(c.position, [0.0, 0.0, AIM_HEIGHT]);
-        let r = c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall));
+        let r = step(&mut c, 0.0, 0.0, &zoom_out, &wall);
         assert!(r.blocked.is_some());
         let after = sub(c.position, r.aim);
         for k in 0..3 {
@@ -725,7 +776,7 @@ mod tests {
         }
         // With the minimum just under the current distance, it stays put.
         c.set_range(length(after) - 1.0, 5000.0);
-        let r = c.update_with(follow(0.0, 0.0), &zoom_out, &Flat(0.0), Some(&wall));
+        let r = step(&mut c, 0.0, 0.0, &zoom_out, &wall);
         assert!(r.blocked.is_some());
         let kept = sub(c.position, r.aim);
         assert!((0..3).all(|k| (kept[k] - after[k]).abs() < 0.01), "{kept:?} vs {after:?}");
@@ -736,7 +787,7 @@ mod tests {
         let wall = Walls(vec![([-50000.0, -30.0], [50000.0, -30.0])]);
         let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
         for x in [0.0, 75.0, 150.0] {
-            c.update_with(follow(x, 0.0), &Input::default(), &Flat(0.0), Some(&wall));
+            step(&mut c, x, 0.0, &Input::default(), &wall);
         }
         let d = length(sub(c.position, [150.0, 0.0, AIM_HEIGHT]));
         assert!((d - PULL_IN_MIN).abs() < 0.01, "{d}");
@@ -755,6 +806,30 @@ mod tests {
         assert!(ground_line_hit(&lake, [0.0, 0.0, 800.0], [3000.0, 0.0, 2000.0]).is_none());
         // Outside the grid: no ground.
         assert!(ground_line_hit(&|_, _| None, [0.0, 0.0, 0.0], [3000.0, 0.0, -100.0]).is_none());
+    }
+
+    #[test]
+    fn moved_needs_more_than_0_1_on_an_axis_or_a_turn() {
+        assert!(!connor_moved(([0.0; 3], 0.0), ([0.1, -0.1, 0.1], 0.0)));
+        assert!(connor_moved(([0.0; 3], 0.0), ([0.0, 0.0, 0.11], 0.0)));
+        assert!(!connor_moved(([0.0; 3], 1.0), ([0.0; 3], 1.00005)));
+        assert!(connor_moved(([0.0; 3], 1.0), ([0.0; 3], 1.001)));
+    }
+
+    #[test]
+    fn still_after_3_updates_without_a_message_and_the_aim_record_reset() {
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        let r = c.update([75.0, 0.0, 0.0], &Input::default(), &Flat(0.0));
+        assert!(!r.moving, "the first update of a walk doesn't count as moving");
+        assert!(c.moving);
+        // He stops: 2 ticks still moving, the 3rd makes him still.
+        assert!(!c.tick(false, [75.0, 0.0, 0.0], false));
+        assert!(!c.tick(false, [75.0, 0.0, 0.0], false));
+        assert!(c.moving);
+        assert!(c.tick(false, [75.0, 0.0, 0.0], false));
+        assert!(!c.moving);
+        assert_eq!(c.prev_aim, Some(Camera::aim_for([75.0, 0.0, 0.0])));
     }
 
     #[test]
