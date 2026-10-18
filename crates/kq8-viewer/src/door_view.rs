@@ -80,6 +80,9 @@ pub struct DoorSim {
     /// Clicks in the world since the last update, picked or not, for
     /// `talking.md` rule 16 (M4 4a-5).
     world_clicks: Vec<String>,
+    /// Connor's state at each click whose turn is waiting (M4 4c-5,
+    /// `clicking.md` rule 35): whether it allows the turn, its name.
+    click_states: std::collections::VecDeque<(bool, &'static str)>,
     log: Log,
     /// `traps.log`; `None` if it could not be made.
     trap_log: Option<Log>,
@@ -634,7 +637,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -755,6 +758,9 @@ pub fn trap_step(
     sim.flush_talk(&shared);
     let mut camera = camera;
     let requests: Vec<Request> = std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).collect();
+    // clicking.md rule 35 (Q105 b): a state a script asked for (and got)
+    // before a click's turn decides it; otherwise his state at the click.
+    let mut asked = false;
     for (i, r) in requests.into_iter().enumerate() {
         let again = if i < retried { " (tried again)" } else { "" };
         // anim-scripts.md rule 28: during an unfinished jump a state
@@ -773,6 +779,7 @@ pub fn trap_step(
                 connor.refused.push(r);
                 continue;
             }
+            asked = true;
         }
         let line = match r {
             Request::EndJump { at } => format!("{at}: applied: {}", connor.end_jump(&at)),
@@ -865,9 +872,16 @@ pub fn trap_step(
                 format!("{at}: applied: Connor {line}{}", if walk { "; handsOff on" } else { "" })
             }
             Request::ClickTurn { name, target, at } => {
-                // clicking.md rules 27-28: his state after the script (its
-                // own requests above are applied already).
-                let (turns, state) = connor.click_turn_state();
+                // clicking.md rules 27-28, 35: his state after the script:
+                // the one it asked for (its requests above are applied
+                // already), else the one at the click.
+                let at_click = sim.click_states.pop_front();
+                let ((turns, state), whence) = match (std::mem::take(&mut asked), at_click) {
+                    (false, Some(s)) => (s, "his state at the click"),
+                    (true, _) => (connor.click_turn_state(), "the state the script asked for"),
+                    (false, None) => (connor.click_turn_state(), "his state now (no click recorded)"),
+                };
+                let state = format!("{state} ({whence}, rule 35)");
                 let n = connor.updates;
                 if turns {
                     let auto = kq8_core::connor_auto::AutoMove::new(kq8_core::connor_auto::AutoKind::Point, target, None);
@@ -1110,7 +1124,14 @@ pub fn door_step(
                 let feet = c.mover.position;
                 // 4c-4: the item in hand (inventory.md rule 12).
                 let held = kq8_core::connor_inventory::hand(&mut sim.active.world).map(|(object, kind)| Item { object, kind });
+                let turns = |r: &[Request]| r.iter().filter(|r| matches!(r, Request::ClickTurn { .. })).count();
+                let before = turns(&sim.active.world.requests);
                 let result = sim.active.click(&name, feet, sim.attack_dist, held.as_ref());
+                // clicking.md rule 35 (Q105 b): his state at the click,
+                // before his next update, for the turn it asked for.
+                for _ in before..turns(&sim.active.world.requests) {
+                    sim.click_states.push_back(c.click_turn_state());
+                }
                 if let Some(h) = &held {
                     let accepted = match &result {
                         kq8_core::active::ClickResult::Script(args) => args.get(2) == Some(&h.object),

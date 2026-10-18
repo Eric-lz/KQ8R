@@ -1952,7 +1952,7 @@ inventory and menus.
     quits (stand-in): the original opens the main menu and **the game
     stops running while it is open** (rule 14, the user's check); a
     later menu step must pause the updates and the panel timers.
-  - **4c-5, A's answers to Q105** (clicking.md rules 34–36). (a) the
+  - **4c-5, A's answers to Q105** (**done** 2026-10-18; clicking.md rules 34–36). (a) the
     turn to an object deleted by its own script: no change, provenance
     only; (b) the click looks at the state the script **asked for**
     (or his state at the click), not the one after his next update;

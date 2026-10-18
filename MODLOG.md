@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-5: A's answers to Q105 (the turn after a click)
+
+**Changed:** Viewer `door_view.rs`: Connor's state is recorded at each click; when the click's turn is applied, that state decides it, unless a state request of the script (a `setState` or a scripted walk that was not refused) was applied before it, which then decides; the log says which. `kq8-core` `active.rs`: buildings carry `doNotPointAt` (`load.rs` passes the value it already read), so a building with a script and `doNotPointAt=1` doesn't turn him; unit test extended. Provenance, `QUESTIONS.md` (Q105 built), `docs/DESIGN.md`.
+**Why:** `clicking.md` rules 34–36 (A's answers to Q105): (a) our stand-in was right (no change); (b) the original looks at his state right after the script, before any update of his; (c) buildings read `doNotPointAt`.
+**Tested how:** `cargo test --workspace` (450 pass, 1 extended), clippy clean. Viewer: the fish `cargo play --world Daventry --at 208502,209600,1.5708 --click fishies.01,10 --frames 600 --sound off` (`connor-4c5-fish.log`) and the tombstone `--at 204100,176500,0 --click tomb2.02,20 --frames 900`.
+**Result:** Fish: "Connor's state after the script Wait (his state at the click, rule 35): turn to fishies.01" although its script deletes it (rule 34). Tombstone: one turn, as before.
+**Still broken / not tested:** The "state the script asked for" path is not tested by a run: no Daventry click script sets Connor's state (the coffin lid does it on `Push`, the bell's line is commented out). No Daventry building sets `doNotPointAt` (Gnome's do).
+**Next:** The user's checks by eye of 4c-1 to 4c-4; A: Q108–Q110.
+
 ## 2026-10-18 M4 step 4c-4: the item in hand
 
 **Changed:** `kq8-core/src/connor_inventory.rs`: holding (a quest item, the coins, the rope or the rocks becomes the hand; the same again puts it back; the scroll's refusal remark at most every 3 s; the rope's remark), the hand after a world click (emptied when accepted, kept when refused or too far, coins kept while `goldCoinPersists 1`), the hand emptied when its item is gone. `active.rs`: the hand, `goldCoinPersists`. Viewer: `door_view.rs` world clicks use the hand (the old fake `--item` holder is gone: `--item TYPE` now gives a real `TestItem` and holds it); `gui_view.rs` leaves the held item out of the quest strip (the arrows still count it; a click on the empty place puts it back) and makes the mouse pointer the game's picture (`curs04.pba`, or the held type's cursor). `QUESTIONS.md`: Q110. Provenance, `docs/FEATURES.md`, `README.md`, `docs/DESIGN.md`.

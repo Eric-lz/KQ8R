@@ -3089,6 +3089,7 @@ impl Placer<'_> {
                 accepts_inventory: info.accepts_inventory.clone(),
                 accept_all_items: info.accept_all_items,
                 too_far_away_action: info.too_far_away_action,
+                do_not_point_at: info.do_not_point_at,
                 bounds: c.bounds,
                 placement: c.placement,
             });

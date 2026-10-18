@@ -365,6 +365,9 @@ pub struct ActiveBuilding {
     pub accept_all_items: bool,
     /// Default **1** for buildings (rule 10; other objects 0).
     pub too_far_away_action: i64,
+    /// `doNotPointAt=1`: no turn after a click (`clicking.md` rule 36, Q105
+    /// c; M4 4c-5).
+    pub do_not_point_at: bool,
     /// Its `.dig` header box, in its own axes, and its placement: reach is
     /// measured to this box in the building's own axes (`clicking.md`
     /// rule 9, Q75; M1 7i).
@@ -2666,7 +2669,7 @@ impl Active {
         all.extend(args);
         self.world.note(format!("{head}; script {script} {}", all.join(" ")));
         self.scripts.call(&script, &all, &mut self.world);
-        self.click_turn(&b.name, &all[1..], true, b.placement.position, false);
+        self.click_turn(&b.name, &all[1..], true, b.placement.position, b.do_not_point_at);
         ClickResult::Script(all)
     }
 
@@ -3854,6 +3857,7 @@ mod tests {
             accepts_inventory: None,
             accept_all_items: false,
             too_far_away_action: BUILDING_TOO_FAR_AWAY_ACTION,
+            do_not_point_at: false,
             bounds: ([0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0]),
             placement: Placement::at([0.0; 3]),
         }
@@ -3903,6 +3907,13 @@ mod tests {
         let call = ["Pub", "ConnorAction", "TooFar", "TooFar"].map(String::from).to_vec();
         assert_eq!(a.click("Pub", [500.0, -9000.0, 0.0], 2350.0, None), ClickResult::Script(call));
         assert_eq!(a.scripts.vars.get("B::Got"), Some("ConnorAction TooFar"));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ClickTurn { .. })), "a building with a script turns Connor");
+        // clicking.md rule 36 (Q105 c): its doNotPointAt is read.
+        let mut a = with_building(Some("b.cs"), 0x28);
+        a.world.buildings[0].do_not_point_at = true;
+        a.click("Pub", [500.0, -9000.0, 0.0], 2350.0, None);
+        assert!(!a.world.requests.iter().any(|r| matches!(r, Request::ClickTurn { .. })));
+        assert!(a.take_log().join("\n").contains("doNotPointAt: no turn"));
         // colliderType 136: not clickable.
         let mut a = with_building(None, 0x88);
         assert!(!a.clickable_building(0));
