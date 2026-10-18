@@ -600,16 +600,22 @@ Consequences:
      still held is passed on again. **This is visible** (traced
      2026-10-17, Q84 b): while `crash` plays, a held or newly pressed
      turn key turns him at the normal **1.75 rad/s**, at once, not after
-     the crash. Turning is part of every move of the mover, which runs in
-     every state, and the crash's backward push is one of those moves;
-     key presses for turning reach the mover in every state (only
-     `handsOff` and the tile/scale puzzles' own switch block them).
-     Forward, back and run keys do nothing until `crash` ends (the Special
-     state has no per-update logic of its own); they are acted on in Wait
-     afterwards. The same holds for the run crash and both jump crashes.
-     Only the head-on crash switches turning back on explicitly; the
-     down-pass crash relies on it already being on (it only differs if
-     `handsOff` was set). The crash sound is the `crash`
+     the crash. **Confirmed by the user in the original (2026-10-18)** for
+     the run crash. Forward, back and run keys do nothing until `crash`
+     ends (the Special state has no per-update logic of its own); they are
+     acted on in Wait afterwards. The head-on crash switches turning back
+     on explicitly (traced).
+     **Not in jumps, falls and landings:** the user's checks (Q41,
+     repeated 2026-10-18) show that Connor does **not** turn during the
+     jump animations (standing, running, back flip), the falls after them
+     (normal and back flip) or the landings (normal and back flip), even
+     with a turn key held. The code as read seems to let turning run in
+     every state, so something not found yet switches it off there (the
+     same gap as the lean, Q59). Follow the user: no turning from the
+     start of a jump until its landing has finished; turning in `crash`
+     as above. Not settled: whether he turns during a **down-pass**
+     crash that comes straight out of a jump (that crash does not switch
+     turning back on); our stand-in: yes, as in the other crashes. The crash sound is the `crash`
      movement's own cue (`cue0=0.0 playsound crash.aud`); nothing else
      plays a sound here. So in the air he starts the stumble and falls
      at the same time. What ends the `crash` early when he starts falling
@@ -807,7 +813,8 @@ counter values are the game's own and are exact.)
   from his facing) by **441 units** in all, 63 per 1/15 s tick, exactly
   the animation's 7 steps (Q31 e), then stands. That was measured with
   no turn key held; a turn key held or pressed during `crash` turns him
-  at 1.75 rad/s while it plays (Q84 b, traced, not measured). The
+  at 1.75 rad/s while it plays (Q84 b, traced; confirmed by the user in
+  the original 2026-10-18). The
   push-back is taken from his current facing each update, so turning
   bends it (inferred, not traced). Whether he also leans while turning
   in a run crash is not settled (the lean switch is left on from `Run`,

@@ -105,8 +105,9 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
     the `Push` script runs inside Connor's update, so the original drops
     him onto the floor in the same update; the visible table and bricks
     are part of his model then.
-  - Ready for B. Still to check in the original: barrels pushed downhill
-    or into a wall, the hay bale at an angle against a wall.
+  - Ready for B. The user checked in the original (2026-10-18): barrels
+    stop uphill and go through the pub's wall, the hay bale slides,
+    Connor turns during `crash` (but not in jumps, falls or landings).
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.

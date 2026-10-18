@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 The user's checks of the Q84/Q87 answers (docs only)
+
+**Changed:** `connor-physics.md` (Jumping rule 5, "Walls"): turning during `crash` confirmed; the sentence "turning runs in every state" removed and replaced by the user's rule (no turning from the start of a jump to the end of its landing). `pushing.md`: the checks recorded. `QUESTIONS.md` Q84, Q87, Q91: the user's checks added.
+**Why:** The user checked the 2026-10-17 answers in the original game.
+**Tested how:** By the user, in the original: barrels uphill and against the pub's wall, the hay bale at an angle into a wall, a run into a wall holding a turn key.
+**Result:** All match the trace: barrel stops uphill, goes through the pub's wall; the hay bale slides; Connor turns during the stumble. The user also repeated that he does not turn during jumps, falls or landings (standing, running, back flip). The 2026-10-17 note had generalised "turning works in every state" from the code; that contradicts this, so the note now limits it to `crash`. A short look for what switches turning off in jumps found only the two hands-off switches (scripted and animation lock), not the cause; not pursued further (same gap as Q59).
+**Still broken / not tested:** Downhill barrels can't be tried in Daventry. Turning in a down-pass crash straight out of a jump is not settled (stand-in: yes).
+**Next:** B builds the 3i–3k fixes (see the 2026-10-17 entry).
+
 ## 2026-10-17 Study session A: Q84–Q93 answered (docs only)
 
 **Changed:** `docs/behaviour/`: `connor-physics.md` (Jumping rule 5, Walls, "Against a building" step 7), `anim-scripts.md` (rules 3, 12, 16, 19, new 20–27: `Die`'s `$3`, `handsOff`, `walkTo`/`runTo`/`pointAndCue`, the watermill cutscene), `pushing.md` (rules 2.5, 4.1–4.3, 11, edge cases, checks), `camera.md` (`follow none`, `move KQCamera` angles, `follow Connor` after a cutscene, `setThirdPerson`, tilt sign), `objects.md` (`loadKQ` while playing, `move` heights, `setHidden`), `connor-movement.md`, `sound.md` rule 46, `clicking.md` rule 22, `doors.md`; `QUESTIONS.md` Q84–Q93 marked answered; STATUS. Scratch notes with addresses in `re/notes.md` (not committed). No code.

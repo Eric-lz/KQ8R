@@ -252,8 +252,8 @@ Words used here:
   edge case): no data does it; if it ever happens, treat the touch as a
   wall hit as well, and log it.
 - Keep the rest, including "uphill: no push", "downhill: floats" and
-  "barrels pass through walls"; the user can check them (below). If the
-  user sees otherwise in the original, follow the user.
+  "barrels pass through walls" (the user saw that in the original,
+  2026-10-18).
 
 ## How to check
 
@@ -271,10 +271,15 @@ Words used here:
   2. Barrels move, but only where the ground is perfectly flat (rule
      4.2). Pushing downhill was not tried; by the trace (Q87 c) a barrel
      pushed downhill moves and floats.
-- **Still to check in the original (2026-10-17 trace):** push a barrel
-  downhill (it should float), and straight into a wall or another object
-  (it should go in); push the hay bale into a wall at an angle (it
-  should slide along, not stop).
+- **Checked by the user in the original (2026-10-18), matching the
+  2026-10-17 trace:**
+  1. A barrel pushed uphill stops (rule 4.2).
+  2. A barrel pushed against the pub's wall goes through it (rule 4.1,
+     box-shaped objects are never stopped).
+  3. The hay bale pushed into a wall at an angle slides along it (rule
+     4.1, ball-stack objects slide).
+  4. Downhill can't be tried: there is no slope near Daventry's barrels.
+     So "floats downhill" (rule 4.2) never shows in Daventry.
   3. With a weapon drawn, or walking backwards, nothing is pushed
      (rules 2.3, 2.6).
 
