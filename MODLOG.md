@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 The user's checks of Q104 in the original (docs only)
+
+**Changed:** `connor-movement.md`, `clicking.md` ("How to check" and the rules: checked), `STATUS.md`. No code.
+**Why:** The user tested the three predictions of the Q104 answer.
+**Tested how:** By the user, by eye, in the original game.
+**Result:** All three as traced: (1) holding left and clicking the sign, Connor turns to it and then stops turning although left is held; (2) `tmbstn1` starts reading at once and turns while reading, `tmbstn2` turns first and reads about half a second later; (3) `wizbook` turns him, `urn` doesn't.
+**Still broken / not tested:** Our build still has the old behaviour (B's next step).
+**Next:** Session B builds Q104 and the Q103 (e) fix.
+
 ## 2026-10-18 Study (A): Q104 (the automatic turn and held keys; the turn after a click) and Q103 (docs only)
 
 **Changed:** `docs/behaviour/connor-movement.md` ("Turning" rule 2 corrected; How to check), `clicking.md` (new rules 25–33: Connor turns to face what he clicked; How to check), `talking.md` (rules 7, 10, 15, 19), `anim-scripts.md` (`eval` under rule 18; `pointAndCue` and turn-key edge cases), `doors.md` (rule 16, open question 3), `chests.md` (rule 10), `QUESTIONS.md` (Q103, Q104 answered). Scratch notes in `re/` (not committed). No code.

@@ -298,8 +298,9 @@ and speech, 4a).
   monster turns with the same 0.5 s wait; a chest remark turns Connor
   in any state (`talking.md` rules 7, 10, 15, 19; `anim-scripts.md`
   rule 18). For B: build the press-only cancel and the click turn; drop
-  the chest-state condition. For the user: the held-key and `wizbook`
-  checks in `connor-movement.md` / `clicking.md` "How to check".
+  the chest-state condition. **The user checked all three predictions
+  in the original (held key stops after the turn; `tmbstn1` vs
+  `tmbstn2`; `wizbook` turns, `urn` doesn't): as traced.**
 - **Still to check by ear and eye (4a):** click the alchemist's sign
   (`cargo play --at 245000,255000,0`, walk up and click it): Connor turns,
   speaks after about half a second, the caption shows, the music drops,

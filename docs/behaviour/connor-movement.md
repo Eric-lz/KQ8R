@@ -132,9 +132,8 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    - **When the automatic turn ends, the turn direction is set to 0.**
      A turn key that is still held from before does **not** take over
      again: Connor stops turning until that key is let go and pressed
-     again (nothing re-sends held keys at that moment). This is the
-     original's behaviour as traced; it has not been checked in the
-     game (see "How to check").
+     again (nothing re-sends held keys at that moment). Traced, and
+     checked by the user in the original (2026-10-18).
    - Forward/back is a separate piece of intent and is not touched: if
      forward is held he keeps walking or running while the automatic
      turn swings him round (user's check), and because the turn
@@ -421,6 +420,7 @@ rule.)
   although left is still held; only letting go and pressing left again
   starts him turning again. If instead he goes on spinning left at once
   after facing the sign, the "held key is not re-sent" rule is wrong.
+  **Checked by the user in the original (2026-10-18): as described.**
 - **Our logs:** per turn key event: down/up, and "auto-turn cancelled"
   only on a down; per update during an automatic turn: heading, turn
   direction, forward intent.

@@ -262,7 +262,8 @@ whose script says `KQMonster::speak Connor Connor …`.
     ever writes `doNotPointAt=1`, 37 files; in Daventry `ax` and `urn`).
     The setting is looked up by its **whole name**: Daventry's `wizbook`
     and `wizquill` write `doNotPointAtMe=1`, which the game doesn't know,
-    so **they do turn Connor** (traced; not checked in the game).
+    so **they do turn Connor** (traced; checked by the user in the
+    original, 2026-10-18).
 30. One more switch (on Connor, not identified, the same one that can
     stop a `pointAndCue` turn, `anim-scripts.md` rule 25) blocks every
     automatic turn of his. It was never seen set; ignore it.
@@ -368,6 +369,8 @@ whose script says `KQMonster::speak Connor Connor …`.
      `doNotPointAt=1`): he does **not** turn.
   3. Click a sign from too far away: "'Tis beyond my reach.", **no**
      turn.
+  **Checked by the user in the original (2026-10-18): 1 and 2 as
+  described** (3 was already checked with 4a).
 - **In our logs:** per click: the call made (`do`/item/`TooFar`/
   `Special`/none), Connor's state after the script, `turn to <object>`
   or the reason there is none (`doNotPointAt`, state, no call).
