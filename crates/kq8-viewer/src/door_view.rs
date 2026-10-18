@@ -84,6 +84,8 @@ pub struct DoorSim {
     connor_checked_at: Option<[f32; 3]>,
     /// `items.log`; `None` if it could not be made.
     item_log: Option<Log>,
+    /// `talk.log` (M4 4a-2); `None` if it could not be made.
+    talk_log: Option<Log>,
 }
 
 impl DoorSim {
@@ -106,6 +108,24 @@ impl DoorSim {
             }
         }
         lines
+    }
+
+    /// Writes the talk lines gathered since the last call (M4 4a-2);
+    /// lines starting or finishing also to the main log.
+    fn flush_talk(&mut self, shared: &Shared) {
+        let lines = self.active.world.take_talk_log();
+        // The update these lines belong to (the counter has moved on).
+        let updates = self.active.world.updates.saturating_sub(1);
+        let Some(log) = &mut self.talk_log else { return };
+        for line in lines {
+            if line.contains(" starts: ") || line.contains(": TalkComplete ") {
+                shared.log.lock().unwrap().summary(format!("talk: update {updates} {line}"));
+            }
+            log.detail(format!("update {updates} {line}"));
+        }
+        // What the viewer does with the events comes in 4a-3 (voice,
+        // ducking), 4a-4 (captions), 4a-6 (mouth); talk.log has them.
+        self.active.world.talk.events.clear();
     }
 
     /// Writes the trap lines gathered since the last call; `On`/`Off` also
@@ -565,10 +585,30 @@ pub fn spawn_doors(
             log.detail(format!("  {}; {click}", items.describe(&o.name)));
         }
     }
+    // Remarks and speech (M4 4a-2): the lines, the monsters, Options.cs.
+    let talk_log = match Log::create("talk") {
+        Ok(mut l) => {
+            l.detail("talk.log: speak / clearSpeak / stateChangeNotify, lines starting and ending, mouth changes, TalkComplete (docs/behaviour/talking.md); t = game time in seconds");
+            Some(l)
+        }
+        Err(e) => {
+            main_log.summary(format!("talk: cannot create talk.log: {e}; speech still runs, not logged"));
+            None
+        }
+    };
+    if let Some((talk, sets)) = objects.talk.take() {
+        active.world.talk = talk;
+        for (k, v) in sets {
+            active.scripts.vars.set(&k, v);
+        }
+    }
+    active.world.monsters = std::mem::take(&mut objects.monsters);
+    let monsters: Vec<String> = active.world.monsters.iter().map(|m| format!("{} ({})", m.name, m.script.as_deref().unwrap_or("no script"))).collect();
+    main_log.summary(format!("talk: {} KQMonsters: {}; captions {:?}", monsters.len(), monsters.join(", "), active.scripts.vars.get("Options::Captions")));
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -642,6 +682,8 @@ pub fn trap_step(
     // as do the `Push` calls below (3l-1).
     let inside_from = sim.active.world.requests.len();
     sim.active.world.connor_jump = connor.jump_state();
+    sim.active.world.connor_can_turn = connor.can_turn_to_listener();
+    sim.active.world.connor_at = Some(connor.mover.position);
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
@@ -684,6 +726,7 @@ pub fn trap_step(
     let inside = inside_from + retried..sim.active.world.requests.len() + retried;
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
+    sim.flush_talk(&shared);
     let mut camera = camera;
     let requests: Vec<Request> = std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).collect();
     for (i, r) in requests.into_iter().enumerate() {
@@ -979,6 +1022,9 @@ pub fn door_step(
     let sim = &mut *sim;
     // KQConner::JumpDir / endJump in timed cues (3m-1).
     sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
+    // talking.md rule 7: whether he can turn to a listener, and where.
+    sim.active.world.connor_can_turn = connor.as_ref().is_some_and(|c| c.can_turn_to_listener());
+    sim.active.world.connor_at = connor.as_ref().map(|c| c.mover.position);
     let updates = sim.active.world.updates;
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut click_at.0).into_iter().partition(|(_, n)| updates >= *n);
     click_at.0 = later;
@@ -1025,6 +1071,7 @@ pub fn door_step(
         }
     }
     sim.flush_traps(&shared);
+    sim.flush_talk(&shared);
     let item_lines = sim.flush_items(&shared);
     let lines = sim.active.take_log();
     if !lines.is_empty() {

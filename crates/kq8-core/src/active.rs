@@ -73,6 +73,8 @@ use crate::named_anim::{NamedAnimPlayer, Request as AnimRequest, Started};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::sound::Start;
 use crate::stats::{ConnorStats, Stats};
+use crate::talk::{Finished, Speak, Talk, CONNOR};
+use kq8_data::msg::Tuple;
 use crate::trap::{Trap, Visitor};
 
 /// A `KQCueEvent` with this first number is an `EndLoop` call, not a `Cue`
@@ -555,6 +557,28 @@ pub struct WorldState {
     /// bit 0x8 lost: far, off or hidden; `object-lighting.md` rule 41),
     /// lower case: clicks pass through them (M1 step 7b).
     switched_off: BTreeSet<String>,
+    /// Remarks and speech (M4 4a-2, `talking.md`): every character's
+    /// queue of lines.
+    pub talk: Talk,
+    /// `KQMonster::stateChangeNotify <recipient> <issuer>` (rule 13):
+    /// lower-case issuer → its recipients, in the order registered.
+    notify: BTreeMap<String, Vec<String>>,
+    /// Connor can turn to face a listener now: he is in Wait or Move
+    /// (`talking.md` rule 7). Set by the caller before scripts run.
+    pub connor_can_turn: bool,
+    /// Where Connor stands, set by the caller before scripts run.
+    pub connor_at: Option<[f32; 3]>,
+    /// The world's `KQMonster` objects (`talking.md` rule 6).
+    pub monsters: Vec<Monster>,
+}
+
+/// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
+/// for speech only their name, place and script.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Monster {
+    pub name: String,
+    pub position: [f32; 3],
+    pub script: Option<String>,
 }
 
 impl WorldState {
@@ -1580,6 +1604,199 @@ impl WorldState {
     }
 }
 
+/// A tuple from five script words (`talking.md` rule 14: the file as a
+/// 16-bit number, the others as single bytes); `None` if one is not a
+/// number.
+fn tuple_of(words: &[String]) -> Option<Tuple> {
+    if words.len() != 5 || !words.iter().all(|w| looks_like_number(w)) {
+        return None;
+    }
+    let n = |k: usize| number_value(&words[k]) as i64;
+    Some(Tuple::new(n(0) as u16, n(1) as u8, n(2) as u8, n(3) as u8, n(4) as u8))
+}
+
+impl WorldState {
+    /// The `KQMonster` (or Connor) called `name`, as the world writes it
+    /// (`talking.md` rule 6).
+    fn monster_name(&self, name: &str) -> Option<String> {
+        if name.eq_ignore_ascii_case(CONNOR) {
+            return Some(CONNOR.to_string());
+        }
+        self.monsters.iter().find(|m| m.name.eq_ignore_ascii_case(name)).map(|m| m.name.clone())
+    }
+
+    /// Where the object called `name` stands now (its placement's
+    /// position; Connor's from the caller), `None` if there is none.
+    pub fn object_point(&self, name: &str) -> Option<[f32; 3]> {
+        if name.eq_ignore_ascii_case(CONNOR) {
+            return self.connor_at;
+        }
+        if self.is_gone(name) {
+            return None;
+        }
+        if let Some(i) = self.door_index(name) {
+            return Some(self.doors[i].door.placement().position);
+        }
+        if let Some(i) = self.chest_index(name) {
+            return Some(self.chests[i].chest.placement().position);
+        }
+        if let Some(i) = self.object_index(name) {
+            return Some(self.objects[i].player.placement().position);
+        }
+        if let Some(i) = self.anim_index(name) {
+            return Some(self.anims[i].player.placement().position);
+        }
+        if let Some(m) = self.monsters.iter().find(|m| m.name.eq_ignore_ascii_case(name)) {
+            return Some(m.position);
+        }
+        if let Some(o) = self.items.get(name) {
+            return o.placement().map(|p| p.position);
+        }
+        self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.placement.position)
+    }
+
+    /// `KQMonster::speak <issuer> <to> <file> <noun> <verb> <case> <first>
+    /// <last> [nofade]` (`talking.md` rules 6-9).
+    fn speak(&mut self, words: &[String], at: &str) -> String {
+        let usage = "usage: KQMonster::speak <issuer> <to> <file> <noun> <verb> <case> <first> <last> [nofade]";
+        if !(9..=10).contains(&words.len()) {
+            self.note(format!("{at}: {usage} (got {} words); nothing", words.len()));
+            return "1".into();
+        }
+        let Some(first) = tuple_of(&words[3..8]) else {
+            self.note(format!("{at}: {usage}: a number is not a number: '{}'; nothing", words.join(" ")));
+            return "1".into();
+        };
+        if !looks_like_number(&words[8]) {
+            self.note(format!("{at}: {usage}: <last> '{}' is not a number; nothing", words[8]));
+            return "1".into();
+        }
+        // Rule 6: `nofade` only as the 10th word, exactly.
+        let nofade = words.get(9).is_some_and(|w| w == "nofade");
+        if words.len() == 10 && !nofade {
+            self.note(format!("{at}: 10th word '{}' is not 'nofade': ignored", words[9]));
+        }
+        let Some(issuer) = self.monster_name(&words[1]) else {
+            self.note(format!("{at}: console: '{}' is not KQMonster; nothing (rule 6)", words[1]));
+            return "1".into();
+        };
+        // Rule 8: an issuer in a conversation is ignored; there are no
+        // conversations yet (not studied).
+        let last_word = number_value(&words[8]) as i64 as u8;
+        let last = if last_word == 0 {
+            match self.talk.book.last_of_run(first) {
+                Some(l) => l,
+                None => {
+                    self.note(format!("{at}: <last> 0 and line {first} is not in its message file: tried as one line (it will be dropped)"));
+                    first.seq
+                }
+            }
+        } else {
+            last_word
+        };
+        let s = Speak { issuer: issuer.clone(), first, last, nofade };
+        let to = &words[2];
+        let head = format!("{at}: KQMonster::speak {issuer} to {to}: {first}…{last}{}", if last_word == 0 { " (<last> 0)" } else { "" });
+        let now = self.now();
+        let line = if to.eq_ignore_ascii_case(&issuer) {
+            format!("{head}: to itself, no turn; {}", self.talk.queue(&s, now))
+        } else {
+            match self.object_point(to) {
+                None => format!("{head}: no object '{to}': no turn; {}", self.talk.queue(&s, now)),
+                Some(_) if issuer == CONNOR && !self.connor_can_turn => {
+                    format!("{head}: Connor is not in Wait or Move: no turn; {}", self.talk.queue(&s, now))
+                }
+                Some(p) if issuer == CONNOR => {
+                    use crate::connor_auto::{AutoKind, AutoMove};
+                    self.requests.push(Request::ConnorAuto { auto: AutoMove::new(AutoKind::Point, [p[0], p[1]], None), at: at.to_string() });
+                    format!("{head}: Connor turns to face {to} at ({:.0}, {:.0}) (rule 7); {}", p[0], p[1], self.talk.queue_later(s, now))
+                }
+                Some(p) => format!(
+                    "{head}: {issuer} would turn to face {to} at ({:.0}, {:.0}) (not done: monsters don't move yet, M5); {}",
+                    p[0],
+                    p[1],
+                    self.talk.queue_later(s, now)
+                ),
+            }
+        };
+        self.talk_note(line);
+        "0".into()
+    }
+
+    /// A line for the current log and `talk.log`.
+    fn talk_note(&mut self, line: String) {
+        self.talk.log.push(format!("t {:8.3}: {line}", self.now()));
+        self.note(line);
+    }
+
+    /// `KQMonster::clearSpeak <name>` (rule 15).
+    fn clear_speak(&mut self, words: &[String], at: &str) -> String {
+        let Some(name) = words.get(1) else {
+            self.note(format!("{at}: usage: KQMonster::clearSpeak <name>; nothing"));
+            return "1".into();
+        };
+        self.talk.clear(name, self.now());
+        self.note(format!("{at}: KQMonster::clearSpeak {name} (talk.log)"));
+        "0".into()
+    }
+
+    /// `KQMonster::testMessage f n v c [s] f n v c [s]` (rule 14): 0 when
+    /// the two tuples are equal, 1 otherwise.
+    fn test_message(&mut self, words: &[String], at: &str) -> String {
+        let n = match words.len() {
+            9 => 4,
+            11 => 5,
+            k => {
+                self.note(format!(
+                    "{at}: usage: KQMonster::testMessage f n v c f n v c; usage: KQMonster::testMessage f n v c s f n v c s (got {k} words); 1"
+                ));
+                return "1".into();
+            }
+        };
+        let pad = |w: &[String]| -> Vec<String> { w.iter().cloned().chain((n == 4).then(|| "0".to_string())).collect() };
+        let (a, b) = (tuple_of(&pad(&words[1..1 + n])), tuple_of(&pad(&words[1 + n..])));
+        let equal = a.is_some() && a == b;
+        let show = |t: Option<Tuple>| {
+            t.map_or("(not numbers)".to_string(), |t| if n == 4 { format!("{} {} {} {}", t.file, t.noun, t.verb, t.case) } else { t.to_string() })
+        };
+        self.talk_note(format!("{at}: testMessage {} vs {}: {}", show(a), show(b), if equal { "equal: 0" } else { "different: 1" }));
+        if equal { "0" } else { "1" }.into()
+    }
+
+    /// `KQMonster::stateChangeNotify <recipient> <issuer>` and
+    /// `clearStateChangeNotify` (rule 13).
+    fn state_change_notify(&mut self, words: &[String], at: &str) -> String {
+        let [_, recipient, issuer] = words else {
+            self.note(format!("{at}: usage: {} <recipient> <issuer>; nothing", words[0]));
+            return "1".into();
+        };
+        let list = self.notify.entry(issuer.to_ascii_lowercase()).or_default();
+        let line = if words[0] == "KQMonster::stateChangeNotify" {
+            if list.iter().any(|r| r.eq_ignore_ascii_case(recipient)) {
+                format!("{recipient} already hears {issuer}")
+            } else {
+                list.push(recipient.clone());
+                format!("{recipient} now hears {issuer}'s TalkComplete (StateChange: monsters, M5)")
+            }
+        } else {
+            let before = list.len();
+            list.retain(|r| !r.eq_ignore_ascii_case(recipient));
+            if list.len() < before {
+                format!("{recipient} no longer hears {issuer}")
+            } else {
+                format!("{recipient} did not hear {issuer}; nothing")
+            }
+        };
+        self.talk_note(format!("{at}: {}: {line}", words[0]));
+        "0".into()
+    }
+
+    /// Lines for `talk.log` since the last call.
+    pub fn take_talk_log(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.talk.log)
+    }
+}
+
 impl ScriptHost for WorldState {
     fn read(&self, name: &str) -> Option<Vec<u8>> {
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name).to_ascii_lowercase();
@@ -1630,6 +1847,10 @@ impl ScriptHost for WorldState {
                 Some(self.music_command(words, at))
             }
             "deleteObject" => Some(self.delete_objects(words, at)),
+            "KQMonster::speak" => Some(self.speak(words, at)),
+            "KQMonster::clearSpeak" => Some(self.clear_speak(words, at)),
+            "KQMonster::testMessage" => Some(self.test_message(words, at)),
+            "KQMonster::stateChangeNotify" | "KQMonster::clearStateChangeNotify" => Some(self.state_change_notify(words, at)),
             "KQObject::setScript" | "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
             _ => None,
         }
@@ -1710,6 +1931,11 @@ impl Active {
                 first_person_locked: false,
                 was_first_person: false,
                 connor_jump: None,
+                talk: Talk::default(),
+                notify: BTreeMap::new(),
+                connor_can_turn: false,
+                connor_at: None,
+                monsters: Vec::new(),
             },
         }
     }
@@ -2002,6 +2228,13 @@ impl Active {
             all.extend(args.iter().map(|a| a.to_string()));
             self.world.note(format!("script {} {}", b.1, all.join(" ")));
             self.scripts.call(&b.1, &all, &mut self.world);
+        } else if let Some((n, script)) = w.monsters.iter().find(|m| m.name.eq_ignore_ascii_case(name)).and_then(|m| Some((m.name.clone(), m.script.clone()?))) {
+            // A monster's script (M4 4a-2: only for TalkComplete; monsters
+            // don't get Init yet, M5).
+            let mut all = vec![n];
+            all.extend(args.iter().map(|a| a.to_string()));
+            self.world.note(format!("script {script} {}", all.join(" ")));
+            self.scripts.call(&script, &all, &mut self.world);
         } else {
             return false;
         }
@@ -2522,6 +2755,7 @@ impl Active {
                 break;
             }
         }
+        self.talk_step(now);
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {
             let a = self.world.doors[i].door.advance(dt);
@@ -2657,6 +2891,63 @@ impl Active {
         self.world.updates += 1;
     }
 
+    /// Remarks and speech, once per update after the events (M4 4a-2,
+    /// `talking.md` rules 7, 10-11): waits after a turn, lines ending and
+    /// starting, mouth changes; then each finished line's `TalkComplete`.
+    fn talk_step(&mut self, now: f64) {
+        // Rule 10: captions follow the console variable (Options.cs).
+        let captions = self.scripts.vars.get("Options::Captions") == Some("true");
+        let mut talk = std::mem::take(&mut self.world.talk);
+        let w = &self.world;
+        let exists = |name: &str| w.known.contains(&name.to_ascii_lowercase()) && !w.is_gone(name);
+        let finished = talk.update(now, captions, &exists);
+        self.world.talk = talk;
+        for f in finished {
+            self.talk_complete(&f, now);
+        }
+    }
+
+    /// Rule 13: after every line, `TalkComplete <file> <noun> <verb>
+    /// <case> <sequence>` to the issuer's own script at once (never
+    /// Connor's: he has none), and through the event queue to every
+    /// object registered with `stateChangeNotify` for the issuer. A
+    /// registration of the issuer for itself is skipped: that is the
+    /// message coming back from the group ("Do not reproduce": the
+    /// original decided this by a reused address and sometimes swallowed
+    /// the next line's message; ours never does).
+    fn talk_complete(&mut self, f: &Finished, now: f64) {
+        let t = f.tuple;
+        let data: Vec<String> = [t.file as u32, t.noun as u32, t.verb as u32, t.case as u32, t.seq as u32].iter().map(u32::to_string).collect();
+        let mut args = vec!["TalkComplete"];
+        args.extend(data.iter().map(String::as_str));
+        let issuer = f.issuer.clone();
+        let own = if issuer == CONNOR {
+            "Connor has no script (rule 13)".to_string()
+        } else if self.call_named(&issuer, &args) {
+            "its own script ran".to_string()
+        } else {
+            "no script of its own".to_string()
+        };
+        let recipients = self.world.notify.get(&issuer.to_ascii_lowercase()).cloned().unwrap_or_default();
+        let mut sent = Vec::new();
+        for r in recipients {
+            if r.eq_ignore_ascii_case(&issuer) {
+                sent.push(format!("{r}: skipped (the issuer itself: the message coming back from its group)"));
+                continue;
+            }
+            self.world.queue.send(now, 0.0, &r, "TalkComplete", &data, &format!("line #{} of {issuer}", f.id));
+            sent.push(format!("{r}: queued"));
+        }
+        let line = format!(
+            "{issuer}: TalkComplete {} (line #{}): {own}; notify group: {}",
+            data.join(" "),
+            f.id,
+            if sent.is_empty() { "nobody".to_string() } else { sent.join(", ") }
+        );
+        self.world.talk.log.push(format!("t {now:8.3}: {line}"));
+        self.world.note(line);
+    }
+
     /// A `KQAnimOnce`'s movement ended (`anim-scripts.md` rule 11): its
     /// script gets `Die`, its listener `Cue 300 0 <movement>`, then it is
     /// deleted if `setDeleteWhenDone` asked. No `EndLoop`, no waiting
@@ -2684,6 +2975,21 @@ impl Active {
             let req = if e.kind == "KQMusic::push" { MusicRequest::Push(name) } else { MusicRequest::Pop(name) };
             self.world.note(format!("{} now due{from}: handed to the music", req.describe()));
             self.world.music.push(req);
+            return;
+        }
+        // talking.md rule 13: a notify group's TalkComplete, a moment after
+        // the line ended.
+        if e.kind == "TalkComplete" {
+            let line = if self.world.is_gone(&e.target) {
+                "deleted; dropped".to_string()
+            } else {
+                let mut args = vec!["TalkComplete"];
+                args.extend(e.data.iter().map(String::as_str));
+                if self.call_named(&e.target, &args) { "its script ran".to_string() } else { "no object with a script by that name; dropped".to_string() }
+            };
+            let line = format!("TalkComplete {} to {}{from}: {line}", e.data.join(" "), e.target);
+            self.world.talk.log.push(format!("t {:8.3}: {line}", self.world.now()));
+            self.world.note(line);
             return;
         }
         // clicking.md rule 21: reserved cue numbers.
@@ -2847,7 +3153,7 @@ mod tests {
         Some(([-630.0, -190.0, 0.0], [600.0, -60.0, 1730.0]))
     }
 
-    fn active(script: &'static str, vars: &[(&str, &str)]) -> Active {
+    pub(super) fn active(script: &'static str, vars: &[(&str, &str)]) -> Active {
         let mut d = ActiveDoor {
             door: test_door(None),
             script: Some("door.cs".into()),
@@ -3868,7 +4174,7 @@ endif
         a.take_log();
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let log = a.take_log().join("\n");
-        assert!(log.contains("stub (later milestone, nothing done): KQMonster::speak Connor Connor 0 109 14 33 1 1"), "{log}");
+        assert!(log.contains("KQMonster::speak Connor to Connor: 0 109 14 33 1…1: to itself, no turn; Connor: queued"), "{log}");
         // A movement it doesn't have: movement 0 under that name
         // (anim-scripts.md rule 5), logged.
         let mut b = with_object("sendEvent 0 $1 KQAnimPlayEvent fly\n", "x");
@@ -3911,5 +4217,91 @@ endif
         let log = a.take_trap_log().join("\n");
         assert!(log.contains("Usage: KQMusic::push music_file"), "{log}");
         assert!(log.contains("KQMusic::create is obsolete, use music.kq instead"), "{log}");
+    }
+}
+
+#[cfg(test)]
+mod talk_tests {
+    use super::tests::active;
+    use super::*;
+    use crate::talk::Voice;
+    use kq8_data::msg::{Line, MessageFile, Talkers};
+
+    /// Made-up lines (never the game's): 63/1 and 55/1-2 Connor's.
+    fn with_book(a: &mut Active) {
+        let line = |noun, seq, raw: &str| Line { tuple: Tuple::new(1000, noun, 0, 0, seq), talker: 4, raw: raw.into() };
+        let file = MessageFile { kind: 0x0F, version: 5010, last_id: 0, lines: vec![line(63, 1, "Rip."), line(55, 1, "([#]) A."), line(55, 2, "B.")] };
+        a.world.talk.book.add("daventry/English", file, 1000);
+        a.world.talk.book.talkers = Talkers::parse(b"(define CONNOR 4)\n");
+        a.world.talk.voices = Some(Box::new(|folder, t| Some(Voice { path: format!("{folder}/{}", t.voice_name()), seconds: 0.4, mouths: vec![] })));
+        a.scripts.vars.set("Options::Captions", "true".into());
+    }
+
+    /// The pattern of a book that waits for Connor's line (not a copy).
+    const LISTENER: &str = "if test $2 == Init\n KQMonster::stateChangeNotify $1 Connor\n KQMonster::stateChangeNotify Connor Connor\nelse if test $2 == ConnorAction\n KQMonster::speak Connor Connor 1000 63 0 0 1 1\nelse if test $2 == TalkComplete\n if eval KQMonster::testMessage $3 $4 $5 $6 $7 1000 63 0 0 1\n  set L::heard $3 $4 $5 $6 $7\n endif\nendif\nendif\nendif\n";
+
+    #[test]
+    fn talk_complete_reaches_the_notify_group_a_moment_later() {
+        let mut a = active(LISTENER, &[]);
+        with_book(&mut a);
+        a.start();
+        let door = a.world.doors[0].door.name.clone();
+        a.scripts.call("door.cs", &[door.clone(), "ConnorAction".into()], &mut a.world);
+        // 0.4 s = 6 updates: the line ends in update 6, the group hears it
+        // in update 7 (queued, not at once).
+        for _ in 0..7 {
+            a.update();
+        }
+        assert_eq!(a.scripts.vars.get("L::heard"), None);
+        a.update();
+        assert_eq!(a.scripts.vars.get("L::heard"), Some("1000 63 0 0 1"));
+        let talk = a.world.take_talk_log().join("\n");
+        assert!(talk.contains("Connor has no script (rule 13); notify group: ") && talk.contains("Connor: skipped (the issuer itself"), "{talk}");
+        assert!(talk.contains(&format!("TalkComplete 1000 63 0 0 1 to {door} (sent by line #0 of Connor): its script ran")), "{talk}");
+        // A different line: testMessage says 1, nothing set.
+        a.scripts.vars.set("L::heard", "none".into());
+        a.scripts.call("door.cs", &[door.clone(), "TalkComplete".into(), "1000".into(), "55".into(), "0".into(), "0".into(), "1".into()], &mut a.world);
+        assert_eq!(a.scripts.vars.get("L::heard"), Some("none"));
+        // Cleared: no longer hears.
+        a.scripts.call("door.cs", &[], &mut a.world);
+        let mut w = &mut a.world;
+        w.state_change_notify(&["KQMonster::clearStateChangeNotify".into(), door.clone(), "Connor".into()], "t");
+        w = &mut a.world;
+        assert!(w.notify["connor"].iter().all(|r| !r.eq_ignore_ascii_case(&door)));
+    }
+
+    #[test]
+    fn connor_turns_to_the_listener_only_in_wait_or_move() {
+        let mut a = active("", &[]);
+        with_book(&mut a);
+        let door = a.world.doors[0].door.name.clone();
+        a.world.connor_at = Some([0.0, -3000.0, 0.0]);
+        let speak = |to: &str| -> Vec<String> { ["KQMonster::speak", "Connor", to, "1000", "55", "0", "0", "1", "0"].iter().map(|s| s.to_string()).collect() };
+        // Not in Wait or Move: queued at once, no turn.
+        a.world.speak(&speak(&door), "t");
+        assert!(a.world.requests.is_empty());
+        a.update();
+        assert!(a.world.talk.is_talking("Connor"));
+        a.world.talk.clear("Connor", a.world.now());
+        // In Wait or Move: the turn, the lines 0.5 s later; <last> 0 = 2.
+        a.world.connor_can_turn = true;
+        a.world.speak(&speak(&door), "t");
+        assert!(matches!(&a.world.requests[..], [Request::ConnorAuto { auto, .. }] if auto.target == [0.0, 0.0] && auto.cue.is_none()));
+        let log = a.world.take_talk_log().join("\n");
+        assert!(log.contains("1000 55 0 0 1…2 waits 0.5 s"), "{log}");
+        // Not a KQMonster: nothing.
+        assert_eq!(a.world.speak(&["KQMonster::speak".into(), door.clone(), "Connor".into(), "0".into(), "0".into(), "0".into(), "1".into(), "1".into(), "1".into()], "t"), "1");
+    }
+
+    #[test]
+    fn test_message_takes_9_or_11_words() {
+        let mut a = active("", &[]);
+        let w = |s: &str| -> Vec<String> { s.split_whitespace().map(str::to_string).collect() };
+        assert_eq!(a.world.test_message(&w("KQMonster::testMessage 1000 63 0 0 1 1000 63 0 0 1"), "t"), "0");
+        assert_eq!(a.world.test_message(&w("KQMonster::testMessage 1000 63 0 0 1000 63 0 0"), "t"), "0");
+        assert_eq!(a.world.test_message(&w("KQMonster::testMessage 1000 63 0 0 1 1000 63 0 0 2"), "t"), "1");
+        // The file as 16 bits, the others as bytes.
+        assert_eq!(a.world.test_message(&w("KQMonster::testMessage 66536 319 0 0 1000 63 0 0"), "t"), "0");
+        assert_eq!(a.world.test_message(&w("KQMonster::testMessage 1 2 3"), "t"), "1");
     }
 }

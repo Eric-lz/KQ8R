@@ -57,6 +57,7 @@ mod object_light;
 mod renderer;
 mod scene_lights;
 mod sound_view;
+mod talk_view;
 mod terrain_view;
 mod wall_lights;
 
@@ -383,6 +384,10 @@ fn main() -> ExitCode {
         }
         Scene::Ground(ground, mut objects, animation) => {
             let audibles = std::mem::take(&mut objects.audibles);
+            // Remarks and speech (M4 4a-2).
+            if let Ok(g) = GameDir::open(&args.game) {
+                objects.talk = Some(talk_view::load_talk(&g, &args.world, &mut shared.log.lock().unwrap()));
+            }
             let music = objects.music.take();
             app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
             if let Some(sound) = GameDir::open(&args.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &args.world, args.sound, audibles, music)) {

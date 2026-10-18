@@ -45,7 +45,8 @@
 use kq8_data::world_script::Vars;
 
 /// Commands of later milestones: the door scripts' (dialogue, GUI,
-/// inventory, cutscenes; `doors.md` "Commands door scripts use"), then
+/// inventory, cutscenes; `doors.md` "Commands door scripts use"; speech
+/// left the list in M4 4a-2), then
 /// those of Daventry's trap scripts that only act (music, monsters, ropes,
 /// cutscene camera, moving objects while playing; M3 step 3d-3), then the
 /// item commands of later milestones (M3 step 3e-2: `tossItems` needs
@@ -56,8 +57,7 @@ use kq8_data::world_script::Vars;
 /// world handles them now. Commands that answer a question (`getloc`,
 /// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
 /// unknown (error line, result 1) until they are studied.
-pub const STUBS: [&str; 25] = [
-    "KQMonster::speak",
+pub const STUBS: [&str; 22] = [
     "doPopup",
     "addMapIcon",
     "earnTeleport",
@@ -70,8 +70,6 @@ pub const STUBS: [&str; 25] = [
     "KQMonster::setChaseRadius",
     "KQMonster::setAlarmRadius",
     "KQMonster::goHome",
-    "KQMonster::stateChangeNotify",
-    "KQMonster::clearStateChangeNotify",
     "KQConner::setRope",
     "KQConner::setRopeCam",
     "KQConner::setRopeCam2",
@@ -294,6 +292,20 @@ impl Scripts {
                     Some("1".into())
                 }
             },
+            "eval" => {
+                // STAND-IN (M4 4a-2, Q103): no note describes `eval`; the
+                // data uses it only as `if eval KQMonster::testMessage …`
+                // (`talking.md` rule 14). Runs the rest as a command and
+                // keeps its result.
+                if words.len() < 2 {
+                    host.log(format!("{at}: eval without a command; 1 (stand-in, Q103)"));
+                    Some("1".into())
+                } else {
+                    host.log(format!("{at}: eval: runs '{}' (stand-in, Q103)", words[1..].join(" ")));
+                    self.checked_command(&words[1..], host, at, depth);
+                    return;
+                }
+            }
             "echo" => {
                 host.log(format!("{at}: echo {}", words[1..].join(" ")));
                 Some("0".into())
@@ -654,7 +666,7 @@ endif
 
     #[test]
     fn console_return_and_if_on_any_command() {
-        let (s, _) = run("test a == b\nset Saved $Console::Return\nif KQMonster::speak Connor Connor 0 1 2 3 1 1\nset Inv zero\nendif\n", &[], &[]);
+        let (s, _) = run("test a == b\nset Saved $Console::Return\nif doPopup 3\nset Inv zero\nendif\n", &[], &[]);
         assert_eq!(s.vars.get("Saved"), Some("-1"), "a false text == with the left word first (Q54)");
         assert_eq!(s.vars.get("Inv"), Some("zero"), "a stub leaves 0, so the branch is taken");
         // An unknown command fails; its `if` branch is skipped.

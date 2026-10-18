@@ -1555,3 +1555,23 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | `<last>` 0: the unbroken run of sequences from `<first>` | `talking.md` rule 6 | Unit test |
 | Lip-sync file: 2-byte header (0x8E / 0x0E, 0), records (u16 time, u16 shape) until time 0xFFFF | `kq8lip.txt` (layout); `talking.md` rule 17 (1/60 s, shapes 0–7) | `msg-verify`: 1,538 files read, times in order; 1,992 changes have a shape above 7 (open question 2) |
 | Texts read as 8-bit Latin-1 | **Our choice** (the files are Windows text; not traced) | — |
+
+### 4a-2, the queues and the script commands — `crates/kq8-core/src/{talk,active,script}.rs`, `crates/kq8-viewer/src/{talk_view,door_view,connor_view,load,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQMonster::speak` words, `<last>` 0, `nofade` only as the 10th word, the issuer must be a `KQMonster` or Connor | `talking.md` rule 6 | Unit test `connor_turns_to_the_listener_only_in_wait_or_move`; `talk.log` of the sign run: `1000 55 0 0 1…1 (<last> 0)` |
+| `<to>` another object: Connor turns with the scripted turn (`pointAndCue`'s, no cue), only in Wait or Move; the lines 0.5 s later; one waiting slot per issuer | `talking.md` rule 7, "Edge cases" | `connor.log` updates 32–42: the turn; `talk.log`: speak at 2.000 s, line at 2.533 s (the first update at or after 2.5 s); unit test `the_wait_after_turning_has_one_slot` |
+| A monster issuer's turn not done (monsters don't move yet); the 0.5 s wait kept | **Stand-in** (Q103 d) | — |
+| One queue per character; the duplicate check by file, noun, verb, case and first sequence; the next line starts at once | `talking.md` rules 9, 11 | Sign run: three clicks during the line "duplicate: not queued"; a click after it ended plays it again (line #1); unit test `lines_play_in_turn_…` |
+| A line: looked up (missing: dropped), speaker = talker object (generic: the issuer), voice next to the message file, caption if `Options::Captions` is true, ducking unless `nofade`, mouth changes from the lip-sync file, lasts its voice's length | `talking.md` rules 5, 10, 17 | Sign run: `A0RS1J00.001` 3.542 s, 39 mouth changes, caption with the leading space, ends at 6.133 s |
+| Line time counted in game time (15 updates per second) | **Our choice** (the voice plays in real time; the same while the game keeps up) | — |
+| A line with no voice or a missing talker: 0.06 s per character, at least 1 s | `talking.md` "Do not reproduce" (the note's example) | Unit test `talkers_speakers_and_lines_that_cant_be_played` |
+| `TalkComplete f n v c s` after every line: the issuer's own script at once (not Connor's), the `stateChangeNotify` group through the event queue (the next update); the issuer registered for itself is skipped | `talking.md` rule 13, "Do not reproduce" (no reused numbers; every line has its own) | Unit test `talk_complete_reaches_the_notify_group_a_moment_later`; sign run: "Connor has no script … nobody" |
+| `clearSpeak`: queue emptied, the line stopped, no `TalkComplete` | `talking.md` rule 15 | Unit test `clear_speak_stops_everything_without_talk_complete` |
+| Pending 0.5 s waits survive `clearSpeak` | **Stand-in** (Q103 b) | — |
+| `testMessage`: 9 or 11 words, 0 when equal; the file as 16 bits, the rest as bytes | `talking.md` rule 14 | Unit test `test_message_takes_9_or_11_words` |
+| `eval <command…>` runs the command and keeps its result | **Stand-in** (no note; Q103 a) | Unit test (the listener script) |
+| Message files searched in the world's `English` folder, then `GAME/ENGLISH` | `talking.md` rule 1 (the data's reading, not traced) | Viewer log: 4 files for Daventry |
+| `Options::Captions` from the `set` lines of `MASK/Options.cs` | `talking.md` rule 10 | Viewer log: `Options.cs sets Options::Captions = 'true'` |
+| Monsters: placed `KQMonster` objects with their place after `move` and their `script=`; their script gets `TalkComplete` (not `Init`, M5) | `talking.md` rules 6, 13 | Viewer log: Girl, Wizard, Ravenw, Shadow |

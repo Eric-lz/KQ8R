@@ -1122,6 +1122,12 @@ pub struct Objects {
     pub connor_stats: Option<(String, Option<String>)>,
     /// Every placed object's `stats=` line (3i-6): name, the line.
     pub object_stats: Vec<(String, String)>,
+    /// The placed `KQMonster`s (M4 4a-2, `talking.md` rule 6): name,
+    /// place after `move`, script.
+    pub monsters: Vec<kq8_core::active::Monster>,
+    /// The message files and voice lookup, and `Options.cs`'s `set`
+    /// lines (M4 4a-2), filled in by `main.rs`.
+    pub talk: Option<(kq8_core::talk::Talk, Vec<(String, String)>)>,
     /// `GAME/patch/BOUNDS.KQ`, for the draw-distance balls (M1 7a);
     /// `None` if it could not be read.
     pub game_bounds: Option<kq8_data::bounds::BoundingBoxes>,
@@ -1350,6 +1356,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         attack_dist: None,
         connor_stats: None,
         object_stats: Vec::new(),
+        monsters: Vec::new(),
         doors: Vec::new(),
         door_animations: Vec::new(),
         door_animation_index: BTreeMap::new(),
@@ -1547,6 +1554,7 @@ struct Placer<'a> {
     attack_dist: Option<f32>,
     connor_stats: Option<(String, Option<String>)>,
     object_stats: Vec<(String, String)>,
+    monsters: Vec<kq8_core::active::Monster>,
     doors: Vec<DoorAssets>,
     door_animations: Vec<Animation>,
     door_animation_index: BTreeMap<String, usize>,
@@ -2079,6 +2087,10 @@ impl Placer<'_> {
         }
         if !unused {
             self.located.insert(key.clone(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
+            if p.class.as_deref() == Some("KQMonster") {
+                let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+                self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script });
+            }
         }
 
         // Animated objects name their model through their current
@@ -3050,6 +3062,13 @@ impl Placer<'_> {
                 t.position = l.position;
             }
         }
+        // Monsters where the start-up scripts' `move` left them.
+        let mut monsters = self.monsters;
+        for m in &mut monsters {
+            if let Some(l) = self.located.get(&m.name.to_ascii_lowercase()) {
+                m.position = l.position;
+            }
+        }
         let mut known: Vec<String> = self.located.keys().cloned().collect();
         known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
         Objects {
@@ -3072,6 +3091,8 @@ impl Placer<'_> {
             attack_dist: self.attack_dist,
             connor_stats: self.connor_stats,
             object_stats: self.object_stats,
+            monsters,
+            talk: None,
             game_bounds: match self.game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
                 Some(Ok(bytes)) => Some(kq8_data::bounds::BoundingBoxes::parse(&bytes).0),
                 _ => None,

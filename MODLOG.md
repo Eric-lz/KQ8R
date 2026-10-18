@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-2: the speech queues and the script commands
+
+**Changed:** New `kq8-core/src/talk.rs` (each character's queue, the duplicate check, the 0.5 s wait slot, line timing, mouth schedule, events for the viewer; 4 unit tests). `active.rs`: `KQMonster::speak`, `clearSpeak`, `testMessage`, `stateChangeNotify`, `clearStateChangeNotify` are real commands now (no longer stubs); `TalkComplete` to the issuer's script and, through the event queue, to the notify group; Connor turns to the listener (scripted turn) when in Wait or Move; monsters (name, place, script); 3 unit tests. `script.rs`: `eval` (stand-in, Q103). Viewer: new `talk_view.rs` (message files of the world's `English` folder then `GAME/ENGLISH`, voice and lip-sync lookup, `Options.cs`'s `set` lines), `talk.log`, the loader collects `KQMonster`s. `docs/behaviour/QUESTIONS.md`: Q103. Provenance.
+**Why:** `docs/behaviour/talking.md` rules 6-15, "Do not reproduce".
+**Tested how:** `cargo test --workspace` (416 pass: 110 + 290 + 5 + 11), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --click alcmsign,45 --click alcmsign,50 --click alcmsign,60 --click alcmsign,120 --frames 3000 --sound off` (`talk.log`, `connor.log`, `run-4a2-sign.txt`).
+**Result:** Update 30 (2.000 s): `alcmsign.cs` says `KQMonster::speak Connor alcmsign 1000 55 0 0 1 0`: "Connor turns to face alcmsign at (245734, 255974)", waits 0.5 s; `connor.log` updates 32-42: `stop`, then `left`, heading to 2.496. Update 38 (2.533 s): line #0 starts, voice `daventry/English/A0RS1J00.001` 3.542 s, plain, other sounds x 0.2, `#` (can't be cut short), 39 mouth changes, caption " The alchemist's shop. There could be something useful inside.". The clicks at updates 45, 50, 60: "duplicate: not queued" (the one at 50 replaced the waiting slot). Update 92 (6.133 s): finished, queue empty, "TalkComplete 1000 55 0 0 1: Connor has no script; notify group: nobody". The click at update 120 plays it again (line #1, 8.533-12.133 s). Daventry has 4 placed `KQMonster`s (Girl, Wizard, Ravenw, Shadow); captions true from `Options.cs`.
+**Still broken / not tested:** Nothing is heard or shown yet (4a-3, 4a-4); the events are only logged. The notify group (`wizbook.cs`) is tested by a unit test only: reaching its line 1000 63 in the viewer needs its animation chain. Stand-ins (Q103): `eval`; waits kept through `clearSpeak`; a monster's turn not done. Monsters' scripts get `TalkComplete` but never `Init` (M5).
+**Next:** 4a-3, the voice and the ducking.
+
 ## 2026-10-18 M4 step 4a-1: reading message, talker and lip-sync files
 
 **Changed:** New `kq8-data/src/msg.rs` (message files, stage directions and the "no stop" mark, voice and lip-sync file names in base 36, `TALKERS.SH`, lip-sync files; 5 unit tests). New check `kq8 msg-verify` (`kq8-cli/src/msg_verify.rs`). Plan for 4a in `docs/DESIGN.md` (M4). `docs/provenance/README.md`.

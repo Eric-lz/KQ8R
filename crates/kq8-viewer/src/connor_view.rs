@@ -574,6 +574,12 @@ pub fn connor_keys(
 }
 
 impl ConnorSim {
+    /// He can turn to face a listener (`talking.md` rule 7): in Wait or
+    /// Move, i.e. the keys choose his movement.
+    pub fn can_turn_to_listener(&self) -> bool {
+        self.walker.mode == Mode::Free
+    }
+
     /// The jump he is in (`jump`, `runJump`, `backJump`) for the scripts'
     /// `KQConner::JumpDir` / `endJump` (M3 3m-1), `None` outside the Jump
     /// state.
