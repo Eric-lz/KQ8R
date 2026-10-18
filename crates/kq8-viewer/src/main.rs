@@ -101,7 +101,7 @@ struct Args {
     /// optionally only for the first N updates (`1,0,0,30`).
     hold: Option<([i8; 3], Option<u64>)>,
     /// Test: press Jump once, before update N + 1.
-    jump: Option<u64>,
+    jump: Vec<u64>,
     /// Test: press a turn key before update N + 1 and hold it (`N` or
     /// `N,1` left, `N,-1` right).
     turn: Option<(u64, i8)>,
@@ -143,7 +143,7 @@ fn parse_args() -> Result<Args, String> {
         frames: None,
         lift: None,
         hold: None,
-        jump: None,
+        jump: Vec::new(),
         turn: None,
         at: None,
         click: Vec::new(),
@@ -227,7 +227,7 @@ fn parse_args() -> Result<Args, String> {
                 })
             }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
-            "--jump" => a.jump = Some(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
+            "--jump" => a.jump.push(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
                 let v = value()?;
                 let n: Vec<i64> = v.split(',').map(|x| x.trim().parse::<i64>()).collect::<Result<_, _>>().map_err(|_| "--turn needs updates[,1 left / -1 right] e.g. 40,-1".to_string())?;
@@ -397,7 +397,7 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::Fly::new())
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
-                .insert_resource(connor_view::JumpAt(args.jump))
+                .insert_resource(connor_view::JumpAt(args.jump.clone()))
                 .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))
                 .insert_resource(door_view::ClickAt(args.click))

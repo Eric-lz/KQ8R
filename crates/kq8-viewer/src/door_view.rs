@@ -637,6 +637,11 @@ pub fn trap_step(
         sim.active.world.log.push(format!("update {}: {at}: KQMonster::setState Connor special {items}", sim.active.world.updates));
         sim.active.world.requests.push(Request::ConnorSpecial { items, at });
     }
+    // What his trap touches ask counts as asked inside his update (rule
+    // 30 of anim-scripts.md: a trap's script runs inside his move; 3m-1),
+    // as do the `Push` calls below (3l-1).
+    let inside_from = sim.active.world.requests.len();
+    sim.active.world.connor_jump = connor.jump_state();
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
@@ -668,19 +673,40 @@ pub fn trap_step(
     // right after his move (pushing.md rule 3 says mid-move: our order).
     // What those calls ask counts as asked inside his update (3l-1): a
     // `move Connor` among it is followed by the rest of his update.
-    let inside_from = sim.active.world.requests.len();
     let pushed = std::mem::take(&mut connor.push_calls);
     for name in &pushed {
         if !sim.active.push_call(name) && !connor.not_pushable.contains(name) {
             connor.not_pushable.push(name.clone());
         }
     }
-    let inside = inside_from..sim.active.world.requests.len();
+    // State requests a jump refused at an earlier update go first (3m-1).
+    let retried = connor.refused.len();
+    let inside = inside_from + retried..sim.active.world.requests.len() + retried;
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
     let mut camera = camera;
-    for (i, r) in std::mem::take(&mut sim.active.world.requests).into_iter().enumerate() {
+    let requests: Vec<Request> = std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).collect();
+    for (i, r) in requests.into_iter().enumerate() {
+        let again = if i < retried { " (tried again)" } else { "" };
+        // anim-scripts.md rule 28: during an unfinished jump a state
+        // request finishes it first (handsOff on) or is refused.
+        let state = match &r {
+            Request::ConnorSpecial { at, .. } => Some(("setState special", at.clone())),
+            Request::ConnorAuto { auto, at } if matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. }) => Some(("scripted walk (Wait)", at.clone())),
+            _ => None,
+        };
+        if let Some((what, at)) = state {
+            if !connor.state_request(what, &at) {
+                let line = format!("update {}: {at}: {what}{again}: refused (Connor's jump is not finished); tried again next update", sim.active.world.updates);
+                if let Some(log) = &mut sim.trap_log {
+                    log.detail(line);
+                }
+                connor.refused.push(r);
+                continue;
+            }
+        }
         let line = match r {
+            Request::EndJump { at } => format!("{at}: applied: {}", connor.end_jump(&at)),
             Request::SetRun { run, at } => {
                 connor.set_run(run, &at);
                 format!("{at}: applied: Connor's run switch {}", if run { "on" } else { "off" })
@@ -703,7 +729,7 @@ pub fn trap_step(
             }
             Request::ConnorSpecial { items, at } => {
                 let line = connor.start_special(&items, &at);
-                format!("{at}: applied: Connor {line}")
+                format!("{at}: applied{again}: Connor {line}")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
                 // The scene his update used; the objects he pushed this
@@ -925,6 +951,8 @@ pub fn door_step(
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
+    // KQConner::JumpDir / endJump in timed cues (3m-1).
+    sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
     let updates = sim.active.world.updates;
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut click_at.0).into_iter().partition(|(_, n)| updates >= *n);
     click_at.0 = later;

@@ -65,6 +65,44 @@ pub fn can_jump<'a>(
     Ok(kind)
 }
 
+/// `KQConner::endJump` (`anim-scripts.md` rule 28, M3 3m-1): in the Jump
+/// state, what a crash does to the jump (gravity on, steps 325, the
+/// animation cut short) and the jump marked finished, with no state change:
+/// he stays in Jump and its animation plays on. If nothing else sets a
+/// state, the jump still ends as usual (Fall). `None` outside the Jump
+/// state.
+pub fn finish_jump(mover: &mut Mover, walker: &mut Walker) -> Option<String> {
+    if walker.mode != Mode::Jump {
+        return None;
+    }
+    mover.end_jump_on_hit();
+    walker.jump_finished = true;
+    Some(format!(
+        "{} finished at z={:.0} (phase {:.3}): gravity on, steps 325, cut short; still in the Jump state",
+        walker.kind.jump(),
+        mover.position[2],
+        walker.phase
+    ))
+}
+
+/// A script asks Connor for another state (`setState … special`, a
+/// scripted walk) while he may be jumping (`anim-scripts.md` rule 28):
+/// - not jumping, or the jump already finished: allowed (`Ok(None)`);
+/// - `handsOff` on: the jump is finished first by itself, as by
+///   [`finish_jump`], then allowed (`Ok(Some(note))`);
+/// - otherwise refused: the Jump state refuses every other state while
+///   the jump is not finished (`Err(why)`).
+pub fn state_request(mover: &mut Mover, walker: &mut Walker, hands_off: bool) -> Result<Option<String>, String> {
+    if walker.mode != Mode::Jump || walker.jump_finished {
+        return Ok(None);
+    }
+    if hands_off {
+        let note = finish_jump(mover, walker).unwrap_or_default();
+        return Ok(Some(format!("handsOff on: the jump is finished first: {note}")));
+    }
+    Err(format!("{} is not finished: the Jump state refuses another state", walker.kind.jump()))
+}
+
 /// One update (1/15 s). `jump` = the Jump key was pressed since the last
 /// update.
 pub fn tick<'a>(
@@ -370,6 +408,56 @@ mod tests {
         assert_eq!(modes[..3], [Mode::Fall, Mode::Fall, Mode::Land], "{modes:?}");
         assert!(modes[3..].iter().all(|m| *m == Mode::Land || *m == Mode::Free), "{modes:?}");
         assert_eq!((m.state, m.position[2], m.use_gravity, m.step_up), (State::Normal, 0.0, true, 325.0));
+    }
+
+    #[test]
+    fn end_jump_then_special_replaces_the_jump_with_no_fall() {
+        // anim-scripts.md rules 28 and 30 (the windmill tumble), Q96 b.
+        let mut list = list();
+        list.push(("normal", one_shot(vec![[0.0; 3]; 33])));
+        let loops = lookup(&list);
+        let ground = Plane(0.0);
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        tick(&mut m, &mut w, STAND, false, &loops, &ground);
+        tick(&mut m, &mut w, STAND, true, &loops, &ground);
+        // Still in the jump's first, standing frames (the windmill's
+        // script puts him on the ground in the same update).
+        for _ in 0..5 {
+            tick(&mut m, &mut w, STAND, false, &loops, &ground);
+        }
+        assert_eq!((w.mode, m.state, m.use_gravity), (Mode::Jump, State::Jump, false));
+        // Without handsOff an unfinished jump refuses another state.
+        assert!(state_request(&mut m, &mut w, false).is_err());
+        assert!(finish_jump(&mut m, &mut w).is_some());
+        assert_eq!((w.mode, m.state, m.use_gravity, m.step_up, m.step_down), (Mode::Jump, State::Normal, true, 325.0, 325.0));
+        assert_eq!(state_request(&mut m, &mut w, false), Ok(None));
+        w.start_special(vec![crate::connor::SpecialStep::Play("normal", "normal".into())]);
+        // No Fall from that jump: the Special state plays to its end.
+        let mut falls = 0;
+        for _ in 0..40 {
+            let t = tick(&mut m, &mut w, STAND, false, &loops, &ground);
+            falls += t.notes.iter().filter(|n| n.contains("ended at")).count();
+            assert_ne!(w.mode, Mode::Fall);
+        }
+        assert_eq!(falls, 0);
+        assert_eq!((w.mode, m.position[2], m.on_ground), (Mode::Free, 0.0, true));
+        assert!(can_jump(&m, &w, &ground, &loops).is_ok());
+    }
+
+    #[test]
+    fn with_hands_off_a_state_request_finishes_the_jump_by_itself() {
+        let list = list();
+        let loops = lookup(&list);
+        let ground = Plane(0.0);
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        tick(&mut m, &mut w, STAND, true, &loops, &ground);
+        let note = state_request(&mut m, &mut w, true).expect("allowed").expect("a note");
+        assert!(note.contains("finished first"), "{note}");
+        assert!(w.jump_finished && m.use_gravity && m.state == State::Normal);
+        // Outside a jump nothing happens.
+        assert!(finish_jump(&mut m, &mut Walker::new(0.0)).is_none());
     }
 
     #[test]

@@ -129,6 +129,10 @@ pub struct ConnorSim {
     /// Scripted turns and walks that ended (M3 3l-2), whose cues
     /// `door_view::trap_step` sends.
     pub auto_ends: Vec<kq8_core::connor_auto::AutoEnd>,
+    /// State requests a jump refused (M3 3m-1, `anim-scripts.md` rule
+    /// 28): tried again at each later update by `door_view::trap_step`
+    /// (STAND-IN: when the original tries again was not traced).
+    pub refused: Vec<kq8_core::active::Request>,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -154,9 +158,10 @@ pub struct StartLift(pub Option<f32>);
 #[derive(Resource)]
 pub struct HoldIntent(pub Option<([i8; 3], Option<u64>)>);
 
-/// `--jump N`: a test that presses Jump once, before update N + 1.
+/// `--jump N` (repeatable): a test that presses Jump once, before update
+/// N + 1, for each N given.
 #[derive(Resource)]
-pub struct JumpAt(pub Option<u64>);
+pub struct JumpAt(pub Vec<u64>);
 
 /// `--turn N[,T]`: a test that presses a turn key (T = 1 left, the
 /// default, or −1 right) before update N + 1 and holds it from then on
@@ -364,6 +369,7 @@ pub fn spawn_connor(
         not_pushable: Vec::new(),
         hands_off: false,
         auto_ends: Vec::new(),
+        refused: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -480,8 +486,9 @@ pub fn connor_keys(
     if c.jump.is_some_and(|k| keys.just_pressed(k)) {
         sim.jump_pressed = true;
     }
-    if jump_at.0.is_some_and(|n| sim.updates >= n) {
-        jump_at.0 = None;
+    let due = jump_at.0.len();
+    jump_at.0.retain(|n| sim.updates < *n);
+    if jump_at.0.len() < due {
         sim.jump_pressed = true;
         let line = format!("connor update {}: test --jump: Jump pressed", sim.updates);
         shared.log.lock().unwrap().summary(&line);
@@ -546,6 +553,39 @@ pub fn connor_keys(
 }
 
 impl ConnorSim {
+    /// The jump he is in (`jump`, `runJump`, `backJump`) for the scripts'
+    /// `KQConner::JumpDir` / `endJump` (M3 3m-1), `None` outside the Jump
+    /// state.
+    pub fn jump_state(&self) -> Option<&'static str> {
+        (self.walker.mode == Mode::Jump).then(|| self.walker.kind.jump())
+    }
+
+    /// `KQConner::endJump` (`anim-scripts.md` rule 28): the jump finished,
+    /// no state change. Returns a line for the script logs.
+    pub fn end_jump(&mut self, at: &str) -> String {
+        let line = kq8_core::connor_update::finish_jump(&mut self.mover, &mut self.walker)
+            .unwrap_or_else(|| "not in the Jump state any more; nothing".into());
+        self.log.detail(format!("connor update {}: endJump: {line} ({at})", self.updates));
+        format!("endJump: {line}")
+    }
+
+    /// A script asks for another state (`anim-scripts.md` rule 28): during
+    /// an unfinished jump, with `handsOff` on the jump is finished first;
+    /// without it the request is refused (`false`). Logged either way.
+    pub fn state_request(&mut self, what: &str, at: &str) -> bool {
+        match kq8_core::connor_update::state_request(&mut self.mover, &mut self.walker, self.hands_off) {
+            Ok(None) => true,
+            Ok(Some(note)) => {
+                self.log.detail(format!("connor update {}: {what}: {note} ({at})", self.updates));
+                true
+            }
+            Err(why) => {
+                self.log.detail(format!("connor update {}: {what}: refused, {why}; tried again next update (stand-in) ({at})", self.updates));
+                false
+            }
+        }
+    }
+
     /// `KQMonster::setState Connor special <items>` (`anim-scripts.md`
     /// rule 16): the items worked out against the movements loaded (his
     /// own and the Special lists'), then the Special state. Returns a
@@ -588,7 +628,7 @@ impl ConnorSim {
             let r = self.mover.rest_of_update(world);
             let on = r.hits.iter().find(|h| h.pass == "down").map_or(r.check.to_string(), |h| format!("{} ({})", h.hit.what, h.result));
             rest += &format!(
-                "; inside his update (a Push call): the rest of it: drop {:.1}, step-down 325, down pass on {on} -> z {:.1}, on ground {}",
+                "; inside his update (a trap touch or a Push call): the rest of it: drop {:.1}, step-down 325, down pass on {on} -> z {:.1}, on ground {}",
                 r.drop, self.mover.position[2], self.mover.on_ground
             );
         } else {

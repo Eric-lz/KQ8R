@@ -407,6 +407,10 @@ pub struct Walker {
     /// The last jump's kind, for the hold, landing and death animations
     /// (`Stand` after a walk-off).
     pub kind: JumpKind,
+    /// The jump going on is finished (`KQConner::endJump`, or a state
+    /// request with `handsOff` on; `anim-scripts.md` rule 28): the Jump
+    /// state now lets another state replace it.
+    pub jump_finished: bool,
     /// The lean into a turn while running, radians about his forward axis;
     /// positive = leaning to his left (turning left). Drawing only.
     pub bank: f32,
@@ -476,6 +480,7 @@ impl Walker {
             playing: None,
             choice: "stop",
             kind: JumpKind::Stand,
+            jump_finished: false,
             submerged: false,
             bank: 0.0,
             lean_allowed: false,
@@ -691,6 +696,7 @@ impl Walker {
     pub fn start_jump(&mut self, kind: JumpKind) {
         self.clear_transitions();
         self.kind = kind;
+        self.jump_finished = false;
         self.mode = Mode::Jump;
         self.movement = kind.jump();
         self.phase = 0.0;

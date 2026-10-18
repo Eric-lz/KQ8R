@@ -350,7 +350,7 @@ repeated and checked in the logs. They do not change the game's rules.
   number N, forward and turn are let go after N updates.
 - `--turn N[,1|-1]`: press a turn key before update N + 1 and keep it
   pressed (1 left by default, -1 right).
-- `--jump N`: press Jump once, before update N + 1.
+- `--jump N`: press Jump once, before update N + 1 (repeatable).
 
 ### Clicking and items (ground view only)
 

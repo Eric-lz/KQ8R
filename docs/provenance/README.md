@@ -1419,3 +1419,17 @@ This replaces the Q90 b and d stand-ins of 3k-4.
 | Answers the hand mode: sword 0, bow 1, empty hands 4 | `pushing.md` "Words used here" (the game's own help text) | Unit test `get_do_mode_answers_empty_hands`; `traps.log` (windmill) |
 | Always 4: no weapons yet, `setDoMode` a stub | **Our state** (until M5) | — |
 
+## The answers to Q94–Q96 and the camera flights (M3 step 3m)
+
+### 3m-1, the windmill tumble — `crates/kq8-core/src/{active,connor,connor_update,script}.rs`, `crates/kq8-viewer/src/{connor_view,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQConner::JumpDir`: 1 in the Jump state with `backJump`, 0 with `jump`/`runJump`, 0 and the usage text outside a jump | `anim-scripts.md` rule 29 (Q96 a) | Unit test `jump_dir_and_end_jump_answer_from_connors_jump`; `traps-3m1-windmill.log` update 38 |
+| `KQConner::endJump`: in the Jump state gravity on, steps 325, cut short, the jump finished, no state change, result 1; else the usage text and 0 | `anim-scripts.md` rule 28 (Q96 b) | Same unit test; `end_jump_then_special_replaces_the_jump_with_no_fall`; `connor-3m1-windmill.log` |
+| An unfinished jump refuses another state; with `handsOff` on a state request finishes it first; once Special replaces Jump no Fall follows | `anim-scripts.md` rule 28, `connor-physics.md` "Jumping" rule 4 | Unit tests `with_hands_off_a_state_request_finishes_the_jump_by_itself`, `end_jump_then_special_replaces_the_jump_with_no_fall` |
+| A refused state request is tried again at each later update | **Stand-in** (when the original tries again was not traced) | — |
+| `setState … special` and a scripted walk (it puts him in Wait) count as state requests | **Our reading** of "any state request" | — |
+| A trap's script runs inside Connor's move: its `move Connor` gets the rest of his update | `anim-scripts.md` rule 30 | `connor-3m1-windmill.log` update 38; watermill update 1 |
+| The scripts see Connor's jump as it was at the end of his last update (our scripts run after his move) | **Our method** | — |
+

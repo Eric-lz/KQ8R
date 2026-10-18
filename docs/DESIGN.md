@@ -1529,6 +1529,81 @@ catchers, ground animators).
     - Not in 3l: first person (none yet), `follow <other object>`,
       `KQCamera` cut/fly lists (`addCamLoc`, `flyToCamLoc`; logged), the
       mask icon and GUI panels (no GUI yet).
+  - **3m — the answers to Q94–Q96 and the camera flights (planned
+    2026-10-18).** Study session A answered Q94–Q96 and traced the
+    camera flights (2026-10-18). Four sub-steps, each with its own log
+    check, MODLOG entry and commit. Order: what blocks play first.
+    - **3m-1, the windmill tumble: `KQConner::endJump`, `JumpDir`**
+      (**done** 2026-10-18; Q96; `anim-scripts.md` rules 28–30, `connor-physics.md`
+      "Jumping" rule 4). The viewer tells the scripts, before they run,
+      whether Connor is in the Jump state and with which jump
+      (`WorldState::connor_jump`). `JumpDir`: 1 in the Jump state with
+      `backJump`, 0 otherwise (outside a jump also a console line).
+      `endJump`: outside the Jump state a console line and 0; in it a
+      request that does what a crash does to the jump (gravity on,
+      steps 325, the animation cut short, the jump marked finished) with
+      no state change, and 1. A state request (`setState … special`, a
+      scripted walk) while a jump is not finished: with `handsOff` on
+      it finishes the jump the same way first; without it, it is
+      refused and tried again at each later update (STAND-IN: when the
+      original tries again was not traced; logged). Once Special
+      replaces Jump, the jump's end no longer starts Fall. The trap's
+      `On` script runs inside Connor's move (rule 30), so its `move
+      Connor` gets the rest of his update, as a `Push` call's does
+      (3l-1). Test: the user's windmill jump; `connor.log`: state
+      `special` with gravity on from the trap's update; after cue 300
+      (33 updates later) z 8050 → 7650; then `--jump` works again.
+    - **3m-2, a push and a wall in the same sweep** (Q95; `pushing.md`
+      rule 4.3, `connor-physics.md` "Against a building" step 7). The
+      push no longer ends the across pass: when the pushed object's
+      turn in the list comes, Connor's position **and his sweep**
+      become P (pass start + 0.95 × the object's movement); the objects
+      later in the list see a zero-length move (STAND-IN: they test
+      nothing, as buildings under 0.1; not traced; logged). A wall
+      contact kept from earlier in the list is then handled with wanted
+      end P and no movement: never head-on; P is projected onto the
+      wall's plane through the contact and he slides there from the
+      contact (the usual slide; a push inside it moves the object by
+      the slide's step, his end = the slide's start + 0.95 × that).
+      Test: push a barrel into the pub; `connor.log`: "push, then the
+      kept wall hit", 225 from the face, then Push → Move → `Stop` with
+      the forward block.
+    - **3m-3, scripted walks** (Q94; `anim-scripts.md` rules 24–25, rule
+      24 corrected). During the automatic turn (counted per update):
+      update 1 `Stop`; from update 2 (no wall block) the turn direction
+      counts as a turn key for the animation (`Left`/`Right`; the
+      walker's own key turning stays off, the automatic turn turns
+      him); one update later `Walk` (`Run` for `runTo`) with the start
+      and distance recorded; when the turn ends Move starts afresh and
+      the distance is measured again. `pointAndCue`: `Left`/`Right`
+      until the turn ends, then nothing asks (Wait). A wall block on at
+      the start: `Stop` through the turn, the walk still starts (a
+      scripted walk's choice ignores the blocks), the block stays on
+      after. `walkTo x y <who>` without both cue numbers: a console
+      line, the walk, no cue. Test: the watermill run; `connor.log`:
+      `stop`, `left`, then `walk` during the turn; "measured again";
+      arrival at (190800, 230100).
+    - **3m-4, camera flights and cuts** (`camera.md` "Camera flights and
+      cuts" rules 1–7, "Edge cases", "Do not reproduce"). New
+      `kq8-core/src/camera_flight.rs`: the spot list (`addCamLoc x y z
+      [newlist]`), the spot nearest the camera, the flight (N =
+      whole(seconds × 15) + 1 updates, or distance ÷ 5,000 per second;
+      equal steps on a straight line, roll in equal steps to `endRoll`),
+      the aim (1,400 above the aim point; tilt −0.2 + the angle up to it
+      each update; heading: locked within 0.02, else 1/3 of the rest per
+      update with one snap angle 0.063 on both sides), the cut (at once,
+      one follow update), and the pull-in on update N ("places" back
+      on: the range around the aim point, along the line to it). The
+      viewer's game camera gets the "places"/"aims" switches (`follow
+      Connor` both on, `follow none` both off), runs a flight once per
+      update, and stays still after it. An empty list: nothing, an
+      error logged. STAND-IN (not settled): the height on update N: the
+      height rule is not applied on that update (logged with the height
+      it would want). Roll is logged, not drawn (as for `move
+      KQCamera`). Test: the watermill run; `camera.log`: N = 31 from cue
+      4, the same step every update, heading 2.153 and tilt +0.016 once
+      locked, update 31 at about (188999.0, 229341.5, 10863), then still
+      until cue 6; the mill wheel (`wheeltp1.cs`): N = 46.
 
 ### M4 — Talk, listen, use the menus
 

@@ -138,6 +138,11 @@ pub enum Request {
     ConnorAuto { auto: crate::connor_auto::AutoMove, at: String },
     /// `walkExit`: a scripted walk ends now, with its cue (rule 24).
     WalkExit { at: String },
+    /// `KQConner::endJump` while Connor is in the Jump state
+    /// (`anim-scripts.md` rule 28, M3 3m-1): the jump is finished as a
+    /// crash finishes it (gravity on, steps 325, cut short), no state
+    /// change.
+    EndJump { at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -530,6 +535,10 @@ pub struct WorldState {
     /// `…::SetThirdPerson::WasFirstPerson` (we are always in third person).
     first_person_locked: bool,
     was_first_person: bool,
+    /// Connor's jump, set by the caller before scripts run (M3 3m-1,
+    /// `anim-scripts.md` rules 28–29): the jump movement (`jump`,
+    /// `runJump`, `backJump`) while he is in the Jump state, else `None`.
+    pub connor_jump: Option<&'static str>,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
@@ -1030,6 +1039,41 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQConner::JumpDir` (`anim-scripts.md` rule 29): 1 in the Jump
+    /// state with `backJump`, 0 with `jump` or `runJump`; outside a jump 0
+    /// and the usage text on the console.
+    fn jump_dir(&mut self, at: &str) -> String {
+        match self.connor_jump {
+            Some(jump) => {
+                let back = jump.eq_ignore_ascii_case("backJump");
+                self.note(format!("{at}: KQConner::JumpDir: {} (Connor is in the Jump state with {jump})", u8::from(back)));
+                u8::from(back).to_string()
+            }
+            None => {
+                self.note(format!("{at}: KQConner::JumpDir: 0; console: \"returns 0 if forward, 1 if backward\" (Connor is not in the Jump state)"));
+                "0".into()
+            }
+        }
+    }
+
+    /// `KQConner::endJump` (`anim-scripts.md` rule 28): in the Jump state a
+    /// request that finishes the jump (gravity on, steps 325, cut short;
+    /// no state change), result 1; otherwise the usage text on the console
+    /// and 0.
+    fn end_jump(&mut self, at: &str) -> String {
+        match self.connor_jump {
+            Some(jump) => {
+                self.note(format!("{at}: KQConner::endJump: Connor's {jump} is finished (gravity on, steps 325, cut short; he stays in the Jump state)"));
+                self.requests.push(Request::EndJump { at: at.to_string() });
+                "1".into()
+            }
+            None => {
+                self.note(format!("{at}: KQConner::endJump: 0; console: \"use when Connor is in the jump state to get him out of it\" (he is not in it)"));
+                "0".into()
+            }
+        }
+    }
+
     /// `KQConner::walkTo x y [<who> <c> <d>]`, `KQConner::runTo …` and
     /// `pointAndCue x y z [<who> <c> <d>]` (`anim-scripts.md` rules
     /// 24–25): a request for Connor. Without `<who>` no cue is sent
@@ -1508,6 +1552,8 @@ impl ScriptHost for WorldState {
                 self.note(format!("{at}: KQConner::getDoMode: {mode} (empty hands; no weapons yet)"));
                 Some(mode.to_string())
             }
+            "KQConner::JumpDir" => Some(self.jump_dir(at)),
+            "KQConner::endJump" => Some(self.end_jump(at)),
             "KQCamera::setRange" => Some(self.set_range(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
@@ -1613,6 +1659,7 @@ impl Active {
                 calls_out: Vec::new(),
                 first_person_locked: false,
                 was_first_person: false,
+                connor_jump: None,
             },
         }
     }
@@ -3546,6 +3593,36 @@ endif
         let mut a = with_object(script, "x");
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert_eq!(a.scripts.vars.get("M::mode"), Some("4"));
+    }
+
+    #[test]
+    fn jump_dir_and_end_jump_answer_from_connors_jump() {
+        // miltrap1.cs's two calls (anim-scripts.md rules 28-29).
+        let script = "if test $2 == ConnorAction
+ KQConner::JumpDir
+ set M::dir $Console::Return
+ KQConner::endJump
+ set M::end $Console::Return
+endif
+";
+        let run = |jump: Option<&'static str>| {
+            let mut a = with_object(script, "x");
+            a.world.connor_jump = jump;
+            a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+            let ends = a.world.requests.iter().filter(|r| matches!(r, Request::EndJump { .. })).count();
+            (a.scripts.vars.get("M::dir").map(str::to_string), a.scripts.vars.get("M::end").map(str::to_string), ends, a.take_log().join("
+"))
+        };
+        let (dir, end, ends, _) = run(Some("backJump"));
+        assert_eq!((dir.as_deref(), end.as_deref(), ends), (Some("1"), Some("1"), 1));
+        for jump in ["jump", "runJump"] {
+            let (dir, end, ends, _) = run(Some(jump));
+            assert_eq!((dir.as_deref(), end.as_deref(), ends), (Some("0"), Some("1"), 1), "{jump}");
+        }
+        // Outside a jump: 0, a console line each, no request.
+        let (dir, end, ends, log) = run(None);
+        assert_eq!((dir.as_deref(), end.as_deref(), ends), (Some("0"), Some("0"), 0));
+        assert!(log.contains("returns 0 if forward, 1 if backward") && log.contains("use when Connor is in the jump state"), "{log}");
     }
 
     #[test]
