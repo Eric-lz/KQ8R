@@ -8,6 +8,7 @@ pub mod active;
 pub mod anim;
 pub mod camera;
 pub mod camera_flight;
+pub mod caption;
 pub mod chest;
 pub mod click;
 pub mod collide;

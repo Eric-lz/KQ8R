@@ -1687,3 +1687,15 @@ note yet (A is studying the interface).
 | Children's rectangles are relative to their dialog | Observed (they fit their parent's size, e.g. the meters' bars inside the 256×14 strip) | `gui-verify-4b2.log`; Q107 (c) |
 | The caption box: `IDDLG_CAPTION` (542) in `Gplayscr.gui`, a `CCBD` at (320, 400)-(640, 416), caption y 2, font `console.pft` (the world's own, 15 high), justification 0x9, picture `stontran.pbm` (the world's `8gui` folder) | Data | `gui-verify-4b2.log`; how it is drawn: Q107 |
 | The in-game panels (meters, health slots, inventory bars, minimap, map window) and their pictures are in the same file | Data | `gui-verify-4b2.log` |
+
+### 4b-3, captions in the original font — `crates/kq8-core/src/caption.rs`, `crates/kq8-viewer/src/{talk_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The caption's font (`console.pft`, the world's `8gui` copy), strip picture (`stontran.pbm`), line height 16 and text 2 pixels down | Data: `IDDLG_CAPTION` in `Gplayscr.gui` (4b-2) | `viewer-4b3-sign.log`: "caption: IDDLG_CAPTION (320, 400)-(640, 416), caption y 2, font Daventry/8gui/console.pft …" |
+| At the bottom of the screen (no status bar is drawn yet), text centred, the strip growing upwards one line per text line | The user's check in the original (2026-10-18) | `viewer-4b3-sign.log`: 2 lines, 640x32; `viewer-4b3-tomb.log`: 4 lines, 640x64 |
+| Wrapped by words at 400 pixels | **Stand-in** (Q107 a): the user's line break (after "something") puts the width between 365 and 418 pixels in this font, not the layout's 320 | Unit test `words_are_added_while_they_fit`; sign: lines 365 and 104 wide, the break where the user saw it |
+| Font and strip coloured by the world's palette, index 0 see-through | **Stand-in** (Q106), chosen by measurement: with the world palette the font's 8 colours are black (its most common, an edge) and golds (232, 200, 128 …), the strip's are greys 56-104 (stone); the menus palette gives a pale yellow and red strip. The user describes gold letters on a stone strip | — |
+| The strip is drawn across the whole screen width, tiled from its top-left | **Stand-in** (Q107 a; not observed) | — |
+| The 640x480 picture is stretched to the window, nearest pixels | **Our choice** | — |
+| Without the layout, font or palette: the old 4a-4 text panel | **Our choice** | Log line "the 4a-4 text panel is used" |

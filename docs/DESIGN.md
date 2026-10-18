@@ -1824,12 +1824,23 @@ inventory and menus.
     pictures; every file read to its exact end. This shows what the
     caption box (`IDDLG_CAPTION`, in `Gplayscr.gui`) and the health
     panel are made of.
-  - **4b-3, captions in the original font** (viewer). If the layout
-    names the caption's place and font, draw the caption there in that
-    font (glyph pictures scaled from 640×480 to the window). What the
-    layout doesn't say (colour, line wrapping, a band behind the text)
-    stays our stand-in until A's note; if it names no font, a sample
-    line in each font for the user to pick by eye.
+  - **4b-3, captions in the original font** (**done** 2026-10-18, not seen by eye yet; `kq8-core/src/caption.rs`,
+    new: wrapping and the picture; viewer `talk_view.rs`). From the
+    layout (`IDDLG_CAPTION`): the font (`console.pft`, the world's),
+    the strip picture (`stontran.pbm`), 16 pixels per line, text 2
+    pixels down. From the user's check in the original (2026-10-18):
+    the caption sits at the bottom of the screen, just above the status
+    bar (at the very bottom when the bar is hidden; we draw no bar yet,
+    so at the bottom); the text is centred; the stone strip grows
+    upwards one line at a time until every line fits; the alchemist's
+    sign breaks after "something". Measured: that first line is 365
+    pixels wide in the font, with "useful" 419, so the wrap width is
+    between 365 and 418, not the layout's 320. Colours: the world's
+    palette for both (gold letters with a black edge, grey stone;
+    measured from the palette values), index 0 see-through. STAND-INS
+    until A's note (Q106, Q107): wrap width 400, greedy word wrap,
+    the strip across the full width of the screen, tiled from its
+    top-left; the 640×480 picture stretched to the window.
   - Tests: unit tests on hand-made files; `font-verify`, `gui-verify`
     on the install; viewer run with the alchemist's sign.
 

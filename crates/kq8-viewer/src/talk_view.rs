@@ -20,6 +20,15 @@
 //! not studied (`talking.md` open question 4, M4 GUI): Bevy's own font,
 //! white on a dark band, wrapped to 80% of the window.
 //!
+//! 4b-3: the caption is drawn as the original's (`kq8_core::caption`):
+//! the world's `console.pft` font over the `stontran.pbm` stone strip,
+//! both named by the layout `IDDLG_CAPTION` in `Gplayscr.gui`, coloured
+//! by the world's palette (STAND-IN, Q106), centred, at the bottom of the
+//! window, growing upwards one 16-pixel line at a time (the user's check
+//! in the original); wrapped at `WRAP_WIDTH` (STAND-IN, Q107 a). The
+//! 640x480 picture is stretched to the window. Without those files, the
+//! 4a-4 text panel above.
+//!
 //! 4a-6: the mouth ([`mouth_draw`]): Connor's face texture (`baseLip`)
 //! becomes `lip<n>` of his `lips=` list at each mouth change, `lip0` for
 //! shapes of 8 or more and at rest (rule 18). Other characters are not
@@ -203,15 +212,151 @@ pub fn setup_caption(mut commands: Commands) {
         });
 }
 
+/// What the caption picture is made from (4b-3).
+#[derive(Resource)]
+pub struct CaptionStyle {
+    font: kq8_data::font::Font,
+    /// The strip picture: width, height, palette indices.
+    strip: Option<(u32, u32, Vec<u8>)>,
+    palette: [kq8_data::palette::Rgb; 256],
+    caption_box: kq8_core::caption::Box,
+}
+
+/// The first of `names` (paths under the install) that exists.
+fn first_found(game: &GameDir, names: &[String]) -> Option<(String, Vec<u8>)> {
+    names.iter().find_map(|n| Some((n.clone(), std::fs::read(game.find(n)?).ok()?)))
+}
+
+/// 4b-3: reads the caption box of `GAME/Resource/Gplayscr.gui`
+/// (`IDDLG_CAPTION` by the tag file), the font and strip picture it
+/// names (the world's `8gui` folder first, then `GAME/8Gui`), and the
+/// world's palette (`<world>/resource/<world>.ppl`, then
+/// `GAME/Resource/<world>.ppl`). `None` (logged) if any is missing.
+pub fn load_caption(game: &GameDir, world: &str, log: &mut Log) -> Option<CaptionStyle> {
+    use kq8_data::gui::{self, Kind, Tags};
+    fn fail(log: &mut Log, why: String) -> Option<CaptionStyle> {
+        log.summary(format!("caption: {why}; the 4a-4 text panel is used"));
+        None
+    }
+    let Some((_, tag_bytes)) = first_found(game, &["GAME/Resource/kqGuiTag.TTAG".into()]) else { return fail(log, "no kqGuiTag.TTAG".into()) };
+    let (tags, _) = Tags::parse(&String::from_utf8_lossy(&tag_bytes));
+    let Some((_, gui_bytes)) = first_found(game, &["GAME/Resource/Gplayscr.gui".into()]) else { return fail(log, "no Gplayscr.gui".into()) };
+    let layout = match gui::parse(&gui_bytes) {
+        Ok(l) => l,
+        Err(e) => return fail(log, format!("Gplayscr.gui: {e}")),
+    };
+    let Some(id) = tags.id_of("IDDLG_CAPTION") else { return fail(log, "no IDDLG_CAPTION tag".into()) };
+    let Some(c) = layout.find(id as u32) else { return fail(log, "no IDDLG_CAPTION in Gplayscr.gui".into()) };
+    let Kind::Dialog { caption: Some(cap), picture } = &c.kind else { return fail(log, "IDDLG_CAPTION is not a caption dialog".into()) };
+    let Some(font_name) = tags.string(cap.text.font) else { return fail(log, format!("font tag {} has no file name", cap.text.font)) };
+    let in_world = |name: &str| vec![format!("{world}/8gui/{name}"), format!("GAME/8Gui/{name}"), format!("GAME/Resource/{name}")];
+    let Some((font_path, font_bytes)) = first_found(game, &in_world(font_name)) else { return fail(log, format!("font {font_name} not found")) };
+    let font = match kq8_data::font::Font::parse(&font_bytes) {
+        Ok(f) => f,
+        Err(e) => return fail(log, format!("{font_path}: {e}")),
+    };
+    let strip_name = picture.and_then(|p| tags.string(p.bitmap));
+    let strip = strip_name.and_then(|n| first_found(game, &in_world(n))).and_then(|(path, b)| match kq8_data::Bitmap::parse(&b) {
+        Ok(bm) if bm.bit_count == 8 => Some((path, (bm.width, bm.height, bm.pixels))),
+        Ok(_) => None,
+        Err(e) => {
+            log.summary(format!("caption: {path}: {e}; no strip"));
+            None
+        }
+    });
+    let pal_names = [format!("{world}/resource/{world}.ppl"), format!("GAME/Resource/{world}.ppl")];
+    let Some((pal_path, pal_bytes)) = first_found(game, &pal_names) else { return fail(log, format!("no palette among {pal_names:?}")) };
+    let palette = match kq8_data::Palette::parse(&pal_bytes) {
+        Ok(p) => p.shown_colors(),
+        Err(e) => return fail(log, format!("{pal_path}: {e}")),
+    };
+    let [l, t, r, b] = c.rect;
+    let caption_box = kq8_core::caption::Box { line_height: (b - t).max(1) as u32, text_y: cap.y.max(0) as u32 };
+    log.summary(format!(
+        "caption: IDDLG_CAPTION ({l}, {t})-({r}, {b}), caption y {}, font {font_path} (height {}), strip {}, palette {pal_path} (stand-in, Q106); line {} px, wrap at {} px (stand-in, Q107 a)",
+        cap.y,
+        font.char_height,
+        strip.as_ref().map_or("none".to_string(), |(p, (w, h, _))| format!("{p} {w}x{h}")),
+        caption_box.line_height,
+        kq8_core::caption::WRAP_WIDTH
+    ));
+    Some(CaptionStyle { font, strip: strip.map(|(_, s)| s), palette, caption_box })
+}
+
+/// The caption picture's node (4b-3).
+#[derive(Component)]
+pub struct CaptionPicture;
+
+/// Spawns the hidden caption picture at the bottom of the window.
+pub fn setup_caption_picture(mut commands: Commands, style: Option<Res<CaptionStyle>>) {
+    if style.is_none() {
+        return;
+    }
+    commands.spawn((
+        Node { position_type: PositionType::Absolute, bottom: Val::Px(0.0), left: Val::Px(0.0), width: Val::Percent(100.0), height: Val::Percent(0.0), ..default() },
+        ImageNode::default(),
+        Visibility::Hidden,
+        CaptionPicture,
+    ));
+}
+
+/// 4b-3: draws the caption picture when the caption changed; each change
+/// in `viewer.log` with its lines and their widths.
+pub fn caption_picture_draw(
+    speech: Res<Speech>,
+    style: Option<Res<CaptionStyle>>,
+    mut node: Query<(&mut Node, &mut ImageNode, &mut Visibility), With<CaptionPicture>>,
+    mut images: ResMut<Assets<Image>>,
+    mut last: Local<Option<String>>,
+    shared: Res<crate::Shared>,
+) {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::image::ImageSampler;
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+    use kq8_core::caption;
+    let Some(style) = style else { return };
+    // The speech changes every frame (the mouths): only a new caption
+    // text makes a new picture.
+    let shown = speech.caption.as_ref().map(|(_, t)| t.clone());
+    if !speech.is_changed() || *last == shown {
+        return;
+    }
+    *last = shown;
+    let Ok((mut n, mut image, mut vis)) = node.single_mut() else { return };
+    let Some(text) = speech.caption.as_ref().map(|(_, t)| t.as_str()) else {
+        if *vis != Visibility::Hidden {
+            *vis = Visibility::Hidden;
+            shared.log.lock().unwrap().detail("caption picture hidden");
+        }
+        return;
+    };
+    let lines = caption::wrap(&style.font, text, caption::WRAP_WIDTH);
+    let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
+    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &lines, style.caption_box);
+    if h == 0 {
+        *vis = Visibility::Hidden;
+        return;
+    }
+    let mut picture = Image::new(Extent3d { width: w, height: h, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
+    picture.sampler = ImageSampler::nearest();
+    image.image = images.add(picture);
+    n.height = Val::Percent(100.0 * h as f32 / caption::SCREEN[1] as f32);
+    *vis = Visibility::Inherited;
+    let widths: Vec<u32> = lines.iter().map(|l| caption::text_width(&style.font, l)).collect();
+    shared.log.lock().unwrap().detail(format!("caption picture shown: {} line(s) {lines:?}, widths {widths:?} px (wrap {}), {w}x{h} of 640x480", lines.len(), caption::WRAP_WIDTH));
+}
+
 /// Shows or hides the caption when it changed; each change in
-/// `viewer.log`.
+/// `viewer.log`. With the original's caption picture (4b-3) this text
+/// panel stays hidden.
 pub fn caption_draw(
     speech: Res<Speech>,
     mut panel: Query<&mut Visibility, With<CaptionPanel>>,
     mut text: Query<&mut Text, With<CaptionText>>,
+    style: Option<Res<CaptionStyle>>,
     shared: Res<crate::Shared>,
 ) {
-    if !speech.is_changed() {
+    if !speech.is_changed() || style.is_some() {
         return;
     }
     let shown = speech.caption.as_ref().map(|(_, t)| t.as_str());

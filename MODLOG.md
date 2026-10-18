@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4b-3: captions in the original font, on the stone strip
+
+**Changed:** New `kq8-core/src/caption.rs` (word wrapping and the caption picture). Viewer `talk_view.rs`: `load_caption` reads the caption box from `Gplayscr.gui`, the font and strip it names, and the world's palette; `caption_picture_draw` draws the caption as a 640-wide picture at the bottom of the window, made again only when the text changes; the old 4a-4 text panel stays as a fallback. `main.rs`. `docs/DESIGN.md` (4b-3 plan with the user's observations), `QUESTIONS.md` (the user's check added to Q107), provenance.
+**Why:** The user asked for the captions to look like the original. Place, centring, growing strip and the line break: the user's check in the original. Font, strip, line height and text offset: the layout data.
+**Tested how:** `cargo test --workspace` (432 pass, 2 new), clippy clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`viewer-4b3-sign.log`); `--at 204100,176500,0 --click tomb2.01,20` (`viewer-4b3-tomb.log`).
+**Result:** Sign: "caption picture shown: 2 line(s) [\"The alchemist's shop. There could be something\", \"useful inside.\"], widths [365, 104] px", 640x32; hidden when the line ends. Tombstone: 4 lines (372, 331, 387, 332 pixels), 640x64.
+**Still broken / not tested:** Not seen by eye (the user's check is next). Stand-ins: the wrap width (400), greedy word wrap, the strip across the full width, the world palette for the colours (Q106, Q107). There is no status bar yet, so the caption sits at the very bottom.
+**Next:** The user's check by eye; then the health panel and inventory bars from the same layout.
+
 ## 2026-10-18 M4 step 4b-2: reading the screen layouts and the tag file; kq8 gui-verify
 
 **Changed:** New `kq8-data/src/gui.rs` (the `.gui` layout tree and the text tag file). New `kq8 gui-verify` (`gui-verify.log`; copy `gui-verify-4b2.log`). `QUESTIONS.md`: Q107. Provenance.
