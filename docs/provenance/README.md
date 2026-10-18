@@ -1676,3 +1676,14 @@ note yet (A is studying the interface).
 | Font flags `0x41` (bit 6 not in the note) in all fonts but the two `Resource` console fonts (`0x46`: monospaced, monochrome) | Observed | `font-verify` |
 | Glyph pixels are palette indices with many values per font (shaded letters); 0 = no ink; no font has its own palette | Observed | `font-verify` pixel values; which palette colours them: Q106 |
 | `14.pft` (and each world's `14*.pft`) covers only the space and the digits 0–9 | Observed | `font-verify`: 11 glyphs |
+
+### 4b-2, layouts and tags — `crates/kq8-data/src/gui.rs`, `crates/kq8-cli/src/gui_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A layout is one block: tag, size, version, id, flags, rectangle (left, top, right, bottom); then the fields of its kind, each kind's fields after those of the kind it builds on (`UIDL` child counts and children; `UICD` caption y, font, justification, text; `CCBD` / `CCAD` a picture; `UIBM` picture; `UITX` font, justification, text; `CCAB` / `CCBB` text + picture; the unused kinds too) | `kq8gui.txt` | `kq8 gui-verify`: the 9 layouts read to their exact end; unit test `a_dialog_with_a_bitmap_button_and_a_text` |
+| The block's size counts the bytes after the 8-byte tag and size; the field sizes (4 bytes each) | Observed (the note gives types, not sizes) | Every block of the 9 files ends exactly where its size says |
+| The tag file: `[TAG]`, then `id name <q>string<q>` lines, `//` comments, `[END]` | `kq8tag.txt` | `gui-verify`: 739 tags, no line refused; all 241 block ids have a tag |
+| Children's rectangles are relative to their dialog | Observed (they fit their parent's size, e.g. the meters' bars inside the 256×14 strip) | `gui-verify-4b2.log`; Q107 (c) |
+| The caption box: `IDDLG_CAPTION` (542) in `Gplayscr.gui`, a `CCBD` at (320, 400)-(640, 416), caption y 2, font `console.pft` (the world's own, 15 high), justification 0x9, picture `stontran.pbm` (the world's `8gui` folder) | Data | `gui-verify-4b2.log`; how it is drawn: Q107 |
+| The in-game panels (meters, health slots, inventory bars, minimap, map window) and their pictures are in the same file | Data | `gui-verify-4b2.log` |

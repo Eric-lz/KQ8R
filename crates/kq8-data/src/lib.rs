@@ -14,6 +14,7 @@ pub mod effects;
 pub mod envinfo;
 pub mod font;
 pub mod game_dir;
+pub mod gui;
 pub mod haze;
 pub mod items;
 pub mod kq_text;

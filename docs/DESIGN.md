@@ -1817,7 +1817,7 @@ inventory and menus.
     (`font-verify.log`): per font the glyph count, height, characters
     covered, whether every glyph fits its picture, and the file read to
     its exact end. Optional PNG sheet of each font for the user's eye.
-  - **4b-2, layouts and tags** (`kq8-data/src/gui.rs`, new). Read the
+  - **4b-2, layouts and tags** (**done** 2026-10-18; `kq8-data/src/gui.rs`, new). Read the
     tag file and the nine `.gui` files in `GAME/Resource`. New check
     `kq8 gui-verify` (`gui-verify.log`): each layout as a tree, with
     ids and tags turned into their names, rectangles, fonts and

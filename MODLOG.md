@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4b-2: reading the screen layouts and the tag file; kq8 gui-verify
+
+**Changed:** New `kq8-data/src/gui.rs` (the `.gui` layout tree and the text tag file). New `kq8 gui-verify` (`gui-verify.log`; copy `gui-verify-4b2.log`). `QUESTIONS.md`: Q107. Provenance.
+**Why:** The layouts say where the caption box and the in-game panels are and which fonts and pictures they use. Layout from the community notes `kq8gui.txt` / `kq8tag.txt`.
+**Tested how:** `cargo test --workspace` (430 pass, 2 new), clippy clean. `cargo run --release -p kq8-cli -- gui-verify`.
+**Result:** `kqGuiTag.TTAG`: 739 tags, no line refused. All 9 layouts in `GAME/Resource` read to their exact end (241 blocks, every id has a name). `Gplayscr.gui` is the in-game screen: the caption box `IDDLG_CAPTION` (320×16 at (320, 400), font `console.pft`, picture `stontran.pbm`), the meters (health bar `4red.pbm`, experience `4green.pbm`, level number, level-up flame), 8 health slots with digit counters, the top bar (mask, 7 quest item slots, gold), bottom-left (armour, short and long weapon), bottom-right (rope, rocks, minimap), the map window and a yes/no/cancel popup.
+**Still broken / not tested:** Nothing is drawn from the layouts yet. The caption box is one line of 320 pixels; how the original fits a long line in it is not in the data (Q107 a). Justification bits, the odd rectangles and the picture flags: Q107.
+**Next:** 4b-3, captions in the original font, at the box's place.
+
 ## 2026-10-18 M4 step 4b-1: reading the game's fonts; kq8 font-verify
 
 **Changed:** New `kq8-data/src/font.rs` (the `.pft` font: settings, character map, glyph table, glyph pictures from the bitmap array). New `kq8 font-verify` (`font-verify.log`, and a sheet of each font's glyphs in `kq8-artifacts/png/fonts/`). `docs/DESIGN.md`: the plan for 4b (fonts, screen layouts, captions in the original font). `QUESTIONS.md`: Q106. Provenance.
