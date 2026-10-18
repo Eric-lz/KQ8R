@@ -39,7 +39,8 @@ end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with 
   Conversations are not studied yet. The turn, the 0.5 s wait, the
   ducking, talking while walking and the mouth were confirmed by the
   user in the original.
-- **Later for A:** Q97 (a flight's last update: the height);
+- **Later for A:** Q98 (the end of a scripted walk; the user sees a
+  difference), Q97 (a flight's last update: the height);
   conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -213,8 +214,12 @@ milestone: **M3, Daventry comes alive**.
 
 - **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
   and back flip), barrels pushed into a wall (the wall stops Connor) and
-  the camera flight match the original. Still to check by eye: Connor's
-  `Left` and early walk during a scripted turn (3m-3).
+  the watermill room's camera flight match the original. The scripted
+  walk differs: at the end of the watermill walk Connor turns left and
+  goes on a bit further than in the original; likely the walk's stop
+  transition (`walkstopright`, about 460 units) playing while
+  `pointAndCue` turns him (**Q98**, asked). The mill wheel's flight
+  (`wheeltp1.cs`) is not checked by eye.
 - **Stand-ins of 3m** (not traced; none reached in Daventry except the
   first): the height on a flight's last update is not applied (Q97); a
   state request refused during an unfinished jump is tried again every
@@ -271,6 +276,8 @@ milestone: **M3, Daventry comes alive**.
 
 - For A (asked 2026-10-18 by B, 3m-4): Q97, the camera's height on a
   flight's last update (and after a cut). Stand-in: not applied.
+- For A (asked 2026-10-18, the user's check): Q98, the end of a scripted
+  walk (does the stop transition play, and does the next turn steer it).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world

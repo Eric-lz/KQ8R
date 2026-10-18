@@ -199,14 +199,17 @@ objects don't stop it, as in the original. Checked in the logs
   4.2 s after Connor's turn, as A traced. Checked by eye by the user
   (2026-10-18), before the camera flight was built. During a scripted
   turn Connor plays `Stop`, then `Left`/`Right`, then walks while the
-  turn finishes (Q94, 3m-3; logs only).
+  turn finishes (Q94, 3m-3). The user's check (2026-10-18): at the end of
+  the watermill walk he goes on a bit further, turning left, than in the
+  original (Q98).
 - **Camera flights and cuts** (2026-10-18, M3 3m-4): `addCamLoc`,
   `flyToCamLoc` and `cutToCamLoc`: the camera flies in a straight line
   at an even speed to the spot nearest it, turning to look just above
   the aim point, and on the last update jumps onto the range around it
   (the watermill room: 31 updates, then about 1,227 closer; the mill
   wheel: 46). Checked in the logs (`camera.log`) against A's numbers;
-  checked by eye by the user (2026-10-18): looks like the original. The
+  the watermill room's flight checked by eye by the user (2026-10-18):
+  looks like the original; the mill wheel's not checked. The
   height on the last update is a stand-in (Q97).
 - **The windmill tumble** (2026-10-18, M3 3m-1): jumping into the
   windmill's sails plays the tumble without a weapon; the script's

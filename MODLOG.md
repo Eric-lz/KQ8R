@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3m: the user's check of the scripted walk (docs only)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q98 (the end of a scripted walk). `STATUS.md`, `docs/FEATURES.md`: the check. The previous entry corrected: the flight the user watched is the watermill room's; the windmill tumble (`miltrap1.cs`) has no flight; the mill wheel's (`wheeltp1.cs`, Connor knocked under the wheel) has one and is not checked by eye. No code.
+**Why:** The user's check by eye: in the watermill cutscene Connor turns left and walks forward a bit more than in the original.
+**Tested how:** B read `connor-3m3-watermill.log` (updates 17–72).
+**Result:** The walk itself ends where the note says (update 56, (190783, 230140), within one step of (190800, 230100)). Then the stop transition `walkstopright` plays for 6 updates while cue 2's `pointAndCue` turns him, and its steps (about 460) carry him on in a curve to the left, to (190385, 230321). This is the likely cause of what the user saw; the note does not say whether the end of a scripted walk plays the stop transition or how it combines with the next turn (Q98).
+**Still broken / not tested:** Not fixed; waits for A's answer to Q98. The extra early walk during the turn (3m-3) may add to the difference; not separated.
+**Next:** A answers Q98 (and Q97).
+
 ## 2026-10-18 M3 step 3m: the user's checks by eye (docs only)
 
 **Changed:** `docs/FEATURES.md`, `README.md`, `STATUS.md`, `docs/behaviour/QUESTIONS.md` (Q97 note): the checks recorded. No code.
