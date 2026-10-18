@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3m: the user's check of the mill wheel cutscene (docs only)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q99. `STATUS.md`: the check and Q99. No code.
+**Why:** The user's check by eye: the camera in the mill wheel cutscene (`wheeltp1.cs`, both times: entered from the north and from the south side of the wheel) is placed differently from the original, "a bit zoomed in, maybe the height". (A crash the user first reported was the `--frames 4000` limit ending the run.)
+**Tested how:** B read `camera.log` / `connor.log` / `traps.log` of the user's run.
+**Result:** The flight itself ends on the script's spot. The two shots before it are wrong: the script has no `follow none`, so our camera keeps following and recalculates every update: the first shot is lowered from 9,750 to 8,523 by the height rule; cue 4's is pulled in about 5,300 by the leash and dropped to 8,540; both re-aim at Connor. Connor stands still meanwhile, and `camera.md` says the follow camera recalculates only while he moves or the player uses the camera (not built, Q53 d). The details that decide the first shot (order in the trap's update, what counts as moving, whether the height rule lowers) are not in the note: Q99.
+**Still broken / not tested:** Not fixed; waits for A's answer to Q99.
+**Next:** A answers Q99, Q98, Q97; then B builds "the camera updates only while Connor moves or is used".
+
 ## 2026-10-18 M3 step 3m: the user's check of the scripted walk (docs only)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q98 (the end of a scripted walk). `STATUS.md`, `docs/FEATURES.md`: the check. The previous entry corrected: the flight the user watched is the watermill room's; the windmill tumble (`miltrap1.cs`) has no flight; the mill wheel's (`wheeltp1.cs`, Connor knocked under the wheel) has one and is not checked by eye. No code.

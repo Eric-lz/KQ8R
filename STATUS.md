@@ -39,8 +39,8 @@ end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with 
   Conversations are not studied yet. The turn, the 0.5 s wait, the
   ducking, talking while walking and the mouth were confirmed by the
   user in the original.
-- **Later for A:** Q98 (the end of a scripted walk; the user sees a
-  difference), Q97 (a flight's last update: the height);
+- **Later for A:** Q99 (when the camera recalculates; the mill wheel
+  shots), Q98 (the end of a scripted walk; the user sees a difference), Q97 (a flight's last update: the height);
   conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -218,8 +218,11 @@ milestone: **M3, Daventry comes alive**.
   walk differs: at the end of the watermill walk Connor turns left and
   goes on a bit further than in the original; likely the walk's stop
   transition (`walkstopright`, about 460 units) playing while
-  `pointAndCue` turns him (**Q98**, asked). The mill wheel's flight
-  (`wheeltp1.cs`) is not checked by eye.
+  `pointAndCue` turns him (**Q98**, asked). The mill wheel cutscene
+  (`wheeltp1.cs`): its two shots before the flight are lower and closer
+  than in the original, because our camera recalculates every update
+  while the original only does while Connor moves or the camera is used
+  (**Q99**, asked; not fixed).
 - **Stand-ins of 3m** (not traced; none reached in Daventry except the
   first): the height on a flight's last update is not applied (Q97); a
   state request refused during an unfinished jump is tried again every
@@ -278,6 +281,8 @@ milestone: **M3, Daventry comes alive**.
   flight's last update (and after a cut). Stand-in: not applied.
 - For A (asked 2026-10-18, the user's check): Q98, the end of a scripted
   walk (does the stop transition play, and does the next turn steer it).
+- For A (asked 2026-10-18, the user's check): Q99, when the follow
+  camera recalculates (the mill wheel cutscene's shots; also Q53 d).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
