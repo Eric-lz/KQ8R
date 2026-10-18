@@ -11,6 +11,8 @@
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use kq8_core::camera::{ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_core::camera_flight::{Flight, Spots, View};
+use kq8_core::connor_mover::GroundLookup as _;
 use kq8_core::collide::{BoxCollider, BuildingCollider};
 
 use crate::connor_view::{key_code, ConnorSim};
@@ -137,6 +139,19 @@ pub struct GameCam {
     /// still turned away from looking at Connor (radians, positive =
     /// anticlockwise from above), after the last two updates.
     view_turn: (f32, f32),
+    /// `camera.md` "Camera flights and cuts" (M3 3m-4): the spot list,
+    /// the flight under way, the view of a flight or cut (with the roll,
+    /// logged, not drawn), and the "places" / "aims" switches `follow`
+    /// sets.
+    spots: Spots,
+    flight: Option<Flight>,
+    /// The flight was asked for during this update: its first step is the
+    /// next update's (the note's timing: watermill cue 5, 30 updates after
+    /// cue 4, comes one update before the flight's last).
+    flight_fresh: bool,
+    view: View,
+    places: bool,
+    aims: bool,
 }
 
 impl GameCam {
@@ -156,9 +171,19 @@ impl GameCam {
     /// the default at once.
     pub fn follow(&mut self, connor: bool, connor_base: [f32; 3]) -> String {
         self.following = connor;
+        // Both switches follow `follow` (rule 1 of the flights); following
+        // an object switches the obstacle avoidance on again.
+        self.places = connor;
+        self.aims = connor;
         if !connor {
-            return "the camera stays where it is".into();
+            let flying = if self.flight.is_some() { "; the flight goes on without aiming" } else { "" };
+            return format!("the camera stays where it is (places and aims off){flying}");
         }
+        self.cam.avoid = true;
+        let ended = match self.flight.take() {
+            Some(f) => format!(" (the flight ends at update {} of {}: STAND-IN, the original adds its steps until the end, overruled by the leash)", f.k, f.n),
+            None => String::new(),
+        };
         let p = self.cam.position;
         let aim = [connor_base[0], connor_base[1], connor_base[2] + kq8_core::camera::AIM_HEIGHT];
         let towards = view_angles(std::array::from_fn(|k| aim[k] - p[k])).1;
@@ -168,9 +193,116 @@ impl GameCam {
         self.view_turn = (start, start);
         self.cam.tilt = DEFAULT_TILT;
         format!(
-            "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}",
+            "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}{ended}",
             if start != 0.0 { "turns back 1/3 per update" } else { "looks at him at once (0.4 rad or less)" }
         )
+    }
+
+    /// `KQCamera::addCamLoc` (rule 1).
+    pub fn add_spot(&mut self, spot: [f32; 3], newlist: bool) -> String {
+        self.spots.add(spot, newlist);
+        let line = format!("spot ({:.0}, {:.0}, {:.0}) added; the list has {}", spot[0], spot[1], spot[2], self.spots.0.len());
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        line
+    }
+
+    /// The view a flight or cut starts from: the one drawn now, with the
+    /// roll kept.
+    fn start_view(&self) -> View {
+        let (tilt, heading) = self.view_now();
+        View { tilt, heading, roll: self.view.roll, locked: false }
+    }
+
+    /// Draws the view of a flight or cut from where the camera is.
+    fn show_view(&mut self) {
+        let p = self.cam.position;
+        let dir = view_direction(self.view.tilt, self.view.heading);
+        self.current = (p, DEFAULT_TILT, std::array::from_fn(|k| p[k] + dir[k] * 1000.0));
+        self.view_turn = (0.0, 0.0);
+    }
+
+    /// `KQCamera::flyToCamLoc` (rule 4): to the spot nearest the camera, in
+    /// N updates from the next camera update on (`camera_step`). An empty
+    /// list: nothing, an error ("Do not reproduce").
+    pub fn fly(&mut self, aim: [f32; 3], seconds: Option<f32>, end_roll: Option<f32>) -> String {
+        let Some(spot) = self.spots.nearest(self.cam.position) else {
+            let line = "ERROR flyToCamLoc: no spot in the list (addCamLoc); the camera stays".to_string();
+            self.log.detail(format!("camera update {}: {line}", self.updates));
+            return line;
+        };
+        let p = self.cam.position;
+        self.view = self.start_view();
+        let f = Flight::new(p, self.view.roll, spot, aim, seconds, end_roll);
+        self.following = false;
+        self.cam.avoid = false;
+        self.cam.tilt = DEFAULT_TILT;
+        self.places = false;
+        let line = format!(
+            "flight: N = {} updates from ({:.1}, {:.1}, {:.1}) to the spot ({:.0}, {:.0}, {:.0}), step ({:.2}, {:.2}, {:.2}), roll {:.3} -> {:.3}; aiming at ({:.0}, {:.0}, {:.0}) + 1400; places off, aims {}",
+            f.n, p[0], p[1], p[2], spot[0], spot[1], spot[2], f.step[0], f.step[1], f.step[2], self.view.roll, end_roll.unwrap_or(0.0), aim[0], aim[1], aim[2], if self.aims { "on" } else { "off" }
+        );
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        self.flight = Some(f);
+        self.flight_fresh = true;
+        line
+    }
+
+    /// `KQCamera::cutToCamLoc` (rule 3): on the nearest spot at once, then
+    /// one follow update. An empty list: nothing, an error.
+    pub fn cut_to(&mut self, aim: [f32; 3], roll: f32, ground: &dyn Fn(f32, f32) -> Option<f32>) -> String {
+        let Some(spot) = self.spots.nearest(self.cam.position) else {
+            let line = "ERROR cutToCamLoc: no spot in the list (addCamLoc); the camera stays".to_string();
+            self.log.detail(format!("camera update {}: {line}", self.updates));
+            return line;
+        };
+        self.view = self.start_view();
+        self.flight = None;
+        self.following = false;
+        self.cam.avoid = false;
+        self.cam.tilt = DEFAULT_TILT;
+        let (p, from) = kq8_core::camera_flight::cut(spot, aim, roll, &mut self.view, self.places, self.aims, self.cam.range);
+        self.cam.position = p;
+        self.show_view();
+        self.previous = self.current;
+        let height = height_note(p, aim, ground);
+        let line = format!(
+            "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3} (not drawn); places {}, aims {}{height}",
+            spot[0], spot[1], spot[2],
+            from.map_or(String::new(), |d| format!(", pulled onto the range from {d:.1}")),
+            p[0], p[1], p[2], self.view.heading, self.view.tilt, self.view.roll, self.places, self.aims
+        );
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        line
+    }
+
+    /// One update of the flight under way (`camera_step`).
+    fn flight_step(&mut self, ground: &dyn Fn(f32, f32) -> Option<f32>) {
+        if std::mem::take(&mut self.flight_fresh) {
+            return;
+        }
+        let Some(f) = self.flight.as_mut() else { return };
+        let mut p = self.cam.position;
+        let s = f.update(&mut p, &mut self.view, self.aims, self.cam.range, ground);
+        let (aim, step) = (f.aim, f.step);
+        self.cam.position = p;
+        self.show_view();
+        let mut line = format!(
+            "camera update {}: flight {}/{}: at ({:.1}, {:.1}, {:.1}), step ({:.2}, {:.2}, {:.2}), roll {:.3}, view heading {:.3}, tilt {:+.3}{}; places {}, aims {}",
+            self.updates, s.k, s.n, p[0], p[1], p[2], step[0], step[1], step[2], self.view.roll, self.view.heading, self.view.tilt,
+            s.aimed.map_or(String::new(), |a| format!(" ({a})")),
+            s.k >= s.n || self.places, self.aims
+        );
+        if s.k >= s.n {
+            // Rule 4, the last update: "places" back on, pulled onto the range.
+            self.places = true;
+            line += &format!(
+                "; last update: on the spot, places on: {}{}; the flight is over, the camera stays here",
+                s.pulled_from.map_or("within the range: stays".to_string(), |d| format!("{d:.1} from the point 1400 above the aim: pulled onto the range ({:.0}, {:.0})", self.cam.range.0, self.cam.range.1)),
+                height_note(p, aim, ground)
+            );
+            self.flight = None;
+        }
+        self.log.detail(line);
     }
 
     /// `handsOff 1` (`anim-scripts.md` rule 21): fixed mode (F11) goes back
@@ -200,6 +332,9 @@ impl GameCam {
         self.current = (p, DEFAULT_TILT, aim);
         self.previous = self.current;
         self.view_turn = (0.0, 0.0);
+        // A flight under way goes on from here; with "aims" on it turns
+        // back to its aim at the next update (flights rule 6).
+        self.view = View { tilt, heading, roll: if flags & 2 != 0 { self.view.roll + turn[1] } else { turn[1] }, locked: false };
         let roll = if turn[1] != 0.0 { format!("; roll {:.3} not drawn", turn[1]) } else { String::new() };
         let line = format!(
             "camera moved from ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}), view tilt {tilt:.3}, heading {heading:.3} (looks along ({:.3}, {:.3}, {:.3})){roll}",
@@ -207,6 +342,19 @@ impl GameCam {
         );
         self.log.detail(format!("camera update {}: {line}", self.updates));
         line
+    }
+}
+
+/// The height rule's wanted height at `p` around `aim` (logged only on a
+/// flight's last update and after a cut: STAND-IN, whether it is applied
+/// there was not settled).
+fn height_note(p: [f32; 3], aim: [f32; 3], ground: &dyn Fn(f32, f32) -> Option<f32>) -> String {
+    let floor = ground(p[0], p[1]).map_or(f32::MIN, |g| g + kq8_core::camera::MIN_HEIGHT);
+    let wanted = floor.max(aim[2] + kq8_core::camera::MIN_HEIGHT);
+    if p[2] >= wanted {
+        String::new()
+    } else {
+        format!("; the height rule would want z {wanted:.1} ({:.1} higher): not applied (stand-in, not settled)", wanted - p[2])
     }
 }
 
@@ -276,6 +424,12 @@ pub fn make(
         log,
         following: true,
         view_turn: (0.0, 0.0),
+        spots: Spots::default(),
+        flight: None,
+        flight_fresh: false,
+        view: View { tilt: -DEFAULT_TILT, heading: 0.0, roll: 0.0, locked: false },
+        places: true,
+        aims: true,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building");
     Some(g)
@@ -339,11 +493,14 @@ pub fn camera_step(
 ) {
     let (Some(mut game), Some(sim), Some(lookup)) = (game, sim, lookup) else { return };
     let g = &mut *game;
-    // `KQCamera::follow none` (camera.md rule 1): it stays where it is.
+    // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
+    // unless a flight is under way (M3 3m-4).
     if !g.following {
         g.updates += 1;
         g.previous = g.current;
         g.mouse_px = Vec2::ZERO;
+        let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
+        g.flight_step(&ground);
         return;
     }
     // One range for walking and running: the user saw no difference in

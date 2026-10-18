@@ -1459,3 +1459,20 @@ This replaces the Q94 stand-ins of 3l-2.
 | `walkTo x y <who>` without both cue numbers: console line, the walk, no cue; `walkTo x y`: no cue | `anim-scripts.md` rule 24 (Q94 d) | Unit test `walk_to_point_and_cue_and_walk_exit_become_requests` |
 | "Move starts afresh" re-measures the distance only; the walk animation goes on | **Our reading** | — |
 
+### 3m-4, camera flights and cuts — `crates/kq8-core/src/{camera_flight,active,script}.rs`, `crates/kq8-viewer/src/{game_camera,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `addCamLoc x y z [newlist]`: newlist non-zero empties the list; fly and cut use the spot nearest the camera (a tie: the first added) | `camera.md` "Camera flights and cuts" rules 1–2 | Unit test `the_list_and_the_nearest_spot` |
+| N = whole(seconds × 15) + 1 updates; no seconds (or ≤ 0): distance ÷ 5,000 per second | Rule 4 | Unit test `flight_lengths`; `camera-3m4-watermill.log` (31), `camera-3m4-wheel.log` (46) |
+| Straight line, the same step every update, exactly on the spot at N; roll in equal steps to `endRoll` (only with five numbers), else 0 | Rule 4 | Unit tests `the_watermill_flight`, `the_roll_goes_evenly_to_the_end_roll_or_to_0`, `cam_loc_fly_and_cut_become_requests` |
+| A flight stops following, avoidance off, tilt and heading offsets to the defaults, "places" off; at N "places" on and pulled onto the range around the point 1,400 above the aim, along the line to it | Rule 4 | `camera-3m4-watermill.log` flight update 31: (188999.0, 229341.5, 10863.4) |
+| Aiming: tilt −0.2 + the angle up to that point each update; heading locked within 0.02, else a third of the rest, one snap angle 0.063 on both sides | Rule 5, "Do not reproduce" | Unit test `aiming_turns_a_third_then_snaps_and_locks`; heading 2.153, tilt +0.016 |
+| The cut: on the spot, heading toward (x, y), roll, one follow update (places → range; aims → aim) | Rule 3 | Unit test `a_cut_goes_to_the_spot_and_aims_at_once` |
+| "Places"/"aims" set by `follow` (Connor: both on, avoidance on; none: both off) | Rule intro, open question 4 | `camera-3m4-wheel.log` (both on from play) |
+| An empty list: nothing, an error logged | "Do not reproduce" | — |
+| The first step is in the update after the command | **Our reading** of rule 7 (cue 5, 30 updates after cue 4, one update before the end) | `camera-3m4-watermill.log` |
+| The height rule is not applied on the last update or after a cut; the wanted height is logged | **Stand-in** (not settled; Q97) | Same log: "would want z 11400.0" |
+| `follow Connor` during a flight ends it | **Stand-in** (the original keeps adding the steps until N; no Daventry case) | — |
+| Roll kept (also from `move KQCamera`), logged, not drawn | **Our choice** (0 in Daventry's scenes) | — |
+

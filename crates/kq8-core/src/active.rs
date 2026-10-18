@@ -143,6 +143,13 @@ pub enum Request {
     /// crash finishes it (gravity on, steps 325, cut short), no state
     /// change.
     EndJump { at: String },
+    /// `KQCamera::addCamLoc x y z [newlist]` (`camera.md` "Camera flights
+    /// and cuts" rule 1, M3 3m-4): a spot for the camera's list.
+    CamSpot { spot: [f32; 3], newlist: bool, at: String },
+    /// `KQCamera::flyToCamLoc x y z [seconds [endRoll]]` (rule 4).
+    CamFly { aim: [f32; 3], seconds: Option<f32>, end_roll: Option<f32>, at: String },
+    /// `KQCamera::cutToCamLoc x y z [roll]` (rule 3).
+    CamCut { aim: [f32; 3], roll: f32, at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -1039,6 +1046,43 @@ impl WorldState {
         "0".into()
     }
 
+    /// The camera's spot list, flights and cuts (`camera.md` "Camera
+    /// flights and cuts" rules 1, 3, 4): requests for the viewer's camera.
+    /// `addCamLoc x y z [newlist]`; `flyToCamLoc x y z [seconds [endRoll]]`
+    /// (`endRoll` only read with exactly those five numbers);
+    /// `cutToCamLoc x y z [roll]`.
+    fn cam_loc(&mut self, words: &[String], at: &str) -> String {
+        let n = words.len() - 1;
+        if n < 3 || !words[1..].iter().all(|w| looks_like_number(w)) {
+            self.note(format!("{at}: usage: {} x y z …: '{}'", words[0], words.join(" ")));
+            return "1".into();
+        }
+        let v = |i: usize| words.get(i).map(|w| number_value(w) as f32);
+        let p = [v(1).unwrap_or(0.0), v(2).unwrap_or(0.0), v(3).unwrap_or(0.0)];
+        let at_s = at.to_string();
+        let (line, request) = match words[0].as_str() {
+            "KQCamera::addCamLoc" => {
+                let newlist = v(4).is_some_and(|x| x != 0.0);
+                (format!("spot ({:.0}, {:.0}, {:.0}){}", p[0], p[1], p[2], if newlist { ", a new list" } else { " added to the list" }), Request::CamSpot { spot: p, newlist, at: at_s })
+            }
+            "KQCamera::flyToCamLoc" => {
+                let seconds = v(4);
+                let end_roll = if n == 5 { v(5) } else { None };
+                (
+                    format!("fly to the nearest spot, aiming at ({:.0}, {:.0}, {:.0}), {}, end roll {:.3}", p[0], p[1], p[2], seconds.map_or("no seconds (5,000 per second)".into(), |s| format!("{s} s")), end_roll.unwrap_or(0.0)),
+                    Request::CamFly { aim: p, seconds, end_roll, at: at_s },
+                )
+            }
+            _ => {
+                let roll = v(4).unwrap_or(0.0);
+                (format!("cut to the nearest spot, aiming at ({:.0}, {:.0}, {:.0}), roll {roll:.3}", p[0], p[1], p[2]), Request::CamCut { aim: p, roll, at: at_s })
+            }
+        };
+        self.note(format!("{at}: {}: {line}", words[0]));
+        self.requests.push(request);
+        "0".into()
+    }
+
     /// `KQConner::JumpDir` (`anim-scripts.md` rule 29): 1 in the Jump
     /// state with `backJump`, 0 with `jump` or `runJump`; outside a jump 0
     /// and the usage text on the console.
@@ -1560,6 +1604,7 @@ impl ScriptHost for WorldState {
             "KQConner::JumpDir" => Some(self.jump_dir(at)),
             "KQConner::endJump" => Some(self.end_jump(at)),
             "KQCamera::setRange" => Some(self.set_range(words, at)),
+            "KQCamera::addCamLoc" | "KQCamera::flyToCamLoc" | "KQCamera::cutToCamLoc" => Some(self.cam_loc(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
@@ -3630,6 +3675,25 @@ endif
         let (dir, end, ends, log) = run(None);
         assert_eq!((dir.as_deref(), end.as_deref(), ends), (Some("0"), Some("0"), 0));
         assert!(log.contains("returns 0 if forward, 1 if backward") && log.contains("use when Connor is in the jump state"), "{log}");
+    }
+
+    #[test]
+    fn cam_loc_fly_and_cut_become_requests() {
+        // wtrmwalk.cs and wheeltp1.cs lines, and the end roll rule.
+        let mut a = with_object(
+            "KQCamera::addCamLoc 190000 230000 10600 1\nKQCamera::flyToCamLoc 186960 228000 10000 2\nKQCamera::flyToCamLoc 1 2 3 4 0.5\nKQCamera::flyToCamLoc 1 2 3\nKQCamera::cutToCamLoc 1 2 3 0.25\nKQCamera::addCamLoc 5 6\n",
+            "x",
+        );
+        a.world.requests.clear();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let r = &a.world.requests;
+        assert_eq!(r.len(), 5, "{r:?}");
+        assert!(matches!(&r[0], Request::CamSpot { spot, newlist: true, .. } if *spot == [190000.0, 230000.0, 10600.0]));
+        assert!(matches!(&r[1], Request::CamFly { seconds: Some(s), end_roll: None, .. } if *s == 2.0));
+        assert!(matches!(&r[2], Request::CamFly { end_roll: Some(e), .. } if *e == 0.5));
+        assert!(matches!(&r[3], Request::CamFly { seconds: None, end_roll: None, .. }));
+        assert!(matches!(&r[4], Request::CamCut { roll, .. } if *roll == 0.25));
+        assert!(a.take_log().join("\n").contains("usage: KQCamera::addCamLoc x y z"));
     }
 
     #[test]

@@ -750,6 +750,22 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),
                 None => format!("{at}: move KQCamera: no game camera; not applied"),
             },
+            Request::CamSpot { spot, newlist, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.add_spot(spot, newlist)),
+                None => format!("{at}: addCamLoc: no game camera; not applied"),
+            },
+            Request::CamFly { aim, seconds, end_roll, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.fly(aim, seconds, end_roll)),
+                None => format!("{at}: flyToCamLoc: no game camera; not applied"),
+            },
+            Request::CamCut { aim, roll, at } => match (camera.as_mut(), &lookup) {
+                (Some(c), Some(l)) => {
+                    let ground = |x: f32, y: f32| kq8_core::connor_mover::GroundLookup::ground(&l.0, x, y).map(|h| h.0);
+                    format!("{at}: applied: {}", c.cut_to(aim, roll, &ground))
+                }
+                (Some(c), None) => format!("{at}: applied: {}", c.cut_to(aim, roll, &|_, _| None)),
+                (None, _) => format!("{at}: cutToCamLoc: no game camera; not applied"),
+            },
             Request::CameraFollow { connor: follow, at } => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.follow(follow, connor.mover.position)),
                 None => format!("{at}: KQCamera::follow: no game camera; not applied"),

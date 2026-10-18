@@ -1583,7 +1583,7 @@ catchers, ground animators).
       line, the walk, no cue. Test: the watermill run; `connor.log`:
       `stop`, `left`, then `walk` during the turn; "measured again";
       arrival at (190800, 230100).
-    - **3m-4, camera flights and cuts** (`camera.md` "Camera flights and
+    - **3m-4, camera flights and cuts** (**done** 2026-10-18; Q97 asked; `camera.md` "Camera flights and
       cuts" rules 1–7, "Edge cases", "Do not reproduce"). New
       `kq8-core/src/camera_flight.rs`: the spot list (`addCamLoc x y z
       [newlist]`), the spot nearest the camera, the flight (N =
@@ -1596,7 +1596,8 @@ catchers, ground animators).
       on: the range around the aim point, along the line to it). The
       viewer's game camera gets the "places"/"aims" switches (`follow
       Connor` both on, `follow none` both off), runs a flight once per
-      update, and stays still after it. An empty list: nothing, an
+      update from the update after the command (the note's cue timing),
+      and stays still after it. An empty list: nothing, an
       error logged. STAND-IN (not settled): the height on update N: the
       height rule is not applied on that update (logged with the height
       it would want). Roll is logged, not drawn (as for `move
