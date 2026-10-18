@@ -4,7 +4,8 @@
 //! Rules from `anim-scripts.md` rules 24–26 and `connor-movement.md`
 //! "Turning" rule 2: he first turns to face the spot with the automatic
 //! turn (3.5 rad/s, the shorter way, exactly onto the heading once the
-//! rest is under one update's turn; a player turn cancels it); a walk then
+//! rest is under one update's turn; only a turn key press cancels it,
+//! Q104 a, `crate::turn_keys`); a walk then
 //! goes **straight ahead** in Move, with no more steering, until he has
 //! gone the flat distance measured when the walk started. At the end (or
 //! at once for a turn already done) the script's object gets
@@ -118,6 +119,18 @@ impl AutoMove {
         }
     }
 
+    /// The walker's intent in update `n` of a turn toward `dir`, with the
+    /// player's own intent `player` (`connor-movement.md` "Turning" rule
+    /// 2, Q104 a): forward/back and the run switch are not touched by a
+    /// turn without a walk, so with forward held he walks or runs through
+    /// it (and leans); standing, [`AutoMove::turn_intent`].
+    pub fn intent_for(&self, n: u32, dir: i8, player: Intent) -> Intent {
+        match self.kind {
+            AutoKind::Point if player.forward != 0 => Intent { forward: player.forward, turn: dir, run: player.run },
+            _ => self.turn_intent(n, dir),
+        }
+    }
+
     /// A walk or run is under way: after the turn, or during its third
     /// update on (rule 24: he walks the rest of the turn).
     pub fn walking(&self) -> bool {
@@ -129,12 +142,14 @@ impl AutoMove {
     }
 
     /// Before the walker's update: one update's automatic turn (changing
-    /// `heading`), or the walk's intent. `player_turn`: the player's turn
-    /// key (0 while `handsOff` is on).
-    pub fn before(&mut self, position: [f32; 3], heading: &mut f32, player_turn: i8, dt: f32) -> Before {
+    /// `heading`), or the walk's intent. `player`: the player's intent
+    /// (zero while `handsOff` is on); `pressed`: a turn key went **down**
+    /// since the last update (Q104 a: only that cancels the turn; a held
+    /// key does nothing, its direction is overwritten).
+    pub fn before(&mut self, position: [f32; 3], heading: &mut f32, player: Intent, pressed: bool, dt: f32) -> Before {
         match self.phase {
             AutoPhase::Turning => {
-                if player_turn != 0 {
+                if pressed {
                     return Before::Cancelled;
                 }
                 let left = wrap(heading_towards(position, self.target) - *heading);
@@ -152,12 +167,12 @@ impl AutoMove {
                             self.phase = AutoPhase::Walking { from, distance: flat_distance(from, self.target) };
                             Intent { forward: 1, turn: 0, run }
                         }
-                        AutoKind::Point => self.turn_intent(n, dir),
+                        AutoKind::Point => self.intent_for(n, dir, player),
                     };
                     return Before::TurnDone { n, intent };
                 }
                 *heading += step * left.signum();
-                Before::Turned { by: step * left.signum(), left: left - step * left.signum(), n, intent: self.turn_intent(n, dir) }
+                Before::Turned { by: step * left.signum(), left: left - step * left.signum(), n, intent: self.intent_for(n, dir, player) }
             }
             AutoPhase::Walking { .. } => {
                 let run = matches!(self.kind, AutoKind::Walk { run: true });
@@ -199,7 +214,7 @@ mod tests {
         let mut h = std::f32::consts::FRAC_PI_2;
         let mut turns = 0;
         loop {
-            match a.before([0.0; 3], &mut h, 0, DT) {
+            match a.before([0.0; 3], &mut h, Intent::default(), false, DT) {
                 Before::Turned { by, .. } => {
                     assert!((by + AUTO_TURN_RATE * DT).abs() < 1e-6);
                     turns += 1;
@@ -217,18 +232,37 @@ mod tests {
     fn a_turn_already_done_ends_at_once_and_a_player_turn_cancels() {
         let mut a = AutoMove::new(AutoKind::Point, [0.0, -10.0], None);
         let mut h = 0.0;
-        assert_eq!(a.before([0.0; 3], &mut h, 0, DT), Before::TurnDone { n: 1, intent: Intent::default() });
+        assert_eq!(a.before([0.0; 3], &mut h, Intent::default(), false, DT), Before::TurnDone { n: 1, intent: Intent::default() });
         let mut b = AutoMove::new(AutoKind::Point, [10.0, 0.0], None);
-        assert_eq!(b.before([0.0; 3], &mut h, 1, DT), Before::Cancelled);
+        assert_eq!(b.before([0.0; 3], &mut h, Intent { forward: 0, turn: 1, run: false }, true, DT), Before::Cancelled);
+    }
+
+    #[test]
+    fn a_held_key_neither_cancels_nor_changes_the_turn_and_forward_is_kept() {
+        // Q104 a: the right key held (no new press) while the turn goes
+        // left: the same 3.5 rad/s, turn direction +1; forward and the run
+        // switch stay the player's.
+        let mut a = AutoMove::new(AutoKind::Point, [10.0, 0.0], None);
+        let mut h = 0.0;
+        let player = Intent { forward: 1, turn: -1, run: true };
+        match a.before([0.0; 3], &mut h, player, false, DT) {
+            Before::Turned { by, n: 1, intent, .. } => {
+                assert!((by - AUTO_TURN_RATE * DT).abs() < 1e-6);
+                assert_eq!(intent, Intent { forward: 1, turn: 1, run: true });
+            }
+            other => panic!("{other:?}"),
+        }
+        // Standing: Stop, then Left as before.
+        assert!(matches!(a.before([0.0; 3], &mut h, Intent { turn: -1, ..Intent::default() }, false, DT), Before::Turned { n: 2, intent: Intent { forward: 0, turn: 1, run: false }, .. }));
     }
 
     #[test]
     fn the_walk_goes_straight_until_the_distance_is_gone() {
         let mut a = AutoMove::new(AutoKind::Walk { run: false }, [0.0, -2740.0], None);
         let mut h = 0.0;
-        assert_eq!(a.before([0.0; 3], &mut h, 0, DT), Before::TurnDone { n: 1, intent: Intent { forward: 1, turn: 0, run: false } });
+        assert_eq!(a.before([0.0; 3], &mut h, Intent::default(), false, DT), Before::TurnDone { n: 1, intent: Intent { forward: 1, turn: 0, run: false } });
         assert_eq!(a.phase, AutoPhase::Walking { from: [0.0, 0.0], distance: 2740.0 });
-        assert_eq!(a.before([0.0; 3], &mut h, 0, DT), Before::Walk(Intent { forward: 1, turn: 0, run: false }));
+        assert_eq!(a.before([0.0; 3], &mut h, Intent::default(), false, DT), Before::Walk(Intent { forward: 1, turn: 0, run: false }));
         assert_eq!(a.walk_done([0.0, -2700.0, 0.0]), None);
         // Pushed off the line: the distance from the start counts.
         assert!(a.walk_done([300.0, -2730.0, 0.0]).is_some());
@@ -241,17 +275,17 @@ mod tests {
         let mut a = AutoMove::new(AutoKind::Walk { run: false }, [0.0, -1000.0], None);
         let mut h = -0.576f32;
         let walk = |turn| Intent { forward: 1, turn, run: false };
-        assert!(matches!(a.before([0.0; 3], &mut h, 0, DT), Before::Turned { n: 1, intent, .. } if intent == Intent::default()));
+        assert!(matches!(a.before([0.0; 3], &mut h, Intent::default(), false, DT), Before::Turned { n: 1, intent, .. } if intent == Intent::default()));
         assert!(!a.walking());
-        assert!(matches!(a.before([0.0; 3], &mut h, 0, DT), Before::Turned { n: 2, intent: Intent { forward: 0, turn: 1, run: false }, .. }));
+        assert!(matches!(a.before([0.0; 3], &mut h, Intent::default(), false, DT), Before::Turned { n: 2, intent: Intent { forward: 0, turn: 1, run: false }, .. }));
         // He has walked a little during the turn; measured again at its end.
-        assert_eq!(a.before([0.0, 50.0, 0.0], &mut h, 0, DT), Before::TurnDone { n: 3, intent: walk(0) });
+        assert_eq!(a.before([0.0, 50.0, 0.0], &mut h, Intent::default(), false, DT), Before::TurnDone { n: 3, intent: walk(0) });
         assert_eq!(a.phase, AutoPhase::Walking { from: [0.0, 50.0], distance: 1050.0 });
         // A longer turn walks from its third update, still turning.
         let mut b = AutoMove::new(AutoKind::Walk { run: true }, [0.0, -1000.0], None);
         let mut h = 1.2f32;
         for n in 1..=3 {
-            if let Before::Turned { intent, .. } = b.before([0.0; 3], &mut h, 0, DT) {
+            if let Before::Turned { intent, .. } = b.before([0.0; 3], &mut h, Intent::default(), false, DT) {
                 assert_eq!(intent, b.turn_intent(n, -1));
             }
         }

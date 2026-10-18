@@ -27,6 +27,7 @@ pub mod sound;
 pub mod stats;
 pub mod talk;
 pub mod trap;
+pub mod turn_keys;
 pub mod water;
 
 /// The original's update rate (`KQGame::FPSLimit 15`); every per-update

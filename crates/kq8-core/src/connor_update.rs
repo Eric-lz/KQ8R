@@ -23,6 +23,10 @@ pub struct Tick {
     /// A scripted turn or walk ended this update (its cue, if any, is
     /// for the caller to send).
     pub auto_end: Option<AutoEnd>,
+    /// An automatic turn ended normally this update (not cancelled): the
+    /// caller sets the key turn direction to 0, so a held turn key does
+    /// not take over (`connor-movement.md` "Turning" rule 2, Q104 a).
+    pub auto_turn_ended: bool,
 }
 
 /// Whether a jump can start now, and which (connor-physics.md "Jumping"
@@ -148,11 +152,16 @@ pub fn tick<'a>(
     let mut auto_end = None;
     let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
     walker.turn_by_script = false;
+    let pressed = std::mem::take(&mut walker.turn_press);
+    let mut auto_turn_ended = false;
     let blocked = walker.blocked();
     if let Some(a) = walker.auto.as_mut() {
         let mut done = None;
-        let what = |i: Intent| if blocked { "stop (a wall block is on)".to_string() } else { crate::connor::choose_movement(i, false).to_string() };
-        match a.before(mover.position, &mut walker.heading, intent.turn, dt) {
+        let what = |i: Intent| {
+            let m = if blocked { "stop (a wall block is on)".to_string() } else { crate::connor::choose_movement(i, false).to_string() };
+            format!("{m} (turn direction {:+}, forward {:+})", i.turn, i.forward)
+        };
+        match a.before(mover.position, &mut walker.heading, intent, pressed, dt) {
             Before::Keys => {}
             Before::Turned { by, left, n, intent: i } => {
                 walker.turn_by_script = true;
@@ -163,14 +172,23 @@ pub fn tick<'a>(
                 } else {
                     String::new()
                 };
-                notes.push(format!("scripted turn update {n}: turned {by:+.3}, {left:+.3} left; asks for {}{walk}", what(i)));
+                notes.push(format!("scripted turn update {n}: turned {by:+.3}, heading {:.3}, {left:+.3} left; asks for {}{walk}", walker.heading, what(i)));
             }
             Before::Cancelled => {
-                notes.push("scripted turn cancelled by a turn key: its cue never comes (connor-movement.md \"Turning\" rule 2)".into());
+                let lost = match (&a.kind, &a.cue) {
+                    (AutoKind::Point, Some(c)) => format!("; pointAndCue cue lost (KQCueEvent {} {} to {} never comes)", c.c, c.d, c.who),
+                    (_, Some(_)) => "; cue lost".into(),
+                    _ => String::new(),
+                };
+                notes.push(format!(
+                    "auto-turn cancelled by a turn key down (connor-movement.md \"Turning\" rule 2); turn direction {:+} from the key{lost}",
+                    intent.turn
+                ));
                 done = Some(None);
             }
             Before::TurnDone { n, intent: i } => {
                 walker.turn_by_script = true;
+                auto_turn_ended = true;
                 intent = i;
                 match a.kind {
                     AutoKind::Point => {
@@ -295,7 +313,10 @@ pub fn tick<'a>(
         notes.push(format!("scripted walk done: {gone:.0} gone of {distance:.0}: Wait"));
         auto_end = Some(AutoEnd { cue, why: format!("walked {gone:.0}") });
     }
-    Tick { step, report, wall_stop, notes, auto_end }
+    if auto_turn_ended {
+        notes.push("automatic turn ended: turn direction set to 0 (a held turn key does not take over)".into());
+    }
+    Tick { step, report, wall_stop, notes, auto_end, auto_turn_ended }
 }
 
 /// What a steep hit during a jump does (connor-physics.md "Jumping" rule

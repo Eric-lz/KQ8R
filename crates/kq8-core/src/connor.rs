@@ -433,6 +433,10 @@ pub struct Walker {
     /// `connor_update::tick`): the turn direction it gives counts as a turn
     /// key for his movement, but his own key turning stays off.
     pub turn_by_script: bool,
+    /// A turn key went **down** since the last update (set by the caller,
+    /// cleared by `connor_update::tick`): the only thing that cancels an
+    /// automatic turn (`connor-movement.md` "Turning" rule 2, Q104 a).
+    pub turn_press: bool,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -494,6 +498,7 @@ impl Walker {
             hand_mode: EMPTY_HANDS,
             auto: None,
             turn_by_script: false,
+            turn_press: false,
         }
     }
 

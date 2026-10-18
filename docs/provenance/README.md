@@ -1349,7 +1349,7 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | --- | --- | --- |
 | `walkTo` / `runTo x y <who> <c> <d>`: handsOff on, Wait, turn to face, then Move straight ahead (walk or run) until the flat distance from the walk's start is gone; Wait, `KQCueEvent c d` to `<who>`; early at a head-on hit or `walkExit`; never switches handsOff off | `anim-scripts.md` rule 24 | Unit tests in `connor_auto.rs`, `walk_to_point_and_cue_and_walk_exit_become_requests`; `traps.log` (watermill) |
 | `pointAndCue x y z <who> <c> <d>`: turn to face (x, y), z ignored; the cue when the turn ends, at once if already facing | `anim-scripts.md` rule 25 | Same; `connor.log` update 70 |
-| The automatic turn: 3.5 rad/s, the shorter way, exactly onto the heading once the rest is under one update's turn; a player turn cancels it | `connor-movement.md` "Turning" rule 2 | Unit test `the_automatic_turn_is_3_5_per_second_the_short_way_and_lands_exactly` |
+| The automatic turn: 3.5 rad/s, the shorter way, exactly onto the heading once the rest is under one update's turn; ~~a player turn cancels it~~ (corrected in 4a-7: only a turn key press) | `connor-movement.md` "Turning" rule 2 | Unit test `the_automatic_turn_is_3_5_per_second_the_short_way_and_lands_exactly` |
 | No time-out if a cue never comes | `anim-scripts.md` rule 26 | — |
 | A head-on hit during a scripted walk: he stands at once, no crash, no wall block; a wall block already on wins; `stop` plays during the turn; no object named, no cue | **Stand-ins**, Q94 | — |
 | The walk's end is checked after each move, so it ends up to one step past the distance | **Our method** | `connor.log`: 2783 of 2736 |
@@ -1611,3 +1611,26 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | At the end of a line the mouth goes to rest (shape 0 → `lip0`) | `talking.md` rule 11 | Sign run: lip0 at update 92 |
 | A change to the shape already shown is not applied again | **Our choice** (same picture) | 36 swaps for 39 changes |
 | Mouth changes are applied once per update (15 per second) | **Our choice** (the game logic runs at 15 per second) | — |
+
+## A's answers to Q104 and Q103 (M4 steps 4a-7 to 4a-9)
+
+From `docs/behaviour/connor-movement.md` "Turning" rule 2,
+`clicking.md` rules 25–33, `talking.md` rules 7, 10, 15, 19,
+`chests.md` rule 10, `anim-scripts.md` rule 18 and "Edge cases"
+(session A, 2026-10-18; the user checked Q104 in the original).
+
+### 4a-7, turn keys are events — `crates/kq8-core/src/{turn_keys,connor_auto,connor,connor_update}.rs`, `crates/kq8-viewer/src/connor_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The turn direction changes only on key events: down sets ±1, up sets 0 | `connor-movement.md` "Turning" rule 2 (Q104 a) | Unit tests in `turn_keys.rs`; `connor-4a7-sign-held-left.log` |
+| Only a down cancels an automatic turn; a held key neither cancels it nor adds to its 3.5 rad/s | Same | `connor-4a7-sign-held-left.log`: left held from update 10, turn 18–25 at 0.233 per update; `connor-4a7-sign-press-during.log`: right pressed at 20, cancelled at 21; unit test `a_held_key_neither_cancels_nor_changes_the_turn_and_forward_is_kept` |
+| When an automatic turn ends the direction is 0; a held key does not take over | Same; checked by the user in the original | `connor-4a7-sign-held-left.log`: heading 2.4958 from update 25 on with left held |
+| Letting go of one turn key while the other is held sends the other as a down (cancels) | Same | Unit test `letting_go_of_one_key_sends_the_other_again_as_a_down` |
+| Forward/back and the run switch stay the player's during a turn without a walk (click, `speak`, chest, `pointAndCue`) | Same | Unit test (forward and run kept) |
+| Standing, the turn still plays `Stop`, then `Left`/`Right` | `anim-scripts.md` rules 24–25 (unchanged) | Same runs: update 18 `stop`, then `left` |
+| `handsOff`: presses swallowed, releases counted; when it goes off the held turn key goes down again | `anim-scripts.md` rules 21–22 | Unit test `hands_off_swallows_presses_but_not_releases`; code path for "sent again" only |
+| A cancelled turn with a cue: "cue lost" in the log | `anim-scripts.md` "Edge cases" | Code path only (every `pointAndCue` in Daventry is under `handsOff`) |
+| Keyboard auto-repeat still clears the wall blocks but is not a down for the turn | **Our reading**: the note says nothing re-sends a held key, and the user saw a held key neither cancel nor resume the turn | Runs above |
+| `--turn N,dir` = pressed at N and held; `--hold`'s turn pressed at the start, let go at its end | **Our choice** (test tools) | Runs above |
+

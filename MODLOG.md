@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-7: turn keys are events; only a press cancels the automatic turn
+
+**Changed:** New `kq8-core/src/turn_keys.rs` (the turn direction, changed only by a key going down or up). `connor_auto.rs`: the automatic turn is cancelled only by a turn key press, and during a turn without a walk forward/back and the run switch stay the player's. `connor.rs` (`Walker::turn_press`), `connor_update.rs` (the turn's end sets the direction to 0; logs: heading, turn direction and forward per turn update; "auto-turn cancelled"; "cue lost"). Viewer `connor_view.rs`: turn keys go through `TurnKeys` and every event is logged; `--turn` = pressed and held; `--hold`'s turn pressed at the start and let go at its end; `handsOff` off sends the held turn key again. `docs/DESIGN.md` (plan for 4a-7 to 4a-9), provenance.
+**Why:** Q104 (a), `connor-movement.md` "Turning" rule 2, as the user saw in the original.
+**Tested how:** `cargo test --workspace` (423 pass), clippy clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --turn 10,1 --click alcmsign,16 --frames 1500 --sound off` (`connor-4a7-sign-held-left.log`), and the same with `--click alcmsign,16 --turn 20,-1` (`connor-4a7-sign-press-during.log`).
+**Result:** Held left: he spins at 0.117 per update until the click; the turn to the sign (updates 18–25) goes 0.233 per update (3.5 rad/s, nothing added) and is not cancelled; from update 25 his heading stays 2.4958 although left is still held (turn column 0). Right pressed during the turn (update 20): "auto-turn cancelled" at update 21, then he turns right at 0.117 per update. In both runs the line still starts at 1.600 s (0.5 s after the speak).
+**Still broken / not tested:** Not tried by hand with the keyboard (the runs use `--turn`). The "other key sent again" and "handsOff off sends the held key again" paths are unit-tested only. When standing, the click turn still plays `Stop` for its first update, even while he was already turning on the spot (rules 24–25 as written).
+**Next:** 4a-8, the turn after a click.
+
 ## 2026-10-18 The user's checks of Q104 in the original (docs only)
 
 **Changed:** `connor-movement.md`, `clicking.md` ("How to check" and the rules: checked), `STATUS.md`. No code.

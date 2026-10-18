@@ -100,8 +100,11 @@ pub struct ConnorSim {
     jump_pressed: bool,
     /// Height where the last jump started (for the log).
     jump_start_z: Option<f32>,
-    /// `--turn`: the test's turn key held (1 left, −1 right, 0 none).
-    test_turn: i8,
+    /// The turn keys as events (M4 4a-7, `kq8_core::turn_keys`): the
+    /// turn direction changes only on a key going down or up.
+    pub turn_keys: kq8_core::turn_keys::TurnKeys,
+    /// `--hold`'s turn key has been pressed (and not yet let go).
+    hold_turn_down: bool,
     /// `--hold`'s run switch has been set (once, at the start).
     hold_run_set: bool,
     /// Keyboard auto-repeat: the movement key pressed last, while it is
@@ -415,7 +418,8 @@ pub fn spawn_connor(
         lip_images,
         mouth: 0,
         jump_start_z: None,
-        test_turn: 0,
+        turn_keys: Default::default(),
+        hold_turn_down: false,
         hold_run_set: false,
         repeat: None,
         log,
@@ -546,8 +550,26 @@ pub fn connor_keys(
             sim.log.detail(line);
         }
     }
+    // The turn keys as events (connor-movement.md "Turning" rule 2, Q104
+    // a): releases first, then presses.
     let c = &sim.controls;
-    let (forward, turn) = (c.axis(c.forward, c.back), c.axis(c.left, c.right));
+    let mut turn_events = Vec::new();
+    for (key, dir) in [(c.left, 1i8), (c.right, -1i8)] {
+        if key.is_some_and(|k| keys.just_released(k)) {
+            turn_events.push((dir, false));
+        }
+    }
+    for (key, dir) in [(c.left, 1i8), (c.right, -1i8)] {
+        if key.is_some_and(|k| keys.just_pressed(k)) {
+            turn_events.push((dir, true));
+        }
+    }
+    for (dir, down) in turn_events {
+        let what = if down { "key" } else { "key released" };
+        turn_key_event(&mut sim, dir, down, what, &shared);
+    }
+    let c = &sim.controls;
+    let forward = c.axis(c.forward, c.back);
     let run_pressed = c.run.is_some_and(|k| keys.just_pressed(k));
     if c.jump.is_some_and(|k| keys.just_pressed(k)) {
         sim.jump_pressed = true;
@@ -567,10 +589,14 @@ pub fn connor_keys(
         sim.log.detail(line);
     }
     sim.intent.forward = forward;
-    sim.intent.turn = turn;
     if let Some(([f, t, r], until)) = hold.0 {
         let held = until.is_none_or(|n| sim.updates < n);
-        (sim.intent.forward, sim.intent.turn) = if held { (f, t) } else { (0, 0) };
+        sim.intent.forward = if held { f } else { 0 };
+        // The held turn: pressed at the start, let go at the end (events).
+        if t != 0 && held != sim.hold_turn_down {
+            sim.hold_turn_down = held;
+            turn_key_event(&mut sim, t, held, "test --hold", &shared);
+        }
         // The run switch only at the start, so scripts can change it
         // (`KQConner::setRun`, M3 step 3d-3).
         if !sim.hold_run_set {
@@ -580,7 +606,7 @@ pub fn connor_keys(
     }
     if let Some((_, t)) = turn_at.0.filter(|&(n, _)| sim.updates >= n) {
         turn_at.0 = None;
-        sim.test_turn = t;
+        turn_key_event(&mut sim, t, true, "test --turn (pressed and held)", &shared);
         sim.repeat = Some((None, MoveKey::Turn));
         if !sim.hands_off {
             sim.cut_presses.push("test --turn: turn pressed".into());
@@ -591,9 +617,7 @@ pub fn connor_keys(
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
     }
-    if sim.test_turn != 0 {
-        sim.intent.turn = sim.test_turn;
-    }
+    sim.intent.turn = sim.turn_keys.turn;
     if run_pressed && sim.hands_off {
         let line = format!("connor update {}: run key pressed: ignored (handsOff)", sim.updates);
         sim.log.detail(line);
@@ -625,6 +649,30 @@ pub fn connor_keys(
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
     }
+}
+
+/// One turn key event (+1 left, −1 right; `down` or up) reaching Connor
+/// (`connor-movement.md` "Turning" rule 2, Q104 a): sets the turn
+/// direction; a down that reaches him (not swallowed by `handsOff`)
+/// cancels an automatic turn at his next update. Logged in `connor.log`,
+/// with "auto-turn cancelled" only on a down during an automatic turn.
+fn turn_key_event(sim: &mut ConnorSim, dir: i8, down: bool, what: &str, shared: &Shared) {
+    let hands_off = sim.hands_off;
+    let e = if down { sim.turn_keys.press(dir, hands_off) } else { sim.turn_keys.release(dir, hands_off) };
+    let turning = sim.walker.auto.as_ref().is_some_and(|a| a.phase == kq8_core::connor_auto::AutoPhase::Turning);
+    if e.is_down() {
+        sim.walker.turn_press = true;
+    }
+    let cancel = if e.is_down() && turning { "; auto-turn cancelled (at the next update)" } else if turning { "; the automatic turn goes on" } else { "" };
+    sim.intent.turn = sim.turn_keys.turn;
+    let line = format!(
+        "connor update {}: turn key {} ({what}): {e}; turn direction {:+}{cancel}",
+        sim.updates,
+        if dir > 0 { "left" } else { "right" },
+        sim.turn_keys.turn
+    );
+    shared.log.lock().unwrap().detail(&line);
+    sim.log.detail(line);
 }
 
 impl ConnorSim {
@@ -731,12 +779,20 @@ impl ConnorSim {
     /// press does), so it acts at once. Returns a line for the log.
     pub fn keys_sent_again(&mut self) -> String {
         let mut sent = Vec::new();
-        let keys = [(self.intent.forward == 1, MoveKey::Forward), (self.intent.forward == -1, MoveKey::Back), (self.intent.turn != 0, MoveKey::Turn)];
+        let keys = [(self.intent.forward == 1, MoveKey::Forward), (self.intent.forward == -1, MoveKey::Back)];
         for (held, key) in keys {
             if held {
                 let cleared = self.walker.key_event(key, true);
                 sent.push(format!("{key:?} (blocks cleared {cleared:?})"));
             }
+        }
+        // The held turn key goes down again (Q104 a: a down event).
+        if let Some(dir) = self.turn_keys.held_last() {
+            let e = self.turn_keys.press(dir, false);
+            self.walker.turn_press = true;
+            self.intent.turn = self.turn_keys.turn;
+            let cleared = self.walker.key_event(MoveKey::Turn, true);
+            sent.push(format!("Turn: {e} (blocks cleared {cleared:?})"));
         }
         if sent.is_empty() { "no movement key held".into() } else { format!("held keys sent again: {}", sent.join(", ")) }
     }
@@ -919,7 +975,13 @@ pub fn connor_step(
     if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
         sim.jump_start_z = Some(z_before);
     }
-    let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes, auto_end } = tick;
+    let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes, auto_end, auto_turn_ended } = tick;
+    // Q104 a: the end of an automatic turn sets the turn direction to 0;
+    // a held turn key is not sent again.
+    if auto_turn_ended {
+        sim.turn_keys.auto_turn_ended();
+        sim.intent.turn = 0;
+    }
     // M3 3n-5 (Q98): the end of a scripted walk, logged.
     let walk_ended = auto_end.as_ref().is_some_and(|a| a.why.starts_with("walked") || a.why == "head-on");
     watch_walk_end(sim, walk_ended);

@@ -1740,6 +1740,56 @@ inventory and menus.
   - **4a-6, the mouth** (**done**; viewer; rule 18). Connor's face texture
     `cf0.bmp` is swapped for `lip<n>` of `[ConnerLips]` at each mouth
     change. Other characters are not drawn yet (cubes), so only logged.
+  - **4a-7 to 4a-9, A's answers to Q104 and Q103 (e)** (planned
+    2026-10-18). One commit per step; each step logs to `connor.log`
+    and `doors.log` / `talk.log`.
+    - **4a-7, turn keys are events** (**done** 2026-10-18; `connor-movement.md` "Turning"
+      rule 2, `anim-scripts.md` "Edge cases"). Today Connor's turn
+      direction is read from the held keys every update, and any
+      non-zero turn cancels the automatic turn. New: a small core
+      module `turn_keys.rs` keeps the turn direction and changes it
+      only on key events: a key going **down** sets it (+1 left, −1
+      right) and is the only thing that cancels an automatic turn;
+      a key coming **up** sets it to 0, or, if the other turn key is
+      still held, sends that one again as a fresh down (which cancels
+      too). While the automatic turn runs it overwrites the direction
+      every update at 3.5 rad/s (a held key adds nothing); when it
+      ends the direction is set to 0, so a held key does not take
+      over. Forward/back and the run switch stay the player's during
+      a turn without a cue (click, `speak`, chest), so he walks or
+      runs through it. `handsOff`: presses swallowed as now; when it
+      goes off, the held turn key is sent again as a down (rule 22).
+      `--turn N,dir` becomes "pressed at N and held"; `--hold`'s turn
+      is pressed at the start and let go at its end. Logs: every turn
+      key event (down/up, "sent again"), "auto-turn cancelled" only on
+      a down, and "cue lost" when a turn with a cue is cancelled; per
+      turn update the heading, turn direction and forward.
+    - **4a-8, the turn after a click** (`clicking.md` rules 25–33,
+      `doors.md` rule 16). After every `ConnorAction` call (doors,
+      scripted objects, scripted clickables, buildings with a script,
+      items with a script) the click asks for a turn to the object's
+      position (its placement point), unless it has `doNotPointAt`
+      (items: on by default). The request goes into the same list as
+      the script's own requests, after them, so a `setState` in the
+      script is applied first; the viewer then looks at Connor's
+      state (Wait or Move: our only states of rule 28's list) and
+      starts the usual automatic turn, or logs why not. One
+      automatic turn: a new turn request while a turn without a walk
+      is running replaces only its target (a `pointAndCue` keeps its
+      cue). Stock remarks never turn him (no change). Another
+      character's `speak` turn (Q103 d): only logged, monsters don't
+      move yet. Logs: per click the call kind (`do`, item, `TooFar`,
+      `Special`, none), Connor's state after the script, and `turn
+      to <object>` or the reason there is none.
+    - **4a-9, the chest remark turns him in any state** (`talking.md`
+      rule 19, `chests.md` rule 10): the "not in Wait or Move → at
+      once" branch goes; only `doNotPointAt` gives no turn and no
+      wait.
+    - Q103 (a)–(c): our stand-ins are right; only the provenance
+      notes change.
+    - Tests: unit tests for the key events and the click turn; viewer
+      runs with `--turn` and `--click` on `alcmsign`, `tmbstn1`,
+      `tmbstn2`, `wizbook`, `urn` and `smlchst3`.
   - Not in 4a: conversations; item descriptions in the inventory (no
     inventory screen, rule 20); the Daventry monster-death remark (no
     monster dies yet); helmets' and armour's face lists (M5).
