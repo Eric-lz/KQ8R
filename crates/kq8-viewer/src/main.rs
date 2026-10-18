@@ -429,6 +429,9 @@ fn main() -> ExitCode {
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
+                // Captions (M4 4a-4).
+                .add_systems(Startup, talk_view::setup_caption)
+                .add_systems(Update, talk_view::caption_draw)
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw))
                 .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw));

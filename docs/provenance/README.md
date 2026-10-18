@@ -1584,3 +1584,10 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | While a line without `nofade` plays, groups 0, 2, 5 × 0.2; back to 1 when no line ducks | `talking.md` rules 10–11, `sound.md` rule 53 | Sign run `sound.log`: 0.028 during the line, 0.140 after |
 | `clearSpeak` stops the voice at once | `talking.md` rule 15 | Code path only (not reached in a run) |
 | A non-Connor speaker with no known place: plain voice | **Our choice** (not in the note) | — |
+
+### 4a-4, captions — `crates/kq8-viewer/src/{talk_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The line's text (stage directions out) shown while its queue talks, if `Options::Captions` is true; hidden when that queue is empty | `talking.md` rules 3, 10–11 | Sign run `viewer.log`: shown at update 38, hidden after the line |
+| The panel's look: Bevy's font, 20 px, white on a 60% black band, 80% wide, 40 px above the bottom | **Stand-in** (`talking.md` open question 4: the GUI is not studied) | — |

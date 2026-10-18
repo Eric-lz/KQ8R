@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-4: captions on screen
+
+**Changed:** Viewer `talk_view.rs`: `Speech` keeps the caption (the issuer that showed it, the text); `setup_caption` / `caption_draw`: a panel at the bottom of the window, shown while the line's queue talks, hidden when it runs empty; each change in `viewer.log`. `main.rs`: the two systems. Provenance.
+**Why:** `talking.md` rules 10-11 (captions follow `Options::Captions`, true in `Options.cs`).
+**Tested how:** `cargo build`; viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`viewer.log`, `run-4a4-sign.txt`).
+**Result:** `viewer.log`: `caption shown: " The alchemist's shop. There could be something useful inside."` right after the line starts (update 38); `caption hidden` after it ends. RESULT: PASS.
+**Still broken / not tested:** Not seen by eye. STAND-IN: the panel's look (Bevy's own font, white text on a dark band, 80% of the window wide, 40 px from the bottom) is ours; the original's caption panel is not studied (`talking.md` open question 4).
+**Next:** 4a-5, Connor's own remarks and cutting a line short.
+
 ## 2026-10-18 M4 step 4a-3: hearing speech, and other sounds turned down
 
 **Changed:** `kq8-core/src/sound.rs`: group 3 for speech, `Start::speech` (Connor's plain, others placed, 2,000 / 30,000), `set_ducking` (groups 0, 2, 5 x 0.2; 1 unit test). Viewer `talk_view.rs`: `Speech` resource and `talk_step` (the talk events become voice orders and the ducking switch, after the traps in each update); `sound_view.rs` plays and stops the voices and sets the ducking. Provenance.

@@ -12,6 +12,13 @@
 //! `sound_view` (group 3; Connor's plain, others placed at the speaker,
 //! 2,000 / 30,000) and the ducking switch (groups 0, 2, 5 x 0.2 while a
 //! line without `nofade` plays; `sound.md` rules 53, 58).
+//!
+//! 4a-4: the caption panel ([`setup_caption`], [`caption_draw`]): the
+//! line's text (stage directions taken out) at the bottom of the screen
+//! while its queue is talking, if `Options::Captions` is true (rule 10).
+//! STAND-IN: how the original draws the panel (font, place, wrapping) is
+//! not studied (`talking.md` open question 4, M4 GUI): Bevy's own font,
+//! white on a dark band, wrapped to 80% of the window.
 
 use bevy::prelude::*;
 use kq8_core::talk::{Book, Talk, TalkEvent, Voice, CONNOR};
@@ -100,6 +107,9 @@ pub struct Speech {
     pub voices: Vec<VoiceOrder>,
     /// A line that turns other sounds down is playing (rules 10-11).
     pub ducking: bool,
+    /// The caption shown (4a-4): the issuer whose queue showed it, and
+    /// the text; `None`: the panel is hidden (rule 11).
+    pub caption: Option<(String, String)>,
 }
 
 /// A voice for the sound system.
@@ -121,7 +131,7 @@ pub fn talk_step(sim: Option<ResMut<DoorSim>>, mut speech: ResMut<Speech>, share
     // The update these events belong to (the counter has moved on).
     let now = sim.active.world.updates.saturating_sub(1) as f64 / kq8_core::UPDATES_PER_SECOND;
     for e in events {
-        match e {
+        match e.clone() {
             TalkEvent::Start { id, speaker, voice: Some(path), tuple, .. } => {
                 // Rule 10: Connor's plain, anyone else's placed where the
                 // speaker is when the line starts.
@@ -137,7 +147,74 @@ pub fn talk_step(sim: Option<ResMut<DoorSim>>, mut speech: ResMut<Speech>, share
             TalkEvent::End { id, cut: true, .. } => speech.voices.push(VoiceOrder::Stop { line: id }),
             _ => {}
         }
+        // 4a-4, rules 10-11: a line with a caption shows it; the queue
+        // that showed it running empty hides it.
+        match e {
+            TalkEvent::Start { issuer, caption: Some(text), .. } => speech.caption = Some((issuer, text)),
+            TalkEvent::Empty { issuer } if speech.caption.as_ref().is_some_and(|(i, _)| *i == issuer) => speech.caption = None,
+            _ => {}
+        }
     }
     speech.ducking = sim.active.world.talk.ducking();
     sim.flush_talk(&shared);
+}
+
+/// The caption panel (4a-4).
+#[derive(Component)]
+pub struct CaptionPanel;
+
+/// Its text.
+#[derive(Component)]
+pub struct CaptionText;
+
+/// Spawns the hidden caption panel at the bottom of the window.
+pub fn setup_caption(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(40.0),
+                left: Val::Percent(10.0),
+                width: Val::Percent(80.0),
+                justify_content: JustifyContent::Center,
+                padding: UiRect::all(Val::Px(8.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)),
+            Visibility::Hidden,
+            CaptionPanel,
+        ))
+        .with_children(|p| {
+            p.spawn((Text::new(""), TextFont { font_size: FontSize::Px(20.0), ..default() }, TextColor(Color::WHITE), CaptionText));
+        });
+}
+
+/// Shows or hides the caption when it changed; each change in
+/// `viewer.log`.
+pub fn caption_draw(
+    speech: Res<Speech>,
+    mut panel: Query<&mut Visibility, With<CaptionPanel>>,
+    mut text: Query<&mut Text, With<CaptionText>>,
+    shared: Res<crate::Shared>,
+) {
+    if !speech.is_changed() {
+        return;
+    }
+    let shown = speech.caption.as_ref().map(|(_, t)| t.as_str());
+    let (Ok(mut vis), Ok(mut t)) = (panel.single_mut(), text.single_mut()) else { return };
+    let was = (*vis != Visibility::Hidden).then(|| t.0.clone());
+    if was.as_deref() == shown {
+        return;
+    }
+    match shown {
+        Some(s) => {
+            t.0 = s.to_string();
+            *vis = Visibility::Inherited;
+            shared.log.lock().unwrap().detail(format!("caption shown: {s:?}"));
+        }
+        None => {
+            *vis = Visibility::Hidden;
+            shared.log.lock().unwrap().detail("caption hidden");
+        }
+    }
 }
