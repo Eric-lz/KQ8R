@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-1: reading message, talker and lip-sync files
+
+**Changed:** New `kq8-data/src/msg.rs` (message files, stage directions and the "no stop" mark, voice and lip-sync file names in base 36, `TALKERS.SH`, lip-sync files; 5 unit tests). New check `kq8 msg-verify` (`kq8-cli/src/msg_verify.rs`). Plan for 4a in `docs/DESIGN.md` (M4). `docs/provenance/README.md`.
+**Why:** First step of talking (`docs/behaviour/talking.md` rules 1-5, 17): the game's lines and their files.
+**Tested how:** `cargo test -p kq8-data msg` (5 pass); `cargo run -p kq8-cli -- msg-verify` (`msg-verify.log`).
+**Result:** RESULT: PASS. 12 files, 2,080 lines, 476 with `#`; Daventry 254 lines (100 `#`, Connor 172, Wizard 40, Uglybeast 17, Girl 8, Knight 6), `0.MSG` 140 (21 `#`, 6 without a voice); lines without a voice file as the note says in every folder; `castled` and `temple2` are copies with no voices of their own; 1000 55 0 0 1 = `A0RS1J00.001` " The alchemist's shop. There could be something useful inside."; 0 0 0 1 1 "'Tis beyond my reach.", 0 0 0 4 1 "This will not work.", 0 109 14 33 1 "'Tis empty.". 1,538 lip-sync files read, 1,992 of 57,430 mouth changes have a shape above 7 (not traced, open question 2).
+**Still broken / not tested:** Nothing plays yet; the lines are only read.
+**Next:** 4a-2, the queues and the script commands.
+
 ## 2026-10-18 M3 3n: the user's check of the mill wheel fix (docs only)
 
 **Changed:** `docs/FEATURES.md`, `STATUS.md`: the check recorded. No code.

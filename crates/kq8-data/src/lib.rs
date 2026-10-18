@@ -19,6 +19,7 @@ pub mod kq_text;
 pub mod lightmap;
 pub mod lights;
 pub mod material;
+pub mod msg;
 pub mod objects;
 pub mod palette;
 pub mod pers;

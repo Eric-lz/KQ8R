@@ -1537,3 +1537,21 @@ No rule changed: A's answer to Q98 says the build already matches `anim-scripts.
 | What | Source | Check |
 | --- | --- | --- |
 | After a script's `move Connor` the traps' swept test starts again from the new spot; the jump's path is not swept | **Stand-in** (`traps.md` rule 5: placing by `move` not traced; `camera.md` calls `move Connor` "a jump to the new spot"; Q102) | `run-wheel2.txt`: `wheeltp2` alone, `Off` at update 133; `run-wheel1.txt` unchanged |
+
+## Remarks and speech (M4 step 4a)
+
+From `docs/behaviour/talking.md` (session A, 2026-10-18). The byte
+layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
+(libkq8fpc, GPL-3.0; facts about layouts only, code and wording our own).
+
+### 4a-1, reading the files — `crates/kq8-data/src/msg.rs`, `crates/kq8-cli/src/msg_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Message file: 2-byte header (0x0F / 0x8F, 0), version 5010, data size, last id, count; 11-byte records (noun, verb, case, sequence, talker, u16 text offset from the version field, 4 unused); zero-ended texts | `talking.md` rule 2; `kq8msg.txt` | `kq8 msg-verify`: all 12 files parse, version 5010, 2,080 lines; unit test `a_message_file_gives_its_lines` (made-up file) |
+| Stage directions `( … )` taken out, `#` inside = "no stop", `[n]` = camera number; the space after the bracket kept | `talking.md` rule 3 | `msg-verify`: 476 lines with `#` (Daventry 100, `0.MSG` 21); the alchemist's sign shows " The alchemist's shop. …" |
+| Voice / lip-sync names: `A`/`S` + file (3) + noun (2) + verb (2) + `.` + case (2) + sequence (1), base 36 | `talking.md` rule 4 | Unit test (the note's `A0RS1J00.001`); `msg-verify`: lines without a voice file match the note in every folder |
+| `TALKERS.SH`: `(define NAME n)`, object name = lower case with a capital first letter; the ten generic talkers | `talking.md` rule 5 | `msg-verify`: Connor is 4; Daventry's lines per talker match the note |
+| `<last>` 0: the unbroken run of sequences from `<first>` | `talking.md` rule 6 | Unit test |
+| Lip-sync file: 2-byte header (0x8E / 0x0E, 0), records (u16 time, u16 shape) until time 0xFFFF | `kq8lip.txt` (layout); `talking.md` rule 17 (1/60 s, shapes 0–7) | `msg-verify`: 1,538 files read, times in order; 1,992 changes have a shape above 7 (open question 2) |
+| Texts read as 8-bit Latin-1 | **Our choice** (the files are Windows text; not traced) | — |

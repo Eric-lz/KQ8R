@@ -1683,6 +1683,69 @@ inventory and menus.
 - B: messages (`.msg`), audio (`.aud`), fonts (`.pft`), GUI files.
 - A: conversations, inventory rules, menu behaviour.
 
+- **4a — remarks and speech (planned 2026-10-18).** From
+  `docs/behaviour/talking.md` (A, 2026-10-18). A **line** is one entry
+  of a message file with its own voice file; a **queue** is the list of
+  lines one character still has to say; a **remark** is a line Connor
+  says about something he clicked. Conversations (choosing what to say)
+  are not studied and not in 4a. One commit per step; every step logs to
+  `kq8-artifacts/logs/talk.log` (new).
+  - **4a-1, reading the files** (`kq8-data/src/msg.rs`, new; rules 1–5,
+    17, the community notes `kq8msg.txt` / `kq8lip.txt`). Message files
+    (`<n>.MSG`: lines with noun, verb, case, sequence, talker, text),
+    the stage directions taken out of the text (the "no stop" mark `#`),
+    the voice and lip-sync file names (base 36), `TALKERS.SH` (talker
+    number → object name, the ten "generic" talkers), lip-sync files
+    (time in 1/60 s, mouth shape). New check `kq8 msg-verify`
+    (`msg-verify.log`): per file the number of lines, of `#` marks and
+    of lines without a voice file, to compare with the note's numbers
+    (Daventry 254 lines, 100 with `#`; `0.MSG` 140, 21 with `#`, 6
+    without a voice; 476 `#` in 2,080 lines).
+  - **4a-2, the queues and the script commands** (`kq8-core/src/talk.rs`,
+    new; `active.rs`; rules 6–9, 11, 13–15, "Edge cases", "Do not
+    reproduce"). `KQMonster::speak`, `clearSpeak`, `testMessage`,
+    `stateChangeNotify`, `clearStateChangeNotify` stop being stubs.
+    One queue per character; the duplicate check; `<last>` 0; turning to
+    the listener (Connor only in Wait or Move, through the existing
+    scripted turn, then the 0.5 s wait; one waiting slot per issuer). A
+    line lasts as long as its voice file (counted in game time, 15
+    updates per second); without a voice file 0.06 s per character, at
+    least 1 s (the note's suggestion, logged). At each line's end:
+    `TalkComplete` with the tuple to the issuer's own script at once
+    (not Connor's), and through the event queue to every object
+    registered with `stateChangeNotify` (a registration of the issuer
+    for itself is skipped: that is the message "coming back"). Every
+    line gets its own number, never reused (the TalkComplete freeze is
+    not reproduced). Lip-sync changes are scheduled and logged here.
+    `eval` (used as `if eval KQMonster::testMessage …`, not described
+    in any note): STAND-IN, runs the rest of the line as a command and
+    keeps its result; question Q103.
+  - **4a-3, hearing it** (viewer `talk_view.rs`, new; `sound_view.rs`;
+    rule 10, `sound.md` rules 53, 58). The voice plays in group 3:
+    Connor's plain, others placed at the speaker (2,000 / 30,000).
+    While a line without `nofade` plays, groups 0, 2 and 5 are turned
+    down to 0.2. `clearSpeak` stops the voice at once.
+  - **4a-4, captions** (viewer; rule 10). With `Options::Captions` true
+    (from `Options.cs`) the line's text is shown at the bottom of the
+    screen; hidden when the queue is empty. STAND-IN: where and how the
+    original draws the panel is not studied (open question 4); plain
+    white text on a dark band.
+  - **4a-5, Connor's own remarks and cutting a line short** (`active.rs`,
+    viewer; rules 16, 19). "Too far" (0 0 0 1 1), "This will not work"
+    (0 0 0 4 1), a chest's `Take…`/`Empty…` remark with the turn to the
+    chest unless `doNotPointAt`. Pressing forward/back/turn/Jump or
+    clicking in the world stops Connor's line when it has no `#` mark
+    (not during `handsOff`).
+  - **4a-6, the mouth** (viewer; rule 18). Connor's face texture
+    `cf0.bmp` is swapped for `lip<n>` of `[ConnerLips]` at each mouth
+    change. Other characters are not drawn yet (cubes), so only logged.
+  - Not in 4a: conversations; item descriptions in the inventory (no
+    inventory screen, rule 20); the Daventry monster-death remark (no
+    monster dies yet); helmets' and armour's face lists (M5).
+  - Tests: `cargo test --workspace`; `kq8 msg-verify`; viewer runs
+    clicking the alchemist's sign (`alcmsign`), `smlchst3` and `wizbook`
+    with `--click`, read in `talk.log`, `sound.log`, `connor.log`.
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and
