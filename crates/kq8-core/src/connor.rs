@@ -422,6 +422,9 @@ pub struct Walker {
     /// Which weapon he holds: 4 = empty hands, the only one so far
     /// (`KQConner::setDoMode` is a stub).
     pub hand_mode: i64,
+    /// A scripted turn or walk (`walkTo`, `runTo`, `pointAndCue`;
+    /// `anim-scripts.md` rules 24–25), run by `connor_update::tick`.
+    pub auto: Option<crate::connor_auto::AutoMove>,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -480,6 +483,7 @@ impl Walker {
             special_at: 0,
             push_counter: 0,
             hand_mode: EMPTY_HANDS,
+            auto: None,
         }
     }
 
@@ -507,6 +511,32 @@ impl Walker {
         }
         self.mode = Mode::Push;
         Some("enters the Push state")
+    }
+
+    /// A scripted turn or walk starts (`anim-scripts.md` rules 24–25). A
+    /// walk puts him in Wait first (the keys' control, standing); a turn
+    /// (`pointAndCue`) only turns him. Returns a line for the log.
+    pub fn start_auto(&mut self, a: crate::connor_auto::AutoMove) -> String {
+        let walk = matches!(a.kind, crate::connor_auto::AutoKind::Walk { .. });
+        let mut line = format!("scripted {:?} to ({:.0}, {:.0})", a.kind, a.target[0], a.target[1]);
+        if let Some(old) = self.auto.take() {
+            line += &format!(" (replaces the unfinished {:?}; its cue never comes)", old.kind);
+        }
+        if walk && self.mode != Mode::Free {
+            line += &format!(" (mode {} -> free: Wait)", self.mode.name());
+            self.set_mode(Mode::Free);
+        }
+        self.auto = Some(a);
+        line
+    }
+
+    /// A scripted walk ran head-on into something (rule 24: the cue comes
+    /// early). STAND-IN (Q94): he stands at once (`stop`), with no crash
+    /// and no wall block.
+    pub fn stop_at_once(&mut self) {
+        self.clear_transitions();
+        self.movement = "stop";
+        self.phase = 0.0;
     }
 
     /// Rule 2.5 failed while pushing: back to Move (the keys decide).

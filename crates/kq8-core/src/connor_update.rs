@@ -6,6 +6,7 @@
 //! Rules: `connor-physics.md` "Falling off an edge", "Walls", "Jumping";
 //! the user's checks of jumping in the original (docs/DESIGN.md M2 2e).
 
+use crate::connor_auto::{AutoEnd, AutoKind, Before};
 use crate::connor::{Intent, JumpKind, Mode, MovementLoop, Step, Walker};
 use crate::connor_mover::{FallEvent, HitRecord, Mover, MoverWorld, PushResult, Report, State, Wish, JUMP_ABOVE_TERRAIN, WALKABLE_NORMAL_Z};
 
@@ -19,6 +20,9 @@ pub struct Tick {
     pub wall_stop: Option<(&'static str, &'static str)>,
     /// Jump lines for the log: asked for, started, refused (why), ended.
     pub notes: Vec<String>,
+    /// A scripted turn or walk ended this update (its cue, if any, is
+    /// for the caller to send).
+    pub auto_end: Option<AutoEnd>,
 }
 
 /// Whether a jump can start now, and which (connor-physics.md "Jumping"
@@ -100,6 +104,38 @@ pub fn tick<'a>(
             Err(why) => notes.push(format!("jump refused: {why}")),
         }
     }
+    // anim-scripts.md rules 24-25: a scripted turn or walk turns him, or
+    // gives the walker its walk instead of the keys.
+    let mut intent = intent;
+    let mut auto_end = None;
+    let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
+    if let Some(a) = walker.auto.as_mut() {
+        let mut done = None;
+        match a.before(mover.position, &mut walker.heading, intent.turn, dt) {
+            Before::Keys | Before::Turned { .. } => {}
+            Before::Cancelled => {
+                notes.push("scripted turn cancelled by a turn key: its cue never comes (connor-movement.md \"Turning\" rule 2)".into());
+                done = Some(None);
+            }
+            Before::TurnDone => match a.kind {
+                AutoKind::Point => {
+                    notes.push(format!("scripted turn done: heading {:.3}", walker.heading));
+                    done = Some(Some(AutoEnd { cue: a.cue.take(), why: "turned to face the spot".into() }));
+                }
+                AutoKind::Walk { run } => {
+                    if let crate::connor_auto::AutoPhase::Walking { distance, .. } = a.phase {
+                        notes.push(format!("scripted turn done: heading {:.3}; {} straight ahead for {distance:.0}", walker.heading, if run { "runs" } else { "walks" }));
+                    }
+                    intent = Intent { forward: 1, turn: 0, run };
+                }
+            },
+            Before::Walk(i) => intent = i,
+        }
+        if let Some(end) = done {
+            walker.auto = None;
+            auto_end = end;
+        }
+    }
     // The choice this update uses the water test from the end of the last
     // move (water.md "Wading animations" rule 3).
     walker.submerged = mover.submerged;
@@ -177,12 +213,25 @@ pub fn tick<'a>(
             mover.back_jump_hit();
         }
         notes.push(format!("{jump} hit {} (steep, {} pass): the jump ends, {to}", hit.hit.what, hit.pass));
+    } else if report.head_on && walker.auto.as_ref().is_some_and(|a| a.walk_done(mover.position).is_none() && matches!(a.phase, crate::connor_auto::AutoPhase::Walking { .. })) {
+        // A scripted walk ran head-on into something: the cue comes early
+        // (rule 24) instead of the crash or stop.
+        walker.stop_at_once();
+        let cue = walker.auto.take().and_then(|a| a.cue);
+        notes.push("scripted walk ran head-on into something: it ends, cue now (stand-in Q94: stands at once, no crash, no wall block)".into());
+        auto_end = Some(AutoEnd { cue, why: "head-on".into() });
     } else if report.head_on {
         // Head-on into a wall: walking or stepping back stops at once;
         // running crashes from the next update.
         wall_stop = walker.head_on_at_wall();
     }
-    Tick { step, report, wall_stop, notes }
+    // A scripted walk has gone its distance: Wait, and the cue.
+    if let Some((gone, distance)) = walker.auto.as_ref().and_then(|a| a.walk_done(mover.position)) {
+        let cue = walker.auto.take().and_then(|a| a.cue);
+        notes.push(format!("scripted walk done: {gone:.0} gone of {distance:.0}: Wait"));
+        auto_end = Some(AutoEnd { cue, why: format!("walked {gone:.0}") });
+    }
+    Tick { step, report, wall_stop, notes, auto_end }
 }
 
 /// What a steep hit during a jump does (connor-physics.md "Jumping" rule

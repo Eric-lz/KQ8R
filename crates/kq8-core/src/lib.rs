@@ -11,6 +11,7 @@ pub mod chest;
 pub mod click;
 pub mod collide;
 pub mod connor;
+pub mod connor_auto;
 pub mod connor_mover;
 pub mod connor_update;
 pub mod door;

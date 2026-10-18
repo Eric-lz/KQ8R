@@ -127,6 +127,12 @@ pub enum Request {
     /// `loadKQ <file>` while playing (M3 3k-4, Q90 stand-in): the copy
     /// of `name` prepared at the start comes into the world.
     Load { file: String, name: String, at: String },
+    /// `KQConner::walkTo` / `runTo` / `pointAndCue` (`anim-scripts.md`
+    /// rules 24–25, M3 3l-2): a scripted walk or turn; a walk also
+    /// switches `handsOff` on.
+    ConnorAuto { auto: crate::connor_auto::AutoMove, at: String },
+    /// `walkExit`: a scripted walk ends now, with its cue (rule 24).
+    WalkExit { at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -987,6 +993,33 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQConner::walkTo x y [<who> <c> <d>]`, `KQConner::runTo …` and
+    /// `pointAndCue x y z [<who> <c> <d>]` (`anim-scripts.md` rules
+    /// 24–25): a request for Connor. Without `<who>` no cue is sent
+    /// (`walkTo x y`, 6 lines in the data); a missing `<c>` or `<d>` is 0.
+    fn connor_auto(&mut self, words: &[String], at: &str) -> String {
+        use crate::connor_auto::{AutoKind, AutoMove, Cue};
+        let point = words[0] == "pointAndCue";
+        let numbers = if point { 3 } else { 2 };
+        let ok = words.len() > numbers && words[1..=numbers].iter().all(|w| looks_like_number(w));
+        if !ok {
+            self.note(format!("{at}: usage: {} x y{} [<who> <cue> <data>]: '{}'", words[0], if point { " z" } else { "" }, words.join(" ")));
+            return "1".into();
+        }
+        let target = [number_value(&words[1]) as f32, number_value(&words[2]) as f32];
+        let kind = if point { AutoKind::Point } else { AutoKind::Walk { run: words[0] == "KQConner::runTo" } };
+        let rest = &words[numbers + 1..];
+        let cue = rest.first().map(|who| Cue {
+            who: who.clone(),
+            c: rest.get(1).cloned().unwrap_or_else(|| "0".into()),
+            d: rest.get(2).cloned().unwrap_or_else(|| "0".into()),
+        });
+        let then = cue.as_ref().map_or("no cue (no object named)".to_string(), |c| format!("then KQCueEvent {} {} to {}", c.c, c.d, c.who));
+        self.note(format!("{at}: {}: Connor {} ({:.0}, {:.0}), {then}", words[0], if point { "turns to face" } else { "turns, then goes straight ahead to" }, target[0], target[1]));
+        self.requests.push(Request::ConnorAuto { auto: AutoMove::new(kind, target, cue), at: at.to_string() });
+        "0".into()
+    }
+
     /// `loadKQ <file>` while playing (Q90 stand-in: as at the start, no
     /// script call, a sound starts at once): a file prepared at the start
     /// comes into the world. With a name or a position on the line, or a
@@ -1419,6 +1452,12 @@ impl ScriptHost for WorldState {
             "move" => Some(self.move_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
+            "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
+            "walkExit" => {
+                self.note(format!("{at}: walkExit: a scripted walk ends now, with its cue (anim-scripts.md rule 24)"));
+                self.requests.push(Request::WalkExit { at: at.to_string() });
+                Some("0".into())
+            }
             "loadKQ" => Some(self.load_kq(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
@@ -1557,6 +1596,15 @@ impl Active {
     /// script, so no `EndLoop`.
     pub fn connor_movement_ended(&mut self, movement: &str) {
         self.world.report_end("Connor", movement, false);
+    }
+
+    /// A scripted turn or walk of Connor ended (`anim-scripts.md` rules
+    /// 24–25): `KQCueEvent <c> <d>` to the object the script named.
+    pub fn connor_auto_cue(&mut self, cue: &crate::connor_auto::Cue, why: &str) {
+        let now = self.world.now();
+        let at = format!("Connor's scripted movement ({why})");
+        self.world.note(format!("{at}: KQCueEvent {} {} to {}", cue.c, cue.d, cue.who));
+        self.world.queue.send(now, 0.0, &cue.who, "KQCueEvent", &[cue.c.clone(), cue.d.clone()], &at);
     }
 
     /// The objects prepared for a script's `loadKQ` (3k-4): file name and
@@ -3354,6 +3402,34 @@ mod tests {
         assert_eq!(a.world.objects[0].player.base.position, [before[0], before[1] - 200.0, before[2] - 300.0]);
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::Move { who, flags: 0, .. } if who == "Connor")));
         assert!(a.take_log().join("\n").contains("move: unknown object 'nobody'"));
+    }
+
+    #[test]
+    fn walk_to_point_and_cue_and_walk_exit_become_requests() {
+        use crate::connor_auto::{AutoKind, Cue};
+        let mut a = with_object(
+            "KQConner::walkTo 190800 230100 $1 2 0\nKQConner::runTo 1 2\npointAndCue 188000 230000 9000 $1 3\nwalkExit\nKQConner::walkTo 5\n",
+            "x",
+        );
+        // The helper's start ran the script once already (Init).
+        a.world.requests.clear();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let autos: Vec<_> = a
+            .world
+            .requests
+            .iter()
+            .filter_map(|r| if let Request::ConnorAuto { auto, .. } = r { Some(auto.clone()) } else { None })
+            .collect();
+        assert_eq!(autos.len(), 3);
+        assert_eq!((autos[0].kind, autos[0].target), (AutoKind::Walk { run: false }, [190800.0, 230100.0]));
+        assert_eq!(autos[0].cue, Some(Cue { who: "basket1".into(), c: "2".into(), d: "0".into() }));
+        // No object named: no cue.
+        assert_eq!((autos[1].kind, autos[1].cue.clone()), (AutoKind::Walk { run: true }, None));
+        // pointAndCue: z ignored; a missing data word is 0.
+        assert_eq!((autos[2].kind, autos[2].target), (AutoKind::Point, [188000.0, 230000.0]));
+        assert_eq!(autos[2].cue.as_ref().map(|c| c.d.as_str()), Some("0"));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::WalkExit { .. })));
+        assert!(a.take_log().join("\n").contains("usage: KQConner::walkTo x y"));
     }
 
     #[test]

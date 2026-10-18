@@ -1342,3 +1342,15 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | A `move Connor` from a `Push` call is followed by the rest of his update (a gravity step, the down pass with its 325 step-down, the ground check), so he lands in the same update | `pushing.md` rule 11 (Q92) | Unit test `a_scripted_move_inside_his_update_lands_him_at_once`; `connor.log` updates 13–64 at z 14837 |
 | The gravity step uses the down pass's fall timer, straight down | **Our method** (the note gives "about 44" for the original's real time; ours is 36 at 15 updates per second) | — |
 | The requests a `Push` call makes count as "inside his update"; the objects he pushed stay passed through | **Our method** (the script still runs after his move, our order) | — |
+
+### 3l-2, the watermill cutscene — `crates/kq8-core/src/{connor_auto,connor,connor_update,active,script}.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `walkTo` / `runTo x y <who> <c> <d>`: handsOff on, Wait, turn to face, then Move straight ahead (walk or run) until the flat distance from the walk's start is gone; Wait, `KQCueEvent c d` to `<who>`; early at a head-on hit or `walkExit`; never switches handsOff off | `anim-scripts.md` rule 24 | Unit tests in `connor_auto.rs`, `walk_to_point_and_cue_and_walk_exit_become_requests`; `traps.log` (watermill) |
+| `pointAndCue x y z <who> <c> <d>`: turn to face (x, y), z ignored; the cue when the turn ends, at once if already facing | `anim-scripts.md` rule 25 | Same; `connor.log` update 70 |
+| The automatic turn: 3.5 rad/s, the shorter way, exactly onto the heading once the rest is under one update's turn; a player turn cancels it | `connor-movement.md` "Turning" rule 2 | Unit test `the_automatic_turn_is_3_5_per_second_the_short_way_and_lands_exactly` |
+| No time-out if a cue never comes | `anim-scripts.md` rule 26 | — |
+| A head-on hit during a scripted walk: he stands at once, no crash, no wall block; a wall block already on wins; `stop` plays during the turn; no object named, no cue | **Stand-ins**, Q94 | — |
+| The walk's end is checked after each move, so it ends up to one step past the distance | **Our method** | `connor.log`: 2783 of 2736 |
+

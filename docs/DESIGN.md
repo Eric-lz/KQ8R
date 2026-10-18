@@ -1443,7 +1443,8 @@ catchers, ground animators).
       line for each scripted move with the height before and after the
       rest of the update. Test: the bricks run; `connor.log` from the
       push to the end of `push`: z never 15,000.
-    - **3l-2, the watermill cutscene** (Q93; `anim-scripts.md` rules
+    - **3l-2, the watermill cutscene** (**done** 2026-10-18; Q94 asked
+      for the head-on case; Q93; `anim-scripts.md` rules
       24–27, `connor-movement.md` "Turning" rule 2). New in `kq8-core`
       `connor.rs`: an automatic turn (3.5 rad/s, the shorter way, stops
       exactly once the rest is under one update's turn; any player turn

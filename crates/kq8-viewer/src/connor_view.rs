@@ -126,6 +126,9 @@ pub struct ConnorSim {
     /// `handsOff 1` (M3 3k-3, Q89 a stand-in): movement keys and Jump
     /// count as let go.
     pub hands_off: bool,
+    /// Scripted turns and walks that ended (M3 3l-2), whose cues
+    /// `door_view::trap_step` sends.
+    pub auto_ends: Vec<kq8_core::connor_auto::AutoEnd>,
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -360,6 +363,7 @@ pub fn spawn_connor(
         push_calls: Vec::new(),
         not_pushable: Vec::new(),
         hands_off: false,
+        auto_ends: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -689,7 +693,9 @@ pub fn connor_step(
     if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
         sim.jump_start_z = Some(z_before);
     }
-    let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes } = tick;
+    let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes, auto_end } = tick;
+    // M3 3l-2: a scripted turn or walk ended: its cue.
+    sim.auto_ends.extend(auto_end);
     // M3 3j-2: physical pushables moved by his move.
     sim.pushed.extend(scene.moved.take());
     // M3 3j-3: scripted pushables pushed: their scripts get Push.

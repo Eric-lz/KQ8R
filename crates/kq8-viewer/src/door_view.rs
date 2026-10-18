@@ -656,6 +656,13 @@ pub fn trap_step(
     for m in std::mem::take(&mut connor.ended) {
         sim.active.connor_movement_ended(&m);
     }
+    // His scripted turns and walks that ended (3l-2): their cues.
+    for end in std::mem::take(&mut connor.auto_ends) {
+        match &end.cue {
+            Some(cue) => sim.active.connor_auto_cue(cue, &end.why),
+            None => sim.active.world.log.push(format!("update {}: Connor's scripted movement ended ({}): no cue", sim.active.world.updates, end.why)),
+        }
+    }
     // Scripted pushables he pushed (3j-3): their scripts get Push now,
     // right after his move (pushing.md rule 3 says mid-move: our order).
     // What those calls ask counts as asked inside his update (3l-1): a
@@ -723,6 +730,29 @@ pub fn trap_step(
                 loads.0.push(name.clone());
                 format!("{at}: applied: loadKQ {file}: {name} comes in (next system)")
             }
+            Request::ConnorAuto { auto, at } => {
+                // A walk switches handsOff on by itself (rule 24).
+                let walk = matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. });
+                if walk {
+                    connor.hands_off = true;
+                }
+                let line = connor.walker.start_auto(auto);
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: {line}{} ({at})", if walk { "; handsOff on" } else { "" }));
+                format!("{at}: applied: Connor {line}{}", if walk { "; handsOff on" } else { "" })
+            }
+            Request::WalkExit { at } => match connor.walker.auto.take_if(|a| matches!(a.kind, kq8_core::connor_auto::AutoKind::Walk { .. })) {
+                Some(a) => {
+                    connor.walker.stop_at_once();
+                    let n = connor.updates;
+                    connor.log.detail(format!("connor update {n}: walkExit: the scripted walk ends now ({at})"));
+                    if let Some(cue) = &a.cue {
+                        sim.active.connor_auto_cue(cue, "walkExit");
+                    }
+                    format!("{at}: applied: walkExit: the scripted walk ended{}", if a.cue.is_some() { ", cue sent" } else { "" })
+                }
+                None => format!("{at}: walkExit: no scripted walk going on; nothing"),
+            },
             Request::HandsOff { on, at } => {
                 connor.hands_off = on;
                 let n = connor.updates;
