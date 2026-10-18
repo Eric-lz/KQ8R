@@ -496,9 +496,8 @@ view toward what is followed). `follow <object>` switches both on
   never set (whatever was in memory). Do nothing instead (keep the
   camera where it is) and log an error.
 - **The jump at the end of a flight** (rule 4, last update) is the
-  original's behaviour as traced, not a bug to remove: build it, so the
-  cutscenes frame the same. If the user sees no jump in the original,
-  it is a misreading (tell A).
+  original's behaviour as traced, and the user saw it in the original
+  (2026-10-18): build it, so the cutscenes frame the same.
 
 - **Per-update rates.** The height smoothing (10% per update), tilt speed
   (0.015 rad per update) and fixed-mode zoom (125 units per update) depend on
@@ -558,7 +557,9 @@ view toward what is followed). `follow <object>` switches both on
   first-visit cutscene, the camera should glide in a straight line at an
   even speed for about 2 s, turning to look into the room, and then
   **jump about a third of the way closer** along its view at the end.
-  If there is no jump, tell A (rule 4's last update would be wrong).
+  **Confirmed by the user in the original (2026-10-18):** the camera
+  jumps toward the end of the flight. (The size of the jump was not
+  measured.)
 - In the original game, compare screenshots of the same spot with the same
   inputs (you can do this by eye; we only compare numbers we log).
 

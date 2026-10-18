@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 The user's check of the camera flight's end jump (docs only)
+
+**Changed:** `camera.md` ("How to check", "Do not reproduce"): the jump at the end of a flight is recorded as confirmed.
+**Why:** The user watched the watermill room's first-visit cutscene in the original.
+**Tested how:** By the user, by eye, in the original.
+**Result:** The camera jumps toward the end of the flight, as traced (rule 4, last update). The size of the jump (about 1,227 units by the trace) was not measured.
+**Still broken / not tested:** The rest of the flight rules (straight line, even speed, aim) are not checked separately; the height on the last update is still not settled.
+**Next:** B builds `endJump` / `JumpDir`, Q95, Q94, the camera flights.
+
 ## 2026-10-18 Study session A: Q94–Q96 answered, camera flights (docs only)
 
 **Changed:** `docs/behaviour/`: `anim-scripts.md` (rule 24 corrected and extended: what plays during `walkTo`'s turn, head-on, a wall block, `walkTo` without an object; rule 25; new rules 28–30: `KQConner::endJump`, `KQConner::JumpDir`, the windmill tumble), `pushing.md` rule 4.3 (a push and a wall in the same sweep) and a check, `connor-physics.md` (Jumping rule 4 and "Against a building" step 7: pointers), `camera.md` (new "Camera flights and cuts": `addCamLoc`, `flyToCamLoc`, `cutToCamLoc`, rules 1–7 with Daventry's numbers; open question 4 partly answered; edge cases, do not reproduce, checks), `QUESTIONS.md` (Q94–Q96 answered); STATUS. Scratch notes with addresses in `re/notes.md` (not committed). No code.
