@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l: end-of-session documents (docs only)
+
+**Changed:** `STATUS.md` ("Where we are" rewritten for 3l and shortened, next steps, Q94 under open questions, 384 tests), `docs/FEATURES.md` (pushing, cutscenes, crash turning, torches in step; what still doesn't work), `README.md` (barrels and cutscenes in "What works", marked logs only; the pop-up and the watermill removed from "What doesn't work"), `docs/DESIGN.md` (3l done), `docs/behaviour/QUESTIONS.md` (Q84–Q93 marked built).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Read through; no code changed.
+**Result:** —
+**Still broken / not tested:** Every 3l step is checked in the logs and unit tests only, not by eye (see each entry below).
+**Next:** The user's checks by eye; A answers Q94 and studies the camera flights.
+
 ## 2026-10-18 M3 step 3l-7: `loadKQ` while playing calls `Init`, refuses a name in use (Q90)
 
 **Changed:** `kq8-core/src/script.rs`: `ScriptHost::take_calls` (scripts a world command asks to run at once, before the next line) and `ScriptHost::event_done` (called when an event's script run has finished). `active.rs`: `loadKQ` runs the new object's script with `$1=<name> $2=Init` at once; a name still used by a live object, or deleted during the same event, is logged as an error and the load is refused (the copy stays prepared); deleted names are remembered per event (`deleted_this_event`); `set_dormant` takes the object's script; 1 new unit test. `kq8-viewer` `load.rs`: the prepared copies carry their `script=`.

@@ -1,116 +1,48 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-17 at the
-end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
+end of B's session building the answers to Q84–Q93 (M3 3l). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-17)
+## Where we are (2026-10-18)
 
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
-  alive) is well under way** (doors, emitters, flowing water, animated
-  objects, traps, items, chests, scripted objects, clicking; checked by
-  eye).
-- **Lighting, haze and draw distance** (M1 4–7) are built as the original
-  does them and checked by eye by the user, including point lights on
-  building surfaces, F9 (dynamic lighting on/off) and `--dynamic on|off`.
-  Q80 answered 2026-10-17 (A counted differently; B's counts are right).
-- **New 2026-10-17 (B, M3 3h): sound effects play** (`sound.md`):
-  - `kq8 aud-verify` decodes all 1,750 `.aud` and 2,849 speech files;
-    all 22 checks against the note match. `--wav <file>` writes one to
-    `kq8-artifacts/wav/` to listen to.
-  - Audio library chosen by the user: **cpal** (the sound card) plus our
-    own mixer (new crate `kq8-audio`), so the note's rules apply exactly.
-  - Playing: door, chest and scripted-object `playsound` cues (placed,
-    5,000 / 25,000), item pickups and `KQSound::play` (plain), and
-    Daventry's looping sound objects (water wheel, mill, waterfall,
-    windmill, fountain): loudness from Connor's distance with the
-    original curve, left/right from the camera, sliders from
-    `Options.cs` (effects 0.14), mix limit 8, loops paused beyond max
-    and switched off beyond 27,100. Every start and stop is in
-    `kq8-artifacts/logs/sound.log`. Viewer option `--sound off` mutes.
-  - **Checked by ear by the user (2026-10-17):** chest, pickup, door
-    (louder on the left as expected), doors and items in normal play.
-  - **Footsteps (3h-4):** Connor's animation cues now fire (doors.md
-    rule 9, the wrap rule of `objects.md`); a `footstep` cue plays
-    dirt / grass / rock / water by the ground under him (terrain
-    flags, or a building's `footsoundType`), a `playsound` cue a placed
-    sound at him. Stand-ins asked as **Q81** (house floors without
-    `footsoundType` = dirt; objects = the terrain under him; the
-    backward loop's wrap; in the air = the last ground). Checked by ear
-    by the user (2026-10-17): like the original (stone on the bridge,
-    water in the river, house floors like the ground outside).
-- **New 2026-10-17 (A): world music studied** (Q83 answered;
-  `sound.md` section "World music", rules 57–57l): the list of tunes,
-  push / pop / play with 1.4 s crossfades, the 0.2 game-clock delay of
-  script pushes and pops, the world tune at full loudness on start,
-  pause, leaving a world. Footsteps (Q81 a, b, d) answered
-  in rules 39–39a.
-- **New 2026-10-17 (B, M3 3h-5): world music plays** (`kq8-core`
-  `music.rs`, fades in `sound.rs`): `forest.aud` from the first frame at
-  0.14; the music zones push and pop their tunes 0.2 s after Connor
-  enters or leaves, with 1.4 s cross-fades, and `forest.aud` restarts
-  from its beginning. Checked in the logs with the wizard's zone
-  (`mwiztrap`) and by ear by the user (2026-10-17). Not built: pause, videos,
-  world changes (rules 57h–57j).
-- **New 2026-10-17 (A, cleanup): Q80, Q81 (c), Q82 answered; Q4 tried
-  again.** Q82: A had misread the crash list in `connor-physics.md`
-  ("Walls", "Jumping" rule 5, now corrected): `jump` crashes like
-  `runJump` (not `PreBirth`), and during a jump any surface with normal z
-  under 0.8 is head-on. B's stand-in is nearly right; small differences
-  listed in QUESTIONS.md Q82. Q81 (c): B's stand-in is right
-  (`objects.md` rule 4). Q80: see `object-lighting.md` "How to check".
-  Q4 closed: none of the 29 missing texture names is ever drawn in play.
-- **New 2026-10-17 (A): animated objects controlled by scripts studied**
-  (`docs/behaviour/anim-scripts.md`): `KQAnimPlayEvent` (waiting movement,
-  starts at once if the current one can be cut short or has ended, else
-  at its end; starts from its own `loop=` line; unknown name = movement 0),
-  `nextAnimName` = the waiting movement, the order at a movement's end
-  (waiting movement first, then `EndLoop` / `Cue 300`), `KQAnimOnce`
-  (gets `Die` at its end; Daventry's barrels and the alchemist's boards),
-  `setDeleteWhenDone`, `pauseAnim` (toggles), Connor's
-  `setState … special` word list, single quotes / `;` in scripts, and
-  `KQStatsChangeRequestEvent` adds (5th number = experience). Ready for B.
-  Daventry's bricks puzzle still needs its `Push` trigger (pushables study).
-- **New 2026-10-17 (A): pushing studied** (`docs/behaviour/pushing.md`):
-  type bit 0x100 = pushable; Connor pushes when moving forward on the
-  ground with empty hands, facing it within 60°, on the across pass.
-  Scripted pushables (also 0x10000: Daventry's bricks, coffin lid, urn)
-  get a `Push` script call each pushing update; physical ones (barrels,
-  the hay bale) move with his step, only while their height stays the
-  same, and Connor follows at 0.95. The bricks puzzle is now fully
-  described. Ready for B. The user's checks in the original (hay bale,
-  barrels on flat ground only, no push with a weapon or backwards) all
-  match.
-- **New 2026-10-17 (A): Q84–Q93 answered** (B's questions from 3i–3k):
-  - Q84 (`connor-physics.md`): a steep jump hit that isn't head-on does
-    not end the jump; Connor **does turn** (1.75 rad/s) while `crash`
-    plays.
-  - Q85/Q86 (`anim-scripts.md` rules 3, 19–20): the six `flags=8`
-    objects with no `currAnimName` never get the random start (in step);
-    a start doesn't use up the update; levels: strictly more than, once
-    per event, cap then full heal; **second stat +5, third +2** (the note
-    had them swapped); `Die` always has `$3`.
-  - Q87/Q88/Q91 (`pushing.md`, `connor-physics.md`): box-shaped objects
-    (barrels) are never stopped by walls or objects and are only raised
-    by the ground (they float downhill); the hay bale slides along walls;
-    every object touched is told, a tie keeps the later-tested one.
-  - Q89/Q93 (`anim-scripts.md` rules 21–27, `camera.md`): `handsOff`
-    in full (re-sends held keys at 0); `setThirdPerson` is a paired
-    first-person-key toggle; `move KQCamera` angles (rx tilt, rz heading
-    from +Y); the watermill cutscene waits for `KQConner::walkTo` and
-    `pointAndCue`, which we don't have yet.
-  - Q90/Q92 (`objects.md`, `pushing.md` rule 11): `loadKQ` while playing
-    = as at the start plus an `Init` call; same name = fatal. The pop-up:
-    the `Push` script runs inside Connor's update, so the original drops
-    him onto the floor in the same update; the visible table and bricks
-    are part of his model then.
-  - Ready for B. The user checked in the original (2026-10-18): barrels
-    stop uphill and go through the pub's wall, the hay bale slides,
-    Connor turns during `crash` (but not in jumps, falls or landings).
-- **Later for A:** Dead City's flames (11,000 vs 12,100, open
+  alive) is well under way**: doors, emitters, flowing water, animated
+  objects, traps, items, chests, scripted objects, clicking, sound
+  effects and world music, scripted animations, pushing and the bricks
+  puzzle (most checked by eye; see `docs/FEATURES.md`).
+- **New 2026-10-18 (B, M3 3l): A's answers to Q84–Q93 are built**, one
+  commit per step, each checked in the logs (none yet by eye):
+  - 3l-1 (Q92): no pop-up at the bricks: a `move Connor` from the `Push`
+    script is followed by the rest of his update, so he lands on the
+    cave floor at once (z 14,837 throughout `push`); a timed `move`
+    drops one gravity step (`objects.md` "(d)").
+  - 3l-2 (Q93): `KQConner::walkTo` / `runTo`, `pointAndCue`, `walkExit`
+    (new `kq8-core/src/connor_auto.rs`): the watermill room's cutscene
+    runs cues 1–6 and gives control back 4.2 s after Connor's turn.
+    **Q94 asked** (head-on during a scripted walk, and three smaller
+    details; stand-ins in place, none reached in Daventry).
+  - 3l-3 (Q89): `handsOff` in full (run key, mouse look, presses
+    swallowed, held keys sent again at 0, F11 mode ends), `move
+    KQCamera` aims the camera by its angles, `follow Connor` starts
+    from where the camera is (gradual turn back above 0.4 rad),
+    `setThirdPerson` as a paired toggle (logged; no first person).
+  - 3l-4 (Q87, Q88, Q91): every object touched is told, in load order,
+    ties keep the later-tested; barrels move and are never stopped
+    (they stop only uphill); the hay bale slides along walls.
+  - 3l-5 (Q84): Connor turns while `crash` plays; a glancing jump hit
+    (all `backJump` hits) keeps gravity off until the jump ends.
+  - 3l-6 (Q85, Q86): the six torches/birds/fish without `currAnimName`
+    start in step, and a first-update start moves at once; the bit 8
+    random speed replaces the `loop=` speed; levels: second stat +5,
+    third +2; "below 0" checked before the cap; `Die` always has `$3`.
+  - 3l-7 (Q90): `loadKQ` while playing calls the new object's `Init`
+    at once; a name in use is refused with an error.
+- **Later for A:** Q94; Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
-  Connor against monsters; Q27.
+  Connor against monsters; Q27; the camera flights (`addCamLoc`,
+  `flyToCamLoc`, `cutToCamLoc`), which both Daventry cutscenes use.
 
 ## Goal
 
@@ -157,9 +89,10 @@ milestone: **M3, Daventry comes alive**.
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (206 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (263 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
-  landing, Fall, fall death, building and object hits, Jump),
+  landing, Fall, fall death, building and object hits, Jump, pushing),
+  `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
   `connor.rs` (keys → movement, turning, banking, steps from the
   animation, start/stop transitions, crash, wall blocks, jumps, wading),
   `connor_update.rs` (one update of Connor), `collide.rs` (ball stack,
@@ -273,36 +206,41 @@ milestone: **M3, Daventry comes alive**.
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
   ear by the user. World music (3h-5) too.
-- Tests: 337 unit tests pass (105 + 216 + 5 + 11), 2026-10-17.
+- Tests: 384 unit tests pass (105 + 263 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
-- **Next step, suggested:** for B: cues of scenery animations (`anim.rs` doesn't run cues), and M3/M4 (Connor's
-  scripted movements, remarks, inventory screen). The brightness setting
-  (rule 17) is still not built.
+- **Next step, suggested:** the user checks 3l by eye (the bricks:
+  no pop-up, the camera's views; the watermill cutscene ends; barrels
+  move; the hay bale slides; turning during the stumble). Then for A:
+  the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`) and
+  Q94; for B: cues of scenery animations, `loadKQ` with a name or place
+  while playing (barrels and boards breaking, M5), remarks, inventory
+  screen (M4). The brightness setting (rule 17) is still not built.
 - Sound, not done: the item land sound (nothing is thrown),
-  hurt sounds (fighting), ducking under speech, pause, speech,
-  `loadKQ` while playing (so `Waterfall2Sound` never appears), and
+  hurt sounds (fighting), ducking under speech, pause, speech, and
   `setActiveCamera` / `makeActive` for sound objects.
 - Clicking: only doors, chests, items, scripted objects and buildings
   react. No remarks (Connor says nothing; remarks are logged),
   Connor doesn't turn to face what he clicks. No inventory screen (M4).
-  `getEndLoop Connor …` (`bricks.cs`) is recorded but Connor's scripted
-  movements don't exist yet. `checkInventory` by id number (Q62 b) not
-  built.
+  `checkInventory` by id number (Q62 b) not built.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
-  the camera trail behind him), first person (F2), shake and cutscene
-  cameras. Our camera updates every tick; the original only while Connor
-  moves or the camera is used (Q53 d).
-- Animated objects play only the movement they start with (scripts can't
-  switch them yet, `KQAnimPlayEvent` to them is only logged) and their
-  cues (sounds) don't fire. A rolling rock that runs into Connor does nothing to him (in
+  the camera trail behind him), first person (F2), shake and camera
+  flights (the watermill's cue 4 flight doesn't happen); the roll of
+  `move KQCamera` is not drawn. Our camera updates every tick; the
+  original only while Connor moves or the camera is used (Q53 d).
+- Cutscenes: no GUI panels to hide and no spinning-mask icon during
+  `handsOff`. A request from a cue reaches Connor one update after the
+  cue (our order).
+- Animated objects: scenery animations' cues (sounds) don't fire.
+  `loadKQ` with a name or position while playing is not done; a copy
+  that comes in is not solid or clickable. A rolling rock that runs into Connor does nothing to him (in
   the original he stumbles and takes damage; rule in `connor-collision.md`,
   Q55, not built yet).
 - Water: no damage yet (poison, lava, swamp).
-- Collision, not done: Connor against monsters (none drawn), pushing
-  objects, ropes; objects with no box in the game's table stay
+- Collision, not done: Connor against monsters (none drawn), Gnome's
+  `KQBoulder`, ropes; objects with no box in the game's table stay
   walk-through. Hidden, far and off objects are not solid (rule 41; not
   checked in the original). A deleted or far building's walls stay
   solid.
@@ -324,8 +262,9 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- For B (answered 2026-10-17 by A, not built): Q84–Q93 (see "Where we
-  are").
+- **Q94** (open, for A): a scripted walk (`walkTo`) that runs head-on
+  into something; a wall block at its start; what plays during its
+  turn; `walkTo` without an object. Stand-ins in place.
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
@@ -350,7 +289,8 @@ milestone: **M3, Daventry comes alive**.
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- All others are answered or closed (Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
+- All others are answered or closed (Q84–Q93 answered 2026-10-17 and
+  built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
   by B in 7k; Q75–Q78 answered by A and built
   2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the

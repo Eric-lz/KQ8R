@@ -110,7 +110,9 @@ measures reach to its box in the building's own axes (Q75).
   a standing jump stops him, a running jump crashes, a back flip slides
   along and plays on, as in the original.
 - **Crashing:** running straight into a wall knocks him back (the crash
-  animation), as far as in the original (checked by eye).
+  animation), as far as in the original (checked by eye). A turn key
+  turns him while he stumbles, as in the original (2026-10-18, M3 3l-5;
+  checked in the logs, not yet by eye).
 - **Objects are solid too** (trees, signposts, doors, crates, stone
   villagers…), with each object's box from the game's table (checked by
   eye).
@@ -170,19 +172,29 @@ objects don't stop it, as in the original. Checked in the logs
   `pauseAnim` pauses. Checked in the logs (`doors.log`): the star globe
   given the spell page (`--item INVITEM_SpellPage --click starball.01,N`)
   plays `open` for 1.93 s, then `lid`. Not checked by eye.
-- **Pushing** (2026-10-17, M3 step 3j): walking into the windmill's hay
-  bale with empty hands, facing it, pushes it along the floor at about
-  half walking speed until a wall stops it; letting go plays his step
-  back. Checked in the logs (`connor.log`). Barrels go into the push
-  animation but don't move yet (a question to the study session). Not
-  checked by eye. Walking into Daventry's bricks (by the waterfall) runs
+- **Pushing** (2026-10-17, M3 step 3j; as traced 2026-10-18, 3l-4):
+  walking into the windmill's hay bale with empty hands, facing it,
+  pushes it along the floor at about half walking speed; pushed at an
+  angle it slides along a wall, pushed straight in it stops; letting go
+  plays his step back. Barrels move too: nothing stops them (they go
+  through walls, as in the original), but a barrel pushed uphill stays.
+  Checked in the logs (`connor.log`), not yet by eye (the hay bale's stop
+  was checked by eye in 3k). Walking into Daventry's bricks (by the waterfall) runs
   their puzzle to the end (M3 step 3k): Connor's push animation, the
   table and bricks hidden then shown, the bricks go down, the waterfall
   and its sound are replaced (so the way behind it is open), the water
   changes, the camera stops following and takes the script's three
-  places, the controls are off until the end. The camera's view angles
-  and `handsOff`'s exact reach are stand-ins (questions to the study
-  session).
+  places and views, the controls are off until the end. Connor lands
+  on the cave floor in the same update as the push, so nothing pops up
+  (3l-1). Checked in the logs; the 3k version was checked by eye.
+- **Cutscenes** (2026-10-18, M3 3l-2, 3l-3): `handsOff` takes the
+  controls (keys, Jump, run, mouse look, clicks) and gives them back with
+  any held key acting at once; `move KQCamera` places and aims the camera
+  (tilt and heading); `follow Connor` starts from where the camera is;
+  `walkTo` / `runTo` / `pointAndCue` walk or turn Connor and cue the
+  script. The watermill room's cutscene now ends and gives control back
+  4.2 s after Connor's turn, as A traced. Checked in the logs, not yet by
+  eye.
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),
@@ -191,8 +203,9 @@ objects don't stop it, as in the original. Checked in the logs
   pushing. Not checked by eye.
 - **Animated objects:** the windmill sails, mill wheel and gears,
   swinging signs, shutters, torches, lamps, waterfalls, fish and the
-  fountain's water move as the game's files say, torches and other rows
-  of things out of step as in the original. Checked in the logs
+  fountain's water move as the game's files say, rows of things with
+  their own random start out of step as in the original; Daventry's
+  torches, dead birds and fish start in step, as A traced (3l-6). Checked in the logs
   (`anim.log`) and by eye. Gnome's three rolling rocks roll out and come
   back each cycle, and their collision boxes move with them (checked by
   eye and by walking to a rock's start spot while it is away). Gnome's
@@ -365,18 +378,22 @@ message that shows the usage.
   "locked", are only logged) and doesn't turn to face what he clicks.
   Picked-up items are only counted in the log.
 - **Animated objects:** scripts switch them (M3 step 3i), but most
-  Daventry scripts that do it start from things not built yet (pushing,
-  fights, talking, `loadKQ` while playing). A rolling rock that runs
+  Daventry scripts that do it start from things not built yet (fights,
+  talking, `loadKQ` with a name or place). A rolling rock that runs
   into Connor does nothing to him yet (in the original he stumbles and
-  takes damage). Barrels can't be pushed yet.
+  takes damage).
 - **Jumping into things:** a standing jump into a tree or wall makes
   Connor stumble (the crash and its sound), as the user saw in the
   original; when he starts falling the stumble is cut short and the
   falling animation takes over (also the user's check). The rule behind
-  it is now A's (Q82). Not built: what a jump does against a monster
-  (Q84 a); whether he can turn during the stumble (Q84 b).
+  it is now A's (Q82). A back flip into a wall slides along it with
+  gravity off until the flip ends (Q84 a, 3l-5; unit test only).
 - **Camera:** it doesn't swing back behind Connor by itself; no first
-  person view (F2), camera shake or cutscene cameras.
+  person view (F2), camera shake or camera flights (`addCamLoc`,
+  `flyToCamLoc`, `cutToCamLoc`); the camera's roll is not drawn.
+- **Cutscenes:** no GUI to hide and no spinning-mask icon during
+  `handsOff`; a scripted walk that runs head-on into something uses a
+  stand-in (Q94).
 - **Water:** no damage yet (poison, lava, swamp).
 - **Collision:** some objects have no box in the game's table and stay
   walk-through (as in the original, if we read it right); no ropes.

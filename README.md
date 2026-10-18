@@ -47,21 +47,21 @@ items. The goal is the whole game; see the roadmap in
 - **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 - **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
-- **Pushing**: the windmill's hay bale slides until a wall stops it; pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
+- **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls, but not uphill (logs only so far); pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
+- **Cutscenes**: scripts take the controls, place and aim the camera, walk or turn Connor, then give control back (bricks, watermill; logs only so far).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 
 ### What doesn't work yet
 
-- Some cutscenes never give control back (e.g. the watermill room), and the cutscene camera is not placed exactly right.
-- At the start of the bricks puzzle, Connor, the bricks and the table briefly pop up in the air.
+- Cutscene camera flights (`flyToCamLoc`) don't happen yet.
 - No story, talking, inventory screen, fighting or saving.
 - No dialogue.
 - No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
   objects; Connor doesn't speak (his remarks are only logged).
-- Scripts switch only some objects' animations (no fights yet); barrels can't be pushed yet.
+- Scripts switch only some objects' animations (no fights yet).
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
 

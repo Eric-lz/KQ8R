@@ -1418,7 +1418,8 @@ catchers, ground animators).
     `EndLoop` after, the waterfall swapped, `water` → `blocked`, the
     cues 5 and 10, controls back; then Connor can walk through where
     the waterfall stood.
-  - **3l — the answers to Q84–Q93 (planned 2026-10-18).** Study session
+  - **3l — the answers to Q84–Q93 (planned 2026-10-18; done
+    2026-10-18, 3l-1 to 3l-7; Q94 asked in 3l-2).** Study session
     A answered B's questions from 3i–3k (2026-10-17) and the user checked
     some in the original (2026-10-18). Each sub-step fixes what a
     stand-in got wrong; each has its own log check, MODLOG entry and
