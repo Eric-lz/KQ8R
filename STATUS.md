@@ -82,6 +82,31 @@ end of B's sound-effects session (M3 3h). Read with `AGENTS.md`, `docs/DESIGN.md
   described. Ready for B. The user's checks in the original (hay bale,
   barrels on flat ground only, no push with a weapon or backwards) all
   match.
+- **New 2026-10-17 (A): Q84–Q93 answered** (B's questions from 3i–3k):
+  - Q84 (`connor-physics.md`): a steep jump hit that isn't head-on does
+    not end the jump; Connor **does turn** (1.75 rad/s) while `crash`
+    plays.
+  - Q85/Q86 (`anim-scripts.md` rules 3, 19–20): the six `flags=8`
+    objects with no `currAnimName` never get the random start (in step);
+    a start doesn't use up the update; levels: strictly more than, once
+    per event, cap then full heal; **second stat +5, third +2** (the note
+    had them swapped); `Die` always has `$3`.
+  - Q87/Q88/Q91 (`pushing.md`, `connor-physics.md`): box-shaped objects
+    (barrels) are never stopped by walls or objects and are only raised
+    by the ground (they float downhill); the hay bale slides along walls;
+    every object touched is told, a tie keeps the later-tested one.
+  - Q89/Q93 (`anim-scripts.md` rules 21–27, `camera.md`): `handsOff`
+    in full (re-sends held keys at 0); `setThirdPerson` is a paired
+    first-person-key toggle; `move KQCamera` angles (rx tilt, rz heading
+    from +Y); the watermill cutscene waits for `KQConner::walkTo` and
+    `pointAndCue`, which we don't have yet.
+  - Q90/Q92 (`objects.md`, `pushing.md` rule 11): `loadKQ` while playing
+    = as at the start plus an `Init` call; same name = fatal. The pop-up:
+    the `Push` script runs inside Connor's update, so the original drops
+    him onto the floor in the same update; the visible table and bricks
+    are part of his model then.
+  - Ready for B. Still to check in the original: barrels pushed downhill
+    or into a wall, the hay bale at an angle against a wall.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -298,10 +323,8 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- Q82: **built 2026-10-17** (B): a jump hit crashes on the down pass or
-  when head-on (`connor_update.rs` `jump_hit_outcome`). New **Q84** for A:
-  (a) a steep jump hit that isn't head-on (`KQMonster`, flag; not
-  reachable yet), (b) does Connor turn while `crash` plays?
+- For B (answered 2026-10-17 by A, not built): Q84–Q93 (see "Where we
+  are").
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world

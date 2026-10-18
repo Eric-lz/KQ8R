@@ -49,7 +49,16 @@ Words used here:
       - scripted pushable: his facing against the touched surface
         (pointing into it);
       - physical pushable: his facing against the direction from him to
-        the object's centre (horizontal only).
+        the object's centre (horizontal only). "Centre" is the object's
+        **position** (its placement point), not the middle of its box;
+        "him" is his position at the start of this update, before this
+        update's move (Q87 e).
+      The turn keys keep working in the Push state at the normal rate
+      (nothing there checks the state; only `handsOff` and
+      `KQMonster::setCanTurn 0` block turning). Turning with forward
+      held keeps pushing; turning alone fails item 6 below (he stands);
+      turning more than 60° away fails this item (back to Move) (Q87 d,
+      inferred: no block was found).
       If this fails while he is already pushing, he goes back to the
       Move state; the touch is an ordinary wall hit.
    6. His chosen movement is **`walk`, `run` or `push`**. Anything else
@@ -75,14 +84,41 @@ Words used here:
       pass** (x and y; its height and turn stay), through its own
       collision sweep over one update (1/15 s). During that sweep it
       **ignores Connor** (his type bit 4 is taken out of its mask for the
-      moment), so walls, other objects and the ground can stop it; its
-      own `keepOnGround` placement applies as for any move.
+      moment). What can stop it depends on its shape (corrected
+      2026-10-17, Q87 a–c, traced, not checked in the game):
+      - **Box-shaped objects** (no `collisionShape`: the default shape
+        is a box, turned with the object; Daventry's barrels) are
+        **never stopped by anything**: not walls, buildings or other
+        objects. Their touches are only overlap tests (against a
+        building, its bounding box) and carry no contact point, and
+        only a touch with a contact point is recorded as a hit. The
+        barrels' mask is also 0, so they aren't even told about touches.
+      - **Ball-stack objects** (`collisionShape=1`; the hay bale, mask
+        11) get real sweeps and are stopped by what their mask covers.
+        A hit is handled like Connor's slide: the rest of the move is
+        turned along the surface and swept again, at most 3 retries per
+        pass, then it stays at the contact (pulled back 25 units). There
+        is **no head-on stop** for objects: pushed straight in it stops,
+        pushed at an angle it slides along. In the across pass a surface
+        whose normal z is between 0 and 0.7 counts as a vertical wall.
+      - **Ground afterwards: raise only.** Objects have no gravity by
+        default (`useGravity` off) and step up / step down 0. With
+        `keepOnGround` on, after the move: if the ground at the new spot
+        is at or above the object's height, the object is put on it; if
+        the ground is lower, nothing happens. With `keepOnGround=0` (the
+        hay bale, the bricks) there is no ground step at all. This is the
+        same rule as at load (`objects.md` Q10), applied after every
+        move.
    2. **If its height changed at all** (any difference from exactly
-      0.0), it is put back where it was and counts as not moved. So an
-      object can only be pushed where its height stays the same: flat
-      floors and flat ground. On a slope it doesn't budge.
+      0.0), it is put back where it was and counts as not moved. With
+      the raise-only ground rule above, this means: pushed toward
+      **higher** ground it doesn't budge; pushed toward **lower** ground
+      its height doesn't change, so it **moves and floats** at its old
+      height (traced 2026-10-17, Q87 c; not checked in the game). On flat
+      ground it moves normally.
    3. **Connor** is then put at the **start of his pass plus 0.95 × the
-      object's actual movement** (all three axes). So he follows it,
+      object's actual movement** (all three axes, including any slide
+      along a wall). So he follows it,
       falling slightly behind; next update his step reaches it again. If
       it didn't move, he stays at the start of the pass.
 5. Physical pushables do **not** run a `Push` script (their scripts, e.g.
@@ -139,6 +175,28 @@ Words used here:
     `loadKQ waterfa2.kq`, `watrfsn2.kq`), `water` → `blocked`, `KQCueEvent
     5` → camera, `KQCueEvent 10` 4 s later → controls back, Connor
     remarks.
+    **Timing and heights** (traced 2026-10-17, Q92):
+    - The `Push` script runs **inside** Connor's movement update, at the
+      moment his across pass touches the bricks (rule 3). So after its
+      `move Connor 0 156652 303600 15000 …` the **rest of that same
+      update still runs**: a gravity step and the down pass with its
+      325 step-down, which tests the floor. The floor there (the cave
+      building's top, 14,812) is within reach, so he lands on it
+      (14,837, 25 above the floor) **in the same update**; the original
+      never draws him at 15,000.
+    - During `push`, the real `Bricks` and `Table` are hidden; what the
+      player sees are copies of the table and bricks **inside Connor's
+      own model** `c_brks1.kqs`, whose origin is the bricks' place (same
+      x, y and turn). So anything that moves Connor up or down moves
+      "the bricks and the table" with him on screen.
+    - The real `Bricks` and `Table` keep their placed height (14,862;
+      `keeponground=0`, no gravity, step heights 0). Nothing changes it
+      until `move Bricks 3 0 -200 -300` (exactly 300 down, 200 along
+      −y). `brktabl2.kqs` also has steps of 0. `setHidden` does not
+      change an object's position or height (`objects.md`).
+    - The cue-10 `move Connor … 15000` comes from a timed cue, outside
+      his update, so there he should be drawn about 160 up for one update
+      before he drops (inferred, not checked in the original).
 
 ## Numbers and units
 
@@ -173,9 +231,15 @@ Words used here:
   and he is set to standing (rule 2.6).
 - **Jumping into a pushable**: not on the ground, so an ordinary hit
   (head-on and crash rules of `connor-physics.md` apply).
-- **A physical pushable on uneven ground**: it never moves (rule 4.2);
-  Connor plays `push` against it and stays put, because each update he
-  is put back to the start of his pass.
+- **A physical pushable toward higher ground**: it never moves (rule
+  4.2); Connor plays `push` against it and stays put, because each update
+  he is put back to the start of his pass. Toward lower ground it moves
+  and floats at its old height (rule 4.1, raise only).
+- **A barrel pushed into a wall or another object**: it goes into or
+  through it (box-shaped objects are never stopped, rule 4.1).
+- **Two touches at the same distance** (the bricks and their table):
+  both objects are told; see `connor-physics.md` "Against a building"
+  step 7.
 - **A scripted pushable whose script does nothing** (or has no script):
   Connor stays in Push and walks **into** it, since the touches aren't
   recorded as hits for him (rule 3). No Daventry object does this (data).
@@ -187,8 +251,9 @@ Words used here:
 - **Walking into a scripted pushable that doesn't react** (last-but-one
   edge case): no data does it; if it ever happens, treat the touch as a
   wall hit as well, and log it.
-- Keep the rest, including "uneven ground: no push"; the user can check
-  it (below).
+- Keep the rest, including "uphill: no push", "downhill: floats" and
+  "barrels pass through walls"; the user can check them (below). If the
+  user sees otherwise in the original, follow the user.
 
 ## How to check
 
@@ -204,8 +269,12 @@ Words used here:
   1. The hay bale in the windmill slides along the floor at about half
      walking speed and stops at walls (rules 4, 6).
   2. Barrels move, but only where the ground is perfectly flat (rule
-     4.2). Pushing downhill was not tried; by the rule any change of
-     height, down as well as up, stops the push.
+     4.2). Pushing downhill was not tried; by the trace (Q87 c) a barrel
+     pushed downhill moves and floats.
+- **Still to check in the original (2026-10-17 trace):** push a barrel
+  downhill (it should float), and straight into a wall or another object
+  (it should go in); push the hay bale into a wall at an angle (it
+  should slide along, not stop).
   3. With a weapon drawn, or walking backwards, nothing is pushed
      (rules 2.3, 2.6).
 

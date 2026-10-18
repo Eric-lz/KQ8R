@@ -105,8 +105,8 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    `turn × 1.75 rad/s × elapsed time` (about 100° per second), whether he is
    standing, walking or running.
 2. **Turn to face a target**: the game can ask Connor to turn until he faces
-   a given direction (what asks for this is not studied yet; probably
-   scripted moves such as `KQConner::walkTo`). He then turns (apparently
+   a given direction (confirmed 2026-10-17: `KQConner::walkTo`,
+   `runTo` and `pointAndCue` use it, `anim-scripts.md` rules 24–25). He then turns (apparently
    the shorter way round) at **double rate, 3.5 rad/s**, and stops exactly
    on the target heading once the remaining angle is smaller than one update's turn.
    Any player turn input (non-zero) cancels this automatic turn.

@@ -353,7 +353,10 @@ world (Daventry's waterfall, mill, windmill and fountain).
     the near/far/off test (`object-lighting.md` rules 34–36; hidden
     objects are off). Going off **stops** it; becoming active again
     **restarts it from the beginning**. When the object first enters the
-    world it starts at once if active (partly traced).
+    world it starts at once if active, from the beginning (traced
+    2026-10-17, Q90 c); the same holds when a `loadKQ` brings it in
+    while playing (e.g. `Waterfall2Sound`, about 6,000 from Connor at the
+    bricks, starts in the same update).
 47. For that test the object has no shape, so it is a ball of radius 100 at
     its position (`object-lighting.md` rule 35). Daventry's
     `visibleDistance` is 27,000, so the sound is **switched off beyond

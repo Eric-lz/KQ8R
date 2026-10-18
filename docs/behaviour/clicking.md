@@ -187,9 +187,11 @@ gets.
 
 22. `deleteObject <name>` marks the named object **deleted at once**:
     from that moment the click line and all collision tests skip it, and
-    it is queued to be removed from the world (when exactly the removal
-    happens was not traced; for us: remove it at the end of the current
-    update). It is not drawn any more. This is the same for placed
+    it is queued to be removed from the world. The removal, and the
+    freeing of its name, happen **when the current event has finished**
+    (the script run in progress and what it calls; traced 2026-10-17,
+    Q90 d). Until then a `loadKQ` with the same name is fatal in the
+    original (`objects.md` "Where a world's objects come from" rule 6). It is not drawn any more. This is the same for placed
     objects, items, everything. `$Console::Return` = 0 when something was
     deleted; an unknown name prints `deleteObject: Object "<name>"
     doesn't exist` and leaves 1.

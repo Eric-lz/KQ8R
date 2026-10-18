@@ -209,6 +209,18 @@ banking, already in `connor-movement.md`). Values it uses:
      objects hit in that pass, the contact **nearest his old position**
      is kept, with its surface direction and the object hit. Then the
      rules in "Walls" apply.
+     **Refined 2026-10-17 (Q88, traced):** the objects are tested in the
+     order of the world's collision list, which is the order they
+     entered the world (removing one keeps the others in order). Each
+     object touched is **told about the touch at once, as it is tested**
+     (the push check of `pushing.md` rules 1–3 runs there), not only the
+     kept one. A new contact **replaces** the kept one when its distance
+     is **less than or equal to** the kept one's, so on an exact tie the
+     **later-tested** object's contact is kept. A touch the push check
+     accepts is not recorded as a hit at all. Example: at the game's
+     `alias bricks` spot, `Table` (loaded first in `newworld.cs`) and
+     `Bricks` are at the same distance; `Bricks` gets its `Push` call and
+     `Table` is the recorded hit that stops him.
   - **Which surfaces are solid (Q31 c):** only the BSP leaves' bit 0
     decides. Surfaces and materials (table 1) play no part in collision.
   - **The trace always starts at node 0** (with "no plane crossed"), so
@@ -559,8 +571,18 @@ Consequences:
 
    `runJumpHold` has transitions to `jumprun` / `jumpstop` in `Conner.anm`;
    when those play is not traced.
-5. **Hitting something steep during a jump** ends the jump: gravity on,
-   steps back to 325.
+5. **Hitting something steep during a jump** ends the jump (gravity on,
+   steps back to 325) **only when it crashes** (the two cases below) or
+   when a movement not in the crash list plays `Stop` (the tile jumps).
+   (Corrected 2026-10-17, Q84 a.) A steep hit that is **not** head-on
+   (against a `KQMonster`, while the Connor flag that switches off the
+   head-on test is set, or any hit during `backJump`) is handled as a
+   glancing hit: on the across pass he slides along the surface, on the
+   up pass he is put at the contact point with no slide. The jump does
+   **not** end: gravity stays off, the steps stay 0, the state and
+   movement do not change, and the jump animation plays on to its normal
+   end, where gravity comes back on, the steps go back to 325 and Fall
+   starts as usual (`jumphold` and so on).
    - Landing on it (down pass) during `jump` or `runJump`: **crash** (state
      Special, movement `crash`, `c_crash.KQS`, `crash.aud`).
    - Running into it (up or across pass): **`jump` and `runJump` both
@@ -575,7 +597,19 @@ Consequences:
      goes back on, step up and step down go back to 325, the jump
      animation is marked as cut short, and then the state becomes Special
      with the movement `crash`. Turning stays allowed, and a turn key
-     still held is passed on again. The crash sound is the `crash`
+     still held is passed on again. **This is visible** (traced
+     2026-10-17, Q84 b): while `crash` plays, a held or newly pressed
+     turn key turns him at the normal **1.75 rad/s**, at once, not after
+     the crash. Turning is part of every move of the mover, which runs in
+     every state, and the crash's backward push is one of those moves;
+     key presses for turning reach the mover in every state (only
+     `handsOff` and the tile/scale puzzles' own switch block them).
+     Forward, back and run keys do nothing until `crash` ends (the Special
+     state has no per-update logic of its own); they are acted on in Wait
+     afterwards. The same holds for the run crash and both jump crashes.
+     Only the head-on crash switches turning back on explicitly; the
+     down-pass crash relies on it already being on (it only differs if
+     `handsOff` was set). The crash sound is the `crash`
      movement's own cue (`cue0=0.0 playsound crash.aud`); nothing else
      plays a sound here. So in the air he starts the stumble and falls
      at the same time. What ends the `crash` early when he starts falling
@@ -771,7 +805,13 @@ counter values are the game's own and are exact.)
 - **Running head-on:** `crash` plays **in full** (corrected; an earlier
   version said "5 updates"): he is pushed **backwards** (straight back
   from his facing) by **441 units** in all, 63 per 1/15 s tick, exactly
-  the animation's 7 steps (Q31 e), then stands. If run is
+  the animation's 7 steps (Q31 e), then stands. That was measured with
+  no turn key held; a turn key held or pressed during `crash` turns him
+  at 1.75 rad/s while it plays (Q84 b, traced, not measured). The
+  push-back is taken from his current facing each update, so turning
+  bends it (inferred, not traced). Whether he also leans while turning
+  in a run crash is not settled (the lean switch is left on from `Run`,
+  but the user saw no lean in jumps, Q59). If run is
   still held, he starts running again (`stoprun`) and crashes again
   (seen twice in a row).
 - **Glancing (walking or running):** he slides along the wall with the

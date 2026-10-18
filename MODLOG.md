@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-17 Study session A: Q84–Q93 answered (docs only)
+
+**Changed:** `docs/behaviour/`: `connor-physics.md` (Jumping rule 5, Walls, "Against a building" step 7), `anim-scripts.md` (rules 3, 12, 16, 19, new 20–27: `Die`'s `$3`, `handsOff`, `walkTo`/`runTo`/`pointAndCue`, the watermill cutscene), `pushing.md` (rules 2.5, 4.1–4.3, 11, edge cases, checks), `camera.md` (`follow none`, `move KQCamera` angles, `follow Connor` after a cutscene, `setThirdPerson`, tilt sign), `objects.md` (`loadKQ` while playing, `move` heights, `setHidden`), `connor-movement.md`, `sound.md` rule 46, `clicking.md` rule 22, `doors.md`; `QUESTIONS.md` Q84–Q93 marked answered; STATUS. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** The user asked A to answer the questions B raised in M3 steps 3i–3k.
+**Tested how:** Read in Ghidra (`Mask.exe`, through the Ghidra plugin's HTTP interface) and checked against the data (`wtrmwalk.cs`, `bricks.cs`, `.kq` files, `c_brks1.kqs`). Nothing was run in the original game.
+**Result:** All ten answered. Corrections to earlier notes: the level-up bonuses (second stat +5, third +2, not the other way); a non-head-on jump hit doesn't end the jump; turning works during `crash`; barrels are never stopped by walls or objects and only raised by the ground; the bit-8 random start is lost on objects without `currAnimName`. B's stand-ins judged wrong: Q85 a/b, Q86 e, Q87 a–c, Q89 c (view not set), Q90 b (no `Init`). Likely causes for the user's three problems: the pop-up (Q92: the `Push` script runs inside Connor's update in the original), the watermill (Q93: `walkTo`/`pointAndCue` missing), the barrels (Q91).
+**Still broken / not tested:** Not checked in the original: barrels pushed downhill (should float) or into a wall (should go in), the hay bale at an angle (should slide), Connor turning during `crash`, the drop after the cue-10 `move`. Not settled: which of Connor's movements set the engine's input lock; whether GUI inventory/menu keys are blocked by `handsOff`; whether far objects update (Q85 in-step torches); the lean during a run crash.
+**Next:** B builds the fixes: `Push` script inside Connor's update (or finish his down pass after a `move`), `walkTo`/`pointAndCue`, `handsOff` details, `move KQCamera` angles, box pushables, the Q84 turning.
+
 ## 2026-10-17 M3 step 3k: the user's checks by eye (docs only)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q91–Q93 from the user's tests. README "what doesn't work" lines. No code.

@@ -48,7 +48,12 @@ needed for normal play; keep them behind a debug switch.
 
 1. The camera follows one object, normally Connor
    (`KQCamera::follow Connor`; `KQCamera::follow none` stops following,
-   used around cutscenes).
+   used around cutscenes). With `follow none` the camera stays
+   **exactly** where it is, place and view, until the next `move
+   KQCamera`, `follow`, fly/cut or shake (traced 2026-10-17, Q89 c).
+   `follow <object> 1` only turns the camera toward the object without
+   moving it (game's usage text). For `follow Connor` after a cutscene,
+   see "Shake and cutscene cameras".
 2. It aims at a point **1,400 units above** the followed object's base
    (Connor's collision box is 1,300 tall, so a little above his head).
 3. The view direction is from the camera to that point, so Connor stays in
@@ -109,9 +114,10 @@ needed for normal play; keep them behind a debug switch.
 
 ### Tilt (pitch)
 
-1. Default tilt is **0.2 rad** (about 11°). The original stores it as −0.2;
-   from the manual it is a slight look down at Connor, but the sign
-   convention is open question 2.
+1. Default tilt is **0.2 rad** (about 11°) down. The original stores it
+   as −0.2: in the camera's angles negative tilt looks **down** (traced
+   2026-10-17 from `move KQCamera`, see "Shake and cutscene cameras";
+   answers open question 2).
 2. Page Up/Down tilt at 0.1 × 3 × 0.05 = **0.015 rad per update** while held
    (0.225 rad/s at 15 updates per second).
 3. Tilt is limited to ±1.57 rad (straight up/down) in third person.
@@ -245,6 +251,21 @@ the first update of a new walk after standing still never starts a swing
    limits). Details are open question 5.
 6. Connor's first-person animations and arm models come from the
    `...FpAnimList` and `ConnerFpSkinList` entries in `GAME/Kq/Connor.kq`.
+7. **`setThirdPerson`** (traced 2026-10-17, Q89 b) is a toggle with a
+   memory, kept in the script variable
+   `<World>::SetThirdPerson::WasFirstPerson`. Cutscene scripts call it in
+   pairs (before and after):
+   - In first person: switches to third person, forbids the first-person
+     key, sets the variable to 1.
+   - In third person with the variable at 1 (the second call): sets it
+     to 0, allows the first-person key again and **goes back to first
+     person**.
+   - In third person with the variable at 0: only **flips** whether the
+     first-person key is allowed. Camera place, distance and tilt are
+     not touched. (`setThirdPerson 1` in third person does the same and
+     sets the variable to 0.)
+   - So a call without its pair leaves the first-person key locked, or
+     unlocked when it should be locked.
 
 ### Shake and cutscene cameras (summary only)
 
@@ -254,6 +275,41 @@ the first update of a new walk after standing still never starts a swing
   `cutToCamLoc x y z [roll]` jumps to one and aims at the given point;
   `flyToCamLoc x y z [seconds endRoll]` flies there over time. Scripts use
   these in cutscenes. To be studied before M3/M4.
+- **`move KQCamera <flags> x y z rx ry rz`** (traced 2026-10-17, Q89 c):
+  - Flags: bit 1 = the position is **added** to the current one
+    (otherwise it replaces it); bit 2 = the angles are added (otherwise
+    they replace them). 0 = both absolute, 3 = both relative. Missing
+    numbers count as 0.
+  - Angles in radians: **rx = tilt** (positive looks up, negative looks
+    down), **ry = roll**, **rz = heading**: 0 looks along world **+Y**,
+    positive turns anticlockwise seen from above (π/2 looks along −X),
+    the right-hand rule round Z as for objects. The view direction is
+    (−sin rz × cos rx, cos rz × cos rx, sin rx). (The angle order is
+    traced; that the camera looks along its own +Y is inferred, but the
+    data fit it: the watermill shot's heading 2.632 points at Connor's
+    `walkTo` target, 2.64; the bricks shot's 0.9 has Connor a little
+    left of centre at 1.10; `miltrap1.cs`'s −0.86 is a high camera
+    looking down.)
+  - The camera takes that place and view **at once**, and the next frame
+    is drawn straight away.
+- **`follow Connor` after a cutscene** starts from where the camera is,
+  with no jump to a preset spot (traced):
+  - If the camera is farther from the aim point than the range's
+    maximum, it is pulled in to max − 1 at once; if nearer than the
+    minimum, pushed out to min + 1 at once; otherwise it stays.
+  - Heading: if it faces more than **0.4 rad** away from Connor, it turns
+    toward him by **1/3 of the remaining angle per update** and snaps the
+    last part (the snap point is lopsided: below 0.63 rad on one side,
+    about 0.063 rad on the other; looks like an original bug, see "Do not
+    reproduce").
+  - Tilt (inferred): set at once to the default tilt plus the angle that
+    looks at the aim point.
+  - Then the normal follow rules apply (the camera only updates while
+    Connor moves, or while the turning flag that `follow Connor` sets is
+    on; open question 7).
+  - The scripts use this: just before `follow Connor` they `move
+    KQCamera` to a spot close to the follow view (bricks cue 10: about
+    0.19 rad off), so there is no visible jump.
 
 ## Data used
 
@@ -286,6 +342,11 @@ the first update of a new walk after standing still never starts a swing
   a new block resets it. No visible effect.
 
 ## Do not reproduce
+
+- **The lopsided snap** when `follow Connor` turns the camera back
+  toward him (below 0.63 rad on one side, about 0.063 rad on the other):
+  use one snap angle on both sides (0.063 rad, the smaller), and turn by
+  1/3 of the remaining angle per 1/15 s, done per second.
 
 - **Per-update rates.** The height smoothing (10% per update), tilt speed
   (0.015 rad per update) and fixed-mode zoom (125 units per update) depend on
@@ -341,7 +402,7 @@ the first update of a new walk after standing still never starts a swing
 
 1. How mouse movement (pixels) becomes the game's mouse value. Needed for
    swing/zoom speed.
-2. Sign convention of tilt (is the stored −0.2 "look down"?).
+2. (Answered 2026-10-17: yes, negative tilt looks down; see Tilt rule 1.)
 3. (Answered: tilt resets after Connor moves more than 10 units, in both
    views; see Tilt rule 5.)
 4. (Answered 2026-10-13, see "Obstacles".) Still open: what switches

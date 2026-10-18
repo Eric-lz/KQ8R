@@ -82,6 +82,10 @@ All traced in `Mask.exe` unless marked otherwise.
    there; not used in Daventry) and `flags`. If `flags` has the bit 8 set,
    the animation starts at a **random frame** and plays at a random speed
    between 0.9 and 1.1 (so rows of swaying things don't move in step).
+   The random speed replaces the `loop=` speed. This only happens when
+   the **current** movement is started; an object with no `currAnimName`
+   whose waiting movement starts first never gets it (`anim-scripts.md`
+   rule 3, Q85).
    `nextAnimName` is read too: it is the **waiting movement** (traced
    2026-10-17, `anim-scripts.md` rules 2–3).
 5. **Key names are matched ignoring capitals but otherwise exactly**
@@ -223,6 +227,34 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
 5. Saved games (for later): the game writes its own script that runs
    `WorldVar.cs`, then `permWrld.cs`, then one `loadKQ` per object,
    `loadKQ WorldState.kq`, and finally `newWorld.cs`.
+6. **`loadKQ` while playing** (traced 2026-10-17, Q90): the same
+   command and the same steps as at the world's start; nothing checks
+   whether the world is already running. The file is read, the name rule
+   and the position rules (the −1/−2 rule; x y z and angles replacing
+   the file's) are applied, the object is added to the world, and the
+   `keepOnGround` raise happens at its first move step, as at the start.
+   On being added:
+   - the near/far/off test runs at once against Connor's **current**
+     position, so it starts active or not straight away;
+   - `hidden=1` keeps only its `groupsAlways`, as at the start;
+   - its script gets **`$1=<name> $2=Init`** at once, during the
+     `loadKQ` line, before the next script line runs (the same call as
+     at the start; for animated objects just before their movement
+     starts);
+   - an animated object (including `KQAnimOnce`) starts its movement as
+     at the start (`anim-scripts.md` rule 3);
+   - a sound object starts playing at once if it is active
+     (`sound.md` rule 46).
+   - `$KQObject::loc` holds six numbers, so `loadKQ <file> @
+     $KQObject::loc` gives position **and** angles (9 words).
+   - **Same name:** if a live object already has that name, the game
+     stops with a fatal error (name already used): no replacing, no
+     duplicate. A deleted object's name is only free once the event that
+     deleted it has finished (`clicking.md` rule 22), so deleting and
+     reloading the same name in one script run is also fatal. 31
+     delete-then-reload pairs in the data were checked in part; all are
+     in different events (data). For us: log an error and refuse the
+     load, don't quit.
 
 ### Ground heights −1 and −2 (Q17)
 
@@ -345,7 +377,18 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    order of combination for other turns is not traced.
    The `move` command sends the object a move event and the object sets its
    new position directly, without the mover's collision passes (traced).
-   Whether the ground rule applies afterwards is not traced.
+   **Refined 2026-10-17 (Q92):** there are no collision tests and no
+   floor search; it is an instant jump. The vertical bookkeeping of a
+   move step still runs: up by the step-up, down by the step-down, plus
+   **one gravity step** if gravity is on, and the terrain-only
+   `keepOnGround` raise applies. So `move Connor 0 x y 15000 …` from a
+   timed script leaves him about one gravity step (about 44) below
+   15,000, "in the air", and he falls from there. When the `move` comes
+   from a script that runs inside his own update (a `Push`), the rest of
+   that update follows it (`pushing.md` rule 11).
+   **`setHidden`** only sets the hidden flag and reruns the near/far
+   test; position and height don't change. Showing the object again
+   rebuilds its collider at its current place (traced, Q92 c).
 5. **(e) 4 or 5 numbers in a `loadKQ` line:** the angles are used only when
    all three are given. With x y z plus one or two more numbers, the extra
    numbers are **ignored** and the angles are 0 0 0. (Traced: angles need

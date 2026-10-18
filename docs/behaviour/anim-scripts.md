@@ -60,6 +60,30 @@ Words used here:
      or names movement 0 (293); one names no movement at all and stays on
      movement 0 (data). Keep the rule anyway: it is the same code as
      rule 4.
+   - **Refined 2026-10-17 (Q85, traced):** in the shipped game nothing
+     actually starts when the object enters the world (that start is
+     behind a debug switch, `doPurging`, which is on from the start and
+     no script changes). Everything starts in the object's **first
+     update**, in this order: (1) if the current name is empty and a
+     waiting movement is set, the waiting movement starts from its own
+     `loop=` line (no random part); (2) otherwise, if still nothing is
+     playing, the current movement starts (the `currAnimName` one, or
+     movement 0 if the name finds nothing), with `animPos` and, if
+     `flags` has bit 8, the random start frame and speed; (3) the phase
+     then **moves on in that same update** (speed × elapsed time), so a
+     start at load time does not use up the first update.
+   - **Consequence for `flags=8` without `currAnimName`** (Daventry:
+     `davtorch`, `fishies`, `fishies2`, `fishies3`, `deadbird`,
+     `deadbir2`, all with `nextAnimName=stop`): step (1) starts `stop`
+     plainly, so step (2) never runs and the random part is **never
+     applied**. These objects start at phase 0, speed exactly 1, all in
+     step with each other. Objects with a `currAnimName` and bit 8 do get
+     the random part.
+   - **The bit-8 random part** (traced): start frame = round(random ×
+     (frameCount − 1)), phase = that frame ÷ frameCount; speed = a random
+     value from 0.9 to 1.1 that **replaces** the `loop=` line's speed
+     (it does not multiply it), so it always plays forward even if the
+     line says 0 or −1.
 
 ### `KQAnimPlayEvent` (starting a movement from a script)
 
@@ -163,8 +187,10 @@ Words used here:
       `drborded.kq` (the boards on the ground).
     - The `@` in `loadKQ … @ …` means "no name" (`objects.md`), so these
       objects get an automatic `NoName<n>` name the first time one is
-      needed (the counter of `items.md` rule 9; the moment of naming is
-      not traced separately for `loadKQ`). That name is what their
+      needed (the counter of `items.md` rule 9); for `loadKQ` the name is
+      given **at the `loadKQ` line itself** (traced 2026-10-17, Q90).
+      `loadKQ` also sets the script variable `$ObjectName` to the new
+      object's name (no script uses it, data). That name is what their
       script gets as `$1`, so `getLoc $1` and `deleteObject $1` work.
 13. **`setDeleteWhenDone <name> 1|0`** (17 uses, none in Daventry,
     data) sets or clears rule 11.3. It only works on `KQAnimOnce`
@@ -205,6 +231,15 @@ Words used here:
     A script that needs to know when he has finished registers with
     `getEndLoop Connor <itself> 1` and reacts to `Cue 300 0 <movement>`
     (`bricks.cs` waits for `push`).
+    **Heights in the Special state** (traced 2026-10-17, Q92 a): the
+    Special state changes nothing about gravity, the step-up and
+    step-down heights (325) or the ground and floor contact rules; they
+    keep running every update as in any state. A movement moves him only
+    by its own per-frame steps, added each update to where he is (as for
+    walking); the first frame's step is 0, so nothing jumps at the start.
+    `bricks.anm`'s `push` (`c_brks1.kqs`, 51 frames, 3.33 s, data) has a
+    step of **0 in every frame**, so Connor keeps the height his physics
+    gives him.
 
 ### The script reader (additions to `doors.md` "The script language")
 
@@ -223,15 +258,124 @@ Words used here:
 ### `KQStatsChangeRequestEvent` (answers `clicking.md` open question 3)
 
 19. On an ordinary object the five numbers are **added** to its five
-    stats; the fourth is then capped at 100; if health (the first) drops
-    **below 0**, the object's script gets `Die`. Connor adds them the
-    same way and then applies his levels (for M5, traced, not checked in
-    the game): the **fifth number is experience** (his log line prints
-    "hlth … expr … lvl"); health is capped at 10 × level; when
-    experience passes 10 × 2^(level − 1) (150,000 from level 15 on), it
-    drops by that amount, the level goes up by 1, health is set to the
-    new maximum, the third stat +5, the fourth +1 (cap 100), the second
-    +2.
+    stats, in text order (the event's first number to the first stat,
+    and so on); the fourth is then capped at 100 (the event's own fourth
+    number is also cut to at most 100 when it is read; negative values
+    stay); if health (the first) drops **below 0**, the object's script
+    gets `Die`. Connor adds them the same way and then applies his
+    levels (for M5, traced, not checked in the game; refined 2026-10-17,
+    Q86):
+    - The **fifth number is experience** (his log line prints health,
+      maximum health, experience, the next threshold and the level).
+    - The "below 0 → `Die`" check comes right after the adding, before
+      any cap.
+    - Then health is capped at 10 × the **old** level.
+    - Then, **once** per event (no repeat): if experience is **strictly
+      more than** the threshold 10 × 2^(old level − 1) (150,000 from
+      level 15 on), experience drops by the threshold, the level goes up
+      by 1, health is set to the new maximum (10 × new level, a full
+      heal), the **second** stat +5, the **third** stat +2, the fourth +1
+      (cap 100). (Corrected: this rule used to say third +5, second +2;
+      the numbers are counted here in the order they are written in
+      `stats=` and in the event.)
+    - Example (`bricks.cs`, Connor at level 1 with 0 experience, +50):
+      50 > 10, so level 2 with 40 experience, health 20 of 20. Exactly 10
+      would not level him up. A leftover above the new threshold (40 >
+      20) is only acted on at the **next** stats event of any kind, even
+      one of all zeros.
+    - Only Connor has the levels; monsters and other objects just add.
+    - **Starting stats:** an object with no `stats=` line starts with all
+      five at **0** (plain objects, `KQAnimObject`, `KQAnimOnce`,
+      `KQMonster`); doors start with health 10,000 (`doors.md` rule 18).
+      `snowmane` (a `KQMonster`) has `stats=10 10 0 0 0` (data).
+
+20. **`Die` always carries a `$3`** (traced 2026-10-17, Q86 e): the kind
+    of the **last weapon hit** the object took (`Normal`, `Projectile`,
+    `Fire`, `Ice`), and `Normal` if it was never hit. So a death from a
+    stats event gives `$3 = Normal` unless an earlier hit was of another
+    kind. A `KQMonster` whose health drops below 0 does not call its
+    `Die` script here; it switches to its dying state instead (not
+    followed further; M5).
+
+### Cutscene control: `handsOff`, `walkTo`, `pointAndCue` (traced 2026-10-17, Q89 a, Q93)
+
+21. **`handsOff 1 [N]`** takes control away from the player:
+    - Ignored while it is on: movement and turn key **presses**, Run,
+      Jump, drawing a weapon or the special weapon, "Away", the
+      first-person key, clicks in the world, choosing items in the
+      inventory/GUI, and weapon or mode changes. Holding the mouse-look
+      button doesn't grab the mouse (inferred). Cursor-change keys and the
+      camera's own keys are not blocked. Whether the GUI's own inventory
+      and menu keys are blocked is not traced.
+    - At the moment it switches on, Connor is told "forward/back 0, turn
+      0", as if every key were let go: walking and turning stop, Move
+      becomes Wait, and Push ends at its next update (nothing asks for
+      `push`, `pushing.md` rule 7). Mouse-look stops; fixed camera mode
+      (F11) goes back to normal mode.
+    - The game keeps track of which movement keys are down during
+      `handsOff`: presses are swallowed, releases still count.
+    - **Not touched:** the Special state and its list (scripted
+      animations keep running), and jumps or falls already under way
+      (inferred: they end normally unless a script changes his state;
+      he can't start a new Fall from Wait or Move while it is on).
+    - On screen: the bottom GUI panels are hidden (their shown/hidden
+      state is remembered), a spinning-mask icon appears, and the mouse
+      pointer changes (its exact look is not traced).
+    - `N`, the "number of dropable frames", limits how much game time may
+      pass in one drawn frame: normally up to **1 s** is caught up in one
+      go; with `N` given, at most **(N + 1) / 15 s**. It only matters when
+      the computer stalls (the game then runs slower instead of jumping
+      ahead). Data: N = 0 once, 1 five times, 2 five times, 3 once; none
+      in the bricks or watermill scripts. Log it only.
+22. **`handsOff 0`** gives everything back **at once**: input on, the GUI
+    panels come back if they were shown before, the mask icon goes, and
+    the per-frame limit goes back to 1 s. Then **every movement key still
+    held is sent to Connor again**, so a forward or turn key held through
+    the cutscene takes effect at once, without pressing it again.
+    `handsOff` is kept in save games.
+23. (Engine side, no script command.) While Connor plays certain
+    movements of his own the game sets a separate "input locked" switch
+    with the same effect on movement and turn keys; when it clears (and
+    `handsOff` is off) a held turn key is sent again. Which movements set
+    it is not traced. (It is stored in save games as `animSetHandsOff`.)
+24. **`KQConner::walkTo x y <who> <c> <d>`** (and **`runTo`**, the same
+    but running) walks Connor to a spot and then cues a script:
+    - It switches `handsOff` on by itself and puts Connor in Wait.
+    - He first **turns to face** (x, y) with the automatic turn at
+      **3.5 rad/s** (`connor-movement.md` "Turning" rule 2).
+    - When that turn ends he switches to Move and walks (or runs)
+      **straight ahead**, with no more steering.
+    - At the start of the walk the flat distance to (x, y) is recorded;
+      he stops once he has gone that far from where he started, even if
+      something pushed him off the line.
+    - On stopping he goes back to Wait and `<who>` gets `KQCueEvent <c>
+      <d>` (its script runs with `Cue`, `$3` = c).
+    - The cue also comes early if he runs **head-on** into something
+      (the case that would otherwise play `crash`), or if the console
+      command `walkExit` is typed.
+    - `walkTo` never switches `handsOff` off; the script must.
+25. **`pointAndCue x y z <who> <c> <d>`** turns Connor to face (x, y)
+    (z is ignored) with the same automatic turn, and sends `<who>`
+    `KQCueEvent <c> <d>` **the moment the turn ends** (at once if he
+    already faces that way). Only his heading changes.
+26. **If a cue never comes, nothing rescues it**: there is no time-out.
+    `handsOff` stays on and the camera stays where the script put it.
+    Only the head-on bump or `walkExit` end a `walkTo` early.
+27. **Daventry's watermill room** (`wtrmwalk.kq`, trap `walktp1`, script
+    `wtrmwalk.cs`, data), first entry only (`$Daventry::Mill::FirstTime`
+    0 → 1):
+    - `On`: `setRun 0`, range 1000 2500, `setThirdPerson`, `handsOff 1`,
+      `follow none`, camera and Connor moved, cue 1 after 1 s;
+    - cue 1: `walkTo 190800 230100`, cue 2 when he arrives (about 2,740
+      units from where he was put);
+    - cue 2: `pointAndCue 188000 230000 9000`, cue 3 when he faces it;
+    - cue 3: `follow Connor`, `addCamLoc`, cue 4 after 0.2 s;
+    - cue 4: `flyToCamLoc` over 2 s, cue 5 after 2 s and cue 6 after 4 s;
+    - cue 5: Connor speaks, `$Daventry::RopenHook::progress` = 2;
+    - cue 6: camera and Connor moved, `follow Connor`, **`handsOff 0`**,
+      `setThirdPerson`, `lookup.cs`.
+    So the control comes back about 4.2 s after he finishes turning in
+    cue 2. Only cues 2 and 3 wait for something other than a timer.
 
 ## Numbers and units
 
