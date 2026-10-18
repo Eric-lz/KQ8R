@@ -7,7 +7,8 @@
 //! rule numbers below are that note's. See docs/provenance/README.md.
 //!
 //! - Loudness = own × group, at most 1 (rule 21). Group = slider × duck
-//!   (no ducking yet: speech is not played). Sliders from `Options.cs`
+//!   (ducking: groups 0, 2, 5 × 0.2 while a line of speech plays, rule
+//!   53, M4 4a-3). Sliders from `Options.cs`
 //!   (rules 50-52), 1 before it runs.
 //! - Placed sounds: distance from Connor in 3D (rule 28), the original
 //!   curve that forgets min (rule 29, kept: "Do not reproduce" 1), balance
@@ -35,6 +36,15 @@ pub const GROUPS: usize = 6;
 pub const GROUP_EFFECTS: usize = 0;
 /// World music, `KQMusic` (rules 50, 57a).
 pub const GROUP_WORLD_MUSIC: usize = 5;
+/// Speech (rules 50, 58).
+pub const GROUP_SPEECH: usize = 3;
+/// The groups speech turns down (rule 53).
+pub const DUCKED_GROUPS: [usize; 3] = [0, 2, 5];
+/// Their factor while a line plays (rule 53).
+pub const DUCK_FACTOR: f32 = 0.2;
+/// Min and max of another character's placed voice (rule 58).
+pub const SPEECH_MIN: f32 = 2_000.0;
+pub const SPEECH_MAX: f32 = 30_000.0;
 /// The music's fade rate, loudness per second (rules 33, 57).
 pub const MUSIC_FADE_RATE: f32 = 0.75;
 /// Min and max of every placed one-shot: cues, hurt sounds, item landing
@@ -191,6 +201,18 @@ impl Start {
     /// A plain one-shot in group 0 (rules 40, 42).
     pub fn plain_one_shot(name: &str, why: String) -> Self {
         Start { name: name.to_string(), placed: None, looping: false, group: GROUP_EFFECTS, why }
+    }
+
+    /// A line of speech in group 3 (rule 58): Connor's plain (`at`
+    /// `None`), anyone else's placed at the speaker, 2,000 / 30,000.
+    pub fn speech(name: &str, at: Option<[f32; 3]>, why: String) -> Self {
+        Start {
+            name: name.to_string(),
+            placed: at.map(|position| Placed { position, min: SPEECH_MIN, max: SPEECH_MAX }),
+            looping: false,
+            group: GROUP_SPEECH,
+            why,
+        }
     }
 }
 
@@ -414,6 +436,21 @@ impl SoundSystem {
         if let Some(n) = self.playing.iter().position(|p| p.id == id) {
             self.stop_at(n, why);
         }
+    }
+
+    /// Rule 53: while a line of speech plays, groups 0, 2 and 5 are
+    /// turned down to 0.2 (sounds already playing too: their gains are
+    /// redone every frame); back to 1 when no line ducks them.
+    pub fn set_ducking(&mut self, on: bool) {
+        let factor = if on { DUCK_FACTOR } else { 1.0 };
+        if DUCKED_GROUPS.iter().all(|&g| self.groups.duck[g] == factor) {
+            return;
+        }
+        for g in DUCKED_GROUPS {
+            self.groups.duck[g] = factor;
+        }
+        let values: Vec<String> = DUCKED_GROUPS.iter().map(|&g| format!("{g}: {:.3}", self.groups.loudness(g))).collect();
+        self.note(format!("ducking {} (rule 53): groups 0, 2, 5 x {factor}; loudness now {}", if on { "on" } else { "off" }, values.join(", ")));
     }
 
     /// Whether sound `id` is still in the list (paused ones included).
@@ -776,6 +813,30 @@ mod tests {
         assert!(close(balance(&v, [100.0, 100.0, 0.0]), 0.82 / 2f32.sqrt()));
         assert!(close(balance(&v, [1000.0, 1000.0, 0.0]), 0.82 / 2f32.sqrt()), "distance doesn't change it");
         assert_eq!(balance(&v, [0.0, 0.0, 300.0]), 0.0, "straight above: centre");
+    }
+
+    #[test]
+    fn speech_ducks_effects_and_world_music_not_itself() {
+        // Rules 53, 58 with the shipped sliders.
+        let mut g = Groups::default();
+        g.apply_script(b"KQSound::setSpeechVol 0.34\nKQSound::setSfxVol 0.14\nKQSound::setMusicVol 0.14\n");
+        let mut s = SoundSystem::new(g);
+        let effect = s.start(&Start::plain_one_shot("door4.aud", "t".into()), found(5.0), &ears()).unwrap();
+        let voice = s.start(&Start::speech("A0RS1J00.001", None, "t".into()), found(3.5), &ears()).unwrap();
+        let wizard = Start::speech("A0RS0000.021", Some([10_000.0, 0.0, 0.0]), "t".into());
+        assert_eq!((wizard.group, wizard.placed.map(|p| (p.min, p.max))), (GROUP_SPEECH, Some((2_000.0, 30_000.0))));
+        s.set_ducking(true);
+        s.update(0.01, &ears());
+        let gains = |s: &SoundSystem, id| s.orders.iter().rev().find_map(|o| match o {
+            Order::Gains { id: i, gains } | Order::Start { id: i, gains, .. } if *i == id => Some(gains[0]),
+            _ => None,
+        });
+        assert!(close(gains(&s, effect).unwrap(), 0.14 * 0.2), "effects x 0.2");
+        assert!(close(gains(&s, voice).unwrap(), 0.34), "speech itself not ducked");
+        s.set_ducking(false);
+        s.update(0.01, &ears());
+        assert!(close(gains(&s, effect).unwrap(), 0.14));
+        assert!(s.log.iter().any(|l| l.contains("ducking on")) && s.log.iter().any(|l| l.contains("ducking off")));
     }
 
     #[test]

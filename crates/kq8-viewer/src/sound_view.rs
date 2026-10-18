@@ -13,7 +13,7 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use kq8_audio::{Command, Output};
 use kq8_core::music::Music;
-use kq8_core::sound::{Audible, Ears, Found, Groups, Order, SoundSystem, View, GROUPS};
+use kq8_core::sound::{Audible, Ears, Found, Groups, Order, SoundSystem, Start, View, GROUPS};
 use kq8_data::aud::{self, Sound};
 use kq8_data::GameDir;
 
@@ -39,6 +39,8 @@ pub struct SoundSim {
     world: String,
     log: Log,
     frames: u64,
+    /// Speech (M4 4a-3): each playing line's sound id.
+    voices: HashMap<u64, u64>,
 }
 
 impl SoundSim {
@@ -95,7 +97,7 @@ impl SoundSim {
             Some(m) => log.summary(format!("sound: music object {} with [{}] (rule 57)", m.object, m.names().join(", "))),
             None => log.summary("sound: no music object; KQMusic requests will be ignored (rule 57f)"),
         }
-        Some(SoundSim { system: SoundSystem::new(groups), audibles, music, output, cache: HashMap::new(), game: game.clone(), world: world.to_string(), log, frames: 0 })
+        Some(SoundSim { system: SoundSystem::new(groups), audibles, music, output, cache: HashMap::new(), game: game.clone(), world: world.to_string(), log, frames: 0, voices: HashMap::new() })
     }
 }
 
@@ -141,6 +143,7 @@ pub fn sound_step(
     connor: Option<ResMut<ConnorSim>>,
     camera: Query<&Transform, With<Camera3d>>,
     light: Option<Res<ObjectLight>>,
+    speech: Option<ResMut<crate::talk_view::Speech>>,
     time: Res<Time<Real>>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -168,6 +171,32 @@ pub fn sound_step(
             decoded.insert(s.name.clone(), snd.clone());
         }
         sim.system.start(s, found(&file), &ears);
+    }
+    // Speech (M4 4a-3, talking.md rules 10-11, 15): the voices, then the
+    // ducking of groups 0, 2, 5 while a line plays.
+    if let Some(mut speech) = speech {
+        use crate::talk_view::VoiceOrder;
+        for order in std::mem::take(&mut speech.voices) {
+            match order {
+                VoiceOrder::Start { line, path, at, why } => {
+                    let file = load(&mut sim.cache, game, world, &path);
+                    if let Ok((snd, _)) = &file {
+                        decoded.insert(path.clone(), snd.clone());
+                    }
+                    if let Some(id) = sim.system.start(&Start::speech(&path, at, why), found(&file), &ears) {
+                        sim.voices.insert(line, id);
+                    }
+                }
+                VoiceOrder::Stop { line } => {
+                    if let Some(id) = sim.voices.remove(&line) {
+                        sim.system.stop(id, &format!("line #{line} cut short (clearSpeak)"));
+                    }
+                }
+            }
+        }
+        sim.system.set_ducking(speech.ducking);
+        let system = &sim.system;
+        sim.voices.retain(|_, id| system.is_playing(*id));
     }
     // Sound objects (M3 3h-3): on while near or far (rules 46-47), stopped
     // by deleteObject (rule 48).

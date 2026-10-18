@@ -1575,3 +1575,12 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | Message files searched in the world's `English` folder, then `GAME/ENGLISH` | `talking.md` rule 1 (the data's reading, not traced) | Viewer log: 4 files for Daventry |
 | `Options::Captions` from the `set` lines of `MASK/Options.cs` | `talking.md` rule 10 | Viewer log: `Options.cs sets Options::Captions = 'true'` |
 | Monsters: placed `KQMonster` objects with their place after `move` and their `script=`; their script gets `TalkComplete` (not `Init`, M5) | `talking.md` rules 6, 13 | Viewer log: Girl, Wizard, Ravenw, Shadow |
+
+### 4a-3, hearing it — `crates/kq8-core/src/sound.rs`, `crates/kq8-viewer/src/{talk_view,sound_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Speech plays in group 3 (speech slider, not ducked); Connor's plain, others placed at the speaker when the line starts, min 2,000, max 30,000 | `talking.md` rule 10, `sound.md` rules 50, 58 | Unit test `speech_ducks_effects_and_world_music_not_itself`; sign run `sound.log`: group 3 plain, loudness 0.340 |
+| While a line without `nofade` plays, groups 0, 2, 5 × 0.2; back to 1 when no line ducks | `talking.md` rules 10–11, `sound.md` rule 53 | Sign run `sound.log`: 0.028 during the line, 0.140 after |
+| `clearSpeak` stops the voice at once | `talking.md` rule 15 | Code path only (not reached in a run) |
+| A non-Connor speaker with no known place: plain voice | **Our choice** (not in the note) | — |

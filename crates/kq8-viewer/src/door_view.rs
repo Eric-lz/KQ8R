@@ -112,7 +112,7 @@ impl DoorSim {
 
     /// Writes the talk lines gathered since the last call (M4 4a-2);
     /// lines starting or finishing also to the main log.
-    fn flush_talk(&mut self, shared: &Shared) {
+    pub fn flush_talk(&mut self, shared: &Shared) {
         let lines = self.active.world.take_talk_log();
         // The update these lines belong to (the counter has moved on).
         let updates = self.active.world.updates.saturating_sub(1);
@@ -123,9 +123,6 @@ impl DoorSim {
             }
             log.detail(format!("update {updates} {line}"));
         }
-        // What the viewer does with the events comes in 4a-3 (voice,
-        // ducking), 4a-4 (captions), 4a-6 (mouth); talk.log has them.
-        self.active.world.talk.events.clear();
     }
 
     /// Writes the trap lines gathered since the last call; `On`/`Off` also

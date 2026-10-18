@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-3: hearing speech, and other sounds turned down
+
+**Changed:** `kq8-core/src/sound.rs`: group 3 for speech, `Start::speech` (Connor's plain, others placed, 2,000 / 30,000), `set_ducking` (groups 0, 2, 5 x 0.2; 1 unit test). Viewer `talk_view.rs`: `Speech` resource and `talk_step` (the talk events become voice orders and the ducking switch, after the traps in each update); `sound_view.rs` plays and stops the voices and sets the ducking. Provenance.
+**Why:** `talking.md` rules 10-11, 15; `sound.md` rules 53, 58.
+**Tested how:** `cargo test --workspace` (417 pass), clippy clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`sound.log`, `talk.log`, `run-4a3-sign.txt`). With `--sound off` the rules and the log run, nothing is heard.
+**Result:** `sound.log`: "start #2 daventry/English/A0RS1J00.001 (3.542 s) group 3 plain, loudness 0.340"; "ducking on (rule 53): groups 0, 2, 5 x 0.2; loudness now 0: 0.028, 2: 0.028, 5: 0.028" in the same frame; "ducking off … 0: 0.140, 2: 0.140, 5: 0.140" at real 6.530 s, the voice finished at 6.602 s (the line ends in game time at 3.6 s, the next update after 3.542 s).
+**Still broken / not tested:** Not heard by anyone yet (needs a run with sound). A cut-short voice (`clearSpeak`) is stopped by code not reached in a run (no Daventry script reached in our runs uses it). Another character's placed voice not seen in a run (no monster speaks without a conversation). The ducking may lift up to one update before the voice ends (game time vs real time).
+**Next:** 4a-4, captions on screen.
+
 ## 2026-10-18 M4 step 4a-2: the speech queues and the script commands
 
 **Changed:** New `kq8-core/src/talk.rs` (each character's queue, the duplicate check, the 0.5 s wait slot, line timing, mouth schedule, events for the viewer; 4 unit tests). `active.rs`: `KQMonster::speak`, `clearSpeak`, `testMessage`, `stateChangeNotify`, `clearStateChangeNotify` are real commands now (no longer stubs); `TalkComplete` to the issuer's script and, through the event queue, to the notify group; Connor turns to the listener (scripted turn) when in Wait or Move; monsters (name, place, script); 3 unit tests. `script.rs`: `eval` (stand-in, Q103). Viewer: new `talk_view.rs` (message files of the world's `English` folder then `GAME/ENGLISH`, voice and lip-sync lookup, `Options.cs`'s `set` lines), `talk.log`, the loader collects `KQMonster`s. `docs/behaviour/QUESTIONS.md`: Q103. Provenance.
