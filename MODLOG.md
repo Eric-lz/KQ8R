@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 4a: the user's checks of remarks and speech (docs only)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q104. `STATUS.md`, `docs/FEATURES.md`: the checks. No code.
+**Why:** The user tested 4a in the viewer against the original.
+**Tested how:** By the user, by eye and ear.
+**Result:** Like the original: clicking the alchemist's sign, Connor turns, says the line, the caption shows, the background sound drops, his mouth moves; pressing forward doesn't stop that line; a movement key stops a tombstone's reading; clicking from too far gives "'Tis beyond my reach."; objects beyond the draw distance can't be clicked (nothing said; our build drops clicks on switched-off objects, `object-lighting.md` rule 41). Two differences: (1) in the original a held turn key does **not** stop the automatic turn to the clicked object, only a new press does; ours cancels it on any turn input, as `connor-movement.md` "Turning" rule 2 says. (2) In the original every tombstone turns Connor; ours turns him only for `tmbstn2`-`9` (`speak Connor $1`), not `tmbstn1`, `tmbstn10`-`19`, `tomb7` (`speak Connor Connor`, no turn by `talking.md` rule 7). The likely cause is the turn after a click (`doors.md` rule 16), which is not built (its states were never traced). Both asked as Q104.
+**Still broken / not tested:** The two differences, until A answers Q104. Not checked: "This will not work.", the chest remark, other characters' voices.
+**Next:** A answers Q104 (and Q103); then B builds the click turn and the press-only cancel.
+
 ## 2026-10-18 M4 step 4a: end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 4a; what to check by ear and eye; the 4a stand-ins; speech not done; next steps; Q103; 418 tests), `docs/FEATURES.md` (new section "Remarks and speech"; the not-working list), `README.md` (remarks in "What works"; `msg-verify`; talking removed from "What doesn't work", conversations stay), `docs/DESIGN.md` (4a done).

@@ -306,9 +306,15 @@ the original.
 
 ## Remarks and speech (milestone M4, step 4a)
 
-From `docs/behaviour/talking.md` (2026-10-18). Checked in the logs only
-(`talk.log`, `sound.log`, `connor.log`); **not yet checked by ear or
-eye**.
+From `docs/behaviour/talking.md` (2026-10-18). Checked in the logs
+(`talk.log`, `sound.log`, `connor.log`) and by the user against the
+original (2026-10-18): the sign's turn, line, caption, background drop
+and mouth; a movement key stopping a tombstone's reading; "too far".
+Two differences, waiting for Q104: a held turn key stops our automatic
+turn (in the original only a new press does), and tombstones that speak
+"to Connor" don't turn him in ours (the turn after a click, `doors.md`
+rule 16, is not built). Not checked by the user: "This will not work.",
+the chests' remark.
 
 - **Lines:** the message files (`.MSG`), voices and lip-sync files are
   read (`kq8 msg-verify` matches the note's counts: 2,080 lines, 476

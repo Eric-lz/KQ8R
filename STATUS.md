@@ -278,7 +278,15 @@ and speech, 4a).
   `follow`, flight or cut (Q100 a); a deep lift whose line meets no
   ground (Q100 b); one `follow` finding both conditions turns the
   "turn back" switch on (Q100 c).
-- **To check by ear and eye (4a):** click the alchemist's sign
+- **The user's checks of 4a (2026-10-18):** like the original: the
+  sign (turn, line, caption, background drop, mouth; forward doesn't
+  stop it), a movement key stops a tombstone's reading, "too far", no
+  click beyond the draw distance. Different: (1) a **held** turn key
+  cancels our automatic turn; in the original only a new press does;
+  (2) tombstones that `speak Connor Connor` don't turn him in ours, all
+  do in the original (the click turn of `doors.md` rule 16 is not
+  built). Both: **Q104**, for A.
+- **Still to check by ear and eye (4a):** click the alchemist's sign
   (`cargo play --at 245000,255000,0`, walk up and click it): Connor turns,
   speaks after about half a second, the caption shows, the music drops,
   his mouth texture changes; click the tombstone `tomb2.01` at (202475,
@@ -342,6 +350,9 @@ and speech, 4a).
 
 - Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
   is still not explained (`anim-scripts.md` open question 6).
+- For A (asked 2026-10-18 by B, from the user's check): **Q104** (a held
+  turn key vs a new press cancelling the automatic turn; the turn after
+  a click, `doors.md` rule 16: which objects, which states, order).
 - For A (asked 2026-10-18 by B, M4 4a): **Q103** (`eval`; `clearSpeak`
   during the wait after a turn; a placed voice that moves; a monster's
   turn; a chest remark without a turn). `talking.md` open questions 1–5
