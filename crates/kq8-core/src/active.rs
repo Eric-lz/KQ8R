@@ -160,6 +160,15 @@ pub enum Request {
     ClickTurn { name: String, target: [f32; 2], at: String },
 }
 
+/// A panel command of a script (`interface.md` rule 15, M4 4c-2).
+#[derive(Debug, Clone, PartialEq)]
+pub enum GuiOrder {
+    /// `setLowerGui` / `setUpperGui` / `setMapGui` 0|1.
+    Set { group: crate::panels::Group, on: bool, at: String },
+    /// `getGuiStatus`.
+    Status { at: String },
+}
+
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
 /// add the position along the world axes, 0 and 2 set it; flags 2 and 3
 /// add the turn, 0 and 1 set it. Adding turns is done only about Z (all
@@ -556,6 +565,12 @@ pub struct WorldState {
     pub connor_jump: Option<&'static str>,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
+    /// How many stats events Connor has had (M4 4c-2): the bottom bar
+    /// sends its values after each (`interface.md` rule 24).
+    pub connor_stats_events: u64,
+    /// The panel commands of scripts since the caller last looked (M4
+    /// 4c-2, `interface.md` rule 15).
+    pub gui_orders: Vec<GuiOrder>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
     /// health without one; 3i-6).
     pub stats: BTreeMap<String, Stats>,
@@ -1219,6 +1234,31 @@ impl WorldState {
         "0".into()
     }
 
+    /// `setLowerGui`, `setUpperGui`, `setMapGui` 0|1 and `getGuiStatus`
+    /// (`interface.md` rule 15, M4 4c-2): orders for the panels, carried
+    /// out by the caller.
+    fn gui_command(&mut self, words: &[String], at: &str) -> String {
+        use crate::panels::Group;
+        let group = match words[0].as_str() {
+            "setLowerGui" => Group::Bottom,
+            "setUpperGui" => Group::Top,
+            "setMapGui" => Group::Map,
+            _ => {
+                self.note(format!("{at}: getGuiStatus: the panels' groups are written to gui.log"));
+                self.gui_orders.push(GuiOrder::Status { at: at.to_string() });
+                return "0".into();
+            }
+        };
+        let Some(v) = words.get(1).filter(|v| looks_like_number(v)) else {
+            self.note(format!("{at}: usage: {} 0|1; nothing", words[0]));
+            return "1".into();
+        };
+        let on = number_value(v) != 0.0;
+        self.note(format!("{at}: {} {}: the {} {} (interface.md rule 15)", words[0], v, group.name(), if on { "slides in" } else { "slides out" }));
+        self.gui_orders.push(GuiOrder::Set { group, on, at: at.to_string() });
+        "0".into()
+    }
+
     /// `handsOff 1|0`: not in any note (Q89 a). Stand-in: the player's
     /// movement keys, Jump and clicks are ignored while on.
     fn hands_off(&mut self, words: &[String], at: &str) -> String {
@@ -1870,6 +1910,7 @@ impl ScriptHost for WorldState {
             "move" => Some(self.move_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
+            "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
             "setThirdPerson" => Some(self.set_third_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
@@ -1962,6 +2003,8 @@ impl Active {
                 deleted: BTreeSet::new(),
                 switched_off: BTreeSet::new(),
                 connor_stats: None,
+                connor_stats_events: 0,
+                gui_orders: Vec::new(),
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
@@ -2095,6 +2138,7 @@ impl Active {
             };
             let level = c.change(d);
             let after = *c;
+            self.world.connor_stats_events += 1;
             self.world.note(format!(
                 "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}",
                 before.stats.0,
@@ -3932,6 +3976,33 @@ mod tests {
         assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 15, 2, 1, 40], 2)), "{log}");
         assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
         assert_eq!(a.scripts.vars.get("D::died"), Some("basket1 Normal"), "{log}");
+    }
+
+    #[test]
+    fn connor_stats_events_are_counted_and_panel_commands_handed_over() {
+        let mut a = with_items("setLowerGui 0
+setUpperGui 1
+setMapGui
+set R $Console::Return
+getGuiStatus
+");
+        use crate::panels::Group;
+        assert_eq!(
+            a.world.gui_orders,
+            vec![
+                GuiOrder::Set { group: Group::Bottom, on: false, at: "s.cs line 1".into() },
+                GuiOrder::Set { group: Group::Top, on: true, at: "s.cs line 2".into() },
+                GuiOrder::Status { at: "s.cs line 5".into() },
+            ]
+        );
+        assert_eq!(a.scripts.vars.get("R"), Some("1"), "setMapGui without 0|1: refused");
+        // interface.md rule 24: every stats event on Connor counts, even
+        // all zeros.
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        let e = |d: &[&str]| Pending { due: 0.0, seq: 0, target: "Connor".into(), kind: "KQStatsChangeRequestEvent".into(), data: d.iter().map(|s| s.to_string()).collect(), from: "test".into() };
+        a.stats_change(&e(&["0", "0", "0", "0", "0"]), "");
+        a.stats_change(&e(&["-2", "0", "0", "0", "0"]), "");
+        assert_eq!((a.world.connor_stats_events, a.world.connor_stats.map(|c| c.stats.0[0])), (2, Some(8)));
     }
 
     #[test]

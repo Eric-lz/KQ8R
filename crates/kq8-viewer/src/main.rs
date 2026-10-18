@@ -49,6 +49,7 @@ mod effects_view;
 mod game_camera;
 mod ground_haze;
 mod ground_anim_view;
+mod gui_view;
 mod item_view;
 mod light_view;
 mod load;
@@ -120,6 +121,9 @@ struct Args {
     special: Option<(String, u64)>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
+    /// `--key NAME,N`: a panel key pressed before update N + 1 (M4 4c-2;
+    /// `space`).
+    key: Vec<(String, u64)>,
     /// `--light x1|x2|off`: how the ground's light map is applied at the
     /// start (M1 step 4c; default x1, the user's check); F7 changes it.
     light: light_view::LightMode,
@@ -151,6 +155,7 @@ fn parse_args() -> Result<Args, String> {
         aim: Vec::new(),
         special: None,
         item: None,
+        key: Vec::new(),
         light: light_view::LightMode::X1,
         haze: true,
         renderer: renderer::Renderer::Auto,
@@ -204,6 +209,12 @@ fn parse_args() -> Result<Args, String> {
                 a.special = Some((items.replace(';', ","), n));
             }
             "--item" => a.item = Some(value()?),
+            "--key" => {
+                let v = value()?;
+                let (name, n) = v.rsplit_once(',').ok_or("--key needs NAME,UPDATE e.g. space,30".to_string())?;
+                let n = n.trim().parse::<u64>().map_err(|_| "--key needs NAME,UPDATE e.g. space,30".to_string())?;
+                a.key.push((name.trim().to_string(), n));
+            }
             "--light" => a.light = light_view::LightMode::parse(&value()?)?,
             "--haze" => {
                 a.haze = match value()?.to_ascii_lowercase().as_str() {
@@ -290,7 +301,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N] [--renderer auto|vulkan|dx12]");
-            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--light x1|x2|off] [--haze on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
+            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--key NAME,N] [--light x1|x2|off] [--haze on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
             return ExitCode::FAILURE;
         }
     };
@@ -391,6 +402,10 @@ fn main() -> ExitCode {
                 if let Some(style) = talk_view::load_caption(&g, &args.world, &mut shared.log.lock().unwrap()) {
                     app.insert_resource(style);
                 }
+                // The panels (M4 4c-2).
+                if let Some(gui) = gui_view::load_gui(&g, &args.world, &mut shared.log.lock().unwrap()) {
+                    app.insert_resource(gui);
+                }
             }
             let music = objects.music.take();
             app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
@@ -416,6 +431,9 @@ fn main() -> ExitCode {
                 .init_resource::<door_view::Deleted>()
                 .init_resource::<talk_view::Speech>()
                 .insert_resource(door_view::HeldItem(args.item))
+                .insert_resource(gui_view::KeyAt(args.key))
+                .init_resource::<gui_view::GuiCover>()
+                .init_resource::<gui_view::CaptionPlace>()
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
                 .insert_resource(Time::<Fixed>::from_hz(kq8_core::UPDATES_PER_SECOND))
@@ -434,8 +452,10 @@ fn main() -> ExitCode {
                 .init_resource::<object_light::HazeCheck>()
                 .add_systems(Startup, object_light::setup_haze_label)
                 // Captions (M4 4a-4).
-                .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture))
-                .add_systems(Update, (talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw))
+                .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
+                // The panels (M4 4c-2), before the caption is placed on them.
+                .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step))
+                .add_systems(Update, (gui_view::gui_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain())
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw))
                 .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw));

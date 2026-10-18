@@ -567,6 +567,17 @@ pub fn spawn_doors(
         }
     };
     active.world.items = std::mem::take(&mut objects.items);
+    // M4 4c-2: Connor's start inventory (inventory.md rule 4), named after
+    // its sections.
+    let (start, problems) = std::mem::take(&mut objects.connor_inventory);
+    let mut start_lines = problems.iter().map(|p| format!("Connor's start inventory: {p}")).collect::<Vec<_>>();
+    for it in start {
+        let line = match active.world.items.add_named(&it.name, &it.kind, it.quantity, it.user_id, kq8_core::item::Place::Carried("Connor".into())) {
+            Ok(_) => format!("Connor's start inventory: {}", active.world.items.describe(&it.name)),
+            Err(e) => format!("Connor's start inventory: [{}] {}: {e}; left out", it.name, it.kind),
+        };
+        start_lines.push(line);
+    }
     for o in &active.world.items.objects {
         active.world.known.insert(o.name.to_ascii_lowercase());
     }
@@ -576,6 +587,9 @@ pub fn spawn_doors(
     }
     if let Some(log) = &mut item_log {
         for line in std::mem::take(&mut objects.item_lines) {
+            log.detail(line);
+        }
+        for line in &start_lines {
             log.detail(line);
         }
         log.detail("items at the start:");
@@ -968,6 +982,7 @@ impl kq8_core::active::ClickWalls for ClickBuildings<'_> {
 /// the ground is not tested), handled at the next update. `--aim NAME,N`
 /// does the same at update N with a line from the camera to the middle of
 /// NAME's box (a test option; `--click` skips the line).
+#[allow(clippy::too_many_arguments)]
 pub fn door_click_input(
     buttons: Res<ButtonInput<MouseButton>>,
     window: Query<&Window, With<PrimaryWindow>>,
@@ -975,6 +990,7 @@ pub fn door_click_input(
     sim: Option<ResMut<DoorSim>>,
     buildings: Option<Res<Buildings>>,
     mut aim: ResMut<AimAt>,
+    cover: Res<crate::gui_view::GuiCover>,
     shared: Res<Shared>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -982,6 +998,18 @@ pub fn door_click_input(
     let due = aim.0.iter().position(|(_, n)| updates >= *n).map(|i| aim.0.remove(i).0);
     if due.is_none() && !buttons.just_pressed(MouseButton::Left) {
         return;
+    }
+    // M4 4c-2: a click on a shown panel is the interface's, not the world's.
+    if due.is_none() {
+        let on_panel = window.single().ok().and_then(|w| {
+            let c = w.cursor_position()?;
+            let (x, y) = (c.x / w.width(), c.y / w.height());
+            cover.0.iter().find(|(_, [l, t, r, b])| x >= *l && x < *r && y >= *t && y < *b).map(|(n, _)| *n)
+        });
+        if let Some(panel) = on_panel {
+            sim.log.detail(format!("update {updates}: mouse click on the panel {panel}: not a world click"));
+            return;
+        }
     }
     // talking.md rule 16: any click in the world counts, picked or not.
     sim.world_clicks.push(if due.is_some() { "test --aim click".to_string() } else { "mouse click".to_string() });

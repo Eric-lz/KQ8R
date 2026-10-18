@@ -1124,6 +1124,10 @@ pub struct Objects {
     pub attack_dist: Option<f32>,
     /// Connor's `stats=` and `level=` from `GAME/Kq/Connor.kq` (3i-6).
     pub connor_stats: Option<(String, Option<String>)>,
+    /// Connor's start inventory from `Connor.kq` (M4 4c-2,
+    /// `inventory.md` rule 4): per item its section name, type,
+    /// quantity and `userId`, in list order; and the problems met.
+    pub connor_inventory: (Vec<ConnorItem>, Vec<String>),
     /// Every placed object's `stats=` line (3i-6): name, the line.
     pub object_stats: Vec<(String, String)>,
     /// The placed `KQMonster`s (M4 4a-2, `talking.md` rule 6): name,
@@ -1359,6 +1363,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         connor: None,
         attack_dist: None,
         connor_stats: None,
+        connor_inventory: (Vec::new(), Vec::new()),
         object_stats: Vec::new(),
         monsters: Vec::new(),
         doors: Vec::new(),
@@ -1557,6 +1562,7 @@ struct Placer<'a> {
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     attack_dist: Option<f32>,
     connor_stats: Option<(String, Option<String>)>,
+    connor_inventory: (Vec<ConnorItem>, Vec<String>),
     object_stats: Vec<(String, String)>,
     monsters: Vec<kq8_core::active::Monster>,
     doors: Vec<DoorAssets>,
@@ -1752,6 +1758,46 @@ impl kq8_data::world_script::Host for Placer<'_> {
     }
 }
 
+/// One item of Connor's start inventory (M4 4c-2).
+#[derive(Debug, Clone)]
+pub struct ConnorItem {
+    /// Its section name, which becomes the item object's name.
+    pub name: String,
+    pub kind: String,
+    pub quantity: i64,
+    pub user_id: i64,
+}
+
+/// `inventory=<section>` of Connor's section, that section's `numItems`
+/// and `ItemName<k>`, each naming a `KQInventoryItem` section with
+/// `itemType`, `quantity` and `userId` (`inventory.md` rule 4; read from
+/// the data).
+fn connor_inventory(file: &[kq8_data::kq_text::Section], connor: &kq8_data::kq_text::Section) -> (Vec<ConnorItem>, Vec<String>) {
+    let mut problems = Vec::new();
+    let find = |name: &str| file.iter().find(|s| s.name.eq_ignore_ascii_case(name));
+    let Some(list) = connor.get("inventory").map(str::trim) else { return (Vec::new(), vec!["no inventory= key".into()]) };
+    let Some(list) = find(list) else { return (Vec::new(), vec![format!("no section [{list}]")]) };
+    let n = list.number("numItems").and_then(Result::ok).unwrap_or(0.0) as usize;
+    let mut items = Vec::new();
+    for k in 0..n {
+        let Some(name) = list.get(&format!("ItemName{k}")).map(str::trim) else {
+            problems.push(format!("[{}] has no ItemName{k}", list.name));
+            continue;
+        };
+        let Some(s) = find(name) else {
+            problems.push(format!("no section [{name}]"));
+            continue;
+        };
+        let Some(kind) = s.get("itemType").map(str::trim) else {
+            problems.push(format!("[{name}] has no itemType"));
+            continue;
+        };
+        let num = |key: &str, default: i64| s.number(key).and_then(Result::ok).map_or(default, |v| v as i64);
+        items.push(ConnorItem { name: name.to_string(), kind: kind.to_string(), quantity: num("quantity", 1), user_id: num("userId", -1) });
+    }
+    (items, problems)
+}
+
 impl Placer<'_> {
     /// Connor (M2 steps 2a, 2b; docs/DESIGN.md): the world script loads
     /// `connor.kq`, which is not in the world archives but in
@@ -1772,6 +1818,7 @@ impl Placer<'_> {
             let mut p = kq8_data::objects::Placement::from_load(section, load);
             self.attack_dist = section.number("attackDist").and_then(Result::ok).map(|v| v as f32);
             self.connor_stats = section.get("stats").map(|s| (s.to_string(), section.get("level").map(str::to_string)));
+            self.connor_inventory = connor_inventory(&file, section);
             let (terrain, [x, y, _]) = (&self.terrain, p.position);
             p.position = p.grounded_position(|level| terrain.ground_at(level, x, y).map(|g| g.height));
             let (keys, problems) = kq8_data::action_map::parse(&read("Connor.sae")?);
@@ -3110,6 +3157,7 @@ impl Placer<'_> {
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
             connor_stats: self.connor_stats,
+            connor_inventory: self.connor_inventory,
             object_stats: self.object_stats,
             monsters,
             talk: None,

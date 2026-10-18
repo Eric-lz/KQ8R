@@ -1889,7 +1889,7 @@ inventory and menus.
     the middle (rule 51, the user's check). The stand-ins `WRAP_WIDTH`
     and `STRIP_MARGIN` go. Log: rows, their widths, box width, left,
     top, bottom.
-  - **4c-2, the always-visible panel** (interface.md rules 7–36). The
+  - **4c-2, the always-visible panel** (**done** 2026-10-18; interface.md rules 7–36). The
     bottom bar: bottom left (armour, hand and ranged weapon slots with
     their numbers), the eight slots (empty pictures; their contents
     come in 4c-3), the meters (red health and green experience bars,

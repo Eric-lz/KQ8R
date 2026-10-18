@@ -1713,3 +1713,31 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | The box's bottom = the top of the highest bottom panel (none drawn yet: the screen's bottom); its centre half-way between the map's right edge and the screen's right edge; the map is always away (no map yet), its right edge at −50/640 of the screen | `interface.md` rules 9, 51 (traced; the user's check: a little left of the middle with the map closed) | Unit test `the_box_sits_on_the_bottom_panel_left_of_the_middle_with_the_map_away`; `viewer-4c1-sign.log`: left 168.75, centre 368.75 of 800 |
 | The screen is 800 × 600 when `Options.cs` has `set800mode 1`, the layout scaled by 1.25: box 400 wide; fonts at their own size | `interface.md` rule 47 (**inferred** by A, fits the user's measured 365–418); **stand-in** until Q108 | Viewer log: "set800mode true: screen 800x600 (layout x 1.25), box 400 px wide" |
 | The stone picture stretched with the layout (nearest pixel) and tiled from the box's top-left | **Stand-in** (`interface.md` open question 6, Q108) | — |
+
+### 4c-2, the always-visible bottom bar — `crates/kq8-core/src/{panels,meters,gui_draw,inventory}.rs`, `crates/kq8-viewer/src/{gui_view,talk_view,door_view,load}.rs`, `crates/kq8-data/src/{items,font}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The panels and what each is: bottom left, eight slots, meters, bottom right, status icons, by their `Gplayscr.gui` blocks | `interface.md` rule 7; data | `gui.log` |
+| Panel groups: the bottom bar = bottom left, slots, bottom right and meters together; the meters alone | `interface.md` rule 8 | Unit tests in `panels.rs` |
+| Sliding in 0.2 s of real time for the whole distance; a panel already going that way is left alone; bottom panels off the bottom edge, the top bar 1/480 above its height, the map 50/640 beyond its width; sounds `intrup`/`intrdown` (top), `map`/`mapbgone` | `interface.md` rule 9 | Unit tests `space_slides…`, `hidden_places`; `gui.log`: hide at 2.501 s, fully hidden at 2.707 s |
+| Space (row 12 of `movekeys.kq`, `KeyChar12=32`) toggles the bottom bar | `interface.md` rule 10; data | `gui.log` "movekeys.kq row 12: KeyChar12=Some(32) KeyWord12=space" |
+| `handsOff 1`: a shown bottom bar is remembered and slides away, the map hidden, the spinning mask on; `handsOff 0`: back only if it was shown | `interface.md` rule 15 (the user's check 7) | Unit test `hands_off_remembers…`; `gui-4c2-bricks*.log` |
+| Conversations put the bar away and bring it back, not during handsOff (built, nothing calls it yet: conversations are not studied) | `interface.md` rule 16 | Unit test `conversations_put_the_bar_away…` |
+| `setLowerGui`, `setUpperGui`, `setMapGui` 0\|1, `getGuiStatus` | `interface.md` rule 15 | Unit test `connor_stats_events_are_counted_and_panel_commands_handed_over` |
+| The screen opens with the bottom bar shown, the top bar, map and popup hidden | `interface.md` rule 19; the user's check 3 in the original | `gui.log` "the screen opens" |
+| Bars: width × percent / 100 cut to whole pixels, at least 1 when not 0, percent kept in 0–100; health % = health × 100 / (10 × level), ≥ 1 if health isn't 0; experience % = experience × 100 / threshold, sent only when it changed; all values after every stats event | `interface.md` rules 20–24 | Unit tests in `meters.rs`; bricks run: "health 100 % (bar 107 of 107 px), experience 200 % (bar 108 of 108 px), level 2" |
+| A health % sent while the meters are hidden pops them up alone for 1.5 s (real time); bringing the bar back clears the timer; a new % while popped renews it | `interface.md` rule 25 (the renewal: "inferred" by A) | Unit test `the_meters_pop_up_alone…`; `gui-4c2-bricks-bar-away.log`: shown at 1.302 s, hidden at 2.807 s |
+| The three numbers are Connor's stats 4, 2, 3; a number that changed flashes `fx.pba` once over its slot | `interface.md` rules 27, 31, 33, 36 | Bricks run: flashes armour, hand, ranged |
+| Slot pictures: the worn item's `GUIBitmap` (via the tag file), else the layout's empty one; the armour picture by rule 35 | `interface.md` rules 34–35 | Unit test `the_slots_show_what_he_wears`; `gui.log` "files [2armr0.pbm, 2sord0.pbm, 2rng0.pbm]" |
+| With `GodArmor` its picture wins, then a full suit; `NoArmor` counts as no body armour beside a suit | **Stand-in** (not traced; `inventory.md` "Edge cases") | Same unit test |
+| Connor's start inventory from `[ConnerInventory]` (`inventory=` of his section, `numItems`, `ItemName<k>` → `itemType`, `quantity`, `userId`), named after their sections (no `NoName` number used) | `inventory.md` rule 4; data | `items.log`: "Connor's start inventory: Mask1a: INVITEM_Piece1A …" (5 items) |
+| `Invinfo.itl` fields 3–7 (stats), 8 (`Comb`), 10 (`GUIBitmap`), 11 (message), 12 (mode), 13 (`Dur`), 17 (use sound), 19 (cursor) | `inventory.md` rule 1; the file's own `;itemX=` header | Unit test `reads_the_fields_by_position` |
+| `.pba` files read with the bitmap-array reader of 4b-1 | `kq8pbma.txt` (as 4b-1) | `fx.pba` 17 frames, `mskicn.pba` 16 |
+| Children's rectangles relative to their dialog; a text with right < left anchored at (left, top); justification bits | `interface.md` rules 5–6 | Unit test `numbers_anchored_at_a_point_or_aligned_in_their_box` |
+| A dialog's children drawn last first (the first listed on top) | **Our reading of the data**: every panel lists its numbers before its pictures | — |
+| Index 0 see-through only for pictures whose flags have bit 1 (only `stontran.pbm` among the panels') | `kq8pbmp.txt` ("transparent" bit); data: the flags read 8 or 9 | — |
+| The layout's own placeholder texts ("0", "3Dfx") not drawn; the red alternative numbers and the level-up flame not drawn | `interface.md` rules 26, 32 (M5 / not traced) | — |
+| A click on a shown panel is not a world click | **Our choice** (the bars cover the world; how the original passes clicks was not described) | `doors.log` "mouse click on the panel …" |
+| Pictures × 1.25 (nearest pixel), tiled when smaller than their box; fonts at their own size; animations 15 frames per second | **Stand-ins** (Q108) | — |
+| The caption box's bottom follows the highest of bottom left, slots and meters as they slide | `interface.md` rule 51 | Sign run: "caption box at left 168.75 top 486.00 bottom 520.00" |

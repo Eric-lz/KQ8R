@@ -185,6 +185,12 @@ impl Font {
     }
 }
 
+/// A whole `.pba` file (a bitmap array: cursors, button pictures, the
+/// panels' little animations; M4 4c-2): its bitmaps in order.
+pub fn bitmap_array(bytes: &[u8]) -> Result<Vec<Bitmap>, String> {
+    read_bitmap_array(bytes, 0).map(|(bitmaps, ..)| bitmaps)
+}
+
 /// Reads a `PBMA` bitmap array at `at`: its `head` (chunk count, version,
 /// bitmap count), any other chunks before the first bitmap (`rmap`,
 /// `user`), then one `PBMP` bitmap per entry, each running until the

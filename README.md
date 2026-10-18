@@ -20,7 +20,7 @@ see [CREDITS.md](CREDITS.md).
 viewer, walk Connor around, open doors and chests and pick up
 items. The goal is the whole game; see the roadmap in
 [docs/DESIGN.md](docs/DESIGN.md#roadmap). We are finishing milestone **M3,
-"Daventry comes alive"**, and have started **M4** (Connor's remarks and speech).
+"Daventry comes alive"**, and are in **M4** (Connor's remarks and speech done; the on-screen interface under way).
 
 ### What works
 
@@ -119,6 +119,7 @@ The first build takes several minutes.
 | Arrow keys | Walk, step back, turn |
 | End | Running on or off |
 | Insert | Jump |
+| Space | Put the bottom bar away or bring it back |
 | Left mouse | Use the door or chest, or pick up the item, under the mouse |
 | Right mouse + move | Swing (left/right) and zoom (up/down) the camera |
 | Shift + right mouse | Tilt the camera |

@@ -358,6 +358,21 @@ doesn't take it gives "This will not work."
   during it ignored), `smlchst3` ("'Tis empty."), a tombstone cut short
   by a turn key, a tombstone clicked from too far.
 
+## The on-screen interface (milestone M4, step 4c)
+
+- **The bottom bar (4c-2):** the original's panels from `Gplayscr.gui`
+  in the world's pictures and fonts: armour, hand-weapon and ranged
+  slots with their numbers (0, 10, 0 at the start), the eight
+  health/potion slots (empty for now), the red health and green
+  experience bars with the level between them, and the rope, rocks and
+  map icon on the right (empty). **Space** slides the whole bar away or
+  back in a fifth of a second. A change of health or experience while
+  the bar is away pops the meters up alone for 1.5 s. A changed number
+  flashes its slot. Cutscenes (`handsOff`) slide the bar away and show
+  the spinning mask; afterwards it comes back only if it was shown.
+  The caption sits on top of the bar. Clicks on the bar don't reach the
+  world. Logged in `gui.log`. Not seen by eye yet.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,
@@ -447,6 +462,8 @@ repeated and checked in the logs. They do not change the game's rules.
   can see the object, as in the game.
 - `--item TYPE`: put an item of that type in Connor's hand, for example
   the key that opens the castle keep's doors.
+- `--key NAME,N`: press a panel key before update N + 1 (`space`: put the
+  bottom bar away or bring it back). Can be given more than once.
 
 An "update" is one step of the game's rules, the same step each time you
 run the test. Unknown options and bad values stop the viewer with a
@@ -477,8 +494,7 @@ message that shows the usage.
   gravity off until the flip ends (Q84 a, 3l-5; unit test only).
 - **Camera:** it doesn't swing back behind Connor by itself; no first
   person view (F2) or camera shake; the camera's roll is not drawn.
-- **Cutscenes:** no GUI to hide and no spinning-mask icon during
-  `handsOff`. The windmill tumble (`miltrap1.cs`) plays the
+- **Cutscenes:** the windmill tumble (`miltrap1.cs`) plays the
   no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18; checked by eye by the user;
   weapons come with M5).
 - **Water:** no damage yet (poison, lava, swamp).

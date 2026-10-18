@@ -237,6 +237,19 @@ impl Items {
         Ok(self.objects.last().expect("just pushed"))
     }
 
+    /// An item object with a name of its own (`Connor.kq`
+    /// `[ConnerInventory]` sections, M4 4c-2): the `NoName` counter is not
+    /// used. `Err` if there is no such type or the name is taken.
+    pub fn add_named(&mut self, name: &str, kind: &str, quantity: i64, third: i64, place: Place) -> Result<&ItemObject, String> {
+        let t = self.types.find(kind).ok_or_else(|| format!("no item type '{kind}' (looked for {})", kq8_data::items::full_name(kind)))?;
+        let kind = t.name.clone();
+        if self.index(name).is_some() {
+            return Err(format!("an item named '{name}' exists already"));
+        }
+        self.objects.push(ItemObject { name: name.to_string(), kind, quantity, third, place, hidden: false, script: None, do_not_point_at: true });
+        Ok(self.objects.last().expect("just pushed"))
+    }
+
     /// The first item object of type `kind` that `who` carries, or (for
     /// `world`, any capitals) that lies in the world (rule 10).
     pub fn find(&self, who: &str, kind: &str) -> Option<&ItemObject> {

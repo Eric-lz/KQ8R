@@ -15,8 +15,11 @@
 //!   if it doesn't start with exactly `INVITEM_` (capitals counting), that
 //!   is put in front; then it is compared with `IDName` ignoring capitals.
 //!
-//! Only what M3 needs is kept (name, id, category, sounds, shape, radius,
-//! translucency); the rest (stats, menus) is M4/M5.
+//! M3 kept the name, id, category, sounds, shape, radius and translucency;
+//! M4 4c-2 adds what the inventory and its panels use
+//! (`docs/behaviour/inventory.md` rule 1): the five stat changes, `Comb`,
+//! the slot picture, the description, the weapon mode, `Dur`, the use
+//! sound and the cursor.
 
 use crate::kq_text;
 
@@ -27,10 +30,18 @@ pub const PREFIX: &str = "INVITEM_";
 const CLASS: usize = 0;
 const ID_NAME: usize = 1;
 const ID: usize = 2;
+const STATS: usize = 3;
+const COMBINE: usize = 8;
 const CATEGORY: usize = 9;
+const PICTURE: usize = 10;
+const MESSAGE: usize = 11;
+const MODE: usize = 12;
+const DURATION: usize = 13;
 const LAND_SOUND: usize = 15;
 const PICKUP_SOUND: usize = 16;
+const USE_SOUND: usize = 17;
 const SHAPE: usize = 18;
+const CURSOR: usize = 19;
 const RADIUS: usize = 20;
 const TRANSLUCENCY: usize = 21;
 
@@ -55,6 +66,23 @@ pub struct ItemType {
     pub radius: Option<f32>,
     /// 256 = solid (as objects' `translucency`).
     pub translucency: Option<f32>,
+    /// `Hlth SDam LDam Prot Exp`: what it adds to the stats when applied
+    /// (`inventory.md` rule 1); words that aren't numbers count 0.
+    pub stats: [i64; 5],
+    /// `Comb` 1: several can share one stack.
+    pub combine: bool,
+    /// `GUIBitmap`: the slot picture's tag name, e.g. `IDBMP_2SORD1`.
+    pub picture: String,
+    /// `Message`: the description line's four numbers as written.
+    pub message: String,
+    /// `Mode`: `SwordMode`, `BowMode`, `NoModeChange`.
+    pub mode: String,
+    /// `Dur`: seconds the effect lasts; 0 = while carried; −1 = once.
+    pub duration: f32,
+    /// `useSnd`; `None` for `none`.
+    pub use_sound: Option<String>,
+    /// `cursor`: the pointer's tag name while held; `None` for `none`.
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -121,6 +149,14 @@ impl ItemTypes {
                 shape: field(SHAPE).to_string(),
                 radius: field(RADIUS).parse().ok(),
                 translucency: field(TRANSLUCENCY).parse().ok(),
+                stats: std::array::from_fn(|k| field(STATS + k).parse::<f64>().map_or(0, |v| v as i64)),
+                combine: field(COMBINE).parse::<f64>().is_ok_and(|v| v != 0.0),
+                picture: field(PICTURE).to_string(),
+                message: field(MESSAGE).to_string(),
+                mode: field(MODE).to_string(),
+                duration: field(DURATION).parse().unwrap_or(0.0),
+                use_sound: sound(field(USE_SOUND)),
+                cursor: sound(field(CURSOR)),
             });
         }
         (ItemTypes { types, declared }, problems)
@@ -154,10 +190,13 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         assert_eq!(c.category, "HealthItem");
         assert_eq!((c.land_sound.as_deref(), c.pickup_sound.as_deref()), (Some("potnland.aud"), Some("energy.aud")));
         assert_eq!((c.shape.as_str(), c.radius, c.translucency), ("crystl.KQS", Some(250.0), Some(200.0)));
+        assert_eq!((c.stats, c.combine, c.picture.as_str(), c.message.as_str()), ([50, 0, 0, 0, 0], true, "IDBMP_X", "13 0 0 1"));
+        assert_eq!((c.mode.as_str(), c.duration, c.use_sound.as_deref(), c.cursor.as_deref()), ("NoModeChange", -1.0, Some("healing.aud"), None));
         // `none` is no sound; a line without the last (extra data) field.
         let s = &list.types[1];
         assert_eq!((s.land_sound.as_deref(), s.pickup_sound.as_deref()), (None, Some("coins.aud")));
         assert_eq!((s.shape.as_str(), s.translucency), ("pouch.kqs", Some(256.0)));
+        assert_eq!(s.cursor.as_deref(), Some("IDBMA_GOLDCURS"));
     }
 
     #[test]

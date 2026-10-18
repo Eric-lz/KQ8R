@@ -329,18 +329,25 @@ pub fn setup_caption_picture(mut commands: Commands, style: Option<Res<CaptionSt
         Node { position_type: PositionType::Absolute, top: Val::Percent(100.0), left: Val::Px(0.0), width: Val::Percent(0.0), height: Val::Percent(0.0), ..default() },
         ImageNode::default(),
         Visibility::Hidden,
+        // Above the panels (4c-2).
+        ZIndex(1),
         CaptionPicture,
     ));
 }
 
 /// 4b-3: draws the caption picture when the caption changed; each change
-/// in `viewer.log` with its lines and their widths.
+/// in `viewer.log` with its rows and their widths. 4c-2: placed every
+/// frame on the highest bottom panel as it slides (`interface.md` rule 51).
+#[allow(clippy::too_many_arguments)]
 pub fn caption_picture_draw(
     speech: Res<Speech>,
     style: Option<Res<CaptionStyle>>,
+    place: Res<crate::gui_view::CaptionPlace>,
     mut node: Query<(&mut Node, &mut ImageNode, &mut Visibility), With<CaptionPicture>>,
     mut images: ResMut<Assets<Image>>,
     mut last: Local<Option<String>>,
+    mut rows_shown: Local<usize>,
+    mut last_place: Local<Option<(i32, i32)>>,
     shared: Res<crate::Shared>,
 ) {
     use bevy::asset::RenderAssetUsages;
@@ -348,50 +355,64 @@ pub fn caption_picture_draw(
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
     use kq8_core::caption;
     let Some(style) = style else { return };
+    let Ok((mut n, mut image, mut vis)) = node.single_mut() else { return };
+    let b = style.caption_box;
+    let [sw, sh] = style.screen.map(|v| v as f32);
+    // Rule 51: on the highest bottom panel (the screen's bottom without
+    // panels), centred between the map's right edge (no map yet: away)
+    // and the screen's right edge.
+    let bottom = place.bottom.unwrap_or(sh);
+    let map_right = place.map_right.unwrap_or_else(|| caption::map_away_right(sw));
     // The speech changes every frame (the mouths): only a new caption
     // text makes a new picture.
     let shown = speech.caption.as_ref().map(|(_, t)| t.clone());
-    if !speech.is_changed() || *last == shown {
-        return;
-    }
-    *last = shown;
-    let Ok((mut n, mut image, mut vis)) = node.single_mut() else { return };
-    let Some(text) = speech.caption.as_ref().map(|(_, t)| t.as_str()) else {
-        if *vis != Visibility::Hidden {
-            *vis = Visibility::Hidden;
-            shared.log.lock().unwrap().detail("caption picture hidden");
+    if *last != shown {
+        *last = shown;
+        *last_place = None;
+        match speech.caption.as_ref().map(|(_, t)| t.as_str()) {
+            None => {
+                *rows_shown = 0;
+                if *vis != Visibility::Hidden {
+                    *vis = Visibility::Hidden;
+                    shared.log.lock().unwrap().detail("caption picture hidden");
+                }
+            }
+            Some(text) => {
+                let rows = caption::wrap(&style.font, text, b.width as f32);
+                *rows_shown = rows.len();
+                if rows.is_empty() {
+                    *vis = Visibility::Hidden;
+                    shared.log.lock().unwrap().detail(format!("caption {text:?}: no rows; hidden"));
+                } else {
+                    let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
+                    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &rows, b);
+                    let mut picture = Image::new(Extent3d { width: w, height: h, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
+                    picture.sampler = ImageSampler::nearest();
+                    image.image = images.add(picture);
+                    *vis = Visibility::Inherited;
+                    let widths: Vec<f32> = rows.iter().map(|l| caption::text_width(&style.font, l)).collect();
+                    shared.log.lock().unwrap().detail(format!("caption picture shown: {} row(s) {rows:?}, widths {widths:?} px; box {w}x{h} (the stone covers it all; interface.md rules 47-50)", rows.len()));
+                }
+            }
         }
-        return;
-    };
-    let b = style.caption_box;
-    let rows = caption::wrap(&style.font, text, b.width as f32);
-    if rows.is_empty() {
-        *vis = Visibility::Hidden;
-        shared.log.lock().unwrap().detail(format!("caption {text:?}: no rows; hidden"));
+    }
+    if *rows_shown == 0 {
         return;
     }
-    let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
-    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &rows, b);
-    let mut picture = Image::new(Extent3d { width: w, height: h, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
-    picture.sampler = ImageSampler::nearest();
-    image.image = images.add(picture);
-    // Rule 51: on the highest bottom panel (none yet: the screen's
-    // bottom), centred between the map's right edge (no map yet: away)
-    // and the screen's right edge.
-    let [sw, sh] = style.screen.map(|v| v as f32);
-    let (bottom, map_right) = (sh, caption::map_away_right(sw));
-    let (left, top) = caption::place(sw, &b, rows.len(), bottom, map_right);
+    let (left, top) = caption::place(sw, &b, *rows_shown, bottom, map_right);
+    let h = b.height(*rows_shown) as f32;
     n.left = Val::Percent(100.0 * left / sw);
     n.top = Val::Percent(100.0 * top / sh);
-    n.width = Val::Percent(100.0 * w as f32 / sw);
-    n.height = Val::Percent(100.0 * h as f32 / sh);
-    *vis = Visibility::Inherited;
-    let widths: Vec<f32> = rows.iter().map(|l| caption::text_width(&style.font, l)).collect();
-    shared.log.lock().unwrap().detail(format!(
-        "caption picture shown: {} row(s) {rows:?}, widths {widths:?} px; box {w}x{h} (the stone covers it all), left {left:.2} top {top:.2} bottom {bottom:.2} of {sw}x{sh}; centre {:.2} (map away, right edge {map_right:.2}; interface.md rules 47-51)",
-        rows.len(),
-        left + w as f32 / 2.0
-    ));
+    n.width = Val::Percent(100.0 * b.width as f32 / sw);
+    n.height = Val::Percent(100.0 * h / sh);
+    let at = (left.round() as i32, top.round() as i32);
+    if *last_place != Some(at) {
+        *last_place = Some(at);
+        shared.log.lock().unwrap().detail(format!(
+            "caption box at left {left:.2} top {top:.2} bottom {bottom:.2} of {sw}x{sh}; centre {:.2} (map's right edge {map_right:.2}; interface.md rule 51)",
+            left + b.width as f32 / 2.0
+        ));
+    }
 }
 
 /// Shows or hides the caption when it changed; each change in
