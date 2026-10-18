@@ -1636,7 +1636,7 @@ catchers, ground animators).
       previous aim point is reset to where he stands. Logs: every update
       with its causes; ticks without an update are simply missing from
       the table.
-    - **3n-2, the refined height rule** (`camera.md` "Height above the
+    - **3n-2, the refined height rule** (**done** 2026-10-18; `camera.md` "Height above the
       ground" rule 2). The order of an update becomes the note's: leash
       (max) or fixed distance, then the height, then the push out to the
       minimum. Height: (1) lift at once to ground + 1,400 if under it by

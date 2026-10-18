@@ -1493,3 +1493,17 @@ This replaces "the camera updates every tick" (Q53 d).
 | The update for a script's `move Connor` comes after the script's `move KQCamera` | Item 1, "When the message arrives" (Q99 a); in our build the camera's system runs after the traps' and cues' scripts | `camera-3n1-wheel.log` ticks 17–18 |
 | "Connor is moving" and the previous aim point count game updates without a message; after 3 the previous aim point is reset to where he stands | "Connor is moving" | Unit test `still_after_3_updates_without_a_message_and_the_aim_record_reset` |
 | One update on the first tick | **Stand-in** (Q27 d: Daventry's start-up script says `KQCamera::follow none`; how the original starts following is not traced) | `camera-3n1-walk.log` tick 1 |
+
+### 3n-2, the refined height rule — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces "snap within 100, else 0.5 of the gap every update" (the 0.5 was hand-tuned).
+
+| What | Source | Check |
+| --- | --- | --- |
+| Order of an update: leash (max) or fixed distance, height, push out to the minimum | `camera.md` "Each camera update" steps 3–5 | Unit test `pulled_in_on_a_leash_and_pushed_out` |
+| Lift at once to ground + 1,400 if under it by at most the maximum; deeper: where the line from the update's start to the new spot meets the floor grid, wanted height taken again there | "Height above the ground" rule 2.1 | Unit tests `height_lifted_at_once_…`, `height_eases_from_the_start_…` |
+| Deeper and the line meets no ground: lifted to ground + 1,400 | **Stand-in** (the note doesn't cover a line that starts under the ground) | — |
+| Within 100 of the wanted height: snapped | Rule 2.2 | Unit test `height_lifted_at_once_…` |
+| Moved (aim point > 20 since the previous record): start height + 10% × (wanted − height after 1–2); not moved: kept; mouse swing and lifted earlier: snapped | Rule 2.3 | Unit test `height_eases_10_percent_…`; `camera-3n2-wheel.log` tick 18: 9,750 → 9,627.3 (sum 1,109.6, wanted 8,523.1) |
+| "Moved" by \|Δx\| + \|Δy\| + \|Δz\|, not the signed sum | "Do not reproduce" | Unit test `height_eases_10_percent_…` (+300 / −300) |
+| 10% per update as 1 − 0.9^(15 × seconds) | "Do not reproduce" (per-update rates) | Same unit test |

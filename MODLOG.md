@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3n-2: the refined camera height rule
+
+**Changed:** `kq8-core/src/camera.rs`: `height_rule` (lift at once to ground + 1,400, or along the line when deeper; snap within 100; otherwise ease 10% from the height at the start of the update only if the aim point moved more than 20 by |Δx| + |Δy| + |Δz|, else kept; snapped with the mouse swing if lifted earlier), `height_share` (1 − 0.9^(15 × seconds)), the "lifted" memory; an update's order is now leash, height, then the push out to the minimum. `HEIGHT_RATE` (your hand-set 0.5) is replaced by `HEIGHT_EASE` 0.1. 3 new unit tests replace the old height test. Viewer `camera.log`: a last column with the height step (lifted / snapped / eased / kept), the aim's movement sum, the wanted height, the height at the start and before the rule.
+**Why:** A's answers to Q97/Q99 c (`camera.md` "Height above the ground" rule 2).
+**Tested how:** `cargo test --workspace` (403 pass), `cargo clippy --workspace --all-targets` clean. Viewer: the mill wheel walked into (`cargo play --world Daventry --at 186300,226000,3.1416 --hold 1,0,0 --frames 1500 --sound off`, `camera-3n2-wheel.log`), a 60-update walk (`cargo play --world Daventry --at 277800,198800,3.1416 --hold 1,0,0,60 --frames 2500 --sound off`, `camera-3n2-walk.log`).
+**Result:** Mill wheel, the first shot (tick 18): "eased 1109.6 8523.1 9750.0": **(185500.0, 226520.0, 9627.3)**, as the note works out (~9,627); then no update until the flight; the second shot at exactly (185000, 237850, 10850). Walk: an update every tick while he walks; the camera trails at 5,000 (range 1,500–5,000) from tick 46; on flat ground the height only snaps; last update at tick 72 (his last move), "still" at 75, nothing after.
+**Still broken / not tested:** Not checked by eye; the 10% easing may feel slower than your 0.5 on hills (one constant, `HEIGHT_EASE`). The easing on a slope was not seen in a run (the walks were on flat ground). STAND-IN: a deep lift whose line meets no ground goes to ground + 1,400.
+**Next:** 3n-3, `move KQCamera` while following (the heading kept).
+
 ## 2026-10-18 M3 step 3n-1: the camera updates only when it should
 
 **Changed:** `kq8-core/src/camera.rs`: `connor_moved` (position > 0.1 on an axis, or a facing change), `Camera::tick` (once per game update: 3 updates without a "moved" message make Connor still and reset the previous aim point), `Camera::not_moved` (for `follow`), `update_with` takes whether Connor moved; the heading no longer goes into the camera; 2 new unit tests. Viewer `game_camera.rs`: `camera_step` runs every tick but does a camera update only for a cause (Connor moved, `follow`, the "turn back" switch, the player's camera controls; flights as before); the "turn back" switch (on/off logged); every update's causes in `camera.log`'s last column, ticks without an update have no line. `door_view.rs`: a script's `move Connor` is labelled for the camera's log. Plan in `docs/DESIGN.md` (3n).

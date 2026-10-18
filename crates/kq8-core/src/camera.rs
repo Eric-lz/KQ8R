@@ -23,8 +23,143 @@ pub const AIM_HEIGHT: f32 = 800.0;  // modified manually to what feels more natu
 pub const MIN_HEIGHT: f32 = 1400.0;
 /// Within this of its wanted height the camera jumps to it...
 pub const HEIGHT_SNAP: f32 = 100.0;
-/// ...otherwise it closes this share of the gap per update.
-pub const HEIGHT_RATE: f32 = 0.5;   // modified manually to what feels more natural, but could be wrong
+/// ...otherwise, if the aim point moved more than this (|Δx| + |Δy| +
+/// |Δz|) since the camera's previous record of it...
+pub const HEIGHT_MOVED: f32 = 20.0;
+/// ...it eases this share of the gap per update at 15 updates per second
+/// (`height_share`; replaces the hand-tuned 0.5 of before M3 3n-2).
+pub const HEIGHT_EASE: f32 = 0.1;
+/// One game update (15 per second).
+pub const UPDATE_SECONDS: f32 = 1.0 / 15.0;
+
+/// The share of the height gap eased in `seconds` ("Do not reproduce":
+/// per second, not per update): 1 − 0.9^(15 × seconds), 10% for one
+/// update at 15 per second.
+pub fn height_share(seconds: f32) -> f32 {
+    1.0 - (1.0 - HEIGHT_EASE).powf(15.0 * seconds)
+}
+
+/// Step 1 of the height rule: how the camera was lifted off the ground.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Lift {
+    /// Not under the ground + 1,400.
+    No,
+    /// Put straight at ground + 1,400 (under it by at most the maximum).
+    ToGround,
+    /// Deeper: put where the line from the update's start to the new spot
+    /// meets the ground.
+    AlongLine,
+    /// Deeper, and that line meets no ground (it starts under it too):
+    /// STAND-IN, put at ground + 1,400.
+    AlongLineMissed,
+}
+
+/// Steps 2–3 of the height rule.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HeightThen {
+    /// Within 100 of the wanted height: put on it.
+    Snapped,
+    /// The aim point moved: the start height + the share of the gap.
+    Eased,
+    /// Not moved: the height stays as step 1 left it.
+    Kept,
+    /// Not moved, but the mouse swings and it was lifted earlier: snapped.
+    SnappedMouse,
+}
+
+/// What the height rule did in one update, for the log.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeightStep {
+    pub lift: Lift,
+    pub then: HeightThen,
+    /// The aim point's movement since the previous record, |Δx| + |Δy| +
+    /// |Δz| (moved if more than 20).
+    pub sum: f32,
+    pub wanted: f32,
+    /// The height at the start of the update and before the height rule.
+    pub start: f32,
+    pub before: f32,
+}
+
+impl HeightStep {
+    /// One word or two for the log, e.g. `lifted+kept`.
+    pub fn words(&self) -> String {
+        let lift = match self.lift {
+            Lift::No => "",
+            Lift::ToGround => "lifted+",
+            Lift::AlongLine => "lifted_along_line+",
+            Lift::AlongLineMissed => "lifted_along_line_missed(stand-in)+",
+        };
+        let then = match self.then {
+            HeightThen::Snapped => "snapped",
+            HeightThen::Eased => "eased",
+            HeightThen::Kept => "kept",
+            HeightThen::SnappedMouse => "snapped(mouse)",
+        };
+        format!("{lift}{then}")
+    }
+}
+
+/// camera.md "Height above the ground" rule 2, after the leash: the camera
+/// went from `start` (where the update began) to `now`; `floor` is the
+/// floor grid's height; the wanted height is the higher of the ground
+/// under the camera + 1,400 and `base_z` + 1,400.
+/// 1. Under the ground + 1,400 by at most `max`: put there at once; deeper:
+///    where the line from `start` to `now` meets the ground, the wanted
+///    height taken again there.
+/// 2. Within 100 of the wanted height: put on it.
+/// 3. Otherwise, if `sum` (the aim point's movement) is more than 20: the
+///    height at the start of the update + `share` × (wanted − the height
+///    after 1–2); if not, kept (snapped only if `mouse_swing` and
+///    `lifted_before`).
+#[allow(clippy::too_many_arguments)]
+pub fn height_rule(
+    start: [f32; 3],
+    now: [f32; 3],
+    base_z: f32,
+    max: f32,
+    sum: f32,
+    share: f32,
+    mouse_swing: bool,
+    lifted_before: bool,
+    floor: &dyn Fn(f32, f32) -> Option<f32>,
+) -> ([f32; 3], HeightStep) {
+    let mut p = now;
+    let mut lift = Lift::No;
+    if let Some(g) = floor(p[0], p[1]) {
+        let gap = g + MIN_HEIGHT - p[2];
+        if gap > 0.0 && gap <= max {
+            p[2] = g + MIN_HEIGHT;
+            lift = Lift::ToGround;
+        } else if gap > max {
+            match ground_line_hit(floor, start, now) {
+                Some(hit) => {
+                    p = hit;
+                    lift = Lift::AlongLine;
+                }
+                None => {
+                    p[2] = g + MIN_HEIGHT;
+                    lift = Lift::AlongLineMissed;
+                }
+            }
+        }
+    }
+    let wanted = floor(p[0], p[1]).map_or(base_z, |g| g.max(base_z)) + MIN_HEIGHT;
+    let before = now[2];
+    let then = if (wanted - p[2]).abs() <= HEIGHT_SNAP {
+        p[2] = wanted;
+        HeightThen::Snapped
+    } else if sum > HEIGHT_MOVED {
+        p[2] = start[2] + share * (wanted - p[2]);
+        HeightThen::Eased
+    } else if mouse_swing && lifted_before {
+        p[2] = wanted;
+        HeightThen::SnappedMouse
+    } else {
+        HeightThen::Kept
+    };
+    (p, HeightStep { lift, then, sum, wanted, start: start[2], before })
+}
 /// Swing per mouse unit (radians).
 pub const SWING_PER_UNIT: f32 = 3.0 * std::f32::consts::FRAC_PI_4;
 /// Zoom per mouse unit (normal mode).
@@ -178,6 +313,9 @@ pub struct Camera {
     /// updates and by `not_moved`).
     prev_offset: Option<[f32; 3]>,
     prev_aim: Option<[f32; 3]>,
+    /// The height rule lifted the camera off the ground and has not eased
+    /// since (camera.md "Height above the ground" rule 2).
+    lifted: bool,
     /// "Connor is moving" (see `tick`), and game updates without a "Connor
     /// moved" message.
     moving: bool,
@@ -199,6 +337,8 @@ pub struct Report {
     pub swing: Option<(f32, f32)>,
     /// Pulled in to this distance from the aim point.
     pub pulled_in: Option<f32>,
+    /// What the height rule did.
+    pub height: Option<HeightStep>,
 }
 
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -290,6 +430,7 @@ impl Camera {
             swing: None,
             prev_offset: None,
             prev_aim: None,
+            lifted: false,
             moving: false,
             still: 0,
         }
@@ -354,6 +495,7 @@ impl Camera {
     /// among this update's causes.
     pub fn update_with(&mut self, followed: Followed, moved: bool, input: &Input, ground: &dyn GroundLookup, view: Option<&dyn ViewBlockers>) -> Report {
         let base = followed.base;
+        let start = self.position;
         let mut report = Report::default();
         // "Connor is moving": from the update after his first "moved"
         // message until 3 updates have passed without one (`tick`).
@@ -420,21 +562,34 @@ impl Camera {
             }
         }
 
-        // Distance.
+        // Step 3: the leash (maximum), or the fixed distance.
         let d = length(sub(self.position, aim));
         match self.mode {
             Mode::Normal if d > max => self.position = at_distance(aim, self.position, max - 1.0),
-            Mode::Normal if d < min => self.position = at_distance(aim, self.position, min + 1.0),
             Mode::Normal => {}
             Mode::Fixed { distance } => self.position = at_distance(aim, self.position, distance),
         }
 
-        // Height: the higher of terrain under the camera + 1,400 and the
-        // base + 1,400; jump within 100, else 10% of the gap.
-        report.terrain_below = ground.ground(self.position[0], self.position[1]).map(|g| g.0);
-        let wanted = report.terrain_below.map_or(base[2], |t| t.max(base[2])) + MIN_HEIGHT;
-        let gap = wanted - self.position[2];
-        self.position[2] = if gap.abs() <= HEIGHT_SNAP { wanted } else { self.position[2] + gap * HEIGHT_RATE };
+        // Step 4: the height (camera.md "Height above the ground" rule 2).
+        // "Moved" by the sum of sizes, not the original's signed sum ("Do
+        // not reproduce").
+        let sum = self.prev_aim.map_or(0.0, |p| (0..3).map(|k| (aim[k] - p[k]).abs()).sum());
+        let floor = |x: f32, y: f32| ground.ground(x, y).map(|g| g.0);
+        let (p, h) = height_rule(start, self.position, base[2], max, sum, height_share(UPDATE_SECONDS), mx != 0.0, self.lifted, &floor);
+        self.position = p;
+        if h.lift != Lift::No {
+            self.lifted = true;
+        }
+        if h.then == HeightThen::Eased {
+            self.lifted = false;
+        }
+        report.height = Some(h);
+
+        // Step 5: pushed out to the minimum.
+        if matches!(self.mode, Mode::Normal) && length(sub(self.position, aim)) < min {
+            self.position = at_distance(aim, self.position, min + 1.0);
+        }
+        report.terrain_below = floor(self.position[0], self.position[1]);
 
         if let Some(view) = view {
             self.avoid_obstacles(aim, base, mx != 0.0 || mf != 0.0, moving_now, ground, view, &mut report);
@@ -604,18 +759,62 @@ mod tests {
     }
 
     #[test]
-    fn height_jumps_when_close_and_eases_when_far() {
-        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT - 50.0]);
-        c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        assert_eq!(c.position[2], MIN_HEIGHT);
+    fn height_lifted_at_once_snapped_within_100_and_kept_while_he_stands() {
+        // Under the ground + 1,400: lifted at once.
         let mut c = Camera::new([0.0, 3000.0, 400.0]);
-        c.update([0.0; 3], &Input::default(), &Flat(0.0));
-        let want = 400.0 + (MIN_HEIGHT - 400.0) * HEIGHT_RATE;
-        assert!((c.position[2] - want).abs() < 1e-3, "{} (want {want})", c.position[2]);
+        let r = c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert_eq!(c.position[2], MIN_HEIGHT);
+        assert_eq!(r.height.unwrap().lift, Lift::ToGround);
+        // Within 100: snapped.
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT + 90.0]);
+        let r = c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert_eq!((c.position[2], r.height.unwrap().then), (MIN_HEIGHT, HeightThen::Snapped));
         // Terrain under the camera higher than Connor's base wins.
         let mut c = Camera::new([0.0, 1500.0, 4000.0 + MIN_HEIGHT + 50.0]);
         c.update([0.0; 3], &Input::default(), &Flat(4000.0));
         assert_eq!(c.position[2], 4000.0 + MIN_HEIGHT);
+        // Far above it and Connor standing still: kept, however far.
+        let mut c = Camera::new([0.0, 3000.0, 3000.0]);
+        for _ in 0..5 {
+            let r = c.update([0.0; 3], &Input::default(), &Flat(0.0));
+            assert_eq!(r.height.unwrap().then, HeightThen::Kept);
+        }
+        assert_eq!(c.position[2], 3000.0);
+    }
+
+    #[test]
+    fn height_eases_10_percent_only_when_the_aim_moved_more_than_20() {
+        let mut c = Camera::new([0.0, 3000.0, 3000.0]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        // 15: not moved.
+        let r = c.update([15.0, 0.0, 0.0], &Input::default(), &Flat(0.0));
+        assert_eq!((r.height.unwrap().then, c.position[2]), (HeightThen::Kept, 3000.0));
+        // 75: eased 10% of the gap.
+        let r = c.update([90.0, 0.0, 0.0], &Input::default(), &Flat(0.0));
+        let h = r.height.unwrap();
+        assert_eq!((h.then, h.sum), (HeightThen::Eased, 75.0));
+        assert!((c.position[2] - (3000.0 - 0.1 * (3000.0 - MIN_HEIGHT))).abs() < 0.01, "{}", c.position[2]);
+        // +300 in x and −300 in y: the original's signed sum says 0; the
+        // sum of sizes says moved ("Do not reproduce").
+        let r = c.update([390.0, -300.0, 0.0], &Input::default(), &Flat(0.0));
+        assert_eq!(r.height.unwrap().then, HeightThen::Eased);
+        assert!((height_share(UPDATE_SECONDS) - 0.1).abs() < 1e-6);
+        assert!((height_share(1.0) - (1.0 - 0.9f32.powi(15))).abs() < 1e-5);
+    }
+
+    #[test]
+    fn height_eases_from_the_start_of_the_update_and_lifts_along_the_line_when_deep() {
+        let flat = |_: f32, _: f32| Some(0.0);
+        // The leash lowered it to 2,500 this update: eased from 3,000.
+        let (p, h) = height_rule([0.0, 0.0, 3000.0], [0.0, 10.0, 2500.0], 0.0, 5000.0, 75.0, 0.1, false, false, &flat);
+        assert_eq!(h.then, HeightThen::Eased);
+        assert!((p[2] - (3000.0 + 0.1 * (MIN_HEIGHT - 2500.0))).abs() < 0.01, "{p:?}");
+        // A cliff 10,000 high from x = 500: the new spot is 10,000 under
+        // ground + 1,400, more than the maximum: put where the line meets it.
+        let cliff = |x: f32, _: f32| Some(if x < 500.0 { 0.0 } else { 10_000.0 });
+        let (p, h) = height_rule([0.0, 0.0, MIN_HEIGHT], [1000.0, 0.0, MIN_HEIGHT], 0.0, 5000.0, 0.0, 0.1, false, false, &cliff);
+        assert_eq!(h.lift, Lift::AlongLine);
+        assert!((p[0] - 500.0).abs() < 0.1 && p[2] == MIN_HEIGHT, "{p:?}");
     }
 
     #[test]

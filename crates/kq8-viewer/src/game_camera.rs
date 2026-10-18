@@ -480,7 +480,7 @@ pub fn make(
         script_moves: Vec::new(),
         turn_back: false,
     };
-    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line)");
+    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z");
     Some(g)
 }
 
@@ -629,7 +629,7 @@ pub fn camera_step(
     }
     let p = g.cam.position;
     let line = format!(
-        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {}",
+        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {}",
         g.updates,
         p[0],
         p[1],
@@ -651,7 +651,8 @@ pub fn camera_step(
         report.swing.map_or("-".to_string(), |(_, l)| format!("{l:.3}")),
         report.pulled_in.map_or("-".to_string(), |d| format!("{d:.1}")),
         if inside.is_empty() { "-".to_string() } else { inside.join(",") },
-        causes.join(",")
+        causes.join(","),
+        report.height.map_or("-".to_string(), |h| format!("{} {:.1} {:.1} {:.1} {:.1}", h.words(), h.sum, h.wanted, h.start, h.before))
     );
     g.log.detail(line);
     if !report.events.is_empty() {
