@@ -395,6 +395,8 @@ Words used here:
    Girl, Knight, Unicorn, Uglybeast, Lady of the Lake), M4/M5.
 2. Mouth shapes above 7 (rule 17).
 3. Which folders are searched for message and sound files (rule 1).
-4. Where and how the caption panel is drawn (font, place, wrapping):
-   GUI, M4.
+4. ~~Where and how the caption panel is drawn (font, place, wrapping):
+   GUI, M4.~~ **Answered 2026-10-18** in `interface.md` rules 46–52
+   (wrap at the box width, rows of 15 pixels growing upwards, centred,
+   placed above the highest bottom panel).
 5. What ends a line that has no sound file (Edge cases).

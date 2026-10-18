@@ -210,7 +210,11 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
 
 ## Open questions
 
-1. What the third number of an item (default −1) is (M4).
+1. ~~What the third number of an item (default −1) is (M4).~~
+   **Answered 2026-10-18** (`inventory.md` rules 13–15): it is `userId`,
+   the object the item is applied to (−1 = not applied). What Connor's
+   inventory does on an add (stacking, swapping, weapons and armour put
+   on): `inventory.md` rule 8.
 2. Whether Connor plays a pick-up animation (none found in this code).
 3. The exact flight of a tossed item (rule 12).
 4. What collision bit 0x200 in an item's type does.

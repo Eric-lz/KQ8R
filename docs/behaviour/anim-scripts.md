@@ -290,6 +290,9 @@ Words used here:
     Q86):
     - The **fifth number is experience** (his log line prints health,
       maximum health, experience, the next threshold and the level).
+      The second is his hand-weapon number, the third his ranged-weapon
+      number, the fourth his armour (shown on the bottom bar;
+      `interface.md` rules 27–33, confirmed 2026-10-18).
     - The "below 0 → `Die`" check comes right after the adding, before
       any cap.
     - Then health is capped at 10 × the **old** level.

@@ -293,6 +293,29 @@ whose script says `KQMonster::speak Connor Connor …`.
     `Take`/`Empty` remark, and that turn does **not** look at his state
     (it happens in any state; `doNotPointAt` still stops it).
 
+### Small points about the turn after a click (Q105; A, 2026-10-18)
+
+34. **An object deleted by its own click script** (Daventry's fish,
+    `deleteObject $1` on `ConnorAction`) **still turns Connor**, to the
+    place where it stood: the turn is started right after the script
+    returns, and the removal waits for the end of the event (rule 22)
+    [traced order]. B's stand-in is right.
+35. **When his state is looked at:** in the original a script's
+    `KQMonster::setState Connor …` **changes his state at once**, inside
+    the script (if his current state allows the change), and the click
+    looks at the state immediately after the script, **before any
+    update of Connor** [traced]. Nothing else runs in between. So a
+    landing or jump starting in Connor's next update does **not** count.
+    B's build (state applied one update later, looked at after that
+    update) differs only when something changes his state in that
+    update; to match, look at the state the script asked for (or, with
+    none, his state at the click).
+36. **`doNotPointAt` on buildings is read** like on any object
+    (buildings read the common object settings first) [traced]. No
+    Daventry building sets it; Gnome's buildings (`gnome01.kq` …
+    `gnome08.kq`, `KQInterior`) say `doNotPointAt=1` [data], so a click
+    on one with a script would not turn Connor.
+
 ## Numbers and units
 
 | What | Value | Source |

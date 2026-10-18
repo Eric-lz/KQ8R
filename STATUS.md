@@ -1,12 +1,23 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session building A's answers to Q104 and Q103 (M4 4a-7 to
-4a-9: turn keys, the turn after a click, the chest remark). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of A's study of the on-screen interface and the inventory
+(`interface.md`, `inventory.md`; Q105 answered, Q106/Q107 mostly). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-18)
+
+- **New 2026-10-18 (A): the interface and the inventory are studied**,
+  ready for B: `docs/behaviour/interface.md` (panels and their files,
+  sliding, Space/Tab/1–8/Escape/F1, the top bar following the mouse,
+  hiding for handsOff and conversations, meter formulas, Connor's stats
+  named, the caption strip's wrap and place) and
+  `docs/behaviour/inventory.md` (categories, stacking, equipment swaps,
+  picking an item, the held item after a world click, applying items,
+  the wizard's items: a held-item click delivers them, his replies need
+  conversations). Not checked in the original yet; checks listed in
+  both notes. Q105 answered in `clicking.md` rules 34–36.
 
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
   alive) is well under way**: doors, emitters, flowing water, animated
@@ -235,18 +246,19 @@ and speech, 4a).
   yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.
-- **Stand-ins of 4a-8 (Q105):** an object deleted by its own click
-  script still turns Connor; his state is looked at one update after
-  the click; buildings' `doNotPointAt` is not read. When standing, an
+- **Stand-ins of 4a-8 (Q105, answered 2026-10-18 in `clicking.md`
+  rules 34–36, not built):** an object deleted by its own click script
+  still turns Connor (right); his state is looked at one update after
+  the click (the original: at once, right after the script); buildings'
+  `doNotPointAt` is not read (the original reads it). When standing, an
   automatic turn plays `Stop` for its first update even if he was
   already turning on the spot (as rules 24–25 say). Talk, weapon,
   throwing and tile-puzzle states don't exist yet.
-- **Next step, suggested:** for A: conversations
-  (`KQConner::conversation`) and Q105. For B, while waiting: a short
-  read-only survey of which Daventry scripts use `loadKQ` with a name
-  or place while playing, and which scenery animations have sound
-  cues, to decide whether either is worth building now; then the
-  inventory screen (M4) once A has studied it. The brightness setting
+- **Next step, suggested:** for B: the always-visible panel
+  (`interface.md` rules 7–9, 20–36), then the bars and the held item
+  (`inventory.md`), and the Q105 answers. For A: conversations
+  (`KQConner::conversation`), needed for the wizard and the other
+  Daventry characters. The brightness setting
   (rule 17) changes nothing at the shipped value 50; leave it for the
   options menu.
 - Sound, not done: the item land sound (nothing is thrown),
@@ -298,11 +310,16 @@ and speech, 4a).
 
 - Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
   is still not explained (`anim-scripts.md` open question 6).
-- `talking.md` open questions 1–5 (conversations, shapes above 7,
-  folders, the caption panel, a line with no voice) are still open.
-- For A (asked 2026-10-18 by B, M4 4a-8): **Q105** (an object deleted
-  by its own click script; when Connor's state is looked at; buildings'
-  `doNotPointAt`).
+- `talking.md` open questions 1–3 and 5 (conversations, shapes above
+  7, folders, a line with no voice) are still open; 4 (the caption
+  panel) answered in `interface.md`.
+- Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
+  `interface.md`; still open: index 0 in fonts, font flag bit 6, the
+  picture attribute bits, and how the layout is scaled at 800 × 600
+  (the 400-pixel caption width is inferred).
+- `interface.md` open questions 1–6 and `inventory.md` open questions
+  1–4 (menu pause, level-up flame, rocks picture, held item on world
+  change, applied quest items).
 - For A (asked 2026-10-18 by B): **Q100** (the heading after `move
   KQCamera` while following in later updates; the deep lift; the "turn
   back" switch when one `follow` finds both), **Q101** (the update Wait
