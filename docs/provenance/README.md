@@ -1366,3 +1366,18 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | `follow Connor` while already following runs the same setup | **Our reading** (the note describes the command, not a state change) | `traps.log` (watermill cue 6) |
 | `setThirdPerson`: a paired toggle; in third person it flips the first-person key's lock (logged; we have no first person) | `camera.md` "First person" rule 7 | Unit test `set_third_person_flips_the_key_lock_and_hands_off_logs_its_frames` |
 
+### 3l-4, pushing as traced — `crates/kq8-core/src/connor_mover.rs`, `crates/kq8-viewer/src/{terrain_view,connor_view,door_view}.rs`
+
+This replaces the Q87 a–c and Q88 stand-ins of 3j-2 and 3j-3 above.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Every object touched in a sweep is told at once (the push check runs there); tested in the order they entered the world; a contact replaces the kept one when at most as far (tie: the later-tested); an accepted push is not recorded | `connor-physics.md` "Against a building" step 7 (Q88) | Unit test `every_object_touched_is_told_and_a_tie_keeps_the_later_tested`; `connor.log` (bricks) |
+| Buildings tested before the objects | **Our reading** (the note orders the objects; buildings are loaded before them) | — |
+| The load order: by where each collider's name comes in the start-up scripts' load order | **Our method** | `viewer.log`: 295 colliders, already in that order |
+| Box-shaped pushables (no `collisionShape`) are never stopped | `pushing.md` rule 4.1 (Q87 a) | Unit test `a_box_shaped_pushable_goes_through_walls_and_the_ground_only_raises`; `connor-3l4-barrel.log` |
+| Ball-stack pushables slide: the hit and 3 retries, normal z in (0, 0.7) = vertical wall, no head-on stop, contact pulled back 25 | `pushing.md` rule 4.1 (Q87 b) | Unit tests `a_ball_stack_pushable_pushed_at_an_angle_slides_along_the_wall`, `a_ball_stack_pushable_slides_ahead_and_stops_at_a_wall`; `connor-3l4-bale2.log` |
+| Ground after the move: raise only, with `keepOnGround`; any height change puts it back | `pushing.md` rules 4.1–4.2 (Q87 c) | Same unit test (uphill put back, downhill floats); barrel log from update 81 |
+| Facing test: from his position at the start of the update to the object's position | `pushing.md` rule 2.5 (Q87 e) | — |
+| Two physical pushables in one sweep: he follows the last one's movement | **Our choice** (not described) | — |
+

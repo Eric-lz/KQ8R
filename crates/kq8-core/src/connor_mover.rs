@@ -61,6 +61,13 @@ pub trait MoverWorld {
     fn sweep(&self, _balls: &BallStack, _from: [f32; 3], _to: [f32; 3]) -> Option<Hit> {
         None
     }
+    /// Like [`MoverWorld::sweep`], but every object touched is **told at
+    /// once**, as it is tested (`connor-physics.md` "Against a building"
+    /// step 7, Q88): `told` runs the push check and returns `true` when it
+    /// accepted the touch as a push, which is then not recorded as a hit.
+    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> bool) -> Option<Hit> {
+        self.sweep(balls, from, to).filter(|h| !told(h))
+    }
     /// Notes gathered by the sweeps since the last call (for the report).
     fn take_notes(&self) -> Vec<String> {
         Vec::new()
@@ -84,9 +91,6 @@ pub trait MoverWorld {
     /// `name` is passed through for the rest of this update's move.
     fn pass_through(&self, _name: &str) {}
 }
-
-/// Two contacts this close count as at the same distance (Q88 stand-in).
-pub const TIE: f32 = 0.001;
 
 /// Connor follows a physical pushable by this share of its movement
 /// (`pushing.md` rule 4.3).
@@ -215,13 +219,68 @@ pub struct Scene<'a> {
     /// Scripted pushables whose script didn't take control: touches are
     /// wall hits ("Do not reproduce" of `pushing.md`), set by the caller.
     pub not_pushable: Vec<String>,
+    /// The order the objects entered the world (indices into `objects`),
+    /// the order they are tested in (Q88); `None` = as listed.
+    pub order: Option<&'a [usize]>,
 }
 
 impl<'a> Scene<'a> {
     pub fn new(ground: &'a dyn GroundLookup, buildings: &'a [BuildingCollider], objects: &'a [BoxCollider]) -> Self {
-        Scene { ground, buildings, objects, notes: RefCell::new(Vec::new()), moved: RefCell::new(Vec::new()), passed: RefCell::new(Vec::new()), not_pushable: Vec::new() }
+        Scene {
+            ground,
+            buildings,
+            objects,
+            notes: RefCell::new(Vec::new()),
+            moved: RefCell::new(Vec::new()),
+            passed: RefCell::new(Vec::new()),
+            not_pushable: Vec::new(),
+            order: None,
+        }
+    }
+
+    /// The objects in the order they entered the world.
+    fn in_order(&self) -> Box<dyn Iterator<Item = &BoxCollider> + '_> {
+        match self.order {
+            Some(order) => Box::new(order.iter().filter_map(|&i| self.objects.get(i))),
+            None => Box::new(self.objects.iter()),
+        }
+    }
+
+    /// The nearest contact of a pushed ball-stack object moving from
+    /// `from` to `to` (`pushing.md` rule 4.1): the buildings if its mask
+    /// has 0x8 (their type), and the objects its mask makes obstacles;
+    /// Connor is not among them, so he is ignored.
+    fn object_hit(&self, o: &BoxCollider, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<(crate::collide::Contact, String)> {
+        let (lo, hi) = balls.reach(from, to);
+        let mut best: Option<(crate::collide::Contact, String)> = None;
+        let mut keep = |c: crate::collide::Contact, what: &str| {
+            if best.as_ref().is_none_or(|(b, _)| length(sub(c.position, from)) <= length(sub(b.position, from))) {
+                best = Some((c, what.to_string()));
+            }
+        };
+        if o.kind.collision_mask & 0x8 != 0 {
+            for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
+                if let Some(c) = b.sweep(balls, from, to) {
+                    keep(c, &b.name);
+                }
+            }
+        }
+        let obstacle = |other: &BoxCollider| o.kind.collision_mask & other.kind.collision_type & OBSTACLE_BITS != 0;
+        for other in self.in_order().filter(|x| x.name != o.name && obstacle(x) && x.overlaps(balls.radius, lo, hi)) {
+            if let Some(ObjectHit::Contact(c)) = other.sweep(balls, from, to) {
+                keep(c, &other.name);
+            }
+        }
+        best
     }
 }
+
+/// A pushed ball-stack object's slide limit: the pass's own hit and this
+/// many retries (`pushing.md` rule 4.1).
+pub const OBJECT_RETRIES: u32 = 3;
+/// In a pushed object's across pass a surface whose normal z is between 0
+/// and this counts as a vertical wall (rule 4.1).
+pub const OBJECT_WALL_NORMAL_Z: f32 = 0.7;
 
 impl MoverWorld for Scene<'_> {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
@@ -238,29 +297,36 @@ impl MoverWorld for Scene<'_> {
     /// what the game does then was not traced, so it counts as no hit (he
     /// can walk out) and is noted.
     fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
+        self.sweep_told(balls, from, to, &mut |_| false)
+    }
+
+    /// Step 7 refined (Q88): the objects are tested in the order they
+    /// entered the world, each one touched is told at once (`told`), an
+    /// accepted push is not recorded, and a contact replaces the kept one
+    /// when it is **at most** as far (on a tie the later-tested wins).
+    /// Buildings are tested first (they are loaded before the objects).
+    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> bool) -> Option<Hit> {
         let (lo, hi) = balls.reach(from, to);
         let mut best: Option<Hit> = None;
-        // Q88 stand-in: on an exact tie a pushable's contact is taken first.
-        let pushable = |name: &str| self.push_target(name).is_some();
-        let mut keep = |c: crate::collide::Contact, what: &str| {
-            let d = length(sub(c.position, from));
-            let better = best.as_ref().is_none_or(|h| {
-                let old = length(sub(h.position, from));
-                d < old - TIE || ((d - old).abs() <= TIE && pushable(what) && !pushable(&h.what))
-            });
-            if better {
-                best = Some(Hit { position: c.position, touch: c.touch, normal: c.normal, what: what.to_string() });
+        let mut keep = |h: Hit| {
+            if best.as_ref().is_none_or(|b| length(sub(h.position, from)) <= length(sub(b.position, from))) {
+                best = Some(h);
             }
         };
         for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
             if let Some(c) = b.sweep(balls, from, to) {
-                keep(c, &b.name);
+                keep(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone() });
             }
         }
-        let passed = self.passed.borrow();
-        for o in self.objects.iter().filter(|o| o.overlaps(balls.radius, lo, hi) && !passed.contains(&o.name)) {
+        let passed = self.passed.borrow().clone();
+        for o in self.in_order().filter(|o| o.overlaps(balls.radius, lo, hi) && !passed.contains(&o.name)) {
             match o.sweep(balls, from, to) {
-                Some(ObjectHit::Contact(c)) => keep(c, &o.name),
+                Some(ObjectHit::Contact(c)) => {
+                    let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone() };
+                    if !told(&h) {
+                        keep(h);
+                    }
+                }
                 Some(ObjectHit::StartedInside { ball }) => self.notes.borrow_mut().push(format!(
                     "ball {ball} started inside {}'s box: no usable contact, not counted as a hit (not traced)",
                     o.name
@@ -287,51 +353,55 @@ impl MoverWorld for Scene<'_> {
         Some(PushTarget { kind: o.kind, position: o.placement.position })
     }
 
-    /// `pushing.md` rule 4.1: the object's own sweep over the step,
-    /// against the buildings and the objects its mask makes obstacles
-    /// (Connor is not in this list, so he is ignored as the rule says);
-    /// it stops at the first contact (Q87 b stand-in). Then its ground
-    /// rule (Q87 c stand-in: exactly on the floor grid); any change of
-    /// height puts it back (rule 4.2). Only ball-stack objects: a box
-    /// object's own sweep is not described (Q87 a).
+    /// `pushing.md` rule 4 (Q87 a–c): the object moves by the step.
+    /// - Box-shaped (no `collisionShape`, the barrels): never stopped by
+    ///   anything (its touches carry no contact point).
+    /// - Ball stack (the hay bale): its own sweep against what its mask
+    ///   covers; a hit slides it along the surface (a normal z between 0
+    ///   and 0.7 counts as a vertical wall), the hit and 3 retries, then it
+    ///   stays at the contact; no head-on stop.
+    /// - Then the ground, raise only (with `keepOnGround`): put on the
+    ///   ground if that is at or above it. Any height change at all puts
+    ///   it back where it was (rule 4.2).
     fn push_object(&self, name: &str, step: [f32; 3]) -> ([f32; 3], String) {
         let Some(o) = self.objects.iter().find(|o| o.name == name) else {
             return ([0.0; 3], "no such collider".into());
         };
-        if !o.kind.ball_stack {
-            return ([0.0; 3], "box-shaped: its own sweep is not described (Q87 a); not moved".into());
-        }
-        let balls = BallStack::from_box(o.min, o.max);
         let from = o.placement.position;
         let to = [from[0] + step[0], from[1] + step[1], from[2]];
-        let (lo, hi) = balls.reach(from, to);
-        let mut best: Option<(crate::collide::Contact, String)> = None;
-        let mut keep = |c: crate::collide::Contact, what: &str| {
-            if best.as_ref().is_none_or(|(b, _)| length(sub(c.position, from)) < length(sub(b.position, from))) {
-                best = Some((c, what.to_string()));
-            }
-        };
-        // Buildings are type 0x28 (or 0x88): obstacles if its mask has 0x8.
-        if o.kind.collision_mask & 0x8 != 0 {
-            for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
-                if let Some(c) = b.sweep(&balls, from, to) {
-                    keep(c, &b.name);
+        let (mut end, mut why) = if !o.kind.ball_stack {
+            (to, "box-shaped: never stopped (rule 4.1)".to_string())
+        } else {
+            let balls = BallStack::from_box(o.min, o.max);
+            let (mut start, mut target) = (from, to);
+            let mut why = "free".to_string();
+            let mut retries = 0;
+            loop {
+                let Some((c, what)) = self.object_hit(o, &balls, start, target) else { break (target, why) };
+                if retries == OBJECT_RETRIES {
+                    break (c.position, format!("{why}; stopped at {what} after {OBJECT_RETRIES} retries"));
                 }
+                let mut n = c.normal;
+                if n[2] > 0.0 && n[2] < OBJECT_WALL_NORMAL_Z {
+                    let flat = (n[0] * n[0] + n[1] * n[1]).sqrt();
+                    n = [n[0] / flat, n[1] / flat, 0.0];
+                }
+                // Pushed straight in, nothing is left along the wall.
+                let along = project_onto(target, c.position, n);
+                if sub(along, c.position).iter().all(|v| v.abs() < SLIDE_MIN) {
+                    break (c.position, format!("{why}; stopped at {what}"));
+                }
+                target = along;
+                start = c.position;
+                retries += 1;
+                why = format!("slid along {what}");
             }
-        }
-        let obstacle = |other: &BoxCollider| o.kind.collision_mask & other.kind.collision_type & OBSTACLE_BITS != 0;
-        for other in self.objects.iter().filter(|x| x.name != o.name && obstacle(x) && x.overlaps(balls.radius, lo, hi)) {
-            if let Some(ObjectHit::Contact(c)) = other.sweep(&balls, from, to) {
-                keep(c, &other.name);
-            }
-        }
-        let (mut end, mut why) = match &best {
-            Some((c, what)) => (c.position, format!("stopped by {what}")),
-            None => (to, "free".to_string()),
         };
         if o.kind.keep_on_ground {
             if let Some((h, _)) = self.ground.ground(end[0], end[1]) {
-                end[2] = h;
+                if h >= end[2] {
+                    end[2] = h;
+                }
             }
         }
         if end[2] != from[2] {
@@ -460,6 +530,9 @@ pub struct Mover {
     /// the ground (rule 2.2).
     push: PushAbility,
     push_ground: bool,
+    /// Where he was when this update began: "him" in the facing test of
+    /// a physical push (`pushing.md` rule 2.5, Q87 e).
+    push_from: [f32; 3],
     /// The balls he collides with (built from his box).
     pub balls: BallStack,
     /// The water test's result after the last move (water.md).
@@ -564,6 +637,7 @@ impl Mover {
             steep_head_on: false,
             push: PushAbility::default(),
             push_ground: false,
+            push_from: position,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
             submerged: false,
         }
@@ -684,6 +758,7 @@ impl Mover {
             return report;
         }
         let before_z = self.position[2];
+        self.push_from = self.position;
         report.began_on_ground = self.on_ground;
 
         // 1. Start of the update.
@@ -901,41 +976,51 @@ impl Mover {
             pass = "slide";
         }
         loop {
-            let Some(h) = world.sweep(&self.balls, start, target) else {
+            // Every object touched is told at once (Q88): the push check
+            // runs for each pushable as it is tested; an accepted push is
+            // not a hit for him (rule 3).
+            let step = [target[0] - pass_start[0], target[1] - pass_start[1], 0.0];
+            let mut touches = Vec::new();
+            let mut physical: Option<[f32; 3]> = None;
+            let mut scripted = false;
+            let me = &*self;
+            let hit = world.sweep_told(&me.balls, start, target, &mut |h| {
+                let Some(t) = world.push_target(&h.what) else { return false };
+                let mut touch = me.push_check(h, &t, across_pass);
+                let accepted = touch.result == PushResult::Push;
+                if accepted && t.scripted() {
+                    // The object's script gets `Push` (the caller runs it
+                    // after this move); the rest of the move goes through.
+                    world.pass_through(&h.what);
+                    scripted = true;
+                } else if accepted {
+                    // Rule 4: moved by his horizontal step of this pass.
+                    let moved = if step.iter().any(|v| v.abs() > PUSH_MIN_STEP) {
+                        let (moved, why) = world.push_object(&h.what, step);
+                        touch.moved = Some((step, moved, why));
+                        moved
+                    } else {
+                        [0.0; 3]
+                    };
+                    physical = Some(moved);
+                }
+                touches.push(touch);
+                accepted
+            });
+            report.pushes.extend(touches);
+            if let Some(moved) = physical {
+                // Rule 4.3: he follows by 0.95 of what it really moved,
+                // from the start of the pass.
+                self.position = add(pass_start, scale(moved, PUSH_FOLLOW));
+                return "push";
+            }
+            if scripted {
+                outcome = "push";
+            }
+            let Some(h) = hit else {
                 self.position = target;
                 return outcome;
             };
-            if let Some(t) = world.push_target(&h.what) {
-                let mut touch = self.push_check(&h, &t, across_pass);
-                if touch.result == PushResult::Push {
-                    // Rule 3: not a hit for him.
-                    if !t.scripted() {
-                        // Rule 4: the object is moved by his horizontal
-                        // step of this pass; he follows by 0.95 of what it
-                        // really moved, from the start of the pass.
-                        let step = [target[0] - pass_start[0], target[1] - pass_start[1], 0.0];
-                        let moved = if step.iter().any(|v| v.abs() > PUSH_MIN_STEP) {
-                            let (moved, why) = world.push_object(&h.what, step);
-                            touch.moved = Some((step, moved, why));
-                            moved
-                        } else {
-                            [0.0; 3]
-                        };
-                        self.position = add(pass_start, scale(moved, PUSH_FOLLOW));
-                    } else {
-                        // Rule 3: the object's script gets `Push` (the
-                        // caller runs it after this move); he is not
-                        // stopped: the rest of the pass goes on through it.
-                        world.pass_through(&h.what);
-                        report.pushes.push(touch);
-                        outcome = "push";
-                        continue;
-                    }
-                    report.pushes.push(touch);
-                    return "push";
-                }
-                report.pushes.push(touch);
-            }
             *hits += 1;
             let angle = head_on_angle(sub(target, start), h.normal);
             let head_on = head_on_allowed
@@ -978,7 +1063,7 @@ impl Mover {
         let towards = if t.scripted() {
             flat([-h.normal[0], -h.normal[1]])
         } else {
-            flat([t.position[0] - self.position[0], t.position[1] - self.position[1]])
+            flat([t.position[0] - self.push_from[0], t.position[1] - self.push_from[1]])
         };
         let cos = p.facing[0] * towards[0] + p.facing[1] * towards[1];
         let mut touch = PushTouch {
@@ -1461,8 +1546,11 @@ mod tests {
                         assert!((m.position[1] - (before[1] - 72.0)).abs() < 1e-3, "full step: {:?}", m.position);
                         assert_eq!(scene.passed.take(), ["post"]);
                     } else {
-                        // A box-shaped one doesn't move (Q87 a): he stays.
-                        assert!((m.position[1] - before[1]).abs() < 1e-3, "stays at the pass start");
+                        // A box-shaped one moves by his step, never stopped
+                        // (rule 4.1); he follows by 0.95 of it (rule 4.3).
+                        let (asked, moved, why) = t.moved.clone().expect("moved");
+                        assert_eq!(moved, asked, "{why}");
+                        assert!((m.position[1] - (before[1] + 0.95 * moved[1])).abs() < 1e-3, "{:?}", m.position);
                     }
                     pushed = Some(m.position);
                     break;
@@ -1536,31 +1624,99 @@ mod tests {
         let (asked, moved, _) = moves[0];
         assert!((moved[1] - asked[1]).abs() < 1e-3 && moved[1] < 0.0, "{moves:?}");
         // Stopped by the wall: its ball (radius 500) touches the wall's face.
-        assert!(moves.iter().any(|(_, _, why)| why.contains("stopped by post")), "{moves:?}");
+        assert!(moves.iter().any(|(_, _, why)| why.contains("stopped at post")), "{moves:?}");
         assert!(bale_y > -3000.0 + 500.0 - 30.0 && bale_y < -2400.0, "bale at {bale_y}");
         // He is behind it, never inside it.
         assert!(connor > bale_y + 500.0, "Connor {connor}, bale {bale_y}");
     }
 
     #[test]
-    fn a_box_shaped_pushable_or_one_on_a_slope_stays() {
-        // Box-shaped (Q87 a stand-in): not moved.
+    fn a_box_shaped_pushable_goes_through_walls_and_the_ground_only_raises() {
+        // pushing.md rule 4.1 (Q87 a): a box-shaped object is never
+        // stopped, not even by a wall right in front of it.
+        let mut wall = post([0.0, -1500.0, 0.0]);
+        wall.min = [-2000.0, -250.0, 0.0];
+        wall.max = [2000.0, 0.0, 2000.0];
         let mut b = bale([0.0; 3], false);
         b.kind.ball_stack = false;
-        let (_, bale_y, touches) = push_for(30, vec![b], &Flat(0.0));
-        assert_eq!(bale_y, 0.0);
-        assert!(touches.iter().any(|t| t.moved.as_ref().is_some_and(|m| m.2.contains("Q87 a"))));
-        // On a slope with keepOnGround: its height would change, so it is
-        // put back (rule 4.2).
-        struct Slope;
+        let (_, y, touches) = push_for(120, vec![b, wall], &Flat(0.0));
+        assert!(y < -2000.0, "barrel at {y}");
+        assert!(touches.iter().filter_map(|t| t.moved.as_ref()).all(|m| m.2.contains("never stopped")));
+        // Raise only (Q87 c): pushed uphill its height would change, so
+        // it is put back (rule 4.2); pushed downhill it floats.
+        struct Slope(f32);
         impl GroundLookup for Slope {
             fn ground(&self, _: f32, y: f32) -> Option<(f32, [f32; 3])> {
-                Some((-0.05 * y, [0.0, 0.05, 0.9987]))
+                Some((self.0 * y, [0.0, -self.0, 1.0]))
             }
         }
-        let (_, bale_y, touches) = push_for(30, vec![bale([0.0; 3], true)], &Slope);
-        assert_eq!(bale_y, 0.0);
+        let mut b = bale([0.0; 3], true);
+        b.kind.ball_stack = false;
+        let (_, y, touches) = push_for(30, vec![b.clone()], &Slope(-0.05));
+        assert_eq!(y, 0.0);
         assert!(touches.iter().any(|t| t.moved.as_ref().is_some_and(|m| m.2.contains("put back"))));
+        let (_, y, touches) = push_for(30, vec![b], &Slope(0.05));
+        assert!(y < -500.0, "downhill: moved, floating at its height: {y}");
+        assert!(touches.iter().all(|t| t.moved.as_ref().is_none_or(|m| m.1[2] == 0.0)));
+    }
+
+    #[test]
+    fn a_ball_stack_pushable_pushed_at_an_angle_slides_along_the_wall() {
+        // pushing.md rule 4.1 (Q87 b): no head-on stop for objects; the
+        // rest of the move is turned along the wall. A wall along x at
+        // y = −1,500, pushed toward −y with a slant toward +x.
+        let mut wall = post([0.0, -1500.0, 0.0]);
+        wall.min = [-5000.0, -250.0, 0.0];
+        wall.max = [5000.0, 0.0, 2000.0];
+        let bale_y0 = 0.0;
+        let mut objects = vec![bale([0.0, bale_y0, 0.0], false), wall];
+        let mut m = Mover::new([-300.0, 1000.0, 0.0], true);
+        let facing = [0.38f32, -0.925];
+        let mut slid = false;
+        for _ in 0..200 {
+            let scene = Scene::new(&Flat(0.0), &[], &objects);
+            let r = m.update_with(&scene, |_, _| {
+                let mut w = push_wish(facing, true, true);
+                w.step = [72.0 * facing[0], 72.0 * facing[1], 0.0];
+                w
+            });
+            slid |= r.pushes.iter().any(|t| t.moved.as_ref().is_some_and(|mv| mv.2.contains("slid along post") && mv.1[0] > 0.0));
+            for (name, d) in scene.moved.take() {
+                let o = objects.iter_mut().find(|o| o.name == name).unwrap();
+                o.placement.position = add(o.placement.position, d);
+            }
+        }
+        assert!(slid, "never slid along the wall");
+        let p = objects[0].placement.position;
+        // It stays on its side of the wall and has gone along it.
+        assert!(p[1] > -1500.0 + 500.0 - 30.0 && p[0] > 300.0, "bale at {p:?}");
+    }
+
+    #[test]
+    fn every_object_touched_is_told_and_a_tie_keeps_the_later_tested() {
+        // connor-physics.md "Against a building" step 7 (Q88): two posts
+        // with faces at the same distance; the later-tested is kept.
+        let a = post([-150.0, 0.0, 0.0]);
+        let mut b = post([150.0, 0.0, 0.0]);
+        b.name = "second".into();
+        let objects = [a, b];
+        let scene = Scene::new(&Flat(0.0), &[], &objects);
+        let balls = BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1);
+        let mut told = Vec::new();
+        let h = scene.sweep_told(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0], &mut |h| {
+            told.push(h.what.clone());
+            false
+        });
+        assert_eq!(told, ["post", "second"]);
+        assert_eq!(h.map(|h| h.what), Some("second".to_string()));
+        // In the order they entered the world: reversed, "post" is kept.
+        let order = [1, 0];
+        let mut scene = Scene::new(&Flat(0.0), &[], &objects);
+        scene.order = Some(&order);
+        assert_eq!(scene.sweep(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0]).map(|h| h.what), Some("post".to_string()));
+        // An accepted touch is not recorded: the other one is kept.
+        let h = scene.sweep_told(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0], &mut |h| h.what == "post");
+        assert_eq!(h.map(|h| h.what), Some("second".to_string()));
     }
 
     #[test]

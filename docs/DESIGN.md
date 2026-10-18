@@ -1480,7 +1480,7 @@ catchers, ground animators).
       the bricks run (`camera.log`: the view heading 0.9 during the
       shot, the turn back after cue 10) and a held key through
       `handsOff 0` (`connor.log`).
-    - **3l-4, pushing** (Q87, Q88, Q91; `pushing.md` rules 2.5,
+    - **3l-4, pushing** (**done** 2026-10-18; Q87, Q88, Q91; `pushing.md` rules 2.5,
       4.1–4.3, `connor-physics.md` "Against a building" step 7). In the
       mover's sweep, every object touched is told at once (the push check
       runs there, in the order the objects entered the world); a contact

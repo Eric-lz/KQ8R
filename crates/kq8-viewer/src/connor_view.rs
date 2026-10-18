@@ -684,6 +684,7 @@ pub fn connor_step(
     lookup: Option<Res<GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     objects: Option<Res<ObjectColliders>>,
+    order: Option<Res<crate::terrain_view::ColliderOrder>>,
     footsounds: Option<Res<FootSounds>>,
     shared: Res<Shared>,
 ) {
@@ -695,6 +696,7 @@ pub fn connor_step(
         objects.as_ref().map_or(&[][..], |o| &o.0),
     );
     scene.not_pushable = sim.not_pushable.clone();
+    scene.order = order.as_ref().map(|o| &o.0[..]);
     if let Some((_, what)) = sim.repeat.filter(|_| !sim.hands_off) {
         let cleared = sim.walker.key_event(what, true);
         if cleared != (false, false) {

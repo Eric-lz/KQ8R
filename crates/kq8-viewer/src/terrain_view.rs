@@ -65,6 +65,13 @@ pub struct ViewBlockerSet {
 #[derive(Resource, Default)]
 pub struct ObjectColliders(pub Vec<kq8_core::collide::BoxCollider>);
 
+/// The order the object colliders entered the world (indices into
+/// `ObjectColliders`), the order Connor's sweep tests them in
+/// (`connor-physics.md` "Against a building" step 7, Q88; M3 3l-4): by
+/// where each object's name comes in the load order.
+#[derive(Resource, Default)]
+pub struct ColliderOrder(pub Vec<usize>);
+
 /// The placed object an entity draws (M3 step 3f: `deleteObject` hides
 /// it by name).
 #[derive(Component)]
@@ -293,6 +300,14 @@ pub fn setup_objects(
         &mut log,
     );
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), anims, &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
+    // 3l-4: doors, chests and scripted objects were added after the
+    // plain objects; the sweep tests them all in load order.
+    let load_index = |name: &str| objects.placed.iter().position(|(p, _, _)| p.name.eq_ignore_ascii_case(name)).unwrap_or(usize::MAX);
+    let mut order: Vec<usize> = (0..colliders.len()).collect();
+    order.sort_by_key(|&i| (load_index(&colliders[i].name), i));
+    let moved = order.iter().enumerate().filter(|(k, i)| k != *i).count();
+    log.detail(format!("collision: {} object colliders tested in load order ({moved} not where they are listed)", colliders.len()));
+    commands.insert_resource(ColliderOrder(order));
     commands.insert_resource(ObjectColliders(colliders));
     // What following emitters can follow (3b-4): Connor, the camera, or a
     // placed object or marker (any case; the last one loaded by that name).

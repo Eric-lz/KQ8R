@@ -625,6 +625,7 @@ pub fn trap_step(
     mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
+    order: Option<Res<crate::terrain_view::ColliderOrder>>,
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -710,7 +711,8 @@ pub fn trap_step(
                 let objects = colliders.as_ref().map_or(&[][..], |c| &c.0[..]);
                 let line = match &lookup {
                     Some(lookup) => {
-                        let scene = kq8_core::connor_mover::Scene::new(&lookup.0, buildings.as_ref().map_or(&[][..], |b| &b.0[..]), objects);
+                        let mut scene = kq8_core::connor_mover::Scene::new(&lookup.0, buildings.as_ref().map_or(&[][..], |b| &b.0[..]), objects);
+                        scene.order = order.as_ref().map(|o| &o.0[..]);
                         scene.passed.borrow_mut().extend(pushed.iter().cloned());
                         connor.move_to(flags, position, turn, &at, &scene, inside.contains(&i))
                     }
