@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study (A): Q104 (the automatic turn and held keys; the turn after a click) and Q103 (docs only)
+
+**Changed:** `docs/behaviour/connor-movement.md` ("Turning" rule 2 corrected; How to check), `clicking.md` (new rules 25–33: Connor turns to face what he clicked; How to check), `talking.md` (rules 7, 10, 15, 19), `anim-scripts.md` (`eval` under rule 18; `pointAndCue` and turn-key edge cases), `doors.md` (rule 16, open question 3), `chests.md` (rule 10), `QUESTIONS.md` (Q103, Q104 answered). Scratch notes in `re/` (not committed). No code.
+**Why:** The user's check of the original (Q104) and B's small points from 4a (Q103).
+**Tested how:** Read in `Mask.exe` with Ghidra; data counts with grep over `MASK/`. Nothing run in the game.
+**Result:** (1) Only a turn key **press** cancels an automatic turn; a held key is ignored during it (the 3.5 rad/s is unchanged) and does **not** take over when the turn ends (he stops turning until the key is pressed again; not checked in the game). Forward is not touched, so he walks/runs (and leans) through the turn. `pointAndCue` has no lock: a cancelled turn loses its cue. (2) The click turn belongs to every `ConnorAction` call (doors, scripted objects such as the tombstones, characters, buildings and items with a script), after the script; states Wait, Move, talk, weapon draw/put-away, throwing, tile puzzle; same turn; `doNotPointAt` stops it (items default to 1); `wizbook`/`wizquill` write `doNotPointAtMe`, which the game ignores, so they turn him. Stock remarks ("too far", "will not work") never turn him. (3) `eval` runs its words as a new line and keeps the inner result (B's stand-in right); `clearSpeak` leaves a line waiting out the 0.5 s alone (right); a placed voice stays where the line started (right); another character's `speak` turn: always, same 0.5 s; a chest remark turns him in any state of his, so the "not in Wait or Move → at once" stand-in is wrong.
+**Mistake caught:** I first wrote that no Daventry object sets `tooFarAwayAction`; the data shows five (`girl`, `landslid`, `ropenhok`, `ugly`, `wizard`). Fixed in `clicking.md` rule 26.
+**Still broken / not tested:** Nothing checked in the original beyond the user's earlier test. The "held key doesn't resume after the turn" rule and `wizbook` turning Connor need the user's check (`connor-movement.md` and `clicking.md` "How to check"). One switch on Connor that blocks all automatic turns is not identified. Whether any character file changes its turn rate was not traced.
+**Next:** B builds the press-only cancel and the click turn (Q104), and drops the chest-state condition (Q103 e). The user checks the two points above.
+
 ## 2026-10-18 M4 4a: the user's checks of the chest remark and "This will not work" (docs only)
 
 **Changed:** `docs/FEATURES.md`, `STATUS.md`: the checks recorded. No code.

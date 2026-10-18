@@ -107,9 +107,28 @@ Words used here:
    `anim-scripts.md` rule 25, with the same `Stop` → `Left`/`Right`
    movements) and the lines are queued **0.5 s later**. Connor only
    turns while he is in Wait or Move (or two states not used by
-   remarks); in any other state (Push, Special, a jump, …) he doesn't
+   remarks: drawing/putting away a weapon, and the conversation state,
+   in which the `speak` is ignored anyway, rule 8); in any other state
+   (Push, Special, a jump, …) he doesn't
    turn and the lines are queued at once. `speak Connor Connor …`, or a
    `<to>` that doesn't exist: no turn, queued at once.
+   **Not the only turn on a click** (2026-10-18, Q104 b): when the
+   `speak` comes from a script run by a click, the click itself also
+   turns Connor to the clicked object after the script, whatever the
+   `speak` says (`clicking.md` rules 25–33). So `speak Connor Connor …`
+   from a tombstone's click: the line starts at once and he turns to the
+   tombstone while speaking.
+   **Held and pressed turn keys** (Q104 a): only a fresh turn key press
+   cancels this turn; a held key neither cancels nor changes it; the
+   lines still come 0.5 s later either way (`connor-movement.md`
+   "Turning" rule 2).
+   **A character other than Connor as issuer** (traced 2026-10-18,
+   Q103 d): it always turns (no state check) with the same automatic
+   turn, at twice its own turn rate (3.5 rad/s with the default rate;
+   whether any character's file changes the rate was not traced), and
+   the lines wait the **same 0.5 s**. The 0.5 s does not depend on the
+   turn: the lines are queued after 0.5 s whether the turn has ended,
+   is still running, or the character can't turn at all.
 8. A `speak` for an issuer that is in a **conversation** (the talk
    state) is ignored entirely.
 9. **The queue:** each character has one queue of lines, made the first
@@ -127,6 +146,10 @@ Words used here:
     - the **voice**: Connor's lines play as a plain sound (no position);
       anyone else's line is placed at the speaker's position at that
       moment, min distance **2,000**, max **30,000** (`sound.md` rule 58);
+      the position is **copied once** when the line starts and never
+      updated while it plays, so a speaker who walks off leaves the
+      voice behind (traced 2026-10-18, Q103 c; only the listener's own
+      movement changes how it sounds). B's stand-in is right;
     - **captions**: if the console variable `Options::Captions` is true
       (`MASK/Options.cs` sets it true), the line's text (rule 3) is shown
       in the caption panel of the GUI;
@@ -180,6 +203,14 @@ Words used here:
     caption goes and the sounds come back up. **No `TalkComplete`** is
     sent for any of them. The mouth goes back to rest. (It also ends a
     conversation line; not covered here.)
+    **It does not touch a line still waiting out the 0.5 s after a
+    turn** (traced 2026-10-18, Q103 b): that line is not in the queue
+    yet but in a separate waiting slot, which `clearSpeak` leaves alone,
+    and the timer is not stopped. When the 0.5 s run out, the line is
+    queued and plays as usual. The same holds when the player cuts
+    Connor's line short (rule 16) during the wait: that is why, after a
+    click on a sign, pressing a turn key still lets him say the line
+    (user's check, Q104). B's stand-in (still queued) is right.
 16. **The player cuts Connor's line short** (same effect as
     `clearSpeak Connor`) by **pressing** forward/back, a turn key or Jump,
     or by **clicking in the world**, but only when:
@@ -224,6 +255,17 @@ Words used here:
 
     Monsters also have stored remarks of their own (alarm lines and
     others; M5).
+    **The chest remark** (traced 2026-10-18, Q103 e): the wait goes with
+    the turn: the chest asks for the turn and the 0.5 s wait together
+    exactly when it has **no** `doNotPointAt`; with `doNotPointAt` there
+    is no turn and the remark is queued **at once**. Unlike `speak`, the
+    chest **doesn't look at Connor's state**: he turns (and the remark
+    waits 0.5 s) in any state, Push or a jump included. (In the talk
+    state the remark is dropped as for any `speak`, rule 8, but the
+    turn still starts.) So "Connor not in Wait or Move" never makes a
+    chest remark come at once; B's stand-in should drop that condition.
+    The two stock remarks above ("beyond my reach", "will not work")
+    never turn him and are always queued at once.
 20. **Item descriptions in the inventory (M4; traced 2026-10-18 after
     the user's check).** Right-clicking an item in the inventory makes
     Connor describe it, but **not** through `speak` or the queue: the

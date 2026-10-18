@@ -254,6 +254,29 @@ Words used here:
     spaces, without the brackets (only inside `echo` text, data); **at
     most 40 words** per command, more gives `Console: Too many
     arguments` and the command fails.
+    **`eval <words…>`** (traced 2026-10-18, Q103 a): joins its words
+    (after the line's own `$` replacement) with single spaces into one
+    new line and runs that line as a command, exactly as if it stood
+    on its own line in the script. Because the line is read again,
+    `$` words in it are replaced **a second time**, and single quotes
+    and `;` count again. `$Console::Return` afterwards:
+    - the inner line ran (a known command, or a script found by name):
+      **the inner command's own result** is kept, so `if eval
+      KQMonster::testMessage $3 $4 $5 $6 $7 1000 63 0 0 1` takes its
+      branch exactly when the tuples match, the same as without
+      `eval`;
+    - the inner line failed (unknown command, syntax error, too many
+      words): **1**, with the console's error message;
+    - `eval` with nothing after it: **0** (counts as true in an `if`;
+      no data does this; log it).
+    It does nothing else. In the data (all worlds) it is used only as
+    `if eval KQMonster::testMessage …` (337 lines) and `if eval exist
+    <object>` (28 lines, none in Daventry; `exist` is a game command,
+    "Console::Return is 1 if object (and Connor) exist" by its usage
+    text, not studied). The words given to it in the data are plain
+    numbers and names, so the second `$` replacement never changes
+    anything there. B's stand-in (run the rest as a command, keep its
+    result) is right.
 
 ### `KQStatsChangeRequestEvent` (answers `clicking.md` open question 3)
 
@@ -594,9 +617,22 @@ Words used here:
   reached on the way up) would get JumpDir 0 and an `endJump` that does
   nothing; the Special state is then asked for from Fall (not traced
   further).
-- A scripted walk whose turn is interrupted by a player turn key: the
-  turn is cancelled (`connor-movement.md` "Turning" rule 2); with `handsOff` on, key presses don't
-  reach him, so this can't happen in the scripts' cutscenes.
+- A scripted walk whose turn is interrupted by a player turn key: only
+  a key **press** would cancel it, never a held key (corrected
+  2026-10-18, Q104 a, `connor-movement.md` "Turning" rule 2); with
+  `handsOff` on, key presses don't reach him, so this can't happen in
+  the scripts' cutscenes.
+- **`pointAndCue` has no lock of its own** (traced 2026-10-18, Q104 a):
+  unlike `walkTo` it does not switch `handsOff` on and doesn't look at
+  Connor's state. If a script used it without `handsOff`, a turn key
+  press during the turn would cancel the turn and the cue would **never
+  be sent** (the cue goes out only when a turn ends normally). Every
+  use in the data that the player could interrupt sits after a
+  `handsOff 1` or inside a cutscene (data, not checked one by one).
+  Recommended: log "pointAndCue turn cancelled, cue lost" if it ever
+  happens. A click turn or `speak` turn that starts during a
+  `pointAndCue` turn replaces its target; the cue is then sent when
+  that turn ends.
 
 ## Do not reproduce
 

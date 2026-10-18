@@ -135,9 +135,12 @@ All of them: `classType=KQDoor`, `currAnimName=closed`, `keepOnGround=0`
     conversation-area object (`<name>Info`, class `KQConvInfo`). No door
     has one; doors never get it.
 16. After the script call, Connor **turns to face the door**, unless the
-    door has `doNotPointAt` set, and only in some of his states (standing,
-    walking and a few others; the exact list was not matched to state
-    names).
+    door has `doNotPointAt` set, and only in some of his states.
+    **Settled 2026-10-18 (Q104 b):** this turn belongs to every
+    `ConnorAction` call, not just doors'; the states are Wait, Move,
+    talk, weapon draw/put-away, throwing and the tile puzzle; it is the
+    usual 3.5 rad/s automatic turn, started after the script has run.
+    Full rules: `clicking.md` rules 25–33.
 17. The script runs when the click is handled, before anything else
     happens; it is the script that sends `KQDoorEvent`. **The door does
     nothing by itself when clicked.**
@@ -345,7 +348,8 @@ about 500 characters.
    turn out from the phase ("Do not reproduce").
 2. Which stock lines Connor says for "too far" and "doesn't work" (M4).
    (How "accepts this item" is decided: answered in `clicking.md`.)
-3. Connor's states in which he turns to face the clicked door (rule 16).
+3. ~~Connor's states in which he turns to face the clicked door (rule
+   16).~~ Answered 2026-10-18 (Q104 b): `clicking.md` rules 25–33.
 4. (See Q45 d below: likely the next; not proven.)
 
 ## Q45 (answered 2026-10-13, traced unless marked)

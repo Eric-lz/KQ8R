@@ -109,7 +109,56 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    `runTo` and `pointAndCue` use it, `anim-scripts.md` rules 24–25). He then turns (apparently
    the shorter way round) at **double rate, 3.5 rad/s**, and stops exactly
    on the target heading once the remaining angle is smaller than one update's turn.
-   Any player turn input (non-zero) cancels this automatic turn.
+   **What cancels it (corrected 2026-10-18, Q104 a, traced; matches the
+   user's check in the original):** only a turn key **press** (the
+   moment the key goes down), not a key that is being held.
+   - The turn keys reach Connor as events, not as a state read every
+     update: one event when a key goes down (turn +1 or −1) and one
+     when it comes up. Only the "down" event cancels the automatic
+     turn. A key that was already held when the turn started sends
+     nothing more, so it can't cancel it; the player has to let go and
+     press again. Releasing a key doesn't cancel the turn either (it
+     sets the turn direction to 0, and the automatic turn sets it again
+     in the next update).
+   - One exception: releasing one turn key while the **other** one is
+     still held makes the game send the held one again as a fresh
+     "down" ("Do not reproduce", "Release of one key cancelling the
+     other"), and that does cancel the automatic turn.
+   - **While the automatic turn runs, a held turn key does nothing.**
+     Every update, the automatic turn overwrites the turn direction with
+     its own (+1 or −1, towards the target), and the speed is the
+     automatic turn's **3.5 rad/s** whatever key is held; the key does
+     not add to it or slow it down.
+   - **When the automatic turn ends, the turn direction is set to 0.**
+     A turn key that is still held from before does **not** take over
+     again: Connor stops turning until that key is let go and pressed
+     again (nothing re-sends held keys at that moment). This is the
+     original's behaviour as traced; it has not been checked in the
+     game (see "How to check").
+   - Forward/back is a separate piece of intent and is not touched: if
+     forward is held he keeps walking or running while the automatic
+     turn swings him round (user's check), and because the turn
+     direction is non-zero during the turn, a run also **leans** into
+     it (rule 3) exactly as with a held turn key.
+   - The same rules hold for every automatic turn, whatever started
+     it: the turn after a click (`clicking.md` "Connor turns to face
+     what he clicked"), `KQMonster::speak` (`talking.md` rule 7), a
+     chest remark (`chests.md` rules 8–9), `pointAndCue` and `walkTo` /
+     `runTo` (`anim-scripts.md` rules 24–25). But `walkTo` / `runTo`
+     switch `handsOff` on, and the scripts that use `pointAndCue` do so
+     too, and while `handsOff` (or the engine's own input lock) is on,
+     turn key presses don't reach Connor at all
+     (`anim-scripts.md` rule 21), so those turns can't be cancelled.
+   - A cancelled turn ends **without** its "turn finished" signal: a
+     `pointAndCue` cue is then never sent, and a `walkTo` would never
+     start walking (it can't happen under `handsOff`, see above).
+   - A new turn request while one is running simply replaces the
+     target; there is only ever one automatic turn.
+   - Pressing a turn key also cuts Connor's current line short unless
+     the line is marked `#` (`talking.md` "Cutting a line short"). A
+     line that is still waiting out the 0.5 s after a turn
+     (`talking.md` rule 7) is not in the queue yet, so the press does
+     not stop it: he still says it (user's check).
 3. **Banking while running** (details traced 2026-10-13, Q56): when
    running forward *and* turning, Connor leans into the turn (a rotation
    about his forward axis, through his feet). Walking never banks.
@@ -364,6 +413,17 @@ rule.)
 - Log the chosen movement name for each input combination in the table.
 - In the original game, walk Connor between two landmarks with known
   positions (from the `.kq` files) and time it; compare with ours.
+- **In the original (Turning rule 2, Q104 a, not checked yet):** stand
+  facing away from the alchemist's sign, hold the **left** turn key so
+  Connor spins, and click the sign while still holding it. Expected by
+  the code: he turns to face the sign at the fast automatic speed (the
+  held key changes nothing), and when he faces it he **stops turning**
+  although left is still held; only letting go and pressing left again
+  starts him turning again. If instead he goes on spinning left at once
+  after facing the sign, the "held key is not re-sent" rule is wrong.
+- **Our logs:** per turn key event: down/up, and "auto-turn cancelled"
+  only on a down; per update during an automatic turn: heading, turn
+  direction, forward intent.
 
 ## Measured in the running original (2026-10-12)
 

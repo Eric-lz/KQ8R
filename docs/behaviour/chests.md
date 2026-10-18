@@ -72,6 +72,12 @@ item; after that the chest is empty and Connor says so.
    turns to face the chest (same exception) and says it. Nothing else.
 10. On the first click Connor does **not** turn to face the chest (the
     chest's own handler only turns him before a remark).
+    **The remark's turn and wait** (traced 2026-10-18, Q103 e): the turn
+    before a `Take`/`Empty` remark is the usual automatic turn, started
+    in **any** state of Connor's (the chest doesn't check his state,
+    unlike a `speak` or a click turn, `clicking.md` rule 28), and the
+    remark then waits 0.5 s; with `doNotPointAt` there is no turn and the
+    remark is queued at once (`talking.md` rule 19).
 
 ### Scripted chests (not `KQChest`)
 

@@ -210,6 +210,88 @@ gets.
     **up** after eating the fish, which fits. The other three numbers'
     meanings are for the stats study (M5).
 
+### Connor turns to face what he clicked (traced 2026-10-18, Q104 b)
+
+Answers `doors.md` open question 3. Fits the user's check in the
+original: every Daventry tombstone turns Connor when clicked, also those
+whose script says `KQMonster::speak Connor Connor …`.
+
+25. **The turn is part of the `ConnorAction` script call itself**, not
+    of the script. Every object kind that gets that call shares it:
+    doors, animated objects (signs, jars, `coffnlid`, …), plain scripted
+    objects such as the tombstones (`classType=KQObject` with a
+    `script=`), characters, buildings with a script, and inventory items
+    lying in the world that have a script. Whenever the call is made,
+    whatever its kind (`do`, an accepted item, `TooFar` or `Special`),
+    Connor is turned to face the object afterwards. What the script does
+    doesn't matter: it may say nothing, `speak Connor Connor …` or
+    `speak Connor $1 …`.
+26. **No call, no turn.** An object without a script gets no call and
+    Connor doesn't turn (rules 10–11). Connor's own stock remarks are
+    not calls either and turn nobody: "too far" (object with
+    `tooFarAwayAction` 0) and "that doesn't work" (item not accepted).
+    These two remarks are queued at once, with no 0.5 s wait. **A "too
+    far" click turns him only when the object has a non-zero
+    `tooFarAwayAction` and a script** (then the `TooFar` call is made,
+    from any distance). In Daventry five scripted objects set
+    `tooFarAwayAction=1`: `girl`, `landslid`, `ropenhok`, `ugly`,
+    `wizard` (data); a click on one of them from any distance turns
+    Connor towards it. Signs, tombstones and doors don't set it: from too
+    far, the remark and no turn.
+27. **Order:** (1) the object's script runs to its end, including
+    anything it does at once (`speak` queues or starts its turn-and-wait,
+    `sendEvent 0` only queues events for later); (2) Connor's state is
+    looked at **after** the script, so a script that changes his state
+    decides the answer; (3) the turn is started (unless rules 28–30
+    stop it). The turn then runs over the following updates.
+28. **States in which he turns:** Wait, Move, the conversation (talk)
+    state, and three states not reached in Daventry's normal play: drawing
+    or putting away a weapon, throwing a rock, and the tile-puzzle
+    jumping state. Not in Push, Special (scripted animations), Jump,
+    Fall, a crash, or any other state. Compare `talking.md` rule 7: a
+    `speak` turns Connor in Wait, Move, weapon draw/put-away and talk
+    (those last two are the "two states not used by remarks"); the click
+    adds throwing and the tile puzzle. In Daventry, in practice, only
+    Wait and Move matter. (Clicks are not taken at all in some other
+    states; that is decided before the call and is not part of this
+    rule.)
+29. **`doNotPointAt=1`** on the clicked object: no turn; the script still
+    runs. Default 0 for every kind **except inventory items, which
+    default to 1**, so picking up an item with a script doesn't turn him
+    unless its file says `doNotPointAt=0` (no file does; the data only
+    ever writes `doNotPointAt=1`, 37 files; in Daventry `ax` and `urn`).
+    The setting is looked up by its **whole name**: Daventry's `wizbook`
+    and `wizquill` write `doNotPointAtMe=1`, which the game doesn't know,
+    so **they do turn Connor** (traced; not checked in the game).
+30. One more switch (on Connor, not identified, the same one that can
+    stop a `pointAndCue` turn, `anim-scripts.md` rule 25) blocks every
+    automatic turn of his. It was never seen set; ignore it.
+31. **It is the same automatic turn** as for `speak`, `walkTo` and
+    `pointAndCue` (`connor-movement.md` "Turning" rule 2): 3.5 rad/s,
+    the shorter way round, re-aimed every update, the same `Stop` →
+    `Left`/`Right` movements when he stands (`anim-scripts.md` rule 25),
+    the same rules for held and pressed turn keys. The target is the
+    object's **position** (its placement point, not its box centre and
+    not the point where the click line hit it).
+32. **Two turns from one click.** There is only one automatic turn; a
+    new request replaces the target of the running one.
+    - `speak Connor $1 …` (the clicked object): the speak starts a turn
+      to the object, then the click asks for a turn to the same point.
+      Result: **one** turn. The line still starts 0.5 s after the
+      `speak` (that wait does not depend on the turn).
+    - `speak Connor Connor …` (tombstones `tmbstn1`, `tmbstn10`–`19`,
+      `tomb7`): no speak turn, the line is queued **at once** and starts
+      straight away, and the click's turn runs while he talks. So these
+      tombstones start talking about half a second **earlier** than
+      `tmbstn2`–`9`, and he turns while speaking.
+    - `speak Connor <another object> …`: the speak turn is replaced by
+      the click's, so he ends up facing the clicked object; the line
+      still comes 0.5 s after the `speak`.
+33. **Chests are different** (`chests.md` rules 6–10): a chest takes the
+    click itself without a script call; Connor turns only before a
+    `Take`/`Empty` remark, and that turn does **not** look at his state
+    (it happens in any state; `doNotPointAt` still stops it).
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -276,6 +358,19 @@ gets.
   house's bounding box (which can be a different side from the wall you
   click): "that doesn't work". Our log: for a picked building, the distance to its
   `.dig` box and "in reach" / "too far".
+- **In the original (rules 25–32, Q104 b):**
+  1. Click `tmbstn1` and then `tmbstn2` (both in reach, Connor facing
+     away from them). Expected: on `tmbstn1` he starts talking at once
+     and turns while talking; on `tmbstn2` he turns first and starts
+     talking about half a second later.
+  2. Click the wizard's book (`wizbook`, `doNotPointAtMe=1`): by the
+     code he **does** turn to it. Click the urn (`urn`,
+     `doNotPointAt=1`): he does **not** turn.
+  3. Click a sign from too far away: "'Tis beyond my reach.", **no**
+     turn.
+- **In our logs:** per click: the call made (`do`/item/`TooFar`/
+  `Special`/none), Connor's state after the script, `turn to <object>`
+  or the reason there is none (`doNotPointAt`, state, no call).
 - **In our logs:** for every click: what the line hit first (name, kind,
   distance along the line), and for buildings "swallowed, no script".
   For every animated object with a script: `Init` at load, `EndLoop

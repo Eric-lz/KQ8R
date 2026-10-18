@@ -286,7 +286,20 @@ and speech, 4a).
   cancels our automatic turn; in the original only a new press does;
   (2) tombstones that `speak Connor Connor` don't turn him in ours, all
   do in the original (the click turn of `doors.md` rule 16 is not
-  built). Both: **Q104**, for A.
+  built). Both: **Q104**, **answered 2026-10-18 by A** (below).
+- **New 2026-10-18 (A): Q104 and Q103 answered** (docs only). Only a
+  turn key **press** cancels an automatic turn; a held key is ignored
+  during it and doesn't resume after it (`connor-movement.md` "Turning"
+  rule 2). Every `ConnorAction` call turns Connor to the clicked object
+  after its script, in Wait, Move and four rarer states, unless
+  `doNotPointAt` (`clicking.md` rules 25–33; items default to no turn;
+  `wizbook`/`wizquill` do turn him). Q103: B's stand-ins for `eval`,
+  `clearSpeak` during the wait and the placed voice are right; a
+  monster turns with the same 0.5 s wait; a chest remark turns Connor
+  in any state (`talking.md` rules 7, 10, 15, 19; `anim-scripts.md`
+  rule 18). For B: build the press-only cancel and the click turn; drop
+  the chest-state condition. For the user: the held-key and `wizbook`
+  checks in `connor-movement.md` / `clicking.md` "How to check".
 - **Still to check by ear and eye (4a):** click the alchemist's sign
   (`cargo play --at 245000,255000,0`, walk up and click it): Connor turns,
   speaks after about half a second, the caption shows, the music drops,
@@ -294,11 +307,13 @@ and speech, 4a).
   178380) (`cargo play --at 201000,178380,0`) and press an arrow key
   while he reads it: he stops talking; click a sign or tombstone
   from far away: "'Tis beyond my reach."
-- **Stand-ins of 4a** (Q103): `eval`; waits after a turn survive
-  `clearSpeak`; a monster's turn not done; a chest remark without a
-  turn is queued at once; the caption panel's look.
+- **Stand-ins of 4a:** the caption panel's look; a monster's turn not
+  done (Q103 d: same turn, same 0.5 s); the chest remark's
+  "Connor not in Wait or Move → at once" is wrong (Q103 e: the chest
+  turns him in any state). The other Q103 stand-ins are confirmed.
 - **Next step, suggested:** the user's checks of 4a (above) and of 3n.
-  For A: conversations (`KQConner::conversation`), Q103. For B: cues of
+  For A: conversations (`KQConner::conversation`). For B: Q104 (click
+  turn, press-only cancel), then cues of
   scenery animations, `loadKQ` with a name or place while playing,
   inventory screen (M4). The brightness setting (rule 17) is still not
   built.
@@ -351,14 +366,8 @@ and speech, 4a).
 
 - Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
   is still not explained (`anim-scripts.md` open question 6).
-- For A (asked 2026-10-18 by B, from the user's check): **Q104** (a held
-  turn key vs a new press cancelling the automatic turn; the turn after
-  a click, `doors.md` rule 16: which objects, which states, order).
-- For A (asked 2026-10-18 by B, M4 4a): **Q103** (`eval`; `clearSpeak`
-  during the wait after a turn; a placed voice that moves; a monster's
-  turn; a chest remark without a turn). `talking.md` open questions 1–5
-  (conversations, shapes above 7, folders, the caption panel, a line
-  with no voice) are still open.
+- `talking.md` open questions 1–5 (conversations, shapes above 7,
+  folders, the caption panel, a line with no voice) are still open.
 - For A (asked 2026-10-18 by B): **Q100** (the heading after `move
   KQCamera` while following in later updates; the deep lift; the "turn
   back" switch when one `follow` finds both), **Q101** (the update Wait
