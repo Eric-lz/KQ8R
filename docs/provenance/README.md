@@ -1656,3 +1656,23 @@ From `docs/behaviour/connor-movement.md` "Turning" rule 2,
 | --- | --- | --- |
 | A chest's `Take`/`Empty` remark: the turn to the chest and the 0.5 s wait go together, in any state of Connor's; only `doNotPointAt` gives no turn and no wait (queued at once) | `talking.md` rule 19, `chests.md` rule 10 (Q103 e) | Unit test `a_chest_opens_then_gives_its_item_then_is_empty` (not in Wait or Move: turn and wait; `doNotPointAt`: at once); `connor-4a9-chest-jump.log`: clicked during a jump (update 40), turn 42–48, "'Tis empty." at 3.200 s |
 | Q103 (a)–(c): `eval`, `clearSpeak` during the wait, the placed voice | `anim-scripts.md` rule 18, `talking.md` rules 10, 15 | Rows of 4a-2 and 4a-3 updated; no code changed |
+
+## The interface's files (M4 step 4b)
+
+From the game's data and the community notes `kq8pfon.txt`,
+`kq8pbma.txt`, `kq8gui.txt`, `kq8tag.txt` (libkq8fpc, GPL-3.0
+repository, read 2026-10-18 from <https://svn.nicode.net/libkq8fpc/doc/>;
+facts about file layouts only, code and wording our own). No behaviour
+note yet (A is studying the interface).
+
+### 4b-1, fonts — `crates/kq8-data/src/font.rs`, `crates/kq8-cli/src/font_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `PFON` block: 31-bit size and an alignment bit (2 or 4), then version 2, the 44-byte font info (font flags, text flags, glyph count, height, width, text and back colour, baseline, two 16.16 scales, spacing), character count and first code, the character map (−1: no glyph), 8-byte glyph entries (picture, left, top, width, height, baseline shift, 2 spare) | `kq8pfon.txt` | `kq8 font-verify`: all 75 fonts read to their exact end; unit test `a_tiny_font_gives_its_settings_map_and_glyph_pixels` (made-up font) |
+| Bitmap array `PBMA`: `head` (chunk count, version, bitmap count), then other chunks, then one `PBMP` bitmap per entry (our existing bitmap reader); the `PBMA`/`PBMP` size fields are skipped | `kq8pbma.txt` | `font-verify`: bitmap count = the head's in all 75 |
+| The `rmap` chunk is present in 71 of the 75 fonts (not in `console1`/`console2`); it is read and ignored | Observed (the note says it is not used by KQMoE) | `font-verify` "array chunks" |
+| A bitmap ends at the next `PBMP` tag or at the first chunk that is not `head`, `data`, `DETL` or `PPAL` | **Our reading** (the note doesn't say how to find a bitmap's end) | Every font then ends exactly with the palette flag |
+| Font flags `0x41` (bit 6 not in the note) in all fonts but the two `Resource` console fonts (`0x46`: monospaced, monochrome) | Observed | `font-verify` |
+| Glyph pixels are palette indices with many values per font (shaded letters); 0 = no ink; no font has its own palette | Observed | `font-verify` pixel values; which palette colours them: Q106 |
+| `14.pft` (and each world's `14*.pft`) covers only the space and the digits 0–9 | Observed | `font-verify`: 11 glyphs |

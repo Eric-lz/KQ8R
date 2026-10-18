@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4b-1: reading the game's fonts; kq8 font-verify
+
+**Changed:** New `kq8-data/src/font.rs` (the `.pft` font: settings, character map, glyph table, glyph pictures from the bitmap array). New `kq8 font-verify` (`font-verify.log`, and a sheet of each font's glyphs in `kq8-artifacts/png/fonts/`). `docs/DESIGN.md`: the plan for 4b (fonts, screen layouts, captions in the original font). `QUESTIONS.md`: Q106. Provenance.
+**Why:** The captions, the health panel and the inventory all draw text with the game's own fonts. Layout from the community notes `kq8pfon.txt` / `kq8pbma.txt`.
+**Tested how:** `cargo test --workspace` (428 pass, 2 new), clippy clean. `cargo run --release -p kq8-cli -- font-verify`.
+**Result:** 75 font files (60 different contents) all read to their exact last byte; every glyph fits its picture; bitmap counts match. Sizes: `20` (height 21), `27`/`36` (38), `45` (46), `20black` (29), the console fonts (15; `Resource` ones 12 and 15). The world fonts `14*.pft` hold only the space and digits 0-9. Glyphs are shaded: many palette values per font, and no font has its own palette (Q106: which palette).
+**Still broken / not tested:** Nothing is drawn with these fonts yet. Nobody has looked at the sheets (they are grey: the real colours need the palette). What `sl`, `black`, `shdw`, `red` and flag bit 6 mean is not known.
+**Next:** 4b-2, the screen layouts (`.gui`) and the tag file; the caption box is `IDDLG_CAPTION` in `Gplayscr.gui`.
+
 ## 2026-10-18 M4 steps 4a-7 to 4a-9: the user's checks; end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 4a-7 to 4a-9, older 3m/3n/4a entries shortened; the fixed differences, the answered Q103/Q104 notes and the done 4a checks removed; stand-ins of 4a and 4a-8 (Q105); next steps; 426 tests), `docs/FEATURES.md` (the click turn, turn keys during an automatic turn, the chest remark in any state; `--turn` / `--hold` wording; "doesn't turn to face" removed), `README.md` (remarks checked, Connor turns to what he clicks; M4 started), `docs/DESIGN.md` (4a-7 to 4a-9 done and checked), `QUESTIONS.md` (Q103, Q104 built and checked).

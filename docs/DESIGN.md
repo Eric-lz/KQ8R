@@ -1798,6 +1798,41 @@ inventory and menus.
     clicking the alchemist's sign (`alcmsign`), `smlchst3` and `wizbook`
     with `--click`, read in `talk.log`, `sound.log`, `connor.log`.
 
+- **4b — the interface's files: fonts, screen layouts, captions in the
+  original font** (planned 2026-10-18). From the game's data and the
+  community notes `kq8pfon.txt`, `kq8pbma.txt`, `kq8gui.txt`,
+  `kq8tag.txt` (libkq8fpc, GPL-3.0: facts about layouts only, code and
+  wording our own). No behaviour note yet: A is studying the interface
+  (`interface.md`, `inventory.md`). A **font** is a set of small
+  letter pictures (glyphs) with a table saying which picture each
+  character uses. A **layout** (`.gui`) is a tree of boxes on a
+  640×480 screen, each with an id, a rectangle, and a picture or a
+  font and text. A **tag** is a number that names a font, picture or
+  text; `kqGuiTag.TTAG` lists them with their names.
+  - **4b-1, fonts** (**done** 2026-10-18; `kq8-data/src/font.rs`, new, and a bitmap-array
+    reader for `.pba`). Read every `.pft` in `GAME/8Gui` and
+    `GAME/Resource`: the font info (flags, glyph count, height,
+    baseline, colours, scale, spacing), the character map, the glyph
+    table and the glyph pictures. New check `kq8 font-verify`
+    (`font-verify.log`): per font the glyph count, height, characters
+    covered, whether every glyph fits its picture, and the file read to
+    its exact end. Optional PNG sheet of each font for the user's eye.
+  - **4b-2, layouts and tags** (`kq8-data/src/gui.rs`, new). Read the
+    tag file and the nine `.gui` files in `GAME/Resource`. New check
+    `kq8 gui-verify` (`gui-verify.log`): each layout as a tree, with
+    ids and tags turned into their names, rectangles, fonts and
+    pictures; every file read to its exact end. This shows what the
+    caption box (`IDDLG_CAPTION`, in `Gplayscr.gui`) and the health
+    panel are made of.
+  - **4b-3, captions in the original font** (viewer). If the layout
+    names the caption's place and font, draw the caption there in that
+    font (glyph pictures scaled from 640×480 to the window). What the
+    layout doesn't say (colour, line wrapping, a band behind the text)
+    stays our stand-in until A's note; if it names no font, a sample
+    line in each font for the user to pick by eye.
+  - Tests: unit tests on hand-made files; `font-verify`, `gui-verify`
+    on the install; viewer run with the alchemist's sign.
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and
