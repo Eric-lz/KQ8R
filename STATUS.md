@@ -58,7 +58,9 @@ end of A's session answering Q94–Q96 and studying the camera flights. Read wit
   not built): message and voice files, the per-character queue,
   captions, ducking (`nofade`), the mouth, `TalkComplete` and
   `stateChangeNotify`, what cuts a line short, the stock remarks.
-  Conversations are not studied yet.
+  Conversations are not studied yet. The turn, the 0.5 s wait, the
+  ducking, talking while walking and the mouth were confirmed by the
+  user in the original.
 - **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.

@@ -319,6 +319,13 @@ Words used here:
      (the line has `#`).
   3. Watch his face up close during a line: the mouth texture should
      change.
+  **Checked by the user in the original (2026-10-18), all as traced:**
+  (1) Connor turns to face the sign and starts talking about half a
+  second later, and the other sounds drop while he speaks; (2) pressing
+  forward, he walks off and keeps talking (the line has `#`; rule 12:
+  speaking doesn't stop his movement); (3) his mouth texture changes
+  while he speaks. Not checked: captions (on screen) and a line without
+  `#` being cut short.
 
 ## Open questions
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 The user's checks of the remarks study (docs only)
+
+**Changed:** `talking.md` "How to check": the user's checks recorded.
+**Why:** The user checked three points of the study in the original.
+**Tested how:** By the user, by eye and ear, at the alchemist's sign in Daventry.
+**Result:** All as traced: Connor turns to the sign and starts about 0.5 s later; other sounds drop while he speaks; pressing forward he walks and keeps talking; his mouth texture changes.
+**Still broken / not tested:** Captions and cutting a line without `#` short were not checked.
+**Next:** B builds remarks after M3 3m.
+
 ## 2026-10-18 Study session A: remarks and speech (docs only)
 
 **Changed:** New `docs/behaviour/talking.md` (message files, sound and lip-sync file names, talkers, `KQMonster::speak`, the queue, captions, ducking, the mouth, `TalkComplete`, `stateChangeNotify`, `testMessage`, `clearSpeak`, what cuts a line short, Connor's built-in remarks). Pointers in `sound.md` (rule 53, 58, open question 3: `nofade`), `chests.md` (open question 1 answered), `doors.md` (stub table). Scratch notes with addresses in `re/notes.md` (not committed). No code.
