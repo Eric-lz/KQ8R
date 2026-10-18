@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3n: end-of-session documents (docs only)
+
+**Changed:** `STATUS.md` ("Where we are": 3n; to check by eye; the 3n stand-ins; next step; Q97–Q99 built, Q100–Q101 asked), `docs/DESIGN.md` (3n done). README unchanged (no new keys or files; nothing new checked by eye).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Read through; no code changed.
+**Result:** —
+**Still broken / not tested:** Every 3n step is checked in the logs and unit tests only, not by eye.
+**Next:** The user's checks by eye (STATUS "To check by eye (3n)"); A answers Q100, Q101.
+
 ## 2026-10-18 M3 step 3n-5: logs for the end of a scripted walk (Q98)
 
 **Changed:** Viewer `connor_view.rs`: in the update a scripted walk ends (distance gone or head-on), `connor.log` gives the walk's phase, its stop transitions with their from points, and the next one from that phase; when that stop transition has ended, the updates it played in, its own steps in the data, the distance along his path and straight, and the heading change. No rule changed. `docs/behaviour/QUESTIONS.md`: Q101.

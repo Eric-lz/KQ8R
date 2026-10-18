@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's session building Q97–Q99 (M3 3n: when the camera updates). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -12,7 +12,24 @@ end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with 
   objects, traps, items, chests, scripted objects, clicking, sound
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
-- **New 2026-10-18 (B, M3 3m): A's answers to Q94–Q96 and the camera
+- **New 2026-10-18 (B, M3 3n): A's answers to Q97–Q99 are built**, one
+  commit per step, checked in the logs only (not by eye yet):
+  - 3n-1: the follow camera updates only when Connor moves (> 0.1 or a
+    turn), after `follow`, while the "turn back" switch is on, while the
+    player uses the camera, and in flights; each update's causes in
+    `camera.log`. Stand-in: one update on the first tick (Q27 d).
+  - 3n-2: the refined height rule (lift at once, snap within 100, ease
+    10% only when the aim moved > 20); replaces the hand-set 0.5.
+  - 3n-3: `move KQCamera` while following keeps its heading (stand-in
+    for the undecoded swing-behind rules; Q100).
+  - 3n-4: a flight's last update and a cut keep the height (Q97); the
+    watermill's end spot has ground 7,650, so no lift.
+  - 3n-5: logs for the end of a scripted walk (Q98); the numbers match
+    the rules; Q101 asked.
+  - Mill wheel (`wheeltp1.cs`) in our logs: first shot (185500, 226520,
+    9627.3), heading kept 0.259 rad off Connor; second shot exactly at
+    the script's (185000, 237850, 10850) until the flight.
+- **Before that (B, M3 3m): A's answers to Q94–Q96 and the camera
   flights are built**, one commit per step, checked in the logs; 3m-1,
   3m-2 and 3m-4 also by eye by the user (like the original):
   - 3m-1 (Q96): `KQConner::endJump` / `JumpDir`: the windmill tumble
@@ -223,6 +240,11 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
+- **To check by eye (3n):** the mill wheel cutscene (both shots before
+  the flight should now hold where the script puts them; the first looks
+  down at Connor from about the script's height); walking on hills (the
+  height now eases 10% per update, slower than the hand-set 0.5: say if
+  it feels wrong); the watermill flight (should look as before).
 - **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
   and back flip), barrels pushed into a wall (the wall stops Connor) and
   the watermill room's camera flight match the original. The scripted
@@ -230,18 +252,18 @@ milestone: **M3, Daventry comes alive**.
   goes on a bit further than in the original; likely the walk's stop
   transition (`walkstopright`, about 460 units) playing while
   `pointAndCue` turns him (**Q98**, asked). The mill wheel cutscene
-  (`wheeltp1.cs`): its two shots before the flight are lower and closer
-  than in the original, because our camera recalculates every update
-  while the original only does while Connor moves or the camera is used
-  (**Q99**, asked; not fixed).
-- **Stand-ins of 3m** (not traced; none reached in Daventry except the
-  first): the height on a flight's last update is not applied (Q97); a
+  (`wheeltp1.cs`): its two shots before the flight were lower and closer
+  than in the original (**Q99**; built in 3n, not checked by eye yet).
+- **Stand-ins of 3m** (not traced; none reached in Daventry): a
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
   tested; `follow Connor` during a flight ends it.
-- **Next step, suggested:** for B: the camera's update rules from Q99
-  ("When the camera updates at all", the refined height rule; fixes the
-  mill wheel shots), then Q97's note (no code change). For B: cues of scenery
+- **Stand-ins of 3n:** one camera update on the first tick (Q27 d); the
+  heading after `move KQCamera` while following kept until the next
+  `follow`, flight or cut (Q100 a); a deep lift whose line meets no
+  ground (Q100 b); one `follow` finding both conditions turns the
+  "turn back" switch on (Q100 c).
+- **Next step, suggested:** the user's checks by eye of 3n. For B: cues of scenery
   animations, `loadKQ` with a name or place while playing (barrels and
   boards breaking, M5), remarks and speech (`talking.md`, studied by A),
   inventory screen (M4). The brightness setting (rule 17) is still not
@@ -256,8 +278,7 @@ milestone: **M3, Daventry comes alive**.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
   the camera trail behind him), first person (F2), shake; the roll of
-  `move KQCamera` and of flights is not drawn (logged). Our camera updates every tick; the
-  original only while Connor moves or the camera is used (Q53 d).
+  `move KQCamera` and of flights is not drawn (logged).
 - Cutscenes: no GUI panels to hide and no spinning-mask icon during
   `handsOff`. A request from a cue reaches Connor one update after the
   cue (our order).
@@ -290,10 +311,12 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- For B (answered 2026-10-18 by A, not built): Q99 (when the camera
-  updates; also settles Q53 d), Q97 (stand-in confirmed). Q98 answered:
-  the build matches; the remaining difference is `anim-scripts.md` open
-  question 6.
+- Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
+  is still not explained (`anim-scripts.md` open question 6).
+- For A (asked 2026-10-18 by B): **Q100** (the heading after `move
+  KQCamera` while following in later updates; the deep lift; the "turn
+  back" switch when one `follow` finds both), **Q101** (the update Wait
+  asks for `Stop` after a scripted walk's end).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
