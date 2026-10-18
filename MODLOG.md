@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a: end-of-session documents (docs only)
+
+**Changed:** `STATUS.md` ("Where we are": 4a; what to check by ear and eye; the 4a stand-ins; speech not done; next steps; Q103; 418 tests), `docs/FEATURES.md` (new section "Remarks and speech"; the not-working list), `README.md` (remarks in "What works"; `msg-verify`; talking removed from "What doesn't work", conversations stay), `docs/DESIGN.md` (4a done).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Read through; no code changed.
+**Result:** —
+**Still broken / not tested:** Every 4a step is checked in the logs and unit tests only, not by ear or eye. `talking.md` open questions 1-5 and Q103 stay open, so nothing is marked done in `QUESTIONS.md`.
+**Next:** The user's checks (STATUS "To check by ear and eye (4a)"); A answers Q103 and studies conversations.
+
 ## 2026-10-18 M4 step 4a-6: Connor's mouth moves while he talks
 
 **Changed:** Viewer `load.rs`: Connor's `baseLip` and the eight textures of his `lips=` list (`[ConnerLips]` `CF0`-`CF7.bmp`) are loaded. `connor_view.rs`: the materials showing the face texture are remembered, the eight images made. `talk_view.rs`: mouth changes and line ends go to `Speech`; `mouth_draw` puts `lip<n>` on the face materials (`lip0` for shapes of 8 or more and at rest), each change in `connor.log`. `main.rs`. Provenance.

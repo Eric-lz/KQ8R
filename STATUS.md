@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session building Q97–Q99 (M3 3n: when the camera updates). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's session building remarks and speech (M4 4a, `talking.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -12,7 +12,25 @@ end of B's session building Q97–Q99 (M3 3n: when the camera updates). Read wit
   objects, traps, items, chests, scripted objects, clicking, sound
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
-- **New 2026-10-18 (B, M3 3n): A's answers to Q97–Q99 are built**, one
+- **New 2026-10-18 (B, M4 4a): remarks and speech are built** from
+  `talking.md`, one commit per step, checked in the logs only (not by
+  ear or eye yet):
+  - 4a-1: message, talker and lip-sync files (`kq8-data/src/msg.rs`);
+    `kq8 msg-verify` matches every count in the note.
+  - 4a-2: the speech queues and `KQMonster::speak`, `clearSpeak`,
+    `testMessage`, `stateChangeNotify` / `clearStateChangeNotify`,
+    `TalkComplete` (`kq8-core/src/talk.rs`); Connor turns to the
+    listener, lines 0.5 s later; `talk.log`. **Q103** asked (`eval`
+    and small points; stand-ins).
+  - 4a-3: voices in group 3 (Connor plain, others placed), ducking of
+    groups 0, 2, 5 to 0.2.
+  - 4a-4: captions (stand-in panel: the GUI is not studied).
+  - 4a-5: "too far", "This will not work", the chests' remarks with the
+    turn; presses and clicks cut a line without `#` short.
+  - 4a-6: Connor's mouth texture (`CF0`–`CF7`).
+  - Runs: the alchemist's sign (`--at 245000,255000,0 --click
+    alcmsign,30`), `smlchst3`, a tombstone cut short, too far.
+- **Before that (B, M3 3n): A's answers to Q97–Q99 are built**, one
   commit per step, checked in the logs only (not by eye yet):
   - 3n-1: the follow camera updates only when Connor moves (> 0.1 or a
     turn), after `follow`, while the "turn back" switch is on, while the
@@ -45,17 +63,8 @@ end of B's session building Q97–Q99 (M3 3n: when the camera updates). Read wit
     `cutToCamLoc`; new `kq8-core/src/camera_flight.rs`): the watermill's
     flight (31 updates, the jump closer at the end) and the mill wheel's
     (46). **Q97 asked** (the height on a flight's last update).
-- Before that (3l, 2026-10-18): A's answers to Q84–Q93 (the bricks
-  without a pop-up, the watermill cutscene, `handsOff`, pushing barrels
-  and the hay bale, turning during `crash`, torches in step, levels,
-  `loadKQ` while playing); see MODLOG.
-- **New 2026-10-18 (A): remarks and speech studied** (`talking.md`,
-  not built): message and voice files, the per-character queue,
-  captions, ducking (`nofade`), the mouth, `TalkComplete` and
-  `stateChangeNotify`, what cuts a line short, the stock remarks.
-  Conversations are not studied yet. The turn, the 0.5 s wait, the
-  ducking, talking while walking and the mouth were confirmed by the
-  user in the original.
+- A studied remarks and speech (`talking.md`, 2026-10-18); built in 4a
+  above. Conversations are not studied yet.
 - **New 2026-10-18 (A): Q97–Q99 answered** (`camera.md`,
   `anim-scripts.md`, not built): the follow camera updates only on a
   "Connor moved" message (a committed move that changes his position by
@@ -77,7 +86,8 @@ end of B's session building Q97–Q99 (M3 3n: when the camera updates). Read wit
 
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
-milestone: **M3, Daventry comes alive**.
+milestones: **M3, Daventry comes alive**, and the start of **M4** (remarks
+and speech, 4a).
 
 ## Setup
 
@@ -137,14 +147,17 @@ milestone: **M3, Daventry comes alive**.
   collider switch, events and scripts together), `emitter.rs` (particles and catchers), `ground_anim.rs`
   (flowing ground textures), `anim.rs` (looping animations of objects),
   `sound.rs` (sound rules: groups, distance, balance, mix limit, sound
-  objects; no sound card).
+  objects, ducking; no sound card), `talk.rs` (speech queues, line
+  timing, mouth schedule; M4 4a). `kq8-data/src/msg.rs`: message,
+  talker and lip-sync files. Viewer `talk_view.rs`: voices, captions,
+  Connor's mouth.
 - `crates/kq8-audio` (5 unit tests): our mixer and the sound card (cpal).
   Runs at a fixed **15 updates per second**; the ground animators run on
   continuous game time.
 - `crates/kq8-cli`: `kq8` checks (`vol-verify`, `bitmap-verify`,
   `bitmap-png`, `shape-verify`, `terrain-verify`, `building-verify`,
   `item-verify`, `lightmap-verify`, `lighting-verify`, `aud-verify
-  [--wav <file>]`) and `kq8 text <file>` to print a game text file
+  [--wav <file>]`, `msg-verify`) and `kq8 text <file>` to print a game text file
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--renderer auto|vulkan|dx12` the
@@ -162,7 +175,7 @@ milestone: **M3, Daventry comes alive**.
   `scene_lights.rs`, on building surfaces `wall_lights.rs`.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
-  events), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
+  events), `talk.log` (speech), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
   `anim.log`, `sound.log`, `lightmap-verify.log`, `lighting-verify.log`,
   `aud-verify.log`. `viewer.log`
   also logs the ground light under Connor and the camera, and every
@@ -236,7 +249,7 @@ milestone: **M3, Daventry comes alive**.
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
   ear by the user. World music (3h-5) too.
-- Tests: 399 unit tests pass (105 + 278 + 5 + 11), 2026-10-18.
+- Tests: 418 unit tests pass (110 + 292 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
@@ -265,17 +278,31 @@ milestone: **M3, Daventry comes alive**.
   `follow`, flight or cut (Q100 a); a deep lift whose line meets no
   ground (Q100 b); one `follow` finding both conditions turns the
   "turn back" switch on (Q100 c).
-- **Next step, suggested:** the user's checks by eye of 3n. For B: cues of scenery
-  animations, `loadKQ` with a name or place while playing (barrels and
-  boards breaking, M5), remarks and speech (`talking.md`, studied by A),
+- **To check by ear and eye (4a):** click the alchemist's sign
+  (`cargo play --at 245000,255000,0`, walk up and click it): Connor turns,
+  speaks after about half a second, the caption shows, the music drops,
+  his mouth texture changes; click the tombstone `tomb2.01` at (202475,
+  178380) (`cargo play --at 201000,178380,0`) and press an arrow key
+  while he reads it: he stops talking; click a sign or tombstone
+  from far away: "'Tis beyond my reach."
+- **Stand-ins of 4a** (Q103): `eval`; waits after a turn survive
+  `clearSpeak`; a monster's turn not done; a chest remark without a
+  turn is queued at once; the caption panel's look.
+- **Next step, suggested:** the user's checks of 4a (above) and of 3n.
+  For A: conversations (`KQConner::conversation`), Q103. For B: cues of
+  scenery animations, `loadKQ` with a name or place while playing,
   inventory screen (M4). The brightness setting (rule 17) is still not
   built.
 - Sound, not done: the item land sound (nothing is thrown),
-  hurt sounds (fighting), ducking under speech, pause, speech, and
-  `setActiveCamera` / `makeActive` for sound objects.
+  hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
+  for sound objects.
+- Speech, not done: conversations (not studied), item descriptions in
+  the inventory (no inventory screen), the Daventry monster-death
+  remark (no monster dies), monsters' mouths (not drawn), helmets'
+  and armour's faces (M5).
 - Clicking: only doors, chests, items, scripted objects and buildings
-  react. No remarks (Connor says nothing; remarks are logged),
-  Connor doesn't turn to face what he clicks. No inventory screen (M4).
+  react. Connor doesn't turn to face a door or object he clicks (only
+  to what he talks about). No inventory screen (M4).
   `checkInventory` by id number (Q62 b) not built.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
@@ -303,7 +330,7 @@ milestone: **M3, Daventry comes alive**.
 - Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
-- Nothing yet of: talking, inventory screen, fighting,
+- Nothing yet of: conversations, inventory screen, fighting,
   stats, story, saving, travel between worlds.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
@@ -315,6 +342,11 @@ milestone: **M3, Daventry comes alive**.
 
 - Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
   is still not explained (`anim-scripts.md` open question 6).
+- For A (asked 2026-10-18 by B, M4 4a): **Q103** (`eval`; `clearSpeak`
+  during the wait after a turn; a placed voice that moves; a monster's
+  turn; a chest remark without a turn). `talking.md` open questions 1–5
+  (conversations, shapes above 7, folders, the caption panel, a line
+  with no voice) are still open.
 - For A (asked 2026-10-18 by B): **Q100** (the heading after `move
   KQCamera` while following in later updates; the deep lift; the "turn
   back" switch when one `follow` finds both), **Q101** (the update Wait

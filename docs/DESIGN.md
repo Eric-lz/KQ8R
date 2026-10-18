@@ -1683,14 +1683,15 @@ inventory and menus.
 - B: messages (`.msg`), audio (`.aud`), fonts (`.pft`), GUI files.
 - A: conversations, inventory rules, menu behaviour.
 
-- **4a — remarks and speech (planned 2026-10-18).** From
+- **4a — remarks and speech (planned 2026-10-18; done 2026-10-18,
+  4a-1 to 4a-6; Q103 asked).** From
   `docs/behaviour/talking.md` (A, 2026-10-18). A **line** is one entry
   of a message file with its own voice file; a **queue** is the list of
   lines one character still has to say; a **remark** is a line Connor
   says about something he clicked. Conversations (choosing what to say)
   are not studied and not in 4a. One commit per step; every step logs to
   `kq8-artifacts/logs/talk.log` (new).
-  - **4a-1, reading the files** (`kq8-data/src/msg.rs`, new; rules 1–5,
+  - **4a-1, reading the files** (**done**; `kq8-data/src/msg.rs`, new; rules 1–5,
     17, the community notes `kq8msg.txt` / `kq8lip.txt`). Message files
     (`<n>.MSG`: lines with noun, verb, case, sequence, talker, text),
     the stage directions taken out of the text (the "no stop" mark `#`),
@@ -1701,7 +1702,7 @@ inventory and menus.
     of lines without a voice file, to compare with the note's numbers
     (Daventry 254 lines, 100 with `#`; `0.MSG` 140, 21 with `#`, 6
     without a voice; 476 `#` in 2,080 lines).
-  - **4a-2, the queues and the script commands** (`kq8-core/src/talk.rs`,
+  - **4a-2, the queues and the script commands** (**done**; `kq8-core/src/talk.rs`,
     new; `active.rs`; rules 6–9, 11, 13–15, "Edge cases", "Do not
     reproduce"). `KQMonster::speak`, `clearSpeak`, `testMessage`,
     `stateChangeNotify`, `clearStateChangeNotify` stop being stubs.
@@ -1720,23 +1721,23 @@ inventory and menus.
     `eval` (used as `if eval KQMonster::testMessage …`, not described
     in any note): STAND-IN, runs the rest of the line as a command and
     keeps its result; question Q103.
-  - **4a-3, hearing it** (viewer `talk_view.rs`, new; `sound_view.rs`;
+  - **4a-3, hearing it** (**done**; viewer `talk_view.rs`, new; `sound_view.rs`;
     rule 10, `sound.md` rules 53, 58). The voice plays in group 3:
     Connor's plain, others placed at the speaker (2,000 / 30,000).
     While a line without `nofade` plays, groups 0, 2 and 5 are turned
     down to 0.2. `clearSpeak` stops the voice at once.
-  - **4a-4, captions** (viewer; rule 10). With `Options::Captions` true
+  - **4a-4, captions** (**done**; viewer; rule 10). With `Options::Captions` true
     (from `Options.cs`) the line's text is shown at the bottom of the
     screen; hidden when the queue is empty. STAND-IN: where and how the
     original draws the panel is not studied (open question 4); plain
     white text on a dark band.
-  - **4a-5, Connor's own remarks and cutting a line short** (`active.rs`,
+  - **4a-5, Connor's own remarks and cutting a line short** (**done**; `active.rs`,
     viewer; rules 16, 19). "Too far" (0 0 0 1 1), "This will not work"
     (0 0 0 4 1), a chest's `Take…`/`Empty…` remark with the turn to the
     chest unless `doNotPointAt`. Pressing forward/back/turn/Jump or
     clicking in the world stops Connor's line when it has no `#` mark
     (not during `handsOff`).
-  - **4a-6, the mouth** (viewer; rule 18). Connor's face texture
+  - **4a-6, the mouth** (**done**; viewer; rule 18). Connor's face texture
     `cf0.bmp` is swapped for `lip<n>` of `[ConnerLips]` at each mouth
     change. Other characters are not drawn yet (cubes), so only logged.
   - Not in 4a: conversations; item descriptions in the inventory (no

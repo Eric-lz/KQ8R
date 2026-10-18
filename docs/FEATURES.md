@@ -304,6 +304,36 @@ the original.
   and by ear by the user (2026-10-17). Not built: pausing music (there is no pause),
   videos, changing worlds.
 
+## Remarks and speech (milestone M4, step 4a)
+
+From `docs/behaviour/talking.md` (2026-10-18). Checked in the logs only
+(`talk.log`, `sound.log`, `connor.log`); **not yet checked by ear or
+eye**.
+
+- **Lines:** the message files (`.MSG`), voices and lip-sync files are
+  read (`kq8 msg-verify` matches the note's counts: 2,080 lines, 476
+  that can't be cut short).
+- **Scripts:** `KQMonster::speak` queues a character's lines, once (a
+  remark already waiting is not added again); Connor first turns to
+  what he talks about (in Wait or Move), then speaks 0.5 s later.
+  `clearSpeak`, `testMessage`, `stateChangeNotify` and `TalkComplete`
+  (scripts hear when a line ends) work.
+- **Hearing it:** Connor's voice plays plain, others' placed at the
+  speaker; the speech slider (0.34); effects and world music drop to
+  0.2 of their loudness while a line plays.
+- **Captions:** the line's text at the bottom of the screen while he
+  talks (`Options::Captions` is true in `Options.cs`). The panel's look
+  is ours (the original's GUI is not studied).
+- **Mouth:** Connor's face texture follows the lip-sync file (`CF0`–`CF7`).
+- **Connor's own remarks:** "'Tis beyond my reach." (too far), "This will
+  not work." (an item not taken), the chests' "'Tis empty." with a turn
+  to the chest.
+- **Cutting short:** a movement key, turn key, Jump or a click stops
+  Connor's line unless it is marked as not stoppable (most remarks are).
+- Checked runs: the alchemist's sign (turn, 0.5 s, 3.542 s line, clicks
+  during it ignored), `smlchst3` ("'Tis empty."), a tombstone cut short
+  by a turn key, a tombstone clicked from too far.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,
@@ -397,17 +427,18 @@ message that shows the usage.
 
 ## What doesn't work yet
 
-- **Not playable:** there is no story, talking, inventory screen,
+- **Not playable:** there is no story, conversations, inventory screen,
   fighting, saving, or travel between worlds.
 - **Not drawn:** people and monsters, fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
-- **Sound:** no speech or hurt sounds yet; music doesn't pause (no pause yet); monsters have no
+- **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no
   footsteps (there are no monsters yet); scenery
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.
 - **Clicking:** doors, chests, items, scripted objects and buildings
-  react; nothing else does. Connor says nothing (his remarks, e.g. "too far" or
-  "locked", are only logged) and doesn't turn to face what he clicks.
+  react; nothing else does. Connor speaks his remarks (M4 4a), but
+  doesn't turn to face a door or object he clicks (only to what he
+  talks about).
   Picked-up items are only counted in the log.
 - **Animated objects:** scripts switch them (M3 step 3i), but most
   Daventry scripts that do it start from things not built yet (fights,

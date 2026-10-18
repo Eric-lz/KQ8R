@@ -49,17 +49,17 @@ items. The goal is the whole game; see the roadmap in
 - **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
 - **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls (the wall still stops Connor), but not uphill; pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
 - **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill).
+- **Remarks**: Connor turns and speaks his lines (signs, tombstones, chests, "too far"), with captions and mouth movement; other sounds turn down meanwhile (not yet checked by ear or eye).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 
 ### What doesn't work yet
 
-- No story, talking, inventory screen, fighting or saving.
-- No dialogue.
+- No story, conversations, inventory screen, fighting or saving.
 - No people or monsters.
 - Clicking works only on doors, chests, items, buildings and a few scripted
-  objects; Connor doesn't speak (his remarks are only logged).
+  objects.
 - Scripts switch only some objects' animations (no fights yet).
 
 Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
@@ -152,6 +152,7 @@ cargo run --release -- lighting-verify
 cargo run --release -- building-verify
 cargo run --release -- item-verify
 cargo run --release -- aud-verify
+cargo run --release -- msg-verify
 ```
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the
@@ -167,7 +168,8 @@ crates/
   kq8-data/     reads the game's files (archives, images, models, ground,
                 object lists, scripts) into plain data
   kq8-core/     the game's rules, without drawing (Connor's movement,
-                camera, scripts, doors, chests, traps, items, sound rules)
+                camera, scripts, doors, chests, traps, items, sound rules,
+                speech queues)
   kq8-audio/    plays sounds: our mixer and the sound card (cpal)
   kq8-viewer/   the window: draws a world and runs the rules; also our
                 test tool (H and U keys, free camera, test options)
