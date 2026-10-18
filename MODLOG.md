@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3n-3: `move KQCamera` while following keeps its heading
+
+**Changed:** Viewer `game_camera.rs`: a `move KQCamera` while the camera follows Connor (and no flight) remembers the script's heading; the camera updates after it set the tilt at once (the view looks at the aim point, as any follow update) but keep that heading, and log how far off Connor it is; `follow`, a flight or a cut forget it. `docs/behaviour/QUESTIONS.md`: Q100 (this stand-in, and two small points from 3n-1/3n-2).
+**Why:** A's answer to Q99 d (`camera.md` "`move KQCamera` while following"): the heading is not snapped; it goes through the swing-behind rules, which are not decoded (open question 7).
+**Tested how:** `cargo test --workspace` (403 pass), `cargo clippy --workspace --all-targets` clean. Viewer: the mill wheel walked into (`cargo play --world Daventry --at 186300,226000,3.1416 --hold 1,0,0 --frames 1500 --sound off`, `camera-3n3-wheel.log`); the watermill (`cargo play --world Daventry --at 192408,227039,0 --frames 3000 --sound off`, `camera-3n3-watermill.log`).
+**Result:** Mill wheel tick 18: "heading kept at -0.300 (STAND-IN, open question 7), +0.259 rad off Connor (-0.559); tilt set at once: -0.846" (the note: about 0.26 off, tilt about −0.83 with the aim 1,400 above his feet; ours aims 800 above). Position (185500.0, 226520.0, 9627.3) as in 3n-2. Watermill unchanged: its script uses `follow none`; the flight ends at (188999.0, 229341.5, 10863.4), heading 2.153, tilt +0.016.
+**Still broken / not tested:** Not checked by eye. STAND-IN: the heading stays kept in later updates too, until the next `follow`, flight or cut (Q100 a; no Daventry case).
+**Next:** 3n-4, the flight's last update (Q97 wording and the ground check).
+
 ## 2026-10-18 M3 step 3n-2: the refined camera height rule
 
 **Changed:** `kq8-core/src/camera.rs`: `height_rule` (lift at once to ground + 1,400, or along the line when deeper; snap within 100; otherwise ease 10% from the height at the start of the update only if the aim point moved more than 20 by |Δx| + |Δy| + |Δz|, else kept; snapped with the mouse swing if lifted earlier), `height_share` (1 − 0.9^(15 × seconds)), the "lifted" memory; an update's order is now leash, height, then the push out to the minimum. `HEIGHT_RATE` (your hand-set 0.5) is replaced by `HEIGHT_EASE` 0.1. 3 new unit tests replace the old height test. Viewer `camera.log`: a last column with the height step (lifted / snapped / eased / kept), the aim's movement sum, the wanted height, the height at the start and before the rule.

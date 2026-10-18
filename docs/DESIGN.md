@@ -1651,7 +1651,7 @@ catchers, ground animators).
       second; not moved: kept (snapped only if the mouse swings and it
       was lifted earlier). This replaces the hand-tuned 0.5 per update.
       Log: lifted / snapped / eased / kept, the sum, the wanted height.
-    - **3n-3, `move KQCamera` while following.** The script's place and
+    - **3n-3, `move KQCamera` while following** (**done** 2026-10-18; Q100 asked). The script's place and
       view stay until the next camera update (3n-1 gives this). In that
       update the tilt is set at once by the follow view (looks at the
       aim point) and the heading is **kept** as the script left it: the

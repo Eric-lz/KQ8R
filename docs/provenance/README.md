@@ -1507,3 +1507,11 @@ This replaces "snap within 100, else 0.5 of the gap every update" (the 0.5 was h
 | Moved (aim point > 20 since the previous record): start height + 10% × (wanted − height after 1–2); not moved: kept; mouse swing and lifted earlier: snapped | Rule 2.3 | Unit test `height_eases_10_percent_…`; `camera-3n2-wheel.log` tick 18: 9,750 → 9,627.3 (sum 1,109.6, wanted 8,523.1) |
 | "Moved" by \|Δx\| + \|Δy\| + \|Δz\|, not the signed sum | "Do not reproduce" | Unit test `height_eases_10_percent_…` (+300 / −300) |
 | 10% per update as 1 − 0.9^(15 × seconds) | "Do not reproduce" (per-update rates) | Same unit test |
+
+### 3n-3, `move KQCamera` while following — `crates/kq8-viewer/src/game_camera.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The script's place and view stand until the next camera update (no update of its own) | `camera.md` "`move KQCamera` while following" (Q99 d), built by 3n-1 | `camera-3n3-wheel.log`: cue 4's shot unchanged until the flight |
+| In that update: the tilt set at once (the view looks at the aim point), the heading not snapped | Same | `camera-3n3-wheel.log` tick 18: heading kept −0.300, +0.259 off Connor, tilt −0.846 |
+| The heading stays kept in later updates until the next `follow`, flight or cut | **Stand-in** (the swing-behind rules, open question 7, are not decoded; Q100 a) | — (no Daventry case) |
