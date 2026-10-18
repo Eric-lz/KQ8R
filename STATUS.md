@@ -16,8 +16,11 @@ end of A's study of the on-screen interface and the inventory
   `docs/behaviour/inventory.md` (categories, stacking, equipment swaps,
   picking an item, the held item after a world click, applying items,
   the wizard's items: a held-item click delivers them, his replies need
-  conversations). Not checked in the original yet; checks listed in
-  both notes. Q105 answered in `clicking.md` rules 34–36.
+  conversations). **Checked by the user in the original** (2026-10-18):
+  start values, Space, meters pop-up, top bar, the caption strip as wide
+  as the box and slightly left of centre with the map closed, equipment
+  swap, a refused held item staying on the pointer. So B's text-fitted
+  caption strip (4b-3) should go back to the box width. Q105 answered in `clicking.md` rules 34–36.
 
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
   alive) is well under way**: doors, emitters, flowing water, animated

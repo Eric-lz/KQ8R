@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study (A): the user's checks of the interface and inventory notes (docs only)
+
+**Changed:** `interface.md` rules 14, 50, 51, "How to check", open question 2; `inventory.md` rule 12, "How to check", open question 1; `QUESTIONS.md` Q107; `STATUS.md`.
+**Why:** The user checked the notes' predictions in the original.
+**Tested how:** By the user in the original, by eye.
+**Result:** All five checks as the notes say: start values and Space (interface check 3), the meters popping up alone (4), the top bar and new-item pop (5), the short caption's strip as wide as a long one and slightly left of centre with the map closed (6), the old weapon/armour dropping and a refused held item staying on the pointer (inventory check 4). Also: the bars don't interrupt play, only Escape (main menu) leaves the game screen; no item is ever lost from the inventory except by being used.
+**Still broken / not tested:** The handsOff check (interface 7) and the quest-strip gap (inventory 5) are not done. B's 4b-3 strip, fitted to the text, is now known to be wrong (the strip is the box's width). Whether the world stops behind the main menu is not traced.
+**Next:** B: caption strip back to the box width; then the always-visible panel.
+
 ## 2026-10-18 Study (A): the on-screen interface and Connor's inventory (docs only)
 
 **Changed:** New `docs/behaviour/interface.md` (which files draw the panels; the panel groups and how they slide; Space / Tab / 1–8 / Escape / F1; the top bar following the mouse; when panels hide for `handsOff`, conversations, captions; first person hides nothing; the meters' formulas; Connor's five stats named; the slots, gold, blinking; the caption strip's wrap, height and place). New `docs/behaviour/inventory.md` (item categories and places; stacking; equipment swaps that drop the old piece; picking an item from the bars; what is held as the pointer and what is used at once; the held item after a world click; applying and un-applying items, `userId`; the wizard's items). `clicking.md` rules 34–36 (Q105). Pointers in `talking.md` (open question 4 answered), `items.md` (open question 1 answered), `anim-scripts.md` rule 19 (stat names). `QUESTIONS.md`: Q105 answered, Q106 partly, Q107 mostly. Scratch notes in `re/` (not committed).

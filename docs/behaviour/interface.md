@@ -146,8 +146,11 @@ is shown or hidden.
     help popup, or closes it if open; Enter closes it; left/right arrows
     page through it while it is open [traced]. Opening the menu first
     saves a 160 × 120 thumbnail of the screen for the save screen
-    (`current.bin`) [traced]. Whether the world stops while the menu is
-    open was not traced (it is a separate screen; very likely).
+    (`current.bin`) [traced]. **The user's check in the original
+    (2026-10-18):** showing the top or bottom bar does not interrupt
+    play; only Escape (the main menu) takes the player out of the game
+    screen. (Our build quits on Escape as a stand-in.) Whether the world
+    clock is stopped behind the menu was not traced.
 15. **handsOff and cutscenes** (`anim-scripts.md` rule 21; STATUS.md
     "GUI panels to hide") [traced]:
     - `handsOff 1`: if the bottom bar is showing, that is remembered and
@@ -336,9 +339,9 @@ is shown or hidden.
 50. **Width of the stone**: the strip covers the **whole box** (its
     picture is the dialog's background), not the text [traced that the
     picture belongs to the box; how the picture fills it, tiled or
-    stretched, was not traced]. The user's "about two letters beyond the
-    text" fits long lines; with this rule a short line has a wide strip.
-    Check: rule "How to check" 6.
+    stretched, was not traced]. **Checked by the user in the original
+    (2026-10-18):** a short line ("'Tis empty.") has a strip as wide as a
+    long line. So the strip is the box's width, not fitted to the text.
 51. **Where** [traced]: the box keeps its own width and height and is
     moved every time panels move:
     - its **bottom edge** = the **top edge of the highest bottom panel**
@@ -350,8 +353,9 @@ is shown or hidden.
       the screen's right edge. With the map open (right edge 320/640)
       that is x 480 of 640; with the map away (slid left, right edge at
       −50/640) it is 0.461 of the screen width: about 295 of 640, or 369
-      of 800 — a little left of the middle [inferred from the traced
-      rule and the map's hidden position; not checked by eye].
+      of 800 — a little left of the middle [traced rule; **checked by the
+      user in the original (2026-10-18): with the map closed the strip
+      is slightly left of the centre**].
 52. Item descriptions in the inventory have no caption (`talking.md`
     rule 20).
 
@@ -406,6 +410,9 @@ is shown or hidden.
 
 ## How to check
 
+**Checks 3–6 below were done by the user in the original on
+2026-10-18; all as described.** Check 7 is not done yet.
+
 1. **In our logs (B):** every panel show/hide with the reason (key,
    pointer, pop-up, handsOff, conversation, script) and the time; per
    stats change the five values sent (armour, hand, ranged, health %,
@@ -440,7 +447,8 @@ is shown or hidden.
 
 1. How layout rectangles are scaled at 800 × 600 (rule 47); the wrap
    width 400 is inferred.
-2. Whether the menu stops the world clock (rule 14).
+2. Whether the world clock stops behind the main menu (rule 14; the
+   bars don't interrupt play, the user's check).
 3. When the level-up flame plays (rule 26); what the status icons'
    hook-up / hook-down mean exactly (rope places; M5/M6).
 4. The rocks picture steps, and the minimap icon (rule 45).

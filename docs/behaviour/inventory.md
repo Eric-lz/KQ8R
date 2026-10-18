@@ -160,7 +160,10 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
     - `goldCoinPersists 0` also empties the hand at once and resets the
       pointer [traced].
     Not traced: whether moving, a cutscene or a world change empties the
-    hand.
+    hand. **The user (2026-10-18):** if the hand is emptied, the item
+    only goes back to its bar slot; **no item is ever lost** that way.
+    Items leave the inventory only when used (a puzzle or quest takes
+    them, or a bottom-bar item is consumed).
 
 ### Applying an item (equipment, potions, health items)
 
@@ -257,6 +260,9 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
 
 ## How to check
 
+**Check 4 (both parts) was done by the user in the original on
+2026-10-18: correct.** Check 5 is not done yet.
+
 1. **Our logs (B):** per inventory change: type, count before/after,
    merged or new, items taken off (deleted or dropped, with position),
    stats before/after; per slot click: category, result (held, put
@@ -279,8 +285,8 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
 
 ## Open questions
 
-1. Whether a held item is dropped back on world change, cutscene or
-   death (rule 12).
+1. Whether a held item goes back to its slot on world change, cutscene
+   or death (rule 12). Either way it stays in the inventory (the user).
 2. What applying a quest item does beyond the stats (the candle's
    light, +25 experience: probably its script or its stats; rule 16).
 3. Weapon readying and the attack pointers: M5.
