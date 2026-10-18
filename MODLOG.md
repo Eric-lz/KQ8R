@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 3n: the user's checks; a script's `move Connor` no longer sweeps the traps
+
+**Changed:** `door_view.rs`: after a script's `move Connor`, the traps' swept test starts again from his new spot (the line from the old spot to the new one is no longer tested). `docs/behaviour/QUESTIONS.md`: Q102; a note on Q101. `docs/FEATURES.md`, `STATUS.md`: the user's checks.
+**Why:** The user's checks of 3n: the mill wheel from the south (`wheeltp1.cs`) matches the original; walking feels like the original; the watermill walked into from outside matches. From the north, `wheeltp2.cs` ran and then `wheeltp1.cs` too, both cutscenes at once. Cause (`run-wheel2.txt` before the fix): `wheeltp2`'s cue 2 moves Connor from (186300, 232800) to (185800, 211300); our trap test swept that jump as a walk along the line, through `wheeltp1`'s box (y 227,000–228,000), so `wheeltp1` sent `On` with Connor at (185800, 211300), nowhere near it. `traps.md` rule 5 says whether a `move` counts was not traced (Q102).
+**Tested how:** `cargo test --workspace` (404 pass), clippy clean. `cargo play --world Daventry --at 186300,234500,0 --hold 1,0,0 --frames 2500 --sound off` (from the north) and `… --at 186300,226000,3.1416 …` (from the south); the watermill walked into: `cargo play --world Daventry --at 192408,225500,3.1416 --hold 1,0,0,30 --frames 3500 --sound off` (`connor-watermill-walkin.log`).
+**Result:** From the north: only `wheeltp2` runs; `Off` at update 133 (his first move after `handsOff 0`); the camera follows `wheeltp2`'s script only (`camera-wheel2-fixed.log`). From the south: as before. Watermill walked in: the scripted walk ends with `walk` at phase 0.4737 (he was still in `stopwalkstop` when the script moved him), the turn's `Left` drops the waiting `stopwalkstop` and starts at once, so no stop transition carries him; started inside the trap (`--at 192408,227039,0`) it ends at 0.9474 and `walkstopright` (~440 units) plays while he turns: the extra step the user saw. Both follow `anim-scripts.md` rules 24–25.
+**Still broken / not tested:** The fix is not checked by eye. STAND-IN: whether a `move` enters a trap at the new spot at once, or ends the old one at once, is not traced (Q102; ours: only at his next move).
+**Next:** The user checks the mill wheel from the north; A answers Q100–Q102.
+
 ## 2026-10-18 M3 step 3n: end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 3n; to check by eye; the 3n stand-ins; next step; Q97–Q99 built, Q100–Q101 asked), `docs/DESIGN.md` (3n done). README unchanged (no new keys or files; nothing new checked by eye).

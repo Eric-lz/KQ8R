@@ -240,11 +240,13 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **To check by eye (3n):** the mill wheel cutscene (both shots before
-  the flight should now hold where the script puts them; the first looks
-  down at Connor from about the script's height); walking on hills (the
-  height now eases 10% per update, slower than the hand-set 0.5: say if
-  it feels wrong); the watermill flight (should look as before).
+- **The user's checks of 3n (2026-10-18):** the mill wheel from the
+  south (`wheeltp1.cs`): no difference from the original; walking feels
+  like the original (kept); the watermill walked into from outside:
+  like the original (the extra step only with our `--at` start inside
+  the trap; Q101 note). From the north (`wheeltp2.cs`) `wheeltp1` fired
+  too: fixed (a script's `move Connor` no longer sweeps the traps along
+  the jump; stand-in, **Q102** asked); **to check by eye again**.
 - **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
   and back flip), barrels pushed into a wall (the wall stops Connor) and
   the watermill room's camera flight match the original. The scripted
@@ -316,7 +318,8 @@ milestone: **M3, Daventry comes alive**.
 - For A (asked 2026-10-18 by B): **Q100** (the heading after `move
   KQCamera` while following in later updates; the deep lift; the "turn
   back" switch when one `follow` finds both), **Q101** (the update Wait
-  asks for `Stop` after a scripted walk's end).
+  asks for `Stop` after a scripted walk's end; lower priority after the
+  user's check), **Q102** (does a script's `move` test the traps).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world

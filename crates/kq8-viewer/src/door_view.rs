@@ -749,7 +749,12 @@ pub fn trap_step(
                 if let Some(c) = camera.as_mut() {
                     c.connor_moved_by_script(&at);
                 }
-                format!("{at}: applied: {line}")
+                // A `move` is a jump to the new spot, not a walk along the
+                // line to it: the traps' swept test starts again from
+                // there (STAND-IN, Q102: whether being placed by `move`
+                // counts as a touch is not traced, traps.md rule 5).
+                sim.connor_checked_at = Some(connor.mover.position);
+                format!("{at}: applied: {line}; the traps' test starts again from here (the jump's path is not swept)")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("KQCamera") => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),

@@ -128,8 +128,11 @@ ground, and can be swung, zoomed and tilted. It doesn't go through walls,
 closed doors or hills: when a building gets between it and Connor it
 swings round to look along the way he came, and comes closer if it has
 to; dragging it into a wall only creeps it closer. Trees and plain
-objects don't stop it, as in the original. Checked in the logs
-(`camera.log`) and by eye.
+objects don't stop it, as in the original. It recalculates only when
+Connor moves, after `follow`, in flights and while the player uses it,
+so a script's camera spot holds while he stands (M3 3n). Checked in the
+logs (`camera.log`) and by eye; the user (2026-10-18): walking feels like
+the original.
 
 ## Daventry comes alive (milestone M3)
 
@@ -201,7 +204,9 @@ objects don't stop it, as in the original. Checked in the logs
   turn Connor plays `Stop`, then `Left`/`Right`, then walks while the
   turn finishes (Q94, 3m-3). The user's check (2026-10-18): at the end of
   the watermill walk he goes on a bit further, turning left, than in the
-  original (Q98).
+  original (Q98); checked again after 3n: walking into the room matches
+  the original; the extra step only shows when the test starts him
+  inside the trap (`--at`), where the walk ends at another phase.
 - **Camera flights and cuts** (2026-10-18, M3 3m-4): `addCamLoc`,
   `flyToCamLoc` and `cutToCamLoc`: the camera flies in a straight line
   at an even speed to the spot nearest it, turning to look just above
@@ -209,8 +214,11 @@ objects don't stop it, as in the original. Checked in the logs
   (the watermill room: 31 updates, then about 1,227 closer; the mill
   wheel: 46). Checked in the logs (`camera.log`) against A's numbers;
   the watermill room's flight checked by eye by the user (2026-10-18):
-  looks like the original; the mill wheel's not checked. The
-  height on the last update is a stand-in (Q97).
+  looks like the original. The mill wheel cutscene (`wheeltp1.cs`)
+  checked by eye after 3n (2026-10-18): no difference from the original.
+  Entering the wheel from the other side (`wheeltp2.cs`) also set off
+  `wheeltp1` (fixed 2026-10-18: a script's `move Connor` no longer sweeps
+  the traps along the jump; Q102); not checked by eye since.
 - **The windmill tumble** (2026-10-18, M3 3m-1): jumping into the
   windmill's sails plays the tumble without a weapon; the script's
   `KQConner::endJump` finishes the jump, so he stands on the floor

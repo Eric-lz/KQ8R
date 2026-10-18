@@ -1531,3 +1531,9 @@ No rule changed: A's answer to Q98 says the build already matches `anim-scripts.
 | What | Source | Check |
 | --- | --- | --- |
 | In the update a scripted walk ends: the walk's phase, its stop transitions (from points) and the next from that phase; when the stop transition has ended: its updates, its own steps in the data, the distance along his path, the heading change | `anim-scripts.md` rules 24–25, "How to check", open question 6 | `connor-3n5-watermill.log` updates 56 and 63 |
+
+### A script's `move Connor` and the traps (fix after the user's check, 2026-10-18) — `crates/kq8-viewer/src/door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| After a script's `move Connor` the traps' swept test starts again from the new spot; the jump's path is not swept | **Stand-in** (`traps.md` rule 5: placing by `move` not traced; `camera.md` calls `move Connor` "a jump to the new spot"; Q102) | `run-wheel2.txt`: `wheeltp2` alone, `Off` at update 133; `run-wheel1.txt` unchanged |
