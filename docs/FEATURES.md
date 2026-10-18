@@ -398,7 +398,9 @@ message that shows the usage.
   stand-in (Q94). The windmill tumble (`miltrap1.cs`) shows Connor
   holding a bow: `KQConner::getDoMode` is not built, so the script takes
   its bow branch (fix ready to build); which tumble plays
-  (`KQConner::JumpDir`) is a stub (Q96).
+  (`KQConner::JumpDir`) is a stub (Q96). After the tumble Connor can't
+  jump and hangs about 400 above the floor: the jump he made into the
+  sails never ends, because `KQConner::endJump` is a stub (Q96 b).
 - **Water:** no damage yet (poison, lava, swamp).
 - **Collision:** some objects have no box in the game's table and stay
   walk-through (as in the original, if we read it right); no ropes.

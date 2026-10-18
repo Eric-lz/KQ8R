@@ -57,7 +57,7 @@ details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 
 - Cutscene camera flights (`flyToCamLoc`) don't happen yet.
 - Connor follows a pushed barrel through a wall (in the original the wall stops him).
-- The windmill tumble shows Connor holding a bow.
+- The windmill tumble shows Connor holding a bow, and afterwards he can't jump.
 - No story, talking, inventory screen, fighting or saving.
 - No dialogue.
 - No people or monsters.

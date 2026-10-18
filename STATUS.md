@@ -218,6 +218,9 @@ milestone: **M3, Daventry comes alive**.
   shows a bow because `KQConner::getDoMode` is unknown to us, so the
   script reads 1 (bow). Building `getDoMode` (hand mode 4) fixes that
   without a study; `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
+  The user also found that after the tumble Jump doesn't work: the jump
+  into the sails never ends in our mover (gravity off, state `jump`, he
+  hangs 400 above the floor) because `endJump` is a stub: needs Q96 b.
 - **Next step, suggested:** for B: `KQConner::getDoMode`. For A: Q95,
   Q96, the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`)
   and Q94; for B after that: cues of scenery animations, `loadKQ` with a name or place
