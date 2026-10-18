@@ -1606,7 +1606,7 @@ catchers, ground animators).
       locked, update 31 at about (188999.0, 229341.5, 10863), then still
       until cue 6; the mill wheel (`wheeltp1.cs`): N = 46.
   - **3n — the answers to Q97–Q99: when the camera updates (planned
-    2026-10-18).** Study session A answered Q97–Q99 (`camera.md` "Height
+    2026-10-18; done 2026-10-18, 3n-1 to 3n-5; Q100, Q101 asked).** Study session A answered Q97–Q99 (`camera.md` "Height
     above the ground" rule 2, "When the camera updates at all", "`move
     KQCamera` while following", "Camera flights and cuts" rules 3, 4, 7;
     `anim-scripts.md` rules 24–25). One commit per step. A stand-in
@@ -1664,7 +1664,7 @@ catchers, ground animators).
       snapped within 100 of the wanted height, otherwise kept (the
       stand-in wording goes). The log gives the floor-grid ground under
       the end spot (watermill: is it above 9,463.4?).
-    - **3n-5, Q98: logs only.** In the update a scripted walk ends:
+    - **3n-5, Q98: logs only** (**done** 2026-10-18; Q101 asked). In the update a scripted walk ends:
       `walk`'s phase, the stop transition chosen and the "from" point it
       waits for, and that transition's steps. No rule change.
     - Tests: the mill wheel (`--at 186300,227500,0`): at most 2 updates

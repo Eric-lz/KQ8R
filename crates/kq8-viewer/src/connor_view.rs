@@ -133,6 +133,26 @@ pub struct ConnorSim {
     /// 28): tried again at each later update by `door_view::trap_step`
     /// (STAND-IN: when the original tries again was not traced).
     pub refused: Vec<kq8_core::active::Request>,
+    /// The end of a scripted walk being watched (M3 3n-5, Q98: logs only).
+    walk_end: Option<WalkEnd>,
+}
+
+/// Q98 (M3 3n-5, logs only): from the update a scripted walk ends until
+/// its stop transition has ended, what he did.
+struct WalkEnd {
+    update: u64,
+    at: [f32; 3],
+    heading: f32,
+    /// The stop transition seen playing, and the updates it played in.
+    via: Option<&'static str>,
+    first: u64,
+    last: u64,
+    /// Flat distance along his path since the walk ended, and while the
+    /// transition played.
+    path: f32,
+    via_path: f32,
+    via_from: [f32; 3],
+    previous: [f32; 3],
 }
 
 /// Each building's `footsoundType` by lower-case name (`sound.md` rule 39).
@@ -370,6 +390,7 @@ pub fn spawn_connor(
         hands_off: false,
         auto_ends: Vec::new(),
         refused: Vec::new(),
+        walk_end: None,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -719,6 +740,86 @@ pub fn push_apply(
 }
 
 /// One update; runs in Bevy's fixed-rate schedule (15 per second).
+/// Q98 (`anim-scripts.md` rules 24–25, open question 6; logs only): in
+/// the update a scripted walk ends, the walk's phase, its stop transitions
+/// and which comes next from that phase; then, once the stop transition
+/// has played, the updates it took and how far it carried him.
+fn watch_walk_end(sim: &mut ConnorSim, ended: bool) {
+    let p = sim.mover.position;
+    // This update's number (`sim.updates` grows later in `connor_step`).
+    let n = sim.updates + 1;
+    if ended {
+        let movement = sim.walker.movement;
+        let phase = sim.walker.phase;
+        let lp = sim.movements.iter().find(|m| m.name == movement).map(|m| &m.movement_loop);
+        let stops: Vec<String> = lp.map_or(Vec::new(), |l| l.transitions.iter().filter(|t| t.to == "stop").map(|t| format!("{} from {:.2}", t.via, t.from)).collect());
+        let next = lp.and_then(|l| l.choose_transition(phase, "stop")).map_or("none".to_string(), |(t, d)| format!("{} from {:.2} ({d:.4} of a loop on)", t.via, t.from));
+        sim.log.detail(format!(
+            "connor update {n}: Q98: the scripted walk ends at ({:.1}, {:.1}), heading {:.3}: {movement} at phase {phase:.4} after this update's move; {movement}'s stop transitions: [{}]; the next from this phase: {next}",
+            p[0],
+            p[1],
+            sim.walker.heading,
+            stops.join(", ")
+        ));
+        sim.walk_end = Some(WalkEnd { update: n, at: p, heading: sim.walker.heading, via: None, first: 0, last: 0, path: 0.0, via_path: 0.0, via_from: p, previous: p });
+        return;
+    }
+    let Some(w) = sim.walk_end.as_mut() else { return };
+    let moved = ((p[0] - w.previous[0]).powi(2) + (p[1] - w.previous[1]).powi(2)).sqrt();
+    w.path += moved;
+    let playing = sim.walker.playing.map(|t| t.via);
+    match (w.via, playing) {
+        (None, Some(via)) => {
+            // It started this update; its share of this update's move is
+            // counted with it (the walk played on to the from point first).
+            w.via = Some(via);
+            w.first = n;
+            w.last = n;
+            w.via_from = w.previous;
+            w.via_path = moved;
+        }
+        (Some(v), Some(via)) if v == via => {
+            w.last = n;
+            w.via_path += moved;
+        }
+        _ => {}
+    }
+    w.previous = p;
+    let done = w.via.is_some() && playing.is_none();
+    if done || n > w.update + 60 {
+        let w = sim.walk_end.take().expect("watched");
+        let straight = ((p[0] - w.at[0]).powi(2) + (p[1] - w.at[1]).powi(2)).sqrt();
+        // The transition's own steps in the data (its frames added up, flat).
+        let own = |via: &str| {
+            sim.movements.iter().find(|m| m.name == via).map_or("unknown".to_string(), |m| {
+                let l = &m.movement_loop;
+                let sum = if l.frame_steps.is_empty() { l.step_sum } else { l.frame_steps.iter().fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]) };
+                format!("{:.1} (left {:.1}, forward {:.1}) over {:.3} s", (sum[0] * sum[0] + sum[1] * sum[1]).sqrt(), sum[0], -sum[1], l.duration)
+            })
+        };
+        let line = match w.via {
+            Some(via) => format!(
+                "connor update {n}: Q98: {via} (its own steps in the data: {}) played in updates {}-{} ({} updates; the update it started in also played the walk up to its from point): {:.1} along his path from ({:.1}, {:.1}); since the walk ended (update {}): {:.1} along his path, {straight:.1} straight, now at ({:.1}, {:.1}), heading {:.3} -> {:.3}",
+                own(via),
+                w.first,
+                w.last,
+                w.last - w.first + 1,
+                w.via_path,
+                w.via_from[0],
+                w.via_from[1],
+                w.update,
+                w.path,
+                p[0],
+                p[1],
+                w.heading,
+                sim.walker.heading
+            ),
+            None => format!("connor update {n}: Q98: no stop transition seen in 60 updates after the walk ended (update {}); now {}", w.update, sim.walker.movement),
+        };
+        sim.log.detail(line);
+    }
+}
+
 pub fn connor_step(
     sim: Option<ResMut<ConnorSim>>,
     lookup: Option<Res<GroundLookup>>,
@@ -759,6 +860,9 @@ pub fn connor_step(
         sim.jump_start_z = Some(z_before);
     }
     let kq8_core::connor_update::Tick { step, report, wall_stop, notes: jump_notes, auto_end } = tick;
+    // M3 3n-5 (Q98): the end of a scripted walk, logged.
+    let walk_ended = auto_end.as_ref().is_some_and(|a| a.why.starts_with("walked") || a.why == "head-on");
+    watch_walk_end(sim, walk_ended);
     // M3 3l-2: a scripted turn or walk ended: its cue.
     sim.auto_ends.extend(auto_end);
     // M3 3j-2: physical pushables moved by his move.

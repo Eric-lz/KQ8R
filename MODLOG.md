@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3n-5: logs for the end of a scripted walk (Q98)
+
+**Changed:** Viewer `connor_view.rs`: in the update a scripted walk ends (distance gone or head-on), `connor.log` gives the walk's phase, its stop transitions with their from points, and the next one from that phase; when that stop transition has ended, the updates it played in, its own steps in the data, the distance along his path and straight, and the heading change. No rule changed. `docs/behaviour/QUESTIONS.md`: Q101.
+**Why:** A's answer to Q98 says the build already matches `anim-scripts.md` rules 24–25; these logs give the numbers open question 6 asks for, to compare with the user's check in the original.
+**Tested how:** `cargo test --workspace` (404 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 192408,227039,0 --frames 3000 --sound off` (`connor-3n5-watermill.log`).
+**Result:** Update 56: "the scripted walk ends at (190783.2, 230139.7), heading 3.546: walk at phase 0.9474 …; walk's stop transitions: [stopwalkstop from 0.90, walkstopright from 0.95, walkstopleft from 0.45]; the next from this phase: walkstopright from 0.95 (0.0026 of a loop on)" (2,779 gone of 2,736: 43 past, the last step was 75). Update 63: "walkstopright (its own steps in the data: 461.2 (left 20.1, forward 460.8) over 0.400 s) played in updates 57-62 (6 updates …): 441.7 along his path …; since the walk ended: 465.1 along his path, 437.2 straight, now at (190385.1, 230320.5), heading 3.546 -> 4.847". All as rules 24–25 say (never short, past by less than a step, the ordinary stop transition, the turn curving it, `Left` waiting for it). One detail the rules don't state decides this case: whether Wait asks for `Stop` in the same update the end is found (ours) or the next (then `walkstopleft`, about half a loop later): Q101. Neither explains the user's "a bit more than the original".
+**Still broken / not tested:** The user's difference in the watermill cutscene is still not explained. The head-on end was not seen in a run.
+**Next:** End-of-session documents; the user's checks by eye.
+
 ## 2026-10-18 M3 step 3n-4: the height on a flight's last update and after a cut (Q97)
 
 **Changed:** `kq8-core/src/camera_flight.rs`: `settle_height` (the 3n-2 height rule with the aim point as not moved: lifted at once, snapped within 100, otherwise kept); the flight's last update and `cut` use it (`cut` now takes the ground and returns a `Cut`); the stand-in field `wanted_height` is gone; 1 new unit test, the watermill test checks "kept". Viewer `game_camera.rs`: the stand-in log wording ("would want … not applied (stand-in, not settled)") replaced by what the rule did, with the floor-grid ground under the camera.

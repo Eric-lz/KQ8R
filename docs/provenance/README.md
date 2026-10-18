@@ -1523,3 +1523,11 @@ This replaces the 3m-4 stand-in "the height rule is not applied on the last upda
 | What | Source | Check |
 | --- | --- | --- |
 | A flight's last update and a cut's one update: the height rule with the aim point as not moved: lifted at once if under the ground + 1,400, snapped within 100 of the wanted height (the higher of ground + 1,400 and aim point + 1,400), otherwise kept; never eased | `camera.md` "Height above the ground" rule 2, "Camera flights and cuts" rules 3, 4 (Q97) | Unit tests `after_a_flight_or_cut_the_height_is_lifted_or_snapped_never_eased`, `the_watermill_flight`; `camera-3n4-watermill.log`: kept at 10,863.4, ground 7,650.0; `camera-3n4-wheel.log`: kept at 8,800 |
+
+### 3n-5, the end of a scripted walk, logs only (Q98) — `crates/kq8-viewer/src/connor_view.rs`
+
+No rule changed: A's answer to Q98 says the build already matches `anim-scripts.md` rules 24–25.
+
+| What | Source | Check |
+| --- | --- | --- |
+| In the update a scripted walk ends: the walk's phase, its stop transitions (from points) and the next from that phase; when the stop transition has ended: its updates, its own steps in the data, the distance along his path, the heading change | `anim-scripts.md` rules 24–25, "How to check", open question 6 | `connor-3n5-watermill.log` updates 56 and 63 |
