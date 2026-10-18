@@ -149,8 +149,9 @@ is shown or hidden.
     (`current.bin`) [traced]. **The user's check in the original
     (2026-10-18):** showing the top or bottom bar does not interrupt
     play; only Escape (the main menu) takes the player out of the game
-    screen. (Our build quits on Escape as a stand-in.) Whether the world
-    clock is stopped behind the menu was not traced.
+    screen, and **the game stops running while the main menu is open**
+    (the user's check, 2026-10-18; not traced). The bars never pause.
+    (Our build quits on Escape as a stand-in.)
 15. **handsOff and cutscenes** (`anim-scripts.md` rule 21; STATUS.md
     "GUI panels to hide") [traced]:
     - `handsOff 1`: if the bottom bar is showing, that is remembered and
@@ -411,7 +412,7 @@ is shown or hidden.
 ## How to check
 
 **Checks 3–6 below were done by the user in the original on
-2026-10-18; all as described.** Check 7 is not done yet.
+2026-10-18; all as described.** Check 7 partly (see there).
 
 1. **In our logs (B):** every panel show/hide with the reason (key,
    pointer, pop-up, handsOff, conversation, script) and the time; per
@@ -442,13 +443,19 @@ is shown or hidden.
    scene with the bottom bar up: it slides away and the spinning mask
    shows; afterwards it comes back. With the bar put away first, it
    stays away.
+   **User (2026-10-18), brief look:** the bar goes away when a cutscene
+   starts. The spinning mask shows only in scenes that take control
+   away (`handsOff`); some of the wizard's scenes let Connor walk away
+   and show no mask. That fits rules 15–16: those are conversations,
+   which hide the bottom bar but don't add the mask. Not checked yet:
+   the bar coming back, and staying away if put away first.
 
 ## Open questions
 
 1. How layout rectangles are scaled at 800 × 600 (rule 47); the wrap
    width 400 is inferred.
-2. Whether the world clock stops behind the main menu (rule 14; the
-   bars don't interrupt play, the user's check).
+2. ~~Whether the world clock stops behind the main menu.~~ It does
+   (the user's check; rule 14).
 3. When the level-up flame plays (rule 26); what the status icons'
    hook-up / hook-down mean exactly (rope places; M5/M6).
 4. The rocks picture steps, and the minimap icon (rule 45).

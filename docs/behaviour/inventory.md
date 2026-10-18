@@ -261,7 +261,8 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
 ## How to check
 
 **Check 4 (both parts) was done by the user in the original on
-2026-10-18: correct.** Check 5 is not done yet.
+2026-10-18: correct.** Check 5: from the user's memory, holding an
+item closes the gap in the strip (not checked with 8 or more items).
 
 1. **Our logs (B):** per inventory change: type, count before/after,
    merged or new, items taken off (deleted or dropped, with position),

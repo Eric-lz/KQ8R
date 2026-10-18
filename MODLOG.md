@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study (A): more checks by the user (docs only)
+
+**Changed:** `interface.md` rule 14, check 7, open question 2 (closed); `inventory.md` check 5.
+**Why:** The user's further checks in the original.
+**Tested how:** By the user in the original, by eye; check 5 from memory.
+**Result:** The game stops running while the main menu (Escape) is open. A cutscene puts the bottom bar away; the spinning mask shows only in scenes that take control away (`handsOff`), not in the wizard's walk-away conversations, as rules 15–16 say. Holding an item closes the gap in the quest strip (from memory).
+**Still broken / not tested:** The bar coming back after a cutscene, and staying away when put away first, not checked. Quest strip with 8+ items not checked.
+**Next:** B: caption strip back to the box width; the always-visible panel.
+
 ## 2026-10-18 Study (A): the user's checks of the interface and inventory notes (docs only)
 
 **Changed:** `interface.md` rules 14, 50, 51, "How to check", open question 2; `inventory.md` rule 12, "How to check", open question 1; `QUESTIONS.md` Q107; `STATUS.md`.
