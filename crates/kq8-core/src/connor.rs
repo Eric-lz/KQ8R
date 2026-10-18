@@ -942,8 +942,13 @@ impl Walker {
             return finish(step, self, notes);
         }
         // The keys turn him only when they choose the movement; that
-        // includes the start and stop transitions.
-        if matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked() {
+        // includes the start and stop transitions. Also while `crash`
+        // plays (connor-physics.md "Jumping" rule 5, "Walls"; Q84 b,
+        // confirmed by the user): at the normal rate, from the run crash
+        // and the jump crashes alike; forward, back and run wait for its
+        // end. Never from a jump's start to its landing's end (Q41).
+        let turns = (matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked()) || self.mode == Mode::Crash;
+        if turns {
             self.heading += f32::from(intent.turn) * TURN_RATE * dt;
         }
         let Some(l) = loops(played) else {
@@ -1100,21 +1105,23 @@ mod tests {
         let mut w = Walker::new(0.0);
         w.update(held, &loops);
         assert_eq!(w.head_on_at_wall(), Some(("run", "crash")));
-        // Straight back from his facing (he turned a little while running).
+        // Straight back from his facing, which the held turn key keeps
+        // turning at 1.75 rad/s while `crash` plays (Q84 b).
         let heading = w.heading;
-        let behind = [-heading.sin(), heading.cos()];
         let mut back = 0.0;
         for n in 1..=7 {
             let s = w.update(held, &loops);
             assert_eq!((w.movement, w.mode), ("crash", Mode::Crash), "update {n}");
+            assert!((w.heading - heading - n as f32 * TURN_RATE / 15.0).abs() < 1e-5, "update {n}: heading {}", w.heading);
+            let behind = [-w.heading.sin(), w.heading.cos()];
             let along = s.wanted[0] * behind[0] + s.wanted[1] * behind[1];
             assert!((along - 63.07).abs() < 0.01 && s.wanted[0].hypot(s.wanted[1]) - along < 1e-3, "update {n}: {s:?}");
             assert_eq!(crash().frame_at(w.phase), n, "update {n}: frame");
             back += along;
         }
         assert!((back - 441.5).abs() < 0.01, "{back}");
-        // Keys ignored while it played (no turning); then running again.
-        assert_eq!(w.heading, heading);
+        // Forward and run waited; then running again.
+        let behind = [-w.heading.sin(), w.heading.cos()];
         let s = w.update(held, &loops);
         assert_eq!(s.mode_changed, Some((Mode::Crash, Mode::Free)));
         assert_eq!(w.movement, "run");

@@ -863,7 +863,7 @@ pub fn connor_step(
     }
     if let Some((from, to)) = wall_stop {
         events.push(if to == "crash" {
-            format!("head-on into a wall: {from} -> {to} from the next update (keys ignored until it ends)")
+            format!("head-on into a wall: {from} -> {to} from the next update (turn keys turn him; forward, back and run wait until it ends)")
         } else {
             format!("head-on into a wall: movement {from} -> {to}; blocked: {}", sim.walker.blocked_name())
         });

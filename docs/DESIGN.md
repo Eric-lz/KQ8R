@@ -1495,7 +1495,7 @@ catchers, ground animators).
       against the pub wall goes through it; uphill it stays; the hay bale
       at an angle slides along the windmill wall; the bricks still start
       (`connor.log`).
-    - **3l-5, turning during `crash`** (Q84; `connor-physics.md`
+    - **3l-5, turning during `crash`** (**done** 2026-10-18; Q84; `connor-physics.md`
       "Jumping" rule 5, "Walls"). Turn keys turn him at 1.75 rad/s while
       `crash` plays (run crash and both jump crashes); forward, back and
       run wait. Still no turning from a jump's start to its landing's

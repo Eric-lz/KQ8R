@@ -537,6 +537,8 @@ pub struct Mover {
     pub balls: BallStack,
     /// The water test's result after the last move (water.md).
     pub submerged: bool,
+    /// This jump has had a glancing steep hit already (for the log).
+    pub jump_glanced: bool,
 }
 
 /// What the down pass ended on.
@@ -640,6 +642,7 @@ impl Mover {
             push_from: position,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
             submerged: false,
+            jump_glanced: false,
         }
     }
 
@@ -661,6 +664,7 @@ impl Mover {
     /// A jump starts (connor-physics.md "Jumping" rule 3): gravity off and
     /// step up and down 0, so the jump animation's own steps make the arc.
     pub fn start_jump(&mut self) {
+        self.jump_glanced = false;
         self.state = State::Jump;
         self.use_gravity = false;
         self.step_up = 0.0;
@@ -674,16 +678,6 @@ impl Mover {
         self.step_up = STEP;
         self.step_down = STEP;
         self.state = State::Normal;
-    }
-
-    /// A steep hit during `backJump` (rule 5: the jump ends, gravity on,
-    /// steps 325), but the animation plays on (the user's check in the
-    /// original), so the state stays Jump: no Fall request from the air
-    /// counter until it ends.
-    pub fn back_jump_hit(&mut self) {
-        self.use_gravity = true;
-        self.step_up = STEP;
-        self.step_down = STEP;
     }
 
     /// The jump animation has ended (rule 4): gravity on, steps back to

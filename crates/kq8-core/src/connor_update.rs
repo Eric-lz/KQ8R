@@ -198,21 +198,23 @@ pub fn tick<'a>(
         None
     };
     notes.extend(state_note.map(str::to_string));
-    // A steep hit ends a jump (connor-physics.md "Jumping" rule 5).
+    // A steep hit during a jump (connor-physics.md "Jumping" rule 5): a
+    // crash ends it; a glancing hit (any `backJump` hit, or not head-on)
+    // doesn't: gravity stays off, the animation plays on (Q84 a).
     let mut wall_stop = None;
-    let first_back_hit = walker.kind != JumpKind::Back || !mover.use_gravity;
     let steep_hit = report.hits.iter().find(|h| h.hit.normal[2] < WALKABLE_NORMAL_Z);
-    if let (Mode::Jump, Some(_), Some(hit), true) = (walker.mode, report.jump_hit, steep_hit, first_back_hit) {
+    if let (Mode::Jump, Some(_), Some(hit)) = (walker.mode, report.jump_hit, steep_hit) {
         let jump = walker.kind.jump();
         let (crash, to) = jump_hit_outcome(walker.kind, hit);
         if crash {
             mover.end_jump_on_hit();
             walker.set_mode(Mode::Crash);
             wall_stop = Some((jump, "crash"));
-        } else {
-            mover.back_jump_hit();
+            notes.push(format!("{jump} hit {} (steep, {} pass): the jump ends, {to}", hit.hit.what, hit.pass));
+        } else if !mover.jump_glanced {
+            mover.jump_glanced = true;
+            notes.push(format!("{jump} hit {} (steep, {} pass): {to}", hit.hit.what, hit.pass));
         }
-        notes.push(format!("{jump} hit {} (steep, {} pass): the jump ends, {to}", hit.hit.what, hit.pass));
     } else if report.head_on && walker.auto.as_ref().is_some_and(|a| a.walk_done(mover.position).is_none() && matches!(a.phase, crate::connor_auto::AutoPhase::Walking { .. })) {
         // A scripted walk ran head-on into something: the cue comes early
         // (rule 24) instead of the crash or stop.
@@ -236,21 +238,22 @@ pub fn tick<'a>(
 
 /// What a steep hit during a jump does (connor-physics.md "Jumping" rule
 /// 5 and "Walls", corrected 2026-10-17 by A's answer to Q82): whether he
-/// crashes, and the end of the log line. Either way the jump ends.
-/// - `backJump`: never crashes; the flip plays on (user's check, Q41 b).
+/// crashes, and the end of the log line. Only a crash ends the jump.
+/// - `backJump`: never crashes; a glancing hit, the flip plays on with
+///   gravity off (user's check, Q41 b; Q84 a).
 /// - A down-pass hit during `jump` or `runJump`: crash.
 /// - An up, across or slide hit: crash only if the head-on test said
 ///   head-on. During a jump every steep surface is head-on (the mover's
 ///   `steep_head_on`), and both `jump` and `runJump` are in the crash list.
 /// - Otherwise (not head-on: against a `KQMonster` or with the Connor flag,
-///   neither of which our code has yet): rule 5 doesn't say what follows.
-///   STAND-IN (Q84 a): as a `backJump` hit, the animation plays on.
+///   neither of which our code has yet): glancing; the jump does not end,
+///   gravity stays off, the animation plays on, then Fall (Q84 a).
 pub fn jump_hit_outcome(kind: JumpKind, hit: &HitRecord) -> (bool, &'static str) {
     match (kind, hit.pass, hit.result) {
-        (JumpKind::Back, _, _) => (false, "gravity on, backJump plays on, then Fall"),
+        (JumpKind::Back, _, _) => (false, "glancing: gravity stays off, backJump plays on, then Fall"),
         (_, "down", _) => (true, "crash (landed on something steep)"),
         (_, _, "head-on") => (true, "crash (head-on; jump and runJump are in the crash list)"),
-        _ => (false, "not head-on: gravity on, the jump plays on, then Fall (stand-in Q84 a)"),
+        _ => (false, "not head-on: glancing, gravity stays off, the jump plays on, then Fall (Q84 a)"),
     }
 }
 
@@ -745,6 +748,10 @@ mod tests {
         let mut hit_results = Vec::new();
         for n in 0..25 {
             let t = tick(&mut m, &mut w, back, n == 0, &loops, &wall);
+            if t.notes.iter().any(|n| n.contains("backJump hit wall")) {
+                // Q84 a: the jump doesn't end; gravity stays off.
+                assert!(!m.use_gravity && m.step_up == 0.0, "{:?}", t.notes);
+            }
             notes.extend(t.notes);
             hit_results.extend(t.report.hits.iter().map(|h| h.result));
             if t.step.as_ref().is_some_and(|s| s.played == "backJump") {

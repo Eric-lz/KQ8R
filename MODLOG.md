@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l-5: turning during `crash`; a glancing jump hit keeps the jump (Q84)
+
+**Changed:** `kq8-core/src/connor.rs`: the turn keys turn Connor at 1.75 rad/s while `crash` plays (run crash and jump crashes); forward, back and run still wait for its end; still no turning from a jump's start to its landing's end. `connor_update.rs`: a steep hit during a jump that is not a crash (every `backJump` hit, and the not-head-on cases our code can't reach yet) no longer switches gravity on: the jump goes on with gravity off and steps 0 until its animation ends, then Fall (noted once per jump). `connor_mover.rs`: `back_jump_hit` removed, `jump_glanced`. Tests: the run-crash test now holds a turn key and checks the turn; the back-flip test checks gravity stays off.
+**Why:** A's answer to Q84 (`connor-physics.md` "Jumping" rule 5, "Walls"), confirmed by the user in the original for the run crash (2026-10-18); turning in jumps, falls and landings stays off (Q41).
+**Tested how:** `cargo test --workspace` (382 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 237968.9,187493.2,-0.2055 --hold 1,0,1,40 --turn 5,1 --frames 1500 --sound off` (the note's measured run-crash spot), `connor.log`.
+**Result:** Crash at update 7, contact y 187449.5 (the original: 187449.2). Updates 8–14 (`crash`): heading −0.2055 → 0.6112, +0.1167 per update (1.75 rad/s); the push-back follows his turning facing; `stoprun` again at 15.
+**Still broken / not tested:** Not checked by eye. Whether he leans while turning in a run crash is not settled (the note); ours leans if forward is held (the lean switch is left on from `run`). Turning in a down-pass crash straight out of a jump: the note's stand-in (yes), not checked. The back-flip change (gravity off after a hit) is in a unit test only.
+**Next:** 3l-6, animated objects' first update and Connor's levels.
+
 ## 2026-10-18 M3 step 3l-4: pushing as traced (barrels move, the hay bale slides, every touch told; Q87, Q88, Q91)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: new `MoverWorld::sweep_told`: every object Connor's balls touch is told at once, in the order the objects entered the world (`Scene::order`), and the push check runs there; an accepted push is not recorded; a contact replaces the kept one when it is at most as far (a tie keeps the later-tested; the "pushable first" stand-in and `TIE` are gone). `push_object`: box-shaped pushables (no `collisionShape`) move by his step and are never stopped; ball-stack ones slide along what they hit (the hit and 3 retries, a normal z between 0 and 0.7 counts as a vertical wall, no head-on stop); the ground only raises (with `keepOnGround`); any height change puts it back. The facing test of a physical push uses his position at the start of the update (Q87 e). 3 old tests rewritten, 2 new. `kq8-viewer`: `terrain_view.rs` `ColliderOrder` (load order of the colliders), used by `connor_step` and by the scene of a scripted `move Connor`.

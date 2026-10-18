@@ -1381,3 +1381,12 @@ This replaces the Q87 a–c and Q88 stand-ins of 3j-2 and 3j-3 above.
 | Facing test: from his position at the start of the update to the object's position | `pushing.md` rule 2.5 (Q87 e) | — |
 | Two physical pushables in one sweep: he follows the last one's movement | **Our choice** (not described) | — |
 
+### 3l-5, turning during `crash`; glancing jump hits — `crates/kq8-core/src/{connor,connor_update,connor_mover}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Turn keys turn him at 1.75 rad/s while `crash` plays (run and jump crashes); forward, back and run wait | `connor-physics.md` "Jumping" rule 5, "Walls" (Q84 b; user's check 2026-10-18) | Unit test `running_head_on_crashes_7_updates_441_5_back_then_runs`; `connor.log` updates 8–14 |
+| No turning from a jump's start to its landing's end | `connor-physics.md` "Jumping" rule 5 (the user's checks, Q41) | Existing jump tests |
+| A down-pass crash straight out of a jump turns too | The note's stand-in (not settled) | — |
+| A steep hit during a jump that is not a crash (all `backJump` hits, not head-on): glancing, gravity stays off, steps 0, the jump plays on, then Fall | `connor-physics.md` "Jumping" rule 5 (Q84 a) | Unit test `a_back_flip_slides_along_the_wall_and_plays_on` |
+
