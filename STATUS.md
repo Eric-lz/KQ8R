@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session building the answers to Q84–Q93 (M3 3l). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of A's session answering Q94–Q96 and studying the camera flights. Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -39,10 +39,23 @@ end of B's session building the answers to Q84–Q93 (M3 3l). Read with `AGENTS.
     third +2; "below 0" checked before the cap; `Die` always has `$3`.
   - 3l-7 (Q90): `loadKQ` while playing calls the new object's `Init`
     at once; a name in use is refused with an error.
-- **Later for A:** Q94; Dead City's flames (11,000 vs 12,100, open
+- **New 2026-10-18 (A): Q94–Q96 answered, camera flights studied**
+  (docs only, not built yet):
+  - Q96: `KQConner::endJump` finishes the jump (gravity on, steps 325)
+    and the windmill's `setState … special` then replaces it: no Fall,
+    no hanging. `JumpDir` is 1 only in a back flip (`anim-scripts.md`
+    rules 28–30).
+  - Q95: a wall found before the barrel in the collision list is still
+    handled after the push, from the 0.95 point, never head-on: Connor
+    stays at the wall (`pushing.md` rule 4.3).
+  - Q94: `walkTo` details; rule 24 corrected (he plays `Left`/`Right`
+    and starts walking before the turn ends; `anim-scripts.md` 24–25).
+  - Camera flights: `camera.md` "Camera flights and cuts" (straight
+    line, constant speed, aim 1,400 above the point, a pull-in on the
+    last update), with numbers for the watermill and the mill wheel.
+- **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
-  Connor against monsters; Q27; the camera flights (`addCamLoc`,
-  `flyToCamLoc`, `cutToCamLoc`), which both Daventry cutscenes use.
+  Connor against monsters; Q27.
 
 ## Goal
 
@@ -220,12 +233,14 @@ milestone: **M3, Daventry comes alive**.
   empty hands; checked by eye by the user); `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
   The user also found that after the tumble Jump doesn't work: the jump
   into the sails never ends in our mover (gravity off, state `jump`, he
-  hangs 400 above the floor) because `endJump` is a stub: needs Q96 b.
-- **Next step, suggested:** for A: Q95,
-  Q96, the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`)
-  and Q94; for B after that: cues of scenery animations, `loadKQ` with a name or place
-  while playing (barrels and boards breaking, M5), remarks, inventory
-  screen (M4). The brightness setting (rule 17) is still not built.
+  hangs 400 above the floor) because `endJump` is a stub. A answered
+  Q95 and Q96 on 2026-10-18; not built yet.
+- **Next step, suggested:** for B: `endJump` / `JumpDir` first (it
+  blocks play at the windmill), then the push/wall order (Q95), the
+  `walkTo` corrections (Q94), the camera flights; after that: cues of
+  scenery animations, `loadKQ` with a name or place while playing
+  (barrels and boards breaking, M5), remarks, inventory screen (M4).
+  The brightness setting (rule 17) is still not built.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), ducking under speech, pause, speech, and
   `setActiveCamera` / `makeActive` for sound objects.
@@ -271,12 +286,8 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- **Q95** (open, for A): Connor and a wall when he pushes a barrel
-  into it. **Q96** (open, for A): `KQConner::JumpDir` and `endJump`
-  (the windmill tumble).
-- **Q94** (open, for A): a scripted walk (`walkTo`) that runs head-on
-  into something; a wall block at its start; what plays during its
-  turn; `walkTo` without an object. Stand-ins in place.
+- For B (answered 2026-10-18, not built): Q94, Q95, Q96 (see "Where
+  we are").
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world

@@ -342,22 +342,67 @@ Words used here:
     but running) walks Connor to a spot and then cues a script:
     - It switches `handsOff` on by itself and puts Connor in Wait.
     - He first **turns to face** (x, y) with the automatic turn at
-      **3.5 rad/s** (`connor-movement.md` "Turning" rule 2).
-    - When that turn ends he switches to Move and walks (or runs)
-      **straight ahead**, with no more steering.
-    - At the start of the walk the flat distance to (x, y) is recorded;
-      he stops once he has gone that far from where he started, even if
-      something pushed him off the line.
-    - On stopping he goes back to Wait and `<who>` gets `KQCueEvent <c>
-      <d>` (its script runs with `Cue`, `$3` = c).
-    - The cue also comes early if he runs **head-on** into something
-      (the case that would otherwise play `crash`), or if the console
-      command `walkExit` is typed.
+      **3.5 rad/s** (`connor-movement.md` "Turning" rule 2). The turn
+      re-aims every update from where he is now.
+    - **During the turn** (corrected 2026-10-18, Q94 c, traced): the
+      automatic turn sets the same turn direction a held turn key sets,
+      and his standing state reacts to it as to a key (`connor-physics.md`
+      "Walk held against a wall", "What Wait does each update"):
+      - first update of the turn: he stands, `Stop` (the movement Wait
+        always starts with);
+      - from the second update, if neither wall block is on: he goes to
+        Move with the turn-on-the-spot movement **`Left`** (turning
+        anticlockwise, heading growing) or **`Right`**;
+      - one update later, still in Move, the walk takes over: `Walk`
+        (`Run` for `runTo`) is asked for and the start point and flat
+        distance are recorded (next point).
+      So a turn of 1 update stays in `Stop`; in a longer one he plays
+      `Left`/`Right` for one update and then walks the rest of the turn,
+      curving. Example, the watermill (0.576 rad, 3 updates): `Stop`,
+      `Left`, then `Walk` while the last 0.110 rad is turned.
+    - **When the turn ends** he is put into Move again (a fresh start of
+      the Move state, even if he is already walking): from then on he
+      walks (or runs) **straight ahead**, with no more steering, and the
+      start point and the **flat distance to (x, y) are recorded again**
+      from where he is at that moment. He stops once he has gone that
+      far from that point, even if something pushed him off the line.
+      (Corrected 2026-10-18: the old text said he only switches to Move
+      when the turn ends; true only for a turn of 1 update.)
+    - On stopping he goes back to Wait (`Stop`) and `<who>` gets
+      `KQCueEvent <c> <d>` (its script runs with `Cue`, `$3` = c).
+    - **Head-on during a scripted walk or run** (traced 2026-10-18,
+      Q94 a): when the walk or run of `walkTo` / `runTo` is under way
+      and he hits something head-on (the head-on test of
+      `connor-physics.md` "Walls", walking or running alike, with the
+      same exceptions), there is **no `crash` and no `Stop` with a wall
+      block**. Instead: he is put at the contact (pulled back 25, as for
+      a head-on stop), the walk is cancelled, the cue is sent (the same
+      cue as on arrival), and he goes to Wait, which plays `Stop`. A
+      glancing hit is handled as usual (he slides and walks on). The
+      console command `walkExit` also ends the walk and sends the cue.
+    - **A wall block already on** (Q94 b, traced): the walk still
+      starts. The block only stops Wait from starting a movement by
+      itself, so during the turn he stays in `Stop` (no `Left`/`Right`),
+      and when the turn ends he goes to Move and walks anyway (Move's
+      own updates don't look at the blocks). `walkTo` does not clear the
+      block: it is still on after the walk, so when the script gives
+      control back he stands until a key event clears it
+      (`connor-physics.md` "What clears a block").
+    - **`walkTo x y` with no object** (Q94 d, traced; 6 lines in the
+      data, all in Dead City and the Swamp): he turns and walks as
+      above, `handsOff` goes on, and **no cue** is sent at the end. With
+      an object but without both cue numbers (4 or 5 words) the game
+      prints "must have objName..." to the console; the walk still
+      happens and no cue is sent.
     - `walkTo` never switches `handsOff` off; the script must.
 25. **`pointAndCue x y z <who> <c> <d>`** turns Connor to face (x, y)
     (z is ignored) with the same automatic turn, and sends `<who>`
     `KQCueEvent <c> <d>` **the moment the turn ends** (at once if he
-    already faces that way). Only his heading changes.
+    already faces that way). Only his heading changes. What plays
+    (traced 2026-10-18, as in rule 24): `Stop` in the first update,
+    then (no wall block on) Move with `Left` or `Right` until the turn
+    ends; in the next update nothing asks for a movement any more, so he
+    goes back to Wait (`Stop`).
 26. **If a cue never comes, nothing rescues it**: there is no time-out.
     `handsOff` stays on and the camera stays where the script put it.
     Only the head-on bump or `walkExit` end a `walkTo` early.
@@ -376,6 +421,92 @@ Words used here:
       `setThirdPerson`, `lookup.cs`.
     So the control comes back about 4.2 s after he finishes turning in
     cue 2. Only cues 2 and 3 wait for something other than a timer.
+    (2026-10-18: with rule 24's correction he plays `Left` for one
+    update in cue 1's turn and starts walking during its last update;
+    the distance is measured again when the turn ends, so he still
+    arrives at (190800, 230100).)
+
+### Ending a jump from a script: `KQConner::endJump`, `KQConner::JumpDir` (traced 2026-10-18, Q96)
+
+28. **`KQConner::endJump`** (no arguments; the game's usage text: "use
+    when Connor is in the jump state to get him out of it"):
+    - It only acts while Connor is in the **Jump state** (the `jump`,
+      `runJump` or `backJump` animation still playing, before Fall).
+      Otherwise it prints its usage text to the console, changes
+      nothing, and `$Console::Return` is 0.
+    - In the Jump state it does to the jump exactly what a head-on crash
+      does (`connor-physics.md` "Jumping" rule 5, "At the moment of the
+      crash"): **gravity back on**, **step up and step down back to
+      325**, the jump animation marked as **cut short**, and the jump
+      marked as **finished**, so that he may now leave the Jump state.
+      `$Console::Return` is 1.
+    - It does **not** change his state or his animation. He stays in
+      Jump and the jump animation plays on until something sets another
+      state. If nothing does, the jump ends as usual at the end of its
+      animation (Fall starts, "Jumping" rule 4); meanwhile gravity is
+      already pulling him down while the animation still adds its steps.
+    - **Why scripts need it:** while a jump is not finished, Connor's
+      Jump state refuses every other state, so a `KQMonster::setState
+      Connor special …` sent during a jump is not carried out at once
+      (it waits; when it is tried again was not traced). One exception:
+      **while `handsOff` is on**, asking Connor for any state during a
+      jump finishes the jump first by itself, the same way (gravity on,
+      steps 325, cut short). `miltrap1.cs` does both (`handsOff 1`
+      comes first), with the same result.
+    - **No Fall afterwards:** once he has left Jump for another state
+      (Special here), the jump animation's end no longer does anything
+      (that check belongs to the Jump state), so no Fall follows from
+      that jump. Gravity and the steps stay as `endJump` left them (on,
+      325); the Special state doesn't touch them (rule 16).
+29. **`KQConner::JumpDir`** puts in `$Console::Return`:
+    - **1** if Connor is in the Jump state and his current movement is
+      **`backJump`** (names compared ignoring capitals);
+    - **0** in the Jump state with `jump` (standing or walking jump) or
+      `runJump`;
+    - **0** if he is not in the Jump state (also after a jump has crashed,
+      or once it has ended and Fall has started), and the usage text
+      "returns 0 if forward, 1 if backward" is printed to the console.
+    Nothing else is looked at: not his facing, not the sails. It only
+    tells which jump he made (`connor-physics.md` "Jumping" rule 2:
+    `backJump` comes from jumping while backing up).
+30. **Daventry's windmill tumble** (`miltrap1.kq` / `miltrap1.cs`,
+    data; order of events traced). The trap box is x 187300–189850,
+    y 228600–231400, **z 8630–10630**, about 1,000 above the ground
+    there (7650), so only a jump into the sails reaches it. Like every
+    trap touch, the `On` script runs **inside Connor's own move**
+    (`traps.md`; the same as the `Push` call, `pushing.md` rule 11).
+    First time only (`$Daventry::MillTree::down` 0):
+    - `setThirdPerson`, `handsOff 1`, `follow none`;
+    - `JumpDir` → `$Daventry::Mill::JumpDir`: 0 for a standing, walking
+      or running jump, 1 for a back flip;
+    - `milgear1` hidden;
+    - `endJump`: gravity on, steps 325, the jump finished (rule 28);
+    - `move Connor 0 188700 230000 7500 0 0 1.57`: below the ground
+      there, so the ground raise puts him on it; because this runs inside
+      his update, the rest of his update follows (`objects.md` "(d)");
+    - `getDoMode` (4 with empty hands) picks the list: empty hands →
+      `normal` (JumpDir 0) or `normbak1,normbak2` (JumpDir 1), with cue
+      300 after **2.2 s** or **2.74 s**; the weapon branches the same
+      way with other lists;
+    - `KQMonster::setState Connor Special …`: allowed at once (the jump
+      is finished), so Special replaces Jump: no Fall from the jump;
+    - `move KQCamera 0 190227 231352 10230 -.55 0 2.58`;
+    - cue 1 after 0.6 s (1.2 s for the back flip): Connor gets
+      `KQAttackEvent` from `milstone` (damage, M5); the camera moves to
+      (190380, 232400, 12500), angles (−0.86, 0, 2.58);
+    - cue 300: `milgear1` shown, camera to (192780, 232150, 9255),
+      angles (−0.2, 0, 2.585), Connor to **(191300, 229530, 8050)**
+      heading −1.57, `follow Connor`, `handsOff 0`, `setThirdPerson`.
+    - If the Special list ends before cue 300, he stands (Wait) where the
+      list left him until cue 300 moves him (rule 16).
+    - After cue 300's `move` he is in Wait with gravity on and steps
+      325, 400 above the ground (7650): one gravity step at the move
+      (`objects.md` "(d)"), then he drops by the normal rules
+      (`connor-physics.md` "Gravity", "Falling off an edge") and can
+      jump again once he stands.
+    **B's build (Q96):** the mover staying in its jump state after the
+    script is wrong. `endJump` (or the `handsOff` rule above) finishes
+    the jump, Special replaces it, and gravity is on from then on.
 
 ## Numbers and units
 
@@ -390,6 +521,10 @@ Words used here:
 | experience for the next level | 10 × 2^(level − 1); 150,000 from level 15 | traced |
 | `KQAnimOnce` files | 64 (Daventry 5) | data |
 | stopped `0 0` movements | 30 `loop=` lines | data |
+| `walkTo`: updates of `Stop` before `Left`/`Right` in the turn | 1 | traced |
+| `endJump`: gravity / step up and down afterwards | on / 325 | traced |
+| windmill tumble: cue 300 after | 2.2 s (`normal`), 2.74 s (back flip) | data |
+| windmill trap box height | z 8630–10630 (ground 7650) | data |
 
 ## Data used
 
@@ -418,6 +553,15 @@ Words used here:
 - `pauseAnim` sent twice resumes; sent to an object already paused by
   another script, it resumes it.
 - An unknown movement name never fails visibly: movement 0 plays.
+- `KQConner::endJump` or `JumpDir` outside a jump: a console message,
+  nothing else (rules 28–29). A trap like the windmill's touched during
+  the Fall that follows a jump (not in Daventry's trap: the sails are
+  reached on the way up) would get JumpDir 0 and an `endJump` that does
+  nothing; the Special state is then asked for from Fall (not traced
+  further).
+- A scripted walk whose turn is interrupted by a player turn key: the
+  turn is cancelled (`connor-movement.md` "Turning" rule 2); with `handsOff` on, key presses don't
+  reach him, so this can't happen in the scripts' cutscenes.
 
 ## Do not reproduce
 
@@ -444,6 +588,17 @@ Words used here:
   `KQAnimPlayEvent blocked` to `water`. The log should show both starting
   in the same update, with no `EndLoop` from `Bricks` afterwards (`down`
   never ends, rule 6).
+- **Windmill tumble (our logs, B):** `cargo play --world Daventry --at
+  191200,229700,-1.5708 --jump 20 …` (the user's standing jump into the
+  sails). `traps.log`: `JumpDir` 0, `endJump` "jump finished: gravity
+  on, steps 325", `setState … normal` carried out at once. `connor.log`:
+  state `special` (not `jump`) from the trap's update, gravity true;
+  after cue 300 (33 updates after the trap) z 8050 → 7650 within a few
+  updates, then state Wait, and `--jump` works again.
+- **Watermill walk (our logs, B):** cue 1's turn: one update `Stop`,
+  one `Left`, then `Walk` while the turn finishes; "walk distance
+  measured again" at the turn's end; arrival at (190800, 230100) as
+  before (rule 24).
 - **In the original (user), once fighting works or with a weapon:** break
   the alchemist's boards. Expected: the boards fall (one animation), then
   lie on the ground; the falling animation plays once and doesn't repeat.

@@ -121,6 +121,58 @@ Words used here:
       along a wall). So he follows it,
       falling slightly behind; next update his step reaches it again. If
       it didn't move, he stays at the start of the pass.
+      **This does not end his pass** (traced 2026-10-18, Q95; B's
+      stand-in, which ends the pass there and ignores the wall, is
+      wrong). In order:
+      - Everything his balls can touch is tested in **one list, in the
+        order things entered the world** (`connor-physics.md` "Against
+        a building" step 7). The push happens when the pushed object's
+        turn in that list comes. At that moment his position **and his
+        sweep** both become the 0.95 position (call it **P**): for the
+        rest of the list his move has length 0. Buildings later in the
+        list then test nothing (a move under 0.1 is never tested);
+        objects later in the list with a zero-length move: not traced.
+      - Things **earlier** in the list were tested on his full move (pass
+        start to pass end). A wall contact found there is kept as usual
+        (the nearest, pulled back 25), and the push does not remove it.
+      - After the sweep, the kept hit (if any) goes to the hit handling
+        of `connor-physics.md` "Walls", with two differences: the
+        **wanted end is P**, and his **movement counts as zero** (start
+        and end of the sweep are both P), so the hit is **never
+        head-on**: no `Stop`, no wall block, no `crash`. It is handled
+        as glancing: target = P projected onto the wall's plane through
+        the kept contact (target = P − n × ((P − contact) · n)); he is
+        put at the contact and swept to the target (the usual slide,
+        with its retries). Its result **replaces P**.
+      - So with a wall in the sweep he ends **on the wall's contact
+        plane** (his centre 225 from the face), keeping only the part of
+        P that runs along the wall. The pushed object goes on: a
+        box-shaped barrel is never stopped (rule 4.1) and goes into the
+        wall.
+      - The slide's sweep is a new sweep. If it touches the pushed
+        object again, the push rules apply inside it too (the object
+        moves by the slide's step; his end becomes the slide's start +
+        0.95 × that). Pushing straight into a wall the slide is about 0
+        long and nothing more happens.
+      - **Daventry:** every building (`permwrld.cs`, run from
+        `newworld.cs` line 64; the pub is `pub.kq`) enters the world
+        before every barrel (`newworld.cs` lines 283–286), so a pub wall
+        is always found on his full move. (If a building came later in
+        the list than the barrel, he would follow the barrel through
+        the wall; this doesn't happen in Daventry's data.)
+      - **Afterwards (Q95 c):** only an update in which his sweep really
+        reaches the object is a pushing touch (rule 3). Held at the
+        wall, he no longer advances while the barrel moves on by his
+        full step at each touch, so within one or two updates his step
+        no longer reaches it. While he is in Push, wall hits are never
+        head-on (head-on only acts in Move and Jump), so he just stays
+        pressed against the wall. After **4 updates without a pushing
+        touch** Push ends (rule 7): key held → Move (walking), and the
+        next walk into the wall is head-on → `Stop` with the forward
+        block (`connor-physics.md` "Walk held against a wall"). This
+        matches the user's check in the original (2026-10-18): the
+        barrel goes through the pub's wall, the wall stops Connor, and
+        he stops pushing once the barrel is too far in.
 5. Physical pushables do **not** run a `Push` script (their scripts, e.g.
    `barelup.cs`, only answer `Die`).
 
@@ -282,6 +334,16 @@ Words used here:
      So "floats downhill" (rule 4.2) never shows in Daventry.
   3. With a weapon drawn, or walking backwards, nothing is pushed
      (rules 2.3, 2.6).
+- **Barrel into the pub's wall (Q95, our logs, B):** push `barrel.04` or
+  `barrel.07` straight into the pub. Expected per update in
+  `connor.log`: while the wall is not in his sweep, Connor at the pass
+  start plus 0.95 × the barrel's movement, as now; in the first update with a wall
+  contact, "push, then kept wall hit: wanted end = P, movement 0, not
+  head-on, slide to the wall plane", and his distance to the wall's face
+  225 from then on (never less); the barrel's x/y keeps changing by his
+  full step at each pushing touch; then 1–2 more pushing touches, 4
+  updates without one, Push → Move, a walking head-on → `Stop` with the
+  forward block. The user saw this in the original (2026-10-18).
 
 ## Open questions
 

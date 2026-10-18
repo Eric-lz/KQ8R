@@ -267,14 +267,12 @@ the first update of a new walk after standing still never starts a swing
    - So a call without its pair leaves the first-person key locked, or
      unlocked when it should be locked.
 
-### Shake and cutscene cameras (summary only)
+### Shake and cutscene cameras
 
 - `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` wobbles the
   camera with two sine waves for the given time (usage text in the game).
-- `KQCamera::addCamLoc x y z [newlist]` builds a list of camera spots;
-  `cutToCamLoc x y z [roll]` jumps to one and aims at the given point;
-  `flyToCamLoc x y z [seconds endRoll]` flies there over time. Scripts use
-  these in cutscenes. To be studied before M3/M4.
+- Camera flights and cuts (`addCamLoc`, `flyToCamLoc`, `cutToCamLoc`):
+  see "Camera flights and cuts" below.
 - **`move KQCamera <flags> x y z rx ry rz`** (traced 2026-10-17, Q89 c):
   - Flags: bit 1 = the position is **added** to the current one
     (otherwise it replaces it); bit 2 = the angles are added (otherwise
@@ -311,6 +309,148 @@ the first update of a new walk after standing still never starts a swing
     KQCamera` to a spot close to the follow view (bricks cue 10: about
     0.19 rad off), so there is no visible jump.
 
+### Camera flights and cuts: `addCamLoc`, `flyToCamLoc`, `cutToCamLoc` (traced 2026-10-18)
+
+Words used here: a **spot** is a camera place in the camera's list; the
+**aim point** is the x y z given to `flyToCamLoc` / `cutToCamLoc`
+(the game's usage text: "xyz is of point to AIM at, uses camlocs from
+addCamLoc command for camera positions"). Two switches of the camera
+matter, both set by `follow` (rule 1): **"places"** (the follow rules
+set the camera's position) and **"aims"** (the follow rules turn the
+view toward what is followed). `follow <object>` switches both on
+(`follow <object> 1`: only "aims"); `follow none` switches both off.
+
+1. **The list.** `KQCamera::addCamLoc x y z [newlist]`: if `newlist` is
+   given and not 0, the list is emptied first; then the spot is added at
+   the end. Without it (or 0) the spot is added to the spots already
+   there. The list stays until the next `newlist` (fly and cut don't
+   empty it). Data: 69 of 70 lines give `1` (5 of them as
+   `$KQCamera::newLoc 1`), so nearly every cutscene uses a fresh list
+   with one spot; only Dead City's `laser2.cs` adds a spot without it.
+2. **Which spot.** Fly and cut both use the spot **nearest the camera's
+   present position** (3D distance; on a tie the one added first).
+3. **`KQCamera::cutToCamLoc x y z [roll]`** (roll in radians, 0 if
+   missing; a 5th word is needed for it):
+   - the camera is put on the spot at once;
+   - it **stops following** (as `follow none` does for the target: Connor's
+     moves no longer update it) and obstacle avoidance is switched off;
+     the two switches stay as they were;
+   - the aim point becomes what the camera "follows" (for the rules
+     below, as if it were an object standing at the aim point: the
+     camera looks 1,400 above it, "What the camera looks at" rule 2);
+   - the player's tilt and heading offsets go back to the defaults
+     (tilt −0.2, heading offset 0); the roll becomes `roll`;
+   - the heading is set at once to look from the spot toward (x, y);
+   - then one camera update runs at once with the normal follow rules:
+     if "places" is on, the camera is pulled onto the range around the
+     aim point (farther than the maximum → max − 1, nearer than the
+     minimum → min + 1, then the height rule); if "aims" is on, the view
+     is aimed as in rule 5. With both off (after `follow none`) it stays
+     on the spot, heading toward (x, y), and keeps its tilt.
+4. **`KQCamera::flyToCamLoc x y z [seconds [endRoll]]`:**
+   - **Duration:** `seconds` (a negative value counts as 0). If it is 0
+     or missing: the distance from the camera to the spot ÷ **5,000**
+     units per second. The flight takes **N = whole part of (duration ×
+     15) + 1 updates** (2 s → 31 updates, 2.067 s; 3 s → 46).
+   - **Path and speed:** a **straight line** from where the camera is to
+     the spot, the same step every update ((spot − start) ÷ N): constant
+     speed, no easing in or out. It is exactly on the spot after update N.
+   - **Roll:** from its present value to `endRoll` in N equal steps.
+     `endRoll` is only read when the line has exactly x y z seconds
+     endRoll; otherwise it is **0**, so a flight without it levels a
+     rolled camera.
+   - At the start: it **stops following** and avoidance is off (as for a
+     cut); the aim point becomes what it "follows"; the tilt and heading
+     offsets go back to the defaults; **"places" is switched off** for
+     the flight ("aims" stays as it was).
+   - **Every update of the flight:** the step is added to the position,
+     the roll step to the roll, then the normal follow update runs: it
+     does not place the camera ("places" off) but, if "aims" is on, aims
+     it (rule 5).
+   - **The last update (N):** "places" is switched **on** again before
+     that update's follow update runs, so the camera is pulled onto the
+     range around the aim point like after a cut: farther than the
+     range's maximum → pulled in to max − 1 **along the line to the
+     aim point + 1,400**, nearer than the minimum → pushed to min + 1,
+     then the height rule ("Height above the ground": at least 1,400
+     above the ground under it and above the aim point; whether it snaps
+     or eases there on this update was not settled). Avoidance is off,
+     so no obstacle pull-in or swing. **So the camera can jump at the
+     end of a flight** (watermill: about 1,227 units, rule 7).
+   - **After the flight** it stays where that last update put it: it
+     follows nothing, so it isn't updated again until a `move
+     KQCamera`, `follow`, cut, flight or shake (the mouse look is off
+     during `handsOff`).
+   - Connor is told when the flight ends (an internal message used by
+     some of his special states; scripts don't see it). The end is not
+     a cue: scripts time what follows with `sendEvent`.
+5. **What the camera looks at during and after a flight or cut**, when
+   "aims" is on: the point **1,400 above the aim point**, from the
+   camera's position, every update:
+   - **tilt** = default tilt (**−0.2**) + the angle up to that point, set
+     exactly each update (so the camera looks slightly below the raised
+     point; in effect at about the aim point's own height when the
+     camera is a few thousand units away and a little below it);
+   - **heading:** within **0.02 rad** it locks on and from then on
+     follows the point exactly each update; otherwise, as in "`follow
+     Connor` after a cutscene": more than 0.63 rad off on the
+     anticlockwise side (0.063 rad on the clockwise side) → turns by
+     **1/3 of the remaining angle per update**, less → snaps onto it
+     (the same lopsided rule; see "Do not reproduce");
+   - **roll** = the flight's roll (rule 4), not changed by aiming.
+   With "aims" off (a `follow none` and no `follow` since) the view
+   keeps its heading and tilt through the whole flight; only the
+   position and roll change.
+6. **Together with other commands** (traced; none of these happen in
+   Daventry's data):
+   - `move KQCamera` during a flight sets place and angles at once; the
+     flight's remaining steps are then added from the new place, so it
+     ends away from the spot; with "aims" on, the view is turned back to
+     the aim point at the next update.
+   - `follow Connor` during a flight: both switches on and Connor is
+     followed again; from the next update the follow rules place the
+     camera behind him (the flight's steps are still added each update
+     until N, then overruled by the leash).
+   - `follow none` during a flight: the view stops turning; the position
+     keeps flying, and at update N it is pulled onto the range around
+     the aim point (rule 4).
+   - `follow Connor` after a flight or cut works as in "`follow Connor`
+     after a cutscene".
+7. **Daventry's numbers (data + rules above), to check in `camera.log`:**
+   - **Watermill room, `wtrmwalk.cs`** (range 1000–2500 from its own
+     `setRange` at `On`):
+     - cue 3: `follow Connor` (both switches on, leash clamp at once),
+       `addCamLoc 190000 230000 10600 1` (the list is this one spot);
+     - cue 4 (0.2 s = 3 updates later): `flyToCamLoc 186960 228000 10000
+       2`: **N = 31**; step = ((190000, 230000, 10600) − camera at cue
+       4) ÷ 31; roll 0 throughout;
+     - looked-at point: **(186960, 228000, 11400)**; at the spot the view
+       is heading **2.153**, tilt **+0.016** (−0.2 + 0.216);
+     - update 31: distance from the spot to the looked-at point
+       **3,725.8** > 2,500, so the camera is pulled in to 2,499 along
+       that line: **(188999.0, 229341.5, 10863.4)** before the height
+       rule (the height rule wants at least 11,400; not settled whether
+       it gets there on that update). Same view direction, about 1,227
+       units closer;
+     - cue 5 comes 30 updates after cue 4 (one update before the flight
+       ends), cue 6 at 60 updates: `move KQCamera 0 192880 230965 9260
+       -.2 0 2.095`, then `follow Connor`.
+   - **Mill wheel, `wheeltp1.cs`** (the windmill's other trap, Connor
+     knocked under the wheel; no `follow none` in it, so both switches
+     are on from normal play): cue 1 `addCamLoc 185000 213300 8800 1`,
+     `flyToCamLoc 185800 211300 5610 3`: **N = 46**; looked-at point
+     (185800, 211300, 7010); at the spot heading **−2.761**, tilt
+     **−0.893**; distance 2,800.7, so at update 46 the camera is pulled
+     in to max − 1 if the range's maximum is under 2,800.7 (walking,
+     2,500: to (185086.2, 213084.6, 8607.2)), and stays if running
+     (5,000). Cue 2 comes after 2.5 s (37–38 updates, before the flight
+     ends); cue 3 (4 s after cue 2): `follow Connor`.
+   - **Windmill tumble, `miltrap1.cs`:** **no flight or cut**. It uses
+     `follow none` and three `move KQCamera` (`anim-scripts.md` rule
+     30), then `follow Connor` at cue 300. Between them the camera
+     stays exactly at each moved spot (rule 1 of "What the camera looks
+     at").
+
 ## Data used
 
 - `MASK/Connor.sae`, `MASK/Camera.sae`: bindings.
@@ -337,6 +477,10 @@ the first update of a new walk after standing still never starts a swing
 - The pulled-in camera can be closer than the minimum distance. On the
   next update the minimum rule pushes it out again and the view test
   pulls it back in, for as long as the obstacle is there.
+- `flyToCamLoc` / `cutToCamLoc` with an **empty spot list**: the
+  original uses a spot that was never set (see "Do not reproduce").
+- `flyToCamLoc` with seconds 0 and the camera already on the spot: N = 1,
+  a flight of one update (the last-update rule still applies).
 - If the first turn is zero (old and new direction the same), the swing
   has a step of 0 and stays "running" without moving until the mouse or
   a new block resets it. No visible effect.
@@ -347,6 +491,14 @@ the first update of a new walk after standing still never starts a swing
   toward him (below 0.63 rad on one side, about 0.063 rad on the other):
   use one snap angle on both sides (0.063 rad, the smaller), and turn by
   1/3 of the remaining angle per 1/15 s, done per second.
+
+- **Fly or cut with no spot in the list:** the original reads a spot it
+  never set (whatever was in memory). Do nothing instead (keep the
+  camera where it is) and log an error.
+- **The jump at the end of a flight** (rule 4, last update) is the
+  original's behaviour as traced, not a bug to remove: build it, so the
+  cutscenes frame the same. If the user sees no jump in the original,
+  it is a misreading (tell A).
 
 - **Per-update rates.** The height smoothing (10% per update), tilt speed
   (0.015 rad per update) and fixed-mode zoom (125 units per update) depend on
@@ -395,6 +547,18 @@ the first update of a new walk after standing still never starts a swing
     the 5% creep gets through. Keep that feel (it's the original's); a
     smoother drag is an M7 improvement, not a fix. Not checked: standing
     still with a blocked view, doors, the exact numbers.
+- **Camera flights (our logs, B):** in `camera.log`, per update of a
+  flight: update k of N, position, step, roll, heading and tilt, the
+  "places"/"aims" switches. Watermill (`cargo play --world Daventry --at
+  192408,227039,0 --frames 3000 --sound off`): N = 31 from cue 4; the
+  position changes by the same step every update; at update 31 the
+  pull-in to (188999.0, 229341.5, ~10863) (rule 7); heading 2.153 and
+  tilt +0.016 once locked on; then no change until cue 6.
+- **Camera flights (original, user, by eye):** in the watermill room's
+  first-visit cutscene, the camera should glide in a straight line at an
+  even speed for about 2 s, turning to look into the room, and then
+  **jump about a third of the way closer** along its view at the end.
+  If there is no jump, tell A (rule 4's last update would be wrong).
 - In the original game, compare screenshots of the same spot with the same
   inputs (you can do this by eye; we only compare numbers we log).
 
@@ -405,9 +569,10 @@ the first update of a new walk after standing still never starts a swing
 2. (Answered 2026-10-17: yes, negative tilt looks down; see Tilt rule 1.)
 3. (Answered: tilt resets after Connor moves more than 10 units, in both
    views; see Tilt rule 5.)
-4. (Answered 2026-10-13, see "Obstacles".) Still open: what switches
-   avoidance off (on by default; no script command found that changes
-   it); whether Connor's "moved" signal comes in every update he moves or
+4. (Answered 2026-10-13, see "Obstacles".) What switches avoidance
+   off: answered 2026-10-18: `follow none`, `flyToCamLoc` and
+   `cutToCamLoc` switch it off, `follow <object>` switches it on again
+   ("Camera flights and cuts"). Still open: whether Connor's "moved" signal comes in every update he moves or
    only when his position or facing really changes (assumed: whenever
    either changes); the turn direction of the swing is inferred from the
    signs of the two angles, not checked in the game.

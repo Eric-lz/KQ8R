@@ -3,6 +3,21 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study session A: Q94–Q96 answered, camera flights (docs only)
+
+**Changed:** `docs/behaviour/`: `anim-scripts.md` (rule 24 corrected and extended: what plays during `walkTo`'s turn, head-on, a wall block, `walkTo` without an object; rule 25; new rules 28–30: `KQConner::endJump`, `KQConner::JumpDir`, the windmill tumble), `pushing.md` rule 4.3 (a push and a wall in the same sweep) and a check, `connor-physics.md` (Jumping rule 4 and "Against a building" step 7: pointers), `camera.md` (new "Camera flights and cuts": `addCamLoc`, `flyToCamLoc`, `cutToCamLoc`, rules 1–7 with Daventry's numbers; open question 4 partly answered; edge cases, do not reproduce, checks), `QUESTIONS.md` (Q94–Q96 answered); STATUS. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** The user asked A to answer the questions B left after M3 3l (Q94–Q96; Q96 b blocks play at the windmill) and to study the camera flights both Daventry cutscenes use.
+**Tested how:** Read in Ghidra (`Mask.exe`) and checked against the data (`miltrap1.cs`, `wtrmwalk.cs`, `wheeltp1.cs`, `newworld.cs`, `permwrld.cs`, every `addCamLoc` / `walkTo` line). Nothing was run in the original game.
+**Result:**
+
+- Q96 (b): `endJump` finishes the jump as a crash does (gravity on, steps 325, jump allowed to end) without changing the state; the script's `setState … special` then replaces Jump at once, so no Fall follows. With `handsOff` on, any state request during a jump does the same. B's mover staying in its jump state is wrong. (a): `JumpDir` is 1 only during a `backJump`.
+- Q95: the push moves Connor's position and his sweep to the 0.95 point mid-sweep; a wall found earlier in the load-order list (all Daventry buildings come before the barrels) is still handled afterwards, with the 0.95 point as the wanted end and zero movement: never head-on, a slide onto the wall plane. B's "end the pass at the 0.95 point" is wrong.
+- Q94: head-on in a scripted walk: B's stand-in right. A wall block doesn't stop the walk (stand-in wrong). During the turn: `Stop`, then `Left`/`Right` for 1 update, then `Walk` before the turn ends; the walk distance is measured again at the turn's end (corrects rule 24). `walkTo x y` alone: no cue (stand-in right).
+- Camera flights: one list of spots (`newlist` 1 empties it); fly/cut use the spot nearest the camera; a flight is a straight line at constant speed over whole(seconds × 15) + 1 updates (no seconds: distance ÷ 5,000 units/s); roll changes evenly to `endRoll` (0 if not given); the camera stops following, and if it was aiming it looks 1,400 above the aim point with the default −0.2 tilt; on the last update the camera is pulled onto the range around that point (watermill: N = 31, a jump of about 1,227 units at the end). `miltrap1.cs` has no flight (only `move KQCamera`); the mill wheel's `wheeltp1.cs` has one.
+
+**Still broken / not tested:** Nothing checked in the original. Not settled: the height on a flight's last update; when a `setState` refused during an unfinished jump is tried again; objects later in the collision list after a push (zero-length move). The end-of-flight jump is traced only; the user should look for it in the watermill cutscene.
+**Next:** B builds: `endJump`/`JumpDir` (unblocks the windmill), the push/wall order (Q95), the `walkTo` details (Q94), the camera flights.
+
 ## 2026-10-18 `KQConner::getDoMode` (the windmill tumble without a bow)
 
 **Changed:** `kq8-core/src/active.rs`: `KQConner::getDoMode` is a world command: it answers Connor's hand mode, always 4 (empty hands) because he has no weapons yet and `setDoMode` is still a stub; 1 unit test.

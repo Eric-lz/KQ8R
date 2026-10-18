@@ -221,6 +221,13 @@ banking, already in `connor-movement.md`). Values it uses:
      `alias bricks` spot, `Table` (loaded first in `newworld.cs`) and
      `Bricks` are at the same distance; `Bricks` gets its `Push` call and
      `Table` is the recorded hit that stops him.
+     **A push and a wall in the same sweep (traced 2026-10-18, Q95):**
+     an accepted physical push moves his position **and his sweep** to
+     the 0.95 position in the middle of the list; things later in the
+     list then see a move of length 0 (buildings test nothing). A wall
+     hit kept from earlier in the list is still handled after the
+     sweep, with the 0.95 position as the wanted end and zero movement
+     (never head-on). Details in `pushing.md` rule 4.3.
   - **Which surfaces are solid (Q31 c):** only the BSP leaves' bit 0
     decides. Surfaces and materials (table 1) play no part in collision.
   - **The trace always starts at node 0** (with "no plane crossed"), so
@@ -571,6 +578,11 @@ Consequences:
 
    `runJumpHold` has transitions to `jumprun` / `jumpstop` in `Conner.anm`;
    when those play is not traced.
+   **A script can finish the jump early** with `KQConner::endJump`
+   (gravity on, steps 325, no state change), and a state change asked
+   for while `handsOff` is on does the same; once he leaves Jump for
+   another state, no Fall follows from that jump (`anim-scripts.md`
+   rules 28–30, Q96, traced 2026-10-18).
 5. **Hitting something steep during a jump** ends the jump (gravity on,
    steps back to 325) **only when it crashes** (the two cases below) or
    when a movement not in the crash list plays `Stop` (the tile jumps).
