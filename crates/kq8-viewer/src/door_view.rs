@@ -838,6 +838,21 @@ pub fn trap_step(
                 connor.log.detail(format!("connor update {n}: {line}{} ({at})", if walk { "; handsOff on" } else { "" }));
                 format!("{at}: applied: Connor {line}{}", if walk { "; handsOff on" } else { "" })
             }
+            Request::ClickTurn { name, target, at } => {
+                // clicking.md rules 27-28: his state after the script (its
+                // own requests above are applied already).
+                let (turns, state) = connor.click_turn_state();
+                let n = connor.updates;
+                if turns {
+                    let auto = kq8_core::connor_auto::AutoMove::new(kq8_core::connor_auto::AutoKind::Point, target, None);
+                    let line = connor.walker.start_auto(auto);
+                    connor.log.detail(format!("connor update {n}: Connor's state after the script {state}: turn to {name}: {line} ({at})"));
+                    format!("{at}: applied: Connor's state after the script {state}: turn to {name} (clicking.md rules 25-32): {line}")
+                } else {
+                    connor.log.detail(format!("connor update {n}: Connor's state after the script {state}: no turn to {name} (rule 28) ({at})"));
+                    format!("{at}: Connor's state after the script {state}: no turn (clicking.md rule 28)")
+                }
+            }
             Request::WalkExit { at } => match connor.walker.auto.take_if(|a| matches!(a.kind, kq8_core::connor_auto::AutoKind::Walk { .. })) {
                 Some(a) => {
                     connor.walker.stop_at_once();

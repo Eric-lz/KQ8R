@@ -1764,7 +1764,7 @@ inventory and menus.
       key event (down/up, "sent again"), "auto-turn cancelled" only on
       a down, and "cue lost" when a turn with a cue is cancelled; per
       turn update the heading, turn direction and forward.
-    - **4a-8, the turn after a click** (`clicking.md` rules 25–33,
+    - **4a-8, the turn after a click** (**done** 2026-10-18; `clicking.md` rules 25–33,
       `doors.md` rule 16). After every `ConnorAction` call (doors,
       scripted objects, scripted clickables, buildings with a script,
       items with a script) the click asks for a turn to the object's

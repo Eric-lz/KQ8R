@@ -152,6 +152,12 @@ pub enum Request {
     CamFly { aim: [f32; 3], seconds: Option<f32>, end_roll: Option<f32>, at: String },
     /// `KQCamera::cutToCamLoc x y z [roll]` (rule 3).
     CamCut { aim: [f32; 3], roll: f32, at: String },
+    /// The turn after a click (`clicking.md` rules 25–33, M4 4a-8): after
+    /// a `ConnorAction` call Connor turns to face `target` (the clicked
+    /// object's position) with the automatic turn, if his state allows it
+    /// (rule 28). Queued after the script's own requests, so the caller
+    /// looks at his state after those (rule 27).
+    ClickTurn { name: String, target: [f32; 2], at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -1712,7 +1718,7 @@ impl WorldState {
                     format!("{head}: Connor turns to face {to} at ({:.0}, {:.0}) (rule 7); {}", p[0], p[1], self.talk.queue_later(s, now))
                 }
                 Some(p) => format!(
-                    "{head}: {issuer} would turn to face {to} at ({:.0}, {:.0}) (not done: monsters don't move yet, M5); {}",
+                    "{head}: {issuer} turns to face {to} at ({:.0}, {:.0}) (rule 7, Q103 d: always, no state check; request logged only: monsters don't move yet, M5); {}",
                     p[0],
                     p[1],
                     self.talk.queue_later(s, now)
@@ -2135,7 +2141,7 @@ impl Active {
     }
 
     /// Runs object `i`'s script with `args` (`$1` is its name).
-    fn call_object(&mut self, i: usize, args: &[&str]) {
+    fn call_object(&mut self, i: usize, args: &[&str]) -> bool {
         let o = &self.world.objects[i];
         let name = o.name().to_string();
         let mut all = vec![name.clone()];
@@ -2144,8 +2150,12 @@ impl Active {
             Some(script) => {
                 self.world.note(format!("script {script} {}", all.join(" ")));
                 self.scripts.call(&script, &all, &mut self.world);
+                true
             }
-            None => self.world.note(format!("object {name} has no script; {} not called", all.join(" "))),
+            None => {
+                self.world.note(format!("object {name} has no script; {} not called", all.join(" ")));
+                false
+            }
         }
     }
 
@@ -2275,7 +2285,7 @@ impl Active {
     }
 
     /// Runs door `i`'s script with `args` (`$1` is the door's name).
-    fn call_door(&mut self, i: usize, args: &[&str]) {
+    fn call_door(&mut self, i: usize, args: &[&str]) -> bool {
         let d = &self.world.doors[i];
         let name = d.door.name.clone();
         let mut all = vec![name.clone()];
@@ -2284,8 +2294,12 @@ impl Active {
             Some(script) => {
                 self.world.note(format!("script {script} {}", all.join(" ")));
                 self.scripts.call(&script, &all, &mut self.world);
+                true
             }
-            None => self.world.note(format!("{name} has no script; {} not called", all.join(" "))),
+            None => {
+                self.world.note(format!("{name} has no script; {} not called", all.join(" ")));
+                false
+            }
         }
     }
 
@@ -2468,13 +2482,38 @@ impl Active {
         };
         self.world.note(format!("{head}; script arguments: {} {}", d.door.name, args.join(" ")));
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        self.call_door(i, &refs);
-        if !d.do_not_point_at {
-            self.world.note(format!("Connor would turn to face {} (rule 16; not done: his states not traced)", d.door.name));
-        }
+        let called = self.call_door(i, &refs);
+        self.click_turn(&d.door.name, &args, called, d.door.placement().position, d.do_not_point_at);
         let mut full = vec![d.door.name.clone()];
         full.extend(args);
         ClickResult::Script(full)
+    }
+
+    /// The turn after a click (`clicking.md` rules 25–33, M4 4a-8): after
+    /// a `ConnorAction` call (`args` = `ConnorAction`, `$3`, `$4`; `called`:
+    /// a script ran) Connor is asked to turn to `position`, the object's
+    /// placement point, unless it has `doNotPointAt` (rule 29). His state
+    /// is looked at when the request is applied, after the script's own
+    /// requests (rules 27–28). Logs the call kind and the outcome.
+    fn click_turn(&mut self, name: &str, args: &[String], called: bool, position: [f32; 3], do_not_point_at: bool) {
+        let call = match args.get(1).map(String::as_str) {
+            Some(k @ ("do" | "TooFar" | "Special")) => k.to_string(),
+            Some(object) => format!("item {object} ({})", args.get(2).map_or("?", |s| s.as_str())),
+            None => "none".into(),
+        };
+        let outcome = if !called {
+            "no script, no call: no turn (rule 26)".to_string()
+        } else if do_not_point_at {
+            "doNotPointAt: no turn (rule 29)".to_string()
+        } else {
+            let at = format!("click {name} ({call})");
+            self.world.requests.push(Request::ClickTurn { name: name.to_string(), target: [position[0], position[1]], at });
+            format!(
+                "turn to {name} at ({:.0}, {:.0}) asked for; Connor's state is looked at after the script's requests (rules 27-28)",
+                position[0], position[1]
+            )
+        };
+        self.world.note(format!("click {name}: call {call}: {outcome}"));
     }
 
     /// The script arguments of a click (`doors.md` rules 12-14), or what
@@ -2487,7 +2526,7 @@ impl Active {
                 if !accepts.takes(&it.kind, &self.world.items.types) {
                     let remark = self.world.connor_remark(WONT_WORK, "This will not work");
                     self.world.note(format!(
-                        "{head}; holds {} ({}): not accepted (accepts {}): {remark}; script not run",
+                        "{head}; holds {} ({}): not accepted (accepts {}): {remark}; script not run; no call: no turn (clicking.md rule 26)",
                         it.object,
                         it.kind,
                         describe_accepts(&accepts)
@@ -2501,7 +2540,7 @@ impl Active {
             }
             (false, _) if rules.too_far_away_action == 0 => {
                 let remark = self.world.connor_remark(TOO_FAR, "too far");
-                self.world.note(format!("{head}; tooFarAwayAction 0: {remark}; nothing sent"));
+                self.world.note(format!("{head}; tooFarAwayAction 0: {remark}; nothing sent; no call: no turn (clicking.md rule 26)"));
                 Err(ClickResult::TooFar)
             }
             (false, _) => Ok(vec!["ConnorAction".into(), "TooFar".into(), "TooFar".into()]),
@@ -2533,14 +2572,14 @@ impl Active {
             Err(r) => return r,
         };
         let Some(script) = b.script.clone() else {
-            self.world.note(format!("{head}; {} {}: swallowed, no script: nothing happens, Connor doesn't turn (rule 10)", b.name, args.join(" ")));
+            self.world.note(format!("{head}; {} {}: swallowed, no script: nothing happens, no call: no turn (rules 10, 26)", b.name, args.join(" ")));
             return ClickResult::Swallowed;
         };
         let mut all = vec![b.name.clone()];
         all.extend(args);
         self.world.note(format!("{head}; script {script} {}", all.join(" ")));
         self.scripts.call(&script, &all, &mut self.world);
-        self.world.note(format!("Connor would turn to face {} (doors.md rule 16; not done: his states not traced)", b.name));
+        self.click_turn(&b.name, &all[1..], true, b.placement.position, false);
         ClickResult::Script(all)
     }
 
@@ -2574,10 +2613,8 @@ impl Active {
         };
         self.world.note(format!("{head}; script arguments: {name} {}", args.join(" ")));
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        self.call_object(i, &refs);
-        if !o.do_not_point_at {
-            self.world.note(format!("Connor would turn to face {name} (doors.md rule 16; not done: his states not traced)"));
-        }
+        let called = self.call_object(i, &refs);
+        self.click_turn(&name, &args, called, o.player.placement().position, o.do_not_point_at);
         let mut full = vec![name];
         full.extend(args);
         ClickResult::Script(full)
@@ -2610,9 +2647,8 @@ impl Active {
         self.world.note(format!("{head}; script arguments: {} {}", c.name, args.join(" ")));
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         self.call_clickable(i, &refs);
-        if !c.do_not_point_at {
-            self.world.note(format!("Connor would turn to face {} (doors.md rule 16; not done: his states not traced)", c.name));
-        }
+        // Only clickables with a script come here: always a call.
+        self.click_turn(&c.name, &args, true, c.placement.position, c.do_not_point_at);
         let mut full = vec![c.name];
         full.extend(args);
         ClickResult::Script(full)
@@ -2651,12 +2687,12 @@ impl Active {
         );
         if distance >= reach {
             let remark = self.world.connor_remark(TOO_FAR, "too far");
-            self.world.item_note(format!("{head}: OUT OF REACH: {remark}; nothing"));
+            self.world.item_note(format!("{head}: OUT OF REACH: {remark}; nothing; no call: no turn (clicking.md rule 26)"));
             return ClickResult::TooFar;
         }
         if let Some(it) = item {
             let remark = self.world.connor_remark(WONT_WORK, "This will not work");
-            self.world.item_note(format!("{head}: holds {} ({}): items accept nothing: {remark}", it.object, it.kind));
+            self.world.item_note(format!("{head}: holds {} ({}): items accept nothing: {remark}; no call: no turn (clicking.md rule 26)", it.object, it.kind));
             return ClickResult::Refused;
         }
         let before = self.world.items.count("Connor", &o.kind);
@@ -2665,11 +2701,13 @@ impl Active {
         let sound = self.world.pickup_sound(&o.kind);
         self.world.item_note(format!("{head}: IN REACH: picked up; Connor's {} {before} -> {after}; {sound}; gone from the world", o.kind));
         // Rule 7: then its script, as a normal click.
-        if let Some(script) = o.script.clone() {
+        let called = o.script.clone().map(|script| {
             let args: Vec<String> = [o.name.as_str(), "ConnorAction", "do", "do"].map(String::from).to_vec();
             self.world.item_note(format!("script {script} {}", args.join(" ")));
             self.scripts.call(&script, &args, &mut self.world);
-        }
+        });
+        let do_args = ["ConnorAction".to_string(), "do".into(), "do".into()];
+        self.click_turn(&o.name, &do_args, called.is_some(), placement.position, o.do_not_point_at);
         ClickResult::PickedUp(o.name)
     }
 
@@ -2703,6 +2741,7 @@ impl Active {
             return ClickResult::Refused;
         }
         let at = format!("chest {name}");
+        self.world.note(format!("click {name}: chest: no ConnorAction call: no click turn (clicking.md rule 33)"));
         match before {
             ChestState::Closed => {
                 // Rule 7: open plays; the item appears at invLoc / invDir.
@@ -4026,7 +4065,10 @@ endif
         a.world.requests.clear();
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let r = &a.world.requests;
-        assert_eq!(r.len(), 5, "{r:?}");
+        // The click's own turn comes after the script's requests
+        // (clicking.md rule 27).
+        assert_eq!(r.len(), 6, "{r:?}");
+        assert!(matches!(&r[5], Request::ClickTurn { name, .. } if name == "basket1"));
         assert!(matches!(&r[0], Request::CamSpot { spot, newlist: true, .. } if *spot == [190000.0, 230000.0, 10600.0]));
         assert!(matches!(&r[1], Request::CamFly { seconds: Some(s), end_roll: None, .. } if *s == 2.0));
         assert!(matches!(&r[2], Request::CamFly { end_roll: Some(e), .. } if *e == 0.5));
@@ -4111,7 +4153,9 @@ endif
         let r = a.click("fishies.01", near, 2350.0, None);
         assert_eq!(r, ClickResult::Script(["fishies.01", "ConnorAction", "do", "do"].map(String::from).to_vec()));
         assert!(a.world.clickables[0].gone);
-        assert!(matches!(&a.world.requests[..], [Request::Delete { name, .. }] if name == "fishies.01"));
+        // It still turns Connor: the removal waits for the end of the
+        // event (clicking.md rule 22; our reading, Q105).
+        assert!(matches!(&a.world.requests[..], [Request::Delete { name, .. }, Request::ClickTurn { name: t, .. }] if name == "fishies.01" && t == "fishies.01"));
         let log = a.take_log().join("\n");
         assert!(log.contains("KQSound::play eat.aud: plain sound started"), "{log}");
         assert!(matches!(&a.world.sounds[..], [s] if s.name == "eat.aud" && s.placed.is_none() && !s.looping && s.group == 0));
@@ -4125,6 +4169,48 @@ endif
         let log = a.take_log().join("\n");
         assert!(log.contains("KQStatsChangeRequestEvent 2 0 0 0 0 to Connor") && log.contains("Connor's stats unknown"), "{log}");
         assert!(log.contains("event KQCueEvent 1 0 to fishies.01 (sent by fish.cs line 7): deleted; dropped"), "{log}");
+    }
+
+    #[test]
+    fn a_click_call_asks_for_a_turn_to_the_object_after_the_script() {
+        // clicking.md rules 25-29: after the ConnorAction call, a turn to
+        // the object's placement point; not with doNotPointAt; not for a
+        // stock remark.
+        let mut a = with_object("set Clicked $3
+", "x");
+        a.world.requests.clear();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(matches!(&a.world.requests[..], [Request::ClickTurn { name, target, at }] if name == "basket1" && *target == [0.0, 0.0] && at.contains("(do)")));
+        let log = a.take_log().join("
+");
+        assert!(log.contains("click basket1: call do: turn to basket1 at (0, 0) asked for"), "{log}");
+        a.world.requests.clear();
+        a.world.objects[0].do_not_point_at = true;
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(a.world.requests.is_empty());
+        assert!(a.take_log().join("
+").contains("call do: doNotPointAt: no turn (rule 29)"));
+        // Out of reach, tooFarAwayAction 0: the stock remark, no call.
+        a.world.objects[0].do_not_point_at = false;
+        assert_eq!(a.click("basket1", [0.0, -90000.0, 0.0], 2350.0, None), ClickResult::TooFar);
+        assert!(a.world.requests.is_empty());
+        assert!(a.take_log().join("
+").contains("no call: no turn (clicking.md rule 26)"));
+        // tooFarAwayAction 1: the TooFar call turns him from any distance.
+        a.world.objects[0].too_far_away_action = 1;
+        a.click("basket1", [0.0, -90000.0, 0.0], 2350.0, None);
+        assert!(matches!(&a.world.requests[..], [Request::ClickTurn { at, .. }] if at.contains("(TooFar)")));
+    }
+
+    #[test]
+    fn a_picked_up_item_does_not_turn_him_by_default() {
+        // clicking.md rule 29: items default to doNotPointAt 1.
+        let mut a = with_items(MAKE);
+        a.world.requests.clear();
+        a.click("NoName0", [1000.0, -3000.0, 500.0], 2350.0, None);
+        assert!(!a.world.requests.iter().any(|r| matches!(r, Request::ClickTurn { .. })));
+        assert!(a.take_log().join("
+").contains("click NoName0: call do: doNotPointAt: no turn (rule 29)"));
     }
 
     #[test]
@@ -4143,7 +4229,7 @@ endif
         assert!(a.world.objects[0].gone && a.world.objects[0].hidden);
         assert_eq!(a.pick([0.0, -5000.0, 200.0], [0.0, 1.0, 0.0]), None);
         // Any placed object (here `keepwall`) is deleted too: the viewer hides it.
-        assert_eq!(a.world.requests.len(), 2, "{}", a.world.log.join("
+        assert_eq!(a.world.requests.len(), 3, "{}", a.world.log.join("
 "));
         assert_eq!((a.scripts.vars.get("R1"), a.scripts.vars.get("R2")), (Some("0"), Some("1")));
         let log = a.take_log().join("\n");

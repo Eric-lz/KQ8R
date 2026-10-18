@@ -532,8 +532,18 @@ impl Walker {
     /// walk puts him in Wait first (the keys' control, standing); a turn
     /// (`pointAndCue`) only turns him. Returns a line for the log.
     pub fn start_auto(&mut self, a: crate::connor_auto::AutoMove) -> String {
-        let walk = matches!(a.kind, crate::connor_auto::AutoKind::Walk { .. });
+        use crate::connor_auto::{AutoKind, AutoPhase};
+        let walk = matches!(a.kind, AutoKind::Walk { .. });
         let mut line = format!("scripted {:?} to ({:.0}, {:.0})", a.kind, a.target[0], a.target[1]);
+        // There is only one automatic turn (clicking.md rule 32,
+        // anim-scripts.md "Edge cases"): a turn without a cue (click,
+        // speak, chest) asked for while a turn is running only replaces
+        // its target; a pointAndCue keeps its cue for the new end.
+        if let Some(old) = self.auto.as_mut().filter(|o| o.kind == AutoKind::Point && o.phase == AutoPhase::Turning && a.kind == AutoKind::Point && a.cue.is_none()) {
+            old.target = a.target;
+            let cue = if old.cue.is_some() { "; its cue is kept" } else { "" };
+            return format!("{line}: one automatic turn: the running turn (update {}) gets this target{cue}", old.turn_updates);
+        }
         if let Some(old) = self.auto.take() {
             line += &format!(" (replaces the unfinished {:?}; its cue never comes)", old.kind);
         }
@@ -1082,6 +1092,21 @@ mod tests {
 
     fn intent(forward: i8, turn: i8, run: bool) -> Intent {
         Intent { forward, turn, run }
+    }
+
+    #[test]
+    fn a_second_turn_request_only_replaces_the_target() {
+        // clicking.md rule 32: one automatic turn; a pointAndCue keeps its
+        // cue (anim-scripts.md "Edge cases").
+        use crate::connor_auto::{AutoKind, AutoMove, Cue};
+        let mut w = Walker::new(0.0);
+        let cue = Cue { who: "x".into(), c: "1".into(), d: "0".into() };
+        w.start_auto(AutoMove::new(AutoKind::Point, [10.0, 0.0], Some(cue.clone())));
+        w.auto.as_mut().unwrap().turn_updates = 3;
+        let line = w.start_auto(AutoMove::new(AutoKind::Point, [0.0, 10.0], None));
+        assert!(line.contains("one automatic turn") && line.contains("cue is kept"), "{line}");
+        let a = w.auto.as_ref().unwrap();
+        assert_eq!((a.target, a.turn_updates, a.cue.as_ref()), ([0.0, 10.0], 3, Some(&cue)));
     }
 
     #[test]

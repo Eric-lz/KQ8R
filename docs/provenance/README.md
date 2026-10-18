@@ -1634,3 +1634,19 @@ From `docs/behaviour/connor-movement.md` "Turning" rule 2,
 | Keyboard auto-repeat still clears the wall blocks but is not a down for the turn | **Our reading**: the note says nothing re-sends a held key, and the user saw a held key neither cancel nor resume the turn | Runs above |
 | `--turn N,dir` = pressed at N and held; `--hold`'s turn pressed at the start, let go at its end | **Our choice** (test tools) | Runs above |
 
+
+### 4a-8, the turn after a click — `crates/kq8-core/src/{active,connor}.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| After every `ConnorAction` call (`do`, an accepted item, `TooFar`; `Special` not made yet) on doors, scripted objects, scripted clickables, buildings with a script and items with a script, Connor is asked to turn to the object's placement point | `clicking.md` rules 25, 31; `doors.md` rule 16 | Unit test `a_click_call_asks_for_a_turn_to_the_object_after_the_script`; `connor-4a8-tmbstn1.log`, `connor-4a8-wizbook.log` |
+| No call, no turn: no script, "too far" with `tooFarAwayAction` 0, an item not taken; a `TooFar` call (`tooFarAwayAction` non-zero) turns him from any distance | `clicking.md` rule 26 | Same unit test |
+| The request comes after the script's own requests; Connor's state is looked at when it is applied: Wait or Move turn, every other state of ours doesn't | `clicking.md` rules 27–28 | Unit test `cam_loc_fly_and_cut_become_requests` (the turn is the last request); runs: "state after the script Wait" |
+| His state is the one after his own next update (requests are applied after it in our build) | **Our ordering** (Q105 b) | — |
+| `doNotPointAt` stops it; items default to 1; the key is looked up by its whole name, so `doNotPointAtMe` does nothing | `clicking.md` rule 29 | `doors-4a8-urn.log`: `urn1` "doNotPointAt: no turn"; `connor-4a8-wizbook.log`: the book turns him (updates 46–60); unit test `a_picked_up_item_does_not_turn_him_by_default` |
+| `doNotPointAt` not read for buildings | **Our gap** (Q105 c) | — |
+| An object deleted by its own click script still turns him (to where it stood) | **Our reading** of `clicking.md` rule 22 (Q105 a) | Unit test `a_scripted_clickable_eats_itself_once` |
+| One automatic turn: a cue-less turn asked for during a running turn (not a walk) only replaces its target, a `pointAndCue` keeps its cue | `clicking.md` rule 32, `anim-scripts.md` "Edge cases" | Unit test `a_second_turn_request_only_replaces_the_target`; `connor-4a8-tmbstn2.log`: "one automatic turn: the running turn (update 0) gets this target" |
+| `speak Connor Connor`: the line at once, the click's turn during it; `speak Connor $1`: one turn, the line 0.5 s after the speak | `clicking.md` rule 32 | `talk-4a8-tmbstn1.log`: line at 1.333 s, turn updates 22–32; `talk-4a8-tmbstn2.log`: line at 1.867 s |
+| Chests: no click turn (only before their remark) | `clicking.md` rule 33 | Log line "chest: no ConnorAction call" |
+| Another character's `speak` turn: always, no state check, same 0.5 s; only logged (monsters don't move yet) | `talking.md` rule 7 (Q103 d) | Code path only (no character speaks outside conversations) |

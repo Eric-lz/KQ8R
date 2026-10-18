@@ -682,6 +682,17 @@ impl ConnorSim {
         self.walker.mode == Mode::Free
     }
 
+    /// His state for the turn after a click (`clicking.md` rule 28): Wait
+    /// or Move turn (talk, weapon draw, throwing and the tile puzzle are
+    /// not built); anything else doesn't. The state's name, for the log.
+    pub fn click_turn_state(&self) -> (bool, &'static str) {
+        match self.walker.mode {
+            Mode::Free if self.walker.moving() => (true, "Move"),
+            Mode::Free => (true, "Wait"),
+            m => (false, m.name()),
+        }
+    }
+
     /// The jump he is in (`jump`, `runJump`, `backJump`) for the scripts'
     /// `KQConner::JumpDir` / `endJump` (M3 3m-1), `None` outside the Jump
     /// state.
