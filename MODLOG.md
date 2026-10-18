@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c: end-of-session documents (docs only)
+
+**Changed:** `STATUS.md` ("Where we are": 4c-1 to 4c-5; older 4a entries shortened; code layout, logs, test count; the 4c stand-ins and what is not built; Q105 moved to answered and built; Q108–Q110 listed; next steps).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** 4c is not seen by eye yet.
+**Next:** The user's checks of 4c by eye; A: Q108–Q110, then conversations.
+
 ## 2026-10-18 M4 step 4c-5: A's answers to Q105 (the turn after a click)
 
 **Changed:** Viewer `door_view.rs`: Connor's state is recorded at each click; when the click's turn is applied, that state decides it, unless a state request of the script (a `setState` or a scripted walk that was not refused) was applied before it, which then decides; the log says which. `kq8-core` `active.rs`: buildings carry `doNotPointAt` (`load.rs` passes the value it already read), so a building with a script and `doNotPointAt=1` doesn't turn him; unit test extended. Provenance, `QUESTIONS.md` (Q105 built), `docs/DESIGN.md`.

@@ -1,27 +1,43 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of A's study of the on-screen interface and the inventory
-(`interface.md`, `inventory.md`; Q105 answered, Q106/Q107 mostly). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's M4 step 4c (the on-screen interface and Connor's inventory,
+4c-1 to 4c-5; Q108–Q110 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-18)
 
-- **New 2026-10-18 (A): the interface and the inventory are studied**,
-  ready for B: `docs/behaviour/interface.md` (panels and their files,
-  sliding, Space/Tab/1–8/Escape/F1, the top bar following the mouse,
-  hiding for handsOff and conversations, meter formulas, Connor's stats
-  named, the caption strip's wrap and place) and
-  `docs/behaviour/inventory.md` (categories, stacking, equipment swaps,
-  picking an item, the held item after a world click, applying items,
-  the wizard's items: a held-item click delivers them, his replies need
-  conversations). **Checked by the user in the original** (2026-10-18):
-  start values, Space, meters pop-up, top bar, the caption strip as wide
-  as the box and slightly left of centre with the map closed, equipment
-  swap, a refused held item staying on the pointer. So B's text-fitted
-  caption strip (4b-3) should go back to the box width. Q105 answered in `clicking.md` rules 34–36.
-
+- **New 2026-10-18 (B, M4 4c): the on-screen interface and Connor's
+  inventory are built** from `interface.md` and `inventory.md`, one
+  commit per step, **not seen by eye yet** (the user's check is next):
+  - 4c-1: the caption's stone strip covers the whole caption box (400
+    wide on the 800 × 600 screen of `set800mode 1`), rows broken at its
+    width, the box a little left of the middle with the map closed.
+  - 4c-2: the bottom bar from `Gplayscr.gui` in the world's pictures
+    and fonts (armour / hand / ranged slots and numbers, eight slots,
+    health and experience bars with the level, rope / rocks / map
+    icon); Space slides it away and back in 0.2 s; handsOff slides it
+    away (spinning mask) and back only if it was shown; the meters pop
+    up alone for 1.5 s on a change; changed numbers flash; the caption
+    sits on the bar. Connor's start inventory from `Connor.kq`.
+    Bricks run: level 2, health 20/20, experience 40 (200 %), hand 15,
+    ranged 2, armour 1, as `interface.md` check 2 predicts.
+  - 4c-3: the top bar (mask button, quest strip with arrows, gold)
+    follows the pointer and pops down for a new quest item; the eight
+    slots with counts, keys 1–8, right-click descriptions (voice only);
+    stacking, equipment pushing out the old piece (it drops where the
+    new one lay), applying items and potion timers.
+  - 4c-4: quest items, coins, rope and rocks held on the game's own
+    pointer pictures; a world click offers the held item (accepted: the
+    hand empties; refused: "This will not work." and it stays).
+  - 4c-5: Q105 built: the click turn looks at Connor's state at the
+    click (or the one the script asked for); buildings read
+    `doNotPointAt`.
+- **Before that (A, 2026-10-18):** `interface.md` and `inventory.md`
+  written and checked by the user in the original; (B, M4 4a-7 to
+  4a-9) turn keys as events, the turn after a click, the chest remark
+  in any state, all checked by the user.
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
   alive) is well under way**: doors, emitters, flowing water, animated
   objects, traps, items, chests, scripted objects, clicking, sound
@@ -44,7 +60,7 @@ end of A's study of the on-screen interface and the inventory
   - 4a-9: a chest's remark turns him in any state; only
     `doNotPointAt` gives no turn and no wait. Q103 (a)–(c) recorded
     in the provenance (stand-ins confirmed).
-- **Before that (B, M4 4a): remarks and speech** (`talking.md`):
+- **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`):
   message, talker and lip-sync files; speech queues and the `speak`
   family of commands; voices and ducking; captions (stand-in panel);
   Connor's own remarks; cutting a line short; his mouth texture.
@@ -61,8 +77,8 @@ end of A's study of the on-screen interface and the inventory
 
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
-milestones: **M3, Daventry comes alive**, and the start of **M4** (remarks
-and speech, 4a).
+milestones: **M3, Daventry comes alive**, and **M4** (remarks and speech
+done; the interface and inventory built in 4c).
 
 ## Setup
 
@@ -90,7 +106,8 @@ and speech, 4a).
 
 ## Code layout
 
-- `crates/kq8-data` (105 unit tests): file formats. Sound files and
+- `crates/kq8-data` (114 unit tests): file formats, also fonts and
+  `.pba` arrays (`font.rs`), screen layouts and the tag file (`gui.rs`). Sound files and
   their lookup (`aud.rs`). VOL archives, bitmaps,
   palettes, materials, `.kqs` shapes, terrain (surface and floor grids),
   `.dig` buildings, `.kq` text, world scripts (start-up, incl. item
@@ -103,7 +120,7 @@ and speech, 4a).
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (278 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (320 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump, pushing),
   `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
@@ -125,7 +142,12 @@ and speech, 4a).
   objects, ducking; no sound card), `talk.rs` (speech queues, line
   timing, mouth schedule; M4 4a). `kq8-data/src/msg.rs`: message,
   talker and lip-sync files. Viewer `talk_view.rs`: voices, captions,
-  Connor's mouth.
+  Connor's mouth. M4 4c: `caption.rs` (wrap, the box's place),
+  `panels.rs` (shown/hidden, sliding, pop-ups), `meters.rs` (bar
+  percents and widths), `gui_draw.rs` (a panel drawn from its layout),
+  `inventory.rs` (slot pictures), `connor_inventory.rs` (adding,
+  stacking, equipment, applying, slot clicks, the hand). Viewer
+  `gui_view.rs`: the panels, the pointer, clicks and keys on the bars.
 - `crates/kq8-audio` (5 unit tests): our mixer and the sound card (cpal).
   Runs at a fixed **15 updates per second**; the ground animators run on
   continuous game time.
@@ -143,14 +165,17 @@ and speech, 4a).
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
   `--hold F,T,R[,N]`, `--jump N` (repeatable), `--turn N[,1|-1]`, `--click NAME,N`
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
-  with the line-of-sight test), `--item TYPE`. Haze and drawing: the
+  with the line-of-sight test), `--item TYPE` (a real held `TestItem`),
+  `--key NAME,N` (`space`, `1`–`8`, `left:`/`right:` + a layout control
+  name). Haze and drawing: the
   ground's material `ground_haze.rs`, walls `building_light.rs`, models
   `object_light.rs` (each with its `.wesl` shader), near / far / off and
   the collider switch `draw_distance.rs`, point lights on models
   `scene_lights.rs`, on building surfaces `wall_lights.rs`.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
-  events), `talk.log` (speech), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
+  events), `talk.log` (speech), `gui.log` (panels, stats sent, the bars'
+  contents, the hand), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
   `anim.log`, `sound.log`, `lightmap-verify.log`, `lighting-verify.log`,
   `aud-verify.log`. `viewer.log`
   also logs the ground light under Connor and the camera, and every
@@ -226,7 +251,9 @@ and speech, 4a).
   ear by the user. World music (3h-5) too.
 - Remarks and speech (M4 4a) and the click turn and turn keys (4a-7
   to 4a-9): checked by the user against the original, 2026-10-18.
-- Tests: 426 unit tests pass (110 + 300 + 5 + 11), 2026-10-18.
+- The interface and inventory (M4 4c): built and checked in the logs
+  (values, timings, pictures chosen); **not seen by eye**.
+- Tests: 450 unit tests pass (114 + 320 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
@@ -249,38 +276,38 @@ and speech, 4a).
   yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.
-- **Stand-ins of 4a-8 (Q105, answered 2026-10-18 in `clicking.md`
-  rules 34–36, not built):** an object deleted by its own click script
-  still turns Connor (right); his state is looked at one update after
-  the click (the original: at once, right after the script); buildings'
-  `doNotPointAt` is not read (the original reads it). When standing, an
-  automatic turn plays `Stop` for its first update even if he was
-  already turning on the spot (as rules 24–25 say). Talk, weapon,
-  throwing and tile-puzzle states don't exist yet.
-- **Next step, suggested:** for B: the always-visible panel
-  (`interface.md` rules 7–9, 20–36), then the bars and the held item
-  (`inventory.md`), and the Q105 answers. For A: conversations
-  (`KQConner::conversation`), needed for the wizard and the other
-  Daventry characters. The brightness setting
-  (rule 17) changes nothing at the shipped value 50; leave it for the
-  options menu.
+- **Stand-ins of 4c** (Q108–Q110): the 800 × 600 screen and how the
+  layout's pictures scale with it (× 1.25, nearest pixel, tiled when
+  smaller); the panels' animations at 15 frames per second; counts of 0
+  not written; the rocks picture; the blink's order; potions on game
+  time; a `give`'s pushed-out piece at Connor's feet; the rope held and
+  its remark; the pointer's click point at its top-left. Not built: the
+  map (M6), the help popup and F1, the red boosted numbers and the
+  potion timer icons (M5), the level-up flame (not traced), weapon
+  readying (M5). Escape still quits: the original's main menu pauses
+  the game (a menu step must stop the updates and the panels' timers).
+  When standing, an automatic turn plays `Stop` for its first update
+  even if he was already turning on the spot (as rules 24–25 say).
+- **Next step, suggested:** the user's checks by eye of 4c (`docs/FEATURES.md`
+  "The on-screen interface"; the commands are in `MODLOG.md`). For A:
+  Q108–Q110, then conversations (`KQConner::conversation`), needed for
+  the wizard and the other Daventry characters (the panels' side of
+  conversations is built, unit-tested only). For B after that: the main
+  menu (Escape, the mask button) with the game paused.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.
-- Speech, not done: conversations (not studied), item descriptions in
-  the inventory (no inventory screen), the Daventry monster-death
+- Speech, not done: conversations (not studied), the Daventry monster-death
   remark (no monster dies), monsters' mouths (not drawn), helmets'
   and armour's faces (M5).
 - Clicking: only doors, chests, items, scripted objects and buildings
-  react. No inventory screen (M4). `Special` calls (conversation areas)
-  are not made yet.
+  react. `Special` calls (conversation areas) are not made yet.
   `checkInventory` by id number (Q62 b) not built.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
   the camera trail behind him), first person (F2), shake; the roll of
   `move KQCamera` and of flights is not drawn (logged).
-- Cutscenes: no GUI panels to hide and no spinning-mask icon during
-  `handsOff`. A request from a cue reaches Connor one update after the
+- Cutscenes: a request from a cue reaches Connor one update after the
   cue (our order).
 - Animated objects: scenery animations' cues (sounds) don't fire.
   `loadKQ` with a name or position while playing is not done; a copy
@@ -301,8 +328,8 @@ and speech, 4a).
 - Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
-- Nothing yet of: conversations, inventory screen, fighting,
-  stats, story, saving, travel between worlds.
+- Nothing yet of: conversations, menus, fighting, story, saving, travel
+  between worlds.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
@@ -317,9 +344,16 @@ and speech, 4a).
   7, folders, a line with no voice) are still open; 4 (the caption
   panel) answered in `interface.md`.
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
-  `interface.md`; still open: index 0 in fonts, font flag bit 6, the
-  picture attribute bits, and how the layout is scaled at 800 × 600
-  (the 400-pixel caption width is inferred).
+  `interface.md` and built (4c-1); still open: index 0 in fonts, font
+  flag bit 6, the picture attribute bits.
+- For A (asked 2026-10-18 by B, M4 4c): **Q108** (the 800 × 600 screen:
+  how rectangles, pictures and fonts scale; how smaller pictures fill
+  their box; the panels' animation speed), **Q109** (counts of 0, the
+  rocks picture, the blink's order, the potions' clock, a `give`'s
+  pushed-out piece, the top bar in a window), **Q110** (the remark
+  numbers in `inventory.md` rule 9: our reading names the right lines;
+  the rope held or not; the pointer's click point; the gold button
+  while the coins are held).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
   1–4 (menu pause, level-up flame, rocks picture, held item on world
   change, applied quest items).
@@ -352,7 +386,8 @@ and speech, 4a).
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- All others are answered or closed (Q103–Q104 answered, built and
+- All others are answered or closed (Q105 answered and built
+  2026-10-18 (4c-5); Q103–Q104 answered, built and
   checked by the user 2026-10-18; Q94–Q96 answered and built
   2026-10-18; Q84–Q93 answered 2026-10-17 and built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
   by B in 7k; Q75–Q78 answered by A and built
