@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 steps 4a-7 to 4a-9: the user's checks; end-of-session documents (docs only)
+
+**Changed:** `STATUS.md` ("Where we are": 4a-7 to 4a-9, older 3m/3n/4a entries shortened; the fixed differences, the answered Q103/Q104 notes and the done 4a checks removed; stand-ins of 4a and 4a-8 (Q105); next steps; 426 tests), `docs/FEATURES.md` (the click turn, turn keys during an automatic turn, the chest remark in any state; `--turn` / `--hold` wording; "doesn't turn to face" removed), `README.md` (remarks checked, Connor turns to what he clicks; M4 started), `docs/DESIGN.md` (4a-7 to 4a-9 done and checked), `QUESTIONS.md` (Q103, Q104 built and checked).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** By the user in the viewer: the held turn key at the alchemist's sign, `tmbstn1` / `tmbstn2`, `wizbook` / `urn1`, the chest remark.
+**Result:** All as described in the 4a-7 to 4a-9 entries, like the original.
+**Still broken / not tested:** Q105 open (stand-ins). Two `eval` details of `anim-scripts.md` rule 18 not built (no data uses them).
+**Next:** A: conversations and Q105. B, while waiting: a read-only survey of `loadKQ` with a name or place, and of scenery animations' sound cues, in Daventry.
+
 ## 2026-10-18 M4 step 4a-9: the chest remark turns Connor in any state; Q103 recorded
 
 **Changed:** `kq8-core/src/active.rs`: a chest's `Take`/`Empty` remark no longer skips the turn when Connor is not in Wait or Move; only `doNotPointAt` gives no turn and no wait. The log says which state he was in. Unit test extended. Provenance: the 4a rows for Q103 (a)–(e) now cite the answers; no other code changed.

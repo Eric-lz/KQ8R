@@ -1740,8 +1740,9 @@ inventory and menus.
   - **4a-6, the mouth** (**done**; viewer; rule 18). Connor's face texture
     `cf0.bmp` is swapped for `lip<n>` of `[ConnerLips]` at each mouth
     change. Other characters are not drawn yet (cubes), so only logged.
-  - **4a-7 to 4a-9, A's answers to Q104 and Q103 (e)** (planned
-    2026-10-18). One commit per step; each step logs to `connor.log`
+  - **4a-7 to 4a-9, A's answers to Q104 and Q103 (e)** (planned and
+    **done** 2026-10-18; checked by the user in the viewer, like the
+    original; Q105 asked). One commit per step; each step logs to `connor.log`
     and `doors.log` / `talk.log`.
     - **4a-7, turn keys are events** (**done** 2026-10-18; `connor-movement.md` "Turning"
       rule 2, `anim-scripts.md` "Edge cases"). Today Connor's turn

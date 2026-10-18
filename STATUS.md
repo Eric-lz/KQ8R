@@ -1,7 +1,8 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session building remarks and speech (M4 4a, `talking.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's session building A's answers to Q104 and Q103 (M4 4a-7 to
+4a-9: turn keys, the turn after a click, the chest remark). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -12,72 +13,32 @@ end of B's session building remarks and speech (M4 4a, `talking.md`). Read with 
   objects, traps, items, chests, scripted objects, clicking, sound
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
-- **New 2026-10-18 (B, M4 4a): remarks and speech are built** from
-  `talking.md`, one commit per step, checked in the logs only (not by
-  ear or eye yet):
-  - 4a-1: message, talker and lip-sync files (`kq8-data/src/msg.rs`);
-    `kq8 msg-verify` matches every count in the note.
-  - 4a-2: the speech queues and `KQMonster::speak`, `clearSpeak`,
-    `testMessage`, `stateChangeNotify` / `clearStateChangeNotify`,
-    `TalkComplete` (`kq8-core/src/talk.rs`); Connor turns to the
-    listener, lines 0.5 s later; `talk.log`. **Q103** asked (`eval`
-    and small points; stand-ins).
-  - 4a-3: voices in group 3 (Connor plain, others placed), ducking of
-    groups 0, 2, 5 to 0.2.
-  - 4a-4: captions (stand-in panel: the GUI is not studied).
-  - 4a-5: "too far", "This will not work", the chests' remarks with the
-    turn; presses and clicks cut a line without `#` short.
-  - 4a-6: Connor's mouth texture (`CF0`–`CF7`).
-  - Runs: the alchemist's sign (`--at 245000,255000,0 --click
-    alcmsign,30`), `smlchst3`, a tombstone cut short, too far.
-- **Before that (B, M3 3n): A's answers to Q97–Q99 are built**, one
-  commit per step, checked in the logs only (not by eye yet):
-  - 3n-1: the follow camera updates only when Connor moves (> 0.1 or a
-    turn), after `follow`, while the "turn back" switch is on, while the
-    player uses the camera, and in flights; each update's causes in
-    `camera.log`. Stand-in: one update on the first tick (Q27 d).
-  - 3n-2: the refined height rule (lift at once, snap within 100, ease
-    10% only when the aim moved > 20); replaces the hand-set 0.5.
-  - 3n-3: `move KQCamera` while following keeps its heading (stand-in
-    for the undecoded swing-behind rules; Q100).
-  - 3n-4: a flight's last update and a cut keep the height (Q97); the
-    watermill's end spot has ground 7,650, so no lift.
-  - 3n-5: logs for the end of a scripted walk (Q98); the numbers match
-    the rules; Q101 asked.
-  - Mill wheel (`wheeltp1.cs`) in our logs: first shot (185500, 226520,
-    9627.3), heading kept 0.259 rad off Connor; second shot exactly at
-    the script's (185000, 237850, 10850) until the flight.
-- **Before that (B, M3 3m): A's answers to Q94–Q96 and the camera
-  flights are built**, one commit per step, checked in the logs; 3m-1,
-  3m-2 and 3m-4 also by eye by the user (like the original):
-  - 3m-1 (Q96): `KQConner::endJump` / `JumpDir`: the windmill tumble
-    finishes the jump, Special replaces it (no Fall), gravity stays on;
-    after cue 300 Connor drops to the floor and can jump again. A trap's
-    script now counts as inside Connor's update.
-  - 3m-2 (Q95): a barrel pushed into the pub goes into the wall while
-    the wall stops Connor; then Push → Move → `Stop` with the block.
-  - 3m-3 (Q94): scripted walks play `Stop`, `Left`/`Right`, then `Walk`
-    during the turn; a wall block no longer stops them. The watermill
-    walk now arrives 7 updates sooner (no slow start from standing).
-  - 3m-4: camera flights and cuts (`addCamLoc`, `flyToCamLoc`,
-    `cutToCamLoc`; new `kq8-core/src/camera_flight.rs`): the watermill's
-    flight (31 updates, the jump closer at the end) and the mill wheel's
-    (46). **Q97 asked** (the height on a flight's last update).
-- A studied remarks and speech (`talking.md`, 2026-10-18); built in 4a
-  above. Conversations are not studied yet.
-- **New 2026-10-18 (A): Q97–Q99 answered** (`camera.md`,
-  `anim-scripts.md`, not built): the follow camera updates only on a
-  "Connor moved" message (a committed move that changes his position by
-  more than 0.1 or his facing), after `follow`, every update while the
-  rarely-set "turn back" switch is on, and during flights. The height
-  eases (10%) only when the aim point moved more than 20; otherwise it
-  only snaps within 100 or is lifted off the ground. A flight's last
-  update keeps the height (B's stand-in is right). In a trap, the
-  camera's update for a script's `move Connor` comes after the script's
-  `move KQCamera`. The end of a scripted walk plays the ordinary stop
-  transition and the next turn curves it: B's build already matches;
-  the user's difference is not explained (`anim-scripts.md` open
-  question 6).
+- **New 2026-10-18 (B, M4 4a-7 to 4a-9): A's answers to Q104 and Q103
+  are built**, one commit per step, **checked by the user in the viewer
+  (all as in the original)**:
+  - 4a-7: turn keys are events (`kq8-core/src/turn_keys.rs`): only a
+    turn key **press** cancels an automatic turn; a held key neither
+    cancels nor speeds it, and doesn't take over when it ends; forward
+    stays the player's during the turn.
+  - 4a-8: Connor turns to face what he clicked after every
+    `ConnorAction` call (doors, scripted objects, buildings and items
+    with a script), in Wait or Move, unless `doNotPointAt`; one
+    automatic turn (a second request only changes the target).
+    `tmbstn1` reads at once and turns while reading, `tmbstn2` turns
+    and reads 0.5 s later; `wizbook` turns him, `urn1` doesn't.
+    **Q105** asked (small points; stand-ins).
+  - 4a-9: a chest's remark turns him in any state; only
+    `doNotPointAt` gives no turn and no wait. Q103 (a)–(c) recorded
+    in the provenance (stand-ins confirmed).
+- **Before that (B, M4 4a): remarks and speech** (`talking.md`):
+  message, talker and lip-sync files; speech queues and the `speak`
+  family of commands; voices and ducking; captions (stand-in panel);
+  Connor's own remarks; cutting a line short; his mouth texture.
+  Checked by the user against the original. Conversations are not
+  studied yet.
+- **Before that (B, M3 3m and 3n):** camera flights and cuts, scripted
+  walks, the windmill tumble, and when the follow camera updates
+  (Q94–Q99). Details in `MODLOG.md`.
 - **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
@@ -249,26 +210,17 @@ and speech, 4a).
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
   ear by the user. World music (3h-5) too.
-- Tests: 418 unit tests pass (110 + 292 + 5 + 11), 2026-10-18.
+- Remarks and speech (M4 4a) and the click turn and turn keys (4a-7
+  to 4a-9): checked by the user against the original, 2026-10-18.
+- Tests: 426 unit tests pass (110 + 300 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
-- **The user's checks of 3n (2026-10-18):** the mill wheel from the
-  south (`wheeltp1.cs`): no difference from the original; walking feels
-  like the original (kept); the watermill walked into from outside:
-  like the original (the extra step only with our `--at` start inside
-  the trap; Q101 note). From the north (`wheeltp2.cs`) `wheeltp1` fired
-  too: fixed (a script's `move Connor` no longer sweeps the traps along
-  the jump; stand-in, **Q102** asked); checked again by the user: works.
-- **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
-  and back flip), barrels pushed into a wall (the wall stops Connor) and
-  the watermill room's camera flight match the original. The scripted
-  walk differs: at the end of the watermill walk Connor turns left and
-  goes on a bit further than in the original; likely the walk's stop
-  transition (`walkstopright`, about 460 units) playing while
-  `pointAndCue` turns him (**Q98**, asked). The mill wheel cutscene
-  (`wheeltp1.cs`): its two shots before the flight were lower and closer
-  than in the original (**Q99**; built in 3n, not checked by eye yet).
+- **Left from 3m and 3n (checked by the user 2026-10-18):** at the end
+  of the watermill walk Connor turns left and goes on a bit further
+  than in the original; not explained by Q98 (`anim-scripts.md` open
+  question 6). A script's `move Connor` no longer sweeps the traps
+  (stand-in, **Q102**).
 - **Stand-ins of 3m** (not traced; none reached in Daventry): a
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
@@ -278,46 +230,25 @@ and speech, 4a).
   `follow`, flight or cut (Q100 a); a deep lift whose line meets no
   ground (Q100 b); one `follow` finding both conditions turns the
   "turn back" switch on (Q100 c).
-- **The user's checks of 4a (2026-10-18):** like the original: the
-  sign (turn, line, caption, background drop, mouth; forward doesn't
-  stop it), a movement key stops a tombstone's reading, "too far", no
-  click beyond the draw distance; an empty chest's "'Tis empty."; "This
-  will not work." with an item in hand (`--item`). Different: (1) a **held** turn key
-  cancels our automatic turn; in the original only a new press does;
-  (2) tombstones that `speak Connor Connor` don't turn him in ours, all
-  do in the original (the click turn of `doors.md` rule 16 is not
-  built). Both: **Q104**, **answered 2026-10-18 by A** (below).
-- **New 2026-10-18 (A): Q104 and Q103 answered** (docs only). Only a
-  turn key **press** cancels an automatic turn; a held key is ignored
-  during it and doesn't resume after it (`connor-movement.md` "Turning"
-  rule 2). Every `ConnorAction` call turns Connor to the clicked object
-  after its script, in Wait, Move and four rarer states, unless
-  `doNotPointAt` (`clicking.md` rules 25–33; items default to no turn;
-  `wizbook`/`wizquill` do turn him). Q103: B's stand-ins for `eval`,
-  `clearSpeak` during the wait and the placed voice are right; a
-  monster turns with the same 0.5 s wait; a chest remark turns Connor
-  in any state (`talking.md` rules 7, 10, 15, 19; `anim-scripts.md`
-  rule 18). For B: build the press-only cancel and the click turn; drop
-  the chest-state condition. **The user checked all three predictions
-  in the original (held key stops after the turn; `tmbstn1` vs
-  `tmbstn2`; `wizbook` turns, `urn` doesn't): as traced.**
-- **Still to check by ear and eye (4a):** click the alchemist's sign
-  (`cargo play --at 245000,255000,0`, walk up and click it): Connor turns,
-  speaks after about half a second, the caption shows, the music drops,
-  his mouth texture changes; click the tombstone `tomb2.01` at (202475,
-  178380) (`cargo play --at 201000,178380,0`) and press an arrow key
-  while he reads it: he stops talking; click a sign or tombstone
-  from far away: "'Tis beyond my reach."
-- **Stand-ins of 4a:** the caption panel's look; a monster's turn not
-  done (Q103 d: same turn, same 0.5 s); the chest remark's
-  "Connor not in Wait or Move → at once" is wrong (Q103 e: the chest
-  turns him in any state). The other Q103 stand-ins are confirmed.
-- **Next step, suggested:** the user's checks of 4a (above) and of 3n.
-  For A: conversations (`KQConner::conversation`). For B: Q104 (click
-  turn, press-only cancel), then cues of
-  scenery animations, `loadKQ` with a name or place while playing,
-  inventory screen (M4). The brightness setting (rule 17) is still not
-  built.
+- **Stand-ins of 4a:** the caption panel's look; another character's
+  turn to its listener is only logged (Q103 d; monsters don't move
+  yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
+  built, as no data uses them: `eval` alone gives 1 (the note: 0), and
+  its words are not read again as a new line.
+- **Stand-ins of 4a-8 (Q105):** an object deleted by its own click
+  script still turns Connor; his state is looked at one update after
+  the click; buildings' `doNotPointAt` is not read. When standing, an
+  automatic turn plays `Stop` for its first update even if he was
+  already turning on the spot (as rules 24–25 say). Talk, weapon,
+  throwing and tile-puzzle states don't exist yet.
+- **Next step, suggested:** for A: conversations
+  (`KQConner::conversation`) and Q105. For B, while waiting: a short
+  read-only survey of which Daventry scripts use `loadKQ` with a name
+  or place while playing, and which scenery animations have sound
+  cues, to decide whether either is worth building now; then the
+  inventory screen (M4) once A has studied it. The brightness setting
+  (rule 17) changes nothing at the shipped value 50; leave it for the
+  options menu.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.
@@ -326,8 +257,8 @@ and speech, 4a).
   remark (no monster dies), monsters' mouths (not drawn), helmets'
   and armour's faces (M5).
 - Clicking: only doors, chests, items, scripted objects and buildings
-  react. Connor doesn't turn to face a door or object he clicks (only
-  to what he talks about). No inventory screen (M4).
+  react. No inventory screen (M4). `Special` calls (conversation areas)
+  are not made yet.
   `checkInventory` by id number (Q62 b) not built.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
@@ -369,6 +300,9 @@ and speech, 4a).
   is still not explained (`anim-scripts.md` open question 6).
 - `talking.md` open questions 1–5 (conversations, shapes above 7,
   folders, the caption panel, a line with no voice) are still open.
+- For A (asked 2026-10-18 by B, M4 4a-8): **Q105** (an object deleted
+  by its own click script; when Connor's state is looked at; buildings'
+  `doNotPointAt`).
 - For A (asked 2026-10-18 by B): **Q100** (the heading after `move
   KQCamera` while following in later updates; the deep lift; the "turn
   back" switch when one `follow` finds both), **Q101** (the update Wait
@@ -398,7 +332,8 @@ and speech, 4a).
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- All others are answered or closed (Q94–Q96 answered and built
+- All others are answered or closed (Q103–Q104 answered, built and
+  checked by the user 2026-10-18; Q94–Q96 answered and built
   2026-10-18; Q84–Q93 answered 2026-10-17 and built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
   by B in 7k; Q75–Q78 answered by A and built
   2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;

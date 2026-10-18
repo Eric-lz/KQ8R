@@ -19,8 +19,8 @@ see [CREDITS.md](CREDITS.md).
 **Not playable yet.** Today you can load any of the game's 12 worlds in a
 viewer, walk Connor around, open doors and chests and pick up
 items. The goal is the whole game; see the roadmap in
-[docs/DESIGN.md](docs/DESIGN.md#roadmap). We are at milestone **M3,
-"Daventry comes alive"**.
+[docs/DESIGN.md](docs/DESIGN.md#roadmap). We are finishing milestone **M3,
+"Daventry comes alive"**, and have started **M4** (Connor's remarks and speech).
 
 ### What works
 
@@ -49,7 +49,7 @@ items. The goal is the whole game; see the roadmap in
 - **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
 - **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls (the wall still stops Connor), but not uphill; pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
 - **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill).
-- **Remarks**: Connor turns and speaks his lines (signs, tombstones, chests, "too far"), with captions and mouth movement; other sounds turn down meanwhile (not yet checked by ear or eye).
+- **Remarks**: Connor turns to what he clicks and speaks his lines (signs, tombstones, chests, "too far"), with captions and mouth movement; other sounds turn down meanwhile.
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).

@@ -304,16 +304,15 @@ the original.
   and by ear by the user (2026-10-17). Not built: pausing music (there is no pause),
   videos, changing worlds.
 
-## Remarks and speech (milestone M4, step 4a)
+## Remarks and speech (milestone M4, steps 4a-1 to 4a-9)
 
 From `docs/behaviour/talking.md` (2026-10-18). Checked in the logs
 (`talk.log`, `sound.log`, `connor.log`) and by the user against the
 original (2026-10-18): the sign's turn, line, caption, background drop
 and mouth; a movement key stopping a tombstone's reading; "too far".
-Two differences, waiting for Q104: a held turn key stops our automatic
-turn (in the original only a new press does), and tombstones that speak
-"to Connor" don't turn him in ours (the turn after a click, `doors.md`
-rule 16, is not built). Also checked by the user (2026-10-18): an empty
+The two differences the user found then (a held turn key cancelled the
+automatic turn; some tombstones didn't turn him) were fixed in steps
+4a-7 and 4a-8 (Q104, below). Also checked by the user (2026-10-18): an empty
 chest says "'Tis empty."; with an item in hand (`--item`) an object that
 doesn't take it gives "This will not work."
 
@@ -334,7 +333,21 @@ doesn't take it gives "This will not work."
 - **Mouth:** Connor's face texture follows the lip-sync file (`CF0`–`CF7`).
 - **Connor's own remarks:** "'Tis beyond my reach." (too far), "This will
   not work." (an item not taken), the chests' "'Tis empty." with a turn
-  to the chest.
+  to the chest, in any state of his (also mid-jump; 4a-9).
+- **Turning to what he clicks (4a-8):** after any click that runs an
+  object's script (doors, signs, tombstones, buildings and items with a
+  script), Connor turns to face the object, standing or moving, unless
+  the object says `doNotPointAt` (items never turn him). Only one turn
+  at a time: a remark's turn and the click's are one turn. Stock
+  remarks ("too far", "will not work") don't turn him. Checked by the
+  user (2026-10-18): `tmbstn1` reads at once and turns while reading,
+  `tmbstn2` turns first and reads half a second later; the wizard's book
+  turns him, the church urn doesn't.
+- **Turn keys during an automatic turn (4a-7):** only pressing a turn
+  key cancels the turn; a key already held does nothing, and when the
+  turn ends he stops turning until the key is pressed again. Held
+  forward keeps him walking through the turn. Checked by the user
+  (2026-10-18).
 - **Cutting short:** a movement key, turn key, Jump or a click stops
   Connor's line unless it is marked as not stoppable (most remarks are).
 - Checked runs: the alchemist's sign (turn, 0.5 s, 3.542 s line, clicks
@@ -414,9 +427,12 @@ repeated and checked in the logs. They do not change the game's rules.
 
 - `--hold F,T,R[,N]`: hold forward (1 forward, -1 back), turn (1 left,
   -1 right) and run (1 on, 0 off) instead of the keys. With the fourth
-  number N, forward and turn are let go after N updates.
+  number N, forward and turn are let go after N updates. The turn key
+  counts as pressed once at the start and let go at N.
 - `--turn N[,1|-1]`: press a turn key before update N + 1 and keep it
-  pressed (1 left by default, -1 right).
+  pressed (1 left by default, -1 right). It is one press: after an
+  automatic turn it does not turn him again (as a held key in the
+  original).
 - `--jump N`: press Jump once, before update N + 1 (repeatable).
 
 ### Clicking and items (ground view only)
@@ -443,10 +459,7 @@ message that shows the usage.
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.
 - **Clicking:** doors, chests, items, scripted objects and buildings
-  react; nothing else does. Connor speaks his remarks (M4 4a), but
-  doesn't turn to face a door or object he clicks (only to what he
-  talks about).
-  Picked-up items are only counted in the log.
+  react; nothing else does. Picked-up items are only counted in the log.
 - **Animated objects:** scripts switch them (M3 step 3i), but most
   Daventry scripts that do it start from things not built yet (fights,
   talking, `loadKQ` with a name or place). A rolling rock that runs
