@@ -56,8 +56,10 @@ of the game, like controls, graphics, gameplay elements and more.
   `MODLOG-template.md`.
 - `docs/DESIGN.md`: how the project works, in plain language. Update when the
   architecture changes, not on every commit.
-- `README.md`: the "what works / what doesn't work" list. Test before you claim
+- `README.md`: the "what works / what doesn't work" list, any new keybindings,
+  "Current State" (very brief), any new files/directories. Test before you claim
   something works. New entries should be kept very brief, one sentence max.
+  Keep the features list generic, don't add overly specific things.
 
 ## Environment
 
