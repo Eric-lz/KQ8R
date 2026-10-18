@@ -19,6 +19,11 @@
 //! STAND-IN: how the original draws the panel (font, place, wrapping) is
 //! not studied (`talking.md` open question 4, M4 GUI): Bevy's own font,
 //! white on a dark band, wrapped to 80% of the window.
+//!
+//! 4a-6: the mouth ([`mouth_draw`]): Connor's face texture (`baseLip`)
+//! becomes `lip<n>` of his `lips=` list at each mouth change, `lip0` for
+//! shapes of 8 or more and at rest (rule 18). Other characters are not
+//! drawn yet: their changes are only in `talk.log`.
 
 use bevy::prelude::*;
 use kq8_core::talk::{Book, Talk, TalkEvent, Voice, CONNOR};
@@ -110,6 +115,9 @@ pub struct Speech {
     /// The caption shown (4a-4): the issuer whose queue showed it, and
     /// the text; `None`: the panel is hidden (rule 11).
     pub caption: Option<(String, String)>,
+    /// Mouth changes not drawn yet (4a-6): speaker, shape (0 at a line's
+    /// end: rest).
+    pub mouths: Vec<(String, u16)>,
 }
 
 /// A voice for the sound system.
@@ -145,6 +153,12 @@ pub fn talk_step(sim: Option<ResMut<DoorSim>>, mut speech: ResMut<Speech>, share
                 speech.voices.push(VoiceOrder::Start { line: id, path, at, why: format!("speech {tuple} line #{id} by {speaker}") });
             }
             TalkEvent::End { id, cut: true, .. } => speech.voices.push(VoiceOrder::Stop { line: id }),
+            _ => {}
+        }
+        // 4a-6, rules 11, 17: mouth changes; the end of a line rests it.
+        match &e {
+            TalkEvent::Mouth { speaker, shape, .. } => speech.mouths.push((speaker.clone(), *shape)),
+            TalkEvent::End { speaker, .. } => speech.mouths.push((speaker.clone(), 0)),
             _ => {}
         }
         // 4a-4, rules 10-11: a line with a caption shows it; the queue
@@ -216,5 +230,37 @@ pub fn caption_draw(
             *vis = Visibility::Hidden;
             shared.log.lock().unwrap().detail("caption hidden");
         }
+    }
+}
+
+/// Applies the mouth changes (4a-6, rule 18) to Connor's face materials;
+/// each change in `connor.log`.
+pub fn mouth_draw(mut speech: ResMut<Speech>, connor: Option<ResMut<crate::connor_view::ConnorSim>>, mut materials: ResMut<Assets<crate::object_light::ObjectMaterial>>) {
+    if speech.mouths.is_empty() {
+        return;
+    }
+    let changes = std::mem::take(&mut speech.mouths);
+    let Some(mut c) = connor else { return };
+    for (speaker, shape) in changes {
+        if !speaker.eq_ignore_ascii_case(CONNOR) || shape == c.mouth {
+            continue;
+        }
+        // Rule 18: a shape of 8 or more uses lip0.
+        let n = if shape > 7 { 0 } else { shape as usize };
+        let image = c.lip_images.get(n).cloned().flatten();
+        let what = match &image {
+            Some(img) => {
+                for h in &c.face {
+                    if let Some(mut m) = materials.get_mut(h) {
+                        m.texture = Some(img.clone());
+                    }
+                }
+                format!("lip{n} on {} face material(s)", c.face.len())
+            }
+            None => format!("lip{n} has no texture: face unchanged"),
+        };
+        c.mouth = shape;
+        let updates = c.updates;
+        c.log.detail(format!("connor update {updates}: mouth shape {shape}: {what} (talking.md rule 18)"));
     }
 }

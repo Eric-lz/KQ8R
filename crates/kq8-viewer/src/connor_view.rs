@@ -71,6 +71,13 @@ impl Controls {
 /// Connor's mover, walker, drawing and logs.
 #[derive(Resource)]
 pub struct ConnorSim {
+    /// His mouth (M4 4a-6, `talking.md` rule 18): the materials that show
+    /// the face texture `baseLip`, and the image of each mouth shape
+    /// 0-7 (`None`: not found, the face stays).
+    pub face: Vec<Handle<ObjectMaterial>>,
+    pub lip_images: Vec<Option<Handle<Image>>>,
+    /// The mouth shape shown now (0 = rest).
+    pub mouth: u16,
     /// Presses that cut his line short (`talking.md` rule 16, M4 4a-5):
     /// forward, back, a turn key or Jump, not during `handsOff`; taken
     /// by the door simulation.
@@ -227,7 +234,7 @@ pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_connor(
     commands: &mut Commands,
-    (placement, assets): (Placement, ConnorAssets),
+    (placement, mut assets): (Placement, ConnorAssets),
     camera_start: Option<[f32; 3]>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
@@ -237,6 +244,24 @@ pub fn spawn_connor(
 ) {
     let camera_keys = assets.camera_keys.clone();
     let connor_keys = assets.keys.clone();
+    // His mouth (M4 4a-6): the face materials are found below.
+    let lip_base = assets.lips.as_ref().map(|(b, _)| b.clone());
+    let lip_images: Vec<Option<Handle<Image>>> = assets
+        .lips
+        .take()
+        .map(|(_, looks)| {
+            looks
+                .into_iter()
+                .map(|l| match l {
+                    Some(crate::load::Look::Texture { width, height, rgba, .. }) => {
+                        Some(images.add(crate::object_light::texture_image(width, height, rgba, bevy::image::ImageAddressMode::Repeat)))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut face = Vec::new();
     // Each animation's loop data; the movements add speed, flags and
     // transitions.
     let loops: Vec<MovementLoop> = assets
@@ -259,7 +284,16 @@ pub fn spawn_connor(
         let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
             .looks
             .into_iter()
-            .map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l))
+            .map(|(m, look, l)| {
+                // The look's name is where it was found (`vol:…/CF0.BMP`).
+                let file = |name: &str| name.rsplit(['/', '\\']).next().unwrap_or(name).to_string();
+                let is_face = matches!(&look, crate::load::Look::Texture { name, .. } if lip_base.as_ref().is_some_and(|b| b.eq_ignore_ascii_case(&file(name))));
+                let handle = materials.add(object_material(look, l, light, images));
+                if is_face {
+                    face.push(handle.clone());
+                }
+                (m, handle, l)
+            })
             .collect();
         let mut entities = Vec::new();
         for frame in anim.frames {
@@ -377,6 +411,9 @@ pub fn spawn_connor(
         updates: 0,
         jump_pressed: false,
         cut_presses: Vec::new(),
+        face,
+        lip_images,
+        mouth: 0,
         jump_start_z: None,
         test_turn: 0,
         hold_run_set: false,

@@ -297,6 +297,10 @@ pub struct ConnorAssets {
     /// His collision box, the `Connor` entry of `GAME/patch/BOUNDS.KQ`
     /// (connor-physics.md "Collision shape"); `None` if it can't be read.
     pub collision_box: Option<([f32; 3], [f32; 3])>,
+    /// His mouth (M4 4a-6, `talking.md` rule 18): the face texture
+    /// `baseLip=` and the looks of `lip0`..`lip7` of his `lips=` list
+    /// (`None` where missing); `None` without them.
+    pub lips: Option<(String, Vec<Option<Look>>)>,
 }
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
@@ -1800,8 +1804,24 @@ impl Placer<'_> {
                 Some((min, max)) => self.log.summary(format!("connor: collision box from BOUNDS.KQ: {min:?} .. {max:?}")),
                 None => self.log.summary("connor: no Connor entry read from GAME/patch/BOUNDS.KQ; the mover's built-in copy is used"),
             }
+            // His mouth (M4 4a-6, talking.md rule 18): `baseLip`, and
+            // `lip0`..`lip7` of the section `lips=` names.
+            let lip_names = section.get("baseLip").zip(section.get("lips")).and_then(|(base, list)| {
+                let s = file.iter().find(|s| s.name.eq_ignore_ascii_case(list.trim()))?;
+                Some((base.trim().to_string(), (0..8).map(|n| s.get(&format!("lip{n}")).map(|v| v.trim().to_string())).collect::<Vec<_>>()))
+            });
+            let lips = lip_names.map(|(base, names)| {
+                self.log.summary(format!("connor: mouth: baseLip {base}, lips {names:?} (talking.md rule 18)"));
+                self.log.quiet = true;
+                let looks = names.iter().map(|n| n.as_ref().map(|n| load_texture(self.world, self.game, n, &palette, self.log))).collect();
+                self.log.quiet = false;
+                (base, looks)
+            });
+            if lips.is_none() {
+                self.log.summary("connor: Connor.kq gives no baseLip / lips: his mouth won't move");
+            }
             let mut assets =
-                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box };
+                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
             for name in CONNOR_MOVEMENTS {
                 let mut with_ask = anm.clone();

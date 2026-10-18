@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-6: Connor's mouth moves while he talks
+
+**Changed:** Viewer `load.rs`: Connor's `baseLip` and the eight textures of his `lips=` list (`[ConnerLips]` `CF0`-`CF7.bmp`) are loaded. `connor_view.rs`: the materials showing the face texture are remembered, the eight images made. `talk_view.rs`: mouth changes and line ends go to `Speech`; `mouth_draw` puts `lip<n>` on the face materials (`lip0` for shapes of 8 or more and at rest), each change in `connor.log`. `main.rs`. Provenance.
+**Why:** `talking.md` rules 11, 17-18.
+**Tested how:** `cargo test --workspace` (418 pass), clippy clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`connor.log`, `run-4a6-sign.txt`).
+**Result:** `viewer.log`: "connor: mouth: baseLip cf0.bmp, lips [CF0.bmp … CF7.bmp]". `connor.log`: from update 40 "mouth shape 7: lip7 on 122 face material(s)" (one face material per animation), 36 swaps for the line's 39 changes (a change to the shape already shown is skipped), "mouth shape 0: lip0" at update 92 when the line ends. (A first try matched no material: a look's name is where it was found, `vol:Daventry/8bit/CF0.BMP`; fixed by comparing the file part.)
+**Still broken / not tested:** Not seen by eye. Mouth changes come at most once per update (15 per second; the lip-sync file has 1/60 s steps). Other characters' mouths: only in `talk.log` (they are not drawn yet). Helmets and armour (`lipsList=`) not done (M5). Shapes above 7: `lip0` (rule 18; 1,992 such changes in the data, what the original does otherwise is open question 2).
+**Next:** End-of-session documents; the user's checks.
+
 ## 2026-10-18 M4 step 4a-5: Connor's own remarks; cutting his line short
 
 **Changed:** `kq8-core/src/talk.rs`: `TOO_FAR` (0 0 0 1 1), `WONT_WORK` (0 0 0 4 1), `cut_short` (rule 16; 1 unit test). `active.rs`: the "too far" and "This will not work" clicks (doors, scripted objects, buildings, items, chests) now say their line instead of only logging it; a chest's `Take…`/`Empty…` remark is said, with the turn to the chest unless `doNotPointAt` (then the 0.5 s wait); `connor_remark`, `chest_remark`. Viewer: a press of forward, back, a turn key or Jump (also `--jump`, `--turn`) and any click in the world (also `--click`, `--aim`) cut Connor's line short unless it has `#`; not during `handsOff` (`connor_view.rs`, `door_view.rs`). `docs/behaviour/QUESTIONS.md`: Q103 (e). Provenance.
