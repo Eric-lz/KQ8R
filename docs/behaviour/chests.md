@@ -135,7 +135,7 @@ item; after that the chest is empty and Connor says so.
 - `KQChest` `.kq`: above keys, `animLoops` (`closed`, `open`), `script`,
   `colliderType`, `hidden`.
 - `GAME/Kq/Invinfo.itl`: the item type list (`items.md`).
-- Message files for the remarks (M4).
+- Message files for the remarks (`talking.md`).
 
 ## Edge cases
 
@@ -173,5 +173,8 @@ item; after that the chest is empty and Connor says so.
 
 ## Open questions
 
-1. Which line each remark is (M4, message files).
+1. ~~Which line each remark is~~ Answered 2026-10-18 in `talking.md`
+   (rules 1–4, 19): the six numbers are file, noun, verb, case, first
+   and last sequence; `smlchst3`'s `Empty` remark is `0.MSG` 0/109/14/33/1
+   "'Tis empty.".
 2. What 0x8000 in the default collision type does.

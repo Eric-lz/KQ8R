@@ -54,7 +54,12 @@ end of A's session answering Q94–Q96 and studying the camera flights. Read wit
     line, constant speed, aim 1,400 above the point, a pull-in on the
     last update), with numbers for the watermill and the mill wheel.
     The end-of-flight jump was confirmed by the user in the original.
-- **Later for A:** Dead City's flames (11,000 vs 12,100, open
+- **New 2026-10-18 (A): remarks and speech studied** (`talking.md`,
+  not built): message and voice files, the per-character queue,
+  captions, ducking (`nofade`), the mouth, `TalkComplete` and
+  `stateChangeNotify`, what cuts a line short, the stock remarks.
+  Conversations are not studied yet.
+- **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
 

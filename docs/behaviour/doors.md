@@ -259,7 +259,7 @@ about 500 characters.
 | `sendEvent … KQStatsChangeRequestEvent 0 0 0 0 <n>` | rewards Connor; the five numbers are in `stats=` order (`clicking.md` rule 24) | partly traced |
 | `deleteObject <name>` | removes the object: `clicking.md` rules 22–23 | traced |
 | `KQObject::collisionType <name> <±bits>` | positive: adds the bits to the object's collision type; negative: removes them; 0 refused. `-32` removes "clickable" (the door can't be clicked any more); `-288` also removes 0x100 ("push", per `urn1.cs`'s comment) | traced |
-| `KQMonster::speak …`, `doPopup`, `addMapIcon`, `earnTeleport`, `teleportersEarned`, `KQMonster::checkInventory`, `deleteObject`, `handsOff` (since studied: `anim-scripts.md` rules 21–22), `KQMonster::setState`, `pauseAnim`, `preloadShape`, `KQObject::setHidden`, `loadKQ` | dialogue, GUI, inventory, cutscene control | not studied here (M4 and later); stand-ins: log them, `checkInventory` → `$Console::Return` 0 |
+| `KQMonster::speak …` (since studied: `talking.md`), `doPopup`, `addMapIcon`, `earnTeleport`, `teleportersEarned`, `KQMonster::checkInventory`, `deleteObject`, `handsOff` (since studied: `anim-scripts.md` rules 21–22), `KQMonster::setState`, `pauseAnim`, `preloadShape`, `KQObject::setHidden`, `loadKQ` | dialogue, GUI, inventory, cutscene control | not studied here (M4 and later); stand-ins: log them, `checkInventory` → `$Console::Return` 0 |
 
 ## Numbers and units
 

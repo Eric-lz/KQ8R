@@ -403,8 +403,10 @@ world (Daventry's waterfall, mill, windmill and fountain).
 53. **Ducking:** while a line of speech plays, groups 0, 2 and 5 are
     multiplied by **0.2** (−14 dB); when it ends, by 1 again. So with the
     shipped settings a sound effect under speech plays at 0.14 × 0.2 =
-    0.028. (Some lines skip the ducking; what decides that was not
-    traced.)
+    0.028. (Some lines skip the ducking: those spoken with the word
+    `nofade` at the end of `KQMonster::speak`; the ducking lasts until
+    the speaker's queue of lines is empty. Traced 2026-10-18,
+    `talking.md` rules 10–11.)
 54. **Pause:** when the game pauses, groups 0, 2, 3 and 5 are paused (each
     sound keeps its place) and resume afterwards; groups 1 and 4 keep
     playing. (Which screens pause the game was not traced.)
@@ -541,8 +543,8 @@ or 1 → 0 takes 1.4 s).
     by the same engine in group 3. Connor's own lines are plain; other
     characters' lines are **placed** at the speaker's position when the
     line starts, min **2,000**, max **30,000**. Speech ducks groups 0, 2
-    and 5 (rule 53). Which file goes with which line (`.msg`, `.lip`) was
-    not studied.
+    and 5 (rule 53). Which file goes with which line, the queue, captions
+    and lip sync: `talking.md` (2026-10-18).
 
 ## Numbers and units
 
@@ -694,7 +696,7 @@ or 1 → 0 takes 1.4 s).
 2. ~~Keep the original distance curve or fix it?~~ **Decided by the user
    (2026-10-17):** keep the original; a fix may come later as an option
    ("Do not reproduce" 1).
-3. Not traced: what makes a speech line skip ducking (rule 53); which
+3. (Answered 2026-10-18: `nofade`, `talking.md`.) Not traced: which
    screens pause the game (rule 54; found so far: the game's own pause,
    opening the in-game menu, and loading a world); what damage kind 4 is
    (rule 41); eight
