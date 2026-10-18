@@ -147,26 +147,50 @@ pub fn tick<'a>(
     let mut intent = intent;
     let mut auto_end = None;
     let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
+    walker.turn_by_script = false;
+    let blocked = walker.blocked();
     if let Some(a) = walker.auto.as_mut() {
         let mut done = None;
+        let what = |i: Intent| if blocked { "stop (a wall block is on)".to_string() } else { crate::connor::choose_movement(i, false).to_string() };
         match a.before(mover.position, &mut walker.heading, intent.turn, dt) {
-            Before::Keys | Before::Turned { .. } => {}
+            Before::Keys => {}
+            Before::Turned { by, left, n, intent: i } => {
+                walker.turn_by_script = true;
+                intent = i;
+                let walk = if n == 3 && matches!(a.kind, AutoKind::Walk { .. }) && !blocked {
+                    let (x, y) = (mover.position[0], mover.position[1]);
+                    format!("; the walk is asked for, from ({x:.0}, {y:.0}), {:.0} to go", ((a.target[0] - x).powi(2) + (a.target[1] - y).powi(2)).sqrt())
+                } else {
+                    String::new()
+                };
+                notes.push(format!("scripted turn update {n}: turned {by:+.3}, {left:+.3} left; asks for {}{walk}", what(i)));
+            }
             Before::Cancelled => {
                 notes.push("scripted turn cancelled by a turn key: its cue never comes (connor-movement.md \"Turning\" rule 2)".into());
                 done = Some(None);
             }
-            Before::TurnDone => match a.kind {
-                AutoKind::Point => {
-                    notes.push(format!("scripted turn done: heading {:.3}", walker.heading));
-                    done = Some(Some(AutoEnd { cue: a.cue.take(), why: "turned to face the spot".into() }));
-                }
-                AutoKind::Walk { run } => {
-                    if let crate::connor_auto::AutoPhase::Walking { distance, .. } = a.phase {
-                        notes.push(format!("scripted turn done: heading {:.3}; {} straight ahead for {distance:.0}", walker.heading, if run { "runs" } else { "walks" }));
+            Before::TurnDone { n, intent: i } => {
+                walker.turn_by_script = true;
+                intent = i;
+                match a.kind {
+                    AutoKind::Point => {
+                        notes.push(format!("scripted turn done in update {n}: heading {:.3}; asks for {}", walker.heading, what(i)));
+                        done = Some(Some(AutoEnd { cue: a.cue.take(), why: "turned to face the spot".into() }));
                     }
-                    intent = Intent { forward: 1, turn: 0, run };
+                    AutoKind::Walk { run } => {
+                        if let crate::connor_auto::AutoPhase::Walking { distance, from } = a.phase {
+                            notes.push(format!(
+                                "scripted turn done in update {n}: heading {:.3}; Move starts afresh: {} straight ahead, walk distance measured again from ({:.0}, {:.0}): {distance:.0}{}",
+                                walker.heading,
+                                if run { "runs" } else { "walks" },
+                                from[0],
+                                from[1],
+                                if blocked { " (a wall block is on: the walk starts anyway, the block stays)" } else { "" }
+                            ));
+                        }
+                    }
                 }
-            },
+            }
             Before::Walk(i) => intent = i,
         }
         if let Some(end) = done {
@@ -253,12 +277,12 @@ pub fn tick<'a>(
             mover.jump_glanced = true;
             notes.push(format!("{jump} hit {} (steep, {} pass): {to}", hit.hit.what, hit.pass));
         }
-    } else if report.head_on && walker.auto.as_ref().is_some_and(|a| a.walk_done(mover.position).is_none() && matches!(a.phase, crate::connor_auto::AutoPhase::Walking { .. })) {
-        // A scripted walk ran head-on into something: the cue comes early
-        // (rule 24) instead of the crash or stop.
+    } else if report.head_on && walker.auto.as_ref().is_some_and(|a| a.walk_done(mover.position).is_none() && a.walking()) {
+        // A scripted walk ran head-on into something: put at the contact,
+        // the cue comes early, Wait (rule 24, Q94 a): no crash, no block.
         walker.stop_at_once();
         let cue = walker.auto.take().and_then(|a| a.cue);
-        notes.push("scripted walk ran head-on into something: it ends, cue now (stand-in Q94: stands at once, no crash, no wall block)".into());
+        notes.push("scripted walk ran head-on into something: put at the contact, it ends, cue now, Wait (stop); no crash, no wall block (rule 24)".into());
         auto_end = Some(AutoEnd { cue, why: "head-on".into() });
     } else if report.head_on {
         // Head-on into a wall: walking or stepping back stops at once;
@@ -458,6 +482,41 @@ mod tests {
         assert!(w.jump_finished && m.use_gravity && m.state == State::Normal);
         // Outside a jump nothing happens.
         assert!(finish_jump(&mut m, &mut Walker::new(0.0)).is_none());
+    }
+
+    #[test]
+    fn a_scripted_walk_plays_stop_left_walk_and_starts_even_with_a_wall_block() {
+        // anim-scripts.md rule 24 (Q94 b, c). A turn of about 0.6 rad:
+        // 3 updates of the automatic turn.
+        let mut list = list();
+        list.push(("left", looping(30, 0.0, Vec::new())));
+        let loops = lookup(&list);
+        let ground = Plane(0.0);
+        let target = [600.0 * 0.6f32.sin(), -600.0 * 0.6f32.cos()];
+        for blocked in [false, true] {
+            let mut m = Mover::new([0.0; 3], true);
+            let mut w = Walker::new(0.0);
+            w.blocked_forward = blocked;
+            w.start_auto(crate::connor_auto::AutoMove::new(AutoKind::Walk { run: false }, target, None));
+            let mut asked = Vec::new();
+            let mut ended = None;
+            for _ in 0..30 {
+                let t = tick(&mut m, &mut w, STAND, false, &loops, &ground);
+                asked.push(w.choice);
+                if t.auto_end.is_some() {
+                    ended = Some(asked.len());
+                    break;
+                }
+            }
+            if blocked {
+                assert_eq!(asked[..3], ["stop", "stop", "walk"], "{asked:?}");
+                assert!(w.blocked_forward, "the block stays on after the walk");
+            } else {
+                assert_eq!(asked[..3], ["stop", "left", "walk"], "{asked:?}");
+            }
+            assert!(ended.is_some(), "blocked {blocked}: the walk never ended: {asked:?}");
+            assert!((w.heading - 0.6).abs() < 1e-4, "{}", w.heading);
+        }
     }
 
     #[test]

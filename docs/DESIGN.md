@@ -1568,7 +1568,7 @@ catchers, ground animators).
       Test: push a barrel into the pub; `connor.log`: "push, then the
       kept wall hit", 225 from the face, then Push → Move → `Stop` with
       the forward block.
-    - **3m-3, scripted walks** (Q94; `anim-scripts.md` rules 24–25, rule
+    - **3m-3, scripted walks** (**done** 2026-10-18; Q94; `anim-scripts.md` rules 24–25, rule
       24 corrected). During the automatic turn (counted per update):
       update 1 `Stop`; from update 2 (no wall block) the turn direction
       counts as a turn key for the animation (`Left`/`Right`; the

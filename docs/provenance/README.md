@@ -1445,3 +1445,17 @@ This replaces the "end the pass at the 0.95 point" of 3l-4.
 | Objects later in the list after a push are not tested | **Stand-in** (rule 4.3: "not traced"; buildings test nothing under 0.1) | Unit test `after_a_push_later_objects_in_the_list_are_not_tested` |
 | Only updates whose sweep reaches the barrel are pushing touches; 4 without one end Push | `pushing.md` rules 4.3 (Q95 c), 7 | `connor-3m2-barrel-pub.log` updates 55–64 |
 
+### 3m-3, scripted walks — `crates/kq8-core/src/{connor_auto,connor,connor_update,active}.rs`
+
+This replaces the Q94 stand-ins of 3l-2.
+
+| What | Source | Check |
+| --- | --- | --- |
+| During the automatic turn: update 1 `Stop`; update 2 (no wall block) `Left`/`Right` (Move); from update 3 `Walk`/`Run` with the start and distance recorded; at the turn's end Move afresh and the distance measured again | `anim-scripts.md` rule 24 (Q94 c, corrected) | Unit tests `during_the_turn_stop_then_left_then_walk_and_the_distance_is_measured_again`, `a_scripted_walk_plays_stop_left_walk_and_starts_even_with_a_wall_block`; `connor-3m3-watermill.log` updates 18–20 |
+| The automatic turn's direction counts as a turn key for the movement; the walker's own key turning stays off meanwhile | **Our method** for "reacts to it as to a key" (the turn rate stays the automatic 3.5 rad/s) | Same |
+| `pointAndCue`: `Left`/`Right` until the turn ends, then Wait | `anim-scripts.md` rule 25 | `connor-3m3-watermill.log` updates 58–64 |
+| A wall block on at the start: `Stop` through the turn, the walk starts anyway, the block stays | `anim-scripts.md` rule 24 (Q94 b) | Unit test above |
+| Head-on during the walk (also while it walks the rest of the turn): put at the contact, cue, Wait (`Stop`), no crash, no block | `anim-scripts.md` rule 24 (Q94 a) | — |
+| `walkTo x y <who>` without both cue numbers: console line, the walk, no cue; `walkTo x y`: no cue | `anim-scripts.md` rule 24 (Q94 d) | Unit test `walk_to_point_and_cue_and_walk_exit_become_requests` |
+| "Move starts afresh" re-measures the distance only; the walk animation goes on | **Our reading** | — |
+

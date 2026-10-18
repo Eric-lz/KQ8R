@@ -429,6 +429,10 @@ pub struct Walker {
     /// A scripted turn or walk (`walkTo`, `runTo`, `pointAndCue`;
     /// `anim-scripts.md` rules 24–25), run by `connor_update::tick`.
     pub auto: Option<crate::connor_auto::AutoMove>,
+    /// The automatic turn turned him this update (set by
+    /// `connor_update::tick`): the turn direction it gives counts as a turn
+    /// key for his movement, but his own key turning stays off.
+    pub turn_by_script: bool,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -489,6 +493,7 @@ impl Walker {
             push_counter: 0,
             hand_mode: EMPTY_HANDS,
             auto: None,
+            turn_by_script: false,
         }
     }
 
@@ -535,9 +540,9 @@ impl Walker {
         line
     }
 
-    /// A scripted walk ran head-on into something (rule 24: the cue comes
-    /// early). STAND-IN (Q94): he stands at once (`stop`), with no crash
-    /// and no wall block.
+    /// A scripted walk ran head-on into something (rule 24, Q94 a): he is
+    /// put at the contact (the mover's head-on stop), the cue comes early,
+    /// and he goes to Wait (`stop`), with no crash and no wall block.
     pub fn stop_at_once(&mut self) {
         self.clear_transitions();
         self.movement = "stop";
@@ -896,7 +901,9 @@ impl Walker {
             // Pushing: `push` instead of the keys' choice (rule 6).
             let mut choice = if self.mode == Mode::Push {
                 "push"
-            } else if self.blocked() {
+            } else if self.blocked() && !self.auto.as_ref().is_some_and(|a| matches!(a.phase, crate::connor_auto::AutoPhase::Walking { .. })) {
+                // A scripted walk after its turn ignores the blocks (rule
+                // 24, Q94 b: Move's own updates don't look at them).
                 "stop"
             } else {
                 choose_movement(intent, self.submerged)
@@ -953,7 +960,7 @@ impl Walker {
         // confirmed by the user): at the normal rate, from the run crash
         // and the jump crashes alike; forward, back and run wait for its
         // end. Never from a jump's start to its landing's end (Q41).
-        let turns = (matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked()) || self.mode == Mode::Crash;
+        let turns = ((matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked()) || self.mode == Mode::Crash) && !self.turn_by_script;
         if turns {
             self.heading += f32::from(intent.turn) * TURN_RATE * dt;
         }

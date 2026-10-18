@@ -1090,7 +1090,12 @@ impl WorldState {
         let target = [number_value(&words[1]) as f32, number_value(&words[2]) as f32];
         let kind = if point { AutoKind::Point } else { AutoKind::Walk { run: words[0] == "KQConner::runTo" } };
         let rest = &words[numbers + 1..];
-        let cue = rest.first().map(|who| Cue {
+        // `walkTo` / `runTo` with an object but not both cue numbers (4 or
+        // 5 words): a console line, the walk, no cue (rule 24, Q94 d).
+        if !point && (1..3).contains(&rest.len()) {
+            self.note(format!("{at}: {}: console: \"must have objName...\" (an object without both cue numbers): the walk happens, no cue", words[0]));
+        }
+        let cue = rest.first().filter(|_| point || rest.len() >= 3).map(|who| Cue {
             who: who.clone(),
             c: rest.get(1).cloned().unwrap_or_else(|| "0".into()),
             d: rest.get(2).cloned().unwrap_or_else(|| "0".into()),
@@ -3545,7 +3550,7 @@ mod tests {
     fn walk_to_point_and_cue_and_walk_exit_become_requests() {
         use crate::connor_auto::{AutoKind, Cue};
         let mut a = with_object(
-            "KQConner::walkTo 190800 230100 $1 2 0\nKQConner::runTo 1 2\npointAndCue 188000 230000 9000 $1 3\nwalkExit\nKQConner::walkTo 5\n",
+            "KQConner::walkTo 190800 230100 $1 2 0\nKQConner::runTo 1 2\npointAndCue 188000 230000 9000 $1 3\nwalkExit\nKQConner::walkTo 5\nKQConner::walkTo 1 2 $1 4\n",
             "x",
         );
         // The helper's start ran the script once already (Init).
@@ -3557,7 +3562,9 @@ mod tests {
             .iter()
             .filter_map(|r| if let Request::ConnorAuto { auto, .. } = r { Some(auto.clone()) } else { None })
             .collect();
-        assert_eq!(autos.len(), 3);
+        assert_eq!(autos.len(), 4);
+        // An object without both cue numbers: a console line, no cue.
+        assert_eq!(autos[3].cue, None);
         assert_eq!((autos[0].kind, autos[0].target), (AutoKind::Walk { run: false }, [190800.0, 230100.0]));
         assert_eq!(autos[0].cue, Some(Cue { who: "basket1".into(), c: "2".into(), d: "0".into() }));
         // No object named: no cue.
@@ -3566,7 +3573,8 @@ mod tests {
         assert_eq!((autos[2].kind, autos[2].target), (AutoKind::Point, [188000.0, 230000.0]));
         assert_eq!(autos[2].cue.as_ref().map(|c| c.d.as_str()), Some("0"));
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::WalkExit { .. })));
-        assert!(a.take_log().join("\n").contains("usage: KQConner::walkTo x y"));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("usage: KQConner::walkTo x y") && log.contains("must have objName"), "{log}");
     }
 
     #[test]
@@ -3610,8 +3618,7 @@ endif
             a.world.connor_jump = jump;
             a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
             let ends = a.world.requests.iter().filter(|r| matches!(r, Request::EndJump { .. })).count();
-            (a.scripts.vars.get("M::dir").map(str::to_string), a.scripts.vars.get("M::end").map(str::to_string), ends, a.take_log().join("
-"))
+            (a.scripts.vars.get("M::dir").map(str::to_string), a.scripts.vars.get("M::end").map(str::to_string), ends, a.take_log().join("\n"))
         };
         let (dir, end, ends, _) = run(Some("backJump"));
         assert_eq!((dir.as_deref(), end.as_deref(), ends), (Some("1"), Some("1"), 1));
