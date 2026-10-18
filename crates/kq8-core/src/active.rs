@@ -571,6 +571,11 @@ pub struct WorldState {
     /// The panel commands of scripts since the caller last looked (M4
     /// 4c-2, `interface.md` rule 15).
     pub gui_orders: Vec<GuiOrder>,
+    /// Applied items with a duration and when they run out, game time
+    /// (M4 4c-3, `inventory.md` rule 14).
+    pub item_timers: Vec<(String, f64)>,
+    /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
+    pub item_voices: Vec<crate::connor_inventory::ItemVoice>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
     /// health without one; 3i-6).
     pub stats: BTreeMap<String, Stats>,
@@ -607,7 +612,7 @@ impl WorldState {
         self.updates as f64 / crate::UPDATES_PER_SECOND
     }
 
-    fn note(&mut self, line: impl AsRef<str>) {
+    pub(crate) fn note(&mut self, line: impl AsRef<str>) {
         let line = format!("update {}: {}", self.updates, line.as_ref());
         if self.in_trap {
             self.trap_log.push(line);
@@ -617,7 +622,7 @@ impl WorldState {
     }
 
     /// A line about items: `items.log` and the current log.
-    fn item_note(&mut self, line: impl AsRef<str>) {
+    pub(crate) fn item_note(&mut self, line: impl AsRef<str>) {
         self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
         self.note(line);
     }
@@ -857,8 +862,12 @@ impl WorldState {
             Ok(name) => {
                 let sound = if m.who.eq_ignore_ascii_case("Connor") && !m.in_world() { format!("; {}", self.pickup_sound(&m.kind)) } else { String::new() };
                 let line = format!("{at}: made {}; NewInvItem = {name}{sound}", self.items.describe(&name));
-                self.vars_out.push(("NewInvItem".into(), name));
+                self.vars_out.push(("NewInvItem".into(), name.clone()));
                 self.item_note(line);
+                // M4 4c-3: Connor's inventory rules (inventory.md rule 8).
+                if m.who.eq_ignore_ascii_case("Connor") && !m.in_world() {
+                    crate::connor_inventory::receive(self, &name, None, &format!("{at}: {}", words[0]));
+                }
                 "0".into()
             }
             Err(e) => {
@@ -2005,6 +2014,8 @@ impl Active {
                 connor_stats: None,
                 connor_stats_events: 0,
                 gui_orders: Vec::new(),
+                item_timers: Vec::new(),
+                item_voices: Vec::new(),
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
@@ -2740,7 +2751,7 @@ impl Active {
             return ClickResult::Refused;
         }
         let before = self.world.items.count("Connor", &o.kind);
-        self.world.items.objects[i].place = Place::Carried("Connor".into());
+        crate::connor_inventory::receive(&mut self.world, &o.name, Some(placement.position), "picked up");
         let after = self.world.items.count("Connor", &o.kind);
         let sound = self.world.pickup_sound(&o.kind);
         self.world.item_note(format!("{head}: IN REACH: picked up; Connor's {} {before} -> {after}; {sound}; gone from the world", o.kind));
@@ -2822,7 +2833,8 @@ impl Active {
                             format!("item {} no longer exists", o.name)
                         } else {
                             let count = self.world.items.count("Connor", &o.kind);
-                            self.world.items.objects[k].place = Place::Carried("Connor".into());
+                            let lay = o.placement().map(|p| p.position);
+                            crate::connor_inventory::receive(&mut self.world, &o.name, lay, "from a chest");
                             let sound = self.world.pickup_sound(&o.kind);
                             let line = format!(
                                 "{at}: 2nd click: {} moved into Connor's inventory ({} {count} -> {}); {sound}",
@@ -2872,6 +2884,8 @@ impl Active {
             }
         }
         self.talk_step(now);
+        // M4 4c-3: potions whose Dur ran out (inventory.md rule 14).
+        crate::connor_inventory::timers(&mut self.world);
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {
             let a = self.world.doors[i].door.advance(dt);

@@ -433,6 +433,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::HeldItem(args.item))
                 .insert_resource(gui_view::KeyAt(args.key))
                 .init_resource::<gui_view::GuiCover>()
+                .init_resource::<gui_view::BarActions>()
                 .init_resource::<gui_view::CaptionPlace>()
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").

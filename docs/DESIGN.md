@@ -1917,7 +1917,7 @@ inventory and menus.
     Q108). The caption box sits on the highest bottom panel (rule 51).
     Not built: the red "alternative" numbers (potions, M5), the
     level-up flame (not traced), the map (M6), the help popup.
-  - **4c-3, the inventory bars** (interface.md rules 12–13, 38–45;
+  - **4c-3, the inventory bars** (**done** 2026-10-18; interface.md rules 12–13, 38–45;
     inventory.md rules 1–11). Adding an item (rule 8): stacking
     (`Comb` 1) into one entry; equipment pushes out what shares its
     place (placeholders deleted, other items put into the world where

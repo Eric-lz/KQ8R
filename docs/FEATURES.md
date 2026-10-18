@@ -372,6 +372,18 @@ doesn't take it gives "This will not work."
   the spinning mask; afterwards it comes back only if it was shown.
   The caption sits on top of the bar. Clicks on the bar don't reach the
   world. Logged in `gui.log`. Not seen by eye yet.
+- **The inventory bars (4c-3):** the top bar (mask button, the quest
+  strip with its arrows, gold and its count) comes down when the pointer
+  reaches the top of the window and goes up when it moves away; it also
+  drops down for 1.5 s when a quest item comes in. The eight slots show
+  mushrooms, crystals, waters, elixirs and the four potions with their
+  counts; keys **1–8** or a click use one (health added, capped; potions
+  wear off after their time). Picked-up stacks join (one gold entry);
+  a new weapon or armour piece pushes out the old one, which drops
+  where the new one lay, and its numbers change the bar. New items and
+  higher counts blink. A right click on an item: Connor describes it
+  (voice only). Quest items and gold are not held on the pointer yet
+  (4c-4). Logged in `gui.log` and `items.log`. Not seen by eye yet.
 
 ## Viewer helpers (not in the original)
 
@@ -463,7 +475,9 @@ repeated and checked in the logs. They do not change the game's rules.
 - `--item TYPE`: put an item of that type in Connor's hand, for example
   the key that opens the castle keep's doors.
 - `--key NAME,N`: press a panel key before update N + 1 (`space`: put the
-  bottom bar away or bring it back). Can be given more than once.
+  bottom bar away or bring it back; `1`–`8`: use a slot), or click a
+  control of the bars (`left:IDCTL_INVBAR_GOLD`, `right:IDCTL_HEALTHBAR_1`,
+  names as in `Gplayscr.gui`). Can be given more than once.
 
 An "update" is one step of the game's rules, the same step each time you
 run the test. Unknown options and bad values stop the viewer with a

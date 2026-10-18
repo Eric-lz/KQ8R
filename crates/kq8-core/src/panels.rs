@@ -192,6 +192,12 @@ impl Panels {
         self.slides[p.index()].away
     }
 
+    /// Whether `p` is sliding (neither fully shown nor fully hidden).
+    pub fn moving(&self, p: Panel) -> bool {
+        let a = self.away(p);
+        a > 0.0 && a < 1.0
+    }
+
     /// Whether `p` is at least partly on the screen.
     pub fn visible(&self, p: Panel) -> bool {
         self.away(p) < 1.0

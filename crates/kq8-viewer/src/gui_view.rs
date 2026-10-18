@@ -37,6 +37,46 @@ use crate::Shared;
 /// frames per second.
 const ANIMATION_FPS: f64 = 15.0;
 
+/// Rule 44: a blink changes the picture every 0.25 s, 5 times.
+const BLINK_MS: f64 = 250.0;
+const BLINKS: u32 = 5;
+
+/// What Connor carries, as the bars show it (4c-3): item names, counts
+/// and picture files.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct InvView {
+    /// The quest items in the order they were added (`inventory.md`
+    /// rule 5): name, picture file.
+    quest: Vec<(String, Option<String>)>,
+    /// The mask piece (rule 41).
+    mask: Option<(String, Option<String>)>,
+    /// The coins: name, count, picture file (rule 43).
+    gold: Option<(String, i64, Option<String>)>,
+    /// The eight slots (rule 38): name, count, picture file.
+    slots: [Option<(String, i64, Option<String>)>; 8],
+    /// The rope's item (rule 45).
+    rope: Option<String>,
+    /// The rocks: name, count, picture file (rule 45).
+    rocks: Option<(String, i64, Option<String>)>,
+    /// Every carried item's count and category (for blinking and news).
+    counts: std::collections::BTreeMap<String, (i64, String)>,
+}
+
+/// A click on the bars or a slot key, waiting for the next update.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BarAction {
+    /// A left (`true`) or right click on a control showing item `item`.
+    Item { item: String, left: bool, how: String },
+    /// The quest strip's arrows (`inventory.md` rule 6).
+    Scroll { by: i32, how: String },
+    /// Keys 1-8 (`interface.md` rule 40), slot 0-7.
+    Key { slot: usize, how: String },
+}
+
+/// The clicks and keys of the panels since the last update (4c-3).
+#[derive(Resource, Default)]
+pub struct BarActions(pub Vec<BarAction>);
+
 /// What is drawn as its own picture: a sliding panel, or the status icons
 /// (they don't slide; rule 7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,8 +94,8 @@ impl Drawn {
     }
 }
 
-/// The pictures drawn in 4c-2.
-const DRAWN: [Drawn; 5] = [Drawn::Panel(Panel::BottomLeft), Drawn::Panel(Panel::Slots), Drawn::Panel(Panel::Meters), Drawn::Panel(Panel::BottomRight), Drawn::Status];
+/// The pictures drawn (4c-2; the top bar since 4c-3).
+const DRAWN: [Drawn; 6] = [Drawn::Panel(Panel::Top), Drawn::Panel(Panel::BottomLeft), Drawn::Panel(Panel::Slots), Drawn::Panel(Panel::Meters), Drawn::Panel(Panel::BottomRight), Drawn::Status];
 
 /// The armour, hand and ranged slot pictures, their numbers and their
 /// flashes, by layout name (rules 33, 34, 36), in [`Slot::ALL`] order.
@@ -90,6 +130,17 @@ pub struct Gui {
     slot_types: [Option<String>; 3],
     /// Their picture files (their types' `GUIBitmap`).
     slot_files: [Option<String>; 3],
+    /// The item objects worn there.
+    slot_items: [Option<String>; 3],
+    /// What Connor carries (4c-3); `None` before the first update.
+    inv: InvView,
+    first_inv: bool,
+    /// The quest strip's first-shown index (`inventory.md` rule 6).
+    quest_first: usize,
+    /// Items blinking (rule 44): when it started, real ms.
+    blinks: HashMap<String, f64>,
+    /// The description voice playing (`talking.md` rule 20).
+    description: Option<u64>,
     /// Each slot number's flash: when it started (real ms; rule 33).
     flashes: [Option<f64>; 3],
     /// The bottom-bar key (`movekeys.kq` row 12, rule 10).
@@ -115,7 +166,9 @@ pub struct CaptionPlace {
     pub map_right: Option<f32>,
 }
 
-/// `--key NAME,N` (4c-2): a key pressed before update N + 1 (`space`).
+/// `--key NAME,N` (4c-2): a key pressed before update N + 1 (`space`,
+/// `1`-`8`), or a click on a control of the bars (`left:NAME`,
+/// `right:NAME`, NAME as in `Gplayscr.gui`, 4c-3).
 #[derive(Resource, Default)]
 pub struct KeyAt(pub Vec<(String, u64)>);
 
@@ -203,6 +256,12 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         meters: Meters::default(),
         slot_types: [None, None, None],
         slot_files: [None, None, None],
+        slot_items: [None, None, None],
+        inv: InvView::default(),
+        first_inv: true,
+        quest_first: 0,
+        blinks: HashMap::new(),
+        description: None,
         flashes: [None; 3],
         space_key,
         stats_events: None,
@@ -276,6 +335,65 @@ impl Gui {
         self.tags.name(c.id as i32).unwrap_or("?").to_string()
     }
 
+    /// Every control of `dialog` with its rectangle relative to it; a
+    /// child dialog's controls are moved by its corner (rule 5).
+    fn controls<'a>(&'a self, dialog: &'a Control) -> Vec<(&'a Control, [i32; 4])> {
+        let mut out: Vec<(&Control, [i32; 4])> = dialog.controls.iter().map(|c| (c, c.rect)).collect();
+        for child in &dialog.dialogs {
+            let [dx, dy, ..] = child.rect;
+            out.extend(self.controls(child).into_iter().map(|(c, [l, t, r, b])| (c, [l + dx, t + dy, r + dx, b + dy])));
+        }
+        out
+    }
+
+    /// Whether item `name` shows its empty picture now (rule 44: a new
+    /// item or a higher count switches between its picture and the empty
+    /// one every 0.25 s, 5 times).
+    fn blank(&self, name: &str) -> bool {
+        self.blinks.get(name).is_some_and(|start| {
+            let k = ((self.panels.now_ms - start) / BLINK_MS) as u32;
+            k < BLINKS && k % 2 == 1
+        })
+    }
+
+    /// The picture file an item shows in its slot, or `None` while it
+    /// blinks (then the layout's empty picture).
+    fn shown_file(&self, item: &Option<(String, Option<String>)>) -> Option<String> {
+        let (name, file) = item.as_ref()?;
+        if self.blank(name) {
+            None
+        } else {
+            file.clone()
+        }
+    }
+
+    /// The quest strip's items now: the held one left out (4c-4).
+    fn strip(&self) -> Vec<(String, Option<String>)> {
+        self.inv.quest.clone()
+    }
+
+    /// What item a control shows (for clicks): its name.
+    fn item_at(&self, control: &str) -> Option<String> {
+        let strip = self.strip();
+        let slot_no = |prefix: &str| control.strip_prefix(prefix).and_then(|k| k.parse::<usize>().ok());
+        if let Some(k) = slot_no("IDCTL_INVBAR_QUEST") {
+            return strip.get(self.quest_first + k - 1).map(|(n, _)| n.clone());
+        }
+        if let Some(k) = slot_no("IDCTL_HEALTHBAR_") {
+            return self.inv.slots.get(k.wrapping_sub(1))?.as_ref().filter(|(_, c, _)| *c > 0).map(|(n, ..)| n.clone());
+        }
+        if let Some(k) = SLOT_PICTURES.iter().position(|n| *n == control) {
+            return self.slot_items[k].clone();
+        }
+        match control {
+            "IDCTL_INVBAR_MASK" => self.inv.mask.as_ref().map(|(n, _)| n.clone()),
+            "IDCTL_INVBAR_GOLD" => self.inv.gold.as_ref().map(|(n, ..)| n.clone()),
+            "IDCTL_INVBAR_ROPE" => self.inv.rope.clone(),
+            "IDCTL_INVBAR_ROCKS" => self.inv.rocks.as_ref().map(|(n, ..)| n.clone()),
+            _ => None,
+        }
+    }
+
     /// What drawn picture `d` is made of now (its layout size and the
     /// pieces), or `None` if its block is missing.
     fn specs(&self, d: Drawn) -> Option<([i32; 2], Vec<Spec>)> {
@@ -283,40 +401,82 @@ impl Gui {
         let [l, t, r, b] = dialog.rect;
         let now = self.panels.now_ms;
         let frame_ms = 1000.0 / ANIMATION_FPS;
+        let strip = self.strip();
         let mut out = Vec::new();
-        for c in &dialog.controls {
+        for (c, rect) in self.controls(dialog) {
             let name = self.name_of(c);
             let slot = |list: &[&str; 3]| list.iter().position(|n| *n == name);
+            let numbered = |prefix: &str| name.strip_prefix(prefix).and_then(|k| k.parse::<usize>().ok());
             match &c.kind {
                 Kind::Bitmap(p) => {
-                    // Rule 34: the worn item's picture, else the layout's
-                    // empty one.
-                    let file = match slot(&SLOT_PICTURES) {
-                        Some(k) => self.slot_files[k].clone().or_else(|| self.tags.string(p.bitmap).map(str::to_string)),
-                        None => self.tags.string(p.bitmap).map(str::to_string),
-                    };
+                    let default = self.tags.string(p.bitmap).map(str::to_string);
+                    let file = if let Some(k) = slot(&SLOT_PICTURES) {
+                        // Rule 34: the worn item's picture, else the empty one.
+                        self.slot_files[k].clone()
+                    } else if let Some(k) = numbered("IDCTL_INVBAR_QUEST") {
+                        // inventory.md rules 5-6: from the first-shown index.
+                        self.shown_file(&strip.get(self.quest_first + k - 1).cloned())
+                    } else if let Some(k) = numbered("IDCTL_HEALTHBAR_") {
+                        // Rules 38-39: a stack at 0 shows the empty picture.
+                        let item = self.inv.slots.get(k - 1).cloned().flatten().filter(|(_, n, _)| *n > 0).map(|(n, _, f)| (n, f));
+                        self.shown_file(&item)
+                    } else {
+                        match name.as_str() {
+                            // Rule 41: the mask piece carried.
+                            "IDCTL_INVBAR_MASK" => self.shown_file(&self.inv.mask),
+                            // Rule 43: the coins by count.
+                            "IDCTL_INVBAR_GOLD" => self.inv.gold.as_ref().and_then(|(n, count, _)| {
+                                let step = match *count {
+                                    c if c <= 0 => 0,
+                                    1..=24 => 1,
+                                    25..=49 => 2,
+                                    _ => 3,
+                                };
+                                if self.blank(n) {
+                                    None
+                                } else {
+                                    self.file_of(&format!("IDBMP_2GOLD{step}"))
+                                }
+                            }),
+                            // Rule 45: the rope carried.
+                            "IDCTL_INVBAR_ROPE" => self.inv.rope.as_ref().filter(|n| !self.blank(n)).and_then(|_| self.file_of("IDBMP_2ROPE1")),
+                            // Rule 45; the levels are not traced (stand-in,
+                            // Q109: the rock type's own picture when he has
+                            // any).
+                            "IDCTL_INVBAR_ROCKS" => self.inv.rocks.as_ref().filter(|(n, c, _)| *c > 0 && !self.blank(n)).and_then(|(_, _, f)| f.clone()),
+                            _ => None,
+                        }
+                    }
+                    .or(default);
                     // Rule 20: the meters' bars cut to a width.
-                    let full = (gui_draw::scaled(c.rect[2], self.scale) - gui_draw::scaled(c.rect[0], self.scale)).max(0) as u32;
+                    let full = (gui_draw::scaled(rect[2], self.scale) - gui_draw::scaled(rect[0], self.scale)).max(0) as u32;
                     let cut = match name.as_str() {
                         "IDCTL_METERS_HEALTH" => Some(meters::bar_width(full, self.meters.health_percent)),
                         "IDCTL_METERS_EXP" => Some(meters::bar_width(full, self.meters.experience_percent)),
                         _ => None,
                     };
                     if let Some(file) = file {
-                        out.push(Spec::Pic { rect: c.rect, file, frame: 0, cut });
+                        out.push(Spec::Pic { rect, file, frame: 0, cut });
                     }
                 }
                 Kind::Text { text, pictures: None } => {
-                    // Rules 23, 36: the numbers we set; the layout's own
-                    // placeholder texts ("0", "3Dfx") are not drawn, nor
-                    // the red alternative numbers (rule 32, M5).
+                    // Rules 23, 36, 39, 43, 45: the numbers we set; the
+                    // layout's own placeholder texts ("0", "3Dfx") are not
+                    // drawn, nor the red alternative numbers (rule 32, M5).
+                    // Counts of 0 are not written (stand-in, Q109).
+                    let count = |c: Option<i64>| c.filter(|n| *n > 0).map(|n| n.to_string());
                     let value = match (slot(&SLOT_NUMBERS), name.as_str()) {
                         (Some(k), _) => self.meters.numbers.map(|n| n[k].to_string()),
                         (None, "IDCTL_METERS_LEVEL") => Some(self.meters.level.to_string()),
-                        _ => None,
+                        (None, "IDCTL_INVBAR_GOLDTEXT") => count(self.inv.gold.as_ref().map(|(_, c, _)| *c)),
+                        (None, "IDCTL_INVBAR_ROCKSTEXT") => count(self.inv.rocks.as_ref().map(|(_, c, _)| *c)),
+                        (None, n) => match n.strip_prefix("IDCTL_HEALTHBAR_").and_then(|k| k.strip_suffix("TEXT")).and_then(|k| k.parse::<usize>().ok()) {
+                            Some(k) => count(self.inv.slots.get(k - 1).cloned().flatten().map(|(_, c, _)| c)),
+                            None => None,
+                        },
                     };
                     if let (Some(value), Some(font)) = (value, self.tags.string(text.font)) {
-                        out.push(Spec::Text { rect: c.rect, font: font.to_string(), justification: text.justification, text: value });
+                        out.push(Spec::Text { rect, font: font.to_string(), justification: text.justification, text: value });
                     }
                 }
                 Kind::Text { pictures: Some(p), .. } => {
@@ -328,13 +488,29 @@ impl Gui {
                         }
                     } else if name == "IDCTL_TIMER_7" && self.panels.mask_icon {
                         // Rule 15: the spinning mask, looping.
-                        out.push(Spec::Pic { rect: c.rect, file, frame: (now / frame_ms) as usize, cut: None });
+                        out.push(Spec::Pic { rect, file, frame: (now / frame_ms) as usize, cut: None });
                     }
                 }
                 _ => {}
             }
         }
         Some(([r - l, b - t], out))
+    }
+
+    /// The control under screen point (`x`, `y`) of drawn picture `d`
+    /// standing at (`left`, `top`): the first listed is on top; texts and
+    /// the flashes parked off screen don't count.
+    fn control_at(&self, d: Drawn, left: f32, top: f32, x: f32, y: f32) -> Option<String> {
+        let dialog = self.control(d.layout_id())?;
+        let (px, py) = (x - left, y - top);
+        self.controls(dialog)
+            .into_iter()
+            .filter(|(c, r)| r[2] > r[0] && r[3] > r[1] && r[1] < 480 && !matches!(c.kind, Kind::Text { pictures: None, .. }))
+            .find(|(_, r)| {
+                let [l, t, r, b] = r.map(|v| gui_draw::scaled(v, self.scale) as f32);
+                px >= l && px < r && py >= t && py < b
+            })
+            .map(|(c, _)| self.name_of(c))
     }
 
     /// Draws a picture `size` layout pixels big from `specs`, loading the
@@ -375,6 +551,32 @@ impl Gui {
     }
 }
 
+/// What Connor carries, for the bars (4c-3).
+fn inventory_view(gui: &Gui, items: &kq8_core::item::Items) -> InvView {
+    let mut v = InvView::default();
+    let mut carried: Vec<&kq8_core::item::ItemObject> = items.objects.iter().filter(|o| o.carried_by("Connor")).collect();
+    carried.sort_by_key(|o| o.added);
+    for o in carried {
+        let Some(t) = items.kind(&o.kind) else { continue };
+        let file = gui.file_of(&t.picture);
+        v.counts.insert(o.name.clone(), (o.quantity, t.category.clone()));
+        match t.category.as_str() {
+            "QuestItem" => v.quest.push((o.name.clone(), file)),
+            "MaskPiece" => v.mask = Some((o.name.clone(), file)),
+            "Money" => v.gold = Some((o.name.clone(), o.quantity, file)),
+            "Rope" => v.rope = Some(o.name.clone()),
+            "Rock" => v.rocks = Some((o.name.clone(), o.quantity, file)),
+            "HealthItem" => {
+                if let Some(k) = kq8_core::connor_inventory::SLOT_TYPES.iter().position(|s| s.eq_ignore_ascii_case(&o.kind)) {
+                    v.slots[k] = Some((o.name.clone(), o.quantity, file));
+                }
+            }
+            _ => {}
+        }
+    }
+    v
+}
+
 /// One drawn picture's node.
 #[derive(Component)]
 pub struct GuiPicture(usize);
@@ -398,7 +600,16 @@ pub fn setup_gui(mut commands: Commands, gui: Option<Res<Gui>>, mut images: ResM
 /// One game update (15 per second), after the scripts and Connor: the
 /// stats events, handsOff, the script commands, `--key`, and what the
 /// slots show.
-pub fn gui_step(gui: Option<ResMut<Gui>>, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, mut key_at: ResMut<KeyAt>, shared: Res<Shared>) {
+#[allow(clippy::too_many_arguments)]
+pub fn gui_step(
+    gui: Option<ResMut<Gui>>,
+    sim: Option<ResMut<DoorSim>>,
+    connor: Option<Res<ConnorSim>>,
+    mut key_at: ResMut<KeyAt>,
+    mut actions: ResMut<BarActions>,
+    mut speech: ResMut<crate::talk_view::Speech>,
+    shared: Res<Shared>,
+) {
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
     let gui = &mut *gui;
     let updates = sim.active.world.updates;
@@ -406,12 +617,70 @@ pub fn gui_step(gui: Option<ResMut<Gui>>, sim: Option<ResMut<DoorSim>>, connor: 
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0).into_iter().partition(|(_, n)| updates >= *n);
     key_at.0 = later;
     for (name, _) in due {
+        let how = format!("test --key {name} before update {updates}");
         match name.to_ascii_lowercase().as_str() {
-            "space" => gui.panels.toggle_bottom(&format!("test --key space before update {updates}")),
+            "space" => gui.panels.toggle_bottom(&how),
+            k if k.len() == 1 && ("1"..="8").contains(&k) => actions.0.push(BarAction::Key { slot: k.parse::<usize>().unwrap_or(1) - 1, how }),
+            // A click on a control of the bars: left:NAME / right:NAME.
+            k if k.starts_with("left:") || k.starts_with("right:") => {
+                let (button, control) = name.split_once(':').unwrap_or_default();
+                let control = control.to_ascii_uppercase();
+                let left = button.eq_ignore_ascii_case("left");
+                match (control.as_str(), gui.item_at(&control)) {
+                    ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
+                    ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
+                    (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
+                    _ => {
+                        let line = format!("update {updates}: {how}: nothing there; nothing (inventory.md rule 10)");
+                        gui.note(line);
+                    }
+                }
+            }
             other => {
-                let line = format!("update {updates}: test --key {other}: not a panel key in this step; nothing");
+                let line = format!("update {updates}: test --key {other}: not a panel key; nothing");
                 gui.note(line);
             }
+        }
+    }
+    // inventory.md rules 6, 9-11, interface.md rule 40: the bars' clicks
+    // and keys since the last update.
+    let dead = false;
+    for action in std::mem::take(&mut actions.0) {
+        let w = &mut sim.active.world;
+        match action {
+            BarAction::Scroll { by, how } => {
+                // Rule 6: +-1, then kept between 0 and count - 7.
+                let count = gui.strip().len();
+                let before = gui.quest_first;
+                gui.quest_first = (before as i64 + by as i64).clamp(0, count.saturating_sub(7) as i64) as usize;
+                let line = format!("update {updates}: quest strip arrow {by:+} ({how}): first shown {before} -> {} of {count} (inventory.md rule 6)", gui.quest_first);
+                gui.note(line);
+            }
+            BarAction::Key { slot, how } => match kq8_core::connor_inventory::slot_item(w, slot) {
+                Some(name) if !dead => {
+                    kq8_core::connor_inventory::bar_click(w, &name, true, gui.hands_off, &how);
+                }
+                _ => {
+                    let line = format!("update {updates}: {how}: slot {} is empty; nothing (interface.md rule 40)", slot + 1);
+                    gui.note(line);
+                }
+            },
+            BarAction::Item { item, left, how } => {
+                kq8_core::connor_inventory::bar_click(w, &item, left, gui.hands_off, &how);
+            }
+        }
+    }
+    // talking.md rule 20: a description is a plain voice; a new one stops
+    // the last one.
+    for v in std::mem::take(&mut sim.active.world.item_voices) {
+        if let Some(id) = gui.description.take() {
+            speech.voices.push(crate::talk_view::VoiceOrder::Stop { line: id });
+        }
+        if let Some(path) = v.path {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1 << 62);
+            let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            gui.description = Some(id);
+            speech.voices.push(crate::talk_view::VoiceOrder::Start { line: id, path, at: None, why: v.why });
         }
     }
     // Rule 15: handsOff going on or off.
@@ -434,6 +703,47 @@ pub fn gui_step(gui: Option<ResMut<Gui>>, sim: Option<ResMut<DoorSim>>, connor: 
     }
     // Rules 34-35: the slot pictures follow what Connor wears.
     let (types, why) = kq8_core::inventory::slot_types(&sim.active.world.items, "Connor");
+    let worn: [Option<String>; 3] = types.clone().map(|t| {
+        t.and_then(|t| sim.active.world.items.objects.iter().find(|o| o.carried_by("Connor") && o.kind == t).map(|o| o.name.clone()))
+    });
+    gui.slot_items = worn;
+    // 4c-3: what the bars show; new items and higher counts blink (rule
+    // 44); a new quest item or mask piece pops the top bar (rule 13).
+    let inv = inventory_view(gui, &sim.active.world.items);
+    if inv != gui.inv {
+        let now = gui.panels.now_ms;
+        let mut news = Vec::new();
+        if !gui.first_inv {
+            for (name, (count, category)) in &inv.counts {
+                let before = gui.inv.counts.get(name).map(|(c, _)| *c);
+                if before.is_none_or(|b| *count > b) {
+                    gui.blinks.insert(name.clone(), now);
+                    if before.is_none() && (category == "QuestItem" || category == "MaskPiece") {
+                        news.push(name.clone());
+                    }
+                }
+            }
+        }
+        let line = format!(
+            "update {updates}: the bars show: quest strip {:?} (first shown {}), mask {:?}, gold {:?}, slots {:?}, rope {:?}, rocks {:?}; blinking {:?}",
+            inv.quest.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+            gui.quest_first,
+            inv.mask.as_ref().map(|(n, _)| n),
+            inv.gold.as_ref().map(|(n, c, _)| (n, c)),
+            inv.slots.iter().map(|s| s.as_ref().map(|(_, c, _)| *c).unwrap_or(0)).collect::<Vec<_>>(),
+            inv.rope,
+            inv.rocks.as_ref().map(|(n, c, _)| (n, c)),
+            gui.blinks.keys().collect::<Vec<_>>()
+        );
+        gui.note(line);
+        gui.inv = inv;
+        gui.first_inv = false;
+        let count = gui.strip().len();
+        gui.quest_first = gui.quest_first.min(count.saturating_sub(7));
+        if !news.is_empty() {
+            gui.panels.pop_top(&format!("new in the inventory: {news:?} (rule 13)"));
+        }
+    }
     if types != gui.slot_types {
         let items = &sim.active.world.items;
         let files = types.clone().map(|t| t.and_then(|t| items.kind(&t).map(|k| k.picture.clone())).and_then(|tag| gui.file_of(&tag)));
@@ -497,6 +807,9 @@ pub fn gui_draw(
     sim: Option<ResMut<DoorSim>>,
     time: Res<Time<Real>>,
     keys: Res<ButtonInput<KeyCode>>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut actions: ResMut<BarActions>,
     mut nodes: Query<(&GuiPicture, &mut Node, &ImageNode, &mut Visibility)>,
     mut images: ResMut<Assets<Image>>,
     mut cover: ResMut<GuiCover>,
@@ -507,6 +820,22 @@ pub fn gui_draw(
     if gui.space_key.is_some_and(|k| keys.just_pressed(k)) {
         gui.panels.toggle_bottom("Space key");
     }
+    // interface.md rule 40: keys 1-8 and the keypad's.
+    const DIGITS: [(KeyCode, KeyCode); 8] = [
+        (KeyCode::Digit1, KeyCode::Numpad1),
+        (KeyCode::Digit2, KeyCode::Numpad2),
+        (KeyCode::Digit3, KeyCode::Numpad3),
+        (KeyCode::Digit4, KeyCode::Numpad4),
+        (KeyCode::Digit5, KeyCode::Numpad5),
+        (KeyCode::Digit6, KeyCode::Numpad6),
+        (KeyCode::Digit7, KeyCode::Numpad7),
+        (KeyCode::Digit8, KeyCode::Numpad8),
+    ];
+    for (k, (a, b)) in DIGITS.iter().enumerate() {
+        if keys.just_pressed(*a) || keys.just_pressed(*b) {
+            actions.0.push(BarAction::Key { slot: k, how: format!("key {}", k + 1) });
+        }
+    }
     gui.panels.update(time.delta_secs_f64() * 1000.0);
     // Flashes that have played out (rule 33: once).
     let fx = gui.control(SLOT_FLASHES[0]).and_then(|c| match &c.kind {
@@ -514,6 +843,9 @@ pub fn gui_draw(
         _ => None,
     });
     let frames = fx.map_or(0, |f| gui.frames(&f)) as f64;
+    // Blinks that have played out (rule 44).
+    let now = gui.panels.now_ms;
+    gui.blinks.retain(|_, start| now - *start < BLINK_MS * BLINKS as f64);
     for k in 0..3 {
         if gui.flashes[k].is_some_and(|start| (gui.panels.now_ms - start) / (1000.0 / ANIMATION_FPS) >= frames) {
             gui.flashes[k] = None;
@@ -523,6 +855,8 @@ pub fn gui_draw(
     }
     let [sw, sh] = gui.screen.map(|v| v as f32);
     let mut covered = Vec::new();
+    // Each visible panel: what, left, top, width, height (screen pixels).
+    let mut places: Vec<(Drawn, f32, f32, f32, f32)> = Vec::new();
     let mut bottom = sh;
     for (picture, mut node, image, mut vis) in &mut nodes {
         let d = DRAWN[picture.0];
@@ -550,6 +884,7 @@ pub fn gui_draw(
         node.height = Val::Percent(100.0 * h / sh);
         if panel.is_some() {
             covered.push((d.layout_id(), [left / sw, top / sh, (left + w) / sw, (top + h) / sh]));
+            places.push((d, left, top, w, h));
         }
         let Some((size, specs)) = gui.specs(d) else { continue };
         if gui.last.get(d.layout_id()) == Some(&specs) {
@@ -564,6 +899,39 @@ pub fn gui_draw(
         gui.last.insert(d.layout_id(), specs);
     }
     cover.0 = covered;
+    // The pointer: on the screen's 800 x 600 (or 640 x 480).
+    let pointer = window.single().ok().and_then(|w| w.cursor_position().map(|c| (c, w.width(), w.height())));
+    if let Some((c, ww, wh)) = pointer {
+        let (x, y) = (c.x / ww * sw, c.y / wh * sh);
+        // interface.md rule 12: the top bar follows the pointer: down at
+        // the very top row, up below y 60 of 480, not while the right
+        // button is held or it is moving, not up in its popped time.
+        let moving = gui.panels.moving(Panel::Top);
+        if c.y < 1.0 && !gui.panels.shown(Panel::Top) && !moving && !buttons.pressed(MouseButton::Right) {
+            gui.panels.set(kq8_core::panels::Group::Top, true, "the pointer at the top row (rule 12)");
+        } else if y > 60.0 / 480.0 * sh && gui.panels.shown(Panel::Top) && !moving && !gui.panels.top_popped() {
+            gui.panels.set(kq8_core::panels::Group::Top, false, "the pointer below y 60 (rule 12)");
+        }
+        // inventory.md rules 6, 9, 10: clicks on the bars.
+        for (button, left) in [(MouseButton::Left, true), (MouseButton::Right, false)] {
+            if !buttons.just_pressed(button) {
+                continue;
+            }
+            let hit = places.iter().find(|(_, l, t, w, h)| x >= *l && x < l + w && y >= *t && y < t + h).copied();
+            let Some((d, l, t, ..)) = hit else { continue };
+            let Some(control) = gui.control_at(d, l, t, x, y) else { continue };
+            let how = format!("{} click on {control}", if left { "left" } else { "right" });
+            match (control.as_str(), gui.item_at(&control)) {
+                ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
+                ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
+                (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
+                _ => {
+                    let line = format!("{how}: nothing there; nothing (inventory.md rule 10)");
+                    gui.note(line);
+                }
+            }
+        }
+    }
     *caption = CaptionPlace { bottom: Some(bottom), map_right: Some(kq8_core::caption::map_away_right(sw)) };
     // The panels' sounds (rule 9): plain one-shots in group 0.
     let sounds = std::mem::take(&mut gui.panels.sounds);

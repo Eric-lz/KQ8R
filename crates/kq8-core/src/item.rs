@@ -110,6 +110,10 @@ pub struct ItemObject {
     pub script: Option<String>,
     /// Rule 4: on; `KQObject::setDontLook`.
     pub do_not_point_at: bool,
+    /// When it last went into someone's inventory: a number counting up
+    /// (0: never); the quest strip lists in this order (M4 4c-3,
+    /// `inventory.md` rule 5).
+    pub added: u64,
 }
 
 impl ItemObject {
@@ -198,13 +202,33 @@ pub struct Items {
     pub objects: Vec<ItemObject>,
     /// The next `NoName<n>` number (rule 9).
     next_no_name: usize,
+    /// The last [`ItemObject::added`] number given.
+    last_added: u64,
 }
 
 impl Items {
     /// `boxes`: (shape name, min, max) from `BOUNDS.KQ`.
     pub fn new(types: ItemTypes, boxes: impl IntoIterator<Item = (String, [f32; 3], [f32; 3])>) -> Self {
         let boxes = boxes.into_iter().map(|(s, a, b)| (s.to_ascii_lowercase(), (a, b))).collect();
-        Items { types, boxes, objects: Vec::new(), next_no_name: 0 }
+        Items { types, boxes, objects: Vec::new(), next_no_name: 0, last_added: 0 }
+    }
+
+    /// The next order number for an item made carried (0 if not).
+    fn next_added(&mut self, place: &Place) -> u64 {
+        if matches!(place, Place::Carried(_)) {
+            self.last_added += 1;
+            self.last_added
+        } else {
+            0
+        }
+    }
+
+    /// Item `name` has just gone into an inventory (M4 4c-3).
+    pub fn mark_added(&mut self, name: &str) {
+        if let Some(i) = self.index(name) {
+            self.last_added += 1;
+            self.objects[i].added = self.last_added;
+        }
     }
 
     /// The type a script means by `name` (rule 2).
@@ -233,7 +257,8 @@ impl Items {
         let kind = t.name.clone();
         let name = format!("NoName{}", self.next_no_name);
         self.next_no_name += 1;
-        self.objects.push(ItemObject { name, kind, quantity, third: -1, place, hidden: false, script: None, do_not_point_at: true });
+        let added = self.next_added(&place);
+        self.objects.push(ItemObject { name, kind, quantity, third: -1, place, hidden: false, script: None, do_not_point_at: true, added });
         Ok(self.objects.last().expect("just pushed"))
     }
 
@@ -246,7 +271,8 @@ impl Items {
         if self.index(name).is_some() {
             return Err(format!("an item named '{name}' exists already"));
         }
-        self.objects.push(ItemObject { name: name.to_string(), kind, quantity, third, place, hidden: false, script: None, do_not_point_at: true });
+        let added = self.next_added(&place);
+        self.objects.push(ItemObject { name: name.to_string(), kind, quantity, third, place, hidden: false, script: None, do_not_point_at: true, added });
         Ok(self.objects.last().expect("just pushed"))
     }
 

@@ -1741,3 +1741,27 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | A click on a shown panel is not a world click | **Our choice** (the bars cover the world; how the original passes clicks was not described) | `doors.log` "mouse click on the panel …" |
 | Pictures × 1.25 (nearest pixel), tiled when smaller than their box; fonts at their own size; animations 15 frames per second | **Stand-ins** (Q108) | — |
 | The caption box's bottom follows the highest of bottom left, slots and meters as they slide | `interface.md` rule 51 | Sign run: "caption box at left 168.75 top 486.00 bottom 520.00" |
+
+### 4c-3, the inventory bars — `crates/kq8-core/src/connor_inventory.rs`, `crates/kq8-core/src/{active,item,panels}.rs`, `crates/kq8-viewer/src/{gui_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Places: a full suit covers body armour, pants, gloves, boots (not the helmet); the chain-mail suit pants, gloves, boots; `GodArmor` its own; each weapon and armour category one place | `inventory.md` rule 3 | Unit test `equipment_pushes_out_what_shares_its_place` |
+| Going in: `HealthItem` / `Money` / `Rock` with `Comb` 1 join the entry he has (the new object deleted); others are new entries; equipment takes off what shares a place (placeholders deleted, others put into the world where the new one lay) and is put on | `inventory.md` rule 8 (the user's check 4 in the original) | Unit tests `stacks_join…`, `equipment_pushes_out…`; `gui-4c3-coins.log` (7 then 12, one entry); `gui-4c3-dagger.log` ("placeholder Fist1 (INVITEM_Fists) deleted", hand 10 → 15) |
+| Every way in goes through these rules: a pickup, a chest's item, `give` / `KQMonster::inventory Connor` | `inventory.md` rule 8 ("picking up, `give`, chests") | `items.log` "inventory (picked up)", "inventory (basket1.cs line 4: give)" |
+| An old piece pushed out by a `give` drops at Connor's feet | **Stand-in** (`inventory.md` "Edge cases" infers the new object's own position, which a `give` doesn't have) | Same unit test |
+| Applying: only if not applied; a stack loses 1; its five numbers added through one stats event; `Dur` 0 stays, `Dur` > 0 a timer then the numbers taken back, `Dur` −1 un-applied at once keeping the numbers; a stack at 0 leaves | `inventory.md` rules 13–15 | Unit tests `stacks_join_and_health_items_heal_for_good`, `a_potion_runs_out_and_its_numbers_go_back`; mushroom run: 5 → 4 → 3 → 2 with `healing.aud` |
+| "Applied" kept in `userId` as 0 for Connor; the potions' timers in game time | **Stand-ins** (the original keeps an object id; rule 14 doesn't say which clock) | — |
+| A left click on a slot: ignored during handsOff; quest items, money, rocks, rope "would be held" (4c-4); the mask piece: the main menu (none yet, logged); everything else applied with its `useSnd` if it wasn't applied | `inventory.md` rule 9; `interface.md` rule 41 | Unit tests; `items.log` "would be held", "opens the main menu", "apply Fist1" |
+| A right click: the description, `0.MSG` with the type's message numbers, its voice played plain, a new one stopping the last; an empty slot: nothing | `inventory.md` rule 10; `talking.md` rule 20 | `items.log` "describes it: 0.MSG 0 47 0 0 1: GAME/ENGLISH/A0001b00.001"; `sound.log` starts it in group 3, no ducking |
+| Keys 1–8 (and the keypad's) use slots 1–8: `Mushroom`, `Crystal`, `SacredWater`, `ElixerOfLife`, `Invulnerable`, `Strength`, `Clarity`, `Invisible` | `interface.md` rules 38, 40; `inventory.md` rule 11 | Mushroom run (`--key 1,40`) |
+| The slots' counts (`14.pft`, right/top at their anchors); a stack at 0 shows the empty picture | `interface.md` rule 39 | `gui.log` "slots [5, 0, …]" |
+| Counts of 0 not written (gold, rocks, slots) | **Stand-in** (Q109) | — |
+| The quest strip: quest items in the order they went in, 7 from a first-shown index, the arrows ±1 kept in 0..count − 7 | `inventory.md` rules 5–6 (rule 5 "inferred") | `gui-4c3-scroll.log`: strip ["Mask1a", "NoName5"]; arrow: "first shown 0 -> 0 of 1" |
+| The gold picture by count (0, 1–24, 25–49, 50 or more); the mask button the mask piece's picture; the rope `2rope1` when carried | `interface.md` rules 41, 43, 45 | `gui-4c3-coins.log` |
+| The rocks picture: the rock type's own (`2rocks3`) when he has any | **Stand-in** (Q109; `interface.md` open question 4) | — |
+| A new item or a higher count blinks: picture and empty picture every 0.25 s, 5 times (shown, empty, shown, empty, shown) | `interface.md` rule 44; the order of the five is **our reading** (Q109) | `gui.log` "blinking ["NoName5"]" |
+| A new quest item or mask piece pops the top bar for 1.5 s; `intrup.aud` / `intrdown.aud` | `interface.md` rules 9, 13; `inventory.md` rule 8 | `gui-4c3-scroll.log`: shown at 1.178 s, hidden at 2.684 s; `sound.log` both sounds |
+| The top bar comes down when the pointer reaches the window's top row, goes up below y 60 of 480 unless popped; not while the right button is held or it is sliding | `interface.md` rule 12 | Not tested by a run (needs the mouse) |
+| A click on a bar goes to the control under it (first listed on top); texts and the flashes parked at y 900 are not targets | Our reading of the layout (rule 5) | `--key left:NAME` / `right:NAME` runs |
+| `--key left:NAME,N` / `right:NAME,N` | **Our test option** | — |
