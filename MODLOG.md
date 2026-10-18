@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l-6: animated objects' first update, Connor's levels, `Die`'s `$3` (Q85, Q86)
+
+**Changed:** `kq8-core/src/named_anim.rs`: an object with no `currAnimName` and a waiting movement starts that movement plainly on its first update (no `flags` bit 8 random part) and its phase moves on in that same update; the bit 8 random part (start frame = round(random × (frames − 1)), phase = frame ÷ frames; a random speed 0.9–1.1 that **replaces** the `loop=` speed) belongs to the current movement only (`random_speed` replaces `speed_scale`; the Q85 stand-in's `load_random` / `kept_random` are gone); 2 tests rewritten, 1 changed. `stats.rs`: on level up the second stat +5 and the third +2 (were swapped); test with the bricks' numbers and the leftover acted on at the next event. `active.rs`: the event's fourth number is cut to 100 when read; Connor's "below 0" check before the cap and the level-up heal; every `Die` call carries `$3` = `Normal` (`DIE_KIND`; nothing is hit by a weapon yet). `anim_view.rs`: the load line says when the first update will drop the random part.
+**Why:** A's answers to Q85 and Q86 (`anim-scripts.md` rules 3, 19–20, `objects.md` "Animated objects at load" rule 4).
+**Tested how:** `cargo test --workspace` (383 pass), `cargo clippy --workspace --all-targets` clean. Viewer: the bricks run (`cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --frames 2500 --sound off`) and a plain start (`--frames 200`), `doors.log`, `anim.log`.
+**Result:** `doors.log` update 0: `Davtorch.01`–`.05`, `deadbird.01`/`.02`, the fish: "waiting movement starts (rule 3: no current movement name): 'stop' at phase 0.0000 speed 1" (all in step, as the original). Update 13 (bricks, +50): "Connor [10, 10, 0, 0, 0] level 1 -> [20, 15, 2, 1, 40] level 2".
+**Still broken / not tested:** Not checked by eye (the torches now flicker in step, as A traced). `Die`'s `$3` is always `Normal` until weapons exist (M5). Connor dying from a stats event is still only logged.
+**Next:** 3l-7, `loadKQ` while playing (`Init`, a name in use).
+
 ## 2026-10-18 M3 step 3l-5: turning during `crash`; a glancing jump hit keeps the jump (Q84)
 
 **Changed:** `kq8-core/src/connor.rs`: the turn keys turn Connor at 1.75 rad/s while `crash` plays (run crash and jump crashes); forward, back and run still wait for its end; still no turning from a jump's start to its landing's end. `connor_update.rs`: a steep hit during a jump that is not a crash (every `backJump` hit, and the not-head-on cases our code can't reach yet) no longer switches gravity on: the jump goes on with gravity off and steps 0 until its animation ends, then Fall (noted once per jump). `connor_mover.rs`: `back_jump_hit` removed, `jump_glanced`. Tests: the run-crash test now holds a turn key and checks the turn; the back-flip test checks gravity stays off.

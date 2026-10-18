@@ -283,10 +283,15 @@ pub fn spawn_animated(
             l.repeat,
             a.random,
             player.phase,
-            l.speed * player.speed_scale,
+            player.speed(),
             player.frame(),
             if *unused || !p.drawn() { "; hidden (H)" } else { "" }
-        ));
+        ) + if player.current_name.is_empty() && player.waiting.is_some() {
+            // anim-scripts.md rule 3 (Q85).
+            "; no currAnimName: the first update starts the waiting movement plainly (phase from its loop= line, its own speed; the random part is lost)"
+        } else {
+            ""
+        });
         let tracked = TRACKED.iter().any(|t| t.eq_ignore_ascii_case(&p.name));
         let source = if *unused {
             Source::Own(Box::new(player))

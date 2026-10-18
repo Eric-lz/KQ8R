@@ -1505,7 +1505,7 @@ catchers, ground animators).
       usual (ours switched gravity on). Test: `--hold 0,0,1` run into a
       wall with `--turn` during the crash (`connor.log`: heading changes
       by 0.117 per update during `crash`).
-    - **3l-6, animated objects and stats** (Q85, Q86; `anim-scripts.md`
+    - **3l-6, animated objects and stats** (**done** 2026-10-18; Q85, Q86; `anim-scripts.md`
       rules 3, 19–20, `objects.md` "Animated objects at load" rule 4).
       First update of an animated object: (1) empty current name and a
       waiting movement → that one starts plainly (no random part); (2)

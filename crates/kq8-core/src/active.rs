@@ -94,6 +94,11 @@ const MUSIC_TARGET: &str = "<KQMusic>";
 
 pub const EVENT_TYPES: [&str; 4] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent"];
 
+/// `Die`'s `$3` (`anim-scripts.md` rule 20, Q86 e): the kind of the last
+/// weapon hit the object took, `Normal` if it was never hit. Nothing is
+/// hit by a weapon yet (fighting is M5), so always `Normal`.
+pub const DIE_KIND: &str = "Normal";
+
 /// What a script asked of Connor or the camera, for the caller to apply
 /// (M3 step 3d-3). `at` is where in which script.
 #[derive(Debug, Clone, PartialEq)]
@@ -1666,7 +1671,10 @@ impl Active {
     /// `clicking.md` rule 24): the five numbers are added. An object other
     /// than Connor whose health drops below 0 gets `Die`.
     fn stats_change(&mut self, e: &Pending, from: &str) {
-        let (d, problems) = Stats::parse(&e.data);
+        let (mut d, problems) = Stats::parse(&e.data);
+        // Rule 19: the event's own fourth number is cut to at most 100
+        // when read (negative values stay).
+        d.0[3] = d.0[3].min(crate::stats::FOURTH_CAP);
         let head = format!("KQStatsChangeRequestEvent {} to {}{from}", e.data.join(" "), e.target);
         for p in problems {
             self.world.note(format!("{head}: {p}"));
@@ -1677,6 +1685,13 @@ impl Active {
                 return;
             };
             let before = *c;
+            // Rule 19: "below 0" is checked right after the adding,
+            // before the cap and any level-up heal.
+            let dies = {
+                let mut t = c.stats;
+                t.add(d);
+                t.dead()
+            };
             let level = c.change(d);
             let after = *c;
             self.world.note(format!(
@@ -1687,7 +1702,7 @@ impl Active {
                 after.level,
                 level.map_or(String::new(), |l| format!("; {l}"))
             ));
-            if after.stats.dead() {
+            if dies {
                 self.world.note(format!("{head}: Connor's health is below 0: he would die (his Die state, M5; not done)"));
             }
             return;
@@ -1701,8 +1716,8 @@ impl Active {
         let start = if known { "" } else { " (no stats= line: started from 0 0 0 0 0, Q86 d stand-in)" };
         self.world.note(format!("{head}: {:?} -> {:?}{start}", before.0, after.0));
         if after.dead() {
-            self.world.note(format!("{head}: health below 0: its script gets Die (rule 19)"));
-            if !self.call_named(&e.target, &["Die"]) {
+            self.world.note(format!("{head}: health below 0: its script gets Die {DIE_KIND} (rules 19-20)"));
+            if !self.call_named(&e.target, &["Die", DIE_KIND]) {
                 self.world.note(format!("{}: no script by that name; Die not called", e.target));
             }
         }
@@ -2512,8 +2527,8 @@ impl Active {
     /// movement.
     fn anim_once_ended(&mut self, i: usize, movement: &str) {
         let name = self.world.objects[i].name().to_string();
-        self.world.note(format!("object {name} (KQAnimOnce): movement '{movement}' finished: its script gets Die (rule 11)"));
-        self.call_object(i, &["Die"]);
+        self.world.note(format!("object {name} (KQAnimOnce): movement '{movement}' finished: its script gets Die {DIE_KIND} (rules 11, 20)"));
+        self.call_object(i, &["Die", DIE_KIND]);
         self.world.report_end(&name, movement, false);
         if self.world.objects[i].delete_when_done {
             let at = format!("{name}: KQAnimOnce done");
@@ -3312,7 +3327,7 @@ mod tests {
     fn a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted() {
         // Made-up script: on a click, ask to be deleted when done, have
         // Connor listen, and play `open` (16 frames over 1 s).
-        let script = "if test $2 == ConnorAction\n setDeleteWhenDone $1 1\n getEndLoop $1 Connor 1\n sendEvent 0 $1 KQAnimPlayEvent open\nendif\nif test $2 == Die\n set D::died $1\nendif\n";
+        let script = "if test $2 == ConnorAction\n setDeleteWhenDone $1 1\n getEndLoop $1 Connor 1\n sendEvent 0 $1 KQAnimPlayEvent open\nendif\nif test $2 == Die\n set D::died $1 $3\nendif\n";
         let mut a = with_object(script, "x");
         // Not a KQAnimOnce yet: setDeleteWhenDone finds nothing (rule 13).
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
@@ -3326,7 +3341,7 @@ mod tests {
             a.update();
             log.push_str(&a.take_log().join("\n"));
         }
-        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1"), "{log}");
+        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1 Normal"), "{log}");
         assert!(log.contains("tells Connor (getEndLoop: Cue 300 0 open)"), "{log}");
         assert!(!log.contains("EndLoop open"), "no EndLoop for a KQAnimOnce: {log}");
         assert!(a.world.is_deleted("basket1") && a.world.objects[0].gone, "{log}");
@@ -3380,16 +3395,16 @@ mod tests {
 
     #[test]
     fn stats_events_add_and_an_object_below_0_gets_die() {
-        let script = "if test $2 == ConnorAction\n sendEvent 0 Connor KQStatsChangeRequestEvent 2 0 0 0 50\n sendEvent 0 $1 KQStatsChangeRequestEvent -3 0 0 0 0\nendif\nif test $2 == Die\n set D::died $1\nendif\n";
+        let script = "if test $2 == ConnorAction\n sendEvent 0 Connor KQStatsChangeRequestEvent 2 0 0 0 50\n sendEvent 0 $1 KQStatsChangeRequestEvent -3 0 0 0 0\nendif\nif test $2 == Die\n set D::died $1 $3\nendif\n";
         let mut a = with_object(script, "x");
         a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
         a.set_stats("basket1", Stats([2, 0, 0, 0, 0]));
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         a.update();
         let log = a.take_log().join("\n");
-        assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 12, 5, 1, 40], 2)), "{log}");
+        assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 15, 2, 1, 40], 2)), "{log}");
         assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
-        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1"), "{log}");
+        assert_eq!(a.scripts.vars.get("D::died"), Some("basket1 Normal"), "{log}");
     }
 
     #[test]

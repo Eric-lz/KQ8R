@@ -1390,3 +1390,15 @@ This replaces the Q87 a–c and Q88 stand-ins of 3j-2 and 3j-3 above.
 | A down-pass crash straight out of a jump turns too | The note's stand-in (not settled) | — |
 | A steep hit during a jump that is not a crash (all `backJump` hits, not head-on): glancing, gravity stays off, steps 0, the jump plays on, then Fall | `connor-physics.md` "Jumping" rule 5 (Q84 a) | Unit test `a_back_flip_slides_along_the_wall_and_plays_on` |
 
+### 3l-6, animated objects' first update, levels, `Die`'s `$3` — `crates/kq8-core/src/{named_anim,stats,active}.rs`, `crates/kq8-viewer/src/anim_view.rs`
+
+This replaces the Q85 and Q86 stand-ins of 3i-4 and 3i-6.
+
+| What | Source | Check |
+| --- | --- | --- |
+| First update: no current name and a waiting movement → that one starts plainly (no random part); else the current movement with `animPos` and the bit 8 random part; the phase moves on in that same update | `anim-scripts.md` rule 3 (Q85) | Unit tests `without_curr_anim_name_the_random_start_is_lost_q85`, `no_curr_anim_name_lets_next_anim_name_start_on_the_first_update`; `doors.log` update 0 |
+| Bit 8: start frame round(random × (frames − 1)), phase = frame ÷ frames; random speed 0.9–1.1 replaces the `loop=` speed | `anim-scripts.md` rule 3, `objects.md` rule 4 | Unit test `with_curr_anim_name_the_random_frame_and_speed_replace_the_loop_line` |
+| Levels: strictly more than the threshold, once per event, cap at the old level then a full heal, second +5, third +2, fourth +1 | `anim-scripts.md` rule 19 (Q86 a–c, correction) | Unit test `connor_levels`; `doors.log` update 13 |
+| "Below 0" checked right after the adding; the event's fourth number cut to 100 when read | `anim-scripts.md` rule 19 | Unit test `stats_events_add_and_an_object_below_0_gets_die` |
+| `Die` always has `$3`: the last weapon-hit kind, `Normal` if never hit (always `Normal` until M5) | `anim-scripts.md` rule 20 (Q86 e) | Same test and `a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted` |
+

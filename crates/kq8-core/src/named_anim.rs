@@ -15,7 +15,9 @@
 //!   animation (rule 1).
 //! - At load, no `currAnimName`: movement 0 shows but the name stays
 //!   empty, and on the first update an empty name makes the waiting
-//!   movement (`nextAnimName`) start at once (rule 3).
+//!   movement (`nextAnimName`) start at once, plainly, without the
+//!   `flags` bit 8 random part; the phase moves on in that same update
+//!   (rule 3, refined Q85).
 //! - `KQAnimPlayEvent` (rule 4): the movement waits; it starts at once if
 //!   the running animation can be cut short (6th field of its `loop=`
 //!   line) or has ended (phase ≥ 0.9999 forwards, ≤ 0 backwards), else
@@ -79,17 +81,13 @@ pub struct Started {
     pub unknown: bool,
     pub start: f32,
     pub speed: f32,
-    /// Rule 3 restarted the movement shown at load, and its random start
-    /// (`flags` bit 8) was kept (Q85 stand-in).
-    pub kept_random: bool,
 }
 
 impl Started {
     pub fn describe(&self, movements: &[DoorMovement]) -> String {
         let shown = movements.get(self.index).map_or("none", |m| m.name.as_str());
         let unknown = if self.unknown { format!(" (unknown name: movement 0 '{shown}' plays)") } else { String::new() };
-        let random = if self.kept_random { " (its random start from load kept: Q85 stand-in)" } else { "" };
-        format!("'{}'{unknown} at phase {:.4} speed {}{random}", self.name, self.start, self.speed)
+        format!("'{}'{unknown} at phase {:.4} speed {}", self.name, self.start, self.speed)
     }
 }
 
@@ -120,14 +118,11 @@ pub struct NamedAnimPlayer {
     /// `pauseAnim` (rule 14): the phase doesn't move, no cues fire, nothing
     /// ends, no waiting movement starts.
     pub paused: bool,
-    /// The running animation's speed × this (`flags` bit 8: 0.9–1.1 for
-    /// the movement shown at load, `objects.md` rule 4); 1 for a movement
-    /// started later (rule 5: "its own `loop=` line").
-    pub speed_scale: f32,
-    /// The random start given at load: (movement, phase, speed factor).
-    /// Kept when rule 3 restarts that same movement on the first update
-    /// (Q85 stand-in).
-    load_random: Option<(usize, f32, f32)>,
+    /// `flags` bit 8 (`anim-scripts.md` rule 3, Q85): a random speed
+    /// 0.9–1.1 that **replaces** the current movement's `loop=` speed;
+    /// `None` for a movement started later (rule 5: "its own `loop=`
+    /// line").
+    pub random_speed: Option<f32>,
 }
 
 impl NamedAnimPlayer {
@@ -137,7 +132,21 @@ impl NamedAnimPlayer {
         let m = movements.get(current);
         let (phase, playing, cut_short) = m.map_or((0.0, false, false), |m| (m.start, m.speed != 0.0, m.cut_short));
         let current_name = m.map_or(String::new(), |m| m.name.clone());
-        NamedAnimPlayer { name: name.to_string(), movements, current, current_name, waiting: None, phase, playing, cut_short, started_this_update: false, base, once: false, paused: false, speed_scale: 1.0, load_random: None }
+        NamedAnimPlayer {
+            name: name.to_string(),
+            movements,
+            current,
+            current_name,
+            waiting: None,
+            phase,
+            playing,
+            cut_short,
+            started_this_update: false,
+            base,
+            once: false,
+            paused: false,
+            random_speed: None,
+        }
     }
 
     /// Rule 3: the names the file gives. `curr` = `currAnimName` (empty or
@@ -155,16 +164,26 @@ impl NamedAnimPlayer {
         self
     }
 
-    /// `flags` bit 8 (`objects.md` rule 4): a random start phase and the
-    /// speed × a random 0.9–1.1 (two numbers from `rng`, phase first, as
-    /// `crate::anim::LoopPlayer`).
+    /// `flags` bit 8 (`anim-scripts.md` rule 3, `objects.md` rule 4, Q85),
+    /// given to the current movement as it starts: start frame =
+    /// round(random × (frames − 1)), phase = that frame ÷ frames; speed =
+    /// a random 0.9–1.1 that replaces the `loop=` speed (so it always
+    /// plays forward). Two numbers from `rng`, frame first. An object with
+    /// no `currAnimName` whose waiting movement starts on the first update
+    /// loses it (that start is plain, [`NamedAnimPlayer::advance`]).
     pub fn with_random_start(mut self, rng: &mut crate::emitter::Rng) -> Self {
-        let (phase, scale) = (rng.fraction(), rng.between(0.9, 1.1));
-        let repeat = self.movement().is_some_and(|m| m.repeat);
-        self.phase = if repeat { phase.rem_euclid(1.0) } else { phase.clamp(0.0, 1.0) };
-        self.speed_scale = scale;
-        self.load_random = Some((self.current, self.phase, scale));
+        let (r, speed) = (rng.fraction(), rng.between(0.9, 1.1));
+        let frames = self.movement().map_or(1, |m| m.frames());
+        let frame = (r * (frames - 1) as f32).round();
+        self.phase = frame / frames as f32;
+        self.random_speed = Some(speed);
+        self.playing = true;
         self
+    }
+
+    /// The running animation's speed now.
+    pub fn speed(&self) -> f32 {
+        self.random_speed.unwrap_or_else(|| self.movement().map_or(0.0, |m| m.speed))
     }
 
     pub fn movement(&self) -> Option<&DoorMovement> {
@@ -202,9 +221,9 @@ impl NamedAnimPlayer {
         self.phase = start;
         self.playing = speed != 0.0;
         self.cut_short = cut_short;
-        self.speed_scale = 1.0;
+        self.random_speed = None;
         self.started_this_update = true;
-        Started { name: name.to_string(), index: self.current, unknown: found.is_none(), start, speed, kept_random: false }
+        Started { name: name.to_string(), index: self.current, unknown: found.is_none(), start, speed }
     }
 
     /// Starts movement `name` at once if it is in the list; `Err` if not
@@ -238,26 +257,22 @@ impl NamedAnimPlayer {
         if self.paused {
             return out;
         }
-        // Rule 3: an empty current name lets the waiting movement start.
+        // Rule 3 (refined Q85): an empty current name lets the waiting
+        // movement start, plainly (no random part), and its phase moves
+        // on in this same update.
         if self.current_name.is_empty() {
             if let Some(w) = self.waiting.take() {
-                let mut started = self.start(&w);
-                // Q85 stand-in: the random start of the movement shown at
-                // load survives its restart. The start uses up the update.
-                if let Some((_, phase, scale)) = self.load_random.take().filter(|r| r.0 == self.current) {
-                    (self.phase, self.speed_scale) = (phase, scale);
-                    (started.start, started.kept_random) = (phase, true);
-                }
+                out.started = Some(self.start(&w));
                 self.started_this_update = false;
-                out.started = Some(started);
-                return out;
+                out.from = self.phase;
+                out.to = self.phase;
             }
         }
         if std::mem::take(&mut self.started_this_update) || !self.playing {
             return out;
         }
         let Some(m) = self.movements.get(self.current) else { return out };
-        let step = m.step_with(self.phase, dt, m.speed * self.speed_scale);
+        let step = m.step_with(self.phase, dt, self.random_speed.unwrap_or(m.speed));
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
@@ -466,19 +481,35 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_random_start_survives_the_first_update_restart_q85_stand_in() {
+    fn without_curr_anim_name_the_random_start_is_lost_q85() {
+        // Rule 3 (Q85): the six flags=8 objects with only nextAnimName=stop
+        // start plainly: phase 0, speed exactly 1, all in step.
         let mut rng = crate::emitter::Rng::new(4);
-        let mut p = object().with_names_at_load(None, Some("stop")).with_random_start(&mut rng);
-        p.movements[0].speed = 1.0;
-        let (phase, scale) = (p.phase, p.speed_scale);
-        assert!((0.9..=1.1).contains(&scale));
+        let mut p = object().with_names_at_load(None, Some("spin")).with_random_start(&mut rng);
         let a = p.advance(DT);
-        assert!(a.started.as_ref().is_some_and(|s| s.kept_random), "{a:?}");
-        assert_eq!((p.phase, p.speed_scale), (phase, scale));
+        assert_eq!(a.started.as_ref().map(|s| (s.index, s.start)), Some((3, 0.0)));
+        assert_eq!(p.random_speed, None);
+        // The phase moved on in that same update, at speed 1.
+        assert!((p.phase - DT).abs() < 1e-6, "{}", p.phase);
+    }
+
+    #[test]
+    fn with_curr_anim_name_the_random_frame_and_speed_replace_the_loop_line() {
+        // A still loop (speed 0 in its line) still plays forward with bit 8.
+        let mut rng = crate::emitter::Rng::new(7);
+        let mut p = object().with_names_at_load(Some("stop"), None).with_random_start(&mut rng);
+        let speed = p.random_speed.expect("random speed");
+        assert!((0.9..=1.1).contains(&speed));
+        // A whole frame: phase × 16 frames is a whole number.
+        let frames = p.phase * 16.0;
+        assert!((frames - frames.round()).abs() < 1e-4 && p.phase < 1.0, "{}", p.phase);
+        let before = p.phase;
+        p.advance(DT);
+        assert!(((p.phase - before).rem_euclid(1.0) - DT * speed).abs() < 1e-5, "moved in the first update");
         // A movement started later runs at its own speed.
         p.cut_short = true;
         p.request("spin");
-        assert_eq!(p.speed_scale, 1.0);
+        assert_eq!(p.random_speed, None);
     }
 
     #[test]
@@ -488,9 +519,9 @@ pub(crate) mod tests {
         let mut p = p;
         let a = p.advance(DT);
         assert_eq!(a.started.map(|s| s.index), Some(3));
-        assert_eq!((p.movement_name(), p.phase), ("spin", 0.0));
-        // It moves from the next update.
-        assert!(p.advance(DT).to > 0.0);
+        // It moves in that same update (refined Q85).
+        assert_eq!(p.movement_name(), "spin");
+        assert!((p.phase - DT).abs() < 1e-6, "{}", p.phase);
         // With a currAnimName the waiting one waits as usual.
         let mut q = object().with_names_at_load(Some("stop"), Some("spin"));
         assert_eq!(q.advance(DT).started, None);
