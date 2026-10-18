@@ -370,6 +370,27 @@ Words used here:
       when the turn ends; true only for a turn of 1 update.)
     - On stopping he goes back to Wait (`Stop`) and `<who>` gets
       `KQCueEvent <c> <d>` (its script runs with `Cue`, `$3` = c).
+    - **How the end is checked and how he stops** (traced 2026-10-18,
+      Q98):
+      - The distance is checked in Move's own step, which runs at the
+        start of each update **before** that update's animation step
+        moves him. So it compares the flat distance gone **so far**
+        (after the previous update's move) with the recorded distance;
+        he stops in the first update where it is reached or passed. He
+        never stops short; he is past it by up to one update's step
+        (exactly on it only by chance).
+      - Stopping is the **same as letting go of the forward key**: he
+        goes to Wait, and Wait asks for `Stop` the ordinary way, so
+        `connor-movement.md` "Starting and stopping" rules 2–6 apply:
+        `walk` keeps playing (and moving him) until the next listed
+        "from" point, then the walk → stand transition of that point
+        plays (`walkstopleft` from 0.45, `stopwalkstop` from 0.90,
+        `walkstopright` from 0.95; for `runTo` the run's ones), with its
+        own steps, then `stop`. There is no jump straight to `stop`.
+        The head-on end of a scripted walk (above) goes through Wait
+        the same way, so it also asks for `Stop` with the transitions.
+      - The cue is sent in the same update, through the event queue, so
+        the cued script runs in that update after Connor's own update.
     - **Head-on during a scripted walk or run** (traced 2026-10-18,
       Q94 a): when the walk or run of `walkTo` / `runTo` is under way
       and he hits something head-on (the head-on test of
@@ -403,6 +424,20 @@ Words used here:
     then (no wall block on) Move with `Left` or `Right` until the turn
     ends; in the next update nothing asks for a movement any more, so he
     goes back to Wait (`Stop`).
+    **Right after a scripted walk** (traced 2026-10-18, Q98 b): if a stop
+    transition (rule 24) is still playing when the turn starts, it is a
+    `0 0` animation, so the request for `Left`/`Right` waits until it
+    ends (`connor-movement.md` "Starting and stopping" rule 4). The
+    turn itself does not wait: the automatic turn changes his heading
+    every update whatever animation plays ("Turning during a start"),
+    so the rest of the stop transition's steps are taken along the
+    turning heading and his path **curves**. When the transition ends,
+    `Left`/`Right` starts if the turn is still going, otherwise he goes
+    back to Wait and `stop`. This is what B built for the watermill
+    (about 440 units of curve during `walkstopright`, `connor-3m3-
+    watermill.log`); the traced rules give the same thing, so the
+    difference the user saw is not explained by Q98 (see Open
+    questions).
 26. **If a cue never comes, nothing rescues it**: there is no time-out.
     `handsOff` stays on and the camera stays where the script put it.
     Only the head-on bump or `walkExit` end a `walkTo` early.
@@ -599,6 +634,13 @@ Words used here:
   one `Left`, then `Walk` while the turn finishes; "walk distance
   measured again" at the turn's end; arrival at (190800, 230100) as
   before (rule 24).
+- **End of the watermill walk (our logs, B, Q98):** the update the walk
+  ends: distance gone ≥ distance recorded (never less), state Wait,
+  `Stop` asked for; `walk` plays on to the next from point, then the
+  stop transition of that point with its steps; during cue 2's turn the
+  path curves while the transition plays, and `Left` only starts after
+  it. Compare with the original (user): where Connor stands when the
+  camera starts its flight (cue 4), against a fixed object in the room.
 - **In the original (user), once fighting works or with a weapon:** break
   the alchemist's boards. Expected: the boards fall (one animation), then
   lie on the ground; the falling animation plays once and doesn't repeat.
@@ -618,3 +660,13 @@ Words used here:
    the camera's meaning).
 5. The `endLoop` cue on monsters (rule 9) and monsters' own movement
    requests: M5.
+6. **The watermill walk's end (Q98, 2026-10-18):** the traced rules
+   (rules 24–25) match what B built, yet the user sees Connor "turn left
+   and walk forward a bit more than the original". Not explained. Things
+   to compare before studying further: (a) the phase of `walk` when the
+   walk ends in our build against the step cycle (the next from point
+   decides which stop plays: `walkstopright` from 0.95 is short, but a
+   phase just past 0.95 would wait a whole cycle for `walkstopleft` at
+   0.45); (b) the stop transitions' own steps (`.kqs` frame steps, as
+   for the start animations in `connor-movement.md`); (c) the end
+   position in the original, measured against something fixed.

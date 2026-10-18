@@ -39,9 +39,20 @@ end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with 
   Conversations are not studied yet. The turn, the 0.5 s wait, the
   ducking, talking while walking and the mouth were confirmed by the
   user in the original.
-- **Later for A:** Q99 (when the camera recalculates; the mill wheel
-  shots), Q98 (the end of a scripted walk; the user sees a difference), Q97 (a flight's last update: the height);
-  conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
+- **New 2026-10-18 (A): Q97–Q99 answered** (`camera.md`,
+  `anim-scripts.md`, not built): the follow camera updates only on a
+  "Connor moved" message (a committed move that changes his position by
+  more than 0.1 or his facing), after `follow`, every update while the
+  rarely-set "turn back" switch is on, and during flights. The height
+  eases (10%) only when the aim point moved more than 20; otherwise it
+  only snaps within 100 or is lifted off the ground. A flight's last
+  update keeps the height (B's stand-in is right). In a trap, the
+  camera's update for a script's `move Connor` comes after the script's
+  `move KQCamera`. The end of a scripted walk plays the ordinary stop
+  transition and the next turn curves it: B's build already matches;
+  the user's difference is not explained (`anim-scripts.md` open
+  question 6).
+- **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
 
@@ -228,7 +239,9 @@ milestone: **M3, Daventry comes alive**.
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
   tested; `follow Connor` during a flight ends it.
-- **Next step, suggested:** for A: Q97. For B: cues of scenery
+- **Next step, suggested:** for B: the camera's update rules from Q99
+  ("When the camera updates at all", the refined height rule; fixes the
+  mill wheel shots), then Q97's note (no code change). For B: cues of scenery
   animations, `loadKQ` with a name or place while playing (barrels and
   boards breaking, M5), remarks and speech (`talking.md`, studied by A),
   inventory screen (M4). The brightness setting (rule 17) is still not
@@ -277,19 +290,17 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- For A (asked 2026-10-18 by B, 3m-4): Q97, the camera's height on a
-  flight's last update (and after a cut). Stand-in: not applied.
-- For A (asked 2026-10-18, the user's check): Q98, the end of a scripted
-  walk (does the stop transition play, and does the next turn steer it).
-- For A (asked 2026-10-18, the user's check): Q99, when the follow
-  camera recalculates (the mill wheel cutscene's shots; also Q53 d).
+- For B (answered 2026-10-18 by A, not built): Q99 (when the camera
+  updates; also settles Q53 d), Q97 (stand-in confirmed). Q98 answered:
+  the build matches; the remaining difference is `anim-scripts.md` open
+  question 6.
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
   change cuts the old tune): not traced, checks by ear suggested.
 - Q53: camera obstacle details (how the view line meets the ground and a
   line starting under water; the BSP line test; whether the new direction
-  is 3D; updating only while Connor moves). Stand-ins in place.
+  is 3D). Stand-ins in place. (d) answered by Q99.
 - Q48: partly answered (emitter-vs-catcher order in a tick not settled;
   no visible difference).
 - Q41: jumps: (a) jump during the wait before a stop, (c) the 250 limit,

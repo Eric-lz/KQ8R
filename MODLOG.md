@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study (A): Q97, Q98, Q99 (camera updates, flight's last update, end of a scripted walk)
+
+**Changed:** `docs/behaviour/camera.md` ("Height above the ground" rule 2 rewritten; "When the camera updates at all" rewritten; "`move KQCamera` while following" and the mill wheel worked through; flight/cut last update settled; edge cases, do-not-reproduce, how to check, open questions 4 and 6). `docs/behaviour/anim-scripts.md` (rules 24–25: how a scripted walk's end is checked and stops, the turn during a stop transition; how to check; open question 6). `docs/behaviour/QUESTIONS.md`: Q97–Q99 answered. `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** B's questions from 3m-4 and the user's checks of the watermill walk and the mill wheel cutscene.
+**Tested how:** Traced in `Mask.exe` with Ghidra (camera update, Connor's move commit, the event queue, flight/cut, Wait/Move); numbers worked out from the data and B's logs. Nothing run in the game.
+**Result:** Q97: the aim point counts as not moved on a flight's last update (and a cut's), so the height never eases there; B's stand-in (watermill stays at 10,863.4) is right. Q99: the camera updates only on Connor's "moved" messages (position > 0.1 or facing changed), after `follow`, during flights, and every update while a "turn back" switch is on (Daventry's scripts keep it off); the height eases only when the aim point moved > 20, from the old height; the trap's camera update comes after the script's `move KQCamera`, so the mill wheel's second shot stays exactly where the script puts it. Q98: the end is checked before each update's move (never short) and plays the ordinary stop transition, which the next turn curves; this is what B built.
+**Still broken / not tested:** Not tested in the game. The user's watermill difference is not explained (list of things to compare in `anim-scripts.md` open question 6). The heading after a `move KQCamera` while following depends on the swing-behind rules (open question 7, not decoded). How mouse and tilt controls trigger camera updates was not re-studied.
+**Next:** B builds the camera update rules (fixes the mill wheel shots); the user compares Connor's end spot in the watermill cutscene.
+
 ## 2026-10-18 M3 step 3m: the user's check of the mill wheel cutscene (docs only)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q99. `STATUS.md`: the check and Q99. No code.

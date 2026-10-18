@@ -1,6 +1,7 @@
 # Third-person and first-person camera
 
-Study session A, 2026-10-11; "Obstacles" added 2026-10-13. Sources: game data files, the game's own
+Study session A, 2026-10-11; "Obstacles" added 2026-10-13; height rule
+and "when the camera updates" refined 2026-10-18 (Q97, Q99). Sources: game data files, the game's own
 manual (`MASK/Manual.pdf`, "Controlling the Camera"), and `Mask.exe`
 (studied, described here in our own words). Covers the gameplay camera that
 follows Connor. Scripted cutscene cameras (`KQCamera::addCamLoc`,
@@ -85,10 +86,40 @@ needed for normal play; keep them behind a debug switch.
 
 1. The camera wants to be at least **1,400 units above the terrain under
    the camera**, and at least 1,400 units above the followed object's base.
-   The higher of the two wins.
-2. If the camera is within 100 units of that height it jumps straight to it;
-   otherwise it moves **10% of the remaining gap per update** (smooth rise
-   and fall).
+   The higher of the two wins (the **wanted height**).
+2. **Refined 2026-10-18 (traced, Q97, Q99 c).** In one camera update,
+   after the leash (step 3 of "Each camera update"), the height is worked
+   out in three steps:
+   1. **Lift off the ground, at once.** Let *gap* = (terrain under the
+      camera's new spot + 1,400) − the camera's new height. If *gap* is
+      more than 0 and not more than the range's maximum, the camera is
+      put **straight at** terrain + 1,400 (no easing). If *gap* is more
+      than the maximum (the camera would be very deep under the
+      ground), it is put where the straight line from its old spot to
+      its new spot meets the ground, and the wanted height is taken
+      again at that spot. Either way the game remembers "lifted"
+      (used in step 3).
+   2. **Close enough: snap.** If the camera is now within **100** of the
+      wanted height, it goes straight to it.
+   3. **Otherwise it only moves if Connor moved.** "Moved" here means
+      that the aim point has changed since the camera's previous
+      record of it by more than **20**, measured as the **signed sum**
+      Δx + Δy + Δz (see "Do not reproduce"). Normally the previous
+      record is from the update before; after 3 updates without a
+      "Connor moved" message (see "When the camera updates at all") it
+      is reset to where he stands, so the sum is 0.
+      - **Moved:** the new height = the camera's height **at the start
+        of this update** + 10% × (wanted height − the height after
+        steps 1–2). Both up and down (smooth rise and fall). "Lifted"
+        is forgotten. Note the starting point: any height change the
+        leash or the lift made in this update is thrown away and
+        replaced by this step (see "Edge cases").
+      - **Not moved:** the height stays as steps 1–2 left it. Only if
+        the player is swinging the camera with the mouse this update
+        and the camera was "lifted" in an earlier update does it snap
+        to the wanted height.
+   So the camera never eases toward the wanted height while Connor
+   stands still; it only snaps (within 100) or is lifted off the ground.
 3. The terrain height under the camera comes from the world's terrain (M1).
    It is the **floor grid** (the ground under water, `water.md`), not the
    drawn surface, so over Daventry's river the camera may come down to
@@ -214,18 +245,75 @@ to the camera. The nearest of these blocks it:
 9. The result is the camera's new spot. The view test is not repeated,
    and the height rule is not applied again.
 
-**When the camera updates at all.** The follow camera recalculates only
-when Connor moves (in every update in which he moves), and while the
-player uses the mouse or tilt keys on it. If Connor stands still with the
-view blocked, nothing changes until he moves or the player moves the
-camera.
+**When the camera updates at all** (rewritten 2026-10-18, traced, Q99).
+The follow camera runs its update (all of steps 1–9 and the aiming) only
+on these occasions:
 
-**"Connor is moving"** (step 8.2): the camera keeps Connor's position
-from the update before. It counts him as moving from the update after he
-starts moving until 3 updates have passed without movement. After 3 still
-updates, the "one update ago" position is reset to where he stands. So
-the first update of a new walk after standing still never starts a swing
-(not checked in the game).
+1. **A "Connor moved" message.** Connor (any followed object) sends it
+   when one of his moves is **committed** and his position changed by
+   **more than 0.1** on any axis, or his facing changed (any entry of his
+   turn matrix by more than 0.0001). A move that changes nothing sends
+   nothing. This covers:
+   - his ordinary moves, one per update while he walks, runs, falls,
+     turns or is carried by an animation's steps;
+   - a script's **`move Connor`** (a jump to the new spot, committed at
+     once);
+   - **not** an update in which he stands still (an animation with no
+     steps, gravity holding him on the floor): no message, no camera
+     update.
+2. **`follow <object>`** itself: it sends one such message at once (so
+   there is one camera update right after the command, even if Connor
+   doesn't move; the aim point counts as not moved for the height rule).
+3. **Every update while the "turn back" switch is on.** `follow
+   <object>` switches it on when the camera faces more than 0.4 rad away
+   from the object (see "`follow Connor` after a cutscene"). It is
+   switched off only when a flight ends, or by a later `follow` that
+   finds the camera farther than the range's maximum. Nothing else
+   switches it off, so after such a `follow` the camera updates every
+   update, standing still or not, and its heading stays locked exactly
+   onto Connor (heading state "exact", "Camera flights and cuts" rule
+   5). Daventry's scripts avoid it: the camera spots they set just
+   before `follow Connor` are 0.04–0.22 rad off (`stngrl.cs`,
+   `wtrmwalk.cs` cue 6, `miltrap1.cs` cue 300), so in normal Daventry
+   play the switch is off.
+4. **Every update of a flight** (until it ends), and the one update of a
+   cut ("Camera flights and cuts").
+5. **The player's camera controls** (mouse swing/zoom, tilt keys): not
+   re-studied here; take the rules above ("Swinging and zooming", "Tilt")
+   as updates while the control is used.
+
+**When the message arrives.** Messages go through the game's event
+queue: they are handled **after** whatever is running at the moment has
+finished, but still within the same update, before the frame is drawn.
+An ordinary move is committed at the start of the next update (so the
+camera follows one update behind the move it reacts to; it was always so
+in normal play). A script's `move Connor` is committed at once, and its
+message is handled right after the script (and the event that ran it)
+ends.
+
+So when a trap's `On` does `move Connor …` and then `move KQCamera …`
+(Daventry's mill wheel, `wheeltp1.cs` lines 8–9), the order is:
+
+1. Connor jumps to the script's spot; the "moved" message is queued.
+2. The camera is put at the script's spot and angles.
+3. The script ends; the queued message arrives; the camera runs one
+   update **from the script's spot**: leash/minimum, height rule, view
+   test, aiming (see "`move KQCamera` while following" in "Shake and
+   cutscene cameras").
+4. Next update: Connor's own move of the update the trap fired in is
+   committed (he lands from the script's spot); if he moved more than
+   0.1 there is one more camera update.
+5. Then nothing until Connor moves again.
+
+If Connor stands still with the view blocked, nothing changes until he
+moves or the player moves the camera.
+
+**"Connor is moving"** (step 8.2 and the swing behind him): the camera
+keeps the aim point from its previous "Connor moved" message. It counts
+him as moving from the first message until 3 updates have passed without
+one. After 3 still updates, the previous aim point is reset to where he
+stands. So the first update of a new walk after standing still never
+starts a swing (not checked in the game).
 
 #### Obstacle numbers
 
@@ -290,6 +378,42 @@ the first update of a new walk after standing still never starts a swing
     looking down.)
   - The camera takes that place and view **at once**, and the next frame
     is drawn straight away.
+  - **`move KQCamera` while following** (traced 2026-10-18, Q99 d): the
+    move itself does not run a camera update. The script's place and
+    view stand until the next camera update ("When the camera updates
+    at all"); with Connor standing still and the "turn back" switch off
+    that may be never, until he moves. The next update starts from the
+    moved spot with the normal rules:
+    - position: leash/minimum, height rule (with its "moved" test),
+      view test, as in any update;
+    - **tilt: set at once** to the player's tilt (default −0.2) + the
+      angle up to the aim point, so the script's tilt is lost in that
+      update;
+    - **heading: not snapped.** It goes through the swing-behind rules
+      (open question 7): with the "turn back" switch off, it only starts
+      turning when it is more than 0.25 rad off Connor (and he counts as
+      moving) or more than 0.5 rad off; within 0.5 rad it is turned only
+      by 1.25 × the growth of the error since the previous update, and
+      beyond 0.5 rad it is turned back to 0.25 rad off at once. (With the
+      switch on: a third of the rest per update, then locked.)
+  - **Daventry's mill wheel (`wheeltp1.cs`), worked out from these
+    rules (not tested):** the first shot (camera put at (185500, 226520,
+    9750), heading −0.3, tilt 0) gets the update of step 3 in the order
+    above, then possibly the one of step 4, then none while Connor plays
+    `wheelover` (no steps). In that update: the distance to the aim point
+    is about 1,940, inside the range, so no leash; the wanted height is
+    about 8,520 (Connor's base + 1,400; the ground under the camera,
+    6,924 in our data, + 1,400 is lower); the camera is 1,230 above it,
+    so no snap; if Connor's jump to the script's spot (from where he
+    entered the trap) is "moved" (signed sum over 20), the height eases
+    once: 9,750 + 10% × (8,520 − 9,750) ≈ 9,627; the step-4 update is
+    normally "not moved" (he only lands), so the height stays. The tilt
+    becomes about −0.2 + (−0.63) ≈ −0.83 (looking down at him). The
+    heading is about 0.26 rad off him, just over 0.25, so at most a
+    small turn. The second shot (cue 4, 0.8 s later, camera put at
+    (185000, 237850, 10850)) comes while he stands still: **no update at
+    all**, so it stays exactly as the script put it (no leash, no height
+    rule, script's angles) until the flight at cue 1.
 - **`follow Connor` after a cutscene** starts from where the camera is,
   with no jump to a preset spot (traced):
   - If the camera is farther from the aim point than the range's
@@ -302,9 +426,11 @@ the first update of a new walk after standing still never starts a swing
     reproduce").
   - Tilt (inferred): set at once to the default tilt plus the angle that
     looks at the aim point.
-  - Then the normal follow rules apply (the camera only updates while
-    Connor moves, or while the turning flag that `follow Connor` sets is
-    on; open question 7).
+  - Then the normal follow rules apply: one camera update right after
+    the command, then updates only on the occasions in "When the camera
+    updates at all" (the "turn back" switch is the one set here when
+    the heading is more than 0.4 rad off; it is cleared by the leash
+    case above, i.e. when the camera was farther than the maximum).
   - The scripts use this: just before `follow Connor` they `move
     KQCamera` to a spot close to the follow view (bricks cue 10: about
     0.19 rad off), so there is no visible jump.
@@ -344,8 +470,9 @@ view toward what is followed). `follow <object>` switches both on
    - then one camera update runs at once with the normal follow rules:
      if "places" is on, the camera is pulled onto the range around the
      aim point (farther than the maximum → max − 1, nearer than the
-     minimum → min + 1, then the height rule); if "aims" is on, the view
-     is aimed as in rule 5. With both off (after `follow none`) it stays
+     minimum → min + 1, then the height rule, settled as in rule 4's last
+     update: the aim point counts as not moved); if "aims" is on, the
+     view is aimed as in rule 5. With both off (after `follow none`) it stays
      on the spot, heading toward (x, y), and keeps its tilt.
 4. **`KQCamera::flyToCamLoc x y z [seconds [endRoll]]`:**
    - **Duration:** `seconds` (a negative value counts as 0). If it is 0
@@ -372,9 +499,15 @@ view toward what is followed). `follow <object>` switches both on
      range around the aim point like after a cut: farther than the
      range's maximum → pulled in to max − 1 **along the line to the
      aim point + 1,400**, nearer than the minimum → pushed to min + 1,
-     then the height rule ("Height above the ground": at least 1,400
-     above the ground under it and above the aim point; whether it snaps
-     or eases there on this update was not settled). Avoidance is off,
+     then the height rule ("Height above the ground" rule 2). **Settled
+     2026-10-18 (traced, Q97):** a flight or cut sets both the camera's
+     present and previous record of the aim point to the aim point, so
+     the aim point **counts as not moved** and the height never eases
+     on this update. Only: (a) if the camera is now below the ground
+     under it + 1,400 it is lifted there at once; then (b) if it is
+     within 100 of the wanted height (the higher of ground + 1,400 and
+     aim point + 1,400) it snaps there; otherwise its height stays.
+     The same holds for a cut's one update. Avoidance is off,
      so no obstacle pull-in or swing. **So the camera can jump at the
      end of a flight** (watermill: about 1,227 units, rule 7).
    - **After the flight** it stays where that last update put it: it
@@ -428,10 +561,13 @@ view toward what is followed). `follow <object>` switches both on
        is heading **2.153**, tilt **+0.016** (−0.2 + 0.216);
      - update 31: distance from the spot to the looked-at point
        **3,725.8** > 2,500, so the camera is pulled in to 2,499 along
-       that line: **(188999.0, 229341.5, 10863.4)** before the height
-       rule (the height rule wants at least 11,400; not settled whether
-       it gets there on that update). Same view direction, about 1,227
-       units closer;
+       that line: **(188999.0, 229341.5, 10863.4)**. The height rule
+       wants 11,400 (aim point + 1,400), 536.6 higher: more than 100,
+       and the aim point counts as not moved, so **the height stays at
+       10,863.4** (Q97). It would only change if the ground under that
+       spot + 1,400 were above 10,863.4 (ground above 9,463.4; then it
+       is lifted to ground + 1,400), which B's log can check. Same view
+       direction, about 1,227 units closer; it stays there until cue 6;
      - cue 5 comes 30 updates after cue 4 (one update before the flight
        ends), cue 6 at 60 updates: `move KQCamera 0 192880 230965 9260
        -.2 0 2.095`, then `follow Connor`.
@@ -443,7 +579,10 @@ view toward what is followed). `follow <object>` switches both on
      **−0.893**; distance 2,800.7, so at update 46 the camera is pulled
      in to max − 1 if the range's maximum is under 2,800.7 (walking,
      2,500: to (185086.2, 213084.6, 8607.2)), and stays if running
-     (5,000). Cue 2 comes after 2.5 s (37–38 updates, before the flight
+     (5,000). Height on that update (Q97): the aim point + 1,400 is
+       7,010, below the camera, so the height stays unless the ground
+       under it + 1,400 is above the camera (then lifted) or within 100
+       of it (then snapped). Cue 2 comes after 2.5 s (37–38 updates, before the flight
      ends); cue 3 (4 s after cue 2): `follow Connor`.
    - **Windmill tumble, `miltrap1.cs`:** **no flight or cut**. It uses
      `follow none` and three `move KQCamera` (`anim-scripts.md` rule
@@ -477,6 +616,13 @@ view toward what is followed). `follow <object>` switches both on
 - The pulled-in camera can be closer than the minimum distance. On the
   next update the minimum rule pushes it out again and the view test
   pulls it back in, for as long as the obstacle is there.
+- **The height easing starts from the old height** (Height rule 2.3):
+  in an update where Connor moved, the leash's vertical change and the
+  lift off the ground are replaced by "old height + 10% of the gap". On
+  a slope where Connor's base + 1,400 is the wanted height and the
+  ground under the camera + 1,400 is above the camera's old height, the
+  camera can end that update still below ground + 1,400; the next
+  update lifts it again. Traced, not seen in the game.
 - `flyToCamLoc` / `cutToCamLoc` with an **empty spot list**: the
   original uses a spot that was never set (see "Do not reproduce").
 - `flyToCamLoc` with seconds 0 and the camera already on the spot: N = 1,
@@ -506,6 +652,17 @@ view toward what is followed). `follow <object>` switches both on
   - height: close `1 − 0.9^(15 × elapsed seconds)` of the remaining gap;
   - tilt: 0.225 rad/s; fixed-mode zoom: 1,875 units/s.
 
+- **The "moved" test of the height rule** adds the signed changes
+  Δx + Δy + Δz of the aim point, so a move of, say, +300 in x and −300
+  in y counts as "not moved" and the height freezes for that update.
+  Use the sum of the sizes (|Δx| + |Δy| + |Δz| > 20) instead; it gives
+  the same result for every move that is mostly along one axis.
+- **The "turn back" switch that never clears** ("When the camera
+  updates at all", item 3): after a `follow` that finds the camera more
+  than 0.4 rad off, the original locks the heading onto Connor and
+  updates every frame until the next flight ends. Build it as traced
+  (Daventry's scripts never trigger it), but log it whenever it
+  switches on, so we notice if another world's script does.
 - **Negative pull-in.** When the hit is under 100 units from the aim
   point, put the camera at a small minimum distance in front of the aim
   point (e.g. 1 unit), never behind it.
@@ -560,6 +717,19 @@ view toward what is followed). `follow <object>` switches both on
   **Confirmed by the user in the original (2026-10-18):** the camera
   jumps toward the end of the flight. (The size of the jump was not
   measured.)
+- **When the camera updates (our logs, B):** log each camera update
+  with its cause (Connor moved / `follow` / turn-back switch / flight /
+  player control) and the height step taken (lifted / snapped / eased /
+  kept, with the signed sum). Standing still on a slope after walking:
+  updates stop 1 update after he stops (the last committed move), and
+  the height stops changing at once even if it is far from the wanted
+  height. Mill wheel (`wheeltp1.cs`): at most 2 updates after the
+  trap's `On`, none from then to cue 1; the second shot logged at
+  exactly (185000, 237850, 10850), tilt −0.25, heading −2.8.
+- **Mill wheel (original, user, by eye):** the second shot (0.8 s after
+  Connor is knocked over) should hold perfectly still, high up (the
+  script's spot), until the flight; the first shot looks down at Connor
+  from about the script's height.
 - In the original game, compare screenshots of the same spot with the same
   inputs (you can do this by eye; we only compare numbers we log).
 
@@ -573,11 +743,16 @@ view toward what is followed). `follow <object>` switches both on
 4. (Answered 2026-10-13, see "Obstacles".) What switches avoidance
    off: answered 2026-10-18: `follow none`, `flyToCamLoc` and
    `cutToCamLoc` switch it off, `follow <object>` switches it on again
-   ("Camera flights and cuts"). Still open: whether Connor's "moved" signal comes in every update he moves or
-   only when his position or facing really changes (assumed: whenever
-   either changes); the turn direction of the swing is inferred from the
-   signs of the two angles, not checked in the game.
+   ("Camera flights and cuts"). Connor's "moved" signal: answered
+   2026-10-18 (Q99 b): only when his position changes by more than 0.1
+   or his facing changes ("When the camera updates at all"). Still
+   open: the turn direction of the swing is inferred from the signs of
+   the two angles, not checked in the game.
 5. First-person slope tilt details and the eye height.
-6. Whether the camera updates at the same rate as Connor (assumed yes).
+6. Whether the camera updates at the same rate as Connor: answered
+   2026-10-18 (Q99): it updates when he sends a "moved" message (one
+   per committed move that changes something), handled one update after
+   his ordinary moves; see "When the camera updates at all". How the
+   player's mouse and tilt controls trigger updates was not re-studied.
 7. The automatic swing behind Connor: when exactly it starts and stops, and
    how fast it turns.
