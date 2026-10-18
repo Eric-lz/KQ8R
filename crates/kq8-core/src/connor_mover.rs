@@ -63,10 +63,11 @@ pub trait MoverWorld {
     }
     /// Like [`MoverWorld::sweep`], but every object touched is **told at
     /// once**, as it is tested (`connor-physics.md` "Against a building"
-    /// step 7, Q88): `told` runs the push check and returns `true` when it
-    /// accepted the touch as a push, which is then not recorded as a hit.
-    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> bool) -> Option<Hit> {
-        self.sweep(balls, from, to).filter(|h| !told(h))
+    /// step 7, Q88): `told` runs the push check; an accepted push is not
+    /// recorded as a hit, and a physical push makes the rest of the list
+    /// see a zero-length move ([`Told::MovedTo`], `pushing.md` rule 4.3).
+    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> Told) -> Option<Hit> {
+        self.sweep(balls, from, to).filter(|h| told(h) == Told::Contact)
     }
     /// Notes gathered by the sweeps since the last call (for the report).
     fn take_notes(&self) -> Vec<String> {
@@ -90,6 +91,20 @@ pub trait MoverWorld {
     /// A scripted pushable's touch is not a hit (`pushing.md` rule 3):
     /// `name` is passed through for the rest of this update's move.
     fn pass_through(&self, _name: &str) {}
+}
+
+/// What the push check made of a touch, the answer of the `told` of
+/// [`MoverWorld::sweep_told`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Told {
+    /// Not a push: an ordinary contact, kept as usual.
+    Contact,
+    /// A scripted push: not a hit; the sweep goes on.
+    Pushed,
+    /// A physical push (`pushing.md` rule 4.3): not a hit; his position
+    /// **and his sweep** become this point (P), so the rest of the list
+    /// sees a zero-length move. Contacts kept from earlier in the list stay.
+    MovedTo([f32; 3]),
 }
 
 /// Connor follows a physical pushable by this share of its movement
@@ -297,7 +312,7 @@ impl MoverWorld for Scene<'_> {
     /// what the game does then was not traced, so it counts as no hit (he
     /// can walk out) and is noted.
     fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
-        self.sweep_told(balls, from, to, &mut |_| false)
+        self.sweep_told(balls, from, to, &mut |_| Told::Contact)
     }
 
     /// Step 7 refined (Q88): the objects are tested in the order they
@@ -305,7 +320,10 @@ impl MoverWorld for Scene<'_> {
     /// accepted push is not recorded, and a contact replaces the kept one
     /// when it is **at most** as far (on a tie the later-tested wins).
     /// Buildings are tested first (they are loaded before the objects).
-    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> bool) -> Option<Hit> {
+    /// After a physical push the objects later in the list are not tested
+    /// (rule 4.3: his move is then zero long; STAND-IN for objects, not
+    /// traced; buildings test nothing under 0.1).
+    fn sweep_told(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3], told: &mut dyn FnMut(&Hit) -> Told) -> Option<Hit> {
         let (lo, hi) = balls.reach(from, to);
         let mut best: Option<Hit> = None;
         let mut keep = |h: Hit| {
@@ -319,12 +337,26 @@ impl MoverWorld for Scene<'_> {
             }
         }
         let passed = self.passed.borrow().clone();
-        for o in self.in_order().filter(|o| o.overlaps(balls.radius, lo, hi) && !passed.contains(&o.name)) {
+        let mut list = self.in_order().filter(|o| o.overlaps(balls.radius, lo, hi) && !passed.contains(&o.name));
+        while let Some(o) = list.next() {
             match o.sweep(balls, from, to) {
                 Some(ObjectHit::Contact(c)) => {
                     let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone() };
-                    if !told(&h) {
-                        keep(h);
+                    match told(&h) {
+                        Told::Contact => keep(h),
+                        Told::Pushed => {}
+                        Told::MovedTo(_) => {
+                            let later: Vec<String> = list.map(|o| o.name.clone()).collect();
+                            if !later.is_empty() {
+                                self.notes.borrow_mut().push(format!(
+                                    "push of {}: his sweep is zero long from here; {} later object(s) in the list not tested ({}; stand-in, not traced)",
+                                    o.name,
+                                    later.len(),
+                                    later.join(", ")
+                                ));
+                            }
+                            break;
+                        }
                     }
                 }
                 Some(ObjectHit::StartedInside { ball }) => self.notes.borrow_mut().push(format!(
@@ -963,7 +995,6 @@ impl Mover {
         report: &mut Report,
     ) -> &'static str {
         let mut outcome = "free";
-        let pass_start = start;
         // Rule 2.4: the across pass and its slides, not the down pass's.
         let across_pass = pass == "across";
         if pass == "down slide" {
@@ -973,22 +1004,24 @@ impl Mover {
             // Every object touched is told at once (Q88): the push check
             // runs for each pushable as it is tested; an accepted push is
             // not a hit for him (rule 3).
-            let step = [target[0] - pass_start[0], target[1] - pass_start[1], 0.0];
+            // The step of this sweep: the pass's, or a slide's (rule 4.3).
+            let step = [target[0] - start[0], target[1] - start[1], 0.0];
             let mut touches = Vec::new();
             let mut physical: Option<[f32; 3]> = None;
             let mut scripted = false;
             let me = &*self;
             let hit = world.sweep_told(&me.balls, start, target, &mut |h| {
-                let Some(t) = world.push_target(&h.what) else { return false };
+                let Some(t) = world.push_target(&h.what) else { return Told::Contact };
                 let mut touch = me.push_check(h, &t, across_pass);
                 let accepted = touch.result == PushResult::Push;
-                if accepted && t.scripted() {
+                let told = if accepted && t.scripted() {
                     // The object's script gets `Push` (the caller runs it
                     // after this move); the rest of the move goes through.
                     world.pass_through(&h.what);
                     scripted = true;
+                    Told::Pushed
                 } else if accepted {
-                    // Rule 4: moved by his horizontal step of this pass.
+                    // Rule 4: moved by his horizontal step of this sweep.
                     let moved = if step.iter().any(|v| v.abs() > PUSH_MIN_STEP) {
                         let (moved, why) = world.push_object(&h.what, step);
                         touch.moved = Some((step, moved, why));
@@ -996,20 +1029,49 @@ impl Mover {
                     } else {
                         [0.0; 3]
                     };
-                    physical = Some(moved);
-                }
+                    // Rule 4.3: P = the sweep's start + 0.95 × what it
+                    // really moved; his sweep becomes P from here on.
+                    let p = add(start, scale(moved, PUSH_FOLLOW));
+                    physical = Some(p);
+                    Told::MovedTo(p)
+                } else {
+                    Told::Contact
+                };
                 touches.push(touch);
-                accepted
+                told
             });
             report.pushes.extend(touches);
-            if let Some(moved) = physical {
-                // Rule 4.3: he follows by 0.95 of what it really moved,
-                // from the start of the pass.
-                self.position = add(pass_start, scale(moved, PUSH_FOLLOW));
-                return "push";
-            }
             if scripted {
                 outcome = "push";
+            }
+            if let Some(p) = physical {
+                outcome = "push";
+                let Some(h) = hit else {
+                    self.position = p;
+                    return outcome;
+                };
+                // Rule 4.3 (Q95): a contact kept from earlier in the list
+                // is still handled, with P as the wanted end and no
+                // movement, so never head-on: P projected onto the
+                // surface's plane through the contact; he is put at the
+                // contact and slides there (a new sweep).
+                *hits += 1;
+                let (contact, normal) = (h.position, h.normal);
+                let slide_to = project_onto(p, contact, normal);
+                let result = if *hits >= MAX_HITS { "3 hits" } else { "after push" };
+                report.events.push(format!(
+                    "push, then the kept hit on {}: wanted end P ({:.1}, {:.1}, {:.1}), movement 0 (not head-on); onto the plane through the contact: ({:.1}, {:.1}, {:.1})",
+                    h.what, p[0], p[1], p[2], slide_to[0], slide_to[1], slide_to[2]
+                ));
+                report.hits.push(HitRecord { pass, hit: h, angle: None, result });
+                self.position = contact;
+                if result != "after push" || sub(slide_to, contact).iter().all(|v| v.abs() < SLIDE_MIN) {
+                    return outcome;
+                }
+                target = slide_to;
+                start = contact;
+                pass = "slide";
+                continue;
             }
             let Some(h) = hit else {
                 self.position = target;
@@ -1655,6 +1717,64 @@ mod tests {
     }
 
     #[test]
+    fn a_wall_before_the_barrel_in_the_list_stops_him_but_not_the_barrel() {
+        // pushing.md rule 4.3 (Q95): the wall comes earlier in the list
+        // (as Daventry's buildings do), so its contact on his full move is
+        // kept; the push makes his sweep P; the kept hit is then handled
+        // with P as the wanted end and no movement: never head-on, he
+        // stays on the wall's contact plane, 225 from its face (y −1,500).
+        let mut wall = post([0.0, -1500.0, 0.0]);
+        wall.name = "wall".into();
+        wall.min = [-2000.0, -250.0, 0.0];
+        wall.max = [2000.0, 0.0, 2000.0];
+        let mut barrel = bale([0.0; 3], false);
+        barrel.kind.ball_stack = false;
+        let mut objects = vec![wall, barrel];
+        let mut m = Mover::new([0.0, 1000.0, 0.0], true);
+        let (mut after_push, mut lowest, mut pushes_at_the_wall) = (0, f32::MAX, 0);
+        for _ in 0..80 {
+            let scene = Scene::new(&Flat(0.0), &[], &objects);
+            let r = m.update_with(&scene, |_, _| push_wish([0.0, -1.0], true, true));
+            let pushed = r.pushes.iter().any(|t| t.result == PushResult::Push);
+            if r.hits.iter().any(|h| h.result == "after push") {
+                after_push += 1;
+                assert!(pushed && !r.head_on, "{r:?}");
+                assert!(r.events.iter().any(|e| e.contains("push, then the kept hit on wall")), "{:?}", r.events);
+            }
+            if pushed && m.position[1] < -1270.0 {
+                pushes_at_the_wall += 1;
+            }
+            lowest = lowest.min(m.position[1]);
+            for (name, d) in scene.moved.take() {
+                let o = objects.iter_mut().find(|o| o.name == name).unwrap();
+                o.placement.position = add(o.placement.position, d);
+            }
+        }
+        assert!(after_push > 0, "the kept wall hit never came after a push");
+        assert!((lowest + 1275.0).abs() < 0.5, "he went to y {lowest}, not 225 from the face");
+        // The barrel went on into the wall, by his full step at each touch,
+        // until his step no longer reached it.
+        let barrel_y = objects[1].placement.position[1];
+        assert!(barrel_y < -1500.0 + 500.0, "barrel at {barrel_y}");
+        assert!((1..=3).contains(&pushes_at_the_wall), "{pushes_at_the_wall} pushing touches at the wall");
+    }
+
+    #[test]
+    fn after_a_push_later_objects_in_the_list_are_not_tested() {
+        // Rule 4.3: his sweep is zero long after the push (stand-in for
+        // objects: not tested; logged). A wall after the barrel in the
+        // list is never found, so he follows the barrel through it.
+        let mut wall = post([0.0, -1500.0, 0.0]);
+        wall.name = "wall".into();
+        wall.min = [-2000.0, -250.0, 0.0];
+        wall.max = [2000.0, 0.0, 2000.0];
+        let mut barrel = bale([0.0; 3], false);
+        barrel.kind.ball_stack = false;
+        let (connor, _, _) = push_for(60, vec![barrel, wall], &Flat(0.0));
+        assert!(connor < -1500.0, "{connor}");
+    }
+
+    #[test]
     fn a_ball_stack_pushable_pushed_at_an_angle_slides_along_the_wall() {
         // pushing.md rule 4.1 (Q87 b): no head-on stop for objects; the
         // rest of the move is turned along the wall. A wall along x at
@@ -1699,7 +1819,7 @@ mod tests {
         let mut told = Vec::new();
         let h = scene.sweep_told(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0], &mut |h| {
             told.push(h.what.clone());
-            false
+            Told::Contact
         });
         assert_eq!(told, ["post", "second"]);
         assert_eq!(h.map(|h| h.what), Some("second".to_string()));
@@ -1709,7 +1829,7 @@ mod tests {
         scene.order = Some(&order);
         assert_eq!(scene.sweep(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0]).map(|h| h.what), Some("post".to_string()));
         // An accepted touch is not recorded: the other one is kept.
-        let h = scene.sweep_told(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0], &mut |h| h.what == "post");
+        let h = scene.sweep_told(&balls, [0.0, 1000.0, 0.0], [0.0, 0.0, 0.0], &mut |h| if h.what == "post" { Told::Pushed } else { Told::Contact });
         assert_eq!(h.map(|h| h.what), Some("second".to_string()));
     }
 

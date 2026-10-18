@@ -1433,3 +1433,15 @@ This replaces the Q90 b and d stand-ins of 3k-4.
 | A trap's script runs inside Connor's move: its `move Connor` gets the rest of his update | `anim-scripts.md` rule 30 | `connor-3m1-windmill.log` update 38; watermill update 1 |
 | The scripts see Connor's jump as it was at the end of his last update (our scripts run after his move) | **Our method** | — |
 
+### 3m-2, a push and a wall in the same sweep — `crates/kq8-core/src/connor_mover.rs`
+
+This replaces the "end the pass at the 0.95 point" of 3l-4.
+
+| What | Source | Check |
+| --- | --- | --- |
+| The push happens at the pushed object's turn in the list; his position and sweep become P = the sweep's start + 0.95 × its movement; contacts kept from earlier in the list stay | `pushing.md` rule 4.3 (Q95 a) | Unit test `a_wall_before_the_barrel_in_the_list_stops_him_but_not_the_barrel`; `connor-3m2-barrel-pub.log` update 54 |
+| The kept hit afterwards: wanted end P, movement 0, never head-on; P projected onto the plane through the contact; put at the contact and slid there | `pushing.md` rule 4.3 (Q95 b), `connor-physics.md` "Against a building" step 7 | Same |
+| A push inside a slide moves the object by the slide's step; P from the slide's start | `pushing.md` rule 4.3 | — |
+| Objects later in the list after a push are not tested | **Stand-in** (rule 4.3: "not traced"; buildings test nothing under 0.1) | Unit test `after_a_push_later_objects_in_the_list_are_not_tested` |
+| Only updates whose sweep reaches the barrel are pushing touches; 4 without one end Push | `pushing.md` rules 4.3 (Q95 c), 7 | `connor-3m2-barrel-pub.log` updates 55–64 |
+

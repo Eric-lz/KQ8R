@@ -1553,7 +1553,7 @@ catchers, ground animators).
       (3l-1). Test: the user's windmill jump; `connor.log`: state
       `special` with gravity on from the trap's update; after cue 300
       (33 updates later) z 8050 → 7650; then `--jump` works again.
-    - **3m-2, a push and a wall in the same sweep** (Q95; `pushing.md`
+    - **3m-2, a push and a wall in the same sweep** (**done** 2026-10-18; Q95; `pushing.md`
       rule 4.3, `connor-physics.md` "Against a building" step 7). The
       push no longer ends the across pass: when the pushed object's
       turn in the list comes, Connor's position **and his sweep**
