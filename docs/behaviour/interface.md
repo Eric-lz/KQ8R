@@ -412,7 +412,7 @@ is shown or hidden.
 ## How to check
 
 **Checks 3–6 below were done by the user in the original on
-2026-10-18; all as described.** Check 7 partly (see there).
+2026-10-18; all as described.** Check 7 too (see there).
 
 1. **In our logs (B):** every panel show/hide with the reason (key,
    pointer, pop-up, handsOff, conversation, script) and the time; per
@@ -447,8 +447,9 @@ is shown or hidden.
    starts. The spinning mask shows only in scenes that take control
    away (`handsOff`); some of the wizard's scenes let Connor walk away
    and show no mask. That fits rules 15–16: those are conversations,
-   which hide the bottom bar but don't add the mask. Not checked yet:
-   the bar coming back, and staying away if put away first.
+   which hide the bottom bar but don't add the mask. **Also checked by
+   the user:** a bar that was showing comes back when the cutscene
+   ends; a bar that was put away first stays away.
 
 ## Open questions
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Study (A): the bottom bar after a cutscene, checked (docs only)
+
+**Changed:** `interface.md` check 7.
+**Why:** The user's check in the original.
+**Tested how:** By the user in the original, by eye.
+**Result:** A bottom bar that was showing comes back when the cutscene ends; one put away before stays away (as `interface.md` rules 15–16 say).
+**Still broken / not tested:** Quest strip with 8+ items (from memory only).
+**Next:** B: caption strip back to the box width; the always-visible panel.
+
 ## 2026-10-18 Study (A): more checks by the user (docs only)
 
 **Changed:** `interface.md` rule 14, check 7, open question 2 (closed); `inventory.md` check 5.
