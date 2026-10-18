@@ -1659,7 +1659,7 @@ catchers, ground animators).
       the heading stays kept in later updates too, until the next
       `follow`, flight or cut (no Daventry script needs more); each
       update logs how far off Connor it is.
-    - **3n-4, Q97: the flight's last update and the cut.** The height
+    - **3n-4, Q97: the flight's last update and the cut** (**done** 2026-10-18). The height
       rule as "not moved": lifted at once if under the ground + 1,400,
       snapped within 100 of the wanted height, otherwise kept (the
       stand-in wording goes). The log gives the floor-grid ground under

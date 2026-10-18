@@ -1515,3 +1515,11 @@ This replaces "snap within 100, else 0.5 of the gap every update" (the 0.5 was h
 | The script's place and view stand until the next camera update (no update of its own) | `camera.md` "`move KQCamera` while following" (Q99 d), built by 3n-1 | `camera-3n3-wheel.log`: cue 4's shot unchanged until the flight |
 | In that update: the tilt set at once (the view looks at the aim point), the heading not snapped | Same | `camera-3n3-wheel.log` tick 18: heading kept −0.300, +0.259 off Connor, tilt −0.846 |
 | The heading stays kept in later updates until the next `follow`, flight or cut | **Stand-in** (the swing-behind rules, open question 7, are not decoded; Q100 a) | — (no Daventry case) |
+
+### 3n-4, the flight's last update and the cut (Q97) — `crates/kq8-core/src/camera_flight.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces the 3m-4 stand-in "the height rule is not applied on the last update".
+
+| What | Source | Check |
+| --- | --- | --- |
+| A flight's last update and a cut's one update: the height rule with the aim point as not moved: lifted at once if under the ground + 1,400, snapped within 100 of the wanted height (the higher of ground + 1,400 and aim point + 1,400), otherwise kept; never eased | `camera.md` "Height above the ground" rule 2, "Camera flights and cuts" rules 3, 4 (Q97) | Unit tests `after_a_flight_or_cut_the_height_is_lifted_or_snapped_never_eased`, `the_watermill_flight`; `camera-3n4-watermill.log`: kept at 10,863.4, ground 7,650.0; `camera-3n4-wheel.log`: kept at 8,800 |

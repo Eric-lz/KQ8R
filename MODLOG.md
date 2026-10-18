@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3n-4: the height on a flight's last update and after a cut (Q97)
+
+**Changed:** `kq8-core/src/camera_flight.rs`: `settle_height` (the 3n-2 height rule with the aim point as not moved: lifted at once, snapped within 100, otherwise kept); the flight's last update and `cut` use it (`cut` now takes the ground and returns a `Cut`); the stand-in field `wanted_height` is gone; 1 new unit test, the watermill test checks "kept". Viewer `game_camera.rs`: the stand-in log wording ("would want … not applied (stand-in, not settled)") replaced by what the rule did, with the floor-grid ground under the camera.
+**Why:** A's answer to Q97 (`camera.md` "Camera flights and cuts" rules 3, 4, 7).
+**Tested how:** `cargo test --workspace` (404 pass), `cargo clippy --workspace --all-targets` clean. Viewer: the watermill (`cargo play --world Daventry --at 192408,227039,0 --frames 3000 --sound off`, `camera-3n4-watermill.log`), the mill wheel (`cargo play --world Daventry --at 186300,226000,3.1416 --hold 1,0,0 --frames 1500 --sound off`, `camera-3n4-wheel.log`).
+**Result:** Watermill flight 31/31: at (188999.0, 229341.5, 10863.4), "kept (z before it 10863.4; wanted 11400.0; the floor-grid ground here 7650.0, + 1400 = 9050.0, 536.6 under the wanted height: kept)": the ground is **not** above 9,463.4, so no lift; same spot as before. Mill wheel flight 46/46: at the spot (185000, 213300, 8800), "kept", 1,790 above the wanted 7,010 (ground 5,590.8).
+**Still broken / not tested:** Not checked by eye (nothing visible should change). No cut in Daventry's data (unit tests only).
+**Next:** 3n-5, logs for the end of a scripted walk (Q98).
+
 ## 2026-10-18 M3 step 3n-3: `move KQCamera` while following keeps its heading
 
 **Changed:** Viewer `game_camera.rs`: a `move KQCamera` while the camera follows Connor (and no flight) remembers the script's heading; the camera updates after it set the tilt at once (the view looks at the aim point, as any follow update) but keep that heading, and log how far off Connor it is; `follow`, a flight or a cut forget it. `docs/behaviour/QUESTIONS.md`: Q100 (this stand-in, and two small points from 3n-1/3n-2).

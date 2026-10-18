@@ -306,11 +306,12 @@ impl GameCam {
         self.following = false;
         self.cam.avoid = false;
         self.cam.tilt = DEFAULT_TILT;
-        let (p, from) = kq8_core::camera_flight::cut(spot, aim, roll, &mut self.view, self.places, self.aims, self.cam.range);
+        let c = kq8_core::camera_flight::cut(spot, aim, roll, &mut self.view, self.places, self.aims, self.cam.range, ground);
+        let (p, from) = (c.position, c.pulled_from);
         self.cam.position = p;
         self.show_view();
         self.previous = self.current;
-        let height = height_note(p, aim, ground);
+        let height = c.height.map_or(String::new(), height_note);
         let line = format!(
             "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3} (not drawn); places {}, aims {}{height}",
             spot[0], spot[1], spot[2],
@@ -329,7 +330,7 @@ impl GameCam {
         let Some(f) = self.flight.as_mut() else { return };
         let mut p = self.cam.position;
         let s = f.update(&mut p, &mut self.view, self.aims, self.cam.range, ground);
-        let (aim, step) = (f.aim, f.step);
+        let step = f.step;
         self.cam.position = p;
         self.show_view();
         let mut line = format!(
@@ -347,7 +348,7 @@ impl GameCam {
             line += &format!(
                 "; last update: on the spot, places on: {}{}; the flight is over, the camera stays here",
                 s.pulled_from.map_or("within the range: stays".to_string(), |d| format!("{d:.1} from the point 1400 above the aim: pulled onto the range ({:.0}, {:.0})", self.cam.range.0, self.cam.range.1)),
-                height_note(p, aim, ground)
+                s.height.map_or(String::new(), height_note)
             );
             self.flight = None;
         }
@@ -403,17 +404,21 @@ impl GameCam {
     }
 }
 
-/// The height rule's wanted height at `p` around `aim` (logged only on a
-/// flight's last update and after a cut: STAND-IN, whether it is applied
-/// there was not settled).
-fn height_note(p: [f32; 3], aim: [f32; 3], ground: &dyn Fn(f32, f32) -> Option<f32>) -> String {
-    let floor = ground(p[0], p[1]).map_or(f32::MIN, |g| g + kq8_core::camera::MIN_HEIGHT);
-    let wanted = floor.max(aim[2] + kq8_core::camera::MIN_HEIGHT);
-    if p[2] >= wanted {
-        String::new()
-    } else {
-        format!("; the height rule would want z {wanted:.1} ({:.1} higher): not applied (stand-in, not settled)", wanted - p[2])
-    }
+/// The height rule on a flight's last update or a cut (Q97: the aim point
+/// counts as not moved), for the log.
+fn height_note((h, ground): (kq8_core::camera::HeightStep, Option<f32>)) -> String {
+    format!(
+        "; height rule, aim not moved (Q97): {} (z before it {:.1}; wanted {:.1}; the floor-grid ground here {}{})",
+        h.words(),
+        h.before,
+        h.wanted,
+        ground.map_or("none".to_string(), |g| format!("{g:.1}, + 1400 = {:.1}", g + kq8_core::camera::MIN_HEIGHT)),
+        match h.then {
+            kq8_core::camera::HeightThen::Kept if h.before > h.wanted => format!(", {:.1} above the wanted height: kept", h.before - h.wanted),
+            kq8_core::camera::HeightThen::Kept => format!(", {:.1} under the wanted height: kept", h.wanted - h.before),
+            _ => String::new(),
+        }
+    )
 }
 
 /// Makes the game camera. `start`: where the world script put `KQCamera`
