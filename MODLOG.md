@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 4a: the user's checks of the chest remark and "This will not work" (docs only)
+
+**Changed:** `docs/FEATURES.md`, `STATUS.md`: the checks recorded. No code.
+**Why:** The user tested the two remarks not checked before.
+**Tested how:** By the user, by eye and ear: clicking an empty chest; launching with `--item <type>` and clicking an object that doesn't take it.
+**Result:** As expected: "'Tis empty." and "This will not work.". (The last code path that had never run in our own tests, `WONT_WORK`, is now checked.)
+**Still broken / not tested:** Q104 (held turn key; the turn after a click) and Q103 still open. Other characters' voices not heard (no one else speaks outside conversations).
+**Next:** A answers Q104 and Q103.
+
 ## 2026-10-18 M4 4a: the user's checks of remarks and speech (docs only)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q104. `STATUS.md`, `docs/FEATURES.md`: the checks. No code.

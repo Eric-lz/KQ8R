@@ -281,7 +281,8 @@ and speech, 4a).
 - **The user's checks of 4a (2026-10-18):** like the original: the
   sign (turn, line, caption, background drop, mouth; forward doesn't
   stop it), a movement key stops a tombstone's reading, "too far", no
-  click beyond the draw distance. Different: (1) a **held** turn key
+  click beyond the draw distance; an empty chest's "'Tis empty."; "This
+  will not work." with an item in hand (`--item`). Different: (1) a **held** turn key
   cancels our automatic turn; in the original only a new press does;
   (2) tombstones that `speak Connor Connor` don't turn him in ours, all
   do in the original (the click turn of `doors.md` rule 16 is not

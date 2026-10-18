@@ -313,8 +313,9 @@ and mouth; a movement key stopping a tombstone's reading; "too far".
 Two differences, waiting for Q104: a held turn key stops our automatic
 turn (in the original only a new press does), and tombstones that speak
 "to Connor" don't turn him in ours (the turn after a click, `doors.md`
-rule 16, is not built). Not checked by the user: "This will not work.",
-the chests' remark.
+rule 16, is not built). Also checked by the user (2026-10-18): an empty
+chest says "'Tis empty."; with an item in hand (`--item`) an object that
+doesn't take it gives "This will not work."
 
 - **Lines:** the message files (`.MSG`), voices and lip-sync files are
   read (`kq8 msg-verify` matches the note's counts: 2,080 lines, 476
