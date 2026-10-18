@@ -73,7 +73,7 @@ use crate::named_anim::{NamedAnimPlayer, Request as AnimRequest, Started};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
 use crate::sound::Start;
 use crate::stats::{ConnorStats, Stats};
-use crate::talk::{Finished, Speak, Talk, CONNOR};
+use crate::talk::{Finished, Speak, Talk, CONNOR, TOO_FAR, WONT_WORK};
 use kq8_data::msg::Tuple;
 use crate::trap::{Trap, Visitor};
 
@@ -1791,6 +1791,39 @@ impl WorldState {
         "0".into()
     }
 
+    /// Connor's built-in remarks (`talking.md` rule 19): one line through
+    /// his queue, without turning. Returns a line for the log.
+    pub fn connor_remark(&mut self, t: Tuple, what: &str) -> String {
+        let s = Speak { issuer: CONNOR.to_string(), first: t, last: t.seq, nofade: false };
+        let line = self.talk.queue(&s, self.now());
+        format!("Connor's \"{what}\" remark {t}: {line}")
+    }
+
+    /// A chest's `Take…` / `Empty…` remark (`talking.md` rule 19,
+    /// `chests.md` rules 8-10): its six numbers are the tuple and the last
+    /// sequence (`End`, 0: the run). Connor turns to the chest first
+    /// unless it has `doNotPointAt`, then the 0.5 s wait (rule 7: only in
+    /// Wait or Move); otherwise queued at once (our reading).
+    fn chest_remark(&mut self, c: &ActiveChest, r: crate::chest::Remark) -> String {
+        let [f, n, v, k, q, end] = r.0;
+        let first = Tuple::new(f as u16, n as u8, v as u8, k as u8, q as u8);
+        let last = if end == 0 { self.talk.book.last_of_run(first).unwrap_or(first.seq) } else { end as u8 };
+        let s = Speak { issuer: CONNOR.to_string(), first, last, nofade: false };
+        let now = self.now();
+        let at = c.chest.placement().position;
+        let line = if c.do_not_point_at {
+            format!("doNotPointAt: no turn; {}", self.talk.queue(&s, now))
+        } else if !self.connor_can_turn {
+            format!("Connor is not in Wait or Move: no turn; {}", self.talk.queue(&s, now))
+        } else {
+            use crate::connor_auto::{AutoKind, AutoMove};
+            let why = format!("chest {} remark", c.chest.name);
+            self.requests.push(Request::ConnorAuto { auto: AutoMove::new(AutoKind::Point, [at[0], at[1]], None), at: why });
+            format!("Connor turns to face the chest at ({:.0}, {:.0}); {}", at[0], at[1], self.talk.queue_later(s, now))
+        };
+        format!("{first}…{last}: {line}")
+    }
+
     /// Lines for `talk.log` since the last call.
     pub fn take_talk_log(&mut self) -> Vec<String> {
         std::mem::take(&mut self.talk.log)
@@ -2452,8 +2485,9 @@ impl Active {
             (true, Some(it)) => {
                 let accepts = self.world.accepts_of(rules.name);
                 if !accepts.takes(&it.kind, &self.world.items.types) {
+                    let remark = self.world.connor_remark(WONT_WORK, "This will not work");
                     self.world.note(format!(
-                        "{head}; holds {} ({}): not accepted (accepts {}): Connor's \"that doesn't work\" remark (line not traced, M4); script not run",
+                        "{head}; holds {} ({}): not accepted (accepts {}): {remark}; script not run",
                         it.object,
                         it.kind,
                         describe_accepts(&accepts)
@@ -2466,7 +2500,8 @@ impl Active {
                 Ok(vec!["ConnorAction".into(), it.object.clone(), kind])
             }
             (false, _) if rules.too_far_away_action == 0 => {
-                self.world.note(format!("{head}; tooFarAwayAction 0: Connor's \"too far\" remark (line not traced, M4); nothing sent"));
+                let remark = self.world.connor_remark(TOO_FAR, "too far");
+                self.world.note(format!("{head}; tooFarAwayAction 0: {remark}; nothing sent"));
                 Err(ClickResult::TooFar)
             }
             (false, _) => Ok(vec!["ConnorAction".into(), "TooFar".into(), "TooFar".into()]),
@@ -2615,11 +2650,13 @@ impl Active {
             o.name, o.kind, o.quantity, feet[0], feet[1], feet[2]
         );
         if distance >= reach {
-            self.world.item_note(format!("{head}: OUT OF REACH: Connor's \"too far\" remark (line not traced, M4); nothing"));
+            let remark = self.world.connor_remark(TOO_FAR, "too far");
+            self.world.item_note(format!("{head}: OUT OF REACH: {remark}; nothing"));
             return ClickResult::TooFar;
         }
         if let Some(it) = item {
-            self.world.item_note(format!("{head}: holds {} ({}): items accept nothing: Connor's \"that doesn't work\" remark (M4)", it.object, it.kind));
+            let remark = self.world.connor_remark(WONT_WORK, "This will not work");
+            self.world.item_note(format!("{head}: holds {} ({}): items accept nothing: {remark}", it.object, it.kind));
             return ClickResult::Refused;
         }
         let before = self.world.items.count("Connor", &o.kind);
@@ -2655,12 +2692,14 @@ impl Active {
             feet[0], feet[1], feet[2]
         );
         if distance >= reach {
-            self.world.note(format!("{head}: OUT OF REACH: Connor's \"too far\" remark (line not traced, M4); nothing"));
+            let remark = self.world.connor_remark(TOO_FAR, "too far");
+            self.world.note(format!("{head}: OUT OF REACH: {remark}; nothing"));
             return ClickResult::TooFar;
         }
         if let Some(it) = item {
             // Rule 5: chests accept no item.
-            self.world.note(format!("{head}: holds {} ({}): chests accept nothing: Connor's \"that doesn't work\" remark (M4)", it.object, it.kind));
+            let remark = self.world.connor_remark(WONT_WORK, "This will not work");
+            self.world.note(format!("{head}: holds {} ({}): chests accept nothing: {remark}", it.object, it.kind));
             return ClickResult::Refused;
         }
         let at = format!("chest {name}");
@@ -2715,7 +2754,7 @@ impl Active {
                     None => format!("remembered item {remembered:?} no longer exists"),
                 };
                 let take = match c.chest.settings.take.filter(|r| r.said()) {
-                    Some(r) => format!("; Take remark {:?}{} (line M4)", r.0, self.turn_note(&c)),
+                    Some(r) => format!("; Take remark {}", self.world.chest_remark(&c, r)),
                     None => "; no Take remark".into(),
                 };
                 self.world.chests[i].chest.state = ChestState::Empty;
@@ -2723,19 +2762,13 @@ impl Active {
             }
             ChestState::Empty => {
                 let empty = match c.chest.settings.empty.filter(|r| r.said()) {
-                    Some(r) => format!("Empty remark {:?}{} (line M4)", r.0, self.turn_note(&c)),
+                    Some(r) => format!("Empty remark {}", self.world.chest_remark(&c, r)),
                     None => "no Empty remark: nothing".into(),
                 };
                 self.world.note(format!("{head}: IN REACH: click (empty): {empty}"));
             }
         }
         ClickResult::Chest { before, after: self.world.chests[i].chest.state }
-    }
-
-    /// Before a chest's remark Connor turns to face it, unless
-    /// `doNotPointAt` (chests.md rules 8-10); not done yet.
-    fn turn_note(&self, c: &ActiveChest) -> &'static str {
-        if c.do_not_point_at { "" } else { "; Connor would turn to face the chest (not done: his states not traced)" }
     }
 
     /// Lines for `items.log` since the last call.
@@ -3588,7 +3621,7 @@ mod tests {
         let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
         assert_eq!(r, ClickResult::Chest { before: ChestState::Empty, after: ChestState::Empty });
         let log = a.take_log().join("\n");
-        assert!(log.contains("Empty remark [0, 109, 14, 33, 1, 1]"), "{log}");
+        assert!(log.contains("Empty remark 0 109 14 33 1…1: "), "{log}");
         assert_eq!(a.world.items.objects.len(), 1, "no second item");
     }
 

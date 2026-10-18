@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-5: Connor's own remarks; cutting his line short
+
+**Changed:** `kq8-core/src/talk.rs`: `TOO_FAR` (0 0 0 1 1), `WONT_WORK` (0 0 0 4 1), `cut_short` (rule 16; 1 unit test). `active.rs`: the "too far" and "This will not work" clicks (doors, scripted objects, buildings, items, chests) now say their line instead of only logging it; a chest's `Take…`/`Empty…` remark is said, with the turn to the chest unless `doNotPointAt` (then the 0.5 s wait); `connor_remark`, `chest_remark`. Viewer: a press of forward, back, a turn key or Jump (also `--jump`, `--turn`) and any click in the world (also `--click`, `--aim`) cut Connor's line short unless it has `#`; not during `handsOff` (`connor_view.rs`, `door_view.rs`). `docs/behaviour/QUESTIONS.md`: Q103 (e). Provenance.
+**Why:** `talking.md` rules 16, 19; `chests.md` rules 8-10.
+**Tested how:** `cargo test --workspace` (418 pass), clippy clean. Viewer (all `--sound off`): the chest, `cargo play --world Daventry --at 202336,262000,1.5708 --click smlchst3,10 --click smlchst3,40 --click smlchst3,80 --turn 105 --frames 2000` (`talk-4a5-chest.log`); a tombstone cut short, `cargo play --world Daventry --at 201000,178380,0 --click tomb2.01,20 --turn 45 --frames 1500`; too far, `cargo play --world Daventry --at 195000,178380,0 --click tomb2.01,20 --frames 900`.
+**Result:** Chest: the 3rd click (update 80) turns Connor to `smlchst3` (`connor.log` from update 82), 0.5 s later "'Tis empty." (`GAME/ENGLISH/A000310E.0X1`, 0.994 s, `#`). Tombstone (`tmbstn1.cs`, 1000 44 14 0 1, no `#`, 11.971 s): the `--turn` press at update 45 cut it at 1.667 s; `sound.log`: the voice stopped, ducking off; no `TalkComplete`. Too far (distance 7,435, reach 4,700): "'Tis beyond my reach." (`GAME/ENGLISH/A0000000.011`, 1.736 s), no turn, `TalkComplete` to nobody.
+**Still broken / not tested:** Not heard or seen by eye. "This will not work" not reached in a run (needs an item in hand that the target refuses; unit-test code path shared with "too far"). A press during a `#` line is logged as "not cut short" (unit test; not reached in a run). A chest with `doNotPointAt`, or Connor not in Wait or Move: queued at once (our reading, Q103 e). The Daventry monster-death remark and the inventory remarks are not built (no monsters die, no inventory screen).
+**Next:** 4a-6, Connor's mouth.
+
 ## 2026-10-18 M4 step 4a-4: captions on screen
 
 **Changed:** Viewer `talk_view.rs`: `Speech` keeps the caption (the issuer that showed it, the text); `setup_caption` / `caption_draw`: a panel at the bottom of the window, shown while the line's queue talks, hidden when it runs empty; each change in `viewer.log`. `main.rs`: the two systems. Provenance.

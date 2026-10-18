@@ -1591,3 +1591,14 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | --- | --- | --- |
 | The line's text (stage directions out) shown while its queue talks, if `Options::Captions` is true; hidden when that queue is empty | `talking.md` rules 3, 10–11 | Sign run `viewer.log`: shown at update 38, hidden after the line |
 | The panel's look: Bevy's font, 20 px, white on a 60% black band, 80% wide, 40 px above the bottom | **Stand-in** (`talking.md` open question 4: the GUI is not studied) | — |
+
+### 4a-5, Connor's own remarks; cutting a line short — `crates/kq8-core/src/{talk,active}.rs`, `crates/kq8-viewer/src/{connor_view,door_view,sound_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Out of reach with `tooFarAwayAction` 0: 0 0 0 1 1 through Connor's queue, no turn | `talking.md` rule 19, `clicking.md` rule 10 | Too-far run: `A0000000.011`, 1.736 s |
+| An item not taken: 0 0 0 4 1, no turn | `talking.md` rule 19, `clicking.md` rule 12 | Code path only (shares `connor_remark` with "too far") |
+| A chest's `Take…`/`Empty…` remark: `Msg Noun Verb Case Seq` and `End` as the last sequence; Connor turns to the chest unless `doNotPointAt`, then 0.5 s | `talking.md` rule 19, `chests.md` rules 8–10 | Chest run: turn from update 82, "'Tis empty." at 5.867 s; unit test (empty remark wording) |
+| `doNotPointAt`, or Connor not in Wait or Move: no turn and no wait | **Our reading** (Q103 e) | — |
+| A press of forward, back, a turn key or Jump, or a click in the world, stops Connor's line as `clearSpeak Connor` unless it has `#`; releases don't count; `handsOff` swallows them | `talking.md` rule 16, `anim-scripts.md` rule 21 | Tombstone run: cut at 1.667 of 11.971 s; unit test `only_lines_without_the_mark_are_cut_short` |
+| The test options `--turn`, `--jump`, `--click`, `--aim` count as presses / clicks | **Our choice** (test tools) | Tombstone run |

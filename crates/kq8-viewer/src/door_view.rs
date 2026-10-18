@@ -77,6 +77,9 @@ pub struct DoorSim {
     item: Option<Item>,
     /// Objects clicked since the last update, with how (mouse, test).
     pending: Vec<(String, String)>,
+    /// Clicks in the world since the last update, picked or not, for
+    /// `talking.md` rule 16 (M4 4a-5).
+    world_clicks: Vec<String>,
     log: Log,
     /// `traps.log`; `None` if it could not be made.
     trap_log: Option<Log>,
@@ -605,7 +608,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, item, pending: Vec::new(), world_clicks: Vec::new(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -965,6 +968,8 @@ pub fn door_click_input(
     if due.is_none() && !buttons.just_pressed(MouseButton::Left) {
         return;
     }
+    // talking.md rule 16: any click in the world counts, picked or not.
+    sim.world_clicks.push(if due.is_some() { "test --aim click".to_string() } else { "mouse click".to_string() });
     let Ok((camera, at)) = camera.single() else { return };
     // Bevy (x, y, z) = game (x, z, -y) / 100, so back: (x, -z, y) x 100.
     let to_game = |v: Vec3| [v.x, -v.z, v.y];
@@ -1010,7 +1015,7 @@ pub fn door_click_input(
 /// events, door movements; then the door colliders are moved.
 pub fn door_step(
     sim: Option<ResMut<DoorSim>>,
-    connor: Option<Res<ConnorSim>>,
+    connor: Option<ResMut<ConnorSim>>,
     colliders: Option<ResMut<ObjectColliders>>,
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
@@ -1025,6 +1030,17 @@ pub fn door_step(
     let updates = sim.active.world.updates;
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut click_at.0).into_iter().partition(|(_, n)| updates >= *n);
     click_at.0 = later;
+    // talking.md rule 16 (M4 4a-5): presses and clicks since the last
+    // update cut Connor's line short unless it has '#'; handsOff
+    // swallows them (anim-scripts.md rule 21).
+    let mut connor = connor;
+    let presses = connor.as_mut().map(|c| std::mem::take(&mut c.cut_presses)).unwrap_or_default();
+    let clicks: Vec<String> = std::mem::take(&mut sim.world_clicks).into_iter().chain(due.iter().map(|(n, _)| format!("test --click {n}"))).collect();
+    let hands_off = connor.as_ref().is_some_and(|c| c.hands_off);
+    for why in presses.into_iter().chain(clicks.into_iter().filter(|_| !hands_off)) {
+        let now = sim.active.world.now();
+        sim.active.world.talk.cut_short(&why, now);
+    }
     for (name, _) in due {
         let line = format!("update {updates}: test --click: clicks {name}");
         shared.log.lock().unwrap().summary(&line);

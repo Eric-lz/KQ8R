@@ -71,6 +71,10 @@ impl Controls {
 /// Connor's mover, walker, drawing and logs.
 #[derive(Resource)]
 pub struct ConnorSim {
+    /// Presses that cut his line short (`talking.md` rule 16, M4 4a-5):
+    /// forward, back, a turn key or Jump, not during `handsOff`; taken
+    /// by the door simulation.
+    pub cut_presses: Vec<String>,
     pub mover: Mover,
     pub walker: Walker,
     pub intent: Intent,
@@ -372,6 +376,7 @@ pub fn spawn_connor(
         phase_step: 0.0,
         updates: 0,
         jump_pressed: false,
+        cut_presses: Vec::new(),
         jump_start_z: None,
         test_turn: 0,
         hold_run_set: false,
@@ -489,6 +494,9 @@ pub fn connor_keys(
         if pressed && sim.hands_off {
             continue;
         }
+        if pressed {
+            sim.cut_presses.push(format!("{what:?} pressed"));
+        }
         let cleared = sim.walker.key_event(what, pressed);
         if cleared != (false, false) {
             let block = match cleared {
@@ -506,11 +514,17 @@ pub fn connor_keys(
     let run_pressed = c.run.is_some_and(|k| keys.just_pressed(k));
     if c.jump.is_some_and(|k| keys.just_pressed(k)) {
         sim.jump_pressed = true;
+        if !sim.hands_off {
+            sim.cut_presses.push("Jump pressed".into());
+        }
     }
     let due = jump_at.0.len();
     jump_at.0.retain(|n| sim.updates < *n);
     if jump_at.0.len() < due {
         sim.jump_pressed = true;
+        if !sim.hands_off {
+            sim.cut_presses.push("test --jump: Jump pressed".into());
+        }
         let line = format!("connor update {}: test --jump: Jump pressed", sim.updates);
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
@@ -531,6 +545,9 @@ pub fn connor_keys(
         turn_at.0 = None;
         sim.test_turn = t;
         sim.repeat = Some((None, MoveKey::Turn));
+        if !sim.hands_off {
+            sim.cut_presses.push("test --turn: turn pressed".into());
+        }
         let cleared = sim.walker.key_event(MoveKey::Turn, true);
         let side = if t > 0 { "left" } else { "right" };
         let line = format!("connor update {}: test --turn: {side} pressed and held; blocks cleared (forward, back): {cleared:?}", sim.updates);

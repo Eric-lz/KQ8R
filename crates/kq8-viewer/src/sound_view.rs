@@ -189,7 +189,7 @@ pub fn sound_step(
                 }
                 VoiceOrder::Stop { line } => {
                     if let Some(id) = sim.voices.remove(&line) {
-                        sim.system.stop(id, &format!("line #{line} cut short (clearSpeak)"));
+                        sim.system.stop(id, &format!("line #{line} cut short (clearSpeak or a press, talking.md rules 15-16)"));
                     }
                 }
             }

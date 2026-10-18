@@ -52,6 +52,10 @@ pub const TEXT_MIN_SECONDS: f64 = 1.0;
 pub const DUCK: f32 = 0.2;
 /// Connor's object name (rule 5: talker 4).
 pub const CONNOR: &str = "Connor";
+/// Rule 19: "'Tis beyond my reach." (a click out of reach).
+pub const TOO_FAR: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 1, seq: 1 };
+/// Rule 19: "This will not work." (an item something doesn't take).
+pub const WONT_WORK: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 4, seq: 1 };
 
 /// A line's voice file, found by the caller.
 #[derive(Debug, Clone, PartialEq)]
@@ -312,6 +316,22 @@ impl Talk {
         line
     }
 
+    /// Rule 16: the player pressed a movement key, a turn key or Jump, or
+    /// clicked in the world (`why`): Connor's line stops as `clearSpeak
+    /// Connor` would, unless it has the "no stop" mark (`#`). Nothing
+    /// when he says nothing. (He is never in a conversation yet.)
+    pub fn cut_short(&mut self, why: &str, now: f64) -> Option<String> {
+        let p = self.playing(CONNOR)?;
+        let line = if p.no_stop {
+            format!("Connor: {why}: line #{} {} has '#': not cut short (rule 16)", p.id, p.tuple)
+        } else {
+            let id = p.id;
+            format!("Connor: {why}: line #{id} cut short (rule 16): {}", self.clear(CONNOR, now))
+        };
+        self.note(now, line.clone());
+        Some(line)
+    }
+
     /// One update at game time `now`: waits that ran out queue their slot;
     /// lines whose time is up end and the next start; mouth changes due
     /// are sent. `exists`: whether an object of that name is in the world.
@@ -516,6 +536,20 @@ mod tests {
         assert!(t.events.iter().any(|e| matches!(e, TalkEvent::End { cut: true, .. })));
         assert!(run(&mut t, 2, 30).is_empty());
         assert!(!t.is_talking("Connor"));
+    }
+
+    #[test]
+    fn only_lines_without_the_mark_are_cut_short() {
+        let mut t = talk();
+        // 55/1 has '#', 55/2 not.
+        t.queue(&speak("Connor", 55, 1, 2), 0.0);
+        run(&mut t, 0, 1);
+        assert!(t.cut_short("forward pressed", 0.0).unwrap().contains("not cut short"));
+        run(&mut t, 1, 7);
+        assert!(t.cut_short("click", 0.4).unwrap().contains("cut short (rule 16)"));
+        assert!(t.events.iter().any(|e| matches!(e, TalkEvent::End { cut: true, .. })));
+        assert!(run(&mut t, 7, 20).is_empty(), "no TalkComplete");
+        assert_eq!(t.cut_short("click", 2.0), None, "nothing to cut");
     }
 
     #[test]
