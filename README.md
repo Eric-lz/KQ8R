@@ -48,16 +48,13 @@ items. The goal is the whole game; see the roadmap in
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 - **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
 - **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls, but not uphill (logs only so far); pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
-- **Cutscenes**: scripts take the controls, place and aim the camera, walk or turn Connor, then give control back (bricks, watermill; logs only so far).
+- **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill; logs only so far).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
 
 ### What doesn't work yet
 
-- Cutscene camera flights (`flyToCamLoc`) don't happen yet.
-- Connor follows a pushed barrel through a wall (in the original the wall stops him).
-- After the windmill tumble Connor can't jump.
 - No story, talking, inventory screen, fighting or saving.
 - No dialogue.
 - No people or monsters.

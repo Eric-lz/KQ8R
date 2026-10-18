@@ -1,7 +1,7 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of A's session answering Q94–Q96 and studying the camera flights. Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -12,48 +12,26 @@ end of A's session answering Q94–Q96 and studying the camera flights. Read wit
   objects, traps, items, chests, scripted objects, clicking, sound
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
-- **New 2026-10-18 (B, M3 3l): A's answers to Q84–Q93 are built**, one
-  commit per step, each checked in the logs (none yet by eye):
-  - 3l-1 (Q92): no pop-up at the bricks: a `move Connor` from the `Push`
-    script is followed by the rest of his update, so he lands on the
-    cave floor at once (z 14,837 throughout `push`); a timed `move`
-    drops one gravity step (`objects.md` "(d)").
-  - 3l-2 (Q93): `KQConner::walkTo` / `runTo`, `pointAndCue`, `walkExit`
-    (new `kq8-core/src/connor_auto.rs`): the watermill room's cutscene
-    runs cues 1–6 and gives control back 4.2 s after Connor's turn.
-    **Q94 asked** (head-on during a scripted walk, and three smaller
-    details; stand-ins in place, none reached in Daventry).
-  - 3l-3 (Q89): `handsOff` in full (run key, mouse look, presses
-    swallowed, held keys sent again at 0, F11 mode ends), `move
-    KQCamera` aims the camera by its angles, `follow Connor` starts
-    from where the camera is (gradual turn back above 0.4 rad),
-    `setThirdPerson` as a paired toggle (logged; no first person).
-  - 3l-4 (Q87, Q88, Q91): every object touched is told, in load order,
-    ties keep the later-tested; barrels move and are never stopped
-    (they stop only uphill); the hay bale slides along walls.
-  - 3l-5 (Q84): Connor turns while `crash` plays; a glancing jump hit
-    (all `backJump` hits) keeps gravity off until the jump ends.
-  - 3l-6 (Q85, Q86): the six torches/birds/fish without `currAnimName`
-    start in step, and a first-update start moves at once; the bit 8
-    random speed replaces the `loop=` speed; levels: second stat +5,
-    third +2; "below 0" checked before the cap; `Die` always has `$3`.
-  - 3l-7 (Q90): `loadKQ` while playing calls the new object's `Init`
-    at once; a name in use is refused with an error.
-- **New 2026-10-18 (A): Q94–Q96 answered, camera flights studied**
-  (docs only, not built yet):
-  - Q96: `KQConner::endJump` finishes the jump (gravity on, steps 325)
-    and the windmill's `setState … special` then replaces it: no Fall,
-    no hanging. `JumpDir` is 1 only in a back flip (`anim-scripts.md`
-    rules 28–30).
-  - Q95: a wall found before the barrel in the collision list is still
-    handled after the push, from the 0.95 point, never head-on: Connor
-    stays at the wall (`pushing.md` rule 4.3).
-  - Q94: `walkTo` details; rule 24 corrected (he plays `Left`/`Right`
-    and starts walking before the turn ends; `anim-scripts.md` 24–25).
-  - Camera flights: `camera.md` "Camera flights and cuts" (straight
-    line, constant speed, aim 1,400 above the point, a pull-in on the
-    last update), with numbers for the watermill and the mill wheel.
-    The end-of-flight jump was confirmed by the user in the original.
+- **New 2026-10-18 (B, M3 3m): A's answers to Q94–Q96 and the camera
+  flights are built**, one commit per step, each checked in the logs
+  (none yet by eye):
+  - 3m-1 (Q96): `KQConner::endJump` / `JumpDir`: the windmill tumble
+    finishes the jump, Special replaces it (no Fall), gravity stays on;
+    after cue 300 Connor drops to the floor and can jump again. A trap's
+    script now counts as inside Connor's update.
+  - 3m-2 (Q95): a barrel pushed into the pub goes into the wall while
+    the wall stops Connor; then Push → Move → `Stop` with the block.
+  - 3m-3 (Q94): scripted walks play `Stop`, `Left`/`Right`, then `Walk`
+    during the turn; a wall block no longer stops them. The watermill
+    walk now arrives 7 updates sooner (no slow start from standing).
+  - 3m-4: camera flights and cuts (`addCamLoc`, `flyToCamLoc`,
+    `cutToCamLoc`; new `kq8-core/src/camera_flight.rs`): the watermill's
+    flight (31 updates, the jump closer at the end) and the mill wheel's
+    (46). **Q97 asked** (the height on a flight's last update).
+- Before that (3l, 2026-10-18): A's answers to Q84–Q93 (the bricks
+  without a pop-up, the watermill cutscene, `handsOff`, pushing barrels
+  and the hay bale, turning during `crash`, torches in step, levels,
+  `loadKQ` while playing); see MODLOG.
 - **New 2026-10-18 (A): remarks and speech studied** (`talking.md`,
   not built): message and voice files, the per-character queue,
   captions, ducking (`nofade`), the mouth, `TalkComplete` and
@@ -61,7 +39,8 @@ end of A's session answering Q94–Q96 and studying the camera flights. Read wit
   Conversations are not studied yet. The turn, the 0.5 s wait, the
   ducking, talking while walking and the mouth were confirmed by the
   user in the original.
-- **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
+- **Later for A:** Q97 (a flight's last update: the height);
+  conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
   Connor against monsters; Q27.
 
@@ -110,7 +89,7 @@ milestone: **M3, Daventry comes alive**.
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (263 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (278 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump, pushing),
   `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
@@ -119,7 +98,8 @@ milestone: **M3, Daventry comes alive**.
   `connor_update.rs` (one update of Connor), `collide.rs` (ball stack,
   building BSP sweep, object box sweep, type/mask rule, line tests),
   `water.rs` (the wading test). World: `camera.rs` (the following camera
-  with the obstacle check), `script.rs` (the `.cs` script runner),
+  with the obstacle check), `camera_flight.rs` (cutscene camera flights
+  and cuts), `script.rs` (the `.cs` script runner),
   `events.rs` (`sendEvent` queue), `door.rs`, `chest.rs`, `item.rs`
   (item objects and inventories), `trap.rs`, `click.rs` (picking and
   reach), `named_anim.rs` (an object's named animations, e.g. `open`),
@@ -144,7 +124,7 @@ milestone: **M3, Daventry comes alive**.
   overrides `Options.cs`'s `useDynamicLighting`; `--sound on|off` the
   sound card (`sound_view.rs`). The full option list with descriptions is in
   `docs/FEATURES.md` ("Launch options"). Test options: `--frames N`, `--lift N`, `--at X,Y,H`,
-  `--hold F,T,R[,N]`, `--jump N`, `--turn N[,1|-1]`, `--click NAME,N`
+  `--hold F,T,R[,N]`, `--jump N` (repeatable), `--turn N[,1|-1]`, `--click NAME,N`
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
   with the line-of-sight test), `--item TYPE`. Haze and drawing: the
   ground's material `ground_haze.rs`, walls `building_light.rs`, models
@@ -227,28 +207,25 @@ milestone: **M3, Daventry comes alive**.
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
   ear by the user. World music (3h-5) too.
-- Tests: 385 unit tests pass (105 + 264 + 5 + 11), 2026-10-18.
+- Tests: 399 unit tests pass (105 + 278 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
-- **The user's checks of 3l (2026-10-18):** the bricks, the hay bale
-  and turning during the stumble match the original; the watermill
-  cutscene runs (its camera flight is missing). Two problems found:
-  Connor follows a pushed barrel through a wall (the original stops him
-  at the wall: **Q95**, needs A); the windmill tumble (`miltrap1.cs`)
-  showed a bow because `KQConner::getDoMode` was unknown to us, so the
-  script read 1 (bow); **fixed 2026-10-18** (`getDoMode` answers 4,
-  empty hands; checked by eye by the user); `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
-  The user also found that after the tumble Jump doesn't work: the jump
-  into the sails never ends in our mover (gravity off, state `jump`, he
-  hangs 400 above the floor) because `endJump` is a stub. A answered
-  Q95 and Q96 on 2026-10-18; not built yet.
-- **Next step, suggested:** for B: `endJump` / `JumpDir` first (it
-  blocks play at the windmill), then the push/wall order (Q95), the
-  `walkTo` corrections (Q94), the camera flights; after that: cues of
-  scenery animations, `loadKQ` with a name or place while playing
-  (barrels and boards breaking, M5), remarks, inventory screen (M4).
-  The brightness setting (rule 17) is still not built.
+- **To check by eye (3m, 2026-10-18):** the windmill tumble (jump
+  into the sails: no hanging, Jump works after), a barrel pushed into the
+  pub (Connor stops at the wall), the watermill room's cutscene (Connor
+  turns with `Left`, the camera flies and jumps closer at the end), the
+  mill wheel's flight. Test commands in the MODLOG entries 3m-1 to 3m-4.
+- **Stand-ins of 3m** (not traced; none reached in Daventry except the
+  first): the height on a flight's last update is not applied (Q97); a
+  state request refused during an unfinished jump is tried again every
+  update; objects later in the collision list after a push are not
+  tested; `follow Connor` during a flight ends it.
+- **Next step, suggested:** for A: Q97. For B: cues of scenery
+  animations, `loadKQ` with a name or place while playing (barrels and
+  boards breaking, M5), remarks and speech (`talking.md`, studied by A),
+  inventory screen (M4). The brightness setting (rule 17) is still not
+  built.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), ducking under speech, pause, speech, and
   `setActiveCamera` / `makeActive` for sound objects.
@@ -258,9 +235,8 @@ milestone: **M3, Daventry comes alive**.
   `checkInventory` by id number (Q62 b) not built.
 - Camera, still missing: the original's own automatic swing back behind
   Connor when he turns (not built; while walking the leash already makes
-  the camera trail behind him), first person (F2), shake and camera
-  flights (the watermill's cue 4 flight doesn't happen); the roll of
-  `move KQCamera` is not drawn. Our camera updates every tick; the
+  the camera trail behind him), first person (F2), shake; the roll of
+  `move KQCamera` and of flights is not drawn (logged). Our camera updates every tick; the
   original only while Connor moves or the camera is used (Q53 d).
 - Cutscenes: no GUI panels to hide and no spinning-mask icon during
   `handsOff`. A request from a cue reaches Connor one update after the
@@ -294,8 +270,8 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- For B (answered 2026-10-18, not built): Q94, Q95, Q96 (see "Where
-  we are").
+- For A (asked 2026-10-18 by B, 3m-4): Q97, the camera's height on a
+  flight's last update (and after a cut). Stand-in: not applied.
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
@@ -320,8 +296,8 @@ milestone: **M3, Daventry comes alive**.
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- All others are answered or closed (Q84–Q93 answered 2026-10-17 and
-  built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
+- All others are answered or closed (Q94–Q96 answered and built
+  2026-10-18; Q84–Q93 answered 2026-10-17 and built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
   by B in 7k; Q75–Q78 answered by A and built
   2026-10-16; Q54, Q60–Q64, Q70–Q74 built 2026-10-16; Q73 checked;
   Q68–Q69 answered and built 2026-10-16; Q65–Q67 answered and built, the

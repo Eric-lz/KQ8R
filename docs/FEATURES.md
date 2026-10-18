@@ -179,9 +179,10 @@ objects don't stop it, as in the original. Checked in the logs
   plays his step back. Barrels move too: nothing stops them (they go
   through walls, as in the original), but a barrel pushed uphill stays.
   Checked in the logs (`connor.log`); the hay bale checked by eye by the
-  user (2026-10-18: like the original). Barrels go through walls as in
-  the original, but Connor follows them through the wall; in the original
-  the wall stops him (Q95, not built). Walking into Daventry's bricks (by the waterfall) runs
+  user (2026-10-18: like the original). A barrel pushed into the pub
+  goes into the wall while the wall stops Connor; once his step no
+  longer reaches it he stops pushing and stands at the wall (Q95, M3
+  3m-2; checked in the logs only). Walking into Daventry's bricks (by the waterfall) runs
   their puzzle to the end (M3 step 3k): Connor's push animation, the
   table and bricks hidden then shown, the bricks go down, the waterfall
   and its sound are replaced (so the way behind it is open), the water
@@ -196,7 +197,22 @@ objects don't stop it, as in the original. Checked in the logs
   `walkTo` / `runTo` / `pointAndCue` walk or turn Connor and cue the
   script. The watermill room's cutscene now ends and gives control back
   4.2 s after Connor's turn, as A traced. Checked by eye by the user
-  (2026-10-18), apart from the camera flight, which is not built.
+  (2026-10-18), before the camera flight was built. During a scripted
+  turn Connor plays `Stop`, then `Left`/`Right`, then walks while the
+  turn finishes (Q94, 3m-3; logs only).
+- **Camera flights and cuts** (2026-10-18, M3 3m-4): `addCamLoc`,
+  `flyToCamLoc` and `cutToCamLoc`: the camera flies in a straight line
+  at an even speed to the spot nearest it, turning to look just above
+  the aim point, and on the last update jumps onto the range around it
+  (the watermill room: 31 updates, then about 1,227 closer; the mill
+  wheel: 46). Checked in the logs (`camera.log`) against A's numbers;
+  not checked by eye. The height on the last update is a stand-in (Q97).
+- **The windmill tumble** (2026-10-18, M3 3m-1): jumping into the
+  windmill's sails plays the tumble without a weapon; the script's
+  `KQConner::endJump` finishes the jump, so he stands on the floor
+  afterwards and can jump again; `KQConner::JumpDir` picks the back-flip
+  tumble after a back flip. Checked in the logs (`connor.log`); the
+  back-flip tumble in a unit test only.
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),
@@ -391,16 +407,11 @@ message that shows the usage.
   it is now A's (Q82). A back flip into a wall slides along it with
   gravity off until the flip ends (Q84 a, 3l-5; unit test only).
 - **Camera:** it doesn't swing back behind Connor by itself; no first
-  person view (F2), camera shake or camera flights (`addCamLoc`,
-  `flyToCamLoc`, `cutToCamLoc`); the camera's roll is not drawn.
+  person view (F2) or camera shake; the camera's roll is not drawn.
 - **Cutscenes:** no GUI to hide and no spinning-mask icon during
-  `handsOff`; a scripted walk that runs head-on into something uses a
-  stand-in (Q94). The windmill tumble (`miltrap1.cs`) plays the
+  `handsOff`. The windmill tumble (`miltrap1.cs`) plays the
   no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18; checked by eye by the user;
-  weapons come with M5); which tumble plays (`KQConner::JumpDir`, forward
-  or backward) is a stub (Q96). After the tumble Connor can't
-  jump and hangs about 400 above the floor: the jump he made into the
-  sails never ends, because `KQConner::endJump` is a stub (Q96 b).
+  weapons come with M5).
 - **Water:** no damage yet (poison, lava, swamp).
 - **Collision:** some objects have no box in the game's table and stay
   walk-through (as in the original, if we read it right); no ropes.

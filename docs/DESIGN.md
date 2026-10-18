@@ -1530,7 +1530,7 @@ catchers, ground animators).
       `KQCamera` cut/fly lists (`addCamLoc`, `flyToCamLoc`; logged), the
       mask icon and GUI panels (no GUI yet).
   - **3m — the answers to Q94–Q96 and the camera flights (planned
-    2026-10-18).** Study session A answered Q94–Q96 and traced the
+    2026-10-18; done 2026-10-18, 3m-1 to 3m-4; Q97 asked in 3m-4).** Study session A answered Q94–Q96 and traced the
     camera flights (2026-10-18). Four sub-steps, each with its own log
     check, MODLOG entry and commit. Order: what blocks play first.
     - **3m-1, the windmill tumble: `KQConner::endJump`, `JumpDir`**
