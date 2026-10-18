@@ -1418,6 +1418,115 @@ catchers, ground animators).
     `EndLoop` after, the waterfall swapped, `water` → `blocked`, the
     cues 5 and 10, controls back; then Connor can walk through where
     the waterfall stood.
+  - **3l — the answers to Q84–Q93 (planned 2026-10-18).** Study session
+    A answered B's questions from 3i–3k (2026-10-17) and the user checked
+    some in the original (2026-10-18). Each sub-step fixes what a
+    stand-in got wrong; each has its own log check, MODLOG entry and
+    commit. Order: most visible first.
+    - **3l-1, the pop-up at the bricks** (Q92; `pushing.md` rule 11,
+      `objects.md` "(d)" refined, `anim-scripts.md` rule 16). The `Push`
+      script runs inside Connor's update, so after its `move Connor …
+      15000` the rest of that update (a gravity step and the down pass
+      with its 325 step-down) still runs and he lands on the floor
+      (14,837) in the same update. Ours: the script runs right after his
+      update (`trap_step`), so he was drawn at 15,000 and fell.
+      **How:** the requests a `Push` call makes are marked "inside his
+      update"; a `move Connor` among them is followed at once by the
+      rest of his update: the move step's own vertical bookkeeping (one
+      gravity step, the terrain raise) and then the mover's down pass and
+      ground check (new `Mover::after_move`, `rest_of_update`), with the
+      same scene his update used. A `move Connor` from anywhere else (a
+      timed cue, outside his update) gets only the move step's
+      bookkeeping (`objects.md` "(d)": one gravity step if gravity is on,
+      the terrain raise), so he is drawn a little below the given height
+      and falls from there (cue 10 of the bricks). Log: a `connor.log`
+      line for each scripted move with the height before and after the
+      rest of the update. Test: the bricks run; `connor.log` from the
+      push to the end of `push`: z never 15,000.
+    - **3l-2, the watermill cutscene** (Q93; `anim-scripts.md` rules
+      24–27, `connor-movement.md` "Turning" rule 2). New in `kq8-core`
+      `connor.rs`: an automatic turn (3.5 rad/s, the shorter way, stops
+      exactly once the rest is under one update's turn; any player turn
+      cancels it) and a scripted walk: `KQConner::walkTo x y <who> <c>
+      <d>` / `runTo` (handsOff on, Wait, turn to face, then Move straight
+      ahead walking or running; the flat distance is fixed at the start
+      of the walk; stops when he has gone that far, back to Wait, cue);
+      the cue also comes at a head-on hit; `pointAndCue x y z <who> <c>
+      <d>` (turn, then cue; at once if already facing); `walkExit` ends a
+      walk with its cue. `active.rs`: the commands become requests; the
+      viewer sends `KQCueEvent c d` to `<who>` when Connor reports the
+      end. Log (`connor.log`, `traps.log`): each start, the turn's end,
+      the distance, the stop, the cue. Test: walk into the watermill room
+      (`--at` at the trap `walktp1`): cues 1–6 of `wtrmwalk.cs` in order
+      and `handsOff 0` at cue 6, about 4.2 s after the turn of cue 2.
+    - **3l-3, cutscene control** (Q89; `anim-scripts.md` rules 21–23,
+      `camera.md` "Shake and cutscene cameras", "What the camera looks
+      at" rule 1, "First person" rule 7). `handsOff 1`: also the run key
+      and the mouse-look button; the camera's fixed mode (F11) goes back
+      to normal; key presses swallowed, releases counted; `handsOff 0`:
+      every movement key still held is sent again as a press (which also
+      clears wall blocks as a press does). `handsOff 1 N`: N logged
+      only. `move KQCamera`: the angles set the view (rx tilt, rz
+      heading from +Y, positive anticlockwise; ry roll logged, not
+      drawn); flags bit 2 adds them to the current view. `follow Connor`
+      starts from where the camera is: pulled in or pushed out to the
+      range at once; if its view heading is more than 0.4 rad off Connor
+      it turns toward him by 1/3 of the rest per update, snapping under
+      0.063 rad (one snap on both sides, "Do not reproduce"); tilt at
+      once. `setThirdPerson`: the paired toggle's variable
+      (`<World>::SetThirdPerson::WasFirstPerson`) is kept and the
+      first-person key's lock logged (we have no first person). Test:
+      the bricks run (`camera.log`: the view heading 0.9 during the
+      shot, the turn back after cue 10) and a held key through
+      `handsOff 0` (`connor.log`).
+    - **3l-4, pushing** (Q87, Q88, Q91; `pushing.md` rules 2.5,
+      4.1–4.3, `connor-physics.md` "Against a building" step 7). In the
+      mover's sweep, every object touched is told at once (the push check
+      runs there, in the order the objects entered the world); a contact
+      replaces the kept one when its distance is ≤ the kept one's (tie:
+      the later-tested wins; the "pushable first" stand-in goes); an
+      accepted push is not recorded. Box-shaped pushables (no
+      `collisionShape`: the barrels) move by Connor's step and are never
+      stopped; ball-stack ones (the hay bale) slide like Connor (up to 3
+      retries, no head-on stop; normal z between 0 and 0.7 counts as a
+      vertical wall); after the move the ground only raises (with
+      `keepOnGround`); any height change puts it back. Test: a barrel
+      against the pub wall goes through it; uphill it stays; the hay bale
+      at an angle slides along the windmill wall; the bricks still start
+      (`connor.log`).
+    - **3l-5, turning during `crash`** (Q84; `connor-physics.md`
+      "Jumping" rule 5, "Walls"). Turn keys turn him at 1.75 rad/s while
+      `crash` plays (run crash and both jump crashes); forward, back and
+      run wait. Still no turning from a jump's start to its landing's
+      end. Q84 a: a steep hit that isn't head-on (a `backJump` hit, or the
+      cases our code can't reach yet) does not end the jump: gravity
+      stays off and steps stay 0 until the animation ends, then Fall as
+      usual (ours switched gravity on). Test: `--hold 0,0,1` run into a
+      wall with `--turn` during the crash (`connor.log`: heading changes
+      by 0.117 per update during `crash`).
+    - **3l-6, animated objects and stats** (Q85, Q86; `anim-scripts.md`
+      rules 3, 19–20, `objects.md` "Animated objects at load" rule 4).
+      First update of an animated object: (1) empty current name and a
+      waiting movement → that one starts plainly (no random part); (2)
+      else the current movement starts with `animPos` and, with `flags`
+      bit 8, the random frame and a random speed that replaces the
+      `loop=` speed; (3) the phase moves on in that same update. So the
+      six torches/fish/birds start in step. Levels: strictly more than
+      the threshold, once per event, health capped at the old level then
+      a full heal on level up; second stat +5, third +2. `Die` always
+      gets `$3` (the last weapon-hit kind, `Normal` if never hit). Test:
+      unit tests; `anim.log` (the six objects at phase 0, speed 1);
+      `doors.log` at the bricks (+50: level 2, 40 left, health 20).
+    - **3l-7, `loadKQ` while playing** (Q90; `objects.md` "Where a
+      world's objects come from" rule 6, `clicking.md` rule 22): the new
+      object's script gets `Init` at once, during the `loadKQ` line; a
+      name still used by a live object (or deleted in the same event):
+      error logged, the load refused (the original stops the game). Test:
+      unit tests; the bricks run (`doors.log`: `Init` for `waterfall2`'s
+      script if it has one).
+    - Not in 3l: first person (none yet), `follow <other object>`,
+      `KQCamera` cut/fly lists (`addCamLoc`, `flyToCamLoc`; logged), the
+      mask icon and GUI panels (no GUI yet).
 
 ### M4 — Talk, listen, use the menus
 
