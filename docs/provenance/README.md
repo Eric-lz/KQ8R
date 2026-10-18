@@ -1331,3 +1331,14 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Prepared at the start: files a script names in `loadKQ <file>` that no start-up script loads, with a place of their own | **Our method** (they were already loaded as H-key copies, M1) | `viewer.log`: 17 dormant copies |
 | A deleted sound object stops at once; the new one starts | `sound.md` rule 48; stand-in above | `sound.log` frame 665 |
 | A copy that comes in has no collider and isn't clickable | **Not done** (the H-key copies have none) | — |
+
+## The answers to Q84–Q93 (M3 step 3l)
+
+### 3l-1, no pop-up at the bricks — `crates/kq8-core/src/connor_mover.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A script's `move` of Connor: no collision tests, then one gravity step (if gravity is on) and the terrain raise | `objects.md` "(d)", refined 2026-10-17 (Q92) | Unit test `a_scripted_move_from_outside_his_update_drops_one_gravity_step`; `connor.log` update 124 |
+| A `move Connor` from a `Push` call is followed by the rest of his update (a gravity step, the down pass with its 325 step-down, the ground check), so he lands in the same update | `pushing.md` rule 11 (Q92) | Unit test `a_scripted_move_inside_his_update_lands_him_at_once`; `connor.log` updates 13–64 at z 14837 |
+| The gravity step uses the down pass's fall timer, straight down | **Our method** (the note gives "about 44" for the original's real time; ours is 36 at 15 updates per second) | — |
+| The requests a `Push` call makes count as "inside his update"; the objects he pushed stay passed through | **Our method** (the script still runs after his move, our order) | — |

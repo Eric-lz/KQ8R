@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l-1: no pop-up at the bricks (Q92)
+
+**Changed:** `kq8-core/src/connor_mover.rs`: the down pass and ground check moved into `down_and_check` (same code); new `Mover::after_move` (a script's `move`: one gravity step, the terrain raise) and `Mover::rest_of_update` (the down pass and ground check that still follow a script run inside his update); 2 new unit tests. `kq8-viewer`: `connor_view.rs` `move_to` runs them; `door_view.rs` `trap_step` marks the requests made by this update's `Push` calls as "inside his update" and gives `move_to` the same scene his update used (the pushed objects still passed through).
+**Why:** The user saw Connor, the bricks and the table rise a few units and fall back at the start of the puzzle (Q92). A's answer (`pushing.md` rule 11, `objects.md` "(d)"): the `Push` script runs inside Connor's update, so after its `move Connor … 15000` the rest of that update puts him on the floor at once; the visible table and bricks are part of his model then.
+**Tested how:** `cargo test --workspace` (372 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --frames 7000 --sound off`, `connor.log`.
+**Result:** Update 13: "moved Connor … to (156652, 303600, 15000); the move step: gravity step 36.0 -> z 14964.0; inside his update (a Push call): the rest of it: drop 108.0, step-down 325, down pass on Cave (landing) -> z 14837.0". Connor's z in every update from 13 to 64 (the whole `push`): 14837.0, never 15,000. Cue 10 (update 124, a timed cue, outside his update): put at 14964 (one gravity step below 15,000), 14856 at 125, 14837 from 126.
+**Still broken / not tested:** Not checked by eye. The cue-10 drop (about 130 units for one update) is what the note infers for the original (not checked there). The script still runs after his move, not in the middle of it; only its `move Connor` is followed by the rest of his update.
+**Next:** 3l-2, the watermill cutscene (`walkTo`, `pointAndCue`).
+
 ## 2026-10-18 The user's checks of the Q84/Q87 answers (docs only)
 
 **Changed:** `connor-physics.md` (Jumping rule 5, "Walls"): turning during `crash` confirmed; the sentence "turning runs in every state" removed and replaced by the user's rule (no turning from the start of a jump to the end of its landing). `pushing.md`: the checks recorded. `QUESTIONS.md` Q84, Q87, Q91: the user's checks added.

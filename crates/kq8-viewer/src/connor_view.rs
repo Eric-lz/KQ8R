@@ -557,20 +557,37 @@ impl ConnorSim {
 
     /// `move Connor <flags> x y z rx ry rz` from a script (M3 3k-1,
     /// `objects.md` "(d)"): his position set or added, his heading (rz)
-    /// set or added; no collision passes; the mover's state is kept.
-    /// Returns a line for the script logs.
-    pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3], at: &str) -> String {
+    /// set or added; no collision passes; the mover's state is kept. Then
+    /// the move step's own vertical bookkeeping (one gravity step, the
+    /// terrain raise; refined Q92), and when the script ran **inside his
+    /// update** (a `Push` call, `pushing.md` rule 11) the rest of that
+    /// update: the down pass and the ground check (M3 3l-1). Returns a
+    /// line for the script logs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3], at: &str, world: &dyn MoverWorld, inside: bool) -> String {
         let old = (self.mover.position, self.walker.heading);
         self.mover.position = if flags & 1 != 0 { std::array::from_fn(|k| old.0[k] + position[k]) } else { position };
         self.walker.heading = if flags & 2 != 0 { old.1 + turn[2] } else { turn[2] };
         let tilt = if turn[0] != 0.0 || turn[1] != 0.0 { " (his turn about x and y ignored: he only turns about z)" } else { "" };
+        let set = self.mover.position;
+        let drop = self.mover.after_move(world);
+        let mut rest = format!("; the move step: gravity step {drop:.1} -> z {:.1}", self.mover.position[2]);
+        if inside {
+            let r = self.mover.rest_of_update(world);
+            let on = r.hits.iter().find(|h| h.pass == "down").map_or(r.check.to_string(), |h| format!("{} ({})", h.hit.what, h.result));
+            rest += &format!(
+                "; inside his update (a Push call): the rest of it: drop {:.1}, step-down 325, down pass on {on} -> z {:.1}, on ground {}",
+                r.drop, self.mover.position[2], self.mover.on_ground
+            );
+        } else {
+            rest += "; outside his update: he falls from there";
+        }
         // No blending from the old place in the drawing.
         self.current = (self.mover.position, self.walker.heading, self.walker.phase, self.walker.bank);
         self.previous = self.current;
-        let p = self.mover.position;
         let line = format!(
-            "moved Connor from ({:.0}, {:.0}, {:.0}) heading {:.3} to ({:.0}, {:.0}, {:.0}) heading {:.3}{tilt}",
-            old.0[0], old.0[1], old.0[2], old.1, p[0], p[1], p[2], self.walker.heading
+            "moved Connor from ({:.0}, {:.0}, {:.0}) heading {:.3} to ({:.0}, {:.0}, {:.0}) heading {:.3}{tilt}{rest}",
+            old.0[0], old.0[1], old.0[2], old.1, set[0], set[1], set[2], self.walker.heading
         );
         self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
         line

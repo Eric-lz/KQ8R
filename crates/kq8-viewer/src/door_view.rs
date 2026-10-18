@@ -591,6 +591,15 @@ pub struct Deleted(pub Vec<String>);
 
 /// A collider that no longer touches anything (3f: `deleteObject`): size
 /// 0, far below the world.
+/// No ground at all (a world without terrain).
+struct NoGround;
+
+impl kq8_core::connor_mover::GroundLookup for NoGround {
+    fn ground(&self, _: f32, _: f32) -> Option<(f32, [f32; 3])> {
+        None
+    }
+}
+
 pub fn switch_off(c: &mut BoxCollider) {
     c.min = [0.0; 3];
     c.max = [0.0; 3];
@@ -614,6 +623,8 @@ pub fn trap_step(
     mut special_at: ResMut<SpecialAt>,
     mut loads: ResMut<LoadQueue>,
     mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
+    lookup: Option<Res<crate::terrain_view::GroundLookup>>,
+    buildings: Option<Res<Buildings>>,
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -647,15 +658,20 @@ pub fn trap_step(
     }
     // Scripted pushables he pushed (3j-3): their scripts get Push now,
     // right after his move (pushing.md rule 3 says mid-move: our order).
-    for name in std::mem::take(&mut connor.push_calls) {
-        if !sim.active.push_call(&name) && !connor.not_pushable.contains(&name) {
-            connor.not_pushable.push(name);
+    // What those calls ask counts as asked inside his update (3l-1): a
+    // `move Connor` among it is followed by the rest of his update.
+    let inside_from = sim.active.world.requests.len();
+    let pushed = std::mem::take(&mut connor.push_calls);
+    for name in &pushed {
+        if !sim.active.push_call(name) && !connor.not_pushable.contains(name) {
+            connor.not_pushable.push(name.clone());
         }
     }
+    let inside = inside_from..sim.active.world.requests.len();
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
     let mut camera = camera;
-    for r in std::mem::take(&mut sim.active.world.requests) {
+    for (i, r) in std::mem::take(&mut sim.active.world.requests).into_iter().enumerate() {
         let line = match r {
             Request::SetRun { run, at } => {
                 connor.set_run(run, &at);
@@ -682,7 +698,18 @@ pub fn trap_step(
                 format!("{at}: applied: Connor {line}")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
-                format!("{at}: applied: {}", connor.move_to(flags, position, turn, &at))
+                // The scene his update used; the objects he pushed this
+                // update are still passed through (pushing.md rule 3).
+                let objects = colliders.as_ref().map_or(&[][..], |c| &c.0[..]);
+                let line = match &lookup {
+                    Some(lookup) => {
+                        let scene = kq8_core::connor_mover::Scene::new(&lookup.0, buildings.as_ref().map_or(&[][..], |b| &b.0[..]), objects);
+                        scene.passed.borrow_mut().extend(pushed.iter().cloned());
+                        connor.move_to(flags, position, turn, &at, &scene, inside.contains(&i))
+                    }
+                    None => connor.move_to(flags, position, turn, &at, &NoGround, inside.contains(&i)),
+                };
+                format!("{at}: applied: {line}")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("KQCamera") => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),

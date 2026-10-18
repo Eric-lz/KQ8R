@@ -624,6 +624,44 @@ impl Mover {
         self.state = State::Fall { start_z: self.position[2] - JUMP_DEATH_OFFSET, stuck: 0 };
     }
 
+    /// A script's `move` has just set his position (`objects.md` "(d)",
+    /// refined 2026-10-17, Q92): no collision tests, but the move step's
+    /// vertical bookkeeping still runs: up by the step-up and down by the
+    /// step-down (they cancel), **one gravity step** if gravity is on, and
+    /// the terrain-only `keepOnGround` raise. Returns the gravity drop.
+    /// The gravity step is the down pass's (the same fall timer), taken
+    /// straight down.
+    pub fn after_move(&mut self, world: &dyn MoverWorld) -> f32 {
+        let mut drop = 0.0;
+        if self.use_gravity {
+            let t_prev = self.fall_timer;
+            self.fall_timer += FALL_TIMER_STEP;
+            let t = self.fall_timer;
+            drop = (GRAVITY * (t * t - t_prev * t_prev) / 2.0).min(MAX_DROP);
+            self.position[2] -= drop;
+        }
+        if let (true, Some((height, _))) = (self.keep_on_ground, world.ground(self.position[0], self.position[1])) {
+            if self.position[2] <= height {
+                self.position[2] = height;
+            }
+        }
+        drop
+    }
+
+    /// What is left of his update after a script that ran inside it moved
+    /// him (`pushing.md` rule 11: the bricks' `Push` call happens during
+    /// his across pass): the down pass (a gravity step and the step-down,
+    /// which finds a floor within 325) and the ground check. No head-on
+    /// test (a down-pass hit never gets one).
+    pub fn rest_of_update(&mut self, world: &dyn MoverWorld) -> Report {
+        let mut report = Report { check: "none", across: "none", ..Default::default() };
+        let mut hits = 0;
+        self.on_ground = false;
+        self.down_and_check(world, false, &mut hits, &mut report);
+        report.events.extend(world.take_notes());
+        report
+    }
+
     /// One update (1/15 s) with a fixed wanted movement (x, y, z change);
     /// zero while standing. Counts as moving (the Move state).
     pub fn update(&mut self, wanted: [f32; 3], world: &dyn MoverWorld) -> Report {
@@ -704,92 +742,7 @@ impl Mover {
         let target = [start[0] + wanted[0], start[1] + wanted[1], start[2]];
         report.across = self.across(world, start, target, head_on_allowed, "across", &mut hits, &mut report);
 
-        // 4. Down pass: this update's gravity drop along the pull, then
-        //    step down.
-        if self.use_gravity {
-            if -self.pull[2] < MIN_PULL_DOWN {
-                self.fall_timer = 0.0;
-            } else {
-                let t_prev = self.fall_timer;
-                self.fall_timer += FALL_TIMER_STEP;
-                let t = self.fall_timer;
-                report.drop = (GRAVITY * (t * t - t_prev * t_prev) / 2.0).min(MAX_DROP);
-            }
-        }
-        // The vertical drop projected onto the pull (Q28 a): d along a
-        // straight-down pull, d·sinθ along a slope of angle θ.
-        let start = self.position;
-        let mut end = add(start, scale(self.pull, report.drop * -self.pull[2]));
-        end[2] -= self.step_down;
-        self.position = end;
-        // Not hit: he is in the air. Going down a steep walkable slope that
-        // is often for an update or a few; the gravity brings him back
-        // before the air count reaches 5 (measured, Q32).
-        if let Some(h) = nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
-            hits += 1;
-            let normal = h.normal;
-            report.down_normal = Some(normal);
-            self.pull = down_slope(normal);
-            let angle = head_on_angle(sub(end, start), normal);
-            if normal[2] > WALKABLE_NORMAL_Z {
-                report.down = DownResult::Walkable;
-                self.on_ground = true;
-                self.fall_timer = 0.0;
-            } else {
-                report.down = DownResult::Steep;
-                if !self.use_gravity {
-                    report.events.push("steep ground: gravity switched on".into());
-                }
-                self.use_gravity = true;
-            }
-            let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
-            // "Exact hit handling": walkable landings (surface z ≥ 0.8),
-            // head-on hits and the last allowed hit stay at the contact;
-            // anything else is pushed off along the surface.
-            let result = if normal[2] >= WALKABLE_NORMAL_Z {
-                "landing"
-            } else if head_on {
-                "head-on"
-            } else if hits >= MAX_HITS {
-                "3 hits"
-            } else {
-                "glance"
-            };
-            let contact = h.position;
-            report.head_on |= head_on;
-            report.hits.push(HitRecord { pass: "down", hit: h, angle, result });
-            self.position = contact;
-            if result == "glance" {
-                let target = project_onto(end, contact, normal);
-                report.push = length(sub(target, contact));
-                self.across(world, contact, target, head_on_allowed, "down slide", &mut hits, &mut report);
-            }
-        }
-
-        // 5. Ground check (keepOnGround): at or below the ground -> on it.
-        //    Only the height changes; the fall timer is left alone. The
-        //    terrain only, as the note says.
-        let under = world.ground(self.position[0], self.position[1]);
-        report.ground = under;
-        if let (true, Some((height, normal))) = (self.keep_on_ground, under) {
-            if self.position[2] <= height {
-                self.position[2] = height;
-                if normal[2] > WALKABLE_NORMAL_Z {
-                    report.check = "walkable";
-                    self.on_ground = true;
-                } else {
-                    report.check = "steep";
-                    self.on_ground = false;
-                    self.pull = down_slope(normal);
-                    if !self.use_gravity {
-                        report.events.push("steep ground: gravity switched on".into());
-                    }
-                    self.use_gravity = true;
-                }
-            } else {
-                report.check = "above";
-            }
-        }
+        self.down_and_check(world, head_on_allowed, &mut hits, &mut report);
 
         // The Fall state (connor-physics.md "Falling off an edge").
         if let State::Fall { start_z, stuck } = self.state {
@@ -829,6 +782,98 @@ impl Mover {
         }
         report.events.extend(world.take_notes());
         report
+    }
+
+    /// Steps 4 and 5 of an update: the down pass (this update's gravity
+    /// drop along the pull, then the step-down, against the terrain,
+    /// buildings and objects) and the ground check (keepOnGround).
+    fn down_and_check(&mut self, world: &dyn MoverWorld, head_on_allowed: bool, hits: &mut u32, report: &mut Report) {
+        // 4. Down pass: this update's gravity drop along the pull, then
+        //    step down.
+        if self.use_gravity {
+            if -self.pull[2] < MIN_PULL_DOWN {
+                self.fall_timer = 0.0;
+            } else {
+                let t_prev = self.fall_timer;
+                self.fall_timer += FALL_TIMER_STEP;
+                let t = self.fall_timer;
+                report.drop = (GRAVITY * (t * t - t_prev * t_prev) / 2.0).min(MAX_DROP);
+            }
+        }
+        // The vertical drop projected onto the pull (Q28 a): d along a
+        // straight-down pull, d·sinθ along a slope of angle θ.
+        let start = self.position;
+        let mut end = add(start, scale(self.pull, report.drop * -self.pull[2]));
+        end[2] -= self.step_down;
+        self.position = end;
+        // Not hit: he is in the air. Going down a steep walkable slope that
+        // is often for an update or a few; the gravity brings him back
+        // before the air count reaches 5 (measured, Q32).
+        if let Some(h) = nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
+            *hits += 1;
+            let normal = h.normal;
+            report.down_normal = Some(normal);
+            self.pull = down_slope(normal);
+            let angle = head_on_angle(sub(end, start), normal);
+            if normal[2] > WALKABLE_NORMAL_Z {
+                report.down = DownResult::Walkable;
+                self.on_ground = true;
+                self.fall_timer = 0.0;
+            } else {
+                report.down = DownResult::Steep;
+                if !self.use_gravity {
+                    report.events.push("steep ground: gravity switched on".into());
+                }
+                self.use_gravity = true;
+            }
+            let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
+            // "Exact hit handling": walkable landings (surface z ≥ 0.8),
+            // head-on hits and the last allowed hit stay at the contact;
+            // anything else is pushed off along the surface.
+            let result = if normal[2] >= WALKABLE_NORMAL_Z {
+                "landing"
+            } else if head_on {
+                "head-on"
+            } else if *hits >= MAX_HITS {
+                "3 hits"
+            } else {
+                "glance"
+            };
+            let contact = h.position;
+            report.head_on |= head_on;
+            report.hits.push(HitRecord { pass: "down", hit: h, angle, result });
+            self.position = contact;
+            if result == "glance" {
+                let target = project_onto(end, contact, normal);
+                report.push = length(sub(target, contact));
+                self.across(world, contact, target, head_on_allowed, "down slide", hits, report);
+            }
+        }
+
+        // 5. Ground check (keepOnGround): at or below the ground -> on it.
+        //    Only the height changes; the fall timer is left alone. The
+        //    terrain only, as the note says.
+        let under = world.ground(self.position[0], self.position[1]);
+        report.ground = under;
+        if let (true, Some((height, normal))) = (self.keep_on_ground, under) {
+            if self.position[2] <= height {
+                self.position[2] = height;
+                if normal[2] > WALKABLE_NORMAL_Z {
+                    report.check = "walkable";
+                    self.on_ground = true;
+                } else {
+                    report.check = "steep";
+                    self.on_ground = false;
+                    self.pull = down_slope(normal);
+                    if !self.use_gravity {
+                        report.events.push("steep ground: gravity switched on".into());
+                    }
+                    self.use_gravity = true;
+                }
+            } else {
+                report.check = "above";
+            }
+        }
     }
 
     /// An across move from `start` to `target` against the buildings (the
@@ -1082,6 +1127,36 @@ mod tests {
             }
         }
         (max, events)
+    }
+
+    #[test]
+    fn a_scripted_move_inside_his_update_lands_him_at_once() {
+        // pushing.md rule 11: moved 163 above the floor by a script that
+        // ran inside his update: the rest of it puts him on the floor.
+        let floor = Flat(14837.0);
+        let mut m = Mover::new([0.0, 0.0, 14837.0], true);
+        m.position = [100.0, 0.0, 15000.0];
+        let drop = m.after_move(&floor);
+        assert!((drop - 36.0).abs() < 0.01, "{drop}");
+        let r = m.rest_of_update(&floor);
+        assert_eq!(m.position[2], 14837.0);
+        assert!(m.on_ground);
+        assert_eq!(m.fall_timer, 0.0);
+        assert!(r.ground.is_some());
+    }
+
+    #[test]
+    fn a_scripted_move_from_outside_his_update_drops_one_gravity_step() {
+        // objects.md "(d)": one gravity step, nothing else; then he falls.
+        let floor = Flat(14837.0);
+        let mut m = Mover::new([0.0, 0.0, 14837.0], true);
+        m.position = [100.0, 0.0, 15000.0];
+        m.after_move(&floor);
+        assert!((m.position[2] - 14964.0).abs() < 0.01, "{:?}", m.position);
+        // The terrain raise: moved under the ground, put on it.
+        m.position = [100.0, 0.0, 14000.0];
+        m.after_move(&floor);
+        assert_eq!(m.position[2], 14837.0);
     }
 
     #[test]

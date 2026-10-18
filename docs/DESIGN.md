@@ -1423,7 +1423,7 @@ catchers, ground animators).
     some in the original (2026-10-18). Each sub-step fixes what a
     stand-in got wrong; each has its own log check, MODLOG entry and
     commit. Order: most visible first.
-    - **3l-1, the pop-up at the bricks** (Q92; `pushing.md` rule 11,
+    - **3l-1, the pop-up at the bricks** (**done** 2026-10-18; Q92; `pushing.md` rule 11,
       `objects.md` "(d)" refined, `anim-scripts.md` rule 16). The `Push`
       script runs inside Connor's update, so after its `move Connor …
       15000` the rest of that update (a gravity step and the down pass
