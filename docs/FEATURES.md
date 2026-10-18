@@ -182,7 +182,7 @@ objects don't stop it, as in the original. Checked in the logs
   user (2026-10-18: like the original). A barrel pushed into the pub
   goes into the wall while the wall stops Connor; once his step no
   longer reaches it he stops pushing and stands at the wall (Q95, M3
-  3m-2; checked in the logs only). Walking into Daventry's bricks (by the waterfall) runs
+  3m-2; checked by eye by the user, 2026-10-18: like the original). Walking into Daventry's bricks (by the waterfall) runs
   their puzzle to the end (M3 step 3k): Connor's push animation, the
   table and bricks hidden then shown, the bricks go down, the waterfall
   and its sound are replaced (so the way behind it is open), the water
@@ -206,13 +206,15 @@ objects don't stop it, as in the original. Checked in the logs
   the aim point, and on the last update jumps onto the range around it
   (the watermill room: 31 updates, then about 1,227 closer; the mill
   wheel: 46). Checked in the logs (`camera.log`) against A's numbers;
-  not checked by eye. The height on the last update is a stand-in (Q97).
+  checked by eye by the user (2026-10-18): looks like the original. The
+  height on the last update is a stand-in (Q97).
 - **The windmill tumble** (2026-10-18, M3 3m-1): jumping into the
   windmill's sails plays the tumble without a weapon; the script's
   `KQConner::endJump` finishes the jump, so he stands on the floor
   afterwards and can jump again; `KQConner::JumpDir` picks the back-flip
   tumble after a back flip. Checked in the logs (`connor.log`); the
-  back-flip tumble in a unit test only.
+  both tumbles (forward and after a back flip) checked by eye by the user
+  (2026-10-18): like the original.
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),

@@ -47,8 +47,8 @@ items. The goal is the whole game; see the roadmap in
 - **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
 - **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
 - **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
-- **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls, but not uphill (logs only so far); pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
-- **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill; logs only so far).
+- **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls (the wall still stops Connor), but not uphill; pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
+- **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill).
 
 Everything above was checked against the original, mostly by eye. Full
 details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).

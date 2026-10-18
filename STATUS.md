@@ -13,8 +13,8 @@ end of B's session building Q94–Q96 and the camera flights (M3 3m). Read with 
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
 - **New 2026-10-18 (B, M3 3m): A's answers to Q94–Q96 and the camera
-  flights are built**, one commit per step, each checked in the logs
-  (none yet by eye):
+  flights are built**, one commit per step, checked in the logs; 3m-1,
+  3m-2 and 3m-4 also by eye by the user (like the original):
   - 3m-1 (Q96): `KQConner::endJump` / `JumpDir`: the windmill tumble
     finishes the jump, Special replaces it (no Fall), gravity stays on;
     after cue 300 Connor drops to the floor and can jump again. A trap's
@@ -211,11 +211,10 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **To check by eye (3m, 2026-10-18):** the windmill tumble (jump
-  into the sails: no hanging, Jump works after), a barrel pushed into the
-  pub (Connor stops at the wall), the watermill room's cutscene (Connor
-  turns with `Left`, the camera flies and jumps closer at the end), the
-  mill wheel's flight. Test commands in the MODLOG entries 3m-1 to 3m-4.
+- **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
+  and back flip), barrels pushed into a wall (the wall stops Connor) and
+  the camera flight match the original. Still to check by eye: Connor's
+  `Left` and early walk during a scripted turn (3m-3).
 - **Stand-ins of 3m** (not traced; none reached in Daventry except the
   first): the height on a flight's last update is not applied (Q97); a
   state request refused during an unfinished jump is tried again every

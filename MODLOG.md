@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3m: the user's checks by eye (docs only)
+
+**Changed:** `docs/FEATURES.md`, `README.md`, `STATUS.md`, `docs/behaviour/QUESTIONS.md` (Q97 note): the checks recorded. No code.
+**Why:** The user tested 3m-1, 3m-2 and 3m-4 in the viewer against the original.
+**Tested how:** By the user, by eye.
+**Result:** Match the original: the windmill tumble, both forward and backward (the back flip, `JumpDir` 1, was a unit test only until now); barrels pushed into a wall, with the wall stopping Connor; the camera flight. With the Q97 stand-in (no height rule on the last update) the flight looks like the original.
+**Still broken / not tested:** Not checked by eye: the scripted walk's `Stop`/`Left`/`Walk` during the turn (3m-3); the user did not say whether the mill wheel's flight was checked as well as the watermill's. Q97 is still open (looking right doesn't settle the height).
+**Next:** A answers Q97 when convenient; B's next steps as in STATUS.
+
 ## 2026-10-18 M3 step 3m: end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are" rewritten for 3m, 3l shortened; to check by eye; the 3m stand-ins; next steps; Q97 under open questions; Q94–Q96 removed from them; 399 tests), `docs/FEATURES.md` (pushing into a wall, scripted turns, camera flights, the windmill tumble; the old problems removed), `README.md` (cutscenes line; the three fixed problems removed from "What doesn't work"), `docs/DESIGN.md` (3m done).
