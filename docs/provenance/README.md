@@ -1562,16 +1562,16 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | --- | --- | --- |
 | `KQMonster::speak` words, `<last>` 0, `nofade` only as the 10th word, the issuer must be a `KQMonster` or Connor | `talking.md` rule 6 | Unit test `connor_turns_to_the_listener_only_in_wait_or_move`; `talk.log` of the sign run: `1000 55 0 0 1…1 (<last> 0)` |
 | `<to>` another object: Connor turns with the scripted turn (`pointAndCue`'s, no cue), only in Wait or Move; the lines 0.5 s later; one waiting slot per issuer | `talking.md` rule 7, "Edge cases" | `connor.log` updates 32–42: the turn; `talk.log`: speak at 2.000 s, line at 2.533 s (the first update at or after 2.5 s); unit test `the_wait_after_turning_has_one_slot` |
-| A monster issuer's turn not done (monsters don't move yet); the 0.5 s wait kept | **Stand-in** (Q103 d) | — |
+| A monster issuer's turn not done (monsters don't move yet); the 0.5 s wait kept | ~~**Stand-in** (Q103 d)~~ `talking.md` rule 7 (Q103 d, 2026-10-18): it always turns, the same 0.5 s; the turn is logged only (4a-8) | — |
 | One queue per character; the duplicate check by file, noun, verb, case and first sequence; the next line starts at once | `talking.md` rules 9, 11 | Sign run: three clicks during the line "duplicate: not queued"; a click after it ended plays it again (line #1); unit test `lines_play_in_turn_…` |
 | A line: looked up (missing: dropped), speaker = talker object (generic: the issuer), voice next to the message file, caption if `Options::Captions` is true, ducking unless `nofade`, mouth changes from the lip-sync file, lasts its voice's length | `talking.md` rules 5, 10, 17 | Sign run: `A0RS1J00.001` 3.542 s, 39 mouth changes, caption with the leading space, ends at 6.133 s |
 | Line time counted in game time (15 updates per second) | **Our choice** (the voice plays in real time; the same while the game keeps up) | — |
 | A line with no voice or a missing talker: 0.06 s per character, at least 1 s | `talking.md` "Do not reproduce" (the note's example) | Unit test `talkers_speakers_and_lines_that_cant_be_played` |
 | `TalkComplete f n v c s` after every line: the issuer's own script at once (not Connor's), the `stateChangeNotify` group through the event queue (the next update); the issuer registered for itself is skipped | `talking.md` rule 13, "Do not reproduce" (no reused numbers; every line has its own) | Unit test `talk_complete_reaches_the_notify_group_a_moment_later`; sign run: "Connor has no script … nobody" |
 | `clearSpeak`: queue emptied, the line stopped, no `TalkComplete` | `talking.md` rule 15 | Unit test `clear_speak_stops_everything_without_talk_complete` |
-| Pending 0.5 s waits survive `clearSpeak` | **Stand-in** (Q103 b) | — |
+| Pending 0.5 s waits survive `clearSpeak` | ~~**Stand-in** (Q103 b)~~ `talking.md` rule 15 (Q103 b, 2026-10-18: confirmed) | — |
 | `testMessage`: 9 or 11 words, 0 when equal; the file as 16 bits, the rest as bytes | `talking.md` rule 14 | Unit test `test_message_takes_9_or_11_words` |
-| `eval <command…>` runs the command and keeps its result | **Stand-in** (no note; Q103 a) | Unit test (the listener script) |
+| `eval <command…>` runs the command and keeps its result | ~~**Stand-in** (no note; Q103 a)~~ `anim-scripts.md` rule 18 (Q103 a, 2026-10-18: confirmed for the data's uses). Two details of rule 18 are **not** built (no data uses them; code unchanged at the user's request): `eval` with nothing after it gives 1 (the note: 0), and the words are not read again as a new line (no second `$` replacement, quotes and `;` not counted again) | Unit test (the listener script) |
 | Message files searched in the world's `English` folder, then `GAME/ENGLISH` | `talking.md` rule 1 (the data's reading, not traced) | Viewer log: 4 files for Daventry |
 | `Options::Captions` from the `set` lines of `MASK/Options.cs` | `talking.md` rule 10 | Viewer log: `Options.cs sets Options::Captions = 'true'` |
 | Monsters: placed `KQMonster` objects with their place after `move` and their `script=`; their script gets `TalkComplete` (not `Init`, M5) | `talking.md` rules 6, 13 | Viewer log: Girl, Wizard, Ravenw, Shadow |
@@ -1580,7 +1580,7 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 
 | What | Source | Check |
 | --- | --- | --- |
-| Speech plays in group 3 (speech slider, not ducked); Connor's plain, others placed at the speaker when the line starts, min 2,000, max 30,000 | `talking.md` rule 10, `sound.md` rules 50, 58 | Unit test `speech_ducks_effects_and_world_music_not_itself`; sign run `sound.log`: group 3 plain, loudness 0.340 |
+| Speech plays in group 3 (speech slider, not ducked); Connor's plain, others placed at the speaker when the line starts (copied once, not following the speaker: confirmed by Q103 c, 2026-10-18), min 2,000, max 30,000 | `talking.md` rule 10, `sound.md` rules 50, 58 | Unit test `speech_ducks_effects_and_world_music_not_itself`; sign run `sound.log`: group 3 plain, loudness 0.340 |
 | While a line without `nofade` plays, groups 0, 2, 5 × 0.2; back to 1 when no line ducks | `talking.md` rules 10–11, `sound.md` rule 53 | Sign run `sound.log`: 0.028 during the line, 0.140 after |
 | `clearSpeak` stops the voice at once | `talking.md` rule 15 | Code path only (not reached in a run) |
 | A non-Connor speaker with no known place: plain voice | **Our choice** (not in the note) | — |
@@ -1599,7 +1599,7 @@ layouts are also in the community notes `kq8msg.txt` and `kq8lip.txt`
 | Out of reach with `tooFarAwayAction` 0: 0 0 0 1 1 through Connor's queue, no turn | `talking.md` rule 19, `clicking.md` rule 10 | Too-far run: `A0000000.011`, 1.736 s |
 | An item not taken: 0 0 0 4 1, no turn | `talking.md` rule 19, `clicking.md` rule 12 | Code path only (shares `connor_remark` with "too far") |
 | A chest's `Take…`/`Empty…` remark: `Msg Noun Verb Case Seq` and `End` as the last sequence; Connor turns to the chest unless `doNotPointAt`, then 0.5 s | `talking.md` rule 19, `chests.md` rules 8–10 | Chest run: turn from update 82, "'Tis empty." at 5.867 s; unit test (empty remark wording) |
-| `doNotPointAt`, or Connor not in Wait or Move: no turn and no wait | **Our reading** (Q103 e) | — |
+| ~~`doNotPointAt`, or Connor not in Wait or Move: no turn and no wait~~ **Replaced in 4a-9**: only `doNotPointAt` gives no turn and no wait; the chest turns him in any state | ~~**Our reading** (Q103 e)~~ `talking.md` rule 19, `chests.md` rule 10 (Q103 e) | See 4a-9 |
 | A press of forward, back, a turn key or Jump, or a click in the world, stops Connor's line as `clearSpeak Connor` unless it has `#`; releases don't count; `handsOff` swallows them | `talking.md` rule 16, `anim-scripts.md` rule 21 | Tombstone run: cut at 1.667 of 11.971 s; unit test `only_lines_without_the_mark_are_cut_short` |
 | The test options `--turn`, `--jump`, `--click`, `--aim` count as presses / clicks | **Our choice** (test tools) | Tombstone run |
 
@@ -1634,7 +1634,6 @@ From `docs/behaviour/connor-movement.md` "Turning" rule 2,
 | Keyboard auto-repeat still clears the wall blocks but is not a down for the turn | **Our reading**: the note says nothing re-sends a held key, and the user saw a held key neither cancel nor resume the turn | Runs above |
 | `--turn N,dir` = pressed at N and held; `--hold`'s turn pressed at the start, let go at its end | **Our choice** (test tools) | Runs above |
 
-
 ### 4a-8, the turn after a click — `crates/kq8-core/src/{active,connor}.rs`, `crates/kq8-viewer/src/{connor_view,door_view}.rs`
 
 | What | Source | Check |
@@ -1650,3 +1649,10 @@ From `docs/behaviour/connor-movement.md` "Turning" rule 2,
 | `speak Connor Connor`: the line at once, the click's turn during it; `speak Connor $1`: one turn, the line 0.5 s after the speak | `clicking.md` rule 32 | `talk-4a8-tmbstn1.log`: line at 1.333 s, turn updates 22–32; `talk-4a8-tmbstn2.log`: line at 1.867 s |
 | Chests: no click turn (only before their remark) | `clicking.md` rule 33 | Log line "chest: no ConnorAction call" |
 | Another character's `speak` turn: always, no state check, same 0.5 s; only logged (monsters don't move yet) | `talking.md` rule 7 (Q103 d) | Code path only (no character speaks outside conversations) |
+
+### 4a-9, the chest remark turns him in any state — `crates/kq8-core/src/active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A chest's `Take`/`Empty` remark: the turn to the chest and the 0.5 s wait go together, in any state of Connor's; only `doNotPointAt` gives no turn and no wait (queued at once) | `talking.md` rule 19, `chests.md` rule 10 (Q103 e) | Unit test `a_chest_opens_then_gives_its_item_then_is_empty` (not in Wait or Move: turn and wait; `doNotPointAt`: at once); `connor-4a9-chest-jump.log`: clicked during a jump (update 40), turn 42–48, "'Tis empty." at 3.200 s |
+| Q103 (a)–(c): `eval`, `clearSpeak` during the wait, the placed voice | `anim-scripts.md` rule 18, `talking.md` rules 10, 15 | Rows of 4a-2 and 4a-3 updated; no code changed |

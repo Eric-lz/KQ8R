@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4a-9: the chest remark turns Connor in any state; Q103 recorded
+
+**Changed:** `kq8-core/src/active.rs`: a chest's `Take`/`Empty` remark no longer skips the turn when Connor is not in Wait or Move; only `doNotPointAt` gives no turn and no wait. The log says which state he was in. Unit test extended. Provenance: the 4a rows for Q103 (a)–(e) now cite the answers; no other code changed.
+**Why:** Q103 (e), `talking.md` rule 19, `chests.md` rule 10. Q103 (a)–(c) confirmed our stand-ins.
+**Tested how:** `cargo test --workspace` (426 pass), clippy clean. Viewer: `cargo play --world Daventry --at 202336,262000,1.5708 --click smlchst3,10 --click smlchst3,25 --jump 38 --click smlchst3,40 --frames 1500 --sound off` (`connor-4a9-chest-jump.log`, `doors-`, `talk-`).
+**Result:** The third click comes at update 40, during the jump: "Connor (not Wait or Move) turns to face the chest … (any state, Q103 e)"; the turn runs in updates 42–48 while he is still in the jump; "'Tis empty." starts at 3.200 s (0.5 s after the click, at the next update).
+**Still broken / not tested:** Not seen by eye. Two details of `eval` in `anim-scripts.md` rule 18 are not built (no data uses them; you asked for no code change there): `eval` with nothing after it gives 1 (the note says 0), and the words are not read again as a new line (no second `$` replacement). Recorded in the provenance.
+**Next:** Your checks in the viewer; A answers Q105.
+
 ## 2026-10-18 M4 step 4a-8: Connor turns to face what he clicked
 
 **Changed:** `kq8-core/src/active.rs`: new request `ClickTurn`; after every `ConnorAction` call (doors, scripted objects, scripted clickables, buildings with a script, items with a script) the click asks for a turn to the object's position unless it has `doNotPointAt`; `call_door` / `call_object` say whether a script ran; every click logs its call kind (`do`, item, `TooFar`) and "turn to <object> asked for" or why not; stock remarks and chests log "no turn". Another character's `speak` turn now says "always, no state check" (Q103 d; still only logged). `connor.rs`: one automatic turn (a cue-less request during a running turn only replaces the target; a `pointAndCue` keeps its cue). Viewer: `ConnorSim::click_turn_state` (Wait / Move), `door_view.rs` applies `ClickTurn` after the script's requests and logs "Connor's state after the script …". Unit tests updated (three counted the requests) and added. `QUESTIONS.md`: Q105. Provenance.

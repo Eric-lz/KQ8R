@@ -1781,7 +1781,7 @@ inventory and menus.
       move yet. Logs: per click the call kind (`do`, item, `TooFar`,
       `Special`, none), Connor's state after the script, and `turn
       to <object>` or the reason there is none.
-    - **4a-9, the chest remark turns him in any state** (`talking.md`
+    - **4a-9, the chest remark turns him in any state** (**done** 2026-10-18; `talking.md`
       rule 19, `chests.md` rule 10): the "not in Wait or Move → at
       once" branch goes; only `doNotPointAt` gives no turn and no
       wait.

@@ -1808,8 +1808,9 @@ impl WorldState {
     /// A chest's `Take…` / `Empty…` remark (`talking.md` rule 19,
     /// `chests.md` rules 8-10): its six numbers are the tuple and the last
     /// sequence (`End`, 0: the run). Connor turns to the chest first
-    /// unless it has `doNotPointAt`, then the 0.5 s wait (rule 7: only in
-    /// Wait or Move); otherwise queued at once (our reading).
+    /// unless it has `doNotPointAt`, then the 0.5 s wait; the turn and the
+    /// wait go together and don't depend on his state (Q103 e: any state,
+    /// unlike `speak`); with `doNotPointAt` queued at once.
     fn chest_remark(&mut self, c: &ActiveChest, r: crate::chest::Remark) -> String {
         let [f, n, v, k, q, end] = r.0;
         let first = Tuple::new(f as u16, n as u8, v as u8, k as u8, q as u8);
@@ -1819,13 +1820,12 @@ impl WorldState {
         let at = c.chest.placement().position;
         let line = if c.do_not_point_at {
             format!("doNotPointAt: no turn; {}", self.talk.queue(&s, now))
-        } else if !self.connor_can_turn {
-            format!("Connor is not in Wait or Move: no turn; {}", self.talk.queue(&s, now))
         } else {
             use crate::connor_auto::{AutoKind, AutoMove};
             let why = format!("chest {} remark", c.chest.name);
             self.requests.push(Request::ConnorAuto { auto: AutoMove::new(AutoKind::Point, [at[0], at[1]], None), at: why });
-            format!("Connor turns to face the chest at ({:.0}, {:.0}); {}", at[0], at[1], self.talk.queue_later(s, now))
+            let state = if self.connor_can_turn { "Wait or Move" } else { "not Wait or Move" };
+            format!("Connor ({state}) turns to face the chest at ({:.0}, {:.0}) (any state, Q103 e); {}", at[0], at[1], self.talk.queue_later(s, now))
         };
         format!("{first}…{last}: {line}")
     }
@@ -3656,12 +3656,25 @@ mod tests {
         assert!(a.world.items.get("NoName0").unwrap().carried_by("Connor"));
         assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 3);
         assert_eq!(a.world.chests[0].chest.remembered, None);
-        // 3rd click: the Empty remark, nothing else.
+        // 3rd click: the Empty remark, nothing else. Connor is not in Wait
+        // or Move here (the test's default): he still turns to the chest
+        // and the remark waits 0.5 s (Q103 e).
+        a.world.requests.clear();
+        assert!(!a.world.connor_can_turn);
         let r = a.click("smlchst3", BY_CHEST, 2350.0, None);
         assert_eq!(r, ClickResult::Chest { before: ChestState::Empty, after: ChestState::Empty });
+        assert!(matches!(&a.world.requests[..], [Request::ConnorAuto { auto, .. }] if auto.target == [0.0, 0.0] && auto.cue.is_none()));
         let log = a.take_log().join("\n");
-        assert!(log.contains("Empty remark 0 109 14 33 1…1: "), "{log}");
+        assert!(log.contains("Empty remark 0 109 14 33 1…1: Connor (not Wait or Move) turns to face the chest"), "{log}");
+        assert!(log.contains("waits 0.5 s"), "{log}");
         assert_eq!(a.world.items.objects.len(), 1, "no second item");
+        // With doNotPointAt: no turn, at once.
+        a.world.requests.clear();
+        a.world.chests[0].do_not_point_at = true;
+        a.world.talk.clear("Connor", a.world.now());
+        a.click("smlchst3", BY_CHEST, 2350.0, None);
+        assert!(a.world.requests.is_empty());
+        assert!(a.take_log().join("\n").contains("doNotPointAt: no turn"));
     }
 
     #[test]
