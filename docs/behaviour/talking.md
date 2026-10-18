@@ -237,8 +237,8 @@ Words used here:
     Only one description plays at a time: a new one stops the previous
     one first. Only that one sequence is played. **Confirmed by the user
     in the original (2026-10-18):** right-clicking mushrooms, his weapon
-    slot or his gold, he says a line with no caption. (Whether other
-    sounds really stay at full volume was not checked.)
+    slot or his gold, he says a line with no caption, and the background
+    music stays at full volume.
 
 ## Numbers and units
 
