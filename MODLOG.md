@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4b-3: the user's check of the captions; the strip ends near the text
+
+**Changed:** `kq8-core/src/caption.rs`: the stone strip no longer spans the whole width: it covers the widest line plus `STRIP_MARGIN` (16 pixels) on each side, centred (`strip_span`); unit test updated. Viewer log line gives the strip's span. `QUESTIONS.md` (Q107: the user's checks), provenance, `docs/FEATURES.md`.
+**Why:** The user's check in the original: the strip reaches at most about two letters beyond the text on each side.
+**Tested how:** By the user by eye (before this change): colours right; line breaks mostly right on several tombstones, not always (left for A, Q107 a). Then `cargo test --workspace` (432 pass), clippy clean, `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`viewer-4b4-sign.log`).
+**Result:** Sign: "strip x 121..518 (margin 16)" for the 365-pixel first line (365 + 2 x 16 = 397).
+**Still broken / not tested:** The narrower strip is not seen by eye yet. The 16-pixel margin and the 400-pixel wrap are stand-ins until A answers Q107 (the user's estimate, not a measurement).
+**Next:** The health panel and inventory bars from `Gplayscr.gui` once A's interface note is in.
+
 ## 2026-10-18 M4 step 4b-3: captions in the original font, on the stone strip
 
 **Changed:** New `kq8-core/src/caption.rs` (word wrapping and the caption picture). Viewer `talk_view.rs`: `load_caption` reads the caption box from `Gplayscr.gui`, the font and strip it names, and the world's palette; `caption_picture_draw` draws the caption as a 640-wide picture at the bottom of the window, made again only when the text changes; the old 4a-4 text panel stays as a fallback. `main.rs`. `docs/DESIGN.md` (4b-3 plan with the user's observations), `QUESTIONS.md` (the user's check added to Q107), provenance.

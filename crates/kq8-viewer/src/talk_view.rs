@@ -343,7 +343,13 @@ pub fn caption_picture_draw(
     n.height = Val::Percent(100.0 * h as f32 / caption::SCREEN[1] as f32);
     *vis = Visibility::Inherited;
     let widths: Vec<u32> = lines.iter().map(|l| caption::text_width(&style.font, l)).collect();
-    shared.log.lock().unwrap().detail(format!("caption picture shown: {} line(s) {lines:?}, widths {widths:?} px (wrap {}), {w}x{h} of 640x480", lines.len(), caption::WRAP_WIDTH));
+    let (x0, x1) = caption::strip_span(&style.font, &lines);
+    shared.log.lock().unwrap().detail(format!(
+        "caption picture shown: {} line(s) {lines:?}, widths {widths:?} px (wrap {}), strip x {x0}..{x1} (margin {}), {w}x{h} of 640x480",
+        lines.len(),
+        caption::WRAP_WIDTH,
+        caption::STRIP_MARGIN
+    ));
 }
 
 /// Shows or hides the caption when it changed; each change in

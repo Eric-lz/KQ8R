@@ -328,8 +328,10 @@ doesn't take it gives "This will not work."
   speaker; the speech slider (0.34); effects and world music drop to
   0.2 of their loudness while a line plays.
 - **Captions:** the line's text at the bottom of the screen while he
-  talks (`Options::Captions` is true in `Options.cs`). The panel's look
-  is ours (the original's GUI is not studied).
+  talks (`Options::Captions` is true in `Options.cs`), in the game's own
+  gold font on its stone strip, centred, the strip growing upwards one
+  line at a time (M4 4b-3). Checked by the user: colours right, line
+  breaks mostly right (the exact wrap rule is not known yet).
 - **Mouth:** Connor's face texture follows the lip-sync file (`CF0`–`CF7`).
 - **Connor's own remarks:** "'Tis beyond my reach." (too far), "This will
   not work." (an item not taken), the chests' "'Tis empty." with a turn

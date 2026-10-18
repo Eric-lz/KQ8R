@@ -5,10 +5,12 @@
 //! From the layout `IDDLG_CAPTION` in `Gplayscr.gui` (16 pixels per line,
 //! text 2 pixels down, the font and strip picture it names) and the user's
 //! check in the original (2026-10-18): at the bottom of the screen, text
-//! centred, the strip growing upwards one line at a time. STAND-INS until
-//! the interface is studied (Q106, Q107): the wrap width [`WRAP_WIDTH`],
-//! greedy word wrapping, the strip across the whole width, tiled from its
-//! top-left; colours from the world's palette, index 0 see-through.
+//! centred, the strip growing upwards one line at a time, ending about two
+//! letters beyond the text on each side; the colours look right (the
+//! world's palette, index 0 see-through); the line breaks mostly match.
+//! STAND-INS until the interface is studied (Q106, Q107): the wrap width
+//! [`WRAP_WIDTH`], greedy word wrapping, the strip's side margin
+//! [`STRIP_MARGIN`] around the widest line, tiled from its top-left.
 
 use kq8_data::font::Font;
 use kq8_data::palette::Rgb;
@@ -20,6 +22,11 @@ pub const SCREEN: [u32; 2] = [640, 480];
 /// user's check puts it between 365 and 418 ("… could be something" fits,
 /// "… something useful" doesn't).
 pub const WRAP_WIDTH: u32 = 400;
+
+/// STAND-IN (Q107 a): the strip reaches this far beyond the widest line
+/// on each side. The user saw "at most around 2 letters" in the original;
+/// a lower-case letter is about 8 pixels in `console.pft`.
+pub const STRIP_MARGIN: u32 = 16;
 
 /// Width of `text` in `font` (characters without a glyph count 0).
 pub fn text_width(font: &Font, text: &str) -> u32 {
@@ -70,6 +77,15 @@ pub struct Strip<'a> {
     pub pixels: &'a [u8],
 }
 
+/// Where the strip starts and ends on the screen (x, from..to): the
+/// widest line plus [`STRIP_MARGIN`] on each side, centred.
+pub fn strip_span(font: &Font, lines: &[String]) -> (u32, u32) {
+    let widest = lines.iter().map(|l| text_width(font, l)).max().unwrap_or(0);
+    let width = (widest + 2 * STRIP_MARGIN).min(SCREEN[0]);
+    let x0 = (SCREEN[0] - width) / 2;
+    (x0, x0 + width)
+}
+
 /// The caption's picture: `SCREEN[0]` wide, one `line_height` per line,
 /// RGBA (see-through where neither the strip nor a letter has ink).
 pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], lines: &[String], b: Box) -> (u32, u32, Vec<u8>) {
@@ -83,9 +99,11 @@ pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], lines: 
         }
     };
     if let Some(s) = strip.filter(|s| s.width > 0 && s.height > 0) {
+        // Centred, as wide as the widest line plus the margin each side.
+        let (x0, x1) = strip_span(font, lines);
         for y in 0..h {
-            for x in 0..w {
-                put(x, y, s.pixels[((y % s.height) * s.width + x % s.width) as usize]);
+            for x in x0..x1 {
+                put(x, y, s.pixels[((y % s.height) * s.width + (x - x0) % s.width) as usize]);
             }
         }
     }
@@ -181,8 +199,12 @@ mod tests {
         let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &lines, Box { line_height: 16, text_y: 2 });
         assert_eq!((w, h), (640, 32));
         let at = |x: u32, y: u32| &rgba[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize];
-        assert_eq!(at(0, 0), [0, 0, 0, 0], "strip index 0: see-through");
-        assert_eq!(at(1, 0), [80, 80, 80, 255]);
+        // The strip: "ab" (20) + 16 each side = 52 wide, x 294..346.
+        assert_eq!(strip_span(&f, &lines), (294, 346));
+        assert_eq!(at(1, 0), [0, 0, 0, 0], "outside the strip: see-through");
+        assert_eq!(at(294, 0), [0, 0, 0, 0], "strip index 0: see-through");
+        assert_eq!(at(295, 0), [80, 80, 80, 255]);
+        assert_eq!(at(346, 1), [0, 0, 0, 0], "past its right end");
         // "ab" is 20 wide, centred: x 310..330, rows 2..4.
         assert_eq!(at(310, 2), [200, 150, 50, 255]);
         assert_eq!(at(329, 3), [200, 150, 50, 255]);

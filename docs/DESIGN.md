@@ -1824,7 +1824,7 @@ inventory and menus.
     pictures; every file read to its exact end. This shows what the
     caption box (`IDDLG_CAPTION`, in `Gplayscr.gui`) and the health
     panel are made of.
-  - **4b-3, captions in the original font** (**done** 2026-10-18, not seen by eye yet; `kq8-core/src/caption.rs`,
+  - **4b-3, captions in the original font** (**done** 2026-10-18; checked by the user: colours right, breaks mostly right; the strip narrowed to the text after the check; `kq8-core/src/caption.rs`,
     new: wrapping and the picture; viewer `talk_view.rs`). From the
     layout (`IDDLG_CAPTION`): the font (`console.pft`, the world's),
     the strip picture (`stontran.pbm`), 16 pixels per line, text 2
