@@ -1460,7 +1460,7 @@ catchers, ground animators).
       the distance, the stop, the cue. Test: walk into the watermill room
       (`--at` at the trap `walktp1`): cues 1–6 of `wtrmwalk.cs` in order
       and `handsOff 0` at cue 6, about 4.2 s after the turn of cue 2.
-    - **3l-3, cutscene control** (Q89; `anim-scripts.md` rules 21–23,
+    - **3l-3, cutscene control** (**done** 2026-10-18; Q89; `anim-scripts.md` rules 21–23,
       `camera.md` "Shake and cutscene cameras", "What the camera looks
       at" rule 1, "First person" rule 7). `handsOff 1`: also the run key
       and the mouse-look button; the camera's fixed mode (F11) goes back

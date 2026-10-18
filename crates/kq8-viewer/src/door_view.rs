@@ -723,7 +723,7 @@ pub fn trap_step(
                 None => format!("{at}: move KQCamera: no game camera; not applied"),
             },
             Request::CameraFollow { connor: follow, at } => match camera.as_mut() {
-                Some(c) => format!("{at}: applied: {}", c.follow(follow)),
+                Some(c) => format!("{at}: applied: {}", c.follow(follow, connor.mover.position)),
                 None => format!("{at}: KQCamera::follow: no game camera; not applied"),
             },
             Request::Load { file, name, at } => {
@@ -754,10 +754,22 @@ pub fn trap_step(
                 None => format!("{at}: walkExit: no scripted walk going on; nothing"),
             },
             Request::HandsOff { on, at } => {
+                // anim-scripts.md rules 21-22: on, the keys count as let go
+                // (presses swallowed, releases counted) and the camera's
+                // fixed mode ends; off, the held movement keys are sent
+                // again.
+                let was = connor.hands_off;
                 connor.hands_off = on;
+                let mut extra = Vec::new();
+                if on {
+                    extra.extend(camera.as_mut().and_then(|c| c.hands_off()));
+                } else if was {
+                    extra.push(connor.keys_sent_again());
+                }
                 let n = connor.updates;
-                connor.log.detail(format!("connor update {n}: handsOff {on} ({at})"));
-                format!("{at}: applied: handsOff {on}: movement keys, Jump and clicks {}", if on { "ignored" } else { "work again" })
+                let extra = if extra.is_empty() { String::new() } else { format!("; {}", extra.join("; ")) };
+                connor.log.detail(format!("connor update {n}: handsOff {on}{extra} ({at})"));
+                format!("{at}: applied: handsOff {on}: movement, turn, run and Jump keys, the mouse look and clicks {}{extra}", if on { "ignored" } else { "work again" })
             }
             Request::Move { who, flags, position, turn, at } => {
                 // A plain placed object (3k-1): its colliders and drawn

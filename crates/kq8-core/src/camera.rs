@@ -196,13 +196,51 @@ fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
+/// `follow Connor` after a cutscene (camera.md "Shake and cutscene
+/// cameras"): a view more than this far (radians) off Connor turns back
+/// gradually; nearer, it looks at him at once.
+pub const FOLLOW_TURN_FROM: f32 = 0.4;
+/// The turn back snaps onto Connor once the rest is under this (one snap
+/// angle on both sides, the note's "Do not reproduce").
+pub const FOLLOW_TURN_SNAP: f32 = 0.063;
+
+/// The view direction of `move KQCamera … rx ry rz` (camera.md "Shake and
+/// cutscene cameras"): rx = tilt (positive looks up), rz = heading (0 looks
+/// along +Y, positive anticlockwise seen from above):
+/// (−sin rz × cos rx, cos rz × cos rx, sin rx).
+pub fn view_direction(rx: f32, rz: f32) -> [f32; 3] {
+    let (sx, cx) = rx.sin_cos();
+    let (sz, cz) = rz.sin_cos();
+    [-sz * cx, cz * cx, sx]
+}
+
+/// The (tilt, heading) of a view direction, the reverse of
+/// [`view_direction`].
+pub fn view_angles(d: [f32; 3]) -> (f32, f32) {
+    let flat = (d[0] * d[0] + d[1] * d[1]).sqrt();
+    (d[2].atan2(flat), (-d[0]).atan2(d[1]))
+}
+
+/// The heading offset a turn back toward Connor starts with: the whole
+/// offset if it is more than [`FOLLOW_TURN_FROM`], else none.
+pub fn follow_turn_start(offset: f32) -> f32 {
+    let offset = wrap(offset);
+    if offset.abs() > FOLLOW_TURN_FROM { offset } else { 0.0 }
+}
+
+/// One update of the turn back: a third of what is left, then the snap.
+pub fn follow_turn_step(offset: f32) -> f32 {
+    let left = offset * (2.0 / 3.0);
+    if left.abs() < FOLLOW_TURN_SNAP { 0.0 } else { left }
+}
+
 /// The angle of `v` round the vertical (atan2 of y, x).
 fn azimuth(v: [f32; 3]) -> f32 {
     v[1].atan2(v[0])
 }
 
 /// An angle brought into −π..π.
-fn wrap(a: f32) -> f32 {
+pub fn wrap(a: f32) -> f32 {
     let t = std::f32::consts::TAU;
     let a = a.rem_euclid(t);
     if a > std::f32::consts::PI { a - t } else { a }
@@ -455,6 +493,39 @@ mod tests {
         fn ground(&self, _: f32, _: f32) -> Option<(f32, [f32; 3])> {
             Some((self.0, [0.0, 0.0, 1.0]))
         }
+    }
+
+    #[test]
+    fn cutscene_angles_give_the_view_and_back() {
+        // Heading 0 looks along +Y, π/2 along −X; negative tilt looks down.
+        let d = view_direction(0.0, 0.0);
+        assert!((d[1] - 1.0).abs() < 1e-6 && d[0].abs() < 1e-6);
+        let d = view_direction(0.0, std::f32::consts::FRAC_PI_2);
+        assert!((d[0] + 1.0).abs() < 1e-6, "{d:?}");
+        assert!(view_direction(-0.2, 0.0)[2] < 0.0);
+        // The watermill shot (wtrmwalk.cs): heading 2.632 points from the
+        // camera at Connor's walkTo target (about 2.64).
+        let (tilt, heading) = view_angles(view_direction(-0.2, 2.632));
+        assert!((tilt + 0.2).abs() < 1e-5 && (heading - 2.632).abs() < 1e-5);
+        let to_target = view_angles([190800.0 - 192100.0, 230100.0 - 232500.0, 0.0]).1;
+        assert!((wrap(to_target - 2.632)).abs() < 0.05, "{to_target}");
+    }
+
+    #[test]
+    fn follow_turns_back_by_a_third_per_update_then_snaps() {
+        // 0.19 rad off (the bricks' cue 10): looks at Connor at once.
+        assert_eq!(follow_turn_start(0.19), 0.0);
+        let mut o = follow_turn_start(-1.0);
+        assert_eq!(o, -1.0);
+        let mut steps = 0;
+        while o != 0.0 {
+            let next = follow_turn_step(o);
+            assert!(next == 0.0 || (next - o * 2.0 / 3.0).abs() < 1e-6);
+            o = next;
+            steps += 1;
+        }
+        // 1.0 × (2/3)^n < 0.063 from n = 7.
+        assert_eq!(steps, 7);
     }
 
     fn horizontal(c: &Camera, aim: [f32; 3]) -> f32 {

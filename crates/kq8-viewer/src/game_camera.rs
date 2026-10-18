@@ -10,7 +10,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_core::camera::{ground_line_hit, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_core::camera::{ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
 use kq8_core::collide::{BoxCollider, BuildingCollider};
 
 use crate::connor_view::{key_code, ConnorSim};
@@ -133,28 +133,80 @@ pub struct GameCam {
     /// `KQCamera::follow none` (M3 3k-3, `camera.md` rule 1): `false` =
     /// the camera stays where it is.
     pub following: bool,
+    /// After `follow Connor` (M3 3l-3): how far the view's heading is
+    /// still turned away from looking at Connor (radians, positive =
+    /// anticlockwise from above), after the last two updates.
+    view_turn: (f32, f32),
 }
 
 impl GameCam {
-    /// `KQCamera::follow Connor|none` (`camera.md` rule 1).
-    pub fn follow(&mut self, connor: bool) -> String {
-        self.following = connor;
-        if connor { "the camera follows Connor again, from where it is".into() } else { "the camera stays where it is".into() }
+    /// The view direction drawn now (from the camera to its aim point,
+    /// turned by what is left of a turn back) as (tilt, heading).
+    fn view_now(&self) -> (f32, f32) {
+        let (p, _, aim) = self.current;
+        let (tilt, heading) = view_angles(std::array::from_fn(|k| aim[k] - p[k]));
+        (tilt, heading + self.view_turn.1)
     }
 
-    /// `move KQCamera <flags> x y z rx ry rz` (M3 3k-3): its position set
-    /// or added; its view still looks at its last aim point (Q89 c
-    /// stand-in: how the angles give the view is not described).
+    /// `KQCamera::follow Connor|none` (`camera.md` rule 1, "Shake and
+    /// cutscene cameras"). Following Connor again starts from where the
+    /// camera is: its next update pulls it in or pushes it out to the
+    /// range; a view more than 0.4 rad off Connor turns back gradually
+    /// (1/3 per update), otherwise it looks at him at once; the tilt is
+    /// the default at once.
+    pub fn follow(&mut self, connor: bool, connor_base: [f32; 3]) -> String {
+        self.following = connor;
+        if !connor {
+            return "the camera stays where it is".into();
+        }
+        let p = self.cam.position;
+        let aim = [connor_base[0], connor_base[1], connor_base[2] + kq8_core::camera::AIM_HEIGHT];
+        let towards = view_angles(std::array::from_fn(|k| aim[k] - p[k])).1;
+        let (_, heading) = self.view_now();
+        let off = wrap(heading - towards);
+        let start = kq8_core::camera::follow_turn_start(off);
+        self.view_turn = (start, start);
+        self.cam.tilt = DEFAULT_TILT;
+        format!(
+            "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}",
+            if start != 0.0 { "turns back 1/3 per update" } else { "looks at him at once (0.4 rad or less)" }
+        )
+    }
+
+    /// `handsOff 1` (`anim-scripts.md` rule 21): fixed mode (F11) goes back
+    /// to normal mode; the mouse is ignored while it is on (`camera_step`).
+    pub fn hands_off(&mut self) -> Option<String> {
+        if let Mode::Fixed { .. } = self.cam.mode {
+            self.cam.mode = Mode::Normal;
+            return Some("fixed camera mode back to normal".into());
+        }
+        None
+    }
+
+    /// `move KQCamera <flags> x y z rx ry rz` (`camera.md` "Shake and
+    /// cutscene cameras"): flags bit 1 adds the position, bit 2 adds the
+    /// angles to the current view; rx = tilt, rz = heading; the camera
+    /// takes that place and view at once. ry (roll) is not drawn (logged).
     pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3]) -> String {
         let old = self.cam.position;
+        let (old_tilt, old_heading) = self.view_now();
         self.cam.position = if flags & 1 != 0 { std::array::from_fn(|k| old[k] + position[k]) } else { position };
-        self.current.0 = self.cam.position;
-        self.previous.0 = self.cam.position;
+        let (tilt, heading) = if flags & 2 != 0 { (old_tilt + turn[0], old_heading + turn[2]) } else { (turn[0], turn[2]) };
+        let dir = view_direction(tilt, heading);
         let p = self.cam.position;
-        format!(
-            "camera moved from ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}); view angles {turn:?} not used (Q89 c stand-in): it looks at its last aim point ({:.0}, {:.0}, {:.0})",
-            old[0], old[1], old[2], p[0], p[1], p[2], self.current.2[0], self.current.2[1], self.current.2[2]
-        )
+        // Only the direction matters; the drawing pitches by the tilt's
+        // difference from the default, so the default draws it as is.
+        let aim = std::array::from_fn(|k| p[k] + dir[k] * 1000.0);
+        self.current = (p, DEFAULT_TILT, aim);
+        self.previous = self.current;
+        self.view_turn = (0.0, 0.0);
+        let roll = if turn[1] != 0.0 { format!("; roll {:.3} not drawn", turn[1]) } else { String::new() };
+        let line = format!(
+            "camera moved from ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}), view tilt {tilt:.3}, heading {heading:.3} (looks along ({:.3}, {:.3}, {:.3})){roll}",
+            old[0], old[1], old[2], p[0], p[1], p[2], dir[0], dir[1], dir[2]
+        );
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        line
     }
 }
 
@@ -223,6 +275,7 @@ pub fn make(
         updates: 0,
         log,
         following: true,
+        view_turn: (0.0, 0.0),
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building");
     Some(g)
@@ -296,8 +349,10 @@ pub fn camera_step(
     // One range for walking and running: the user saw no difference in
     // the original (Q27 e), so the run switch does not change it.
     let held = |k: Option<KeyCode>| choice.game && k.is_some_and(|k| keys.pressed(k));
+    // handsOff (anim-scripts.md rule 21): the mouse-look button does
+    // nothing; the camera's own keys still work.
     let input = Input {
-        mouse_held: choice.game && g.keys.mouse.is_some_and(|b| buttons.pressed(b)),
+        mouse_held: choice.game && !sim.hands_off && g.keys.mouse.is_some_and(|b| buttons.pressed(b)),
         // Directions checked by eye by the user against the original
         // (2026-10-11): mouse left swings the camera left, mouse down
         // (towards you; screen y grows downwards) zooms in.
@@ -320,6 +375,13 @@ pub fn camera_step(
     g.updates += 1;
     g.previous = g.current;
     g.current = (g.cam.position, g.cam.tilt, report.aim);
+    // The turn back toward Connor after `follow Connor` (3l-3).
+    g.view_turn.0 = g.view_turn.1;
+    if g.view_turn.1 != 0.0 {
+        g.view_turn.1 = kq8_core::camera::follow_turn_step(g.view_turn.1);
+        let line = format!("camera update {}: view turning back toward Connor: {:.3} left", g.updates, g.view_turn.1);
+        g.log.detail(line);
+    }
     let p = g.cam.position;
     let line = format!(
         "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {}",
@@ -380,5 +442,9 @@ pub fn camera_draw(
     }
     let mut view = Transform::from_translation(eye).looking_at(aim, Vec3::Y);
     view.rotate_local_x(tilt - DEFAULT_TILT);
+    // What is left of a turn back toward Connor (3l-3), round the
+    // vertical (game +Z is Bevy +Y; both turn anticlockwise from above).
+    let (o0, o1) = game.view_turn;
+    view.rotate_axis(Dir3::Y, o0 + (o1 - o0) * a);
     *t = view;
 }

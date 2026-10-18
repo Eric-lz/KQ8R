@@ -1354,3 +1354,15 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | A head-on hit during a scripted walk: he stands at once, no crash, no wall block; a wall block already on wins; `stop` plays during the turn; no object named, no cue | **Stand-ins**, Q94 | — |
 | The walk's end is checked after each move, so it ends up to one step past the distance | **Our method** | `connor.log`: 2783 of 2736 |
 
+### 3l-3, cutscene control — `crates/kq8-core/src/{camera,active,script}.rs`, `crates/kq8-viewer/src/{game_camera,connor_view,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `handsOff 1`: movement, turn and run keys, Jump, the mouse look and clicks ignored; presses swallowed, releases counted; fixed camera mode back to normal; `N` logged only | `anim-scripts.md` rule 21 | `connor.log`, `traps.log` (bricks) |
+| `handsOff 0`: everything back at once; every movement key still held is sent again as a press | `anim-scripts.md` rule 22 | `traps.log` update 124: "held keys sent again: Forward" |
+| `move KQCamera`: flags bit 1 adds the position, bit 2 the angles; rx tilt (negative down), rz heading (0 along +Y, anticlockwise), ry roll; view (−sin rz cos rx, cos rz cos rx, sin rx); taken at once | `camera.md` "Shake and cutscene cameras" | Unit test `cutscene_angles_give_the_view_and_back`; `camera.log` |
+| Roll not drawn, logged | **Our choice** (0 in Daventry's two cutscenes) | — |
+| `follow Connor` from where the camera is: range at once, more than 0.4 rad off → 1/3 per update, snap under 0.063 (one snap on both sides), tilt at once; also when it already followed | `camera.md` "Shake and cutscene cameras", "Do not reproduce" | Unit test `follow_turns_back_by_a_third_per_update_then_snaps`; `traps.log` |
+| `follow Connor` while already following runs the same setup | **Our reading** (the note describes the command, not a state change) | `traps.log` (watermill cue 6) |
+| `setThirdPerson`: a paired toggle; in third person it flips the first-person key's lock (logged; we have no first person) | `camera.md` "First person" rule 7 | Unit test `set_third_person_flips_the_key_lock_and_hands_off_logs_its_frames` |
+

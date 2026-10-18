@@ -515,6 +515,11 @@ pub struct WorldState {
     /// Objects prepared for a script's `loadKQ` (3k-4): lower-case file
     /// name → the object's name.
     dormant: BTreeMap<String, String>,
+    /// `setThirdPerson` (`camera.md` "First person" rule 7): the
+    /// first-person key is locked, and the variable
+    /// `…::SetThirdPerson::WasFirstPerson` (we are always in third person).
+    first_person_locked: bool,
+    was_first_person: bool,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
     /// Other objects' stats by lower-case name (`stats=`, doors 10,000
@@ -993,6 +998,28 @@ impl WorldState {
         "0".into()
     }
 
+    /// `setThirdPerson [1]` (`camera.md` "First person" rule 7), a toggle
+    /// cutscenes call in pairs. We have no first person, so we are always
+    /// in third person: with the variable at 1 (never, here) it would go
+    /// back to first person; otherwise the first-person key's lock flips
+    /// (`setThirdPerson 1` also sets the variable to 0). Camera place,
+    /// distance and tilt are not touched.
+    fn set_third_person(&mut self, words: &[String], at: &str) -> String {
+        if self.was_first_person {
+            self.was_first_person = false;
+            self.first_person_locked = false;
+            self.note(format!("{at}: setThirdPerson: WasFirstPerson 1: key unlocked, back to first person (we have no first person; logged only)"));
+            return "0".into();
+        }
+        self.first_person_locked = !self.first_person_locked;
+        let one = if words.get(1).is_some_and(|w| w == "1") { " (setThirdPerson 1: variable set to 0)" } else { "" };
+        self.note(format!(
+            "{at}: setThirdPerson: third person, WasFirstPerson 0: the first-person key is now {}{one} (we have no first person; camera untouched)",
+            if self.first_person_locked { "locked" } else { "allowed" }
+        ));
+        "0".into()
+    }
+
     /// `KQConner::walkTo x y [<who> <c> <d>]`, `KQConner::runTo …` and
     /// `pointAndCue x y z [<who> <c> <d>]` (`anim-scripts.md` rules
     /// 24–25): a request for Connor. Without `<who>` no cue is sent
@@ -1051,7 +1078,13 @@ impl WorldState {
     /// movement keys, Jump and clicks are ignored while on.
     fn hands_off(&mut self, words: &[String], at: &str) -> String {
         let on = words.get(1).is_some_and(|v| looks_like_number(v) && number_value(v) != 0.0);
-        self.note(format!("{at}: handsOff {}: the player's keys and clicks {} (Q89 a stand-in)", if on { 1 } else { 0 }, if on { "ignored" } else { "work again" }));
+        // N, the "number of dropable frames" (rule 21): logged only.
+        let frames = words.get(2).filter(|_| on).map_or(String::new(), |n| format!("; at most ({n} + 1) / 15 s of game time per drawn frame (logged only)"));
+        self.note(format!(
+            "{at}: handsOff {}: the player's keys, mouse look and clicks {} (anim-scripts.md rules 21-22){frames}",
+            if on { 1 } else { 0 },
+            if on { "ignored" } else { "work again; held movement keys sent again" }
+        ));
         self.requests.push(Request::HandsOff { on, at: at.to_string() });
         "0".into()
     }
@@ -1452,6 +1485,7 @@ impl ScriptHost for WorldState {
             "move" => Some(self.move_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
+            "setThirdPerson" => Some(self.set_third_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
                 self.note(format!("{at}: walkExit: a scripted walk ends now, with its cue (anim-scripts.md rule 24)"));
@@ -1534,6 +1568,8 @@ impl Active {
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
+                first_person_locked: false,
+                was_first_person: false,
             },
         }
     }
@@ -3430,6 +3466,19 @@ mod tests {
         assert_eq!(autos[2].cue.as_ref().map(|c| c.d.as_str()), Some("0"));
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::WalkExit { .. })));
         assert!(a.take_log().join("\n").contains("usage: KQConner::walkTo x y"));
+    }
+
+    #[test]
+    fn set_third_person_flips_the_key_lock_and_hands_off_logs_its_frames() {
+        let mut a = with_object("setThirdPerson\nhandsOff 1 2\nsetThirdPerson\nhandsOff 0\n", "x");
+        a.take_log();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let log = a.take_log().join("\n");
+        let locked = log.find("first-person key is now locked").expect(&log);
+        let allowed = log.find("first-person key is now allowed").expect(&log);
+        assert!(locked < allowed, "{log}");
+        assert!(log.contains("at most (2 + 1) / 15 s"), "{log}");
+        assert!(log.contains("held movement keys sent again"), "{log}");
     }
 
     #[test]

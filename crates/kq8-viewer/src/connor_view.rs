@@ -457,6 +457,11 @@ pub fn connor_keys(
         }
     }
     for (what, pressed) in key_events {
+        // handsOff (anim-scripts.md rule 21): presses are swallowed,
+        // releases still count.
+        if pressed && sim.hands_off {
+            continue;
+        }
         let cleared = sim.walker.key_event(what, pressed);
         if cleared != (false, false) {
             let block = match cleared {
@@ -507,7 +512,10 @@ pub fn connor_keys(
     if sim.test_turn != 0 {
         sim.intent.turn = sim.test_turn;
     }
-    if run_pressed {
+    if run_pressed && sim.hands_off {
+        let line = format!("connor update {}: run key pressed: ignored (handsOff)", sim.updates);
+        sim.log.detail(line);
+    } else if run_pressed {
         sim.intent.run = !sim.intent.run;
         let line = format!("connor update {}: run switch {}", sim.updates, if sim.intent.run { "on" } else { "off" });
         shared.log.lock().unwrap().summary(&line);
@@ -597,6 +605,21 @@ impl ConnorSim {
         line
     }
 
+    /// `handsOff 0` (`anim-scripts.md` rule 22): every movement key still
+    /// held is sent to him again as a press (which clears wall blocks as a
+    /// press does), so it acts at once. Returns a line for the log.
+    pub fn keys_sent_again(&mut self) -> String {
+        let mut sent = Vec::new();
+        let keys = [(self.intent.forward == 1, MoveKey::Forward), (self.intent.forward == -1, MoveKey::Back), (self.intent.turn != 0, MoveKey::Turn)];
+        for (held, key) in keys {
+            if held {
+                let cleared = self.walker.key_event(key, true);
+                sent.push(format!("{key:?} (blocks cleared {cleared:?})"));
+            }
+        }
+        if sent.is_empty() { "no movement key held".into() } else { format!("held keys sent again: {}", sent.join(", ")) }
+    }
+
     /// `KQConner::setRun` from a script (M3 step 3d-3).
     pub fn set_run(&mut self, run: bool, at: &str) {
         let was = self.intent.run;
@@ -672,7 +695,7 @@ pub fn connor_step(
         objects.as_ref().map_or(&[][..], |o| &o.0),
     );
     scene.not_pushable = sim.not_pushable.clone();
-    if let Some((_, what)) = sim.repeat {
+    if let Some((_, what)) = sim.repeat.filter(|_| !sim.hands_off) {
         let cleared = sim.walker.key_event(what, true);
         if cleared != (false, false) {
             let line = format!("connor update {}: {what:?} held (repeat): blocks cleared (forward, back): {cleared:?}", sim.updates);
