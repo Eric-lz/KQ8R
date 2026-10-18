@@ -217,7 +217,7 @@ milestone: **M3, Daventry comes alive**.
   at the wall: **Q95**, needs A); the windmill tumble (`miltrap1.cs`)
   showed a bow because `KQConner::getDoMode` was unknown to us, so the
   script read 1 (bow); **fixed 2026-10-18** (`getDoMode` answers 4,
-  empty hands; checked in the logs, not by eye); `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
+  empty hands; checked by eye by the user); `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
   The user also found that after the tumble Jump doesn't work: the jump
   into the sails never ends in our mover (gravity off, state `jump`, he
   hangs 400 above the floor) because `endJump` is a stub: needs Q96 b.

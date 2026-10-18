@@ -9,7 +9,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** The user saw Connor holding a bow in the windmill tumble. `miltrap1.cs` picks the tumble by `getDoMode`; unknown to us, it left `$Console::Return` at 1 = bow. The values (sword 0, bow 1, empty hands 4) are in `pushing.md` ("Words used here").
 **Tested how:** `cargo test --workspace` (385 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 191200,229700,-1.5708 --jump 20 --frames 2000 --sound off` (the user's standing jump into the sails), `traps.log`, `connor.log`.
 **Result:** Update 38: trap `miltrap1` On, "KQConner::getDoMode: 4 (empty hands; no weapons yet)", `setState Connor special AnimList=conmill.anm,AnimListOn,normal` (the "no weapon out" branch); `normal` plays to update 72.
-**Still broken / not tested:** Not checked by eye. Showing the weapon he holds needs weapons (M5). After the tumble the jump still never ends (Q96 b); `JumpDir` is a stub, so always the forward tumble (Q96 a).
+**Still broken / not tested:** Checked by eye by the user afterwards (2026-10-18): he tumbles with no weapon in hand, as in the original. Showing the weapon he holds needs weapons (M5). After the tumble the jump still never ends (Q96 b); `JumpDir` is a stub, so always the forward tumble (Q96 a).
 **Next:** Study session A: Q95, Q96, Q94, the camera flights.
 
 ## 2026-10-18 M3 step 3l: the user's checks by eye (docs only)

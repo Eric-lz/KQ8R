@@ -396,7 +396,7 @@ message that shows the usage.
 - **Cutscenes:** no GUI to hide and no spinning-mask icon during
   `handsOff`; a scripted walk that runs head-on into something uses a
   stand-in (Q94). The windmill tumble (`miltrap1.cs`) plays the
-  no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18;
+  no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18; checked by eye by the user;
   weapons come with M5); which tumble plays (`KQConner::JumpDir`, forward
   or backward) is a stub (Q96). After the tumble Connor can't
   jump and hangs about 400 above the floor: the jump he made into the
