@@ -206,7 +206,7 @@ milestone: **M3, Daventry comes alive**.
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
 - Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
   ear by the user. World music (3h-5) too.
-- Tests: 384 unit tests pass (105 + 263 + 5 + 11), 2026-10-18.
+- Tests: 385 unit tests pass (105 + 264 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
@@ -215,13 +215,13 @@ milestone: **M3, Daventry comes alive**.
   cutscene runs (its camera flight is missing). Two problems found:
   Connor follows a pushed barrel through a wall (the original stops him
   at the wall: **Q95**, needs A); the windmill tumble (`miltrap1.cs`)
-  shows a bow because `KQConner::getDoMode` is unknown to us, so the
-  script reads 1 (bow). Building `getDoMode` (hand mode 4) fixes that
-  without a study; `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
+  showed a bow because `KQConner::getDoMode` was unknown to us, so the
+  script read 1 (bow); **fixed 2026-10-18** (`getDoMode` answers 4,
+  empty hands; checked in the logs, not by eye); `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
   The user also found that after the tumble Jump doesn't work: the jump
   into the sails never ends in our mover (gravity off, state `jump`, he
   hangs 400 above the floor) because `endJump` is a stub: needs Q96 b.
-- **Next step, suggested:** for B: `KQConner::getDoMode`. For A: Q95,
+- **Next step, suggested:** for A: Q95,
   Q96, the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`)
   and Q94; for B after that: cues of scenery animations, `loadKQ` with a name or place
   while playing (barrels and boards breaking, M5), remarks, inventory

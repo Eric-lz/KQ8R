@@ -1412,3 +1412,10 @@ This replaces the Q90 b and d stand-ins of 3k-4.
 | A name a live object still has, or deleted during the same event: error logged, load refused (the original's fatal error) | `objects.md` rule 6, `clicking.md` rule 22 (Q90 d; "for us: log and refuse") | Same unit test |
 | A world command asks the script runner to run a script at once (`take_calls`); the runner reports the end of an event's run (`event_done`) | **Our method** | — |
 
+### `KQConner::getDoMode` — `crates/kq8-core/src/active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Answers the hand mode: sword 0, bow 1, empty hands 4 | `pushing.md` "Words used here" (the game's own help text) | Unit test `get_do_mode_answers_empty_hands`; `traps.log` (windmill) |
+| Always 4: no weapons yet, `setDoMode` a stub | **Our state** (until M5) | — |
+

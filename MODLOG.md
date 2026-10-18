@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 `KQConner::getDoMode` (the windmill tumble without a bow)
+
+**Changed:** `kq8-core/src/active.rs`: `KQConner::getDoMode` is a world command: it answers Connor's hand mode, always 4 (empty hands) because he has no weapons yet and `setDoMode` is still a stub; 1 unit test.
+**Why:** The user saw Connor holding a bow in the windmill tumble. `miltrap1.cs` picks the tumble by `getDoMode`; unknown to us, it left `$Console::Return` at 1 = bow. The values (sword 0, bow 1, empty hands 4) are in `pushing.md` ("Words used here").
+**Tested how:** `cargo test --workspace` (385 pass), `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --at 191200,229700,-1.5708 --jump 20 --frames 2000 --sound off` (the user's standing jump into the sails), `traps.log`, `connor.log`.
+**Result:** Update 38: trap `miltrap1` On, "KQConner::getDoMode: 4 (empty hands; no weapons yet)", `setState Connor special AnimList=conmill.anm,AnimListOn,normal` (the "no weapon out" branch); `normal` plays to update 72.
+**Still broken / not tested:** Not checked by eye. Showing the weapon he holds needs weapons (M5). After the tumble the jump still never ends (Q96 b); `JumpDir` is a stub, so always the forward tumble (Q96 a).
+**Next:** Study session A: Q95, Q96, Q94, the camera flights.
+
 ## 2026-10-18 M3 step 3l: the user's checks by eye (docs only)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q95 (Connor and a wall while pushing a barrel into it), Q96 (`KQConner::JumpDir`, `endJump`). `FEATURES.md`, `README.md`, `STATUS.md`: the checks and the two problems. `DESIGN.md` M7: barrels through walls noted as an improvement for after M7. No code.

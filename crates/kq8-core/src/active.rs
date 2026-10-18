@@ -1499,6 +1499,15 @@ impl ScriptHost for WorldState {
             "KQObject::collisionType" => Some(self.collision_type(words, at)),
             "KQObject::collision" => Some(self.collision_mask(words, at)),
             "KQConner::setRun" => Some(self.set_run(words, at)),
+            "KQConner::getDoMode" => {
+                // pushing.md "Words used here": the hand mode, sword 0, bow
+                // 1, empty hands 4 (the game's help text). Connor has no
+                // weapons yet and `KQConner::setDoMode` is a stub (M5), so
+                // always empty hands.
+                let mode = crate::connor::EMPTY_HANDS;
+                self.note(format!("{at}: KQConner::getDoMode: {mode} (empty hands; no weapons yet)"));
+                Some(mode.to_string())
+            }
             "KQCamera::setRange" => Some(self.set_range(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
@@ -3524,6 +3533,19 @@ mod tests {
         assert!(locked < allowed, "{log}");
         assert!(log.contains("at most (2 + 1) / 15 s"), "{log}");
         assert!(log.contains("held movement keys sent again"), "{log}");
+    }
+
+    #[test]
+    fn get_do_mode_answers_empty_hands() {
+        // miltrap1.cs: the "no weapon out" branch, not the bow's.
+        let script = "if test $2 == ConnorAction
+ KQConner::getDoMode
+ set M::mode $Console::Return
+endif
+";
+        let mut a = with_object(script, "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.scripts.vars.get("M::mode"), Some("4"));
     }
 
     #[test]

@@ -395,10 +395,10 @@ message that shows the usage.
   `flyToCamLoc`, `cutToCamLoc`); the camera's roll is not drawn.
 - **Cutscenes:** no GUI to hide and no spinning-mask icon during
   `handsOff`; a scripted walk that runs head-on into something uses a
-  stand-in (Q94). The windmill tumble (`miltrap1.cs`) shows Connor
-  holding a bow: `KQConner::getDoMode` is not built, so the script takes
-  its bow branch (fix ready to build); which tumble plays
-  (`KQConner::JumpDir`) is a stub (Q96). After the tumble Connor can't
+  stand-in (Q94). The windmill tumble (`miltrap1.cs`) plays the
+  no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18;
+  weapons come with M5); which tumble plays (`KQConner::JumpDir`, forward
+  or backward) is a stub (Q96). After the tumble Connor can't
   jump and hangs about 400 above the floor: the jump he made into the
   sails never ends, because `KQConner::endJump` is a stub (Q96 b).
 - **Water:** no damage yet (poison, lava, swamp).
