@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l: the user's checks by eye (docs only)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q95 (Connor and a wall while pushing a barrel into it), Q96 (`KQConner::JumpDir`, `endJump`). `FEATURES.md`, `README.md`, `STATUS.md`: the checks and the two problems. `DESIGN.md` M7: barrels through walls noted as an improvement for after M7. No code.
+**Why:** The user tested 3l in the viewer against the original.
+**Tested how:** By the user, by eye. B looked at the cause of each problem in the code and logs.
+**Result:** Match the original: the bricks puzzle (no pop-up), the hay bale, turning during the stumble; the watermill cutscene runs, without its camera flight (not built). Problems: (1) a barrel pushed into the pub's wall goes through (as in the original), but Connor follows it through; in the original the wall stops him and he stops pushing once the barrel is too far in. Cause: after an accepted physical push our across pass puts him at start + 0.95 × the barrel's movement and ends, so a wall contact in that sweep is never handled; how the original combines the two is not in the note (Q95). (2) The windmill tumble (`miltrap1.cs`) shows a bow: `traps.log` has "ERROR unknown command 'KQConner::getDoMode'", so `$Console::Return` stays 1 and the script takes its "bow weapon" branch (`cbow`). `KQConner::JumpDir` is a stub (0: always the forward tumble).
+**Still broken / not tested:** Both problems are not fixed yet (the user asked to wait).
+**Next:** B: `KQConner::getDoMode` (returns the hand mode, 4; from `pushing.md`). A: Q95, Q96.
+
 ## 2026-10-18 M3 step 3l: end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are" rewritten for 3l and shortened, next steps, Q94 under open questions, 384 tests), `docs/FEATURES.md` (pushing, cutscenes, crash turning, torches in step; what still doesn't work), `README.md` (barrels and cutscenes in "What works", marked logs only; the pop-up and the watermill removed from "What doesn't work"), `docs/DESIGN.md` (3l done), `docs/behaviour/QUESTIONS.md` (Q84–Q93 marked built).

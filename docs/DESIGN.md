@@ -1557,6 +1557,11 @@ Play the original next to ours, list differences, fix them. After that,
 the improvements this project was started for: controls, graphics,
 gameplay changes.
 
+Improvements already noted (original behaviour we copy until then):
+
+- Pushed barrels go through walls (`pushing.md` rule 4.1, the user's
+  check 2026-10-18): make walls stop them, after M7.
+
 ### Outside the milestones: choosing the graphics API, `--renderer` (planned 2026-10-16, done 2026-10-16)
 
 Not from the original game (its Glide / Direct3D choice is not studied):

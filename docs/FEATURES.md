@@ -112,7 +112,7 @@ measures reach to its box in the building's own axes (Q75).
 - **Crashing:** running straight into a wall knocks him back (the crash
   animation), as far as in the original (checked by eye). A turn key
   turns him while he stumbles, as in the original (2026-10-18, M3 3l-5;
-  checked in the logs, not yet by eye).
+  checked by eye by the user).
 - **Objects are solid too** (trees, signposts, doors, crates, stone
   villagers…), with each object's box from the game's table (checked by
   eye).
@@ -178,23 +178,25 @@ objects don't stop it, as in the original. Checked in the logs
   angle it slides along a wall, pushed straight in it stops; letting go
   plays his step back. Barrels move too: nothing stops them (they go
   through walls, as in the original), but a barrel pushed uphill stays.
-  Checked in the logs (`connor.log`), not yet by eye (the hay bale's stop
-  was checked by eye in 3k). Walking into Daventry's bricks (by the waterfall) runs
+  Checked in the logs (`connor.log`); the hay bale checked by eye by the
+  user (2026-10-18: like the original). Barrels go through walls as in
+  the original, but Connor follows them through the wall; in the original
+  the wall stops him (Q95, not built). Walking into Daventry's bricks (by the waterfall) runs
   their puzzle to the end (M3 step 3k): Connor's push animation, the
   table and bricks hidden then shown, the bricks go down, the waterfall
   and its sound are replaced (so the way behind it is open), the water
   changes, the camera stops following and takes the script's three
   places and views, the controls are off until the end. Connor lands
   on the cave floor in the same update as the push, so nothing pops up
-  (3l-1). Checked in the logs; the 3k version was checked by eye.
+  (3l-1). Checked by eye by the user (2026-10-18): matches the original.
 - **Cutscenes** (2026-10-18, M3 3l-2, 3l-3): `handsOff` takes the
   controls (keys, Jump, run, mouse look, clicks) and gives them back with
   any held key acting at once; `move KQCamera` places and aims the camera
   (tilt and heading); `follow Connor` starts from where the camera is;
   `walkTo` / `runTo` / `pointAndCue` walk or turn Connor and cue the
   script. The watermill room's cutscene now ends and gives control back
-  4.2 s after Connor's turn, as A traced. Checked in the logs, not yet by
-  eye.
+  4.2 s after Connor's turn, as A traced. Checked by eye by the user
+  (2026-10-18), apart from the camera flight, which is not built.
 - **Connor's scripted animations** (2026-10-17, M3 step 3i-7): a
   script's `KQMonster::setState Connor special` list plays its movements
   one after another (also from the extra lists such as `bricks.anm`),
@@ -393,7 +395,10 @@ message that shows the usage.
   `flyToCamLoc`, `cutToCamLoc`); the camera's roll is not drawn.
 - **Cutscenes:** no GUI to hide and no spinning-mask icon during
   `handsOff`; a scripted walk that runs head-on into something uses a
-  stand-in (Q94).
+  stand-in (Q94). The windmill tumble (`miltrap1.cs`) shows Connor
+  holding a bow: `KQConner::getDoMode` is not built, so the script takes
+  its bow branch (fix ready to build); which tumble plays
+  (`KQConner::JumpDir`) is a stub (Q96).
 - **Water:** no damage yet (poison, lava, swamp).
 - **Collision:** some objects have no box in the game's table and stay
   walk-through (as in the original, if we read it right); no ropes.

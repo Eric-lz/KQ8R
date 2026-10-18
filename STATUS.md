@@ -210,11 +210,17 @@ milestone: **M3, Daventry comes alive**.
 
 ## What doesn't work yet / next
 
-- **Next step, suggested:** the user checks 3l by eye (the bricks:
-  no pop-up, the camera's views; the watermill cutscene ends; barrels
-  move; the hay bale slides; turning during the stumble). Then for A:
-  the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`) and
-  Q94; for B: cues of scenery animations, `loadKQ` with a name or place
+- **The user's checks of 3l (2026-10-18):** the bricks, the hay bale
+  and turning during the stumble match the original; the watermill
+  cutscene runs (its camera flight is missing). Two problems found:
+  Connor follows a pushed barrel through a wall (the original stops him
+  at the wall: **Q95**, needs A); the windmill tumble (`miltrap1.cs`)
+  shows a bow because `KQConner::getDoMode` is unknown to us, so the
+  script reads 1 (bow). Building `getDoMode` (hand mode 4) fixes that
+  without a study; `KQConner::JumpDir` / `endJump` are stubs (**Q96**).
+- **Next step, suggested:** for B: `KQConner::getDoMode`. For A: Q95,
+  Q96, the camera flights (`addCamLoc` / `flyToCamLoc` / `cutToCamLoc`)
+  and Q94; for B after that: cues of scenery animations, `loadKQ` with a name or place
   while playing (barrels and boards breaking, M5), remarks, inventory
   screen (M4). The brightness setting (rule 17) is still not built.
 - Sound, not done: the item land sound (nothing is thrown),
@@ -262,6 +268,9 @@ milestone: **M3, Daventry comes alive**.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
+- **Q95** (open, for A): Connor and a wall when he pushes a barrel
+  into it. **Q96** (open, for A): `KQConner::JumpDir` and `endJump`
+  (the windmill tumble).
 - **Q94** (open, for A): a scripted walk (`walkTo`) that runs head-on
   into something; a wall block at its start; what plays during its
   turn; `walkTo` without an object. Stand-ins in place.
