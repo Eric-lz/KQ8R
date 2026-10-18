@@ -1136,7 +1136,7 @@ pub struct Objects {
     pub audibles: Vec<kq8_core::sound::Audible>,
     /// Objects prepared for a script's `loadKQ` while playing (M3 3k-4):
     /// lower-case file name, object name.
-    pub dormant: Vec<(String, String)>,
+    pub dormant: Vec<(String, String, Option<String>)>,
     /// The world's music object (`KQMusic`, `music.kq`; M3 step 3h-5,
     /// sound.md rule 57), if a start-up script loads one.
     pub music: Option<kq8_core::music::Music>,
@@ -1557,7 +1557,7 @@ struct Placer<'a> {
     /// Files named by `loadKQ <file>` in the world's scripts, lower case
     /// (M3 3k-4).
     load_targets: std::collections::BTreeSet<String>,
-    dormant: Vec<(String, String)>,
+    dormant: Vec<(String, String, Option<String>)>,
     music: Option<kq8_core::music::Music>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
@@ -2017,7 +2017,8 @@ impl Placer<'_> {
         // its own.
         let dormant = unused && p.position != [0.0; 3] && self.load_targets.contains(&base.to_ascii_lowercase());
         if dormant {
-            self.dormant.push((base.to_ascii_lowercase(), p.name.clone()));
+            let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+            self.dormant.push((base.to_ascii_lowercase(), p.name.clone(), script));
             self.log.summary(format!("dormant {label}[{}]: prepared for a script's loadKQ (M3 3k-4)", p.name));
         }
         if (!unused || dormant) && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAudibleObject")) {

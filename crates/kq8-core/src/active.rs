@@ -518,8 +518,13 @@ pub struct WorldState {
     /// lower-case name: overrides their file's `hidden=`.
     plain_hidden: BTreeMap<String, bool>,
     /// Objects prepared for a script's `loadKQ` (3k-4): lower-case file
-    /// name → the object's name.
-    dormant: BTreeMap<String, String>,
+    /// name → the object's name and script.
+    dormant: BTreeMap<String, (String, Option<String>)>,
+    /// Names deleted during the event running now: free only once it has
+    /// finished (`clicking.md` rule 22, 3l-7).
+    deleted_this_event: BTreeSet<String>,
+    /// Scripts a world command asked to run at once (`ScriptHost::take_calls`).
+    calls_out: Vec<(String, Vec<String>)>,
     /// `setThirdPerson` (`camera.md` "First person" rule 7): the
     /// first-person key is locked, and the variable
     /// `…::SetThirdPerson::WasFirstPerson` (we are always in third person).
@@ -1052,10 +1057,14 @@ impl WorldState {
         "0".into()
     }
 
-    /// `loadKQ <file>` while playing (Q90 stand-in: as at the start, no
-    /// script call, a sound starts at once): a file prepared at the start
-    /// comes into the world. With a name or a position on the line, or a
-    /// file not prepared: not done (logged).
+    /// `loadKQ <file>` while playing (`objects.md` "Where a world's objects
+    /// come from" rule 6, Q90): a file prepared at the start comes into the
+    /// world as at the start (a sound starts at once) and its script gets
+    /// `Init` at once, during this line. A name still used by a live
+    /// object, or deleted during this same event (`clicking.md` rule 22):
+    /// the original stops with a fatal error; we log an error and refuse
+    /// the load. With a name or a position on the line, or a file not
+    /// prepared: not done (logged).
     fn load_kq(&mut self, words: &[String], at: &str) -> String {
         let Some(file) = words.get(1) else {
             self.note(format!("{at}: usage: loadKQ <file> [name [x y z [rx ry rz]]]"));
@@ -1066,16 +1075,24 @@ impl WorldState {
             return "0".into();
         }
         let key = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
-        let Some(name) = self.dormant.remove(&key) else {
+        let Some((name, script)) = self.dormant.get(&key).cloned() else {
             self.note(format!("{at}: loadKQ {file}: no copy prepared at the start (already loaded, or not found): not done"));
             return "0".into();
         };
-        if self.deleted.contains(&name.to_ascii_lowercase()) || self.known.contains(&name.to_ascii_lowercase()) {
-            self.note(format!("{at}: loadKQ {file}: an object called {name} exists or existed (Q90 d): loaded anyway"));
+        let lower = name.to_ascii_lowercase();
+        let live = self.known.contains(&lower) && !self.deleted.contains(&lower);
+        if live || self.deleted_this_event.contains(&lower) {
+            let why = if live { "a live object already has that name" } else { "its name was deleted in this same event and is not free yet" };
+            self.note(format!("{at}: ERROR loadKQ {file}: {why} ({name}): the original stops with a fatal error; load refused"));
+            return "1".into();
         }
-        self.known.insert(name.to_ascii_lowercase());
-        self.note(format!("{at}: loadKQ {file}: {name} comes into the world (Q90 stand-in: as at the start, no call)"));
-        self.requests.push(Request::Load { file: key, name, at: at.to_string() });
+        self.dormant.remove(&key);
+        self.known.insert(lower);
+        self.note(format!("{at}: loadKQ {file}: {name} comes into the world (as at the start){}", if script.is_some() { "; its script gets Init now" } else { "; no script" }));
+        self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
+        if let Some(script) = script {
+            self.calls_out.push((script, vec![name, "Init".into()]));
+        }
         "0".into()
     }
 
@@ -1316,6 +1333,7 @@ impl WorldState {
             self.items.objects[i].place = Place::Gone;
             let line = format!("{at}: deleteObject {name}: item gone");
             self.item_note(line);
+            self.deleted_this_event.insert(key.clone());
             self.deleted.insert(key);
             return true;
         } else if let Some(i) = self.object_index(name) {
@@ -1345,6 +1363,7 @@ impl WorldState {
         };
         self.note(format!("{at}: deleteObject {name}: {what} deleted (not drawn, not clickable, no collision; events to it dropped)"));
         self.requests.push(Request::Delete { name: name.to_string(), at: at.to_string() });
+        self.deleted_this_event.insert(key.clone());
         self.deleted.insert(key);
         true
     }
@@ -1518,6 +1537,14 @@ impl ScriptHost for WorldState {
     fn take_vars(&mut self) -> Vec<(String, String)> {
         std::mem::take(&mut self.vars_out)
     }
+
+    fn take_calls(&mut self) -> Vec<(String, Vec<String>)> {
+        std::mem::take(&mut self.calls_out)
+    }
+
+    fn event_done(&mut self) {
+        self.deleted_this_event.clear();
+    }
 }
 
 /// The scripts and the world they act on.
@@ -1573,6 +1600,8 @@ impl Active {
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
+                deleted_this_event: BTreeSet::new(),
+                calls_out: Vec::new(),
                 first_person_locked: false,
                 was_first_person: false,
             },
@@ -1648,12 +1677,13 @@ impl Active {
         self.world.queue.send(now, 0.0, &cue.who, "KQCueEvent", &[cue.c.clone(), cue.d.clone()], &at);
     }
 
-    /// The objects prepared for a script's `loadKQ` (3k-4): file name and
-    /// object name. Their names are not known to the scripts until loaded.
-    pub fn set_dormant(&mut self, files: impl IntoIterator<Item = (String, String)>) {
-        for (file, name) in files {
+    /// The objects prepared for a script's `loadKQ` (3k-4): file name,
+    /// object name and its script. Their names are not known to the
+    /// scripts until loaded.
+    pub fn set_dormant(&mut self, files: impl IntoIterator<Item = (String, String, Option<String>)>) {
+        for (file, name, script) in files {
             self.world.known.remove(&name.to_ascii_lowercase());
-            self.world.dormant.insert(file.to_ascii_lowercase(), name);
+            self.world.dormant.insert(file.to_ascii_lowercase(), (name, script));
         }
     }
 
@@ -3513,13 +3543,41 @@ mod tests {
     #[test]
     fn load_kq_while_playing_brings_a_prepared_copy_in_once() {
         let mut a = with_object("loadKQ waterfa2.kq\nloadKQ waterfa2.kq\nloadKQ other.kq\nloadKQ x.kq name 1 2 3\n", "x");
-        a.set_dormant([("WATERFA2.KQ".to_string(), "waterfall2".to_string())]);
+        a.set_dormant([("WATERFA2.KQ".to_string(), "waterfall2".to_string(), None)]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let loads: Vec<&Request> = a.world.requests.iter().filter(|r| matches!(r, Request::Load { .. })).collect();
         assert_eq!(loads.len(), 1);
         assert!(a.world.known.contains("waterfall2"));
         let log = a.take_log().join("\n");
         assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
+    }
+
+    #[test]
+    fn load_kq_while_playing_calls_init_at_once_and_refuses_a_name_in_use() {
+        // objects.md "Where a world's objects come from" rule 6 (Q90 b, d).
+        let mut a = with_object("loadKQ new.kq\nset T::after $W::init\nloadKQ dup.kq\n", "x");
+        a.world.sources.insert("new.cs".into(), b"if test $2 == Init\n set W::init $1\nendif\n".to_vec());
+        a.world.sources.insert("again.cs".into(), b"loadKQ dup.kq\n".to_vec());
+        a.set_dormant([
+            ("new.kq".to_string(), "newthing".to_string(), Some("new.cs".to_string())),
+            ("dup.kq".to_string(), "basket1".to_string(), None),
+        ]);
+        a.world.known.insert("basket1".into());
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        // Init ran during the loadKQ line, before the next line.
+        assert_eq!(a.scripts.vars.get("T::after"), Some("newthing"));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("ERROR loadKQ dup.kq: a live object already has that name (basket1)"), "{log}");
+        assert!(!a.world.requests.iter().any(|r| matches!(r, Request::Load { name, .. } if name == "basket1")));
+        // Deleted in the same event: still refused; free in the next one.
+        let mut b = with_object("if test $2 == ConnorAction\n deleteObject basket1\n loadKQ dup.kq\nendif\n", "x");
+        b.world.sources.insert("again.cs".into(), b"loadKQ dup.kq\n".to_vec());
+        b.set_dormant([("dup.kq".to_string(), "basket1".to_string(), None)]);
+        b.world.known.insert("basket1".into());
+        b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(b.take_log().join("\n").contains("deleted in this same event"));
+        b.scripts.call("again.cs", &[], &mut b.world);
+        assert!(b.world.requests.iter().any(|r| matches!(r, Request::Load { name, .. } if name == "basket1")));
     }
 
     /// A made-up script in the style of `fishies.cs` (not a copy).

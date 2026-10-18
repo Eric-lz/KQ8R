@@ -115,6 +115,15 @@ pub trait ScriptHost {
     fn take_vars(&mut self) -> Vec<(String, String)> {
         Vec::new()
     }
+    /// Scripts a world command asked to run at once, before the next line
+    /// (script, arguments): `loadKQ`'s `Init` call (`objects.md` "Where a
+    /// world's objects come from" rule 6).
+    fn take_calls(&mut self) -> Vec<(String, Vec<String>)> {
+        Vec::new()
+    }
+    /// The script run of one event (a [`Scripts::call`] and what it ran)
+    /// has finished (`clicking.md` rule 22: deleted names are freed then).
+    fn event_done(&mut self) {}
 }
 
 /// The scripts' shared state: the variables (set by the start-up scripts
@@ -147,7 +156,9 @@ impl Scripts {
     /// Runs script `name` with `args` as `$1`, `$2`, ... Returns false if
     /// the script was not found (logged).
     pub fn call(&mut self, name: &str, args: &[String], host: &mut dyn ScriptHost) -> bool {
-        self.run(name, args, host, 0)
+        let found = self.run(name, args, host, 0);
+        host.event_done();
+        found
     }
 
     fn run(&mut self, name: &str, args: &[String], host: &mut dyn ScriptHost, depth: usize) -> bool {
@@ -299,6 +310,10 @@ impl Scripts {
                 let r = host.world_command(words, at);
                 for (var, value) in host.take_vars() {
                     self.vars.set(&var, value);
+                }
+                for (script, args) in host.take_calls() {
+                    host.log(format!("{at}: runs {script} {} at once", args.join(" ")));
+                    self.run(&script, &args, host, depth + 1);
                 }
                 r
             }

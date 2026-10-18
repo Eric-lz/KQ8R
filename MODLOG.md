@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 step 3l-7: `loadKQ` while playing calls `Init`, refuses a name in use (Q90)
+
+**Changed:** `kq8-core/src/script.rs`: `ScriptHost::take_calls` (scripts a world command asks to run at once, before the next line) and `ScriptHost::event_done` (called when an event's script run has finished). `active.rs`: `loadKQ` runs the new object's script with `$1=<name> $2=Init` at once; a name still used by a live object, or deleted during the same event, is logged as an error and the load is refused (the copy stays prepared); deleted names are remembered per event (`deleted_this_event`); `set_dormant` takes the object's script; 1 new unit test. `kq8-viewer` `load.rs`: the prepared copies carry their `script=`.
+**Why:** A's answer to Q90 (`objects.md` "Where a world's objects come from" rule 6, `clicking.md` rule 22): B's stand-in gave no call; the original stops with a fatal error on a name in use (we refuse instead, as the note asks).
+**Tested how:** `cargo test --workspace` (384 pass), `cargo clippy --workspace --all-targets` clean. Viewer: the bricks run (`cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --frames 2500 --sound off`), `doors.log`, `traps.log`.
+**Result:** Update 63: "loadKQ waterfa2.kq: waterfall2 comes into the world (as at the start); its script gets Init now", "runs waterfa2.cs waterfall2 Init at once" (before line 35), then `watrfsn2.kq` ("no script"). Update 64: both come in as before.
+**Still broken / not tested:** The name check is not reached in Daventry's play (unit test only). `loadKQ` with a name or position while playing (barrels, boards) is still not done. A copy that comes in still has no collider and isn't clickable.
+**Next:** End-of-session documents (STATUS, FEATURES, README, DESIGN, QUESTIONS).
+
 ## 2026-10-18 M3 step 3l-6: animated objects' first update, Connor's levels, `Die`'s `$3` (Q85, Q86)
 
 **Changed:** `kq8-core/src/named_anim.rs`: an object with no `currAnimName` and a waiting movement starts that movement plainly on its first update (no `flags` bit 8 random part) and its phase moves on in that same update; the bit 8 random part (start frame = round(random × (frames − 1)), phase = frame ÷ frames; a random speed 0.9–1.1 that **replaces** the `loop=` speed) belongs to the current movement only (`random_speed` replaces `speed_scale`; the Q85 stand-in's `load_random` / `kept_random` are gone); 2 tests rewritten, 1 changed. `stats.rs`: on level up the second stat +5 and the third +2 (were swapped); test with the bricks' numbers and the leftover acted on at the next event. `active.rs`: the event's fourth number is cut to 100 when read; Connor's "below 0" check before the cap and the level-up heal; every `Die` call carries `$3` = `Normal` (`DIE_KIND`; nothing is hit by a weapon yet). `anim_view.rs`: the load line says when the first update will drop the random part.

@@ -1518,7 +1518,7 @@ catchers, ground animators).
       gets `$3` (the last weapon-hit kind, `Normal` if never hit). Test:
       unit tests; `anim.log` (the six objects at phase 0, speed 1);
       `doors.log` at the bricks (+50: level 2, 40 left, health 20).
-    - **3l-7, `loadKQ` while playing** (Q90; `objects.md` "Where a
+    - **3l-7, `loadKQ` while playing** (**done** 2026-10-18; Q90; `objects.md` "Where a
       world's objects come from" rule 6, `clicking.md` rule 22): the new
       object's script gets `Init` at once, during the `loadKQ` line; a
       name still used by a live object (or deleted in the same event):

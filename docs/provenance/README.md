@@ -1402,3 +1402,13 @@ This replaces the Q85 and Q86 stand-ins of 3i-4 and 3i-6.
 | "Below 0" checked right after the adding; the event's fourth number cut to 100 when read | `anim-scripts.md` rule 19 | Unit test `stats_events_add_and_an_object_below_0_gets_die` |
 | `Die` always has `$3`: the last weapon-hit kind, `Normal` if never hit (always `Normal` until M5) | `anim-scripts.md` rule 20 (Q86 e) | Same test and `a_kq_anim_once_reports_die_tells_its_listener_and_is_deleted` |
 
+### 3l-7, `loadKQ` while playing — `crates/kq8-core/src/{script,active}.rs`, `crates/kq8-viewer/src/load.rs`
+
+This replaces the Q90 b and d stand-ins of 3k-4.
+
+| What | Source | Check |
+| --- | --- | --- |
+| The new object's script gets `$1=<name> $2=Init` at once, during the `loadKQ` line, before the next line | `objects.md` "Where a world's objects come from" rule 6 (Q90 b) | Unit test `load_kq_while_playing_calls_init_at_once_and_refuses_a_name_in_use`; `doors.log` update 63 |
+| A name a live object still has, or deleted during the same event: error logged, load refused (the original's fatal error) | `objects.md` rule 6, `clicking.md` rule 22 (Q90 d; "for us: log and refuse") | Same unit test |
+| A world command asks the script runner to run a script at once (`take_calls`); the runner reports the end of an event's run (`event_done`) | **Our method** | — |
+
