@@ -1,95 +1,164 @@
-//! The caption as a picture (M4 step 4b-3): a line's text broken into
-//! lines in the game's own font and drawn over the stone strip, on the
-//! game's 640×480 screen.
+//! The caption as a picture: a line's text broken into rows in the game's
+//! own font and drawn over the stone strip (M4 steps 4b-3 and 4c-1).
 //!
-//! From the layout `IDDLG_CAPTION` in `Gplayscr.gui` (16 pixels per line,
-//! text 2 pixels down, the font and strip picture it names) and the user's
-//! check in the original (2026-10-18): at the bottom of the screen, text
-//! centred, the strip growing upwards one line at a time, ending about two
-//! letters beyond the text on each side; the colours look right (the
-//! world's palette, index 0 see-through); the line breaks mostly match.
-//! STAND-INS until the interface is studied (Q106, Q107): the wrap width
-//! [`WRAP_WIDTH`], greedy word wrapping, the strip's side margin
-//! [`STRIP_MARGIN`] around the widest line, tiled from its top-left.
+//! Rules from `docs/behaviour/interface.md` rules 46–52 (A, 2026-10-18;
+//! answers Q107 a), checked by the user in the original:
+//!
+//! - The caption box is the layout's `IDDLG_CAPTION`: font `console.pft`,
+//!   background picture `stontran.pbm`, text 2 pixels down (rule 46).
+//! - Rows are cut greedily at the **box's width**: widths are summed
+//!   letter by letter (glyph width × the font's horizontal scale, plus the
+//!   font's spacing after each letter that fits); a letter that would pass
+//!   the width ends the row at the last space before it (that space is
+//!   dropped; spaces that fit at a row's end are kept) (rule 47). A row
+//!   with no space to break at is cut at the box's edge ("Edge cases",
+//!   the note's "do instead").
+//! - Height: one row per font height; the strip's top = its bottom − rows
+//!   × font height − 4, so it grows upwards (rule 48). Each row is centred
+//!   in the box's width, in its own slot, from the top down (rule 49).
+//! - The stone covers the **whole box**, not the text (rule 50; the user's
+//!   check: a short line's strip is as wide as a long line's).
+//! - The box's bottom edge = the top of the highest bottom panel; its
+//!   centre is half-way between the map window's right edge and the
+//!   screen's right edge (rule 51).
+//!
+//! STAND-INS (Q108): the screen is 800 × 600 when `Options.cs` says
+//! `set800mode 1` and the 640 × 480 layout is scaled with it (rule 47,
+//! inferred); pictures are stretched with the layout (nearest pixel) and
+//! tiled when smaller than their box; fonts are drawn at their own size.
 
 use kq8_data::font::Font;
 use kq8_data::palette::Rgb;
 
-/// The game's screen.
-pub const SCREEN: [u32; 2] = [640, 480];
+/// The layout's screen (every `.gui` rectangle is on it).
+pub const LAYOUT: [u32; 2] = [640, 480];
 
-/// STAND-IN (Q107 a): the widest a caption line may be, in pixels. The
-/// user's check puts it between 365 and 418 ("… could be something" fits,
-/// "… something useful" doesn't).
-pub const WRAP_WIDTH: u32 = 400;
+/// Rule 48: the strip is this much taller than its rows.
+pub const STRIP_PAD: u32 = 4;
 
-/// STAND-IN (Q107 a): the strip reaches this far beyond the widest line
-/// on each side. The user saw "at most around 2 letters" in the original;
-/// a lower-case letter is about 8 pixels in `console.pft`.
-pub const STRIP_MARGIN: u32 = 16;
+/// The game's screen: 800 × 600 with `set800mode 1`, else the layout's.
+pub fn screen(set800mode: bool) -> [u32; 2] {
+    if set800mode {
+        [800, 600]
+    } else {
+        LAYOUT
+    }
+}
 
-/// Width of `text` in `font` (characters without a glyph count 0).
-pub fn text_width(font: &Font, text: &str) -> u32 {
-    text.chars().map(|c| glyph_advance(font, c)).sum()
+/// How much bigger the screen is than the layout (1.25 at 800 × 600).
+pub fn scale(screen: [u32; 2]) -> f32 {
+    screen[0] as f32 / LAYOUT[0] as f32
 }
 
 fn code(c: char) -> u8 {
     u8::try_from(c as u32).unwrap_or(b'?')
 }
 
-fn glyph_advance(font: &Font, c: char) -> u32 {
-    font.glyph(code(c)).map_or(0, |g| (g.width as i32 + font.char_spacing).max(0) as u32)
+/// A letter's own width (glyph width × horizontal scale; 0 without a
+/// glyph), before the spacing that follows it.
+fn glyph_width(font: &Font, c: char) -> f32 {
+    font.glyph(code(c)).map_or(0.0, |g| g.width as f32 * font.h_scale)
 }
 
-/// Breaks `text` into lines no wider than `width`: words (split at
-/// spaces) are added while they fit; a single word wider than `width`
-/// gets a line of its own. Leading and trailing spaces are dropped.
-pub fn wrap(font: &Font, text: &str, width: u32) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut line = String::new();
-    for word in text.split_whitespace() {
-        let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-        if !line.is_empty() && text_width(font, &candidate) > width {
-            lines.push(std::mem::replace(&mut line, word.to_string()));
-        } else {
-            line = candidate;
+/// Width of a row: every letter's width plus the spacing after it (rule
+/// 47).
+pub fn text_width(font: &Font, text: &str) -> f32 {
+    text.chars().map(|c| glyph_width(font, c) + font.char_spacing as f32).sum()
+}
+
+/// Rule 47: breaks `text` into rows no wider than `width`.
+pub fn wrap(font: &Font, text: &str, width: f32) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut rows = Vec::new();
+    let (mut start, mut i, mut used, mut last_space) = (0usize, 0usize, 0f32, None::<usize>);
+    while i < chars.len() {
+        let w = glyph_width(font, chars[i]);
+        if used + w > width && i > start {
+            match last_space {
+                // The row ends at the last space before this letter; the
+                // space is dropped and the next row starts after it.
+                Some(s) => {
+                    rows.push(chars[start..s].iter().collect());
+                    start = s + 1;
+                }
+                // No space: cut at the box's edge (our choice).
+                None => {
+                    rows.push(chars[start..i].iter().collect());
+                    start = i;
+                }
+            }
+            (i, used, last_space) = (start, 0.0, None);
+            continue;
         }
+        if chars[i] == ' ' {
+            last_space = Some(i);
+        }
+        used += w + font.char_spacing as f32;
+        i += 1;
     }
-    if !line.is_empty() {
-        lines.push(line);
+    if start < chars.len() {
+        rows.push(chars[start..].iter().collect());
     }
-    lines
+    rows
 }
 
-/// What the caption box needs from the layout.
+/// What the caption box needs, in screen pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Box {
-    /// Height of one line of the strip (the layout box's height).
-    pub line_height: u32,
-    /// Text top below the top of its line (the layout's caption y).
+    /// The box's width: the layout's width × the screen's scale (400 at
+    /// 800 × 600).
+    pub width: u32,
+    /// One row: the font's height (rule 48).
+    pub row_height: u32,
+    /// Text top below the top of its row slot (the layout's caption y).
     pub text_y: u32,
+    /// Layout pixels per screen pixel for the strip picture.
+    pub scale: f32,
 }
 
-/// The strip picture: width, height, palette indices (0 see-through).
+impl Box {
+    /// The strip's height for `rows` rows (rule 48).
+    pub fn height(&self, rows: usize) -> u32 {
+        rows as u32 * self.row_height + STRIP_PAD
+    }
+}
+
+/// Where the box goes (rule 51), in screen pixels: (left, top).
+/// `bottom`: the top of the highest bottom panel (the screen's height
+/// with the bottom bar away); `map_right`: the map window's right edge
+/// as it stands (−50/640 of the screen's width when it is away).
+pub fn place(screen_width: f32, b: &Box, rows: usize, bottom: f32, map_right: f32) -> (f32, f32) {
+    let centre = (map_right + screen_width) / 2.0;
+    (centre - b.width as f32 / 2.0, bottom - b.height(rows) as f32)
+}
+
+/// The map window's right edge when it is away (`interface.md` rule 9:
+/// 50/640 of the screen beyond the left edge).
+pub fn map_away_right(screen_width: f32) -> f32 {
+    -50.0 / 640.0 * screen_width
+}
+
+/// A picture: width, height, palette indices (0 see-through).
 pub struct Strip<'a> {
     pub width: u32,
     pub height: u32,
     pub pixels: &'a [u8],
 }
 
-/// Where the strip starts and ends on the screen (x, from..to): the
-/// widest line plus [`STRIP_MARGIN`] on each side, centred.
-pub fn strip_span(font: &Font, lines: &[String]) -> (u32, u32) {
-    let widest = lines.iter().map(|l| text_width(font, l)).max().unwrap_or(0);
-    let width = (widest + 2 * STRIP_MARGIN).min(SCREEN[0]);
-    let x0 = (SCREEN[0] - width) / 2;
-    (x0, x0 + width)
+impl Strip<'_> {
+    /// The picture's index at screen pixel (x, y) of a box it fills,
+    /// stretched by `scale` and tiled (stand-in, Q108).
+    pub fn at(&self, x: u32, y: u32, scale: f32) -> u8 {
+        let sx = (x as f32 / scale) as u32 % self.width;
+        let sy = (y as f32 / scale) as u32 % self.height;
+        self.pixels[(sy * self.width + sx) as usize]
+    }
 }
 
-/// The caption's picture: `SCREEN[0]` wide, one `line_height` per line,
-/// RGBA (see-through where neither the strip nor a letter has ink).
-pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], lines: &[String], b: Box) -> (u32, u32, Vec<u8>) {
-    let (w, h) = (SCREEN[0], b.line_height * lines.len() as u32);
+/// The caption's picture, the size of the box: RGBA, see-through where
+/// neither the strip nor a letter has ink.
+pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], rows: &[String], b: Box) -> (u32, u32, Vec<u8>) {
+    let (w, h) = (b.width, b.height(rows.len()));
     let mut rgba = vec![0u8; (w * h * 4) as usize];
     let mut put = |x: u32, y: u32, index: u8| {
         if index != 0 && x < w && y < h {
@@ -99,40 +168,39 @@ pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], lines: 
         }
     };
     if let Some(s) = strip.filter(|s| s.width > 0 && s.height > 0) {
-        // Centred, as wide as the widest line plus the margin each side.
-        let (x0, x1) = strip_span(font, lines);
         for y in 0..h {
-            for x in x0..x1 {
-                put(x, y, s.pixels[((y % s.height) * s.width + (x - x0) % s.width) as usize]);
+            for x in 0..w {
+                put(x, y, s.at(x, y, b.scale));
             }
         }
     }
-    for (k, line) in lines.iter().enumerate() {
-        let top = k as u32 * b.line_height + b.text_y;
-        let mut x = (w.saturating_sub(text_width(font, line))) / 2;
-        for c in line.chars() {
-            let Some(g) = font.glyph(code(c)) else { continue };
-            if let Some(px) = font.glyph_pixels(g) {
-                for gy in 0..g.height as u32 {
-                    for gx in 0..g.width as u32 {
-                        put(x + gx, top + gy, px[(gy * g.width as u32 + gx) as usize]);
+    for (k, row) in rows.iter().enumerate() {
+        let top = k as u32 * b.row_height + b.text_y;
+        let mut x = ((w as f32 - text_width(font, row)) / 2.0).max(0.0);
+        for c in row.chars() {
+            if let Some(g) = font.glyph(code(c)) {
+                if let Some(px) = font.glyph_pixels(g) {
+                    for gy in 0..g.height as u32 {
+                        for gx in 0..g.width as u32 {
+                            put(x as u32 + gx, top + gy, px[(gy * g.width as u32 + gx) as usize]);
+                        }
                     }
                 }
             }
-            x += glyph_advance(font, c);
+            x += glyph_width(font, c) + font.char_spacing as f32;
         }
     }
     (w, h, rgba)
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use kq8_data::font::Glyph;
 
     /// A font where every letter is 10 wide and the space 5 wide (one
-    /// 10x2 picture of index 7).
-    fn font() -> Font {
+    /// 10x2 picture of index 7), 2 high.
+    pub fn font() -> Font {
         let mut map = vec![-1i16; 224];
         for c in b'a'..=b'z' {
             map[(c - 32) as usize] = 1;
@@ -179,36 +247,56 @@ mod tests {
     }
 
     #[test]
-    fn words_are_added_while_they_fit() {
+    fn rows_break_at_the_last_space_before_the_letter_that_does_not_fit() {
         let f = font();
-        assert_eq!(text_width(&f, "ab cd"), 45);
-        // "aaa bbb" = 65 fits 70; "aaa bbb ccc" = 105 doesn't.
-        assert_eq!(wrap(&f, " aaa bbb ccc ", 70), vec!["aaa bbb", "ccc"]);
-        assert_eq!(wrap(&f, "aaaaaaaaaa b", 50), vec!["aaaaaaaaaa", "b"], "a long word gets its own line");
-        assert!(wrap(&f, "   ", 70).is_empty());
+        assert_eq!(text_width(&f, "ab cd"), 45.0);
+        // "aaa bbb" = 65; the space after it still fits (70) and is kept;
+        // "c" would pass 70, so the row ends at that last space (dropped).
+        assert_eq!(wrap(&f, "aaa bbb ccc", 70.0), vec!["aaa bbb", "ccc"]);
+        // A space that fits at the end of a row is kept.
+        assert_eq!(wrap(&f, "aaa bbb  ccc", 75.0), vec!["aaa bbb ", "ccc"]);
+        // Leading spaces count like any letter.
+        assert_eq!(wrap(&f, " aa", 70.0), vec![" aa"]);
+        // No space to break at: cut at the box's edge.
+        assert_eq!(wrap(&f, "aaaaaaa b", 50.0), vec!["aaaaa", "aa b"]);
+        assert!(wrap(&f, "", 70.0).is_empty());
     }
 
     #[test]
-    fn the_picture_has_one_strip_line_per_text_line_and_centred_text() {
+    fn the_box_sits_on_the_bottom_panel_left_of_the_middle_with_the_map_away() {
+        let b = Box { width: 400, row_height: 15, text_y: 2, scale: 1.25 };
+        assert_eq!(b.height(2), 34, "2 x 15 + 4");
+        // 800 x 600, map away (right edge -62.5): centre 368.75.
+        let (left, top) = place(800.0, &b, 2, 600.0, map_away_right(800.0));
+        assert_eq!((left, top), (168.75, 566.0));
+        // Map open (right edge 400 of 800): centre 600.
+        assert_eq!(place(800.0, &b, 1, 520.0, 400.0), (400.0, 501.0));
+    }
+
+    #[test]
+    fn the_stone_covers_the_whole_box_and_rows_are_centred() {
         let f = font();
         let mut pal = [[0u8; 3]; 256];
         pal[7] = [200, 150, 50];
         pal[3] = [80, 80, 80];
-        let strip = [0u8, 3, 3, 0];
-        let lines = vec!["ab".to_string(), "c".to_string()];
-        let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &lines, Box { line_height: 16, text_y: 2 });
-        assert_eq!((w, h), (640, 32));
+        let strip = [0u8, 3, 3, 3];
+        let rows = vec!["ab".to_string(), "c".to_string()];
+        let b = Box { width: 100, row_height: 15, text_y: 2, scale: 1.0 };
+        let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &rows, b);
+        assert_eq!((w, h), (100, 34));
         let at = |x: u32, y: u32| &rgba[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize];
-        // The strip: "ab" (20) + 16 each side = 52 wide, x 294..346.
-        assert_eq!(strip_span(&f, &lines), (294, 346));
-        assert_eq!(at(1, 0), [0, 0, 0, 0], "outside the strip: see-through");
-        assert_eq!(at(294, 0), [0, 0, 0, 0], "strip index 0: see-through");
-        assert_eq!(at(295, 0), [80, 80, 80, 255]);
-        assert_eq!(at(346, 1), [0, 0, 0, 0], "past its right end");
-        // "ab" is 20 wide, centred: x 310..330, rows 2..4.
-        assert_eq!(at(310, 2), [200, 150, 50, 255]);
-        assert_eq!(at(329, 3), [200, 150, 50, 255]);
-        // "c" on the second line: x 315..325, rows 18..20.
-        assert_eq!(at(315, 18), [200, 150, 50, 255]);
+        assert_eq!(at(0, 0), [0, 0, 0, 0], "strip index 0: see-through");
+        assert_eq!(at(1, 0), [80, 80, 80, 255]);
+        assert_eq!(at(99, 33), [80, 80, 80, 255], "the stone reaches the box's far corner");
+        // "ab" is 20 wide, centred: x 40..60, rows 2..4.
+        assert_eq!(at(40, 2), [200, 150, 50, 255]);
+        assert_eq!(at(59, 3), [200, 150, 50, 255]);
+        // "c" on the second row: x 45..55, its slot starts at 15: y 17..19.
+        assert_eq!(at(45, 17), [200, 150, 50, 255]);
+        // Stretched by 2: the 2x2 stone's see-through pixel is 2x2.
+        let b2 = Box { scale: 2.0, ..b };
+        let (_, _, rgba2) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &[], b2);
+        assert_eq!(&rgba2[4..8], [0, 0, 0, 0]);
+        assert_eq!(&rgba2[8..12], [80, 80, 80, 255]);
     }
 }

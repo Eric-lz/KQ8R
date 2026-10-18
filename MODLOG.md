@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-1: the caption strip as wide as the caption box, slightly left of centre
+
+**Changed:** `kq8-core/src/caption.rs`: rows are cut letter by letter at the caption box's width and break at the last space (`interface.md` rule 47); the stone covers the whole box (rule 50); the box is rows × 15 + 4 high, grows upwards, and is placed on the highest bottom panel, centred between the map's right edge and the screen's right edge (rules 48–51). The stand-ins `WRAP_WIDTH` and `STRIP_MARGIN` are gone. Viewer `talk_view.rs`: reads `set800mode` from `Options.cs` (screen 800 × 600, layout × 1.25, box 400 wide), draws the caption as a box-sized picture at its place. `docs/DESIGN.md`: the plan for 4c (the interface and the inventory, five steps). `QUESTIONS.md`: Q108. Provenance, `docs/FEATURES.md`.
+**Why:** The user's check in the original: a short line's strip is as wide as a long one's, and with the map closed the strip sits slightly left of the middle (Q107, `interface.md` rules 46–52).
+**Tested how:** `cargo test --workspace` (433 pass; the 3 caption tests rewritten), clippy clean. Viewer: `cargo play --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off` (`viewer-4c1-sign.log`).
+**Result:** "caption picture shown: 2 row(s) [" The alchemist's shop. There could be something", "useful inside."], widths [371.0, 104.0] px; box 400x34 (the stone covers it all), left 168.75 top 566.00 bottom 600.00 of 800x600; centre 368.75". The break is where the user saw it (the leading space is kept, `talking.md` rule 3).
+**Still broken / not tested:** Not seen by eye. The 800 × 600 screen and how pictures scale with it are stand-ins (Q108). There is no bottom bar yet, so the caption sits at the very bottom; no map, so it is always "map closed".
+**Next:** 4c-2, the always-visible bottom bar.
+
 ## 2026-10-18 Study (A): the bottom bar after a cutscene, checked (docs only)
 
 **Changed:** `interface.md` check 7.

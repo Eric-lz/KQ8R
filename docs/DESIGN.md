@@ -1844,6 +1844,125 @@ inventory and menus.
   - Tests: unit tests on hand-made files; `font-verify`, `gui-verify`
     on the install; viewer run with the alchemist's sign.
 
+- **4c — the on-screen interface and Connor's inventory** (planned
+  2026-10-18). From `docs/behaviour/interface.md` and `inventory.md`
+  (A, 2026-10-18, checked by the user in the original), `clicking.md`
+  rules 12–18 and 34–36. One step and one commit at a time; every step
+  logs to `kq8-artifacts/logs/gui.log` (new) and the logs it touches.
+  Words: a **panel** is one of the boxes of `Gplayscr.gui` (top bar,
+  bottom left, the eight slots, the meters, bottom right, map, caption,
+  status icons); **sliding** is a panel moving on or off the screen in
+  0.2 s; the **hand** is the item Connor holds as the mouse pointer.
+  - **The screen size (stand-in for all steps, question Q108).** The
+    shipped `Options.cs` says `set800mode 1`, so the game's screen is
+    800 × 600 and the 640 × 480 layout is scaled by 1.25 (rule 47:
+    inferred; the user's measured caption width fits it). How the
+    panels' pictures are scaled is not studied: we stretch them with
+    the layout (nearest pixel) and tile a picture smaller than its box
+    (the 6 × 6 meter bar, the 64 × 64 stone); fonts are drawn at their
+    own size (rule 47). The 800 × 600 picture is stretched to the
+    window, as the captions are now.
+  - **Where the code goes.** `kq8-core`: `caption.rs` (wrapping, the
+    box's place), new `panels.rs` (which panels are shown, sliding,
+    pop-up timers, the keys and the reasons), new `meters.rs` (the
+    percentages and bar widths, the five values sent), new
+    `gui_draw.rs` (a panel drawn into a picture from its layout block:
+    pictures, numbers with their justification, bars cut to a width),
+    new `inventory.rs` (Connor's inventory: categories, adding,
+    stacking, swapping equipment, the quest strip, the hand, applying
+    items). Viewer: new `gui_view.rs` (loads the layout, pictures and
+    fonts of the world's `8gui`, draws each panel as one picture,
+    moves it, takes the keys and the mouse on the panels).
+  - **4c-1, the caption strip** (**done** 2026-10-18; interface.md rules 46–52, Q107). The
+    stone covers the **whole caption box** (400 wide at 800 × 600), not
+    the text (the user's check). Wrapping as rule 47: widths summed
+    letter by letter; a letter that would pass the box's width ends
+    the row at the last space before it (the space dropped, spaces that
+    fit at a row's end kept); a row with no space breaks at the box's
+    edge ("Edge cases", our choice). Height rows × 15 + 4, growing
+    upwards; each row centred in the box, 2 pixels down in its own
+    15-pixel slot. Place: bottom edge = top of the highest bottom panel
+    (no bottom bar until 4c-2: the screen's bottom); centre half-way
+    between the map window's right edge and the screen's right edge;
+    there is no map yet (M6), so it is always closed (right edge at
+    −50/640 of the screen): centre x 368.75 of 800, a little left of
+    the middle (rule 51, the user's check). The stand-ins `WRAP_WIDTH`
+    and `STRIP_MARGIN` go. Log: rows, their widths, box width, left,
+    top, bottom.
+  - **4c-2, the always-visible panel** (interface.md rules 7–36). The
+    bottom bar: bottom left (armour, hand and ranged weapon slots with
+    their numbers), the eight slots (empty pictures; their contents
+    come in 4c-3), the meters (red health and green experience bars,
+    the level number), bottom right (empty rope, rocks and map-icon
+    pictures). Panel groups and sliding (rules 8–9: 0.2 s of real
+    time, panels off the bottom edge). **Space** (from `movekeys.kq`
+    row 12) puts the bottom bar away or brings it back (rule 10).
+    `handsOff 1` puts it away if shown (remembered) and shows the
+    spinning mask in the status icons; `handsOff 0` brings it back
+    only if it was shown (rule 15). Conversations (rule 16): the panel
+    side is built and unit-tested, but nothing calls it yet
+    (conversations are not studied). Script commands `setLowerGui`,
+    `setUpperGui`, `setMapGui`, `getGuiStatus` (rule 15; no Daventry
+    script uses them). Meters: health % = health × 100 / (10 × level),
+    at least 1 when not 0; experience % = experience × 100 /
+    threshold; bar width = width × % / 100, at least 1 pixel (rules
+    20–23). After every stats change on Connor all values are sent
+    (rule 24); a health or experience % sent while the meters are
+    hidden slides them up alone and away 1.5 s later (rule 25). Slot
+    pictures from what Connor wears (rules 34–35); his start inventory
+    from `Connor.kq` `[ConnerInventory]` (`inventory.md` rule 4: the
+    first mask piece, the three placeholders, the mask-button piece).
+    Numbers in `14shdw.pft`, right/top (rule 36); a changed number
+    plays `fx.pba` once over its slot (rule 33; frame rate a stand-in,
+    Q108). The caption box sits on the highest bottom panel (rule 51).
+    Not built: the red "alternative" numbers (potions, M5), the
+    level-up flame (not traced), the map (M6), the help popup.
+  - **4c-3, the inventory bars** (interface.md rules 12–13, 38–45;
+    inventory.md rules 1–11). Adding an item (rule 8): stacking
+    (`Comb` 1) into one entry; equipment pushes out what shares its
+    place (placeholders deleted, other items put into the world where
+    the new one lay) and is put on (stats added); the pickup sound (as
+    now). The top bar: slides down when the pointer reaches the top
+    row, up again below y 60 (rule 12; not while the right button is
+    held); pops down for 1.5 s for a new quest item or mask piece and
+    the slot blinks 5 times, 0.25 s each (rules 13, 44). The quest
+    strip: 7 slots in the order items were added, the arrows scroll
+    by one (rules 5–6); the gold picture by count (rule 43). The eight
+    slots with their counts (rules 38–39); **keys 1–8** and clicks use
+    a slot (rules 40, 9): the item is applied (stack −1, its five
+    numbers added through the stats event; `Dur` −1 heals for good;
+    `Dur` > 0 runs a timer and takes the numbers back at its end;
+    rules 13–15) and its `useSnd` plays. Bottom right: rope and rocks
+    (rule 45; the rocks picture levels are not traced: stand-in).
+    Right click on a slot: Connor's description of the item
+    (`talking.md` rule 20; rule 10). The mask button opens no menu
+    yet (logged). A click on a shown panel never reaches the world.
+    Clicks on the bars are ignored during handsOff (rule 9).
+  - **4c-4, the item in hand** (inventory.md rules 7, 9, 12; clicking.md
+    rules 12–18). A left click on a quest item, the gold, the rope or
+    the rocks makes it the hand: the pointer becomes the type's
+    `cursor` picture (a picture following the mouse; the play pointer
+    `curs04.pba` otherwise) and the item leaves the strip (the others
+    close the gap, rule 7). A world click with the hand is the click
+    built in 3g (accept lists, `$3` / `$4`): accepted → the hand is
+    emptied (not for money while `goldCoinPersists 1`); refused or out
+    of reach → it stays. Clicking the item's own slot puts it back.
+    `INVITEM_Scroll` and the rope's remarks (rule 9). `--item TYPE`
+    now gives Connor the item and puts it in his hand. Escape still
+    quits (stand-in): the original opens the main menu and **the game
+    stops running while it is open** (rule 14, the user's check); a
+    later menu step must pause the updates and the panel timers.
+  - **4c-5, A's answers to Q105** (clicking.md rules 34–36). (a) the
+    turn to an object deleted by its own script: no change, provenance
+    only; (b) the click looks at the state the script **asked for**
+    (or his state at the click), not the one after his next update;
+    (c) `doNotPointAt` is read for buildings too.
+  - Tests: unit tests for each core module; viewer runs with `--click`
+    on `alcmsign` and `smlchst3`, Space pressed by a test option
+    (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),
+    the farm coins and the mushroom baskets (`inventory.md` checks
+    2–3), read in `gui.log`, `items.log`, `doors.log`, `talk.log`.
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and

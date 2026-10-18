@@ -23,11 +23,16 @@
 //! 4b-3: the caption is drawn as the original's (`kq8_core::caption`):
 //! the world's `console.pft` font over the `stontran.pbm` stone strip,
 //! both named by the layout `IDDLG_CAPTION` in `Gplayscr.gui`, coloured
-//! by the world's palette (STAND-IN, Q106), centred, at the bottom of the
-//! window, growing upwards one 16-pixel line at a time (the user's check
-//! in the original); wrapped at `WRAP_WIDTH` (STAND-IN, Q107 a). The
-//! 640x480 picture is stretched to the window. Without those files, the
-//! 4a-4 text panel above.
+//! by the world's palette (`interface.md` rule 1, Q106). Without those
+//! files, the 4a-4 text panel above.
+//!
+//! 4c-1 (`interface.md` rules 46–52): the stone covers the whole caption
+//! box (400 wide on the 800 × 600 screen of `set800mode 1`, STAND-IN
+//! Q108), rows wrapped at that width, the box growing upwards from the
+//! top of the highest bottom panel (the screen's bottom while there is no
+//! bottom bar), centred half-way between the map's right edge (always
+//! away: no map yet) and the screen's right edge. The screen is
+//! stretched to the window.
 //!
 //! 4a-6: the mouth ([`mouth_draw`]): Connor's face texture (`baseLip`)
 //! becomes `lip<n>` of his `lips=` list at each mouth change, `lip0` for
@@ -220,6 +225,19 @@ pub struct CaptionStyle {
     strip: Option<(u32, u32, Vec<u8>)>,
     palette: [kq8_data::palette::Rgb; 256],
     caption_box: kq8_core::caption::Box,
+    /// The game's screen (800 × 600 with `set800mode 1`; 4c-1).
+    screen: [u32; 2],
+}
+
+/// Whether `MASK/Options.cs` has the line `set800mode 1` (4c-1: the game's
+/// screen is 800 × 600 then; `interface.md` rule 47).
+pub fn set800mode(game: &GameDir) -> bool {
+    let Some(Ok(bytes)) = game.find("Options.cs").map(std::fs::read) else { return false };
+    let text: String = bytes.iter().map(|&b| b as char).collect();
+    text.lines().any(|line| {
+        let mut w = line.split('#').next().unwrap_or("").split_whitespace();
+        w.next().is_some_and(|c| c.eq_ignore_ascii_case("set800mode")) && w.next().is_some_and(|v| v.parse::<f64>().is_ok_and(|n| n != 0.0))
+    })
 }
 
 /// The first of `names` (paths under the install) that exists.
@@ -271,16 +289,31 @@ pub fn load_caption(game: &GameDir, world: &str, log: &mut Log) -> Option<Captio
         Err(e) => return fail(log, format!("{pal_path}: {e}")),
     };
     let [l, t, r, b] = c.rect;
-    let caption_box = kq8_core::caption::Box { line_height: (b - t).max(1) as u32, text_y: cap.y.max(0) as u32 };
+    // 4c-1: the box's width scaled with the screen (rule 47, STAND-IN
+    // Q108), one row per font height (rule 48).
+    let wide = set800mode(game);
+    let screen = kq8_core::caption::screen(wide);
+    let scale = kq8_core::caption::scale(screen);
+    let caption_box = kq8_core::caption::Box {
+        width: ((r - l).max(1) as f32 * scale).round() as u32,
+        row_height: font.char_height.max(1) as u32,
+        text_y: cap.y.max(0) as u32,
+        scale,
+    };
     log.summary(format!(
-        "caption: IDDLG_CAPTION ({l}, {t})-({r}, {b}), caption y {}, font {font_path} (height {}), strip {}, palette {pal_path} (stand-in, Q106); line {} px, wrap at {} px (stand-in, Q107 a)",
+        "caption: IDDLG_CAPTION ({l}, {t})-({r}, {b}), caption y {}, font {font_path} (height {}, h scale {}, spacing {}), strip {}, palette {pal_path}; set800mode {wide}: screen {}x{} (layout x {scale}), box {} px wide (the wrap width), rows {} px + {} (interface.md rules 46-48)",
         cap.y,
         font.char_height,
+        font.h_scale,
+        font.char_spacing,
         strip.as_ref().map_or("none".to_string(), |(p, (w, h, _))| format!("{p} {w}x{h}")),
-        caption_box.line_height,
-        kq8_core::caption::WRAP_WIDTH
+        screen[0],
+        screen[1],
+        caption_box.width,
+        caption_box.row_height,
+        kq8_core::caption::STRIP_PAD
     ));
-    Some(CaptionStyle { font, strip: strip.map(|(_, s)| s), palette, caption_box })
+    Some(CaptionStyle { font, strip: strip.map(|(_, s)| s), palette, caption_box, screen })
 }
 
 /// The caption picture's node (4b-3).
@@ -293,7 +326,7 @@ pub fn setup_caption_picture(mut commands: Commands, style: Option<Res<CaptionSt
         return;
     }
     commands.spawn((
-        Node { position_type: PositionType::Absolute, bottom: Val::Px(0.0), left: Val::Px(0.0), width: Val::Percent(100.0), height: Val::Percent(0.0), ..default() },
+        Node { position_type: PositionType::Absolute, top: Val::Percent(100.0), left: Val::Px(0.0), width: Val::Percent(0.0), height: Val::Percent(0.0), ..default() },
         ImageNode::default(),
         Visibility::Hidden,
         CaptionPicture,
@@ -330,25 +363,34 @@ pub fn caption_picture_draw(
         }
         return;
     };
-    let lines = caption::wrap(&style.font, text, caption::WRAP_WIDTH);
-    let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
-    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &lines, style.caption_box);
-    if h == 0 {
+    let b = style.caption_box;
+    let rows = caption::wrap(&style.font, text, b.width as f32);
+    if rows.is_empty() {
         *vis = Visibility::Hidden;
+        shared.log.lock().unwrap().detail(format!("caption {text:?}: no rows; hidden"));
         return;
     }
+    let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
+    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &rows, b);
     let mut picture = Image::new(Extent3d { width: w, height: h, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
     picture.sampler = ImageSampler::nearest();
     image.image = images.add(picture);
-    n.height = Val::Percent(100.0 * h as f32 / caption::SCREEN[1] as f32);
+    // Rule 51: on the highest bottom panel (none yet: the screen's
+    // bottom), centred between the map's right edge (no map yet: away)
+    // and the screen's right edge.
+    let [sw, sh] = style.screen.map(|v| v as f32);
+    let (bottom, map_right) = (sh, caption::map_away_right(sw));
+    let (left, top) = caption::place(sw, &b, rows.len(), bottom, map_right);
+    n.left = Val::Percent(100.0 * left / sw);
+    n.top = Val::Percent(100.0 * top / sh);
+    n.width = Val::Percent(100.0 * w as f32 / sw);
+    n.height = Val::Percent(100.0 * h as f32 / sh);
     *vis = Visibility::Inherited;
-    let widths: Vec<u32> = lines.iter().map(|l| caption::text_width(&style.font, l)).collect();
-    let (x0, x1) = caption::strip_span(&style.font, &lines);
+    let widths: Vec<f32> = rows.iter().map(|l| caption::text_width(&style.font, l)).collect();
     shared.log.lock().unwrap().detail(format!(
-        "caption picture shown: {} line(s) {lines:?}, widths {widths:?} px (wrap {}), strip x {x0}..{x1} (margin {}), {w}x{h} of 640x480",
-        lines.len(),
-        caption::WRAP_WIDTH,
-        caption::STRIP_MARGIN
+        "caption picture shown: {} row(s) {rows:?}, widths {widths:?} px; box {w}x{h} (the stone covers it all), left {left:.2} top {top:.2} bottom {bottom:.2} of {sw}x{sh}; centre {:.2} (map away, right edge {map_right:.2}; interface.md rules 47-51)",
+        rows.len(),
+        left + w as f32 / 2.0
     ));
 }
 

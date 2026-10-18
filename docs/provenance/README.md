@@ -1699,3 +1699,17 @@ note yet (A is studying the interface).
 | ~~The strip is drawn across the whole screen width~~ **Replaced 2026-10-18**: the strip covers the widest line plus 16 pixels on each side, centred, tiled from its own left edge | The user's check in the original ("at most around 2 letters" beyond the text on each side); 16 pixels is **our estimate** (about two lower-case letters in `console.pft`; Q107 a) | Unit test `the_picture_has_one_strip_line_per_text_line_and_centred_text`; `viewer-4b4-sign.log`: strip x 121..518 for the 365-pixel line |
 | The 640x480 picture is stretched to the window, nearest pixels | **Our choice** | — |
 | Without the layout, font or palette: the old 4a-4 text panel | **Our choice** | Log line "the 4a-4 text panel is used" |
+
+### 4c-1, the caption strip as the original's — `crates/kq8-core/src/caption.rs`, `crates/kq8-viewer/src/talk_view.rs`
+
+Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the text, a 640×480 picture, 16 pixels per line).
+
+| What | Source | Check |
+| --- | --- | --- |
+| Rows cut letter by letter at the caption box's width: glyph width × horizontal scale, spacing after each letter that fits; a letter that would pass the width ends the row at the last space before it (dropped); spaces that fit at a row's end kept; spaces count like letters (the sign's leading space too, `talking.md` rule 3) | `interface.md` rule 47 | Unit test `rows_break_at_the_last_space_before_the_letter_that_does_not_fit`; `viewer-4c1-sign.log`: rows 371 and 104 wide, the break after "something" |
+| A row with no space to break at is cut at the box's edge | `interface.md` "Edge cases" (the note's "do instead") | Same unit test |
+| Height rows × font height (15) + 4, growing upwards; each row centred in the box, 2 pixels down in its own 15-pixel slot | `interface.md` rules 48–49; caption y 2 from the layout | `viewer-4c1-sign.log`: box 400x34 |
+| The stone covers the whole box, not the text | `interface.md` rule 50 (traced; the user's check: a short line's strip is as wide as a long one's) | Unit test `the_stone_covers_the_whole_box_and_rows_are_centred` |
+| The box's bottom = the top of the highest bottom panel (none drawn yet: the screen's bottom); its centre half-way between the map's right edge and the screen's right edge; the map is always away (no map yet), its right edge at −50/640 of the screen | `interface.md` rules 9, 51 (traced; the user's check: a little left of the middle with the map closed) | Unit test `the_box_sits_on_the_bottom_panel_left_of_the_middle_with_the_map_away`; `viewer-4c1-sign.log`: left 168.75, centre 368.75 of 800 |
+| The screen is 800 × 600 when `Options.cs` has `set800mode 1`, the layout scaled by 1.25: box 400 wide; fonts at their own size | `interface.md` rule 47 (**inferred** by A, fits the user's measured 365–418); **stand-in** until Q108 | Viewer log: "set800mode true: screen 800x600 (layout x 1.25), box 400 px wide" |
+| The stone picture stretched with the layout (nearest pixel) and tiled from the box's top-left | **Stand-in** (`interface.md` open question 6, Q108) | — |
