@@ -218,7 +218,8 @@ the original.
   checked by eye after 3n (2026-10-18): no difference from the original.
   Entering the wheel from the other side (`wheeltp2.cs`) also set off
   `wheeltp1` (fixed 2026-10-18: a script's `move Connor` no longer sweeps
-  the traps along the jump; Q102); not checked by eye since.
+  the traps along the jump; Q102); checked by eye by the user after
+  the fix (2026-10-18): works as expected.
 - **The windmill tumble** (2026-10-18, M3 3m-1): jumping into the
   windmill's sails plays the tumble without a weapon; the script's
   `KQConner::endJump` finishes the jump, so he stands on the floor

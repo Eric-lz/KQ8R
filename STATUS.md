@@ -246,7 +246,7 @@ milestone: **M3, Daventry comes alive**.
   like the original (the extra step only with our `--at` start inside
   the trap; Q101 note). From the north (`wheeltp2.cs`) `wheeltp1` fired
   too: fixed (a script's `move Connor` no longer sweeps the traps along
-  the jump; stand-in, **Q102** asked); **to check by eye again**.
+  the jump; stand-in, **Q102** asked); checked again by the user: works.
 - **The user's checks of 3m (2026-10-18):** the windmill tumble (forward
   and back flip), barrels pushed into a wall (the wall stops Connor) and
   the watermill room's camera flight match the original. The scripted

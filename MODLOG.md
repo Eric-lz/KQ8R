@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M3 3n: the user's check of the mill wheel fix (docs only)
+
+**Changed:** `docs/FEATURES.md`, `STATUS.md`: the check recorded. No code.
+**Why:** The user tested the fix for the double mill wheel cutscene.
+**Tested how:** By the user, by eye, against the original.
+**Result:** Everything works as expected: both sides of the mill wheel, walking, the watermill cutscene.
+**Still broken / not tested:** Q100–Q102 still open (stand-ins in place).
+**Next:** A answers Q100–Q102; B's next steps as in STATUS.
+
 ## 2026-10-18 M3 3n: the user's checks; a script's `move Connor` no longer sweeps the traps
 
 **Changed:** `door_view.rs`: after a script's `move Connor`, the traps' swept test starts again from his new spot (the line from the old spot to the new one is no longer tested). `docs/behaviour/QUESTIONS.md`: Q102; a note on Q101. `docs/FEATURES.md`, `STATUS.md`: the user's checks.
