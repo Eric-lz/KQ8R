@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Item descriptions have no caption (docs only)
+
+**Changed:** `talking.md`: new rule 20 (item descriptions in the inventory), rule 16 corrected, captions check recorded.
+**Why:** The user saw captions for the sign's line but none for item descriptions (right-clicking an inventory item).
+**Tested how:** Traced in Ghidra after the user's report; the item lines checked against `Invinfo.itl` and `0.MSG` (dagger 25 0 0 1 "I carry a fine dagger.").
+**Result:** Item descriptions don't use `speak` or the queue: the voice file is played directly as a plain sound (one at a time), so no caption, no ducking, no mouth, no `TalkComplete`. Rule 16 had wrongly said moving cuts them short.
+**Still broken / not tested:** Whether other sounds stay at full volume during a description was not checked in the original. The inventory screen itself is M4.
+**Next:** B builds remarks after M3 3m.
+
 ## 2026-10-18 The user's checks of the remarks study (docs only)
 
 **Changed:** `talking.md` "How to check": the user's checks recorded.

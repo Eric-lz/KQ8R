@@ -188,8 +188,9 @@ Words used here:
     Releasing keys doesn't count, and `handsOff` swallows the presses
     anyway (`anim-scripts.md` rule 21). In practice: the stock remarks
     and most of Connor's Daventry remarks have `#` and always play to
-    the end; the item descriptions of `0.MSG` and the conversation lines
-    can be cut short.
+    the end; Connor's conversation lines can be cut short. (The item
+    descriptions of `0.MSG` have no `#` either, but they don't go
+    through the queue at all: rule 20.)
 
 ### The mouth (lip sync)
 
@@ -223,6 +224,21 @@ Words used here:
 
     Monsters also have stored remarks of their own (alarm lines and
     others; M5).
+20. **Item descriptions in the inventory (M4; traced 2026-10-18 after
+    the user's check).** Right-clicking an item in the inventory makes
+    Connor describe it, but **not** through `speak` or the queue: the
+    game plays the line's **voice file directly, as a plain sound**.
+    So there is **no caption**, no ducking of other sounds, no mouth
+    movement, no turning, no `TalkComplete`, and the movement keys don't
+    cut it short. The line is `0.MSG` with the noun, verb, case and
+    sequence of the item type's "Message (N V C S)" column in
+    `GAME/Kq/Invinfo.itl` (data: dagger `25 0 0 1` → `A0000P00.001` "I
+    carry a fine dagger."; mushroom `1 0 0 1`; silver coins `47 0 0 1`).
+    Only one description plays at a time: a new one stops the previous
+    one first. Only that one sequence is played. **Confirmed by the user
+    in the original (2026-10-18):** right-clicking mushrooms, his weapon
+    slot or his gold, he says a line with no caption. (Whether other
+    sounds really stay at full volume was not checked.)
 
 ## Numbers and units
 
@@ -324,8 +340,9 @@ Words used here:
   second later, and the other sounds drop while he speaks; (2) pressing
   forward, he walks off and keeps talking (the line has `#`; rule 12:
   speaking doesn't stop his movement); (3) his mouth texture changes
-  while he speaks. Not checked: captions (on screen) and a line without
-  `#` being cut short.
+  while he speaks. Captions: checked too, the sign's line shows a
+  caption; item descriptions in the inventory show none (rule 20). Not
+  checked: a line without `#` being cut short.
 
 ## Open questions
 
