@@ -465,8 +465,14 @@ pub fn mouth_draw(mut speech: ResMut<Speech>, connor: Option<ResMut<crate::conno
         if !speaker.eq_ignore_ascii_case(CONNOR) || shape == c.mouth {
             continue;
         }
-        // Rule 18: a shape of 8 or more uses lip0.
-        let n = if shape > 7 { 0 } else { shape as usize };
+        // Rules 17-18 (corrected, Q114): codes above 7 are not mouth
+        // shapes (8-16 gestures, above 16 nothing): the mouth stays.
+        if shape > 7 {
+            let updates = c.updates;
+            c.log.detail(format!("connor update {updates}: lip-sync code {shape}: not a mouth shape; mouth unchanged (talking.md rule 17; his gestures come with conversations)"));
+            continue;
+        }
+        let n = shape as usize;
         let image = c.lip_images.get(n).cloned().flatten();
         let what = match &image {
             Some(img) => {

@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 Q114 built: the duplicate check on the last line; Connor's mouth ignores codes above 7
+
+**Changed:** `kq8-core/src/talk.rs`: a `speak` is a duplicate when its range's **last** line (not its first) is waiting or playing; the log calls codes 8–16 gestures. Viewer `talk_view.rs`: Connor's lip-sync codes above 7 leave his mouth as it is (was: `lip0`). `QUESTIONS.md` Q114 marked built; provenance.
+**Why:** A's corrections to `talking.md` rules 9, 17, 18 (Q114), asked of B.
+**Tested how:** `cargo test --workspace` (486 pass; 1 new test, 1 changed), clippy clean, release build.
+**Result:** During line 1 of 1…2, a new 1…2, 1…1 or 2…2 adds nothing; after the remark ends it is queued again.
+**Still broken / not tested:** Connor's mouth change not run in the viewer (no reachable Connor line with codes above 7 found). Connor's gestures (codes 8–16) not built: they come with conversations (`conversation.md` rule 18).
+**Next:** conversations (`conversation.md`), when the user asks; 4d-6 and the 4d-7 drawing wait for Q122, Q123.
+
 ## 2026-10-19 M4 step 4d-7a: who casts a shadow (drawing on hold, Q123)
 
 **Changed:** `kq8-data/src/characters.rs`: `shadow_mask_setting` (`setShadowMask` in `Options.cs`), `casts_shadow` (rule 36). Viewer `load.rs`: a "shadow" line per character in `characters.log`. `QUESTIONS.md`: Q123. DESIGN, provenance.

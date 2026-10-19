@@ -241,7 +241,10 @@ impl Talk {
         };
         let q = &self.queues[i];
         let first = s.first;
-        if q.playing.as_ref().is_some_and(|p| p.first == first) || q.lines.iter().any(|e| e.first == first) {
+        // Rule 9 (corrected 2026-10-19, Q114): the check is on the range's
+        // last line (`<last>`, 0 already replaced), waiting or playing.
+        let last_line = first.with_seq(s.last);
+        if q.playing.as_ref().is_some_and(|p| p.tuple == last_line) || q.lines.iter().any(|e| e.tuple == last_line) {
             let line = format!("{}: {first}…{}: duplicate: already in the queue; not queued (rule 9)", s.issuer, s.last);
             self.note(now, line.clone());
             return line;
@@ -389,7 +392,11 @@ impl Talk {
         let (id, speaker) = (p.id, p.speaker.clone());
         for m in changes {
             self.events.push(TalkEvent::Mouth { id, speaker: speaker.clone(), shape: m.shape });
-            let odd = if m.shape > 7 { " (above 7: not traced, open question 2)" } else { "" };
+            let odd = match m.shape {
+                0..=7 => "",
+                8..=16 => " (a gesture code, not a mouth shape: talking.md rule 17, conversation.md rule 18)",
+                _ => " (above 16: nothing, talking.md rule 17)",
+            };
             self.note(now, format!("{speaker}: line #{id}: mouth shape {}{odd} (due at {:.3} s, {} / 60)", m.shape, m.time as f64 * LIP_TICK, m.time));
         }
     }
@@ -495,14 +502,28 @@ mod tests {
         assert_eq!(starts, [(1, Some(" One.".into()), true), (2, Some("Two.".into()), false)]);
         assert!(t.events.iter().any(|e| matches!(e, TalkEvent::Mouth { shape: 3, .. })));
         assert!(t.ducking());
-        // Still in the queue while line 2 plays: a duplicate.
-        assert!(t.queue(&speak("Connor", 55, 1, 0), 0.5).contains("duplicate"));
+        // Line 2 (the range's last) is playing: a duplicate (rule 9 as
+        // corrected, Q114: the check is on the last line).
+        assert!(t.queue(&speak("Connor", 55, 1, 2), 0.5).contains("duplicate"));
         let f = run(&mut t, 7, 13);
         assert_eq!(f.iter().map(|f| (f.tuple.seq, f.last)).collect::<Vec<_>>(), [(2, true)]);
         assert!(matches!(t.events.last(), Some(TalkEvent::Empty { .. })));
         assert!(!t.ducking() && !t.is_talking("connor"));
         // Finished: the same remark is queued again.
         assert!(t.queue(&speak("Connor", 55, 1, 2), 1.0).contains("starts at once"));
+    }
+
+    #[test]
+    fn the_duplicate_check_is_on_the_range_s_last_line() {
+        // Q114: during line 1 of 1…2, line 2 still waits: 1…2 again adds
+        // nothing, but 1…1 (its last, line 1, is playing) adds nothing
+        // either, while 2…2 (line 2 waiting) is a duplicate too.
+        let mut t = talk();
+        t.queue(&speak("Connor", 55, 1, 2), 0.0);
+        run(&mut t, 0, 1);
+        assert!(t.queue(&speak("Connor", 55, 1, 2), 0.1).contains("duplicate"));
+        assert!(t.queue(&speak("Connor", 55, 1, 1), 0.1).contains("duplicate"));
+        assert!(t.queue(&speak("Connor", 55, 2, 2), 0.1).contains("duplicate"));
     }
 
     #[test]

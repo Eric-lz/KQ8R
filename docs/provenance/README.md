@@ -2031,3 +2031,11 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | World mask: the last `setShadowMask` in `MASK/Options.cs` (15), else the built-in 1 | Rule 36 ("`MASK/Options.cs` sets 15 at start") | Same unit test (Options.cs-like text) |
 | `allowShadows` taken as on at load (its default; Daventry's `world.cs` sets 1); not changed while playing | Rule 36 (default on); **not read from scripts yet** | — |
 | Shadows not drawn | Waits for Q123 | — |
+
+### Q114, the corrected `talking.md` rules 9 and 17–18 — `crates/kq8-core/src/talk.rs`, `crates/kq8-viewer/src/talk_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The duplicate check is on the range's **last** line (after 0 is replaced): nothing of the range is added when that line is waiting or playing | `talking.md` rule 9 (corrected, Q114) | Unit tests `the_duplicate_check_is_on_the_range_s_last_line`, `lines_play_in_turn_for_their_voice_length_and_duplicates_are_dropped` (changed: 1…2 during line 2) |
+| Connor's lip-sync codes above 7 don't change his mouth (8–16 are gestures, above 16 nothing); was: `lip0` | Rules 17, 18 (corrected) | Not tested in the viewer (no reachable Connor line with such codes found); logged in `connor.log` when it happens |
+| Connor's gestures (codes 8–16) | `conversation.md` rule 18: not built; left for the conversations step | — |
