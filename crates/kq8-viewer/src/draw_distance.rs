@@ -189,6 +189,19 @@ impl ShapeBalls {
         DistanceTest::new(placement, ball, from)
     }
 
+    /// The test for a character (characters.md rule 9): its box by
+    /// `box_type` (the monster list's type, else `monsterType`), else by
+    /// its name, exact.
+    pub fn test_character(&self, placement: &Placement, box_type: Option<&str>) -> DistanceTest {
+        if let Some(b) = box_type.and_then(|t| self.bounds(t)) {
+            return DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's type");
+        }
+        match self.bounds(&placement.name) {
+            Some(b) => DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's name"),
+            None => DistanceTest::new(placement, None, "character without a box: radius 100"),
+        }
+    }
+
     /// The test for a placed object by its `shapeName`.
     pub fn test(&self, placement: &Placement) -> DistanceTest {
         let (ball, from) = self.ball(placement.shape.as_deref(), &placement.name);

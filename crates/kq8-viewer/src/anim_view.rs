@@ -82,6 +82,9 @@ pub struct AnimSim {
     playing: Vec<Playing>,
     updates: u64,
     log: Log,
+    /// `characters.log` (M4 4d), if it could be made.
+    #[allow(dead_code)]
+    characters: Option<Log>,
 }
 
 /// A step that does nothing (no move, no turn), within rounding.
@@ -142,6 +145,7 @@ pub fn spawn_animated(
     light: &ObjectLight,
     images: &mut Assets<Image>,
     balls: &crate::draw_distance::ShapeBalls,
+    character_lines: &[String],
     main_log: &mut Log,
 ) -> Vec<AnimObject> {
     let mut log = match Log::create("anim") {
@@ -185,6 +189,7 @@ pub fn spawn_animated(
         })
         .collect();
     let mut rng = Rng::new(SEED);
+    let mut characters: Vec<String> = Vec::new();
     let mut playing = Vec::new();
     let mut core = Vec::new();
     let mut moving = Vec::new();
@@ -215,12 +220,61 @@ pub fn spawn_animated(
             player = player.with_random_start(&mut rng);
         }
         let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
-        if *unused || !p.drawn() {
+        // A character not born yet (characters.md rule 16): not drawn;
+        // only with H, as hidden objects.
+        let unborn = a.character.as_ref().is_some_and(|c| c.unborn);
+        if *unused || !p.drawn() || unborn {
             body.insert((Visibility::Hidden, ShownWithH));
         }
         // Draw distance (M1 6h); unused objects are only shown with H.
+        // A character's ball is its rule-9 box.
         if !*unused {
-            body.insert(balls.test_at(p, *shape_index));
+            let test = match &a.character {
+                Some(c) => {
+                    let mut test = balls.test_character(p, c.box_type.as_deref());
+                    if c.unborn {
+                        // Rule 16: groupsAlways plus bit 1 only, no draw
+                        // or collider bits.
+                        test.groups = [p.groups_always | 1, 0, 0];
+                    }
+                    test
+                }
+                None => balls.test_at(p, *shape_index),
+            };
+            if let Some(c) = &a.character {
+                let l = &a.movements[player.current].1;
+                characters.push(format!(
+                    "[{}] {}: from {}; at ({:.0}, {:.0}, {:.0}) heading {:.2}; {} movements, shown at load '{}' ({} {} speed {} repeat {} cut short {}); flags {:#x}{}{}; ball from {} (centre ({:.0}, {:.0}, {:.0}) m, radius {:.0}); wanders {} (M5); birthDelay {}{}{}{}",
+                    p.name,
+                    c.keys.class.name(),
+                    c.from,
+                    p.position[0],
+                    p.position[1],
+                    p.position[2],
+                    p.angles[2],
+                    a.movements.len(),
+                    a.movements[player.current].0,
+                    l.shape,
+                    l.sequence,
+                    l.speed,
+                    l.repeat,
+                    l.unknown != 0,
+                    c.keys.flags,
+                    if c.keys.no_turn { ", noTurn" } else { "" },
+                    if c.keys.gravity { "" } else { ", gravity off" },
+                    test.ball_from,
+                    test.centre.x,
+                    test.centre.y,
+                    test.centre.z,
+                    test.radius,
+                    c.wanders,
+                    c.birth_delay,
+                    if c.unborn { "; has Birth: NOT DRAWN until born (rule 16)" } else { "" },
+                    c.lips.as_ref().map_or(String::new(), |l| format!("; lips [{}] face {}", l.section, l.face)),
+                    c.skin.as_ref().map_or(String::new(), |(f, t)| format!("; skin {f} -> {t}")),
+                ));
+            }
+            body.insert(test);
             // The lights it carries (M1 7c), by the movement and frame shown.
             let lights = a.movements.iter().map(|(_, _, i)| built[*i].lights.clone()).collect();
             if let Some(c) = crate::scene_lights::CarriedLights::new(lights, bevy_transform_from(rotation, p.position), p.turn_off_dyn_lighting) {
@@ -311,7 +365,20 @@ pub fn spawn_animated(
         moving.len(),
         log.path().display()
     ));
-    commands.insert_resource(AnimSim { playing, updates: 0, log });
+    // Characters (M4 4d-2): one line each, and the loader's lines.
+    let mut clog = Log::create("characters").ok();
+    let drawn = characters.len();
+    if let Some(c) = clog.as_mut() {
+        for line in character_lines.iter().chain(&characters) {
+            c.detail(line);
+        }
+    }
+    main_log.summary(format!(
+        "characters: {drawn} drawn from their movement lists ({} not born yet: hidden), {} loader notes; log in kq8-artifacts/logs/characters.log",
+        characters.iter().filter(|l| l.contains("NOT DRAWN")).count(),
+        character_lines.len()
+    ));
+    commands.insert_resource(AnimSim { playing, updates: 0, log, characters: clog });
     core
 }
 
@@ -389,7 +456,14 @@ pub fn anim_draw(
         let movement = player.current.min(p.movements.len().saturating_sub(1));
         let Some(drawn) = p.movements.get(movement) else { continue };
         let frame = player.frame().min(drawn.frames.len().saturating_sub(1));
-        if p.shown == Some((movement, frame)) {
+        // Its place may have changed (a script's `move`, objects.md Q20 d;
+        // core keeps it): the body follows (M4 4d-2).
+        let base = player.base;
+        let moved = base.rotation != p.rotation || base.position != p.position;
+        if moved {
+            (p.rotation, p.position) = (base.rotation, base.position);
+        }
+        if p.shown == Some((movement, frame)) && !moved {
             continue;
         }
         if let Ok(mut c) = carried.get_mut(p.body) {
@@ -404,7 +478,7 @@ pub fn anim_draw(
         p.shown = Some((movement, frame));
         let pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
         // Only bodies that move or just stopped moving need a new pose.
-        if !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
+        if moved || !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
             let (m, at) = combine(&pose, &p.rotation, p.position);
             if let Ok(mut t) = transforms.get_mut(p.body) {
                 *t = bevy_transform_from(m, at);

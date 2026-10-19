@@ -301,6 +301,7 @@ pub fn setup_objects(
         &light,
         &mut images,
         &balls,
+        &std::mem::take(&mut objects.character_lines),
         &mut log,
     );
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), anims, &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
@@ -527,7 +528,8 @@ pub fn setup_objects(
         commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), crate::scene_lights::PointLightSource { name, light }));
     }
     // Invisible objects: a 1 m cube each, hidden until H is pressed.
-    // Green = no model in the game; orange = a character we cannot draw yet.
+    // Green = no model in the game; orange = a character whose movement
+    // list could not be read (characters are drawn since M4 4d-2).
     let cube = meshes.add(Cuboid::from_length(100.0 / UNITS_PER_METRE));
     let green = materials.add(StandardMaterial { base_color: Color::srgb(0.1, 1.0, 0.2), unlit: true, ..default() });
     let orange = materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.55, 0.0), unlit: true, ..default() });

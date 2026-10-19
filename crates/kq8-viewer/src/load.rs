@@ -335,6 +335,21 @@ pub fn load_animation(
     palette: &[Rgb; 256],
     log: &mut Log,
 ) -> Result<Animation, String> {
+    load_animation_skinned(game, world, model, loop_name, palette, None, log)
+}
+
+/// [`load_animation`] with a character's skin swap (`characters.md` rule
+/// 4): wherever the model uses texture `skin.0`, `skin.1` is drawn instead
+/// (names compared ignoring capitals, as for the mouth textures, rule 25).
+pub fn load_animation_skinned(
+    game: &GameDir,
+    world: &World,
+    model: &str,
+    loop_name: &str,
+    palette: &[Rgb; 256],
+    skin: Option<&(String, String)>,
+    log: &mut Log,
+) -> Result<Animation, String> {
     let (label, bytes) = find_model(game, world, model)?;
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
     let named = shape
@@ -388,7 +403,13 @@ pub fn load_animation(
             let look = match material {
                 None => Look::Missing(format!("material index {index} not in list of {}", list.len())),
                 Some(m) => match m.kind() {
-                    MaterialKind::Texture => load_texture(world, game, &m.texture, palette, log),
+                    MaterialKind::Texture => match skin.filter(|(from, _)| from.eq_ignore_ascii_case(&m.texture)) {
+                        Some((from, to)) => {
+                            log.summary(format!("{model}: skin swap: texture {from} drawn as {to} (characters.md rule 4)"));
+                            load_texture(world, game, to, palette, log)
+                        }
+                        None => load_texture(world, game, &m.texture, palette, log),
+                    },
                     MaterialKind::Rgb => Look::Color(m.rgb),
                     k => Look::Missing(format!("material kind {k:?}")),
                 },
@@ -1203,6 +1224,8 @@ pub struct Objects {
     pub item_shapes: BTreeMap<String, usize>,
     /// Lines about items at load, for `items.log`.
     pub item_lines: Vec<String>,
+    /// Lines about characters at load, for `characters.log` (M4 4d-2).
+    pub character_lines: Vec<String>,
     /// The ground, for z -1 / -2 of items made while playing.
     pub ground: Option<kq8_data::Terrain>,
 }
@@ -1225,6 +1248,8 @@ pub struct AnimatedAssets {
     pub random: bool,
     /// `script=`, if any.
     pub script: Option<String>,
+    /// A character's own values (M4 4d-2), `None` for other objects.
+    pub character: Option<CharacterAssets>,
 }
 
 /// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
@@ -1316,6 +1341,9 @@ struct CollisionInfo {
     footsound_type: Option<i64>,
     /// `collisionShape=1`: a ball stack (M3 3j).
     ball_stack: bool,
+    /// A character (M4 4d-2): the name its box is looked up by first
+    /// (characters.md rule 9); `Some(None)` = by its name only.
+    character_box: Option<Option<String>>,
 }
 
 /// `colliderType` / `colliderMask` from an object's section: a whole
@@ -1427,6 +1455,10 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         several_positions: 0,
         items,
         item_lines: Vec::new(),
+        monster_types: None,
+        pending_line: None,
+        list_files: Default::default(),
+        character_lines: Vec::new(),
     };
 
     // Only what the world's start-up scripts load is in the world
@@ -1469,7 +1501,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .map(|l| l.file.rsplit(['/', '\\']).next().unwrap_or(&l.file).to_ascii_lowercase())
         .collect();
     for (name, label, bytes) in world.entries_ending(".kq") {
-        if loaded_files.contains(&name.to_ascii_lowercase()) {
+        if loaded_files.contains(&name.to_ascii_lowercase()) || placer.list_files.contains(&name.to_ascii_lowercase()) {
             continue;
         }
         let Ok(bytes) = bytes else { continue };
@@ -1635,6 +1667,56 @@ struct Placer<'a> {
     items: kq8_core::item::Items,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
+    /// `GAME/Kq/Monstats.mtl`, read when a monster list is first loaded
+    /// (characters.md rule 4).
+    monster_types: Option<kq8_data::characters::MonsterTypes>,
+    /// The monster-list line whose type file `place` is placing now.
+    pending_line: Option<PendingLine>,
+    /// Type files placed through the monster list (lower case): not
+    /// shown again as unused objects.
+    list_files: std::collections::BTreeSet<String>,
+    /// Lines for `characters.log` written while loading.
+    character_lines: Vec<String>,
+}
+
+/// A monster-list line being placed (characters.md rule 4): the line, and
+/// the values its `@` fields take from the type.
+struct PendingLine {
+    line: kq8_data::characters::MonsterLine,
+    type_name: String,
+    wander: kq8_data::characters::Wander,
+    birth_delay: f32,
+    from: String,
+}
+
+/// A character's `.anm` file, read: the list, and the bytes to attach.
+struct LoadedAnm {
+    list: kq8_data::characters::AnimList,
+    bytes: Vec<u8>,
+}
+
+/// What the viewer and core need to know about a character (M4 4d-2,
+/// characters.md), beyond what every animated object has.
+#[derive(Debug, Clone)]
+pub struct CharacterAssets {
+    pub keys: kq8_data::characters::CharacterKeys,
+    /// The name its box is looked up by first (rule 9): the monster
+    /// list's type, else `monsterType`.
+    pub box_type: Option<String>,
+    /// Where it came from: its own file, or a monster-list line.
+    pub from: String,
+    /// May wander once active (M5): the list's movement field, else
+    /// `wanders`.
+    pub wanders: bool,
+    /// Seconds before Wait (rule 12): the list's value, else the key's.
+    pub birth_delay: f32,
+    /// The list has `Birth` (and no `PreBirth`): not drawn, not solid
+    /// until born (rule 16).
+    pub unborn: bool,
+    /// Its mouth textures (rule 25), if it has `lips=`.
+    pub lips: Option<kq8_data::characters::Lips>,
+    /// The skin swap (rule 4): the list's, else the keys'.
+    pub skin: Option<(String, String)>,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
@@ -2054,6 +2136,28 @@ impl Placer<'_> {
                 }
             }
         }
+        // A world's monster list (characters.md rules 3, 4): each line
+        // places its type's file.
+        if !unused && file.first().and_then(|s| s.get("classType")).is_some_and(|c| c.trim().eq_ignore_ascii_case("KQMonsterManager")) {
+            self.place_monster_list(&label, &file, load, vars);
+            return;
+        }
+        // A character (M4 4d-2, rule 6): its movement list comes from
+        // `animFile`; attached to the file as if the file carried it, so
+        // the animated-object rules below apply unchanged.
+        let character_keys = file.first().and_then(kq8_data::characters::CharacterKeys::from_section);
+        let mut character_list = None;
+        if let Some(keys) = &character_keys {
+            match keys.anim_file.as_deref().map(|a| (a, self.read_anm(a))) {
+                Some((_, Ok(list))) => {
+                    file[0].entries.insert(0, ("animLoops".to_string(), list.list.name.clone()));
+                    file.extend(kq_text::parse(&list.bytes));
+                    character_list = Some(list.list);
+                }
+                Some((a, Err(e))) => self.character_lines.push(format!("{label}[{}]: animFile {a}: {e}; not drawn (marker)", file[0].name)),
+                None => self.character_lines.push(format!("{label}[{}]: no animFile; not drawn (marker)", file[0].name)),
+            }
+        }
         if file.iter().filter(|x| x.get("locX").is_some()).count() > 1 {
             self.several_positions += 1;
             self.log.detail(format!("note {label}: several sections have a position; the first section is the object"));
@@ -2062,6 +2166,38 @@ impl Placer<'_> {
         // (animation lists, movements) belong to it.
         let Some(s) = file.first() else { return };
         let mut p = Placement::from_load(s, load);
+        // A monster-list line (rule 4): renamed, its position and heading
+        // replace the file's; z −1 = on the ground (the floor grid, as a
+        // `loadKQ` −1); any other z as written, then `keepOnGround`.
+        let pending = self.pending_line.take();
+        if let Some(l) = &pending {
+            p.name = l.line.name.clone();
+            p.position = l.line.position;
+            p.angles[2] = l.line.heading;
+            p.z_on_ground = (l.line.position[2] == -1.0).then_some(kq8_data::terrain::Level::Floor);
+            p.missing_loc = [false; 3];
+        }
+        let character = character_keys.zip(character_list).map(|(keys, list)| {
+            let lips = match kq8_data::characters::Lips::of(&file, &keys) {
+                Some(Ok(l)) => Some(l),
+                Some(Err(e)) => {
+                    self.character_lines.push(format!("[{}]: lips: {e}; no mouth change", p.name));
+                    None
+                }
+                None => None,
+            };
+            let unborn = list.has("Birth") && !list.has("PreBirth");
+            CharacterAssets {
+                box_type: pending.as_ref().map(|l| l.type_name.clone()).or_else(|| keys.monster_type.clone()),
+                from: pending.as_ref().map_or_else(|| format!("{label} ({} line {})", load.from, load.line), |l| l.from.clone()),
+                wanders: pending.as_ref().map_or(keys.wanders, |l| l.wander.wanders()),
+                birth_delay: pending.as_ref().map_or(keys.birth_delay, |l| l.birth_delay),
+                unborn,
+                lips,
+                skin: pending.as_ref().and_then(|l| l.line.skin.clone()).or_else(|| keys.skin.clone()),
+                keys,
+            }
+        });
         // Missing locX/locY/locZ are 0 (objects.md Q19); only the file's
         // own position can have gaps.
         if load.position.is_none() && p.missing_loc.contains(&true) {
@@ -2183,7 +2319,7 @@ impl Placer<'_> {
         }
         if !unused {
             self.located.insert(key.clone(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
-            if p.class.as_deref() == Some("KQMonster") {
+            if p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
                 let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
                 self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script });
             }
@@ -2355,6 +2491,7 @@ impl Placer<'_> {
             do_not_point_at: number("doNotPointAt").is_some_and(|v| v != 0.0),
             footsound_type: number("footsoundType").map(|v| v as i64),
             ball_stack: number("collisionShape").is_some_and(|v| v == 1.0),
+            character_box: character.as_ref().map(|c| c.box_type.clone()),
         });
         let flags = p.flags.clone();
         self.placed.push((p, i, unused));
@@ -2372,7 +2509,7 @@ impl Placer<'_> {
                     c.movement
                 ));
             } else {
-                self.place_animated(&label, &file, c, flags.as_deref());
+                self.place_animated(&label, &file, c, flags.as_deref(), character.clone());
             }
         }
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
@@ -2816,7 +2953,17 @@ impl Placer<'_> {
     /// An animated object for `anim_view` and the script rules (3c, 3i-4):
     /// every movement's frames. If one can't be loaded the object is drawn
     /// still (as before for its current movement).
-    fn place_animated(&mut self, label: &str, file: &[kq8_data::kq_text::Section], c: &kq8_data::objects::CurrentLoop, flags: Option<&str>) {
+    fn place_animated(
+        &mut self,
+        label: &str,
+        file: &[kq8_data::kq_text::Section],
+        c: &kq8_data::objects::CurrentLoop,
+        flags: Option<&str>,
+        character: Option<CharacterAssets>,
+    ) {
+        // A character's skin swap (characters.md rule 4) gives its own
+        // copies of the animations that use the texture.
+        let skin = character.as_ref().and_then(|c| c.skin.clone());
         let s = &file[0];
         let listed = match kq8_data::objects::movement_loops(file, s) {
             Ok(Some(m)) => m,
@@ -2828,13 +2975,16 @@ impl Placer<'_> {
         };
         let mut movements = Vec::with_capacity(listed.len());
         for (name, l) in listed {
-            let key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
+            let mut key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
+            if let Some((a, b)) = &skin {
+                key = format!("{key}|{}>{}", a.to_ascii_lowercase(), b.to_ascii_lowercase());
+            }
             let index = match self.object_animation_index.get(&key) {
                 Some(i) => *i,
                 None => {
                     let loaded = self.object_palette().and_then(|palette| {
                         self.log.quiet = true;
-                        let a = load_animation(self.game, self.world, &l.shape, &l.sequence, &palette, self.log);
+                        let a = load_animation_skinned(self.game, self.world, &l.shape, &l.sequence, &palette, skin.as_ref(), self.log);
                         self.log.quiet = false;
                         a
                     });
@@ -2858,7 +3008,8 @@ impl Placer<'_> {
             }
             if !l.transitions.is_empty() {
                 // anim-scripts.md rule 4.2: no placed object has any (data).
-                self.log.summary(format!("animated {label}: movement {name} has transitions; not played for objects (anim-scripts.md rule 4.2)"));
+                let who = if character.is_some() { "characters: from step 4d-3" } else { "objects (anim-scripts.md rule 4.2)" };
+                self.log.summary(format!("animated {label}: movement {name} has transitions; not played for {who}"));
             }
             movements.push((name, l, index));
         }
@@ -2874,7 +3025,89 @@ impl Placer<'_> {
             anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
             script: text("script"),
+            character,
         });
+    }
+
+    /// A character's `.anm` list (characters.md rule 6): the world's
+    /// archives, else `GAME/Kq` (the search order 3i-7 uses for
+    /// `AnimList=` files).
+    fn read_anm(&mut self, name: &str) -> Result<LoadedAnm, String> {
+        let bytes = match self.world.load(name) {
+            Some(r) => r.map(|(_, b)| b)?,
+            None => {
+                let path = self.game.find(&format!("GAME/Kq/{name}")).ok_or("not found in the world or GAME/Kq")?;
+                std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?
+            }
+        };
+        let list = kq8_data::characters::AnimList::parse(&bytes)?;
+        Ok(LoadedAnm { list, bytes })
+    }
+
+    /// `loadKQ monsters.kq` (characters.md rules 3, 4): each line's type
+    /// (`GAME/Kq/Monstats.mtl`) names a file of the world, read as if
+    /// loaded by `loadKQ`, then renamed and placed by the line. An unknown
+    /// type makes nothing.
+    fn place_monster_list(&mut self, label: &str, file: &[kq8_data::kq_text::Section], load: &kq8_data::world_script::LoadKq, vars: &kq8_data::world_script::Vars) {
+        use kq8_data::characters::{MonsterList, MonsterTypes};
+        let (list, problems) = MonsterList::from_section(&file[0]);
+        for p in &problems {
+            self.log.summary(format!("characters: {label}: {p}"));
+        }
+        if self.monster_types.is_none() {
+            let types = match self.game.find("GAME/Kq/Monstats.mtl").map(std::fs::read) {
+                Some(Ok(bytes)) => {
+                    let (t, problems) = MonsterTypes::parse(&bytes);
+                    for p in &problems {
+                        self.log.summary(format!("characters: Monstats.mtl: {p}"));
+                    }
+                    t
+                }
+                _ => {
+                    self.log.summary("characters: GAME/Kq/Monstats.mtl could not be read: no monster-list character is made");
+                    MonsterTypes::default()
+                }
+            };
+            self.monster_types = Some(types);
+        }
+        let mut made = 0;
+        for line in list.lines {
+            let found = self.monster_types.as_ref().and_then(|t| t.find(&line.type_name)).map(|(t, folded)| (t.clone(), folded));
+            let Some((kind, folded)) = found else {
+                self.character_lines.push(format!("{label} {} {}: KQMonster::add - Monster type undefined ('{}'): nothing made", line.key, line.name, line.type_name));
+                continue;
+            };
+            let bytes = match self.world.load(&kind.file) {
+                Some(Ok(x)) => x,
+                _ => {
+                    self.character_lines.push(format!("{label} {} {}: type {} file {} not in the world: nothing made", line.key, line.name, kind.name, kind.file));
+                    continue;
+                }
+            };
+            self.list_files.insert(kind.file.to_ascii_lowercase());
+            let from = format!("{label} {} (type {}{}, file {})", line.key, kind.name, if folded { ", matched ignoring capitals" } else { "" }, kind.file);
+            let sub = kq8_data::world_script::LoadKq {
+                file: kind.file.clone(),
+                name: kq8_data::world_script::LoadName::Keep,
+                position: None,
+                angles: None,
+                ignored_numbers: 0,
+                from: from.clone(),
+                line: load.line,
+                inside_if: load.inside_if,
+            };
+            self.pending_line = Some(PendingLine {
+                wander: line.movement.or(kind.movement.clone()),
+                birth_delay: line.birth_delay.or(kind.birth_delay),
+                type_name: kind.name.clone(),
+                line,
+                from,
+            });
+            self.place(&sub, Some(bytes), false, vars);
+            self.pending_line = None;
+            made += 1;
+        }
+        self.log.summary(format!("characters: {label}: {made} of {:?} monster-list lines placed (characters.md rule 4)", list.declared));
     }
 
     fn skipped_map(&mut self, unused: bool) -> &mut BTreeMap<String, usize> {
@@ -3209,6 +3442,7 @@ impl Placer<'_> {
             items: Default::default(),
             item_shapes: BTreeMap::new(),
             item_lines: Vec::new(),
+            character_lines: self.character_lines,
             ground: None,
         }
     }
@@ -3264,8 +3498,34 @@ fn object_colliders(
         }
         let class = p.class.as_deref().unwrap_or("?");
         let what = format!("[{}] class={class} shape={}", p.name, info.shape);
-        if class == "KQMonster" {
-            *left_out.entry("KQMonster (ball stack, not traced against Connor)").or_default() += 1;
+        if let Some(box_type) = &info.character_box {
+            // A character (M4 4d-2): its box by type, else by name
+            // (characters.md rule 9). Clickable with it (doors.md rule
+            // 10); never solid for Connor yet (a ball stack, M5).
+            *left_out.entry("character (not solid for Connor yet)").or_default() += 1;
+            let found = box_type.as_deref().and_then(|t| table.lookup(t).map(|e| (e, "type"))).or_else(|| table.lookup(&p.name).map(|e| (e, "name")));
+            let Some((entry, from)) = found else {
+                log.detail(format!("collision: {what}: character with no box (type {box_type:?}, name): can't be clicked"));
+                clickable_without_box += usize::from(info.collider_type & kq8_core::click::CLICKABLE != 0);
+                continue;
+            };
+            if info.collider_type & kq8_core::click::CLICKABLE != 0 {
+                let mut c = kq8_core::active::Clickable::plain(
+                    &p.name,
+                    class,
+                    entry.min,
+                    entry.max,
+                    Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                    info.collider_type,
+                );
+                c.script = info.script.clone();
+                c.accepts_inventory = info.accepts_inventory.clone();
+                c.accept_all_items = info.accept_all_items;
+                c.too_far_away_action = info.too_far_away_action;
+                c.do_not_point_at = info.do_not_point_at;
+                log.detail(format!("collision: {what}: character, clickable, box {} by {from}", entry.name));
+                clickables.push(c);
+            }
             continue;
         }
         if info.collider_type == 0 && info.collider_mask == 0 {

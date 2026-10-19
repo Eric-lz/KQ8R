@@ -1949,3 +1949,19 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | `.anm` list read like `Conner.anm` (first section = the list); looked up in the world's archives, else `GAME/Kq` | Rule 6; the search order is the one 3i-7 uses for `AnimList=` files (**our choice**, not in the note) | Unit test `anm_lists_give_movements_and_the_current_one`; frame counts as the note: `wizstop` 31, `chk_stop` 30, `UG_STOP` 40, `Ravnstp` 46 |
 | Box: `BOUNDS.KQ` by type / `monsterType`, else by name, exact | Rule 9 | All 52 Daventry lines find a box (the Knight by name) |
 | Geometry mouth movement names; gesture names | Rules 27, 28 | Daventry's two geometry talkers have all 8 mouth movements |
+
+### 4d-2, characters drawn where they stand — `crates/kq8-viewer/src/{load,anim_view,draw_distance,terrain_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `loadKQ monsters.kq`: every line places its type's file (world archives), renamed, the line's position and heading; an unknown type makes nothing | `characters.md` rules 3, 4 | `characters.log`: Daventry 52 of 52 lines placed |
+| A line's z −1 is put on the floor grid like a `loadKQ` −1; any other z (the chickens' and bats' −2) as written, then `keepOnGround` | Rule 4, "Edge cases" | `characters.log`: `chicken1` at z 13,932 (raised), `bat2` at 6,790 (as written) |
+| The `.kq` file's own position, `dirX`/`dirY` kept for a list line; only `dirZ` replaced | Rule 4 ("the position and heading replace those of the file") | — |
+| A character's `animFile` list attached as if the file carried it; every movement drawn as for animated objects, one model per movement | Rules 2, 6 | 57 characters in `characters.log`, 0 markers left for characters |
+| Characters whose list has `Birth` and no `PreBirth`: not drawn (only with H), groups `groupsAlways` + 1 only | Rule 16 | 21 hidden in Daventry: all the zombies |
+| Draw-distance ball from the box by type (list) or `monsterType`, else by name, exact; no box: radius 100 (as for objects) | Rules 9, 33; radius 100 from `object-lighting.md` rule 35 | `characters.log`: the Shadow has no box (radius 100) |
+| Skin swap: the texture named first is drawn as the second, names compared ignoring capitals | Rule 4; capitals: **our reading**, as rule 25 infers for the mouth | `viewer.log`: `test2.bmp` drawn as `test3.bmp` in 17 loads (the boss spriggan's models) |
+| Characters are clickable when their type has bit 0x20, with the rule-9 box; never solid for Connor yet | `clicking.md` / `doors.md` rule 10 for clicks; rule 9 for the box; not solid: **our stand-in** until M5 (rule 9: ball stacks) | Daventry: Girl, Wizard, Ravenw, Knight, Uglybeast clickable; `--click Uglybeast`: `ugly.cs` plays `pivot`, at its end `move Uglybeast 3` and `stand` |
+| `KQGeometryTalker`s count as `KQMonster`s for `speak` | Rule 1 ("a `KQMonster` in every way") | — |
+| A drawn animated object follows its place in core (a script's `move`); until now only its collider moved | `objects.md` Q20 d (a `move` moves the object) | `--click Uglybeast`: the body moves with `move Uglybeast 3` (log; not seen by eye) |
+| Characters loaded while playing (the Lady, three ravens, the Unicorn) are prepared like other dormant objects (3k-4) | As 3k-4 | Not tested: no run reaches their scripts |

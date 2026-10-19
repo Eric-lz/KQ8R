@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-2: characters drawn where they stand
+
+**Changed:** Viewer `load.rs`: `loadKQ monsters.kq` places every line through its type's file (renamed, the line's position and heading, z −1 on the ground); a character's `animFile` list is attached so it is drawn like an animated object (one model per movement); skin swap (`load_animation_skinned`); characters clickable with their rule-9 box, not solid. `anim_view.rs`: characters' ball from the rule-9 box, characters with `Birth` (the zombies) hidden, new `kq8-artifacts/logs/characters.log`; a drawn animated object now follows its place in core (a script's `move`). `draw_distance.rs`: `test_character`. `docs/DESIGN.md`, provenance.
+**Why:** Step 4d-2 of `characters.md`: the orange cubes become the characters.
+**Tested how:** `cargo test --workspace` (467 pass), clippy clean. Viewer runs: `--frames 150` (start), and `--at 258500,296500,0.6 --click Uglybeast,30 --frames 2500`, read in `characters.log`, `viewer.log`, `doors.log`.
+**Result:** 52 of 52 monster-list lines placed; 57 characters drawn (52 + Girl, Wizard, Ravenw, Shadow, Uglybeast), 21 zombies hidden, 0 characters left as markers. Wizard at (190807, 198274, 6630) heading −1.57; Knight and Henchman at (0, 0); the Girl at (100, 100). Boss spriggan's `test2.bmp` drawn as `test3.bmp`. Clicking the Uglybeast: `ugly.cs` plays `pivot` (update 30–80, its four grass sounds), `EndLoop pivot`, `move Uglybeast 3` → (262035, 298992), `stand`; then `KQConner::conversation` is unknown (conversations not built).
+**Still broken / not tested:** **Not looked at by eye.** No states yet: characters play their load movement as plain objects (the Wizard shows his still `attack` pose, not `Stop`; one-shots like the ravens' `attack` hold their last frame). Not solid; no gravity, no turning, no mouth. The Lady, the three script-loaded ravens and the Unicorn are prepared but no run reached their scripts. A clickable character's click box stays where it was loaded after a `move` (the Wizard's ring scene).
+**Next:** 4d-3: the states (first update, Wait and `Stop`, the return to `Stop`, Special lists).
+
 ## 2026-10-19 M4 step 4d-1: reading characters (plan for 4d)
 
 **Changed:** `docs/DESIGN.md`: plan for 4d (characters, 4d-1 to 4d-7). New `kq8-data/src/characters.rs` (monster list lines, the type list `Monstats.mtl`, a character's keys with their defaults, the `KQLips` section, `.anm` movement lists). New `kq8 character-verify` (`kq8-cli/src/character_verify.rs`). `docs/provenance/README.md`. `docs/behaviour/QUESTIONS.md`: Q116 (`birthDelay` is not 0 for two Daventry goblins), Q117 ("the speaker goes to Wait" is not in `talking.md` rule 13).

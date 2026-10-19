@@ -630,7 +630,10 @@ inventory and menus.
     to expect (note "How to check"): Daventry 22 `KQMonster` + 2
     `KQGeometryTalker` files, 52 lines; `wizstop` 31 frames,
     `chk_stop` 30, `UG_STOP` 40, `Ravnstp` 46.
-  - **4d-2, characters drawn where they stand** (rules 3–5, 7, 9, 10,
+  - **4d-2, characters drawn where they stand** (**done** 2026-10-19:
+    57 drawn in Daventry, the 21 zombies hidden; also clickable by
+    their rule-9 box, and a drawn animated object now follows a
+    script's `move`) (rules 3–5, 7, 9, 10,
     16, 33–35). Characters from their own `.kq` (script `loadKQ`, also
     the copies loaded while playing: the Lady, the ravens, the
     Unicorn) and from the monster list (`loadKQ monsters.kq`): the

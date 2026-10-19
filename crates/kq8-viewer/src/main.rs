@@ -15,7 +15,8 @@
 //! Model: left-drag to turn around the model, wheel to zoom; arrows turn,
 //! R resets the view. Ground: W/A/S/D fly, Q/E down/up, Shift faster,
 //! hold the right mouse button to look around, H shows/hides invisible
-//! objects (green: no model, orange: .anm character). Connor (M2): keys
+//! objects (green: no model, orange: a character whose movement list could
+//! not be read; since M4 4d-2 characters are drawn). Connor (M2): keys
 //! from Connor.sae (arrows walk/turn, End run on/off); the game camera
 //! follows him (right mouse swing/zoom, Shift, Page Up/Down tilt, Home,
 //! F11 fixed distance; keys from Camera.sae); F switches to the free
