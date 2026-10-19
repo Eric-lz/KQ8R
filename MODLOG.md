@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c: checked by the user (docs only)
+
+**Changed:** `docs/FEATURES.md` (the interface entries: checked by the user), `STATUS.md` (4c-6 to 4c-10, checked, test count, next steps).
+**Why:** The user's check after 4c-10: "everything seems correct".
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** The stand-ins of Q108–Q111 stay until A traces them.
+**Next:** The corner panels pushed to the window's corners, as an option (the user's third idea).
+
 ## 2026-10-18 M4 step 4c-10: the meters' gap for good; the mask not on the meters alone
 
 **Changed:** Viewer `gui_view.rs`, `talk_view.rs`: the panels' and the caption's pictures fill their box exactly (`NodeImageMode::Stretch`). `main.rs`, `terrain_view.rs`: the engine doesn't smooth the panels' edges (`UiAntiAlias::Off`). `gui_view.rs`: the spinning mask stands on the bottom bar only, not on the meters when they pop up alone. Provenance, `docs/DESIGN.md`.

@@ -371,7 +371,7 @@ doesn't take it gives "This will not work."
   flashes its slot. Cutscenes (`handsOff`) slide the bar away and show
   the spinning mask; afterwards it comes back only if it was shown.
   The caption sits on top of the bar. Clicks on the bar don't reach the
-  world. Logged in `gui.log`. Not seen by eye yet.
+  world. Logged in `gui.log`. Checked by the user 2026-10-18.
 - **The inventory bars (4c-3):** the top bar (mask button, the quest
   strip with its arrows, gold and its count) comes down when the pointer
   reaches the top of the window and goes up when it moves away; it also
@@ -382,7 +382,8 @@ doesn't take it gives "This will not work."
   a new weapon or armour piece pushes out the old one, which drops
   where the new one lay, and its numbers change the bar. New items and
   higher counts blink. A right click on an item: Connor describes it
-  (voice only). Logged in `gui.log` and `items.log`. Not seen by eye yet.
+  (voice only). Logged in `gui.log` and `items.log`. Checked by the
+  user 2026-10-18.
 - **The item in hand (4c-4):** a left click on a quest item, the gold,
   the rope or the rocks puts it on the mouse pointer (the game's own
   pointer pictures; the play pointer otherwise) and takes it out of the
@@ -391,7 +392,7 @@ doesn't take it gives "This will not work."
   the original) the hand empties, otherwise "This will not work." and it
   stays on the pointer. The scroll can't be taken: Connor reads it out.
   Escape still quits (the original opens its main menu, which pauses the
-  game; there is no menu yet). Not seen by eye yet.
+  game; there is no menu yet). Checked by the user 2026-10-18.
 - **A 4:3 screen in a wide window (4c-6):** the panels and the caption
   stay in the original's 4:3 shape, centred in the window; the world
   fills the whole window around them.

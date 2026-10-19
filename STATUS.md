@@ -2,7 +2,7 @@
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
 end of B's M4 step 4c (the on-screen interface and Connor's inventory,
-4c-1 to 4c-5; Q108–Q110 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+4c-1 to 4c-10, checked by the user; Q108–Q111 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -10,7 +10,8 @@ end of B's M4 step 4c (the on-screen interface and Connor's inventory,
 
 - **New 2026-10-18 (B, M4 4c): the on-screen interface and Connor's
   inventory are built** from `interface.md` and `inventory.md`, one
-  commit per step, **not seen by eye yet** (the user's check is next):
+  commit per step, **checked by the user against the original**
+  (2026-10-18, after the fixes 4c-6 to 4c-10 below):
   - 4c-1: the caption's stone strip covers the whole caption box (400
     wide on the 800 × 600 screen of `set800mode 1`), rows broken at its
     width, the box a little left of the middle with the map closed.
@@ -34,6 +35,14 @@ end of B's M4 step 4c (the on-screen interface and Connor's inventory,
   - 4c-5: Q105 built: the click turn looks at Connor's state at the
     click (or the one the script asked for); buildings read
     `doNotPointAt`.
+  - 4c-6 to 4c-10, from the user's checks: the panels and the caption
+    on a 4:3 screen centred in the window (the world fills the window);
+    Space plays `intrup.aud` hiding the bar and `intrdown.aud` showing
+    it; the spinning mask whole (57 × 57) at the right, standing on the
+    bottom bar (not on the meters alone); black behind the meters'
+    bars; each panel drawn with its edges rounded where they stand and
+    stretched to fill its box exactly (Bevy's default kept proportions
+    and left the world showing at the meters' ends).
 - **Before that (A, 2026-10-18):** `interface.md` and `inventory.md`
   written and checked by the user in the original; (B, M4 4a-7 to
   4a-9) turn keys as events, the turn after a click, the chest remark
@@ -251,9 +260,9 @@ done; the interface and inventory built in 4c).
   ear by the user. World music (3h-5) too.
 - Remarks and speech (M4 4a) and the click turn and turn keys (4a-7
   to 4a-9): checked by the user against the original, 2026-10-18.
-- The interface and inventory (M4 4c): built and checked in the logs
-  (values, timings, pictures chosen); **not seen by eye**.
-- Tests: 450 unit tests pass (114 + 320 + 5 + 11), 2026-10-18.
+- The interface and inventory (M4 4c): checked by the user against the
+  original, 2026-10-18.
+- Tests: 451 unit tests pass (114 + 321 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
 
@@ -276,7 +285,7 @@ done; the interface and inventory built in 4c).
   yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.
-- **Stand-ins of 4c** (Q108–Q110): the 800 × 600 screen and how the
+- **Stand-ins of 4c** (Q108–Q111): the 800 × 600 screen and how the
   layout's pictures scale with it (× 1.25, nearest pixel, tiled when
   smaller); the panels' animations at 15 frames per second; counts of 0
   not written; the rocks picture; the blink's order; potions on game
@@ -288,9 +297,7 @@ done; the interface and inventory built in 4c).
   the game (a menu step must stop the updates and the panels' timers).
   When standing, an automatic turn plays `Stop` for its first update
   even if he was already turning on the spot (as rules 24–25 say).
-- **Next step, suggested:** the user's checks by eye of 4c (`docs/FEATURES.md`
-  "The on-screen interface"; the commands are in `MODLOG.md`). For A:
-  Q108–Q110, then conversations (`KQConner::conversation`), needed for
+- **Next step, suggested:** for A: Q108–Q111, then conversations (`KQConner::conversation`), needed for
   the wizard and the other Daventry characters (the panels' side of
   conversations is built, unit-tested only). For B after that: the main
   menu (Escape, the mask button) with the game paused.
