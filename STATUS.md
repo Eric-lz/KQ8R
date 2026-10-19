@@ -16,8 +16,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   palette"): the bars, captions and fonts use the world's
   `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,
   `castle.ppl`), not `<folder>.ppl` and not `defaultPaletteName`; it
-  stays the same all through a world. For B: fixes the missing bars in
-  eight worlds.
+  stays the same all through a world. **Built by B (2026-10-19):** the
+  bars and captions now show in all 12 worlds.
 - **New 2026-10-19 (A): characters studied** (`docs/behaviour/characters.md`):
   how `KQMonster` / `KQGeometryTalker` are made (own `.kq` or the
   world's `monsters.kq` line + `Monstats.mtl` type), drawn (animation
@@ -405,8 +405,6 @@ done; conversations and menus next). M0–M3 are done.
   a–c (the view heading's state around cutscene cameras: rule 1 from
   idle only, the exact aim before unlocking, the mill wheel's turn past
   Connor); d and e were settled by the user's checks.
-- For B (answered 2026-10-19, not built): **Q118** (the world palette
-  is `objectPalette` from `world.cs`; `interface.md` rules 1a–1h).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world

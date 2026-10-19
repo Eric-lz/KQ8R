@@ -1077,6 +1077,35 @@ fn world_palette_name(world: &World, setting: &str) -> Option<String> {
     })
 }
 
+/// The game-play screen's palette (bars, caption strip, fonts): the
+/// paths to try, best first, and a line for the log (`interface.md`
+/// rules 1c, 1e, 1f, Q118). The file is the world's
+/// `KQWorld::objectPalette` from `world.cs`; if that one is missing the
+/// panels keep the last palette that loaded, so `loadingPalette`, then
+/// the interior, terrain and Connor ones follow. Each name is looked up
+/// in the world's `resource` folder, then `GAME/Resource` (the copies are
+/// the same).
+pub fn screen_palette_paths(game: &GameDir, world: &str) -> (Vec<String>, String) {
+    const SETTINGS: [&str; 5] = ["objectPalette", "loadingPalette", "interiorPalette", "terrainPalette", "connorPalette"];
+    let w = match World::open(game, world) {
+        Ok(w) => w,
+        Err(e) => return (Vec::new(), format!("world.cs not read ({e})")),
+    };
+    let mut names: Vec<(&str, String)> = Vec::new();
+    for s in SETTINGS {
+        if let Some(n) = world_palette_name(&w, s).filter(|n| !names.iter().any(|(_, m)| m.eq_ignore_ascii_case(n))) {
+            names.push((s, n));
+        }
+    }
+    let note = if names.is_empty() {
+        "world.cs names no KQWorld:: palette".to_string()
+    } else {
+        names.iter().map(|(s, n)| format!("KQWorld::{s} {n}")).collect::<Vec<_>>().join(", ")
+    };
+    let paths = names.iter().flat_map(|(_, n)| [format!("{world}/resource/{n}"), format!("GAME/Resource/{n}")]).collect();
+    (paths, note)
+}
+
 /// Daventry's (or any world's) placed objects: each different model once,
 /// plus where each copy goes.
 pub struct Objects {

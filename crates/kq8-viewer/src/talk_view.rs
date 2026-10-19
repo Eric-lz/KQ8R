@@ -248,8 +248,8 @@ fn first_found(game: &GameDir, names: &[String]) -> Option<(String, Vec<u8>)> {
 /// 4b-3: reads the caption box of `GAME/Resource/Gplayscr.gui`
 /// (`IDDLG_CAPTION` by the tag file), the font and strip picture it
 /// names (the world's `8gui` folder first, then `GAME/8Gui`), and the
-/// world's palette (`<world>/resource/<world>.ppl`, then
-/// `GAME/Resource/<world>.ppl`). `None` (logged) if any is missing.
+/// world's palette (`KQWorld::objectPalette` from `world.cs`, Q118;
+/// `crate::load::screen_palette_paths`). `None` (logged) if any is missing.
 pub fn load_caption(game: &GameDir, world: &str, log: &mut Log) -> Option<CaptionStyle> {
     use kq8_data::gui::{self, Kind, Tags};
     fn fail(log: &mut Log, why: String) -> Option<CaptionStyle> {
@@ -282,8 +282,9 @@ pub fn load_caption(game: &GameDir, world: &str, log: &mut Log) -> Option<Captio
             None
         }
     });
-    let pal_names = [format!("{world}/resource/{world}.ppl"), format!("GAME/Resource/{world}.ppl")];
-    let Some((pal_path, pal_bytes)) = first_found(game, &pal_names) else { return fail(log, format!("no palette among {pal_names:?}")) };
+    // interface.md rules 1c-1g (Q118): the world's objectPalette, as the bars.
+    let (pal_names, pal_note) = crate::load::screen_palette_paths(game, world);
+    let Some((pal_path, pal_bytes)) = first_found(game, &pal_names) else { return fail(log, format!("no palette found ({pal_note}; tried {pal_names:?})")) };
     let palette = match kq8_data::Palette::parse(&pal_bytes) {
         Ok(p) => p.shown_colors(),
         Err(e) => return fail(log, format!("{pal_path}: {e}")),

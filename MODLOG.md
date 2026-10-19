@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Bars and captions in every world (Q118 built)
+
+**Changed:** `kq8-viewer/src/load.rs`: new `screen_palette_paths` (the world's `KQWorld::objectPalette` from `world.cs`, then `loadingPalette`, `interiorPalette`, `terrainPalette`, `connorPalette`; each in the world's `resource` folder, then `GAME/Resource`). `gui_view.rs` (bars) and `talk_view.rs` (caption strip) use it instead of `<folder>.ppl`. `docs/provenance/README.md`, `STATUS.md`.
+**Why:** `--world deadcity` and seven other worlds started with no bars and the stand-in caption panel: no `<folder>.ppl` there (Q118, `interface.md` rules 1c–1g).
+**Tested how:** `cargo clippy -p kq8-viewer --all-targets` clean; `cargo play --world <W> --frames 30` (60 for DeadCity and Daventry) for all 12 worlds, reading `viewer.log` and `gui.log`.
+**Result:** Every world logs its palette, e.g. "gui: … palette DeadCity/resource/newdead.ppl (world.cs: KQWorld::objectPalette newdead.ppl …)", CastleD `Castle.ppl`, IceWorld `ice.ppl`, SnowExit `exit.ppl`, Temple1–4 `temple01`–`04.ppl`; the caption uses the same file. DeadCity `gui.log` update 1: "the bars show: quest strip ["NoName28", "NoName29", "Mask1a"] … slots [3, 1, 2, 0, …], rope Some("NoName27")". Daventry unchanged (`daventry.ppl`).
+**Still broken / not tested:** Not looked at on screen by me (the logs only). The fallbacks after `objectPalette` are not tested (no shipped world needs them).
+**Next:** User: look at the bars in DeadCity, IceWorld and a temple.
+
 ## 2026-10-19 Study (A): Q118, the user's check (world palette)
 
 **Changed:** `docs/behaviour/interface.md`: new rule 1i (each world's `8gui` pictures are converted to its own palette), the user's result under "How to check" point 8. No code.

@@ -237,8 +237,9 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         Ok(l) => l,
         Err(e) => return fail(main, format!("Gplayscr.gui: {e}")),
     };
-    let pal_names = [format!("{world}/resource/{world}.ppl"), format!("GAME/Resource/{world}.ppl")];
-    let Some((pal_path, pal_bytes)) = first_found(game, &pal_names) else { return fail(main, format!("no palette among {pal_names:?}")) };
+    // interface.md rules 1c-1f (Q118): the world's objectPalette.
+    let (pal_names, pal_note) = crate::load::screen_palette_paths(game, world);
+    let Some((pal_path, pal_bytes)) = first_found(game, &pal_names) else { return fail(main, format!("no palette found ({pal_note}; tried {pal_names:?})")) };
     let palette = match kq8_data::Palette::parse(&pal_bytes) {
         Ok(p) => p.shown_colors(),
         Err(e) => return fail(main, format!("{pal_path}: {e}")),
@@ -265,7 +266,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         }
     };
     let head = format!(
-        "gui: Gplayscr.gui read; screen {}x{} (set800mode {wide}, layout x {scale}; stand-in Q108); palette {pal_path}; the bottom-bar key: {key_line} (interface.md rule 10)",
+        "gui: Gplayscr.gui read; screen {}x{} (set800mode {wide}, layout x {scale}; stand-in Q108); palette {pal_path} (world.cs: {pal_note}; interface.md rule 1c); the bottom-bar key: {key_line} (interface.md rule 10)",
         screen[0], screen[1]
     );
     main.summary(&head);

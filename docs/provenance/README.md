@@ -1831,6 +1831,16 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | --- | --- | --- |
 | With the option on, the bottom bar's left panel at the window's left edge, its right panel and the spinning mask at the window's right edge; the slots, meters, top bar and caption stay on the centred 4:3 screen; clicks follow the panels; `--corners on\|off` (default off), F6 | **Not in the original: the user's idea** (2026-10-18, "the third idea") | `gui-4c11-corners.log` (window 1280 × 720): "engine: IDCTL_INVBARL at left 0.00 … right 288.00", "IDCTL_INVBARR at left 992.00 … right 1280.00", the slots and meters at 448–832 |
 
+### The world palette for the bars and captions (Q118) — `crates/kq8-viewer/src/{load,gui_view,talk_view}.rs`
+
+Replaces the 4b-3 / 4c-2 guess `<folder>/resource/<folder>.ppl`, which found no palette in eight worlds, so their bars and caption strip were not drawn.
+
+| What | Source | Check |
+| --- | --- | --- |
+| The bars, the caption strip and the fonts use the palette named by `set KQWorld::objectPalette` in the world's `world.cs` | `interface.md` rules 1, 1c, 1g | `viewer.log` per world, e.g. DeadCity "gui: … palette DeadCity/resource/newdead.ppl (world.cs: KQWorld::objectPalette newdead.ppl …)"; all 12 worlds found theirs |
+| If that file is missing: `loadingPalette`, then `interiorPalette`, `terrainPalette`, `connorPalette` | Rule 1f (the panels keep the last palette that loaded) for `loadingPalette` and rule 1c ("may fall back to `loadingPalette`, then to the other three"); the order of the last three is **our choice** | Not tested (every shipped world has its `objectPalette`) |
+| Each name looked up in the world's `resource` folder, then `GAME/Resource`; capitals ignored | Rule 1e | CastleD: `Castle.ppl` finds `castle.ppl` |
+
 ### The back flip at a wall (2026-10-18) — `crates/kq8-core/src/connor.rs`
 
 | What | Source | Check |
