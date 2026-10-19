@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 4d-3 to 4d-5: the user's check
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: the user's observations added to Q119 and Q120. No code.
+**Why:** The user ran the four test procedures of 4d-5.
+**Tested how:** By eye in our viewer (user).
+**Result:** (1) The Wizard breathes, speaks with mouth and gestures, doesn't turn, stands again: as described. (2) The Uglybeast flickers a lot between two animations while speaking (Q120: our literal reading of rule 18). (3) A very brief snap back at the end of the Uglybeast's turn (Q119; the original shows none). (4) Chickens and pig stand doing their idle animation; the farm spriggan's one `attack` at the start was not seen (probably out of view).
+**Still broken / not tested:** Q119 and Q120 wait for A; the spriggan's first `attack` not confirmed by eye.
+**Next:** A: Q116, Q117, Q119–Q121. B: plan 4d-6 (gravity).
+
 ## 2026-10-19 M4 step 4d-5: the characters' mouths and gestures
 
 **Changed:** `kq8-core/src/character.rs`: `mouth_code` (codes 0–7 mouth shape, a geometry talker's mouth movements, gestures 8–16), `after_speech` (Wait after the last line, Q117 stand-in). `active.rs`: the talk events of each update reach the characters; `Active::test_command`. Viewer: `load.rs` loads each character's `lip0`–`lip7` textures; `anim_view.rs` gives a character its own copies of its face materials and swaps `lip<n>` on them; new test option `--command "WORDS",N` (`main.rs`, `door_view.rs`). `QUESTIONS.md`: Q120. FEATURES (characters, `--command`), DESIGN, provenance.
