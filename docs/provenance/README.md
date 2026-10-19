@@ -1836,3 +1836,25 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | What | Source | Check |
 | --- | --- | --- |
 | Stopped by a wall while stepping back (movement `stop`, the back block on, so back still held), Jump starts `backJump`, not the standing jump | **The user's check in the original**; the rule behind it is a **stand-in** (Q112): `connor-physics.md` "Jumping" rule 2 alone gives the standing jump | Unit test `a_wall_stop_blocks_until_the_key_is_released` (extended); `connor-backflip-wall.log`: "head-on into a wall: movement back -> stop; blocked: back" at update 7, "jump: backJump from stop" at 26, glancing up the Pub's wall to z 10,316, `backJumpEnd` at 46 |
+
+## Closing M3: the answers to Q27, Q53, Q100, Q102 (M3 step 3o)
+
+### 3o-1, the view heading — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces three stand-ins: the heading kept after `move KQCamera` while following (3n-3), the viewer's own turn back after `follow` (3l-3), and "a `follow` 0.4 rad or less off looks at Connor at once".
+
+| What | Source | Check |
+| --- | --- | --- |
+| The camera's position never swings behind Connor; only the view's heading turns, by four states (idle, catching up, locked, turning back), every camera update | `camera.md` "Turning the view toward Connor" (Q27 c, Q100 a) | `camera-3o1-side.log` |
+| Error = angle from the view heading to the direction to the aim point (+ the mouse offset), wrapped; positive = to the left | Same, "Words used here" | Unit tests below |
+| Idle → catching up when the error is over 0.25 and Connor moves, or over 0.5 | Rule 1 | Unit test `the_view_holds_until_a_quarter_radian_then_catches_up_and_locks`; `camera-3o1-side.log` update 19: "idle->catching_up error +0.258" |
+| Rule 1 is applied only from idle | **Stand-in** (Q113 a: the worked mill wheel example has a locked view stay locked) | — |
+| Catching up: only while he moves or the error is 0.5 or more and he hasn't just switched forward/backward (else idle); under 0.02 → locked; over 0.5 → cut to 0.25 on the same side; otherwise, only when the error grew, a turn of 1.25 × the growth | Rule 4 | Unit tests `the_view_holds_…`, `a_big_error_is_cut_to_a_quarter_radian_at_once_then_held`; `camera-3o1-side.log` updates 19–95, locked at 96 |
+| Locked: exactly on the aim point + offset; unlocked (idle) when no drag, switch off, and he is still or just switched; the exact aim comes first | Rule 4; the order is a **stand-in** (Q113 b) | Unit tests `the_view_holds_…` (unlocks on the 3rd still update), `stepping_back_while_locked_unlocks_the_view` |
+| A drag: locked with the offset that keeps the present angle (taken after the swing of that update); after the drag: offset 0, idle | Rule 2 | Unit test `a_drag_locks_the_view_at_its_angle_and_the_end_of_it_goes_idle` |
+| The "turn back" switch: offset 0, state turning back (or stays locked); a third of the rest per update, one snap angle 0.063 on both sides; under 0.02 → locked | Rules 3–4, "Do not reproduce" (lopsided snap) | Unit test `the_turn_back_switch_turns_a_third_per_update_then_locks_and_stays` |
+| "Switched": the move since the previous camera update against the facing then; more than 0.1 of its length along his back = backward; measured only while catching up or locked and moving | "Switched between going forward and going backward" | Unit test `stepping_back_while_locked_unlocks_the_view` |
+| "Error at the end of the previous update" is measured after that update's turn | Rule 5 | `camera-3o1-side.log` (each "left" is the next "error" minus his drift) |
+| Flights and cuts keep their own aiming (3m-4) and write the heading the follow view goes on from; `move KQCamera` writes it too; the state is not changed by any of them | **Stand-in** (Q113 d) | `camera-3o1-watermill.log`: flight unchanged, cue 6 `follow` leaves the view 0.121 off, idle |
+| The view is drawn from the camera's own heading and tilt (blended between updates, the heading the short way round), no longer "look at the aim point, then turn" | **Our method** | Viewer runs above |
+| At the start-up update the view first looks straight at Connor | **Stand-in** (part of the Q27 d start stand-in; `--at` moves him after the camera is made) | `camera-3o1-side.log` update 1: error 0.000 |

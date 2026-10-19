@@ -3,16 +3,16 @@
 //! Rules from the behaviour note `docs/behaviour/camera.md` ("What the camera
 //! looks at", "Distance", "Height above the ground", "Swinging and zooming
 //! with the mouse", "Tilt", "Obstacles", "When the camera updates at
-//! all"). [`Camera::tick`] runs once per game update (15 per second); a
-//! camera update ([`Camera::update_with`]) runs only when the caller has a
-//! cause for one (M3 3n-1). Not here yet: the automatic swing behind
-//! Connor (Q27 c), first person, shake.
+//! all", "Turning the view toward Connor"). [`Camera::tick`] runs once per
+//! game update (15 per second); a camera update ([`Camera::update_with`])
+//! runs only when the caller has a cause for one (M3 3n-1), and ends by
+//! aiming the view: its heading by four states (M3 3o-1). Not here yet:
+//! first person, shake.
 //!
-//! Stand-ins until Q27 is answered: what the tilt turns (the caller draws
-//! the view looking at the aim point, pitched by `tilt - DEFAULT_TILT`),
-//! and in fixed mode Page Up = closer. `mouse_forward` positive = zoom in;
-//! the viewer sends mouse-down as positive (the user's check of the
-//! original).
+//! Stand-ins: the view's tilt looks at the aim point, pitched by `tilt -
+//! DEFAULT_TILT` (until M3 3o-2); in fixed mode Page Up = closer.
+//! `mouse_forward` positive = zoom in; the viewer sends mouse-down as
+//! positive (the user's check of the original).
 
 use crate::connor_mover::GroundLookup;
 
@@ -251,11 +251,83 @@ pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3],
     None
 }
 
-/// The followed object, for the obstacle rules.
+/// The followed object, for the obstacle rules and the view heading.
 #[derive(Debug, Clone, Copy)]
 pub struct Followed {
     /// Its base (Connor's feet).
     pub base: [f32; 3],
+    /// The way it faces (Connor's heading: forward is (sin, −cos)).
+    pub facing: f32,
+}
+
+/// camera.md "Turning the view toward Connor": the view heading's state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadingState {
+    /// The heading is not changed.
+    Idle,
+    /// Gaining on Connor while he drifts off the middle.
+    CatchingUp,
+    /// Exactly on the aim point (+ the mouse offset), every update.
+    Locked,
+    /// The "turn back" switch: a third of the rest per update.
+    TurningBack,
+}
+
+/// Start catching up when the error is over this while Connor moves...
+pub const CATCH_UP_MOVING: f32 = 0.25;
+/// ...or over this whatever he does; while catching up, an error over it
+/// is cut to [`CATCH_UP_MOVING`] at once.
+pub const CATCH_UP_ANY: f32 = 0.5;
+/// Under this error the heading locks on.
+pub const HEADING_LOCK: f32 = 0.02;
+/// Catching up turns by this × the growth of the error.
+pub const CATCH_UP_GAIN: f32 = 1.25;
+/// A move more than this share of its length along Connor's back counts
+/// as going backward.
+pub const BACKWARD_SHARE: f32 = 0.1;
+
+/// What the view heading did in one update, for the log.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeadingStep {
+    pub before: HeadingState,
+    pub after: HeadingState,
+    /// The error when the update began (radians, positive = the aim point
+    /// is to the left), with the mouse offset.
+    pub error: f32,
+    /// The turn made this update (radians, anticlockwise positive).
+    pub turn: f32,
+    /// The error left after the turn.
+    pub left: f32,
+    pub offset: f32,
+    /// "Switched between going forward and going backward", when it was
+    /// measured this update.
+    pub switched: Option<bool>,
+}
+
+impl HeadingStep {
+    /// For the log, e.g. `idle->catching_up error +0.262 turn +0.015 left +0.247`.
+    pub fn words(&self) -> String {
+        let name = |s: HeadingState| match s {
+            HeadingState::Idle => "idle",
+            HeadingState::CatchingUp => "catching_up",
+            HeadingState::Locked => "locked",
+            HeadingState::TurningBack => "turning_back",
+        };
+        format!(
+            "{}->{} error {:+.3} turn {:+.3} left {:+.3}{}{}",
+            name(self.before),
+            name(self.after),
+            self.error,
+            self.turn,
+            self.left,
+            if self.offset != 0.0 { format!(" mouse_offset {:+.3}", self.offset) } else { String::new() },
+            match self.switched {
+                Some(true) => " switched_fwd_back",
+                Some(false) => " not_switched",
+                None => "",
+            }
+        )
+    }
 }
 
 /// An avoidance swing: turn `step` radians round the aim point every
@@ -320,6 +392,22 @@ pub struct Camera {
     /// moved" message.
     moving: bool,
     still: u32,
+    /// The view drawn: heading (0 looks along +Y, anticlockwise positive,
+    /// as `view_direction`) and tilt (positive looks up).
+    pub heading: f32,
+    pub view_tilt: f32,
+    /// camera.md "Turning the view toward Connor": the heading's state,
+    /// the "turn back" switch ("When the camera updates at all" item 3),
+    /// the mouse offset, the error at the end of the previous update, a
+    /// drag in the previous update, and the last "backward" measured.
+    pub heading_state: HeadingState,
+    pub turn_back: bool,
+    mouse_offset: f32,
+    last_error: f32,
+    dragging: bool,
+    backward: Option<bool>,
+    /// Connor's facing at the previous camera update.
+    last_facing: Option<f32>,
 }
 
 /// What one update did, for the log.
@@ -339,6 +427,8 @@ pub struct Report {
     pub pulled_in: Option<f32>,
     /// What the height rule did.
     pub height: Option<HeightStep>,
+    /// What the view heading did.
+    pub heading: Option<HeadingStep>,
 }
 
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -376,13 +466,6 @@ pub fn view_direction(rx: f32, rz: f32) -> [f32; 3] {
 pub fn view_angles(d: [f32; 3]) -> (f32, f32) {
     let flat = (d[0] * d[0] + d[1] * d[1]).sqrt();
     (d[2].atan2(flat), (-d[0]).atan2(d[1]))
-}
-
-/// The heading offset a turn back toward Connor starts with: the whole
-/// offset if it is more than [`FOLLOW_TURN_FROM`], else none.
-pub fn follow_turn_start(offset: f32) -> f32 {
-    let offset = wrap(offset);
-    if offset.abs() > FOLLOW_TURN_FROM { offset } else { 0.0 }
 }
 
 /// One update of the turn back: a third of what is left, then the snap.
@@ -433,7 +516,24 @@ impl Camera {
             lifted: false,
             moving: false,
             still: 0,
+            heading: 0.0,
+            view_tilt: 0.0,
+            heading_state: HeadingState::Idle,
+            turn_back: false,
+            mouse_offset: 0.0,
+            last_error: 0.0,
+            dragging: false,
+            backward: None,
+            last_facing: None,
         }
+    }
+
+    /// Points the view straight at `aim` (the start), state idle.
+    pub fn look_at(&mut self, aim: [f32; 3]) {
+        let (up, towards) = view_angles(sub(aim, self.position));
+        self.heading = towards;
+        self.view_tilt = up + self.tilt - DEFAULT_TILT;
+        self.last_error = 0.0;
     }
 
     /// `KQCamera::setRange <min> <max>`: refused unless min < max.
@@ -452,7 +552,7 @@ impl Camera {
     pub fn update(&mut self, base: [f32; 3], input: &Input, ground: &dyn GroundLookup) -> Report {
         let moved = self.last_base.is_some_and(|l| connor_moved((l, 0.0), (base, 0.0)));
         self.tick(moved, base, input.mouse_held);
-        self.update_with(Followed { base }, moved, input, ground, None)
+        self.update_with(Followed { base, facing: 0.0 }, moved, input, ground, None)
     }
 
     /// The aim point for an object whose base is at `base`.
@@ -606,11 +706,104 @@ impl Camera {
                 report.events.push("tilt back to default (Connor moved)".into());
             }
         }
-        self.last_base = Some(base);
         self.tilt = self.tilt.clamp(-TILT_LIMIT, TILT_LIMIT);
+        report.heading = Some(self.aim_view(aim, followed, mx != 0.0 || mf != 0.0, moving_now));
+        self.last_base = Some(base);
+        self.last_facing = Some(followed.facing);
         report.aim = aim;
         report.distance = length(sub(self.position, aim));
         report
+    }
+
+    /// Aims the view from where the camera now is (camera.md "What the
+    /// camera looks at" rule 3, "Turning the view toward Connor").
+    /// `dragging`: a mouse value is not 0 this update; `moving`: "Connor
+    /// is moving". The tilt: the view looks at the aim point, pitched by
+    /// the tilt's difference from the default (as before M3 3o-2).
+    fn aim_view(&mut self, aim: [f32; 3], followed: Followed, dragging: bool, moving: bool) -> HeadingStep {
+        let (up, towards) = view_angles(sub(aim, self.position));
+        self.view_tilt = up + self.tilt - DEFAULT_TILT;
+        let error = |c: &Camera| wrap(towards + c.mouse_offset - c.heading);
+        let before = self.heading_state;
+        let start = error(self);
+        let mut switched = None;
+        // 1. Start catching up. STAND-IN (Q113 a): only from idle; the
+        // note's mill wheel example has a locked view stay locked.
+        if before == HeadingState::Idle && (start.abs() > CATCH_UP_ANY || (start.abs() > CATCH_UP_MOVING && moving)) {
+            self.heading_state = HeadingState::CatchingUp;
+        }
+        // 2. The mouse wins: locked, keeping the present angle.
+        if dragging {
+            if !self.dragging {
+                self.mouse_offset = -wrap(towards - self.heading);
+            }
+            self.heading_state = HeadingState::Locked;
+        } else if self.dragging {
+            self.mouse_offset = 0.0;
+            self.heading_state = HeadingState::Idle;
+        }
+        self.dragging = dragging;
+        // 3. The "turn back" switch.
+        if self.turn_back {
+            self.mouse_offset = 0.0;
+            if before != HeadingState::Locked {
+                self.heading_state = HeadingState::TurningBack;
+            }
+        }
+        // 4. By state.
+        let e = error(self);
+        let old = self.heading;
+        match self.heading_state {
+            HeadingState::Idle => {}
+            HeadingState::CatchingUp => {
+                if !((moving || e.abs() >= CATCH_UP_ANY) && !self.measure_switch(followed, &mut switched)) {
+                    self.heading_state = HeadingState::Idle;
+                } else if e.abs() < HEADING_LOCK {
+                    self.heading_state = HeadingState::Locked;
+                } else if e.abs() > CATCH_UP_ANY {
+                    self.heading = towards + self.mouse_offset - e.signum() * CATCH_UP_MOVING;
+                } else if e * self.last_error >= 0.0 && e.abs() > self.last_error.abs() {
+                    self.heading += e.signum() * CATCH_UP_GAIN * (e.abs() - self.last_error.abs());
+                }
+            }
+            HeadingState::Locked => {
+                self.heading = towards + self.mouse_offset;
+                // Unlocked after this exact aim (STAND-IN for the order, Q113 b).
+                if !dragging && !self.turn_back && (!moving || self.measure_switch(followed, &mut switched)) {
+                    self.heading_state = HeadingState::Idle;
+                }
+            }
+            HeadingState::TurningBack => {
+                if e.abs() < HEADING_LOCK {
+                    self.heading_state = HeadingState::Locked;
+                } else {
+                    // A third of the rest, one snap angle ("Do not reproduce").
+                    self.heading = towards + self.mouse_offset - follow_turn_step(e);
+                }
+            }
+        }
+        self.heading = wrap(self.heading);
+        self.last_error = error(self);
+        HeadingStep { before, after: self.heading_state, error: start, turn: wrap(self.heading - old), left: self.last_error, offset: self.mouse_offset, switched }
+    }
+
+    /// "Switched between going forward and going backward": Connor's last
+    /// move (since the previous camera update) against the way he faced
+    /// then; more than 0.1 of its length along his back is backward. True
+    /// when that differs from the previous time it was measured.
+    fn measure_switch(&mut self, followed: Followed, switched: &mut Option<bool>) -> bool {
+        let backward = match (self.last_base, self.last_facing) {
+            (Some(l), Some(f)) => {
+                let m = sub(followed.base, l);
+                let behind = [-f.sin(), f.cos()];
+                m[0] * behind[0] + m[1] * behind[1] > BACKWARD_SHARE * length(m)
+            }
+            _ => false,
+        };
+        let s = self.backward.is_some_and(|b| b != backward);
+        self.backward = Some(backward);
+        *switched = Some(s);
+        s
     }
 
     /// camera.md "Obstacles", steps 6–9.
@@ -715,10 +908,7 @@ mod tests {
 
     #[test]
     fn follow_turns_back_by_a_third_per_update_then_snaps() {
-        // 0.19 rad off (the bricks' cue 10): looks at Connor at once.
-        assert_eq!(follow_turn_start(0.19), 0.0);
-        let mut o = follow_turn_start(-1.0);
-        assert_eq!(o, -1.0);
+        let mut o: f32 = -1.0;
         let mut steps = 0;
         while o != 0.0 {
             let next = follow_turn_step(o);
@@ -900,7 +1090,7 @@ mod tests {
         let base = [x, y, 0.0];
         let moved = c.last_base.is_some_and(|l| connor_moved((l, 0.0), (base, 0.0)));
         c.tick(moved, base, input.mouse_held);
-        c.update_with(Followed { base }, moved, input, &Flat(0.0), Some(view))
+        c.update_with(Followed { base, facing: 0.0 }, moved, input, &Flat(0.0), Some(view))
     }
 
     #[test]
@@ -1029,6 +1219,127 @@ mod tests {
         assert!(c.tick(false, [75.0, 0.0, 0.0], false));
         assert!(!c.moving);
         assert_eq!(c.prev_aim, Some(Camera::aim_for([75.0, 0.0, 0.0])));
+    }
+
+    /// One tick and camera update with Connor at `base` facing `facing`
+    /// (no obstacles).
+    fn aim_step(c: &mut Camera, base: [f32; 3], facing: f32, input: &Input) -> HeadingStep {
+        let moved = c.last_base.is_some_and(|l| connor_moved((l, 0.0), (base, 0.0)));
+        c.tick(moved, base, input.mouse_held);
+        c.update_with(Followed { base, facing }, moved, input, &Flat(0.0), None).heading.unwrap()
+    }
+
+    #[test]
+    fn the_view_holds_until_a_quarter_radian_then_catches_up_and_locks() {
+        // Connor walks sideways (+x) 75 per update in front of a camera
+        // that doesn't move (a wide range): the angle to him keeps growing.
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        c.set_range(100.0, 1.0e6);
+        c.look_at(Camera::aim_for([0.0; 3]));
+        let mut states = Vec::new();
+        let mut x = 0.0;
+        for _ in 0..400 {
+            // Facing +x (forward is (sin, −cos) of the facing).
+            let h = aim_step(&mut c, [x, 0.0, 0.0], std::f32::consts::FRAC_PI_2, &Input::default());
+            states.push((h.after, h.error, h.left));
+            x += 75.0;
+        }
+        // Idle while the error is 0.25 or less (it grows clockwise: Connor
+        // goes right, so the error is negative).
+        let first = states.iter().position(|s| s.0 != HeadingState::Idle).unwrap();
+        assert!(states[..first].iter().all(|s| s.1.abs() <= CATCH_UP_MOVING), "{:?}", &states[..first]);
+        assert!(states[first].1 < -CATCH_UP_MOVING && states[first].0 == HeadingState::CatchingUp);
+        // Each update of catching up takes back 1.25 × the growth: what is
+        // left shrinks, never past 0.26.
+        let locked = states.iter().position(|s| s.0 == HeadingState::Locked).expect("locks on");
+        assert!(states[first..locked].iter().all(|s| s.2.abs() < 0.26 && s.0 == HeadingState::CatchingUp));
+        assert!(states[locked].2.abs() < HEADING_LOCK);
+        // Then exactly on him while he walks.
+        assert!(states[locked + 1..].iter().all(|s| s.0 == HeadingState::Locked && s.2.abs() < 1e-5), "{:?}", &states[locked..]);
+        // He stops: unlocked once he counts as still (3 updates), after
+        // that update's exact aim.
+        let mut after = Vec::new();
+        for _ in 0..4 {
+            after.push(aim_step(&mut c, [x - 75.0, 0.0, 0.0], std::f32::consts::FRAC_PI_2, &Input::default()).after);
+        }
+        assert_eq!(after, [HeadingState::Locked, HeadingState::Locked, HeadingState::Idle, HeadingState::Idle]);
+    }
+
+    #[test]
+    fn a_big_error_is_cut_to_a_quarter_radian_at_once_then_held() {
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        c.look_at(Camera::aim_for([0.0; 3]));
+        c.heading += 0.8;
+        let h = aim_step(&mut c, [0.0; 3], 0.0, &Input::default());
+        assert_eq!((h.before, h.after), (HeadingState::Idle, HeadingState::CatchingUp));
+        assert!((h.error + 0.8).abs() < 1e-4 && (h.left + CATCH_UP_MOVING).abs() < 1e-4, "{h:?}");
+        // Standing still, 0.25 off: back to idle, nothing turns.
+        let h = aim_step(&mut c, [0.0; 3], 0.0, &Input::default());
+        assert_eq!((h.after, h.turn), (HeadingState::Idle, 0.0));
+        assert!((h.left + CATCH_UP_MOVING).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_drag_locks_the_view_at_its_angle_and_the_end_of_it_goes_idle() {
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        c.look_at(Camera::aim_for([0.0; 3]));
+        c.heading += 0.1;
+        let swing = Input { mouse_held: true, mouse_x: 0.1, ..Input::default() };
+        aim_step(&mut c, [0.0; 3], 0.0, &swing); // first update: no movement
+        // The first update of the drag: the camera swings 0.1 × 3π/4 round
+        // Connor; the view keeps its present heading (offset = − the error).
+        let heading = c.heading;
+        let h = aim_step(&mut c, [0.0; 3], 0.0, &swing);
+        assert_eq!(h.after, HeadingState::Locked);
+        assert!(h.turn.abs() < 1e-5 && h.left.abs() < 1e-5 && (h.offset + h.error).abs() < 1e-5, "{h:?}");
+        assert!((c.heading - heading).abs() < 1e-5);
+        // The next: the view turns with the camera, by the same swing.
+        let h = aim_step(&mut c, [0.0; 3], 0.0, &swing);
+        assert!((h.turn - 0.1 * SWING_PER_UNIT).abs() < 1e-4 && h.left.abs() < 1e-5, "{h:?}");
+        // Let go: offset 0, idle, the heading left where it was.
+        let h = aim_step(&mut c, [0.0; 3], 0.0, &Input::default());
+        assert_eq!((h.after, h.offset, h.turn), (HeadingState::Idle, 0.0, 0.0));
+    }
+
+    #[test]
+    fn the_turn_back_switch_turns_a_third_per_update_then_locks_and_stays() {
+        let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
+        c.look_at(Camera::aim_for([0.0; 3]));
+        c.heading -= 1.0;
+        c.turn_back = true;
+        let mut left = Vec::new();
+        for _ in 0..10 {
+            let h = aim_step(&mut c, [0.0; 3], 0.0, &Input::default());
+            left.push((h.after, h.left));
+        }
+        assert!((left[0].1 - 2.0 / 3.0).abs() < 1e-4 && left[0].0 == HeadingState::TurningBack);
+        let lock = left.iter().position(|s| s.0 == HeadingState::Locked).unwrap();
+        assert!(left[lock - 1].1 == 0.0, "snapped under 0.063 first: {left:?}");
+        // The switch stays on: locked even though he stands still.
+        assert!(left[lock..].iter().all(|s| s.0 == HeadingState::Locked));
+    }
+
+    #[test]
+    fn stepping_back_while_locked_unlocks_the_view() {
+        // Facing 0: forward is −Y, his back is +Y.
+        let mut c = Camera::new([0.0, 3000.0, MIN_HEIGHT]);
+        c.look_at(Camera::aim_for([0.0; 3]));
+        let mut y = 0.0;
+        for k in 0..5 {
+            if k == 2 {
+                // Walking (he counts as moving from his 2nd update): lock on.
+                c.heading_state = HeadingState::Locked;
+            }
+            let h = aim_step(&mut c, [0.0, y, 0.0], 0.0, &Input::default());
+            if k >= 2 {
+                assert_eq!(h.after, HeadingState::Locked, "{h:?}");
+            }
+            y -= 75.0;
+        }
+        y += 75.0;
+        y += 40.0;
+        let h = aim_step(&mut c, [0.0, y, 0.0], 0.0, &Input::default());
+        assert_eq!((h.after, h.switched), (HeadingState::Idle, Some(true)));
     }
 
     #[test]

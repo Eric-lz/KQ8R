@@ -10,7 +10,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_core::camera::{connor_moved, ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT};
+use kq8_core::camera::{connor_moved, ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT, FOLLOW_TURN_FROM};
 use kq8_core::camera_flight::{Flight, Spots, View};
 use kq8_core::connor_mover::GroundLookup as _;
 use kq8_core::collide::{BoxCollider, BuildingCollider};
@@ -122,9 +122,9 @@ impl GameCam {
 #[derive(Resource)]
 pub struct GameCam {
     cam: Camera,
-    /// (position, tilt, aim) after the last two updates.
-    previous: ([f32; 3], f32, [f32; 3]),
-    current: ([f32; 3], f32, [f32; 3]),
+    /// (position, view tilt, view heading) after the last two updates.
+    previous: ([f32; 3], f32, f32),
+    current: ([f32; 3], f32, f32),
     keys: Keys,
     /// Mouse movement (pixels) and presses gathered between updates.
     mouse_px: Vec2,
@@ -135,10 +135,6 @@ pub struct GameCam {
     /// `KQCamera::follow none` (M3 3k-3, `camera.md` rule 1): `false` =
     /// the camera stays where it is.
     pub following: bool,
-    /// After `follow Connor` (M3 3l-3): how far the view's heading is
-    /// still turned away from looking at Connor (radians, positive =
-    /// anticlockwise from above), after the last two updates.
-    view_turn: (f32, f32),
     /// `camera.md` "Camera flights and cuts" (M3 3m-4): the spot list,
     /// the flight under way, the view of a flight or cut (with the roll,
     /// logged, not drawn), and the "places" / "aims" switches `follow`
@@ -154,37 +150,29 @@ pub struct GameCam {
     aims: bool,
     /// `camera.md` "When the camera updates at all" (M3 3n-1): Connor's
     /// base and heading at the last tick (for the "Connor moved" test),
-    /// causes waiting for this tick's camera update (`follow`, the start),
-    /// the scripts' `move Connor` this tick (for the log), and the "turn
-    /// back" switch (an update every tick while on).
+    /// causes waiting for this tick's camera update (`follow`, the start)
+    /// and the scripts' `move Connor` this tick (for the log). The "turn
+    /// back" switch is the camera's (`Camera::turn_back`).
     last_connor: Option<([f32; 3], f32)>,
     pending: Vec<&'static str>,
     script_moves: Vec<String>,
-    turn_back: bool,
-    /// `move KQCamera` while following (M3 3n-3): the heading the script
-    /// gave, kept by the camera updates until the next `follow`, flight or
-    /// cut (STAND-IN for the swing-behind rules, open question 7).
-    held_heading: Option<f32>,
 }
 
 impl GameCam {
-    /// The view direction drawn now (from the camera to its aim point,
-    /// turned by what is left of a turn back) as (tilt, heading).
+    /// The view drawn now as (tilt, heading).
     fn view_now(&self) -> (f32, f32) {
-        let (p, _, aim) = self.current;
-        let (tilt, heading) = view_angles(std::array::from_fn(|k| aim[k] - p[k]));
-        (tilt, heading + self.view_turn.1)
+        (self.cam.view_tilt, self.cam.heading)
     }
 
     /// `KQCamera::follow Connor|none` (`camera.md` rule 1, "Shake and
     /// cutscene cameras"). Following Connor again starts from where the
     /// camera is: its next update pulls it in or pushes it out to the
-    /// range; a view more than 0.4 rad off Connor turns back gradually
-    /// (1/3 per update), otherwise it looks at him at once; the tilt is
-    /// the default at once.
+    /// range; a view more than 0.4 rad off Connor switches the "turn back"
+    /// switch on (the heading then turns back 1/3 per update), otherwise
+    /// the heading goes by the four states ("Turning the view toward
+    /// Connor"); the tilt is the default at once.
     pub fn follow(&mut self, connor: bool, connor_base: [f32; 3]) -> String {
         self.following = connor;
-        self.held_heading = None;
         // Both switches follow `follow` (rule 1 of the flights); following
         // an object switches the obstacle avoidance on again.
         self.places = connor;
@@ -201,10 +189,9 @@ impl GameCam {
         let p = self.cam.position;
         let aim = Camera::aim_for(connor_base);
         let towards = view_angles(std::array::from_fn(|k| aim[k] - p[k])).1;
-        let (_, heading) = self.view_now();
+        let heading = self.cam.heading;
         let off = wrap(heading - towards);
-        let start = kq8_core::camera::follow_turn_start(off);
-        self.view_turn = (start, start);
+        let turns = off.abs() > FOLLOW_TURN_FROM;
         self.cam.tilt = DEFAULT_TILT;
         // "When the camera updates at all" item 2: one update right after
         // the command, with the aim point counting as not moved.
@@ -213,14 +200,14 @@ impl GameCam {
         // farther than the maximum switches it off; one that finds the view
         // more than 0.4 rad off switches it on (our order when both hold).
         let distance = (0..3).map(|k| (p[k] - aim[k]).powi(2)).sum::<f32>().sqrt();
-        let was = self.turn_back;
+        let was = self.cam.turn_back;
         if distance > self.cam.range.1 {
-            self.turn_back = false;
+            self.cam.turn_back = false;
         }
-        if start != 0.0 {
-            self.turn_back = true;
+        if turns {
+            self.cam.turn_back = true;
         }
-        let switch = match (was, self.turn_back) {
+        let switch = match (was, self.cam.turn_back) {
             (false, true) => "the \"turn back\" switch goes ON: the camera updates every update until a flight ends (the original clears it no other way)".to_string(),
             (true, false) => format!("the \"turn back\" switch goes OFF (camera {distance:.1} from the aim point, farther than the maximum {:.0})", self.cam.range.1),
             (true, true) => "the \"turn back\" switch stays ON".to_string(),
@@ -231,7 +218,7 @@ impl GameCam {
         }
         format!(
             "the camera follows Connor again, from where it is: view heading {heading:.3}, Connor at {towards:.3} ({off:+.3} off): {}{ended}{}",
-            if start != 0.0 { "turns back 1/3 per update" } else { "looks at him at once (0.4 rad or less)" },
+            if turns { "turns back 1/3 per update" } else { "0.4 rad or less: the heading goes by the four states" },
             if switch.is_empty() { String::new() } else { format!("; {switch}") }
         )
     }
@@ -257,12 +244,12 @@ impl GameCam {
         View { tilt, heading, roll: self.view.roll, locked: false }
     }
 
-    /// Draws the view of a flight or cut from where the camera is.
+    /// Draws the view of a flight or cut from where the camera is; the
+    /// follow camera's heading goes on from it.
     fn show_view(&mut self) {
-        let p = self.cam.position;
-        let dir = view_direction(self.view.tilt, self.view.heading);
-        self.current = (p, DEFAULT_TILT, std::array::from_fn(|k| p[k] + dir[k] * 1000.0));
-        self.view_turn = (0.0, 0.0);
+        self.cam.heading = self.view.heading;
+        self.cam.view_tilt = self.view.tilt;
+        self.current = (self.cam.position, self.view.tilt, self.view.heading);
     }
 
     /// `KQCamera::flyToCamLoc` (rule 4): to the spot nearest the camera, in
@@ -276,7 +263,6 @@ impl GameCam {
         };
         let p = self.cam.position;
         self.view = self.start_view();
-        self.held_heading = None;
         let f = Flight::new(p, self.view.roll, spot, aim, seconds, end_roll);
         self.following = false;
         self.cam.avoid = false;
@@ -301,7 +287,6 @@ impl GameCam {
             return line;
         };
         self.view = self.start_view();
-        self.held_heading = None;
         self.flight = None;
         self.following = false;
         self.cam.avoid = false;
@@ -342,7 +327,7 @@ impl GameCam {
         if s.k >= s.n {
             // Rule 4, the last update: "places" back on, pulled onto the range.
             self.places = true;
-            if std::mem::take(&mut self.turn_back) {
+            if std::mem::take(&mut self.cam.turn_back) {
                 line += "; the \"turn back\" switch goes OFF (a flight ended)";
             }
             line += &format!(
@@ -376,22 +361,19 @@ impl GameCam {
         let (tilt, heading) = if flags & 2 != 0 { (old_tilt + turn[0], old_heading + turn[2]) } else { (turn[0], turn[2]) };
         let dir = view_direction(tilt, heading);
         let p = self.cam.position;
-        // Only the direction matters; the drawing pitches by the tilt's
-        // difference from the default, so the default draws it as is.
-        let aim = std::array::from_fn(|k| p[k] + dir[k] * 1000.0);
-        self.current = (p, DEFAULT_TILT, aim);
+        self.cam.heading = wrap(heading);
+        self.cam.view_tilt = tilt;
+        self.current = (p, tilt, self.cam.heading);
         self.previous = self.current;
-        self.view_turn = (0.0, 0.0);
         // A flight under way goes on from here; with "aims" on it turns
         // back to its aim at the next update (flights rule 6).
         self.view = View { tilt, heading, roll: if flags & 2 != 0 { self.view.roll + turn[1] } else { turn[1] }, locked: false };
         let roll = if turn[1] != 0.0 { format!("; roll {:.3} not drawn", turn[1]) } else { String::new() };
         // While following (camera.md "`move KQCamera` while following"):
-        // this place and view stand until the next camera update, which
-        // keeps the heading.
+        // this place and view stand until the next camera update; its
+        // heading then goes by the four states, from this one.
         let held = if self.following && self.flight.is_none() {
-            self.held_heading = Some(heading);
-            "; still following: stays until the next camera update, which keeps this heading"
+            "; still following: stays until the next camera update (tilt set at once, heading by the four states from here)"
         } else {
             ""
         };
@@ -473,11 +455,11 @@ pub fn make(
             return None;
         }
     };
-    let cam = Camera::new(position);
-    let aim = [connor_at[0], connor_at[1], connor_at[2] + kq8_core::camera::AIM_HEIGHT];
+    let mut cam = Camera::new(position);
+    cam.look_at(Camera::aim_for(connor_at));
     let mut g = GameCam {
-        previous: (position, cam.tilt, aim),
-        current: (position, cam.tilt, aim),
+        previous: (position, cam.view_tilt, cam.heading),
+        current: (position, cam.view_tilt, cam.heading),
         cam,
         keys,
         mouse_px: Vec2::ZERO,
@@ -486,7 +468,6 @@ pub fn make(
         updates: 0,
         log,
         following: true,
-        view_turn: (0.0, 0.0),
         spots: Spots::default(),
         flight: None,
         flight_fresh: false,
@@ -499,10 +480,8 @@ pub fn make(
         // One update on the first tick, as before 3n-1.
         pending: vec!["start (stand-in)"],
         script_moves: Vec::new(),
-        turn_back: false,
-        held_heading: None,
     };
-    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z");
+    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt");
     Some(g)
 }
 
@@ -566,7 +545,6 @@ pub fn camera_step(
     let g = &mut *game;
     g.updates += 1;
     g.previous = g.current;
-    g.view_turn.0 = g.view_turn.1;
     // "Connor moved" (camera.md "When the camera updates at all" item 1):
     // his position or facing changed since the last tick. Our camera runs
     // after Connor's update and this tick's scripts, so the update it
@@ -623,12 +601,18 @@ pub fn camera_step(
         ));
     }
     let pending = std::mem::take(&mut g.pending);
+    if pending.contains(&"start (stand-in)") {
+        // Part of the start stand-in (Q27 d): the view starts looking
+        // straight at Connor where he is now (`--at` puts him there after
+        // the camera was made).
+        g.cam.look_at(Camera::aim_for(base));
+    }
     if !pending.is_empty() {
         // `follow` (and our start): the aim point counts as not moved.
         g.cam.not_moved(base);
         causes.extend(pending.iter().map(|c| c.replace(' ', "_")));
     }
-    if g.turn_back {
+    if g.cam.turn_back {
         causes.push("turn_back".into());
     }
     if input.mouse_held || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
@@ -639,34 +623,13 @@ pub fn camera_step(
     }
     // The view blockers as they stand now (doors move).
     let view = view_blockers(&lookup.0, buildings.as_deref(), blockers.as_deref(), doors.as_deref());
-    let report = g.cam.update_with(Followed { base }, moved, &input, &lookup.0, Some(&view));
+    let report = g.cam.update_with(Followed { base, facing: sim.walker.heading }, moved, &input, &lookup.0, Some(&view));
     // Check from the numbers: is the camera inside a building's solid?
     let inside: Vec<&str> = view.buildings.iter().filter(|b| b.solid_at(g.cam.position)).map(|b| b.name.as_str()).collect();
-    g.current = (g.cam.position, g.cam.tilt, report.aim);
-    if let Some(held) = g.held_heading {
-        // After `move KQCamera` while following (3n-3): the tilt is set at
-        // once (the view looks at the aim point), the heading is not
-        // snapped. The swing-behind rules that would turn it are not
-        // decoded (open question 7): kept, and how far off Connor logged.
-        let p = g.cam.position;
-        let (tilt, towards) = view_angles(std::array::from_fn(|k| report.aim[k] - p[k]));
-        g.view_turn.1 = wrap(held - towards);
-        let line = format!(
-            "camera update {}: after move KQCamera while following: heading kept at {held:.3} (STAND-IN, open question 7), {:+.3} rad off Connor ({towards:.3}); tilt set at once: {:.3} (looks at the aim point)",
-            g.updates,
-            g.view_turn.1,
-            tilt + g.cam.tilt - DEFAULT_TILT
-        );
-        g.log.detail(line);
-    } else if g.view_turn.1 != 0.0 {
-        // The turn back toward Connor after `follow Connor` (3l-3).
-        g.view_turn.1 = kq8_core::camera::follow_turn_step(g.view_turn.1);
-        let line = format!("camera update {}: view turning back toward Connor: {:.3} left", g.updates, g.view_turn.1);
-        g.log.detail(line);
-    }
+    g.current = (g.cam.position, g.cam.view_tilt, g.cam.heading);
     let p = g.cam.position;
     let line = format!(
-        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {}",
+        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {} | {} {:.3} {:+.3}",
         g.updates,
         p[0],
         p[1],
@@ -689,7 +652,10 @@ pub fn camera_step(
         report.pulled_in.map_or("-".to_string(), |d| format!("{d:.1}")),
         if inside.is_empty() { "-".to_string() } else { inside.join(",") },
         causes.join(","),
-        report.height.map_or("-".to_string(), |h| format!("{} {:.1} {:.1} {:.1} {:.1}", h.words(), h.sum, h.wanted, h.start, h.before))
+        report.height.map_or("-".to_string(), |h| format!("{} {:.1} {:.1} {:.1} {:.1}", h.words(), h.sum, h.wanted, h.start, h.before)),
+        report.heading.map_or("-".to_string(), |h| h.words()),
+        g.cam.heading,
+        g.cam.view_tilt
     );
     g.log.detail(line);
     if !report.events.is_empty() {
@@ -701,8 +667,7 @@ pub fn camera_step(
 }
 
 /// Draws the view from the game camera, blended between its last two
-/// updates, looking at the aim point and pitched by the tilt's difference
-/// from the default (stand-in until Q27 b).
+/// updates: from its position, along its view heading and tilt.
 pub fn camera_draw(
     game: Option<Res<GameCam>>,
     choice: Res<CameraChoice>,
@@ -715,20 +680,15 @@ pub fn camera_draw(
     }
     let Ok(mut t) = camera.single_mut() else { return };
     let a = fixed.overstep_fraction();
-    let lerp = |x: [f32; 3], y: [f32; 3]| -> [f32; 3] { std::array::from_fn(|i| x[i] + (y[i] - x[i]) * a) };
-    let (p0, t0, a0) = game.previous;
-    let (p1, t1, a1) = game.current;
-    let eye = Vec3::from(to_bevy(lerp(p0, p1), [0.0; 3]));
-    let aim = Vec3::from(to_bevy(lerp(a0, a1), [0.0; 3]));
-    let tilt = t0 + (t1 - t0) * a;
+    let (p0, t0, h0) = game.previous;
+    let (p1, t1, h1) = game.current;
+    let p: [f32; 3] = std::array::from_fn(|i| p0[i] + (p1[i] - p0[i]) * a);
+    // The heading the short way round.
+    let dir = view_direction(t0 + (t1 - t0) * a, h0 + wrap(h1 - h0) * a);
+    let eye = Vec3::from(to_bevy(p, [0.0; 3]));
+    let aim = Vec3::from(to_bevy(std::array::from_fn(|i| p[i] + dir[i] * 1000.0), [0.0; 3]));
     if (aim - eye).length() * UNITS_PER_METRE < 1.0 {
         return;
     }
-    let mut view = Transform::from_translation(eye).looking_at(aim, Vec3::Y);
-    view.rotate_local_x(tilt - DEFAULT_TILT);
-    // What is left of a turn back toward Connor (3l-3), round the
-    // vertical (game +Z is Bevy +Y; both turn anticlockwise from above).
-    let (o0, o1) = game.view_turn;
-    view.rotate_axis(Dir3::Y, o0 + (o1 - o0) * a);
-    *t = view;
+    *t = Transform::from_translation(eye).looking_at(aim, Vec3::Y);
 }

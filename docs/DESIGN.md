@@ -1682,6 +1682,105 @@ catchers, ground animators).
       Walking: updates every tick while he walks, none from 1 tick after
       he stops. The watermill flight still ends at (188999.0, 229341.5,
       10863.4).
+  - **3o — closing M3: the answers to Q27, Q53, Q100, Q102 (planned
+    2026-10-19).** Study session A answered the last open M3 questions
+    (MODLOG "A: the last open questions blocking M3"). This builds them,
+    replacing our stand-ins, plus the user's report that the camera
+    points at Connor's hips. One commit per step (code, unit tests,
+    MODLOG, provenance); numbers logged to `kq8-artifacts/logs/`.
+    - **Words used here.** *View heading*: the direction the camera
+      looks, left/right (0 = along +Y, anticlockwise positive, as for
+      `move KQCamera`). *View tilt*: the direction it looks, up/down.
+      *Player's tilt*: the part the player sets with Page Up/Down (−0.2
+      by default). *Error*: the angle from the view heading to the
+      direction from the camera to the aim point.
+    - **3o-1, the view heading** (**done** 2026-10-19; Q113 asked) (`camera.md` "Turning the view toward
+      Connor"; Q27 c, Q100 a). The camera keeps its own view heading
+      and one of four states: idle, catching up, locked, turning back.
+      Every follow update (when it aims): (1) start catching up if the
+      error is over 0.25 and Connor moves, or over 0.5; (2) while the
+      mouse drags: locked, with a mouse offset that keeps the present
+      angle; after the drag: offset 0, idle; (3) the "turn back" switch:
+      offset 0, turning back (or stays locked); (4) by state: idle does
+      nothing; catching up (only while he moves or the error is 0.5 or
+      more, and he hasn't just switched between going forward and
+      backward; else idle): under 0.02 → locked, over 0.5 → cut to 0.25,
+      otherwise 1.25 × the growth of the error, only when it grew;
+      locked: exactly on the aim point, unlocked (idle) when no drag,
+      switch off, and he is still or just switched; turning back: a third
+      of the rest per update (one snap angle, 0.063, "Do not
+      reproduce"), under 0.02 → locked. Where it lives: `kq8-core`
+      `camera.rs` (the heading is part of `Camera`); the viewer draws
+      the view from the camera's heading and tilt, blended between
+      updates. **Replaces** our stand-ins: the heading kept after `move
+      KQCamera` while following (3n-3), the `follow` turn back done in
+      the viewer (3l-3, now state "turning back"), and "a `follow` 0.4
+      rad or less off looks at Connor at once" (now the four states:
+      no snap). Flights and cuts keep their own aiming (3m-4); they
+      write the heading the follow camera starts from. Tilt as before
+      in this step (3o-2 changes it). Log: state before → after, the
+      error, the turn, every camera update.
+    - **3o-2, the tilt and the aim height, together** (`camera.md`
+      "What the camera looks at" rules 2–3, Q27 b; the user's report of
+      the hips). `AIM_HEIGHT` back to the note's 1,400 (it was set to
+      800 by hand because our view looked straight at the aim point;
+      the leash, the height rule and the obstacle tests all assume
+      1,400). The player's tilt is stored as the note's −0.2 (Page Up
+      adds 0.015); the view tilt = the player's tilt + the angle up from
+      the camera to the aim point, set every update. One constant for
+      the default tilt (the flights' `AIM_TILT` is the same −0.2). Log:
+      the height above Connor's feet at which the view's centre line
+      passes him (expected about 900–1,000 at walking distance; his box
+      is 1,300 tall). Not hand-tuned again: if it still looks wrong by
+      eye, a question for A.
+    - **3o-3, the mouse** (`camera.md` "Swinging and zooming" rules 1,
+      6, 7). Mouse value = the movement as a share of the window: one
+      window width = 3π/4 swing, one window height = 5,000 zoom
+      (replaces the hand-set 800 pixels per unit). A mouse movement
+      during a drag runs a camera update (one per game update, with
+      the movement gathered since the last: the original at 15 frames
+      per second does the same). Holding the button without moving (or
+      an update of a drag where neither value changed): the offset
+      from the aim point is set back to the previous update's, so the
+      camera keeps its place relative to Connor while he walks; the
+      range and obstacle rules still apply after it. Directions as the
+      user checked them (rule 7). Not built: the recentring at 0.9 /
+      0.5 (rule 6, not settled; the note says we may ignore it). Our
+      method: the movement is the mouse's own (raw) movement in window
+      pixels, not the cursor's place, so a drag doesn't stop at the
+      window's edge.
+    - **3o-4, the view line against the ground** (`camera.md`
+      "Obstacles" item 1, Q53 a). Exact, per triangle: the line is cut
+      at every square edge and diagonal it crosses; the first place
+      where it is on the other side of the drawn ground than at its
+      start (also coming **up** out of it) is the hit, worked out
+      exactly on that triangle's plane; else the end point. Holes: none
+      are known in our data (`terrain.md` open question 3), so none are
+      passed through yet; the code says where they would go. Replaces
+      the stepping every 50 units.
+    - **3o-5, small camera points** (Q100 b, c). The deep lift
+      ("Height above the ground" rule 2.1, gap over the maximum): the
+      line from the update's start to the new spot is tested against
+      the **drawn surface** with the 3o-4 test; the camera is put on
+      the hit point; no hit: it stays at its deep spot ("lifted" is
+      still remembered); the wanted height from the floor grid there.
+      Replaces our floor-grid line and "no hit: ground + 1,400". One
+      `follow` that finds the view over 0.4 rad off and the camera
+      beyond the maximum leaves the "turn back" switch **off** (the 0.4
+      test first, then the distance test; ours was on).
+    - **3o-6, traps after a script's `move`** (`traps.md` rule 5
+      "Placed by a script", Q102 b). When a script's `move Connor` is
+      applied (right after the scripts of the update), every trap he
+      is inside runs its stay test (rule 7) at the new spot: `Off` (or
+      `Cue 302`) then, in the same update, not at his next move. No
+      trap is entered by the move (rule 5 a, as built). Daventry: the
+      mill wheel's `wheeltp2` gets `Off` right after its cue 2.
+    - **Then** the user's check against the original: (a) walk Connor
+      off to one side: the view holds until he is about 14° off the
+      middle, then catches up and locks on him; (b) hold the right
+      mouse button while he walks: the camera keeps its place relative
+      to him; (c) standing and walking, the view points at about his
+      chest. Only after it: M3 marked done.
 
 ### M4 — Talk, listen, use the menus
 
