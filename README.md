@@ -51,10 +51,13 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 - **M4 – So far.** Connor's remarks and other spoken lines play with
   their captions and lip sync. The on-screen interface works: the bottom
   bar (health, experience, weapons, potions), the top bar (quest items,
-  gold) and holding an item on the mouse pointer to use it.
+  gold) and holding an item on the mouse pointer to use it. Daventry's
+  people and creatures are drawn and animated: they breathe, gesture
+  and move their mouths while they speak, and can be clicked.
 
 ### Next
 
+- **Characters:** gravity and shadows (the last two steps of 4d).
 - **Conversations** with the wizard and the other people in Daventry.
 - **The main menu:** pausing the game with Escape key.
 
@@ -188,6 +191,7 @@ cargo run --release -- building-verify
 cargo run --release -- item-verify
 cargo run --release -- aud-verify
 cargo run --release -- msg-verify
+cargo run --release -- character-verify
 ```
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the

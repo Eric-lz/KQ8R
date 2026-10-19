@@ -12,6 +12,21 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (B, M4 4d-1 to 4d-5): characters are drawn and
+  animated** from `characters.md` (one commit per step; plan in
+  `docs/DESIGN.md` "4d"; checked by the user after 4d-2): the monster
+  list and the types (`kq8 character-verify`: Daventry 22 + 2 files, 52
+  lines, 0 problems); every character drawn from its `.anm` list (the
+  orange cubes are gone; zombies hidden until born; the boss spriggan's
+  skin swap; clickable by their box, not solid); the states (updated
+  only while near or far, the first update, Wait and `Stop` at a random
+  frame and speed, back to `Stop` after a one-shot, no state, `setState`
+  and Special lists); turning toward a `speak` listener at 3.5 rad/s
+  (`noTurn` blocks it); mouths (lip textures, the Uglybeast's mouth
+  movements) and gestures; Wait after the last line. New test option
+  `--command "WORDS",N`; new log `characters.log`. Questions Q116–Q120
+  for A. Left: 4d-6 gravity, 4d-7 shadows (to be planned).
+
 - **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
   palette"): the bars, captions and fonts use the world's
   `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,
@@ -307,9 +322,19 @@ done; conversations and menus next). M0–M3 are done.
   cutscene cameras (Q113 a–c; the user's check matched ours after the
   watermill scene); the mouse's recentring near the window's edges is
   not built (not settled; the note says it may be left out).
-- **Stand-ins of 4a:** the caption panel's look; another character's
-  turn to its listener is only logged (Q103 d; monsters don't move
-  yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
+- **Stand-ins of 4d (characters):** `birthDelay` from the data (Q116);
+  Wait after the last line of a queue, characters only, from no state
+  or Wait (Q117); a state set before the first update is kept (Q118,
+  `sprdump`); `EndLoop` through the queue lets `Stop` show for one
+  update before a script's answer (Q119, the Uglybeast's `pivot`); the
+  Uglybeast's mouth movements bring `Stop` back in Wait (Q120); a
+  character's facing taken as Connor's (−Y). Not built yet: gravity and
+  steps (4d-6), shadows (4d-7), the Talk state, `makeTranslucent`,
+  `changeAnmFile`, collision against characters; a clickable
+  character's click box stays where it was loaded. Not tested: the
+  characters scripts load while playing (the Lady, three ravens, the
+  Unicorn), `sprdump`'s scene, a real turn in the viewer.
+- **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.
 - **Stand-ins of 4c** (Q108–Q111): the 800 × 600 screen and how the
@@ -385,6 +410,12 @@ done; conversations and menus next). M0–M3 are done.
 - `characters.md` open questions 1–4 (`flags` bit 0x20, how shadows are
   drawn and `shadowvisible`, the AI (M5), `changeBmp` / `changeAnmFile`):
   not blocking the drawing of characters.
+- For A (asked 2026-10-19 by B, M4 4d): **Q116** (`birthDelay` 1 for
+  two goblins vs "0 for all"), **Q117** (where "the speaker goes to
+  Wait" comes from, and its details), **Q118** (a state set before the
+  first update: `sprdump`), **Q119** (`EndLoop` and Wait's `Stop`: which
+  comes first; the Uglybeast's one-update `Stop`), **Q120** (the
+  geometry talker's mouth movements and rule 18).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.
