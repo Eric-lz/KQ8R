@@ -837,15 +837,26 @@ Words used here:
   10. The bats (`flyingObject`, rule 8): do they hang still in the air at
       their place before Connor comes near, or drift down?
 
+  **The user's check (2026-10-19, later):** (6) every character's shadow
+  falls to one side, the same side as the hills' shadows: confirms the
+  sun direction of rule 37. (7) About half as bright, about a quarter
+  where parts overlap: fits strength 0.5 with each layer darkening again
+  (rule 37; keep this look until the M7 improvement in `docs/DESIGN.md`).
+  (8) Characters and barrels cast shadows on building floors **and
+  walls**: confirms buildings as receivers (any of their surfaces in
+  range, rule 37) and plain objects casting the same way. (10) Can't be
+  told by eye: bats are only visible once Connor is close, which is
+  already in range, so the flying mover's settling stays traced only.
+
 ## Open questions
 
 1. What `flags` bit 0x20 (`flags=32` on the Wizard, the Girl, the Knight,
    the Uglybeast, the Unicorn) does: it drops the object's link to the
    terrain when it enters the world; the effect was not traced.
-2. Shadows (rule 37): how the renderer uses the strength 0.5 (blend mode,
-   colour), whether they fade with distance or haze, which side of the
-   model the facing test keeps, and over water which surface receives
-   them: not traced.
+2. Shadows (rule 37): the exact blend of the strength 0.5 (the user's
+   check: about half, a quarter on overlaps), whether they fade with
+   distance or haze, which side of the model the facing test keeps, and
+   over water which surface receives them: not traced.
 3. Wandering, idling, alarm, chasing, walking speed and the flying mover's
    movement: M5. The flying mover's settling (rule 8) is traced but not
    fully sure.

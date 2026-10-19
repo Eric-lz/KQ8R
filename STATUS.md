@@ -42,8 +42,9 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   characters are type 0x42 / mask 0x281F (terrain and buildings count),
   no Fall state. Shadows (Q123): along the sun, onto terrain and
   buildings, each triangle on its own, strength 0.5; `shadowvisible` is
-  only for the relighting tool. Checks for the user: `characters.md`
-  "How to check" 6–10.
+  only for the relighting tool. **User's check:** shadows fall to one
+  side like the hills', about half as bright (a quarter on overlaps), and
+  land on building floors and walls, from characters and barrels alike.
 - **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
   palette"): the bars, captions and fonts use the world's
   `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,

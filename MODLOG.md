@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): shadows, the user's check
+
+**Changed:** `docs/behaviour/characters.md`: the user's results under "How to check" (points 6–8, 10), open question 2 narrowed. No code.
+**Why:** Checks 6–10 listed after Q123.
+**Tested how:** By eye in the original (user).
+**Result:** Shadows fall to one side, like the hills' shadows (sun direction confirmed); about half as bright, a quarter where parts overlap (fits strength 0.5); characters and barrels cast shadows on building floors and walls (buildings receive, plain objects cast). Bats: can't be told (only visible once in range).
+**Still broken / not tested:** The exact blend, fading with distance, shadows over water, the flying mover's settling: not traced or checked.
+**Next:** B: build shadows from `characters.md` rule 37.
+
 ## 2026-10-19 Study (A): Q116, Q117, Q119–Q124 (characters: timing, mouth, start-up, gravity, shadows)
 
 **Changed:** `docs/behaviour/characters.md`: rules 8 (what the mover collides with, flying, no Fall), 12 (start-up, rewritten), 14, 15 (corrected), 18 (same update; zero-length movements), 20 (transitions, `endLoop` cue), 27 (mouth poses hold), 36 (`allowShadows` data corrected), new 37 (how shadows are drawn); numbers, checks, open questions. `talking.md`: new rule 13a (the speaker goes to Wait). `anim-scripts.md`: rule 3 corrected (names start as `Stop`), rule 8 (delay-0 events are handled before drawing), rule 9, new rule 10a (loop duration 0 never ends). `connor-physics.md`: new section on characters. `QUESTIONS.md`: the eight marked answered. `STATUS.md`. Scratch addresses in `re/notes.md` (not committed). No code.
