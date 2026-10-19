@@ -2692,6 +2692,23 @@ impl Active {
     /// he holds.
     pub fn click(&mut self, name: &str, feet: [f32; 3], attack_dist: f32, item: Option<&Item>) -> ClickResult {
         let reach = 2.0 * attack_dist;
+        // conversation.md rule 19 (M4 4e-4): in the talk state a world click
+        // does nothing, except one on the partner with an item held.
+        if let Some(c) = self.world.conversation.as_ref().filter(|c| c.entered()) {
+            let partner = c.partner.clone();
+            match item {
+                Some(it) if name.eq_ignore_ascii_case(&partner) => {
+                    let kind = self.world.items.kind(&it.kind).map_or_else(|| it.kind.clone(), |t| t.name.clone());
+                    self.world.conversation_note(format!("click {name} with {} ({kind}) during the talk state: InvConv {kind} to its script, Connor leaves (with TalkExit), then the click goes on (rule 19)", it.object));
+                    self.call_named(&partner, &["InvConv", &kind]);
+                    self.conversation_leave("an item clicked on the partner", true);
+                }
+                _ => {
+                    self.world.conversation_note(format!("click {name}{}: Connor is in his talk state: nothing (rule 19)", item.map_or(String::new(), |it| format!(" with {}", it.object))));
+                    return ClickResult::Nothing;
+                }
+            }
+        }
         if self.world.is_switched_off(name) {
             // object-lighting.md rule 41: no collider, nothing to click.
             self.world.note(format!("click {name}: its collider is out (far, off or hidden); nothing"));
@@ -2712,7 +2729,11 @@ impl Active {
         }
         let Some(i) = self.world.door_index(name) else {
             let found = self.world.clickables.iter().position(|c| c.name.eq_ignore_ascii_case(name));
+            // conversation.md rule 5: a character with an info object.
             if let Some(i) = found.filter(|&i| self.world.clickables[i].script.is_some()) {
+                if let Some(info) = self.world.conv_infos.iter().find(|f| f.partner().eq_ignore_ascii_case(name)).cloned() {
+                    return self.click_partner(i, &info, feet, item);
+                }
                 return self.click_clickable(i, feet, reach, item);
             }
             match found.map(|i| self.world.clickables[i].clone()) {
@@ -2922,6 +2943,55 @@ impl Active {
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         self.call_clickable(i, &refs);
         // Only clickables with a script come here: always a call.
+        self.click_turn(&c.name, &args, true, c.placement.position, c.do_not_point_at);
+        let mut full = vec![c.name];
+        full.extend(args);
+        ClickResult::Script(full)
+    }
+
+    /// Connor clicks conversation partner `i` (`conversation.md` rule 5,
+    /// M4 4e-4): no reach test; where he stands decides. In a special area
+    /// (`box2`…): `ConnorAction Special Special`; else in the start area
+    /// (`box0`): in reach whatever the distance (`do do`, or the held item
+    /// as usual); else `TooFar TooFar` (`tooFarAwayAction` not looked at).
+    /// The turn afterwards as for any click.
+    fn click_partner(&mut self, i: usize, info: &kq8_data::conv_info::ConvInfo, feet: [f32; 3], item: Option<&Item>) -> ClickResult {
+        let c = self.world.clickables[i].clone();
+        if c.gone || c.collision_type & CLICKABLE == 0 {
+            self.world.note(format!("click {}: deleted or not clickable now (type {:#x}); nothing", c.name, c.collision_type));
+            return ClickResult::Nothing;
+        }
+        let p = [feet[0], feet[1]];
+        let special = info.special_area(p);
+        let start = info.in_area(0, p);
+        let head = format!(
+            "click {} (conversation partner, {}): Connor at ({:.0}, {:.0}, {:.0}): {}",
+            c.name,
+            info.name,
+            feet[0],
+            feet[1],
+            feet[2],
+            match (special, start) {
+                (Some(k), _) => format!("in special area box{k}: Special (rule 5.1)"),
+                (None, true) => "in the start area box0: in reach whatever the distance (rule 5.2)".to_string(),
+                (None, false) => "in no area: TooFar (rule 5.3; tooFarAwayAction not looked at)".to_string(),
+            }
+        );
+        let args = match (special, start) {
+            (Some(_), _) => vec!["ConnorAction".to_string(), "Special".into(), "Special".into()],
+            (None, true) => {
+                let rules = ClickRules { name: &c.name, too_far_away_action: c.too_far_away_action };
+                match self.script_args(&head, true, item, &rules) {
+                    Ok(a) => a,
+                    Err(r) => return r,
+                }
+            }
+            (None, false) => vec!["ConnorAction".to_string(), "TooFar".into(), "TooFar".into()],
+        };
+        self.world.note(format!("{head}; script arguments: {} {}", c.name, args.join(" ")));
+        self.world.conversation_note(format!("{head}: {} {}", c.name, args.join(" ")));
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.call_clickable(i, &refs);
         self.click_turn(&c.name, &args, true, c.placement.position, c.do_not_point_at);
         let mut full = vec![c.name];
         full.extend(args);

@@ -566,6 +566,52 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         assert!(a.take_log().join("\n").contains("'Nobody' is not KQMonster"));
     }
 
+    /// `world()` with Bob clickable (his script) and a special area inside
+    /// the start area.
+    fn clickable_world() -> Active {
+        let mut a = world();
+        let placement = crate::collide::Placement { rotation: crate::door::identity().m, position: [1000.0, 1000.0, 0.0] };
+        let mut c = crate::active::Clickable::plain("Bob", "KQMonster", [-100.0; 3], [100.0; 3], placement, 0x20);
+        c.script = Some("bob.cs".into());
+        a.world.clickables.push(c);
+        a.world.conv_infos[0].areas.push([[3500.0, 3500.0], [3900.0, 3500.0], [3900.0, 3900.0], [3500.0, 3900.0]]);
+        a
+    }
+
+    #[test]
+    fn a_click_on_a_partner_goes_by_the_areas_not_the_reach() {
+        use crate::active::ClickResult;
+        let mut a = clickable_world();
+        let args = |r: ClickResult| if let ClickResult::Script(a) = r { a[1..].join(" ") } else { format!("{r:?}") };
+        // Far beyond the reach (2 x 100) but in the start area: do.
+        assert_eq!(args(a.click("Bob", [3000.0, 3000.0, 0.0], 100.0, None)), "ConnorAction do do");
+        assert_eq!(args(a.click("Bob", [3600.0, 3600.0, 0.0], 100.0, None)), "ConnorAction Special Special", "the special area wins");
+        assert_eq!(args(a.click("Bob", [9000.0, 9000.0, 0.0], 100000.0, None)), "ConnorAction TooFar TooFar", "in reach but in no area");
+        let log = a.take_log().join("\n");
+        assert!(log.contains("click Bob: call do: turn to Bob"), "the click turn as usual: {log}");
+    }
+
+    #[test]
+    fn during_the_talk_state_only_an_item_on_the_partner_counts() {
+        use crate::active::{ClickResult, Item};
+        let mut a = clickable_world();
+        a.test_command("KQConner::conversation Bob 1000 60 0 0 1 2 0", "test");
+        let mut walker = Walker::new(0.0);
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        assert_eq!(a.click("Bob", [1000.0, 1000.0, 0.0], 100.0, None), ClickResult::Nothing);
+        assert!(a.world.connor_in_talk());
+        let horn = Item { object: "horn.1".into(), kind: "INVITEM_UniHorn".into() };
+        a.take_log();
+        let r = a.click("Bob", [1000.0, 1000.0, 0.0], 100.0, Some(&horn));
+        let log = a.take_log().join("\n");
+        let inv = log.find("script bob.cs Bob InvConv INVITEM_UniHorn").expect(&log);
+        let exit = log.find("script bob.cs Bob TalkExit").expect(&log);
+        assert!(inv < exit, "InvConv, then TalkExit: {log}");
+        assert!(a.world.conversation.is_none());
+        // Then the ordinary click: Bob takes nothing, so "This will not work".
+        assert_eq!(r, ClickResult::Refused);
+    }
+
     #[test]
     fn the_walk_in_puts_him_440_short_facing_the_spot() {
         let (p, h) = walk_in_point([1000.0, 3000.0, 0.0], [1000.0, 1000.0, 100.0]);

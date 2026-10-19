@@ -784,7 +784,7 @@ inventory and menus.
     no cameras (Do not reproduce). STAND-INS (Q125): during the approach
     movements the keys are ignored; Jump and Push are refused for the
     whole talk state.
-  - **4e-4, clicks** (rules 5, 19). A click on a partner: special area →
+  - **4e-4, clicks** (**done** 2026-10-19) (rules 5, 19). A click on a partner: special area →
     `ConnorAction Special Special`; start area → in reach whatever the
     distance (`do do` or the held item); else `TooFar TooFar`; the click
     turn as usual. During the talk state a world click does nothing,

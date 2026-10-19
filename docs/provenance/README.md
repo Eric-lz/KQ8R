@@ -2090,3 +2090,10 @@ marked otherwise.
 | `speak` of Connor or the partner ignored while either is in its talk state; keys and clicks don't cut lines short | `talking.md` rule 8; rule 12 | Unit test (`speak_ignored`) |
 | `clearSpeak <partner>` empties its conversation queue too; partner to Wait; Connor's mouth to rest, his notify group `TalkComplete 0 0 0 0 0`; his talk state goes on | Rule 23 | Not run (the ring, candle, ashes and horn scenes need items and the story) |
 | Info objects read from the world's `loadKQ` (no model); a character's GB/WB keys on its `Monster` | Rule 3; data (`permwrld.cs` lines 374–376) | `viewer.log`: "2 conversation info object(s)" |
+
+### 4e-4, clicks — `crates/kq8-core/src/active.rs` (`click`, `click_partner`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A character with an info object: no reach test; special area (`box2`…) → `ConnorAction Special Special`; start area → in reach (`do do`, or the held item through the accept list); else `TooFar TooFar`, `tooFarAwayAction` not looked at; then the click turn | Rule 5 | Unit test `a_click_on_a_partner_goes_by_the_areas_not_the_reach`; viewer: the note's three Daventry points give `do`, `Special` ("Come around, lad…"), `TooFar` ("Hello, there, sir wizard!") |
+| In the talk state a world click does nothing, except on the partner with an item: `InvConv <item type>` to its script, Connor leaves (with `TalkExit`), then the ordinary click; the queue is not emptied | Rule 19 | Unit test `during_the_talk_state_only_an_item_on_the_partner_counts`; viewer with `--item INVITEM_SilverCoins`: `InvConv`, `TalkExit`, `ConnorAction TestItem INVITEM_SilverCoins`, conversation 8/86 queued behind 13 waiting lines |
