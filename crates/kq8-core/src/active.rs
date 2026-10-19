@@ -1857,12 +1857,21 @@ impl WorldState {
                     self.requests.push(Request::ConnorAuto { auto: AutoMove::new(AutoKind::Point, [p[0], p[1]], None), at: at.to_string() });
                     format!("{head}: Connor turns to face {to} at ({:.0}, {:.0}) (rule 7); {}", p[0], p[1], self.talk.queue_later(s, now))
                 }
-                Some(p) => format!(
-                    "{head}: {issuer} turns to face {to} at ({:.0}, {:.0}) (rule 7, Q103 d: always, no state check; request logged only: monsters don't move yet, M5); {}",
-                    p[0],
-                    p[1],
-                    self.talk.queue_later(s, now)
-                ),
+                Some(p) => {
+                    // characters.md rule 23 (M4 4d-4): the character turns,
+                    // unless noTurn.
+                    let turned = match self.character_index(&issuer) {
+                        Some(i) => self.anims[i].character.as_mut().unwrap().ask_turn([p[0], p[1]]).to_string(),
+                        None => "not a drawn character: nothing turns".to_string(),
+                    };
+                    self.character_log.push(format!("update {}: {issuer}: speak to {to}: {turned}", self.updates));
+                    format!(
+                        "{head}: {issuer} turns to face {to} at ({:.0}, {:.0}) (rule 7, Q103 d: always, no state check): {turned}; {}",
+                        p[0],
+                        p[1],
+                        self.talk.queue_later(s, now)
+                    )
+                }
             }
         };
         self.talk_note(line);

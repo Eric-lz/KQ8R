@@ -19,8 +19,17 @@
 //! - Rule 22: `setState` by name (capitals ignored); `Special <list>` as
 //!   Connor's (`anim-scripts.md` rule 16), then Wait.
 //!
-//! Not here (later steps): turning (4d-4), the mouth and gestures (4d-5),
-//! gravity (4d-6); noticing Connor, wandering, idling, Move, Die (M5).
+//! - Rule 23 (4d-4): a turn request (`speak` with a listener) turns the
+//!   character toward the point with Connor's automatic turn, 3.5 rad/s
+//!   the short way, landing exactly once less than one update's turn is
+//!   left; a newer request replaces the target; `noTurn` ignores it. No
+//!   turning movement plays: it turns on the spot, its movement going on.
+//!   The heading is read from its rotation the way Connor's is (heading
+//!   0 faces −Y, `crate::connor_auto::heading_towards`).
+//!
+//! Not here (later steps): the mouth and gestures (4d-5), gravity (4d-6),
+//! the Talk state's turn every 4th update (conversations); noticing
+//! Connor, wandering, idling, Move, Die (M5).
 
 use std::collections::VecDeque;
 
@@ -75,6 +84,8 @@ pub struct Character {
     special: VecDeque<String>,
     special_playing: Option<String>,
     rng: Rng,
+    /// The point it is turning to (rule 23), if any.
+    pub turn_to: Option<[f32; 2]>,
 }
 
 /// What one update did: the player's step (`None` when not updated) and
@@ -103,6 +114,7 @@ impl Character {
             special: VecDeque::new(),
             special_playing: None,
             rng: Rng::new(seed),
+            turn_to: None,
         }
     }
 
@@ -129,6 +141,7 @@ impl Character {
             self.first_update = Some(update);
             self.first(player, now, notes);
         }
+        self.turn_step(player, dt, notes);
         let played = player.advance(dt);
         if let Some(st) = &played.started {
             if self.random_pending && st.name.eq_ignore_ascii_case(STOP) {
@@ -142,6 +155,36 @@ impl Character {
         }
         step.played = Some(played);
         step
+    }
+
+    /// A turn request toward `to` (rule 23). Returns what happened, for
+    /// the log.
+    pub fn ask_turn(&mut self, to: [f32; 2]) -> &'static str {
+        if self.no_turn {
+            return "blocked: noTurn (rule 23), the request is ignored";
+        }
+        let replaced = self.turn_to.replace(to).is_some();
+        if replaced { "turns toward it (replacing the turn under way)" } else { "turns toward it at 3.5 rad/s (rule 23)" }
+    }
+
+    /// One update of the turn (rule 23): the rotation turns about the
+    /// world's z by at most 3.5 rad/s × dt.
+    fn turn_step(&mut self, player: &mut NamedAnimPlayer, dt: f32, notes: &mut Vec<String>) {
+        use crate::connor_auto::{heading_towards, wrap, AUTO_TURN_RATE};
+        let Some(to) = self.turn_to else { return };
+        let r = player.base.rotation;
+        let heading = heading_of(&r);
+        let left = wrap(heading_towards(player.base.position, to) - heading);
+        let step = AUTO_TURN_RATE * dt;
+        let by = if left.abs() < step {
+            self.turn_to = None;
+            left
+        } else {
+            step * left.signum()
+        };
+        player.base.rotation = times(&r, &kq8_data::objects::rotation([0.0, 0.0, by]));
+        let done = if self.turn_to.is_none() { "; turn done" } else { "" };
+        notes.push(format!("turning to ({:.0}, {:.0}): heading {heading:.3} -> {:.3} (by {by:.3}){done}", to[0], to[1], heading_of(&player.base.rotation)));
     }
 
     /// Rule 12: the first update, before the player's step.
@@ -294,6 +337,19 @@ impl Character {
     }
 }
 
+/// The heading a rotation faces, as Connor's: where its −Y goes, as
+/// `heading_towards` measures it (0 faces −Y, π/2 faces +X).
+pub fn heading_of(r: &[[f32; 3]; 3]) -> f32 {
+    // Row vectors: (0, −1, 0) × R = −(second row).
+    let (x, y) = (-r[1][0], -r[1][1]);
+    x.atan2(-y)
+}
+
+/// a × b (row-vector rotations: a first, then b).
+fn times(a: &[[f32; 3]; 3], b: &[[f32; 3]; 3]) -> [[f32; 3]; 3] {
+    std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| a[i][k] * b[k][j]).sum()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,6 +383,43 @@ mod tests {
             n += 1;
         }
         n
+    }
+
+    #[test]
+    fn heading_of_matches_dir_z() {
+        for h in [0.0f32, 0.8, -1.57, 3.0] {
+            let r = kq8_data::objects::rotation([0.0, 0.0, h]);
+            assert!((crate::connor_auto::wrap(heading_of(&r) - h)).abs() < 1e-5, "{h}");
+        }
+    }
+
+    #[test]
+    fn a_turn_goes_at_3_5_per_second_and_lands_exactly() {
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        // Facing −Y; the point is at +X: a quarter turn (π/2).
+        assert!(c.ask_turn([1000.0, 0.0]).contains("3.5"));
+        let mut log = Vec::new();
+        let mut n = 0;
+        while c.turn_to.is_some() && n < 30 {
+            let before = heading_of(&p.base.rotation);
+            run(&mut c, &mut p, n, 1, &mut log);
+            let by = crate::connor_auto::wrap(heading_of(&p.base.rotation) - before);
+            assert!(by.abs() <= 3.5 / 15.0 + 1e-5);
+            n += 1;
+        }
+        // π/2 at 3.5/15 per update: 7 updates (6 full steps and the rest).
+        assert_eq!(n, 7, "{log:?}");
+        assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+        assert!(p.movement_name().eq_ignore_ascii_case("stop"), "no turning movement");
+    }
+
+    #[test]
+    fn no_turn_blocks_turns() {
+        let mut c = character(0x20);
+        c.no_turn = true;
+        assert!(c.ask_turn([1000.0, 0.0]).contains("blocked"));
+        assert!(c.turn_to.is_none());
     }
 
     #[test]

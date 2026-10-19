@@ -664,7 +664,8 @@ inventory and menus.
     open question 4). Logs: first update number and how the first
     movement was chosen, the state, every movement start with its
     reason, the `Stop` start frame and speed.
-  - **4d-4, turning** (rules 23–24). `speak` with a listener turns the
+  - **4d-4, turning** (**done** 2026-10-19; the Talk state's turn every
+    4th update waits for conversations) (rules 23–24). `speak` with a listener turns the
     character toward it at 3.5 rad/s on the spot, the movement going
     on; a newer request replaces the target; `noTurn` (and
     `setCanTurn 0`) blocks it. Logs: every request, blocked or not, and

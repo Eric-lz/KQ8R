@@ -1982,3 +1982,15 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | `setUseGravity`, `setMonUseGravity`, `setCanTurn` stored; `changeAnmFile` logged | Rules 8, 22, 23 (used from 4d-4 / 4d-6); `changeAnmFile` open question 4 | — |
 | Each character's random draws from its own generator seeded by its name | **Our choice** (the original's random source is not described) | Same numbers every run |
 | A dormant character (loaded by a script while playing) gets its draw-distance test when it comes in | As 3k-4 | Not tested (no run reaches those scripts) |
+
+### 4d-4, turning — `crates/kq8-core/src/{character,active}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `speak` with a listener turns the issuing character toward the listener's point; `noTurn` (and `setCanTurn 0`) ignores the request | `characters.md` rule 23; `talking.md` rule 7 (monsters always) | Unit test `no_turn_blocks_turns`; viewer: the Uglybeast's "too far" line: "blocked: noTurn" |
+| 3.5 rad/s the short way, landing exactly when less than one update's turn is left; a newer request replaces the target | Rule 23 (Connor's automatic turn, `connor_auto.rs`) | Unit test `a_turn_goes_at_3_5_per_second_and_lands_exactly` (a quarter turn in 7 updates) |
+| No turning movement: the current movement goes on | Rule 23 | Same unit test (`stop` keeps playing) |
+| The heading is where the model's −Y points, as Connor's; the turn is about the world's z, after the rotation it has (a script's `move` turn kept) | **Our reading**: rule 23 says "the same automatic turn as Connor's"; the models' forward axis is not stated for characters | Unit test `heading_of_matches_dir_z`; not seen by eye |
+| The turn only runs while the character updates (near or far) | Rule 11 | — |
+| Talk state's turn every 4th update | Rule 24, `conversation.md` rule 17: not built (no conversations yet) | — |
+| A clickable character's click box keeps the rotation it was loaded with | **Not done** (logged in MODLOG) | — |

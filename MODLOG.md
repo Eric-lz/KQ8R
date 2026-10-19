@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-4: characters turn
+
+**Changed:** `kq8-core/src/character.rs`: a turn request turns the character at 3.5 rad/s toward a point on the spot (`ask_turn`, `turn_step`, `heading_of`); `noTurn` / `setCanTurn 0` ignore it. `active.rs`: `speak` with a listener asks the issuing character to turn (it was only logged). DESIGN, provenance.
+**Why:** Step 4d-4 of `characters.md` (rule 23).
+**Tested how:** `cargo test --workspace` (480 pass, 3 new), clippy clean. Viewer: `--at 252000,296000,0.6 --click Uglybeast,30` (too far: `ugly.cs` makes the Uglybeast speak), read in `characters.log`, `doors.log`.
+**Result:** Unit tests: a quarter turn takes 7 updates (6 × 0.233 rad and the rest), lands exactly on the heading, `stop` keeps playing; `noTurn` ignores the request. Viewer: "Uglybeast: speak to Connor: blocked: noTurn (rule 23)".
+**Still broken / not tested:** **A real turn was not seen in the viewer**: Daventry's turning speakers without `noTurn` (the ravens, the Lady, the Henchman) only speak in scenes our test options can't reach yet. Which way a character's model faces is our reading (as Connor: −Y). The Talk state's turn (every 4th update) waits for conversations. A clickable character's click box doesn't turn with it.
+**Next:** 4d-5: the mouth and gestures.
+
 ## 2026-10-19 M4 step 4d-3: the characters' states
 
 **Changed:** New `kq8-core/src/character.rs` (first update, Birth, Wait and `Stop`, the return to `Stop`, no state, `setState`, Special lists). `active.rs`: a character is an `AnimObject` with a `character` part, updated only while near or far; `setState`, `setUseGravity`, `setMonUseGravity`, `setCanTurn`, `changeAnmFile` for characters. `named_anim.rs`: `randomize`. Viewer: `draw_distance.rs` tells core which characters are near or far (`CharactersInRange`); `anim_view.rs` builds the states, writes core's lines to `characters.log` with a count by state every 10 s; `door_view.rs` gives a script-loaded character its distance test. `QUESTIONS.md`: Q118, Q119. DESIGN, provenance.
