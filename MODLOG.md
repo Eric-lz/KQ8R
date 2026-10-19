@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 Fix: the back flip when backed against a wall
+
+**Changed:** `kq8-core/src/connor.rs`: `jump_kind` gives `backJump` when he stands (`stop`) with the back wall block on, that is after a wall stopped him stepping back and back is still held (the block goes when back is let go); unit test extended. `QUESTIONS.md`: Q112. Provenance.
+**Why:** The user's check in the original: backed against a wall with back held, Jump does the back flip; ours did the standing jump, because `connor-physics.md` "Jumping" rule 2 picks the jump from his movement only, and the wall stop makes it `stop`.
+**Tested how:** `cargo test --workspace` (451 pass, 1 extended), clippy clean. Viewer: `cargo play --world Daventry --at 205900,267595,1.5708 --hold -1,0,0 --jump 25 --frames 900 --sound off` (backs west into the Pub; `connor-backflip-wall.log`).
+**Result:** "head-on into a wall: movement back -> stop; blocked: back" at update 7; "jump: backJump from stop" at 26; the flip rises to z 10,316 gliding along the wall ("backJump hit Pub … glancing: gravity stays off, backJump plays on"), lands with `backJumpEnd` at 46, then stands with back still held.
+**Dead ends recorded:** Two test spots were wrong: from (186300, 226000) stepping back he reached the mill wheel's trap first; at (237907, 187000) there is no wall (I misread the note's measured numbers). The Pub spot came from `connor-3m2-barrel-pub.log`.
+**Still broken / not tested:** Not seen by eye. The exact rule is a stand-in (Q112): we test the back block, the original may test the key or the asked movement; it only differs in cases not seen yet.
+**Next:** The user's check.
+
 ## 2026-10-18 M4 step 4c-11: corner panels (an option, not in the original)
 
 **Changed:** Viewer `gui_view.rs`: with the corner panels on, the bottom bar's left panel stands at the window's left edge and its right panel and the spinning mask at the window's right edge; the slots, meters, top bar and caption stay on the centred 4:3 screen; clicks use the moved places. F6 switches it (logged in `gui.log`); `main.rs`: `--corners on|off` (default off). `docs/DESIGN.md` (4c-11), provenance, `docs/FEATURES.md`, `README.md` (F6).

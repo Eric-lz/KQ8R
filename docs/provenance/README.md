@@ -1830,3 +1830,9 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | What | Source | Check |
 | --- | --- | --- |
 | With the option on, the bottom bar's left panel at the window's left edge, its right panel and the spinning mask at the window's right edge; the slots, meters, top bar and caption stay on the centred 4:3 screen; clicks follow the panels; `--corners on\|off` (default off), F6 | **Not in the original: the user's idea** (2026-10-18, "the third idea") | `gui-4c11-corners.log` (window 1280 × 720): "engine: IDCTL_INVBARL at left 0.00 … right 288.00", "IDCTL_INVBARR at left 992.00 … right 1280.00", the slots and meters at 448–832 |
+
+### The back flip at a wall (2026-10-18) — `crates/kq8-core/src/connor.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Stopped by a wall while stepping back (movement `stop`, the back block on, so back still held), Jump starts `backJump`, not the standing jump | **The user's check in the original**; the rule behind it is a **stand-in** (Q112): `connor-physics.md` "Jumping" rule 2 alone gives the standing jump | Unit test `a_wall_stop_blocks_until_the_key_is_released` (extended); `connor-backflip-wall.log`: "head-on into a wall: movement back -> stop; blocked: back" at update 7, "jump: backJump from stop" at 26, glancing up the Pub's wall to z 10,316, `backJumpEnd` at 46 |

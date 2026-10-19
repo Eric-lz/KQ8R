@@ -681,6 +681,13 @@ impl Walker {
         if !JUMP_FROM.contains(&self.movement) {
             return Err(format!("not from {}", self.movement));
         }
+        // STAND-IN (Q112; the user's check in the original, 2026-10-18):
+        // stopped by a wall while stepping back, with back still held (the
+        // back block is on until back is let go), the jump is the back
+        // flip, not the standing jump that rule 2 alone would give.
+        if self.movement == "stop" && self.blocked_back {
+            return Ok(JumpKind::Back);
+        }
         Ok(JumpKind::for_movement(self.movement))
     }
 
@@ -1182,6 +1189,10 @@ mod tests {
             w.update(intent(forward, 0, false), &lookup(&stop_list()));
             assert_eq!(w.head_on_at_wall(), Some((movement, "stop")));
             assert_eq!(w.blocked_name(), if forward > 0 { "fwd" } else { "back" });
+            // Q112 stand-in (the user's check): backed against the wall,
+            // back held, Jump gives the back flip; forward: the standing
+            // jump.
+            assert_eq!(w.jump_kind(), Ok(if forward > 0 { JumpKind::Stand } else { JumpKind::Back }));
             // Key held for 3 s: standing, the idle animation playing on.
             let mut last = w.phase;
             for n in 0..45 {
@@ -1193,6 +1204,8 @@ mod tests {
             // Pressing the same key again clears nothing; releasing it does.
             assert_eq!(w.key_event(key, true), (false, false));
             assert_eq!(w.key_event(key, false), (forward > 0, forward < 0));
+            // Back let go: standing still, the standing jump again.
+            assert_eq!(w.jump_kind(), Ok(JumpKind::Stand));
             w.update(intent(0, 0, false), &lookup(&stop_list()));
             assert_eq!(w.key_event(key, true), (false, false));
             w.update(intent(forward, 0, false), &lookup(&stop_list()));
