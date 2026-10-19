@@ -801,7 +801,7 @@ inventory and menus.
     end (built in 4c-2, now called). First person is not built: logged.
     STAND-IN (Q126): the point the camera aims at is the partner's
     position plus 1,400 (as for Connor), not its feet.
-  - **4e-6, goodbye and welcome back** (rules 20–22). Walking away with
+  - **4e-6, goodbye and welcome back** (**done** 2026-10-19, run in the viewer; the code came with 4e-2 and 4e-3) (rules 20–22). Walking away with
     more than one line left and a goodbye line: the goodbye, then
     `TalkExit`; clicking again: welcome back, the cut line from its start,
     the rest.

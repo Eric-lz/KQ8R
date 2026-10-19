@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-6: goodbye and welcome back, run in the viewer
+
+**Changed:** No code (built in 4e-2 and wired in 4e-3). `docs/DESIGN.md`, provenance (the viewer check).
+**Why:** Step 4e-6 of `conversation.md` (rules 20–22): the note's "walk away, then click him again" check.
+**Tested how:** Viewer (`--sound off`): `--at 193000,198000,-1.7 --hold 1,0,0,55 --command "KQConner::conversation Wizard 1000 4 14 27 1 13 0",20 --command "move Connor 0 193000 198000 -1 0 0 -1.7",130 --click Wizard,150 --frames 9000`; read in `conversation.log`, `talk.log`.
+**Result:** As the note: out of the stay area at update 47 with 13 lines left: the goodbye 1000/4/0/7/1 ("Well, then, off with you!…") cuts line 1 at 1.27 of 6.8 s; it ends at update 108: the queue pauses with 13 lines waiting, `TalkExit`, no `TalkComplete`. Clicked again from the note's spot at update 150 (`ConnorAction do do`, `wizard.cs` gives the same conversation): the range is a duplicate (not added twice); the welcome back 1000/4/0/8/1 ("Ah, I see you have seen fit to return…", its camera 4) plays, no `TalkComplete`; then line 1 from its start (update 267), line 2, … with their cameras.
+**Still broken / not tested:** **Not looked at by eye or heard.** The first walk-away run of this step wandered into the special area behind the Wizard (`Special` on the second click): the held forward key and the turn toward the Wizard took Connor through him (characters are not solid yet, 4d).
+**Next:** 4e-7: Connor's gestures.
+
 ## 2026-10-19 M4 step 4e-5: conversation cameras and the right button
 
 **Changed:** `kq8-core/src/conversation.rs`: a conversation line with a camera number cuts the camera to `cam<n>` (checked against `nCam`) and turns Connor to the partner once he is at his spot; the right button held during the stay test places the camera at `cam0` aimed at the partner and swings it around the partner, and later camera numbers are ignored. `active.rs`: `Request::CameraAround`; the line starts of the update are looked at. Viewer: `game_camera.rs` swings around a point instead of Connor (`around`; `follow` ends it); `door_view.rs` passes the right button to the conversation; new test option `--right N` (`main.rs`). FEATURES (`--right`), DESIGN, provenance.

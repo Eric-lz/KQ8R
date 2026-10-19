@@ -2109,3 +2109,9 @@ marked otherwise.
 | `--right N`: the right button counts as held from update N on | **Our test tool** | Used above |
 | The right button's lock released on entering the talk state | Rule 6 | **Not built** (our lock is the button itself; nothing to release when it is up) |
 | Only this update's line starts are looked at | **Our method** (the event list is emptied by the viewer each update) | Unit test (it failed before the fix) |
+
+### 4e-6, goodbye and welcome back in the viewer
+
+| What | Source | Check |
+| --- | --- | --- |
+| Walk away with lines left: goodbye, pause, `TalkExit`; click again: welcome back, the cut line from its start, the rest; the range not added twice | Rules 21, 22; the note's "How to check" (Wizard) | Viewer run of 4e-6 (MODLOG): goodbye at 46–108, welcome back at 151–267, line 1 again at 267 |
