@@ -543,6 +543,8 @@ fn setup(
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
         bevy::core_pipeline::tonemapping::DebandDither::Disabled,
+        // 4c-10: no smoothing of the panels' edges.
+        bevy::ui_render::UiAntiAlias::Off,
         Transform::default(),
     ));
 }

@@ -327,7 +327,8 @@ pub fn setup_caption_picture(mut commands: Commands, style: Option<Res<CaptionSt
     }
     commands.spawn((
         Node { position_type: PositionType::Absolute, top: Val::Percent(100.0), left: Val::Px(0.0), width: Val::Percent(0.0), height: Val::Percent(0.0), ..default() },
-        ImageNode::default(),
+        // 4c-10: fills its box exactly.
+        ImageNode { image_mode: bevy::ui::widget::NodeImageMode::Stretch, ..default() },
         Visibility::Hidden,
         // Above the panels (4c-2).
         ZIndex(1),

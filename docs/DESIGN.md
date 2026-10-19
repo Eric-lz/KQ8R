@@ -1981,6 +1981,10 @@ inventory and menus.
       for a 17-row place, squeezed by the engine); every panel is now
       drawn with its edges rounded where they stand on the screen. The
       spinning mask stands on the bottom bar like the caption.
+    - **4c-10** (**done** 2026-10-18): the rest of the gap was Bevy
+      keeping each picture's proportions inside its box; the pictures
+      now stretch to fill their box. The mask doesn't rise with the
+      meters alone.
   - Tests: unit tests for each core module; viewer runs with `--click`
     on `alcmsign` and `smlchst3`, Space pressed by a test option
     (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),

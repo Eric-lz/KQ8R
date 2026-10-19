@@ -223,6 +223,10 @@ pub fn setup_ground(
         // nothing; Bevy warned about it).
         Tonemapping::None,
         bevy::core_pipeline::tonemapping::DebandDither::Disabled,
+        // 4c-10: the panels are pixel pictures laid edge to edge: no
+        // smoothing of their edges, which let the world show through
+        // between them (the user's check).
+        bevy::ui_render::UiAntiAlias::Off,
         // The whole ground must stay inside the view distance. Field of
         // view 70 degrees vertically (Bevy's default is 45; user's choice).
         // modified manually to what feels more natural, but could be wrong

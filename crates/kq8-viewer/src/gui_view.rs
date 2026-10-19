@@ -654,7 +654,10 @@ pub fn setup_gui(mut commands: Commands, gui: Option<Res<Gui>>, mut images: ResM
         let image = images.add(Image::new_fill(Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }, TextureDimension::D2, &[0, 0, 0, 0], TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default()));
         commands.spawn((
             Node { position_type: PositionType::Absolute, left: Val::Percent(0.0), top: Val::Percent(100.0), width: Val::Percent(0.0), height: Val::Percent(0.0), ..default() },
-            ImageNode::new(image),
+            // 4c-10: the picture fills its box exactly (Bevy's default
+            // keeps its proportions and centres it, which left the world
+            // showing at the meters' ends, the user's check).
+            ImageNode { image_mode: bevy::ui::widget::NodeImageMode::Stretch, ..ImageNode::new(image) },
             Visibility::Hidden,
             GuiPicture(k),
         ));
@@ -942,12 +945,18 @@ pub fn gui_draw(
     // Each visible panel: what, left, top, width, height (screen pixels).
     let mut places: Vec<(Drawn, f32, f32, f32, f32)> = Vec::new();
     // The top of the highest bottom panel as they slide (the screen's
-    // bottom when they are away): the caption (rule 51) and, 4c-9, the
-    // spinning mask stand on it.
+    // bottom when they are away): the caption stands on it (rule 51).
+    // 4c-9, 4c-10 (the user's checks): the spinning mask stands on the
+    // bottom bar, but not on the meters when they pop up alone.
     let mut bottom = sh;
+    let mut bar_top = sh;
     for p in [Panel::BottomLeft, Panel::Slots, Panel::Meters] {
         if let Some(rect) = gui.rect(Drawn::Panel(p)) {
-            bottom = bottom.min(kq8_core::panels::place(p, rect, [sw, sh], gui.panels.away(p)).1);
+            let top = kq8_core::panels::place(p, rect, [sw, sh], gui.panels.away(p)).1;
+            bottom = bottom.min(top);
+            if p != Panel::Meters {
+                bar_top = bar_top.min(top);
+            }
         }
     }
     for (picture, mut node, image, mut vis) in &mut nodes {
@@ -970,7 +979,7 @@ pub fn gui_draw(
             (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
             // 4c-9 (the user's check): it rises and falls with the
             // bottom bar, on top of it.
-            (None, Some([mw, mh])) => ((sw - mw as f32, bottom - mh as f32), (mw as f32, mh as f32)),
+            (None, Some([mw, mh])) => ((sw - mw as f32, bar_top - mh as f32), (mw as f32, mh as f32)),
             (None, None) => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
         };
         if away >= 1.0 {
@@ -982,7 +991,7 @@ pub fn gui_draw(
             let at = [left, top, left + w, top + h].map(|v| v.round() as i32);
             if *status_at != Some(at) {
                 *status_at = Some(at);
-                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; at the right, on the bottom bar or the screen's bottom: the user's checks, 4c-7 to 4c-9, Q111)");
+                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; at the right, on the bottom bar (not on the meters alone) or the screen's bottom: the user's checks, 4c-7 to 4c-10, Q111)");
                 gui.note(line);
             }
         }

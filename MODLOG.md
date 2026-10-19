@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-10: the meters' gap for good; the mask not on the meters alone
+
+**Changed:** Viewer `gui_view.rs`, `talk_view.rs`: the panels' and the caption's pictures fill their box exactly (`NodeImageMode::Stretch`). `main.rs`, `terrain_view.rs`: the engine doesn't smooth the panels' edges (`UiAntiAlias::Off`). `gui_view.rs`: the spinning mask stands on the bottom bar only, not on the meters when they pop up alone. Provenance, `docs/DESIGN.md`.
+**Why:** The user's fourth check: the gap was smaller but a few pixels of the world still showed beside the meters, flickering while the bar slides; the mask rose with the meters popping up alone, which the original's doesn't (the caption does).
+**Tested how:** Logs of the user's own run (window 1280 × 720) showed the engine's boxes exactly edge to edge and no see-through pixels in our pictures, so I took a screenshot in a run (temporary code, removed) and read the pixels at the seams as numbers, with and without the edge smoothing, then with the fix. `cargo test --workspace` (451 pass), clippy clean. Bricks with the bar away `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --key space,3 --frames 2500 --sound off` (`gui-4c10-bricks-bar-away.log`).
+**Result:** Before: at row 700 the meters' stone started at x 452 (136, 136, 128, 120, as their picture's first columns) with world colours (255, 198, 54…) at 448–451, and the same 4 pixels at 828–831: Bevy's default image mode keeps the picture's proportions, so 320 × 17 in 384 × 20 was drawn 376 wide and centred (and 395 wide when the sliding box was 21 high: the flicker). The edge smoothing only changed row 699. After: grey stone from 448 to 831 at every row, right next to the side panels. The mask: "at [743, 543, 800, 600]" while the meters pop up alone at 1.287 s.
+**Dead end recorded:** 4c-9's rounding fix was right but only part of it; the edge smoothing (`UiAntiAlias`) was a wrong first guess (switched off anyway).
+**Still broken / not tested:** Not seen by eye.
+**Next:** The user's check of 4c-10.
+
 ## 2026-10-18 M4 step 4c-9: the gap beside the meters; the spinning mask on the bottom bar
 
 **Changed:** `kq8-core/src/gui_draw.rs`: a panel is drawn where it stands (`draw` takes its layout place; `screen_size`): each edge is rounded at its screen place, so the picture has exactly the pixels of the place the engine gives it (unit test). Viewer `gui_view.rs`: passes each panel's place; the spinning mask stands on the top of the highest bottom panel (worked out before the panels are placed, as the caption's), rising and falling with the bar; new `gui_layout_log` writes where the engine put each bottom panel and its picture's size. Q111 closed by the user's checks. Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.
