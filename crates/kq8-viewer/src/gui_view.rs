@@ -11,8 +11,9 @@
 //! script commands). The status icons show the spinning mask during
 //! handsOff. Every change goes to `kq8-artifacts/logs/gui.log`.
 //!
-//! The screen is 800 × 600 (`set800mode 1`) and stretched to the window
-//! (STAND-IN, Q108); the panels' timers count real time.
+//! The screen is 800 × 600 (`set800mode 1`) (STAND-IN, Q108), drawn on
+//! the largest 4:3 rectangle centred in the window ([`ScreenFrame`], 4c-6,
+//! the user's choice); the panels' timers count real time.
 
 use std::collections::HashMap;
 
@@ -164,6 +165,27 @@ pub struct Gui {
 /// (left, top, right, bottom): a click there is not a world click.
 #[derive(Resource, Default)]
 pub struct GuiCover(pub Vec<(&'static str, [f32; 4])>);
+
+/// 4c-6: the game's 4:3 screen in the window (left, top, width, height,
+/// window pixels), from `kq8_core::panels::screen_frame`.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct ScreenFrame(pub [f32; 4]);
+
+/// Every frame, first: fits the 4:3 screen into the window; each new
+/// frame in `viewer.log`.
+pub fn fit_screen(window: Query<&Window, With<bevy::window::PrimaryWindow>>, mut frame: ResMut<ScreenFrame>, shared: Res<crate::Shared>) {
+    let Ok(w) = window.single() else { return };
+    let new = kq8_core::panels::screen_frame([w.width(), w.height()]);
+    if new != frame.0 {
+        frame.0 = new;
+        let [l, t, fw, fh] = new;
+        shared.log.lock().unwrap().detail(format!(
+            "screen: window {}x{}: the game's 4:3 screen at left {l:.1} top {t:.1}, {fw:.1}x{fh:.1} (the panels, the caption and the pointer on it; the world fills the window; 4c-6)",
+            w.width(),
+            w.height()
+        ));
+    }
+}
 
 /// Where the caption box goes (`interface.md` rule 51), screen pixels:
 /// the top of the highest bottom panel; the map's right edge.
@@ -840,6 +862,7 @@ pub fn gui_draw(
     mut images: ResMut<Assets<Image>>,
     mut cover: ResMut<GuiCover>,
     mut caption: ResMut<CaptionPlace>,
+    frame: Res<ScreenFrame>,
 ) {
     let Some(mut gui) = gui else { return };
     let gui = &mut *gui;
@@ -880,6 +903,10 @@ pub fn gui_draw(
         }
     }
     let [sw, sh] = gui.screen.map(|v| v as f32);
+    // 4c-6: screen pixels to window pixels.
+    let [fl, ft, fw, _] = frame.0;
+    let k = fw / sw;
+    let (ww, wh) = window.single().map_or((fw, frame.0[3]), |w| (w.width(), w.height()));
     let mut covered = Vec::new();
     // Each visible panel: what, left, top, width, height (screen pixels).
     let mut places: Vec<(Drawn, f32, f32, f32, f32)> = Vec::new();
@@ -904,12 +931,12 @@ pub fn gui_draw(
             continue;
         }
         *vis = Visibility::Inherited;
-        node.left = Val::Percent(100.0 * left / sw);
-        node.top = Val::Percent(100.0 * top / sh);
-        node.width = Val::Percent(100.0 * w / sw);
-        node.height = Val::Percent(100.0 * h / sh);
+        node.left = Val::Px(fl + left * k);
+        node.top = Val::Px(ft + top * k);
+        node.width = Val::Px(w * k);
+        node.height = Val::Px(h * k);
         if panel.is_some() {
-            covered.push((d.layout_id(), [left / sw, top / sh, (left + w) / sw, (top + h) / sh]));
+            covered.push((d.layout_id(), [(fl + left * k) / ww, (ft + top * k) / wh, (fl + (left + w) * k) / ww, (ft + (top + h) * k) / wh]));
             places.push((d, left, top, w, h));
         }
         let Some((size, specs)) = gui.specs(d) else { continue };
@@ -926,14 +953,14 @@ pub fn gui_draw(
     }
     cover.0 = covered;
     // The pointer: on the screen's 800 x 600 (or 640 x 480).
-    let pointer = window.single().ok().and_then(|w| w.cursor_position().map(|c| (c, w.width(), w.height())));
-    if let Some((c, ww, wh)) = pointer {
-        let (x, y) = (c.x / ww * sw, c.y / wh * sh);
+    let pointer = window.single().ok().and_then(|w| w.cursor_position());
+    if let Some(c) = pointer {
+        let (x, y) = ((c.x - fl) / k, (c.y - ft) / k);
         // interface.md rule 12: the top bar follows the pointer: down at
         // the very top row, up below y 60 of 480, not while the right
         // button is held or it is moving, not up in its popped time.
         let moving = gui.panels.moving(Panel::Top);
-        if c.y < 1.0 && !gui.panels.shown(Panel::Top) && !moving && !buttons.pressed(MouseButton::Right) {
+        if c.y < ft + 1.0 && !gui.panels.shown(Panel::Top) && !moving && !buttons.pressed(MouseButton::Right) {
             gui.panels.set(kq8_core::panels::Group::Top, true, "the pointer at the top row (rule 12)");
         } else if y > 60.0 / 480.0 * sh && gui.panels.shown(Panel::Top) && !moving && !gui.panels.top_popped() {
             gui.panels.set(kq8_core::panels::Group::Top, false, "the pointer below y 60 (rule 12)");
@@ -982,11 +1009,12 @@ pub fn pointer_draw(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut shown: Local<Option<(String, u32)>>,
+    frame: Res<ScreenFrame>,
 ) {
     use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage};
     let Some(mut gui) = gui else { return };
-    let Ok((entity, w)) = window.single() else { return };
-    let step = ((w.height() / gui.screen[1] as f32).round() as u32).max(1);
+    let Ok((entity, _)) = window.single() else { return };
+    let step = ((frame.0[3] / gui.screen[1] as f32).round() as u32).max(1);
     let wanted = (gui.pointer.clone(), step);
     if shown.as_ref() == Some(&wanted) {
         return;

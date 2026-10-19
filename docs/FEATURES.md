@@ -392,6 +392,9 @@ doesn't take it gives "This will not work."
   stays on the pointer. The scroll can't be taken: Connor reads it out.
   Escape still quits (the original opens its main menu, which pauses the
   game; there is no menu yet). Not seen by eye yet.
+- **A 4:3 screen in a wide window (4c-6):** the panels and the caption
+  stay in the original's 4:3 shape, centred in the window; the world
+  fills the whole window around them.
 
 ## Viewer helpers (not in the original)
 

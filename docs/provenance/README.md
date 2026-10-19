@@ -1784,3 +1784,10 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | A held item a script deleted or took: the hand is emptied | **Our choice** (the note doesn't say; the user: no item is ever lost) | Same unit test |
 | `--item TYPE`: a real item named `TestItem`, carried, in the hand | **Our test option** (replaces the 3e fake held item named after its type) | Star globe run |
 | Escape still quits; the original opens the main menu and pauses the game | `interface.md` rule 14 (the user's check); no menu yet | — |
+
+### 4c-6, a 4:3 screen in the middle of the window — `crates/kq8-core/src/panels.rs`, `crates/kq8-viewer/src/{gui_view,talk_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The panels, the caption, the pointer's screen position, the click areas and the pointer's size are on the largest 4:3 rectangle centred in the window; the world fills the whole window | **The user's choice** (2026-10-18: the original runs at a fixed 4:3 and its panels are laid out for it; "a virtual 4:3 screen in the middle") | Unit test `the_screen_is_4_3_in_the_middle_of_the_window`; `viewer.log` "screen: window 1280x720: the game's 4:3 screen at left 160.0 top 0.0, 960.0x720.0" |
+| The top bar comes down with the pointer at the 4:3 screen's top row | **Our choice** (follows the screen) | — (needs the real mouse) |

@@ -379,9 +379,27 @@ pub fn place(p: Panel, rect: [f32; 4], screen: [f32; 2], away: f32) -> (f32, f32
     }
 }
 
+/// M4 4c-6 (the user's choice, 2026-10-18): the original's screen is 4:3
+/// and its panels are laid out for it, so they stand on a "virtual" 4:3
+/// screen, the largest that fits in the window, centred; the world still
+/// fills the window. Returns its left, top, width, height in window
+/// pixels.
+pub fn screen_frame(window: [f32; 2]) -> [f32; 4] {
+    let [ww, wh] = window;
+    let (w, h) = if ww * 3.0 > wh * 4.0 { (wh * 4.0 / 3.0, wh) } else { (ww, ww * 3.0 / 4.0) };
+    [(ww - w) / 2.0, (wh - h) / 2.0, w, h]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_screen_is_4_3_in_the_middle_of_the_window() {
+        assert_eq!(screen_frame([1920.0, 1080.0]), [240.0, 0.0, 1440.0, 1080.0]);
+        assert_eq!(screen_frame([800.0, 600.0]), [0.0, 0.0, 800.0, 600.0]);
+        assert_eq!(screen_frame([800.0, 800.0]), [0.0, 100.0, 800.0, 600.0]);
+    }
 
     fn start() -> Panels {
         Panels::new(&[Panel::BottomLeft, Panel::Slots, Panel::Meters, Panel::BottomRight])

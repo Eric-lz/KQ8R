@@ -31,8 +31,8 @@
 //! Q108), rows wrapped at that width, the box growing upwards from the
 //! top of the highest bottom panel (the screen's bottom while there is no
 //! bottom bar), centred half-way between the map's right edge (always
-//! away: no map yet) and the screen's right edge. The screen is
-//! stretched to the window.
+//! away: no map yet) and the screen's right edge. The screen is the
+//! 4:3 rectangle in the middle of the window (4c-6).
 //!
 //! 4a-6: the mouth ([`mouth_draw`]): Connor's face texture (`baseLip`)
 //! becomes `lip<n>` of his `lips=` list at each mouth change, `lip0` for
@@ -349,6 +349,7 @@ pub fn caption_picture_draw(
     mut rows_shown: Local<usize>,
     mut last_place: Local<Option<(i32, i32)>>,
     shared: Res<crate::Shared>,
+    frame: Res<crate::gui_view::ScreenFrame>,
 ) {
     use bevy::asset::RenderAssetUsages;
     use bevy::image::ImageSampler;
@@ -401,10 +402,13 @@ pub fn caption_picture_draw(
     }
     let (left, top) = caption::place(sw, &b, *rows_shown, bottom, map_right);
     let h = b.height(*rows_shown) as f32;
-    n.left = Val::Percent(100.0 * left / sw);
-    n.top = Val::Percent(100.0 * top / sh);
-    n.width = Val::Percent(100.0 * b.width as f32 / sw);
-    n.height = Val::Percent(100.0 * h / sh);
+    // 4c-6: on the 4:3 screen in the middle of the window.
+    let [fl, ft, fw, _] = frame.0;
+    let k = fw / sw;
+    n.left = Val::Px(fl + left * k);
+    n.top = Val::Px(ft + top * k);
+    n.width = Val::Px(b.width as f32 * k);
+    n.height = Val::Px(h * k);
     let at = (left.round() as i32, top.round() as i32);
     if *last_place != Some(at) {
         *last_place = Some(at);

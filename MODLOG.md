@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-6: the panels on a 4:3 screen in the middle of the window
+
+**Changed:** `kq8-core/src/panels.rs`: `screen_frame`, the largest 4:3 rectangle centred in a window (unit test). Viewer: a `ScreenFrame` resource fitted each frame (`fit_screen`, logged in `viewer.log` when it changes); `gui_view.rs` places the panels on it in window pixels, maps the pointer to the game's screen through it, computes the click areas from it and sizes the pointer picture from its height; `talk_view.rs` places the caption on it. `docs/DESIGN.md` (4c-6, 4c-7 planned), provenance, `docs/FEATURES.md`.
+**Why:** The user's check of 4c: the original runs at a fixed 4:3 and its panels are laid out for it; in a 16:9 window ours were stretched sideways. The user chose the "virtual 4:3 screen in the middle" (their second idea; the third, the corner panels in the window's corners, maybe later).
+**Tested how:** `cargo test --workspace` (451 pass, 1 new), clippy clean. Viewer: `cargo play --at 245000,255000,0 --click alcmsign,10 --frames 200 --sound off`.
+**Result:** "screen: window 1280x720: the game's 4:3 screen at left 160.0 top 0.0, 960.0x720.0"; the caption still at "left 168.75 top 486.00" of the 800 × 600 screen (that is 362.5 pixels from the window's left).
+**Still broken / not tested:** Not seen by eye. Mouse clicks on the bars and the top bar following the mouse with the new mapping are not tested by a run (they need the real mouse).
+**Next:** 4c-7, the user's corrections (Space's sounds, the spinning mask's place).
+
 ## 2026-10-18 M4 step 4c: end-of-session documents (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 4c-1 to 4c-5; older 4a entries shortened; code layout, logs, test count; the 4c stand-ins and what is not built; Q105 moved to answered and built; Q108–Q110 listed; next steps).

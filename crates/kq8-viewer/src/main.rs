@@ -433,6 +433,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::HeldItem(args.item))
                 .insert_resource(gui_view::KeyAt(args.key))
                 .init_resource::<gui_view::GuiCover>()
+                .init_resource::<gui_view::ScreenFrame>()
                 .init_resource::<gui_view::BarActions>()
                 .init_resource::<gui_view::CaptionPlace>()
                 // Game logic at the original's 15 updates per second
@@ -456,7 +457,7 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step))
-                .add_systems(Update, (gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain())
+                .add_systems(Update, (gui_view::fit_screen, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain())
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw))
                 .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw));

@@ -1957,6 +1957,25 @@ inventory and menus.
     only; (b) the click looks at the state the script **asked for**
     (or his state at the click), not the one after his next update;
     (c) `doNotPointAt` is read for buildings too.
+  - **After the user's check (2026-10-18)**:
+    - **4c-6, a 4:3 screen in the middle of the window.** The original
+      runs at 4:3 and its panels are laid out for it; stretching them to
+      a 16:9 window pulls them sideways. The user chose: the panels and
+      the caption sit on a "virtual" 4:3 screen, the largest one that
+      fits, centred in the window; the 3D world still fills the whole
+      window. `kq8_core::panels::screen_frame(window)` gives that
+      rectangle; the viewer places every panel, the caption, the
+      pointer's screen position, the click areas and the pointer's size
+      from it. Later, maybe: the corner panels in the window's corners
+      (the user's third idea).
+    - **4c-7, the user's corrections.** Space plays `intrup.aud` /
+      `intrdown.aud` like the top bar (handsOff does not); the spinning
+      mask in the bottom right corner of the screen, smaller. Both from
+      the user's check in the original, against `interface.md` rules 9
+      and 7 (asked as Q111).
+    - Not changed, asked (Q111): the meter bars' width (the layout's 86
+      of 256 pixels each, with 14-pixel end pieces) and an empty green
+      bar at 0 experience.
   - Tests: unit tests for each core module; viewer runs with `--click`
     on `alcmsign` and `smlchst3`, Space pressed by a test option
     (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),
