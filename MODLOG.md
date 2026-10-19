@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): characters, the user's check
+
+**Changed:** `docs/behaviour/characters.md` rule 36 (shadows) and "How to check" (the user's results), open question 2 narrowed. `docs/DESIGN.md` M7 improvements: shadows drawn as one even shape.
+**Why:** The user checked the five points of the note in the original.
+**Tested how:** By eye in the original (user).
+**Result:** (1) the Wizard doesn't turn to Connor: matches. (2) the Uglybeast's turn is a model movement, its heading unchanged: matches (`pivot` is a movement). (3) chickens: can't be told by eye. (4) zombies hidden until they rise near Connor: matches. (5) shadows are a dark copy of the figure; overlapping parts darken the ground twice.
+**Still broken / not tested:** Shadow direction and `shadowvisible` not traced; whether chickens wander only after seeing Connor not confirmed.
+**Next:** B: draw the characters from `characters.md`, check Q115.
+
 ## 2026-10-19 Study (A): characters (drawing and animating, not fighting)
 
 **Changed:** New `docs/behaviour/characters.md` (36 rules): which classes are characters, the monster list and types, the drawing keys, the ground and the box, what plays at load, Wait's return to `Stop`, the Birth state, script commands on characters, turning, the mouth, gestures, when a character notices Connor, visibility and shadows. `docs/behaviour/conversation.md` rule 18 corrected (gesture condition) and open question 2 answered. `docs/behaviour/QUESTIONS.md`: Q115 (the correction, for B). `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed).

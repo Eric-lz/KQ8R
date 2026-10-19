@@ -472,8 +472,15 @@ Words used here:
     spriggans, zombies, bats, the Henchman, the Lady and the Uglybeast cast
     shadows**; the chickens, the pig, the Knight and the Shadow don't.
     `shadowvisible=1` (Daventry trees, stones, the fountain) is read but
-    what it does was not traced. How the shadow is drawn (projected model,
-    blob, direction) was **not traced**: open question 2.
+    what it does was not traced. How the shadow is drawn was **not
+    traced** (open question 2). **The user's check in the original
+    (2026-10-19):** the shadow is a **dark copy of the figure** on the
+    ground, and where parts of it overlap (e.g. an arm over the body) the
+    ground gets **darker again**: each part darkens the ground on its own,
+    with no merging. Copy that look until M7; drawing the shadow as one
+    even shape is noted as an M7 improvement (`docs/DESIGN.md`). The
+    direction of the shadow (from the sun's `tsLightAim` or straight down)
+    was not traced or checked.
 
 ## Numbers and units
 
@@ -582,12 +589,26 @@ Words used here:
      and the chickens none? What does it look like (dark copy of the
      figure, round blob)?
 
+  **The user's check (2026-10-19):** (1) the Wizard does not turn to face
+  Connor, as rule 23 says. (2) The Uglybeast turns to face Connor, but it
+  looks like a model movement: its heading stays the same while it turns,
+  which fits rule 22 (`pivot` is a movement; the heading itself is only
+  changed by `ugly.cs`'s `move … 3 … -1.57` at the pivot's end, together
+  with the switch to `stand`, so it shows no jump). (3) Not visible:
+  the chickens come into view only when they are already drawn, so
+  whether they start walking only after being seen can't be told by eye
+  (rule 29 stays traced only). (4) Zombies stay hidden in the ground and
+  appear only after rising once Connor is close enough, as rule 16 says.
+  (5) Shadows: a dark copy of the figure, overlaps darker (rule 36).
+
 ## Open questions
 
 1. What `flags` bit 0x20 (`flags=32` on the Wizard, the Girl, the Knight,
    the Uglybeast, the Unicorn) does: it drops the object's link to the
    terrain when it enters the world; the effect was not traced.
-2. How shadows are drawn (rule 36), and what `shadowvisible` does.
+2. How shadows are drawn (rule 36): the look is known from the user's
+   check (a dark copy of the figure, overlaps darker); their direction
+   and what `shadowvisible` does are not traced.
 3. Wandering, idling, alarm, chasing, walking speed and the flying mover:
    M5.
 4. `KQObject::changeBmp` and `changeAnmFile` in detail.
