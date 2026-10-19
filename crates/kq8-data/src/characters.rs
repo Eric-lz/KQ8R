@@ -417,6 +417,12 @@ pub struct CharacterKeys {
     /// `stepUpAmount=` / `stepDownAmount=`, if given (rule 8).
     pub step_up: Option<f32>,
     pub step_down: Option<f32>,
+    /// `GBMsg`, `GBNoun`, `GBVerb`, `GBCase`, `GBSeq`: the goodbye line
+    /// (`conversation.md` rule 20); `None` when file and noun are both 0
+    /// (a missing key counts as 0).
+    pub goodbye: Option<crate::msg::Tuple>,
+    /// `WBMsg`…`WBSeq`: the welcome-back line (rule 20).
+    pub welcome_back: Option<crate::msg::Tuple>,
 }
 
 impl CharacterKeys {
@@ -444,6 +450,8 @@ impl CharacterKeys {
             skin: text("originalBmp").zip(text("alternateBmp")),
             step_up: number("stepUpAmount").map(|v| v as f32),
             step_down: number("stepDownAmount").map(|v| v as f32),
+            goodbye: line_keys(s, "GB"),
+            welcome_back: line_keys(s, "WB"),
         })
     }
 
@@ -451,6 +459,15 @@ impl CharacterKeys {
     pub fn random_stop(&self) -> bool {
         self.flags & RANDOM_STOP != 0
     }
+}
+
+/// `<p>Msg`, `<p>Noun`, `<p>Verb`, `<p>Case`, `<p>Seq` as a line
+/// (`conversation.md` rule 20): a missing key is 0; file and noun both 0
+/// = no line.
+fn line_keys(s: &Section, p: &str) -> Option<crate::msg::Tuple> {
+    let n = |k: &str| s.number(&format!("{p}{k}")).and_then(Result::ok).unwrap_or(0.0) as i64;
+    let t = crate::msg::Tuple::new(n("Msg") as u16, n("Noun") as u8, n("Verb") as u8, n("Case") as u8, n("Seq") as u8);
+    (t.file != 0 || t.noun != 0).then_some(t)
 }
 
 /// The mouth (rule 25): the face texture and `lip0`…`lip7`.
@@ -629,6 +646,15 @@ useDynamicLighting 1
         assert!(!k.random_stop() && !k.gravity && !k.wanders && k.no_turn);
         let file = kq_text::parse(b"[Door]\nclassType=KQDoor\n");
         assert!(CharacterKeys::from_section(&file[0]).is_none());
+    }
+
+    #[test]
+    fn goodbye_and_welcome_back_keys() {
+        // conversation.md rule 20: a missing key is 0; file and noun 0 = none.
+        let file = kq_text::parse(b"[Bob]\nclassType=KQMonster\nGBMsg=1000\nGBNoun=4\nGBCase=7\nGBSeq=1\nWBMsg=0\nWBNoun=0\nWBSeq=1\n");
+        let k = CharacterKeys::from_section(&file[0]).unwrap();
+        assert_eq!(k.goodbye, Some(crate::msg::Tuple::new(1000, 4, 0, 7, 1)));
+        assert_eq!(k.welcome_back, None);
     }
 
     #[test]

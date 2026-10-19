@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4e-1: reading the conversation info objects (plan for 4e)
+
+**Changed:** `docs/DESIGN.md`: plan for 4e (conversations, 4e-1 to 4e-7). New `kq8-data/src/conv_info.rs` (`KQConvInfo`: talking spot, areas, cameras; the inside test). `kq8-data/src/characters.rs`: the goodbye and welcome-back keys (`GB…`, `WB…`). New `kq8 conv-verify` (`kq8-cli/src/conv_verify.rs`). `docs/behaviour/QUESTIONS.md`: Q125 (Connor's keys before the stay test, Jump and push while talking), Q126 (where the conversation camera aims). Provenance.
+**Why:** First step of conversations (`conversation.md` rules 3, 20).
+**Tested how:** `cargo test -p kq8-data` (125 pass, 4 new), clippy clean; `cargo run --release -p kq8-cli -- conv-verify`, read in `kq8-artifacts/logs/conv-verify.log`.
+**Result:** 169 `KQConner::conversation` calls, all with `<enemy>` 0; 19 characters with goodbye/welcome-back keys; every partner's largest camera number is below its camera count (Daventry: Wizard and Uglybeast 6 of 7). The note's Daventry points: (193000, 198000) in areas 0 and 1, 834 from the spot; (191000, 197000) in 0 and 2; (198000, 198000) in none: all as the note. **17** info objects, not the note's 16: Barren has three (`WitchdrInfo`, `AlthillmanInfo` in `Altarman.kq`, `FrghillmanInfo` in `shaftinf.kq`); the note lists only the Witch Doctor. Not a question (no Daventry effect); worth a word to A.
+**Still broken / not tested:** Nothing uses the info objects yet (4e-3).
+**Next:** 4e-2: the conversation queue.
+
 ## 2026-10-19 Bars and captions in every world (Q118 built)
 
 **Changed:** `kq8-viewer/src/load.rs`: new `screen_palette_paths` (the world's `KQWorld::objectPalette` from `world.cs`, then `loadingPalette`, `interiorPalette`, `terrainPalette`, `connorPalette`; each in the world's `resource` folder, then `GAME/Resource`). `gui_view.rs` (bars) and `talk_view.rs` (caption strip) use it instead of `<folder>.ppl`. `docs/provenance/README.md`, `STATUS.md`.

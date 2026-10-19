@@ -10,6 +10,7 @@ pub mod bounds;
 pub mod characters;
 pub mod building;
 pub mod chunks;
+pub mod conv_info;
 pub mod dil;
 pub mod effects;
 pub mod envinfo;

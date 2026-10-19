@@ -705,7 +705,7 @@ inventory and menus.
     2): stand-in straight down, asked as a question. Planned in detail
     when it starts.
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
-    dying, the flying mover (M5); conversations (next, from
+    dying, the flying mover (M5); conversations (4e, from
     `conversation.md`); collision against characters (they stay not
     solid, as now).
   - Tests: unit tests for each core rule (first update, Wait and
@@ -714,6 +714,107 @@ inventory and menus.
     the Wizard (`--at` in his house), at the Uglybeast's pond with
     `--click Uglybeast`, at the chickens, at the graveyard, read in
     `characters.log`, `anim.log`, `talk.log`.
+
+- **4e — conversations** (planned 2026-10-19). From
+  `docs/behaviour/conversation.md` (A, 2026-10-19, checked by the user in
+  the original), with `talking.md`, `characters.md` rules 19, 24, 28,
+  `clicking.md`, `camera.md`, `interface.md` rule 16. Words: the
+  **partner** is the character Connor talks to; its **info object**
+  (`<partner>Info`, class `KQConvInfo`) gives his **talking spot**
+  (`convLocX/Y/Z`), the **start area** (`box0`), the **stay area**
+  (`box1`), **special areas** (`box2`…) and the **conversation cameras**
+  (`cam0`…); the **conversation queue** is the partner's second line
+  queue (`<partner>Conv`), next to its `speak` queue; a **talk state**
+  is the state Connor and the partner are in while they talk. One step
+  and one commit at a time; every step logs to
+  `kq8-artifacts/logs/talk.log` and a new `conversation.log` (Connor's
+  side: case, placing, stay test, the end, cameras).
+  - **Where the code goes.** `kq8-data`: new `conv_info.rs` (the info
+    object, the "inside" test); `characters.rs` gets the goodbye and
+    welcome-back keys. `kq8-core`: `talk.rs` gets the conversation
+    queues; new `conversation.rs` (Connor's talk state: the case, the
+    approach, the stay test, the end, what the camera and the panels are
+    told); `connor.rs` gets a `Talk` mode (the approach movements, or the
+    keys); `character.rs` the partner's Talk state; `active.rs` the
+    command, the clicks, `TalkExit`, `InvConv`. Viewer: `load.rs` reads
+    the info objects; a new system after `trap_step` runs Connor's talk
+    state and applies it to Connor, the camera and the panels.
+  - **4e-1, reading** (rules 3, 20; data). `KQConvInfo` sections: spot,
+    boxes (4 corners each), cameras (6 numbers); the inside test (angle
+    sum 6.1–6.4 rad; a corner counts as outside); `GBMsg…`/`WBMsg…`
+    keys. New check `kq8 conv-verify` (`conv-verify.log`): per world
+    every info object with its boxes and cameras, the largest camera
+    number of the world's message lines against the cameras, the
+    `KQConner::conversation` calls and their `<enemy>` word, the
+    characters with goodbye/welcome-back keys; and the note's three
+    Daventry points. Numbers to expect: 16 info objects (Wizard 3 boxes
+    7 cameras, Uglybeast 2 and 7), 169 calls all with `<enemy>` 0, 19
+    characters with the keys; (193000, 198000) in `box0` and `box1`, 834
+    from the spot; (191000, 197000) in `box0` and `box2`; (198000,
+    198000) in none.
+  - **4e-2, the conversation queue** (core `talk.rs`, rules 12, 21, 22,
+    23; unit tests only). A second queue per partner, issuer the
+    partner; lines play as `speak` lines; each line's camera number
+    reported when it starts; `TalkComplete` from the partner; the queue
+    reports when its last line ends. Goodbye (put in front, cuts the
+    line playing, which goes back to the head of the waiting lines; at
+    its end the queue pauses and the caller is told for `TalkExit`; no
+    `TalkComplete`); welcome back (a paused queue with lines waiting:
+    welcome back in front, the new lines after the waiting ones with the
+    duplicate check, no `TalkComplete`); a goodbye asked for and not
+    played is dropped; `clearSpeak` empties it.
+  - **4e-3, the command and the two talk states** (rules 1, 2, 6–13,
+    15–17). `KQConner::conversation` (usage, not `KQMonster`, `<last>`
+    0); the partner's `speak` queue emptied, its current movement made
+    cuttable, `Stop` asked for, its Talk state (turns toward Connor every
+    4th update unless `noTurn`; no return to `Stop`); Connor's `speak`
+    queue emptied and his Talk state: the case from his place ("there"
+    under 125 from the spot in the stay area, "close" in the stay area,
+    "walk" in the start area; none: logged, treated as "there", Do not
+    reproduce), weapon away (no weapons yet: logged, skipped), "close"
+    puts him on the spot, "walk" turns him toward it and plays
+    `stopwalk`, then puts him 440 short of the spot facing it and plays
+    `walkstopright`, then turns him to the partner; the partner told to
+    start (its lines queued). The stay test every update; leaving it ends
+    the conversation (Do not reproduce: `TalkExit` sent once if no
+    goodbye will play). The end: Move if moving, else `Stop` and Wait;
+    `TalkExit` before the last line's `TalkComplete`; the partner to
+    Wait. While talking: `speak` for either is ignored; keys don't cut
+    lines short. A missing info object: logged, treated as "there" with
+    no cameras (Do not reproduce). STAND-INS (Q125): during the approach
+    movements the keys are ignored; Jump and Push are refused for the
+    whole talk state.
+  - **4e-4, clicks** (rules 5, 19). A click on a partner: special area →
+    `ConnorAction Special Special`; start area → in reach whatever the
+    distance (`do do` or the held item); else `TooFar TooFar`; the click
+    turn as usual. During the talk state a world click does nothing,
+    except one on the partner with an item held: `InvConv <item>`, Connor
+    leaves (with `TalkExit`), then the click goes on as above.
+  - **4e-5, cameras and panels** (rules 6, 14, 15; `interface.md` rule
+    16). A line with a camera number cuts the camera to `cam<n>` (checked
+    against `nCam`: Do not reproduce) and turns Connor to the partner once
+    he has reached his spot; the right button held during the stay test
+    puts the camera at `cam0` aimed at the partner, swinging and zooming
+    around it, and camera numbers are ignored from then on; at the end
+    the camera goes to `cam0` looking at the partner, then follows
+    Connor. The bottom bar is put away at the start and comes back at the
+    end (built in 4c-2, now called). First person is not built: logged.
+    STAND-IN (Q126): the point the camera aims at is the partner's
+    position plus 1,400 (as for Connor), not its feet.
+  - **4e-6, goodbye and welcome back** (rules 20–22). Walking away with
+    more than one line left and a goodbye line: the goodbye, then
+    `TalkExit`; clicking again: welcome back, the cut line from its start,
+    the rest.
+  - **4e-7, Connor's gestures** (rule 18). Codes 8–15 play
+    `gesturea`…`gestureh`, 16 `stop`, when he stands still (no weapon
+    drawn, not in first person: always true for now).
+  - Tests: unit tests for each core rule (inside test, case, placing,
+    stay test, the queue's goodbye and welcome back, the click areas);
+    `kq8 conv-verify`; viewer runs at the Wizard (`--at 193000,198000,-1.7`
+    then `--click Wizard`; from (191000, 197000) and (198000, 198000);
+    walking out of `box1` with `--hold`) and at the Uglybeast (`--click
+    Uglybeast`, case "there"), read in `conversation.log`, `talk.log`,
+    `doors.log`, `camera.log`, `gui.log`.
 
 ### M5 — Fight
 

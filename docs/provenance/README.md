@@ -2039,3 +2039,18 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | The duplicate check is on the range's **last** line (after 0 is replaced): nothing of the range is added when that line is waiting or playing | `talking.md` rule 9 (corrected, Q114) | Unit tests `the_duplicate_check_is_on_the_range_s_last_line`, `lines_play_in_turn_for_their_voice_length_and_duplicates_are_dropped` (changed: 1…2 during line 2) |
 | Connor's lip-sync codes above 7 don't change his mouth (8–16 are gestures, above 16 nothing); was: `lip0` | Rules 17, 18 (corrected) | Not tested in the viewer (no reachable Connor line with such codes found); logged in `connor.log` when it happens |
 | Connor's gestures (codes 8–16) | `conversation.md` rule 18: not built; left for the conversations step | — |
+
+## M4 4e, conversations
+
+From `docs/behaviour/conversation.md` (session A, 2026-10-19), unless
+marked otherwise.
+
+### 4e-1, reading — `crates/kq8-data/src/conv_info.rs`, `characters.rs`, `crates/kq8-cli/src/conv_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQConvInfo` section `<partner>Info`: `convLocX/Y/Z`, `nBox` + `box<n>` (4 corners x y), `nCam` + `cam<n>` (x y z rx ry rz); `box0` start, `box1` stay, `box2`… special areas | Rule 3; **Observed** in `wizinfo.kq`, `uglyinfo.kq` (the file's own comments name the boxes the same way) | Unit test `reads_the_spot_areas_and_cameras`; `kq8 conv-verify`: Wizard 3 areas 7 cameras, Uglybeast 2 and 7 |
+| A bad or missing `box<n>` / `cam<n>` ends its list (logged) | **Our choice** (not in the data) | Unit test `other_classes_and_bad_lists` |
+| Inside: the corners' angles seen from the point add up to 6.1–6.4 rad; on a corner = outside; corner order doesn't matter | Rule 3 | Unit test `inside_by_the_angle_sum_corners_outside_order_free`; the note's three Daventry points land in the note's areas |
+| `GBMsg…GBSeq`, `WBMsg…WBSeq`: a missing key 0; file and noun both 0 = no line | Rule 20 | Unit test `goodbye_and_welcome_back_keys`; `conv-verify`: 19 characters |
+| `conv-verify`: `$1` in a script is the object whose `script=` is that file, the one with an info object first (`wizard.cs` is also `magicmap`'s) | **Our method** for the count | Every partner's largest camera number below its `nCam` |
