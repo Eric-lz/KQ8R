@@ -321,6 +321,9 @@ pub struct AnimObject {
     /// A character's states (M4 4d-3, `characters.md`); `None` for other
     /// animated objects.
     pub character: Option<Box<crate::character::Character>>,
+    /// `makeTranslucent` (characters.md rule 22): the see-through value a
+    /// script set (256 = solid), for the viewer; `None` = as loaded.
+    pub translucency: Option<f32>,
 }
 
 /// A `KQCueEvent`'s script arguments (`doors.md` rule 23): `Cue`, its first
@@ -1412,6 +1415,36 @@ impl WorldState {
         "0".into()
     }
 
+    /// `makeTranslucent <name> <0–256>` (`characters.md` rule 22): the
+    /// see-through value, at once, no fade; 256 = solid (`objects.md`
+    /// "See-through objects" rule 2). Built for animated objects and
+    /// characters (the only Daventry use is the Wizard).
+    fn make_translucent(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(value)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
+            self.note(format!("{at}: usage: makeTranslucent <name> <0-256>; nothing"));
+            return "1".into();
+        };
+        let n = number_value(value) as f32;
+        match self.anims.iter_mut().position(|a| !a.gone && a.player.name.eq_ignore_ascii_case(who)) {
+            Some(i) => {
+                self.anims[i].translucency = Some(n);
+                let name = self.anims[i].player.name.clone();
+                let what = if n >= 256.0 { "solid".to_string() } else { format!("opacity {:.3}", (n / 255.0).clamp(0.0, 1.0)) };
+                let line = format!("{at}: makeTranslucent {name} {n}: {what}, at once (rule 22)");
+                if self.anims[i].character.is_some() {
+                    self.character_note(&name, line);
+                } else {
+                    self.note(line);
+                }
+                "0".into()
+            }
+            None => {
+                self.note(format!("{at}: makeTranslucent {who} {n}: not an animated object or character of ours: not done"));
+                "1".into()
+            }
+        }
+    }
+
     /// `KQObject::setUseGravity`, `KQMonster::setMonUseGravity`,
     /// `KQMonster::setCanTurn <name> 0|1` (characters.md rules 8, 22, 23):
     /// kept on the character for the steps that use them (4d-4, 4d-6).
@@ -2030,6 +2063,7 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
+            "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
                 Some(self.character_switch(words, at))
             }
@@ -4172,7 +4206,7 @@ mod tests {
         let mut a = with_object(script, "x");
         let mut player = crate::named_anim::tests::still_then_open("water");
         player.movements[1].name = "blocked".into();
-        a.add_anims([AnimObject { player, script: None, gone: false, character: None }]);
+        a.add_anims([AnimObject { player, script: None, gone: false, character: None, translucency: None }]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         a.update();
         let log = a.take_log().join("\n");
@@ -4186,9 +4220,19 @@ mod tests {
         }
         assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("object water: movement 'blocked' finished"), "{log}");
         let mut d = with_object("deleteObject water\n", "x");
-        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None }]);
+        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
         d.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
+    }
+
+    #[test]
+    fn make_translucent_sets_the_value_on_an_animated_object() {
+        let mut a = with_object("makeTranslucent water 150\nmakeTranslucent nobody 150\n", "x");
+        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.world.anims[0].translucency, Some(150.0));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("opacity 0.588, at once") && log.contains("makeTranslucent nobody 150: not an animated object"), "{log}");
     }
 
     #[test]

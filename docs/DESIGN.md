@@ -681,6 +681,11 @@ inventory and menus.
     short or has ended, and the list has it); after the last line of a
     queue the speaker goes to Wait (Q117). Logs: every mouth change
     (shape, texture replaced, drawn), every gesture and why or why not.
+  - **4d-5b, `makeTranslucent`** (**done** 2026-10-19; rule 22,
+    `objects.md` "See-through objects" rule 2): the see-through value
+    of an animated object or character, at once, no fade; the object
+    gets its own copies of its materials. Connor's (Dead City) not
+    built.
   - **4d-6, gravity and steps** (rule 8). Characters with gravity on
     fall onto the ground or a building floor as Connor does, step up
     and down 325; `monUseGravity=0` and `setUseGravity 0` keep them at

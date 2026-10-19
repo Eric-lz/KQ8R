@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-5b: `makeTranslucent`
+
+**Changed:** `kq8-core/src/active.rs`: `makeTranslucent <name> <n>` for animated objects and characters (it was an unknown command); `AnimObject::translucency`. Viewer `anim_view.rs`: the object's parts get their own material copies and opacity n / 255 (256 solid). DESIGN, provenance.
+**Why:** `characters.md` rule 22: `wizard.cs` makes the Wizard see-through (150) during the ring spell and solid (256) after.
+**Tested how:** `cargo test --workspace` (483 pass, 1 new), clippy clean. Viewer: `--at 189300,198274,0 --command "makeTranslucent Wizard 150",20 --command "makeTranslucent Wizard 256",60`, read in `characters.log`.
+**Result:** Update 21: opacity 1.000 → 0.588 on 3,347 parts (64 own materials); update 61: back to 1.000.
+**Still broken / not tested:** **Not looked at by eye.** Connor's `makeTranslucent` (Dead City, M6) not built. The ring scene itself not run.
+**Next:** a character's click box follows it; 4d-6 plan.
+
 ## 2026-10-19 M4 4d-3 to 4d-5: the user's check
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: the user's observations added to Q119 and Q120. No code.

@@ -84,6 +84,12 @@ struct Playing {
     face: Vec<Handle<ObjectMaterial>>,
     lip_images: Vec<Option<Handle<Image>>>,
     mouth_shown: u16,
+    /// Its drawn parts (for `makeTranslucent`, rule 22), the opacity drawn
+    /// now, and its own material copies with their opacity at 1 (the
+    /// alpha of the colour before any see-through).
+    parts: Vec<Entity>,
+    opacity_shown: f32,
+    own: std::collections::HashMap<AssetId<ObjectMaterial>, (Handle<ObjectMaterial>, f32)>,
 }
 
 #[derive(Resource)]
@@ -119,7 +125,7 @@ impl AnimSim {
         };
         let index = active.world.anims.len();
         let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
-        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take() }]);
+        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take(), translucency: None }]);
         true
     }
 
@@ -341,6 +347,7 @@ pub fn spawn_animated(
             })
             .collect();
         let mut drawn = Vec::with_capacity(a.movements.len());
+        let mut parts = Vec::new();
         for (_, _, i) in &a.movements {
             let b = &built[*i];
             let mut frames = Vec::with_capacity(b.frames.len());
@@ -362,6 +369,7 @@ pub fn spawn_animated(
                     }
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
                     commands.entity(parent).add_child(part);
+                    parts.push(part);
                 }
                 frames.push(parent);
             }
@@ -418,7 +426,7 @@ pub fn spawn_animated(
         let source = if *unused {
             Source::Own(Box::new(player))
         } else {
-            core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take() });
+            core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take(), translucency: None });
             Source::Core(core.len() - 1)
         };
         playing.push(Playing {
@@ -437,6 +445,9 @@ pub fn spawn_animated(
             face: face_copies.into_values().collect(),
             lip_images,
             mouth_shown: 0,
+            parts,
+            opacity_shown: opacity,
+            own: Default::default(),
         });
     }
     main_log.summary(format!(
@@ -553,11 +564,55 @@ pub fn anim_draw(
     mut visibility: Query<&mut Visibility>,
     mut carried: Query<&mut crate::scene_lights::CarriedLights>,
     mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut part_materials: Query<&mut MeshMaterial3d<ObjectMaterial>>,
 ) {
     let Some(mut sim) = sim else { return };
     let doors = doors.as_deref();
     let sim = &mut *sim;
     for p in &mut sim.playing {
+        // makeTranslucent (characters.md rule 22, M4): every material of
+        // every part at n / 255, at once (objects.md "See-through
+        // objects" rule 2); the object gets its own copies first.
+        let wanted = match (&p.source, doors) {
+            (Source::Core(i), Some(d)) => d.active.world.anims.get(*i).and_then(|a| a.translucency),
+            _ => None,
+        };
+        if let Some(n) = wanted {
+            let opacity = if n >= 256.0 { 1.0 } else { (n / 255.0).clamp(0.0, 1.0) };
+            if opacity != p.opacity_shown {
+                let mut changed = 0;
+                // Shared material → this object's copy (one per material).
+                let mut copies: std::collections::HashMap<AssetId<ObjectMaterial>, Handle<ObjectMaterial>> = Default::default();
+                for e in &p.parts {
+                    let Ok(mut mm) = part_materials.get_mut(*e) else { continue };
+                    let id = mm.0.id();
+                    if !p.own.contains_key(&id) {
+                        let Some(m) = materials.get(&mm.0).cloned() else { continue };
+                        // Its alpha at opacity 1: the colour's, undone.
+                        let full = if p.opacity_shown > 0.0 && m.alpha_mode == AlphaMode::Blend { m.settings.base_colour.w / p.opacity_shown } else { m.settings.base_colour.w };
+                        if p.face.iter().any(|h| h.id() == id) {
+                            // Already its own (the mouth's copies, 4d-5).
+                            p.own.insert(id, (mm.0.clone(), full));
+                        } else {
+                            let h = copies.entry(id).or_insert_with(|| materials.add(m)).clone();
+                            p.own.insert(h.id(), (h.clone(), full));
+                            mm.0 = h;
+                        }
+                    }
+                    changed += 1;
+                }
+                for (h, full) in p.own.values() {
+                    if let Some(mut m) = materials.get_mut(h) {
+                        m.settings.base_colour.w = full * opacity;
+                        m.alpha_mode = if opacity < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque };
+                    }
+                }
+                if let Some(log) = sim.characters.as_mut() {
+                    log.detail(format!("update {}: {}: makeTranslucent {n}: opacity {:.3} -> {opacity:.3} on {changed} part(s), {} own material(s) (rule 22)", sim.updates, p.name, p.opacity_shown, p.own.len()));
+                }
+                p.opacity_shown = opacity;
+            }
+        }
         // A character's mouth shape (M4 4d-5, rule 25): lip<n> on its face.
         let mouth = match (&p.source, doors) {
             (Source::Core(i), Some(d)) => d.active.world.anims.get(*i).and_then(|a| a.character.as_deref()).map(|c| c.mouth),

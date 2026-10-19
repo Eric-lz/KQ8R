@@ -2007,3 +2007,11 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | Mouth movements in Wait bring `Stop` back (rule 18 read literally) | Rule 18; asked as Q120 | Uglybeast: `f` at 67, `Stop` at 68 |
 | `--command "WORDS",N` test option | **Our test tool** (not a game rule) | Used for the runs above |
 | Connor's own codes 8–16 (Q114: no mouth change, gestures) | Not changed in this step: Connor's mouth is `talking.md`'s (4a-6); left for the conversations step | — |
+
+### 4d-5b, `makeTranslucent` — `crates/kq8-core/src/active.rs`, `crates/kq8-viewer/src/anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `makeTranslucent <name> <n>`: at once, no fade; every material of every part at opacity n / 255; 256 = solid | `characters.md` rule 22; `objects.md` "See-through objects" rule 2 | Unit test `make_translucent_sets_the_value_on_an_animated_object`; viewer `--command "makeTranslucent Wizard 150",20 --command "makeTranslucent Wizard 256",60`: 3,347 parts at 0.588, then solid |
+| Only for animated objects and characters; others (Connor in Dead City) logged as not done | **Our scope** (Daventry only uses it on the Wizard) | Unit test (an unknown name) |
+| The object's own material copies; the mouth's copies kept, so the mouth still changes | **Our method** | `characters.log`: 64 own materials |
