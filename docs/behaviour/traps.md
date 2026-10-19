@@ -66,8 +66,36 @@ never blocks anything.
    visitor moves (`connor-collision.md` rule 1). An object lying still in
    a trap's box doesn't count until it moves; an item counts while it is
    tossed or falls (its throw moves it through its mover), a pushed box
-   while it is pushed. Whether being placed by `move` or `loadKQ` counts
-   was not traced.
+   while it is pushed.
+
+   **Placed by a script (traced 2026-10-19, Q102).** A script's `move
+   <object> …` (Connor or any other object) goes through the same
+   movement routine as an ordinary step, but as a move that takes no
+   time. For such a move the routine does **not** sweep: the object's
+   collision shape is simply put at the new spot (its "last checked"
+   spot becomes the new spot too), and the move is committed at once.
+   So:
+   - **(a) The path is not tested, and neither is the new spot at that
+     moment.** No trap between the old and the new spot is entered, and
+     a trap whose box contains the new spot is not entered yet. It is
+     entered at the object's **next ordinary move** that sweeps (one that
+     changes his position or facing): that sweep starts from the new
+     spot, so a box that contains it counts as touched ("starts inside",
+     rule 6). For Connor in Daventry's cutscenes that is the first update
+     he moves again (an animation with no steps does not count).
+   - **(b) The trap he was in is told at the move itself.** Committing
+     the move sends the usual "moved" message; the trap runs its stay
+     test (rule 7) when that message is handled, which is right after the
+     script that did the `move` (and the event that ran it) has finished,
+     in the same update. If he is now outside: `Off` (or `Cue 302`) then,
+     not at his next move. (Daventry's mill wheel: `wheeltp2` gets `Off`
+     right after its cue 2 moves him under the wheel; its script does
+     nothing on `Off`, so nothing visible changes.)
+   - **(c) `loadKQ`** puts a new object's shape at its spot when it is
+     added, with no sweep, so it does not set off a trap it lands in
+     until it moves itself through its mover (a tossed item, a pushed
+     box); an object that never moves never does. (That no trap checks
+     its box when it is itself added was looked for and not found.)
 
 ### Entering and leaving
 
@@ -204,5 +232,7 @@ never blocks anything.
    normal `Off` when they leave (rule 16).
 2. ~~The exact contact test used for "touching" (rule 6).~~ Answered
    2026-10-13: the swept shape test, along the move (rule 6).
-3. Whether an object placed inside a trap by `move` or `loadKQ`, without
-   moving there, sets it off (rule 5).
+3. ~~Whether an object placed inside a trap by `move` or `loadKQ`, without
+   moving there, sets it off (rule 5).~~ Answered 2026-10-19 (Q102): not
+   at once; at its next ordinary move. The trap it left hears of a
+   `move` at once (rule 5, "Placed by a script").

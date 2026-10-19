@@ -415,6 +415,12 @@ Words used here:
         own steps, then `stop`. There is no jump straight to `stop`.
         The head-on end of a scripted walk (above) goes through Wait
         the same way, so it also asks for `Stop` with the transitions.
+      - **Same update (Q101, traced 2026-10-19):** when Move's step finds
+        the end, it switches him to Wait **at once**, and Wait asks for
+        `Stop` as it starts, so the request is made in that same update,
+        before that update's animation step. The transition is chosen
+        from `walk`'s phase at that moment (the phase the previous update
+        left). This is what B built.
       - The cue is sent in the same update, through the event queue, so
         the cued script runs in that update after Connor's own update.
     - **Head-on during a scripted walk or run** (traced 2026-10-18,
@@ -709,3 +715,10 @@ Words used here:
    0.45); (b) the stop transitions' own steps (`.kqs` frame steps, as
    for the start animations in `connor-movement.md`); (c) the end
    position in the original, measured against something fixed.
+   **Closed 2026-10-19 (Q101):** the one open point (same update or the
+   next) is traced: same update, as built. The user then found that
+   walking into the room, as one must in the original, matches the
+   original; the extra walk only shows when our test starts Connor
+   inside the trap (`--at 192408,227039,0`), a start the original
+   can't make, so his walk phase at the end differs. Not a difference
+   in normal play, so nothing is left to study for M3.

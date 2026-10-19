@@ -1,14 +1,26 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's session on M4 step 4c (the on-screen interface and Connor's
+Hand-over in case the chat is lost. 2026-10-19: A answered the last
+study questions blocking M3 (see "Where we are"). Before that, brought up
+to date 2026-10-18 at the end of B's session on M4 step 4c (the on-screen interface and Connor's
 inventory, 4c-1 to 4c-11, checked by the user) and the back flip at a
 wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-18)
+## Where we are (2026-10-19)
 
+- **New 2026-10-19 (A): no study questions block M3 any more.** Q27,
+  Q53, Q100, Q101, Q102 answered, Q48 and `anim-scripts.md` open
+  question 6 closed (MODLOG). Main finding: the camera never swings its
+  position behind Connor; its **view heading** turns toward him by four
+  states (`camera.md` "Turning the view toward Connor"). For B to build:
+  that heading rule; the default tilt looking 0.2 rad below the aim
+  point; the right mouse button held keeping the camera fixed relative
+  to Connor; the mouse scale (one window width = 3π/4); the view line
+  blocked where it comes up out of the ground; one `follow` finding both
+  conditions leaving the "turn back" switch off; the trap a script
+  `move` takes Connor out of getting `Off` at once. Not tested in play.
 - **New 2026-10-18 (B, M4 4c): the on-screen interface and Connor's
   inventory are built** from `interface.md` and `inventory.md`, one
   commit per step, **checked by the user against the original**
@@ -69,7 +81,7 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   walks, the windmill tumble, and when the follow camera updates
   (Q94–Q99). Details in `MODLOG.md`.
 - **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
-  question 9); Q53 (camera follow-ups); Connor against monsters; Q27.
+  question 9); Connor against monsters.
 
 ## Goal
 
@@ -257,10 +269,11 @@ the interface and the inventory done; conversations and menus next).
 ## What doesn't work yet / next
 
 - **Left from 3m and 3n (checked by the user 2026-10-18):** at the end
-  of the watermill walk Connor turns left and goes on a bit further
-  than in the original; not explained by Q98 (`anim-scripts.md` open
-  question 6). A script's `move Connor` no longer sweeps the traps
-  (stand-in, **Q102**).
+  of the watermill walk Connor goes on a bit further than in the
+  original, only from the test start inside the trap (closed by A
+  2026-10-19: not a difference in normal play). A script's `move Connor`
+  no longer sweeps the traps (confirmed by A, Q102 a); the trap he leaves
+  should get `Off` at the move (Q102 b, not built).
 - **Stand-ins of 3m** (not traced; none reached in Daventry): a
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
@@ -269,7 +282,8 @@ the interface and the inventory done; conversations and menus next).
   heading after `move KQCamera` while following kept until the next
   `follow`, flight or cut (Q100 a); a deep lift whose line meets no
   ground (Q100 b); one `follow` finding both conditions turns the
-  "turn back" switch on (Q100 c).
+  "turn back" switch on (Q100 c). All answered by A 2026-10-19
+  (`camera.md`), not built yet.
 - **Stand-ins of 4a:** the caption panel's look; another character's
   turn to its listener is only logged (Q103 d; monsters don't move
   yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
@@ -292,6 +306,9 @@ the interface and the inventory done; conversations and menus next).
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
+- **M3, what is left (2026-10-19):** B builds A's 2026-10-19 answers
+  (Q27, Q53, Q100, Q102 b; see "Where we are"), then the user checks the
+  camera against the original. No study questions are left for M3.
 - **Next step, suggested:** for A: conversations (`KQConner::conversation`),
   needed for the wizard and the other Daventry characters (the panels'
   side of conversations is built, unit-tested only); Q108–Q112 when
@@ -306,9 +323,9 @@ the interface and the inventory done; conversations and menus next).
 - Clicking: only doors, chests, items, scripted objects and buildings
   react. `Special` calls (conversation areas) are not made yet.
   `checkInventory` by id number (Q62 b) not built.
-- Camera, still missing: the original's own automatic swing back behind
-  Connor when he turns (not built; while walking the leash already makes
-  the camera trail behind him), first person (F2), shake; the roll of
+- Camera, still missing: the view's heading rule (`camera.md` "Turning
+  the view toward Connor", traced 2026-10-19; there is no position swing
+  behind him, the leash does that), first person (F2), shake; the roll of
   `move KQCamera` and of flights is not drawn (logged).
 - Cutscenes: a request from a cue reaches Connor one update after the
   cue (our order).
@@ -341,8 +358,8 @@ the interface and the inventory done; conversations and menus next).
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- Q97–Q99: built 2026-10-18 (3n). The user's watermill walk difference
-  is still not explained (`anim-scripts.md` open question 6).
+- Q97–Q99: built 2026-10-18 (3n). The watermill walk difference:
+  closed 2026-10-19 (only from the test start inside the trap).
 - `talking.md` open questions 1–3 and 5 (conversations, shapes above
   7, folders, a line with no voice) are still open; 4 (the caption
   panel) answered in `interface.md`.
@@ -362,25 +379,18 @@ the interface and the inventory done; conversations and menus next).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
   1–4 (menu pause, level-up flame, rocks picture, held item on world
   change, applied quest items).
-- For A (asked 2026-10-18 by B): **Q100** (the heading after `move
-  KQCamera` while following in later updates; the deep lift; the "turn
-  back" switch when one `follow` finds both), **Q101** (the update Wait
-  asks for `Stop` after a scripted walk's end; lower priority after the
-  user's check), **Q102** (does a script's `move` test the traps).
+- For B (answered 2026-10-19 by A, not built): **Q27** (a, b, c),
+  **Q53** a, **Q100** (a, b, c), **Q102** b. Q101, Q53 b–c, Q102 a, c
+  confirm what is built; Q48 closed (keep the order).
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
   change cuts the old tune): not traced, checks by ear suggested.
-- Q53: camera obstacle details (how the view line meets the ground and a
-  line starting under water; the BSP line test; whether the new direction
-  is 3D). Stand-ins in place. (d) answered by Q99.
-- Q48: partly answered (emitter-vs-catcher order in a tick not settled;
-  no visible difference).
 - Q41: jumps: (a) jump during the wait before a stop, (c) the 250 limit,
   (d) a running jump's landing with only a turn key held. Stand-ins.
-- Q27: camera details: mouse scale, what the tilt turns, the automatic
-  swing back behind Connor, the start place and Daventry's `follow none`,
-  when `walk.cs`/`run.cs` run.
+- Q27 a, a detail: the step from the mouse's window fraction to the
+  camera (signs, centring) was not found; the user's checked directions
+  stand.
 - Q24: partly answered (steps spread within each frame; not compared
   frame by frame).
 - Q29 (e): why Connor climbs so little into a steep hillside (the rest

@@ -198,7 +198,14 @@ so: "How many cycles (1/15th of sec) does a particle live".
    get their own per-update tick; which of the two is handled first in an
    update was **not settled** (it depends on the order they joined the
    timer). The difference is one tick (1/15 s) before a leaf vanishes;
-   B's order (emitters first, then catchers) is a fine choice. Names
+   B's order (emitters first, then catchers) is a fine choice.
+   **Closed 2026-10-19:** the per-update tick is handed to the members
+   of a list in list order. Daventry loads its catchers (`permwrld.cs`
+   lines 43–45) before the leaf emitters (from line 92 on), so if each
+   object joins that list when it is loaded, the original handles the
+   catchers first and a leaf vanishes one tick later than in B's order.
+   Where each joins the list was not found. One tick (1/15 s) of a
+   falling leaf can't be seen; keep B's order. Names
    (`emitter`, `interior`, and object names in general) are looked up
    **letter for letter, capitals counting** in the game's name table;
    whether names are stored with their capitals changed was not checked.

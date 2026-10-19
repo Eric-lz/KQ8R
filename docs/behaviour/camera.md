@@ -1,7 +1,10 @@
 # Third-person and first-person camera
 
 Study session A, 2026-10-11; "Obstacles" added 2026-10-13; height rule
-and "when the camera updates" refined 2026-10-18 (Q97, Q99). Sources: game data files, the game's own
+and "when the camera updates" refined 2026-10-18 (Q97, Q99); the view's
+heading ("Turning the view toward Connor", replacing the wrong "swing
+behind Connor"), the mouse value and Q27/Q53/Q100 added 2026-10-19.
+Sources: game data files, the game's own
 manual (`MASK/Manual.pdf`, "Controlling the Camera"), and `Mask.exe`
 (studied, described here in our own words). Covers the gameplay camera that
 follows Connor. Scripted cutscene cameras (`KQCamera::addCamLoc`,
@@ -57,8 +60,33 @@ needed for normal play; keep them behind a debug switch.
    see "Shake and cutscene cameras".
 2. It aims at a point **1,400 units above** the followed object's base
    (Connor's collision box is 1,300 tall, so a little above his head).
-3. The view direction is from the camera to that point, so Connor stays in
-   the middle of the screen.
+3. The view direction is from the camera toward that point, with two
+   adjustments (traced, Q27 b, 2026-10-19):
+   - **Up/down (tilt):** set exactly every update to the player's tilt
+     plus the angle up from the camera to the aim point. The player's tilt
+     is −0.2 by default (negative = down), so at the default the camera
+     looks **0.2 rad (about 11°) below** the aim point: Connor appears
+     a little above the middle of the screen, not in it. Page Up/Down
+     change the player's tilt; the rest follows the aim point.
+   - **Left/right (heading):** lazy, see "Turning the view toward
+     Connor": Connor is allowed to drift off the middle before the view
+     turns.
+4. **Start of the game in Daventry (Q27 d, from the data):** `cam3rd.kq`
+   gives only the class (no `followObjectName`, so the camera follows
+   nothing when it is loaded), and `newWorld.cs` ends with `KQCamera::follow
+   none`. On a new game, `world.cs` (`Begin`, first time only) puts the
+   camera at (275026, 197541, 14930) with tilt −0.2 and heading −1.8 (the
+   same place as the `loadKQ cam3rd.kq` line) and starts Daventry's
+   opening scene `stngrl.cs`, whose last part (`start3`) does `KQCamera::follow
+   Connor` and `handsOff 0`. That `follow` is what hands the camera to
+   Connor. A `.kq` key `followObjectName=<name>` would make a camera follow
+   that object as soon as it is loaded; no camera file in the game uses
+   it.
+5. **When `walk.cs` / `run.cs` run (Q27 e, from the data):** they are trap
+   scripts. Daventry's walk and run zones (`walktrap.kq`, `runtrap.kq`,
+   `windwalk.kq`, `wizwalk.kq`, `wtrmrun.kq`, and the `*_la.cs` variants
+   on the house zones) name them, so they run when Connor enters the
+   zone (`On`) and set the range there (`traps.md`).
 
 ### Distance (normal mode, the default)
 
@@ -98,7 +126,14 @@ needed for normal play; keep them behind a debug switch.
       ground), it is put where the straight line from its old spot to
       its new spot meets the ground, and the wanted height is taken
       again at that spot. Either way the game remembers "lifted"
-      (used in step 3).
+      (used in step 3). **Details (traced 2026-10-19, Q100 b):** "the
+      ground" for that line is the **drawn surface** (the same exact
+      ground test as the view test under "Obstacles", including its
+      "any change of side" rule), not the floor grid; the camera is put
+      **on** the hit point itself (not 1,400 above it); the wanted height
+      of step 2 is then taken from the floor grid under that spot. If
+      the line meets nothing, the camera stays at its deep new spot (and
+      "lifted" is still remembered); steps 2–3 then work from there.
    2. **Close enough: snap.** If the camera is now within **100** of the
       wanted height, it goes straight to it.
    3. **Otherwise it only moves if Connor moved.** "Moved" here means
@@ -130,7 +165,18 @@ needed for normal play; keep them behind a debug switch.
 1. While the right mouse button is held, sideways mouse movement swings the
    camera around the aim point (around the vertical axis). The swing angle is
    proportional to the mouse movement, with a factor of 3π/4 per unit of the
-   game's mouse value; how mouse pixels map to that unit is open question 1.
+   game's mouse value. **The mouse value (traced 2026-10-19, Q27 a):** the
+   game reads the cursor's position in its window and turns it into a
+   fraction of the window's size, 0 at the left (top) edge to 1 at the
+   right (bottom) edge. So one unit is one window width sideways (one
+   window height for forward/back): dragging across the whole width of
+   the window swings the camera 3π/4 (135°), and dragging the whole
+   height zooms 5,000 units. On the 800 × 600 game screen that is about
+   0.0029 rad per pixel sideways and about 8.3 units per pixel of
+   zoom. Not traced: the step between that fraction and the camera (so
+   the signs: use the directions the user checked in the original, rule
+   7 of this list), and whether the game centres the value first (see
+   rule 6).
 2. Forward/back mouse movement in normal mode moves the camera along the
    line to the aim point (zoom) by 5,000 units per unit of mouse value,
    whatever the current distance. The result is still kept inside the
@@ -142,6 +188,31 @@ needed for normal play; keep them behind a debug switch.
 4. The first update after pressing the button uses no movement (only the
    change since the previous update counts, and there is none yet).
 5. Releasing the button clears the stored mouse movement.
+6. **More, traced 2026-10-19:**
+   - Each mouse movement runs a camera update **at once** (not only on
+     Connor's "moved" messages), with the change since the last one.
+   - **Holding the button without moving the mouse** (and in any update
+     of a drag where neither value changed): the camera's offset from the
+     aim point is set back to the offset it had at the end of the
+     previous update. So with the button held, the camera keeps exactly
+     the same place relative to Connor while he walks, instead of
+     trailing on the leash. This is the manual's "continuing to hold the
+     right mouse button down while Connor moves will maintain the camera
+     in the same relative position". (The range and the obstacle rules
+     still apply afterwards.)
+   - If the sideways value goes past 0.9 or the forward/back value past
+     0.5 (in size), the game sends itself the "button released" action
+     (all values to 0, next change counts as none) and remembers it for
+     the view-turning rules. With values from 0 to 1 that would cut every
+     drag in the lower half of the window, which the user does not
+     report, so the camera probably gets a centred value (−0.5…0.5); this
+     is **not traced**. Our build may ignore this rule.
+   - A zoom that would turn the camera's direction round Connor by 3.14
+     rad or more (it passed through the aim point) is refused, and the
+     camera is put at the minimum distance + 1 on its old side (rule 2).
+7. Directions (checked by the user in the original, Q27 f): mouse
+   **down** zooms in, mouse **left** swings the camera left; with Shift,
+   mouse down tilts like Page Down.
 
 ### Tilt (pitch)
 
@@ -159,15 +230,98 @@ needed for normal play; keep them behind a debug switch.
    This matches the manual ("it will automatically reset itself as soon as
    Connor moves").
 
-### Swinging back behind Connor
+### Turning the view toward Connor (traced 2026-10-19; was "Swinging back behind Connor")
 
-1. When Connor turns so that the camera is no longer behind him, and the
-   player is not using the mouse on the camera, the camera swings round
-   towards his back by itself. It starts when the angle between "behind
-   Connor" and the camera's direction exceeds about 0.25 rad, and moves a
-   fraction of the remaining angle each update.
-2. The exact states and rates (constants seen: 0.25, 0.5, 1.25, 1/3, 0.21,
-   10/3) were not fully decoded: open question 7.
+**Correction.** Earlier versions of this note said the camera swings
+round behind Connor's back by itself. That was wrong. Nothing in the
+follow camera ever moves the camera's **position** round toward his
+back: the position only changes by the leash, the minimum distance, the
+height rule, the mouse and the obstacle rules. What these rules turn is
+the camera's **heading** (the direction it looks, left/right), so that
+Connor drifts back to the middle of the screen. The camera ends up
+behind a walking Connor only because the leash drags it along behind
+him.
+
+Words used here: the **error** is the angle, round the vertical, from
+the direction the camera looks to the direction from the camera to the
+aim point (plus the mouse offset below, normally 0), wrapped to −π…π.
+Positive = the aim point is to the left (anticlockwise seen from above).
+"Moving" and "still" are as in "Connor is moving" under "Obstacles"
+(still = 3 or more updates without a "Connor moved" message).
+
+The view heading is in one of four states, kept from update to update.
+It starts in state 0. Each time the view is aimed (every camera update
+in third person, when the camera "aims"; see "Camera flights and cuts"
+for the switches):
+
+1. **Start catching up.** If the error is more than **0.25** and Connor
+   is moving, or more than **0.5** whatever he does, the state becomes
+   **catching up**.
+2. **The mouse wins.** While the player is dragging with the right
+   mouse button (either mouse value not 0), the state is **locked**,
+   with a mouse offset: on the first update of a drag the offset is set
+   so that the view keeps its present angle to Connor (offset = minus
+   the error), and the view then turns with the camera as it is swung
+   round. On the first update after the drag ends, the offset goes back
+   to 0 and the state to **idle**. (Exception, not seen in normal play:
+   if the cursor was recentred during the drag, see "Swinging and
+   zooming" rule 6, the drag's offset is kept and the state stays
+   locked until the next drag.)
+3. **The "turn back" switch** ("When the camera updates at all", item
+   3) overrides 1: the offset is reset to 0, and the state becomes
+   **turning back**, or stays **locked** if it was locked in the
+   previous update.
+4. Then, by state:
+   - **Idle:** the heading is not changed. Connor may sit up to 0.25
+     rad off the middle while he moves, or 0.5 rad while he stands, with
+     nothing happening.
+   - **Catching up:** only if Connor is moving or the error is at least
+     0.5, and he has not just switched between going forward and going
+     backward (see below); otherwise the state goes back to idle and
+     nothing turns. Then:
+     - error under **0.02**: the state becomes **locked** (no turn this
+       update);
+     - error over **0.5** (either side): the heading jumps so that the
+       error becomes exactly **0.25** on the same side;
+     - otherwise (0.02 to 0.5): only if the error **grew** in this
+       update (further from 0 on the same side than at the end of the
+       previous update), the heading turns toward Connor by **1.25 ×
+       the growth**. So the view slowly gains on him while he keeps
+       drifting sideways (each update it takes back a quarter more than
+       he drifted), and does nothing while he drifts back toward the
+       middle by himself.
+   - **Locked:** the heading is set exactly onto the aim point (+ the
+     mouse offset), every update. It unlocks (state idle, after this
+     update's exact aim) when no mouse drag is going on, the "turn back"
+     switch is off, and Connor is still or has just switched between
+     going forward and going backward.
+   - **Turning back:** the "follow Connor after a cutscene" turn: 1/3 of
+     the error per update, with the lopsided snap (rules there); under
+     0.02 the state becomes locked.
+5. "The error at the end of the previous update", used for the growth
+   test, is measured after the heading change of that update.
+
+**"Switched between going forward and going backward":** the game
+compares the direction of Connor's last move with the way he faces
+(from the previous update's position and facing): a move that goes
+along his back by more than 0.1 of its length counts as "backward",
+anything else (forward, sideways, turning on the spot) as "forward".
+It is "switched" when this differs from the previous time it was
+measured. It is only measured in the cases named above (catching up, or
+locked while he is moving), so it is a rare event: in practice it means
+the view stops chasing him when he starts or stops stepping back.
+
+**What this looks like in play:** Connor walks off to one side: the
+view holds still until he is a quarter radian (about 14°) off the
+middle, then gains on him a little each update until he is centred,
+then stays exactly on him for as long as he keeps walking. When he
+stops, the next camera update (the first one of his next move) drops
+back to idle. A sudden big jump (more than 0.5 rad, e.g. after a `move
+KQCamera`) is cut to 0.25 rad at once.
+
+Numbers: start 0.25 rad (moving) / 0.5 rad (any); jump back to 0.25
+above 0.5; gain 1.25 × the growth; lock under 0.02 rad; "backward" when
+the move is more than 0.1 along his back.
 
 ### Obstacles (studied 2026-10-13)
 
@@ -180,7 +334,22 @@ line through the aim point (the camera's height is left alone).
 to the camera. The nearest of these blocks it:
 
 1. **The drawn ground** (the visible terrain, not the floor grid under
-   water).
+   water). **How it is tested (traced 2026-10-19, Q53 a):** exactly, not
+   by stepping. The line is followed square by square across the
+   terrain, stopping at every place where it crosses a square's edge or
+   either diagonal (so every edge of the two triangles of each square,
+   whichever way the square is split). At each such place the ground
+   height on that edge is compared with the line's height. The first
+   place where the line has changed **side** (it was above the ground at
+   its start and is now below, **or** it started below and is now above)
+   gives the triangle it crossed in, and the exact crossing point with
+   that triangle's plane is the hit. If no edge shows a change, the end
+   point is checked the same way against its own triangle. Squares
+   marked as **holes** in the terrain are passed through (the side is
+   simply flipped there, so a hole never counts as a hit). So a line that
+   **starts under** the surface (Connor wading, the aim point below the
+   drawn water/ground) is **blocked where it comes up out of the
+   ground**, not at once and not only where it goes back down.
 2. **Objects whose collision type has bit 0x8 or bit 0x1000.** In the
    data that means:
    - **buildings**: every building (`.dig` interior) gets type 0x28
@@ -200,7 +369,12 @@ to the camera. The nearest of these blocks it:
    through them. Objects are tested by their box from `BOUNDS.KQ`
    (turned and moved with the object, so an open door blocks where its
    leaf now stands), buildings by their BSP. These are the same shapes
-   Connor collides with.
+   Connor collides with. **Buildings (Q53 b, traced 2026-10-19):** the
+   line is split by the BSP's planes in the usual way; a piece that ends
+   up in a solid part blocks **at the point where it entered that part
+   across a plane**. A piece that is in solid from the line's very start
+   (the aim point inside a wall) does not block; the line can still be
+   blocked by a solid part it enters later. This is what B built.
 
 **Each camera update**, in this order (steps 1–5 are the rules above):
 
@@ -228,7 +402,10 @@ to the camera. The nearest of these blocks it:
       - Take Connor's aim point from **one update ago** (A) and the point
         where the view line was blocked (H). Take the point halfway
         between them (M). The new offset points from the aim point
-        towards M, with the same length as before.
+        towards M, with the same length as before. **This is a 3D
+        direction** (Q53 c, traced 2026-10-19): A, H and M keep their
+        heights, so the camera can dip below or rise above its height
+        here; the height rule is not applied again in this update.
       - Start a **swing**. Its step per update is 0.66 × the angle around
         Connor between the old (blocked) direction and the new one. The
         swing goes on, update after update, turning the same way, until
@@ -268,7 +445,12 @@ on these occasions:
    <object>` switches it on when the camera faces more than 0.4 rad away
    from the object (see "`follow Connor` after a cutscene"). It is
    switched off only when a flight ends, or by a later `follow` that
-   finds the camera farther than the range's maximum. Nothing else
+   finds the camera farther than the range's maximum. **One `follow`
+   that finds both** (more than 0.4 rad off and farther than the
+   maximum; Q100 c, traced 2026-10-19): the 0.4 test comes first and
+   switches it on, then the distance test switches it **off**, so it
+   ends **off**. A `follow` that finds the camera 0.4 rad or less off
+   and within the maximum leaves the switch as it was. Nothing else
    switches it off, so after such a `follow` the camera updates every
    update, standing still or not, and its heading stays locked exactly
    onto Connor (heading state "exact", "Camera flights and cuts" rule
@@ -278,9 +460,11 @@ on these occasions:
    play the switch is off.
 4. **Every update of a flight** (until it ends), and the one update of a
    cut ("Camera flights and cuts").
-5. **The player's camera controls** (mouse swing/zoom, tilt keys): not
-   re-studied here; take the rules above ("Swinging and zooming", "Tilt")
-   as updates while the control is used.
+5. **The player's camera controls** (traced 2026-10-19): every mouse
+   movement during a drag runs one camera update at once ("Swinging and
+   zooming" rule 6); while Page Up/Down is held, the tilt changes and
+   the camera updates once per update (in fixed mode they zoom instead,
+   and update the same way).
 
 **When the message arrives.** Messages go through the game's event
 queue: they are handled **after** whatever is running at the moment has
@@ -308,7 +492,7 @@ So when a trap's `On` does `move Connor …` and then `move KQCamera …`
 If Connor stands still with the view blocked, nothing changes until he
 moves or the player moves the camera.
 
-**"Connor is moving"** (step 8.2 and the swing behind him): the camera
+**"Connor is moving"** (step 8.2 and "Turning the view toward Connor"): the camera
 keeps the aim point from its previous "Connor moved" message. It counts
 him as moving from the first message until 3 updates have passed without
 one. After 3 still updates, the previous aim point is reset to where he
@@ -389,13 +573,24 @@ starts a swing (not checked in the game).
     - **tilt: set at once** to the player's tilt (default −0.2) + the
       angle up to the aim point, so the script's tilt is lost in that
       update;
-    - **heading: not snapped.** It goes through the swing-behind rules
-      (open question 7): with the "turn back" switch off, it only starts
+    - **heading: not snapped.** It goes through "Turning the view toward
+      Connor": with the "turn back" switch off, it only starts
       turning when it is more than 0.25 rad off Connor (and he counts as
       moving) or more than 0.5 rad off; within 0.5 rad it is turned only
       by 1.25 × the growth of the error since the previous update, and
       beyond 0.5 rad it is turned back to 0.25 rad off at once. (With the
       switch on: a third of the rest per update, then locked.)
+    - **In the later updates** (Q100 a, 2026-10-19): the same rules, update
+      after update, from the state the view is in. Worked out for
+      Daventry's mill wheel (first shot, 0.259 rad off): if the view was
+      idle, the error is just over 0.25, so it starts catching up only
+      while Connor counts as moving; from then on it turns only in updates
+      where the error grows (by 1.25 × the growth) and locks once under
+      0.02 rad; while he plays `wheelover` (no steps, no updates) nothing
+      changes, and the flight at cue 1 takes over. If the view was locked
+      before the `move` (Connor walking into the trap), it stays locked
+      only if he is still moving at that update; otherwise it drops to
+      idle and keeps the 0.259 rad.
   - **Daventry's mill wheel (`wheeltp1.cs`), worked out from these
     rules (not tested):** the first shot (camera put at (185500, 226520,
     9750), heading −0.3, tilt 0) gets the update of step 3 in the order
@@ -735,8 +930,11 @@ view toward what is followed). `follow <object>` switches both on
 
 ## Open questions
 
-1. How mouse movement (pixels) becomes the game's mouse value. Needed for
-   swing/zoom speed.
+1. How mouse movement (pixels) becomes the game's mouse value: mostly
+   answered 2026-10-19 ("Swinging and zooming" rule 1: one unit = one
+   window width or height). Still open: the step between the window
+   fraction and the camera (signs, and whether the value is centred; see
+   rule 6 there). The user's checked directions stand.
 2. (Answered 2026-10-17: yes, negative tilt looks down; see Tilt rule 1.)
 3. (Answered: tilt resets after Connor moves more than 10 units, in both
    views; see Tilt rule 5.)
@@ -752,7 +950,8 @@ view toward what is followed). `follow <object>` switches both on
 6. Whether the camera updates at the same rate as Connor: answered
    2026-10-18 (Q99): it updates when he sends a "moved" message (one
    per committed move that changes something), handled one update after
-   his ordinary moves; see "When the camera updates at all". How the
-   player's mouse and tilt controls trigger updates was not re-studied.
-7. The automatic swing behind Connor: when exactly it starts and stops, and
-   how fast it turns.
+   his ordinary moves; see "When the camera updates at all". The
+   player's controls: answered 2026-10-19 (item 5 there).
+7. The automatic swing behind Connor: answered 2026-10-19. There is no
+   swing of the camera's position; the rules turn the view's heading
+   ("Turning the view toward Connor").
