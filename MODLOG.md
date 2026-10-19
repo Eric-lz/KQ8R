@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 ROADMAP.md (docs only)
+
+**Changed:** New `ROADMAP.md`: the milestones M0–M7 from `docs/DESIGN.md` with their status, what is done, next and later, in short plain words. `.gitignore`: `ROADMAP.md` whitelisted. `README.md`: the file listed.
+**Why:** The user asked for a short page showing roughly how far along the rewrite is.
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** —
+**Next:** Keep it up to date when a milestone changes status.
+
 ## 2026-10-18 End of B's session (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 4c-11, the back flip at a wall; the older 4a-7 to 4a-9 details folded into one line; next steps; Q111, Q112 in "Open questions"; test counts and the `--corners` option), `docs/FEATURES.md` (the back flip at a wall, checked by the user).
