@@ -7,6 +7,7 @@ pub mod action_map;
 pub mod aud;
 pub mod bitmap;
 pub mod bounds;
+pub mod characters;
 pub mod building;
 pub mod chunks;
 pub mod dil;

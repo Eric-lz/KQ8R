@@ -590,6 +590,113 @@ inventory and menus.
     the farm coins and the mushroom baskets (`inventory.md` checks
     2–3), read in `gui.log`, `items.log`, `doors.log`, `talk.log`.
 
+- **4d — characters: drawing and animating them, not fighting**
+  (planned 2026-10-19). From `docs/behaviour/characters.md` (A,
+  2026-10-19, checked by the user in the original) and the notes it
+  builds on (`anim-scripts.md`, `objects.md`, `object-lighting.md`,
+  `talking.md`, `conversation.md` rule 18). Until now every
+  `KQMonster` is an orange cube. Words: a **character** is an object of
+  class `KQMonster` or `KQGeometryTalker`; the **monster list** is a
+  world's `monsters.kq` (one tab-separated line per character); a
+  **type** is a line of `GAME/Kq/Monstats.mtl` naming the character's
+  own `.kq` file; a **state** is what the character is doing (Birth,
+  Wait, Move, Special, Talk, Die, or none). Fighting, wandering,
+  noticing Connor and idling are M5: before M5 every character stays
+  "not active" (rule 32). One step and one commit at a time; every step
+  logs to `kq8-artifacts/logs/characters.log` (new) and the logs it
+  touches.
+  - **Where the code goes.** `kq8-data`: new `characters.rs` (the
+    monster list, the type list, a character's keys, its `.anm` list).
+    `kq8-core`: new `character.rs` (the states on top of the existing
+    movement player `named_anim.rs`; a character is an `AnimObject`
+    with a `character` part, so the existing script commands reach it).
+    Viewer: `load.rs` places characters; `anim_view.rs` draws them
+    (it already shows a different model per movement).
+  - **4d-1, reading characters** (**done** 2026-10-19; Daventry 22 + 2
+    files, 52 lines, 0 problems; frame counts as the note; Q116 asked)
+    (rules 1, 3, 4, 6, 25; data). The
+    monster list line (20 fields, `@` = the type's value, `none`,
+    quotes dropped, the skin swap `type(a.bmp,b.bmp)`, the movement
+    field `none` / `loop n …` / `patrol n …` / `random`, z −1 = on the
+    ground); the type list (type → `.kq` file); a character's keys with
+    their defaults (`flags` 0x10, `shadowMask` 2, gravity on, `noTurn`,
+    `wanders` 1, `lips`, `baseLip`, `monsterType`, `idleAnimFile`,
+    `originalBmp` / `alternateBmp`); the `KQLips` section; the `.anm`
+    movement list (as `Conner.anm`). New check `kq8 character-verify`
+    (`character-verify.log`): per world every character file, its
+    movements (and whether it has `stop`, `Birth`, gestures, the
+    geometry mouth movements), its lips, every monster-list line with
+    its type, file and box (`BOUNDS.KQ` by type, else by name). Numbers
+    to expect (note "How to check"): Daventry 22 `KQMonster` + 2
+    `KQGeometryTalker` files, 52 lines; `wizstop` 31 frames,
+    `chk_stop` 30, `UG_STOP` 40, `Ravnstp` 46.
+  - **4d-2, characters drawn where they stand** (rules 3–5, 7, 9, 10,
+    16, 33–35). Characters from their own `.kq` (script `loadKQ`, also
+    the copies loaded while playing: the Lady, the ravens, the
+    Unicorn) and from the monster list (`loadKQ monsters.kq`): the
+    type's file read, renamed, the line's position and heading; z −1 on
+    the ground, `keepOnGround` as for objects; the skin swap. Every
+    movement of the `.anm` drawn as for animated objects (one model per
+    movement). Characters with a `Birth` movement (the zombies) are not
+    drawn (rule 16). Their box ball from `BOUNDS.KQ` (type, else name)
+    for near / far / off. Still not solid for Connor (as now). The
+    orange cubes go. Movements play as for plain animated objects in
+    this step (the states come in 4d-3). Logs: per character its name,
+    class, file, position and heading after the ground rules, list,
+    box and how it was found.
+  - **4d-3, the states** (rules 11–19, 22). A character updates only
+    while near or far, not off or hidden (the viewer tells core which
+    are near or far each update). The first update (rule 12): a waiting
+    first movement → **no state** (rule 15), else the current movement,
+    then Birth (if the list has `Birth`) or Wait after `birthDelay`
+    seconds. Wait asks for `Stop` (random frame and speed 0.9–1.1 with
+    `flags` bit 0x10); after any one-shot except `Stop` and gestures,
+    Wait asks for `Stop` again (always random). `KQMonster::setState
+    <name> <state> [words]` for characters: Wait, Unborn, Special (the
+    same list handling as Connor's, then Wait), Die and Move logged
+    (M5), others logged and ignored (Do not reproduce). `setHome`
+    (never moves), `setCanTurn`, `setUseGravity`, `setMonUseGravity`
+    kept for later steps; `changeAnmFile` logged (not traced far,
+    open question 4). Logs: first update number and how the first
+    movement was chosen, the state, every movement start with its
+    reason, the `Stop` start frame and speed.
+  - **4d-4, turning** (rules 23–24). `speak` with a listener turns the
+    character toward it at 3.5 rad/s on the spot, the movement going
+    on; a newer request replaces the target; `noTurn` (and
+    `setCanTurn 0`) blocks it. Logs: every request, blocked or not, and
+    the heading per update while turning.
+  - **4d-5, the face and the hands** (rules 25–28; Q115). The mouth
+    texture (`lips`: the face texture `baseLip`, else `lip0`, swapped
+    for `lip<n>`, kept across movements, 0 at the start and after each
+    line); the Uglybeast's and the Unicorn's mouth movements (codes
+    0/16 `rest`, 1–7 `f m r w ih ah e`, started at once; 8–15 ignored);
+    gestures for other characters (codes 8–15 `gesturea`–`gestureh`, 16
+    `stop`, only when not walking and the current movement can be cut
+    short or has ended, and the list has it); after the last line of a
+    queue the speaker goes to Wait (Q117). Logs: every mouth change
+    (shape, texture replaced, drawn), every gesture and why or why not.
+  - **4d-6, gravity and steps** (rule 8). Characters with gravity on
+    fall onto the ground or a building floor as Connor does, step up
+    and down 325; `monUseGravity=0` and `setUseGravity 0` keep them at
+    their height. Planned in detail when 4d-1 to 4d-5 are done (how
+    much of Connor's mover can be shared).
+  - **4d-7, shadows** (rule 36). Who casts one (world mask 15 from
+    `Options.cs`, `shadowMask`, solid only). Look from the user's
+    check: a dark copy of the figure on the ground, each part
+    darkening on its own. The direction is not traced (open question
+    2): stand-in straight down, asked as a question. Planned in detail
+    when it starts.
+  - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
+    dying, the flying mover (M5); conversations (next, from
+    `conversation.md`); collision against characters (they stay not
+    solid, as now).
+  - Tests: unit tests for each core rule (first update, Wait and
+    `Stop`, the return to `Stop`, no state, Special lists, turning, the
+    mouth codes, gestures); `kq8 character-verify`; viewer runs near
+    the Wizard (`--at` in his house), at the Uglybeast's pond with
+    `--click Uglybeast`, at the chickens, at the graveyard, read in
+    `characters.log`, `anim.log`, `talk.log`.
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and

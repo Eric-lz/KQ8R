@@ -14,6 +14,7 @@
 //!   kq8 msg-verify [--game DIR]
 //!   kq8 font-verify [--game DIR]
 //!   kq8 gui-verify [--game DIR]
+//!   kq8 character-verify [--game DIR]
 //!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
 //!
 //! `<file>` is a path in the game folder (`GAME/8Gui/daventry.pbm`) or an
@@ -24,6 +25,7 @@
 mod aud_verify;
 mod bitmap_png;
 mod bitmap_verify;
+mod character_verify;
 mod font_verify;
 mod gui_verify;
 mod building_verify;
@@ -56,6 +58,7 @@ const USAGE: &str = "usage:
   kq8 msg-verify [--game DIR]
   kq8 font-verify [--game DIR]
   kq8 gui-verify [--game DIR]
+  kq8 character-verify [--game DIR]
   kq8 text <file> [--game DIR]";
 
 fn main() -> ExitCode {
@@ -104,6 +107,7 @@ fn main() -> ExitCode {
         (Some("msg-verify"), []) => msg_verify::run(&game),
         (Some("font-verify"), []) => font_verify::run(&game),
         (Some("gui-verify"), []) => gui_verify::run(&game),
+        (Some("character-verify"), []) => character_verify::run(&game),
         (Some("text"), [file]) => match source::load(&game, file) {
             // Printed only (never written into the repo), with line numbers.
             Ok(bytes) => {

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-1: reading characters (plan for 4d)
+
+**Changed:** `docs/DESIGN.md`: plan for 4d (characters, 4d-1 to 4d-7). New `kq8-data/src/characters.rs` (monster list lines, the type list `Monstats.mtl`, a character's keys with their defaults, the `KQLips` section, `.anm` movement lists). New `kq8 character-verify` (`kq8-cli/src/character_verify.rs`). `docs/provenance/README.md`. `docs/behaviour/QUESTIONS.md`: Q116 (`birthDelay` is not 0 for two Daventry goblins), Q117 ("the speaker goes to Wait" is not in `talking.md` rule 13).
+**Why:** First step of drawing the characters (`characters.md`, session B).
+**Tested how:** `cargo test -p kq8-data` (120 pass, 6 new), clippy clean; `kq8 character-verify` on the install.
+**Result:** Daventry: 22 `KQMonster` + 2 `KQGeometryTalker` files and 52 monster-list lines, **0 problems**, as the note says; every line finds its type, file and box (the Knight's by name). `Stop` frames: `wizstop` 31, `chk_stop` 30, `UG_STOP` 40, `Ravnstp` 46 (the note's numbers). The Wizard's, the Girl's and the Lady's face texture are in their `Stop` models. Only the zombies have `Birth`. `goblin18` and `goblin20` have `birthDelay` 1 (the note says 0 for all: Q116). All worlds: 154 + 7 files, 595 lines, 63 problems, none in Daventry (Swamp's list skips 15 numbers, its mandragora types point at files that are not characters; later worlds, M6).
+**Still broken / not tested:** Nothing drawn yet (4d-2).
+**Next:** 4d-2: draw the characters where they stand.
+
 ## 2026-10-19 Study (A): characters, the user's check
 
 **Changed:** `docs/behaviour/characters.md` rule 36 (shadows) and "How to check" (the user's results), open question 2 narrowed. `docs/DESIGN.md` M7 improvements: shadows drawn as one even shape.

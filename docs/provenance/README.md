@@ -1923,3 +1923,19 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | "Dragging" (heading rule 2) = the right button held, moving or not: locked at Connor's present angle on screen while held; letting go: offset 0, idle (he may drift) | **The user's check in the original** (2026-10-19: a click alone lets him drift afterwards; held still he keeps his spot on screen); fits `camera.md` rule 1 of "Swinging and zooming" (the mouse value is the cursor's place, so not 0 while held); our 3o-1 read "not 0" as "moved" | Unit test `a_drag_locks_the_view_at_its_angle_and_the_end_of_it_goes_idle` (rewritten); asked A to confirm in Q113 e |
 | The angle kept is measured before that update's swing | **The user's check** (a fast drag only rotates round Connor); the note's "keeps its present angle" | Same unit test (half a window per update: Connor stays 0.1 off) |
 | Pressing and letting go of the button each run a camera update | **Our method** (so the lock starts and ends at the click, not at Connor's next move) | — (needs the real mouse) |
+
+## Characters (M4 step 4d) — `docs/behaviour/characters.md`
+
+### 4d-1, reading characters — `crates/kq8-data/src/characters.rs`, `crates/kq8-cli/src/character_verify.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The character classes `KQMonster` and `KQGeometryTalker` | `characters.md` rule 1 | `character-verify`: Daventry 22 + 2 files, as the note; all worlds 154 + 7 (the note says 155 `KQMonster`: one is not in a world's archives as a `.kq` with that first section; not looked for) |
+| Monster-list line: 20 tab-separated fields in the order of rule 3; `@` = the type's value; quotes dropped; `type(a.bmp,b.bmp)` = skin swap; z −1 = ground; movement `none` / `loop n …` / `patrol n …` / `random` | Rules 3, 4; field order also in the file's own `;monsterX=` header line (data) | Unit tests `monster_lines_are_read_field_by_field`, `bad_lines_are_reported`; Daventry 52 lines, 0 problems |
+| Type list `Monstats.mtl`: 15 fields, `KQFile` the 7th | Rule 4; field order from the file's `;typeX=` header (data) | Unit test `types_name_their_files`; 81 types, 0 problems |
+| A type name matched exactly, then ignoring capitals | **Our choice** (the note does not say); counted in the log | Daventry needs none; Swamp 1, DeadCity 9, temple3 2 match only ignoring capitals (later worlds, M6) |
+| Key defaults: `flags` 0x10, gravity on, `wanders` 1, `shadowMask` 2, `birthDelay` 0, `noTurn` 0 | Rules 6, 8, 13, 36, "Numbers and units" | Unit test `keys_have_the_note_defaults` |
+| `lips=` → `KQLips` section in the same file, face = `baseLip` else `lip0`, shape 8+ → `lip0` | Rule 25 | Unit test `lips_give_the_face_and_shapes`; Daventry's Wizard, Girl, Lady: the face texture is in their `Stop` model |
+| `.anm` list read like `Conner.anm` (first section = the list); looked up in the world's archives, else `GAME/Kq` | Rule 6; the search order is the one 3i-7 uses for `AnimList=` files (**our choice**, not in the note) | Unit test `anm_lists_give_movements_and_the_current_one`; frame counts as the note: `wizstop` 31, `chk_stop` 30, `UG_STOP` 40, `Ravnstp` 46 |
+| Box: `BOUNDS.KQ` by type / `monsterType`, else by name, exact | Rule 9 | All 52 Daventry lines find a box (the Knight by name) |
+| Geometry mouth movement names; gesture names | Rules 27, 28 | Daventry's two geometry talkers have all 8 mouth movements |
