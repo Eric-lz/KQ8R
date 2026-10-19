@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-5: the characters' mouths and gestures
+
+**Changed:** `kq8-core/src/character.rs`: `mouth_code` (codes 0–7 mouth shape, a geometry talker's mouth movements, gestures 8–16), `after_speech` (Wait after the last line, Q117 stand-in). `active.rs`: the talk events of each update reach the characters; `Active::test_command`. Viewer: `load.rs` loads each character's `lip0`–`lip7` textures; `anim_view.rs` gives a character its own copies of its face materials and swaps `lip<n>` on them; new test option `--command "WORDS",N` (`main.rs`, `door_view.rs`). `QUESTIONS.md`: Q120. FEATURES (characters, `--command`), DESIGN, provenance.
+**Why:** Step 4d-5 of `characters.md` (rules 25–28, Q115).
+**Tested how:** `cargo test --workspace` (482 pass, 2 new), clippy clean. Viewer: `--at 189300,198274,0 --command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` and `--at 258500,296500,0.6 --command "KQMonster::speak Uglybeast Connor 1000 59 0 32 1 0",30`, read in `characters.log`.
+**Result:** Wizard: his turn is blocked (`noTurn`); the line plays gestures `gesturee` (code 12), `gesturea` (8), `gesturee`, `gesturec` (10), then `stop` (16); his mouth texture changes about 40 times (`lip1`…`lip7` on his 15 face materials), back to `lip0` at the end; then Wait (`Stop`). Uglybeast: 16 mouth codes, each starting its mouth movement at once.
+**Still broken / not tested:** **Not looked at by eye or heard.** Q120: in Wait the Uglybeast's one-frame mouth movements end and `Stop` comes back between codes (rule 18 read literally). Q117 stand-in for "goes to Wait". Connor's own codes 8–16 still change his mouth to `lip0` (Q114, for the conversations step). The Girl's and the Lady's mouths not run (not reachable or not loaded in a test).
+**Next:** 4d-6 (gravity and steps): plan it in detail first.
+
 ## 2026-10-19 M4 step 4d-4: characters turn
 
 **Changed:** `kq8-core/src/character.rs`: a turn request turns the character at 3.5 rad/s toward a point on the spot (`ask_turn`, `turn_step`, `heading_of`); `noTurn` / `setCanTurn 0` ignore it. `active.rs`: `speak` with a listener asks the issuing character to turn (it was only logged). DESIGN, provenance.

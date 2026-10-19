@@ -204,6 +204,10 @@ pub fn apply_loads(
 #[derive(Resource)]
 pub struct SpecialAt(pub Option<(String, u64)>);
 
+/// `--command "WORDS",N` (M4 4d-5 test).
+#[derive(Resource, Default)]
+pub struct CommandAt(pub Vec<(String, u64)>);
+
 /// `--aim NAME,N` (each may be given more than once).
 #[derive(Resource)]
 pub struct AimAt(pub Vec<(String, u64)>);
@@ -1101,9 +1105,18 @@ pub fn door_step(
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
     in_range: Res<crate::draw_distance::CharactersInRange>,
+    mut command_at: ResMut<CommandAt>,
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
+    // `--command`: one script command, as if a script ran it now.
+    let updates = sim.active.world.updates;
+    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut command_at.0).into_iter().partition(|(_, n)| updates >= *n);
+    command_at.0 = later;
+    for (line, _) in due {
+        let result = sim.active.test_command(&line, "test --command");
+        shared.log.lock().unwrap().summary(format!("update {updates}: test --command {line}: {result:?}"));
+    }
     // characters.md rule 11: which characters update now.
     sim.active.world.characters_in_range = in_range.0.clone();
     // KQConner::JumpDir / endJump in timed cues (3m-1).

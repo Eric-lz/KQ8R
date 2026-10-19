@@ -1250,6 +1250,9 @@ pub struct AnimatedAssets {
     pub script: Option<String>,
     /// A character's own values (M4 4d-2), `None` for other objects.
     pub character: Option<CharacterAssets>,
+    /// A character's mouth textures `lip0`…`lip7` (M4 4d-5, rule 25),
+    /// coloured with the object palette; `None` where one is missing.
+    pub lip_looks: Vec<Option<Look>>,
 }
 
 /// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
@@ -2964,6 +2967,15 @@ impl Placer<'_> {
         // A character's skin swap (characters.md rule 4) gives its own
         // copies of the animations that use the texture.
         let skin = character.as_ref().and_then(|c| c.skin.clone());
+        // Its mouth textures (rule 25).
+        let mut lip_looks = Vec::new();
+        if let Some(lips) = character.as_ref().and_then(|c| c.lips.clone()) {
+            if let Ok(palette) = self.object_palette() {
+                self.log.quiet = true;
+                lip_looks = lips.shapes.iter().map(|n| n.as_ref().map(|n| load_texture(self.world, self.game, n, &palette, self.log))).collect();
+                self.log.quiet = false;
+            }
+        }
         let s = &file[0];
         let listed = match kq8_data::objects::movement_loops(file, s) {
             Ok(Some(m)) => m,
@@ -3025,6 +3037,7 @@ impl Placer<'_> {
             anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
             script: text("script"),
+            lip_looks,
             character,
         });
     }

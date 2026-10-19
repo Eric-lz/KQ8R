@@ -513,6 +513,10 @@ repeated and checked in the logs. They do not change the game's rules.
   bottom bar away or bring it back; `1`–`8`: use a slot), or click a
   control of the bars (`left:IDCTL_INVBAR_GOLD`, `right:IDCTL_HEALTHBAR_1`,
   names as in `Gplayscr.gui`). Can be given more than once.
+- `--command "WORDS",N`: run one script command before update N + 1,
+  as if a script did (words split at spaces; no variables). For example
+  `--command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` makes
+  the Wizard say a line. Can be given more than once.
 
 An "update" is one step of the game's rules, the same step each time you
 run the test. Unknown options and bad values stop the viewer with a
@@ -522,7 +526,10 @@ message that shows the usage.
 
 - **Not playable:** there is no story, conversations, inventory screen,
   fighting, saving, or travel between worlds.
-- **Not drawn:** people and monsters, fire and ice arrow sparks and
+- **Characters (M4 4d):** they stand, breathe and gesture but don't
+  walk, notice Connor, fight or die (M5); they are not solid; zombies
+  stay in the ground; no gravity or shadows yet (4d-6, 4d-7).
+- **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no
   footsteps (there are no monsters yet); scenery

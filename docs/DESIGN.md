@@ -670,7 +670,8 @@ inventory and menus.
     on; a newer request replaces the target; `noTurn` (and
     `setCanTurn 0`) blocks it. Logs: every request, blocked or not, and
     the heading per update while turning.
-  - **4d-5, the face and the hands** (rules 25–28; Q115). The mouth
+  - **4d-5, the face and the hands** (**done** 2026-10-19; Q120 asked;
+    new test option `--command "WORDS",N`) (rules 25–28; Q115). The mouth
     texture (`lips`: the face texture `baseLip`, else `lip0`, swapped
     for `lip<n>`, kept across movements, 0 at the start and after each
     line); the Uglybeast's and the Unicorn's mouth movements (codes

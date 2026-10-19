@@ -1985,6 +1985,20 @@ impl WorldState {
     }
 }
 
+impl Active {
+    /// A test option (`--command`, viewer): one script command, its words
+    /// split at spaces (no variables, no quotes), run as if a script did.
+    /// Returns its result, or `None` for a command the world doesn't know.
+    pub fn test_command(&mut self, line: &str, at: &str) -> Option<String> {
+        let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+        if words.is_empty() {
+            return None;
+        }
+        self.world.note(format!("{at}: {line}"));
+        ScriptHost::world_command(&mut self.world, &words, at)
+    }
+}
+
 impl ScriptHost for WorldState {
     fn read(&self, name: &str) -> Option<Vec<u8>> {
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name).to_ascii_lowercase();
@@ -3173,6 +3187,40 @@ impl Active {
         let w = &self.world;
         let exists = |name: &str| w.known.contains(&name.to_ascii_lowercase()) && !w.is_gone(name);
         let finished = talk.update(now, captions, &exists);
+        // Characters (M4 4d-5, characters.md rules 25-28): each mouth code
+        // and line end; the last line of a queue sends the speaker to Wait
+        // (Q117 stand-in).
+        let mut last_speaker: BTreeMap<String, String> = BTreeMap::new();
+        for e in &talk.events {
+            match e {
+                crate::talk::TalkEvent::Mouth { speaker, shape, .. } => {
+                    if let Some(i) = self.world.character_index(speaker) {
+                        let a = &mut self.world.anims[i];
+                        let line = a.character.as_mut().unwrap().mouth_code(&mut a.player, *shape);
+                        self.world.character_note(speaker, line);
+                    }
+                }
+                crate::talk::TalkEvent::End { issuer, speaker, .. } => {
+                    last_speaker.insert(issuer.to_ascii_lowercase(), speaker.clone());
+                    if let Some(i) = self.world.character_index(speaker) {
+                        let c = self.world.anims[i].character.as_mut().unwrap();
+                        if !c.geometry && c.mouth != 0 {
+                            c.mouth = 0;
+                            self.world.character_note(speaker, "line ended: mouth shape 0 (rule 25)");
+                        }
+                    }
+                }
+                crate::talk::TalkEvent::Empty { issuer } => {
+                    let Some(speaker) = last_speaker.get(&issuer.to_ascii_lowercase()).cloned() else { continue };
+                    if let Some(i) = self.world.character_index(&speaker) {
+                        let a = &mut self.world.anims[i];
+                        let line = a.character.as_mut().unwrap().after_speech(&mut a.player);
+                        self.world.character_note(&speaker, line);
+                    }
+                }
+                _ => {}
+            }
+        }
         self.world.talk = talk;
         for f in finished {
             self.talk_complete(&f, now);

@@ -79,6 +79,11 @@ struct Playing {
     /// and its draw-distance test, handed over when it comes in.
     character: Option<Box<kq8_core::character::Character>>,
     test: Option<crate::draw_distance::DistanceTest>,
+    /// Its own copies of the materials showing its face texture, the
+    /// image of each mouth shape, and the shape drawn (M4 4d-5, rule 25).
+    face: Vec<Handle<ObjectMaterial>>,
+    lip_images: Vec<Option<Handle<Image>>>,
+    mouth_shown: u16,
 }
 
 #[derive(Resource)]
@@ -174,11 +179,21 @@ pub fn spawn_animated(
         moves: bool,
         /// Each frame's lights (M1 7c, rule 26b).
         lights: std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>,
+        /// Each material's texture file name (for a character's face).
+        textures: Vec<(i32, Option<String>)>,
     }
     let built: Vec<Built> = animations
         .into_iter()
         .map(|a| {
             let shading: std::collections::BTreeMap<i32, crate::load::Shading> = a.looks.iter().map(|(m, _, s)| (*m, *s)).collect();
+            let textures = a
+                .looks
+                .iter()
+                .map(|(m, look, _)| match look {
+                    crate::load::Look::Texture { name, .. } => (*m, Some(name.rsplit(['/', '\\']).next().unwrap_or(name).to_string())),
+                    _ => (*m, None),
+                })
+                .collect();
             let materials = a.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)))).collect();
             let frames = a
                 .frames
@@ -194,7 +209,7 @@ pub fn spawn_animated(
                 })
                 .collect();
             let moves = a.frame_transforms.iter().skip(1).any(|t| !is_still(t));
-            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights) }
+            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures }
         })
         .collect();
     let mut rng = Rng::new(SEED);
@@ -310,6 +325,21 @@ pub fn spawn_animated(
             }
         }
         let body = body.id();
+        // A character's mouth (M4 4d-5, rule 25): its own copy of every
+        // material showing the face texture, in every movement, so the
+        // shape is kept across movements and not shared with others.
+        let face_name = a.character.as_ref().and_then(|c| c.lips.as_ref()).map(|l| l.face.clone());
+        let mut face_copies: std::collections::HashMap<Handle<ObjectMaterial>, Handle<ObjectMaterial>> = Default::default();
+        let lip_images: Vec<Option<Handle<Image>>> = a
+            .lip_looks
+            .iter()
+            .map(|l| match l {
+                Some(crate::load::Look::Texture { width, height, rgba, .. }) => {
+                    Some(images.add(crate::object_light::texture_image(*width, *height, rgba.clone(), bevy::image::ImageAddressMode::Repeat)))
+                }
+                _ => None,
+            })
+            .collect();
         let mut drawn = Vec::with_capacity(a.movements.len());
         for (_, _, i) in &a.movements {
             let b = &built[*i];
@@ -319,7 +349,17 @@ pub fn spawn_animated(
                 commands.entity(body).add_child(parent);
                 for (mesh, m) in frame {
                     let Some((_, material)) = b.materials.iter().find(|(i, _)| i == m) else { continue };
-                    let material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
+                    let mut material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
+                    let is_face = face_name.as_ref().is_some_and(|f| b.textures.iter().any(|(i, t)| i == m && t.as_ref().is_some_and(|t| t.eq_ignore_ascii_case(f))));
+                    if is_face {
+                        material = face_copies
+                            .entry(material.clone())
+                            .or_insert_with(|| match materials.get(&material).cloned() {
+                                Some(copy) => materials.add(copy),
+                                None => material.clone(),
+                            })
+                            .clone();
+                    }
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
                     commands.entity(parent).add_child(part);
                 }
@@ -394,6 +434,9 @@ pub fn spawn_animated(
             collider: None,
             character,
             test: prepared_test,
+            face: face_copies.into_values().collect(),
+            lip_images,
+            mouth_shown: 0,
         });
     }
     main_log.summary(format!(
@@ -509,10 +552,35 @@ pub fn anim_draw(
     mut transforms: Query<&mut Transform>,
     mut visibility: Query<&mut Visibility>,
     mut carried: Query<&mut crate::scene_lights::CarriedLights>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
 ) {
     let Some(mut sim) = sim else { return };
     let doors = doors.as_deref();
+    let sim = &mut *sim;
     for p in &mut sim.playing {
+        // A character's mouth shape (M4 4d-5, rule 25): lip<n> on its face.
+        let mouth = match (&p.source, doors) {
+            (Source::Core(i), Some(d)) => d.active.world.anims.get(*i).and_then(|a| a.character.as_deref()).map(|c| c.mouth),
+            _ => None,
+        };
+        if let Some(shape) = mouth.filter(|m| *m != p.mouth_shown && !p.face.is_empty()) {
+            let n = if shape > 7 { 0 } else { shape as usize };
+            let what = match p.lip_images.get(n).cloned().flatten() {
+                Some(img) => {
+                    for h in &p.face {
+                        if let Some(mut m) = materials.get_mut(h) {
+                            m.texture = Some(img.clone());
+                        }
+                    }
+                    format!("lip{n} drawn on {} face material(s)", p.face.len())
+                }
+                None => format!("lip{n} has no texture: face unchanged"),
+            };
+            p.mouth_shown = shape;
+            if let Some(log) = sim.characters.as_mut() {
+                log.detail(format!("update {}: {}: mouth shape {shape}: {what} (rule 25)", sim.updates, p.name));
+            }
+        }
         let Some(player) = player(p, doors) else { continue };
         let movement = player.current.min(p.movements.len().saturating_sub(1));
         let Some(drawn) = p.movements.get(movement) else { continue };

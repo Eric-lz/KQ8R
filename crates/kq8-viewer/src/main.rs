@@ -121,6 +121,9 @@ struct Args {
     /// (M3 3i-7 test; ITEMS uses `;` between items, e.g.
     /// `AnimList=bricks.anm;AnimListOn;push`).
     special: Option<(String, u64)>,
+    /// `--command "WORDS",N`: before update N + 1, one script command
+    /// runs as if a script did (M4 4d-5 test; repeatable).
+    command: Vec<(String, u64)>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
     /// `--key NAME,N`: a panel key pressed before update N + 1 (M4 4c-2;
@@ -159,6 +162,7 @@ fn parse_args() -> Result<Args, String> {
         click: Vec::new(),
         aim: Vec::new(),
         special: None,
+        command: Vec::new(),
         item: None,
         key: Vec::new(),
         light: light_view::LightMode::X1,
@@ -213,6 +217,13 @@ fn parse_args() -> Result<Args, String> {
                 let (items, n) = v.rsplit_once(',').ok_or("--special needs ITEMS,UPDATE e.g. kneel;kneelstop,30".to_string())?;
                 let n = n.trim().parse::<u64>().map_err(|_| "--special needs ITEMS,UPDATE e.g. kneel;kneelstop,30".to_string())?;
                 a.special = Some((items.replace(';', ","), n));
+            }
+            "--command" => {
+                let v = value()?;
+                let usage = "--command needs \"WORDS\",UPDATE e.g. \"KQMonster::speak Wizard Connor 1000 4 0 8 1 1\",30".to_string();
+                let (words, n) = v.rsplit_once(',').ok_or(usage.clone())?;
+                let n = n.trim().parse::<u64>().map_err(|_| usage)?;
+                a.command.push((words.trim().to_string(), n));
             }
             "--item" => a.item = Some(value()?),
             "--key" => {
@@ -348,6 +359,7 @@ N is an update number (15 updates per second):
   --key NAME,N               press space or 1-8, or click a bar control
                              (left:NAME / right:NAME), before update N + 1 (repeatable)
   --special ITEMS,N          play Connor's special movements (separated by ;)
+  --command \"WORDS\",N      run one script command at update N (repeatable)
 
   -h, --help                 show this list
 
@@ -500,6 +512,7 @@ fn main() -> ExitCode {
                 .insert_resource(connor_view::StartAt(args.at))
                 .insert_resource(door_view::ClickAt(args.click))
                 .insert_resource(door_view::SpecialAt(args.special))
+                .insert_resource(door_view::CommandAt(args.command))
                 .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
                 .init_resource::<door_view::Deleted>()

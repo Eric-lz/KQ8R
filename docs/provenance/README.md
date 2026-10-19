@@ -1994,3 +1994,16 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | The turn only runs while the character updates (near or far) | Rule 11 | — |
 | Talk state's turn every 4th update | Rule 24, `conversation.md` rule 17: not built (no conversations yet) | — |
 | A clickable character's click box keeps the rotation it was loaded with | **Not done** (logged in MODLOG) | — |
+
+### 4d-5, the face and the hands — `crates/kq8-core/src/{character,active}.rs`, `crates/kq8-viewer/src/{anim_view,load,door_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Codes 0–7: mouth shape; the character's own copies of every material with its face texture (`baseLip`, else `lip0`) get `lip<n>`; kept across movements; 0 at a line's end | `characters.md` rule 25 | `characters.log` (Wizard, `--command`): "lip6 drawn on 15 face material(s)" … "lip0" at the end |
+| Face texture names compared ignoring capitals, by file name | Rule 25 ("inferred") | Wizard `WF0.bmp`, 15 materials found |
+| Geometry talker: 0/16 `rest`, 1–7 `f m r w ih ah e`, started at once (not a request); 8–15 and above 16 ignored | Rule 27, "Do not reproduce" | Unit test `a_geometry_talker_starts_mouth_movements_at_once`; Uglybeast: 16 codes, each a movement |
+| Codes 8–15 `gesturea`…`gestureh`, 16 `stop`, asked the ordinary way, only when the movement playing can be cut short or has ended and the list has it; nobody walks yet; above 16 nothing; the mouth unchanged | Rule 28 (Q115), `conversation.md` rule 18 | Unit test `mouth_codes_shape_gesture_or_nothing`; Wizard line 1000/4/0/8: `gesturee`, `gesturea`, `gesturee`, `gesturec`, then code 16 `stop` |
+| After the last line of a queue the speaker goes to Wait, from no state or Wait only | Rules 15, 27; **stand-in** for the details (Q117) | Wizard: "last line of its queue: the speaker goes to Wait" at update 154 |
+| Mouth movements in Wait bring `Stop` back (rule 18 read literally) | Rule 18; asked as Q120 | Uglybeast: `f` at 67, `Stop` at 68 |
+| `--command "WORDS",N` test option | **Our test tool** (not a game rule) | Used for the runs above |
+| Connor's own codes 8–16 (Q114: no mouth change, gestures) | Not changed in this step: Connor's mouth is `talking.md`'s (4a-6); left for the conversations step | — |

@@ -27,7 +27,15 @@
 //!   The heading is read from its rotation the way Connor's is (heading
 //!   0 faces −Y, `crate::connor_auto::heading_towards`).
 //!
-//! Not here (later steps): the mouth and gestures (4d-5), gravity (4d-6),
+//! - Rules 25–28 (4d-5): a lip-sync code to a character. Codes 0–7 set the
+//!   mouth shape (the face texture, drawn by the viewer; a
+//!   `KQGeometryTalker` instead **starts** `rest f m r w ih ah e` at once);
+//!   8–15 ask for `gesturea`…`gestureh`, 16 for `stop` (a geometry
+//!   talker: 16 starts `rest`), only when not walking and the movement
+//!   playing can be cut short or has ended, and the list has it; above
+//!   16 nothing. A line's end puts the mouth shape back to 0.
+//!
+//! Not here (later steps): gravity (4d-6),
 //! the Talk state's turn every 4th update (conversations); noticing
 //! Connor, wandering, idling, Move, Die (M5).
 
@@ -86,6 +94,8 @@ pub struct Character {
     rng: Rng,
     /// The point it is turning to (rule 23), if any.
     pub turn_to: Option<[f32; 2]>,
+    /// The mouth shape (rule 25): 0–7, 0 at the start and after a line.
+    pub mouth: u16,
 }
 
 /// What one update did: the player's step (`None` when not updated) and
@@ -115,6 +125,7 @@ impl Character {
             special_playing: None,
             rng: Rng::new(seed),
             turn_to: None,
+            mouth: 0,
         }
     }
 
@@ -155,6 +166,58 @@ impl Character {
         }
         step.played = Some(played);
         step
+    }
+
+    /// A lip-sync code for this character (rules 25–28). Returns the log
+    /// line.
+    pub fn mouth_code(&mut self, player: &mut NamedAnimPlayer, code: u16) -> String {
+        use kq8_data::characters::{GEOMETRY_MOUTH, GESTURES};
+        if self.geometry {
+            // Rule 27: starts at once, replacing whatever plays.
+            let name = match code {
+                0..=7 => GEOMETRY_MOUTH[code as usize],
+                16 => GEOMETRY_MOUTH[0],
+                // "Do not reproduce": the original starts a leftover name.
+                _ => return format!("code {code}: ignored for a geometry talker (Do not reproduce)"),
+            };
+            let st = player.start(name);
+            let unknown = if st.unknown { " (not in its list: movement 0)" } else { "" };
+            return format!("code {code}: mouth movement '{name}' starts at once{unknown} (rule 27)");
+        }
+        let gesture = match code {
+            0..=7 => {
+                self.mouth = code;
+                return format!("code {code}: mouth shape {code} (rule 25)");
+            }
+            8..=15 => GESTURES[(code - 8) as usize],
+            16 => "stop",
+            _ => return format!("code {code}: above 16, nothing (conversation.md rule 18)"),
+        };
+        // Rule 28: not walking (none walk before M5), the movement playing
+        // can be cut short or has ended, and the list has the gesture.
+        if !player.movements.iter().any(|m| m.name.eq_ignore_ascii_case(gesture)) {
+            return format!("code {code}: no '{gesture}' in its list: nothing (rule 28)");
+        }
+        if !(player.cut_short || player.has_ended()) {
+            return format!("code {code}: '{gesture}' not played: '{}' can't be cut short and hasn't ended (rule 28)", player.movement_name());
+        }
+        match player.request(gesture) {
+            Request::AtOnce(_) => format!("code {code}: gesture '{gesture}' starts (rule 28)"),
+            _ => format!("code {code}: gesture '{gesture}' waits (rule 28)"),
+        }
+    }
+
+    /// The end of the last line of its queue (Q117 stand-in): Wait, from
+    /// no state or Wait only. Returns the log line.
+    pub fn after_speech(&mut self, player: &mut NamedAnimPlayer) -> String {
+        match self.state {
+            State::None | State::Wait => {
+                let mut notes = Vec::new();
+                self.enter_wait(player, &mut notes);
+                format!("last line of its queue: the speaker goes to Wait (characters.md rules 15, 27; Q117 stand-in): {}", notes.join("; "))
+            }
+            s => format!("last line of its queue: stays in {s:?} (Q117 stand-in: Wait only from no state or Wait)"),
+        }
     }
 
     /// A turn request toward `to` (rule 23). Returns what happened, for
@@ -383,6 +446,38 @@ mod tests {
             n += 1;
         }
         n
+    }
+
+    #[test]
+    fn mouth_codes_shape_gesture_or_nothing() {
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        assert!(c.mouth_code(&mut p, 5).contains("mouth shape 5"));
+        assert_eq!(c.mouth, 5);
+        // stop can be cut short: gesturea plays.
+        let line = c.mouth_code(&mut p, 8);
+        assert!(line.contains("starts"), "{line}");
+        assert_eq!(p.movement_name(), "gesturea");
+        assert!(c.mouth_code(&mut p, 9).contains("no 'gestureb'"));
+        assert!(c.mouth_code(&mut p, 17).contains("nothing"));
+        // attack can't be cut short and hasn't ended: no gesture.
+        p.start("attack");
+        assert!(c.mouth_code(&mut p, 16).contains("not played"));
+        assert_eq!(c.mouth, 5, "gesture codes leave the mouth alone");
+    }
+
+    #[test]
+    fn a_geometry_talker_starts_mouth_movements_at_once() {
+        let mut c = Character::new(true, 0x20, 0.0, false, true, true, 1);
+        let mut p = player(0, None, None);
+        // attack can't be cut short, yet the mouth movement replaces it.
+        let line = c.mouth_code(&mut p, 2);
+        assert!(line.contains("'m' starts at once"), "{line}");
+        assert_eq!(p.movement_name(), "m");
+        c.mouth_code(&mut p, 16);
+        assert_eq!(p.movement_name(), "rest");
+        assert!(c.mouth_code(&mut p, 9).contains("ignored"));
+        assert_eq!(c.mouth, 0);
     }
 
     #[test]
