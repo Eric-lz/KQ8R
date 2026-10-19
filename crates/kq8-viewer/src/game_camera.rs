@@ -137,6 +137,9 @@ pub struct GameCam {
     keys: Keys,
     /// Mouse movement (pixels) and presses gathered between updates.
     mouse: Vec2,
+    /// The button was held at the last tick (its press and release are
+    /// causes for a camera update).
+    mouse_was_held: bool,
     pressed_mode: bool,
     pressed_reset: bool,
     updates: u64,
@@ -469,6 +472,7 @@ pub fn make(
         cam,
         keys,
         mouse: Vec2::ZERO,
+        mouse_was_held: false,
         pressed_mode: false,
         pressed_reset: false,
         updates: 0,
@@ -630,7 +634,11 @@ pub fn camera_step(
     // per game update here, with the movement since the last); holding the
     // button still is no cause by itself.
     let mouse_moved = input.mouse_held && (input.mouse_x != 0.0 || input.mouse_forward != 0.0);
-    if mouse_moved || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
+    // Pressing or letting go of the button also runs one (M3 3o-7: holding
+    // it locks the view at Connor's present spot on screen, letting go
+    // lets him drift; the user's check).
+    let pressed_or_released = std::mem::replace(&mut g.mouse_was_held, input.mouse_held) != input.mouse_held;
+    if mouse_moved || pressed_or_released || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
         causes.push("player".into());
     }
     if causes.is_empty() {

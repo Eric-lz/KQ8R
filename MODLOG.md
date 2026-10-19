@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 step 3o-7: the right button (the user's first check)
+
+**Changed:** `kq8-core/src/camera.rs`: heading rule 2's "dragging" is now the right button held, moving or not (was: the mouse moved this update); the angle on screen it keeps is measured from where the camera was before that update's swing (was: after). Viewer `game_camera.rs`: pressing and letting go of the button each run a camera update. Unit test rewritten (a fast swing). `docs/DESIGN.md` (3o-7), provenance, `QUESTIONS.md` (Q113 e, for A to confirm).
+**Why:** The user's check in the original: (1) a fast drag moved our camera far off to the side, leaving Connor off screen (a slow one only a little); the original only rotates round Connor wherever he is on screen. Cause: our lock took Connor's angle after the first swing of the drag, so a fast first swing became the kept offset. (2) In the original a click alone (no mouse movement) lets him drift afterwards, and (3) holding the button still keeps him at the same spot on screen; ours needed the mouse to move.
+**Tested how:** `cargo test --workspace` (461 pass), clippy clean. Viewer: the walk-zone run of 3o-2 (`--at 282250,196409,3.1416 --hold 1,0,0,90`): `camera.log` identical to `camera-3o3-walkzone.log` (no mouse).
+**Result:** Unit test: Connor 0.1 rad off; pressing the button locks at 0.1; swings of half a window per update turn the view by the whole swing, he stays 0.1 off; held still while he walks, still 0.1 off; let go: idle, offset 0.
+**Still broken / not tested:** **Not tested in play** (needs the real mouse): the user's check again.
+**Next:** The user's check.
+
 ## 2026-10-19 M3 step 3o-6: a script's `move` and the trap he was in
 
 **Changed:** `kq8-core/src/trap.rs`: `Trap::stay_check`, only rule 7's stay test (nothing comes in). `active.rs`: `Active::connor_placed` runs it for every trap and calls the scripts (logged "stay test right after a script's move, rule 5"). Viewer `door_view.rs`: when a script's `move Connor` is applied, the stay test runs at the new spot at once and its calls are logged with the move. 2 unit tests. Provenance, `docs/DESIGN.md`.

@@ -1915,3 +1915,11 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | When a script's `move Connor` is applied, every trap he is inside runs its stay test (rule 7) at the new spot: `Off` (or `Cue 302`) then, in the same update | `traps.md` rule 5 "Placed by a script" (b) (Q102 b) | Unit tests `placed_by_a_script_only_the_stay_test_runs`, `a_script_s_move_out_of_a_trap_gives_off_at_once`; `traps-3o6-wheel2.log`: "wheeltp2: Off Connor (stay test right after a script's move, rule 5)" in the tick of cue 2 |
 | No trap is entered by the move; his next ordinary move's sweep starts from the new spot | Rule 5 (a) (as built before) | Same unit tests |
 | In our build the stay test runs when the viewer applies the move, after all the scripts of that update (the note: right after the script that did it) | **Our order** (requests are applied after the update's scripts; what the `Off` script asks waits for the next update) | — (no visible difference in Daventry: `wheeltp2.cs` does nothing on `Off`) |
+
+### 3o-7, the right button (the user's first check) — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| "Dragging" (heading rule 2) = the right button held, moving or not: locked at Connor's present angle on screen while held; letting go: offset 0, idle (he may drift) | **The user's check in the original** (2026-10-19: a click alone lets him drift afterwards; held still he keeps his spot on screen); fits `camera.md` rule 1 of "Swinging and zooming" (the mouse value is the cursor's place, so not 0 while held); our 3o-1 read "not 0" as "moved" | Unit test `a_drag_locks_the_view_at_its_angle_and_the_end_of_it_goes_idle` (rewritten); asked A to confirm in Q113 e |
+| The angle kept is measured before that update's swing | **The user's check** (a fast drag only rotates round Connor); the note's "keeps its present angle" | Same unit test (half a window per update: Connor stays 0.1 off) |
+| Pressing and letting go of the button each run a camera update | **Our method** (so the lock starts and ends at the click, not at Connor's next move) | — (needs the real mouse) |

@@ -1775,6 +1775,18 @@ catchers, ground animators).
       `Cue 302`) then, in the same update, not at his next move. No
       trap is entered by the move (rule 5 a, as built). Daventry: the
       mill wheel's `wheeltp2` gets `Off` right after its cue 2.
+    - **3o-7, the user's first check: the right button** (planned and
+      done 2026-10-19). The user's check in the original: (1) a fast
+      drag moved the camera far off to the side, Connor off screen; the
+      original only rotates round Connor, wherever he is on screen; (2)
+      pressing and letting go of the right button without moving the
+      mouse lets Connor drift afterwards; (3) holding it still keeps him
+      at the same spot on screen. So: "dragging" (heading rule 2) is the
+      button **held**, moving or not (the note's mouse value is the
+      cursor's place, not 0 while held); Connor's angle on screen is
+      taken **before** that update's swing (ours took it after, so a
+      fast first swing was kept as the offset); pressing and letting go
+      each run a camera update.
     - **Then** the user's check against the original: (a) walk Connor
       off to one side: the view holds until he is about 14° off the
       middle, then catches up and locks on him; (b) hold the right

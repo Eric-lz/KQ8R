@@ -668,6 +668,9 @@ impl Camera {
     pub fn update_with(&mut self, followed: Followed, moved: bool, input: &Input, ground: &dyn GroundLookup, view: Option<&dyn ViewBlockers>) -> Report {
         let base = followed.base;
         let start = self.position;
+        // The direction to the aim point before this update's swing (a
+        // drag keeps Connor's angle on screen from here, M3 3o-7).
+        let towards_start = view_angles(sub(Self::aim_for(followed.base), start)).1;
         let mut report = Report::default();
         // "Connor is moving": from the update after his first "moved"
         // message until 3 updates have passed without one (`tick`).
@@ -789,7 +792,7 @@ impl Camera {
             }
         }
         self.tilt = self.tilt.clamp(-TILT_LIMIT, TILT_LIMIT);
-        report.heading = Some(self.aim_view(aim, followed, mx != 0.0 || mf != 0.0, moving_now));
+        report.heading = Some(self.aim_view(aim, followed, input.mouse_held, moving_now, towards_start));
         self.last_base = Some(base);
         self.last_facing = Some(followed.facing);
         report.aim = aim;
@@ -799,10 +802,13 @@ impl Camera {
 
     /// Aims the view from where the camera now is (camera.md "What the
     /// camera looks at" rule 3, "Turning the view toward Connor").
-    /// `dragging`: a mouse value is not 0 this update; `moving`: "Connor
-    /// is moving". The tilt is set exactly: the player's tilt + the angle
-    /// up from the camera to the aim point (rule 3, Q27 b).
-    fn aim_view(&mut self, aim: [f32; 3], followed: Followed, dragging: bool, moving: bool) -> HeadingStep {
+    /// `dragging`: the right button is held, moving or not (the user's
+    /// check in the original, M3 3o-7: the note's mouse value is the
+    /// cursor's place, not 0 while held); `moving`: "Connor is moving";
+    /// `towards_start`: the direction to the aim point before this
+    /// update's swing. The tilt is set exactly: the player's tilt + the
+    /// angle up from the camera to the aim point (rule 3, Q27 b).
+    fn aim_view(&mut self, aim: [f32; 3], followed: Followed, dragging: bool, moving: bool, towards_start: f32) -> HeadingStep {
         let (up, towards) = view_angles(sub(aim, self.position));
         self.view_tilt = self.tilt + up;
         let error = |c: &Camera| wrap(towards + c.mouse_offset - c.heading);
@@ -814,10 +820,12 @@ impl Camera {
         if before == HeadingState::Idle && (start.abs() > CATCH_UP_ANY || (start.abs() > CATCH_UP_MOVING && moving)) {
             self.heading_state = HeadingState::CatchingUp;
         }
-        // 2. The mouse wins: locked, keeping the present angle.
+        // 2. The mouse wins: locked, keeping the present angle, measured
+        // before the swing (the user's check: a fast drag only rotates
+        // round Connor, wherever he is on screen).
         if dragging {
             if !self.dragging {
-                self.mouse_offset = -wrap(towards - self.heading);
+                self.mouse_offset = -wrap(towards_start - self.heading);
             }
             self.heading_state = HeadingState::Locked;
         } else if self.dragging {
@@ -1464,20 +1472,31 @@ mod tests {
         let mut c = Camera::new([0.0, -3000.0, MIN_HEIGHT]);
         c.look_at(Camera::aim_for([0.0; 3]));
         c.heading += 0.1;
-        let swing = Input { mouse_held: true, mouse_x: 0.1, ..Input::default() };
-        aim_step(&mut c, [0.0; 3], 0.0, &swing); // first update: no movement
-        // The first update of the drag: the camera swings 0.1 × 3π/4 round
-        // Connor; the view keeps its present heading (offset = − the error).
+        // A fast swing: half a window width per update.
+        let swing = Input { mouse_held: true, mouse_x: 0.5, ..Input::default() };
+        // Pressing the button (no movement yet) already locks the view at
+        // Connor's present angle on screen, 0.1 off (the user's check).
         let heading = c.heading;
         let h = aim_step(&mut c, [0.0; 3], 0.0, &swing);
         assert_eq!(h.after, HeadingState::Locked);
-        assert!(h.turn.abs() < 1e-5 && h.left.abs() < 1e-5 && (h.offset + h.error).abs() < 1e-5, "{h:?}");
+        assert!(h.turn.abs() < 1e-5 && (h.offset - 0.1).abs() < 1e-4, "{h:?}");
         assert!((c.heading - heading).abs() < 1e-5);
-        // The next: the view turns with the camera, by the same swing.
-        let h = aim_step(&mut c, [0.0; 3], 0.0, &swing);
-        assert!((h.turn - 0.1 * SWING_PER_UNIT).abs() < 1e-4 && h.left.abs() < 1e-5, "{h:?}");
-        // Let go: offset 0, idle, the heading left where it was.
-        let h = aim_step(&mut c, [0.0; 3], 0.0, &Input::default());
+        // Each swing: the view turns with the camera by the whole swing, so
+        // Connor stays 0.1 off, however fast.
+        for _ in 0..2 {
+            let h = aim_step(&mut c, [0.0; 3], 0.0, &swing);
+            assert!((wrap(h.turn - 0.5 * SWING_PER_UNIT)).abs() < 1e-4 && h.left.abs() < 1e-5, "{h:?}");
+            let towards = view_angles(sub(Camera::aim_for([0.0; 3]), c.position)).1;
+            assert!((wrap(c.heading - towards) - 0.1).abs() < 1e-4);
+        }
+        // Held still while he walks: still locked, still 0.1 off.
+        let held = Input { mouse_held: true, ..Input::default() };
+        let h = aim_step(&mut c, [300.0, 0.0, 0.0], 0.0, &held);
+        assert_eq!(h.after, HeadingState::Locked);
+        let towards = view_angles(sub(Camera::aim_for([300.0, 0.0, 0.0]), c.position)).1;
+        assert!((wrap(c.heading - towards) - 0.1).abs() < 1e-4);
+        // Let go: offset 0, idle (he may drift), the heading left where it was.
+        let h = aim_step(&mut c, [300.0, 0.0, 0.0], 0.0, &Input::default());
         assert_eq!((h.after, h.offset, h.turn), (HeadingState::Idle, 0.0, 0.0));
     }
 
