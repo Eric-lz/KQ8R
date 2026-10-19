@@ -603,6 +603,13 @@ impl Camera {
         false
     }
 
+    /// The camera was put somewhere by a script, a flight or a cut: the
+    /// previous update's offset no longer describes it (it is not used to
+    /// hold the camera in place or to back out of a wall).
+    pub fn placed(&mut self) {
+        self.prev_offset = None;
+    }
+
     /// `follow` (and a flight or cut): the previous record of the aim point
     /// becomes the present one, so this update counts as "not moved".
     pub fn not_moved(&mut self, base: [f32; 3]) {
@@ -650,6 +657,15 @@ impl Camera {
         // pressing uses no movement.
         let (mx, mf) = if input.mouse_held && self.mouse_was_held { (input.mouse_x, input.mouse_forward) } else { (0.0, 0.0) };
         self.mouse_was_held = input.mouse_held;
+        // Held without a change (rule 6): the offset from the aim point goes
+        // back to the previous update's, so the camera keeps its place
+        // relative to Connor; the range and the other rules still follow.
+        if input.mouse_held && mx == 0.0 && mf == 0.0 {
+            if let Some(off) = self.prev_offset {
+                self.position = add(aim, off);
+                report.events.push("mouse button held still: the offset to the aim point kept".into());
+            }
+        }
         if mx != 0.0 {
             // Swing round the aim point about the vertical axis.
             let a = mx * SWING_PER_UNIT;
@@ -1035,6 +1051,30 @@ mod tests {
         c.update([0.0; 3], &held, &Flat(0.0));
         assert!((horizontal(&c, [0.0; 3]) - 3000.0).abs() < 0.5);
         assert!(c.position[0].abs() > 1000.0, "{:?}", c.position);
+    }
+
+    #[test]
+    fn holding_the_button_still_keeps_the_camera_s_place_relative_to_connor() {
+        // Inside the range, so without the button the camera stays put.
+        let held = Input { mouse_held: true, ..Input::default() };
+        let mut c = Camera::new([0.0, -2000.0, MIN_HEIGHT]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        let off = sub(c.position, Camera::aim_for([0.0; 3]));
+        for k in 1..=10 {
+            let base = [75.0 * k as f32, 0.0, 0.0];
+            c.update(base, &held, &Flat(0.0));
+            let now = sub(c.position, Camera::aim_for(base));
+            assert!((0..3).all(|i| (now[i] - off[i]).abs() < 1e-2), "{now:?} vs {off:?}");
+        }
+        // Let go: it stays where it is while he walks on.
+        let p = c.position;
+        c.update([825.0, 0.0, 0.0], &Input::default(), &Flat(0.0));
+        assert_eq!(c.position, p);
+        // After a script put it somewhere, holding doesn't pull it back.
+        c.position = [5000.0, 0.0, MIN_HEIGHT];
+        c.placed();
+        c.update([825.0, 0.0, 0.0], &held, &Flat(0.0));
+        assert_eq!(c.position, [5000.0, 0.0, MIN_HEIGHT]);
     }
 
     #[test]

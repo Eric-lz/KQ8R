@@ -1869,3 +1869,16 @@ This replaces the stand-in "the view looks straight at the aim point, pitched by
 | The view tilt = the player's tilt + the angle up from the camera to the aim point, set every update; the player's tilt is −0.2 by default (negative looks down), Page Up adds 0.015 per update | Rule 3 (Q27 b), "Tilt" rules 1–2 | Unit test `the_view_looks_0_2_below_the_aim_point_and_passes_connor_at_his_chest`; `camera-3o2-wheel.log` update 18: −0.832 (the note: about −0.83) |
 | One default tilt and one aim height for the follow camera and the flights | **Our method** (same numbers in both rules) | `the_watermill_flight` unchanged; `camera-3o2-watermill.log` flight 31/31 as before |
 | `camera.log` logs where the view's centre line passes Connor (height above his feet) | **Our log** (the user's check of the hips) | `camera-3o2-walkzone.log`: 893 at 2,499 away; `camera-3o2-walk.log`: 782 at 3,046, 390 at 4,999 |
+
+### 3o-3, the mouse — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces the hand-set "800 pixels = one mouse unit".
+
+| What | Source | Check |
+| --- | --- | --- |
+| One mouse unit = one window width sideways (a swing of 3π/4) and one window height forward/back (a zoom of 5,000) | `camera.md` "Swinging and zooming" rule 1 (Q27 a) | — (not tested in play: needs the real mouse) |
+| The movement is the mouse's own (raw) movement in window pixels, not the cursor's place, so a drag doesn't stop at the window's edge | **Our method** (the original reads the cursor's place; its recentring at 0.9 / 0.5, rule 6, is not settled and not built) | — |
+| A mouse movement during a drag is a cause for a camera update; holding the button still is not | Rule 6, "When the camera updates at all" item 5; one update per game update with the movement since the last (**our method**, as the original at 15 frames per second) | `camera-3o3-walkzone.log` identical to `camera-3o2-walkzone.log` (no mouse) |
+| Held without a change: the offset from the aim point set back to the previous update's (before the leash, the height and the obstacle rules) | Rule 6 | Unit test `holding_the_button_still_keeps_the_camera_s_place_relative_to_connor` |
+| After `move KQCamera`, a flight or a cut, the previous offset is forgotten (holding the button then doesn't pull the camera back) | **Our choice** (the note's rule assumes the previous offset is the follow camera's own) | Same unit test |
+| Directions: mouse left swings the camera left, mouse down zooms in; with Shift, mouse down tilts like Page Down | Rule 7 (the user's check in the original) | As before |

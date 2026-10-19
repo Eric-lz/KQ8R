@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 step 3o-3: the mouse
+
+**Changed:** Viewer `game_camera.rs`: the mouse's movement is gathered as a share of the window (one window width / height = one mouse unit), replacing the hand-set 800 pixels per unit; a mouse movement during a drag is a cause for a camera update, holding the button still is not. `kq8-core/src/camera.rs`: holding the button without a change puts the camera back at the previous update's offset from the aim point (then the leash, height and obstacle rules); `Camera::placed` forgets that offset after `move KQCamera`, a flight or a cut; 1 unit test. Provenance, `docs/DESIGN.md`.
+**Why:** `camera.md` "Swinging and zooming" rules 1 and 6 (Q27 a): one window width = 3π/4, one window height = 5,000; each mouse move updates the camera; holding the button keeps the camera's place relative to Connor (the manual says so too).
+**Tested how:** `cargo test --workspace` (458 pass, 1 new), clippy clean. Viewer: the walk-zone run of 3o-2 again (`camera-3o3-walkzone.log`): identical to `camera-3o2-walkzone.log`, as it must be without the mouse.
+**Result:** As above. On a 1,280-pixel-wide window one pixel sideways swings 3π/4 ÷ 1,280 = 0.0018 rad (before: 0.0029); on a 720-high window one pixel forward/back zooms 6.9 units (before: 6.25).
+**Still broken / not tested:** **Not tested in play**: the test options can't drive the mouse, so the swing, the zoom and the held button are unit-tested only. Not built: the recentring at 0.9 / 0.5 (rule 6, not settled).
+**Next:** 3o-4, the view line against the ground.
+
 ## 2026-10-19 M3 step 3o-2: the tilt and the aim height
 
 **Changed:** `kq8-core/src/camera.rs`: `AIM_HEIGHT` 800 → 1,400 (the note's; the 800 was set by hand because our view looked straight at the aim point); `DEFAULT_TILT` is now the note's −0.2 (Page Up still adds 0.015); the view tilt = the player's tilt + the angle up to the aim point, every update; `centre_line_height` (where the view's centre line passes Connor) and a unit test. `camera_flight.rs`: its aim height and default tilt are the same constants. Viewer `game_camera.rs`: the flights' starting view uses the new default; `camera.log` gets `centre_line_at_connor`. Provenance, `docs/DESIGN.md`.

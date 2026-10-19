@@ -1733,7 +1733,7 @@ catchers, ground animators).
       passes him (expected about 900–1,000 at walking distance; his box
       is 1,300 tall). Not hand-tuned again: if it still looks wrong by
       eye, a question for A.
-    - **3o-3, the mouse** (`camera.md` "Swinging and zooming" rules 1,
+    - **3o-3, the mouse** (**done** 2026-10-19) (`camera.md` "Swinging and zooming" rules 1,
       6, 7). Mouse value = the movement as a share of the window: one
       window width = 3π/4 swing, one window height = 5,000 zoom
       (replaces the hand-set 800 pixels per unit). A mouse movement

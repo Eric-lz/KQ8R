@@ -6,7 +6,9 @@
 //!
 //! Keys from `MASK/Camera.sae` (F11 mode, Page Up/Down tilt, Home reset)
 //! and `MASK/Connor.sae` (right mouse `MoveCamera`, Shift `ModifyDn`).
-//! Mouse value = pixels ÷ 600: a stand-in until Q27 (a) is answered.
+//! Mouse value = the mouse's movement as a share of the window (one window
+//! width sideways, one window height forward/back; camera.md "Swinging and
+//! zooming" rule 1, M3 3o-3).
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
@@ -21,9 +23,6 @@ use crate::door_view::DoorSim;
 use crate::load::VIEW_BLOCKING;
 use crate::terrain_view::{Buildings, Fly, GroundLookup, ViewBlockerSet};
 use crate::{to_bevy, Shared, UNITS_PER_METRE};
-
-/// Stand-in until Q27 (a): this many screen pixels make one mouse unit.
-const PIXELS_PER_MOUSE_UNIT: f32 = 800.0; // modified manually to what feels more natural, but could be wrong
 
 /// What blocks the view line now (camera.md "Obstacles"): the drawn
 /// ground, the blocking buildings, object boxes and doors as they stand.
@@ -127,7 +126,7 @@ pub struct GameCam {
     current: ([f32; 3], f32, f32),
     keys: Keys,
     /// Mouse movement (pixels) and presses gathered between updates.
-    mouse_px: Vec2,
+    mouse: Vec2,
     pressed_mode: bool,
     pressed_reset: bool,
     updates: u64,
@@ -247,6 +246,7 @@ impl GameCam {
     /// Draws the view of a flight or cut from where the camera is; the
     /// follow camera's heading goes on from it.
     fn show_view(&mut self) {
+        self.cam.placed();
         self.cam.heading = self.view.heading;
         self.cam.view_tilt = self.view.tilt;
         self.current = (self.cam.position, self.view.tilt, self.view.heading);
@@ -358,6 +358,7 @@ impl GameCam {
         let old = self.cam.position;
         let (old_tilt, old_heading) = self.view_now();
         self.cam.position = if flags & 1 != 0 { std::array::from_fn(|k| old[k] + position[k]) } else { position };
+        self.cam.placed();
         let (tilt, heading) = if flags & 2 != 0 { (old_tilt + turn[0], old_heading + turn[2]) } else { (turn[0], turn[2]) };
         let dir = view_direction(tilt, heading);
         let p = self.cam.position;
@@ -462,7 +463,7 @@ pub fn make(
         current: (position, cam.view_tilt, cam.heading),
         cam,
         keys,
-        mouse_px: Vec2::ZERO,
+        mouse: Vec2::ZERO,
         pressed_mode: false,
         pressed_reset: false,
         updates: 0,
@@ -498,6 +499,7 @@ pub fn camera_input(
     mut choice: ResMut<CameraChoice>,
     mut fly: ResMut<Fly>,
     camera: Query<&Transform, With<Camera3d>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     shared: Res<Shared>,
 ) {
     let Some(mut game) = game else { return };
@@ -516,8 +518,12 @@ pub fn camera_input(
     if !choice.game {
         return;
     }
-    if game.keys.mouse.is_some_and(|b| buttons.pressed(b)) {
-        game.mouse_px += motion.delta;
+    // The mouse's own movement (not the cursor's place, so a drag doesn't
+    // stop at the window's edge: our method) as a share of the window.
+    if let (true, Ok(w)) = (game.keys.mouse.is_some_and(|b| buttons.pressed(b)), windows.single()) {
+        if w.width() > 0.0 && w.height() > 0.0 {
+            game.mouse += motion.delta / Vec2::new(w.width(), w.height());
+        }
     }
     if game.keys.change_mode.is_some_and(|k| keys.just_pressed(k)) {
         game.pressed_mode = true;
@@ -556,7 +562,7 @@ pub fn camera_step(
     // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
     // unless a flight is under way (M3 3m-4).
     if !g.following {
-        g.mouse_px = Vec2::ZERO;
+        g.mouse = Vec2::ZERO;
         g.pending.clear();
         let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
         g.flight_step(&ground);
@@ -572,14 +578,14 @@ pub fn camera_step(
         // Directions checked by eye by the user against the original
         // (2026-10-11): mouse left swings the camera left, mouse down
         // (towards you; screen y grows downwards) zooms in.
-        mouse_x: -g.mouse_px.x / PIXELS_PER_MOUSE_UNIT,
-        mouse_forward: g.mouse_px.y / PIXELS_PER_MOUSE_UNIT,
+        mouse_x: -g.mouse.x,
+        mouse_forward: g.mouse.y,
         shift: held(g.keys.shift),
         tilt_keys: i8::from(held(g.keys.tilt_up)) - i8::from(held(g.keys.tilt_down)),
         reset_tilt: g.pressed_reset,
         change_mode: g.pressed_mode,
     };
-    g.mouse_px = Vec2::ZERO;
+    g.mouse = Vec2::ZERO;
     g.pressed_mode = false;
     g.pressed_reset = false;
     // Ticks without a "moved" message (Connor is moving, the previous aim
@@ -615,7 +621,11 @@ pub fn camera_step(
     if g.cam.turn_back {
         causes.push("turn_back".into());
     }
-    if input.mouse_held || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
+    // Item 5: a mouse movement during a drag runs an update at once (one
+    // per game update here, with the movement since the last); holding the
+    // button still is no cause by itself.
+    let mouse_moved = input.mouse_held && (input.mouse_x != 0.0 || input.mouse_forward != 0.0);
+    if mouse_moved || input.tilt_keys != 0 || input.reset_tilt || input.change_mode {
         causes.push("player".into());
     }
     if causes.is_empty() {
