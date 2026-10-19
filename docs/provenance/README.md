@@ -1965,3 +1965,20 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | `KQGeometryTalker`s count as `KQMonster`s for `speak` | Rule 1 ("a `KQMonster` in every way") | — |
 | A drawn animated object follows its place in core (a script's `move`); until now only its collider moved | `objects.md` Q20 d (a `move` moves the object) | `--click Uglybeast`: the body moves with `move Uglybeast 3` (log; not seen by eye) |
 | Characters loaded while playing (the Lady, three ravens, the Unicorn) are prepared like other dormant objects (3k-4) | As 3k-4 | Not tested: no run reaches their scripts |
+
+### 4d-3, the states — `crates/kq8-core/src/{character,active,named_anim}.rs`, `crates/kq8-viewer/src/{anim_view,draw_distance,door_view}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A character updates only while near or far (not off, not hidden); the viewer's draw-distance test tells core each frame | `characters.md` rule 11 | Unit test `nothing_happens_while_off`; `characters.log` "by state": 52 "not updated yet" at the Wizard's house |
+| First update: a waiting first movement with no current name starts, no state; else movement 0 (or `currAnimName`) **starts** (so it has a name), then Birth or Wait after `birthDelay` | Rules 12, 14, 15 | Unit tests `first_update_then_wait_asks_for_stop_when_movement_0_ends`, `a_waiting_first_movement_means_no_state`, `birth_list_means_birth_state`, `birth_delay_puts_off_wait`; Shadow: rule 12.1 |
+| Wait through the queue: at the next update at the earliest (delay 0) | Rule 12.2 ("at once, through the event queue") | Wizard: `attack` at update 0, `Stop` at update 1 |
+| Wait asks for `Stop` the ordinary way; random frame and speed 0.9–1.1 with `flags` bit 0x10, also when it starts later at the end of movement 0 | Rule 13 | Ravenw: `Stop` at update 44 at random frame 40; chickens out of step |
+| In Wait, any one-shot ending (not `Stop`, not `gesture…`) → `Stop` again, always random | Rule 18 | Unit test `in_wait_a_one_shot_is_followed_by_stop_but_not_a_gesture` |
+| `setState` by name: Wait, Special (words joined, then items one at a time, then Wait), Unborn; Move / Die logged (M5); Connor-only states logged and ignored; unknown "cannot find state" | Rule 22, "Do not reproduce" | Unit tests `special_lists_play_in_turn_then_wait`, `other_states_are_logged` |
+| `AnimList=`, `Inv`, `KillConnor` in a character's Special list: skipped and logged | **Our stand-in** (none in Daventry) | — |
+| The state-allowed check ("only if the current one allows it") | Not built: only Talk's list is given and there is no Talk state yet | — |
+| A state set before the first update is kept (no restart, no Wait) | **Stand-in**, asked as Q118 (`sprdump`) | Unit test `a_state_set_before_the_first_update_is_kept` |
+| `setUseGravity`, `setMonUseGravity`, `setCanTurn` stored; `changeAnmFile` logged | Rules 8, 22, 23 (used from 4d-4 / 4d-6); `changeAnmFile` open question 4 | — |
+| Each character's random draws from its own generator seeded by its name | **Our choice** (the original's random source is not described) | Same numbers every run |
+| A dormant character (loaded by a script while playing) gets its draw-distance test when it comes in | As 3k-4 | Not tested (no run reaches those scripts) |

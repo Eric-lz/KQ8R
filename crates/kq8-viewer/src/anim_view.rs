@@ -75,6 +75,10 @@ struct Playing {
     /// Its entry in `ObjectColliders` (only for objects with steps):
     /// `None` = not looked up yet, `Some(None)` = it has none.
     collider: Option<Option<usize>>,
+    /// A character prepared for a script's `loadKQ` (M4 4d-3): its states
+    /// and its draw-distance test, handed over when it comes in.
+    character: Option<Box<kq8_core::character::Character>>,
+    test: Option<crate::draw_distance::DistanceTest>,
 }
 
 #[derive(Resource)]
@@ -83,7 +87,6 @@ pub struct AnimSim {
     updates: u64,
     log: Log,
     /// `characters.log` (M4 4d), if it could be made.
-    #[allow(dead_code)]
     characters: Option<Log>,
 }
 
@@ -111,8 +114,14 @@ impl AnimSim {
         };
         let index = active.world.anims.len();
         let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
-        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false }]);
+        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take() }]);
         true
+    }
+
+    /// The draw-distance test of a character that just came in (M4 4d-3),
+    /// with its body, to be put on it.
+    pub fn take_test(&mut self, name: &str) -> Option<(Entity, crate::draw_distance::DistanceTest)> {
+        self.playing.iter_mut().find(|p| p.name.eq_ignore_ascii_case(name) && p.test.is_some()).and_then(|p| Some((p.body, p.test.take()?)))
     }
 
     /// `deleteObject` (3f): its collider is no longer moved.
@@ -228,6 +237,25 @@ pub fn spawn_animated(
         }
         // Draw distance (M1 6h); unused objects are only shown with H.
         // A character's ball is its rule-9 box.
+        // A character's states (M4 4d-3).
+        let mut character = a.character.as_ref().map(|c| {
+            let has_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
+            Box::new(kq8_core::character::Character::new(
+                c.keys.class == kq8_data::characters::Class::GeometryTalker,
+                c.keys.flags,
+                c.birth_delay,
+                has_birth,
+                c.keys.no_turn,
+                c.keys.gravity,
+                kq8_core::character::Character::seed_for(&p.name),
+            ))
+        });
+        let mut prepared_test = None;
+        if *unused {
+            if let Some(c) = &a.character {
+                prepared_test = Some(balls.test_character(p, c.box_type.as_deref()));
+            }
+        }
         if !*unused {
             let test = match &a.character {
                 Some(c) => {
@@ -350,10 +378,23 @@ pub fn spawn_animated(
         let source = if *unused {
             Source::Own(Box::new(player))
         } else {
-            core.push(AnimObject { player, script: a.script.clone(), gone: false });
+            core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take() });
             Source::Core(core.len() - 1)
         };
-        playing.push(Playing { name: p.name.clone(), source, script: a.script.clone(), rotation, position: p.position, movements: drawn, body, shown: None, tracked, collider: None });
+        playing.push(Playing {
+            name: p.name.clone(),
+            source,
+            script: a.script.clone(),
+            rotation,
+            position: p.position,
+            movements: drawn,
+            body,
+            shown: None,
+            tracked,
+            collider: None,
+            character,
+            test: prepared_test,
+        });
     }
     main_log.summary(format!(
         "animated objects: {} playing ({} run by the world's scripts, {} with more than one movement, {} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
@@ -385,11 +426,31 @@ pub fn spawn_animated(
 /// One update (15 per second), after `door_step` has run core's update:
 /// unused objects move their own loops; an object whose shown movement
 /// moves it takes its collider along (3r-4).
-pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>, doors: Option<Res<DoorSim>>) {
+pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>, doors: Option<ResMut<DoorSim>>) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.updates += 1;
     let n = sim.updates;
+    let mut doors = doors;
+    // characters.log (M4 4d-3): core's lines, and every 10 s how many
+    // characters are in each state.
+    if let Some(d) = doors.as_mut() {
+        let lines = std::mem::take(&mut d.active.world.character_log);
+        if let Some(log) = sim.characters.as_mut() {
+            for l in lines {
+                log.detail(l);
+            }
+            if n % 150 == 0 {
+                let w = &d.active.world;
+                let mut states: std::collections::BTreeMap<String, usize> = Default::default();
+                for c in w.anims.iter().filter(|a| !a.gone).filter_map(|a| a.character.as_deref()) {
+                    let key = if c.first_update.is_none() { "not updated yet".to_string() } else { format!("{:?}", c.state) };
+                    *states.entry(key).or_default() += 1;
+                }
+                log.detail(format!("update {}: characters near or far now: {}; by state {states:?}", w.updates, w.characters_in_range.len()));
+            }
+        }
+    }
     let doors = doors.as_deref();
     let mut colliders = colliders;
     for p in &mut sim.playing {

@@ -318,6 +318,9 @@ pub struct AnimObject {
     pub script: Option<String>,
     /// Deleted (`deleteObject`).
     pub gone: bool,
+    /// A character's states (M4 4d-3, `characters.md`); `None` for other
+    /// animated objects.
+    pub character: Option<Box<crate::character::Character>>,
 }
 
 /// A `KQCueEvent`'s script arguments (`doors.md` rule 23): `Cue`, its first
@@ -606,6 +609,11 @@ pub struct WorldState {
     pub connor_at: Option<[f32; 3]>,
     /// The world's `KQMonster` objects (`talking.md` rule 6).
     pub monsters: Vec<Monster>,
+    /// Characters near or far now (lower case), set by the caller before
+    /// each update (`characters.md` rule 11).
+    pub characters_in_range: BTreeSet<String>,
+    /// Lines for `characters.log` (M4 4d-3), taken by the caller.
+    pub character_log: Vec<String>,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -620,6 +628,18 @@ pub struct Monster {
 impl WorldState {
     pub fn now(&self) -> f64 {
         self.updates as f64 / crate::UPDATES_PER_SECOND
+    }
+
+    /// A line about a character: the current log and `characters.log`.
+    pub(crate) fn character_note(&mut self, who: &str, line: impl AsRef<str>) {
+        let line = format!("{who}: {}", line.as_ref());
+        self.character_log.push(format!("update {}: {line}", self.updates));
+        self.note(line);
+    }
+
+    /// The character called `name` (not deleted): its index in `anims`.
+    pub fn character_index(&self, name: &str) -> Option<usize> {
+        self.anims.iter().position(|a| !a.gone && a.character.is_some() && a.player.name.eq_ignore_ascii_case(name))
     }
 
     pub(crate) fn note(&mut self, line: impl AsRef<str>) {
@@ -1379,8 +1399,48 @@ impl WorldState {
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
             }
+            [_, who, state, rest @ ..] if self.character_index(who).is_some() => {
+                // characters.md rule 22.
+                let i = self.character_index(who).unwrap();
+                let a = &mut self.anims[i];
+                let line = a.character.as_mut().unwrap().set_state(&mut a.player, state, rest);
+                let name = a.player.name.clone();
+                self.character_note(&name, format!("{at}: KQMonster::setState {state} {}: {line}", rest.join(" ")));
+            }
             _ => self.note(format!("{at}: stub (later milestone, nothing done): {}", words.join(" "))),
         }
+        "0".into()
+    }
+
+    /// `KQObject::setUseGravity`, `KQMonster::setMonUseGravity`,
+    /// `KQMonster::setCanTurn <name> 0|1` (characters.md rules 8, 22, 23):
+    /// kept on the character for the steps that use them (4d-4, 4d-6).
+    /// `KQMonster::changeAnmFile <name> <file>`: logged only (rule 22:
+    /// traced only as far as "taken at the next end of a movement").
+    fn character_switch(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(value)) = (words.get(1), words.get(2)) else {
+            self.note(format!("{at}: usage: {} <name> <value>; nothing", words[0]));
+            return "1".into();
+        };
+        let Some(i) = self.character_index(who) else {
+            self.note(format!("{at}: {} {who}: not a character; nothing", words[0]));
+            return "1".into();
+        };
+        let on = number_value(value) != 0.0;
+        let c = self.anims[i].character.as_mut().unwrap();
+        let line = match words[0].as_str() {
+            "KQMonster::setCanTurn" => {
+                c.no_turn = !on;
+                format!("setCanTurn {}: noTurn now {} (used from 4d-4)", u8::from(on), u8::from(c.no_turn))
+            }
+            "KQMonster::changeAnmFile" => format!("changeAnmFile {value}: not done (not traced far, open question 4)"),
+            other => {
+                c.gravity = on;
+                format!("{other} {}: gravity {} (used from 4d-6)", u8::from(on), if on { "on" } else { "off" })
+            }
+        };
+        let name = self.anims[i].player.name.clone();
+        self.character_note(&name, format!("{at}: {line}"));
         "0".into()
     }
 
@@ -1947,6 +2007,9 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
+            "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
+                Some(self.character_switch(words, at))
+            }
             "move" => Some(self.move_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
@@ -2064,6 +2127,8 @@ impl Active {
                 connor_can_turn: false,
                 connor_at: None,
                 monsters: Vec::new(),
+                characters_in_range: BTreeSet::new(),
+                character_log: Vec::new(),
             },
         }
     }
@@ -3042,11 +3107,31 @@ impl Active {
         }
         // The other animated objects (3i-4): only starts, cues and ends
         // are logged here (their phases go to anim.log).
+        let now = self.world.now();
+        let update = self.world.updates;
         for i in 0..self.world.anims.len() {
             if self.world.anims[i].gone {
                 continue;
             }
-            let a = self.world.anims[i].player.advance(dt);
+            // A character (M4 4d-3): its states drive the player, and only
+            // while near or far (characters.md rule 11).
+            let in_range = self.world.characters_in_range.contains(&self.world.anims[i].player.name.to_ascii_lowercase());
+            let obj = &mut self.world.anims[i];
+            let (a, notes) = match obj.character.as_deref_mut() {
+                Some(c) => {
+                    c.in_range = in_range;
+                    let step = c.update(&mut obj.player, now, dt, update);
+                    match step.played {
+                        Some(a) => (a, step.notes),
+                        None => continue,
+                    }
+                }
+                None => (obj.player.advance(dt), Vec::new()),
+            };
+            let who = self.world.anims[i].player.name.clone();
+            for n in notes {
+                self.world.character_note(&who, n);
+            }
             let p = &self.world.anims[i].player;
             let (name, at) = (p.name.clone(), p.placement().position);
             for cue in &a.cues {
@@ -4030,7 +4115,7 @@ mod tests {
         let mut a = with_object(script, "x");
         let mut player = crate::named_anim::tests::still_then_open("water");
         player.movements[1].name = "blocked".into();
-        a.add_anims([AnimObject { player, script: None, gone: false }]);
+        a.add_anims([AnimObject { player, script: None, gone: false, character: None }]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         a.update();
         let log = a.take_log().join("\n");
@@ -4044,7 +4129,7 @@ mod tests {
         }
         assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("object water: movement 'blocked' finished"), "{log}");
         let mut d = with_object("deleteObject water\n", "x");
-        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false }]);
+        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None }]);
         d.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
     }

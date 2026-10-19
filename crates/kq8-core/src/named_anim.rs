@@ -172,13 +172,21 @@ impl NamedAnimPlayer {
     /// no `currAnimName` whose waiting movement starts on the first update
     /// loses it (that start is plain, [`NamedAnimPlayer::advance`]).
     pub fn with_random_start(mut self, rng: &mut crate::emitter::Rng) -> Self {
+        self.randomize(rng);
+        self
+    }
+
+    /// The same random start frame and speed for the movement playing now
+    /// (a character's `Stop`, `characters.md` rules 13 and 18). Returns
+    /// the frame and speed, for the log.
+    pub fn randomize(&mut self, rng: &mut crate::emitter::Rng) -> (usize, f32) {
         let (r, speed) = (rng.fraction(), rng.between(0.9, 1.1));
         let frames = self.movement().map_or(1, |m| m.frames());
         let frame = (r * (frames - 1) as f32).round();
         self.phase = frame / frames as f32;
         self.random_speed = Some(speed);
         self.playing = true;
-        self
+        (frame as usize, speed)
     }
 
     /// The running animation's speed now.

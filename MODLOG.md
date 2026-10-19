@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-3: the characters' states
+
+**Changed:** New `kq8-core/src/character.rs` (first update, Birth, Wait and `Stop`, the return to `Stop`, no state, `setState`, Special lists). `active.rs`: a character is an `AnimObject` with a `character` part, updated only while near or far; `setState`, `setUseGravity`, `setMonUseGravity`, `setCanTurn`, `changeAnmFile` for characters. `named_anim.rs`: `randomize`. Viewer: `draw_distance.rs` tells core which characters are near or far (`CharactersInRange`); `anim_view.rs` builds the states, writes core's lines to `characters.log` with a count by state every 10 s; `door_view.rs` gives a script-loaded character its distance test. `QUESTIONS.md`: Q118, Q119. DESIGN, provenance.
+**Why:** Step 4d-3 of `characters.md`.
+**Tested how:** `cargo test --workspace` (477 pass, 10 new), clippy clean. Viewer runs at the Wizard (`--at 189300,198274,0`), the Uglybeast (`--at 258500,296500,0.6 --click Uglybeast,30`), the farm (`--at 262000,212000,1.0`), the Shadow (`--at 239000,183200,0`), read in `characters.log`, `doors.log`.
+**Result:** Wizard: `attack` (still) at update 0, Wait and `Stop` at update 1 (plain: `flags=32`). Ravenw: `Stop` waits for `attack`, starts at update 44 at random frame 40, speed 1.059. Chickens and pig start `Stop` at random frames 28, 15, 7. The farm spriggan plays `attack` once (about 1 s) before `Stop` (rule 14). Zombies in Birth. The Shadow: rule 12.1, no state. Characters far away are not updated (52 of 57 at the Wizard's house).
+**Still broken / not tested:** **Not looked at by eye.** Q119: at the end of the Uglybeast's `pivot`, `Stop` shows for one update at the old heading before the script's `move` and `stand` (our `EndLoop` goes through the queue). Q118 stand-in for `sprdump` (not run). Script-loaded characters (Lady, ravens, Unicorn) not run. No turning, mouth, gestures, gravity.
+**Next:** 4d-4: turning.
+
 ## 2026-10-19 M4 step 4d-2: characters drawn where they stand
 
 **Changed:** Viewer `load.rs`: `loadKQ monsters.kq` places every line through its type's file (renamed, the line's position and heading, z −1 on the ground); a character's `animFile` list is attached so it is drawn like an animated object (one model per movement); skin swap (`load_animation_skinned`); characters clickable with their rule-9 box, not solid. `anim_view.rs`: characters' ball from the rule-9 box, characters with `Birth` (the zombies) hidden, new `kq8-artifacts/logs/characters.log`; a drawn animated object now follows its place in core (a script's `move`). `draw_distance.rs`: `test_character`. `docs/DESIGN.md`, provenance.

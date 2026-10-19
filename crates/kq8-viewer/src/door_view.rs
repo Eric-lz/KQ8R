@@ -183,6 +183,11 @@ pub fn apply_loads(
             shown += 1;
         }
         let animated = anim.as_mut().is_some_and(|a| a.bring_in(&name, &mut sim.active));
+        // A character brought in gets its draw-distance test now (M4
+        // 4d-3), so it updates while near or far (characters.md rule 11).
+        if let Some((body, test)) = anim.as_mut().and_then(|a| a.take_test(&name)) {
+            commands.entity(body).insert(test);
+        }
         let sounding = sound.as_mut().is_some_and(|s| s.wake(&name));
         let line = format!(
             "update {}: loadKQ: {name} came in: {shown} drawn part(s) shown{}{} (not clickable, no collider: prepared copies have none; not done)",
@@ -1095,9 +1100,12 @@ pub fn door_step(
     colliders: Option<ResMut<ObjectColliders>>,
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
+    in_range: Res<crate::draw_distance::CharactersInRange>,
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
+    // characters.md rule 11: which characters update now.
+    sim.active.world.characters_in_range = in_range.0.clone();
     // KQConner::JumpDir / endJump in timed cues (3m-1).
     sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
     // talking.md rule 7: whether he can turn to a listener, and where.

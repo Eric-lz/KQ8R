@@ -1,0 +1,465 @@
+//! Characters' states (M4 step 4d-3): what a `KQMonster` or
+//! `KQGeometryTalker` does on top of the movement player every animated
+//! object has (`crate::named_anim`).
+//!
+//! Rules from `docs/behaviour/characters.md` (session A, 2026-10-19):
+//!
+//! - Rule 11: a character updates only while near or far (not off, not
+//!   hidden); the caller says which ([`Character::in_range`]).
+//! - Rule 12: the first update. A waiting first movement with no current
+//!   name starts and the character stays in **no state** (12.1, rule 15);
+//!   otherwise the current movement plays and the character goes into
+//!   Birth (its list has `Birth`) or into Wait `birthDelay` seconds later,
+//!   through the event queue (12.2): at the next update at the earliest.
+//! - Rule 13: Wait asks for `Stop` the ordinary way; with `flags` bit 0x10
+//!   it starts at a random frame and speed 0.9–1.1.
+//! - Rule 18: in Wait, a play-once movement that ends (other than `Stop`
+//!   or a `gesture…`) is followed by Wait asking for `Stop` again, always
+//!   at a random frame and speed. Rule 19: no such return in Talk.
+//! - Rule 22: `setState` by name (capitals ignored); `Special <list>` as
+//!   Connor's (`anim-scripts.md` rule 16), then Wait.
+//!
+//! Not here (later steps): turning (4d-4), the mouth and gestures (4d-5),
+//! gravity (4d-6); noticing Connor, wandering, idling, Move, Die (M5).
+
+use std::collections::VecDeque;
+
+use crate::emitter::Rng;
+use crate::named_anim::{NamedAnimPlayer, Played, Request};
+
+/// What the character is doing (characters.md "Words used here").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    /// No state: plays only what it is told (rule 15).
+    None,
+    Birth,
+    Wait,
+    Move,
+    Special,
+    Talk,
+    Die,
+}
+
+/// The state names `setState` knows that only Connor has (rule 22).
+const CONNOR_ONLY: [&str; 10] = ["SwapWeapons", "ThrowRock", "Jump", "Push", "Tile", "Tile2", "Tile3", "Scales", "Choice", "Portal"];
+
+/// The movement Wait asks for (rule 13); looked up ignoring capitals.
+pub const STOP: &str = "Stop";
+
+/// A character's own values and state.
+#[derive(Debug, Clone)]
+pub struct Character {
+    /// `KQGeometryTalker` (rule 27; used from 4d-5).
+    pub geometry: bool,
+    /// `flags` bit 0x10 (rule 13).
+    pub random_stop: bool,
+    /// Seconds from the first update to Wait (rule 12).
+    pub birth_delay: f32,
+    /// Its list has `Birth` (rule 16).
+    pub has_birth: bool,
+    /// `noTurn` / `setCanTurn` (rule 23; used from 4d-4).
+    pub no_turn: bool,
+    /// Gravity on (rule 8; used from 4d-6).
+    pub gravity: bool,
+    pub state: State,
+    /// Near or far now (rule 11), set by the caller before each update.
+    pub in_range: bool,
+    /// The update number of its first update (rule 12), once it happened.
+    pub first_update: Option<u64>,
+    /// Game time at which Wait begins (rule 12.2).
+    wait_at: Option<f64>,
+    /// `Stop` gets the random frame and speed when it next starts (it was
+    /// asked for while the running movement could not be cut short).
+    random_pending: bool,
+    /// Special list items not handled yet, and the movement it waits for.
+    special: VecDeque<String>,
+    special_playing: Option<String>,
+    rng: Rng,
+}
+
+/// What one update did: the player's step (`None` when not updated) and
+/// lines for the log.
+#[derive(Debug, Default)]
+pub struct Step {
+    pub played: Option<Played>,
+    pub notes: Vec<String>,
+}
+
+impl Character {
+    /// A character as loaded; `seed` makes its random draws its own.
+    pub fn new(geometry: bool, flags: u32, birth_delay: f32, has_birth: bool, no_turn: bool, gravity: bool, seed: u64) -> Self {
+        Character {
+            geometry,
+            random_stop: flags & kq8_data::characters::RANDOM_STOP != 0,
+            birth_delay,
+            has_birth,
+            no_turn,
+            gravity,
+            state: State::None,
+            in_range: false,
+            first_update: None,
+            wait_at: None,
+            random_pending: false,
+            special: VecDeque::new(),
+            special_playing: None,
+            rng: Rng::new(seed),
+        }
+    }
+
+    /// A seed from the character's name (so two goblins differ, and a run
+    /// is the same every time).
+    pub fn seed_for(name: &str) -> u64 {
+        name.bytes().fold(0xCBF2_9CE4_8422_2325u64, |h, b| (h ^ u64::from(b.to_ascii_lowercase())).wrapping_mul(0x0100_0000_01B3))
+    }
+
+    /// One update (rule 11: nothing at all while off or hidden).
+    pub fn update(&mut self, player: &mut NamedAnimPlayer, now: f64, dt: f32, update: u64) -> Step {
+        let mut step = Step::default();
+        if !self.in_range {
+            return step;
+        }
+        let notes = &mut step.notes;
+        // Rule 12.2's Wait, through the queue: never in the first update.
+        if self.wait_at.is_some_and(|t| now >= t) {
+            self.wait_at = None;
+            notes.push(format!("Wait begins (rule 12.2, birthDelay {} s)", self.birth_delay));
+            self.enter_wait(player, notes);
+        }
+        if self.first_update.is_none() {
+            self.first_update = Some(update);
+            self.first(player, now, notes);
+        }
+        let played = player.advance(dt);
+        if let Some(st) = &played.started {
+            if self.random_pending && st.name.eq_ignore_ascii_case(STOP) {
+                self.random_pending = false;
+                let (frame, speed) = player.randomize(&mut self.rng);
+                notes.push(format!("'{}' started after the movement before it ended: random frame {frame}, speed {speed:.3} (rule 13)", st.name));
+            }
+        }
+        if let Some(m) = &played.finished {
+            self.after_end(player, m, notes);
+        }
+        step.played = Some(played);
+        step
+    }
+
+    /// Rule 12: the first update, before the player's step.
+    fn first(&mut self, player: &mut NamedAnimPlayer, now: f64, notes: &mut Vec<String>) {
+        let n = self.first_update.unwrap_or(0);
+        if self.state != State::None {
+            // Q118 stand-in: a state set before the first update is kept.
+            notes.push(format!("first update {n}: already in {:?} (set by a script before): kept, nothing restarted (Q118 stand-in)", self.state));
+            return;
+        }
+        if player.current_name.is_empty() {
+            if let Some(w) = &player.waiting {
+                // Rule 12.1 (rule 15, "Do not reproduce": kept, logged once).
+                notes.push(format!("first update {n}: rule 12.1: no current movement, the waiting '{w}' starts; NO STATE from now on until something sets one (rule 15)"));
+                return;
+            }
+        }
+        // Rule 12.2: movement 0 *starts* here when no name was given, so it
+        // is now the current movement by name (rule 14: Wait's `Stop` then
+        // waits for its end if it can't be cut short).
+        if player.current_name.is_empty() {
+            player.current_name = player.movement().map_or(String::new(), |m| m.name.clone());
+        }
+        notes.push(format!(
+            "first update {n}: rule 12.2: movement '{}' ({}) at phase {:.4} speed {:.3}",
+            player.movement_name(),
+            player.movement().map_or("none", |m| m.name.as_str()),
+            player.phase,
+            player.speed()
+        ));
+        if self.has_birth {
+            self.state = State::Birth;
+            notes.push("its list has Birth: Birth state, not drawn until it rises (rule 16; rising is M5)".into());
+        } else {
+            self.wait_at = Some(now + f64::from(self.birth_delay.max(0.0)));
+        }
+    }
+
+    /// Wait (rule 13): asks for `Stop`, random by `flags` bit 0x10.
+    fn enter_wait(&mut self, player: &mut NamedAnimPlayer, notes: &mut Vec<String>) {
+        self.state = State::Wait;
+        self.special.clear();
+        self.special_playing = None;
+        let random = self.random_stop;
+        let why = if random { "flags 0x10: random" } else { "no flags 0x10: from its loop= line" };
+        notes.push(format!("state Wait: asks for Stop ({why}): {}", self.ask_stop(player, random)));
+    }
+
+    /// Asks for `Stop` the ordinary way (`anim-scripts.md` rule 4).
+    fn ask_stop(&mut self, player: &mut NamedAnimPlayer, random: bool) -> String {
+        match player.request(STOP) {
+            Request::AtOnce(st) => {
+                let unknown = if st.unknown { " (no Stop in its list: movement 0)" } else { "" };
+                if random {
+                    let (frame, speed) = player.randomize(&mut self.rng);
+                    format!("starts at once{unknown} at random frame {frame}, speed {speed:.3}")
+                } else {
+                    format!("starts at once{unknown} at phase {:.4} speed {}", st.start, st.speed)
+                }
+            }
+            Request::Waiting => {
+                self.random_pending = random;
+                format!("waits for '{}' to end", player.movement_name())
+            }
+            Request::WaitingForever => {
+                self.random_pending = random;
+                format!("waits for '{}', which is stopped and can't be cut short: never (anim-scripts.md rule 6)", player.movement_name())
+            }
+        }
+    }
+
+    /// After the ordinary end of a play-once movement (rules 18, 22).
+    fn after_end(&mut self, player: &mut NamedAnimPlayer, ended: &str, notes: &mut Vec<String>) {
+        match self.state {
+            State::Wait => {
+                let lower = ended.to_ascii_lowercase();
+                if lower == "stop" || lower.starts_with("gesture") {
+                    notes.push(format!("'{ended}' ended in Wait: no return to Stop for Stop or a gesture (rule 18)"));
+                } else {
+                    notes.push(format!("'{ended}' ended in Wait: asks for Stop again (rule 18, always random): {}", self.ask_stop(player, true)));
+                }
+            }
+            State::Special if self.special_playing.as_deref().is_some_and(|p| p.eq_ignore_ascii_case(ended)) => {
+                self.special_playing = None;
+                notes.push(format!("Special: '{ended}' ended; next item"));
+                self.special_next(player, notes);
+            }
+            State::None => notes.push(format!("'{ended}' ended in no state: holds its last frame (rule 15)")),
+            s => notes.push(format!("'{ended}' ended in {s:?}: nothing more")),
+        }
+    }
+
+    /// `KQMonster::setState <name> <state> [words…]` (rule 22). Returns
+    /// the log line.
+    pub fn set_state(&mut self, player: &mut NamedAnimPlayer, state: &str, words: &[String]) -> String {
+        let mut notes = Vec::new();
+        if state.eq_ignore_ascii_case("Wait") {
+            self.wait_at = None;
+            self.enter_wait(player, &mut notes);
+        } else if state.eq_ignore_ascii_case("Special") {
+            // The words are joined with spaces into one list (rule 22).
+            let list = words.join(" ");
+            self.state = State::Special;
+            self.wait_at = None;
+            self.special = list.split(',').map(str::trim).filter(|w| !w.is_empty()).map(str::to_string).collect();
+            self.special_playing = None;
+            notes.push(format!("state Special, list '{list}' ({} items)", self.special.len()));
+            self.special_next(player, &mut notes);
+        } else if state.eq_ignore_ascii_case("Unborn") {
+            self.state = State::Birth;
+            self.wait_at = None;
+            notes.push("state Birth (Unborn); hiding a character that was drawn is not done (none in Daventry)".into());
+        } else if state.eq_ignore_ascii_case("Move") || state.eq_ignore_ascii_case("Die") {
+            notes.push(format!("{state}: walking and dying are M5; state unchanged ({:?})", self.state));
+        } else if CONNOR_ONLY.iter().any(|s| s.eq_ignore_ascii_case(state)) {
+            // "Do not reproduce": the original leaves it in an empty state.
+            notes.push(format!("{state} is a state only Connor has: logged and ignored (Do not reproduce); state stays {:?}", self.state));
+        } else {
+            notes.push(format!("cannot find state '{state}'; nothing"));
+        }
+        notes.join("; ")
+    }
+
+    /// The next items of a Special list (`anim-scripts.md` rule 16): a
+    /// movement starts at once and handling waits for its end; the list
+    /// used up → Wait.
+    fn special_next(&mut self, player: &mut NamedAnimPlayer, notes: &mut Vec<String>) {
+        while let Some(item) = self.special.pop_front() {
+            if item.to_ascii_lowercase().starts_with("animlist") {
+                notes.push(format!("Special item '{item}': other movement lists for characters are not built (none in Daventry); skipped"));
+                continue;
+            }
+            if item.eq_ignore_ascii_case("Inv") {
+                let what = self.special.pop_front().unwrap_or_default();
+                notes.push(format!("Special item 'Inv {what}': not traced; skipped"));
+                continue;
+            }
+            if item.eq_ignore_ascii_case("KillConnor") {
+                notes.push("Special item 'KillConnor' on a character: skipped (Connor's only)".into());
+                continue;
+            }
+            let st = player.start(&item);
+            let unknown = if st.unknown { " (not in its list: movement 0 plays under that name, anim-scripts.md rule 5)" } else { "" };
+            notes.push(format!("Special: '{item}' starts at once{unknown}; waits for its end"));
+            self.special_playing = Some(item);
+            return;
+        }
+        notes.push("Special list used up".into());
+        self.enter_wait(player, notes);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::named_anim::tests::movement;
+
+    /// attack (one-shot, can't be cut short), stop (repeats, can be cut
+    /// short), caw (one-shot), gesturea (one-shot).
+    fn player(current: usize, curr: Option<&str>, next: Option<&str>) -> NamedAnimPlayer {
+        let ms = vec![
+            movement("attack", 0.0, 1.0, false, false, vec![]),
+            movement("stop", 0.0, 1.0, true, true, vec![]),
+            movement("caw", 0.0, 1.0, false, false, vec![]),
+            movement("gesturea", 0.0, 1.0, false, true, vec![]),
+        ];
+        let base = crate::collide::Placement { rotation: crate::door::identity().m, position: [0.0; 3] };
+        NamedAnimPlayer::new("raven", ms, current, base).with_names_at_load(curr, next)
+    }
+
+    fn character(flags: u32) -> Character {
+        let mut c = Character::new(false, flags, 0.0, false, false, true, 7);
+        c.in_range = true;
+        c
+    }
+
+    /// Runs updates until `done` or `limit`.
+    fn run(c: &mut Character, p: &mut NamedAnimPlayer, from: u64, limit: u64, log: &mut Vec<String>) -> u64 {
+        let mut n = from;
+        while n < from + limit {
+            let s = c.update(p, n as f64 / 15.0, 1.0 / 15.0, n);
+            log.extend(s.notes);
+            n += 1;
+        }
+        n
+    }
+
+    #[test]
+    fn nothing_happens_while_off() {
+        let mut c = character(0x10);
+        c.in_range = false;
+        let mut p = player(0, None, None);
+        let s = c.update(&mut p, 0.0, 1.0 / 15.0, 0);
+        assert!(s.played.is_none() && c.first_update.is_none() && p.phase == 0.0);
+    }
+
+    #[test]
+    fn first_update_then_wait_asks_for_stop_when_movement_0_ends() {
+        // A raven: movement 0 'attack' can't be cut short.
+        let mut c = character(0x10);
+        let mut p = player(0, None, None);
+        let mut log = Vec::new();
+        let s = c.update(&mut p, 0.0, 1.0 / 15.0, 5);
+        log.extend(s.notes);
+        assert_eq!(c.first_update, Some(5));
+        assert_eq!(c.state, State::None, "Wait comes through the queue, not in the first update");
+        run(&mut c, &mut p, 6, 1, &mut log);
+        assert_eq!(c.state, State::Wait);
+        assert_eq!(p.movement_name(), "attack");
+        assert_eq!(p.waiting.as_deref(), Some(STOP));
+        // The loop is 1 s long in the test movements: 15 updates.
+        run(&mut c, &mut p, 7, 20, &mut log);
+        assert!(p.movement_name().eq_ignore_ascii_case("stop"), "{log:?}");
+        assert!(p.random_speed.is_some(), "Stop got the random speed: {log:?}");
+        let joined = log.join("\n");
+        assert!(joined.contains("rule 12.2") && joined.contains("waits for 'attack' to end"), "{joined}");
+    }
+
+    #[test]
+    fn stop_starts_at_once_plain_without_flag_0x10() {
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        let mut log = Vec::new();
+        run(&mut c, &mut p, 0, 2, &mut log);
+        assert_eq!(c.state, State::Wait);
+        assert!(p.random_speed.is_none(), "{log:?}");
+        assert!(log.join("\n").contains("starts at once at phase"));
+    }
+
+    #[test]
+    fn in_wait_a_one_shot_is_followed_by_stop_but_not_a_gesture() {
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        let mut log = Vec::new();
+        let n = run(&mut c, &mut p, 0, 2, &mut log);
+        p.request("caw");
+        let n = run(&mut c, &mut p, n, 20, &mut log);
+        assert!(p.movement_name().eq_ignore_ascii_case("stop"), "{log:?}");
+        assert!(p.random_speed.is_some(), "rule 18 is always random");
+        p.request("gesturea");
+        run(&mut c, &mut p, n, 20, &mut log);
+        assert_eq!(p.movement_name(), "gesturea", "a gesture holds its last frame");
+        assert!(log.join("\n").contains("no return to Stop for Stop or a gesture"));
+    }
+
+    #[test]
+    fn a_waiting_first_movement_means_no_state() {
+        // The Shadow: no currAnimName, nextAnimName=stop.
+        let mut c = character(0x10);
+        let mut p = player(0, None, Some("stop"));
+        let mut log = Vec::new();
+        let n = run(&mut c, &mut p, 0, 3, &mut log);
+        assert_eq!(c.state, State::None);
+        assert!(p.movement_name().eq_ignore_ascii_case("stop"));
+        p.request("caw");
+        run(&mut c, &mut p, n, 20, &mut log);
+        assert_eq!(p.movement_name(), "caw", "no state: holds the last frame: {log:?}");
+    }
+
+    #[test]
+    fn birth_list_means_birth_state() {
+        let mut c = Character::new(false, 0x10, 0.0, true, false, true, 1);
+        c.in_range = true;
+        let mut p = player(0, None, None);
+        let mut log = Vec::new();
+        run(&mut c, &mut p, 0, 5, &mut log);
+        assert_eq!(c.state, State::Birth);
+    }
+
+    #[test]
+    fn birth_delay_puts_off_wait() {
+        let mut c = Character::new(false, 0x20, 1.0, false, false, true, 1);
+        c.in_range = true;
+        let mut p = player(1, Some("stop"), None);
+        let mut log = Vec::new();
+        run(&mut c, &mut p, 0, 14, &mut log);
+        assert_eq!(c.state, State::None);
+        run(&mut c, &mut p, 14, 2, &mut log);
+        assert_eq!(c.state, State::Wait);
+    }
+
+    #[test]
+    fn special_lists_play_in_turn_then_wait() {
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        let mut log = Vec::new();
+        let n = run(&mut c, &mut p, 0, 2, &mut log);
+        let line = c.set_state(&mut p, "special", &["caw,attack".to_string()]);
+        assert!(line.contains("'caw' starts at once"), "{line}");
+        assert_eq!(c.state, State::Special);
+        let n = run(&mut c, &mut p, n, 17, &mut log);
+        assert_eq!(p.movement_name(), "attack", "{log:?}");
+        run(&mut c, &mut p, n, 17, &mut log);
+        assert_eq!(c.state, State::Wait, "{log:?}");
+        assert!(p.movement_name().eq_ignore_ascii_case("stop"));
+    }
+
+    #[test]
+    fn other_states_are_logged() {
+        let mut c = character(0x10);
+        let mut p = player(1, Some("stop"), None);
+        assert!(c.set_state(&mut p, "jump", &[]).contains("only Connor has"));
+        assert!(c.set_state(&mut p, "dance", &[]).contains("cannot find state"));
+        assert!(c.set_state(&mut p, "die", &[]).contains("M5"));
+        assert_eq!(c.state, State::None);
+        c.set_state(&mut p, "WAIT", &[]);
+        assert_eq!(c.state, State::Wait);
+    }
+
+    #[test]
+    fn a_state_set_before_the_first_update_is_kept() {
+        let mut c = character(0x10);
+        let mut p = player(1, Some("stop"), None);
+        c.set_state(&mut p, "special", &["caw".to_string()]);
+        let mut log = Vec::new();
+        run(&mut c, &mut p, 0, 3, &mut log);
+        assert_eq!(c.state, State::Special);
+        assert_eq!(p.movement_name(), "caw");
+        assert!(log.join("\n").contains("Q118"));
+    }
+}

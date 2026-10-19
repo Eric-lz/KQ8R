@@ -77,6 +77,9 @@ pub struct DistanceTest {
     /// `hidden=` from its file (always off, rule 36); scripted objects,
     /// chests and items are asked of the running game instead.
     pub hidden: bool,
+    /// A character (M4 4d-3): core is told each frame whether it is near
+    /// or far (`characters.md` rule 11).
+    pub character: bool,
 }
 
 /// What the scripts asked of the distance test (rule 42).
@@ -128,6 +131,7 @@ impl DistanceTest {
             groups: [placement.groups_always, placement.groups_near, placement.groups_far],
             ball_from,
             hidden: placement.hidden,
+            character: false,
         }
     }
 
@@ -193,13 +197,16 @@ impl ShapeBalls {
     /// `box_type` (the monster list's type, else `monsterType`), else by
     /// its name, exact.
     pub fn test_character(&self, placement: &Placement, box_type: Option<&str>) -> DistanceTest {
-        if let Some(b) = box_type.and_then(|t| self.bounds(t)) {
-            return DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's type");
-        }
-        match self.bounds(&placement.name) {
-            Some(b) => DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's name"),
-            None => DistanceTest::new(placement, None, "character without a box: radius 100"),
-        }
+        let mut test = if let Some(b) = box_type.and_then(|t| self.bounds(t)) {
+            DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's type")
+        } else {
+            match self.bounds(&placement.name) {
+                Some(b) => DistanceTest::new(placement, Some(b), "BOUNDS.KQ by the character's name"),
+                None => DistanceTest::new(placement, None, "character without a box: radius 100"),
+            }
+        };
+        test.character = true;
+        test
     }
 
     /// The test for a placed object by its `shapeName`.
@@ -230,6 +237,11 @@ pub struct ActivePoint {
     pub limit: f32,
 }
 
+/// The characters near or far in the last frame (lower case), for core
+/// (M4 4d-3, `characters.md` rule 11).
+#[derive(Resource, Default)]
+pub struct CharactersInRange(pub std::collections::BTreeSet<String>);
+
 /// What `update_activity` saw, for the log.
 #[derive(Resource, Default)]
 pub struct ActivityLog {
@@ -243,6 +255,7 @@ pub fn add(app: &mut App) {
         .configure_sets(PostUpdate, PropagateSet::<RenderLayers>::default().before(VisibilitySystems::CheckVisibility))
         .init_resource::<ActivePoint>()
         .init_resource::<ActivityLog>()
+        .init_resource::<CharactersInRange>()
         .init_resource::<ActiveRules>()
         .init_resource::<ColliderSwitches>()
         .init_resource::<SwitchedOut>();
@@ -277,8 +290,10 @@ pub fn update_activity(
     sim: Option<Res<crate::door_view::DoorSim>>,
     mut lights_group: ResMut<crate::scene_lights::LightsGroup>,
     shared: Res<Shared>,
+    mut characters: ResMut<CharactersInRange>,
 ) {
     lights_group.0.clear();
+    characters.0.clear();
     // Rule 42: Connor unless a script asked for the camera.
     let from_connor = if rules.camera { None } else { connor.iter().next() };
     let Some(reference) = from_connor.or(camera.iter().next()).map(|t| t.translation) else { return };
@@ -306,6 +321,9 @@ pub fn update_activity(
         } else {
             Activity::of(d, limit, test.too_far)
         };
+        if test.character && activity != Activity::Off {
+            characters.0.insert(test.name.to_ascii_lowercase());
+        }
         let [always, near, far] = test.groups;
         let drawn = !light.haze_on || activity.groups(always, near, far) & DRAW_BITS != 0;
         if !drawn && !has_layer {

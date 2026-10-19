@@ -647,7 +647,8 @@ inventory and menus.
     this step (the states come in 4d-3). Logs: per character its name,
     class, file, position and heading after the ground rules, list,
     box and how it was found.
-  - **4d-3, the states** (rules 11–19, 22). A character updates only
+  - **4d-3, the states** (**done** 2026-10-19; Q118, Q119 asked)
+    (rules 11–19, 22). A character updates only
     while near or far, not off or hidden (the viewer tells core which
     are near or far each update). The first update (rule 12): a waiting
     first movement → **no state** (rule 15), else the current movement,
