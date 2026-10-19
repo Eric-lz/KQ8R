@@ -128,6 +128,10 @@ pub enum Request {
     /// `KQCamera::follow Connor|none` (`camera.md` rule 1): `true` =
     /// follow Connor, `false` = stay where it is.
     CameraFollow { connor: bool, at: String },
+    /// The player swings and zooms the camera around `point` instead of
+    /// Connor (`conversation.md` rule 14, the right button; M4 4e-5);
+    /// `None`: around Connor again. `KQCamera::follow` ends it too.
+    CameraAround { point: Option<[f32; 3]>, at: String },
     /// `handsOff 1|0` (Q89 a stand-in): the player's movement keys, Jump
     /// and clicks are ignored while on.
     HandsOff { on: bool, at: String },
@@ -3349,6 +3353,7 @@ impl Active {
         let mut talk = std::mem::take(&mut self.world.talk);
         let w = &self.world;
         let exists = |name: &str| w.known.contains(&name.to_ascii_lowercase()) && !w.is_gone(name);
+        let fresh = talk.events.len();
         let finished = talk.update(now, captions, &exists);
         // Characters (M4 4d-5, characters.md rules 25-28): each mouth code
         // and line end; the last line of a queue sends the speaker to Wait
@@ -3387,7 +3392,18 @@ impl Active {
             }
         }
         let goodbyes = std::mem::take(&mut talk.goodbyes_ended);
+        // conversation.md rule 14: a conversation line with a camera number.
+        let cuts: Vec<(String, u32, u64)> = talk.events[fresh..]
+            .iter()
+            .filter_map(|e| match e {
+                crate::talk::TalkEvent::Start { issuer, camera: Some(n), conv: true, id, .. } => Some((issuer.clone(), *n, *id)),
+                _ => None,
+            })
+            .collect();
         self.world.talk = talk;
+        for (partner, n, id) in cuts {
+            self.conversation_camera(&partner, n, id);
+        }
         for f in finished {
             // conversation.md rule 15: the conversation's last line ends
             // Connor's talk state, TalkExit before its TalkComplete.

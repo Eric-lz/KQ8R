@@ -124,6 +124,9 @@ struct Args {
     /// `--command "WORDS",N`: before update N + 1, one script command
     /// runs as if a script did (M4 4d-5 test; repeatable).
     command: Vec<(String, u64)>,
+    /// `--right N`: the camera-move (right) button counts as held from
+    /// update N on, for a conversation's stay test (M4 4e-5 test).
+    right: Option<u64>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
     /// `--key NAME,N`: a panel key pressed before update N + 1 (M4 4c-2;
@@ -163,6 +166,7 @@ fn parse_args() -> Result<Args, String> {
         aim: Vec::new(),
         special: None,
         command: Vec::new(),
+        right: None,
         item: None,
         key: Vec::new(),
         light: light_view::LightMode::X1,
@@ -225,6 +229,7 @@ fn parse_args() -> Result<Args, String> {
                 let n = n.trim().parse::<u64>().map_err(|_| usage)?;
                 a.command.push((words.trim().to_string(), n));
             }
+            "--right" => a.right = Some(value()?.trim().parse::<u64>().map_err(|_| "--right needs an update number, e.g. 60".to_string())?),
             "--item" => a.item = Some(value()?),
             "--key" => {
                 let v = value()?;
@@ -360,6 +365,7 @@ N is an update number (15 updates per second):
                              (left:NAME / right:NAME), before update N + 1 (repeatable)
   --special ITEMS,N          play Connor's special movements (separated by ;)
   --command \"WORDS\",N      run one script command at update N (repeatable)
+  --right N                the right (camera-move) button counts as held from update N on (conversations)
 
   -h, --help                 show this list
 
@@ -513,6 +519,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::ClickAt(args.click))
                 .insert_resource(door_view::SpecialAt(args.special))
                 .insert_resource(door_view::CommandAt(args.command))
+                .insert_resource(door_view::RightAt(args.right))
                 .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
                 .init_resource::<door_view::Deleted>()

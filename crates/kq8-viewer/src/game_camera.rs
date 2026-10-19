@@ -168,6 +168,10 @@ pub struct GameCam {
     last_connor: Option<([f32; 3], f32)>,
     pending: Vec<&'static str>,
     script_moves: Vec<String>,
+    /// A conversation's right button (M4 4e-5, `conversation.md` rule 14):
+    /// the camera swings and zooms around this point instead of Connor;
+    /// Connor's moves don't move it.
+    around: Option<[f32; 3]>,
 }
 
 impl GameCam {
@@ -185,6 +189,10 @@ impl GameCam {
     /// Connor"); the tilt is the default at once.
     pub fn follow(&mut self, connor: bool, connor_base: [f32; 3]) -> String {
         self.following = connor;
+        let around = self.around.take().map_or(String::new(), |p| format!(" (no longer around ({:.0}, {:.0}, {:.0}))", p[0], p[1], p[2]));
+        if !around.is_empty() {
+            self.log.detail(format!("camera update {}: follow{around}", self.updates));
+        }
         // Both switches follow `follow` (rule 1 of the flights); following
         // an object switches the obstacle avoidance on again.
         self.places = connor;
@@ -228,6 +236,29 @@ impl GameCam {
             if turns { "turns back 1/3 per update" } else { "0.4 rad or less: the heading goes by the four states" },
             if switch.is_empty() { String::new() } else { format!("; {switch}") }
         )
+    }
+
+    /// The camera-move (right) button, if the key map gives one.
+    pub fn mouse_button(&self) -> Option<MouseButton> {
+        self.keys.mouse
+    }
+
+    /// `conversation.md` rule 14 (M4 4e-5): the player swings and zooms the
+    /// camera around `point` (its base, as Connor's feet), not Connor;
+    /// `None`: around Connor again. STAND-IN (Q126): the following
+    /// camera's rules with that point in Connor's place.
+    pub fn around(&mut self, point: Option<[f32; 3]>) -> String {
+        self.around = point;
+        self.following = true;
+        self.places = true;
+        self.aims = true;
+        self.cam.avoid = true;
+        let line = match point {
+            Some(p) => format!("the camera swings around ({:.0}, {:.0}, {:.0}) (aim 1400 above), not Connor; Connor's moves don't move it (Q126 stand-in)", p[0], p[1], p[2]),
+            None => "the camera follows Connor again".to_string(),
+        };
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        line
     }
 
     /// A script's `move Connor` this tick (for the log: the camera update
@@ -490,6 +521,7 @@ pub fn make(
         // One update on the first tick, as before 3n-1.
         pending: vec!["start (stand-in)"],
         script_moves: Vec::new(),
+        around: None,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
@@ -565,7 +597,8 @@ pub fn camera_step(
     // after Connor's update and this tick's scripts, so the update it
     // causes comes after a trap's `move KQCamera` (the note's queue).
     let now = (sim.mover.position, sim.walker.heading);
-    let moved = g.last_connor.is_some_and(|l| connor_moved(l, now));
+    // M4 4e-5: around a conversation partner, Connor's moves don't count.
+    let moved = g.last_connor.is_some_and(|l| connor_moved(l, now)) && g.around.is_none();
     g.last_connor = Some(now);
     let script_moves = std::mem::take(&mut g.script_moves);
     // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
@@ -599,7 +632,7 @@ pub fn camera_step(
     g.pressed_reset = false;
     // Ticks without a "moved" message (Connor is moving, the previous aim
     // point), then the causes of a camera update this tick.
-    let base = sim.mover.position;
+    let base = g.around.unwrap_or(sim.mover.position);
     if g.cam.tick(moved, base, input.mouse_held) {
         g.log.detail(format!("camera tick {}: 3 updates without \"Connor moved\": still; the previous aim point reset to where he stands", g.updates));
     }

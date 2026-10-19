@@ -93,6 +93,9 @@ pub struct Conversation {
     pub approach_updates: u32,
     /// Where the command was given (for the logs).
     pub at: String,
+    /// The right button was held during the stay test: camera numbers are
+    /// ignored for the rest of the conversation (rule 14).
+    pub cuts_stopped: bool,
 }
 
 impl Conversation {
@@ -225,7 +228,19 @@ impl WorldState {
         }
         let partner_at = self.object_point(&partner).unwrap_or([0.0; 3]);
         let lines = Speak { issuer: partner.clone(), first, last, nofade: false };
-        let c = Conversation { partner: partner.clone(), partner_at, info, lines, keep_weapon, case: None, stage: Stage::Asked, walk_from: [0.0; 3], approach_updates: 0, at: at.to_string() };
+        let c = Conversation {
+            partner: partner.clone(),
+            partner_at,
+            info,
+            lines,
+            keep_weapon,
+            case: None,
+            stage: Stage::Asked,
+            walk_from: [0.0; 3],
+            approach_updates: 0,
+            at: at.to_string(),
+            cuts_stopped: false,
+        };
         match &self.conversation {
             Some(old) if old.entered() => {
                 // "Edge cases": Connor's state can't be entered again; the
@@ -252,8 +267,9 @@ impl Active {
     /// (the caller: the viewer, before it applies the requests). `may_enter`:
     /// his state lets him into the talk state now (an unfinished jump
     /// doesn't, `anim-scripts.md` rule 28: tried again next update).
+    /// `right_held`: the camera-move (right) button is held now (rule 14).
     /// Returns nothing; lines go to `conversation_log`.
-    pub fn conversation_tick(&mut self, walker: &mut Walker, position: [f32; 3], may_enter: Result<(), String>) {
+    pub fn conversation_tick(&mut self, walker: &mut Walker, position: [f32; 3], may_enter: Result<(), String>, right_held: bool) {
         if let Some(why) = self.world.connor_leave.take() {
             let to = walker.leave_talk();
             self.world.conversation_note(format!("Connor leaves his talk state ({why}): {to} (rule 15)"));
@@ -265,8 +281,71 @@ impl Active {
                 Err(why) => self.world.conversation_note(format!("Connor can't go into his talk state now ({why}); tried again next update")),
             },
             Stage::StopWalk | Stage::WalkStopRight => self.approach(walker, position, stage),
-            Stage::Talking => self.stay_test(walker, position),
+            Stage::Talking => {
+                if right_held {
+                    self.camera_moved_by_player();
+                }
+                self.stay_test(walker, position);
+            }
         }
+    }
+
+    /// Rule 14: the first update the right button is held during the stay
+    /// test: the camera placed once at `cam0` aimed at the partner, then
+    /// swung around it by the player; camera numbers ignored from now on.
+    fn camera_moved_by_player(&mut self) {
+        let Some(c) = self.world.conversation.as_mut().filter(|c| !c.cuts_stopped) else { return };
+        c.cuts_stopped = true;
+        let aim = partner_aim(c.partner_at);
+        let at = format!("conversation with {} (right button)", c.partner);
+        let line = match c.info.as_ref().and_then(|i| i.cameras.first()) {
+            Some(cam0) => {
+                let d: [f32; 3] = std::array::from_fn(|k| aim[k] - cam0.position[k]);
+                let (tilt, heading) = crate::camera::view_angles(d);
+                self.world.requests.push(Request::Move { who: "KQCamera".into(), flags: 0, position: cam0.position, turn: [tilt, 0.0, heading], at: at.clone() });
+                format!("camera placed once at cam0 ({:.0}, {:.0}, {:.0}) aimed at ({:.0}, {:.0}, {:.0})", cam0.position[0], cam0.position[1], cam0.position[2], aim[0], aim[1], aim[2])
+            }
+            None => "no cam0: the camera stays where it is".to_string(),
+        };
+        let partner_at = c.partner_at;
+        self.world.requests.push(Request::CameraAround { point: Some(partner_at), at });
+        self.world.conversation_note(format!(
+            "the right button is held during the stay test: {line}; the player swings and zooms it around the partner at ({:.0}, {:.0}, {:.0}) (Q126 stand-in: as the following camera, aiming 1400 above); camera numbers ignored for the rest of this conversation (rule 14)",
+            partner_at[0], partner_at[1], partner_at[2]
+        ));
+    }
+
+    /// Rule 14: line `id` of `partner`'s conversation starts with camera
+    /// number `n`.
+    pub(crate) fn conversation_camera(&mut self, partner: &str, n: u32, id: u64) {
+        let Some(c) = self.world.conversation.as_ref().filter(|c| c.entered() && c.partner.eq_ignore_ascii_case(partner)) else {
+            self.world.conversation_note(format!("{partner}: line #{id} has camera {n}: Connor is not in his talk state with {partner}: ignored"));
+            return;
+        };
+        if c.cuts_stopped {
+            self.world.conversation_note(format!("{partner}: line #{id} camera {n}: ignored (the player moved the camera, rule 14)"));
+            return;
+        }
+        let cams = c.info.as_ref().map_or(0, |i| i.cameras.len());
+        let Some(cam) = c.info.as_ref().and_then(|i| i.cameras.get(n as usize)).copied() else {
+            // Do not reproduce: the original does not check.
+            self.world.conversation_note(format!("{partner}: line #{id} camera {n}: not below nCam {cams}: ignored (Do not reproduce)"));
+            return;
+        };
+        let at = format!("conversation with {partner}, line #{id}, camera {n}");
+        let turn = if c.reached() {
+            let to = c.partner_at;
+            self.world.requests.push(Request::ConnorAuto { auto: AutoMove::new(AutoKind::Point, [to[0], to[1]], None), at: at.clone() });
+            format!("Connor (at his spot) turns to face the partner at ({:.0}, {:.0})", to[0], to[1])
+        } else {
+            "Connor has not reached his spot: no turn".to_string()
+        };
+        self.world.requests.push(Request::CameraFollow { connor: false, at: at.clone() });
+        self.world.requests.push(Request::Move { who: "KQCamera".into(), flags: 0, position: cam.position, turn: cam.turn, at });
+        self.world.conversation_note(format!(
+            "{partner}: line #{id} camera {n}: {turn}; the camera stops following and cuts to cam{n} ({:.0}, {:.0}, {:.0}), angles ({:.2}, {:.2}, {:.2}) (rule 14)",
+            cam.position[0], cam.position[1], cam.position[2], cam.turn[0], cam.turn[1], cam.turn[2]
+        ));
     }
 
     /// Rule 2's start message and rule 6: Connor goes into his talk state.
@@ -509,7 +588,7 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         a.test_command("KQConner::conversation Bob 1000 60 0 0 1 0 0", "test");
         assert_eq!(a.world.conversation.as_ref().map(|c| (c.stage, c.lines.last)), Some((Stage::Asked, 2)), "<last> 0: the run");
         let mut walker = Walker::new(0.0);
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         assert_eq!(a.world.conversation.as_ref().map(|c| (c.case, c.stage)), Some((Some(Case::There), Stage::Talking)));
         assert_eq!(walker.mode, crate::connor::Mode::Talk);
         assert!(a.world.speak_ignored("Connor") && a.world.speak_ignored("bob") && !a.world.speak_ignored("Wizard"));
@@ -522,7 +601,7 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         let last = log.find("Bob: TalkComplete 1000 60 0 0 2").expect(&log);
         assert!(log.contains("Bob: TalkComplete 1000 60 0 0 1") && exit < last, "TalkExit before the last line's TalkComplete: {log}");
         assert!(a.world.conversation.is_none());
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         assert_eq!(walker.mode, crate::connor::Mode::Free, "Wait");
         assert!(a.world.gui_orders.iter().filter(|o| matches!(o, GuiOrder::Conversation { .. })).count() == 2, "the bar away and back");
     }
@@ -532,12 +611,12 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         let mut a = world();
         a.test_command("KQConner::conversation Bob 1000 60 0 0 1 2 0", "test");
         let mut walker = Walker::new(0.0);
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         a.update();
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         assert!(a.world.conversation.is_some(), "still inside");
         a.take_log();
-        a.conversation_tick(&mut walker, [2000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [2000.0, 1000.0, 100.0], Ok(()), false);
         assert!(a.world.conversation.is_none() && walker.mode == crate::connor::Mode::Free);
         let log = a.take_log().join("\n");
         assert!(log.contains("no goodbye") && log.contains("script bob.cs Bob TalkExit"), "Do not reproduce: TalkExit anyway: {log}");
@@ -549,14 +628,14 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         a.world.conv_infos.clear();
         a.test_command("KQConner::conversation Bob 1000 60 0 0 1 2 0", "test");
         let mut walker = Walker::new(0.0);
-        a.conversation_tick(&mut walker, [9000.0, 9000.0, 0.0], Ok(()));
+        a.conversation_tick(&mut walker, [9000.0, 9000.0, 0.0], Ok(()), false);
         assert_eq!(a.world.conversation.as_ref().map(|c| c.case), Some(Some(Case::There)));
         let mut a = world();
         a.test_command("KQConner::conversation Bob 1000 60 0 0 1 2 0", "test");
-        a.conversation_tick(&mut walker, [9000.0, 9000.0, 0.0], Err("jumping".into()));
+        a.conversation_tick(&mut walker, [9000.0, 9000.0, 0.0], Err("jumping".into()), false);
         assert_eq!(a.world.conversation.as_ref().map(|c| c.stage), Some(Stage::Asked), "tried again later");
         let mut w2 = Walker::new(0.0);
-        a.conversation_tick(&mut w2, [9000.0, 9000.0, 0.0], Ok(()));
+        a.conversation_tick(&mut w2, [9000.0, 9000.0, 0.0], Ok(()), false);
         assert_eq!(a.world.conversation.as_ref().map(|c| c.case), Some(Some(Case::There)), "no case: there");
         // Bad commands.
         let mut a = world();
@@ -597,7 +676,7 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         let mut a = clickable_world();
         a.test_command("KQConner::conversation Bob 1000 60 0 0 1 2 0", "test");
         let mut walker = Walker::new(0.0);
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()));
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         assert_eq!(a.click("Bob", [1000.0, 1000.0, 0.0], 100.0, None), ClickResult::Nothing);
         assert!(a.world.connor_in_talk());
         let horn = Item { object: "horn.1".into(), kind: "INVITEM_UniHorn".into() };
@@ -610,6 +689,38 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         assert!(a.world.conversation.is_none());
         // Then the ordinary click: Bob takes nothing, so "This will not work".
         assert_eq!(r, ClickResult::Refused);
+    }
+
+    #[test]
+    fn camera_numbers_cut_the_camera_until_the_right_button() {
+        use kq8_data::msg::{Line, MessageFile, Tuple};
+        let mut a = world();
+        // Lines with cameras 0, 1 (not below nCam 1: ignored) and 0 again.
+        let line = |seq, raw: &str| Line { tuple: Tuple::new(1001, 1, 0, 0, seq), talker: 9, raw: raw.into() };
+        a.world.talk.book.add("x", MessageFile { kind: 0x0F, version: 5010, last_id: 0, lines: vec![line(1, "([0]) A."), line(2, "([1]) B."), line(3, "([0]) C.")] }, 1001);
+        a.test_command("KQConner::conversation Bob 1001 1 0 0 1 3 0", "test");
+        let mut walker = Walker::new(0.0);
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
+        a.world.requests.clear();
+        a.update();
+        let cut = |r: &[Request]| r.iter().any(|r| matches!(r, Request::Move { who, position, .. } if who == "KQCamera" && *position == [0.0, 0.0, 500.0]));
+        assert!(cut(&a.world.requests) && a.world.requests.iter().any(|r| matches!(r, Request::CameraFollow { connor: false, .. })));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorAuto { .. })), "at his spot: he turns to the partner");
+        a.world.requests.clear();
+        for _ in 0..16 {
+            a.update();
+        }
+        assert!(!cut(&a.world.requests), "camera 1 is not below nCam 1");
+        assert!(a.world.conversation_log.iter().any(|l| l.contains("not below nCam 1")));
+        // The right button during the stay test: cam0 aimed at the partner,
+        // the swing around it, and no more cuts.
+        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), true);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::CameraAround { point: Some(_), .. })));
+        a.world.requests.clear();
+        for _ in 0..16 {
+            a.update();
+        }
+        assert!(!cut(&a.world.requests), "camera 0 of line 3 ignored after the right button");
     }
 
     #[test]

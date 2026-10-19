@@ -2097,3 +2097,15 @@ marked otherwise.
 | --- | --- | --- |
 | A character with an info object: no reach test; special area (`box2`…) → `ConnorAction Special Special`; start area → in reach (`do do`, or the held item through the accept list); else `TooFar TooFar`, `tooFarAwayAction` not looked at; then the click turn | Rule 5 | Unit test `a_click_on_a_partner_goes_by_the_areas_not_the_reach`; viewer: the note's three Daventry points give `do`, `Special` ("Come around, lad…"), `TooFar` ("Hello, there, sir wizard!") |
 | In the talk state a world click does nothing, except on the partner with an item: `InvConv <item type>` to its script, Connor leaves (with `TalkExit`), then the ordinary click; the queue is not emptied | Rule 19 | Unit test `during_the_talk_state_only_an_item_on_the_partner_counts`; viewer with `--item INVITEM_SilverCoins`: `InvConv`, `TalkExit`, `ConnorAction TestItem INVITEM_SilverCoins`, conversation 8/86 queued behind 13 waiting lines |
+
+### 4e-5, conversation cameras — `crates/kq8-core/src/conversation.rs`, `active.rs`; viewer `game_camera.rs`, `door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A conversation line with `[n]` starting while Connor is in his talk state: once he has reached his spot he turns to face the partner; the camera stops following and cuts to `cam<n>` (as `move KQCamera 0 …`) | Rule 14 | Unit test `camera_numbers_cut_the_camera_until_the_right_button`; viewer: the Wizard's first meeting cuts to 2 3 3 5 2 1 1 1 1 3 5 2 3 6, the note's list |
+| `n` not below `nCam`: logged and ignored | "Do not reproduce" (the original does not check) | Same unit test |
+| The right button held during the stay test: the camera placed once at `cam0` aimed at the partner, swung and zoomed around it; camera numbers ignored for the rest of the conversation | Rule 14 (the user's check in the original) | Same unit test; viewer `--right 200`: at update 200 the camera at `cam0`, then cameras 3, 5, 2, 1 ignored |
+| The swing around the partner is the following camera's with the partner's position in place of Connor's feet (range, height rule, obstacle check, aim 1,400 above); Connor's own moves don't move it; `follow` ends it | **Stand-in (Q126)** | `camera.log` "swings around (190807, 198274, 6630)" |
+| `--right N`: the right button counts as held from update N on | **Our test tool** | Used above |
+| The right button's lock released on entering the talk state | Rule 6 | **Not built** (our lock is the button itself; nothing to release when it is up) |
+| Only this update's line starts are looked at | **Our method** (the event list is emptied by the viewer each update) | Unit test (it failed before the fix) |

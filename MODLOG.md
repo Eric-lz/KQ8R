@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-5: conversation cameras and the right button
+
+**Changed:** `kq8-core/src/conversation.rs`: a conversation line with a camera number cuts the camera to `cam<n>` (checked against `nCam`) and turns Connor to the partner once he is at his spot; the right button held during the stay test places the camera at `cam0` aimed at the partner and swings it around the partner, and later camera numbers are ignored. `active.rs`: `Request::CameraAround`; the line starts of the update are looked at. Viewer: `game_camera.rs` swings around a point instead of Connor (`around`; `follow` ends it); `door_view.rs` passes the right button to the conversation; new test option `--right N` (`main.rs`). FEATURES (`--right`), DESIGN, provenance.
+**Why:** Step 4e-5 of `conversation.md` (rules 6, 14, 15).
+**Tested how:** `cargo test --workspace` (502 pass, 1 new), clippy clean. Viewer (`--sound off`): `--at 193000,198000,-1.7 --click Wizard,30 --frames 32000`, and the same with `--right 200 --frames 9000`; read in `conversation.log`, `camera.log`.
+**Result:** The Wizard's first meeting (lines 1–13, then 14 after the map scene) cuts to cameras 2 3 3 5 2 1 1 1 1 3 5 2 3 6, the note's list; Connor turns to the Wizard at each. `cam2` sits at (189954, 199109, 8090) looking along (0.81, −0.55, −0.19), toward Connor's spot. With `--right 200`: at update 200 the camera goes to `cam0` (196075, 200403, 8086) aimed at (190807, 198274, 8030), swings around the Wizard, and cameras 3, 5, 2 and 1 of the next lines are ignored. At the end the camera goes to `cam0` looking at the Wizard, then follows Connor (built in 4e-3).
+**Still broken / not tested:** **Not looked at by eye**, and no real mouse drag tried (only `--right`, which presses nothing in the camera itself, so no swing was made). Q126 stand-in for the aim point and the swing's rules. The release of the right button's lock on entering (rule 6) is not built (logged as nothing to do).
+**Next:** 4e-6: goodbye and welcome back in the viewer.
+
 ## 2026-10-19 M4 step 4e-4: clicking a conversation partner, `InvConv`
 
 **Changed:** `kq8-core/src/active.rs`: a click on a character with an info object goes by the areas (`click_partner`: `Special`, `do` / the held item, `TooFar`), not by the reach; during the talk state a world click does nothing except one on the partner with an item held (`InvConv`, Connor leaves with `TalkExit`, then the ordinary click). 2 unit tests. DESIGN, provenance.

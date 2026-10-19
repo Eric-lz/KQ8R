@@ -222,6 +222,11 @@ pub struct SpecialAt(pub Option<(String, u64)>);
 #[derive(Resource, Default)]
 pub struct CommandAt(pub Vec<(String, u64)>);
 
+/// `--right N` (M4 4e-5 test): the right button counts as held from
+/// update N on.
+#[derive(Resource, Default)]
+pub struct RightAt(pub Option<u64>);
+
 /// `--aim NAME,N` (each may be given more than once).
 #[derive(Resource)]
 pub struct AimAt(pub Vec<(String, u64)>);
@@ -731,6 +736,7 @@ pub fn trap_step(
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
+    (buttons, right_at): (Res<ButtonInput<MouseButton>>, Res<RightAt>),
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -801,8 +807,13 @@ pub fn trap_step(
             Err("his jump is not finished".to_string())
         };
         let position = connor.mover.position;
+        // conversation.md rule 14: the camera-move button (not during
+        // handsOff, which ignores the mouse look); `--right` for tests.
+        let button = camera.as_ref().and_then(|c| c.mouse_button()).is_some_and(|b| buttons.pressed(b));
+        let test = right_at.0.is_some_and(|n| sim.active.world.updates >= n);
+        let right_held = (button || test) && !connor.hands_off;
         let ConnorSim { walker, .. } = &mut *connor;
-        sim.active.conversation_tick(walker, position, may_enter);
+        sim.active.conversation_tick(walker, position, may_enter, right_held);
         sim.flush_conversation(&shared);
     }
     // State requests a jump refused at an earlier update go first (3m-1).
@@ -917,6 +928,10 @@ pub fn trap_step(
             Request::CameraFollow { connor: follow, at } => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.follow(follow, connor.mover.position)),
                 None => format!("{at}: KQCamera::follow: no game camera; not applied"),
+            },
+            Request::CameraAround { point, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.around(point)),
+                None => format!("{at}: camera around a point: no game camera; not applied"),
             },
             Request::Load { file, name, at } => {
                 loads.0.push(name.clone());

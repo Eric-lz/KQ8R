@@ -790,7 +790,7 @@ inventory and menus.
     turn as usual. During the talk state a world click does nothing,
     except one on the partner with an item held: `InvConv <item>`, Connor
     leaves (with `TalkExit`), then the click goes on as above.
-  - **4e-5, cameras and panels** (rules 6, 14, 15; `interface.md` rule
+  - **4e-5, cameras and panels** (**done** 2026-10-19; the panels came with 4e-3; new test option `--right N`) (rules 6, 14, 15; `interface.md` rule
     16). A line with a camera number cuts the camera to `cam<n>` (checked
     against `nCam`: Do not reproduce) and turns Connor to the partner once
     he has reached his spot; the right button held during the stay test

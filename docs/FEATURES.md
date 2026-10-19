@@ -517,6 +517,9 @@ repeated and checked in the logs. They do not change the game's rules.
   as if a script did (words split at spaces; no variables). For example
   `--command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` makes
   the Wizard say a line. Can be given more than once.
+- `--right N`: the right (camera-move) button counts as held from update
+  N on, for a conversation: the camera stops cutting between the
+  conversation cameras and turns around the person Connor talks to.
 
 An "update" is one step of the game's rules, the same step each time you
 run the test. Unknown options and bad values stop the viewer with a
