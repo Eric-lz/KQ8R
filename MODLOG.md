@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-7: Space's sounds, the spinning mask in the corner
+
+**Changed:** `kq8-core/src/panels.rs`: Space plays `intrup.aud` when the bottom bar starts to show and `intrdown.aud` when it starts to hide (handsOff and the scripts still play nothing); tests updated. Viewer `gui_view.rs`: the status icons are drawn at their own size (not × 1.25) with the spinning mask's bottom right corner at the screen's bottom right corner; the place is logged. `QUESTIONS.md`: Q111. Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.
+**Why:** The user's check of 4c in the original: Space makes the top bar's sound (cutscenes don't); the spinning mask is in the bottom right corner and smaller.
+**Tested how:** `cargo test --workspace` (451 pass, 2 tests changed), clippy clean. Viewer: the bricks `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --key space,3 --key space,9 --frames 2500 --sound off` (`gui-4c7-bricks.log`, `sound-4c7-bricks.log`).
+**Result:** "Space: intrdown.aud" at 0.000 s, "Space: intrup.aud" at 1.106 s, both started in `sound.log`; handsOff at 1.370 s slides the bar away with no sound; "status icons at [752, 552, 1088, 600] of 800x600" (the mask is the first 48 × 48 of that, in the corner).
+**Not changed (asked as Q111):** the meter bars' width (ours follow the layout exactly: 86 of 256 pixels each, with 14-pixel end pieces) and the empty green bar at 0 experience (0 % wide by rule 22; nothing is drawn behind an empty bar, so the world shows through it).
+**Still broken / not tested:** Not seen by eye. Which sound goes with which direction, and the mask's exact place and size, are stand-ins (Q111).
+**Next:** The user's check of 4c-6 and 4c-7; A: Q108–Q111.
+
 ## 2026-10-18 M4 step 4c-6: the panels on a 4:3 screen in the middle of the window
 
 **Changed:** `kq8-core/src/panels.rs`: `screen_frame`, the largest 4:3 rectangle centred in a window (unit test). Viewer: a `ScreenFrame` resource fitted each frame (`fit_screen`, logged in `viewer.log` when it changes); `gui_view.rs` places the panels on it in window pixels, maps the pointer to the game's screen through it, computes the click areas from it and sizes the pointer picture from its height; `talk_view.rs` places the caption on it. `docs/DESIGN.md` (4c-6, 4c-7 planned), provenance, `docs/FEATURES.md`.

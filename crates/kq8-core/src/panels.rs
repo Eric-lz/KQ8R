@@ -10,7 +10,8 @@
 //!   to show while it is showing or sliding in is left alone, the same for
 //!   hiding. The top bar plays `intrup.aud` when it starts to show and
 //!   `intrdown.aud` when it starts to hide; the map `map.aud` /
-//!   `mapbgone.aud`; the bottom panels nothing. Hidden, the top bar sits
+//!   `mapbgone.aud`; the bottom panels nothing (but Space plays the top
+//!   bar's sounds: the user's check, 4c-7). Hidden, the top bar sits
 //!   1/480 of the screen above its own height, the bottom panels just
 //!   below the bottom edge, the map 50/640 of the screen beyond its own
 //!   width to the left (rule 9).
@@ -246,10 +247,17 @@ impl Panels {
         }
     }
 
-    /// Rule 10: Space.
+    /// Rule 10: Space. 4c-7 (the user's check in the original, Q111):
+    /// Space plays the top bar's sounds, `intrup.aud` as the bar starts
+    /// to show and `intrdown.aud` as it starts to hide (which goes with
+    /// which: STAND-IN); handsOff and the scripts play nothing (rule 9).
     pub fn toggle_bottom(&mut self, why: &str) {
         let on = !self.bottom_shown();
-        self.set(Group::Bottom, on, why);
+        if self.set(Group::Bottom, on, why) {
+            let sound = if on { "intrup.aud" } else { "intrdown.aud" };
+            self.note(format!("Space: {sound} (the user's check; stand-in Q111)"));
+            self.sounds.push(sound.to_string());
+        }
     }
 
     /// Rule 15: `handsOff` going on or off.
@@ -421,7 +429,8 @@ mod tests {
         p.toggle_bottom("Space");
         p.update(50.0);
         assert_eq!(p.away(Panel::BottomRight), 1.0);
-        assert!(p.sounds.is_empty(), "the bottom panels play nothing");
+        // 4c-7: Space plays the top bar's sounds.
+        assert_eq!(p.sounds, ["intrdown.aud", "intrup.aud", "intrdown.aud"]);
         // Asked to hide while hiding: left alone.
         assert!(!p.set(Group::Bottom, false, "test"));
     }
@@ -455,6 +464,8 @@ mod tests {
         assert!(!p.bottom_shown() && p.mask_icon);
         p.hands_off(false);
         assert!(p.bottom_shown() && !p.mask_icon);
+        // 4c-7: handsOff slides the bar without a sound.
+        assert!(p.sounds.is_empty());
         // Put away first: it stays away.
         p.toggle_bottom("Space");
         p.hands_off(true);
@@ -464,7 +475,7 @@ mod tests {
         p.set(Group::Top, true, "test");
         p.hands_off(true);
         assert!(p.shown(Panel::Top));
-        assert_eq!(p.sounds, ["intrup.aud"]);
+        assert_eq!(p.sounds, ["intrdown.aud", "intrup.aud"]);
     }
 
     #[test]

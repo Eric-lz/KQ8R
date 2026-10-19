@@ -549,7 +549,7 @@ impl Gui {
 
     /// Draws a picture `size` layout pixels big from `specs`, loading the
     /// pictures and fonts it needs.
-    fn draw(&mut self, size: [i32; 2], specs: &[Spec]) -> gui_draw::Canvas {
+    fn draw(&mut self, size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
         for s in specs {
             match s {
                 Spec::Pic { file, .. } => self.load_file(file),
@@ -570,7 +570,7 @@ impl Gui {
                 }
             }
         }
-        gui_draw::draw(size, self.scale, &pieces, &self.palette)
+        gui_draw::draw(size, scale, &pieces, &self.palette)
     }
 
     /// How many frames a `.pba` has (0 if not loaded).
@@ -863,6 +863,7 @@ pub fn gui_draw(
     mut cover: ResMut<GuiCover>,
     mut caption: ResMut<CaptionPlace>,
     frame: Res<ScreenFrame>,
+    mut status_at: Local<Option<[i32; 4]>>,
 ) {
     let Some(mut gui) = gui else { return };
     let gui = &mut *gui;
@@ -918,11 +919,21 @@ pub fn gui_draw(
             Drawn::Panel(p) => (gui.panels.away(p), Some(p)),
             Drawn::Status => (if gui.panels.mask_icon { 0.0 } else { 1.0 }, None),
         };
-        let (left, top) = match panel {
-            Some(p) => kq8_core::panels::place(p, rect, [sw, sh], away),
-            None => (rect[0], rect[1]),
+        // 4c-7 (the user's check in the original, Q111): the status
+        // icons at their own size (not scaled with the screen), the
+        // spinning mask in the screen's bottom right corner.
+        let status_size = |gui: &Gui| {
+            let dialog = gui.control(d.layout_id())?.rect;
+            let mask = gui.control("IDCTL_TIMER_7")?.rect;
+            Some(([dialog[2] - dialog[0], dialog[3] - dialog[1]].map(|v| v as f32), [mask[2], mask[3]].map(|v| v as f32)))
         };
-        let (w, h) = (rect[2] - rect[0], rect[3] - rect[1]);
+        let ((left, top), (w, h)) = match (panel, d) {
+            (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
+            (None, _) => match status_size(gui) {
+                Some(([w, h], [mr, mb])) => ((sw - mr, sh - mb), (w, h)),
+                None => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
+            },
+        };
         if matches!(panel, Some(Panel::BottomLeft | Panel::Slots | Panel::Meters)) {
             bottom = bottom.min(top);
         }
@@ -931,6 +942,14 @@ pub fn gui_draw(
             continue;
         }
         *vis = Visibility::Inherited;
+        if panel.is_none() {
+            let at = [left, top, left + w, top + h].map(|v| v.round() as i32);
+            if *status_at != Some(at) {
+                *status_at = Some(at);
+                let line = format!("status icons at {at:?} of {sw}x{sh} (own size; the spinning mask in the bottom right corner: the user's check, 4c-7, Q111)");
+                gui.note(line);
+            }
+        }
         node.left = Val::Px(fl + left * k);
         node.top = Val::Px(ft + top * k);
         node.width = Val::Px(w * k);
@@ -943,7 +962,8 @@ pub fn gui_draw(
         if gui.last.get(d.layout_id()) == Some(&specs) {
             continue;
         }
-        let canvas = gui.draw(size, &specs);
+        let scale = if panel.is_some() { gui.scale } else { 1.0 };
+        let canvas = gui.draw(size, &specs, scale);
         let mut picture = Image::new(Extent3d { width: canvas.width, height: canvas.height, depth_or_array_layers: 1 }, TextureDimension::D2, canvas.rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
         picture.sampler = ImageSampler::nearest();
         if let Some(mut slot) = images.get_mut(&image.image) {

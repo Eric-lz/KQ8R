@@ -1791,3 +1791,11 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | --- | --- | --- |
 | The panels, the caption, the pointer's screen position, the click areas and the pointer's size are on the largest 4:3 rectangle centred in the window; the world fills the whole window | **The user's choice** (2026-10-18: the original runs at a fixed 4:3 and its panels are laid out for it; "a virtual 4:3 screen in the middle") | Unit test `the_screen_is_4_3_in_the_middle_of_the_window`; `viewer.log` "screen: window 1280x720: the game's 4:3 screen at left 160.0 top 0.0, 960.0x720.0" |
 | The top bar comes down with the pointer at the 4:3 screen's top row | **Our choice** (follows the screen) | — (needs the real mouse) |
+
+### 4c-7, the user's corrections — `crates/kq8-core/src/panels.rs`, `crates/kq8-viewer/src/gui_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Space plays `intrup.aud` as the bottom bar starts to show and `intrdown.aud` as it starts to hide; handsOff, scripts and the meters' pop-up play nothing | **The user's check in the original** (2026-10-18), against `interface.md` rule 9 ("no sound of their own"); which sound with which way is a **stand-in** (Q111 a) | Unit tests in `panels.rs`; `gui-4c7-bricks.log` "Space: intrdown.aud", "Space: intrup.aud"; `sound-4c7-bricks.log`; handsOff at 1.370 s: no sound |
+| The status icons at their own size (48 × 48 on the 800 × 600 screen), the spinning mask's bottom right corner at the screen's | **The user's check in the original** ("bottom right corner, a little smaller"); the exact place and size are a **stand-in** (Q111 b) | `gui-4c7-bricks.log` "status icons at [752, 552, 1088, 600] of 800x600" |
+| The meter bars and the empty green bar unchanged | `interface.md` rules 20, 22 and the layout; the user sees them differ (Q111 c, d) | — |
