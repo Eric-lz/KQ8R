@@ -1720,7 +1720,7 @@ catchers, ground animators).
       write the heading the follow camera starts from. Tilt as before
       in this step (3o-2 changes it). Log: state before → after, the
       error, the turn, every camera update.
-    - **3o-2, the tilt and the aim height, together** (`camera.md`
+    - **3o-2, the tilt and the aim height, together** (**done** 2026-10-19; `camera.md`
       "What the camera looks at" rules 2–3, Q27 b; the user's report of
       the hips). `AIM_HEIGHT` back to the note's 1,400 (it was set to
       800 by hand because our view looked straight at the aim point;

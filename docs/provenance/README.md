@@ -1858,3 +1858,14 @@ This replaces three stand-ins: the heading kept after `move KQCamera` while foll
 | Flights and cuts keep their own aiming (3m-4) and write the heading the follow view goes on from; `move KQCamera` writes it too; the state is not changed by any of them | **Stand-in** (Q113 d) | `camera-3o1-watermill.log`: flight unchanged, cue 6 `follow` leaves the view 0.121 off, idle |
 | The view is drawn from the camera's own heading and tilt (blended between updates, the heading the short way round), no longer "look at the aim point, then turn" | **Our method** | Viewer runs above |
 | At the start-up update the view first looks straight at Connor | **Stand-in** (part of the Q27 d start stand-in; `--at` moves him after the camera is made) | `camera-3o1-side.log` update 1: error 0.000 |
+
+### 3o-2, the tilt and the aim height — `crates/kq8-core/src/{camera,camera_flight}.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces the stand-in "the view looks straight at the aim point, pitched by the tilt's difference from the default" and the hand-set aim height of 800.
+
+| What | Source | Check |
+| --- | --- | --- |
+| The aim point is 1,400 above the followed object's base (back from the hand-set 800; the leash, the height rule and the view test use it) | `camera.md` "What the camera looks at" rule 2 | Unit tests (all camera tests now at 1,400) |
+| The view tilt = the player's tilt + the angle up from the camera to the aim point, set every update; the player's tilt is −0.2 by default (negative looks down), Page Up adds 0.015 per update | Rule 3 (Q27 b), "Tilt" rules 1–2 | Unit test `the_view_looks_0_2_below_the_aim_point_and_passes_connor_at_his_chest`; `camera-3o2-wheel.log` update 18: −0.832 (the note: about −0.83) |
+| One default tilt and one aim height for the follow camera and the flights | **Our method** (same numbers in both rules) | `the_watermill_flight` unchanged; `camera-3o2-watermill.log` flight 31/31 as before |
+| `camera.log` logs where the view's centre line passes Connor (height above his feet) | **Our log** (the user's check of the hips) | `camera-3o2-walkzone.log`: 893 at 2,499 away; `camera-3o2-walk.log`: 782 at 3,046, 390 at 4,999 |

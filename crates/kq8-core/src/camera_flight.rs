@@ -18,17 +18,18 @@
 //! Angles are the camera's own (`camera::view_direction`): tilt positive
 //! looks up, heading 0 looks along +Y, anticlockwise.
 
-use crate::camera::{height_rule, height_share, view_angles, wrap, HeightStep, FOLLOW_TURN_SNAP, UPDATE_SECONDS};
+use crate::camera::{height_rule, height_share, view_angles, wrap, HeightStep, AIM_HEIGHT, DEFAULT_TILT, FOLLOW_TURN_SNAP, UPDATE_SECONDS};
 
 /// Without seconds, a flight goes this fast (units per second).
 pub const FLIGHT_SPEED: f32 = 5000.0;
 /// The camera looks this far above the aim point (rule 5; `camera.md`
-/// "What the camera looks at" rule 2).
-pub const LOOK_ABOVE: f32 = 1400.0;
+/// "What the camera looks at" rule 2): the follow camera's aim height.
+pub const LOOK_ABOVE: f32 = AIM_HEIGHT;
 /// Within this of the aim (radians) the heading locks on (rule 5).
 pub const LOCK_ON: f32 = 0.02;
-/// The default tilt in the camera's angles: 0.2 rad down (rule 5).
-pub const AIM_TILT: f32 = -0.2;
+/// The default tilt in the camera's angles: 0.2 rad down (rule 5), the
+/// follow camera's default.
+pub const AIM_TILT: f32 = DEFAULT_TILT;
 /// Updates per second the flight's length is counted in (rule 4).
 const UPDATES: f32 = 15.0;
 

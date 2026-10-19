@@ -9,15 +9,18 @@
 //! aiming the view: its heading by four states (M3 3o-1). Not here yet:
 //! first person, shake.
 //!
-//! Stand-ins: the view's tilt looks at the aim point, pitched by `tilt -
-//! DEFAULT_TILT` (until M3 3o-2); in fixed mode Page Up = closer.
+//! The view's tilt is the player's tilt (−0.2 by default, negative looks
+//! down) plus the angle up to the aim point (M3 3o-2). Stand-in: in fixed
+//! mode Page Up = closer.
 //! `mouse_forward` positive = zoom in; the viewer sends mouse-down as
 //! positive (the user's check of the original).
 
 use crate::connor_mover::GroundLookup;
 
-/// The camera aims this far above the followed object's base.
-pub const AIM_HEIGHT: f32 = 800.0;  // modified manually to what feels more natural, but could be wrong
+/// The camera aims this far above the followed object's base (camera.md
+/// "What the camera looks at" rule 2; the 800 hand-set before M3 3o-2
+/// made up for our view looking straight at it).
+pub const AIM_HEIGHT: f32 = 1400.0;
 /// The camera stays at least this far above the terrain under it and above
 /// the followed object's base.
 pub const MIN_HEIGHT: f32 = 1400.0;
@@ -172,7 +175,8 @@ pub const TILT_PER_UPDATE: f32 = 0.015;
 pub const FIXED_ZOOM_PER_UPDATE: f32 = 125.0;
 /// Third-person tilt limits.
 pub const TILT_LIMIT: f32 = 1.57;
-pub const DEFAULT_TILT: f32 = 0.2;
+/// The player's tilt by default: 0.2 rad down (camera.md "Tilt" rule 1).
+pub const DEFAULT_TILT: f32 = -0.2;
 /// Tilt snaps back once the followed object moved more than this
 /// (|Δx| + |Δy|) in one update, in normal mode.
 pub const MOVE_RESETS_TILT: f32 = 10.0;
@@ -479,6 +483,20 @@ fn azimuth(v: [f32; 3]) -> f32 {
     v[1].atan2(v[0])
 }
 
+/// Where the view's centre line (from `position`, along `tilt` and
+/// `heading`) passes the vertical line through `base`: its height above
+/// `base` there (at the point of the line nearest to it seen from above).
+/// `None` when the view looks straight up or down.
+pub fn centre_line_height(position: [f32; 3], tilt: f32, heading: f32, base: [f32; 3]) -> Option<f32> {
+    let d = view_direction(tilt, heading);
+    let flat = d[0] * d[0] + d[1] * d[1];
+    if flat < 1e-9 {
+        return None;
+    }
+    let t = ((base[0] - position[0]) * d[0] + (base[1] - position[1]) * d[1]) / flat;
+    Some(position[2] + t * d[2] - base[2])
+}
+
 /// An angle brought into −π..π.
 pub fn wrap(a: f32) -> f32 {
     let t = std::f32::consts::TAU;
@@ -528,11 +546,12 @@ impl Camera {
         }
     }
 
-    /// Points the view straight at `aim` (the start), state idle.
+    /// Points the view's heading straight at `aim` (the start), the tilt
+    /// as every update sets it.
     pub fn look_at(&mut self, aim: [f32; 3]) {
         let (up, towards) = view_angles(sub(aim, self.position));
         self.heading = towards;
-        self.view_tilt = up + self.tilt - DEFAULT_TILT;
+        self.view_tilt = self.tilt + up;
         self.last_error = 0.0;
     }
 
@@ -718,11 +737,11 @@ impl Camera {
     /// Aims the view from where the camera now is (camera.md "What the
     /// camera looks at" rule 3, "Turning the view toward Connor").
     /// `dragging`: a mouse value is not 0 this update; `moving`: "Connor
-    /// is moving". The tilt: the view looks at the aim point, pitched by
-    /// the tilt's difference from the default (as before M3 3o-2).
+    /// is moving". The tilt is set exactly: the player's tilt + the angle
+    /// up from the camera to the aim point (rule 3, Q27 b).
     fn aim_view(&mut self, aim: [f32; 3], followed: Followed, dragging: bool, moving: bool) -> HeadingStep {
         let (up, towards) = view_angles(sub(aim, self.position));
-        self.view_tilt = up + self.tilt - DEFAULT_TILT;
+        self.view_tilt = self.tilt + up;
         let error = |c: &Camera| wrap(towards + c.mouse_offset - c.heading);
         let before = self.heading_state;
         let start = error(self);
@@ -1046,6 +1065,24 @@ mod tests {
         // Page Up in fixed mode: 125 closer.
         c.update([2000.0, 0.0, 0.0], &Input { tilt_keys: 1, ..Input::default() }, &Flat(0.0));
         assert_eq!(c.mode, Mode::Fixed { distance: d - FIXED_ZOOM_PER_UPDATE });
+    }
+
+    #[test]
+    fn the_view_looks_0_2_below_the_aim_point_and_passes_connor_at_his_chest() {
+        // Camera level with the aim point, 2,500 away (walking range).
+        let mut c = Camera::new([0.0, -2500.0, AIM_HEIGHT]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert!((c.view_tilt - DEFAULT_TILT).abs() < 1e-5, "{}", c.view_tilt);
+        let h = centre_line_height(c.position, c.view_tilt, c.heading, [0.0; 3]).unwrap();
+        // 1,400 − 2,500 × tan 0.2 = 893.
+        assert!((h - (AIM_HEIGHT - 2500.0 * 0.2f32.tan())).abs() < 1.0, "{h}");
+        // Page Up: the player's tilt goes up, the rest follows the aim point.
+        c.update([0.0; 3], &Input { tilt_keys: 1, ..Input::default() }, &Flat(0.0));
+        assert!((c.view_tilt - (DEFAULT_TILT + TILT_PER_UPDATE)).abs() < 1e-5);
+        // From higher up the view tilts further down by the angle to the aim.
+        let mut c = Camera::new([0.0, -2500.0, AIM_HEIGHT + 2500.0]);
+        c.update([0.0; 3], &Input::default(), &Flat(0.0));
+        assert!((c.view_tilt - (DEFAULT_TILT - std::f32::consts::FRAC_PI_4)).abs() < 1e-4, "{}", c.view_tilt);
     }
 
     #[test]

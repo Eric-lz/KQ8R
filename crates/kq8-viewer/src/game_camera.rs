@@ -471,7 +471,7 @@ pub fn make(
         spots: Spots::default(),
         flight: None,
         flight_fresh: false,
-        view: View { tilt: -DEFAULT_TILT, heading: 0.0, roll: 0.0, locked: false },
+        view: View { tilt: DEFAULT_TILT, heading: 0.0, roll: 0.0, locked: false },
         places: true,
         aims: true,
         last_connor: None,
@@ -481,7 +481,7 @@ pub fn make(
         pending: vec!["start (stand-in)"],
         script_moves: Vec::new(),
     };
-    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt");
+    g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
 }
 
@@ -629,7 +629,7 @@ pub fn camera_step(
     g.current = (g.cam.position, g.cam.view_tilt, g.cam.heading);
     let p = g.cam.position;
     let line = format!(
-        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {} | {} {:.3} {:+.3}",
+        "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {} | {} {:.3} {:+.3} | {}",
         g.updates,
         p[0],
         p[1],
@@ -655,7 +655,8 @@ pub fn camera_step(
         report.height.map_or("-".to_string(), |h| format!("{} {:.1} {:.1} {:.1} {:.1}", h.words(), h.sum, h.wanted, h.start, h.before)),
         report.heading.map_or("-".to_string(), |h| h.words()),
         g.cam.heading,
-        g.cam.view_tilt
+        g.cam.view_tilt,
+        kq8_core::camera::centre_line_height(p, g.cam.view_tilt, g.cam.heading, base).map_or("-".to_string(), |h| format!("{h:.0}"))
     );
     g.log.detail(line);
     if !report.events.is_empty() {
