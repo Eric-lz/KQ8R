@@ -2021,3 +2021,13 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | What | Source | Check |
 | --- | --- | --- |
 | A clickable character's click box is placed where the character is drawn, every update (after a script's `move` or a turn) | `doors.md` rule 10 / `clicking.md`: an object is picked by its box at its place; the box is the character's (`characters.md` rule 9) | Unit test `a_character_s_click_box_follows_it` |
+
+### 4d-6a and 4d-7a, measurements and the shadow rule — `crates/kq8-viewer/src/load.rs`, `crates/kq8-data/src/characters.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| "gravity check": each character's z against the floor and surface grids under it (a log only; no gravity built) | `characters.md` rule 8; **measurement for Q122** | `characters.log`: 46 of 57 on the floor grid |
+| Casts a shadow when (world mask AND `shadowMask`) is not 0, `allowShadows` is on and `translucency` is 256 | Rule 36 | Unit test `shadows_follow_the_masks_and_solidity`; Daventry: 51 cast, not the chickens, the pig, the Knight, the Shadow (as the note) |
+| World mask: the last `setShadowMask` in `MASK/Options.cs` (15), else the built-in 1 | Rule 36 ("`MASK/Options.cs` sets 15 at start") | Same unit test (Options.cs-like text) |
+| `allowShadows` taken as on at load (its default; Daventry's `world.cs` sets 1); not changed while playing | Rule 36 (default on); **not read from scripts yet** | — |
+| Shadows not drawn | Waits for Q123 | — |

@@ -1462,6 +1462,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         pending_line: None,
         list_files: Default::default(),
         character_lines: Vec::new(),
+        shadow_world_mask: None,
     };
 
     // Only what the world's start-up scripts load is in the world
@@ -1680,6 +1681,9 @@ struct Placer<'a> {
     list_files: std::collections::BTreeSet<String>,
     /// Lines for `characters.log` written while loading.
     character_lines: Vec<String>,
+    /// The world's shadow mask (`setShadowMask` in `Options.cs`, else
+    /// 1), read when first needed (characters.md rule 36).
+    shadow_world_mask: Option<u32>,
 }
 
 /// A monster-list line being placed (characters.md rule 4): the line, and
@@ -2325,6 +2329,24 @@ impl Placer<'_> {
             if p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
                 let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
                 self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script });
+            }
+            // 4d-7a: does it cast a shadow (characters.md rule 36)? The
+            // world's mask from Options.cs (else the built-in 1);
+            // `allowShadows` taken as on (its default; Daventry's world.cs
+            // says 1).
+            if let Some(c) = &character {
+                let world_mask = *self.shadow_world_mask.get_or_insert_with(|| {
+                    self.game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::characters::shadow_mask_setting(&b)).unwrap_or(kq8_data::characters::BUILT_IN_SHADOW_MASK)
+                });
+                let casts = kq8_data::characters::casts_shadow(world_mask, c.keys.shadow_mask, true, p.translucency);
+                self.character_lines.push(format!(
+                    "shadow [{}]: {} (world mask {world_mask} AND shadowMask {} = {}; translucency {}; allowShadows on) (rule 36; drawing not built)",
+                    p.name,
+                    if casts { "CASTS a shadow" } else { "no shadow" },
+                    c.keys.shadow_mask,
+                    world_mask & c.keys.shadow_mask,
+                    p.translucency
+                ));
             }
             // 4d-6a: how far above the ground grids a character starts
             // (characters.md rule 8: gravity would bring it down).

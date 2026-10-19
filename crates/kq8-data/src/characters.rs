@@ -46,6 +46,34 @@ pub const GEOMETRY_MOUTH: [&str; 8] = ["rest", "f", "m", "r", "w", "ih", "ah", "
 /// `stop`.
 pub const GESTURES: [&str; 8] = ["gesturea", "gestureb", "gesturec", "gestured", "gesturee", "gesturef", "gestureg", "gestureh"];
 
+/// The world's shadow mask when no script sets one (rule 36: the
+/// program's own value).
+pub const BUILT_IN_SHADOW_MASK: u32 = 1;
+
+/// `setShadowMask <n>` in a start-up script such as `MASK/Options.cs`
+/// (rule 36): the last value given, `None` if there is none.
+pub fn shadow_mask_setting(script: &[u8]) -> Option<u32> {
+    let text: String = script.iter().map(|&b| b as char).collect();
+    let mut found = None;
+    for line in text.lines() {
+        let line = line.split("//").next().unwrap_or("").trim();
+        let mut words = line.split_whitespace();
+        if words.next().is_some_and(|w| w.eq_ignore_ascii_case("setShadowMask")) {
+            if let Some(v) = words.next().and_then(|v| v.parse::<f64>().ok()) {
+                found = Some(v as u32);
+            }
+        }
+    }
+    found
+}
+
+/// Rule 36: an object casts a shadow when (the world's mask) AND (its own
+/// `shadowMask`) is not 0, shadows are allowed (`allowShadows`), and it
+/// is solid (`translucency` 256).
+pub fn casts_shadow(world_mask: u32, own_mask: u32, allowed: bool, translucency: f32) -> bool {
+    world_mask & own_mask != 0 && allowed && translucency >= 256.0
+}
+
 /// The two character classes (rule 1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Class {
@@ -566,6 +594,24 @@ type1=\tKQMonsterType\tslime\t100\t20\t20\t5000\tslime.kq\tnone\tINVITEM_SlmSlim
         assert_eq!((s.file.as_str(), folded), ("sprigan.kq", false));
         assert_eq!(t.find("SLIME").map(|(t, f)| (t.birth_delay, f)), Some((2.0, true)));
         assert!(t.find("nothing").is_none());
+    }
+
+    #[test]
+    fn shadows_follow_the_masks_and_solidity() {
+        assert_eq!(shadow_mask_setting(b"KQSound::setSfxVol 0.14
+setShadowMask 15
+useDynamicLighting 1
+"), Some(15));
+        assert_eq!(shadow_mask_setting(b"set x 1
+"), None);
+        // Characters (2) and plain objects (8) cast with 15; not with the
+        // built-in 1; shadowMask 0 never; see-through never; all off.
+        assert!(casts_shadow(15, DEFAULT_SHADOW_MASK, true, 256.0));
+        assert!(casts_shadow(15, 8, true, 256.0));
+        assert!(!casts_shadow(BUILT_IN_SHADOW_MASK, DEFAULT_SHADOW_MASK, true, 256.0));
+        assert!(!casts_shadow(15, 0, true, 256.0));
+        assert!(!casts_shadow(15, 2, true, 165.0));
+        assert!(!casts_shadow(15, 2, false, 256.0));
     }
 
     #[test]

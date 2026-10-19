@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-7a: who casts a shadow (drawing on hold, Q123)
+
+**Changed:** `kq8-data/src/characters.rs`: `shadow_mask_setting` (`setShadowMask` in `Options.cs`), `casts_shadow` (rule 36). Viewer `load.rs`: a "shadow" line per character in `characters.log`. `QUESTIONS.md`: Q123. DESIGN, provenance.
+**Why:** Step 4d-7: the casting rule is described; the drawing is not (direction, what it lies on, darkness).
+**Tested how:** `cargo test -p kq8-data` (121 pass, 1 new). Viewer `--frames 60`, read in `characters.log`.
+**Result:** World mask 15 from `Options.cs`. 51 of 57 characters cast; no shadow for `chicken1`–`3`, `piggy1` (`shadowMask=0`), the Knight (165) and the Shadow (180) (see-through): as the note lists.
+**Still broken / not tested:** No shadows drawn (Q123). `allowShadows` not read from the world's scripts (taken as on, its default).
+**Next:** Q114's corrections for Connor's lip sync.
+
 ## 2026-10-19 M4 step 4d-6a: where characters start above the ground (gravity on hold, Q122)
 
 **Changed:** Viewer `load.rs`: a "gravity check" line per character in `characters.log` (its z, the floor and surface grid heights under it, gravity, `keepOnGround`, `flyingObject`). `QUESTIONS.md`: Q122. DESIGN.

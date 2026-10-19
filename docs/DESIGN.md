@@ -695,7 +695,10 @@ inventory and menus.
     and down 325; `monUseGravity=0` and `setUseGravity 0` keep them at
     their height. Planned in detail when 4d-1 to 4d-5 are done (how
     much of Connor's mover can be shared).
-  - **4d-7, shadows** (rule 36). Who casts one (world mask 15 from
+  - **4d-7, shadows** (rule 36). **4d-7a done** 2026-10-19: who casts a
+    shadow (`shadow_mask_setting`, `casts_shadow`; a line per character
+    in `characters.log`). Drawing **waits for Q123** (direction, what
+    it lies on, how dark, plain objects, `shadowvisible`). Who casts one (world mask 15 from
     `Options.cs`, `shadowMask`, solid only). Look from the user's
     check: a dark copy of the figure on the ground, each part
     darkening on its own. The direction is not traced (open question
