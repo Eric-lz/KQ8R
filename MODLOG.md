@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-6a: where characters start above the ground (gravity on hold, Q122)
+
+**Changed:** Viewer `load.rs`: a "gravity check" line per character in `characters.log` (its z, the floor and surface grid heights under it, gravity, `keepOnGround`, `flyingObject`). `QUESTIONS.md`: Q122. DESIGN.
+**Why:** 4d-6 (gravity) needs to know which characters would move; what a character's mover collides with is not in any note.
+**Tested how:** Viewer `--frames 60`, read in `characters.log`.
+**Result:** 47 characters start on a grid (gap 0). Above it: `Ravenw` 615 and `sprgnbow` 210 (gravity off), `sprigwnd1` 305 (windmill), `RuinSprig3`/`4` 3,635 and `bossprig` 6,035 (ruins), `sprdump` 35, the Uglybeast 5 (gravity on); bats `bat2` 160 above the surface, `bat3` 6,350 (`flyingObject=1`).
+**Still broken / not tested:** No gravity for characters: Q122 (their collision type/mask, buildings and terrain in their passes, flying characters, falls and fall death).
+**Next:** 4d-7a: who casts a shadow (the drawing waits for a question).
+
 ## 2026-10-19 M4 step 4d-5c: a character's click box follows it
 
 **Changed:** `kq8-core/src/active.rs`: every update a clickable character's click box takes the character's place and turn. Provenance.

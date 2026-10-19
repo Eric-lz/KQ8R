@@ -2326,6 +2326,21 @@ impl Placer<'_> {
                 let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
                 self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script });
             }
+            // 4d-6a: how far above the ground grids a character starts
+            // (characters.md rule 8: gravity would bring it down).
+            if let Some(c) = &character {
+                let [x, y, z] = p.position;
+                let show = |g: Option<kq8_data::terrain::Ground>| g.map_or("none".to_string(), |g| format!("{:.0} (gap {:.0})", g.height, z - g.height));
+                self.character_lines.push(format!(
+                    "gravity check [{}]: z {z:.0}; floor grid {}, surface {}; gravity {}, keepOnGround {:?}, flyingObject {}",
+                    p.name,
+                    show(self.terrain.floor_at(x, y)),
+                    show(self.terrain.height_at(x, y)),
+                    if c.keys.gravity { "on" } else { "off" },
+                    p.keep_on_ground,
+                    u8::from(c.keys.flying)
+                ));
+            }
         }
 
         // Animated objects name their model through their current

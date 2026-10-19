@@ -686,7 +686,11 @@ inventory and menus.
     of an animated object or character, at once, no fade; the object
     gets its own copies of its materials. Connor's (Dead City) not
     built.
-  - **4d-6, gravity and steps** (rule 8). Characters with gravity on
+  - **4d-6, gravity and steps** (rule 8). **4d-6a done** 2026-10-19: a
+    "gravity check" line per character in `characters.log` (how far
+    above the floor and surface grids it starts). The rest **waits for
+    Q122** (a character's collision type and mask, buildings and the
+    terrain in its passes, flying characters, falls). Characters with gravity on
     fall onto the ground or a building floor as Connor does, step up
     and down 325; `monUseGravity=0` and `setUseGravity 0` keep them at
     their height. Planned in detail when 4d-1 to 4d-5 are done (how
