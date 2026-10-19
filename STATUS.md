@@ -1,17 +1,30 @@
 # STATUS
 
-Hand-over in case the chat is lost. 2026-10-19: B built A's last M3
-answers (3o-1 to 3o-7) and the user checked the camera against the
-original: **M3 is done**. Before that, A answered the last study
-questions blocking M3, and before that, brought up
-to date 2026-10-18 at the end of B's session on M4 step 4c (the on-screen interface and Connor's
-inventory, 4c-1 to 4c-11, checked by the user) and the back flip at a
-wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-10-19 at the
+end of B's session on M4 step 4e (conversations, 4e-1 to 4e-7; Q125 and
+Q126 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (B, M4 4e-1 to 4e-7): conversations are built** from
+  `conversation.md` (one commit per step; plan in `docs/DESIGN.md` "4e";
+  **not looked at by eye yet**): the info objects (`kq8 conv-verify`: 17
+  in the data, 169 `KQConner::conversation` calls all with `<enemy>` 0,
+  19 characters with goodbye/welcome-back keys); the partner's second
+  line queue with goodbye and welcome back; the command, the partner's
+  Talk state and Connor's talk state (cases "there", "close", "walk" with
+  `stopwalk` / `walkstopright`, the stay test, the end with `TalkExit`
+  before the last `TalkComplete`); clicks by area (`Special`, `do`,
+  `TooFar`) and `InvConv`; the camera cuts (the Wizard's first meeting
+  2 3 3 5 2 1 1 1 1 3 5 2 3 6, as the note) and the right button (new
+  test option `--right N`); the bottom bar away and back; Connor's
+  gestures. Checked from the logs against every Daventry check in the
+  note (Wizard: the three click spots, the first meeting, walking away
+  and coming back; Uglybeast: case "there", `TalkExit` then
+  `TalkComplete 6 11`). New log `conversation.log`. Q125 (keys before
+  the stay test, Jump, push) and Q126 (the camera's aim) for A.
 - **New 2026-10-19 (B, M4 4d-1 to 4d-5): characters are drawn and
   animated** from `characters.md` (one commit per step; plan in
   `docs/DESIGN.md` "4d"; checked by the user after 4d-2): the monster
@@ -24,8 +37,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   and Special lists); turning toward a `speak` listener at 3.5 rad/s
   (`noTurn` blocks it); mouths (lip textures, the Uglybeast's mouth
   movements) and gestures; Wait after the last line. New test option
-  `--command "WORDS",N`; new log `characters.log`. Questions Q116, Q117,
-  Q119–Q121 for A. Left: 4d-6 gravity, 4d-7 shadows (to be planned).
+  `--command "WORDS",N`; new log `characters.log`. Left: A's answers to
+  Q116–Q124 (below), 4d-6 gravity, 4d-7 shadows.
 
 - **New 2026-10-19 (A): Q116, Q117, Q119–Q124 answered** (`characters.md`
   rules 8, 12, 14, 15, 18, 20, 27, 36, new 37; `talking.md` 13a;
@@ -47,83 +60,14 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   land on building floors and walls, from characters and barrels alike. No fading; cut beyond 1,500
   above the ground (gone at the top of a jump); on water they lie on the
   surface (a wading Connor shows only his part above it).
-- **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
-  palette"): the bars, captions and fonts use the world's
-  `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,
-  `castle.ppl`), not `<folder>.ppl` and not `defaultPaletteName`; it
-  stays the same all through a world. **Built by B (2026-10-19):** the
-  bars and captions now show in all 12 worlds.
-- **New 2026-10-19 (A): characters studied** (`docs/behaviour/characters.md`):
-  how `KQMonster` / `KQGeometryTalker` are made (own `.kq` or the
-  world's `monsters.kq` line + `Monstats.mtl` type), drawn (animation
-  list, no scale, feet at the origin, gravity and `keepOnGround`, box by
-  type or name), what plays at load (first movement, then Wait asks for
-  `Stop` at a random frame and speed), returning to `Stop` after any
-  one-shot in Wait, the Birth state (zombies not drawn until they rise),
-  turning (3.5 rad/s, `noTurn` blocks it, no turning movement), the
-  mouth (`lips=` textures; the Uglybeast's whole-model mouth movements),
-  gestures (corrected: no talk-state condition; Q115), when a character
-  notices Connor (before M5: draw them all standing in `Stop`), and
-  shadows (who casts one; how they are drawn is not traced). Ready for B.
-- **New 2026-10-19 (A): conversations studied** (`docs/behaviour/conversation.md`):
-  `KQConner::conversation`, the `<name>Info` boxes (start, stay, special
-  areas) and cameras, Connor's walk to his talking spot, the talk states,
-  camera cuts on `[n]`, walking away (goodbye, `TalkExit`) and coming back
-  (welcome back), `InvConv`, gestures (lip-sync codes 8–16). Also a
-  correction to `talking.md` rule 9 (the duplicate check uses the last
-  sequence; Q114). Ready for B.
-- **New 2026-10-19 (B, M3 3o): M3 is done.** A's last answers built,
-  one commit per step (`docs/milestones/M3.md` "3o"): the camera's view
-  heading turns by four states (Connor may drift about 14° off the middle
-  before the view catches up and locks on him; the position never swings
-  behind him); the view looks 0.2 rad below the aim point 1,400 above his
-  feet (the hand-set 800 is gone; at walking distance the middle of the
-  screen passes him 893 above his feet); the mouse as a share of the
-  window; holding the right button locks him at his spot on screen and
-  keeps the camera's place relative to him (3o-7, fixed after the user's
-  first check); the view line's exact ground test; the deep lift on the
-  drawn surface; one `follow` finding both conditions; the trap a
-  script's `move` takes Connor out of gets `Off` at once. **Checked by
-  the user against the original** (2026-10-19), also the end of the
-  watermill scene. Q113 asked (small, not blocking).
-- **New 2026-10-18 (B, M4 4c): the on-screen interface and Connor's
-  inventory are built** from `interface.md` and `inventory.md`, one
-  commit per step, **checked by the user against the original**
-  (2026-10-18, after the fixes 4c-6 to 4c-10 below):
-  - 4c-1: the caption's stone strip covers the whole caption box (400
-    wide on the 800 × 600 screen of `set800mode 1`), rows broken at its
-    width, the box a little left of the middle with the map closed.
-  - 4c-2: the bottom bar from `Gplayscr.gui` in the world's pictures
-    and fonts (armour / hand / ranged slots and numbers, eight slots,
-    health and experience bars with the level, rope / rocks / map
-    icon); Space slides it away and back in 0.2 s; handsOff slides it
-    away (spinning mask) and back only if it was shown; the meters pop
-    up alone for 1.5 s on a change; changed numbers flash; the caption
-    sits on the bar. Connor's start inventory from `Connor.kq`.
-    Bricks run: level 2, health 20/20, experience 40 (200 %), hand 15,
-    ranged 2, armour 1, as `interface.md` check 2 predicts.
-  - 4c-3: the top bar (mask button, quest strip with arrows, gold)
-    follows the pointer and pops down for a new quest item; the eight
-    slots with counts, keys 1–8, right-click descriptions (voice only);
-    stacking, equipment pushing out the old piece (it drops where the
-    new one lay), applying items and potion timers.
-  - 4c-4: quest items, coins, rope and rocks held on the game's own
-    pointer pictures; a world click offers the held item (accepted: the
-    hand empties; refused: "This will not work." and it stays).
-  - 4c-5: Q105 built: the click turn looks at Connor's state at the
-    click (or the one the script asked for); buildings read
-    `doNotPointAt`.
-  - 4c-6 to 4c-10, from the user's checks: the panels and the caption
-    on a 4:3 screen centred in the window (the world fills the window);
-    Space plays `intrup.aud` hiding the bar and `intrdown.aud` showing
-    it; the spinning mask whole (57 × 57) at the right, standing on the
-    bottom bar (not on the meters alone); black behind the meters'
-    bars; each panel drawn with its edges rounded where they stand and
-    stretched to fill its box exactly (Bevy's default kept proportions
-    and left the world showing at the meters' ends).
-  - 4c-11 (an improvement, not in the original, off by default): F6 or
-    `--corners on` puts the bottom bar's left and right panels at the
-    window's edges on a wide window.
+- **2026-10-19 (A, B): Q118** (the world palette is `KQWorld::objectPalette`): built,
+  the bars and captions show in all 12 worlds.
+- **2026-10-19 (A): characters and conversations studied**
+  (`characters.md`, `conversation.md`), both checked by the user in the
+  original.
+- **2026-10-19 (B): M3 is done** (the camera checked by the user against
+  the original). **2026-10-18 (B, M4 4c):** the on-screen interface and
+  Connor's inventory, checked by the user (`docs/FEATURES.md`).
 - **New 2026-10-18 (B): the back flip at a wall.** Backed against a
   wall with back still held, Jump is the back flip (the user's check in
   the original); stand-in rule: `stop` with the back wall block on
@@ -135,13 +79,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   objects, clicking, sound effects and world music, scripted animations,
   pushing and the bricks puzzle, cutscenes and the camera (checked by
   eye; see `docs/FEATURES.md`).
-- **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`):
-  message, talker and lip-sync files; speech queues and the `speak`
-  family of commands; voices and ducking; captions (stand-in panel);
-  Connor's own remarks; cutting a line short; his mouth texture; turn
-  keys as events and the turn after a click (4a-7 to 4a-9, Q103–Q105).
-  Checked by the user against the original. Conversations studied
-  2026-10-19 (`conversation.md`), not built.
+- **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`),
+  checked by the user against the original.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Connor against monsters.
 
@@ -149,8 +88,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
-milestone: **M4** (remarks and speech, the interface and the inventory
-done; conversations and menus next). M0–M3 are done.
+milestone: **M4** (remarks and speech, the interface and the inventory,
+characters and conversations done; the menus next). M0–M3 are done.
 
 ## Setup
 
@@ -212,7 +151,10 @@ done; conversations and menus next). M0–M3 are done.
   (flowing ground textures), `anim.rs` (looping animations of objects),
   `sound.rs` (sound rules: groups, distance, balance, mix limit, sound
   objects, ducking; no sound card), `talk.rs` (speech queues, line
-  timing, mouth schedule; M4 4a). `kq8-data/src/msg.rs`: message,
+  timing, mouth schedule; M4 4a; the conversation queues, 4e),
+  `character.rs` (characters' states, M4 4d), `conversation.rs` (the
+  conversation command and Connor's talk state, M4 4e).
+  `kq8-data/src/msg.rs`: message,
   talker and lip-sync files. Viewer `talk_view.rs`: voices, captions,
   Connor's mouth. M4 4c: `caption.rs` (wrap, the box's place),
   `panels.rs` (shown/hidden, sliding, pop-ups), `meters.rs` (bar
@@ -226,7 +168,8 @@ done; conversations and menus next). M0–M3 are done.
 - `crates/kq8-cli`: `kq8` checks (`vol-verify`, `bitmap-verify`,
   `bitmap-png`, `shape-verify`, `terrain-verify`, `building-verify`,
   `item-verify`, `lightmap-verify`, `lighting-verify`, `aud-verify
-  [--wav <file>]`, `msg-verify`) and `kq8 text <file>` to print a game text file
+  [--wav <file>]`, `msg-verify`, `font-verify`, `gui-verify`,
+  `character-verify`, `conv-verify`) and `kq8 text <file>` to print a game text file
   (`vol:<World>/<volume>/<NAME>` for a file inside an archive).
 - `crates/kq8-viewer`: Bevy viewer. `[--world <W>]` shows a world (the
   default); `--model NAME` shows one model; `--renderer auto|vulkan|dx12` the
@@ -246,7 +189,8 @@ done; conversations and menus next). M0–M3 are done.
   `scene_lights.rs`, on building surfaces `wall_lights.rs`.
 - Logs go to `kq8-artifacts/logs/`: `viewer.log`, `connor.log` and
   `camera.log` (one line per update), `doors.log` (clicks, scripts,
-  events), `talk.log` (speech), `gui.log` (panels, stats sent, the bars'
+  events), `talk.log` (speech), `conversation.log` (conversations),
+  `characters.log`, `gui.log` (panels, stats sent, the bars'
   contents, the hand), `traps.log`, `items.log`, `effects.log`, `ground_anim.log`,
   `anim.log`, `sound.log`, `lightmap-verify.log`, `lighting-verify.log`,
   `aud-verify.log`. `viewer.log`
@@ -329,7 +273,8 @@ done; conversations and menus next). M0–M3 are done.
 - The interface and inventory (M4 4c): checked by the user against the
   original, 2026-10-18 (the corner panels option: looked at by the user,
   no complaint). The back flip at a wall: checked by the user.
-- Tests: 461 unit tests pass (114 + 331 + 5 + 11), 2026-10-19.
+- Conversations (M4 4e): checked in the logs only (see "Where we are").
+- Tests: 503 unit tests pass (125 + 362 + 5 + 11), 2026-10-19.
 
 ## What doesn't work yet / next
 
@@ -354,12 +299,9 @@ done; conversations and menus next). M0–M3 are done.
   and the start-up on a first request (Q121), end of queue does nothing
   in Wait (Q117), gravity (Q122), shadows (Q123). Built since: `makeTranslucent`
   (4d-5b), click boxes following characters (4d-5c), who casts a shadow
-  (4d-7a, logged), Q114's corrections. Waiting for A: gravity (Q122),
-  drawing shadows (Q123), transitions and the `endLoop` cue (Q124) (now
-  answered, see above). Not
-  built: the Talk state (conversations), `changeAnmFile`, collision
-  against characters; a clickable
-  character's click box now follows it (4d-5c). Not tested: the
+  (4d-7a, logged), Q114's corrections. Q122–Q124 answered too (see
+  above), not built yet. Not built: `changeAnmFile`, collision against
+  characters (so Connor walks through the Wizard). Not tested: the
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), `sprdump`'s scene, a real turn in the viewer.
 - **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not
@@ -382,21 +324,29 @@ done; conversations and menus next). M0–M3 are done.
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
-- **Next step, suggested:** for B: draw the characters from
-  `characters.md` (Daventry first), then conversations from
-  `conversation.md` (the Wizard and the Uglybeast; the panels' side is
-  built, unit-tested only), and Q114–Q115 (corrections); or the main menu
-  (Escape, the mask button) with the game paused. For A: Q108–Q113 when
-  convenient (small).
+- **Stand-ins of 4e (conversations):** the keys are ignored during the
+  walk to the spot, no Jump or push while talking (Q125); the camera
+  aims 1,400 above the partner and swings around it like the following
+  camera (Q126); the talk state waits while a jump is unfinished
+  (`conversation.md` open question 3); Connor's state changes one step
+  after core decides (same update). Not built: weapons away (`away` /
+  `out`, no weapons yet), first person, the right button's lock release
+  on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
+  partner, a real mouse drag during a talk.
+- **Next step, suggested:** for the user: look at a conversation in the
+  viewer (click the Wizard from inside his house; walk away mid-talk;
+  hold the right button). For B: build A's answers to Q116–Q124 (4d:
+  timing, mouth poses, start-up, then gravity 4d-6 and shadows 4d-7); or
+  the main menu (Escape, the mask button) with the game paused. For A:
+  Q125, Q126, then Q108–Q113 (small).
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.
-- Speech, not done: conversations (studied, not built), the Daventry monster-death
-  remark (no monster dies), monsters' mouths (not drawn), helmets'
-  and armour's faces (M5).
-- Clicking: only doors, chests, items, scripted objects and buildings
-  react. `Special` calls (conversation areas) are not made yet.
-  `checkInventory` by id number (Q62 b) not built.
+- Speech, not done: the Daventry monster-death remark (no monster dies),
+  helmets' and armour's faces (M5).
+- Clicking: only doors, chests, items, scripted objects, buildings and
+  characters with a script react. `checkInventory` by id number (Q62 b)
+  not built.
 - Camera, still missing: first person (F2), shake; the roll of `move
   KQCamera` and of flights is not drawn (logged).
 - Cutscenes: a request from a cue reaches Connor one update after the
@@ -414,11 +364,10 @@ done; conversations and menus next). M0–M3 are done.
 - Lighting still lacks: the brightness setting (rule 17). Point lights
   on building surfaces light every surface of a drawn building, not only
   those in view (same picture, more work).
-- Not drawn yet: people and monsters (`.anm` characters; orange cubes with H), the
+- Not drawn yet: the
   teleport pad's look (Q14b), arrow sparks and the dragon fire (they come
   with fighting).
-- Nothing yet of: conversations, menus, fighting, story, saving, travel
-  between worlds.
+- Nothing yet of: menus, fighting, saving, travel between worlds.
 - **Not M3 (M3 is Daventry only, the user 2026-10-19):** things of later
   worlds wait for M6 (listed there in `docs/DESIGN.md`): Gnome's rolling
   rocks hurting Connor, Gnome's pushable boulder, damaging water.
@@ -434,7 +383,14 @@ done; conversations and menus next). M0–M3 are done.
   are still open; 1 and 2 (conversations, shapes above 7) answered in
   `conversation.md`, 4 (the caption panel) in `interface.md`.
 - `conversation.md` open question 3 (states that delay the talk
-  state): small, not blocking (1 and 2 answered).
+  state): small, not blocking (1 and 2 answered); B's stand-in: an
+  unfinished jump.
+- For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
+  the stay test; Jump and push while talking), **Q126** (where the
+  conversation camera aims and what the right-button swing centres on).
+  Not a question, for A's notes: the data has **17** `KQConvInfo`
+  objects, not 16 (Barren's `AlthillmanInfo` and `FrghillmanInfo` besides
+  the Witch Doctor's).
 - `characters.md` open questions 1–4 (`flags` bit 0x20, how the renderer
   blends shadows and whether they fade, the AI (M5), `changeBmp` /
   `changeAnmFile`): not blocking the drawing of characters.

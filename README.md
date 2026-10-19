@@ -54,11 +54,13 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   gold) and holding an item on the mouse pointer to use it. Daventry's
   people and creatures are drawn and animated: they breathe, gesture
   and move their mouths while they speak, and can be clicked.
+  Conversations with the wizard and the beast at the pond work: Connor
+  walks to his spot, the camera cuts between fixed views, and walking
+  away ends the talk with a goodbye.
 
 ### Next
 
 - **Characters:** gravity and shadows (the last two steps of 4d).
-- **Conversations** with the wizard and the other people in Daventry.
 - **The main menu:** pausing the game with Escape key.
 
 ### Later

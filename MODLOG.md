@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 End of M4 4e (docs only)
+
+**Changed:** `STATUS.md` (where we are, the 4e stand-ins, next steps, open questions Q125–Q126; older entries shortened; A's new entries kept), `README.md` (conversations under M4 "So far"; out of "Next"), `docs/FEATURES.md` (a "Conversations" section, `--right N`, what doesn't work).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Nothing to run (documents only). Full suite before: `cargo test --workspace` 503 pass, clippy clean.
+**Result:** —
+**Still broken / not tested:** Conversations not looked at by eye yet. Session A answered Q116–Q124 during this session (`characters.md`, `talking.md` rule 13a): rule 13a agrees with the conversation's end as built (partner to Wait before the last `TalkComplete`); the rest is 4d work, not built.
+**Next:** The user's check of a conversation in the viewer; B: A's answers to Q116–Q124, or the main menu; A: Q125, Q126.
+
 ## 2026-10-19 M4 step 4e-7: Connor's gestures
 
 **Changed:** `kq8-core/src/connor.rs`: `Walker::gesture` (codes 8–15 `gesturea`…`gestureh`, 16 `stop`, only while he stands with the keys choosing). `active.rs`: Connor's lip-sync codes 8–16 are passed on (`connor_gestures`). Viewer: `load.rs` loads his eight gesture movements; `door_view.rs` plays them on his walker; `talk_view.rs`: a log text. 1 unit test. DESIGN, provenance.

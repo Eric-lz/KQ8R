@@ -365,6 +365,38 @@ doesn't take it gives "This will not work."
   during it ignored), `smlchst3` ("'Tis empty."), a tombstone cut short
   by a turn key, a tombstone clicked from too far.
 
+## Conversations (milestone M4, step 4e)
+
+From `docs/behaviour/conversation.md` (2026-10-19). Checked in the logs
+(`conversation.log`, `talk.log`, `camera.log`, `connor.log`), **not yet
+by eye**.
+
+- **Starting one:** clicking the wizard or the beast at the pond. Where
+  Connor stands decides, not how far he is: in the area in front of the
+  partner the talk starts; behind the wizard's back he says "Come around,
+  lad..."; farther away "Hello, there, sir wizard!" (`kq8 conv-verify`
+  checks the areas and cameras of all 17 partners in the data).
+- **Getting to his spot:** close by, Connor is put on his talking spot;
+  from farther inside the room he turns, starts walking and is brought
+  to the spot by his walk-stop movement, then turns to the partner.
+- **During the talk:** the lines play one after the other with voices,
+  captions and lip sync; the bottom bar slides away and comes back at
+  the end; the camera cuts between the partner's fixed cameras (for the
+  wizard's first meeting 2, 3, 3, 5, 2, 1, 1, 1, 1, 3, 5, 2, 3, 6, as the
+  study found); Connor and the wizard gesture with their hands; clicks
+  in the world and the movement keys don't cut lines short. Holding the
+  right mouse button stops the cuts and lets the camera turn around the
+  partner.
+- **Walking away:** leaving the area ends the talk; with lines left the
+  partner says goodbye ("Well, then, off with you!..."); clicking him
+  again plays the welcome back and the talk carries on from the line
+  that was cut.
+- **An item on the partner during the talk** ends it and offers the
+  item (`InvConv`).
+- Stand-ins until the study session answers: Q125 (keys during the walk
+  to the spot, Jump and pushing while talking), Q126 (where the
+  conversation camera aims).
+
 ## The on-screen interface (milestone M4, step 4c)
 
 - **The bottom bar (4c-2):** the original's panels from `Gplayscr.gui`
@@ -527,8 +559,9 @@ message that shows the usage.
 
 ## What doesn't work yet
 
-- **Not playable:** there is no story, conversations, inventory screen,
-  fighting, saving, or travel between worlds.
+- **Not playable:** there is no inventory screen, fighting, saving, or
+  travel between worlds; the story's scenes run only as far as the
+  built parts allow.
 - **Characters (M4 4d):** they stand, breathe and gesture but don't
   walk, notice Connor, fight or die (M5); they are not solid; zombies
   stay in the ground; no gravity or shadows yet (4d-6, 4d-7).
@@ -538,8 +571,8 @@ message that shows the usage.
   footsteps (there are no monsters yet); scenery
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.
-- **Clicking:** doors, chests, items, scripted objects and buildings
-  react; nothing else does. Picked-up items are only counted in the log.
+- **Clicking:** doors, chests, items, scripted objects, buildings and the
+  characters with a script react; nothing else does.
 - **Animated objects:** scripts switch them (M3 step 3i), but most
   Daventry scripts that do it start from things not built yet (fights,
   talking, `loadKQ` with a name or place). In Gnome (a later world, not
@@ -551,6 +584,9 @@ message that shows the usage.
   falling animation takes over (also the user's check). The rule behind
   it is now A's (Q82). A back flip into a wall slides along it with
   gravity off until the flip ends (Q84 a, 3l-5; unit test only).
+- **Conversations:** not checked by eye yet; the horn on the beast,
+  `clearSpeak` on a partner and a real mouse drag during a talk were
+  not run.
 - **Camera:** no first person view (F2) or camera shake; the camera's
   roll is not drawn; the mouse's recentring near the window's edges is
   not built.
