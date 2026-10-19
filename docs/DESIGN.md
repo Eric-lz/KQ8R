@@ -739,7 +739,7 @@ inventory and menus.
     command, the clicks, `TalkExit`, `InvConv`. Viewer: `load.rs` reads
     the info objects; a new system after `trap_step` runs Connor's talk
     state and applies it to Connor, the camera and the panels.
-  - **4e-1, reading** (rules 3, 20; data). `KQConvInfo` sections: spot,
+  - **4e-1, reading** (**done** 2026-10-19; 17 info objects, Barren has three) (rules 3, 20; data). `KQConvInfo` sections: spot,
     boxes (4 corners each), cameras (6 numbers); the inside test (angle
     sum 6.1–6.4 rad; a corner counts as outside); `GBMsg…`/`WBMsg…`
     keys. New check `kq8 conv-verify` (`conv-verify.log`): per world
@@ -752,7 +752,7 @@ inventory and menus.
     characters with the keys; (193000, 198000) in `box0` and `box1`, 834
     from the spot; (191000, 197000) in `box0` and `box2`; (198000,
     198000) in none.
-  - **4e-2, the conversation queue** (core `talk.rs`, rules 12, 21, 22,
+  - **4e-2, the conversation queue** (**done** 2026-10-19) (core `talk.rs`, rules 12, 21, 22,
     23; unit tests only). A second queue per partner, issuer the
     partner; lines play as `speak` lines; each line's camera number
     reported when it starts; `TalkComplete` from the partner; the queue

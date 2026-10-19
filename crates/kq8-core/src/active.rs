@@ -4672,7 +4672,7 @@ endif
         a.take_log();
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let log = a.take_log().join("\n");
-        assert!(log.contains("KQMonster::speak Connor to Connor: 0 109 14 33 1…1: to itself, no turn; Connor: queued"), "{log}");
+        assert!(log.contains("KQMonster::speak Connor to Connor: 0 109 14 33 1…1: to itself, no turn; ConnorTalk: queued"), "{log}");
         // A movement it doesn't have: movement 0 under that name
         // (anim-scripts.md rule 5), logged.
         let mut b = with_object("sendEvent 0 $1 KQAnimPlayEvent fly\n", "x");

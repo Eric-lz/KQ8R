@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4e-2: the partner's conversation queue
+
+**Changed:** `kq8-core/src/talk.rs`: a second queue per partner (`<name>Conv`) with its goodbye and welcome-back lines (`conv_queue`, `conv_start`, `conv_goodbye`, `clear_conv`); lines report their camera number when they start (conversations only); a finished line says whether it was the conversation's last; the goodbye pauses the queue and is reported for `TalkExit`; the logs name the queue (`WizardTalk`, `WizardConv`). `active.rs`: one test's expected log text. DESIGN, provenance.
+**Why:** Step 4e-2 of `conversation.md` (rules 12, 14, 21–23).
+**Tested how:** `cargo test --workspace` (493 pass, 3 new), clippy clean.
+**Result:** Unit tests: a conversation of three lines plays with cameras 2, none, 5 and its third line is reported as the last; walking away during line 2 cuts it, the goodbye plays, the queue pauses with lines 2 and 3 waiting, no `TalkComplete`; told to start again: welcome back, line 2 from its start, line 3, the range not added twice; on the last line no goodbye; `clearSpeak` empties it.
+**Still broken / not tested:** Nothing calls it yet (4e-3). Not run in the viewer.
+**Next:** 4e-3: the command and the two talk states.
+
 ## 2026-10-19 M4 step 4e-1: reading the conversation info objects (plan for 4e)
 
 **Changed:** `docs/DESIGN.md`: plan for 4e (conversations, 4e-1 to 4e-7). New `kq8-data/src/conv_info.rs` (`KQConvInfo`: talking spot, areas, cameras; the inside test). `kq8-data/src/characters.rs`: the goodbye and welcome-back keys (`GB…`, `WB…`). New `kq8 conv-verify` (`kq8-cli/src/conv_verify.rs`). `docs/behaviour/QUESTIONS.md`: Q125 (Connor's keys before the stay test, Jump and push while talking), Q126 (where the conversation camera aims). Provenance.

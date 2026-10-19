@@ -2054,3 +2054,16 @@ marked otherwise.
 | Inside: the corners' angles seen from the point add up to 6.1–6.4 rad; on a corner = outside; corner order doesn't matter | Rule 3 | Unit test `inside_by_the_angle_sum_corners_outside_order_free`; the note's three Daventry points land in the note's areas |
 | `GBMsg…GBSeq`, `WBMsg…WBSeq`: a missing key 0; file and noun both 0 = no line | Rule 20 | Unit test `goodbye_and_welcome_back_keys`; `conv-verify`: 19 characters |
 | `conv-verify`: `$1` in a script is the object whose `script=` is that file, the one with an info object first (`wizard.cs` is also `magicmap`'s) | **Our method** for the count | Every partner's largest camera number below its `nCam` |
+
+### 4e-2, the conversation queue — `crates/kq8-core/src/talk.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A second queue per partner (`<name>Conv`), issuer the partner; lines play as `speak` lines; `TalkComplete` from the partner | Rules 2, 12 | Unit test `a_conversation_plays_its_lines_with_cameras_and_reports_its_end` |
+| A line's `[n]` reported when it starts, conversation lines only | Rule 14 | Same test (a `speak` line of the same tuple reports none) |
+| "The conversation's last line": a conversation line after which nothing waits in its queue | Rule 15 (**our reading** of "last line" when a welcome back and older lines are in the queue) | Same test |
+| Goodbye: with the line playing and at least one waiting, and a goodbye line, it goes in front and starts at once, cutting the line playing (back to the head of the waiting lines, no `TalkComplete` for it); at its end captions off, sounds up, the queue pauses, the caller told (`TalkExit`); no `TalkComplete` | Rule 22; "Edge cases" (the cut line: treat as cut) | Unit test `walking_away_plays_the_goodbye_and_coming_back_the_welcome_back` |
+| A goodbye whose line can't be played pauses the queue at once | **Our choice** (not in the note) | — |
+| Told to start while paused with lines waiting: welcome back in front, then the waiting lines, then the new ones with the duplicate check; a goodbye not played yet dropped | Rule 21 | Same test: welcome back, line 2 from its start, line 3; the range not added twice |
+| Walking away on the last line: no goodbye, the line plays on with its `TalkComplete` | Rule 22 | Unit test `no_goodbye_on_the_last_line_and_clear_speak_empties_the_conversation` |
+| `clearSpeak` on the conversation queue: emptied at once, no `TalkComplete`, pause forgotten | Rule 23 | Same test |
