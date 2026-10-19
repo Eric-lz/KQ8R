@@ -133,9 +133,15 @@ Words used here:
    state) is ignored entirely.
 9. **The queue:** each character has one queue of lines, made the first
    time it speaks (an object called `<name>Talk`). `speak` adds lines
-   `<first>`…`<last>` to the end. A line already in the queue (same
-   file, noun, verb, case and **first** sequence) is **not added
-   again**: clicking a sign five times while its remark plays gives the
+   `<first>`…`<last>` to the end. **Correction (2026-10-19, traced while
+   studying conversations):** the check is on the range's **last**
+   line, not the first: if a line with the same file, noun, verb, case
+   and the sequence `<last>` (after `0` is turned into the real last) is
+   already in the queue, **none** of the range is added. For one-line
+   remarks (first = last) nothing changes; for a remark of several
+   lines, a click during line 2 of 1…3 adds nothing (line 3 is still
+   waiting), where the old wording would have added 1…3 again.
+   Clicking a sign five times while its remark plays gives the
    remark once; after it has finished, a click gives it again. If the
    queue was empty the first line starts at once; otherwise it waits.
    There is no limit on the queue's length.
@@ -201,8 +207,9 @@ Words used here:
 15. **`KQMonster::clearSpeak <name>`** empties that character's queue at
     once: the line playing stops, the waiting lines are dropped, the
     caption goes and the sounds come back up. **No `TalkComplete`** is
-    sent for any of them. The mouth goes back to rest. (It also ends a
-    conversation line; not covered here.)
+    sent for any of them. The mouth goes back to rest. (On a
+    conversation partner it also empties the conversation queue:
+    `conversation.md` rule 23.)
     **It does not touch a line still waiting out the 0.5 s after a
     turn** (traced 2026-10-18, Q103 b): that line is not in the queue
     yet but in a separate waiting slot, which `clearSpeak` leaves alone,
@@ -228,13 +235,16 @@ Words used here:
 17. The lip-sync file (community note `kq8lip.txt`) is a list of pairs
     (time, mouth shape): time in **1/60 s** from the start of the line,
     shape 0–7 (0 = rest). At each time the speaker's mouth changes,
-    as long as that line's sound is still the one playing. Shapes above
-    7 are handled differently (not traced). A line without a lip-sync
-    file simply has no mouth movement.
+    as long as that line's sound is still the one playing. **Codes above
+    7 are not mouth shapes** (traced 2026-10-19): 8–15 play the
+    movements `gesturea`…`gestureh`, 16 plays `stop`, above 16 nothing,
+    and the mouth stays as it is (`conversation.md` rule 18 says when).
+    A line without a lip-sync file simply has no mouth movement.
 18. **Connor's mouth** is a texture swap: his model's face texture
     `baseLip=cf0.bmp` is replaced by `lip<n>` of `[ConnerLips]` in
-    `GAME/Kq/Connor.kq` (`CF0.bmp`…`CF7.bmp`); a shape of 8 or more uses
-    `lip0`. Other characters do the same with their own `lips=` list
+    `GAME/Kq/Connor.kq` (`CF0.bmp`…`CF7.bmp`); a shape of 8 or more
+    would use `lip0`, but lip-sync codes above 7 never reach the mouth
+    (rule 17). Other characters do the same with their own `lips=` list
     (e.g. `[WizardLips]` `WF0`–`WF7`). With a helmet or armour his face
     texture comes from `lipsList=ConnerLipsList` (`cf`, `chf`, …, not
     traced further; M5). In first person his mouth isn't changed.
@@ -388,12 +398,14 @@ Words used here:
 
 ## Open questions
 
-1. **Conversations** (`KQConner::conversation`, 173 lines in the data):
-   the talk state, choosing lines, the `[n]` camera numbers and the
-   `<name>Info` objects (`KQConvInfo`), `TalkExit`, how the queue is
-   used there. Not studied; needed for the Daventry characters (Wizard,
-   Girl, Knight, Unicorn, Uglybeast, Lady of the Lake), M4/M5.
-2. Mouth shapes above 7 (rule 17).
+1. ~~**Conversations** (`KQConner::conversation`, 173 lines in the
+   data): the talk state, choosing lines, the `[n]` camera numbers and
+   the `<name>Info` objects (`KQConvInfo`), `TalkExit`, how the queue
+   is used there.~~ **Answered 2026-10-19** in `conversation.md`. (In
+   Daventry only the Wizard and the Uglybeast have conversations; the
+   Girl, Knight, Unicorn and Lady of the Lake only use `speak`.)
+2. ~~Mouth shapes above 7 (rule 17).~~ **Answered 2026-10-19**: gestures
+   (rule 17, `conversation.md` rule 18).
 3. Which folders are searched for message and sound files (rule 1).
 4. ~~Where and how the caption panel is drawn (font, place, wrapping):
    GUI, M4.~~ **Answered 2026-10-18** in `interface.md` rules 46–52

@@ -12,6 +12,13 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (A): conversations studied** (`docs/behaviour/conversation.md`):
+  `KQConner::conversation`, the `<name>Info` boxes (start, stay, special
+  areas) and cameras, Connor's walk to his talking spot, the talk states,
+  camera cuts on `[n]`, walking away (goodbye, `TalkExit`) and coming back
+  (welcome back), `InvConv`, gestures (lip-sync codes 8–16). Also a
+  correction to `talking.md` rule 9 (the duplicate check uses the last
+  sequence; Q114). Ready for B.
 - **New 2026-10-19 (B, M3 3o): M3 is done.** A's last answers built,
   one commit per step (`docs/milestones/M3.md` "3o"): the camera's view
   heading turns by four states (Connor may drift about 14° off the middle
@@ -80,9 +87,9 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   family of commands; voices and ducking; captions (stand-in panel);
   Connor's own remarks; cutting a line short; his mouth texture; turn
   keys as events and the turn after a click (4a-7 to 4a-9, Q103–Q105).
-  Checked by the user against the original. Conversations are not
-  studied yet.
-- **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
+  Checked by the user against the original. Conversations studied
+  2026-10-19 (`conversation.md`), not built.
+- **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Connor against monsters.
 
 ## Goal
@@ -304,15 +311,15 @@ done; conversations and menus next). M0–M3 are done.
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
-- **Next step, suggested:** for A: conversations (`KQConner::conversation`),
-  needed for the wizard and the other Daventry characters (the panels'
-  side of conversations is built, unit-tested only); Q108–Q112 when
-  convenient (small). For B: the main menu (Escape, the mask button)
-  with the game paused; it doesn't wait for conversations.
+- **Next step, suggested:** for B: conversations from `conversation.md`
+  (the Wizard and the Uglybeast; the panels' side is built, unit-tested
+  only), and Q114 (a correction to the speech queue); or the main menu
+  (Escape, the mask button) with the game paused. For A: Q108–Q113 when
+  convenient (small).
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.
-- Speech, not done: conversations (not studied), the Daventry monster-death
+- Speech, not done: conversations (studied, not built), the Daventry monster-death
   remark (no monster dies), monsters' mouths (not drawn), helmets'
   and armour's faces (M5).
 - Clicking: only doors, chests, items, scripted objects and buildings
@@ -351,9 +358,12 @@ done; conversations and menus next). M0–M3 are done.
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- `talking.md` open questions 1–3 and 5 (conversations, shapes above
-  7, folders, a line with no voice) are still open; 4 (the caption
-  panel) answered in `interface.md`.
+- `talking.md` open questions 3 and 5 (folders, a line with no voice)
+  are still open; 1 and 2 (conversations, shapes above 7) answered in
+  `conversation.md`, 4 (the caption panel) in `interface.md`.
+- `conversation.md` open questions 1–3 (a Connor setting that stops
+  the camera cuts, the gestures' condition, states that delay the talk
+  state): small, not blocking.
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

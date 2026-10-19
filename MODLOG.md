@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): conversations
+
+**Changed:** New `docs/behaviour/conversation.md` (23 rules). `docs/behaviour/talking.md`: rule 9 corrected (the duplicate check uses the range's last sequence, not the first), rules 15, 17, 18 (lip-sync codes 8–16 are gestures, not mouth shapes), open questions 1 and 2 answered. `docs/behaviour/QUESTIONS.md`: Q114 (the correction, for B). `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed).
+**Why:** Next study topic after M3 (STATUS "Next step"): the Wizard's and the Uglybeast's conversations in Daventry need it.
+**Tested how:** Traced in `Mask.exe` with Ghidra; checked against the data with small scripts in the scratch folder (message files, `*info.kq`, lip-sync files, script calls).
+**Result:** 169 `KQConner::conversation` calls, all with enemy flag 0; 16 `KQConvInfo` objects (Daventry: Wizard 3 boxes 7 cameras, Uglybeast 2 and 7); the largest camera number in every world's lines is within its partner's camera count; 19 characters have goodbye/welcome-back keys; 1,110 lip-sync files use gesture codes (Daventry 93). The Wizard's scripted spots fall in his stay area (1,083 and 344 units from the talking spot, so Connor is placed on it).
+**Still broken / not tested:** Nothing checked in the running original yet (the note lists four things to look at). Not settled: the Connor setting that makes the talk state put the camera at `cam0` and stop the camera cuts; what else enables gestures; states that delay the talk state. Whether a line cut off by the goodbye sends its own "finished" message.
+**Next:** B: build conversations from `conversation.md` and check Q114. A: Q108–Q113 when convenient.
+
 ## 2026-10-19 M3 is done (docs only)
 
 **Changed:** `docs/DESIGN.md`: M3 marked done, its step plans (3a to 3o) moved unchanged to the new `docs/milestones/M3.md`, a short list left in their place. `README.md`: M3 "✅ Done", the M3 line without "(mostly)" (plus: the camera follows Connor as in the original), "What's left of M3" taken out of "Next". `docs/FEATURES.md`: the camera (view heading, right button, chest height), what's missing. `STATUS.md`: "Where we are", goal, what works, stand-ins, open questions, test counts (461). `QUESTIONS.md`: Q27, Q53, Q100, Q102 marked built; Q113 d and e settled by the user's checks, a–c left for A (not blocking).
