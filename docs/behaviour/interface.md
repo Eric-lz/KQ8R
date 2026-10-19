@@ -34,12 +34,20 @@ is shown or hidden.
      `console.pft`, the caption strip `stontran.pbm`);
    - `palette=<world>`, `useWorldPal=1`: **the world's palette** colours
      everything on this screen, fonts and caption included (answers Q106
-     for the in-game screen);
+     for the in-game screen). Which file that is: **the world's
+     `KQWorld::objectPalette`** from its `kq/world.cs`; see "The world
+     palette" just below (Q118). The text `<world>` is never read as a
+     file name;
    - `cursor=IDBMA_CURS04`: the normal play pointer is `curs04.pba`.
 2. The menus (`Mainmenu.kq`, `Options.kq`, `Graphics.kq`, `movekeys.kq`)
    use the volume `game / $KQGame::BitDepth GUI` (`GAME/8Gui`),
    `palette=Menus.ppl`, `useWorldPal=0`, cursor `IDBMA_CURSGUI`; the
-   loading screen uses `loading.ppl` [data].
+   loading screen uses `loading.ppl` [data]. Each time a world loads,
+   the game copies `GAME/8Gui/L<first 7 letters of the world's
+   folder>.ppl` (e.g. `ldaventr.ppl`, `ldeadcit.ppl`) over
+   `GAME/8Gui/loading.ppl`, with the matching loading picture
+   [traced]. Not part of the game-play screen.
+
 3. `GAME/Kq/KqGui.kq` names the tag file `kqGuiTag.ttag` and the four
    screen files (main menu, game play, options, loading) [data].
 4. **Layout format.** The `.gui` blocks (dialogs `UIDL`/`CCBD`, buttons
@@ -67,6 +75,109 @@ is shown or hidden.
    left, 0xA right, 0xC centred, 0x11 left/top, 0x12 right/top. The
    caption code sets its own value 0x14 (centred, from the top of each
    line's slot) [traced].
+
+### The world palette (answers Q118)
+
+There is **one display palette** at a time for the whole window: the
+3D view and every panel are coloured by the same 256 colours [traced].
+A screen with `useWorldPal=0` (the menus, the loading screen) puts its
+own `palette=` file into the window when it is shown. A screen with
+`useWorldPal=1` (only the game-play screen) puts **nothing** there: it
+uses whatever the window holds [traced].
+
+1a. **What fills the window during a world load** [traced, order from
+    `mask.cs` and `world.cs`]:
+    1. the start of the load puts `black.ppl` in (screen black);
+    2. the loading screen puts `loading.ppl` in;
+    3. `world.cs` (`Load`): `blackOut` puts `black.ppl` in again,
+       `KQGame::selectScreen 1` shows the game-play screen (no palette
+       change), then `loadPalette $KQWorld::loadingPalette 0` puts that
+       file in, background colour index 0;
+    4. `mask.cs`: `loadPalettes 0` reads the four world settings
+       `KQWorld::objectPalette`, `terrainPalette`, `interiorPalette`,
+       `connorPalette` (an empty setting is skipped) and puts the
+       **object palette** in, background colour index 0.
+       `KQWorld::loadingPalette` is only a script variable; the program
+       itself never reads it.
+1b. **Every frame while the 3D view draws** [traced]: before drawing
+    the terrain it switches the window to the terrain palette, before
+    the interiors to the interior palette, before the objects to the
+    object palette (each only if that palette loaded, and only if it
+    differs from the one already in). The frame therefore always **ends
+    on the object palette**, and the panels, captions and fonts drawn
+    over the view use it [the panels being drawn after the view is
+    inferred: they cover it]. `connorPalette` is loaded but not used
+    for this switching.
+1c. **So the file is `KQWorld::objectPalette`** of the current world.
+    In every shipped world all five settings name the same file, and
+    `loadingPalette` too [data], so in practice it is that one file:
+
+    | World folder | File |
+    | --- | --- |
+    | Daventry | `daventry.ppl` |
+    | Barren | `barren.ppl` |
+    | Gnome | `gnome.ppl` |
+    | Swamp | `swamp.ppl` |
+    | DeadCity | `newdead.ppl` |
+    | CastleD | `Castle.ppl` (file `castle.ppl`) |
+    | IceWorld | `ice.ppl` |
+    | SnowExit | `exit.ppl` |
+    | Temple1–4 | `temple01.ppl` – `temple04.ppl` |
+
+    The `defaultPaletteName=` line in `GAME/Kq/<World>.kq` is **not
+    used** (the program never reads that key [traced]; CastleD's even
+    names a file that doesn't exist, `CastleD.ppl`). A rebuild should
+    read `objectPalette` from `world.cs` (both the `BitDepth 8` and the
+    other branch name the same file) and may fall back to
+    `loadingPalette`, then to the other three.
+1d. **Changes while playing.** Nothing in the shipped data changes the
+    palette after the load: `loadPalette`, `blackOut` and `loadPalettes`
+    appear only in `world.cs` (`Load`) and `mask.cs` (new world /
+    restore world) [data]. Entering or leaving an interior changes only
+    the camera, not the palette [traced]; inside an interior the frame
+    still ends on the object palette. A world change (portal, load)
+    runs the whole of 1a again, so the bars take the new world's
+    colours from the first frame of play. After the main menu or the
+    options screen (which put `Menus.ppl` in), the first frame of the
+    3D view puts the world palette back, because it differs [traced].
+    If a script did call `loadPalette` during play, the panels would
+    show that file only until the next frame's switch (1b) put the
+    object palette back [traced logic; no shipped script does it].
+1e. **Where the file is read from.** By name, through the open resource
+    folders: both the world's `resource` folder and `GAME/Resource` are
+    open at play time and both hold a byte-identical copy of every
+    world palette [data]; which one wins was not traced and makes no
+    difference. Name case doesn't matter (`Castle.ppl` finds
+    `castle.ppl`) [inferred: Windows file names].
+1f. **If it is missing.** `loadPalette` writes "loadPalette: Could not
+    load palette" to the console and leaves the window as it was;
+    `loadPalettes` leaves that slot empty, and the frame's switch skips
+    an empty slot [traced]. So with no object palette the panels keep
+    the last palette that did load (the interior or terrain one, else
+    the `loadingPalette`, else `black.ppl`: all black). The rebuild
+    should log the missing name and still draw the panels with any
+    world palette it found.
+1g. **Conversation captions** are drawn by the game-play screen itself
+    (the caption box `IDDLG_CAPTION`, rules 46–52) in `console.pft`, so
+    they, their stone strip and their fonts use the same world palette
+    as the bars [traced: the screen has no palette of its own]. There
+    is no separate conversation palette.
+1h. **Saved-game pictures** (the 160 × 120 thumbnail in the load and
+    save menus) are stored in the colours of the world they were taken
+    in and recoloured to the current palette when shown; the program
+    holds its own list of world palette names for this (`daventry.ppl`
+    … `temple04.ppl`, `dwarf.ppl`, `icelord.ppl`, `castle.ppl`,
+    `exit.ppl`) [traced; detail not needed for the bars].
+1i. **Each world's pictures are made for its own palette** [data]. Every
+    world's `8gui` folder has its own copy of the panel pictures, and
+    the copies differ byte for byte: the artists converted each picture
+    to the nearest colours of that world's palette. So the grey stone,
+    the slots and the frames come out almost the same grey in every
+    world, while the meters differ a little (main colour of `4red.pbm`:
+    Daventry 152, 8, 0; Dead City 224, 24, 0; Swamp 184, 0, 0; of
+    `4green.pbm`: 0, 104, 0; 16, 72, 0; 8, 72, 0). **Always pair a
+    world's pictures with that same world's palette**: Daventry's
+    pictures in the Dead City palette give purple and orange.
 
 ## The panels on the game-play screen
 
@@ -388,8 +499,9 @@ is shown or hidden.
 
 ## Edge cases
 
-- With no world palette loaded nothing on this screen has its colours;
-  the menus never use the world palette.
+- With no world palette loaded the screen keeps the last palette that
+  did load (rule 1f; at worst `black.ppl`, all black); the menus never
+  use the world palette.
 - The map key does nothing without the magic map.
 - Escape during handsOff does nothing; Space, Tab and 1–8 are not
   checked for handsOff by the screen itself [traced]; the item use they
@@ -450,6 +562,21 @@ is shown or hidden.
    which hide the bottom bar but don't add the mask. **Also checked by
    the user:** a bar that was showing comes back when the cutscene
    ends; a bar that was put away first stays away.
+8. **The world palette (Q118).** In our build: every world, including
+   DeadCity, CastleD, IceWorld, SnowExit and Temple1–4, should log the
+   palette name it took from `world.cs` (`objectPalette`, e.g.
+   `newdead.ppl`) and draw the bars and the caption strip. **In the
+   original (user):** compare the bars in Daventry and in the Dead City
+   (or the Ice World): the same pictures are coloured by each world's
+   own palette, so the stone, the gold letters and the meters may look
+   a little different from world to world; our build should show the
+   same difference. Open the main menu with Escape and go back: the
+   bars are in the world's colours again straight away (rule 1d).
+   **User (2026-10-19), Daventry, Dead City, Swamp:** only the health
+   and experience meters differ, in a slightly different red and
+   green; everything else looks the same. That matches the data
+   (rule 1i). Escape to the main menu and back: nothing changes, the
+   bars are in the world's colours at once (rule 1d).
 
 ## Open questions
 

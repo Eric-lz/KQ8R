@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): Q118, the user's check (world palette)
+
+**Changed:** `docs/behaviour/interface.md`: new rule 1i (each world's `8gui` pictures are converted to its own palette), the user's result under "How to check" point 8. No code.
+**Why:** The user compared the bars in Daventry, the Dead City and the Swamp in the original.
+**Tested how:** By eye in the original (user). Then decoded each world's own `4red`, `4green`, `stontran`, `4left` and `2gold0` pictures with its own palette (script in the scratch folder).
+**Result:** User: only the health and experience meters differ (a slightly different red and green). Data agrees: the world copies of the pictures differ byte for byte; the greys come out the same, the red is 152,8,0 / 224,24,0 / 184,0,0 and the green 0,104,0 / 16,72,0 / 8,72,0. A first try that put Daventry's pictures in the other palettes gave purple and orange, so a world's pictures must go with that same world's palette.
+**Still broken / not tested:** Nothing open. Escape to the main menu and back (user, later the same day): nothing changes, as rule 1d says.
+**Next:** B: use the world's own `8gui` pictures with its `objectPalette`.
+
+## 2026-10-19 Study (A): Q118, which file is the world palette
+
+**Changed:** `docs/behaviour/interface.md`: rule 1 and rule 2 extended, new section "The world palette" (rules 1a–1h), edge case updated, "How to check" point 8. `docs/behaviour/QUESTIONS.md`: Q118 answered. `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed). No code.
+**Why:** B's guess `<folder>/resource/<folder>.ppl` exists in only four worlds, so eight worlds drew no bars (user's report).
+**Tested how:** Traced in `Mask.exe` with Ghidra (screen activation, `loadPalette`, `blackOut`, `loadPalettes`, the main window's palette, the camera's per-frame drawing, world loading). Checked the data: every `world.cs` (and the two `patch/WORLD.CS`) names one file for all five settings; searched every shipped `.cs`/`.kq` for `loadPalette`, `blackOut`, `loadPalettes` (only `world.cs` Load and `mask.cs`); `newdead.ppl` world and `GAME/Resource` copies have the same MD5.
+**Result:** The screen with `useWorldPal=1` loads no palette; the window has one palette for everything, and every frame the 3D view ends on the world's `objectPalette`, which is what the panels show. `defaultPaletteName` in `GAME/Kq/<World>.kq` is never read (CastleD's names a missing file). Nothing changes the palette during play; after the menus the next frame puts the world palette back. A missing file leaves the last palette that loaded.
+**Still broken / not tested:** Not checked in the running original; that the panels are drawn after the 3D view is inferred; which resource folder wins when both have the file is not traced (the copies are identical).
+**Next:** B: read `objectPalette` from `world.cs` for the bars and captions (fall back to `loadingPalette`), then check in all twelve worlds.
+
 ## 2026-10-19 Q118: bars missing in eight worlds (question for A)
 
 **Changed:** `docs/behaviour/QUESTIONS.md`: Q118 (which file is the game-play screen's world palette). No code.
