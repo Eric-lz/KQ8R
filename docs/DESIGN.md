@@ -1976,8 +1976,11 @@ inventory and menus.
     - **4c-8, the user's second check** (**done** 2026-10-18): Space's
       sounds the other way round; the spinning mask whole (its pictures
       are 57 × 57, its box 48 × 48); black behind the meters' bars.
-    - Open (Q111 c): a gap the user sees between the meters' end pieces
-      and the side panels.
+    - **4c-9, the gap and the mask on the bar** (**done** 2026-10-18):
+      the gap beside the meters was ours (their picture drawn 18 rows
+      for a 17-row place, squeezed by the engine); every panel is now
+      drawn with its edges rounded where they stand on the screen. The
+      spinning mask stands on the bottom bar like the caption.
   - Tests: unit tests for each core module; viewer runs with `--click`
     on `alcmsign` and `smlchst3`, Space pressed by a test option
     (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),

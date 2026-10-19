@@ -398,8 +398,9 @@ doesn't take it gives "This will not work."
 - **Corrections after the user's checks (4c-7, 4c-8):** Space plays the
   top bar's sounds the other way round as the bottom bar moves
   (cutscenes don't); the spinning mask sits whole in the screen's bottom
-  right corner at its own size; the empty part of the meters' bars is
-  black.
+  right corner at its own size, standing on the bottom bar and rising
+  and falling with it (4c-9); the empty part of the meters' bars is
+  black; the meters fit the bar without a gap (4c-9).
 
 ## Viewer helpers (not in the original)
 

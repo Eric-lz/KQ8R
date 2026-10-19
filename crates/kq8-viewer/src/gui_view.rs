@@ -563,7 +563,7 @@ impl Gui {
 
     /// Draws a picture `size` layout pixels big from `specs`, loading the
     /// pictures and fonts it needs.
-    fn draw(&mut self, size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
+    fn draw(&mut self, origin: [i32; 2], size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
         for s in specs {
             match s {
                 Spec::Pic { file, .. } => self.load_file(file),
@@ -586,7 +586,7 @@ impl Gui {
                 Spec::Fill { rect, rgb } => pieces.push(Piece::Fill { rect: *rect, rgb: *rgb }),
             }
         }
-        gui_draw::draw(size, scale, &pieces, &self.palette)
+        gui_draw::draw(origin, size, scale, &pieces, &self.palette)
     }
 
     /// The spinning mask's file (`IDCTL_TIMER_7`).
@@ -941,7 +941,15 @@ pub fn gui_draw(
     let mut covered = Vec::new();
     // Each visible panel: what, left, top, width, height (screen pixels).
     let mut places: Vec<(Drawn, f32, f32, f32, f32)> = Vec::new();
+    // The top of the highest bottom panel as they slide (the screen's
+    // bottom when they are away): the caption (rule 51) and, 4c-9, the
+    // spinning mask stand on it.
     let mut bottom = sh;
+    for p in [Panel::BottomLeft, Panel::Slots, Panel::Meters] {
+        if let Some(rect) = gui.rect(Drawn::Panel(p)) {
+            bottom = bottom.min(kq8_core::panels::place(p, rect, [sw, sh], gui.panels.away(p)).1);
+        }
+    }
     for (picture, mut node, image, mut vis) in &mut nodes {
         let d = DRAWN[picture.0];
         let Some(rect) = gui.rect(d) else { continue };
@@ -960,12 +968,11 @@ pub fn gui_draw(
         }
         let ((left, top), (w, h)) = match (panel, gui.mask_size()) {
             (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
-            (None, Some([mw, mh])) => ((sw - mw as f32, sh - mh as f32), (mw as f32, mh as f32)),
+            // 4c-9 (the user's check): it rises and falls with the
+            // bottom bar, on top of it.
+            (None, Some([mw, mh])) => ((sw - mw as f32, bottom - mh as f32), (mw as f32, mh as f32)),
             (None, None) => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
         };
-        if matches!(panel, Some(Panel::BottomLeft | Panel::Slots | Panel::Meters)) {
-            bottom = bottom.min(top);
-        }
         if away >= 1.0 {
             *vis = Visibility::Hidden;
             continue;
@@ -975,7 +982,7 @@ pub fn gui_draw(
             let at = [left, top, left + w, top + h].map(|v| v.round() as i32);
             if *status_at != Some(at) {
                 *status_at = Some(at);
-                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; in the bottom right corner: the user's checks, 4c-7, 4c-8, Q111)");
+                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; at the right, on the bottom bar or the screen's bottom: the user's checks, 4c-7 to 4c-9, Q111)");
                 gui.note(line);
             }
         }
@@ -992,7 +999,12 @@ pub fn gui_draw(
             continue;
         }
         let scale = if panel.is_some() { gui.scale } else { 1.0 };
-        let canvas = gui.draw(size, &specs, scale);
+        // 4c-9: drawn where it stands, so its rows match its place.
+        let origin = match panel {
+            Some(_) => gui.control(d.layout_id()).map_or([0, 0], |c| [c.rect[0], c.rect[1]]),
+            None => [0, 0],
+        };
+        let canvas = gui.draw(origin, size, &specs, scale);
         // Where the drawn picture is see-through (the world shows), by
         // column and row ranges, for the log.
         let clear: Vec<(u32, u32)> = (0..canvas.height).flat_map(|y| (0..canvas.width).map(move |x| (x, y))).filter(|&(x, y)| canvas.at(x, y)[3] == 0).collect();
@@ -1111,4 +1123,46 @@ pub fn pointer_draw(
     let line = format!("pointer: {} ({file}, {}x{} drawn x{step}; click point at its top-left, stand-in Q110)", gui.pointer, pic.width, pic.height);
     gui.note(line);
     *shown = Some(wanted);
+}
+
+/// 4c-9: where the engine actually put the bottom panels, in physical
+/// pixels after its rounding (left, top, right, bottom) and the size of
+/// the picture shown in each; each change in `gui.log`.
+pub fn gui_layout_log(
+    gui: Option<ResMut<Gui>>,
+    nodes: Query<(&GuiPicture, &bevy::ui::ComputedNode, &bevy::ui::UiGlobalTransform, &ImageNode, &Visibility)>,
+    images: Res<Assets<Image>>,
+    mut last: Local<HashMap<&'static str, [i32; 6]>>,
+) {
+    let Some(mut gui) = gui else { return };
+    for (picture, computed, at, image, vis) in &nodes {
+        let d = DRAWN[picture.0];
+        if !matches!(d, Drawn::Panel(Panel::BottomLeft | Panel::Slots | Panel::Meters | Panel::BottomRight)) || *vis == Visibility::Hidden {
+            continue;
+        }
+        let size = computed.size();
+        let centre = at.affine().translation;
+        let edges = [centre.x - size.x / 2.0, centre.y - size.y / 2.0, centre.x + size.x / 2.0, centre.y + size.y / 2.0];
+        let texture = images.get(&image.image).map_or([0, 0], |i| [i.width(), i.height()]);
+        let key = [edges[0].round() as i32, edges[1].round() as i32, edges[2].round() as i32, edges[3].round() as i32, texture[0] as i32, texture[1] as i32];
+        if last.get(d.layout_id()) == Some(&key) {
+            continue;
+        }
+        last.insert(d.layout_id(), key);
+        let line = format!(
+            "engine: {} at left {:.2} top {:.2} right {:.2} bottom {:.2} (physical px, {:.2}x{:.2}, unrounded {:.2}x{:.2}); picture {}x{}",
+            d.layout_id(),
+            edges[0],
+            edges[1],
+            edges[2],
+            edges[3],
+            size.x,
+            size.y,
+            computed.unrounded_size.x,
+            computed.unrounded_size.y,
+            texture[0],
+            texture[1]
+        );
+        gui.note(line);
+    }
 }

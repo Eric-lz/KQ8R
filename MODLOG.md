@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-9: the gap beside the meters; the spinning mask on the bottom bar
+
+**Changed:** `kq8-core/src/gui_draw.rs`: a panel is drawn where it stands (`draw` takes its layout place; `screen_size`): each edge is rounded at its screen place, so the picture has exactly the pixels of the place the engine gives it (unit test). Viewer `gui_view.rs`: passes each panel's place; the spinning mask stands on the top of the highest bottom panel (worked out before the panels are placed, as the caption's), rising and falling with the bar; new `gui_layout_log` writes where the engine put each bottom panel and its picture's size. Q111 closed by the user's checks. Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.
+**Why:** The user's third check: a small gap the height of the meters between them and the side panels, flickering every frame while the bar slides; and the spinning mask should follow the bottom bar like the caption.
+**Tested how:** `cargo test --workspace` (451 pass, 1 extended), clippy clean. Viewer: `cargo play --at 245000,255000,0 --key space,10 --key space,30 --frames 400 --sound off` (before the fix) and the bricks `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --frames 2500 --sound off` (`gui-4c9-bricks.log`).
+**Result:** Before: "engine: IDCTL_METERS at left 448.00 top 700.00 right 832.00 bottom 720.00 (… unrounded 384.00x20.40); picture 320x18", with the place going 20, 21, 20… pixels while sliding: 18 rows of picture for 17 rows of screen (14 × 1.25 = 17.5 rounded up, but its edges are 582.5 → 583 and 600). The left and right edges were exact. After: "picture 320x17". The mask: "[743, 465, 800, 522]" on the bar (its top at 520), sliding down with it to "[743, 543, 800, 600]".
+**Still broken / not tested:** Not seen by eye. At window sizes that aren't a whole multiple of 800 × 600 the pixels are still unevenly stretched (some rows and columns doubled), which can shimmer slightly while a panel slides; the gap itself should be gone. The rope hook icon beside the mask: later, with the rope (M6).
+**Next:** The user's check of 4c-9.
+
 ## 2026-10-18 M4 step 4c-8: the user's second check (Space's sounds, the whole mask, black behind the bars)
 
 **Changed:** `kq8-core/src/panels.rs`: Space hiding the bottom bar plays `intrup.aud`, showing it `intrdown.aud` (swapped). `gui_draw.rs`: a one-colour fill piece (unit test). Viewer `gui_view.rs`: black behind the health and experience bars; the spinning mask drawn whole at its own 57 × 57 (it was cut to its 48 × 48 layout box) in the screen's bottom right corner; `gui.log` now lists each picture's size when loaded and any see-through pixels of a drawn panel. `QUESTIONS.md` Q111 (a, b, d answered by the user; c open). Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.

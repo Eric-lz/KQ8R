@@ -1808,3 +1808,11 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | The spinning mask drawn whole at its pictures' own size (57 × 57, larger than its 48 × 48 layout box), its bottom right corner at the screen's; only the mask is drawn of the status icons | **The user's check** (it was cut off on its right, Q111 b); `mskicn.pba`'s size from the data | `gui-4c8-bricks.log` "picture mskicn.pba: 16 frame(s), 57x57", "spinning mask at [743, 543, 800, 600] of 800x600" |
 | Black behind the health and experience bars (the part a bar doesn't cover is black, not see-through) | **The user's check** (Q111 d) | Unit test `pictures_fill_their_box…`; `gui.log` lists no see-through pixels in `IDCTL_METERS` any more |
 | `gui.log` lists each picture's size and frames when loaded, and any see-through pixels of a drawn panel | **Our log** | `gui-4c8-bricks.log` |
+
+### 4c-9, the gap beside the meters; the mask on the bar — `crates/kq8-core/src/gui_draw.rs`, `crates/kq8-viewer/src/{gui_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A panel's picture is drawn where it stands: every edge (the panel's and its pieces') is rounded at its screen place, so the picture has exactly the rows and columns of its place (the meters: 466 to 480 × 1.25 = 582.5 to 600, 17 rows; they were drawn 18 and squeezed, which made the user's gap and its flicker while sliding) | **Our fix** (a drawing error of ours; the user's check found it) | Unit test `pictures_fill_their_box…` (`screen_size` 320 × 17); `gui-4c9-bricks.log` "engine: IDCTL_METERS … picture 320x17" (before: "picture 320x18" in a 20.4-pixel place) |
+| The spinning mask stands on the bottom bar at the right and rises and falls with it (the screen's bottom when the bar is away) | **The user's check in the original** (as the caption, `interface.md` rule 51) | `gui-4c9-bricks.log` "spinning mask at [743, 465, 800, 522]" (on the bar, its top at 520) down to "[743, 543, 800, 600]" |
+| `gui.log` lists where the engine put each bottom panel (physical pixels, after its rounding) and its picture's size | **Our log** | `gui-4c9-bricks.log` "engine: …" |

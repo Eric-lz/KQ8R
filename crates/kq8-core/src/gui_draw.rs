@@ -20,6 +20,10 @@
 //! 800 × 600) and rounded; pictures stretched with them (nearest pixel)
 //! and tiled from their rectangle's top-left when smaller; fonts at their
 //! own size.
+//! 4c-9: every edge is rounded where it stands on the screen (the panel's
+//! place plus the child's), as the panel's own edges are, so a picture
+//! is exactly as many pixels as its place: the meters are 14 layout
+//! pixels at 466, 582.5 to 600 on the screen, 17 rows (not 18).
 
 use kq8_data::font::Font;
 use kq8_data::palette::Rgb;
@@ -98,14 +102,18 @@ pub struct Canvas {
     pub width: u32,
     pub height: u32,
     pub rgba: Vec<u8>,
+    /// The panel's top-left on the screen; pieces are drawn at their
+    /// screen places less this.
+    offset: [i32; 2],
 }
 
 impl Canvas {
     pub fn new(width: u32, height: u32) -> Self {
-        Canvas { width, height, rgba: vec![0; (width * height * 4) as usize] }
+        Canvas { width, height, rgba: vec![0; (width * height * 4) as usize], offset: [0, 0] }
     }
 
     fn put(&mut self, x: i32, y: i32, index: u8, see_through: bool, palette: &[Rgb; 256]) {
+        let (x, y) = (x - self.offset[0], y - self.offset[1]);
         if (see_through && index == 0) || x < 0 || y < 0 || x >= self.width as i32 || y >= self.height as i32 {
             return;
         }
@@ -137,8 +145,9 @@ impl Canvas {
     /// Fills the layout rectangle `rect` with one colour.
     pub fn fill(&mut self, rect: [i32; 4], rgb: [u8; 3], scale: f32) {
         let [l, t, r, b] = rect.map(|v| scaled(v, scale));
-        for y in t.max(0)..b.min(self.height as i32) {
-            for x in l.max(0)..r.min(self.width as i32) {
+        let [ox, oy] = self.offset;
+        for y in (t - oy).max(0)..(b - oy).min(self.height as i32) {
+            for x in (l - ox).max(0)..(r - ox).min(self.width as i32) {
                 let at = ((y as u32 * self.width + x as u32) * 4) as usize;
                 self.rgba[at..at + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
             }
@@ -163,15 +172,26 @@ impl Canvas {
     }
 }
 
-/// Draws a panel `size` layout pixels big from its pieces, **last
+/// The screen pixels a panel at layout point `origin`, `size` layout
+/// pixels big, covers: its edges rounded where they stand (4c-9).
+pub fn screen_size(origin: [i32; 2], size: [i32; 2], scale: f32) -> [u32; 2] {
+    [0, 1].map(|k| (scaled(origin[k] + size[k], scale) - scaled(origin[k], scale)).max(1) as u32)
+}
+
+/// Draws a panel standing at layout point `origin`, `size` layout pixels
+/// big, from its pieces (rectangles relative to the panel), **last
 /// first** (the first piece ends on top).
-pub fn draw(size: [i32; 2], scale: f32, pieces: &[Piece], palette: &[Rgb; 256]) -> Canvas {
-    let mut c = Canvas::new(scaled(size[0], scale).max(1) as u32, scaled(size[1], scale).max(1) as u32);
+pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], palette: &[Rgb; 256]) -> Canvas {
+    let [w, h] = screen_size(origin, size, scale);
+    let mut c = Canvas::new(w, h);
+    c.offset = origin.map(|v| scaled(v, scale));
+    let [ox, oy] = origin;
+    let at = |r: &[i32; 4]| [r[0] + ox, r[1] + oy, r[2] + ox, r[3] + oy];
     for piece in pieces.iter().rev() {
         match piece {
-            Piece::Picture { rect, pic, cut } => c.picture(*rect, *pic, *cut, scale, palette),
-            Piece::Text { rect, font, justification, text } => c.text(*rect, font, *justification, text, scale, palette),
-            Piece::Fill { rect, rgb } => c.fill(*rect, *rgb, scale),
+            Piece::Picture { rect, pic, cut } => c.picture(at(rect), *pic, *cut, scale, palette),
+            Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
+            Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
         }
     }
     c
@@ -209,24 +229,29 @@ mod tests {
             // Under it: a background whose index 0 is drawn (not see-through).
             Piece::Picture { rect: [0, 0, 10, 4], pic: Pic { width: 2, height: 2, pixels: &back, see_through: false }, cut: None },
         ];
-        let c = draw([10, 4], 1.0, &pieces, &pal);
+        let c = draw([0, 0], [10, 4], 1.0, &pieces, &pal);
         assert_eq!((c.width, c.height), (10, 4));
         assert_eq!(c.at(3, 1), [255, 0, 0, 255], "the bar on top");
         assert_eq!(c.at(4, 0), [0, 255, 0, 255], "past 4 pixels: the background");
         assert_eq!(c.at(0, 3), [0, 0, 0, 255], "index 0 of an opaque picture is drawn");
         // See-through index 0.
-        let st = draw([2, 2], 1.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
+        let st = draw([0, 0], [2, 2], 1.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
         assert_eq!(st.at(0, 1), [0, 0, 0, 0]);
         // Scaled by 2: a 2x2 picture covers 4x4.
-        let big = draw([2, 2], 2.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
+        let big = draw([0, 0], [2, 2], 2.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
         assert_eq!((big.width, big.at(1, 1), big.at(1, 2)), (4, [0, 255, 0, 255], [0, 0, 0, 0]));
         // 4c-8: a cut bar over black: the empty part is black, not see-through.
         let bar = [
             Piece::Picture { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, cut: Some(4) },
             Piece::Fill { rect: [0, 0, 10, 2], rgb: [0, 0, 0] },
         ];
-        let c = draw([10, 2], 1.0, &bar, &pal);
+        let c = draw([0, 0], [10, 2], 1.0, &bar, &pal);
         assert_eq!((c.at(3, 0), c.at(9, 1)), ([255, 0, 0, 255], [0, 0, 0, 255]));
+        // 4c-9: the meters, 14 layout pixels high at 466, × 1.25: 582.5
+        // to 600 on the screen, so 17 rows, and a piece filling them all.
+        assert_eq!(screen_size([192, 466], [256, 14], 1.25), [320, 17]);
+        let full = draw([192, 466], [2, 14], 1.25, &[Piece::Fill { rect: [0, 0, 2, 14], rgb: [9, 9, 9] }], &pal);
+        assert_eq!((full.height, full.at(0, 0), full.at(1, 16)), (17, [9, 9, 9, 255], [9, 9, 9, 255]));
     }
 
     #[test]
@@ -234,7 +259,7 @@ mod tests {
         let f = crate::caption::tests::font();
         let mut pal = [[0u8; 3]; 256];
         pal[7] = [200, 150, 50];
-        let c = draw([40, 4], 1.0, &[Piece::Text { rect: [30, 1, 29, 0], font: &f, justification: 0x12, text: "ab".into() }], &pal);
+        let c = draw([0, 0], [40, 4], 1.0, &[Piece::Text { rect: [30, 1, 29, 0], font: &f, justification: 0x12, text: "ab".into() }], &pal);
         // "ab" is 20 wide: x 10..30, y 1..3.
         assert_eq!(c.at(10, 1), [200, 150, 50, 255]);
         assert_eq!(c.at(29, 2), [200, 150, 50, 255]);
