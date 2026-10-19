@@ -188,7 +188,6 @@ docs/
   provenance/   where each piece of knowledge came from
   RESEARCH.md   existing tools and documentation for this game
 MODLOG.md       every change, with how it was tested
-ROADMAP.md      how far along we are, in brief
 ```
 
 Not in the repository (kept only on your machine): `MASK/` (the game),
