@@ -171,7 +171,8 @@ Words used here:
     panel is hidden and the other sounds come back to full volume
     (ducking stays on between the lines of one queue).
 12. A `speak` changes nothing about the issuer's state or movement:
-    Connor can walk, jump and turn while he talks.
+    Connor can walk, jump and turn while he talks. (The one exception is
+    at the end of a **character's** queue: rule 13a.)
 
 ### Hearing that a line has finished: `TalkComplete`
 
@@ -194,6 +195,33 @@ Words used here:
       `stateChangeNotify wizbook Connor`, then `speak Connor Connor 1000
       63 0 0 1 1`, and on `TalkComplete` 1000 63 0 0 1 starts the
       ripping animation.
+
+**13a. The speaker goes to Wait** (traced 2026-10-19, Q117; this is the
+rule `characters.md` refers to). When the line that finishes is the
+**last line of the queue** (marked as the last, rule 11), and the
+queue belongs to a **character** (`KQMonster` or `KQGeometryTalker`;
+for a conversation, the partner), then, **before** its `TalkComplete`
+script runs:
+
+- if the character's mover wants to walk and it is in a conversation
+  (Talk), it goes to the Move state;
+- otherwise, **if it is not already in Wait**, `Stop` is asked for
+  (the ordinary way) and it is put into **Wait**.
+
+Answers to Q117: (a) only after the **last** line, not after every
+line. (b) **Characters only**: Connor's queue does not do this (at
+the end of his last line only the conversation, if any, is told; his
+state is not changed). (c) Yes: a character in "no state" gets `Stop`
+and Wait. (d) For a character not in Wait the `Stop` request is always
+made (so it can replace a Special movement that can be cut short); the
+switch to Wait then follows the usual state rule: from **Special** it is accepted
+only once the list's last movement has started (while movements of
+the list are still waiting their turn it is refused, and the list
+goes on and ends in Wait by itself, `anim-scripts.md` rule 16); Wait
+and "no state" accept it, and so does Talk. **A character already in
+Wait gets nothing**: no `Stop` request, so a held pose (e.g. the
+Uglybeast's last mouth pose, `characters.md` rule 27) stays until a
+script changes it.
 14. **`KQMonster::testMessage f1 n1 v1 c1 [s1] f2 n2 v2 c2 [s2]`** (9 or
     11 words) compares two tuples (with or without the sequence) and
     gives **0 when they are equal** (so `if eval KQMonster::testMessage

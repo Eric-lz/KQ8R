@@ -27,6 +27,23 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   `--command "WORDS",N`; new log `characters.log`. Questions Q116, Q117,
   Q119–Q121 for A. Left: 4d-6 gravity, 4d-7 shadows (to be planned).
 
+- **New 2026-10-19 (A): Q116, Q117, Q119–Q124 answered** (`characters.md`
+  rules 8, 12, 14, 15, 18, 20, 27, 36, new 37; `talking.md` 13a;
+  `anim-scripts.md` 3, 8, 10a; `connor-physics.md`). For the user's two
+  sightings: **the snap (Q119)**: the original handles everything sent
+  with delay 0 before drawing the frame, so `stand` replaces `Stop`
+  unseen; **the flicker (Q120)**: the Uglybeast's mouth poses have a loop
+  duration of 0 and never end, so no `Stop` comes back between codes
+  (the "too far" line's return to idle is `ugly.cs` sending `stop`).
+  Found on the way: every animated object starts with the movement
+  names `Stop`/`Stop`, so all Daventry characters start on `stop`, the
+  Lady and the Shadow are in Wait, and `flags=8` torches and fish get the
+  random start (corrects `anim-scripts.md` rule 3). Gravity (Q122):
+  characters are type 0x42 / mask 0x281F (terrain and buildings count),
+  no Fall state. Shadows (Q123): along the sun, onto terrain and
+  buildings, each triangle on its own, strength 0.5; `shadowvisible` is
+  only for the relighting tool. Checks for the user: `characters.md`
+  "How to check" 6–10.
 - **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
   palette"): the bars, captions and fonts use the world's
   `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,
@@ -328,10 +345,15 @@ done; conversations and menus next). M0–M3 are done.
   `sprdump`); `EndLoop` through the queue lets `Stop` show for one
   update before a script's answer (Q119, the Uglybeast's `pivot`); the
   Uglybeast's mouth movements bring `Stop` back in Wait (Q120); a
-  character's facing taken as Connor's (−Y). Built since: `makeTranslucent`
+  character's facing taken as Connor's (−Y). **All of Q116–Q124 are now
+  answered (A, 2026-10-19)**: to build: delay-0 events before drawing
+  (Q119), zero-duration movements hold (Q120), the `Stop` default names
+  and the start-up on a first request (Q121), end of queue does nothing
+  in Wait (Q117), gravity (Q122), shadows (Q123). Built since: `makeTranslucent`
   (4d-5b), click boxes following characters (4d-5c), who casts a shadow
   (4d-7a, logged), Q114's corrections. Waiting for A: gravity (Q122),
-  drawing shadows (Q123), transitions and the `endLoop` cue (Q124). Not
+  drawing shadows (Q123), transitions and the `endLoop` cue (Q124) (now
+  answered, see above). Not
   built: the Talk state (conversations), `changeAnmFile`, collision
   against characters; a clickable
   character's click box now follows it (4d-5c). Not tested: the
@@ -410,19 +432,9 @@ done; conversations and menus next). M0–M3 are done.
   `conversation.md`, 4 (the caption panel) in `interface.md`.
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered).
-- `characters.md` open questions 1–4 (`flags` bit 0x20, how shadows are
-  drawn and `shadowvisible`, the AI (M5), `changeBmp` / `changeAnmFile`):
-  not blocking the drawing of characters.
-- For A (asked 2026-10-19 by B, M4 4d): **Q116** (`birthDelay` 1 for
-  two goblins vs "0 for all"), **Q117** (where "the speaker goes to
-  Wait" comes from, and its details), **Q119** (`EndLoop` and Wait's `Stop`: which
-  comes first; the Uglybeast's one-update `Stop`), **Q120** (the
-  geometry talker's mouth movements and rule 18), **Q121** (a state set
-  before the first update: `sprdump`), **Q122** (gravity: a character's collision
-  type and mask, flying, falls), **Q123** (drawing shadows), **Q124**
-  (transitions and the `endLoop` cue on characters). Q119 and Q120 now
-  carry the user's check of our build (the snap and the flicker are
-  visible).
+- `characters.md` open questions 1–4 (`flags` bit 0x20, how the renderer
+  blends shadows and whether they fade, the AI (M5), `changeBmp` /
+  `changeAnmFile`): not blocking the drawing of characters.
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

@@ -47,6 +47,34 @@ Words used here:
    (the `getEndLoop` listener). Those four transition keys appear in no
    data file (data); they matter for saving (M6).
 3. **At load** (refines `objects.md` "Animated objects at load" rule 3):
+   - **Correction 2026-10-19 (traced, found while answering Q121; it
+     replaces the bullets on a missing `currAnimName` below):** every
+     animated object starts with current movement name **`Stop`** and
+     waiting movement name **`Stop`**. `currAnimName` and `nextAnimName`
+     replace them; a missing key leaves `Stop`. So:
+     - **Without `currAnimName`** the object starts on its **`stop`**
+       movement (capitals ignored) if its list has one, otherwise on
+       movement 0 (with `Stop` as its current name). The current name is
+       never empty (no file sets an empty `currAnimName`, data), so the
+       "empty name, waiting movement starts" step below never happens.
+     - **`flags=8` objects without `currAnimName`** (Daventry `davtorch`,
+       `fishies`, `fishies2`, `fishies3`, `deadbird`, `deadbir2`, all with
+       `nextAnimName=stop` and a `stop` movement) therefore **do get the
+       random start frame and speed**: they start on `stop` through the
+       ordinary start, which applies bit 8. They are **not** in step with
+       each other (the consequence bullet below is withdrawn).
+     - **Without `nextAnimName`** the waiting slot holds `Stop` until the
+       first request that starts at once clears it. If an object's first
+       movement is played once and ends before any request came, `Stop`
+       (or movement 0 if there is none) then starts (rule 8.1). Data scan
+       of all worlds: in Daventry only `tombdoor` (starts on a play-once
+       `stop`, so it plays it twice); elsewhere 16 objects in Dead City,
+       Gnome and Swamp (traps' `up`/`down`, `flower1`, …).
+     - Objects whose list has `stop` but whose movement 0 is something
+       else now start differently from the old rule: none in Daventry;
+       9 special classes elsewhere (Dead City's `death` and tower
+       skeleton, Ice World's dragon, Swamp's mandragore, Temple 4's
+       `lucend`), all M5 or later.
    - With a `currAnimName` that names a movement: that movement starts
      (with `animPos`, as `objects.md` says).
    - Without `currAnimName` (or empty): the name lookup fails and
@@ -72,7 +100,8 @@ Words used here:
      `flags` has bit 8, the random start frame and speed; (3) the phase
      then **moves on in that same update** (speed × elapsed time), so a
      start at load time does not use up the first update.
-   - **Consequence for `flags=8` without `currAnimName`** (Daventry:
+   - ~~**Consequence for `flags=8` without `currAnimName`**~~ (withdrawn
+     2026-10-19, see the correction at the top of this rule) (Daventry:
      `davtorch`, `fishies`, `fishies2`, `fishies3`, `deadbird`,
      `deadbir2`, all with `nextAnimName=stop`): step (1) starts `stop`
      plainly, so step (2) never runs and the random part is **never
@@ -145,12 +174,44 @@ Words used here:
    opened`, the object has already been on its waiting movement (if any)
    for the rest of that update; usually there is none and it holds the
    last frame of `open` until the event arrives.
+   - **"Through the event queue" still means the same update, before
+     the frame is drawn** (traced 2026-10-19, Q119). The game's event
+     queue is sorted by time. Each frame, every event whose time has come
+     is handled, in time order (first come, first served for equal
+     times), and only then is the frame drawn. The 15-per-second update
+     of every object is itself one of those events and updates all
+     objects in one go. An event sent with delay 0 during an update (the
+     end of a movement, `EndLoop`, `Cue 300`, a script's `sendEvent 0 …`,
+     a cue's `sendEvent`) gets the current time, so it is handled right
+     after that update finishes, before the next update and before
+     drawing; what those handlers send with delay 0 is handled in the same
+     pass. **Nothing sent with delay 0 waits for the next update.** For
+     our build: handle the queue until it holds nothing for the current
+     time, then draw.
+   - The end of a movement is itself such an event: it is noticed in the
+     object's update but handled just after the update of all objects.
+   - The waiting movement of 8.1 starts **at once even if the movement
+     that ended could not be cut short** (it has ended), and, as for
+     rule 4, it starts afresh from its own `loop=` line.
 9. The `endLoop` cue word inside movement data (3 lines, all in monster
-   `.anm` files: Daventry's `knight`, the `archon`, data) makes the game
-   behave as if the movement ended at that phase. Monsters only; M5.
+   `.anm` files: Daventry's `knight` `attack`, the `archon`'s `attack`,
+   data) makes the game behave as if the movement ended at that phase.
+   Monsters only; M5. Details for characters: `characters.md` rule 20
+   (the movement is not stopped by the cue; Q124).
 10. A repeating movement never ends, so it never sends `EndLoop`
     (`clicking.md` rule 21) and never lets a waiting movement start
     unless it can be cut short.
+
+**10a. A movement whose model has a loop duration of 0 never ends**
+(traced 2026-10-19, Q120). The time per frame is the model loop's
+duration divided by (frames − 1); when that is 0 (or less), the phase
+does not move at all, whatever the `loop=` line's speed. So a
+play-once movement on such a model holds its pose for good: it never
+sends `EndLoop`, a waiting movement behind it starts only if it can be
+cut short, and a character's Wait never brings `Stop` back after it.
+Data: the Uglybeast's and the Unicorn's mouth poses (`ug_rest.kqs`,
+`ug_f.kqs`, … duration 0.0, 2 frames). Check other models with
+duration 0 the same way (B's model reader has the duration).
 
 ### `KQAnimOnce`: objects that play once and then report
 

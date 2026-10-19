@@ -1,7 +1,9 @@
 # Characters: drawing and animating people and monsters (not fighting)
 
 Study session A, 2026-10-19. Traced in `Mask.exe` unless marked "data"
-(read from the game's files), "inferred" or "not traced".
+(read from the game's files), "inferred" or "not traced". Updated the same
+day for B's questions Q116–Q124: rules 8, 12, 14, 15, 18, 20, 27, 36 and a
+new rule 37 (how shadows are drawn).
 
 ## Purpose
 
@@ -160,6 +162,49 @@ Words used here:
    - `KQObject::setUseGravity <name> 0|1` and `KQMonster::setMonUseGravity
      <name> 0|1` switch gravity (Daventry: `knight.cs` switches the Knight's
      off before placing him on the tomb).
+   - **What the mover collides with** (traced 2026-10-19, Q122): a
+     character's own collision **type is 0x42 and mask 0x281F** unless its
+     file says otherwise (`colliderType`, `colliderMask`; a file that sets
+     only the type keeps mask 0x281F). These are the character's own
+     defaults, not the plain-object ones (0x41 / 0). The mask has the
+     terrain bit 0x800, so the terrain counts in the up and down passes
+     exactly as for Connor (`connor-physics.md` "The terrain in the
+     passes"). Buildings, other characters, Connor and plain objects take
+     part by the ordinary pair rule (`connor-physics.md`): 0x281F shares a
+     bit with buildings (0x28), plain objects (0x41), characters (0x42)
+     and Connor (4), so with the defaults a falling character lands on a
+     building floor, an object, another character or Connor's head.
+     There is no separate rule for characters.
+   - **A file with `colliderMask=0`** (Daventry: the Wizard and the Knight,
+     type 49185 = 0xC021) has **no terrain bit**: the terrain is not
+     tested in its passes, and its mover hits only things whose own mask
+     covers its type (Connor's 0x281B does, through bit 1; buildings' mask
+     is 0, so **it falls through building floors**). Only the ground check
+     (`keepOnGround`, step 5 of the mover) stops it, at the terrain.
+     Data: the Wizard stands at the terrain height of his house anyway; the
+     Knight's script turns his gravity off before placing him.
+   - **No Fall state, no fall death, no steep-slope gravity** (traced): the
+     mover starts the Fall state after 5 updates in the air, and switches
+     gravity on when landing on steep ground, only for an object whose
+     collision **type has bit 4** (Connor's). Characters' type 0x42 (and
+     every `colliderType` in Daventry's character files) lacks it. Their
+     state list has no Fall state either. A character that drops from any
+     height just falls with gravity and lands; nothing else happens.
+   - **Gravity runs only while the character is updated** (rule 11: near
+     or far, not hidden). A character that starts in the air stays there
+     until it first comes in range, then falls from there in its updates,
+     with the same gravity as Connor (`connor-physics.md` "Gravity").
+   - **`flyingObject=1`** (Daventry: the Knight and the bats): a different
+     mover. Each update it sets the character's step up and step down to
+     0 and its gravity off, does the ordinary move, then moves it **down
+     by up to 150** (stopped by what it would land on, as the down pass)
+     and, if a ground or building surface lies above its feet within its
+     height, **raises it by up to 300**. So a flyer settles onto the
+     surface below at up to 150 units per update (2,250 per second) and
+     rides over bumps (traced; **not sure** of every detail, and not
+     checked in the game). Daventry's bats have their model 1,170 above
+     their position (rule 7), so this keeps them hanging in the air above
+     the ground. How they fly about is M5.
 9. **The box** (traced): a character's collision box comes from `BOUNDS.KQ`
    looked up by its `monsterType` (from the monster list: the line's type,
    e.g. `goblin2`, `sprgnbowtype`, `knighttype`) and, if that finds
@@ -182,21 +227,53 @@ Words used here:
     its first movement starts in the first update in which it is near or
     far, not when it is loaded. (Ordinary animated objects behave the same
     way, `anim-scripts.md` rule 3.)
-12. **The first update** (traced; refines `anim-scripts.md` rule 3 for
-    characters):
-    1. If `currAnimName` is empty and a waiting movement is set
-       (`nextAnimName`, or a `KQAnimPlayEvent` that arrived before), that
-       movement starts, and **nothing else happens**: the character stays
-       in **no state** (rule 15).
-    2. Otherwise the current movement starts (`currAnimName`, or
-       **movement 0** if it is empty or unknown), with `animPos` and the
-       bit-8 random start of `flags` as for objects. Then:
-       - if the movement list has a movement called **`Birth`** (capitals
-         ignored): the character goes into the **Birth** state (rule 16);
-       - otherwise it is put into **Wait** after `birthDelay` seconds (a
-         monster-list column; 0 for every Daventry character, so at once,
-         through the event queue).
-    3. The mouth is set to shape 0 (rule 25).
+12. **The start-up** (traced; **corrected 2026-10-19**, Q116 and Q121;
+    refines `anim-scripts.md` rule 3 for characters):
+    - **When:** at the first of these moments: the character's first
+      update (rule 11), the moment it first becomes near or far, or the
+      **first movement request** it gets (a `KQAnimPlayEvent`, a state
+      asking for a movement, a `Special` list), **whatever its range or
+      `hidden` flag**. A request to a character that has never started a
+      movement runs the start-up first, then is handled as usual.
+    - **The names start as `Stop`** (corrected 2026-10-19): every animated
+      object, characters included, begins with current movement **`Stop`**
+      and waiting movement **`Stop`**. `currAnimName` and `nextAnimName`
+      replace them when the file has them; a missing key leaves `Stop`.
+      So a character without `currAnimName` starts on its `stop` movement
+      (capitals ignored), or on movement 0 if its list has no `stop`
+      (every Daventry character list has one, data). The old step "empty
+      current name: the waiting movement starts and the character stays in
+      no state" never happens: no file in the game sets an empty
+      `currAnimName` (data).
+    - **What it does:**
+      1. The current movement starts afresh, with `animPos` and the bit-8
+         random start of `flags` as for objects.
+      2. **Only if the character has no state yet:** if its list has a
+         movement called **`Birth`** (capitals ignored) it goes into the
+         **Birth** state (rule 16); otherwise it is put into **Wait**
+         `birthDelay` seconds later (through the event queue, in game
+         time; rule 13). A character that already has a state (set by a
+         script before the start-up, e.g. `sprdump`'s `Special`) keeps it,
+         and no Wait is queued.
+      3. The mouth is set to shape 0 (rule 25).
+    - **`birthDelay`** comes from the monster-list line (the 18th field,
+      rule 3; `@` = the type's value) or the `.kq` key, default 0.
+      **Correction (Q116, data):** it is not 0 for every Daventry
+      character: `goblin18` and `goblin20` have **1**, the zombies `RoadZ1`
+      **3** and `RoadZ5` **3.5** (zombies have `Birth`, so it does not
+      apply to them). The two goblins start on `stop` (frame 0, speed 1;
+      their `flags` has no bit 8), and one second later Wait asks for
+      `Stop` again, which restarts it at a random frame and speed
+      (rule 13).
+    - **Example, `sprdump`** (Q121): `outdoor.cs` shows it and gives it
+      `setState … special dump` before it was ever updated. Entering
+      Special asks for `dump`; that request runs the start-up at once:
+      `stop` (its `currAnimName`) starts, nothing is queued (it already
+      has the Special state), then `dump` replaces `stop` at once (`stop`
+      can be cut short). Its later first update finds a movement playing
+      and does nothing extra. So `dump` plays from its start, and
+      `EndLoop dump` comes at its real end. B's stand-in gives the same
+      result.
 13. **Wait, when it starts** (traced): asks for the movement **`Stop`**
     (capitals ignored, so `stop` matches) the ordinary way
     (`anim-scripts.md` rule 4: at once if the running movement can be cut
@@ -207,23 +284,27 @@ Words used here:
     plays at a **random speed from 0.9 to 1.1** (the same random part as
     `anim-scripts.md` rule 3, bit 8). So a field of chickens or goblins
     does not breathe in step.
-14. **Movement 0 is usually a pose, not `stop`** (data): in most Daventry
-    lists movement 0 is `attack` (the Wizard's is `wizstop.kqs` at speed 0,
-    a still frame; the Lady's is `down`, her sinking). It shows at most
-    until Wait asks for `Stop`: at once when movement 0 can be cut short
-    (`0 1`), at its end when it can't (`0 0`, e.g. the ravens' `attack`,
-    `Ravnstp` played once). Characters with `currAnimName=stop` (the
-    Knight, the Henchman, the Uglybeast, the Unicorn, the bow spriggans,
-    `sprdump`) start on `stop` directly.
-15. **No state** (traced): a character whose first movement came from step
-    12.1 (Daventry: the **Shadow**, `nextAnimName=stop`; the **Lady**, whose
-    `Init` sends `KQAnimPlayEvent up` before her first update) never gets
-    the Wait state by itself. It just plays what it is told: a play-once
-    movement that ends **holds its last frame** (no return to `Stop`), and
-    the scripts ask for the next one (`lady.cs`: `EndLoop up` →
-    `KQAnimPlayEvent stop`). It gets a real state only when something sets
-    one (`KQMonster::setState`, a conversation, the end of a `speak`
-    queue: `talking.md` rule 13's "the speaker goes to Wait").
+14. **Every Daventry character starts on `stop`** (corrected 2026-10-19,
+    from rule 12's `Stop` default; data): movement 0 (`attack` in most
+    lists, the Lady's `down`) is **not** shown at the start. Characters
+    without `currAnimName` (the Wizard, the Girl, the Lady, the ravens, the
+    chickens, the pig, the goblins, the spriggans, the zombies, the bats,
+    the Shadow) start on `stop` by default; the others set
+    `currAnimName=stop`. Movement 0 only plays when something asks for it
+    (fighting, M5) or for a list without `stop` (none in Daventry).
+15. **No state** (corrected 2026-10-19): a character is in "no state" only
+    between its start-up and the Wait that the start-up queues (for 0 s,
+    or `birthDelay`), or when a script asks it for a state it can't have
+    (Do not reproduce). **The Lady and the Shadow are in Wait like the
+    others** (the earlier version said they stay in no state; that came
+    from the empty-name step of rule 12, which never happens). The Lady,
+    worked through: her `Init` sends `KQAnimPlayEvent up`; the request
+    runs the start-up (`stop` starts, Wait is queued), then `up` replaces
+    `stop` at once; Wait then asks for `Stop`, which waits for `up` to end
+    (`up` can't be cut short). At the end of `up`, `Stop` starts, `EndLoop
+    up` reaches `lady.cs` (which sends `stop` again, harmless) and Wait
+    asks for `Stop` once more (rule 18). In "no state" a play-once
+    movement that ends holds its last frame, as for an object.
 16. **Birth** (traced): only for characters whose list has `Birth`
     (Daventry: **every zombie**, `zombie.anm` `birth`):
     - **Not drawn and not solid**: their group bits are replaced by
@@ -257,6 +338,27 @@ Words used here:
     once and the Wizard then stands again; `wizard.cs` also sends
     `KQAnimPlayEvent stop` itself after `wizmap3`, which restarts `Stop`
     (harmless).
+    - **All of it happens before the next picture** (traced 2026-10-19,
+      Q119): the end of the movement, the waiting movement, Wait's `Stop`,
+      the script's `EndLoop` run, and whatever that script sends with
+      delay 0 are all handled within the **same update**, before the frame
+      is drawn (`anim-scripts.md` rule 8, "same update"). Order: (1) the
+      waiting movement starts, if any; (2) Wait's `Stop` starts (or waits,
+      if the waiting movement can't be cut short); (3) the script gets
+      `EndLoop` (and the listener `Cue 300`); (4) the script's own
+      requests with delay 0 arrive. So for the Uglybeast: `pivot` ends,
+      `Stop` starts at the old heading, `ugly.cs` runs `move Uglybeast 3 …
+      -1.57` and sends `stand`, and `stand` replaces `Stop` at once (`Stop`
+      can be cut short), all before anything is drawn. **The first picture
+      after the pivot shows `stand` at the new heading**; `Stop` is never
+      seen. This is why the original shows no snap. (Answers (a): the
+      script runs through the queue, but still before the frame is drawn;
+      (b): Wait's `Stop` comes first and the script's `stand` replaces it.)
+    - **Movements whose model has a loop duration of 0 never end**
+      (traced 2026-10-19, Q120; `anim-scripts.md` rule 10a). Their phase
+      never moves, so they hold their pose and never come here. This covers
+      the `KQGeometryTalker` mouth poses (rule 27): no return to `Stop`
+      between mouth codes.
 19. **In Talk, nothing goes back to `Stop` by itself** (traced): the Talk
     state only does the ordinary end, so a gesture that ends holds its
     last frame until the next gesture or code 16 (`stop`, rule 28) asks
@@ -265,8 +367,30 @@ Words used here:
 20. **Transitions** work as for Connor (`anim-scripts.md` rule 4.2,
     `connor-movement.md`): Daventry's only character transition is the
     Girl's `cower` → `stop` through `cowerstop` from phase 0.88 (data).
-    The `endLoop` cue (the Knight's `birthx` at 0.84, data) makes the game
-    treat the movement as ended there (`anim-scripts.md` rule 9).
+    **Where they meet the character rules** (traced 2026-10-19, Q124):
+    - **The end of the transition movement is an ordinary end**: when
+      `cowerstop` ends, its target (`stop`) starts as for Connor
+      (`connor-movement.md` rule 6), then `EndLoop cowerstop` goes to the
+      character's script and `Cue 300 … cowerstop` to its listener (the
+      name is the transition movement's), then, in Wait, rule 18 applies:
+      `cowerstop` is not `Stop` or a gesture, so Wait asks for `Stop`
+      again, and as the `stop` that just started can be cut short, it
+      **restarts at a random frame and speed** in the same update. The
+      picture shows `stop` at a random frame.
+    - **The `endLoop` cue** (`cueN=<phase> endLoop`) makes a character do
+      its whole "movement ended" handling at that phase: the waiting
+      movement starts at once if there is one (even if the running one
+      can't be cut short), `EndLoop` and `Cue 300` are sent, and in Wait
+      rule 18 asks for `Stop`. **The movement itself is not stopped**: if
+      nothing replaces it (no waiting movement, and Wait's `Stop` has to
+      wait because it can't be cut short), it plays on to its real end,
+      which then runs the end handling a second time (a second `EndLoop`).
+    - **Correction of the data (Q124 c):** the cue is not on `birthx`.
+      Daventry's only one is on the Knight's **`attack`** (movement 0,
+      `herostop`, `0 1`, phase 0.84); `birthx` has only a sound cue. The
+      other two are on the archon's `attack` (Barren, Snow exit). `attack`
+      can be cut short, so Wait's `Stop` replaces it at the cue. Nothing
+      before M5 plays `attack`, so the cue is **not needed before M5**.
 21. **Compared with Connor, the differences are**: characters have no
     walk / run / turn movements chosen from keys; their Wait doesn't react
     to a turn (rule 23); they return to `Stop` after any one-shot (rule 18)
@@ -380,14 +504,37 @@ Words used here:
     movement at once** (not a request: it replaces whatever plays, even a
     movement that can't be cut short): code 0 and code 16 → `rest`, 1 →
     `f`, 2 → `m`, 3 → `r`, 4 → `w`, 5 → `ih`, 6 → `ah`, 7 → `e`. These are
-    whole-model mouth poses in `ugly.anm` / `unicorn.anm` (each `0 1`, about
-    one frame). It **never gestures**. At the end of a line nothing
-    returns it to `stop` (the "shape 0" of rule 25 is a texture change
-    that does nothing for it): the last code of its lip-sync file decides
-    (usually 0, `rest`); after the last line of a queue, the "speaker goes
-    to Wait" of `talking.md` rule 13 asks for `Stop`, which starts at once
-    (the mouth movements can be cut short). Codes 8–15 and above 16: see
-    Do not reproduce.
+    whole-model mouth poses in `ugly.anm` / `unicorn.anm` (each `0 1`). It
+    **never gestures**.
+    - **The poses hold** (traced 2026-10-19, Q120): their models
+      (`ug_rest.kqs`, `ug_f.kqs`, …) have a **loop duration of 0.0**
+      (data), so the pose's phase never moves and it **never ends**
+      (`anim-scripts.md` rule 10a). No `EndLoop`, and no return to `Stop`
+      from rule 18, even though the Uglybeast is in Wait while it speaks.
+      Each pose stays until the next code replaces it. So during a line
+      the body stands still in one pose and only the mouth changes; there
+      is no flicker. (Answers (a): the poses are not exempt by name; they
+      just never end.)
+    - **At the end of a line** nothing returns it to `stop` (the "shape 0"
+      of rule 25 is a texture change that does nothing for it): the last
+      code of its lip-sync file decides (usually 0, `rest`), and that pose
+      holds.
+    - **At the end of the last line of a queue**: the "speaker goes to
+      Wait" of `talking.md` rule 13a does nothing here, because the
+      Uglybeast is **already in Wait** (rule 13a only acts when the speaker
+      is not). It stays on the held pose until a script asks for
+      something else. **Its scripts do:** the "too far" line (`ugly.cs`,
+      `speak Uglybeast Connor 1000 59 0 32 1 0`, lines 1–2) ends with
+      `TalkComplete … 0 32 2` → `sendEvent 0 Uglybeast KQAnimPlayEvent
+      stop`, which brings back `stop` (answers (b)).
+      **The user's check (2026-10-19)** fits this exactly: clicked from far
+      away, it says the "too far" line, its animation changes from the
+      idle one to a still pose where only the mouth moves, then goes back
+      to idle.
+    - In a conversation (Talk state) the same holds: the poses never end.
+      There the end of the queue's last line does act (it is not in Wait):
+      `Stop` is asked for and it goes to Wait (`talking.md` rule 13a).
+    Codes 8–15 and above 16: see Do not reproduce.
 28. **Gestures** (traced; **corrects `conversation.md` rule 18**): codes
     8–15 ask for `gesturea`…`gestureh`, 16 for `stop`, the ordinary way
     (`anim-scripts.md` rule 4), for a `KQMonster` (not a
@@ -466,21 +613,78 @@ Words used here:
     - `shadowMask` of an object: default **8** for plain objects, **2** for
       characters (both cast with 15); `shadowMask=0` turns it off (1,149
       sections in all worlds say 0, e.g. Daventry's chickens and pig; the Girl says 4, data);
-    - `allowShadows 0|1`: all on (default) or all off; only Barren and
-      Castle of the Dead scripts use it (data).
+    - `allowShadows 0|1`: all on (default) or all off. **Corrected
+      2026-10-19 (Q123, data):** it is used far more widely than the first
+      version said: every world's `world.cs` sets it when the world loads
+      (1 in Daventry, Barren, Dead City, Ice World, Snow exit, Swamp; 0 in
+      Castle of the Dead, Gnome and the four Temples), and some scripts
+      switch it while Connor is somewhere special: Dead City's rope traps
+      (`ropetp1a/2a/2c.cs` 1, `ropetp1b/2b/2d.cs` 0), Ice World's ropes and
+      elevator, Barren's elevator and `shdwon/shdwoff.cs`, Snow exit's
+      `portalt3.cs`, and `GAME/kq/gnomtele.cs` (1). The switch is also kept
+      in saved games (with Connor's data).
     So in Daventry **the Wizard, the Girl, the ravens, the goblins,
     spriggans, zombies, bats, the Henchman, the Lady and the Uglybeast cast
     shadows**; the chickens, the pig, the Knight and the Shadow don't.
-    `shadowvisible=1` (Daventry trees, stones, the fountain) is read but
-    what it does was not traced. How the shadow is drawn was **not
-    traced** (open question 2). **The user's check in the original
-    (2026-10-19):** the shadow is a **dark copy of the figure** on the
-    ground, and where parts of it overlap (e.g. an arm over the body) the
-    ground gets **darker again**: each part darkens the ground on its own,
-    with no merging. Copy that look until M7; drawing the shadow as one
-    even shape is noted as an M7 improvement (`docs/DESIGN.md`). The
-    direction of the shadow (from the sun's `tsLightAim` or straight down)
-    was not traced or checked.
+    **The user's check in the original (2026-10-19):** the shadow is a
+    **dark copy of the figure** on the ground, and where parts of it
+    overlap (e.g. an arm over the body) the ground gets **darker again**:
+    each part darkens the ground on its own, with no merging. Copy that
+    look until M7; drawing the shadow as one even shape is noted as an M7
+    improvement (`docs/DESIGN.md`).
+37. **How a shadow is drawn** (traced 2026-10-19, Q123; the pixel blending
+    itself not traced):
+    - **Direction: along the sun.** The direction is the aim of the first
+      sun-type light in the scene (the world's sun, `tsLightAim` in
+      `light/SunlgtHW.kq` on hardware; Daventry (0, 1, −0.66);
+      `object-lighting.md` rules 1–5), made length 1. With no sun in the
+      scene, (1, 1, −1). So in Daventry shadows fall toward +y, about 1.5
+      units sideways for every unit of height. Not straight down.
+    - **The copy:** each triangle of the character's current model frame
+      (as drawn, with its position and heading) that faces one way with
+      respect to the sun (the test keeps one side of the model, probably
+      the side facing the sun) is projected **along the sun direction
+      onto the plane of each receiving surface triangle**, cut to that
+      triangle, and drawn there. Each projected triangle is drawn on its
+      own, so where two parts of the model cover the same spot (an arm
+      over the body), the spot is darkened twice: the look the user saw.
+      There is no flattening onto one plane at the feet: the shadow
+      follows every terrain triangle and building surface it falls on.
+    - **Lifted 20 units**: each receiving plane is moved 20 units toward
+      its front before projecting, so the shadow sits just above the
+      surface (against flicker).
+    - **What it lies on:** (1) the **terrain**, but only when the
+      character is within **1,500** units (up or down) of the ground
+      height under its position; the terrain triangles searched are those
+      under its box moved along the sun by its height above the ground.
+      (2) **Buildings**: every building that is near or far (active) and
+      whose ball comes within reach of the character's box (sum of their
+      sizes plus 500); its surfaces from a little above the character's
+      top down to several times its size below are used, in an area at
+      most **1,800** across centred on the shadow. **Not on objects or
+      other characters.** Over water: not traced whether the floor grid
+      under the water or the water surface receives it.
+    - **How dark:** a strength of **0.5** is passed to the renderer for
+      every character's and object's shadow (the drawing code's own
+      default is 0.75; a model-less path uses 0.8). That most likely means
+      each layer halves the brightness of what is under it (two layers: a
+      quarter), but the blending itself was **not traced**. No fading with
+      distance or haze was found in the shadow code (not traced further).
+    - **When:** only while the character is drawn (near or far, not
+      hidden), and only when the cast test of rule 36 passes in that frame.
+    - **Plain objects** (Q123 d): **the same**, through their own drawing
+      code: same direction (the sun's aim, there not made length 1, which
+      only changes how far the terrain search reaches), the same 20-unit
+      lift and 0.5 strength. Default `shadowMask` 8 and the world mask 15,
+      so every plain object without `shadowMask=0` casts one in Daventry
+      (plain objects also need a model; not traced further).
+    - **`shadowvisible=1`** (Q123 e; Daventry trees, stones, the
+      fountain), and the script command `KQObject::showShadow <name> 0|1`
+      which sets the same flag (no script uses it): it marks the objects
+      whose shadows the game's **built-in relighting tool** bakes into the
+      terrain light map (`terrain-lighting.md` rule 13, console
+      `lightTerrain`). The shipped maps already contain them. **In play it
+      does nothing**: it has nothing to do with the live shadows above.
 
 ## Numbers and units
 
@@ -489,7 +693,14 @@ Words used here:
 | update only while | near or far (not off, not hidden) | traced |
 | `Stop` random start | random frame, speed 0.9–1.1 | traced |
 | default `flags` for characters | 0x10 (random `Stop` at Wait start) | traced |
-| `birthDelay` default | 0 s | traced |
+| `birthDelay` default | 0 s (Daventry: goblin18, goblin20 1 s; RoadZ1 3, RoadZ5 3.5) | traced, data |
+| starting movement names | current `Stop`, waiting `Stop` (until a key replaces them) | traced |
+| collision type / mask default | 0x42 / 0x281F | traced |
+| flying mover | steps 0, no gravity; down up to 150, up up to 300 per update | traced (not sure) |
+| shadow direction | the sun's aim, length 1; (1, 1, −1) with no sun | traced |
+| shadow lift / strength | 20 units / 0.5 | traced |
+| shadow on terrain only within | 1,500 of the ground under the position | traced |
+| shadow area on buildings | at most 1,800 across | traced |
 | automatic turn rate | 3.5 rad/s (`rotateSpeed` 1.75 × 2) | traced |
 | turn toward Connor in Talk | every 4th update | traced |
 | sight test | every 15th update; eye 1,000 above feet, target 1,250 above Connor's | traced |
@@ -527,9 +738,10 @@ Words used here:
 - A character first in range during a cutscene starts its movements then,
   not at load (rule 11). Two characters loaded together but entering range
   at different times are not in step (and `Stop` is random anyway).
-- `KQAnimPlayEvent` sent before the first update to a character without
-  `currAnimName` keeps it in "no state" for good (rule 15); one sent to a
-  character with `currAnimName` waits as for objects.
+- `KQAnimPlayEvent` (or any movement request) sent before the first
+  update runs the start-up at that moment (rule 12), even for a character
+  that is off or hidden; the request is then handled as usual (it starts
+  at once if the starting movement can be cut short).
 - A character in Talk that a script makes play a one-shot (none in
   Daventry) holds its last frame until the conversation ends.
 - A character moved by `move` while gravity is on drops to the ground from
@@ -549,9 +761,13 @@ Words used here:
   starts a movement whose name is left over from memory (undefined). Do
   instead: ignore those codes for geometry talkers. (Daventry: never
   happens, rule 28 data.)
-- **"No state" after a waiting first movement** (rule 15): keep it (the
-  Lady's and the Shadow's scripts rely on holding the last frame), but log
-  it once per character.
+- ~~"No state" after a waiting first movement~~ (withdrawn 2026-10-19: it
+  never happens, rule 15).
+- **The `endLoop` cue's double end** (rule 20): if nothing replaces the
+  movement at the cue, its real end runs the end handling again (a second
+  `EndLoop`). Only the Knight's and archon's `attack` have the cue, and it
+  can be cut short, so Wait's `Stop` always replaces it at the cue. Keep
+  it; log a second `EndLoop` if it ever happens.
 - Keep the rest, including the random `Stop`, the return to `Stop` in Wait
   only, the `noTurn` block, and no turning movement.
 
@@ -560,9 +776,9 @@ Words used here:
 - **Our logs (B):** per character, when it enters the world: name, class,
   file, position and heading (after the ground rule and `keepOnGround`),
   animation list, box found (by type or by name, and which key). At its
-  first update: the update number, the first movement, how it was chosen
-  (12.1 / 12.2), its state (Wait / Birth / no state), the `Stop` start
-  frame and speed. Every later movement start with the reason (script
+  start-up: the update number, what triggered it (first update, coming in
+  range, or a request and which), the first movement, its state after
+  (Wait queued / Birth / kept), the `Stop` start frame and speed. Every later movement start with the reason (script
   event, Wait's return to `Stop`, gesture code, mouth code, Special list).
   Every mouth change: shape, texture replaced and texture drawn. Per
   second: how many characters are near / far / off, drawn, with shadow.
@@ -570,9 +786,11 @@ Words used here:
   frames; the chickens' `chk_stop.kqs` 30 frames; the Uglybeast's
   `UG_STOP.KQS` 40 frames; the ravens' `Ravnstp.kqs` 46 frames (its
   `stop` sends itself `Cue 10` at phase 0 of every loop, which may make it
-  `caw`, `ravencnr.cs`). The Wizard's first movement is `attack` (a still
-  `wizstop` frame) for at most one update before `Stop`; his face texture
-  is `WF0.BMP` until he speaks. The Girl stays at (100, 100) in a new game.
+  `caw`, `ravencnr.cs`). Every Daventry character's first movement is
+  `stop` (rule 14; the earlier "Wizard starts on `attack`" was wrong); the
+  Wizard's face texture is `WF0.BMP` until he speaks. The Uglybeast's
+  mouth poses never end (no `Stop` between codes, rule 27); after the
+  pivot, the first frame logged as drawn shows `stand` (rule 18). The Girl stays at (100, 100) in a new game.
   No zombie is drawn. The Knight and the Henchman start at (0, 0).
 - **In the original (user, by eye):**
   1. The Wizard idling in his house: he breathes in place (`Stop`), facing
@@ -600,15 +818,35 @@ Words used here:
   (rule 29 stays traced only). (4) Zombies stay hidden in the ground and
   appear only after rising once Connor is close enough, as rule 16 says.
   (5) Shadows: a dark copy of the figure, overlaps darker (rule 36).
+  **Later check (2026-10-19, Q120):** clicked from far away, the Uglybeast
+  says the "too far" line; its animation changes from idle to a still pose
+  with only the mouth moving, then back to idle (rule 27).
+
+- **Still to check in the original (user, 2026-10-19 additions):**
+  6. Shadow direction in Daventry: at a sunny spot, does a goblin's or
+     the Wizard's shadow fall to one side (toward +y in world axes: the
+     same side as the dark sides of hills, `terrain-lighting.md`) rather
+     than straight under them (rule 37)?
+  7. Shadow darkness: is one layer of shadow about half as bright as the
+     ground beside it, and the overlaps about a quarter?
+  8. Shadows on buildings: does a character standing on a building floor
+     (e.g. a spriggan in the castle ruins) cast its shadow on the floor?
+     Do plain objects (a barrel, a cart) cast shadows like characters?
+  9. The two goblins `goblin18` / `goblin20` (rule 12): nothing to see
+     (a one-second restart of `stop`), skip unless convenient.
+  10. The bats (`flyingObject`, rule 8): do they hang still in the air at
+      their place before Connor comes near, or drift down?
 
 ## Open questions
 
 1. What `flags` bit 0x20 (`flags=32` on the Wizard, the Girl, the Knight,
    the Uglybeast, the Unicorn) does: it drops the object's link to the
    terrain when it enters the world; the effect was not traced.
-2. How shadows are drawn (rule 36): the look is known from the user's
-   check (a dark copy of the figure, overlaps darker); their direction
-   and what `shadowvisible` does are not traced.
-3. Wandering, idling, alarm, chasing, walking speed and the flying mover:
-   M5.
+2. Shadows (rule 37): how the renderer uses the strength 0.5 (blend mode,
+   colour), whether they fade with distance or haze, which side of the
+   model the facing test keeps, and over water which surface receives
+   them: not traced.
+3. Wandering, idling, alarm, chasing, walking speed and the flying mover's
+   movement: M5. The flying mover's settling (rule 8) is traced but not
+   fully sure.
 4. `KQObject::changeBmp` and `changeAnmFile` in detail.

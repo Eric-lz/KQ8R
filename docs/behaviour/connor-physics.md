@@ -860,6 +860,26 @@ suggest that 1 is the normal value.
 **Recommendation:** start with gravity on and log it. If the original is
 later found to start with it off, it is a one-line change.
 
+### Other characters on the same mover (traced 2026-10-19, Q122)
+
+Characters (`KQMonster`, `KQGeometryTalker`) use this same mover and the
+same rules (passes, terrain test, gravity, steps, ground check), with
+these differences; details in `characters.md` rule 8:
+
+- **Their own collision type and mask** are 0x42 and 0x281F by default
+  (not Connor's 4 / 0x281B, not the plain-object 0x41 / 0). The mask has
+  the terrain bit, so the terrain counts in their up and down passes;
+  buildings, objects, Connor and other characters count by the pair rule.
+  A file's `colliderMask=0` (the Wizard, the Knight) removes the terrain
+  test and building floors; only the ground check catches them.
+- **Gravity** is on unless `monUseGravity=0`, and the mover runs only in
+  the character's update (near or far, not hidden).
+- **No Fall state, no fall death, and landing on steep ground does not
+  switch gravity on**: those three need collision type bit 4, which only
+  Connor has.
+- `flyingObject=1` replaces the mover with a flying one (no gravity, no
+  steps, settles toward the surface below at up to 150 per update).
+
 ## Data used
 
 - `GAME/Kq/Connor.kq`: collider box (the sphere and the section's
