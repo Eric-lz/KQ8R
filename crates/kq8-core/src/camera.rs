@@ -135,7 +135,7 @@ pub fn height_rule(
             p[2] = g + MIN_HEIGHT;
             lift = Lift::ToGround;
         } else if gap > max {
-            match ground_line_hit(floor, start, now) {
+            match floor_line_hit_stepped(floor, start, now) {
                 Some(hit) => {
                     p = hit;
                     lift = Lift::AlongLine;
@@ -221,21 +221,19 @@ pub trait ViewBlockers {
     fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)>;
 }
 
-/// Step along the view line when testing it against the drawn ground.
-pub const GROUND_STEP: f32 = 50.0;
+/// Step along the line for the deep lift's ground test (until M3 3o-5).
+const STEP: f32 = 50.0;
 /// Halvings of the step that found the ground.
-pub const GROUND_REFINE: u32 = 20;
+const REFINE: u32 = 20;
 
-/// Where the line from `from` to `to` first goes from above the ground to
-/// below it; `height` gives the drawn ground's height at (x, y) (`None`
-/// outside the grid). Stepped every `GROUND_STEP`, then halved
-/// `GROUND_REFINE` times (our method; the note gives none). A line that
-/// starts below the ground is not blocked until it comes up and goes down
-/// again (our choice, e.g. the aim point under deep water).
-pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+/// The deep lift's line against the floor grid (camera.md "Height above
+/// the ground" rule 2.1), as built in M3 3n-2: stepped every 50, halved 20
+/// times, only a line going from above to below counts. (3o-5 replaces it
+/// with [`ground_line_hit`] on the drawn surface.)
+pub fn floor_line_hit_stepped(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
     let at = |t: f32| -> [f32; 3] { std::array::from_fn(|k| from[k] + (to[k] - from[k]) * t) };
     let below = |p: [f32; 3]| height(p[0], p[1]).is_some_and(|h| p[2] < h);
-    let steps = (length(sub(to, from)) / GROUND_STEP).ceil().max(1.0) as u32;
+    let steps = (length(sub(to, from)) / STEP).ceil().max(1.0) as u32;
     let mut was_below = below(from);
     let mut t0 = 0.0;
     for i in 1..=steps {
@@ -243,7 +241,7 @@ pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3],
         let now = below(at(t1));
         if now && !was_below {
             let (mut lo, mut hi) = (t0, t1);
-            for _ in 0..GROUND_REFINE {
+            for _ in 0..REFINE {
                 let mid = 0.5 * (lo + hi);
                 if below(at(mid)) { hi = mid } else { lo = mid }
             }
@@ -251,6 +249,66 @@ pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3],
         }
         was_below = now;
         t0 = t1;
+    }
+    None
+}
+
+/// Where the line from `from` to `to` meets the ground (camera.md
+/// "Obstacles" item 1, Q53 a), exactly, triangle by triangle. `height` is
+/// the ground's height at (x, y) (`None` outside the grid), made of two
+/// flat triangles per square of side `square` with the diagonals
+/// alternating like a chessboard (terrain.md): every such diagonal lies on
+/// a line x − y or x + y = an even number of squares. The line is cut at
+/// every square edge and diagonal it crosses and at its end; the first cut
+/// where it is on the other side of the ground than at its start (above →
+/// below, **or** below → above: a line starting under the surface is
+/// blocked where it comes up out of it) gives the triangle, and the hit is
+/// the exact crossing with that triangle's plane (between two cuts the
+/// line stays in one triangle, so its height over the ground changes
+/// linearly). Holes would be passed through; none are known in our data
+/// (terrain.md open question 3), so there are none here.
+pub fn ground_line_hit(height: &dyn Fn(f32, f32) -> Option<f32>, square: f32, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+    let d = sub(to, from);
+    let at = |t: f32| -> [f32; 3] { std::array::from_fn(|k| from[k] + d[k] * t) };
+    let mut cuts: Vec<f32> = Vec::new();
+    // Crossings of p0 + t × dp with every multiple of `step`, 0 < t < 1.
+    let mut crossings = |p0: f32, dp: f32, step: f32| {
+        if dp.abs() < 1e-6 {
+            return;
+        }
+        let (a, b) = (p0 / step, (p0 + dp) / step);
+        let (lo, hi) = (a.min(b).ceil() as i64, a.max(b).floor() as i64);
+        for k in lo..=hi.min(lo + 10_000) {
+            let t = (k as f32 * step - p0) / dp;
+            if t > 0.0 && t < 1.0 {
+                cuts.push(t);
+            }
+        }
+    };
+    crossings(from[0], d[0], square);
+    crossings(from[1], d[1], square);
+    crossings(from[0] - from[1], d[0] - d[1], 2.0 * square);
+    crossings(from[0] + from[1], d[0] + d[1], 2.0 * square);
+    cuts.sort_by(f32::total_cmp);
+    cuts.push(1.0);
+    // The line's height over the ground at t (`None` outside the grid).
+    let over = |t: f32| {
+        let p = at(t);
+        height(p[0], p[1]).map(|h| p[2] - h)
+    };
+    let mut prev: Option<(f32, f32)> = over(0.0).map(|f| (0.0, f));
+    let mut above = prev.map(|(_, f)| f >= 0.0);
+    for t in cuts {
+        let Some(f) = over(t) else { continue };
+        match (above, prev) {
+            (Some(a), Some((t0, f0))) if (f >= 0.0) != a => {
+                let share = if f0 == f { 0.0 } else { f0 / (f0 - f) };
+                return Some(at(t0 + share * (t - t0)));
+            }
+            (None, _) => above = Some(f >= 0.0),
+            _ => {}
+        }
+        prev = Some((t, f));
     }
     None
 }
@@ -1260,18 +1318,68 @@ mod tests {
         assert!(c.position[1] < 0.0, "same side as before: {:?}", c.position);
     }
 
+    /// A terrain of `w` × `h` grid points (values row by row from the
+    /// bottom, heights × 10), squares 1,024 wide.
+    fn terrain(w: usize, h: usize, values: Vec<u8>) -> kq8_data::Terrain {
+        let settings = kq8_data::TerrainSettings {
+            ground_scale: 10,
+            height_scale: 10.0,
+            height_image: String::new(),
+            floor_image: None,
+            material_image: String::new(),
+            material_list: String::new(),
+            material_direction: None,
+            light_scale: 0,
+            lightmap_name: None,
+            shadowmap_name: None,
+            sw_lightmap_name: None,
+            sw_shadowmap_name: None,
+            haze_distance: None,
+            visible_distance: None,
+            all: Vec::new(),
+        };
+        kq8_data::Terrain::new(settings, kq8_data::terrain::Grid::from_rows(w, h, values).unwrap()).unwrap()
+    }
+
     #[test]
-    fn the_ground_blocks_where_the_line_goes_into_it() {
-        // A ridge 1,000 high between x = 1,000 and x = 2,000.
-        let ridge = |x: f32, _: f32| Some(if (1000.0..2000.0).contains(&x) { 1000.0 } else { 0.0 });
-        let hit = ground_line_hit(&ridge, [0.0, 0.0, 800.0], [3000.0, 0.0, 800.0]).expect("blocked");
-        assert!((hit[0] - 1000.0).abs() < 0.1 && hit[2] == 800.0, "{hit:?}");
-        assert!(ground_line_hit(&ridge, [0.0, 0.0, 1200.0], [3000.0, 0.0, 1200.0]).is_none());
-        // Starting under water (below the surface) and rising out: not blocked.
-        let lake = |_: f32, _: f32| Some(1000.0);
-        assert!(ground_line_hit(&lake, [0.0, 0.0, 800.0], [3000.0, 0.0, 2000.0]).is_none());
+    fn the_ground_test_is_exact_per_triangle_and_any_change_of_side_counts() {
+        // 3 × 3 squares; one raised grid point (1, 1) at 2,000: the four
+        // squares round it slope up to it, each split along its diagonal.
+        let mut v = vec![0u8; 16];
+        v[4 + 1] = 200;
+        let t = terrain(4, 4, v);
+        let s = t.settings.square_size();
+        let ground = |x: f32, y: f32| t.height_at(x, y).map(|g| g.height);
+        // Every hit lies on the ground.
+        let check = |from: [f32; 3], to: [f32; 3]| -> Option<[f32; 3]> {
+            let hit = ground_line_hit(&ground, s, from, to)?;
+            assert!((ground(hit[0], hit[1]).unwrap() - hit[2]).abs() < 0.5, "{hit:?} not on the ground");
+            Some(hit)
+        };
+        // Level at 1,000 along y = 1,024 (a square edge, through the peak):
+        // it goes in where the ground reaches 1,000.
+        let hit = check([0.0, 1024.0, 1000.0], [3000.0, 1024.0, 1000.0]).expect("blocked");
+        assert!((hit[0] - 512.0).abs() < 0.5, "{hit:?}");
+        // Slanting across edges and diagonals: nothing nearer than the hit
+        // (the line before it is all above the ground).
+        let (a, b) = ([10.0, 300.0, 1000.0], [2500.0, 1900.0, 1000.0]);
+        let hit = check(a, b).expect("blocked");
+        for k in 0..100 {
+            let f = k as f32 / 100.0;
+            let p: [f32; 3] = std::array::from_fn(|i| a[i] + (hit[i] - a[i]) * f);
+            assert!(ground(p[0], p[1]).unwrap() <= p[2] + 0.5, "{p:?} under the ground before the hit {hit:?}");
+        }
+        // Above the bump: clear.
+        assert!(check([0.0, 1024.0, 2100.0], [3000.0, 1024.0, 2100.0]).is_none());
+        // Starting under the ground and coming up out of it: blocked where
+        // it comes up (Q53 a), not at once.
+        let hit = check([1024.0, 1024.0, 1500.0], [1024.0, 3000.0, 1500.0]).expect("comes up");
+        assert!(hit[1] > 1024.0 && (hit[2] - 1500.0).abs() < 1e-3, "{hit:?}");
+        // Within one triangle, no edge on the way: the end point decides.
+        let hit = check([1900.0, 1100.0, 400.0], [1300.0, 1100.0, 1000.0]).expect("end point");
+        assert!(hit[0] < 1900.0 && hit[0] > 1300.0, "{hit:?}");
         // Outside the grid: no ground.
-        assert!(ground_line_hit(&|_, _| None, [0.0, 0.0, 0.0], [3000.0, 0.0, -100.0]).is_none());
+        assert!(ground_line_hit(&|_, _| None, s, [0.0, 0.0, 0.0], [3000.0, 0.0, -100.0]).is_none());
     }
 
     #[test]

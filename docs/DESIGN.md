@@ -1749,7 +1749,7 @@ catchers, ground animators).
       method: the movement is the mouse's own (raw) movement in window
       pixels, not the cursor's place, so a drag doesn't stop at the
       window's edge.
-    - **3o-4, the view line against the ground** (`camera.md`
+    - **3o-4, the view line against the ground** (**done** 2026-10-19) (`camera.md`
       "Obstacles" item 1, Q53 a). Exact, per triangle: the line is cut
       at every square edge and diagonal it crosses; the first place
       where it is on the other side of the drawn ground than at its

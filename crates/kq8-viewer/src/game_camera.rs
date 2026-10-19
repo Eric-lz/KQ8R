@@ -40,7 +40,7 @@ impl ViewBlockers for Blockers<'_> {
         let dist = |p: [f32; 3]| (0..3).map(|k| (p[k] - from[k]).powi(2)).sum::<f32>();
         let surface = |x: f32, y: f32| self.terrain.height_at(x, y).map(|g| g.height);
         let mut hits: Vec<([f32; 3], String)> = Vec::new();
-        if let Some(h) = ground_line_hit(&surface, from, to) {
+        if let Some(h) = ground_line_hit(&surface, self.terrain.settings.square_size(), from, to) {
             hits.push((h, "the ground".into()));
         }
         for b in &self.buildings {

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 step 3o-4: the view line against the ground, exactly
+
+**Changed:** `kq8-core/src/camera.rs`: `ground_line_hit` is now exact, per triangle: the line is cut at every square edge and diagonal and at its end, the first cut on the other side of the drawn ground than the start gives the triangle, the hit is the exact crossing with its plane; a line coming **up** out of the ground counts too. The old stepped test is kept as `floor_line_hit_stepped` for the deep lift only (3o-5 changes that rule); 1 unit test replaces the old one. Viewer `game_camera.rs`: passes the square size. Provenance, `docs/DESIGN.md`.
+**Why:** A's answer to Q53 a (`camera.md` "Obstacles" item 1).
+**Tested how:** `cargo test --workspace` (458 pass; 1 test replaced), clippy clean. Viewer: Connor running down from the windmill's hill in four directions, `cargo play --world Daventry --at 144500,246500,H --hold 1,0,1,150 --frames 1200 --sound off` with H = 0, 1.5708, 3.1416, 4.7124 (`camera-3o4-hill-H.log`).
+**Result:** Unit test: on a 3 × 3 grid with one point raised to 2,000, a level line at 1,000 along a square edge goes in at x = 512.0 (exactly half-way up the slope); a slanting line across edges and diagonals has no ground above it before its hit; a line starting inside the hill is blocked where it comes out; a line with no edge on the way is caught at its end point. Viewer: one hit in the four runs (H = 1.5708, update 78: "the_ground (154683, 246889, 15026)", then the avoidance swing of 0.102 per update as before).
+**Still broken / not tested:** Not seen by eye. No holes (none known). The old and the new test were not run side by side on the same spot.
+**Next:** 3o-5, the deep lift on the drawn surface and one `follow` finding both conditions.
+
 ## 2026-10-19 M3 step 3o-3: the mouse
 
 **Changed:** Viewer `game_camera.rs`: the mouse's movement is gathered as a share of the window (one window width / height = one mouse unit), replacing the hand-set 800 pixels per unit; a mouse movement during a drag is a cause for a camera update, holding the button still is not. `kq8-core/src/camera.rs`: holding the button without a change puts the camera back at the previous update's offset from the aim point (then the leash, height and obstacle rules); `Camera::placed` forgets that offset after `move KQCamera`, a flight or a cut; 1 unit test. Provenance, `docs/DESIGN.md`.

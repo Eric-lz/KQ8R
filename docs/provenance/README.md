@@ -1882,3 +1882,15 @@ This replaces the hand-set "800 pixels = one mouse unit".
 | Held without a change: the offset from the aim point set back to the previous update's (before the leash, the height and the obstacle rules) | Rule 6 | Unit test `holding_the_button_still_keeps_the_camera_s_place_relative_to_connor` |
 | After `move KQCamera`, a flight or a cut, the previous offset is forgotten (holding the button then doesn't pull the camera back) | **Our choice** (the note's rule assumes the previous offset is the follow camera's own) | Same unit test |
 | Directions: mouse left swings the camera left, mouse down zooms in; with Shift, mouse down tilts like Page Down | Rule 7 (the user's check in the original) | As before |
+
+### 3o-4, the view line against the ground — `crates/kq8-core/src/camera.rs`, `crates/kq8-viewer/src/game_camera.rs`
+
+This replaces "stepped every 50 units, halved 20 times; only a line going from above to below counts".
+
+| What | Source | Check |
+| --- | --- | --- |
+| Exact, per triangle: the line is cut at every square edge and diagonal it crosses (the chessboard's diagonals all lie on x − y or x + y = an even number of squares) and at its end; the first cut on the other side of the drawn ground than the start gives the triangle; the hit is the exact crossing with that triangle's plane | `camera.md` "Obstacles" item 1 (Q53 a); triangles from `terrain.md` (as `Terrain::height_at`) | Unit test `the_ground_test_is_exact_per_triangle_and_any_change_of_side_counts` (hits lie on the ground; nothing nearer) |
+| Any change of side counts: a line that starts under the surface is blocked where it comes up out of it | Same (Q53 a) | Same unit test |
+| Hole squares passed through | Same; **not built**: no holes are known in our data (`terrain.md` open question 3) | — |
+| Points outside the grid are skipped (no ground there) | **Our method** (the note doesn't cover lines leaving the grid) | Same unit test |
+| The deep lift keeps the old stepped floor-grid test until 3o-5 | **Kept for one step** (its rule changes in 3o-5) | — |
