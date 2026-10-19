@@ -1,7 +1,7 @@
 //! `kq8-viewer`: shows a world's ground (M1 step 2) or one KQ8 model
 //! (M1 step 1) in a window.
 //!
-//! Usage:
+//! Usage (`--help` prints the full list of options):
 //!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
 //!              [--at X,Y,H] [--light x1|x2|off] [--renderer auto|vulkan|dx12]
 //!   kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>]
@@ -306,13 +306,60 @@ struct Orbit {
 #[derive(Resource)]
 struct Loaded(Option<Model>);
 
+/// `--help` / `-h`: the launch options, grouped as in `docs/FEATURES.md`
+/// ("Launch options").
+const HELP: &str = "\
+kq8-viewer: shows a world of King's Quest: Mask of Eternity (or one model).
+
+Usage:
+  cargo play [OPTIONS]                  (= cargo run --release -p kq8-viewer -- [OPTIONS])
+  cargo play --model <file> [OPTIONS]   one model on its own
+
+Showing things:
+  --world <name>             world to load (default Daventry)
+  --model <file>             show one model, e.g. --model smlchest.KQS
+  --palette <file>           another palette for --model
+  --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
+  --haze on|off              distance fog at the start (default on; F8)
+  --dynamic on|off           dynamic lights, instead of what Options.cs says
+  --corners on|off           bottom bar's corner panels at the window's edges (default off; F6)
+  --sound on|off             play sound through the sound card (default on)
+  --renderer auto|vulkan|dx12  graphics API (default auto)
+  --game <folder>            where the game is (default MASK; or KQ8_GAME_DIR)
+  --frames <number>          close the window by itself after that many frames
+
+Test options (drive Connor from the command line; ground view only).
+N is an update number (15 updates per second):
+  --at X,Y,H                 start Connor at X, Y facing heading H (radians)
+  --lift <number>            lift him that high once at the start, then let him fall
+  --hold F,T,R[,N]           hold forward (1 / -1 back), turn (1 left / -1 right),
+                             run (1 / 0); let go of forward and turn after N updates
+  --turn N[,1|-1]            press a turn key before update N + 1 and keep it pressed
+  --jump N                   press Jump before update N + 1 (repeatable)
+  --click NAME,N             click object NAME before update N + 1 (repeatable;
+                             skips the line-of-sight test)
+  --aim NAME,N               like --click, but only if the camera can see it
+  --item TYPE                give Connor an item of that type and hold it
+  --key NAME,N               press space or 1-8, or click a bar control
+                             (left:NAME / right:NAME), before update N + 1 (repeatable)
+  --special ITEMS,N          play Connor's special movements (separated by ;)
+
+  -h, --help                 show this list
+
+Keys while playing are listed in README.md; details of every option in
+docs/FEATURES.md (\"Launch options\").
+";
+
 fn main() -> ExitCode {
+    if std::env::args().skip(1).any(|a| a == "--help" || a == "-h") {
+        print!("{HELP}");
+        return ExitCode::SUCCESS;
+    }
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
             eprintln!("error: {e}");
-            eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N] [--renderer auto|vulkan|dx12]");
-            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--key NAME,N] [--light x1|x2|off] [--haze on|off] [--corners on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
+            eprintln!("Run `cargo play --help` for the list of options.");
             return ExitCode::FAILURE;
         }
     };

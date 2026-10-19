@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 `cargo play --help`
+
+**Changed:** Viewer `main.rs`: `--help` / `-h` prints every launch option, grouped as in `docs/FEATURES.md` ("Showing things", "Test options"), and exits without opening the window; a wrong option now prints its error and points to `--help` (instead of the two long usage lines, which had fallen behind: no `--aim`, `--special`). `README.md` ("Try it"): mentions `--help`; the link to the options in `docs/FEATURES.md` fixed (its anchor was misspelled). `docs/FEATURES.md`: mentions `--help`.
+**Why:** The user asked for a command listing the launch options.
+**Tested how:** `cargo play --help` (the list printed, exit code 0); `cargo play --bogus` (the error and the pointer to `--help`, exit code 1); clippy clean.
+**Result:** As above.
+**Still broken / not tested:** —
+**Next:** Keep the list in `HELP` up to date when an option is added.
+
 ## 2026-10-18 README "Current state" is now a short roadmap (docs only)
 
 **Changed:** `README.md`: the "Current state" section (the "what works" / "what doesn't work yet" lists, mostly repeated in `docs/FEATURES.md`) replaced by a short roadmap: the milestones M0–M7 with their status, what is done, next and later. The text is the user's edited version of the `ROADMAP.md` I wrote first; that commit was reverted (the user changed their mind: no separate file).

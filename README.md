@@ -16,11 +16,11 @@ see [CREDITS.md](CREDITS.md).
 
 ## Current state
 
-A rough picture of how far the rewrite of *King's Quest: Mask of Eternity*
-has come. The detailed plans are in [docs/DESIGN.md](docs/DESIGN.md), and
+A rough picture of how far the project has come.
+The detailed plans are in [docs/DESIGN.md](docs/DESIGN.md), and
 the full list of what works is in [docs/FEATURES.md](docs/FEATURES.md).
 
-So far everything is built and tested in the first world, **Daventry**.
+So far everything is built and tested (mostly) in the first world, **Daventry**.
 
 | Milestone | What it means | Status |
 | --- | --- | --- |
@@ -97,81 +97,53 @@ cargo play
 ```
 
 This opens Daventry's ground with its objects and lets you walk Connor arund.
-To open a different world, use the `--world` flag.
-For example, to spawn Connor in the Swamp, you can use
+
+To spawn Connor in a different world, e.g. in the Swamp, run:
 
 ```sh
 cargo play --world swamp
 ```
 
-*`cargo play` is a short name for `cargo run --release -p kq8-viewer --`
-(set in `.cargo/config.toml`); either form works.*
+Other worlds (not case-sensitive): Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
+temple1–temple4, CastleD.
 
-Other worlds: Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
-temple1–temple4, CastleD. (not case-sensitive)
-
-To spawn Connor at a specific coordinate, use `--at x,y,heading`, where `heading` is
-the direction he's facing.
+To spawn Connor at a specific coordinate, use `--at x,y,heading`.
 
 To change graphics API, use `--renderer vulkan|dx12|auto`.
 Default is `auto`.
 
-There are other launch options, but most are used for debugging only.
-You can check them out at [docs/FEATURES.md](docs/FEATURES.md#aunch-options-(viewer))
-
-The first build takes several minutes.
+There are other launch options, mostly for debugging.
+`cargo play --help` lists them all; each is described in
+[docs/FEATURES.md](docs/FEATURES.md#launch-options-viewer).
 
 ### Key bindings
 
-| Key | What it does |
+Follows original game's default keybindings, plus extra debugging keys.
+
+| Debug key | What it does |
 | --- | --- |
-| Arrow keys | Walk, step back, turn |
-| End | Running on or off |
-| Insert | Jump |
-| Space | Put the bottom bar away or bring it back |
-| 1–8 | Use the health or potion slot 1–8 |
-| Mouse at the top edge | Show the top bar (quest items, gold) |
-| Right mouse on an item in a bar | Connor describes it |
-| Left mouse on a quest item, gold, rope or rocks | Hold it on the pointer (again: put it back); then left-click something in the world to use it |
-| Left mouse | Use the door or chest, or pick up the item, under the mouse |
-| Right mouse + move | Swing (left/right) and zoom (up/down) the camera |
-| Shift + right mouse | Tilt the camera |
-| Page Up / Page Down, Home | Tilt the camera, reset the tilt |
-| F11 | Camera keeps a fixed distance |
-| F6 | Bottom bar's corner panels at the window's edges, or back on the 4:3 screen (not in the original) |
-| F | *DEBUG:* Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
-| H | *DEBUG:* Show hidden and unused objects (traps, sound sources...) |
-| U | *DEBUG:* Show the ground under the water |
-| F7 | *DEBUG:* Light of the ground and objects: x1 (default, as in the original), x2, off |
-| F8 | *DEBUG:* Haze (distance fog) on / off |
-| F9 | *DEBUG:* Dynamic lights on / off |
-| G / B | *DEBUG:* Test: lift Connor high / a little and let him fall |
-| Esc | Quit |
+| F6 | Switch UI between centered (4:3) or widescreen |
+| F | Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
+| H | Show hidden and unused objects (traps, sound sources...) |
+| U | Show the ground under the water |
+| F7 | Light of the ground and objects |
+| F8 | Haze (distance fog) on / off |
+| F9 | Dynamic lights on / off |
+| G / B | Test: lift Connor high / a little and let him fall |
 
-Logs are written to log files in `kq8-artifacts/logs/` (for
-example `connor.log`, `doors.log`, `items.log`). If something looks
-wrong, those logs are the most useful thing to report.
+## How the work is done
 
-### Checking the game files
+To keep the rewrite our own, this project is developed in two separate
+sessions:
 
-These commands read the whole game and report any file they can't
-understand (each also writes a log to `kq8-artifacts/logs/`):
-
-```sh
-cargo run --release -- vol-verify
-cargo run --release -- bitmap-verify
-cargo run --release -- shape-verify
-cargo run --release -- terrain-verify
-cargo run --release -- lightmap-verify
-cargo run --release -- lighting-verify
-cargo run --release -- building-verify
-cargo run --release -- item-verify
-cargo run --release -- aud-verify
-cargo run --release -- msg-verify
-```
-
-Other debugging tools: `cargo run --release -- text <file>` prints one of the
-game's text files; `cargo play --model smlchest.KQS` shows one model on its own.
+- One session studies the original game's files and program,
+ and writes its behaviour in plain-language notes in
+[docs/behaviour/](docs/behaviour/);
+- The other session writes Rust code from those notes only,
+and has **no access to the original game's files**. Every rule
+records where it came from in
+[docs/provenance/README.md](docs/provenance/README.md). More in
+[docs/DESIGN.md](docs/DESIGN.md#working-method-for-studying-the-original).
 
 ## How the repository is organised
 
@@ -202,16 +174,26 @@ MODLOG.md       every change, with how it was tested
 Not in the repository (kept only on your machine): `MASK/` (the game),
 `target/` (build output) and `kq8-artifacts/` (logs).
 
-## How the work is done
+### Checking the game files
 
-The original game's behaviour is studied from its data files and its
-program. To keep the rewrite our own, this is done in two separate
-sessions: one studies the original and writes plain-language notes in
-[docs/behaviour/](docs/behaviour/); the other writes the Rust code from
-those notes only, without seeing the original program. Every rule
-records where it came from in
-[docs/provenance/README.md](docs/provenance/README.md). More in
-[docs/DESIGN.md](docs/DESIGN.md#working-method-for-studying-the-original).
+These commands read the whole game and report any file they can't
+understand (each also writes a log to `kq8-artifacts/logs/`):
+
+```sh
+cargo run --release -- vol-verify
+cargo run --release -- bitmap-verify
+cargo run --release -- shape-verify
+cargo run --release -- terrain-verify
+cargo run --release -- lightmap-verify
+cargo run --release -- lighting-verify
+cargo run --release -- building-verify
+cargo run --release -- item-verify
+cargo run --release -- aud-verify
+cargo run --release -- msg-verify
+```
+
+Other debugging tools: `cargo run --release -- text <file>` prints one of the
+game's text files; `cargo play --model smlchest.KQS` shows one model on its own.
 
 ## More
 

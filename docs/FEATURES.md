@@ -442,6 +442,7 @@ Add them after `cargo play`, for example
 `cargo play --world Daventry --frames 120` (the same as
 `cargo run --release -p kq8-viewer -- --world Daventry --frames 120`).
 With no model name the world's ground opens; `--model` opens one model.
+`cargo play --help` prints the list of options.
 "Test" options drive Connor from the command line so a run can be
 repeated and checked in the logs. They do not change the game's rules.
 
