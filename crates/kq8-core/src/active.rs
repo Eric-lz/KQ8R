@@ -3189,6 +3189,14 @@ impl Active {
             for n in notes {
                 self.world.character_note(&who, n);
             }
+            // A character's click box is where the character is (after a
+            // script's `move` or a turn, M4 4d-4).
+            if self.world.anims[i].character.is_some() {
+                let now_at = self.world.anims[i].player.placement();
+                if let Some(c) = self.world.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(&who)) {
+                    c.placement = now_at;
+                }
+            }
             let p = &self.world.anims[i].player;
             let (name, at) = (p.name.clone(), p.placement().position);
             for cue in &a.cues {
@@ -4223,6 +4231,22 @@ mod tests {
         d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
         d.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
+    }
+
+    #[test]
+    fn a_character_s_click_box_follows_it() {
+        let mut a = with_object("x\n", "x");
+        let mut player = crate::named_anim::tests::still_then_open("wiz");
+        player.movements[0].name = "stop".into();
+        let character = crate::character::Character::new(false, 0x20, 0.0, false, false, true, 1);
+        a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(character)), translucency: None }]);
+        let at = Placement { rotation: crate::door::identity().m, position: [0.0; 3] };
+        a.world.clickables.push(Clickable::plain("wiz", "KQMonster", [-100.0; 3], [100.0; 3], at, 33));
+        a.world.characters_in_range.insert("wiz".into());
+        assert_eq!(a.test_command("move wiz 0 5000 0 0 0 0 0", "t").as_deref(), Some("0"));
+        a.update();
+        let c = a.world.clickables.iter().find(|c| c.name == "wiz").unwrap();
+        assert_eq!(c.placement.position, [5000.0, 0.0, 0.0]);
     }
 
     #[test]

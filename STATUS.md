@@ -331,7 +331,7 @@ done; conversations and menus next). M0–M3 are done.
   character's facing taken as Connor's (−Y). Not built yet: gravity and
   steps (4d-6), shadows (4d-7), the Talk state, `makeTranslucent`,
   `changeAnmFile`, collision against characters; a clickable
-  character's click box stays where it was loaded. Not tested: the
+  character's click box now follows it (4d-5c). Not tested: the
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), `sprdump`'s scene, a real turn in the viewer.
 - **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not

@@ -1993,7 +1993,7 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | The heading is where the model's −Y points, as Connor's; the turn is about the world's z, after the rotation it has (a script's `move` turn kept) | **Our reading**: rule 23 says "the same automatic turn as Connor's"; the models' forward axis is not stated for characters | Unit test `heading_of_matches_dir_z`; not seen by eye |
 | The turn only runs while the character updates (near or far) | Rule 11 | — |
 | Talk state's turn every 4th update | Rule 24, `conversation.md` rule 17: not built (no conversations yet) | — |
-| A clickable character's click box keeps the rotation it was loaded with | **Not done** (logged in MODLOG) | — |
+| A clickable character's click box keeps the rotation it was loaded with | **Not done** in 4d-4; done in 4d-5c (the box follows the character) | — |
 
 ### 4d-5, the face and the hands — `crates/kq8-core/src/{character,active}.rs`, `crates/kq8-viewer/src/{anim_view,load,door_view,main}.rs`
 
@@ -2015,3 +2015,9 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | `makeTranslucent <name> <n>`: at once, no fade; every material of every part at opacity n / 255; 256 = solid | `characters.md` rule 22; `objects.md` "See-through objects" rule 2 | Unit test `make_translucent_sets_the_value_on_an_animated_object`; viewer `--command "makeTranslucent Wizard 150",20 --command "makeTranslucent Wizard 256",60`: 3,347 parts at 0.588, then solid |
 | Only for animated objects and characters; others (Connor in Dead City) logged as not done | **Our scope** (Daventry only uses it on the Wizard) | Unit test (an unknown name) |
 | The object's own material copies; the mouth's copies kept, so the mouth still changes | **Our method** | `characters.log`: 64 own materials |
+
+### 4d-5c, a character's click box follows it — `crates/kq8-core/src/active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A clickable character's click box is placed where the character is drawn, every update (after a script's `move` or a turn) | `doors.md` rule 10 / `clicking.md`: an object is picked by its box at its place; the box is the character's (`characters.md` rule 9) | Unit test `a_character_s_click_box_follows_it` |

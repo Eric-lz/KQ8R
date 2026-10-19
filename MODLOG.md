@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 M4 step 4d-5c: a character's click box follows it
+
+**Changed:** `kq8-core/src/active.rs`: every update a clickable character's click box takes the character's place and turn. Provenance.
+**Why:** Until now the box stayed where the character was loaded, so after the Wizard's scripted moves (the ring scene) or a turn, clicks would miss him or hit empty space.
+**Tested how:** `cargo test -p kq8-core` (new unit test `a_character_s_click_box_follows_it`: `move wiz 0 5000 0 0 …` moves the box to (5000, 0, 0)).
+**Result:** As expected in the unit test.
+**Still broken / not tested:** Not tried in the viewer (the Wizard's moves happen in his ring scene, which needs his conversation).
+**Next:** 4d-6 plan.
+
 ## 2026-10-19 M4 step 4d-5b: `makeTranslucent`
 
 **Changed:** `kq8-core/src/active.rs`: `makeTranslucent <name> <n>` for animated objects and characters (it was an unknown command); `AnimObject::translucency`. Viewer `anim_view.rs`: the object's parts get their own material copies and opacity n / 255 (256 solid). DESIGN, provenance.
