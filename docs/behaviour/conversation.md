@@ -203,10 +203,19 @@ Words used here:
     Data: Daventry's file has 75 lines with a camera number (Wizard and
     Uglybeast); the Wizard's first meeting (1000/4/14/27/1…14) uses
     cameras 2, 3, 3, 5, 2, 1, 1, 1, 1, 3, 5, 2, 3, 6.
-    (One more case, not settled: with a certain Connor setting on —
-    not identified, see Open questions — the talk state once places the
-    camera at `cam0`'s position looking at the partner and from then
-    on ignores camera numbers.)
+    **Moving the camera stops the cuts** (traced 2026-10-19 after the
+    user's check in the original): the first update the player holds
+    the **right mouse button** (the camera-move button, `camera.md`)
+    while Connor's stay-area test runs, the camera is placed **once** at
+    `cam0`'s position, **aimed at the partner** (its position from rule
+    2), and stops following anyone; from then on, for the rest of this
+    conversation, **camera numbers are ignored** (no cuts, and Connor no
+    longer turns to the partner on them). The player swings and zooms
+    the camera with the mouse as usual (`camera.md` "Swinging and
+    zooming"), around the partner. At the end the camera follows Connor
+    again (rule 15). **Checked by the user in the original
+    (2026-10-19):** moving the camera cancels the cuts and lets it
+    rotate freely around the two talking.
 
 ### The end
 
@@ -437,9 +446,9 @@ Words used here:
 
 ## Open questions
 
-1. Which Connor setting makes the talk state place the camera at
-   `cam0` and then ignore camera numbers (rule 14, last point). Not
-   identified; probably rarely on.
+1. ~~Which Connor setting makes the talk state place the camera at
+   `cam0` and then ignore camera numbers.~~ **Answered 2026-10-19**:
+   the right mouse button held (rule 14), confirmed by the user.
 2. Whether the gestures' "talk state" condition for characters other
    than Connor is set by anything else than a conversation start
    (rule 18), i.e. whether `speak` lines alone ever make a character

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): conversations, the user's check
+
+**Changed:** `docs/behaviour/conversation.md` rule 14 and open question 1: holding the right mouse button during a conversation places the camera once at `cam0` aimed at the partner and stops the camera cuts for the rest of that conversation. Scratch note in `re/notes.md`.
+**Why:** The user checked the original: points 1–4 of "How to check" all as described; moving the camera cancels the cuts and lets it turn freely around the two talking.
+**Tested how:** Traced the Connor flag the talk state tests: it is set while the camera-move (right) button is pressed.
+**Result:** Matches the user's observation.
+**Still broken / not tested:** Open questions 2 and 3 of the note.
+**Next:** As before.
+
 ## 2026-10-19 Study (A): conversations
 
 **Changed:** New `docs/behaviour/conversation.md` (23 rules). `docs/behaviour/talking.md`: rule 9 corrected (the duplicate check uses the range's last sequence, not the first), rules 15, 17, 18 (lip-sync codes 8–16 are gestures, not mouth shapes), open questions 1 and 2 answered. `docs/behaviour/QUESTIONS.md`: Q114 (the correction, for B). `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed).
