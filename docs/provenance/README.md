@@ -1894,3 +1894,14 @@ This replaces "stepped every 50 units, halved 20 times; only a line going from a
 | Hole squares passed through | Same; **not built**: no holes are known in our data (`terrain.md` open question 3) | — |
 | Points outside the grid are skipped (no ground there) | **Our method** (the note doesn't cover lines leaving the grid) | Same unit test |
 | The deep lift keeps the old stepped floor-grid test until 3o-5 | **Kept for one step** (its rule changes in 3o-5) | — |
+
+### 3o-5, small camera points (Q100 b, c) — `crates/kq8-core/src/{camera,camera_flight}.rs`, `crates/kq8-viewer/src/{game_camera,door_view}.rs`
+
+This replaces two stand-ins of 3n: the deep lift's line against the floor grid ("no hit: ground + 1,400") and "one `follow` finding both conditions leaves the switch on".
+
+| What | Source | Check |
+| --- | --- | --- |
+| The deep lift (gap over the range's maximum): the line from the update's start to the new spot is tested against the **drawn surface** with the view test's exact ground test; the camera is put **on** the hit point; the wanted height is then the floor grid's there + 1,400 | `camera.md` "Height above the ground" rule 2.1 (Q100 b) | Unit test `height_eases_from_the_start_of_the_update_and_lifts_along_the_line_when_deep` |
+| The line meets nothing: the camera stays at its deep spot, "lifted" still remembered | Same | Same unit test |
+| The same for a flight's last update and a cut (they use the same height rule) | Same, "Camera flights and cuts" rules 3–4 | Flight unit tests unchanged; `camera-3o5-watermill.log` flight 31/31 as before |
+| One `follow` finding the view over 0.4 rad off **and** the camera beyond the maximum: the switch ends **off** (the 0.4 test first, then the distance test); neither: left as it was | "When the camera updates at all" item 3 (Q100 c) | Unit test `one_follow_finding_both_leaves_the_turn_back_switch_off` |

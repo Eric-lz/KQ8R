@@ -49,11 +49,10 @@ pub enum Lift {
     No,
     /// Put straight at ground + 1,400 (under it by at most the maximum).
     ToGround,
-    /// Deeper: put where the line from the update's start to the new spot
-    /// meets the ground.
+    /// Deeper: put on the point where the line from the update's start to
+    /// the new spot meets the drawn surface.
     AlongLine,
-    /// Deeper, and that line meets no ground (it starts under it too):
-    /// STAND-IN, put at ground + 1,400.
+    /// Deeper, and that line meets no ground: it stays at its deep spot.
     AlongLineMissed,
 }
 
@@ -91,7 +90,7 @@ impl HeightStep {
             Lift::No => "",
             Lift::ToGround => "lifted+",
             Lift::AlongLine => "lifted_along_line+",
-            Lift::AlongLineMissed => "lifted_along_line_missed(stand-in)+",
+            Lift::AlongLineMissed => "deep_line_missed(stays)+",
         };
         let then = match self.then {
             HeightThen::Snapped => "snapped",
@@ -108,8 +107,10 @@ impl HeightStep {
 /// floor grid's height; the wanted height is the higher of the ground
 /// under the camera + 1,400 and `base_z` + 1,400.
 /// 1. Under the ground + 1,400 by at most `max`: put there at once; deeper:
-///    where the line from `start` to `now` meets the ground, the wanted
-///    height taken again there.
+///    on the point where the line from `start` to `now` meets the drawn
+///    surface (`surface_line`, the view test's exact ground test; Q100 b),
+///    the wanted height taken again there from the floor grid; if the line
+///    meets nothing, it stays at `now` ("lifted" all the same).
 /// 2. Within 100 of the wanted height: put on it.
 /// 3. Otherwise, if `sum` (the aim point's movement) is more than 20: the
 ///    height at the start of the update + `share` × (wanted − the height
@@ -126,6 +127,7 @@ pub fn height_rule(
     mouse_swing: bool,
     lifted_before: bool,
     floor: &dyn Fn(f32, f32) -> Option<f32>,
+    surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>,
 ) -> ([f32; 3], HeightStep) {
     let mut p = now;
     let mut lift = Lift::No;
@@ -135,15 +137,12 @@ pub fn height_rule(
             p[2] = g + MIN_HEIGHT;
             lift = Lift::ToGround;
         } else if gap > max {
-            match floor_line_hit_stepped(floor, start, now) {
+            match surface_line(start, now) {
                 Some(hit) => {
                     p = hit;
                     lift = Lift::AlongLine;
                 }
-                None => {
-                    p[2] = g + MIN_HEIGHT;
-                    lift = Lift::AlongLineMissed;
-                }
+                None => lift = Lift::AlongLineMissed,
             }
         }
     }
@@ -219,38 +218,11 @@ pub trait ViewBlockers {
     /// The nearest point where the line from `from` to `to` is blocked,
     /// and what blocked it (for the log).
     fn first_block(&self, from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], String)>;
-}
-
-/// Step along the line for the deep lift's ground test (until M3 3o-5).
-const STEP: f32 = 50.0;
-/// Halvings of the step that found the ground.
-const REFINE: u32 = 20;
-
-/// The deep lift's line against the floor grid (camera.md "Height above
-/// the ground" rule 2.1), as built in M3 3n-2: stepped every 50, halved 20
-/// times, only a line going from above to below counts. (3o-5 replaces it
-/// with [`ground_line_hit`] on the drawn surface.)
-pub fn floor_line_hit_stepped(height: &dyn Fn(f32, f32) -> Option<f32>, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
-    let at = |t: f32| -> [f32; 3] { std::array::from_fn(|k| from[k] + (to[k] - from[k]) * t) };
-    let below = |p: [f32; 3]| height(p[0], p[1]).is_some_and(|h| p[2] < h);
-    let steps = (length(sub(to, from)) / STEP).ceil().max(1.0) as u32;
-    let mut was_below = below(from);
-    let mut t0 = 0.0;
-    for i in 1..=steps {
-        let t1 = i as f32 / steps as f32;
-        let now = below(at(t1));
-        if now && !was_below {
-            let (mut lo, mut hi) = (t0, t1);
-            for _ in 0..REFINE {
-                let mid = 0.5 * (lo + hi);
-                if below(at(mid)) { hi = mid } else { lo = mid }
-            }
-            return Some(at(hi));
-        }
-        was_below = now;
-        t0 = t1;
+    /// Where the line meets the drawn ground alone ([`ground_line_hit`]),
+    /// for the height rule's deep lift; none by default.
+    fn surface_hit(&self, _from: [f32; 3], _to: [f32; 3]) -> Option<[f32; 3]> {
+        None
     }
-    None
 }
 
 /// Where the line from `from` to `to` meets the ground (camera.md
@@ -506,8 +478,8 @@ fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 /// `follow Connor` after a cutscene (camera.md "Shake and cutscene
-/// cameras"): a view more than this far (radians) off Connor turns back
-/// gradually; nearer, it looks at him at once.
+/// cameras"): a view more than this far (radians) off Connor switches the
+/// "turn back" switch on.
 pub const FOLLOW_TURN_FROM: f32 = 0.4;
 /// The turn back snaps onto Connor once the rest is under this (one snap
 /// angle on both sides, the note's "Do not reproduce").
@@ -528,6 +500,22 @@ pub fn view_direction(rx: f32, rz: f32) -> [f32; 3] {
 pub fn view_angles(d: [f32; 3]) -> (f32, f32) {
     let flat = (d[0] * d[0] + d[1] * d[1]).sqrt();
     (d[2].atan2(flat), (-d[0]).atan2(d[1]))
+}
+
+/// The "turn back" switch after `follow <object>` (camera.md "When the
+/// camera updates at all" item 3, Q100 c): switched on when the view is
+/// more than 0.4 rad off the object, then switched off when the camera is
+/// farther than the range's maximum, in that order (one `follow` finding
+/// both leaves it off); otherwise left as it was.
+pub fn follow_switch(was: bool, off: f32, distance: f32, max: f32) -> bool {
+    let mut on = was;
+    if wrap(off).abs() > FOLLOW_TURN_FROM {
+        on = true;
+    }
+    if distance > max {
+        on = false;
+    }
+    on
 }
 
 /// One update of the turn back: a third of what is left, then the snap.
@@ -768,7 +756,8 @@ impl Camera {
         // not reproduce").
         let sum = self.prev_aim.map_or(0.0, |p| (0..3).map(|k| (aim[k] - p[k]).abs()).sum());
         let floor = |x: f32, y: f32| ground.ground(x, y).map(|g| g.0);
-        let (p, h) = height_rule(start, self.position, base[2], max, sum, height_share(UPDATE_SECONDS), mx != 0.0, self.lifted, &floor);
+        let surface = |a: [f32; 3], b: [f32; 3]| view.and_then(|v| v.surface_hit(a, b));
+        let (p, h) = height_rule(start, self.position, base[2], max, sum, height_share(UPDATE_SECONDS), mx != 0.0, self.lifted, &floor, &surface);
         self.position = p;
         if h.lift != Lift::No {
             self.lifted = true;
@@ -1089,15 +1078,21 @@ mod tests {
     fn height_eases_from_the_start_of_the_update_and_lifts_along_the_line_when_deep() {
         let flat = |_: f32, _: f32| Some(0.0);
         // The leash lowered it to 2,500 this update: eased from 3,000.
-        let (p, h) = height_rule([0.0, 0.0, 3000.0], [0.0, 10.0, 2500.0], 0.0, 5000.0, 75.0, 0.1, false, false, &flat);
+        let (p, h) = height_rule([0.0, 0.0, 3000.0], [0.0, 10.0, 2500.0], 0.0, 5000.0, 75.0, 0.1, false, false, &flat, &|_, _| None);
         assert_eq!(h.then, HeightThen::Eased);
         assert!((p[2] - (3000.0 + 0.1 * (MIN_HEIGHT - 2500.0))).abs() < 0.01, "{p:?}");
         // A cliff 10,000 high from x = 500: the new spot is 10,000 under
         // ground + 1,400, more than the maximum: put where the line meets it.
         let cliff = |x: f32, _: f32| Some(if x < 500.0 { 0.0 } else { 10_000.0 });
-        let (p, h) = height_rule([0.0, 0.0, MIN_HEIGHT], [1000.0, 0.0, MIN_HEIGHT], 0.0, 5000.0, 0.0, 0.1, false, false, &cliff);
-        assert_eq!(h.lift, Lift::AlongLine);
-        assert!((p[0] - 500.0).abs() < 0.1 && p[2] == MIN_HEIGHT, "{p:?}");
+        // The drawn surface's line test meets the cliff face at x = 500
+        // (Q100 b): the camera goes on that point itself; the wanted height
+        // is then the floor grid's there (the top, 10,000) + 1,400.
+        let face = |a: [f32; 3], b: [f32; 3]| (a[0] < 500.0 && b[0] >= 500.0).then_some([500.0, 0.0, MIN_HEIGHT]);
+        let (p, h) = height_rule([0.0, 0.0, MIN_HEIGHT], [1000.0, 0.0, MIN_HEIGHT], 0.0, 5000.0, 0.0, 0.1, false, false, &cliff, &face);
+        assert_eq!((p, h.lift, h.wanted, h.then), ([500.0, 0.0, MIN_HEIGHT], Lift::AlongLine, 10_000.0 + MIN_HEIGHT, HeightThen::Kept));
+        // The line meets nothing: it stays at its deep spot, "lifted".
+        let (p, h) = height_rule([0.0, 0.0, MIN_HEIGHT], [1000.0, 0.0, MIN_HEIGHT], 0.0, 5000.0, 0.0, 0.1, false, false, &cliff, &|_, _| None);
+        assert_eq!((p, h.lift), ([1000.0, 0.0, MIN_HEIGHT], Lift::AlongLineMissed));
     }
 
     #[test]
@@ -1525,6 +1520,17 @@ mod tests {
         y += 40.0;
         let h = aim_step(&mut c, [0.0, y, 0.0], 0.0, &Input::default());
         assert_eq!((h.after, h.switched), (HeadingState::Idle, Some(true)));
+    }
+
+    #[test]
+    fn one_follow_finding_both_leaves_the_turn_back_switch_off() {
+        // Over 0.4 rad off: on; farther than the maximum too: off (Q100 c).
+        assert!(follow_switch(false, 0.5, 2000.0, 2500.0));
+        assert!(!follow_switch(false, 0.5, 3000.0, 2500.0));
+        assert!(!follow_switch(true, 0.1, 3000.0, 2500.0));
+        // Neither: left as it was.
+        assert!(follow_switch(true, 0.1, 2000.0, 2500.0));
+        assert!(!follow_switch(false, -0.3, 2000.0, 2500.0));
     }
 
     #[test]

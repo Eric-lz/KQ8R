@@ -165,8 +165,8 @@ pub struct FlightStep {
 /// counts as not moved: lifted off the ground at once, or snapped within
 /// 100 of the wanted height (the higher of the ground + 1,400 and the aim
 /// point + 1,400), otherwise kept. `start` is where the update began.
-pub fn settle_height(start: [f32; 3], now: [f32; 3], aim: [f32; 3], range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>) -> ([f32; 3], HeightStep, Option<f32>) {
-    let (p, h) = height_rule(start, now, aim[2], range.1, 0.0, height_share(UPDATE_SECONDS), false, false, ground);
+pub fn settle_height(start: [f32; 3], now: [f32; 3], aim: [f32; 3], range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>, surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>) -> ([f32; 3], HeightStep, Option<f32>) {
+    let (p, h) = height_rule(start, now, aim[2], range.1, 0.0, height_share(UPDATE_SECONDS), false, false, ground, surface_line);
     (p, h, ground(p[0], p[1]))
 }
 
@@ -188,8 +188,9 @@ impl Flight {
     /// On the last update the camera is exactly on the spot, "places"
     /// comes back on, it is pulled onto `range` around the aim point and
     /// the height rule runs as "not moved" (`settle_height`); `ground` is
-    /// the floor grid's height under a point.
-    pub fn update(&mut self, position: &mut [f32; 3], view: &mut View, aims: bool, range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>) -> FlightStep {
+    /// the floor grid's height under a point, `surface_line` the line test
+    /// against the drawn surface (the deep lift).
+    pub fn update(&mut self, position: &mut [f32; 3], view: &mut View, aims: bool, range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>, surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>) -> FlightStep {
         self.k += 1;
         let last = self.k >= self.n;
         let mut pulled_from = None;
@@ -198,7 +199,7 @@ impl Flight {
             let start = *position;
             let (p, from) = onto_range(self.spot, self.aim, range);
             pulled_from = from;
-            let (p, h, g) = settle_height(start, p, self.aim, range, ground);
+            let (p, h, g) = settle_height(start, p, self.aim, range, ground, surface_line);
             *position = p;
             height = Some((h, g));
         } else {
@@ -225,13 +226,13 @@ pub struct Cut {
 /// range around the aim point and the height rule as "not moved"
 /// (`settle_height`, Q97); if `aims`, aimed.
 #[allow(clippy::too_many_arguments)]
-pub fn cut(spot: [f32; 3], aim: [f32; 3], roll: f32, view: &mut View, places: bool, aims: bool, range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>) -> Cut {
+pub fn cut(spot: [f32; 3], aim: [f32; 3], roll: f32, view: &mut View, places: bool, aims: bool, range: (f32, f32), ground: &dyn Fn(f32, f32) -> Option<f32>, surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>) -> Cut {
     view.heading = view_angles([aim[0] - spot[0], aim[1] - spot[1], 0.0]).1;
     view.roll = roll;
     view.locked = false;
     let (position, pulled_from, height) = if places {
         let (p, from) = onto_range(spot, aim, range);
-        let (p, h, g) = settle_height(spot, p, aim, range, ground);
+        let (p, h, g) = settle_height(spot, p, aim, range, ground, surface_line);
         (p, from, Some((h, g)))
     } else {
         (spot, None, None)
@@ -282,7 +283,7 @@ mod tests {
         let mut last = None;
         for k in 1..=31 {
             let before = p;
-            let s = f.update(&mut p, &mut v, true, (1000.0, 2500.0), &|_, _| Some(7650.0));
+            let s = f.update(&mut p, &mut v, true, (1000.0, 2500.0), &|_, _| Some(7650.0), &|_, _| None);
             if k < 31 {
                 let d: Vec<f32> = (0..3).map(|i| p[i] - before[i] - f.step[i]).collect();
                 assert!(d.iter().all(|x| x.abs() < 0.05), "update {k}: the same step");
@@ -307,13 +308,13 @@ mod tests {
     fn after_a_flight_or_cut_the_height_is_lifted_or_snapped_never_eased() {
         let aim = [0.0, 0.0, 0.0];
         // Under the ground + 1,400: lifted at once.
-        let (p, h, _) = settle_height([0.0, 3000.0, 500.0], [0.0, 2000.0, 500.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0));
+        let (p, h, _) = settle_height([0.0, 3000.0, 500.0], [0.0, 2000.0, 500.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0), &|_, _| None);
         assert_eq!((p[2], h.lift), (1400.0, crate::camera::Lift::ToGround));
         // Within 100 of the wanted height: snapped.
-        let (p, h, _) = settle_height([0.0; 3], [0.0, 2000.0, 1450.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0));
+        let (p, h, _) = settle_height([0.0; 3], [0.0, 2000.0, 1450.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0), &|_, _| None);
         assert_eq!((p[2], h.then), (1400.0, crate::camera::HeightThen::Snapped));
         // Far above: kept, not eased.
-        let (p, h, _) = settle_height([0.0; 3], [0.0, 2000.0, 3000.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0));
+        let (p, h, _) = settle_height([0.0; 3], [0.0, 2000.0, 3000.0], aim, (1000.0, 5000.0), &|_, _| Some(0.0), &|_, _| None);
         assert_eq!((p[2], h.then), (3000.0, crate::camera::HeightThen::Kept));
     }
 
@@ -339,7 +340,7 @@ mod tests {
         let mut p = [0.0; 3];
         let mut v = View { tilt: 0.0, heading: 0.0, roll: 0.3, locked: false };
         while !f.done() {
-            f.update(&mut p, &mut v, false, (1.0, 1e9), &|_, _| None);
+            f.update(&mut p, &mut v, false, (1.0, 1e9), &|_, _| None, &|_, _| None);
         }
         assert!(v.roll.abs() < 1e-5, "levelled: {}", v.roll);
         // "aims" off: heading and tilt kept.
@@ -350,12 +351,12 @@ mod tests {
     #[test]
     fn a_cut_goes_to_the_spot_and_aims_at_once() {
         let mut v = View { tilt: 0.5, heading: 3.0, roll: 0.0, locked: false };
-        let c = cut([0.0; 3], [0.0, 2000.0, -1400.0], 0.1, &mut v, true, true, (1000.0, 5000.0), &|_, _| None);
+        let c = cut([0.0; 3], [0.0, 2000.0, -1400.0], 0.1, &mut v, true, true, (1000.0, 5000.0), &|_, _| None, &|_, _| None);
         assert_eq!((c.position, c.pulled_from), ([0.0; 3], None));
         assert!(v.locked && v.heading.abs() < 1e-6 && (v.tilt - AIM_TILT).abs() < 1e-5 && v.roll == 0.1, "{v:?}");
         // Both switches off: on the spot, heading toward (x, y), tilt kept.
         let mut v = View { tilt: 0.5, heading: 3.0, roll: 0.0, locked: false };
-        let c = cut([0.0; 3], [1000.0, 0.0, 0.0], 0.0, &mut v, false, false, (1000.0, 5000.0), &|_, _| Some(0.0));
+        let c = cut([0.0; 3], [1000.0, 0.0, 0.0], 0.0, &mut v, false, false, (1000.0, 5000.0), &|_, _| Some(0.0), &|_, _| None);
         assert_eq!((c.position, c.height), ([0.0; 3], None));
         assert!((v.heading + std::f32::consts::FRAC_PI_2).abs() < 1e-5 && v.tilt == 0.5, "{v:?}");
     }

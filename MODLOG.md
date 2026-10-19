@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 step 3o-5: the deep lift on the drawn surface; one `follow` finding both
+
+**Changed:** `kq8-core/src/camera.rs`: the height rule's deep lift tests the line from the update's start to the new spot against the drawn surface (the exact test of 3o-4, through the new `ViewBlockers::surface_hit`) and puts the camera on the hit point; if the line meets nothing the camera stays at its deep spot (the old stepped floor-grid test and its "ground + 1,400" stand-in are gone); `follow_switch`: the "turn back" switch after a `follow`, the 0.4 rad test first, then the distance test. `camera_flight.rs`: flights and cuts pass the surface test to the same rule. Viewer `game_camera.rs` (`surface_line`, `follow` uses `follow_switch`), `door_view.rs` (the cut). 1 unit test new, 1 extended. Provenance, `docs/DESIGN.md`.
+**Why:** A's answers to Q100 b and c (`camera.md` "Height above the ground" rule 2.1, "When the camera updates at all" item 3).
+**Tested how:** `cargo test --workspace` (459 pass), clippy clean. Viewer (`--sound off`): the watermill (`camera-3o5-watermill.log`), the mill wheel (`camera-3o5-wheel.log`), the four windmill hill runs of 3o-4 (`camera-3o5-hill-H.log`).
+**Result:** No change in any run: the watermill flight still ends at (188999.0, 229341.5, 10863.4); the three Daventry `follow Connor` calls find the view 0.157, 0.121 and 0.000 rad off, so the switch stays off. No run reached the deep lift (none logged `lifted_along_line` or `deep_line_missed`).
+**Still broken / not tested:** **Not tested in play**: the deep lift needs the camera more than the range's maximum under the ground (a big cliff), and no Daventry `follow` finds both conditions; both are unit-tested only.
+**Next:** 3o-6, a script's `move` and the trap it takes Connor out of.
+
 ## 2026-10-19 M3 step 3o-4: the view line against the ground, exactly
 
 **Changed:** `kq8-core/src/camera.rs`: `ground_line_hit` is now exact, per triangle: the line is cut at every square edge and diagonal and at its end, the first cut on the other side of the drawn ground than the start gives the triangle, the hit is the exact crossing with its plane; a line coming **up** out of the ground counts too. The old stepped test is kept as `floor_line_hit_stepped` for the deep lift only (3o-5 changes that rule); 1 unit test replaces the old one. Viewer `game_camera.rs`: passes the square size. Provenance, `docs/DESIGN.md`.

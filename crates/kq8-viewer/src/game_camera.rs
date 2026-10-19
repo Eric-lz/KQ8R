@@ -12,7 +12,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use kq8_core::camera::{connor_moved, ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT, FOLLOW_TURN_FROM};
+use kq8_core::camera::{connor_moved, follow_switch, ground_line_hit, view_angles, view_direction, wrap, Camera, Followed, Input, Mode, ViewBlockers, DEFAULT_TILT, FOLLOW_TURN_FROM};
 use kq8_core::camera_flight::{Flight, Spots, View};
 use kq8_core::connor_mover::GroundLookup as _;
 use kq8_core::collide::{BoxCollider, BuildingCollider};
@@ -55,6 +55,16 @@ impl ViewBlockers for Blockers<'_> {
         }
         hits.into_iter().min_by(|a, b| dist(a.0).total_cmp(&dist(b.0)))
     }
+
+    fn surface_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+        surface_line(self.terrain)(from, to)
+    }
+}
+
+/// The line test against the drawn surface (camera.md "Obstacles" item 1),
+/// for the height rule's deep lift (Q100 b).
+pub fn surface_line(terrain: &kq8_data::Terrain) -> impl Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]> + '_ {
+    move |from, to| ground_line_hit(&|x, y| terrain.height_at(x, y).map(|g| g.height), terrain.settings.square_size(), from, to)
 }
 
 /// The view blockers as they stand now (doors move).
@@ -195,17 +205,12 @@ impl GameCam {
         // "When the camera updates at all" item 2: one update right after
         // the command, with the aim point counting as not moved.
         self.pending.push("follow");
-        // Item 3: the "turn back" switch. A follow that finds the camera
-        // farther than the maximum switches it off; one that finds the view
-        // more than 0.4 rad off switches it on (our order when both hold).
+        // Item 3: the "turn back" switch: on when the view is more than 0.4
+        // rad off, then off when the camera is farther than the maximum (one
+        // `follow` finding both leaves it off, Q100 c).
         let distance = (0..3).map(|k| (p[k] - aim[k]).powi(2)).sum::<f32>().sqrt();
         let was = self.cam.turn_back;
-        if distance > self.cam.range.1 {
-            self.cam.turn_back = false;
-        }
-        if turns {
-            self.cam.turn_back = true;
-        }
+        self.cam.turn_back = follow_switch(was, off, distance, self.cam.range.1);
         let switch = match (was, self.cam.turn_back) {
             (false, true) => "the \"turn back\" switch goes ON: the camera updates every update until a flight ends (the original clears it no other way)".to_string(),
             (true, false) => format!("the \"turn back\" switch goes OFF (camera {distance:.1} from the aim point, farther than the maximum {:.0})", self.cam.range.1),
@@ -280,7 +285,7 @@ impl GameCam {
 
     /// `KQCamera::cutToCamLoc` (rule 3): on the nearest spot at once, then
     /// one follow update. An empty list: nothing, an error.
-    pub fn cut_to(&mut self, aim: [f32; 3], roll: f32, ground: &dyn Fn(f32, f32) -> Option<f32>) -> String {
+    pub fn cut_to(&mut self, aim: [f32; 3], roll: f32, ground: &dyn Fn(f32, f32) -> Option<f32>, surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>) -> String {
         let Some(spot) = self.spots.nearest(self.cam.position) else {
             let line = "ERROR cutToCamLoc: no spot in the list (addCamLoc); the camera stays".to_string();
             self.log.detail(format!("camera update {}: {line}", self.updates));
@@ -291,7 +296,7 @@ impl GameCam {
         self.following = false;
         self.cam.avoid = false;
         self.cam.tilt = DEFAULT_TILT;
-        let c = kq8_core::camera_flight::cut(spot, aim, roll, &mut self.view, self.places, self.aims, self.cam.range, ground);
+        let c = kq8_core::camera_flight::cut(spot, aim, roll, &mut self.view, self.places, self.aims, self.cam.range, ground, surface_line);
         let (p, from) = (c.position, c.pulled_from);
         self.cam.position = p;
         self.show_view();
@@ -308,13 +313,13 @@ impl GameCam {
     }
 
     /// One update of the flight under way (`camera_step`).
-    fn flight_step(&mut self, ground: &dyn Fn(f32, f32) -> Option<f32>) {
+    fn flight_step(&mut self, ground: &dyn Fn(f32, f32) -> Option<f32>, surface_line: &dyn Fn([f32; 3], [f32; 3]) -> Option<[f32; 3]>) {
         if std::mem::take(&mut self.flight_fresh) {
             return;
         }
         let Some(f) = self.flight.as_mut() else { return };
         let mut p = self.cam.position;
-        let s = f.update(&mut p, &mut self.view, self.aims, self.cam.range, ground);
+        let s = f.update(&mut p, &mut self.view, self.aims, self.cam.range, ground, surface_line);
         let step = f.step;
         self.cam.position = p;
         self.show_view();
@@ -565,7 +570,7 @@ pub fn camera_step(
         g.mouse = Vec2::ZERO;
         g.pending.clear();
         let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
-        g.flight_step(&ground);
+        g.flight_step(&ground, &surface_line(&lookup.0));
         return;
     }
     // One range for walking and running: the user saw no difference in

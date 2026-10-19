@@ -847,9 +847,9 @@ pub fn trap_step(
             Request::CamCut { aim, roll, at } => match (camera.as_mut(), &lookup) {
                 (Some(c), Some(l)) => {
                     let ground = |x: f32, y: f32| kq8_core::connor_mover::GroundLookup::ground(&l.0, x, y).map(|h| h.0);
-                    format!("{at}: applied: {}", c.cut_to(aim, roll, &ground))
+                    format!("{at}: applied: {}", c.cut_to(aim, roll, &ground, &crate::game_camera::surface_line(&l.0)))
                 }
-                (Some(c), None) => format!("{at}: applied: {}", c.cut_to(aim, roll, &|_, _| None)),
+                (Some(c), None) => format!("{at}: applied: {}", c.cut_to(aim, roll, &|_, _| None, &|_, _| None)),
                 (None, _) => format!("{at}: cutToCamLoc: no game camera; not applied"),
             },
             Request::CameraFollow { connor: follow, at } => match camera.as_mut() {

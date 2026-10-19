@@ -1758,7 +1758,7 @@ catchers, ground animators).
       are known in our data (`terrain.md` open question 3), so none are
       passed through yet; the code says where they would go. Replaces
       the stepping every 50 units.
-    - **3o-5, small camera points** (Q100 b, c). The deep lift
+    - **3o-5, small camera points** (**done** 2026-10-19) (Q100 b, c). The deep lift
       ("Height above the ground" rule 2.1, gap over the maximum): the
       line from the update's start to the new spot is tested against
       the **drawn surface** with the 3o-4 test; the camera is put on
