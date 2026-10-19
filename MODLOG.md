@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Q118: bars missing in eight worlds (question for A)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q118 (which file is the game-play screen's world palette). No code.
+**Why:** User's report: `--world deadcity` (and others) starts with no bars. `gui_view.rs` and `talk_view.rs` look only for `<folder>.ppl`, which exists only in Barren, Daventry, Gnome and Swamp; the others name theirs differently (`newdead.ppl`, `castle.ppl`, ...), so no palette is found and no bars are drawn.
+**Tested how:** Read `viewer.log` (`gui: no palette among ["deadcity/resource/deadcity.ppl", ...]; no panels drawn`); listed each world's `resource/*.ppl` and `world.cs` palette lines; compared world and `GAME/Resource` copies (identical).
+**Result:** Cause found; not fixed.
+**Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
+**Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
+
 ## 2026-10-19 M4 step 4d-1: reading characters (plan for 4d)
 
 **Changed:** `docs/DESIGN.md`: plan for 4d (characters, 4d-1 to 4d-7). New `kq8-data/src/characters.rs` (monster list lines, the type list `Monstats.mtl`, a character's keys with their defaults, the `KQLips` section, `.anm` movement lists). New `kq8 character-verify` (`kq8-cli/src/character_verify.rs`). `docs/provenance/README.md`. `docs/behaviour/QUESTIONS.md`: Q116 (`birthDelay` is not 0 for two Daventry goblins), Q117 ("the speaker goes to Wait" is not in `talking.md` rule 13).
