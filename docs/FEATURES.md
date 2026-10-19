@@ -108,7 +108,9 @@ measures reach to its box in the building's own axes (Q75).
   original's arc, and running and backward jumps (Insert while running or
   stepping back), all checked by eye. Jumping into a wall or steep slope:
   a standing jump stops him, a running jump crashes, a back flip slides
-  along and plays on, as in the original.
+  along and plays on, as in the original. Backed against a wall with
+  the back key still held, Jump is a back flip, as in the original
+  (checked by the user 2026-10-18; the exact rule is a stand-in, Q112).
 - **Crashing:** running straight into a wall knocks him back (the crash
   animation), as far as in the original (checked by eye). A turn key
   turns him while he stumbles, as in the original (2026-10-18, M3 3l-5;

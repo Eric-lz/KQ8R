@@ -1,8 +1,9 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-18 at the
-end of B's M4 step 4c (the on-screen interface and Connor's inventory,
-4c-1 to 4c-10, checked by the user; Q108–Q111 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+end of B's session on M4 step 4c (the on-screen interface and Connor's
+inventory, 4c-1 to 4c-11, checked by the user) and the back flip at a
+wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -43,36 +44,25 @@ end of B's M4 step 4c (the on-screen interface and Connor's inventory,
     bars; each panel drawn with its edges rounded where they stand and
     stretched to fill its box exactly (Bevy's default kept proportions
     and left the world showing at the meters' ends).
+  - 4c-11 (an improvement, not in the original, off by default): F6 or
+    `--corners on` puts the bottom bar's left and right panels at the
+    window's edges on a wide window.
+- **New 2026-10-18 (B): the back flip at a wall.** Backed against a
+  wall with back still held, Jump is the back flip (the user's check in
+  the original); stand-in rule: `stop` with the back wall block on
+  (Q112). Checked by the user.
 - **Before that (A, 2026-10-18):** `interface.md` and `inventory.md`
-  written and checked by the user in the original; (B, M4 4a-7 to
-  4a-9) turn keys as events, the turn after a click, the chest remark
-  in any state, all checked by the user.
+  written and checked by the user in the original.
 - **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
   alive) is well under way**: doors, emitters, flowing water, animated
   objects, traps, items, chests, scripted objects, clicking, sound
   effects and world music, scripted animations, pushing and the bricks
   puzzle (most checked by eye; see `docs/FEATURES.md`).
-- **New 2026-10-18 (B, M4 4a-7 to 4a-9): A's answers to Q104 and Q103
-  are built**, one commit per step, **checked by the user in the viewer
-  (all as in the original)**:
-  - 4a-7: turn keys are events (`kq8-core/src/turn_keys.rs`): only a
-    turn key **press** cancels an automatic turn; a held key neither
-    cancels nor speeds it, and doesn't take over when it ends; forward
-    stays the player's during the turn.
-  - 4a-8: Connor turns to face what he clicked after every
-    `ConnorAction` call (doors, scripted objects, buildings and items
-    with a script), in Wait or Move, unless `doNotPointAt`; one
-    automatic turn (a second request only changes the target).
-    `tmbstn1` reads at once and turns while reading, `tmbstn2` turns
-    and reads 0.5 s later; `wizbook` turns him, `urn1` doesn't.
-    **Q105** asked (small points; stand-ins).
-  - 4a-9: a chest's remark turns him in any state; only
-    `doNotPointAt` gives no turn and no wait. Q103 (a)–(c) recorded
-    in the provenance (stand-ins confirmed).
 - **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`):
   message, talker and lip-sync files; speech queues and the `speak`
   family of commands; voices and ducking; captions (stand-in panel);
-  Connor's own remarks; cutting a line short; his mouth texture.
+  Connor's own remarks; cutting a line short; his mouth texture; turn
+  keys as events and the turn after a click (4a-7 to 4a-9, Q103–Q105).
   Checked by the user against the original. Conversations are not
   studied yet.
 - **Before that (B, M3 3m and 3n):** camera flights and cuts, scripted
@@ -86,8 +76,8 @@ end of B's M4 step 4c (the on-screen interface and Connor's inventory,
 
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
-milestones: **M3, Daventry comes alive**, and **M4** (remarks and speech
-done; the interface and inventory built in 4c).
+milestones: **M3, Daventry comes alive**, and **M4** (remarks and speech,
+the interface and the inventory done; conversations and menus next).
 
 ## Setup
 
@@ -129,7 +119,7 @@ done; the interface and inventory built in 4c).
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (320 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (321 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump, pushing),
   `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
@@ -176,7 +166,7 @@ done; the interface and inventory built in 4c).
   (repeatable; skips the line-of-sight test), `--aim NAME,N` (a click
   with the line-of-sight test), `--item TYPE` (a real held `TestItem`),
   `--key NAME,N` (`space`, `1`–`8`, `left:`/`right:` + a layout control
-  name). Haze and drawing: the
+  name); `--corners on|off` (the corner panels, F6). Haze and drawing: the
   ground's material `ground_haze.rs`, walls `building_light.rs`, models
   `object_light.rs` (each with its `.wesl` shader), near / far / off and
   the collider switch `draw_distance.rs`, point lights on models
@@ -261,7 +251,8 @@ done; the interface and inventory built in 4c).
 - Remarks and speech (M4 4a) and the click turn and turn keys (4a-7
   to 4a-9): checked by the user against the original, 2026-10-18.
 - The interface and inventory (M4 4c): checked by the user against the
-  original, 2026-10-18.
+  original, 2026-10-18 (the corner panels option: looked at by the user,
+  no complaint). The back flip at a wall: checked by the user.
 - Tests: 451 unit tests pass (114 + 321 + 5 + 11), 2026-10-18.
 
 ## What doesn't work yet / next
@@ -297,10 +288,16 @@ done; the interface and inventory built in 4c).
   the game (a menu step must stop the updates and the panels' timers).
   When standing, an automatic turn plays `Stop` for its first update
   even if he was already turning on the spot (as rules 24–25 say).
-- **Next step, suggested:** for A: Q108–Q111, then conversations (`KQConner::conversation`), needed for
-  the wizard and the other Daventry characters (the panels' side of
-  conversations is built, unit-tested only). For B after that: the main
-  menu (Escape, the mask button) with the game paused.
+  Q111 (Space's sounds, the mask's place and size, black behind the
+  bars) built from the user's checks; the exact rules are not traced.
+- **Stand-in of the back flip at a wall (Q112):** the game may test the
+  back key or the movement asked for rather than the back wall block;
+  it only differs in cases not seen yet.
+- **Next step, suggested:** for A: conversations (`KQConner::conversation`),
+  needed for the wizard and the other Daventry characters (the panels'
+  side of conversations is built, unit-tested only); Q108–Q112 when
+  convenient (small). For B: the main menu (Escape, the mask button)
+  with the game paused; it doesn't wait for conversations.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.
@@ -360,7 +357,9 @@ done; the interface and inventory built in 4c).
   pushed-out piece, the top bar in a window), **Q110** (the remark
   numbers in `inventory.md` rule 9: our reading names the right lines;
   the rope held or not; the pointer's click point; the gold button
-  while the coins are held).
+  while the coins are held), **Q111** (answered by the user's checks
+  and built; the exact rules are worth tracing), **Q112** (what the
+  back flip at a wall really tests).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
   1–4 (menu pause, level-up flame, rocks picture, held item on world
   change, applied quest items).

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 End of B's session (docs only)
+
+**Changed:** `STATUS.md` ("Where we are": 4c-11, the back flip at a wall; the older 4a-7 to 4a-9 details folded into one line; next steps; Q111, Q112 in "Open questions"; test counts and the `--corners` option), `docs/FEATURES.md` (the back flip at a wall, checked by the user).
+**Why:** `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** Stand-ins of Q108–Q112 stay until A traces them.
+**Next:** A: conversations (then Q108–Q112). B: the main menu with the game paused.
+
 ## 2026-10-18 Fix: the back flip when backed against a wall
 
 **Changed:** `kq8-core/src/connor.rs`: `jump_kind` gives `backJump` when he stands (`stop`) with the back wall block on, that is after a wall stopped him stepping back and back is still held (the block goes when back is let go); unit test extended. `QUESTIONS.md`: Q112. Provenance.
