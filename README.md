@@ -16,53 +16,62 @@ see [CREDITS.md](CREDITS.md).
 
 ## Current state
 
-**Not playable yet.** Today you can load any of the game's 12 worlds in a
-viewer, walk Connor around, open doors and chests and pick up
-items. The goal is the whole game; see the roadmap in
-[docs/DESIGN.md](docs/DESIGN.md#roadmap). We are finishing milestone **M3,
-"Daventry comes alive"**, and are in **M4** (Connor's remarks and speech done; the on-screen interface under way).
+A rough picture of how far the rewrite of *King's Quest: Mask of Eternity*
+has come. The detailed plans are in [docs/DESIGN.md](docs/DESIGN.md), and
+the full list of what works is in [docs/FEATURES.md](docs/FEATURES.md).
 
-### What works
+So far everything is built and tested in the first world, **Daventry**.
 
-- **Reading the game's files**: archives, images, 3D models, buildings,
-  ground, world scripts, item types, sound files (`.aud`).
-- **Camera** that follows Connor and stays out of walls, as in the
-  original.
-- **World**: terrain, buildings and objects placed as in the
-  original. All 12 worlds load; Daventry is the best checked.
-- **Lighting**: terrain, objects and Connor lit by the world's
-  light and sun, buildings by their own light maps. Dynamic lights like portals and torches.
-- **Distance fog**: a dark fog hides everything far away, and far objects switch off as in the original (F8 on/off).
-- **Particles**: falling leaves, snow, flowing rivers, windmills,
-  torches.
-- **Movement**: walk, run, turn, jump, lean into
-  turns, slide on steep slopes, fall, wade through water. Walls, floors
-  and objects are solid.
-- **Doors** open with a mouse click when Connor is close enough.
-- **Chests, baskets and items**: open them, pick things up (counted in a
-  log; no inventory screen yet).
-- **Traps**: invisible zones that, for example, make Connor walk indoors
-  and run outdoors.
-- **World music**: Daventry's tune, with cross-fades in the wizard's, unicorn's and church's zones.
-- **Sound effects**: doors, chests, item pickups, script sounds, Connor's footsteps (by ground type) and the looping water, mill, windmill and fountain sounds, louder near Connor and from the side they are on (`--sound off` to mute).
-- **Graphics API**: Vulkan or DirectX 12 (`--renderer vulkan|dx12`).
-- **Scripted animations**: scripts start, queue and pause objects' animations (e.g. the wizard's star globe opens when given the spell page).
-- **Pushing**: the windmill's hay bale slides along walls; barrels move, even through walls (the wall still stops Connor), but not uphill; pushing Daventry's bricks runs their puzzle (bricks down, new waterfall, the cave opens).
-- **Cutscenes**: scripts take the controls, place, aim and fly the camera, walk or turn Connor, then give control back (bricks, watermill, windmill).
-- **Remarks**: Connor turns to what he clicks and speaks his lines (signs, tombstones, chests, "too far"), with captions and mouth movement; other sounds turn down meanwhile.
+| Milestone | What it means | Status |
+| --- | --- | --- |
+| M0 | Read the game's files | ✅ Done |
+| M1 | See Daventry | ✅ Done |
+| M2 | Walk Connor around Daventry | ✅ Done |
+| M3 | Daventry comes alive | 🟡 Mostly done |
+| M4 | Talk, listen, use the menus | 🟡 Under way |
+| M5 | Fight | ⬜ Not started |
+| M6 | The whole game | ⬜ Not started |
+| M7 | Match the original, then improve | ⬜ Not started |
 
-Everything above was checked against the original, mostly by eye. Full
-details and how each was checked: [docs/FEATURES.md](docs/FEATURES.md).
+### Done
 
-### What doesn't work yet
+- **M0 – Reading the game's files.** The game's archives, pictures and
+  colour palettes are read straight from your own copy of the game.
+- **M1 – Seeing Daventry.** The ground, buildings, trees and objects are
+  drawn where the game puts them, with the original's lighting
+  and distance fog. All 12 worlds load.
+- **M2 – Walking around.** Connor walks, runs, steps back, turns, jumps
+  and wades through water. He falls, slides off steep slopes and bumps
+  into walls the way he does in the original. The camera follows him and
+  keeps out of walls.
+- **M3 – Daventry comes alive (mostly).** Doors, chests, items to pick
+  up, traps, animated objects (windmill, mill wheel, fountain), falling
+  leaves, flowing water, sound effects and music. The game's own puzzle
+  scripts run, scripted cutscenes play, and the first puzzle (pushing
+  the bricks to block the waterfall) works.
+- **M4 – So far.** Connor's remarks and other spoken lines play with
+  their captions and lip sync. The on-screen interface works: the bottom
+  bar (health, experience, weapons, potions), the top bar (quest items,
+  gold) and holding an item on the mouse pointer to use it.
 
-- No story, conversations, inventory screen, fighting or saving.
-- No people or monsters.
-- Clicking works only on doors, chests, items, buildings and a few scripted
-  objects.
-- Scripts switch only some objects' animations (no fights yet).
+### Next
 
-Full list: [docs/FEATURES.md](docs/FEATURES.md#what-doesnt-work-yet).
+- **Conversations** with the wizard and the other people in Daventry.
+- **The main menu:** pausing the game with Escape key.
+- **What's left of M3:** a few cutscene and camera details, damage from
+  rolling rocks, and pushable boulders.
+
+### Later
+
+- **M5 – Fighting.** Monsters that move, attack and die; Connor's weapons,
+  armour, health and experience in battle.
+- **M6 – The whole game.** Saving and loading, travelling between worlds,
+  all 12 worlds playable, the cutscene videos, the options screen.
+- **M7 – Match the original, then improve.** Play the original side by
+  side with ours and fix every difference. After that, the improvements
+  this project was started for: better controls, better graphics and
+  gameplay fixes. (A first one is already in: the bottom bar's corner
+  panels can sit at the window's edges on wide screens.)
 
 ## What you need
 

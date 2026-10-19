@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 README "Current state" is now a short roadmap (docs only)
+
+**Changed:** `README.md`: the "Current state" section (the "what works" / "what doesn't work yet" lists, mostly repeated in `docs/FEATURES.md`) replaced by a short roadmap: the milestones M0–M7 with their status, what is done, next and later. The text is the user's edited version of the `ROADMAP.md` I wrote first; that commit was reverted (the user changed their mind: no separate file).
+**Why:** The user asked for a short overview of how far along the rewrite is, in the README.
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** —
+**Next:** Update the table and lists when a milestone changes status.
+
 ## 2026-10-18 End of B's session (docs only)
 
 **Changed:** `STATUS.md` ("Where we are": 4c-11, the back flip at a wall; the older 4a-7 to 4a-9 details folded into one line; next steps; Q111, Q112 in "Open questions"; test counts and the `--corners` option), `docs/FEATURES.md` (the back flip at a wall, checked by the user).
