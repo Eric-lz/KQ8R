@@ -129,6 +129,9 @@ struct Args {
     light: light_view::LightMode,
     /// `--haze on|off`: haze at the start (M1 step 6); F8 switches it.
     haze: bool,
+    /// `--corners on|off`: the bottom bar's corner panels at the window's
+    /// edges (M4 4c-11, default off); F6 switches it.
+    corners: bool,
     /// `--renderer auto|vulkan|dx12`: the graphics API (default auto).
     renderer: renderer::Renderer,
     /// `--dynamic on|off`: overrides `Options.cs`'s `useDynamicLighting`
@@ -158,6 +161,7 @@ fn parse_args() -> Result<Args, String> {
         key: Vec::new(),
         light: light_view::LightMode::X1,
         haze: true,
+        corners: false,
         renderer: renderer::Renderer::Auto,
         dynamic: None,
         sound: true,
@@ -221,6 +225,13 @@ fn parse_args() -> Result<Args, String> {
                     "on" | "1" => true,
                     "off" | "0" => false,
                     v => return Err(format!("--haze needs on or off, not '{v}'")),
+                }
+            }
+            "--corners" => {
+                a.corners = match value()?.to_ascii_lowercase().as_str() {
+                    "on" | "1" => true,
+                    "off" | "0" => false,
+                    v => return Err(format!("--corners needs on or off, not '{v}'")),
                 }
             }
             "--renderer" => a.renderer = renderer::Renderer::parse(&value()?)?,
@@ -301,7 +312,7 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("error: {e}");
             eprintln!("usage: kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>] [--game DIR] [--frames N] [--renderer auto|vulkan|dx12]");
-            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--key NAME,N] [--light x1|x2|off] [--haze on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
+            eprintln!("       kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]] [--at X,Y,H] [--click NAME,N] [--item TYPE] [--key NAME,N] [--light x1|x2|off] [--haze on|off] [--corners on|off] [--dynamic on|off] [--sound on|off] [--renderer auto|vulkan|dx12]");
             return ExitCode::FAILURE;
         }
     };
@@ -403,7 +414,8 @@ fn main() -> ExitCode {
                     app.insert_resource(style);
                 }
                 // The panels (M4 4c-2).
-                if let Some(gui) = gui_view::load_gui(&g, &args.world, &mut shared.log.lock().unwrap()) {
+                if let Some(mut gui) = gui_view::load_gui(&g, &args.world, &mut shared.log.lock().unwrap()) {
+                    gui.corners = args.corners;
                     app.insert_resource(gui);
                 }
             }

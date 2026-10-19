@@ -1824,3 +1824,9 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | Each panel's picture and the caption's fill their box exactly (`NodeImageMode::Stretch`); Bevy's default kept the picture's proportions and centred it, so the 320 × 17 meters in a 384 × 20 box were drawn 376 wide, leaving 4 pixels of world at each end (and jumping as the box went 20 / 21 high while sliding: the flicker) | **Our fix** (an engine setting of ours; the user's check found it) | A screenshot read as numbers (temporary code, removed): before, the meters' first stone pixels at x 452 and world colours at 448–451 and 828–831; after, stone from 448 to 831, next to the side panels |
 | The panels' edges are not smoothed by the engine (`UiAntiAlias::Off` on the camera) | **Our choice** (pixel pictures laid edge to edge; it only changed the slots' fractional bottom row, not the gap) | Same screenshots |
 | The spinning mask stands on the bottom bar (bottom left, slots) but not on the meters when they pop up alone; the caption still does | **The user's check in the original** | `gui-4c10-bricks-bar-away.log`: the meters pop up at 1.287 s, the mask stays "at [743, 543, 800, 600]" |
+
+### 4c-11, corner panels (an improvement) — `crates/kq8-viewer/src/{gui_view,main}.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| With the option on, the bottom bar's left panel at the window's left edge, its right panel and the spinning mask at the window's right edge; the slots, meters, top bar and caption stay on the centred 4:3 screen; clicks follow the panels; `--corners on\|off` (default off), F6 | **Not in the original: the user's idea** (2026-10-18, "the third idea") | `gui-4c11-corners.log` (window 1280 × 720): "engine: IDCTL_INVBARL at left 0.00 … right 288.00", "IDCTL_INVBARR at left 992.00 … right 1280.00", the slots and meters at 448–832 |

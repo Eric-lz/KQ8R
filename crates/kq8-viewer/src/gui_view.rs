@@ -154,6 +154,10 @@ pub struct Gui {
     flashes: [Option<f64>; 3],
     /// The bottom-bar key (`movekeys.kq` row 12, rule 10).
     space_key: Option<KeyCode>,
+    /// 4c-11 (not in the original, the user's idea): the bottom bar's
+    /// left and right panels at the window's edges instead of the 4:3
+    /// screen's; `--corners on|off`, F6.
+    pub corners: bool,
     /// Connor's stats events already sent (rule 24).
     stats_events: Option<u64>,
     hands_off: bool,
@@ -296,6 +300,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         pointer: PLAY_POINTER.into(),
         flashes: [None; 3],
         space_key,
+        corners: false,
         stats_events: None,
         hands_off: false,
         last: HashMap::new(),
@@ -903,6 +908,12 @@ pub fn gui_draw(
     if gui.space_key.is_some_and(|k| keys.just_pressed(k)) {
         gui.panels.toggle_bottom("Space key");
     }
+    // 4c-11: F6, the corner panels on or off.
+    if keys.just_pressed(KeyCode::F6) {
+        gui.corners = !gui.corners;
+        let line = format!("F6: corner panels {} (4c-11, not in the original)", if gui.corners { "on: bottom left and right at the window's edges" } else { "off: on the 4:3 screen" });
+        gui.note(line);
+    }
     // interface.md rule 40: keys 1-8 and the keypad's.
     const DIGITS: [(KeyCode, KeyCode); 8] = [
         (KeyCode::Digit1, KeyCode::Numpad1),
@@ -975,13 +986,25 @@ pub fn gui_draw(
                 gui.frames(&f);
             }
         }
-        let ((left, top), (w, h)) = match (panel, gui.mask_size()) {
+        let ((mut left, top), (w, h)) = match (panel, gui.mask_size()) {
             (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
             // 4c-9 (the user's check): it rises and falls with the
             // bottom bar, on top of it.
             (None, Some([mw, mh])) => ((sw - mw as f32, bar_top - mh as f32), (mw as f32, mh as f32)),
             (None, None) => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
         };
+        // 4c-11: with the corner panels on, the bottom bar's left panel at
+        // the window's left edge, its right panel and the spinning mask
+        // at the window's right edge (screen units; off the 4:3 screen on
+        // a wide window). Clicks follow, as they use these places.
+        if gui.corners {
+            let (window_left, window_right) = (-fl / k, (ww - fl) / k);
+            match panel {
+                Some(Panel::BottomLeft) => left = window_left,
+                Some(Panel::BottomRight) | None => left = window_right - w,
+                _ => {}
+            }
+        }
         if away >= 1.0 {
             *vis = Visibility::Hidden;
             continue;

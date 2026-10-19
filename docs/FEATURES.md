@@ -396,6 +396,10 @@ doesn't take it gives "This will not work."
 - **A 4:3 screen in a wide window (4c-6):** the panels and the caption
   stay in the original's 4:3 shape, centred in the window; the world
   fills the whole window around them.
+- **Corner panels (4c-11, not in the original, off by default):** on
+  a wide window, F6 (or `--corners on`) moves the bottom bar's left
+  panel (armour, weapons) and right panel (rope, rocks, map icon) to
+  the window's edges; the rest stays centred.
 - **Corrections after the user's checks (4c-7, 4c-8):** Space plays the
   top bar's sounds the other way round as the bottom bar moves
   (cutscenes don't); the spinning mask sits whole in the screen's bottom
@@ -448,6 +452,9 @@ repeated and checked in the logs. They do not change the game's rules.
   colour it with another palette; that option works only with `--model`.
 - `--light x1|x2|off`: how the ground and the objects are lit at the
   start (default `x1`). F7 changes it while the window is open.
+- `--corners on|off`: the bottom bar's left and right panels at the
+  window's edges on a wide window (default `off`, as the original). F6
+  changes it while the window is open.
 - `--haze on|off`: haze at the start (default `on`). F8 changes it while
   the window is open.
 - `--dynamic on|off`: dynamic lighting (point lights painting the

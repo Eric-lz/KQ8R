@@ -129,6 +129,7 @@ The first build takes several minutes.
 | Shift + right mouse | Tilt the camera |
 | Page Up / Page Down, Home | Tilt the camera, reset the tilt |
 | F11 | Camera keeps a fixed distance |
+| F6 | Bottom bar's corner panels at the window's edges, or back on the 4:3 screen (not in the original) |
 | F | *DEBUG:* Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
 | H | *DEBUG:* Show hidden and unused objects (traps, sound sources...) |
 | U | *DEBUG:* Show the ground under the water |

@@ -1985,6 +1985,15 @@ inventory and menus.
       keeping each picture's proportions inside its box; the pictures
       now stretch to fill their box. The mask doesn't rise with the
       meters alone.
+    - **4c-11, corner panels (an improvement, off by default; done
+      2026-10-18).** The user's third idea: on a window wider than 4:3,
+      the bottom bar's left panel (armour, weapons) goes to the
+      window's left edge and its right panel (rope, rocks, map icon) to
+      the right edge; the slots, the meters, the top bar and the caption
+      stay on the centred 4:3 screen, and the spinning mask follows the
+      right panel. `--corners on|off` at the start, **F6** while
+      playing. Only the panels' horizontal place changes (clicks follow
+      it); everything else is as in 4c-6.
   - Tests: unit tests for each core module; viewer runs with `--click`
     on `alcmsign` and `smlchst3`, Space pressed by a test option
     (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),

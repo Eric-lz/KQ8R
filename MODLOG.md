@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-11: corner panels (an option, not in the original)
+
+**Changed:** Viewer `gui_view.rs`: with the corner panels on, the bottom bar's left panel stands at the window's left edge and its right panel and the spinning mask at the window's right edge; the slots, meters, top bar and caption stay on the centred 4:3 screen; clicks use the moved places. F6 switches it (logged in `gui.log`); `main.rs`: `--corners on|off` (default off). `docs/DESIGN.md` (4c-11), provenance, `docs/FEATURES.md`, `README.md` (F6).
+**Why:** The user asked to see their third idea, as an option to switch on and off.
+**Tested how:** `cargo test --workspace` (451 pass), clippy clean. Viewer: `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --corners on --frames 400 --sound off` (`gui-4c11-corners.log`).
+**Result:** Window 1280 × 720: "IDCTL_INVBARL at left 0.00 … right 288.00", "IDCTL_INVBARR at left 992.00 … right 1280.00", slots and meters at 448–832 as before; the mask "at [876, 465, 933, 522]" in screen units, that is 1211–1280 in the window, on the bar at the right edge.
+**Still broken / not tested:** Not seen by eye. F6 and mouse clicks on the moved panels are not tested by a run (they need the real keyboard and mouse).
+**Next:** The user's look at it.
+
 ## 2026-10-18 M4 step 4c: checked by the user (docs only)
 
 **Changed:** `docs/FEATURES.md` (the interface entries: checked by the user), `STATUS.md` (4c-6 to 4c-10, checked, test count, next steps).
