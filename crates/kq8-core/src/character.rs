@@ -254,8 +254,8 @@ impl Character {
     fn first(&mut self, player: &mut NamedAnimPlayer, now: f64, notes: &mut Vec<String>) {
         let n = self.first_update.unwrap_or(0);
         if self.state != State::None {
-            // Q118 stand-in: a state set before the first update is kept.
-            notes.push(format!("first update {n}: already in {:?} (set by a script before): kept, nothing restarted (Q118 stand-in)", self.state));
+            // Q121 stand-in: a state set before the first update is kept.
+            notes.push(format!("first update {n}: already in {:?} (set by a script before): kept, nothing restarted (Q121 stand-in)", self.state));
             return;
         }
         if player.current_name.is_empty() {
@@ -648,6 +648,6 @@ mod tests {
         run(&mut c, &mut p, 0, 3, &mut log);
         assert_eq!(c.state, State::Special);
         assert_eq!(p.movement_name(), "caw");
-        assert!(log.join("\n").contains("Q118"));
+        assert!(log.join("\n").contains("Q121"));
     }
 }

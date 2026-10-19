@@ -24,8 +24,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   and Special lists); turning toward a `speak` listener at 3.5 rad/s
   (`noTurn` blocks it); mouths (lip textures, the Uglybeast's mouth
   movements) and gestures; Wait after the last line. New test option
-  `--command "WORDS",N`; new log `characters.log`. Questions Q116–Q120
-  for A. Left: 4d-6 gravity, 4d-7 shadows (to be planned).
+  `--command "WORDS",N`; new log `characters.log`. Questions Q116, Q117,
+  Q119–Q121 for A. Left: 4d-6 gravity, 4d-7 shadows (to be planned).
 
 - **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
   palette"): the bars, captions and fonts use the world's
@@ -324,7 +324,7 @@ done; conversations and menus next). M0–M3 are done.
   not built (not settled; the note says it may be left out).
 - **Stand-ins of 4d (characters):** `birthDelay` from the data (Q116);
   Wait after the last line of a queue, characters only, from no state
-  or Wait (Q117); a state set before the first update is kept (Q118,
+  or Wait (Q117); a state set before the first update is kept (Q121,
   `sprdump`); `EndLoop` through the queue lets `Stop` show for one
   update before a script's answer (Q119, the Uglybeast's `pivot`); the
   Uglybeast's mouth movements bring `Stop` back in Wait (Q120); a
@@ -412,7 +412,7 @@ done; conversations and menus next). M0–M3 are done.
   not blocking the drawing of characters.
 - For A (asked 2026-10-19 by B, M4 4d): **Q116** (`birthDelay` 1 for
   two goblins vs "0 for all"), **Q117** (where "the speaker goes to
-  Wait" comes from, and its details), **Q118** (a state set before the
+  Wait" comes from, and its details), **Q121** (a state set before the
   first update: `sprdump`), **Q119** (`EndLoop` and Wait's `Stop`: which
   comes first; the Uglybeast's one-update `Stop`), **Q120** (the
   geometry talker's mouth movements and rule 18).

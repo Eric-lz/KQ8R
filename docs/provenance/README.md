@@ -1978,7 +1978,7 @@ This replaces the stand-in "the old trap gets `Off` at his next move".
 | `setState` by name: Wait, Special (words joined, then items one at a time, then Wait), Unborn; Move / Die logged (M5); Connor-only states logged and ignored; unknown "cannot find state" | Rule 22, "Do not reproduce" | Unit tests `special_lists_play_in_turn_then_wait`, `other_states_are_logged` |
 | `AnimList=`, `Inv`, `KillConnor` in a character's Special list: skipped and logged | **Our stand-in** (none in Daventry) | — |
 | The state-allowed check ("only if the current one allows it") | Not built: only Talk's list is given and there is no Talk state yet | — |
-| A state set before the first update is kept (no restart, no Wait) | **Stand-in**, asked as Q118 (`sprdump`) | Unit test `a_state_set_before_the_first_update_is_kept` |
+| A state set before the first update is kept (no restart, no Wait) | **Stand-in**, asked as Q121 (`sprdump`) | Unit test `a_state_set_before_the_first_update_is_kept` |
 | `setUseGravity`, `setMonUseGravity`, `setCanTurn` stored; `changeAnmFile` logged | Rules 8, 22, 23 (used from 4d-4 / 4d-6); `changeAnmFile` open question 4 | — |
 | Each character's random draws from its own generator seeded by its name | **Our choice** (the original's random source is not described) | Same numbers every run |
 | A dormant character (loaded by a script while playing) gets its draw-distance test when it comes in | As 3k-4 | Not tested (no run reaches those scripts) |
