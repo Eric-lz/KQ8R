@@ -816,6 +816,18 @@ pub fn trap_step(
         sim.active.conversation_tick(walker, position, may_enter, right_held);
         sim.flush_conversation(&shared);
     }
+    // M4 4e-7: Connor's gesture codes (conversation.md rule 18).
+    for code in std::mem::take(&mut sim.active.world.connor_gestures) {
+        let wanted = match code {
+            8..=15 => kq8_data::characters::GESTURES[(code - 8) as usize],
+            _ => "stop",
+        };
+        let name = connor.movements.iter().find(|m| m.name.eq_ignore_ascii_case(wanted)).map(|m| m.name);
+        let line = connor.walker.gesture(code, name);
+        let n = connor.updates;
+        connor.log.detail(format!("connor update {n}: lip-sync {line}"));
+        shared.log.lock().unwrap().detail(format!("connor update {n}: lip-sync {line}"));
+    }
     // State requests a jump refused at an earlier update go first (3m-1).
     let retried = connor.refused.len();
     let inside = inside_from + retried..sim.active.world.requests.len() + retried;

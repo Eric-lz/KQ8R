@@ -469,7 +469,7 @@ pub fn mouth_draw(mut speech: ResMut<Speech>, connor: Option<ResMut<crate::conno
         // shapes (8-16 gestures, above 16 nothing): the mouth stays.
         if shape > 7 {
             let updates = c.updates;
-            c.log.detail(format!("connor update {updates}: lip-sync code {shape}: not a mouth shape; mouth unchanged (talking.md rule 17; his gestures come with conversations)"));
+            c.log.detail(format!("connor update {updates}: lip-sync code {shape}: not a mouth shape; mouth unchanged (talking.md rule 17; codes 8-16 are his gestures, see the 'lip-sync code' lines)"));
             continue;
         }
         let n = shape as usize;

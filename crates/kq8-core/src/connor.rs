@@ -534,6 +534,44 @@ impl Walker {
         format!("talk state (from {from}): asks for Stop the ordinary way; {} playing", self.movement)
     }
 
+    /// A lip-sync gesture code for Connor (`conversation.md` rule 18, M4
+    /// 4e-7): codes 8–15 play `gesturea`…`gestureh`, 16 plays `stop`, at
+    /// once from phase 0, only when he stands still with the keys choosing
+    /// (Wait, or the talk state outside its approach), no start or stop
+    /// movement playing, no weapon drawn and not in first person (never, for
+    /// now). `name`: the movement, as loaded (`None`: not in his list).
+    /// Returns what happened, for the log.
+    pub fn gesture(&mut self, code: u16, name: Option<&'static str>) -> String {
+        let wanted = match code {
+            8..=15 => kq8_data::characters::GESTURES[(code - 8) as usize],
+            16 => "stop",
+            _ => return format!("code {code}: not a gesture code; nothing"),
+        };
+        let Some(name) = name else {
+            return format!("code {code}: '{wanted}' is not in his movement list; nothing");
+        };
+        let why = if !self.keys_choose() || self.mode == Mode::Push {
+            Some(format!("in {} (not standing in Wait or the talk state)", self.mode.name()))
+        } else if self.moving() {
+            Some(format!("he is moving ({})", self.choice))
+        } else if let Some(t) = self.playing {
+            Some(format!("{} is playing", t.via))
+        } else if self.hand_mode != EMPTY_HANDS {
+            Some("a weapon is drawn".to_string())
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            return format!("code {code}: '{wanted}' not played: {why} (rule 18)");
+        }
+        let from = self.movement;
+        self.movement = name;
+        self.phase = 0.0;
+        self.wanted = None;
+        self.waiting = None;
+        format!("code {code}: plays '{name}' from phase 0 (was '{from}'; rule 18)")
+    }
+
     /// He leaves his talk state (`conversation.md` rule 15): Move if he is
     /// moving (the movement goes on), else `Stop` and Wait. Returns the
     /// state he goes to.
@@ -1155,6 +1193,30 @@ mod tests {
 
     fn intent(forward: i8, turn: i8, run: bool) -> Intent {
         Intent { forward, turn, run }
+    }
+
+    #[test]
+    fn gestures_play_only_while_he_stands() {
+        // conversation.md rule 18.
+        let mut w = Walker::new(0.0);
+        assert!(w.gesture(10, Some("gesturec")).contains("plays 'gesturec'"));
+        assert_eq!((w.movement, w.phase), ("gesturec", 0.0));
+        assert!(w.gesture(16, Some("stop")).contains("plays 'stop'"));
+        assert!(w.gesture(9, None).contains("not in his movement list"));
+        assert!(w.gesture(7, Some("gesturea")).contains("not a gesture code"));
+        // In the talk state, standing: yes; during the approach: no.
+        w.enter_talk();
+        w.choice = "stop";
+        assert!(w.gesture(8, Some("gesturea")).contains("plays"));
+        w.talk_play = Some("stopwalk");
+        assert!(w.gesture(8, Some("gesturea")).contains("not played"));
+        // Walking: no.
+        let mut w = Walker::new(0.0);
+        w.choice = "walk";
+        assert!(w.gesture(8, Some("gesturea")).contains("moving"));
+        let mut w = Walker::new(0.0);
+        w.mode = Mode::Special;
+        assert!(w.gesture(8, Some("gesturea")).contains("not played"));
     }
 
     #[test]

@@ -2115,3 +2115,11 @@ marked otherwise.
 | What | Source | Check |
 | --- | --- | --- |
 | Walk away with lines left: goodbye, pause, `TalkExit`; click again: welcome back, the cut line from its start, the rest; the range not added twice | Rules 21, 22; the note's "How to check" (Wizard) | Viewer run of 4e-6 (MODLOG): goodbye at 46–108, welcome back at 151–267, line 1 again at 267 |
+
+### 4e-7, Connor's gestures — `crates/kq8-core/src/connor.rs`, `active.rs`; viewer `door_view.rs`, `load.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Connor's codes 8–15 play `gesturea`…`gestureh`, 16 `stop`, at once from phase 0; the mouth unchanged; only when he stands still (Wait, or the talk state outside its approach; no start or stop movement playing), no weapon drawn, not in first person | Rule 18 | Unit test `gestures_play_only_while_he_stands`; viewer: line 1 of the first meeting plays `gesturee`, `gestured`, `gestureg`, `gesturef`, `stop` |
+| "Stands still" read as: the keys choose and choose standing, and no transition plays | **Our reading** of rule 18 | Same test |
+| His eight gesture movements loaded from `Conner.anm` | Data (`Conner.anm` Movement13–20) | `viewer.log` "connor: movement gesturea = movement 13 …" |

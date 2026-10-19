@@ -805,7 +805,7 @@ inventory and menus.
     more than one line left and a goodbye line: the goodbye, then
     `TalkExit`; clicking again: welcome back, the cut line from its start,
     the rest.
-  - **4e-7, Connor's gestures** (rule 18). Codes 8–15 play
+  - **4e-7, Connor's gestures** (**done** 2026-10-19) (rule 18). Codes 8–15 play
     `gesturea`…`gestureh`, 16 `stop`, when he stands still (no weapon
     drawn, not in first person: always true for now).
   - Tests: unit tests for each core rule (inside test, case, placing,

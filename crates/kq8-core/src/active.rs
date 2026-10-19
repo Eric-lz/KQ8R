@@ -633,6 +633,9 @@ pub struct WorldState {
     pub connor_leave: Option<String>,
     /// Lines for `conversation.log` (M4 4e-3), taken by the caller.
     pub conversation_log: Vec<String>,
+    /// Connor's lip-sync codes 8–16 of this update (gestures,
+    /// `conversation.md` rule 18; M4 4e-7), taken by the caller.
+    pub connor_gestures: Vec<u16>,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -2239,6 +2242,7 @@ impl Active {
                 conversation: None,
                 connor_leave: None,
                 conversation_log: Vec::new(),
+                connor_gestures: Vec::new(),
             },
         }
     }
@@ -3361,6 +3365,11 @@ impl Active {
         let mut last_speaker: BTreeMap<String, String> = BTreeMap::new();
         for e in &talk.events {
             match e {
+                // conversation.md rule 18: Connor's gesture codes, for his
+                // walker (the caller's).
+                crate::talk::TalkEvent::Mouth { speaker, shape: shape @ 8..=16, .. } if speaker.eq_ignore_ascii_case(CONNOR) => {
+                    self.world.connor_gestures.push(*shape);
+                }
                 crate::talk::TalkEvent::Mouth { speaker, shape, .. } => {
                     if let Some(i) = self.world.character_index(speaker) {
                         let a = &mut self.world.anims[i];

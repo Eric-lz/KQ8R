@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-7: Connor's gestures
+
+**Changed:** `kq8-core/src/connor.rs`: `Walker::gesture` (codes 8–15 `gesturea`…`gestureh`, 16 `stop`, only while he stands with the keys choosing). `active.rs`: Connor's lip-sync codes 8–16 are passed on (`connor_gestures`). Viewer: `load.rs` loads his eight gesture movements; `door_view.rs` plays them on his walker; `talk_view.rs`: a log text. 1 unit test. DESIGN, provenance.
+**Why:** Step 4e-7 of `conversation.md` (rule 18; Q114 left Connor's gestures for this step).
+**Tested how:** `cargo test --workspace` (503 pass, 1 new), clippy clean. Viewer: `--at 193000,198000,-1.7 --click Wizard,30 --frames 2200 --sound off`, read in `connor.log`.
+**Result:** Line 1 of the first meeting (Connor's, `A0RS040E.0R1`): code 12 at update 35 plays `gesturee`, 11 `gestured` (54), 14 `gestureg` (76), 13 `gesturef` (96), 16 `stop` (114, 122); the gestures play to their end (`gesturee` 19 updates) unless the next code comes first. The first try found no gesture in his list: the viewer loaded only the movements M2 and M3 needed; the eight gestures (46–51 frames, can be cut short) are now loaded too.
+**Still broken / not tested:** **Not looked at by eye.** No weapons and no first person yet, so those two conditions never block a gesture. Gestures during his `speak` remarks (not conversations) follow the same rule but were not run.
+**Next:** End of 4e: STATUS, README, FEATURES; the user's check in the viewer; A: Q125, Q126.
+
 ## 2026-10-19 M4 step 4e-6: goodbye and welcome back, run in the viewer
 
 **Changed:** No code (built in 4e-2 and wired in 4e-3). `docs/DESIGN.md`, provenance (the viewer check).

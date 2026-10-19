@@ -229,8 +229,9 @@ pub fn load_model(
 /// plays"), the falls of step 2c/2e (connor-physics.md "Falling off an
 /// edge"), the crash (2d-4), the jumps (2e), the start and stop transitions (2g,
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
-/// Transitions to or via a movement not listed here are skipped.
-pub const CONNOR_MOVEMENTS: [&str; 37] = [
+/// Transitions to or via a movement not listed here are skipped. M4 4e-7
+/// adds his gestures.
+pub const CONNOR_MOVEMENTS: [&str; 45] = [
     "stop",
     "walk",
     "run",
@@ -269,6 +270,15 @@ pub const CONNOR_MOVEMENTS: [&str; 37] = [
     "push",
     "pushleft",
     "pushright",
+    // His gestures (M4 4e-7, conversation.md rule 18: lip-sync codes 8-15).
+    "gesturea",
+    "gestureb",
+    "gesturec",
+    "gestured",
+    "gesturee",
+    "gesturef",
+    "gestureg",
+    "gestureh",
 ];
 
 /// One of Connor's movements: its animation and playback speed.
