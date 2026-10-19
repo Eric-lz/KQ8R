@@ -27,7 +27,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 | M0 | Read the game's files | ✅ Done |
 | M1 | See Daventry | ✅ Done |
 | M2 | Walk Connor around Daventry | ✅ Done |
-| M3 | Daventry comes alive | 🟡 Mostly done |
+| M3 | Daventry comes alive | ✅ Done |
 | M4 | Talk, listen, use the menus | 🟡 Under way |
 | M5 | Fight | ⬜ Not started |
 | M6 | The whole game | ⬜ Not started |
@@ -42,11 +42,12 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 - **M2 – Walking around.** Connor walks, runs, steps back, turns, jumps
   and wades through water. He falls, slides off steep slopes and bumps
   into walls the way he does in the original.
-- **M3 – Daventry comes alive (mostly).** Doors, chests, items to pick
+- **M3 – Daventry comes alive.** Doors, chests, items to pick
   up, traps, animated objects (windmill, signs, fountain), falling
   leaves, flowing water, sound effects and music. The game's own puzzle
   scripts run, scripted cutscenes play, and the first puzzle (pushing
-  the bricks to block the waterfall) works.
+  the bricks to block the waterfall) works. The camera follows Connor
+  as in the original.
 - **M4 – So far.** Connor's remarks and other spoken lines play with
   their captions and lip sync. The on-screen interface works: the bottom
   bar (health, experience, weapons, potions), the top bar (quest items,
@@ -56,7 +57,6 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 
 - **Conversations** with the wizard and the other people in Daventry.
 - **The main menu:** pausing the game with Escape key.
-- **What's left of M3:** a few cutscene and camera details.
 
 ### Later
 

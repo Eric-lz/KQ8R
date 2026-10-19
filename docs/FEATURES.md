@@ -132,9 +132,14 @@ swings round to look along the way he came, and comes closer if it has
 to; dragging it into a wall only creeps it closer. Trees and plain
 objects don't stop it, as in the original. It recalculates only when
 Connor moves, after `follow`, in flights and while the player uses it,
-so a script's camera spot holds while he stands (M3 3n). Checked in the
-logs (`camera.log`) and by eye; the user (2026-10-18): walking feels like
-the original.
+so a script's camera spot holds while he stands (M3 3n). Its position
+never swings behind him by itself; only the view turns: Connor may drift
+about 14° off the middle before the view catches up and locks on him.
+Holding the right mouse button keeps him at the same spot on screen and
+the camera at the same place relative to him; letting go lets him drift
+again. The view looks a little below the point 1,400 above his feet, so
+it points at about his chest (M3 3o). Checked in the logs (`camera.log`)
+and by eye: the user (2026-10-19) found it matches the original.
 
 ## Daventry comes alive (milestone M3)
 
@@ -536,8 +541,9 @@ message that shows the usage.
   falling animation takes over (also the user's check). The rule behind
   it is now A's (Q82). A back flip into a wall slides along it with
   gravity off until the flip ends (Q84 a, 3l-5; unit test only).
-- **Camera:** it doesn't swing back behind Connor by itself; no first
-  person view (F2) or camera shake; the camera's roll is not drawn.
+- **Camera:** no first person view (F2) or camera shake; the camera's
+  roll is not drawn; the mouse's recentring near the window's edges is
+  not built.
 - **Cutscenes:** the windmill tumble (`miltrap1.cs`) plays the
   no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18; checked by eye by the user;
   weapons come with M5).

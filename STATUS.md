@@ -1,7 +1,9 @@
 # STATUS
 
-Hand-over in case the chat is lost. 2026-10-19: A answered the last
-study questions blocking M3 (see "Where we are"). Before that, brought up
+Hand-over in case the chat is lost. 2026-10-19: B built A's last M3
+answers (3o-1 to 3o-7) and the user checked the camera against the
+original: **M3 is done**. Before that, A answered the last study
+questions blocking M3, and before that, brought up
 to date 2026-10-18 at the end of B's session on M4 step 4c (the on-screen interface and Connor's
 inventory, 4c-1 to 4c-11, checked by the user) and the back flip at a
 wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
@@ -10,17 +12,20 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 ## Where we are (2026-10-19)
 
-- **New 2026-10-19 (A): no study questions block M3 any more.** Q27,
-  Q53, Q100, Q101, Q102 answered, Q48 and `anim-scripts.md` open
-  question 6 closed (MODLOG). Main finding: the camera never swings its
-  position behind Connor; its **view heading** turns toward him by four
-  states (`camera.md` "Turning the view toward Connor"). For B to build:
-  that heading rule; the default tilt looking 0.2 rad below the aim
-  point; the right mouse button held keeping the camera fixed relative
-  to Connor; the mouse scale (one window width = 3π/4); the view line
-  blocked where it comes up out of the ground; one `follow` finding both
-  conditions leaving the "turn back" switch off; the trap a script
-  `move` takes Connor out of getting `Off` at once. Not tested in play.
+- **New 2026-10-19 (B, M3 3o): M3 is done.** A's last answers built,
+  one commit per step (`docs/milestones/M3.md` "3o"): the camera's view
+  heading turns by four states (Connor may drift about 14° off the middle
+  before the view catches up and locks on him; the position never swings
+  behind him); the view looks 0.2 rad below the aim point 1,400 above his
+  feet (the hand-set 800 is gone; at walking distance the middle of the
+  screen passes him 893 above his feet); the mouse as a share of the
+  window; holding the right button locks him at his spot on screen and
+  keeps the camera's place relative to him (3o-7, fixed after the user's
+  first check); the view line's exact ground test; the deep lift on the
+  drawn surface; one `follow` finding both conditions; the trap a
+  script's `move` takes Connor out of gets `Off` at once. **Checked by
+  the user against the original** (2026-10-19), also the end of the
+  watermill scene. Q113 asked (small, not blocking).
 - **New 2026-10-18 (B, M4 4c): the on-screen interface and Connor's
   inventory are built** from `interface.md` and `inventory.md`, one
   commit per step, **checked by the user against the original**
@@ -65,11 +70,11 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   (Q112). Checked by the user.
 - **Before that (A, 2026-10-18):** `interface.md` and `inventory.md`
   written and checked by the user in the original.
-- **M2 (walk Connor around Daventry) is done.** **M3 (Daventry comes
-  alive) is well under way**: doors, emitters, flowing water, animated
-  objects, traps, items, chests, scripted objects, clicking, sound
-  effects and world music, scripted animations, pushing and the bricks
-  puzzle (most checked by eye; see `docs/FEATURES.md`).
+- **M2 and M3 (Daventry comes alive) are done**: doors, emitters,
+  flowing water, animated objects, traps, items, chests, scripted
+  objects, clicking, sound effects and world music, scripted animations,
+  pushing and the bricks puzzle, cutscenes and the camera (checked by
+  eye; see `docs/FEATURES.md`).
 - **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`):
   message, talker and lip-sync files; speech queues and the `speak`
   family of commands; voices and ducking; captions (stand-in panel);
@@ -77,9 +82,6 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   keys as events and the turn after a click (4a-7 to 4a-9, Q103–Q105).
   Checked by the user against the original. Conversations are not
   studied yet.
-- **Before that (B, M3 3m and 3n):** camera flights and cuts, scripted
-  walks, the windmill tumble, and when the follow camera updates
-  (Q94–Q99). Details in `MODLOG.md`.
 - **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
   question 9); Connor against monsters.
 
@@ -87,8 +89,8 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
-milestones: **M3, Daventry comes alive**, and **M4** (remarks and speech,
-the interface and the inventory done; conversations and menus next).
+milestone: **M4** (remarks and speech, the interface and the inventory
+done; conversations and menus next). M0–M3 are done.
 
 ## Setup
 
@@ -130,7 +132,7 @@ the interface and the inventory done; conversations and menus next).
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (321 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (331 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump, pushing),
   `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
@@ -224,7 +226,10 @@ the interface and the inventory done; conversations and menus next).
   It keeps out of walls: buildings, closed doors and hills block its
   view, trees and plain objects don't; when blocked it swings round to
   look along the way Connor came and comes closer if it has to; dragging
-  it into a wall only creeps it closer.
+  it into a wall only creeps it closer. The view lets Connor drift about
+  14° off the middle before it catches up; the right button held keeps
+  him at his spot on screen; it points at about his chest (M3 3o,
+  checked by the user against the original 2026-10-19).
 - M3 (checked by eye unless marked):
   - Doors: left click with the mouse opens them within reach (4,700);
     from too far Connor's "too far" remark is only logged; the open door
@@ -264,26 +269,19 @@ the interface and the inventory done; conversations and menus next).
 - The interface and inventory (M4 4c): checked by the user against the
   original, 2026-10-18 (the corner panels option: looked at by the user,
   no complaint). The back flip at a wall: checked by the user.
-- Tests: 451 unit tests pass (114 + 321 + 5 + 11), 2026-10-18.
+- Tests: 461 unit tests pass (114 + 331 + 5 + 11), 2026-10-19.
 
 ## What doesn't work yet / next
 
-- **Left from 3m and 3n (checked by the user 2026-10-18):** at the end
-  of the watermill walk Connor goes on a bit further than in the
-  original, only from the test start inside the trap (closed by A
-  2026-10-19: not a difference in normal play). A script's `move Connor`
-  no longer sweeps the traps (confirmed by A, Q102 a); the trap he leaves
-  should get `Off` at the move (Q102 b, not built).
 - **Stand-ins of 3m** (not traced; none reached in Daventry): a
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
   tested; `follow Connor` during a flight ends it.
-- **Stand-ins of 3n:** one camera update on the first tick (Q27 d); the
-  heading after `move KQCamera` while following kept until the next
-  `follow`, flight or cut (Q100 a); a deep lift whose line meets no
-  ground (Q100 b); one `follow` finding both conditions turns the
-  "turn back" switch on (Q100 c). All answered by A 2026-10-19
-  (`camera.md`), not built yet.
+- **Stand-ins of 3n and 3o:** one camera update on the first tick,
+  looking straight at Connor (Q27 d); the view heading's state around
+  cutscene cameras (Q113 a–c; the user's check matched ours after the
+  watermill scene); the mouse's recentring near the window's edges is
+  not built (not settled; the note says it may be left out).
 - **Stand-ins of 4a:** the caption panel's look; another character's
   turn to its listener is only logged (Q103 d; monsters don't move
   yet). Two details of `eval` (`anim-scripts.md` rule 18) are not
@@ -306,9 +304,6 @@ the interface and the inventory done; conversations and menus next).
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
-- **M3, what is left (2026-10-19):** B builds A's 2026-10-19 answers
-  (Q27, Q53, Q100, Q102 b; see "Where we are"), then the user checks the
-  camera against the original. No study questions are left for M3.
 - **Next step, suggested:** for A: conversations (`KQConner::conversation`),
   needed for the wizard and the other Daventry characters (the panels'
   side of conversations is built, unit-tested only); Q108–Q112 when
@@ -323,10 +318,8 @@ the interface and the inventory done; conversations and menus next).
 - Clicking: only doors, chests, items, scripted objects and buildings
   react. `Special` calls (conversation areas) are not made yet.
   `checkInventory` by id number (Q62 b) not built.
-- Camera, still missing: the view's heading rule (`camera.md` "Turning
-  the view toward Connor", traced 2026-10-19; there is no position swing
-  behind him, the leash does that), first person (F2), shake; the roll of
-  `move KQCamera` and of flights is not drawn (logged).
+- Camera, still missing: first person (F2), shake; the roll of `move
+  KQCamera` and of flights is not drawn (logged).
 - Cutscenes: a request from a cue reaches Connor one update after the
   cue (our order).
 - Animated objects: scenery animations' cues (sounds) don't fire.
@@ -358,8 +351,6 @@ the interface and the inventory done; conversations and menus next).
   question 9, kept for a later session) and the Direct3D renderer (6,
   not studied; Glide only). The rest was answered 2026-10-17.
 
-- Q97–Q99: built 2026-10-18 (3n). The watermill walk difference:
-  closed 2026-10-19 (only from the test start inside the trap).
 - `talking.md` open questions 1–3 and 5 (conversations, shapes above
   7, folders, a line with no voice) are still open; 4 (the caption
   panel) answered in `interface.md`.
@@ -379,9 +370,10 @@ the interface and the inventory done; conversations and menus next).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
   1–4 (menu pause, level-up flame, rocks picture, held item on world
   change, applied quest items).
-- For B (answered 2026-10-19 by A, not built): **Q27** (a, b, c),
-  **Q53** a, **Q100** (a, b, c), **Q102** b. Q101, Q53 b–c, Q102 a, c
-  confirm what is built; Q48 closed (keep the order).
+- For A (asked 2026-10-19 by B, M3 3o; small, not blocking): **Q113**
+  a–c (the view heading's state around cutscene cameras: rule 1 from
+  idle only, the exact aim before unlocking, the mill wheel's turn past
+  Connor); d and e were settled by the user's checks.
 - For B (answered 2026-10-17, not built): Q81 (c) (stand-in already
   right; only the forward-wrap transition detail is new).
 - `sound.md` open questions 5–6 (music after a video; whether a world
@@ -401,7 +393,8 @@ the interface and the inventory done; conversations and menus next).
 - Q42: entry 0 in textures' own colour tables (stand-in black; no visible
   difference).
 - Q14b: the teleport pad's see-through look.
-- All others are answered or closed (Q105 answered and built
+- All others are answered or closed (Q27, Q53, Q100, Q102 built
+  2026-10-19 (3o), Q101 and Q48 closed; Q105 answered and built
   2026-10-18 (4c-5); Q103–Q104 answered, built and
   checked by the user 2026-10-18; Q94–Q96 answered and built
   2026-10-18; Q84–Q93 answered 2026-10-17 and built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked

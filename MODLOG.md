@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 is done (docs only)
+
+**Changed:** `docs/DESIGN.md`: M3 marked done, its step plans (3a to 3o) moved unchanged to the new `docs/milestones/M3.md`, a short list left in their place. `README.md`: M3 "✅ Done", the M3 line without "(mostly)" (plus: the camera follows Connor as in the original), "What's left of M3" taken out of "Next". `docs/FEATURES.md`: the camera (view heading, right button, chest height), what's missing. `STATUS.md`: "Where we are", goal, what works, stand-ins, open questions, test counts (461). `QUESTIONS.md`: Q27, Q53, Q100, Q102 marked built; Q113 d and e settled by the user's checks, a–c left for A (not blocking).
+**Why:** The user's check of the camera against the original after 3o-7: (a) Connor drifts to one side before the view catches up and locks, (b) the right button held keeps the camera's place relative to him, (c) the view points at about his chest; and the end of the watermill scene (`wtrmwalk.cs`): Connor a little left of centre, no snap, as ours. Then `docs/SESSIONS.md` "At the end of the session" (B).
+**Tested how:** Nothing to run (documents only).
+**Result:** —
+**Still broken / not tested:** Q113 a–c (the view heading's state around cutscene cameras) wait for A; low priority.
+**Next:** A: conversations (`KQConner::conversation`), Q108–Q113 when convenient. B: the main menu with the game paused.
+
 ## 2026-10-19 M3 step 3o-7: the right button (the user's first check)
 
 **Changed:** `kq8-core/src/camera.rs`: heading rule 2's "dragging" is now the right button held, moving or not (was: the mouse moved this update); the angle on screen it keeps is measured from where the camera was before that update's swing (was: after). Viewer `game_camera.rs`: pressing and letting go of the button each run a camera update. Unit test rewritten (a fast swing). `docs/DESIGN.md` (3o-7), provenance, `QUESTIONS.md` (Q113 e, for A to confirm).
