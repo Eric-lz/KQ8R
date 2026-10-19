@@ -223,6 +223,14 @@ game files. The viewer runs it at 15 updates per second.
 **You will see:** doors opening, traps firing, chests, animated objects,
 the first puzzles working.
 
+**Scope: Daventry only** (the user, 2026-10-19). Objects and puzzles
+that first appear in later worlds are **not** part of M3, even when the
+data or a note already covers them: they come with M6 (the whole game),
+or M5 when they hurt Connor. Known ones: Gnome's rolling rocks hitting
+Connor (`connor-collision.md`, Q55) and Gnome's pushable `boulder`
+(`KQBoulder`). Things built for other worlds along the way (the rolling
+rocks' movement and moving boxes, the boulder standing still) stay.
+
 - A: the script language (`.cs` commands like `set`, `if test`,
   `sendEvent`), the event system, and each object kind used in Daventry
   (door, trap, chest, emitter, animation lists...).
@@ -2012,6 +2020,12 @@ stats.
 
 Save/load, moving between worlds, all 12 worlds, cutscene videos, music,
 options. A and B as needed per topic.
+
+Already known for later worlds (kept out of M3): Gnome's rolling rocks
+knocking Connor back and hurting him (`connor-collision.md`, Q55;
+damage needs M5), Gnome's pushable `boulder` (`KQBoulder`, not
+studied), the other pushable classes (`pushing.md` open question 1),
+damaging water (poison, lava, swamp).
 
 ### M7 — Match the original, then improve
 

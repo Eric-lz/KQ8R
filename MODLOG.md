@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 is Daventry only (docs only)
+
+**Changed:** `docs/DESIGN.md`: M3 now says its scope is Daventry only; things of later worlds (Gnome's rolling rocks hurting Connor, Gnome's pushable boulder) are listed under M6 instead, with damaging water and the other pushable classes. `STATUS.md`: those items taken out of "Later for A" and "What doesn't work yet" and pointed to M6. `docs/FEATURES.md`: the rolling rock line says it is Gnome, not M3. (The user had already taken them out of the README's "Next".)
+**Why:** The user: the rolling rocks and the boulder were noted while testing a world past the middle of the game; they are irrelevant to Daventry, and sessions kept treating them as part of M3, so M3 could never be finished.
+**Tested how:** Nothing to run (documents only). Searched all docs for "rolling rock", "boulder", `KQBoulder`, Q55: the MODLOG history and the behaviour notes describe how those objects work and stay as they are.
+**Result:** —
+**Still broken / not tested:** —
+**Next:** —
+
+## 2026-10-18 `cargo play --world` with no name lists the worlds
+
+**Changed:** Viewer `main.rs`: `--world` with nothing after it, or followed by another option, prints the 12 worlds (from `kq8_data::game_dir::WORLDS`, Daventry marked as the default) and exits without opening the window; the `--help` text says so. `README.md` ("Try it") and `docs/FEATURES.md` mention it.
+**Why:** The user asked for it.
+**Tested how:** `cargo play --world` and `cargo play --world --frames 10` (the list, exit code 0); `cargo play --world swamp --frames 60 --sound off` still opens the Swamp (`viewer.log`: "world: Swamp"); clippy clean.
+**Result:** As above.
+**Still broken / not tested:** A misspelt world name still fails later with the loader's own error (not changed).
+**Next:** —
+
 ## 2026-10-18 `cargo play --help`
 
 **Changed:** Viewer `main.rs`: `--help` / `-h` prints every launch option, grouped as in `docs/FEATURES.md` ("Showing things", "Test options"), and exits without opening the window; a wrong option now prints its error and points to `--help` (instead of the two long usage lines, which had fallen behind: no `--aim`, `--special`). `README.md` ("Try it"): mentions `--help`; the link to the options in `docs/FEATURES.md` fixed (its anchor was misspelled). `docs/FEATURES.md`: mentions `--help`.

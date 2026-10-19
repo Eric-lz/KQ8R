@@ -1,7 +1,8 @@
 //! `kq8-viewer`: shows a world's ground (M1 step 2) or one KQ8 model
 //! (M1 step 1) in a window.
 //!
-//! Usage (`--help` prints the full list of options):
+//! Usage (`--help` prints the full list of options; `--world` with no
+//! name lists the worlds):
 //!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
 //!              [--at X,Y,H] [--light x1|x2|off] [--renderer auto|vulkan|dx12]
 //!   kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>]
@@ -309,23 +310,26 @@ struct Loaded(Option<Model>);
 /// `--help` / `-h`: the launch options, grouped as in `docs/FEATURES.md`
 /// ("Launch options").
 const HELP: &str = "\
-kq8-viewer: shows a world of King's Quest: Mask of Eternity (or one model).
+kq8-viewer: launches the game window.
 
 Usage:
   cargo play [OPTIONS]                  (= cargo run --release -p kq8-viewer -- [OPTIONS])
-  cargo play --model <file> [OPTIONS]   one model on its own
+  cargo play --world <world> [OPTIONS]  loads a specific world. 
 
 Showing things:
-  --world <name>             world to load (default Daventry)
-  --model <file>             show one model, e.g. --model smlchest.KQS
-  --palette <file>           another palette for --model
-  --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
-  --haze on|off              distance fog at the start (default on; F8)
-  --dynamic on|off           dynamic lights, instead of what Options.cs says
-  --corners on|off           bottom bar's corner panels at the window's edges (default off; F6)
-  --sound on|off             play sound through the sound card (default on)
+  --world <name>             world to load (default Daventry; no name: list the worlds)
+  --at X,Y,H                 start Connor at X, Y facing heading H (radians)
   --renderer auto|vulkan|dx12  graphics API (default auto)
   --game <folder>            where the game is (default MASK; or KQ8_GAME_DIR)
+  --sound on|off             play sound through the sound card (default on)
+  --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
+  --dynamic on|off           dynamic lights, instead of what Options.cs says
+  --haze on|off              distance fog at the start (default on; F8)
+  --corners on|off           bottom bar's corner panels at the window's edges (default off; F6)
+
+Used mostly for debugging:
+  --model <file>             show one model, e.g. --model smlchest.KQS
+  --palette <file>           another palette for --model
   --frames <number>          close the window by itself after that many frames
 
 Test options (drive Connor from the command line; ground view only).
@@ -351,8 +355,18 @@ docs/FEATURES.md (\"Launch options\").
 ";
 
 fn main() -> ExitCode {
-    if std::env::args().skip(1).any(|a| a == "--help" || a == "-h") {
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw.iter().any(|a| a == "--help" || a == "-h") {
         print!("{HELP}");
+        return ExitCode::SUCCESS;
+    }
+    // `--world` with no name after it (the end, or another option next):
+    // the list of worlds.
+    if raw.iter().enumerate().any(|(i, a)| a == "--world" && raw.get(i + 1).is_none_or(|next| next.starts_with('-'))) {
+        println!("Worlds (not case-sensitive), e.g. cargo play --world swamp:");
+        for w in kq8_data::game_dir::WORLDS {
+            println!("  {w}{}", if w == "Daventry" { "  (default)" } else { "" });
+        }
         return ExitCode::SUCCESS;
     }
     let args = match parse_args() {

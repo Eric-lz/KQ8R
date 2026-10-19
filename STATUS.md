@@ -69,8 +69,7 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   walks, the windmill tumble, and when the follow camera updates
   (Q94–Q99). Details in `MODLOG.md`.
 - **Later for A:** conversations (`KQConner::conversation`); Dead City's flames (11,000 vs 12,100, open
-  question 9); Q53 (camera follow-ups); pushable objects (`KQBoulder`);
-  Connor against monsters; Q27.
+  question 9); Q53 (camera follow-ups); Connor against monsters; Q27.
 
 ## Goal
 
@@ -315,12 +314,9 @@ the interface and the inventory done; conversations and menus next).
   cue (our order).
 - Animated objects: scenery animations' cues (sounds) don't fire.
   `loadKQ` with a name or position while playing is not done; a copy
-  that comes in is not solid or clickable. A rolling rock that runs into Connor does nothing to him (in
-  the original he stumbles and takes damage; rule in `connor-collision.md`,
-  Q55, not built yet).
-- Water: no damage yet (poison, lava, swamp).
-- Collision, not done: Connor against monsters (none drawn), Gnome's
-  `KQBoulder`, ropes; objects with no box in the game's table stay
+  that comes in is not solid or clickable.
+- Collision, not done: Connor against monsters (none drawn), ropes;
+  objects with no box in the game's table stay
   walk-through. Hidden, far and off objects are not solid (rule 41; not
   checked in the original). A deleted or far building's walls stay
   solid.
@@ -334,6 +330,9 @@ the interface and the inventory done; conversations and menus next).
   with fighting).
 - Nothing yet of: conversations, menus, fighting, story, saving, travel
   between worlds.
+- **Not M3 (M3 is Daventry only, the user 2026-10-19):** things of later
+  worlds wait for M6 (listed there in `docs/DESIGN.md`): Gnome's rolling
+  rocks hurting Connor, Gnome's pushable boulder, damaging water.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 

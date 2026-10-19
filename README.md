@@ -35,17 +35,15 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 
 ### Done
 
-- **M0 – Reading the game's files.** The game's archives, pictures and
+- **M0 – Reading the game's files.** Terrain, buildings, pictures and
   colour palettes are read straight from your own copy of the game.
 - **M1 – Seeing Daventry.** The ground, buildings, trees and objects are
-  drawn where the game puts them, with the original's lighting
-  and distance fog. All 12 worlds load.
+  drawn with the original's lighting and distance fog. All 12 worlds load.
 - **M2 – Walking around.** Connor walks, runs, steps back, turns, jumps
   and wades through water. He falls, slides off steep slopes and bumps
-  into walls the way he does in the original. The camera follows him and
-  keeps out of walls.
+  into walls the way he does in the original.
 - **M3 – Daventry comes alive (mostly).** Doors, chests, items to pick
-  up, traps, animated objects (windmill, mill wheel, fountain), falling
+  up, traps, animated objects (windmill, signs, fountain), falling
   leaves, flowing water, sound effects and music. The game's own puzzle
   scripts run, scripted cutscenes play, and the first puzzle (pushing
   the bricks to block the waterfall) works.
@@ -58,8 +56,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 
 - **Conversations** with the wizard and the other people in Daventry.
 - **The main menu:** pausing the game with Escape key.
-- **What's left of M3:** a few cutscene and camera details, damage from
-  rolling rocks, and pushable boulders.
+- **What's left of M3:** a few cutscene and camera details.
 
 ### Later
 
@@ -104,17 +101,18 @@ To spawn Connor in a different world, e.g. in the Swamp, run:
 cargo play --world swamp
 ```
 
-Other worlds (not case-sensitive): Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
-temple1–temple4, CastleD.
-
-To spawn Connor at a specific coordinate, use `--at x,y,heading`.
-
-To change graphics API, use `--renderer vulkan|dx12|auto`.
-Default is `auto`.
+Other worlds:
+`Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
+temple1–temple4, CastleD`
 
 There are other launch options, mostly for debugging.
-`cargo play --help` lists them all; each is described in
-[docs/FEATURES.md](docs/FEATURES.md#launch-options-viewer).
+You can find them in
+[docs/FEATURES.md](docs/FEATURES.md#launch-options-viewer),
+or by running:
+
+```sh
+cargo play --help
+```
 
 ### Key bindings
 

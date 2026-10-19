@@ -449,7 +449,8 @@ repeated and checked in the logs. They do not change the game's rules.
 ### Showing things
 
 - `--world <name>`: which world to load (default `Daventry`). The names
-  are listed in [README.md](../README.md).
+  are listed in [README.md](../README.md); `--world` with no name prints
+  them.
 - `--model <file>`: show one model on its own, e.g. `--model smlchest.KQS`
   (default: no model, so the ground opens). Add `--palette <file>` to
   colour it with another palette; that option works only with `--model`.
@@ -526,9 +527,9 @@ message that shows the usage.
   react; nothing else does. Picked-up items are only counted in the log.
 - **Animated objects:** scripts switch them (M3 step 3i), but most
   Daventry scripts that do it start from things not built yet (fights,
-  talking, `loadKQ` with a name or place). A rolling rock that runs
-  into Connor does nothing to him yet (in the original he stumbles and
-  takes damage).
+  talking, `loadKQ` with a name or place). In Gnome (a later world, not
+  part of M3), a rolling rock that runs into Connor does nothing to him
+  yet (in the original he stumbles and takes damage).
 - **Jumping into things:** a standing jump into a tree or wall makes
   Connor stumble (the crash and its sound), as the user saw in the
   original; when he starts falling the stumble is cut short and the
