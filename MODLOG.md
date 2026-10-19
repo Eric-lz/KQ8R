@@ -39,6 +39,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Bars and caption strip missing in DeadCity, CastleD, IceWorld, SnowExit, Temple1–4.
 **Next:** A answers Q118; B then reads the palette name from `world.cs` for the bars and captions.
 
+## 2026-10-19 Q124: transitions and the `endLoop` cue on characters (question for A)
+
+**Changed:** `docs/behaviour/QUESTIONS.md`: Q124. Viewer `load.rs`: the log line about the Girl's transition no longer says "from step 4d-3" (it was not built there) but "waits for Q124".
+**Why:** `characters.md` rule 20 says transitions and the `endLoop` cue work for characters as for Connor, but not how a transition movement's end meets `EndLoop` and Wait's return to `Stop` (rule 18), nor whether the movement stops at the `endLoop` cue; `anim-scripts.md` rule 9 calls the cue M5. Daventry's only uses (the Girl's `cower` → `stop` via `cowerstop` at 0.882353; the Knight's `birthx`) are not reachable in a test run.
+**Tested how:** Data checked (`girl.anm` `transition0=0.882353 stop 0.000000 cowerstop`); build only.
+**Result:** —
+**Still broken / not tested:** Character transitions and the `endLoop` cue not built.
+**Next:** A: Q116, Q117, Q119–Q124.
+
 ## 2026-10-19 Q114 built: the duplicate check on the last line; Connor's mouth ignores codes above 7
 
 **Changed:** `kq8-core/src/talk.rs`: a `speak` is a duplicate when its range's **last** line (not its first) is waiting or playing; the log calls codes 8–16 gestures. Viewer `talk_view.rs`: Connor's lip-sync codes above 7 leave his mouth as it is (was: `lip0`). `QUESTIONS.md` Q114 marked built; provenance.

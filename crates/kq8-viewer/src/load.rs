@@ -3057,7 +3057,7 @@ impl Placer<'_> {
             }
             if !l.transitions.is_empty() {
                 // anim-scripts.md rule 4.2: no placed object has any (data).
-                let who = if character.is_some() { "characters: from step 4d-3" } else { "objects (anim-scripts.md rule 4.2)" };
+                let who = if character.is_some() { "characters yet (characters.md rule 20; waits for Q124)" } else { "objects (anim-scripts.md rule 4.2)" };
                 self.log.summary(format!("animated {label}: movement {name} has transitions; not played for {who}"));
             }
             movements.push((name, l, index));

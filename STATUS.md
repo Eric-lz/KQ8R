@@ -328,9 +328,12 @@ done; conversations and menus next). M0–M3 are done.
   `sprdump`); `EndLoop` through the queue lets `Stop` show for one
   update before a script's answer (Q119, the Uglybeast's `pivot`); the
   Uglybeast's mouth movements bring `Stop` back in Wait (Q120); a
-  character's facing taken as Connor's (−Y). Not built yet: gravity and
-  steps (4d-6), shadows (4d-7), the Talk state, `makeTranslucent`,
-  `changeAnmFile`, collision against characters; a clickable
+  character's facing taken as Connor's (−Y). Built since: `makeTranslucent`
+  (4d-5b), click boxes following characters (4d-5c), who casts a shadow
+  (4d-7a, logged), Q114's corrections. Waiting for A: gravity (Q122),
+  drawing shadows (Q123), transitions and the `endLoop` cue (Q124). Not
+  built: the Talk state (conversations), `changeAnmFile`, collision
+  against characters; a clickable
   character's click box now follows it (4d-5c). Not tested: the
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), `sprdump`'s scene, a real turn in the viewer.
@@ -412,10 +415,14 @@ done; conversations and menus next). M0–M3 are done.
   not blocking the drawing of characters.
 - For A (asked 2026-10-19 by B, M4 4d): **Q116** (`birthDelay` 1 for
   two goblins vs "0 for all"), **Q117** (where "the speaker goes to
-  Wait" comes from, and its details), **Q121** (a state set before the
-  first update: `sprdump`), **Q119** (`EndLoop` and Wait's `Stop`: which
+  Wait" comes from, and its details), **Q119** (`EndLoop` and Wait's `Stop`: which
   comes first; the Uglybeast's one-update `Stop`), **Q120** (the
-  geometry talker's mouth movements and rule 18).
+  geometry talker's mouth movements and rule 18), **Q121** (a state set
+  before the first update: `sprdump`), **Q122** (gravity: a character's collision
+  type and mask, flying, falls), **Q123** (drawing shadows), **Q124**
+  (transitions and the `endLoop` cue on characters). Q119 and Q120 now
+  carry the user's check of our build (the snap and the flicker are
+  visible).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.
