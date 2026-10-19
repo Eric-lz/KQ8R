@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): characters (drawing and animating, not fighting)
+
+**Changed:** New `docs/behaviour/characters.md` (36 rules): which classes are characters, the monster list and types, the drawing keys, the ground and the box, what plays at load, Wait's return to `Stop`, the Birth state, script commands on characters, turning, the mouth, gestures, when a character notices Connor, visibility and shadows. `docs/behaviour/conversation.md` rule 18 corrected (gesture condition) and open question 2 answered. `docs/behaviour/QUESTIONS.md`: Q115 (the correction, for B). `STATUS.md`. Scratch notes with addresses in `re/notes.md` (not committed).
+**Why:** Other characters are still drawn as orange cubes; the next build step is to draw them so that conversations can be built on real, animated characters (Daventry first).
+**Tested how:** Traced in `Mask.exe` with Ghidra; checked against the data with small scripts in the scratch folder (Daventry's 24 character files and 52 monster-list lines, animation lists, models' textures, `BOUNDS.KQ`, lip-sync files by speaker).
+**Result:** Characters wait for Connor to be in range before their first movement; Wait asks for `Stop` at a random frame and speed 0.9–1.1 and comes back to it after any one-shot; `noTurn` blocks every turn (the Wizard, the Uglybeast); zombies are not drawn until born; the Uglybeast's mouth is 8 whole-model movements; gestures need only a movement that can be cut short (so `speak` lines gesture: the Knight's 6 files); 91 of 93 Daventry gesture lip files end with code 16 (`stop`); with `Options.cs`'s `setShadowMask 15`, characters cast shadows by default (mask 2) unless `shadowMask=0` or see-through.
+**Still broken / not tested:** Nothing checked in the running original (the note lists five things to look at). Not traced: how shadows are drawn, `shadowvisible`, `flags` bit 0x20, wandering / idling / alarm (M5), `changeBmp`, `changeAnmFile`.
+**Next:** B: draw the characters from `characters.md`, check Q115; then conversations.
+
 ## 2026-10-19 Study (A): conversations, the user's check
 
 **Changed:** `docs/behaviour/conversation.md` rule 14 and open question 1: holding the right mouse button during a conversation places the camera once at `cam0` aimed at the partner and stops the camera cuts for the rest of that conversation. Scratch note in `re/notes.md`.

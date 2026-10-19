@@ -12,6 +12,18 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (A): characters studied** (`docs/behaviour/characters.md`):
+  how `KQMonster` / `KQGeometryTalker` are made (own `.kq` or the
+  world's `monsters.kq` line + `Monstats.mtl` type), drawn (animation
+  list, no scale, feet at the origin, gravity and `keepOnGround`, box by
+  type or name), what plays at load (first movement, then Wait asks for
+  `Stop` at a random frame and speed), returning to `Stop` after any
+  one-shot in Wait, the Birth state (zombies not drawn until they rise),
+  turning (3.5 rad/s, `noTurn` blocks it, no turning movement), the
+  mouth (`lips=` textures; the Uglybeast's whole-model mouth movements),
+  gestures (corrected: no talk-state condition; Q115), when a character
+  notices Connor (before M5: draw them all standing in `Stop`), and
+  shadows (who casts one; how they are drawn is not traced). Ready for B.
 - **New 2026-10-19 (A): conversations studied** (`docs/behaviour/conversation.md`):
   `KQConner::conversation`, the `<name>Info` boxes (start, stay, special
   areas) and cameras, Connor's walk to his talking spot, the talk states,
@@ -311,9 +323,10 @@ done; conversations and menus next). M0–M3 are done.
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
-- **Next step, suggested:** for B: conversations from `conversation.md`
-  (the Wizard and the Uglybeast; the panels' side is built, unit-tested
-  only), and Q114 (a correction to the speech queue); or the main menu
+- **Next step, suggested:** for B: draw the characters from
+  `characters.md` (Daventry first), then conversations from
+  `conversation.md` (the Wizard and the Uglybeast; the panels' side is
+  built, unit-tested only), and Q114–Q115 (corrections); or the main menu
   (Escape, the mask button) with the game paused. For A: Q108–Q113 when
   convenient (small).
 - Sound, not done: the item land sound (nothing is thrown),
@@ -361,9 +374,11 @@ done; conversations and menus next). M0–M3 are done.
 - `talking.md` open questions 3 and 5 (folders, a line with no voice)
   are still open; 1 and 2 (conversations, shapes above 7) answered in
   `conversation.md`, 4 (the caption panel) in `interface.md`.
-- `conversation.md` open questions 1–3 (a Connor setting that stops
-  the camera cuts, the gestures' condition, states that delay the talk
-  state): small, not blocking.
+- `conversation.md` open question 3 (states that delay the talk
+  state): small, not blocking (1 and 2 answered).
+- `characters.md` open questions 1–4 (`flags` bit 0x20, how shadows are
+  drawn and `shadowvisible`, the AI (M5), `changeBmp` / `changeAnmFile`):
+  not blocking the drawing of characters.
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

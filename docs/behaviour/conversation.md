@@ -263,9 +263,13 @@ Words used here:
     them; codes above 16 do nothing. For conversations and for `speak`
     lines alike:
     - a character other than Connor plays it only if it stands still
-      (no walking movement), is in a talk state (as far as traced: the
-      flag it needs is set when a conversation starts) and has that
-      movement in its animation list;
+      (no walking movement), its **current movement can be cut short or
+      has ended**, and it has that movement in its animation list; a
+      `KQGeometryTalker` never gestures. (Corrected 2026-10-19 in
+      `characters.md` rule 28: there is no talk-state condition; the
+      conversation start only marks the partner's current movement as
+      "can be cut short", and a character standing in `Stop` qualifies
+      anyway, so `speak` lines gesture too.)
     - Connor plays it only if he stands still, has no weapon drawn and
       is not in first person.
     Data: 1,110 lip-sync files of the game have codes 8–16 (4,080
@@ -449,9 +453,9 @@ Words used here:
 1. ~~Which Connor setting makes the talk state place the camera at
    `cam0` and then ignore camera numbers.~~ **Answered 2026-10-19**:
    the right mouse button held (rule 14), confirmed by the user.
-2. Whether the gestures' "talk state" condition for characters other
-   than Connor is set by anything else than a conversation start
-   (rule 18), i.e. whether `speak` lines alone ever make a character
-   gesture.
+2. ~~Whether `speak` lines alone ever make a character gesture.~~
+   **Answered 2026-10-19** in `characters.md` rule 28: yes; the condition
+   is the current movement (can be cut short or has ended), not a talk
+   state (rule 18 corrected).
 3. Connor's states from which the talk state can't be entered (the
    conversation then waits), e.g. in the middle of a jump: not traced.
