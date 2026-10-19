@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 Study (A): shadows, second user's check (jump, water)
+
+**Changed:** `docs/behaviour/characters.md` rule 37 (the 1,500 cut, water), "How to check", open question 2. No code.
+**Why:** The user checked fading and water in the original.
+**Tested how:** By eye in the original (user); compared with Connor's jump height in `connor-physics.md`.
+**Result:** No fading with distance. Connor's shadow vanishes at the top of a standing jump and comes back on the way down: the jump peaks about 1,697 above the ground, past the traced 1,500 cut. Shadows lie on the water surface; a wading Connor's shadow shows only the part above the water.
+**Still broken / not tested:** How the game leaves out parts below the water: not traced. The exact blend: not traced.
+**Next:** B: build shadows from rule 37.
+
 ## 2026-10-19 Study (A): shadows, the user's check
 
 **Changed:** `docs/behaviour/characters.md`: the user's results under "How to check" (points 6–8, 10), open question 2 narrowed. No code.

@@ -662,8 +662,17 @@ Words used here:
       sizes plus 500); its surfaces from a little above the character's
       top down to several times its size below are used, in an area at
       most **1,800** across centred on the shadow. **Not on objects or
-      other characters.** Over water: not traced whether the floor grid
-      under the water or the water surface receives it.
+      other characters.**
+    - **The 1,500 limit is a cut, not a fade** (user's check,
+      2026-10-19): at the top of Connor's standing jump (about 1,697 above
+      the ground, `connor-physics.md` "Jumping") his shadow disappears,
+      and it comes back as he comes down. Nothing fades with distance.
+    - **Over water the water surface receives it** (user's check): the
+      drawn ground (the surface grid, `water.md`), not the floor under the
+      water. When Connor wades, only the part of him above the water
+      shows in the shadow (the parts below the surface do not reach it;
+      how the game drops them was not traced: do the same, e.g. by
+      projecting only points above the receiving plane).
     - **How dark:** a strength of **0.5** is passed to the renderer for
       every character's and object's shadow (the drawing code's own
       default is 0.75; a model-less path uses 0.8). That most likely means
@@ -847,6 +856,10 @@ Words used here:
   range, rule 37) and plain objects casting the same way. (10) Can't be
   told by eye: bats are only visible once Connor is close, which is
   already in range, so the flying mover's settling stays traced only.
+  **And:** shadows don't fade with distance; Connor's shadow vanishes at
+  the top of a jump and returns on the way down (the 1,500 cut); shadows
+  lie on the water surface, and a wading Connor's shadow shows only his
+  part above the water (rule 37).
 
 ## Open questions
 
@@ -854,9 +867,10 @@ Words used here:
    the Uglybeast, the Unicorn) does: it drops the object's link to the
    terrain when it enters the world; the effect was not traced.
 2. Shadows (rule 37): the exact blend of the strength 0.5 (the user's
-   check: about half, a quarter on overlaps), whether they fade with
-   distance or haze, which side of the model the facing test keeps, and
-   over water which surface receives them: not traced.
+   check: about half, a quarter on overlaps), which side of the model the
+   facing test keeps, and how parts below a water surface are left out:
+   not traced. (No fading, and the water surface receiving them: settled
+   by the user's checks.)
 3. Wandering, idling, alarm, chasing, walking speed and the flying mover's
    movement: M5. The flying mover's settling (rule 8) is traced but not
    fully sure.

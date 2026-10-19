@@ -44,7 +44,9 @@ wall (Q112 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   buildings, each triangle on its own, strength 0.5; `shadowvisible` is
   only for the relighting tool. **User's check:** shadows fall to one
   side like the hills', about half as bright (a quarter on overlaps), and
-  land on building floors and walls, from characters and barrels alike.
+  land on building floors and walls, from characters and barrels alike. No fading; cut beyond 1,500
+  above the ground (gone at the top of a jump); on water they lie on the
+  surface (a wading Connor shows only his part above it).
 - **New 2026-10-19 (A): Q118 answered** (`interface.md` "The world
   palette"): the bars, captions and fonts use the world's
   `KQWorld::objectPalette` from `world.cs` (e.g. `newdead.ppl`,
