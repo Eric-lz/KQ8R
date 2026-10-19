@@ -131,6 +131,17 @@ impl Trap {
 
     /// `v` has moved: does it come in, stay, or leave (rules 6–11)?
     pub fn check(&mut self, v: &Visitor) -> Check {
+        self.check_with(v, true)
+    }
+
+    /// `v` was put at a new spot by a script's `move` (rule 5 "Placed by a
+    /// script", Q102): only the stay test of rule 7 for one already
+    /// inside; nothing comes in (that waits for its next ordinary move).
+    pub fn stay_check(&mut self, v: &Visitor) -> Check {
+        self.check_with(v, false)
+    }
+
+    fn check_with(&mut self, v: &Visitor, may_enter: bool) -> Check {
         let (min, max) = self.current_box();
         let counts = !self.gone && self.counts(v.collision_type);
         // Rule 6: each ball's path against the box widened by its radius.
@@ -150,7 +161,7 @@ impl Trap {
             return out;
         }
         let sticky = self.settings.trap_type & STICKY != 0 && self.settings.inner_percent.is_some();
-        if !was_inside && touching {
+        if may_enter && !was_inside && touching {
             self.inside.push(v.name.to_string());
             out.call = Some(if self.inside.len() == 1 {
                 vec!["On".into(), v.name.into()]
@@ -361,6 +372,23 @@ mod tests {
         // Inside to far outside in one move: the path still touches (stand-in).
         assert_eq!(call(&t.check(&moving(10_000.0, 12_000.0, &balls))), None);
         assert_eq!(call(&t.check(&moving(12_000.0, 12_100.0, &balls))).as_deref(), Some("Off Connor"));
+    }
+
+    #[test]
+    fn placed_by_a_script_only_the_stay_test_runs() {
+        let balls = BallStack::from_box(MIN, MAX);
+        let mut t = trap(0, None);
+        // Put inside by a script: not entered (that waits for his next move).
+        assert_eq!(call(&t.stay_check(&at("Connor", 10_000.0, &balls))), None);
+        assert!(t.inside.is_empty());
+        // Walked in, then put far away by a script: Off at once.
+        assert_eq!(call(&t.check(&at("Connor", 10_000.0, &balls))).as_deref(), Some("On Connor"));
+        assert_eq!(call(&t.stay_check(&at("Connor", 30_000.0, &balls))).as_deref(), Some("Off Connor"));
+        assert!(t.inside.is_empty());
+        // Put somewhere still inside: stays in, nothing sent.
+        t.check(&at("Connor", 10_000.0, &balls));
+        assert_eq!(call(&t.stay_check(&at("Connor", 10_100.0, &balls))), None);
+        assert_eq!(t.inside, ["Connor"]);
     }
 
     #[test]

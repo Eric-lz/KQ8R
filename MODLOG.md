@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M3 step 3o-6: a script's `move` and the trap he was in
+
+**Changed:** `kq8-core/src/trap.rs`: `Trap::stay_check`, only rule 7's stay test (nothing comes in). `active.rs`: `Active::connor_placed` runs it for every trap and calls the scripts (logged "stay test right after a script's move, rule 5"). Viewer `door_view.rs`: when a script's `move Connor` is applied, the stay test runs at the new spot at once and its calls are logged with the move. 2 unit tests. Provenance, `docs/DESIGN.md`.
+**Why:** A's answer to Q102 b (`traps.md` rule 5 "Placed by a script"): the trap a script's `move` takes Connor out of gets `Off` right after the script, not at his next move.
+**Tested how:** `cargo test --workspace` (461 pass, 2 new), clippy clean. Viewer: Connor walking south into the mill wheel's second trap, `cargo play --world Daventry --at 186300,234800,0 --hold 1,0,0 --frames 2500 --sound off` (`traps-3o6-wheel2.log`, `camera-3o6-wheel2.log`).
+**Result:** `wheeltp2` On at update 22; its own line 8 moves him to (186300, 232800), still inside: "no trap left". Cue 2 (line 20) moves him under the wheel to (185800, 211300, 5610): "trap wheeltp2: Off Connor (stay test right after a script's move, rule 5)" and "script wheeltp2.cs wheeltp2 Off Connor" in the same tick (before: 60 updates later, after `handsOff 0`). `wheeltp1` is not entered (the jump's path is not swept, as before). The log labels the move's application one update number higher than the script line; it is the same tick (the counter goes up at the end of the scripts' update; already so before this step).
+**Still broken / not tested:** Not seen by eye; nothing visible changes in Daventry (`wheeltp2.cs` does nothing on `Off`). What an `Off` script asks for is applied in the next update (our order).
+**Next:** The user's check of the camera against the original; then close M3.
+
 ## 2026-10-19 M3 step 3o-5: the deep lift on the drawn surface; one `follow` finding both
 
 **Changed:** `kq8-core/src/camera.rs`: the height rule's deep lift tests the line from the update's start to the new spot against the drawn surface (the exact test of 3o-4, through the new `ViewBlockers::surface_hit`) and puts the camera on the hit point; if the line meets nothing the camera stays at its deep spot (the old stepped floor-grid test and its "ground + 1,400" stand-in are gone); `follow_switch`: the "turn back" switch after a `follow`, the 0.4 rad test first, then the distance test. `camera_flight.rs`: flights and cuts pass the surface test to the same rule. Viewer `game_camera.rs` (`surface_line`, `follow` uses `follow_switch`), `door_view.rs` (the cut). 1 unit test new, 1 extended. Provenance, `docs/DESIGN.md`.

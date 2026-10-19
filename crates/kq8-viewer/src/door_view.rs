@@ -826,11 +826,18 @@ pub fn trap_step(
                     c.connor_moved_by_script(&at);
                 }
                 // A `move` is a jump to the new spot, not a walk along the
-                // line to it: the traps' swept test starts again from
-                // there (STAND-IN, Q102: whether being placed by `move`
-                // counts as a touch is not traced, traps.md rule 5).
-                sim.connor_checked_at = Some(connor.mover.position);
-                format!("{at}: applied: {line}; the traps' test starts again from here (the jump's path is not swept)")
+                // line to it (traps.md rule 5 "Placed by a script", Q102):
+                // the trap he is in runs its stay test now (b); no trap is
+                // entered now, his next ordinary move's sweep starts from
+                // here (a).
+                let p = connor.mover.position;
+                sim.connor_checked_at = Some(p);
+                let (min, max) = kq8_core::connor_mover::CONNOR_BOX;
+                let v = Visitor { name: &connor.placement.name, collision_type: kq8_core::collide::CONNOR_TYPE, from: p, position: p, min, max, balls: &connor.mover.balls };
+                let calls = sim.active.connor_placed(&v);
+                sim.flush_traps(&shared);
+                let left = if calls.is_empty() { "no trap left".to_string() } else { format!("stay test: {}", calls.join("; ")) };
+                format!("{at}: applied: {line}; {left}; the traps' sweep starts again from here (the jump's path is not swept)")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("KQCamera") => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),

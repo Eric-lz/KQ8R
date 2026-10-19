@@ -1905,3 +1905,13 @@ This replaces two stand-ins of 3n: the deep lift's line against the floor grid (
 | The line meets nothing: the camera stays at its deep spot, "lifted" still remembered | Same | Same unit test |
 | The same for a flight's last update and a cut (they use the same height rule) | Same, "Camera flights and cuts" rules 3–4 | Flight unit tests unchanged; `camera-3o5-watermill.log` flight 31/31 as before |
 | One `follow` finding the view over 0.4 rad off **and** the camera beyond the maximum: the switch ends **off** (the 0.4 test first, then the distance test); neither: left as it was | "When the camera updates at all" item 3 (Q100 c) | Unit test `one_follow_finding_both_leaves_the_turn_back_switch_off` |
+
+### 3o-6, a script's `move` and the trap he was in (Q102 b) — `crates/kq8-core/src/{trap,active}.rs`, `crates/kq8-viewer/src/door_view.rs`
+
+This replaces the stand-in "the old trap gets `Off` at his next move".
+
+| What | Source | Check |
+| --- | --- | --- |
+| When a script's `move Connor` is applied, every trap he is inside runs its stay test (rule 7) at the new spot: `Off` (or `Cue 302`) then, in the same update | `traps.md` rule 5 "Placed by a script" (b) (Q102 b) | Unit tests `placed_by_a_script_only_the_stay_test_runs`, `a_script_s_move_out_of_a_trap_gives_off_at_once`; `traps-3o6-wheel2.log`: "wheeltp2: Off Connor (stay test right after a script's move, rule 5)" in the tick of cue 2 |
+| No trap is entered by the move; his next ordinary move's sweep starts from the new spot | Rule 5 (a) (as built before) | Same unit tests |
+| In our build the stay test runs when the viewer applies the move, after all the scripts of that update (the note: right after the script that did it) | **Our order** (requests are applied after the update's scripts; what the `Off` script asks waits for the next update) | — (no visible difference in Daventry: `wheeltp2.cs` does nothing on `Off`) |

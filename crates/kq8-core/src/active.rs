@@ -2294,10 +2294,22 @@ impl Active {
     /// it and runs its script for `On`, `Off` or `Cue` (traps.md rules
     /// 6-9). Returns the calls made, as `<trap> <args>`.
     pub fn connor_moved(&mut self, v: &Visitor) -> Vec<String> {
+        self.traps_check(v, false)
+    }
+
+    /// After a script's `move Connor` (traps.md rule 5 "Placed by a
+    /// script", Q102 b): every trap he is inside runs its stay test at the
+    /// new spot, so the one he was taken out of gets `Off` (or `Cue 302`)
+    /// now; no trap is entered (that waits for his next ordinary move).
+    pub fn connor_placed(&mut self, v: &Visitor) -> Vec<String> {
+        self.traps_check(v, true)
+    }
+
+    fn traps_check(&mut self, v: &Visitor, placed: bool) -> Vec<String> {
         let mut calls = Vec::new();
         for i in 0..self.world.traps.len() {
             let shrunk_before = self.world.traps[i].shrunk;
-            let c = self.world.traps[i].check(v);
+            let c = if placed { self.world.traps[i].stay_check(v) } else { self.world.traps[i].check(v) };
             let Some(args) = c.call else { continue };
             let t = &self.world.traps[i];
             let (name, gone) = (t.settings.name.clone(), t.gone);
@@ -2307,8 +2319,9 @@ impl Active {
                 _ => "",
             };
             let line = format!(
-                "trap {name}: {} at ({:.0}, {:.0}, {:.0}): touching {}, box centre inside {}, {} box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}){change}; inside now: [{}]",
+                "trap {name}: {}{} at ({:.0}, {:.0}, {:.0}): touching {}, box centre inside {}, {} box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}){change}; inside now: [{}]",
                 args.join(" "),
+                if placed { " (stay test right after a script's move, rule 5)" } else { "" },
                 v.position[0],
                 v.position[1],
                 v.position[2],
@@ -3584,6 +3597,21 @@ mod tests {
         let log = a.take_trap_log().join("\n");
         assert!(log.contains("script trap.cs clifTrap Init") && log.contains("trap clifTrap: On Connor at (-600, 0, 0)"), "{log}");
         assert!(a.take_log().is_empty(), "trap lines stay out of doors.log");
+    }
+
+    #[test]
+    fn a_script_s_move_out_of_a_trap_gives_off_at_once() {
+        let mut a = with_trap("if test $2 == On\n set T::Who $3\nelse if test $2 == Off\n set T::Out $3\nendif\nendif\n");
+        assert_eq!(connor_at(&mut a, 0.0), ["clifTrap On Connor"]);
+        let balls = crate::collide::BallStack::from_box([-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]);
+        let far = [20_000.0, 0.0, 0.0];
+        let v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: far, position: far, min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
+        assert_eq!(a.connor_placed(&v), ["clifTrap Off Connor"]);
+        assert_eq!(a.scripts.vars.get("T::Out"), Some("Connor"));
+        // Put back inside by a script: not entered until he moves.
+        let v = Visitor { from: [0.0; 3], position: [0.0; 3], ..v };
+        assert!(a.connor_placed(&v).is_empty());
+        assert!(a.take_trap_log().join("\n").contains("Off Connor (stay test right after a script's move, rule 5)"));
     }
 
     #[test]

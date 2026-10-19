@@ -1768,7 +1768,7 @@ catchers, ground animators).
       `follow` that finds the view over 0.4 rad off and the camera
       beyond the maximum leaves the "turn back" switch **off** (the 0.4
       test first, then the distance test; ours was on).
-    - **3o-6, traps after a script's `move`** (`traps.md` rule 5
+    - **3o-6, traps after a script's `move`** (**done** 2026-10-19) (`traps.md` rule 5
       "Placed by a script", Q102 b). When a script's `move Connor` is
       applied (right after the scripts of the update), every trap he
       is inside runs its stay test (rule 7) at the new spot: `Off` (or
