@@ -2067,3 +2067,26 @@ marked otherwise.
 | Told to start while paused with lines waiting: welcome back in front, then the waiting lines, then the new ones with the duplicate check; a goodbye not played yet dropped | Rule 21 | Same test: welcome back, line 2 from its start, line 3; the range not added twice |
 | Walking away on the last line: no goodbye, the line plays on with its `TalkComplete` | Rule 22 | Unit test `no_goodbye_on_the_last_line_and_clear_speak_empties_the_conversation` |
 | `clearSpeak` on the conversation queue: emptied at once, no `TalkComplete`, pause forgotten | Rule 23 | Same test |
+
+### 4e-3, the command and the two talk states — `crates/kq8-core/src/conversation.rs`, `connor.rs`, `character.rs`, `active.rs`; viewer `door_view.rs`, `load.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQConner::conversation`: 9 words or the usage text; the partner must be a `KQMonster` (or geometry talker); `<last>` 0 = the run; `<enemy>` ≠ 0 keeps the weapon | Rule 1 | Unit test `a_missing_info_object_and_no_case_are_treated_as_there` (bad commands); Wizard and Uglybeast runs |
+| At once: partner's `speak` queue emptied, conversation queue made with GB/WB, partner's movement made cuttable + `Stop` + Talk; Connor "sent the start message", handled after the update's scripts | Rule 2 | `conversation.log` updates 30/31 of the Wizard run |
+| The start message waits while his jump is unfinished (tried again each update) | `anim-scripts.md` rule 28 used for this state too; **stand-in** (open question 3 of the note) | Unit test (`Err("jumping")`) |
+| Entering: Connor's `speak` queue emptied; the bottom bar away (the panels' own handsOff rule); the case: stay area and under 125 (3D) "there", stay area "close", start area "walk" | Rules 2, 6; `interface.md` rule 16 | Unit test `the_case_comes_from_the_areas_and_the_distance`; Wizard from (193000, 198000): 834, "close"; Uglybeast: 1, "there" |
+| "Close": put on the spot as `move Connor 2` (heading kept) | Rule 9 | Placed at (192171, 198091, 6700) as the note |
+| "Walk": automatic turn toward the spot, `stopwalk`; at its end put 440 short on the line from where he stood, at the spot's height, facing it, `walkstopright`, partner told to start; at its end the automatic turn to the partner | Rule 10 | Unit test `the_walk_in_puts_him_440_short_facing_the_spot`; viewer from (195000, 200000): placed (192536, 198337), `walkstopright` ends 29 from the spot, turns to −1.725 |
+| The keys are ignored during the approach movements; no Jump (not "in the keys' control") and no push (only Wait/Move/Push accept one) in the talk state | **Stand-ins (Q125)** | — |
+| No weapons: `away` / `out` never play | Rule 7; weapons are M5 | Logged "none drawn" |
+| First person not built: nothing to switch or restore | Rules 6, 15 | Logged |
+| Stay test every update once the spot is reached; outside `box1` = walked away, Connor leaves at once | Rule 13 | Unit test `walking_out_of_the_stay_area_ends_it_and_sends_talk_exit_without_a_goodbye`; viewer: out at update 47 |
+| The end: Move if moving, else `Stop` and Wait; camera to `cam0` looking at the partner, then `follow Connor`; partner to Wait; bar back; `TalkExit` before the last line's `TalkComplete` | Rules 15, 16 | Unit test `a_conversation_enters_plays_and_ends_with_talk_exit_before_the_last_talk_complete`; Wizard: update 1694; Uglybeast: update 1094 (`TalkExit`, its cue 2 in 0.5 s, then `TalkComplete 6 11`, as the note) |
+| The camera looks at the partner's position + 1,400 | **Stand-in (Q126)** | Logged |
+| Connor's state changes one step after the core decides (this update, before his next) | **Our order** | — |
+| No info object or no case: "there" (no cameras; no stay test without an info object); walking away with no goodbye: `TalkExit` anyway | "Do not reproduce" | Unit tests |
+| Partner's Talk: every 4th update a turn toward Connor's current position unless `noTurn`; no return to `Stop`; Wait at the end | Rule 17; `characters.md` rules 19, 24 | Unit test `in_talk_it_turns_toward_connor_every_4th_update_and_wait_ends_it`; Wizard and Uglybeast: "noTurn" |
+| `speak` of Connor or the partner ignored while either is in its talk state; keys and clicks don't cut lines short | `talking.md` rule 8; rule 12 | Unit test (`speak_ignored`) |
+| `clearSpeak <partner>` empties its conversation queue too; partner to Wait; Connor's mouth to rest, his notify group `TalkComplete 0 0 0 0 0`; his talk state goes on | Rule 23 | Not run (the ring, candle, ashes and horn scenes need items and the story) |
+| Info objects read from the world's `loadKQ` (no model); a character's GB/WB keys on its `Monster` | Rule 3; data (`permwrld.cs` lines 374–376) | `viewer.log`: "2 conversation info object(s)" |

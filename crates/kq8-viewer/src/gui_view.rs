@@ -773,6 +773,11 @@ pub fn gui_step(
                 let line = format!("update {updates}: {at}: getGuiStatus: {}", gui.panels.status());
                 gui.note(line);
             }
+            // M4 4e-3: interface.md rule 16 (built in 4c-2).
+            kq8_core::active::GuiOrder::Conversation { start, at } => {
+                gui.note(format!("update {updates}: {at}"));
+                gui.panels.conversation(start);
+            }
         }
     }
     // Rules 34-35: the slot pictures follow what Connor wears.

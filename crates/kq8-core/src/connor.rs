@@ -355,6 +355,11 @@ pub enum Mode {
     /// Pushing (`pushing.md` rules 6–8): `push` plays instead of the keys'
     /// choice; turning as when walking (Q87 d stand-in).
     Push,
+    /// His talk state in a conversation (`conversation.md` rules 6–15, M4
+    /// 4e-3): the approach movement in [`Walker::talk_play`] plays (keys
+    /// ignored, Q125 stand-in), else the keys choose as in Wait and Move
+    /// (rule 13). No Jump, no Push (Q125 stand-in).
+    Talk,
 }
 
 /// Updates without a pushing touch before the Push state ends
@@ -376,6 +381,7 @@ impl Mode {
             Mode::Jump => "jump",
             Mode::Special => "special",
             Mode::Push => "push",
+            Mode::Talk => "talk",
         }
     }
 }
@@ -437,6 +443,10 @@ pub struct Walker {
     /// cleared by `connor_update::tick`): the only thing that cancels an
     /// automatic turn (`connor-movement.md` "Turning" rule 2, Q104 a).
     pub turn_press: bool,
+    /// In the talk state: the approach movement playing (`stopwalk`,
+    /// `walkstopright`; `conversation.md` rule 10), `None` when the keys
+    /// choose (rule 13).
+    pub talk_play: Option<&'static str>,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -499,6 +509,45 @@ impl Walker {
             auto: None,
             turn_by_script: false,
             turn_press: false,
+            talk_play: None,
+        }
+    }
+
+    /// The keys choose his movement: Wait, Move, Push, or the talk state
+    /// outside its approach movements.
+    pub fn keys_choose(&self) -> bool {
+        matches!(self.mode, Mode::Free | Mode::Push) || (self.mode == Mode::Talk && self.talk_play.is_none())
+    }
+
+    /// He goes into his talk state (`conversation.md` rule 2): asked for
+    /// `Stop` (the keys ask again from here, so with no key held a walk
+    /// stops the ordinary way). Returns a line for the log.
+    pub fn enter_talk(&mut self) -> String {
+        let from = self.mode.name();
+        self.mode = Mode::Talk;
+        self.talk_play = None;
+        self.wanted = None;
+        self.waiting = None;
+        // No choice yet: the keys' choice (`stop` with no key) is a new
+        // request, made the ordinary way.
+        self.choice = "";
+        format!("talk state (from {from}): asks for Stop the ordinary way; {} playing", self.movement)
+    }
+
+    /// He leaves his talk state (`conversation.md` rule 15): Move if he is
+    /// moving (the movement goes on), else `Stop` and Wait. Returns the
+    /// state he goes to.
+    pub fn leave_talk(&mut self) -> &'static str {
+        if self.mode != Mode::Talk {
+            return "not in the talk state";
+        }
+        self.talk_play = None;
+        if self.moving() {
+            self.mode = Mode::Free;
+            "Move"
+        } else {
+            self.set_mode(Mode::Free);
+            "Wait (Stop)"
         }
     }
 
@@ -613,6 +662,7 @@ impl Walker {
         match self.mode {
             // Push: the keys' path, with `push` as the choice (rule 6).
             Mode::Free | Mode::Push => None,
+            Mode::Talk => self.talk_play,
             Mode::Fall => Some(self.kind.hold()),
             // runJump has no landing animation; it never gets Land.
             Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
@@ -845,7 +895,13 @@ impl Walker {
     /// is already in Wait (connor-movement.md open question 2, measured),
     /// so a wall there is never head-on.
     pub fn moving(&self) -> bool {
-        self.mode == Mode::Free && self.choice != "stop"
+        match self.mode {
+            Mode::Free => self.choice != "stop",
+            // In the talk state: the keys chose a movement since he entered
+            // it (rule 13).
+            Mode::Talk => self.talk_play.is_none() && !matches!(self.choice, "stop" | ""),
+            _ => false,
+        }
     }
 
     /// A head-on hit while moving (connor-physics.md "Walls"). Running:
@@ -982,7 +1038,7 @@ impl Walker {
         // confirmed by the user): at the normal rate, from the run crash
         // and the jump crashes alike; forward, back and run wait for its
         // end. Never from a jump's start to its landing's end (Q41).
-        let turns = ((matches!(self.mode, Mode::Free | Mode::Push) && !self.blocked()) || self.mode == Mode::Crash) && !self.turn_by_script;
+        let turns = ((self.keys_choose() && !self.blocked()) || self.mode == Mode::Crash) && !self.turn_by_script;
         if turns {
             self.heading += f32::from(intent.turn) * TURN_RATE * dt;
         }
@@ -1034,7 +1090,7 @@ impl Walker {
                 step.ended = Some(played);
             }
             let own = l.one_shot_step(from, self.phase).map(|v| v * l.speed.signum());
-            if self.phase >= 1.0 && matches!(self.mode, Mode::Free | Mode::Push) {
+            if self.phase >= 1.0 && self.keys_choose() {
                 match self.playing {
                     Some(t) => self.end_transition(t, loops, &mut notes),
                     // Rule 6, last case: a one-shot ending with no

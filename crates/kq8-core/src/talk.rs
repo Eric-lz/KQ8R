@@ -217,7 +217,8 @@ pub enum TalkEvent {
     End { id: u64, issuer: String, speaker: String, cut: bool },
     /// The issuer's queue is empty (rule 11): its caption goes; the sounds
     /// come back up once no line ducks them.
-    Empty { issuer: String },
+    /// `conv`: the conversation queue, not the `speak` one.
+    Empty { issuer: String, conv: bool },
 }
 
 /// A line that finished playing (not cut short): its `TalkComplete`.
@@ -510,11 +511,11 @@ impl Talk {
         let line = match playing {
             Some(p) => {
                 self.events.push(TalkEvent::End { id: p.id, issuer: issuer.clone(), speaker: p.speaker.clone(), cut: true });
-                self.events.push(TalkEvent::Empty { issuer });
+                self.events.push(TalkEvent::Empty { issuer, conv: true });
                 format!("{label}: clearSpeak: line #{} {} stopped, {dropped} waiting dropped; no TalkComplete; caption off, sounds up", p.id, p.tuple)
             }
             None if dropped > 0 => {
-                self.events.push(TalkEvent::Empty { issuer });
+                self.events.push(TalkEvent::Empty { issuer, conv: true });
                 format!("{label}: clearSpeak: {dropped} waiting dropped{}; no TalkComplete", if paused { " (it was paused by a goodbye)" } else { "" })
             }
             None => format!("{label}: clearSpeak: already empty"),
@@ -538,11 +539,11 @@ impl Talk {
         let line = match playing {
             Some(p) => {
                 self.events.push(TalkEvent::End { id: p.id, issuer: issuer.clone(), speaker: p.speaker.clone(), cut: true });
-                self.events.push(TalkEvent::Empty { issuer: issuer.clone() });
+                self.events.push(TalkEvent::Empty { issuer: issuer.clone(), conv: false });
                 format!("{issuer}: clearSpeak: line #{} {} stopped at {:.3} of {:.3} s, {dropped} waiting dropped; no TalkComplete; caption off, mouth at rest", p.id, p.tuple, now - p.started, p.ends - p.started)
             }
             None if dropped > 0 => {
-                self.events.push(TalkEvent::Empty { issuer: issuer.clone() });
+                self.events.push(TalkEvent::Empty { issuer: issuer.clone(), conv: false });
                 format!("{issuer}: clearSpeak: {dropped} waiting dropped; no TalkComplete")
             }
             None => format!("{issuer}: clearSpeak: queue already empty"),
@@ -609,7 +610,7 @@ impl Talk {
                             // waiting lines stay; TalkExit, no TalkComplete.
                             self.queues[i].paused = true;
                             self.goodbyes_ended.push(issuer.clone());
-                            self.events.push(TalkEvent::Empty { issuer });
+                            self.events.push(TalkEvent::Empty { issuer, conv: true });
                             let waiting = self.queues[i].lines.len();
                             self.note(now, format!("{label}: goodbye #{} {} finished: caption off, sounds back up, the queue pauses with {waiting} line(s) waiting; TalkExit to the partner's script; no TalkComplete (rule 22)", p.id, p.tuple));
                             break;
@@ -642,7 +643,8 @@ impl Talk {
                     if ended_here {
                         let issuer = self.queues[i].issuer.clone();
                         let label = self.queues[i].label();
-                        self.events.push(TalkEvent::Empty { issuer });
+                        let conv = self.queues[i].conv;
+                        self.events.push(TalkEvent::Empty { issuer, conv });
                         self.note(now, format!("{label}: queue empty: caption off, sounds back up{}", if self.ducking() { " once no other line ducks them" } else { "" }));
                     }
                     break;

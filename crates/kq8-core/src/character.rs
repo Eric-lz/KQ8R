@@ -35,9 +35,14 @@
 //!   playing can be cut short or has ended, and the list has it; above
 //!   16 nothing. A line's end puts the mouth shape back to 0.
 //!
-//! Not here (later steps): gravity (4d-6),
-//! the Talk state's turn every 4th update (conversations); noticing
-//! Connor, wandering, idling, Move, Die (M5).
+//! - The Talk state (M4 4e-3, `conversation.md` rules 2, 15–17,
+//!   `characters.md` rules 19, 24): entered at a conversation's start, its
+//!   current movement marked "can be cut short" and `Stop` asked for; every
+//!   4th update it asks to turn toward Connor's current position (unless
+//!   `noTurn`); nothing goes back to `Stop` by itself; at the end, Wait.
+//!
+//! Not here (later steps): gravity (4d-6); noticing Connor, wandering,
+//! idling, Move, Die (M5).
 
 use std::collections::VecDeque;
 
@@ -62,6 +67,10 @@ const CONNOR_ONLY: [&str; 10] = ["SwapWeapons", "ThrowRock", "Jump", "Push", "Ti
 
 /// The movement Wait asks for (rule 13); looked up ignoring capitals.
 pub const STOP: &str = "Stop";
+
+/// In Talk, a turn toward Connor is asked for every this many updates
+/// (`conversation.md` rule 17).
+pub const TALK_TURN_EVERY: u64 = 4;
 
 /// A character's own values and state.
 #[derive(Debug, Clone)]
@@ -96,6 +105,9 @@ pub struct Character {
     pub turn_to: Option<[f32; 2]>,
     /// The mouth shape (rule 25): 0–7, 0 at the start and after a line.
     pub mouth: u16,
+    /// Where Connor stands now, set by the caller before each update
+    /// (the Talk state's turn, `conversation.md` rule 17).
+    pub connor_at: Option<[f32; 2]>,
 }
 
 /// What one update did: the player's step (`None` when not updated) and
@@ -126,6 +138,7 @@ impl Character {
             rng: Rng::new(seed),
             turn_to: None,
             mouth: 0,
+            connor_at: None,
         }
     }
 
@@ -151,6 +164,15 @@ impl Character {
         if self.first_update.is_none() {
             self.first_update = Some(update);
             self.first(player, now, notes);
+        }
+        // conversation.md rule 17: in Talk, every 4th update a turn toward
+        // Connor's current position (noTurn blocks it, characters.md rule 24).
+        if self.state == State::Talk && !self.no_turn && update.is_multiple_of(TALK_TURN_EVERY) {
+            if let Some(c) = self.connor_at {
+                if self.turn_to.replace(c).is_none() {
+                    notes.push(format!("Talk: turns toward Connor at ({:.0}, {:.0}) (every {TALK_TURN_EVERY}th update, rule 17)", c[0], c[1]));
+                }
+            }
         }
         self.turn_step(player, dt, notes);
         let played = player.advance(dt);
@@ -218,6 +240,37 @@ impl Character {
             }
             s => format!("last line of its queue: stays in {s:?} (Q117 stand-in: Wait only from no state or Wait)"),
         }
+    }
+
+    /// A conversation starts with this character as the partner
+    /// (`conversation.md` rule 2): its current movement is marked "can be
+    /// cut short", `Stop` is asked for and it goes into Talk. Returns the
+    /// log line.
+    pub fn enter_talk(&mut self, player: &mut NamedAnimPlayer) -> String {
+        let from = self.state;
+        self.state = State::Talk;
+        self.wait_at = None;
+        self.special.clear();
+        self.special_playing = None;
+        player.cut_short = true;
+        let stop = match player.request(STOP) {
+            Request::AtOnce(st) => format!("Stop starts at once{}", if st.unknown { " (no Stop in its list: movement 0)" } else { "" }),
+            _ => format!("Stop waits for '{}'", player.movement_name()),
+        };
+        let turn = if self.no_turn { "; noTurn: it will not turn toward Connor (characters.md rule 24)" } else { "" };
+        format!("state Talk (from {from:?}): '{}' marked can be cut short; {stop}{turn}", player.movement_name())
+    }
+
+    /// The conversation ended (`conversation.md` rules 15–16): Wait.
+    /// Returns the log line (nothing from another state).
+    pub fn leave_talk(&mut self, player: &mut NamedAnimPlayer) -> Option<String> {
+        if self.state != State::Talk {
+            return None;
+        }
+        self.turn_to = None;
+        let mut notes = Vec::new();
+        self.enter_wait(player, &mut notes);
+        Some(format!("the conversation ended: {}", notes.join("; ")))
     }
 
     /// A turn request toward `to` (rule 23). Returns what happened, for
@@ -507,6 +560,31 @@ mod tests {
         assert_eq!(n, 7, "{log:?}");
         assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
         assert!(p.movement_name().eq_ignore_ascii_case("stop"), "no turning movement");
+    }
+
+    #[test]
+    fn in_talk_it_turns_toward_connor_every_4th_update_and_wait_ends_it() {
+        let mut c = character(0x20);
+        let mut p = player(0, None, None);
+        let line = c.enter_talk(&mut p);
+        assert!(line.contains("can be cut short") && line.contains("Stop starts at once"), "attack made cuttable: {line}");
+        assert_eq!(c.state, State::Talk);
+        c.connor_at = Some([1000.0, 0.0]);
+        let mut log = Vec::new();
+        run(&mut c, &mut p, 1, 3, &mut log);
+        assert!(c.turn_to.is_none(), "updates 1-3: no turn yet");
+        run(&mut c, &mut p, 4, 1, &mut log);
+        assert!(log.iter().any(|l| l.contains("every 4th update")), "{log:?}");
+        // A no-turn partner never turns.
+        let mut n = character(0x20);
+        n.no_turn = true;
+        n.enter_talk(&mut p);
+        n.connor_at = Some([1000.0, 0.0]);
+        run(&mut n, &mut p, 4, 1, &mut Vec::new());
+        assert!(n.turn_to.is_none());
+        assert!(c.leave_talk(&mut p).unwrap().contains("Wait"));
+        assert_eq!(c.state, State::Wait);
+        assert!(c.leave_talk(&mut p).is_none(), "only from Talk");
     }
 
     #[test]

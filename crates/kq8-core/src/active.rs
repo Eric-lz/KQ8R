@@ -167,6 +167,9 @@ pub enum GuiOrder {
     Set { group: crate::panels::Group, on: bool, at: String },
     /// `getGuiStatus`.
     Status { at: String },
+    /// A conversation starts (`true`) or ends (`interface.md` rule 16,
+    /// `conversation.md` rules 2, 15; M4 4e-3).
+    Conversation { start: bool, at: String },
 }
 
 /// A placement moved by `move` (`objects.md` "(d)", Q21): flags 1 and 3
@@ -617,6 +620,15 @@ pub struct WorldState {
     pub characters_in_range: BTreeSet<String>,
     /// Lines for `characters.log` (M4 4d-3), taken by the caller.
     pub character_log: Vec<String>,
+    /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
+    pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
+    /// The conversation going on or asked for (`crate::conversation`).
+    pub conversation: Option<crate::conversation::Conversation>,
+    /// Connor is to leave his talk state (why), at the next
+    /// `Active::conversation_tick` (rule 15).
+    pub connor_leave: Option<String>,
+    /// Lines for `conversation.log` (M4 4e-3), taken by the caller.
+    pub conversation_log: Vec<String>,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -626,6 +638,9 @@ pub struct Monster {
     pub name: String,
     pub position: [f32; 3],
     pub script: Option<String>,
+    /// Its goodbye and welcome-back lines (`conversation.md` rule 20).
+    pub goodbye: Option<Tuple>,
+    pub welcome_back: Option<Tuple>,
 }
 
 impl WorldState {
@@ -1665,7 +1680,7 @@ impl WorldState {
     }
 
     /// Whether `name` was deleted (events to it are dropped).
-    fn is_gone(&self, name: &str) -> bool {
+    pub(crate) fn is_gone(&self, name: &str) -> bool {
         self.deleted.contains(&name.to_ascii_lowercase())
     }
 
@@ -1786,7 +1801,7 @@ impl WorldState {
 /// A tuple from five script words (`talking.md` rule 14: the file as a
 /// 16-bit number, the others as single bytes); `None` if one is not a
 /// number.
-fn tuple_of(words: &[String]) -> Option<Tuple> {
+pub(crate) fn tuple_of(words: &[String]) -> Option<Tuple> {
     if words.len() != 5 || !words.iter().all(|w| looks_like_number(w)) {
         return None;
     }
@@ -1797,7 +1812,7 @@ fn tuple_of(words: &[String]) -> Option<Tuple> {
 impl WorldState {
     /// The `KQMonster` (or Connor) called `name`, as the world writes it
     /// (`talking.md` rule 6).
-    fn monster_name(&self, name: &str) -> Option<String> {
+    pub(crate) fn monster_name(&self, name: &str) -> Option<String> {
         if name.eq_ignore_ascii_case(CONNOR) {
             return Some(CONNOR.to_string());
         }
@@ -1859,8 +1874,11 @@ impl WorldState {
             self.note(format!("{at}: console: '{}' is not KQMonster; nothing (rule 6)", words[1]));
             return "1".into();
         };
-        // Rule 8: an issuer in a conversation is ignored; there are no
-        // conversations yet (not studied).
+        // Rule 8: Connor or the partner while either is in its talk state.
+        if self.speak_ignored(&issuer) {
+            self.talk_note(format!("{at}: KQMonster::speak {issuer}: ignored: {issuer} or the conversation's partner is in a talk state (talking.md rule 8)"));
+            return "0".into();
+        }
         let last_word = number_value(&words[8]) as i64 as u8;
         let last = if last_word == 0 {
             match self.talk.book.last_of_run(first) {
@@ -1923,8 +1941,34 @@ impl WorldState {
             self.note(format!("{at}: usage: KQMonster::clearSpeak <name>; nothing"));
             return "1".into();
         };
-        self.talk.clear(name, self.now());
+        let now = self.now();
+        self.talk.clear(name, now);
         self.note(format!("{at}: KQMonster::clearSpeak {name} (talk.log)"));
+        // conversation.md rule 23: a partner's conversation queue too; the
+        // partner to Wait, Connor sent an empty "line finished" (his mouth
+        // to rest, his notify group TalkComplete 0 0 0 0 0); his talk state
+        // goes on.
+        if let Some(line) = self.talk.clear_conv(name, now) {
+            let mut notes = vec![line];
+            if let Some(i) = self.character_index(name) {
+                let a = &mut self.anims[i];
+                let who = a.player.name.clone();
+                let line = a.character.as_mut().unwrap().set_state(&mut a.player, "Wait", &[]);
+                self.character_note(&who, format!("clearSpeak on a partner: {line} (conversation.md rule 23)"));
+                notes.push(format!("{who} to Wait"));
+            }
+            self.talk.events.push(crate::talk::TalkEvent::Mouth { id: 0, speaker: CONNOR.into(), shape: 0 });
+            let data: Vec<String> = vec!["0".into(); 5];
+            let recipients = self.notify.get(&CONNOR.to_ascii_lowercase()).cloned().unwrap_or_default();
+            for r in &recipients {
+                self.queue.send(now, 0.0, r, "TalkComplete", &data, &format!("clearSpeak {name}"));
+            }
+            notes.push(format!(
+                "Connor: an empty line finished: mouth at rest; his notify group gets TalkComplete 0 0 0 0 0: {}",
+                if recipients.is_empty() { "nobody".to_string() } else { recipients.join(", ") }
+            ));
+            self.conversation_note(format!("{at}: KQMonster::clearSpeak {name} on a partner (rule 23): {}; Connor's talk state goes on", notes.join("; ")));
+        }
         "0".into()
     }
 
@@ -2089,6 +2133,7 @@ impl ScriptHost for WorldState {
             }
             "deleteObject" => Some(self.delete_objects(words, at)),
             "KQMonster::speak" => Some(self.speak(words, at)),
+            "KQConner::conversation" => Some(self.conversation_command(words, at)),
             "KQMonster::clearSpeak" => Some(self.clear_speak(words, at)),
             "KQMonster::testMessage" => Some(self.test_message(words, at)),
             "KQMonster::stateChangeNotify" | "KQMonster::clearStateChangeNotify" => Some(self.state_change_notify(words, at)),
@@ -2186,6 +2231,10 @@ impl Active {
                 monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
                 character_log: Vec::new(),
+                conv_infos: Vec::new(),
+                conversation: None,
+                connor_leave: None,
+                conversation_log: Vec::new(),
             },
         }
     }
@@ -2474,7 +2523,7 @@ impl Active {
     /// Runs the script of the object called `name` (door, chest, scripted
     /// object, clickable, building or trap) with `args`. `false`: no such
     /// object with a script.
-    fn call_named(&mut self, name: &str, args: &[&str]) -> bool {
+    pub(crate) fn call_named(&mut self, name: &str, args: &[&str]) -> bool {
         let w = &self.world;
         if let Some(i) = w.door_index(name).filter(|&i| w.doors[i].script.is_some()) {
             self.call_door(i, args);
@@ -3173,10 +3222,12 @@ impl Active {
             // A character (M4 4d-3): its states drive the player, and only
             // while near or far (characters.md rule 11).
             let in_range = self.world.characters_in_range.contains(&self.world.anims[i].player.name.to_ascii_lowercase());
+            let connor_at = self.world.connor_at.map(|p| [p[0], p[1]]);
             let obj = &mut self.world.anims[i];
             let (a, notes) = match obj.character.as_deref_mut() {
                 Some(c) => {
                     c.in_range = in_range;
+                    c.connor_at = connor_at;
                     let step = c.update(&mut obj.player, now, dt, update);
                     match step.played {
                         Some(a) => (a, step.notes),
@@ -3252,7 +3303,9 @@ impl Active {
                         }
                     }
                 }
-                crate::talk::TalkEvent::Empty { issuer } => {
+                // The speak queue's end only (the conversation's end is
+                // conversation.md rules 15-16).
+                crate::talk::TalkEvent::Empty { issuer, conv: false } => {
                     let Some(speaker) = last_speaker.get(&issuer.to_ascii_lowercase()).cloned() else { continue };
                     if let Some(i) = self.world.character_index(&speaker) {
                         let a = &mut self.world.anims[i];
@@ -3263,9 +3316,20 @@ impl Active {
                 _ => {}
             }
         }
+        let goodbyes = std::mem::take(&mut talk.goodbyes_ended);
         self.world.talk = talk;
         for f in finished {
+            // conversation.md rule 15: the conversation's last line ends
+            // Connor's talk state, TalkExit before its TalkComplete.
+            let ends = f.conv && f.conv_end && self.world.conversation.as_ref().is_some_and(|c| c.entered() && c.partner.eq_ignore_ascii_case(&f.issuer));
+            if ends {
+                self.conversation_leave("the conversation's last line ended", true);
+            }
             self.talk_complete(&f, now);
+        }
+        // Rule 22: a goodbye ended: TalkExit (no TalkComplete).
+        for partner in goodbyes {
+            self.talk_exit(&partner);
         }
     }
 

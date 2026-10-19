@@ -179,7 +179,7 @@ pub fn talk_step(sim: Option<ResMut<DoorSim>>, mut speech: ResMut<Speech>, share
         // that showed it running empty hides it.
         match e {
             TalkEvent::Start { issuer, caption: Some(text), .. } => speech.caption = Some((issuer, text)),
-            TalkEvent::Empty { issuer } if speech.caption.as_ref().is_some_and(|(i, _)| *i == issuer) => speech.caption = None,
+            TalkEvent::Empty { issuer, .. } if speech.caption.as_ref().is_some_and(|(i, _)| *i == issuer) => speech.caption = None,
             _ => {}
         }
     }

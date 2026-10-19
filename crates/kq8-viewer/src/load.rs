@@ -1195,6 +1195,8 @@ pub struct Objects {
     pub catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     /// The traps (M3 step 3d-2), where the start-up scripts left them.
     pub traps: Vec<kq8_core::trap::TrapSettings>,
+    /// The conversation info objects (`KQConvInfo`, M4 4e-3).
+    pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// `KQAudibleObject`s the start-up scripts load (M3 step 3h-3,
     /// sound.md rules 43-44).
     pub audibles: Vec<kq8_core::sound::Audible>,
@@ -1432,6 +1434,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         emitters: Vec::new(),
         catchers: Vec::new(),
         traps: Vec::new(),
+        conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
         point_lights: Vec::new(),
@@ -1636,6 +1639,7 @@ struct Placer<'a> {
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
+    conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
     /// Files named by `loadKQ <file>` in the world's scripts, lower case
     /// (M3 3k-4).
@@ -2255,6 +2259,26 @@ impl Placer<'_> {
             self.place_trap(&label, s, p);
             return;
         }
+        // A conversation info object (M4 4e-3, conversation.md rule 3): no
+        // model, no place of its own; its spot, areas and cameras.
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(kq8_data::conv_info::CLASS)) {
+            if let Some(info) = kq8_data::conv_info::ConvInfo::from_section(s) {
+                self.character_lines.push(format!(
+                    "{label}[{}]: conversation info for {}: spot ({:.0}, {:.0}, {:.0}), {} areas, {} cameras{}",
+                    info.name,
+                    info.partner(),
+                    info.spot[0],
+                    info.spot[1],
+                    info.spot[2],
+                    info.areas.len(),
+                    info.cameras.len(),
+                    if info.problems.is_empty() { String::new() } else { format!("; problems: {}", info.problems.join("; ")) }
+                ));
+                self.conv_infos.push(info);
+                *self.by_class.entry("KQConvInfo (conversation info, M4)".into()).or_default() += 1;
+                return;
+            }
+        }
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQPointLight")) {
             self.place_point_light(&label, s, p);
             return;
@@ -2328,7 +2352,10 @@ impl Placer<'_> {
             self.located.insert(key.clone(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
             if p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
                 let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
-                self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script });
+                // conversation.md rule 20: its goodbye and welcome-back lines.
+                let keys = kq8_data::characters::CharacterKeys::from_section(s);
+                let (goodbye, welcome_back) = keys.map_or((None, None), |k| (k.goodbye, k.welcome_back));
+                self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script, goodbye, welcome_back });
             }
             // 4d-7a: does it cast a shadow (characters.md rule 36)? The
             // world's mask from Options.cs (else the built-in 1);
@@ -3481,6 +3508,7 @@ impl Placer<'_> {
             emitters,
             catchers: self.catchers,
             traps,
+            conv_infos: self.conv_infos,
             audibles: self.audibles,
             dormant: self.dormant,
             music: self.music,

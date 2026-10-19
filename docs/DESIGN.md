@@ -763,7 +763,7 @@ inventory and menus.
     welcome back in front, the new lines after the waiting ones with the
     duplicate check, no `TalkComplete`); a goodbye asked for and not
     played is dropped; `clearSpeak` empties it.
-  - **4e-3, the command and the two talk states** (rules 1, 2, 6–13,
+  - **4e-3, the command and the two talk states** (**done** 2026-10-19; the goodbye already plays on walking away) (rules 1, 2, 6–13,
     15–17). `KQConner::conversation` (usage, not `KQMonster`, `<last>`
     0); the partner's `speak` queue emptied, its current movement made
     cuttable, `Stop` asked for, its Talk state (turns toward Connor every

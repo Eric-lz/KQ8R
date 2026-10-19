@@ -32,6 +32,7 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kq8_core::active::{Active, ActiveChest, ActiveDoor, ActiveObject, Item, Pick, Request};
+use kq8_core::connor::Mode;
 use kq8_core::named_anim::NamedAnimPlayer;
 use kq8_core::chest::Chest;
 use kq8_core::trap::{Trap, Visitor};
@@ -92,6 +93,8 @@ pub struct DoorSim {
     item_log: Option<Log>,
     /// `talk.log` (M4 4a-2); `None` if it could not be made.
     talk_log: Option<Log>,
+    /// `conversation.log` (M4 4e-3); `None` if it could not be made.
+    conversation_log: Option<Log>,
 }
 
 impl DoorSim {
@@ -128,6 +131,17 @@ impl DoorSim {
                 shared.log.lock().unwrap().summary(format!("talk: update {updates} {line}"));
             }
             log.detail(format!("update {updates} {line}"));
+        }
+    }
+
+    /// Writes the conversation lines gathered since the last call (M4
+    /// 4e-3), also to the main log.
+    pub fn flush_conversation(&mut self, shared: &Shared) {
+        let lines = std::mem::take(&mut self.active.world.conversation_log);
+        let Some(log) = &mut self.conversation_log else { return };
+        for line in lines {
+            shared.log.lock().unwrap().summary(format!("conversation: {line}"));
+            log.detail(line);
         }
     }
 
@@ -634,6 +648,16 @@ pub fn spawn_doors(
             None
         }
     };
+    let conversation_log = match Log::create("conversation") {
+        Ok(mut l) => {
+            l.detail("conversation.log: KQConner::conversation, Connor's talk state (case, approach, stay test, the end), the partner's Talk state, TalkExit (docs/behaviour/conversation.md)");
+            Some(l)
+        }
+        Err(e) => {
+            main_log.summary(format!("talk: cannot create conversation.log: {e}; conversations still run, not logged"));
+            None
+        }
+    };
     if let Some((talk, sets)) = objects.talk.take() {
         active.world.talk = talk;
         for (k, v) in sets {
@@ -643,10 +667,13 @@ pub fn spawn_doors(
     active.world.monsters = std::mem::take(&mut objects.monsters);
     let monsters: Vec<String> = active.world.monsters.iter().map(|m| format!("{} ({})", m.name, m.script.as_deref().unwrap_or("no script"))).collect();
     main_log.summary(format!("talk: {} KQMonsters: {}; captions {:?}", monsters.len(), monsters.join(", "), active.scripts.vars.get("Options::Captions")));
+    // M4 4e-3: the conversation info objects (conversation.md rule 3).
+    active.world.conv_infos = std::mem::take(&mut objects.conv_infos);
+    main_log.summary(format!("talk: {} conversation info object(s): {:?}", active.world.conv_infos.len(), active.world.conv_infos.iter().map(|i| i.name.as_str()).collect::<Vec<_>>()));
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -758,6 +785,25 @@ pub fn trap_step(
         if !sim.active.push_call(name) && !connor.not_pushable.contains(name) {
             connor.not_pushable.push(name.clone());
         }
+    }
+    // M4 4e-3: Connor's side of a conversation (conversation.md rules
+    // 6-15), after his move and this update's scripts; what it asks of him
+    // and the camera joins the requests below.
+    if sim.active.world.conversation.is_some() || sim.active.world.connor_leave.is_some() {
+        let asked = sim.active.world.conversation.as_ref().is_some_and(|c| !c.entered());
+        let may_enter = if !asked {
+            Ok(())
+        } else if matches!(connor.walker.mode, Mode::Dead | Mode::Dying) {
+            Err(format!("he is {}", connor.walker.mode.name()))
+        } else if connor.state_request("talk state", "conversation") {
+            Ok(())
+        } else {
+            Err("his jump is not finished".to_string())
+        };
+        let position = connor.mover.position;
+        let ConnorSim { walker, .. } = &mut *connor;
+        sim.active.conversation_tick(walker, position, may_enter);
+        sim.flush_conversation(&shared);
     }
     // State requests a jump refused at an earlier update go first (3m-1).
     let retried = connor.refused.len();
@@ -1134,8 +1180,14 @@ pub fn door_step(
     let presses = connor.as_mut().map(|c| std::mem::take(&mut c.cut_presses)).unwrap_or_default();
     let clicks: Vec<String> = std::mem::take(&mut sim.world_clicks).into_iter().chain(due.iter().map(|(n, _)| format!("test --click {n}"))).collect();
     let hands_off = connor.as_ref().is_some_and(|c| c.hands_off);
+    // conversation.md rule 12: nothing cuts a line short in the talk state.
+    let talking = sim.active.world.connor_in_talk();
     for why in presses.into_iter().chain(clicks.into_iter().filter(|_| !hands_off)) {
         let now = sim.active.world.now();
+        if talking {
+            sim.log.detail(format!("update {updates}: {why}: Connor is in his talk state: no line is cut short (conversation.md rule 12)"));
+            continue;
+        }
         sim.active.world.talk.cut_short(&why, now);
     }
     for (name, _) in due {
@@ -1199,6 +1251,7 @@ pub fn door_step(
     }
     sim.flush_traps(&shared);
     sim.flush_talk(&shared);
+    sim.flush_conversation(&shared);
     let item_lines = sim.flush_items(&shared);
     let lines = sim.active.take_log();
     if !lines.is_empty() {

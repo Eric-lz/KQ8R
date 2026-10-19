@@ -18,6 +18,7 @@ pub mod connor_auto;
 pub mod connor_inventory;
 pub mod connor_mover;
 pub mod connor_update;
+pub mod conversation;
 pub mod door;
 pub mod emitter;
 pub mod events;

@@ -676,10 +676,10 @@ fn turn_key_event(sim: &mut ConnorSim, dir: i8, down: bool, what: &str, shared: 
 }
 
 impl ConnorSim {
-    /// He can turn to face a listener (`talking.md` rule 7): in Wait or
-    /// Move, i.e. the keys choose his movement.
+    /// He can turn to face a listener (`talking.md` rule 7): in Wait,
+    /// Move or the talk state.
     pub fn can_turn_to_listener(&self) -> bool {
-        self.walker.mode == Mode::Free
+        matches!(self.walker.mode, Mode::Free | Mode::Talk)
     }
 
     /// His state for the turn after a click (`clicking.md` rule 28): Wait
@@ -689,6 +689,8 @@ impl ConnorSim {
         match self.walker.mode {
             Mode::Free if self.walker.moving() => (true, "Move"),
             Mode::Free => (true, "Wait"),
+            // Rule 28: the talk state turns too (M4 4e-3).
+            Mode::Talk => (true, "Talk"),
             m => (false, m.name()),
         }
     }
