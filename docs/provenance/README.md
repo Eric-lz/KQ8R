@@ -1799,3 +1799,12 @@ Replaces the 4b-3 stand-ins above (wrap at 400 by words, the strip fitted to the
 | Space plays `intrup.aud` as the bottom bar starts to show and `intrdown.aud` as it starts to hide; handsOff, scripts and the meters' pop-up play nothing | **The user's check in the original** (2026-10-18), against `interface.md` rule 9 ("no sound of their own"); which sound with which way is a **stand-in** (Q111 a) | Unit tests in `panels.rs`; `gui-4c7-bricks.log` "Space: intrdown.aud", "Space: intrup.aud"; `sound-4c7-bricks.log`; handsOff at 1.370 s: no sound |
 | The status icons at their own size (48 × 48 on the 800 × 600 screen), the spinning mask's bottom right corner at the screen's | **The user's check in the original** ("bottom right corner, a little smaller"); the exact place and size are a **stand-in** (Q111 b) | `gui-4c7-bricks.log` "status icons at [752, 552, 1088, 600] of 800x600" |
 | The meter bars and the empty green bar unchanged | `interface.md` rules 20, 22 and the layout; the user sees them differ (Q111 c, d) | — |
+
+### 4c-8, the user's second check — `crates/kq8-core/src/{panels,gui_draw}.rs`, `crates/kq8-viewer/src/gui_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| ~~Space: `intrup.aud` as the bar shows, `intrdown.aud` as it hides~~ **Replaced**: `intrup.aud` as Space hides the bottom bar, `intrdown.aud` as it shows it (the top bar's stay as they were) | **The user's check in the original** (2026-10-18, second check; Q111 a) | Unit tests in `panels.rs`; `gui-4c8-bricks.log` "Space: intrup.aud" at 0.000 s (hide), "Space: intrdown.aud" at 1.101 s (show) |
+| The spinning mask drawn whole at its pictures' own size (57 × 57, larger than its 48 × 48 layout box), its bottom right corner at the screen's; only the mask is drawn of the status icons | **The user's check** (it was cut off on its right, Q111 b); `mskicn.pba`'s size from the data | `gui-4c8-bricks.log` "picture mskicn.pba: 16 frame(s), 57x57", "spinning mask at [743, 543, 800, 600] of 800x600" |
+| Black behind the health and experience bars (the part a bar doesn't cover is black, not see-through) | **The user's check** (Q111 d) | Unit test `pictures_fill_their_box…`; `gui.log` lists no see-through pixels in `IDCTL_METERS` any more |
+| `gui.log` lists each picture's size and frames when loaded, and any see-through pixels of a drawn panel | **Our log** | `gui-4c8-bricks.log` |

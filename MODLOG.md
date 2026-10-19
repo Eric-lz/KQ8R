@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-18 M4 step 4c-8: the user's second check (Space's sounds, the whole mask, black behind the bars)
+
+**Changed:** `kq8-core/src/panels.rs`: Space hiding the bottom bar plays `intrup.aud`, showing it `intrdown.aud` (swapped). `gui_draw.rs`: a one-colour fill piece (unit test). Viewer `gui_view.rs`: black behind the health and experience bars; the spinning mask drawn whole at its own 57 × 57 (it was cut to its 48 × 48 layout box) in the screen's bottom right corner; `gui.log` now lists each picture's size when loaded and any see-through pixels of a drawn panel. `QUESTIONS.md` Q111 (a, b, d answered by the user; c open). Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.
+**Why:** The user's second check of 4c: the bottom bar's sounds were inverted; the mask was cut off on its right even when centred; the experience bar should have a black background (the world showed through its empty part).
+**Tested how:** `cargo test --workspace` (451 pass, 1 extended), clippy clean. Viewer: the bricks `cargo play --world Daventry --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --key space,3 --key space,9 --frames 2500 --sound off` (`gui-4c8-bricks.log`).
+**Result:** "Space: intrup.aud" at 0.000 s (hiding), "Space: intrdown.aud" at 1.101 s (showing); "picture mskicn.pba: 16 frame(s), 57x57"; "spinning mask at [743, 543, 800, 600] of 800x600"; before the fix the log showed "IDCTL_METERS drawn 320x18: 1720 see-through pixels, columns 18-302, rows 5-12" (the empty bars), after it no see-through pixels in the meters.
+**Dead end recorded:** Looking for the gap next to the meters: the layout has no gap (the meters run from 192 to 448, the side panels end and start there), the side panels' pictures are full 64 × 64 opaque stone, and the log shows no see-through pixels in any bottom panel. Not found yet (Q111 c).
+**Still broken / not tested:** Not seen by eye. The gap between the meters' end pieces and the side panels (Q111 c).
+**Next:** The user's description of the gap; A: Q108–Q111.
+
 ## 2026-10-18 M4 step 4c-7: Space's sounds, the spinning mask in the corner
 
 **Changed:** `kq8-core/src/panels.rs`: Space plays `intrup.aud` when the bottom bar starts to show and `intrdown.aud` when it starts to hide (handsOff and the scripts still play nothing); tests updated. Viewer `gui_view.rs`: the status icons are drawn at their own size (not × 1.25) with the spinning mask's bottom right corner at the screen's bottom right corner; the place is logged. `QUESTIONS.md`: Q111. Provenance, `docs/FEATURES.md`, `docs/DESIGN.md`.

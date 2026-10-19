@@ -48,6 +48,9 @@ pub enum Piece<'a> {
     Picture { rect: [i32; 4], pic: Pic<'a>, cut: Option<u32> },
     /// A text in a font with a justification.
     Text { rect: [i32; 4], font: &'a Font, justification: u32, text: String },
+    /// A rectangle of one colour (4c-8: the black behind the meters'
+    /// bars, the user's check).
+    Fill { rect: [i32; 4], rgb: [u8; 3] },
 }
 
 /// Layout pixels → screen pixels, rounded.
@@ -131,6 +134,17 @@ impl Canvas {
         }
     }
 
+    /// Fills the layout rectangle `rect` with one colour.
+    pub fn fill(&mut self, rect: [i32; 4], rgb: [u8; 3], scale: f32) {
+        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+        for y in t.max(0)..b.min(self.height as i32) {
+            for x in l.max(0)..r.min(self.width as i32) {
+                let at = ((y as u32 * self.width + x as u32) * 4) as usize;
+                self.rgba[at..at + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+            }
+        }
+    }
+
     /// Draws `text` in `font`, placed by `rect` and `justification`
     /// (rules 5–6); letters at the font's own size, index 0 see-through.
     pub fn text(&mut self, rect: [i32; 4], font: &Font, justification: u32, text: &str, scale: f32, palette: &[Rgb; 256]) {
@@ -157,6 +171,7 @@ pub fn draw(size: [i32; 2], scale: f32, pieces: &[Piece], palette: &[Rgb; 256]) 
         match piece {
             Piece::Picture { rect, pic, cut } => c.picture(*rect, *pic, *cut, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(*rect, font, *justification, text, scale, palette),
+            Piece::Fill { rect, rgb } => c.fill(*rect, *rgb, scale),
         }
     }
     c
@@ -205,6 +220,13 @@ mod tests {
         // Scaled by 2: a 2x2 picture covers 4x4.
         let big = draw([2, 2], 2.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
         assert_eq!((big.width, big.at(1, 1), big.at(1, 2)), (4, [0, 255, 0, 255], [0, 0, 0, 0]));
+        // 4c-8: a cut bar over black: the empty part is black, not see-through.
+        let bar = [
+            Piece::Picture { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, cut: Some(4) },
+            Piece::Fill { rect: [0, 0, 10, 2], rgb: [0, 0, 0] },
+        ];
+        let c = draw([10, 2], 1.0, &bar, &pal);
+        assert_eq!((c.at(3, 0), c.at(9, 1)), ([255, 0, 0, 255], [0, 0, 0, 255]));
     }
 
     #[test]

@@ -1973,9 +1973,11 @@ inventory and menus.
       mask in the bottom right corner of the screen, smaller. Both from
       the user's check in the original, against `interface.md` rules 9
       and 7 (asked as Q111).
-    - Not changed, asked (Q111): the meter bars' width (the layout's 86
-      of 256 pixels each, with 14-pixel end pieces) and an empty green
-      bar at 0 experience.
+    - **4c-8, the user's second check** (**done** 2026-10-18): Space's
+      sounds the other way round; the spinning mask whole (its pictures
+      are 57 × 57, its box 48 × 48); black behind the meters' bars.
+    - Open (Q111 c): a gap the user sees between the meters' end pieces
+      and the side panels.
   - Tests: unit tests for each core module; viewer runs with `--click`
     on `alcmsign` and `smlchst3`, Space pressed by a test option
     (`--key KEY,N`, new), the bricks puzzle (`interface.md` check 2),

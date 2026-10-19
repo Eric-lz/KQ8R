@@ -395,9 +395,11 @@ doesn't take it gives "This will not work."
 - **A 4:3 screen in a wide window (4c-6):** the panels and the caption
   stay in the original's 4:3 shape, centred in the window; the world
   fills the whole window around them.
-- **Corrections after the user's check (4c-7):** Space plays the top
-  bar's sounds as the bottom bar moves (cutscenes don't); the spinning
-  mask sits in the screen's bottom right corner at its own size.
+- **Corrections after the user's checks (4c-7, 4c-8):** Space plays the
+  top bar's sounds the other way round as the bottom bar moves
+  (cutscenes don't); the spinning mask sits whole in the screen's bottom
+  right corner at its own size; the empty part of the meters' bars is
+  black.
 
 ## Viewer helpers (not in the original)
 

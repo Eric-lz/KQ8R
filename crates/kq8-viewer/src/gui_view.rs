@@ -112,6 +112,7 @@ const SLOT_FLASHES: [&str; 3] = ["IDCTL_INVBAR_ARMOR_FX", "IDCTL_INVBAR_SHORT_FX
 enum Spec {
     Pic { rect: [i32; 4], file: String, frame: usize, cut: Option<u32> },
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
+    Fill { rect: [i32; 4], rgb: [u8; 3] },
 }
 
 /// The panels and what they show.
@@ -324,7 +325,11 @@ impl Gui {
             (path, r)
         });
         let value = match read {
-            Some((_, Ok(v))) => Some(v),
+            Some((path, Ok(v))) => {
+                let sizes: Vec<String> = v.iter().take(3).map(|b| format!("{}x{}", b.width, b.height)).collect();
+                self.note(format!("picture {path}: {} frame(s), {} (flags 0x{:x})", v.len(), sizes.join(", "), v.first().map_or(0, |b| b.flags)));
+                Some(v)
+            }
             Some((path, Err(e))) => {
                 self.note(format!("picture {path}: {e}; not drawn"));
                 None
@@ -492,6 +497,11 @@ impl Gui {
                     if let Some(file) = file {
                         out.push(Spec::Pic { rect, file, frame: 0, cut });
                     }
+                    // 4c-8 (the user's check in the original, Q111 d):
+                    // black behind the bars, where they are empty.
+                    if cut.is_some() {
+                        out.push(Spec::Fill { rect, rgb: [0, 0, 0] });
+                    }
                 }
                 Kind::Text { text, pictures: None } => {
                     // Rules 23, 36, 39, 43, 45: the numbers we set; the
@@ -521,8 +531,12 @@ impl Gui {
                             out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
                         }
                     } else if name == "IDCTL_TIMER_7" && self.panels.mask_icon {
-                        // Rule 15: the spinning mask, looping.
-                        out.push(Spec::Pic { rect, file, frame: (now / frame_ms) as usize, cut: None });
+                        // Rule 15: the spinning mask, looping. 4c-8: at
+                        // its pictures' own size (57 x 57, larger than
+                        // its 48 x 48 box), the user's check (Q111 b).
+                        let size = self.mask_size().unwrap_or([rect[2] - rect[0], rect[3] - rect[1]]);
+                        out.push(Spec::Pic { rect: [0, 0, size[0], size[1]], file, frame: (now / frame_ms) as usize, cut: None });
+                        return Some((size, out));
                     }
                 }
                 _ => {}
@@ -554,6 +568,7 @@ impl Gui {
             match s {
                 Spec::Pic { file, .. } => self.load_file(file),
                 Spec::Text { font, .. } => self.load_font(font),
+                Spec::Fill { .. } => {}
             }
         }
         let mut pieces = Vec::new();
@@ -568,9 +583,24 @@ impl Gui {
                     let Some(Some(f)) = self.fonts.get(&font.to_ascii_lowercase()) else { continue };
                     pieces.push(Piece::Text { rect: *rect, font: f, justification: *justification, text: text.clone() });
                 }
+                Spec::Fill { rect, rgb } => pieces.push(Piece::Fill { rect: *rect, rgb: *rgb }),
             }
         }
         gui_draw::draw(size, scale, &pieces, &self.palette)
+    }
+
+    /// The spinning mask's file (`IDCTL_TIMER_7`).
+    fn mask_file(&self) -> Option<String> {
+        match &self.control("IDCTL_TIMER_7")?.kind {
+            Kind::Text { pictures: Some(p), .. } => self.tags.string(p.bitmap).map(str::to_string),
+            _ => None,
+        }
+    }
+
+    /// The spinning mask's own picture size, once loaded.
+    fn mask_size(&self) -> Option<[i32; 2]> {
+        let frames = self.files.get(&self.mask_file()?.to_ascii_lowercase())?.as_ref()?;
+        frames.first().map(|b| [b.width as i32, b.height as i32])
     }
 
     /// How many frames a `.pba` has (0 if not loaded).
@@ -922,17 +952,16 @@ pub fn gui_draw(
         // 4c-7 (the user's check in the original, Q111): the status
         // icons at their own size (not scaled with the screen), the
         // spinning mask in the screen's bottom right corner.
-        let status_size = |gui: &Gui| {
-            let dialog = gui.control(d.layout_id())?.rect;
-            let mask = gui.control("IDCTL_TIMER_7")?.rect;
-            Some(([dialog[2] - dialog[0], dialog[3] - dialog[1]].map(|v| v as f32), [mask[2], mask[3]].map(|v| v as f32)))
-        };
-        let ((left, top), (w, h)) = match (panel, d) {
+        // 4c-8: only the mask is drawn, at its own size (57 x 57).
+        if panel.is_none() {
+            if let Some(f) = gui.mask_file() {
+                gui.frames(&f);
+            }
+        }
+        let ((left, top), (w, h)) = match (panel, gui.mask_size()) {
             (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
-            (None, _) => match status_size(gui) {
-                Some(([w, h], [mr, mb])) => ((sw - mr, sh - mb), (w, h)),
-                None => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
-            },
+            (None, Some([mw, mh])) => ((sw - mw as f32, sh - mh as f32), (mw as f32, mh as f32)),
+            (None, None) => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
         };
         if matches!(panel, Some(Panel::BottomLeft | Panel::Slots | Panel::Meters)) {
             bottom = bottom.min(top);
@@ -946,7 +975,7 @@ pub fn gui_draw(
             let at = [left, top, left + w, top + h].map(|v| v.round() as i32);
             if *status_at != Some(at) {
                 *status_at = Some(at);
-                let line = format!("status icons at {at:?} of {sw}x{sh} (own size; the spinning mask in the bottom right corner: the user's check, 4c-7, Q111)");
+                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; in the bottom right corner: the user's checks, 4c-7, 4c-8, Q111)");
                 gui.note(line);
             }
         }
@@ -964,6 +993,15 @@ pub fn gui_draw(
         }
         let scale = if panel.is_some() { gui.scale } else { 1.0 };
         let canvas = gui.draw(size, &specs, scale);
+        // Where the drawn picture is see-through (the world shows), by
+        // column and row ranges, for the log.
+        let clear: Vec<(u32, u32)> = (0..canvas.height).flat_map(|y| (0..canvas.width).map(move |x| (x, y))).filter(|&(x, y)| canvas.at(x, y)[3] == 0).collect();
+        if !clear.is_empty() && panel.is_some() {
+            let xs = (clear.iter().map(|p| p.0).min().unwrap(), clear.iter().map(|p| p.0).max().unwrap());
+            let ys = (clear.iter().map(|p| p.1).min().unwrap(), clear.iter().map(|p| p.1).max().unwrap());
+            let line = format!("{} drawn {}x{}: {} see-through pixels, columns {}-{}, rows {}-{}", d.layout_id(), canvas.width, canvas.height, clear.len(), xs.0, xs.1, ys.0, ys.1);
+            gui.note(line);
+        }
         let mut picture = Image::new(Extent3d { width: canvas.width, height: canvas.height, depth_or_array_layers: 1 }, TextureDimension::D2, canvas.rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
         picture.sampler = ImageSampler::nearest();
         if let Some(mut slot) = images.get_mut(&image.image) {

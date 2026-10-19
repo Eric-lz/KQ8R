@@ -247,15 +247,16 @@ impl Panels {
         }
     }
 
-    /// Rule 10: Space. 4c-7 (the user's check in the original, Q111):
-    /// Space plays the top bar's sounds, `intrup.aud` as the bar starts
-    /// to show and `intrdown.aud` as it starts to hide (which goes with
-    /// which: STAND-IN); handsOff and the scripts play nothing (rule 9).
+    /// Rule 10: Space. 4c-7 (the user's checks in the original, Q111):
+    /// Space plays the top bar's sounds the other way round,
+    /// `intrdown.aud` as the bar starts to show and `intrup.aud` as it
+    /// starts to hide (4c-8); handsOff and the scripts play nothing
+    /// (rule 9).
     pub fn toggle_bottom(&mut self, why: &str) {
         let on = !self.bottom_shown();
         if self.set(Group::Bottom, on, why) {
-            let sound = if on { "intrup.aud" } else { "intrdown.aud" };
-            self.note(format!("Space: {sound} (the user's check; stand-in Q111)"));
+            let sound = if on { "intrdown.aud" } else { "intrup.aud" };
+            self.note(format!("Space: {sound} (the user's checks in the original, 4c-7, 4c-8)"));
             self.sounds.push(sound.to_string());
         }
     }
@@ -430,7 +431,7 @@ mod tests {
         p.update(50.0);
         assert_eq!(p.away(Panel::BottomRight), 1.0);
         // 4c-7: Space plays the top bar's sounds.
-        assert_eq!(p.sounds, ["intrdown.aud", "intrup.aud", "intrdown.aud"]);
+        assert_eq!(p.sounds, ["intrup.aud", "intrdown.aud", "intrup.aud"]);
         // Asked to hide while hiding: left alone.
         assert!(!p.set(Group::Bottom, false, "test"));
     }
@@ -475,7 +476,7 @@ mod tests {
         p.set(Group::Top, true, "test");
         p.hands_off(true);
         assert!(p.shown(Panel::Top));
-        assert_eq!(p.sounds, ["intrdown.aud", "intrup.aud"]);
+        assert_eq!(p.sounds, ["intrup.aud", "intrup.aud"]);
     }
 
     #[test]
