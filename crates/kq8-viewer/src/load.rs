@@ -1246,6 +1246,9 @@ pub struct Objects {
     /// Each item type that can appear in this world (`IDName`) -> its
     /// model in `shapes`.
     pub item_shapes: BTreeMap<String, usize>,
+    /// Corpse shapes of the fighters (`fighting.md` rule 32; M5 5c-7): lower-case
+    /// shape name -> model slot.
+    pub corpse_shapes: BTreeMap<String, usize>,
     /// Lines about items at load, for `items.log`.
     pub item_lines: Vec<String>,
     /// Lines about characters at load, for `characters.log` (M4 4d-2).
@@ -1486,6 +1489,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         unused_placed: 0,
         several_positions: 0,
         items,
+        corpse_shapes: BTreeMap::new(),
         item_lines: Vec::new(),
         monster_types: None,
         pending_line: None,
@@ -1701,6 +1705,8 @@ struct Placer<'a> {
     several_positions: usize,
     /// Item types and the item objects made so far (3e-3).
     items: kq8_core::item::Items,
+    /// Corpse shapes loaded (M5 5c-7).
+    corpse_shapes: BTreeMap<String, usize>,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
     /// `GAME/Kq/Monstats.mtl`, read when a monster list is first loaded
@@ -2272,6 +2278,29 @@ impl Placer<'_> {
                 casts_shadow: false,
             }
         });
+        // fighting.md rule 32 (M5 5c-7): its corpse shapes, ready for its death.
+        if let Some(f) = character.as_ref().and_then(|c| c.fight.clone()) {
+            for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs].into_iter().flatten() {
+                let key = shape.to_ascii_lowercase();
+                if self.corpse_shapes.contains_key(&key) {
+                    continue;
+                }
+                let slot = match self.index_of.get(&key) {
+                    Some(slot) => *slot,
+                    None => {
+                        let slot = self.load_shape(&shape, None, None);
+                        self.index_of.insert(key.clone(), slot);
+                        slot
+                    }
+                };
+                match slot {
+                    Some(i) => {
+                        self.corpse_shapes.insert(key, i);
+                    }
+                    None => self.character_lines.push(format!("[{}]: corpse shape {shape} could not be loaded", p.name)),
+                }
+            }
+        }
         // Missing locX/locY/locZ are 0 (objects.md Q19); only the file's
         // own position can have gaps.
         if load.position.is_none() && p.missing_loc.contains(&true) {
@@ -3628,6 +3657,7 @@ impl Placer<'_> {
             object_animations: self.object_animations,
             items: Default::default(),
             item_shapes: BTreeMap::new(),
+            corpse_shapes: self.corpse_shapes,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

@@ -480,6 +480,9 @@ impl Character {
     /// once `walk` or `run`; the stuck check starts (rule 7). Returns the
     /// log line.
     pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, now: f64, run: bool, why: &str) -> String {
+        if self.state == State::Die {
+            return format!("Move ({why}): it is dying: its state never changes again (fighting.md rule 30)");
+        }
         let cut = self.attack_cut_short(now).map(|l| format!("{l}; ")).unwrap_or_default();
         let from = self.state;
         self.state = State::Move;
@@ -855,6 +858,10 @@ impl Character {
     /// `KQMonster::setState <name> <state> [words…]` (rule 22). Returns
     /// the log line.
     pub fn set_state(&mut self, player: &mut NamedAnimPlayer, state: &str, words: &[String], now: f64) -> String {
+        // fighting.md rule 30: a dying character never changes state.
+        if self.state == State::Die {
+            return format!("{state}: it is dying: its state never changes again (fighting.md rule 30)");
+        }
         let mut notes = Vec::new();
         if state.eq_ignore_ascii_case("Wait") {
             notes.extend(self.attack_cut_short(now));

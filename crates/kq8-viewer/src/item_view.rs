@@ -84,3 +84,42 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
         }
     }
 }
+
+/// The corpses' models (`fighting.md` rule 32; M5 5c-7), and the corpses
+/// drawn so far.
+#[derive(Resource)]
+pub struct CorpseDraw {
+    /// Lower-case shape name -> its model.
+    parts: BTreeMap<String, Parts>,
+    /// How many of the world's corpses have their entity.
+    drawn: usize,
+}
+
+/// `shapes`: lower-case shape name -> index into `built`.
+pub fn spawn_corpses(commands: &mut Commands, shapes: BTreeMap<String, usize>, built: &[Parts]) {
+    let parts = shapes.into_iter().filter_map(|(k, slot)| built.get(slot).map(|p| (k, p.clone()))).collect();
+    commands.insert_resource(CorpseDraw { parts, drawn: 0 });
+}
+
+/// Each new corpse: its model where the character stood, turned the same
+/// way (rule 32). **Ours**: no shadow (not a caster) and no draw-distance
+/// test (always drawn when in view); the skin swap is not applied (only
+/// `bossprig` has one in Daventry).
+pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<CorpseDraw>>, shared: Res<crate::Shared>) {
+    let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
+    let corpses = &sim.active.world.corpses;
+    while draw.drawn < corpses.len() {
+        let c = &corpses[draw.drawn];
+        draw.drawn += 1;
+        let Some(parts) = draw.parts.get(&c.shape.to_ascii_lowercase()) else {
+            shared.log.lock().unwrap().summary(format!("corpse of {}: shape {} not loaded; not drawn", c.name, c.shape));
+            continue;
+        };
+        let body = commands.spawn((bevy_transform_from(c.rotation, c.position), Visibility::Inherited, crate::terrain_view::ObjectName(format!("{}_corpse", c.name)))).id();
+        for (mesh, material) in parts {
+            let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+            commands.entity(body).add_child(part);
+        }
+        shared.log.lock().unwrap().summary(format!("corpse of {}: {} drawn at ({:.0}, {:.0}, {:.0})", c.name, c.shape, c.position[0], c.position[1], c.position[2]));
+    }
+}

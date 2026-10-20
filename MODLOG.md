@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-7: dying
+
+**Changed:** `kq8-core`: `fight.rs` (`character_dies`, `death_ended`, `Corpse`, the first-kill tip), `active.rs` (`setState <name> Die [now]`, the die movement's end, the dead's `Die <kind>` script call), `character.rs` / `character_ai.rs` (a dying character never changes state and has no movement rules); `kq8-data`: `FightSettings::type_name`. Viewer: corpse shapes loaded with each fighter (`load.rs`), drawn when a corpse appears (`item_view.rs`). 2 new tests. DESIGN, provenance.
+**Why:** `fighting.md` rules 21, 30, 32, 33.
+**Tested how:** `cargo test --workspace` (427 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --swing goblin22,60 --swing goblin22,90 --frames 2000`; `fight.log`, `viewer.log`.
+**Result:** Second punch (update 94): health 4 → −8, it dies: `Die` starts, off the active list, not solid, gravity off; its drops are listed (two mushrooms). At update 125 the death ends: Connor's experience 0 → 3, a corpse `g2dead.kqs` at (289716, 191415, 13770) is drawn ("corpse of goblin22: g2dead.kqs drawn"), it is removed and hidden; first-kill tip logged; it has no script ("Die Normal not called"). Matches How to check 6 (experience only when the death ends).
+**Still broken / not tested:** **Not looked at by eye.** The corpse has no draw-distance test and no skin swap (bossprig's body will show the plain texture). Projectile, fire and ice deaths not run in the viewer. The drops don't appear yet (5c-8).
+**Next:** 5c-8, drops thrown.
+
 ## 2026-10-20 M5 step 5c-6: characters being hit
 
 **Changed:** `kq8-core/fight.rs`: `hit_character` does all of rule 22 (kind, active, chase timer, hit count, must flee, damage, attack time, flinch or ouch, where Connor is, the alarm with "run"), `run_alarm` (rule 26), `hit_unalarmed` (rule 28); `character.rs`: the flinch's end (2 s pause, chase timer); `character_ai.rs`: the hit count (always `run` from the second hit, cleared at home), the hunt after an unseen hit (0.52 rad beside Connor: the note's Do instead). 2 new tests. DESIGN, provenance.

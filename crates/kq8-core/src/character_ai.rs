@@ -197,6 +197,10 @@ impl WorldState {
             }
             let Some(c) = a.character.as_deref() else { continue };
             let Some(ai) = c.ai.as_ref() else { continue };
+            // fighting.md rule 30: the dying have no movement rules.
+            if c.state == crate::character::State::Die {
+                continue;
+            }
             let pos = a.player.base.position;
             let name = a.player.name.clone();
             let state = c.state;

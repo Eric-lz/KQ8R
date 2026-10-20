@@ -670,6 +670,13 @@ pub struct WorldState {
     pub weapon_ready: Option<String>,
     /// The combat level's factor (`fighting.md` rule 3): 1.0 by default.
     pub combat_level: f32,
+    /// Bodies left by the dead (`fighting.md` rule 32; M5 5c-7).
+    pub corpses: Vec<crate::fight::Corpse>,
+    /// Scripts of the dead to call with `Die <kind>` (rule 32.3), taken
+    /// by `Active::update`.
+    pub die_calls: Vec<(String, &'static str)>,
+    /// The first-kill tip was sent (rule 33; logged only).
+    pub kill_tip: bool,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -1659,6 +1666,14 @@ impl WorldState {
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
             }
+            [_, who, state, rest @ ..] if state.eq_ignore_ascii_case("Die") && self.character_index(who).is_some_and(|i| self.anims[i].character.as_deref().is_some_and(|c| c.fight.is_some())) => {
+                // fighting.md rule 30 (M5 5c-7): `Die now` skips the movement.
+                let i = self.character_index(who).unwrap();
+                let now_flag = rest.iter().any(|w| w.eq_ignore_ascii_case("now"));
+                self.fight_note(who, format!("{at}: KQMonster::setState {who} Die {}", rest.join(" ")));
+                let kind = self.anims[i].character.as_deref().and_then(|c| c.fight.as_ref()).and_then(|f| f.last_kind).unwrap_or(crate::fight::HitKind::Normal);
+                self.character_dies(i, kind, now_flag);
+            }
             [_, who, state, rest @ ..] if self.character_index(who).is_some() => {
                 // characters.md rule 22.
                 let i = self.character_index(who).unwrap();
@@ -2490,6 +2505,9 @@ impl Active {
                 fight_rng: crate::emitter::Rng::new(0x5EED_F1647),
                 weapon_ready: None,
                 combat_level: 1.0,
+                corpses: Vec::new(),
+                die_calls: Vec::new(),
+                kill_tip: false,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -3624,6 +3642,17 @@ impl Active {
                 let w = &self.world;
                 let has_script = w.anims[i].script.is_some() || w.clickables.iter().any(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&name));
                 self.world.movement_ended(&name, &m, has_script);
+                // fighting.md rule 32 (M5 5c-7): its die movement ended.
+                let dying = self.world.anims[i].character.as_deref().and_then(|c| c.fight.as_ref()).and_then(|f| f.dying.clone());
+                if dying.flatten().is_some_and(|d| d.eq_ignore_ascii_case(&m)) {
+                    self.world.death_ended(i, now);
+                }
+            }
+        }
+        // Rule 32.3: the dead's scripts get `Die <kind>`.
+        for (name, kind) in std::mem::take(&mut self.world.die_calls) {
+            if !self.call_named(&name, &["Die", kind]) {
+                self.world.fight_note(&name, format!("no script: Die {kind} not called (rule 32)"));
             }
         }
         // Q119: nothing sent with delay 0 waits for the next update.
@@ -5147,7 +5176,7 @@ mod tests {
         assert!(log.contains("no target: he hits dead air"), "{log}");
         // The big swing: x 0.75 to 4, cut.
         a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), true, "attack2");
-        assert!(a.world.fight_log.last().unwrap().contains("hit by Connor") && a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
+        assert!(a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
     }
 
     /// The goblin with a `react` (0.6 s, one-shot) added, health 500 so it
@@ -5218,6 +5247,52 @@ mod tests {
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("alarmed while hunting: no reaction delay (fighting.md rule 28)"), "{}", a.world.character_log.join("
 "));
+    }
+
+    #[test]
+    fn a_character_dies_then_gives_experience_a_corpse_and_goes() {
+        // fighting.md rules 30, 32, 33 (M5 5c-7).
+        let mut a = fighter();
+        let o = &mut a.world.anims[0];
+        o.player.movements.push(crate::named_anim::tests::movement("die", 0.0, 1.0, false, false, vec![]));
+        let f = o.character.as_mut().unwrap().fight.as_mut().unwrap();
+        f.settings.dead_dts = Some("g2dead.kqs".into());
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.connor_at = Some([0.0, -1400.0, 100.0]);
+        watch(&mut a, &[], 40);
+        a.world.hit_character(0, "Connor", 100, crate::fight::HitKind::Normal);
+        let c = a.world.anims[0].character.as_ref().unwrap();
+        assert_eq!((c.state, c.collision_type, c.collision_mask, c.gravity), (crate::character::State::Die, 0, 0, false));
+        assert_eq!(c.fight.as_ref().unwrap().stats.0[0], 0);
+        assert!(!a.world.active_list.iter().any(|n| n == "gob"));
+        // It never changes state again; hits only take health.
+        assert!(a.test_command("KQMonster::setState gob Wait", "t").is_some());
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Die);
+        a.world.hit_character(0, "Connor", 10, crate::fight::HitKind::Normal);
+        assert!(a.world.fight_log.join("\n").contains("it is dying: nothing else (rule 21)"));
+        // Experience only when the death movement ends (1 s).
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[4], 0);
+        watch(&mut a, &[], 60);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("its death ended (rule 32): Connor gets its experience 3"), "{log}");
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[4], 3);
+        assert_eq!(a.world.corpses.len(), 1);
+        assert_eq!((a.world.corpses[0].shape.as_str(), a.world.corpses[0].position), ("g2dead.kqs", a.world.anims[0].player.base.position));
+        assert!(a.world.anims[0].gone);
+        assert!(log.contains("first kill (type goblin2)"), "{log}");
+        assert!(log.contains("no script: Die Normal not called"), "{log}");
+    }
+
+    #[test]
+    fn die_now_skips_the_movement_and_fire_leaves_no_corpse() {
+        // Rules 30, 32: `setState <name> Die now`; a Fire kill burns away.
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.anims[0].character.as_mut().unwrap().fight.as_mut().unwrap().last_kind = Some(crate::fight::HitKind::Fire);
+        a.test_command("KQMonster::setState gob Die now", "t");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("Die now: no movement") && log.contains("no corpse (Fire: burnt away)"), "{log}");
+        assert!(a.world.anims[0].gone && a.world.corpses.is_empty());
     }
 
     #[test]

@@ -1268,7 +1268,8 @@ stats.
     10 s). Hit while not alarmed: rule 28 (with the Do instead: the
     point 0.52 rad off the line to Connor). **Test:** How to check 4
     and 5 (flinch ~3 in 5, never twice in 2 s; runs after one hit).
-  - **5c-7, dying** (rules 30, 32, 33). Health 0; the die movement by
+  - **5c-7, dying** (**done** 2026-10-20; goblin22 dies on the second
+    punch, its corpse stays) (rules 30, 32, 33). Health 0; the die movement by
     kind; off the active list, not solid, gravity off, no state change
     ever again; when it ends: experience to Connor (his levels), a
     corpse (`deadDts` / `projdKqs` / `idedKqs`, none for fire) where it

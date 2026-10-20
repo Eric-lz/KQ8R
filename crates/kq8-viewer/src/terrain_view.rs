@@ -399,6 +399,8 @@ pub fn setup_objects(
         wall_surfaces.push(model.surfaces);
     }
     crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials, &balls);
+    // fighting.md rule 32 (M5 5c-7): the corpses' models.
+    crate::item_view::spawn_corpses(&mut commands, std::mem::take(&mut objects.corpse_shapes), &built);
     // Emitters (M3 step 3b-1): their particles use the object models.
     // Particle catchers (3b-2) look up their emitter and building.
     let emitters = std::mem::take(&mut objects.emitters);

@@ -227,13 +227,34 @@ pub struct Fight {
     pub last_ouch: f64,
     /// Its flinch movement playing now (`react` or its special one).
     pub flinching: Option<String>,
+    /// Dying (rule 30): its die movement (`None` with `Die now` or an
+    /// unknown kind: nothing plays).
+    pub dying: Option<Option<String>>,
 }
+
+/// A body left where a character died (rule 32; M5 5c-7), drawn by the
+/// viewer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Corpse {
+    /// The character's name (the body is `<name>_corpse` in the logs).
+    pub name: String,
+    /// Its shape (`deadDts`, `projdKqs`, `idedKqs`).
+    pub shape: String,
+    pub position: [f32; 3],
+    pub rotation: [[f32; 3]; 3],
+}
+
+/// Types whose death gives no first-kill tip (rule 33, with the Do
+/// instead: `chicken2`, not the original's typo `checken2`).
+pub const NO_KILL_TIP: [&str; 3] = ["bat", "chicken", "chicken2"];
+/// The first-kill tip comes this long after the death (rule 33), seconds.
+pub const KILL_TIP_DELAY: f64 = 1.5;
 
 impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
         let must_flee = settings.must_flee;
-        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None }
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -427,8 +448,18 @@ impl crate::active::WorldState {
         f.stats.0[0] -= dmg.loss;
         let after = f.stats.0[0];
         let line = format!("hit by {from}, {}: {} (roll {:.0}-125 %, rule 16); health {before} -> {after}", kind.name(), dmg.describe(), range.0 * 100.0);
+        if f.dying.is_some() {
+            // Rule 21: health still taken, others still alarmed; nothing else.
+            self.fight_note(&name, format!("{line}; it is dying: nothing else (rule 21)"));
+            let told = self.run_alarm(&name, now);
+            if !told.is_empty() {
+                self.fight_note(&name, format!("the alarm with run (rule 26): {}", told.join(", ")));
+            }
+            return;
+        }
         if after < 0 {
-            self.fight_note(&name, format!("{line}; below 0: it would die (dying is 5c-7); the rest of the hit is skipped (rule 22.6)"));
+            self.fight_note(&name, format!("{line}; below 0: it dies, the rest of the hit is skipped (rules 18, 22.6)"));
+            self.character_dies(j, kind, false);
             return;
         }
         // 22.7: an attack under way: its next is due attackDelay from now.
@@ -549,6 +580,144 @@ impl crate::active::WorldState {
     }
 }
 
+impl crate::active::WorldState {
+    /// Rule 30 (M5 5c-7): it enters the dying state. Health 0; its die
+    /// movement by the last hit's kind (`now`: none, straight to rule 32);
+    /// its drops (5c-8); off the active list; gravity off; not solid
+    /// (collision type and mask 0); its state never changes again.
+    pub(crate) fn character_dies(&mut self, j: usize, kind: HitKind, now_flag: bool) {
+        let now = self.now();
+        let a = &mut self.anims[j];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(f) = c.fight.as_mut() else { return };
+        if f.dying.is_some() {
+            return;
+        }
+        f.stats.0[0] = 0;
+        f.last_kind = Some(kind);
+        let has = |n: &str| a.player.movements.iter().any(|m| m.name.eq_ignore_ascii_case(n));
+        let movement = if now_flag {
+            None
+        } else {
+            Some(match kind {
+                HitKind::Normal => "Die",
+                HitKind::Projectile if has("projdie") => "projdie",
+                HitKind::Projectile => "Die",
+                HitKind::Fire => "firedie",
+                HitKind::Ice => "icedie",
+            })
+        };
+        let how = match movement {
+            Some(m) => {
+                let st = a.player.start(m);
+                format!("'{m}' starts at once{}", if st.unknown { " (not in its list: movement 0)" } else { "" })
+            }
+            None => "Die now: no movement, straight to its end (rule 30)".to_string(),
+        };
+        f.dying = Some(movement.map(str::to_string));
+        f.flinching = None;
+        c.state = crate::character::State::Die;
+        c.gravity = false;
+        c.collision_type = 0;
+        c.collision_mask = 0;
+        c.turn_to = None;
+        let mut was_active = false;
+        if let Some(ai) = c.ai.as_mut() {
+            was_active = ai.active;
+            ai.active = false;
+            ai.alarmed = false;
+            ai.hunting = false;
+            ai.on_way_home = false;
+        }
+        self.active_list.retain(|n| !n.eq_ignore_ascii_case(&name));
+        let talk = if self.conversation.is_some() { "; a conversation it was in would end (not built: none in Daventry)" } else { "" };
+        self.fight_note(
+            &name,
+            format!(
+                "dies (rule 30): kind {}, {how}; health 0; {}; gravity off; not solid (collision type and mask 0); its state never changes again{talk}",
+                kind.name(),
+                if was_active { "off the active list" } else { "it was not on the active list" }
+            ),
+        );
+        self.drop_items(j);
+        if now_flag {
+            self.death_ended(j, now);
+        }
+    }
+
+    /// Rule 31: its drops (M5 5c-7: logged only; thrown in 5c-8).
+    pub(crate) fn drop_items(&mut self, j: usize) {
+        let a = &self.anims[j];
+        let name = a.player.name.clone();
+        let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) else { return };
+        let drops: Vec<String> = f.settings.drops.iter().map(|d| format!("{} x{}", d.name, d.quantity)).collect();
+        let line = if drops.is_empty() { "drops: nothing (rule 31)".to_string() } else { format!("drops (rule 31): {} (thrown in 5c-8)", drops.join(", ")) };
+        self.fight_note(&name, line);
+    }
+
+    /// Rule 32: its die movement ended (or `Die now`): Connor gets its
+    /// experience (a stats event: his levels apply); a corpse where it
+    /// stood (`deadDts`; `Projectile`: `projdKqs` or `deadDts`; `Ice`:
+    /// `idedKqs` or none; `Fire`: none); its script gets `Die <kind>`
+    /// (queued for the caller, which runs scripts); it is removed. Rule 33:
+    /// the first-kill tip (logged only).
+    pub(crate) fn death_ended(&mut self, j: usize, now: f64) {
+        let a = &mut self.anims[j];
+        let name = a.player.name.clone();
+        let (position, rotation) = (a.player.base.position, a.player.base.rotation);
+        let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) else { return };
+        let kind = f.last_kind.unwrap_or(HitKind::Normal);
+        let exp = f.stats.0[4];
+        let s = &f.settings;
+        let shape = match kind {
+            HitKind::Normal => s.dead_dts.clone(),
+            HitKind::Projectile => s.projd_kqs.clone().or_else(|| s.dead_dts.clone()),
+            HitKind::Ice => s.ided_kqs.clone(),
+            HitKind::Fire => None,
+        };
+        let type_name = s.type_name.clone();
+        a.gone = true;
+        // 32.1: experience to Connor, whoever killed it.
+        let xp = match self.connor_stats.as_mut() {
+            Some(c) => {
+                let before = *c;
+                let level = c.change(crate::stats::Stats([0, 0, 0, 0, exp]));
+                let after = *c;
+                self.connor_stats_events += 1;
+                format!(
+                    "Connor gets its experience {exp}: {:?} level {} -> {:?} level {}{}",
+                    before.stats.0,
+                    before.level,
+                    after.stats.0,
+                    after.level,
+                    level.map_or(String::new(), |l| format!("; {l}"))
+                )
+            }
+            None => format!("Connor's stats are unknown: its experience {exp} is lost"),
+        };
+        // 32.2: the corpse.
+        let corpse = match shape {
+            Some(shape) => {
+                let line = format!("a corpse {shape} where it stood ({:.0}, {:.0}, {:.0}), turned the same way, no shadow, not solid", position[0], position[1], position[2]);
+                self.corpses.push(Corpse { name: name.clone(), shape, position, rotation });
+                line
+            }
+            None => format!("no corpse ({})", if kind == HitKind::Fire { "Fire: burnt away" } else { "no shape for this kind" }),
+        };
+        self.fight_note(&name, format!("its death ended (rule 32): {xp}; {corpse}; its script gets Die {}; removed from the world", kind.name()));
+        // 32.3: queued for the caller; 32.4: removed.
+        self.die_calls.push((name.clone(), kind.name()));
+        self.active_list.retain(|n| !n.eq_ignore_ascii_case(&name));
+        self.requests.push(crate::active::Request::Delete { name: name.clone(), at: format!("{name} died (fighting.md rule 32)") });
+        // Rule 33.
+        if !self.kill_tip && !NO_KILL_TIP.iter().any(|t| t.eq_ignore_ascii_case(&type_name)) {
+            self.kill_tip = true;
+            self.fight_note(&name, format!("first kill (type {type_name}): a one-off tip would come at {:.2} (rule 33; not followed further)", now + KILL_TIP_DELAY));
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -556,6 +725,7 @@ pub(crate) mod tests {
     /// Fight settings with these stats and attack delay, nothing else.
     pub(crate) fn settings(stats: [i64; 5], attack_delay: f32) -> FightSettings {
         FightSettings {
+            type_name: "goblin2".into(),
             stats,
             attack_delay,
             ranged_weapon: None,

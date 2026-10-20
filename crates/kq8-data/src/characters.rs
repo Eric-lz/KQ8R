@@ -869,6 +869,8 @@ pub const PROTECTION_CAP: i64 = 100;
 /// (rule 3, applied when it enters the world).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FightSettings {
+    /// Its type's name (`goblin2`; the first-kill tip, rule 33).
+    pub type_name: String,
     pub stats: [i64; 5],
     /// `attackDelay` in seconds (the line's, `@` = the type's).
     pub attack_delay: f32,
@@ -933,6 +935,7 @@ impl FightSettings {
             Field::FromType => kind.attack_more,
         };
         FightSettings {
+            type_name: kind.name.clone(),
             stats,
             attack_delay: line.attack_delay.or(kind.attack_delay),
             ranged_weapon,

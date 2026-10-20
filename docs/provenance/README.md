@@ -2575,3 +2575,19 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | The alarm with "run": every active character with an alarm radius that sees Connor (or its team does), the hit one included: alarmed if it had no target (rule 23, its delay, team); hit count 2, `run` at once if moving, chase timer 10 s | Rule 26 (as written: no distance limit) | Viewer: goblin21 plus Brdgsprig and Fallsprig (active, seeing him); unit test |
 | Hit while not alarmed and standing: no team and a chase radius → runs with no target: alarmed (no delay) within its alarm radius; after its chase timer gives up beyond 4 × alarm radius or runs home beyond its chase radius; heads for the point at his distance 0.52 rad anticlockwise off the line to him; otherwise alarmed at once | Rule 28 with its "Do not reproduce" (the original's point is about twice the angle) | Unit test |
 | A hunting character neither wanders nor fidgets | **Ours** (rule 28 replaces its wandering) | — |
+
+### 5c-7, dying — `crates/kq8-core/src/{fight,active,character,character_ai}.rs` (`character_dies`, `death_ended`, `drop_items`, `Corpse`, `die_calls`), `crates/kq8-data/src/characters.rs` (`FightSettings::type_name`), viewer `load.rs` (corpse shapes), `item_view.rs` (`CorpseDraw`, `corpse_draw`), `terrain_view.rs`, `main.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Below 0: health 0; its die movement by the last hit's kind (`Die`; `projdie` if it has one, else `Die`; `firedie`; `icedie`) started at once; off the active list; gravity off; collision type and mask 0 (not solid); its state never changes again (`setState` and Move refused); no movement rules | `fighting.md` rule 30 | Unit test; viewer (goblin22) |
+| A conversation it was in ends: logged only | Rule 30 (inferred in the note; none in Daventry) | — |
+| `setState <name> Die now`: no movement, straight to rule 32 (kind: its last hit's, else `Normal`) | Rule 30 | Unit test |
+| A hit on a dying character: health taken, others alarmed (rule 26), nothing else | Rule 21 | Unit test |
+| When the die movement ends: Connor's experience as a stats event (fifth number; his levels apply), whoever killed it | Rule 32.1; `anim-scripts.md` rule 19 | Unit test; viewer: experience 0 → 3 at update 125, not at the death (94) |
+| A corpse: `deadDts`; `Projectile`: `projdKqs` else `deadDts`; `Ice`: `idedKqs` else none; `Fire`: none; where it stood, turned the same way | Rule 32.2 | Unit test; viewer: `g2dead.kqs` drawn |
+| The corpse is drawn by the viewer from shapes loaded with each fighter at the start; no shadow, not solid, no draw-distance test; **the skin swap is not applied** (only `bossprig` in Daventry) | Rule 32.2; **ours** for the draw-distance test and the skin (a known gap) | Viewer |
+| Its script gets `Die <kind>` (after the update's characters, by its name) | Rule 32.3 | Unit test ("no script") |
+| Removed: gone in core, the viewer hides it like a `deleteObject` | Rule 32.4 | Viewer |
+| First kill not of type `bat`, `chicken`, `chicken2`: a tip 1.5 s later, logged only | Rule 33 with its Do instead (`chicken2`, not the typo `checken2`) | Unit test |
+| The drops at the start of dying: logged here, thrown in 5c-8 | Rule 31 | Viewer |
