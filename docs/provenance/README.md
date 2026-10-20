@@ -2405,3 +2405,10 @@ marked otherwise.
 | --- | --- | --- |
 | A sunk zombie (Birth, on its way home) takes up the chase again as rule 28 says, then rises after `birthDelay` as rule 30 | `character-movement.md` rules 28, 30, read together (**our reading**); the user saw zombies rise again in the original; asked in Q134 | Unit test; viewer: the road zombies |
 | It rises only once a `hide` under way has ended | **Stand-in**, asked in Q134 | Viewer |
+
+### 5b-1, the exact cylinder — `crates/kq8-core/src/collide.rs` (`CylinderCollider::from_box`, `sweep`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Radius = the ball radius; bottom = position + box's lowest z; height = box height with more than one ball, else 2 × radius; whole units | `connor-collision.md` rule 18 (Q131 a; replaces the 4d-12-1 stand-in) | Unit test: goblin 0–1,600, Connor 0–1,300, a bat from 1,170 |
+| A purely vertical move tests one ball: the top one going up, the bottom one going down | Rule 18 (Q131 b) | Unit test |

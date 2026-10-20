@@ -797,7 +797,7 @@ impl WorldState {
         for c in now.iter().filter(|c| !was.contains(&c.name)) {
             let p = c.position;
             let line = format!(
-                "solid for Connor: cylinder radius {:.0} (+ his ball radius), height {:.0} on ({:.0}, {:.0}, {:.0}); type {:#x} mask {:#x}{} (Q131 stand-in size)",
+                "solid for Connor: cylinder radius {:.0} (+ his ball radius), height {:.0} from ({:.0}, {:.0}, {:.0}); type {:#x} mask {:#x}{} (connor-collision.md rule 18)",
                 c.radius,
                 c.height,
                 p[0],
@@ -5042,7 +5042,7 @@ mod tests {
         // Only 0x10 (traps, which he ignores); no box: never solid.
         assert_eq!(names, ["gob", "wiz"]);
         let gob = &a.world.character_colliders[0];
-        assert_eq!((gob.position, gob.radius, gob.height), ([5000.0, 0.0, 0.0], 800.0, 1300.0));
+        assert_eq!((gob.position, gob.radius, gob.height), ([5000.0, 0.0, 0.0], 800.0, 1600.0));
         // Far (collider off) or deleted: no longer solid, logged.
         a.world.characters_solid.remove("gob");
         a.world.anims[1].gone = true;

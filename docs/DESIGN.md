@@ -1090,6 +1090,39 @@ stats.
     all or nothing; the raise from the top of its shape onto the drawn
     ground (the water surface) or a building, at most 300, as an up
     pass. Bats end each update on the water surface.
+  - **5b — A's answers Q131–Q134 and the user's checks** (planned
+    2026-10-20; `character-movement.md` rules 3, 7, 18, 25, 27, 28, 30,
+    33 as corrected, `connor-collision.md` rule 18, `connor-physics.md`
+    "landing on a `KQMonster`"; the user's check of the leash and the
+    follow). One commit each:
+    - **5b-1, the exact cylinder** (**done** 2026-10-20) (Q131 a, b): radius = ball radius;
+      bottom = position + the box's lowest z; height = box height with
+      more than one ball, else 2 × the radius (goblin 0–1,600); whole
+      units; a purely vertical move tests one ball (top up, bottom down).
+    - **5b-2, landing on a character's top** (Q131 c): Connor lands, then
+      is pushed 250 level, away from its position (over it: toward his
+      back), as an across-pass move (3 slides), in any state.
+    - **5b-3, the stuck escape** (Q132): on only once `walk` / `run`
+      really plays; the world's diagonals NE, NW, SW, SE, ±1,250 in x and
+      y, the round starting at NE on each start of moving; level from the
+      feet (1 above, as the note recommends); Connor never blocks; all
+      blocked → face north.
+    - **5b-4, the chase** (Q133, the user's check): a melee character
+      within reach stops only while Connor has no forward / back key;
+      otherwise it follows him at reach (the attack itself is the fight
+      study); `doMode=1`: stop within 0.75 ×, start beyond 1.25 ×; the
+      re-take while moving home keeps its movement (no coin) and heads
+      home during its reaction delay; only while moving; standing:
+      home at a `run` next update, chase radius 0 stays; the standing
+      leash also with chase radius 0; home distance 3D; a fidget named
+      `attack` / `react` ending sets the chase timer to 5 s.
+    - **5b-5, the zombies** (Q134): sinking plays `hide` where it is,
+      still drawn, solid and active; when `hide` ends: off the list,
+      underground, gravity off, on its home point, no longer on its way
+      home; no alarm during `hide` (told during it: underground at home
+      at once); rising again only by rule 30 (B's re-take underground
+      removed); the chase during `birth` goes into Move at once (its walk
+      waits; the stuck check from the walk's start).
   - Tests: unit tests for each rule in core; viewer runs at goblin22
     (Sara's house), the chickens behind the farm, the windmill
     spriggans, the graveyard and the road zombies, the bats, read in

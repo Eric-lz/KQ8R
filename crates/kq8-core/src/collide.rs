@@ -434,7 +434,8 @@ impl BoxCollider {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CylinderCollider {
     pub name: String,
-    /// Its position (the cylinder's foot, on the axis).
+    /// The cylinder's foot on its axis: the other's position, raised by
+    /// its box's lowest z.
     pub position: [f32; 3],
     pub collision_type: u32,
     pub collision_mask: u32,
@@ -459,18 +460,25 @@ pub struct CylinderSweep {
 }
 
 impl CylinderCollider {
-    /// From the other object's `BOUNDS.KQ` box (own space). **Stand-in**
-    /// (rule 18: "not pinned down: likely its ball radius and its box
-    /// height"): the radius of its ball stack (half the larger of the x
-    /// and y sizes) and the box's height.
+    /// From the other object's `BOUNDS.KQ` box (own space)
+    /// (`connor-collision.md` rule 18, exact since Q131 a): its ball stack
+    /// wrapped up. Radius = its ball radius (half the larger of the box's
+    /// x and y sizes); bottom = its position's height + the box's lowest z;
+    /// height = from the bottom of its lowest ball to the top of its
+    /// highest (the box's height with more than one ball, else 2 × the
+    /// radius). The sizes are cut to whole units.
     pub fn from_box(name: &str, position: [f32; 3], min: [f32; 3], max: [f32; 3], collision_type: u32, collision_mask: u32) -> Self {
+        let balls = BallStack::from_box(min, max);
+        let r = balls.radius;
+        let bottom = balls.heights.first().map_or(min[2], |h| h - r);
+        let top = balls.heights.last().map_or(max[2], |h| h + r);
         CylinderCollider {
             name: name.to_string(),
-            position,
+            position: [position[0], position[1], position[2] + bottom.trunc()],
             collision_type,
             collision_mask,
-            radius: BallStack::from_box(min, max).radius,
-            height: max[2] - min[2],
+            radius: r.trunc(),
+            height: (top - bottom).trunc(),
         }
     }
 
@@ -554,7 +562,14 @@ impl CylinderCollider {
                 best = Some((t, ball, normal));
             }
         };
+        // Rule 18 (Q131 b): a purely vertical move tests one ball only,
+        // the top one going up, the bottom one going down.
+        let last = stack.heights.len().saturating_sub(1);
+        let only = (mv[0] == 0.0 && mv[1] == 0.0).then_some(if mv[2] >= 0.0 { last } else { 0 });
         for (ball, h) in stack.heights.iter().enumerate() {
+            if only.is_some_and(|k| k != ball) {
+                continue;
+            }
             let s = [from[0] - cx, from[1] - cy, from[2] + h];
             let inside_xy = |p: [f32; 3]| p[0] * p[0] + p[1] * p[1] < reach * reach;
             if inside_xy(s) && s[2] > low && s[2] < high {
@@ -946,9 +961,16 @@ mod tests {
     }
 
     #[test]
-    fn the_cylinder_is_the_ball_radius_and_the_box_height() {
+    fn the_cylinder_is_the_ball_stack_wrapped_up() {
+        // connor-collision.md rule 18 (Q131 a): one ball of 800 for a
+        // goblin, so 0 to 1,600; Connor's four balls: 0 to 1,300; a box
+        // starting above 0 lifts the cylinder (a bat's from 1,170).
         let g = goblin(0x42);
-        assert_eq!((g.radius, g.height), (800.0, 1300.0));
+        assert_eq!((g.radius, g.height, g.position[2]), (800.0, 1600.0, 0.0));
+        let c = CylinderCollider::from_box("Connor", [0.0; 3], [-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0], 4, 0x281B);
+        assert_eq!((c.radius, c.height), (200.0, 1300.0));
+        let b = CylinderCollider::from_box("bat", [0.0, 0.0, 100.0], [-220.0, -90.0, 1170.0], [210.0, 150.0, 2030.0], 0x42, 0x281F);
+        assert_eq!((b.radius, b.position[2], b.height), (215.0, 1270.0, 860.0));
     }
 
     #[test]
@@ -971,10 +993,11 @@ mod tests {
 
     #[test]
     fn top_and_bottom_hits_point_straight_up_and_down() {
-        // Coming down on its top: his bottom ball (centre 200 above his
-        // feet) meets 1,300 + 200, so his feet at 1,300.
-        let c = goblin(0x42).sweep(&connor(), [100.0, 0.0, 2000.0], [100.0, 0.0, 1000.0]).contact.expect("top");
-        assert!(near(c.touch, [100.0, 0.0, 1300.0]), "{c:?}");
+        // Coming down on its top (1,600): only his bottom ball is tested
+        // (rule 18, Q131 b), centre 200 above his feet, meeting 1,600 +
+        // 200: his feet at 1,600.
+        let c = goblin(0x42).sweep(&connor(), [100.0, 0.0, 2500.0], [100.0, 0.0, 1000.0]).contact.expect("top");
+        assert!(near(c.touch, [100.0, 0.0, 1600.0]), "{c:?}");
         assert!(near(c.normal, [0.0, 0.0, 1.0]), "{c:?}");
         // Going up into it from below: his top ball (centre 1,100 above
         // his feet) meets −200, so his feet at −1,300.
@@ -1029,19 +1052,19 @@ mod tests {
         assert!(g.overlaps(stack.radius, lo, hi));
         let (lo, hi) = stack.reach([2000.0, 0.0, 0.0], [1300.0, 0.0, 0.0]);
         assert!(!g.overlaps(stack.radius, lo, hi));
-        let (lo, hi) = stack.reach([0.0, 0.0, 1600.0], [0.0, 0.0, 1700.0]);
+        let (lo, hi) = stack.reach([0.0, 0.0, 1900.0], [0.0, 0.0, 2000.0]);
         assert!(!g.overlaps(stack.radius, lo, hi), "above it");
     }
 
     #[test]
     fn a_line_enters_the_cylinder_at_its_side_or_top() {
-        // M5 5a-2: the goblin's cylinder, radius 800, height 1,300.
+        // M5 5a-2: the goblin's cylinder, radius 800, height 1,600.
         let g = goblin(0x42);
         let p = g.line_hit([2000.0, 0.0, 500.0], [-2000.0, 0.0, 500.0]).unwrap();
         assert!((p[0] - 800.0).abs() < 0.01 && p[2] == 500.0, "{p:?}");
         let p = g.line_hit([0.0, 0.0, 3000.0], [0.0, 0.0, 0.0]).unwrap();
-        assert!((p[2] - 1300.0).abs() < 0.01, "the top: {p:?}");
-        assert!(g.line_hit([2000.0, 0.0, 1500.0], [-2000.0, 0.0, 1500.0]).is_none(), "over it");
+        assert!((p[2] - 1600.0).abs() < 0.01, "the top: {p:?}");
+        assert!(g.line_hit([2000.0, 0.0, 1700.0], [-2000.0, 0.0, 1700.0]).is_none(), "over it");
         assert!(g.line_hit([2000.0, 900.0, 500.0], [-2000.0, 900.0, 500.0]).is_none(), "beside it");
         assert!(g.line_hit([0.0, 0.0, 500.0], [3000.0, 0.0, 500.0]).is_none(), "from inside");
         assert!(g.line_hit([2000.0, 0.0, 500.0], [1000.0, 0.0, 500.0]).is_none(), "short of it");

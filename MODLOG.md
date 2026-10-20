@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 step 5b-1: the exact cylinder of a character (Q131 a, b)
+
+**Changed:** `kq8-core/src/collide.rs`: a character's cylinder is its ball stack wrapped up (bottom at its box's lowest z, height 2 × the radius for one ball), and a purely vertical move tests one ball. Plan for 5b (A's answers Q131–Q134 and the user's checks) in DESIGN. Tests updated, provenance.
+**Why:** A's answer to Q131 (a), (b) in `connor-collision.md` rule 18.
+**Tested how:** `cargo test --workspace`, clippy clean.
+**Result:** A goblin's cylinder is now 0–1,600 (was our 1,300): the same stopping distance for Connor (1,000 from its position, which the user checked), but he meets its top 300 higher. Connor's own cylinder 0–1,300; a bat's from 1,170 above its position.
+**Still broken / not tested:** **Not looked at by eye.** Landing on top is still an ordinary landing (5b-2).
+**Next:** 5b-2.
+
 ## 2026-10-20 Fix (the user's check of 5a): zombies rise again after sinking
 
 **Changed:** `kq8-core/src/character_ai.rs`: a zombie that gave up and sank back (Birth, still on its way home) now takes up the chase again by rule 28 (Connor seen within its attack distance, or it is within its home radius and he within its alarm radius) and rises `birthDelay` s later (rule 30), not before its `hide` has ended. The unit test now checks a second rise. Q134 updated. Provenance.
