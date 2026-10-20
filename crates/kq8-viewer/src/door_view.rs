@@ -626,6 +626,11 @@ pub fn spawn_doors(
     for o in &active.world.items.objects {
         active.world.known.insert(o.name.to_ascii_lowercase());
     }
+    // character-movement.md rule 20 (M5 5a-4).
+    if let Some(n) = objects.max_monsters {
+        active.world.max_monsters = n;
+    }
+    start_lines.push(format!("KQWorld::MaxMonsters {} ({}; character-movement.md rule 20)", active.world.max_monsters, if objects.max_monsters.is_some() { "world.cs" } else { "not set: 6, ours" }));
     if let Some(ground) = objects.ground.take() {
         use kq8_data::terrain::Level;
         active.world.heights = Some(Box::new(move |x, y, floor| ground.ground_at(if floor { Level::Floor } else { Level::Surface }, x, y).map(|g| g.height)));
@@ -1108,6 +1113,8 @@ pub fn character_gravity(
     let b = buildings.as_ref().map_or(&[][..], |b| &b.0[..]);
     // M5 5a-3: their own moves meet objects, each other and Connor too.
     let o = objects.as_ref().map_or(&[][..], |o| &o.0[..]);
+    // M5 5a-4: sight and the active list, then the movers.
+    sim.active.world.characters_ai(&lookup.0, b, o);
     sim.active.world.characters_gravity(&lookup.0, b, o);
     // M4 4d-12-3: the characters solid for Connor where they stand now,
     // for his scene; his hits on them since the last update to the log.

@@ -1036,7 +1036,8 @@ stats.
     as upright, 3 slides then stays); never head-on, no wall blocks, no
     push-off. Traps (0x10) nothing. Nobody is pushed by a character.
     `colliderMask=0`: nothing.
-  - **5a-4, sight and the active list** (rules 20–22). Every 15th
+  - **5a-4, sight and the active list** (**done** 2026-10-20; new
+    `character_ai.rs`) (rules 20–22). Every 15th
     update (counted per character from its first update) a line from
     the top of its box to 1,250 above Connor, blocked by the drawn
     ground (water surface included), plain objects (type bit 1) and

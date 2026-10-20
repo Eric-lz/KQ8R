@@ -634,6 +634,11 @@ pub struct WorldState {
     pub character_colliders: Vec<crate::collide::CylinderCollider>,
     /// Lines for `characters.log` (M4 4d-3), taken by the caller.
     pub character_log: Vec<String>,
+    /// The active characters, lower case, in the order they joined
+    /// (`character-movement.md` rule 20; M5 5a-4).
+    pub active_list: Vec<String>,
+    /// `KQWorld::MaxMonsters` (rule 20), set by the caller.
+    pub max_monsters: usize,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2389,6 +2394,8 @@ impl Active {
                 characters_solid: BTreeSet::new(),
                 character_colliders: Vec::new(),
                 character_log: Vec::new(),
+                active_list: Vec::new(),
+                max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -4652,6 +4659,82 @@ mod tests {
             a.world.anims[0].character.as_mut().unwrap().collision_mask = 0;
         });
         assert!((at[1] + 1467.0).abs() < 1.0, "{at:?}");
+    }
+
+    /// M5 5a-4: standing characters with their movement rules, in Wait.
+    fn watchers(names: &[(&str, Option<&str>, f32)]) -> Active {
+        let mut a = with_object("x\n", "x");
+        for (k, (name, team, alarm)) in names.iter().enumerate() {
+            let mut player = crate::named_anim::tests::still_then_open(name);
+            player.movements[0].name = "stop".into();
+            player.base.position = [k as f32 * 1000.0, 0.0, 100.0];
+            let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, false, k as u64);
+            c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
+            let kq = kq8_data::kq_text::parse(b"[Gob]\nclassType=KQMonster\nanimFile=g.anm\n");
+            let mut s = kq8_data::characters::AiSettings::from_keys(&kq8_data::characters::CharacterKeys::from_section(&kq[0]).unwrap());
+            s.team = team.map(str::to_string);
+            s.alarm_radius = *alarm;
+            c.ai = Some(crate::character_ai::Ai::new(s, player.base.position, 1300.0, false));
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+            a.world.characters_in_range.insert(name.to_ascii_lowercase());
+        }
+        a.world.connor_at = Some([0.0, -5000.0, 100.0]);
+        a
+    }
+
+    /// Updates until update `to`, with the movement rules.
+    fn watch(a: &mut Active, objects: &[crate::collide::BoxCollider], to: u64) {
+        while a.world.updates < to {
+            a.update();
+            a.world.characters_ai(&FlatGround, &[], objects);
+            a.world.characters_gravity(&FlatGround, &[], objects);
+        }
+    }
+
+    #[test]
+    fn characters_see_connor_and_join_the_active_list() {
+        // Rule 20: the sight test every 15th update, from the box top; in
+        // Wait, seen → active (at most MaxMonsters).
+        let mut a = watchers(&[("g1", None, 0.0), ("g2", None, 0.0), ("g3", Some("windguys"), 0.0)]);
+        a.world.max_monsters = 2;
+        watch(&mut a, &[], 14);
+        assert!(!a.world.character_log.join("\n").contains("sight"), "the first test is at update 15");
+        assert!(a.world.active_list.is_empty());
+        watch(&mut a, &[], 16);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("update 15: g1: sight (rule 20): can see Connor (a clear line; eye 1300"), "{log}");
+        assert!(log.contains("g1: status:") && log.contains("Connor 5000 away"), "{log}");
+        // g1 and g2 fill the two places; g3 (a team) takes g1's.
+        assert_eq!(a.world.active_list, ["g2", "g3"], "{}", a.world.character_log.join("\n"));
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("g1: leaves the active list (rule 21): pushed off the active list by g3 (team windguys)"), "{log}");
+        // Alarm radius 0: Connor is always farther than twice it: home.
+        assert!(log.contains("put back on its home point (0, 0, 100) at once"), "{log}");
+    }
+
+    #[test]
+    fn a_plain_object_blocks_the_sight_line_a_character_does_not() {
+        let mut a = watchers(&[("g1", None, 0.0)]);
+        // A wall of a box between them (type 0x41).
+        let mut wall = crate::collide::BoxCollider { name: "cart".into(), min: [-3000.0, -100.0, 0.0], max: [3000.0, 100.0, 3000.0], placement: Placement { rotation: crate::door::identity().m, position: [0.0, -2500.0, 100.0] }, kind: Default::default() };
+        wall.kind.collision_type = 0x41;
+        watch(&mut a, std::slice::from_ref(&wall), 20);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("g1: sight (rule 20): can't see Connor (blocked by object cart"), "{log}");
+        assert!(a.world.active_list.is_empty());
+        // A character's type (0x42) is not in the line's mask: no block.
+        wall.kind.collision_type = 0x42;
+        watch(&mut a, std::slice::from_ref(&wall), 31);
+        assert_eq!(a.world.active_list, ["g1"], "{}", a.world.character_log.join("\n"));
+        // Going off takes it off the list; Connor near (alarm 3,000:
+        // within 6,000): it stays where it is.
+        a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap().settings.alarm_radius = 3000.0;
+        a.world.anims[0].player.base.position = [0.0, -1000.0, 100.0];
+        a.world.characters_in_range.clear();
+        watch(&mut a, &[], 32);
+        assert!(a.world.active_list.is_empty());
+        assert_eq!(a.world.anims[0].player.base.position, [0.0, -1000.0, 100.0]);
+        assert!(a.world.character_log.join("\n").contains("went off (neither near nor far); Connor 4000 away (2 × alarm radius 6000)"));
     }
 
     #[test]

@@ -294,6 +294,11 @@ pub fn spawn_animated(
             // M4 4d-12-3: what Connor's scene needs to make it solid.
             (ch.collision_type, ch.collision_mask) = (k.collider_type, k.collider_mask);
             ch.bounds = balls.character_box(&p.name, c.box_type.as_deref());
+            // character-movement.md (M5 5a-4): its rules; home = where it
+            // was placed; the eye at the top of its box (rule 20).
+            let eye = ch.bounds.map_or(1000.0, |(_, max)| max[2]);
+            let has_hide = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("hide"));
+            ch.ai = Some(kq8_core::character_ai::Ai::new(c.ai.clone(), p.position, eye, has_hide));
             if let Some((min, max)) = ch.bounds {
                 let keep = match p.keep_on_ground {
                     kq8_data::objects::KeepOnGround::Floor => -1,

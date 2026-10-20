@@ -135,6 +135,9 @@ pub struct Character {
     mover_started: bool,
     /// Walking (M5 5a-2, `character-movement.md` rules 1–8).
     pub walk: Walk,
+    /// Its movement rules and what it knows (M5 5a-4), set by the loader;
+    /// `None` = none (it only does what it is told).
+    pub ai: Option<crate::character_ai::Ai>,
 }
 
 /// A character's walking (`character-movement.md` rules 1–8; M5 5a-2).
@@ -224,6 +227,7 @@ impl Character {
             falling_from: None,
             mover_started: false,
             walk: Walk::default(),
+            ai: None,
         }
     }
 

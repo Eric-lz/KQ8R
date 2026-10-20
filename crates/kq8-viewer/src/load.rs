@@ -1243,6 +1243,9 @@ pub struct Objects {
     pub character_lines: Vec<String>,
     /// The ground, for z -1 / -2 of items made while playing.
     pub ground: Option<kq8_data::Terrain>,
+    /// `KQWorld::MaxMonsters` from `world.cs` (`character-movement.md`
+    /// rule 20; M5 5a-4).
+    pub max_monsters: Option<usize>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -1570,6 +1573,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.item_shapes = item_shapes;
     objects.item_lines = item_lines;
     objects.ground = Some(terrain.clone());
+    objects.max_monsters = world_palette_name(world, "MaxMonsters").and_then(|v| v.parse().ok());
     objects
 }
 
@@ -3550,6 +3554,7 @@ impl Placer<'_> {
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,
+            max_monsters: None,
         }
     }
 }

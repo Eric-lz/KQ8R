@@ -2323,3 +2323,14 @@ marked otherwise.
 | Connor as the upright cylinder of his box (radius 200, height 1,300) | **Stand-in**, asked as Q132 (c) | Unit test; viewer: goblin22 stops 1,000 from him |
 | `colliderMask=0`: nothing but the ground check | Rule 35 | Unit test |
 | Nobody is pushed by a character's move | Rule 34 | — (nothing moves the other) |
+
+### 5a-4, sight and the active list — `crates/kq8-core/src/character_ai.rs` (new), `character.rs`, `active.rs`, viewer `anim_view.rs`, `door_view.rs`, `load.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The sight test every 15th update: a line from the top of its box to 1,250 above Connor, blocked by the drawn ground, plain objects (bit 1) and buildings (bit 8), not characters or Connor; no distance limit; `canAlwaysSeeConner` | `character-movement.md` rule 20 | Unit tests; viewer: goblin22 blocked by the cottage, chicken1 (eye 400) sees him |
+| "Every 15th update" = the world's update number a multiple of 15 | **Our reading** (the note does not say from when it counts) | Unit test |
+| The count of updates since it last saw him | Rule 20 | — (used from 5a-7) |
+| In Wait, not active and seeing him → joins the list if there is room (`KQWorld::MaxMonsters`, from `world.cs`); a team member takes the place of the **first** one without a team (**our reading**) | Rule 20 | Unit test |
+| Off (not near or far) or pushed off → leaves; put home at once if on its way home or Connor > 2 × alarm radius (plain 3D distance: **stand-in**, the note's open question 2); `hide` → Birth; Move → Wait | Rule 21 | Unit tests |
+| `characters.log`: every change of sight (and what blocked it), joins and leaves, a status line per character every 15 updates | The note's "How to check" | Viewer run |

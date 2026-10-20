@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-4: characters see Connor; the active list
+
+**Changed:** New `kq8-core/src/character_ai.rs`: each character's movement rules (`Ai`: settings, home, eye height, what it knows), the sight test every 15th update, joining the world's active list (`KQWorld::MaxMonsters`, team members first), leaving it (off, pushed off) with the reset to home. `character.rs`, `active.rs`: the new state. Viewer: `anim_view.rs` gives each character its rules at load, `load.rs` / `door_view.rs` read `MaxMonsters` from `world.cs` and run the sight pass before the movers. 2 new tests. DESIGN, provenance.
+**Why:** `character-movement.md` rules 20–22 (step 4 of 5a).
+**Tested how:** `cargo test --workspace` (399 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --frames 1500`, `characters.log`.
+**Result:** At the start goblin22 can't see Connor (blocked by building Cottage); chicken1 (eye 400) sees him at update 15 and joins the list (1 of 6); MaxMonsters 6 from `world.cs`. Unit tests: no test before update 15; three in Wait with room for two: the team member takes the place of the first one without a team, which (alarm radius 0) is put back home; a cart blocks the line, a character's type doesn't; going off with Connor within twice the alarm radius leaves it where it is.
+**Still broken / not tested:** **Not looked at by eye.** Being active does nothing visible yet (wandering is 5a-5). The reset's distance and the 15th update's count are our readings. Hiding a zombie that goes back to Birth is not drawn.
+**Next:** 5a-5, wandering.
+
 ## 2026-10-20 M5 step 5a-3: a character's own move meets objects, characters and Connor
 
 **Changed:** `kq8-core/src/active.rs`: `characters_gravity` now builds each character's scene itself: terrain, buildings (mask 0x8), and the plain objects, other characters (cylinders where they stand now) and Connor (a cylinder from his box) whose type its mask covers in its own touch table (`OWN_TOUCH_OBSTACLES` in `character.rs`); `colliderMask=0` sees none of them. Viewer `door_view.rs` passes the object colliders. 1 new test. DESIGN, provenance.
