@@ -2229,3 +2229,11 @@ marked otherwise.
 | The shown model frame's triangles, every frame, through `kq8_core::shadow` onto the terrain | Rule 37 | Same |
 | The terrain triangles searched: under the model's own corners moved along the sun (the box's are not used) | Rule 37 (1) says "its box"; **our stand-in**: the model's points cover the same shadow | — |
 | Drawn unlit, multiply blending at 0.5 (two layers: a quarter), no haze, no fading | Rule 37 "How dark" (0.5; "most likely" halves; blending not traced) and the user's check (half as bright, a quarter on overlaps) | Not checked by eye yet |
+
+### 4d-7b-2b, Connor's shadow — `crates/kq8-viewer/src/anim_view.rs`, `connor_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Connor's shown model frame cast like a character's (direction, pieces, 20 lift, 1,500 cut, 0.5) | `characters.md` rule 37 and its user's checks (his shadow at a jump, wading) | `characters.log` "Connor: shadow" lines |
+| He casts whenever his body is shown | **Stand-in**, asked as Q130 (his `shadowMask`, `allowShadows`) | — |
+| A shadow with nothing to draw is hidden, not given an empty mesh | **Ours** (Bevy warns about empty meshes) | Run at the ruins: no warning |

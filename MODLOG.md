@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-7b-2b: Connor's shadow; no empty shadow meshes
+
+**Changed:** `kq8-viewer/src/anim_view.rs`: `shadow_draw` also throws Connor's shown model frame onto the terrain, the same way as the characters'; the parts shared in `frame_triangles` and `show_shadow`. A shadow with nothing to draw now hides its entity and keeps its mesh (it used to get an empty mesh). `connor_view.rs`: `shown` readable by the shadow code. New question **Q130** (Connor's own cast test). Provenance.
+**Why:** The user's check of 4d-7b-2 (2026-10-20): the goblin's shadow looks right, Connor has none; and Bevy warned every frame "Mesh … contains no vertices" (our empty shadow meshes: a character in range with no shadow, e.g. the spriggans on the castle).
+**Tested how:** `cargo test --workspace` (521 pass), clippy clean. Viewer: `cargo play --world Daventry --at 212000,286000,0 --frames 400 --sound off`, terminal output kept and searched, `characters.log`.
+**Result:** Connor: 384 model triangles, about 216 facing the sun, about 275 pieces each frame. The warning: 0 times in the run (three characters there have no shadow).
+**Still broken / not tested:** Connor's shadow not checked by eye (the jump's 1,500 cut and wading not run). His cast test is ours (Q130).
+**Next:** the user's look; then 4d-7b-3 (buildings) and 4d-7b-4 (plain objects).
+
 ## 2026-10-19 M4 step 4d-7b-2: characters' shadows on the terrain (Q123)
 
 **Changed:** `kq8-viewer/src/anim_view.rs`: new `shadow_draw` (PostUpdate, after the transforms): for each character that casts (rule 36) and is drawn (near or far, not hidden), every frame its shown model frame's triangles go through `kq8_core::shadow` onto the terrain into its own mesh, drawn unlit with multiply blending at 0.5, no haze; a line per shadow once a second in `characters.log`. `load.rs`: the rule-36 result is kept on the character. `main.rs`: the system. DESIGN, provenance.

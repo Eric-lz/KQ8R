@@ -118,7 +118,9 @@ pub struct ConnorSim {
     /// What the last down-pass contact was (`terrain`, a building, or
     /// `none`), to log only when it changes.
     last_down: String,
-    shown: Option<Entity>,
+    /// The frame entity shown now (its children are the model parts; the
+    /// shadow reads them, M4 4d-7b-2).
+    pub(crate) shown: Option<Entity>,
     /// Sounds his cues started (M3 3h-4), taken by `sound_view`.
     pub sounds: Vec<kq8_core::sound::Start>,
     /// Picks the footstep file (`sound.md` rule 38).
