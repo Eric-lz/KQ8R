@@ -164,6 +164,14 @@ pub struct ConnorSim {
     /// is ready (M5 5c fix, **stand-in**, Q138): his movements come from
     /// it where it has them.
     pub weapon_set: Option<String>,
+    /// The weapon list he is readying or has ready (switched at the click;
+    /// `weapon_set` follows when the draw part starts), the switch still
+    /// to come (set, list item it waits for), and whether a draw or
+    /// put-away is playing (no slot clicks meanwhile: the user's check,
+    /// 5d fix 10).
+    pub weapon_target: Option<String>,
+    pending_set: Option<(Option<String>, usize)>,
+    readying: bool,
 }
 
 /// One of Connor's swings (M5 5c-5).
@@ -487,6 +495,9 @@ pub fn spawn_connor(
         swing: None,
         do_cues: Vec::new(),
         weapon_set: None,
+        weapon_target: None,
+        pending_set: None,
+        readying: false,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -888,44 +899,100 @@ impl ConnorSim {
     /// walks (Wait, Move: our Free mode); otherwise only the set switches. Returns the
     /// line for `fight.log`.
     pub fn ready_set(&mut self, list: Option<String>) -> String {
-        let (word, file) = match (&list, &self.weapon_set) {
-            (Some(l), _) => ("draw", l.clone()),
-            (None, Some(old)) => ("undraw", old.clone()),
-            (None, None) => return "no weapon set: nothing".into(),
-        };
-        self.weapon_set = list;
-        // pushing.md: sword 0, empty hands 4 (conversation.md rule 7,
-        // gestures, pushing; fix 3).
-        self.walker.hand_mode = if self.weapon_set.is_some() { kq8_core::connor::SWORD_MODE } else { kq8_core::connor::EMPTY_HANDS };
-        let set = match &self.weapon_set {
-            Some(l) => format!("his movements now come from {l} where it has them"),
-            None => "his own movements again (Conner.anm)".into(),
-        };
-        // 5d fix 9 (stand-in, Q138 a): a list without `draw` / `undraw`
-        // (all but the fists) draws with `out` and puts away with `away`
-        // (the dagger's `out` is `cd_draw` with `dagout.aud`, its `away`
-        // `cd_shth` with `dagin.aud`; `conversation.md` rule 7 puts away
-        // with `away`).
-        let find = |w: &str| {
-            let wanted = kq8_core::connor::special_movement_name(&file, w);
+        use kq8_core::connor::SpecialStep;
+        let old = self.weapon_target.clone();
+        if old == list {
+            return "no change".into();
+        }
+        self.weapon_target = list.clone();
+        let named = |file: &str, w: &str| {
+            let wanted = kq8_core::connor::special_movement_name(file, w);
             self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
         };
-        let other = if word == "draw" { "out" } else { "away" };
-        let (word, found) = match find(word) {
-            Some(m) => (word, Some(m)),
-            None => (other, find(other)),
+        let own = |w: &str| self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(w)).map(|m| m.name);
+        // 5d fix 10 (stand-in, Q138 a): the fists draw with `draw` and
+        // put away with `undraw` (the user's check); the other weapons as
+        // `conversation.md` rule 7 puts one away: the weapon's `away`, bare
+        // hands, his own `out` (`c_shth` backwards: the hand back from the
+        // sheath); and draw the other way round: his own `away` (`c_shth`:
+        // the hand to the sheath), then the weapon's `out` (`cd_draw`).
+        let mut steps: Vec<(&'static str, &str)> = Vec::new();
+        let old_undraws = old.as_deref().and_then(|f| named(f, "undraw"));
+        let new_draws = list.as_deref().and_then(|f| named(f, "draw"));
+        match &old {
+            Some(f) => {
+                if let Some(m) = old_undraws.or_else(|| named(f, "away")) {
+                    steps.push((m, if old_undraws.is_some() { "undraw" } else { "away" }));
+                }
+            }
+            None => {
+                if new_draws.is_none() {
+                    if let Some(m) = own("away") {
+                        steps.push((m, "away (his own)"));
+                    }
+                }
+            }
+        }
+        let switch_at = steps.len();
+        match &list {
+            Some(f) => {
+                if let Some(m) = new_draws.or_else(|| named(f, "out")) {
+                    steps.push((m, if new_draws.is_some() { "draw" } else { "out" }));
+                }
+            }
+            None => {
+                if old_undraws.is_none() {
+                    if let Some(m) = own("out") {
+                        steps.push((m, "out (his own)"));
+                    }
+                }
+            }
+        }
+        let set = match &list {
+            Some(l) => format!("his movements come from {l} where it has them"),
+            None => "his own movements again (Conner.anm)".into(),
         };
-        let Some(m) = found else {
-            return format!("{set}; no {word} in {file} loaded: nothing plays");
-        };
-        if self.walker.mode != Mode::Free {
-            return format!("{set}; mode {}: '{m}' not played (stand-in)", self.walker.mode.name());
+        let played: Vec<&str> = steps.iter().map(|(m, _)| *m).collect();
+        if self.walker.mode != Mode::Free || steps.is_empty() {
+            self.switch_set(list);
+            return format!("{set} at once; mode {}: {played:?} not played (stand-in)", self.walker.mode.name());
+        }
+        if switch_at == 0 {
+            self.switch_set(list);
+        } else {
+            self.pending_set = Some((list, switch_at));
         }
         self.walker.auto = None;
-        let notes = self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(m, word.into())]);
-        let line = format!("{set}; plays '{m}' ({})", notes.join("; "));
+        self.readying = true;
+        let notes = self.walker.start_special(steps.iter().map(|(m, w)| SpecialStep::Play(m, w.to_string())).collect());
+        let line = format!("plays {played:?}; {set} from item {switch_at} ({})", notes.join("; "));
         self.log.detail(format!("connor update {}: weapon: {line}", self.updates));
         line
+    }
+
+    /// The movement set switches (5d fix 10), with his hand mode
+    /// (`pushing.md`: sword 0, empty hands 4; `conversation.md` rule 7,
+    /// gestures, pushing).
+    fn switch_set(&mut self, list: Option<String>) {
+        self.walker.hand_mode = if list.is_some() { kq8_core::connor::SWORD_MODE } else { kq8_core::connor::EMPTY_HANDS };
+        self.weapon_set = list;
+    }
+
+    /// After his own update: the waiting set switch when its list item
+    /// starts (or the list ended or was replaced); the draw or put-away is
+    /// over when the Special state is.
+    fn weapon_step(&mut self) {
+        if let Some((set, at)) = self.pending_set.clone() {
+            if self.walker.mode != Mode::Special || self.walker.special_at >= at {
+                self.pending_set = None;
+                self.switch_set(set);
+                let n = self.updates;
+                self.log.detail(format!("connor update {n}: weapon: the set switches now ({:?})", self.weapon_set));
+            }
+        }
+        if self.readying && self.walker.mode != Mode::Special {
+            self.readying = false;
+        }
     }
 
     /// Whether a weapon may be readied or put away now: not during a jump,
@@ -935,6 +1002,9 @@ impl ConnorSim {
     /// falling or dying (ours). `Err`: why not.
     pub fn may_ready(&self) -> Result<(), String> {
         let w = &self.walker;
+        if self.readying {
+            return Err("a draw or put-away plays".into());
+        }
         if matches!(w.mode, Mode::Jump | Mode::Fall | Mode::Land | Mode::Crash | Mode::Dying | Mode::Dead) {
             return Err(format!("mode {}", w.mode.name()));
         }
@@ -1268,6 +1338,8 @@ pub fn connor_step(
         let loops = |name: &str| find(movements, weapon_set.as_deref(), name).map(|m| &m.movement_loop);
         kq8_core::connor_update::tick(mover, walker, intent, jump, &loops, &scene)
     };
+    // 5d fix 10: the weapon set switch waiting for its list item.
+    sim.weapon_step();
     if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
         sim.jump_start_z = Some(z_before);
     }

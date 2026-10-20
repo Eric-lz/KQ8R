@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d fix 10: drawing and sheathing in two parts; a weapon picked up while ready; no clicks meanwhile
+
+**Changed:** Weapons other than the fists are drawn with his own `away` (hand to the sheath) then the weapon's `out`, and put away with the weapon's `away` then his own `out` (as `conversation.md` rule 7); the set switches when the second part starts. A hand weapon picked up while one is ready becomes the ready one. While a draw or put-away plays, slot clicks are refused.
+**Why:** The user's checks in the original: the dagger's draw lacked its start and its sheath its end; picking up the dagger with the fists out switches to the dagger; no slot click until the draw has finished.
+**Tested how:** `cargo test --workspace` (437 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 260784,228600,3.1416 --key left:IDCTL_INVBAR_SHORT,40 --click NoName1,70 --key left:IDCTL_INVBAR_SHORT,150 --key left:IDCTL_INVBAR_SHORT,210 --key left:IDCTL_INVBAR_SHORT,215 --frames 2200`; `fight.log`, `connor.log`, `items.log`.
+**Result:** 40: the fists' `draw`. 70: the dagger picked up becomes ready: the fists' `undraw`, then `condag.anm/out` (set switched at 78). 150: `condag.anm/away`, his own `out` (set off at 166, ends 174). 210: his own `away`, `condag.anm/out` (ends 232). 215: the click refused.
+**Still broken / not tested:** Not looked at. What the original plays exactly (Q138).
+**Next:** The user's look.
+
 ## 2026-10-20 M5 5d fix 9: the dagger has its own movement set
 
 **Changed:** A hand weapon's movement set is also loaded when a world script names the weapon (Connor is loaded before `WorldInv.cs` makes the dagger, so only the fists' set was loaded). A list without `draw` / `undraw` (all but the fists) readies with `out` and puts away with `away` (stand-in, Q138).

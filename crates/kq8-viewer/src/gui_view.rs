@@ -794,7 +794,7 @@ pub fn gui_step(
     // is the sword; Ctrl held gives the play pointer.
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
     // Readied as Connor took it (a click during a jump is undone: fix 2).
-    let ready = connor.as_ref().map_or(sim.active.world.weapon_ready.is_some(), |c| c.weapon_set.is_some());
+    let ready = connor.as_ref().map_or(sim.active.world.weapon_ready.is_some(), |c| c.weapon_target.is_some());
     let pointer = hand
         .as_ref()
         .and_then(|(_, kind)| sim.active.world.items.kind(kind).and_then(|t| t.cursor.clone()))

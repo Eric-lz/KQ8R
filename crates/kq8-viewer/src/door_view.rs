@@ -1427,16 +1427,16 @@ pub fn door_step(
         // M5 5c fix (stand-in, Q138): the weapon readied or put away
         // switches his movement set (draw / undraw).
         let list = weapon_list(&sim.active.world);
-        if list != c.weapon_set {
+        if list != c.weapon_target {
             let w = &mut sim.active.world;
             if let Err(why) = c.may_ready() {
                 // The user's checks in the original (2026-10-20): no
                 // readying or putting away during a jump, its landing or a
                 // stumble; the click is undone (fixes 2, 3).
-                let kept = c.weapon_set.as_ref().and_then(|f| {
+                let kept = c.weapon_target.as_ref().and_then(|f| {
                     w.connor_fight.as_ref()?.short_lists.iter().find(|(_, file)| file.eq_ignore_ascii_case(f)).map(|(n, _)| format!("{}{n}", kq8_data::items::PREFIX))
                 });
-                let line = format!("weapon {:?} asked ({why}): refused, stays {kept:?} (no readying during a jump, its landing or a stumble)", w.weapon_ready);
+                let line = format!("weapon {:?} asked ({why}): refused, stays {kept:?} (no readying during a jump, its landing, a stumble or another draw)", w.weapon_ready);
                 w.weapon_ready = kept;
                 w.fight_note("Connor", line);
             } else {

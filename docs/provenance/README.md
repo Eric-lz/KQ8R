@@ -2759,3 +2759,13 @@ executable looked at.
 | Readying plays the list's `draw`, else `out`; putting away its `undraw`, else `away` | **Stand-in** (Q138 a): data (`out` = `cd_draw` / `ca_draw`, `away` = `cd_shth` / `Ca_shth`, with their sounds); `conversation.md` rule 7 (`away` puts away) | Viewer: the dagger picked up, `condag.anm/out`, `stop` drawn from `condag.anm`, `away` |
 | The alchemist's boards refuse the fists and the dagger | `anim-scripts.md` rule 12 (`boardup.cs`); the user's check | — |
 
+### 5d fix 10, drawing and putting away in two parts; picking a weapon up while ready; no clicks meanwhile — viewer `connor_view.rs` (`ready_set`, `switch_set`, `weapon_step`, `weapon_target`, `may_ready`), `door_view.rs`, `gui_view.rs`; `crates/kq8-core/src/connor_inventory.rs` (`receive`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A weapon other than the fists is put away with its `away`, then his own `out`; drawn with his own `away`, then its `out`; from one weapon to another: the old one's put-away part, then the new one's draw part; the movement set switches when the second part starts | `conversation.md` rule 7 (`away`, bare hands, `out`), data (`c_shth` forwards / backwards in `conner.anm`); **stand-in** (Q138 a); the user's check (the dagger's draw and sheath were cut short) | `connor.log`: put away 150–174, drawn 210–232 |
+| The fists keep `draw` / `undraw` | The user's check (fix 1) | — |
+| A hand weapon picked up while one is ready becomes the ready one (it replaces the old one in its slot, rule 8) | The user's check in the original | `items.log`: "INVITEM_Dagger is ready now"; `fight.log`: fists' `undraw`, dagger's `out` |
+| No slot click while a draw or put-away plays (undone like one during a jump) | The user's check in the original | `fight.log`: update 215 refused |
+| The sword pointer follows the weapon asked for (at the click) | Ours | — |
+

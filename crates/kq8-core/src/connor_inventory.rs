@@ -175,8 +175,13 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
         w.item_note(line);
         let on = apply(w, name, "put on");
         w.item_note(on);
-        if t.category == "LongWeapon" || t.category == "ShortWeapon" {
-            w.item_note(format!("{}: weapon modes and readying are M5; not done", o.name));
+        // The user's check in the original (5d fix 10): a hand weapon taken
+        // while one is ready is readied in its place.
+        if t.category == "ShortWeapon" && w.weapon_ready.is_some() {
+            let was = w.weapon_ready.replace(o.kind.clone());
+            w.item_note(format!("{}: a hand weapon was ready ({was:?}): {} is ready now (the user's check)", o.name, o.kind));
+        } else if t.category == "LongWeapon" || t.category == "ShortWeapon" {
+            w.item_note(format!("{}: ranged weapon modes are not built; a hand weapon is readied from its slot", o.name));
         }
         if o.kind.eq_ignore_ascii_case("INVITEM_TempleArmor") {
             w.item_note("INVITEM_TempleArmor: Connor's animation set would change (contpsd2.anm, conicbw2.anm); not done");
