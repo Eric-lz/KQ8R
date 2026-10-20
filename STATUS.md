@@ -14,7 +14,8 @@ Q126 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
   camera turns between the Wizard and Connor in the original (now so,
   Q126 updated), and the Uglybeast still snapped and flickered (now
   fixed from A's answers: Q120 a 0 s loop never ends, Q119 delay-0 events
-  before drawing; checked in the logs, not yet by eye). Other characters
+  before drawing). **All three checked by the user in our viewer
+  (2026-10-19): fixed.** Other characters
   standing still is expected until M5 (wandering, `characters.md`).
   Q119's change makes every `EndLoop` and delay-0 event one update
   earlier, also in M3's scenes.

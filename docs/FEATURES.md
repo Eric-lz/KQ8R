@@ -393,6 +393,10 @@ by eye**.
   that was cut.
 - **An item on the partner during the talk** ends it and offers the
   item (`InvConv`).
+- Checked by the user (2026-10-19): offering an item, the camera cuts
+  and the right button (turning between the two, as in the original),
+  walking away and coming back; the Uglybeast's turn and lines without
+  snapping or flickering.
 - Stand-ins until the study session answers: Q125 (keys during the walk
   to the spot, Jump and pushing while talking), Q126 (where the
   conversation camera aims).

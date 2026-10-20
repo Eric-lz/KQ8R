@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 4e-8 to 4e-10: the user's check
+
+**Changed:** `STATUS.md`, `docs/FEATURES.md`: the user's result. No code.
+**Why:** The user ran the three tests of 4e-8 to 4e-10 in our viewer.
+**Tested how:** By eye in our viewer (user).
+**Result:** All three fixed: the right-button camera turns between the Wizard and Connor as in the original; the Uglybeast no longer snaps to idle at the end of its turn; its far-away line no longer flickers.
+**Still broken / not tested:** The exact centre point of the right-button camera is still our stand-in (Q126). Q125 open. A's answers Q116, Q117, Q121–Q124 not built.
+**Next:** B: A's remaining 4d answers, or the main menu. A: Q125, Q126.
+
 ## 2026-10-19 M4 step 4e-10: events sent with delay 0 are handled before drawing (Q119 built)
 
 **Changed:** `kq8-core/src/active.rs`: at the end of every update the event queue is handled again, until nothing is due now (`handle_due`), so the ends of movements (`EndLoop`, `Cue 300`), a line's notify-group `TalkComplete` and what scripts send with delay 0 during the update arrive in the same update, before the frame is drawn (was: the next update). Four older tests changed to the new timing, 1 new. `QUESTIONS.md` Q119 marked built. DESIGN, provenance.
