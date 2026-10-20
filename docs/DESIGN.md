@@ -1232,7 +1232,9 @@ stats.
     At the `Do` cue only a log line ("hit test: 5c-4"). **Test:**
     goblin22 swings as soon as it is within 1,500 and then every
     ~2 s (1 s swing + 1 s delay) at a standing Connor (How to check 1).
-  - **5c-4, the swing lands on Connor** (rules 13, 14, 16–19, 29). At
+  - **5c-4, the swing lands on Connor** (**done** 2026-10-20; goblin22
+    kills a standing Connor in 8 hits; Connor's keys moved here from
+    5c-5: `ouchSound`, the damage factors, the weapon lists) (rules 13, 14, 16–19, 29). At
     `Do`: in reach (≤ reach, 1.25 × with his back key held) and in front
     (< 90°) → a hit of its hand damage (`Fire` with a Flame Sword); the
     roll 25–100 %, his protection, at least 1 lost; his health in the

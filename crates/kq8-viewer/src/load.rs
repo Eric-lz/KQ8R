@@ -230,8 +230,8 @@ pub fn load_model(
 /// edge"), the crash (2d-4), the jumps (2e), the start and stop transitions (2g,
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped. M4 4e-7
-/// adds his gestures.
-pub const CONNOR_MOVEMENTS: [&str; 45] = [
+/// adds his gestures; M5 5c-4 his flinch and deaths from a hit.
+pub const CONNOR_MOVEMENTS: [&str; 50] = [
     "stop",
     "walk",
     "run",
@@ -279,6 +279,12 @@ pub const CONNOR_MOVEMENTS: [&str; 45] = [
     "gesturef",
     "gestureg",
     "gestureh",
+    // Hit (M5 5c-4, fighting.md rule 29): the flinch, the deaths.
+    "react",
+    "die",
+    "dropweapon",
+    "firedie",
+    "icedie",
 ];
 
 /// One of Connor's movements: its animation and playback speed.
@@ -1187,6 +1193,9 @@ pub struct Objects {
     pub attack_dist: Option<f32>,
     /// Connor's `stats=` and `level=` from `GAME/Kq/Connor.kq` (3i-6).
     pub connor_stats: Option<(String, Option<String>)>,
+    /// What `Connor.kq` gives the fight (M5 5c-4, `fighting.md` rules 24,
+    /// 39–41).
+    pub connor_fight: Option<kq8_core::fight::ConnorFight>,
     /// Connor's start inventory from `Connor.kq` (M4 4c-2,
     /// `inventory.md` rule 4): per item its section name, type,
     /// quantity and `userId`, in list order; and the problems met.
@@ -1441,6 +1450,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         connor: None,
         attack_dist: None,
         connor_stats: None,
+        connor_fight: None,
         connor_inventory: (Vec::new(), Vec::new()),
         object_stats: Vec::new(),
         monsters: Vec::new(),
@@ -1647,6 +1657,7 @@ struct Placer<'a> {
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     attack_dist: Option<f32>,
     connor_stats: Option<(String, Option<String>)>,
+    connor_fight: Option<kq8_core::fight::ConnorFight>,
     connor_inventory: (Vec<ConnorItem>, Vec<String>),
     object_stats: Vec<(String, String)>,
     monsters: Vec<kq8_core::active::Monster>,
@@ -1966,6 +1977,29 @@ impl Placer<'_> {
             let mut p = kq8_data::objects::Placement::from_load(section, load);
             self.attack_dist = section.number("attackDist").and_then(Result::ok).map(|v| v as f32);
             self.connor_stats = section.get("stats").map(|s| (s.to_string(), section.get("level").map(str::to_string)));
+            // fighting.md rules 24, 39-41 (M5 5c-4): his ouch sound, the big
+            // swing's factors, the hand weapons' movement lists.
+            let num = |k: &str, d: f32| section.number(k).and_then(Result::ok).map_or(d, |v| v as f32);
+            let short_lists = section
+                .get("ShortAnimList")
+                .and_then(|n| file.iter().find(|s| s.name.eq_ignore_ascii_case(n.trim())))
+                .map(|s| {
+                    s.entries
+                        .iter()
+                        .filter(|(k, _)| k.to_ascii_lowercase().starts_with("animlist") && k.len() > "animlist".len())
+                        .filter_map(|(_, v)| {
+                            let mut w = v.split_whitespace();
+                            Some((w.next()?.to_string(), w.next()?.to_string()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            self.connor_fight = Some(kq8_core::fight::ConnorFight {
+                ouch_sound: section.get("ouchSound").map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |s| s.trim().to_string()),
+                min_damage_factor: num("minDamageFactor", 1.0),
+                max_damage_factor: num("maxDamageFactor", 1.0),
+                short_lists,
+            });
             self.connor_inventory = connor_inventory(&file, section);
             let (terrain, [x, y, _]) = (&self.terrain, p.position);
             p.position = p.grounded_position(|level| terrain.ground_at(level, x, y).map(|g| g.height));
@@ -3561,6 +3595,7 @@ impl Placer<'_> {
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
             connor_stats: self.connor_stats,
+            connor_fight: self.connor_fight,
             connor_inventory: self.connor_inventory,
             object_stats: self.object_stats,
             monsters,

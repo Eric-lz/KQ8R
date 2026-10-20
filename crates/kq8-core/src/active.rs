@@ -124,6 +124,15 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// A hit took health from Connor and he lives (`fighting.md` rule 29;
+    /// M5 5c-4): he flinches if `roll_over` (*R* > 0.9 *D*), his movement
+    /// can be cut short and his last flinch ended over 2 s ago, else his
+    /// ouch sound plays (at most once a second). The caller decides: it
+    /// has his movement.
+    ConnorHurt { roll_over: bool, at: String },
+    /// Connor's health fell below 0 (rules 18, 29): his dying state, by
+    /// the hit's kind.
+    ConnorDies { kind: crate::fight::HitKind, at: String },
     /// `move <who> <flags> x y z rx ry rz` (`objects.md` "(d)") for
     /// Connor, the camera or a plain placed object: the caller moves it.
     Move { who: String, flags: u32, position: [f32; 3], turn: [f32; 3], at: String },
@@ -647,6 +656,15 @@ pub struct WorldState {
     /// Connor's back key is held now (`fighting.md` rule 13: the reach is
     /// 1.25 × then; M5 5c-3), set by the caller.
     pub connor_back_key: bool,
+    /// What `Connor.kq` gives the fight (M5 5c-4), set by the caller.
+    pub connor_fight: Option<crate::fight::ConnorFight>,
+    /// Connor is in his dying state: hits are ignored (`fighting.md` rule
+    /// 29).
+    pub connor_dying: bool,
+    /// The one-off tips of rule 29 were sent (logged only).
+    pub connor_tips: [bool; 2],
+    /// The fight's random draws (the rolls, M5 5c).
+    pub fight_rng: crate::emitter::Rng,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -680,7 +698,7 @@ impl WorldState {
 
     /// A line about the fight (M5 5c): `fight.log`, `characters.log` and
     /// the current log.
-    pub(crate) fn fight_note(&mut self, who: &str, line: impl AsRef<str>) {
+    pub fn fight_note(&mut self, who: &str, line: impl AsRef<str>) {
         self.fight_log.push(format!("update {}: {who}: {}", self.updates, line.as_ref()));
         self.character_note(who, line);
     }
@@ -2461,6 +2479,10 @@ impl Active {
                 max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
                 connor_move_key: false,
                 connor_back_key: false,
+                connor_fight: None,
+                connor_dying: false,
+                connor_tips: [false; 2],
+                fight_rng: crate::emitter::Rng::new(0x5EED_F1647),
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -5042,7 +5064,7 @@ mod tests {
         let starts: Vec<u64> = a.world.fight_log.iter().filter(|l| l.contains(": attack (rule 7,")).map(|l| l["update ".len()..].split(':').next().unwrap().parse().unwrap()).collect();
         assert!(log.contains("attack (rule 7, moving)") && log.contains("attack time 0.00 -> never"), "the first comes at once, from Move: {log}");
         assert!(log.contains("attack (rule 7, standing)"), "then standing (no key held): {log}");
-        assert!(log.contains("Do cue of 'Attack' at phase 0.5"), "{log}");
+        assert!(log.contains("Do (Attack at phase 0.5"), "{log}");
         assert!(log.contains("'Attack' ended: next attack due at") && log.contains("now + attackDelay 1 s"), "{log}");
         assert!(starts.len() >= 3, "{log}");
         // Between two swings: its length (1 s) + the delay (1 s), give or
@@ -5055,6 +5077,44 @@ mod tests {
         let first = a.world.character_log.iter().position(|l| l.contains("attack (rule 7, moving)")).unwrap();
         let ended = a.world.character_log.iter().position(|l| l.contains("'Attack' ended")).unwrap();
         assert!(!a.world.character_log[first..ended].iter().any(|l| l.contains("stops, facing him")), "{log}");
+    }
+
+    #[test]
+    fn its_swings_hurt_connor_until_he_dies() {
+        // fighting.md rules 13, 16, 18, 29 (M5 5c-4): a zombie's 15.
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().fight.as_mut().unwrap().stats.0[1] = 15;
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.connor_at = Some([0.0, -3500.0, 100.0]);
+        watch(&mut a, &[], 600);
+        let log = a.world.fight_log.join("
+");
+        assert!(log.contains("Do (Attack at phase 0.5333): hits Connor: distance") && log.contains("hand damage 15, Normal"), "{log}");
+        assert!(log.contains("Connor: hit by gob, Normal: D 15, R "), "{log}");
+        assert!(log.contains("first hit by a character: a one-off tip"), "{log}");
+        assert!(log.contains("is below 0: his dying state, kind Normal"), "{log}");
+        assert!(a.world.connor_stats.unwrap().stats.0[0] < 0);
+        assert!(a.world.connor_dying);
+        // While dying, hits are ignored (the requests are taken by the
+        // viewer, so here they pile up: one ConnorDies only).
+        assert_eq!(a.world.requests.iter().filter(|r| matches!(r, Request::ConnorDies { .. })).count(), 1);
+        assert!(log.contains("ignored, he is dying (rule 29)"), "{log}");
+    }
+
+    #[test]
+    fn a_swing_misses_when_connor_is_behind_it() {
+        // Rule 13: the front half. Connor stands right behind it, within
+        // reach; it can't turn (noTurn), so its swings miss.
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.anims[0].character.as_mut().unwrap().no_turn = true;
+        a.world.connor_at = Some([0.0, 1000.0, 100.0]);
+        watch(&mut a, &[], 120);
+        let log = a.world.fight_log.join("
+");
+        assert!(log.contains("gob missing Connor, too far away: miss, not in its front half: distance 1000, reach 1500"), "{log}");
+        assert!(!log.contains("hits Connor"), "{log}");
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[0], 10);
     }
 
     #[test]

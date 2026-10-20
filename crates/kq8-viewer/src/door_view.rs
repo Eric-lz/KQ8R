@@ -569,6 +569,18 @@ pub fn spawn_doors(
         }
         active.set_stats(name, s);
     }
+    // fighting.md (M5 5c-4): what Connor.kq gives the fight.
+    if let Some(f) = &objects.connor_fight {
+        main_log.summary(format!(
+            "fight: Connor's ouch sound {}, big swing x {} to {}, {} hand weapon lists ({})",
+            f.ouch_sound,
+            f.min_damage_factor,
+            f.max_damage_factor,
+            f.short_lists.len(),
+            f.short_lists.iter().map(|(w, a)| format!("{w} {a}")).collect::<Vec<_>>().join(", ")
+        ));
+    }
+    active.world.connor_fight = objects.connor_fight.clone();
     match &objects.connor_stats {
         Some((line, level)) => {
             let words: Vec<&str> = line.split_whitespace().collect();
@@ -854,6 +866,9 @@ pub fn trap_step(
         // request finishes it first (handsOff on) or is refused.
         let state = match &r {
             Request::ConnorSpecial { at, .. } => Some(("setState special", at.clone())),
+            // fighting.md rule 29 (M5 5c-4): his dying state is a state
+            // change too (**ours**: during a jump the same rule 28 applies).
+            Request::ConnorDies { at, .. } => Some(("dying state", at.clone())),
             Request::ConnorAuto { auto, at } if matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. }) => Some(("scripted walk (Wait)", at.clone())),
             _ => None,
         };
@@ -869,6 +884,18 @@ pub fn trap_step(
             asked = true;
         }
         let line = match r {
+            Request::ConnorHurt { roll_over, at } => {
+                let ouch = sim.active.world.connor_fight.as_ref().map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |f| f.ouch_sound.clone());
+                let now = sim.active.world.now();
+                let line = connor.hurt(roll_over, &ouch, now);
+                sim.active.world.fight_note("Connor", format!("{at}: {line}"));
+                format!("{at}: applied: Connor {line}")
+            }
+            Request::ConnorDies { kind, at } => {
+                let line = connor.die_from_hit(kind);
+                sim.active.world.fight_note("Connor", format!("{at}: {line}"));
+                format!("{at}: applied: Connor {line}")
+            }
             Request::EndJump { at } => format!("{at}: applied: {}", connor.end_jump(&at)),
             Request::SetRun { run, at } => {
                 connor.set_run(run, &at);

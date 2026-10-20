@@ -2522,3 +2522,23 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | The `Do` cue of a fighter: logged only (hit test in 5c-4) | Rule 13 | Viewer |
 | `fight.log`: per attack who, distance, angle off its heading, his back key, attack time before / after, the movement replaced | The note's "How to check" (our logs) | Viewer |
 | His back key (forward key −1) handed to core each update | Rule 13 (used in 5c-4) | — |
+
+### 5c-4, the swing lands on Connor — `crates/kq8-core/src/{fight,active,connor}.rs` (`HitTest`, `Damage`, `character_do`, `hit_connor`, `Request::ConnorHurt` / `ConnorDies`, `Walker::death`), viewer `connor_view.rs` (`hurt`, `die_from_hit`), `door_view.rs`, `load.rs` (`CONNOR_MOVEMENTS`, `ConnorFight`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| At `Do`: the target is Connor when the character is alarmed; none otherwise (nothing happens) | `fighting.md` rule 13 ("it needs a target") | — |
+| In reach: 3D distance feet to feet ≤ reach, 1.25 × while his back key is held | Rule 13 | Unit test; viewer: hits at 1,642 / 1,503 with the key held (reach 1,875) |
+| In front: the line to him less than 90° off its facing (3D dot product > 0; exactly 90° is behind) | Rule 13 | Unit test (Connor behind a `noTurn` goblin: misses) |
+| A miss logs the original's line ("missing Connor, too far away") plus why; nothing else happens | Rule 13 | Unit test |
+| A hit: its hand damage, `Fire` with a Flame Sword | Rule 14 | Viewer |
+| Roll on Connor round(*D* × (0.25 + r × 0.75)) ≥ 1; protection 100 or *D* 0: no loss; *P'* = round(*P* × (0.75 + r × 0.5)) ≤ 100; loss cut(*R* × (100 − *P'*) / 100) ≥ 1; "round" = halves up | Rule 16 | Unit test: rule 19's examples (2 → 1–2, 15 → 4–15, fists 10 on a character → 8–12) |
+| One random generator for the fight's rolls, seeded at start | **Ours** (the note says only "random") | — |
+| Below 0 (0 alive) → his dying state; hits ignored from then on | Rules 18, 29 | Unit test; viewer: dies at −2 after 8 hits |
+| Health kept at most 10 × level; the bars refreshed (stats event count) | Rule 29; `interface.md` rule 24 | — |
+| The two one-off tips: logged only | Rule 29 (not traced further) | Viewer |
+| Flinch: *R* > 0.9 *D* (his `normalReactPercent` default), his movement can be cut short, last flinch ended over 2 s ago → `react`; else `ouchSound` (`conrow3.aud`, placed one-shot) at most once a second, a flinch starting that second too | Rules 23, 24, 29 | Viewer: flinch at updates 169 and 229, refused at 199 (1.20 s after the last ended) |
+| "His movement can be cut short" = the keys choose it (Free, Push, talk), no start / stop transition plays, and its `loop=` line says so or it has ended | **Ours**, from Connor's movement rules (his `interruptable` cues come with his swings, 5c-5) | — |
+| The flinch played as a one-item Special list (keys ignored while it plays) | **Stand-in**: how his own flinch state works was not traced beyond rule 29 | — |
+| Death: `die` (Normal, Projectile), `dropweapon` then `firedie` / `icedie` (Fire, Ice), then his Die state holding the last frame; during a jump the death waits like any state request (rule 28) | Rule 29; **stand-in**: game over is another study, he stays dead | Viewer |
+| `Connor.kq`: `ouchSound`, `minDamageFactor`, `maxDamageFactor`, `ShortAnimList` (weapon → `.anm`) | Rules 24, 39–41; data | Viewer log line at load |

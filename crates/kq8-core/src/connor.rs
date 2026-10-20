@@ -447,6 +447,9 @@ pub struct Walker {
     /// `walkstopright`; `conversation.md` rule 10), `None` when the keys
     /// choose (rule 13).
     pub talk_play: Option<&'static str>,
+    /// Killed by a hit (`fighting.md` rule 29; M5 5c-4): the death
+    /// movement the Dying and Dead modes show instead of the fall's.
+    pub death: Option<&'static str>,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -510,6 +513,7 @@ impl Walker {
             turn_by_script: false,
             turn_press: false,
             talk_play: None,
+            death: None,
         }
     }
 
@@ -704,7 +708,7 @@ impl Walker {
             Mode::Fall => Some(self.kind.hold()),
             // runJump has no landing animation; it never gets Land.
             Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
-            Mode::Dying | Mode::Dead => Some(self.kind.die()),
+            Mode::Dying | Mode::Dead => Some(self.death.unwrap_or(self.kind.die())),
             Mode::Crash => Some("crash"),
             Mode::Jump => Some(self.kind.jump()),
             Mode::Special => match self.special.get(self.special_at) {

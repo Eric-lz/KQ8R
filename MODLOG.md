@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-4: the swing lands on Connor
+
+**Changed:** `kq8-core/fight.rs`: `HitKind`, `Damage` (the rolls), `HitTest`, `ConnorFight`, the `Do` cue's hit test and `hit_connor`; `active.rs`: `Request::ConnorHurt` / `ConnorDies`, Connor's fight state, the fight's random draws; `connor.rs`: `Walker::death`. Viewer: `connor_view.rs` (`hurt`: flinch or ouch sound; `die_from_hit`), `door_view.rs` (the two requests; `Connor.kq`'s fight keys to core), `load.rs` (reads `ouchSound`, the damage factors, `ShortAnimList`; loads his `react`, `die`, `dropweapon`, `firedie`, `icedie`). 4 new tests. DESIGN, provenance.
+**Why:** `fighting.md` rules 13, 14, 16–19, 29.
+**Tested how:** `cargo test --workspace` (420 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --frames 3500` (Connor stands) and `--at 289284,190300,3.1416 --hold -1,0,0 --frames 2500` (he walks backward away from goblin22); `fight.log`, `connor.log`.
+**Result:** Standing: every swing hits (1,154 away, 0° off its facing): 1, 1, 1, 1, 2, 2, 2, 2 lost (D 2, roll 25–100 %): health 10 → −2, dead at update 258; flinches (`react`, 0.8 s) at 169 and 229, refused at 199 ("last flinch ended 1.20 s ago"), the ouch sound otherwise; the half-health tip line at 168; `die` plays, then the Die state holds it (304); later hits "ignored, he is dying". Walking backward: the goblin swings from its run and hits at 1,642 and 1,503 (reach 1.25 × = 1,875), as How to check 2 says. Unit tests: rule 19's examples, the 60 % flinch share for D 10, the front-half and back-key tests, a miss behind a `noTurn` goblin.
+**Still broken / not tested:** **Not looked at by eye.** Game over is not built (he stays dead, keys ignored; a stand-in). The tips are logged only. Circling round a swinging goblin (How to check 3) not run in the viewer (unit test only). Fire / ice deaths not run.
+**Next:** 5c-5, Connor hits back.
+
 ## 2026-10-20 M5 step 5c-3: characters attack
 
 **Changed:** `kq8-core`: `fight.rs` (the attack time, `is_attack`, the `Do` cue logged); `character.rs` (`start_attack`, the end and the cut-short cases of rules 10, 11); `character_ai.rs` (the attack in Wait and Move, replacing the 5a / 5b stand-in; no stop rule while a swing from Move plays: the user's decision on rule 11b); `active.rs` (`connor_back_key`, the `Do` cue, the character's fight lines to `fight.log`). Viewer `door_view.rs`: his back key. 2 new tests, 1 updated. DESIGN, provenance.

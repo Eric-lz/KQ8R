@@ -151,6 +151,10 @@ pub struct ConnorSim {
     pub refused: Vec<kq8_core::active::Request>,
     /// The end of a scripted walk being watched (M3 3n-5, Q98: logs only).
     walk_end: Option<WalkEnd>,
+    /// `fighting.md` rules 23, 24, 29 (M5 5c-4): when his last flinch ends
+    /// (game time) and when his ouch sound last played.
+    flinch_end: f64,
+    last_ouch: f64,
 }
 
 /// Q98 (M3 3n-5, logs only): from the update a scripted walk ends until
@@ -439,6 +443,8 @@ pub fn spawn_connor(
         auto_ends: Vec::new(),
         refused: Vec::new(),
         walk_end: None,
+        flinch_end: f64::NEG_INFINITY,
+        last_ouch: f64::NEG_INFINITY,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -728,6 +734,81 @@ impl ConnorSim {
                 false
             }
         }
+    }
+
+    /// `fighting.md` rules 23, 24, 29 (M5 5c-4): a hit took health and he
+    /// lives. He flinches (his `react`, keys ignored while it plays, as a
+    /// Special list) when the roll was over 0.9 *D*, his movement can be
+    /// cut short (the keys choose it, no start or stop transition plays,
+    /// its `loop=` line says so or it has ended) and his last flinch ended
+    /// over 2 s ago; otherwise his ouch sound, at most once a second (a
+    /// flinch also starts that second). Returns the line for `fight.log`.
+    pub fn hurt(&mut self, roll_over: bool, ouch: &str, now: f64) -> String {
+        use kq8_core::fight::{FLINCH_PAUSE, OUCH_EVERY};
+        let w = &self.walker;
+        let current = self.movements.iter().find(|m| m.name == w.movement).map(|m| &m.movement_loop);
+        let can_cut = w.keys_choose() && w.playing.is_none() && current.is_none_or(|l| l.cut_short || w.phase >= 1.0);
+        let react = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case("react")).map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
+        let why_not = if !roll_over {
+            Some("the roll is not above 0.9 x D".to_string())
+        } else if !can_cut {
+            Some(format!("'{}' can't be cut short now (mode {})", w.movement, w.mode.name()))
+        } else if now < self.flinch_end + FLINCH_PAUSE {
+            Some(format!("his last flinch ended {:.2} s ago (2 s pause)", now - self.flinch_end))
+        } else if react.is_none() {
+            Some("no react in his list".to_string())
+        } else {
+            None
+        };
+        let line = match (why_not, react) {
+            (None, Some((name, length))) => {
+                self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(name, "react".into())]);
+                self.flinch_end = now + f64::from(length);
+                self.last_ouch = now;
+                format!("flinches: '{name}' ({length:.2} s, keys ignored meanwhile; rules 23, 29)")
+            }
+            (why, _) => {
+                let why = why.unwrap_or_default();
+                if now + 1e-6 >= self.last_ouch + OUCH_EVERY {
+                    self.last_ouch = now;
+                    self.sounds.push(kq8_core::sound::Start::placed_one_shot(ouch, self.mover.position, "his ouch sound (fighting.md rule 24)".into()));
+                    format!("no flinch ({why}): his ouch sound {ouch} (rule 24)")
+                } else {
+                    format!("no flinch ({why}); no ouch sound, the last was {:.2} s ago (at most once a second, rule 24)", now - self.last_ouch)
+                }
+            }
+        };
+        self.log.detail(format!("connor update {}: hurt: {line}", self.updates));
+        line
+    }
+
+    /// `fighting.md` rule 29 (M5 5c-4): his health fell below 0: his dying
+    /// state by the hit's kind (`die`; fire and ice: `dropweapon`, then
+    /// `firedie` / `icedie`), played as a Special list ending in his Die
+    /// state, which holds the last frame. **Stand-in**: game over is
+    /// another study; he stays there. Returns the line for `fight.log`.
+    pub fn die_from_hit(&mut self, kind: kq8_core::fight::HitKind) -> String {
+        use kq8_core::connor::SpecialStep;
+        use kq8_core::fight::HitKind;
+        let names: &[&str] = match kind {
+            HitKind::Normal | HitKind::Projectile => &["die"],
+            HitKind::Fire => &["dropweapon", "firedie"],
+            HitKind::Ice => &["dropweapon", "icedie"],
+        };
+        let mut steps: Vec<SpecialStep> = names
+            .iter()
+            .map(|n| match self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(n)) {
+                Some(m) => SpecialStep::Play(m.name, n.to_string()),
+                None => SpecialStep::Note(format!("{n} not in his list: skipped")),
+            })
+            .collect();
+        self.walker.death = steps.iter().rev().find_map(|s| if let SpecialStep::Play(n, _) = s { Some(*n) } else { None });
+        steps.push(SpecialStep::Kill);
+        self.walker.auto = None;
+        let notes = self.walker.start_special(steps);
+        let line = format!("dies ({}): plays {names:?}, then his Die state holding the last frame; game over is another study (stand-in: he stays dead) ({})", kind.name(), notes.join("; "));
+        self.log.detail(format!("connor update {}: {line}", self.updates));
+        line
     }
 
     /// `KQMonster::setState Connor special <items>` (`anim-scripts.md`
@@ -1121,7 +1202,7 @@ pub fn connor_step(
         if let Some((from, to)) = s.mode_changed {
             events.push(format!("animation mode {} -> {}", from.name(), to.name()));
             if to == Mode::Dead {
-                events.push("jumpdie finished: Die state".into());
+                events.push(format!("{} finished: Die state", sim.walker.death.unwrap_or("jumpdie")));
             }
         }
         events.extend(s.notes.iter().cloned());
