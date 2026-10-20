@@ -678,6 +678,11 @@ move (what it hit, stop / slide / land).
    it keeps fighting him and the leash never takes it home (rule 28).
    Also: does a goblin following a walking Connor at reach keep walking
    with him, and stop as soon as he stands (rule 25)?
+   **Checked by the user in the original (2026-10-20):** running away
+   far enough sends the goblin running home. A goblin following a
+   walking Connor keeps up with him; when Connor stands still it catches
+   up and starts attacking (the attack comes soon after it stops: a hint
+   for the fight study about when the first attack is due).
 5. **Spriggans by the windmill** (`sprigwnd2`, `sprigwnd3`, team
    `windguys`): when one notices Connor, does the other come too even if
    farther away (rule 24)?

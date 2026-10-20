@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of the leash and the follow (original game)
+
+**Changed:** `docs/behaviour/character-movement.md` How to check 4: the result recorded.
+**Why:** Check of A's Q133 answer in the original.
+**Tested how:** The user, by eye, in the original: ran away from a chasing goblin; walked with a goblin following, then stood still.
+**Result:** Far enough away, the goblin runs back home. While Connor walks it keeps up with him; when he stands still it catches up and attacks. Both fit rules 25 and 28 (follow a moving Connor, stop only when he has no forward / back key, then attack); B's stop-and-go stand-in is not what the original does.
+**Still broken / not tested:** The exact distances and timings were not measured.
+**Next:** B builds the Q131–Q134 answers.
+
 ## 2026-10-20 Study (A): characters moving on their own finished — Q131–Q134 answered
 
 **Changed:** Docs only. `docs/behaviour/character-movement.md` rules 3, 7, 18, 21, 25, 27, 28, 30, 33, numbers, edge cases, Do not reproduce, How to check 4, open questions; `connor-collision.md` rule 18 (the cylinder, exact); `connor-physics.md` (landing on a `KQMonster`); QUESTIONS (Q131–Q134 answered); STATUS. Scratch notes in `re/` (not committed).
