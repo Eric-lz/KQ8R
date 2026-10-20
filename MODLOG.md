@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M4 step 4d-7b-5c: shadows darker, and on walls as soon as they reach them (the user's check)
+
+**Changed:** `kq8-viewer/src/shadow_view.rs`: the shadow's 0.5 is now of the shown brightness (sRGB 0.5, linear 0.214). `kq8-core/src/shadow.rs`: the search area's sides are no longer cut to 1,800 (the band's height cut stays); test updated. Provenance, DESIGN.
+**Why:** The user's check: shadows lighter than the original, and on a wall they appear late (the ground shadow first slides under the wall). The sun's angle was suspected; it is the game's own (`tsLightAim` (0, 1, −0.66) in Daventry's `SunlgtHW.kq` and `SUNLIGHT.KQ`), so it is kept. The real causes: Bevy multiplies in linear light (0.5 showed as about 73 %), and the traced area ended about 1,750 from Connor along the sun while his shadow reaches about 1,970. Not reproducing the cut follows the user's earlier decision (no cut shadows).
+**Tested how:** `cargo test --workspace`, `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --sound off --at 240000,217000,3.1416 --hold 1,0,0,80 --frames 500`, `characters.log`.
+**Result:** The barn wall receives from update 23 (58 pieces), was update 30 with the cut (update 22 with the first stand-ins); walking box 637 × 1,972, standing 505 × 2,139.
+**Still broken / not tested:** **Not looked at by eye**: the darkness and the wall timing need the user's look. The darker value is our reading of "halves" (blending not traced).
+**Next:** The user's look at the barn wall.
+
 ## 2026-10-21 M4 step 4d-7b-5b: shadows on buildings use the model's stored ball (viewer, Q135 built)
 
 **Changed:** `kq8-viewer`: `load.rs` (models and movements keep their `.kqs` ball); `shadow_view.rs` (`ModelBall` component, `caster` from a frame's place, `receivers` takes the caster and reports a fallback; plain objects find the ball of what is shown); `anim_view.rs`, `connor_view.rs`, `door_view.rs` (every shown frame carries its movement's ball), `terrain_view.rs` (still objects' parts carry their model's). Logs: per caster s, where the ball came from, the box (own space). DESIGN (4d-7b-5 done), provenance, STATUS, FEATURES, QUESTIONS (Q135 built).

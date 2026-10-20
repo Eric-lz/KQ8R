@@ -314,8 +314,14 @@ fn at_most(lo: f32, hi: f32, max: f32) -> (f32, f32) {
 /// height from 6 s below to s above the ball's centre (at most 1,800, cut
 /// around its middle); across, the rectangle around a 2 s square on the
 /// ball's centre at the band's top and its copy moved along the sun down
-/// to height 0, each side at most 1,800 (cut around its middle). `None`
-/// when the sun has no downward part (no search).
+/// to height 0. `None` when the sun has no downward part (no search).
+///
+/// **Not reproduced (the user's decision, 2026-10-21):** the original also
+/// cuts each side of that rectangle to 1,800. Along the sun that stops it
+/// short of the shadow's tip (Connor standing in Daventry: the rectangle
+/// ends about 1,750 from him, his shadow about 1,970), so a wall in
+/// between got no shadow while the shadow on the ground slid under it.
+/// The user does not want the original's cut shadows.
 pub fn search_box(c: &Caster, dir: V3) -> Option<(V3, V3)> {
     let d = c.dir_to_own(dir);
     if d[2] >= 0.0 {
@@ -328,9 +334,8 @@ pub fn search_box(c: &Caster, dir: V3) -> Option<(V3, V3)> {
     let copy = [c.centre[0] + d[0] * t, c.centre[1] + d[1] * t];
     let (mut lo, mut hi) = ([0.0; 3], [0.0; 3]);
     for k in 0..2 {
-        let (a, b) = at_most(c.centre[k].min(copy[k]) - s, c.centre[k].max(copy[k]) + s, BUILDING_BOX);
-        lo[k] = a;
-        hi[k] = b;
+        lo[k] = c.centre[k].min(copy[k]) - s;
+        hi[k] = c.centre[k].max(copy[k]) + s;
     }
     lo[2] = bottom;
     hi[2] = top;
@@ -527,17 +532,18 @@ mod tests {
     }
 
     #[test]
-    fn the_area_spans_the_square_and_its_copy_along_the_sun_cut_to_1800() {
+    fn the_area_spans_the_square_and_its_copy_along_the_sun_uncut() {
         // Daventry's sun, Connor facing along it: the copy moves 1,079 /
-        // 0.66 = 1,635; 505 across by 2,139, cut to 1,800 along the sun.
+        // 0.66 = 1,635; 505 across by 2,139 (the original cuts that to
+        // 1,800 along the sun: not reproduced, the user's decision).
         let dir = direction(Some([0.0, 1.0, -0.66]));
         let (lo, hi) = search_box(&connor(), dir).unwrap();
         let s = REACH_SIZE * 879.0;
         assert!(near(lo[0], -s) && near(hi[0], s), "{lo:?} {hi:?}");
         let (y0, y1) = (-s, 1079.3 / 0.66 + s);
         assert!((y1 - y0 - 2139.0).abs() < 1.0, "{y0} {y1}");
+        assert!(near(lo[1], y0) && near(hi[1], y1), "{lo:?} {hi:?}");
         let m = (y0 + y1) / 2.0;
-        assert!(near(lo[1], m - 900.0) && near(hi[1], m + 900.0), "{lo:?} {hi:?}");
         // Whole surfaces: a big tile reaching in is taken whole.
         let p = building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, hi[1] + 1900.0, 0.0, 4000.0)])], &connor(), dir);
         assert_eq!((p.surfaces, p.triangles.len()), (1, 2));

@@ -2229,6 +2229,7 @@ marked otherwise.
 | The shown model frame's triangles, every frame, through `kq8_core::shadow` onto the terrain | Rule 37 | Same |
 | The terrain triangles searched: under the model's own corners moved along the sun (the box's are not used) | Rule 37 (1) says "its box"; **our stand-in**: the model's points cover the same shadow | — |
 | Drawn unlit, multiply blending at 0.5 (two layers: a quarter), no haze, no fading | Rule 37 "How dark" (0.5; "most likely" halves; blending not traced) and the user's check (half as bright, a quarter on overlaps) | Not checked by eye yet |
+| 0.5 of the brightness as shown (sRGB 0.5, linear 0.214), not of linear light | **Our reading** (2026-10-21): an 8-bit screen halves the shown value; Bevy blends in linear light, where 0.5 left about 73 %. The user's check: ours was lighter than the original | Not checked by eye yet |
 
 ### 4d-7b-2b, Connor's shadow — `crates/kq8-viewer/src/anim_view.rs`, `connor_view.rs`
 
@@ -2283,7 +2284,8 @@ The stand-ins below were **replaced by A's traced answer in 4d-7b-5a** (next sec
 | The caster's size: its shown model's stored `.kqs` ball (radius, centre in its own space); s = 0.287 × radius | `characters.md` rule 37 (2) (Q135, traced) | Unit test `a_building_is_searched_within_its_radius_plus_s_plus_500` (Connor 879 → s 252) |
 | Reach: building ball centre (turned `.dig` box middle) to the caster's ball centre in the world ≤ building radius + s + 500 | Rule 37 (2) (a) | Same test |
 | Band (own space): s above to 6 × s below the ball's centre; over 1,800 cut around its middle | Rule 37 (2) (b) | Unit tests `the_band_runs_from_6_s_below_to_s_above_the_balls_centre` (1,079 / 687), `a_band_over_1800_is_cut_around_its_middle` (885 / 915) |
-| Area (own space, turns with the heading): the rectangle around a 2 × s square at the band's top and its copy moved along the sun to height 0; each side over 1,800 cut around its middle | Rule 37 (2) (c) | Unit tests `the_area_spans_the_square_and_its_copy_along_the_sun_cut_to_1800` (505 × 2,139 → 1,800), `the_box_turns_with_the_casters_heading` |
+| Area (own space, turns with the heading): the rectangle around a 2 × s square at the band's top and its copy moved along the sun to height 0 | Rule 37 (2) (c) | Unit tests `the_area_spans_the_square_and_its_copy_along_the_sun_uncut` (505 × 2,139), `the_box_turns_with_the_casters_heading` |
+| The area's sides are **not** cut to 1,800 (the original cuts them) | **The user's decision** (2026-10-21): the cut left a wall without shadow while the ground shadow slid under it; the user doesn't want the original's cut shadows | Barn walk: the wall receives from update 23 (30 with the cut) |
 | "The band's top" for the square = the top after the 1,800 cut | **Our reading** (A's example only covers an uncut band) | — |
 | No sun with a downward part: no building search | Rule 37 (2) (c) | Unit test `no_downward_sun_means_no_search` |
 | A surface counts when any part of it is inside the box; taken whole, the shadow not cut at the box | Rule 37 (2) "Which surfaces count" ("Do"; the original's looser test not reproduced) and the user's decision (no cut) | Unit tests above, `the_chosen_floor_receives_the_shadow` |

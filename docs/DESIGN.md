@@ -841,6 +841,10 @@ inventory and menus.
           surfaces stay skipped (A: "Do instead"). Unit tests with A's
           numbers (Connor standing: band 1,079 above to 687 below his
           feet; running: 885 / 915; the area 505 × 2,139 cut to 1,800).
+        - **4d-7b-5c, the user's check** (2026-10-21): shadows too light
+          (0.5 now of the shown brightness, sRGB) and late on walls (the
+          area's 1,800 cut along the sun is not reproduced, the user's
+          decision); the sun's angle is the data's (`tsLightAim`), kept.
         - **4d-7b-5b, the model's ball in the viewer** (**done**; `load.rs`: models
           and movements keep the `.kqs` ball; a `ModelBall` component on
           each shown frame in `anim_view.rs`, `connor_view.rs`,

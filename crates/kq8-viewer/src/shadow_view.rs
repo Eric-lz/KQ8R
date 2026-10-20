@@ -120,7 +120,10 @@ fn shown_caster(root: Entity, children: &Query<&Children>, visibility: &Query<&V
 pub fn shadow_material(materials: &mut Assets<StandardMaterial>) -> Handle<StandardMaterial> {
     let v = shadow::STRENGTH;
     materials.add(StandardMaterial {
-        base_color: Color::linear_rgb(v, v, v),
+        // Half of the brightness as shown (sRGB), as an 8-bit screen
+        // halves it; Bevy blends in linear light, where 0.5 would only
+        // darken to about 73 % (the user's check 2026-10-21: too light).
+        base_color: Color::srgb(v, v, v),
         alpha_mode: AlphaMode::Multiply,
         unlit: true,
         cull_mode: None,
