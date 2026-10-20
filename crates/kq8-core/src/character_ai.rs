@@ -525,13 +525,27 @@ impl WorldState {
             return;
         }
         let (pos, state) = (a.player.base.position, c.state);
-        if state == State::Birth {
-            return;
-        }
         let d = distance(pos, connor);
         let s = ai.settings.clone();
         let (sees, home, go_home) = (ai.sees, ai.home, ai.go_home);
         let home_d = flat_distance(pos, home);
+        if state == State::Birth {
+            // A zombie that sank back is still on its way home: rule 28's
+            // re-take applies underground too, then it rises as rule 30
+            // (**our reading**; the user saw them rise again in the
+            // original; asked in Q134).
+            let retake = ai.on_way_home && !ai.alarmed && ai.rise_at.is_none() && !go_home && s.alarm_radius > 0.0 && ((sees && d <= s.attack_dist) || (home_d <= s.home_radius && d < s.alarm_radius));
+            if retake {
+                let delay = f64::from(c.birth_delay.max(0.0));
+                self.alarm(i, &format!("underground on its way home, it takes up the chase again (Connor {d:.0} away, home {home_d:.0} away; rule 28)"), false, now);
+                let a = &mut self.anims[i];
+                let name = a.player.name.clone();
+                let ai = a.character.as_deref_mut().and_then(|c| c.ai.as_mut()).unwrap();
+                ai.rise_at = Some(now + delay);
+                self.character_note(&name, format!("rises in {delay} s (birthDelay, rule 30)"));
+            }
+            return;
+        }
         if !ai.alarmed {
             let retake = ai.on_way_home && !go_home && s.alarm_radius > 0.0 && ((sees && d <= s.attack_dist) || (home_d <= s.home_radius && d < s.alarm_radius));
             let alarm = !ai.on_way_home && !go_home && s.alarm_radius > 0.0 && sees && d < s.alarm_radius && ai.fidget.is_none() && matches!(state, State::Wait | State::Move);
@@ -825,7 +839,8 @@ impl WorldState {
         let Some(c) = a.character.as_deref_mut() else { return };
         let Some(ai) = c.ai.as_ref() else { return };
         let Some(t) = ai.rise_at else { return };
-        if now + 1e-6 < t || c.state != crate::character::State::Birth {
+        // **Stand-in** (Q134): not before a `hide` under way has ended.
+        if now + 1e-6 < t || c.state != crate::character::State::Birth || !c.unborn {
             return;
         }
         let pos = a.player.base.position;

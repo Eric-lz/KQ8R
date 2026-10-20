@@ -2398,3 +2398,10 @@ marked otherwise.
 | --- | --- | --- |
 | `KQObject::getLoc` / `getLoc` sets `$KQObject::loc` (x y z and the angles worked back from the turn) and `$KQObject::locOnly` (x y z), from the object's current place | `objects.md` "Script variables, getLoc and move" rule 1 (Q20) | Unit test; viewer: `zomtrap.cs` sets the graveyard zombies' homes |
 | Connor's turn as 0 0 0 | **Ours** (his turn is not in core's world) | — |
+
+### 5a fix: zombies rise again — `crates/kq8-core/src/character_ai.rs` (`alarm_rules`, `rise`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A sunk zombie (Birth, on its way home) takes up the chase again as rule 28 says, then rises after `birthDelay` as rule 30 | `character-movement.md` rules 28, 30, read together (**our reading**); the user saw zombies rise again in the original; asked in Q134 | Unit test; viewer: the road zombies |
+| It rises only once a `hide` under way has ended | **Stand-in**, asked in Q134 | Viewer |

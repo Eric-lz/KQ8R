@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Fix (the user's check of 5a): zombies rise again after sinking
+
+**Changed:** `kq8-core/src/character_ai.rs`: a zombie that gave up and sank back (Birth, still on its way home) now takes up the chase again by rule 28 (Connor seen within its attack distance, or it is within its home radius and he within its alarm radius) and rises `birthDelay` s later (rule 30), not before its `hide` has ended. The unit test now checks a second rise. Q134 updated. Provenance.
+**Why:** The user saw zombies sink and never come back up; in the original they rise again. Built as written, a sunk zombie stayed active and on its way home, but rule 30 only starts from "not active" and our chase rules skipped Birth.
+**Tested how:** `cargo test --workspace` (407 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 192916,313500,0 --hold 1,0,1 --turn 150,1 --frames 7000` (Connor runs off, then circles), `characters.log`.
+**Result:** 9 rises of the road zombies in the run (RoadZ4 rose again 4 times as Connor circled back past it); none starts while `hide` still plays.
+**Still broken / not tested:** **Not looked at by eye.** With Connor circling within its attack distance it gives up and rises again every few seconds (the leash loop, Q133). Whether the original uses this path is asked (Q134).
+**Next:** the user's look; A: Q132–Q134.
+
 ## 2026-10-20 Fix (the user's check of 5a): the graveyard zombies gave up at once — `getLoc` while playing
 
 **Changed:** `kq8-core/src/active.rs`: `KQObject::getLoc` / `getLoc` now work while playing (they only worked at load): `$KQObject::loc` and `$KQObject::locOnly` from the object's current place and turn. 1 new test. Provenance.
