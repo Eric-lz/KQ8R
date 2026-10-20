@@ -359,12 +359,12 @@ characters and conversations done; the menus next). M0–M3 are done.
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Next step, suggested:** for the user: look at the characters'
-  shadows (the goblin by the start, the spriggans at the castle ruins)
-  and at the spriggans standing on the windmill floor and the castle.
-  For B: shadows on buildings and from plain objects (4d-7b-3, -4); or
-  the main menu once A has studied it. For A: Q127–Q129, Q125, Q126,
-  then Q108–Q113 (small); a study of the main menu.
+- **Next step, suggested:** for B: shadows from plain objects (4d-7b-4),
+  then on buildings (4d-7b-3, after a question on the note's loose
+  height band). For A: Q125–Q130, then Q108–Q113 (small). **The main
+  menu is postponed (the user, 2026-10-20):** starting straight in
+  Daventry keeps testing quick; when it comes, keep a launch option
+  that skips it.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.

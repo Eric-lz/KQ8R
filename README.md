@@ -62,9 +62,11 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 ### Next
 
 - **Characters:** shadows on buildings and from objects.
-- **The main menu:** pausing the game with Escape key.
 
 ### Later
+
+- **The main menu** (postponed: the viewer starts straight in Daventry,
+  which keeps testing quick).
 
 - **M5 – Fighting.** Monsters that move, attack and die; Connor's weapons,
   armour, health and experience in battle.
