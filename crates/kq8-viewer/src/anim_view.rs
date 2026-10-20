@@ -243,6 +243,8 @@ pub fn spawn_animated(
                 play_time: built[*i].duration,
                 frame_steps: built[*i].steps.clone(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
+                // characters.md rule 20 (M4 4d-11).
+                transitions: l.transitions.clone(),
             })
             .collect();
         let names = (a.anim_names.0.as_deref(), a.anim_names.1.as_deref());

@@ -350,6 +350,7 @@ pub fn spawn_doors(
                 play_time: timing[*a].0,
                 frame_steps: timing[*a].1.clone(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
+                transitions: l.transitions.clone(),
             })
             .collect();
         let animations: Vec<usize> = d.movements.iter().map(|(_, _, a)| *a).collect();

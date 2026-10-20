@@ -2170,3 +2170,14 @@ marked otherwise.
 | Birth, Move, Die: `Stop` asked for, state kept | **Our reading**: the note names only no state, Wait, Talk and Special | — |
 | Wait entered through Wait's own start (rule 13's random `Stop` with `flags` 0x10) | **Our reading** of "`Stop` is asked for and it is put into Wait": the same picture either way | — |
 | Replaces the 4d-5 row "after the last line of a queue the speaker goes to Wait" (Q117 stand-in) | Rule 13a | — |
+
+### 4d-11, transitions on characters — `crates/kq8-core/src/named_anim.rs`, `door.rs`, viewer `anim_view.rs`, `door_view.rs`, `load.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A request chooses the transition whose from point comes next (−1 first; passed on a play-once: never; tie: first listed); a newer request chooses again or drops it | `connor-movement.md` rules 2, 4 (Q40 b), `anim-scripts.md` rule 4.2 | Unit tests `a_transition_waits_for_its_from_point_then_its_target_starts`, `a_from_point_already_passed_on_a_play_once_is_never_reached` |
+| The update is cut at the from point; the transition movement plays from 0 at speed 1, once; at its end the target starts at its phase, another wanted movement is asked for again | `connor-movement.md` rules 3, 5, 6 | Same tests |
+| The end of the transition movement is an ordinary end (`EndLoop`, `Cue 300`, in Wait `Stop` again at a random frame) | `characters.md` rule 20 (Q124 a) | Unit test `in_wait_the_end_of_a_transition_restarts_stop_at_a_random_frame` |
+| The transition and its target first move in the next update | As Connor's walker (`connor.rs`, rule 3 "first advanced in the next update"); for the target **our reading** (the rule does not say) | Same tests |
+| Backwards: the distance measured the other way | `connor-movement.md` rule 2 ("the other way round"); no data has one | — |
+| The `endLoop` cue not built | `characters.md` rule 20 (Q124 c: M5) | — |

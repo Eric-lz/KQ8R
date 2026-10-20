@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-11: transitions on characters (Q124 built)
+
+**Changed:** `kq8-core/src/named_anim.rs`: the movement player plays `transitionN` lines (`connor-movement.md` rules 2–6): a request first chooses the transition whose from point comes next (−1 at once; a point already passed on a play-once is never reached; a newer request chooses again), waits for it (that update cut at the point), plays the transition movement from 0 at speed 1, and at its ordinary end starts the target at its phase (then asks again for another wanted movement). Like Connor's walker, the transition and its target move from the next update. `door.rs`: movements carry their transitions; `anim_view.rs`, `door_view.rs` pass them on; `load.rs` logs them as played. `character.rs`, `active.rs`: log lines. 3 unit tests. `QUESTIONS.md` Q124 marked built. DESIGN, provenance.
+**Why:** A's answer to Q124 (`characters.md` rule 20).
+**Tested how:** `cargo test --workspace` (510 pass, 3 new), clippy clean. Viewer: `cargo play --world Daventry --at 600,100,0 --frames 900 --sound off --command "sendEvent 0 Girl KQAnimPlayEvent cower",20 --command "sendEvent 0 Girl KQAnimPlayEvent stop",25`, read `characters.log`, `viewer.log`.
+**Result:** Unit tests: `cower` asked for `stop` at phase 0.33 plays on to 0.882353 (cut there), `cowerstop` plays 15 updates, ends as an ordinary end, `stop` starts at 0; in Wait the end of `cowerstop` brings `Stop` back at a random frame (rule 20); after 0.88 no transition, `stop` waits for the end of `cower`. Viewer: the request runs the Girl's start-up, its Wait asks for `Stop` and chooses `cowerstop` from 0.882353; `viewer.log`: "movement cower has transitions, a character's: played".
+**Still broken / not tested:** The Girl is never in range in a new game (she stands at (100, 100, 0)), so the transition has **not been seen playing in the viewer**. The `endLoop` cue (rule 20 b) waits for M5 (only on the Knight's `attack`). Backwards transitions are built as the note's "the other way round" but no data has one.
+**Next:** 4d-6b, gravity (Q122): plan first.
+
 ## 2026-10-19 M4 step 4d-10: the end of a `speak` (Q117 built)
 
 **Changed:** `kq8-core/src/character.rs` (`after_speech`) and `active.rs` (`talk_step`): when the line marked last of a `speak` ends in a character's queue (for a conversation, the partner's), before its `TalkComplete`: already in Wait, nothing (no `Stop`); otherwise `Stop` is asked for and it goes into Wait, accepted from no state, Talk, and Special once its list's last movement has started (else refused, the list goes on). Was: when the queue ran dry, for the last line's speaker, from no state or Wait. 1 unit test. `QUESTIONS.md` Q117 marked built. DESIGN, provenance.

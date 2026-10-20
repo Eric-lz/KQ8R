@@ -28,8 +28,17 @@
 //!   the running animation can be cut short (6th field of its `loop=`
 //!   line) or has ended (phase ≥ 0.9999 forwards, ≤ 0 backwards), else
 //!   when it ends. A stopped (`speed` 0) movement that can't be cut short
-//!   never ends, so a request then waits forever (rule 6). Transitions
-//!   (rule 4.2): no placed object has any (data), so none here.
+//!   never ends, so a request then waits forever (rule 6).
+//! - Transitions (rule 4.2, `connor-movement.md` rules 2–6, `characters.md`
+//!   rule 20; M4 4d-11; no placed object has any, so in practice only
+//!   characters): a request first looks for a transition from the current
+//!   movement to the asked one, the one whose from point comes next (−1:
+//!   at once; on a play-once a point already passed is never reached); it
+//!   then waits for that point (the update is cut there), the transition
+//!   movement plays from 0 at speed 1, and at its end (an ordinary end,
+//!   reported as `finished`) its target starts at its phase, and the
+//!   wanted movement, if another, is asked for again from there. A newer
+//!   request chooses again (none found: the waiting transition is dropped).
 //! - Starting (rule 5): looked up ignoring capitals, first match; an
 //!   unknown name starts movement 0 under the asked name; the movement's
 //!   own `loop=` start phase and speed; afresh even if already playing.
@@ -64,8 +73,11 @@ pub struct Played {
     /// name as asked).
     pub finished: Option<String>,
     /// The waiting movement that started in this update (rule 3 or 8),
-    /// with what it started as.
+    /// with what it started as; at the end of a transition, its target.
     pub started: Option<Started>,
+    /// A transition movement that started in this update (its from point
+    /// was reached).
+    pub transition: Option<Started>,
 }
 
 /// What a request did (`anim-scripts.md` rule 4), for the log.
@@ -78,6 +90,10 @@ pub enum Request {
     /// Waits for a stopped movement that can't be cut short: never starts
     /// (rule 6).
     WaitingForever,
+    /// A transition was chosen: it waits for the from point (−1: the next
+    /// update), then the transition movement plays (`connor-movement.md`
+    /// rules 2–5).
+    Transition(kq8_data::objects::TransitionLine),
 }
 
 /// A movement just started (rule 5), for the log.
@@ -133,6 +149,11 @@ pub struct NamedAnimPlayer {
     /// `None` for a movement started later (rule 5: "its own `loop=`
     /// line").
     pub random_speed: Option<f32>,
+    /// A chosen transition waiting for its from point (`connor-movement.md`
+    /// rule 3).
+    pub chosen: Option<kq8_data::objects::TransitionLine>,
+    /// The transition playing now (rules 5 and 6).
+    pub in_transition: Option<kq8_data::objects::TransitionLine>,
 }
 
 impl NamedAnimPlayer {
@@ -156,6 +177,8 @@ impl NamedAnimPlayer {
             once: false,
             paused: false,
             random_speed: None,
+            chosen: None,
+            in_transition: None,
         }
     }
 
@@ -273,9 +296,21 @@ impl NamedAnimPlayer {
         Ok(())
     }
 
-    /// `KQAnimPlayEvent <name>` (rule 4).
+    /// `KQAnimPlayEvent <name>` (rule 4): it becomes the waiting movement;
+    /// a transition to it is looked for first (rule 4.2); else it starts
+    /// at once if the running one can be cut short or has ended.
     pub fn request(&mut self, name: &str) -> Request {
         self.waiting = Some(name.to_string());
+        // connor-movement.md rule 6: during a transition the wanted one is
+        // only kept; it is asked for again when the transition ends.
+        if self.in_transition.is_some() {
+            return Request::Waiting;
+        }
+        // Rule 2 (and Q40 b: a newer request chooses again; none: dropped).
+        self.chosen = self.choose_transition(name);
+        if let Some(t) = &self.chosen {
+            return Request::Transition(t.clone());
+        }
         if self.cut_short || self.has_ended() {
             self.waiting = None;
             return Request::AtOnce(self.start(name));
@@ -286,6 +321,48 @@ impl NamedAnimPlayer {
         } else {
             Request::Waiting
         }
+    }
+
+    /// `connor-movement.md` rule 2: of the current movement's transitions
+    /// to `wanted` (capitals ignored), the one whose from point comes next
+    /// in its playing direction; −1 = at once (always first); a point
+    /// already passed counts only on a repeating movement (after the
+    /// wrap); a tie goes to the first listed. A stopped movement has none.
+    pub fn choose_transition(&self, wanted: &str) -> Option<kq8_data::objects::TransitionLine> {
+        let m = self.movement()?;
+        let speed = self.speed();
+        if speed == 0.0 {
+            return None;
+        }
+        let mut best: Option<(f32, &kq8_data::objects::TransitionLine)> = None;
+        for t in m.transitions.iter().filter(|t| t.to.eq_ignore_ascii_case(wanted)) {
+            let d = if t.from < 0.0 {
+                -1.0
+            } else {
+                let ahead = if speed > 0.0 { t.from - self.phase } else { self.phase - t.from };
+                match (ahead >= 0.0, m.repeat) {
+                    (true, _) => ahead,
+                    (false, true) => ahead + 1.0,
+                    (false, false) => continue,
+                }
+            };
+            if best.is_none_or(|(b, _)| d < b) {
+                best = Some((d, t));
+            }
+        }
+        best.map(|(_, t)| t.clone())
+    }
+
+    /// How far (in phase) the chosen transition's from point is ahead in
+    /// this update of `travel` phase, if it is reached: `Some(0)` for −1.
+    fn reaches_from_point(&self, t: &kq8_data::objects::TransitionLine, travel: f32) -> Option<f32> {
+        if t.from < 0.0 {
+            return Some(0.0);
+        }
+        let m = self.movement()?;
+        let ahead = if travel > 0.0 { t.from - self.phase } else { self.phase - t.from };
+        let ahead = if ahead < 0.0 && m.repeat { ahead + 1.0 } else { ahead };
+        (ahead >= 0.0 && ahead <= travel.abs()).then_some(ahead)
     }
 
     /// One update of `dt` seconds.
@@ -309,10 +386,57 @@ impl NamedAnimPlayer {
             return out;
         }
         let Some(m) = self.movements.get(self.current) else { return out };
-        let step = m.step_with(self.phase, dt, self.random_speed.unwrap_or(m.speed));
+        let speed = self.random_speed.unwrap_or(m.speed);
+        // connor-movement.md rule 3: a chosen transition's from point
+        // reached in this update cuts it there (−1: the whole update
+        // plays); the transition is set up at the end and first moves in
+        // the next update.
+        if let Some(t) = self.chosen.clone() {
+            let travel = if m.play_time > 0.0 { speed * dt / m.play_time } else { 0.0 };
+            if let Some(ahead) = self.reaches_from_point(&t, travel) {
+                let cut_dt = if t.from < 0.0 { dt } else { ahead * m.play_time / speed.abs() };
+                let step = m.step_with(self.phase, cut_dt, speed);
+                let at = if t.from < 0.0 { step.to } else { t.from };
+                out.to = at;
+                out.cues = step.cues;
+                self.chosen = None;
+                // Rule 5: the transition movement from phase 0 at speed 1, once.
+                let mut st = self.start(&t.via);
+                // As Connor's walker: it first moves in the next update.
+                self.started_this_update = false;
+                self.phase = 0.0;
+                self.random_speed = Some(1.0);
+                st.start = 0.0;
+                st.speed = 1.0;
+                out.transition = Some(st);
+                self.in_transition = Some(t);
+                return out;
+            }
+        }
+        let step = m.step_with(self.phase, dt, speed);
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
+        if step.done && self.in_transition.is_some() {
+            // Rule 6: an ordinary end of the transition movement; its
+            // target starts at its phase; another wanted one is asked for
+            // again from there.
+            let t = self.in_transition.take().unwrap();
+            self.playing = false;
+            out.finished = Some(self.movement_name().to_string());
+            let mut st = self.start(&t.to);
+            self.started_this_update = false;
+            self.phase = t.to_phase;
+            st.start = t.to_phase;
+            out.started = Some(st);
+            match self.waiting.take() {
+                Some(w) if !w.eq_ignore_ascii_case(&t.to) => {
+                    self.request(&w);
+                }
+                _ => {}
+            }
+            return out;
+        }
         if step.done {
             self.playing = false;
             out.finished = Some(self.movement_name().to_string());
@@ -353,7 +477,7 @@ pub(crate) mod tests {
     /// A movement of 16 frames over 1 s (made-up numbers in the style of
     /// the chests and baskets).
     pub fn movement(name: &str, start: f32, speed: f32, repeat: bool, cut_short: bool, cues: Vec<Cue>) -> DoorMovement {
-        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], cues }
+        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], cues, transitions: Vec::new() }
     }
 
     /// `stop` still at 0, then `open` 0 -> 1 over 1 s with a cue at 0, 16
@@ -547,6 +671,63 @@ pub(crate) mod tests {
         p.cut_short = true;
         p.request("spin");
         assert_eq!(p.random_speed, None);
+    }
+
+    /// The Girl's `girl.anm`: `stop` (loop, cut short), `cower` (`0 0`,
+    /// `transition0=0.882353 stop 0.000000 cowerstop`), `cowerstop` (`0 0`).
+    fn girl() -> NamedAnimPlayer {
+        let mut cower = movement("cower", 0.0, 1.0, false, false, vec![]);
+        cower.transitions.push(kq8_data::objects::TransitionLine { from: 0.882353, to: "stop".into(), to_phase: 0.0, via: "cowerstop".into() });
+        let ms = vec![movement("stop", 0.0, 1.0, true, true, vec![]), cower, movement("cowerstop", 0.0, 1.0, false, false, vec![])];
+        NamedAnimPlayer::new("Girl", ms, 0, Placement::at([0.0; 3])).with_stop_names(None, None)
+    }
+
+    #[test]
+    fn a_transition_waits_for_its_from_point_then_its_target_starts() {
+        // characters.md rule 20 (Q124 a), connor-movement.md rules 2-6.
+        let mut p = girl();
+        assert!(matches!(p.request("cower"), Request::AtOnce(_)));
+        for _ in 0..5 {
+            p.advance(DT);
+        }
+        let Request::Transition(t) = p.request("STOP") else { panic!() };
+        assert_eq!(t.via, "cowerstop");
+        // cower goes on until 0.882353: the update that reaches it is cut there.
+        let mut n = 0;
+        let a = loop {
+            n += 1;
+            let a = p.advance(DT);
+            if a.transition.is_some() {
+                break a;
+            }
+            assert!(n < 30);
+        };
+        assert_eq!((a.to, p.movement_name(), p.phase), (0.882353, "cowerstop", 0.0));
+        // cowerstop then plays its 1 s (from the next update) and ends as an
+        // ordinary end; stop starts at its to-phase.
+        let (m, a) = until_finished(&mut p);
+        assert_eq!((m, a.finished.as_deref()), (15, Some("cowerstop")));
+        assert_eq!(a.started.as_ref().map(|s| (s.name.as_str(), s.start)), Some(("stop", 0.0)));
+        assert_eq!((p.movement_name(), p.waiting.as_deref(), p.in_transition.is_none()), ("stop", None, true));
+    }
+
+    #[test]
+    fn a_from_point_already_passed_on_a_play_once_is_never_reached() {
+        let mut p = girl();
+        p.request("cower");
+        // Past 0.88 (14 of 15 updates): no transition, so stop waits for the end.
+        for _ in 0..15 {
+            p.advance(DT);
+        }
+        assert_eq!(p.request("stop"), Request::Waiting);
+        let (_, a) = until_finished(&mut p);
+        assert_eq!((a.finished.as_deref(), a.started.map(|s| s.name)), (Some("cower"), Some("stop".to_string())));
+        // A newer request with no transition drops a chosen one (Q40 b).
+        let mut q = girl();
+        q.request("cower");
+        assert!(matches!(q.request("stop"), Request::Transition(_)));
+        q.request("cowerstop");
+        assert_eq!(q.chosen, None);
     }
 
     #[test]

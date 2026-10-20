@@ -181,6 +181,12 @@ impl Character {
         }
         self.turn_step(player, dt, notes);
         let played = player.advance(dt);
+        if let Some(t) = &played.transition {
+            notes.push(format!("transition '{}' starts: the from point was reached at phase {:.4} (rule 20, connor-movement.md rule 3)", t.name, played.to));
+        }
+        if let (Some(st), Some(f)) = (&played.started, &played.finished) {
+            notes.push(format!("'{f}' ended: '{}' starts at phase {:.4}", st.name, st.start));
+        }
         if let Some(st) = &played.started {
             if self.random_pending && st.name.eq_ignore_ascii_case(STOP) {
                 self.random_pending = false;
@@ -414,6 +420,8 @@ impl Character {
                 self.random_pending = random;
                 format!("waits for '{}', which is stopped and can't be cut short: never (anim-scripts.md rule 6)", player.movement_name())
             }
+            // Rule 20: the transition's target starts at its own phase.
+            Request::Transition(t) => format!("transition '{}' chosen: waits for phase {} of '{}', then '{}' at {} (rule 20)", t.via, t.from, player.movement_name(), t.to, t.to_phase),
         }
     }
 
@@ -778,6 +786,29 @@ mod tests {
         assert_eq!(p.movement_name(), "caw", "{log:?}");
         c.after_speech(&mut p);
         assert_eq!(c.state, State::Wait);
+    }
+
+    #[test]
+    fn in_wait_the_end_of_a_transition_restarts_stop_at_a_random_frame() {
+        // Rule 20 (Q124 a): the Girl's cower -> stop through cowerstop.
+        let mut cower = movement("cower", 0.0, 1.0, false, false, vec![]);
+        cower.transitions.push(kq8_data::objects::TransitionLine { from: 0.882353, to: "stop".into(), to_phase: 0.0, via: "cowerstop".into() });
+        let ms = vec![movement("stop", 0.0, 1.0, true, true, vec![]), cower, movement("cowerstop", 0.0, 1.0, false, false, vec![])];
+        let base = crate::collide::Placement { rotation: crate::door::identity().m, position: [0.0; 3] };
+        let mut p = NamedAnimPlayer::new("Girl", ms, 0, base).with_stop_names(None, None);
+        let mut c = character(0x20);
+        let mut log = Vec::new();
+        let n = run(&mut c, &mut p, 0, 2, &mut log);
+        assert_eq!(c.state, State::Wait);
+        p.request("cower");
+        let n = run(&mut c, &mut p, n, 3, &mut log);
+        assert!(matches!(p.request("stop"), Request::Transition(_)));
+        run(&mut c, &mut p, n, 40, &mut log);
+        let joined = log.join("
+");
+        assert!(joined.contains("transition 'cowerstop' starts"), "{joined}");
+        assert!(joined.contains("'cowerstop' ended in Wait: asks for Stop again"), "{joined}");
+        assert!(p.movement_name().eq_ignore_ascii_case("stop") && p.random_speed.is_some(), "{joined}");
     }
 
     #[test]

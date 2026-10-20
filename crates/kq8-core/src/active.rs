@@ -359,6 +359,7 @@ fn anim_request(player: &mut NamedAnimPlayer, data: &[String], what: &str, from:
         AnimRequest::AtOnce(s) => format!("starts at once: {}", s.describe(&player.movements)),
         AnimRequest::Waiting => "waiting (the running movement can't be cut short; starts when it ends)".to_string(),
         AnimRequest::WaitingForever => "waiting forever (rule 6: a stopped movement that can't be cut short never ends)".to_string(),
+        AnimRequest::Transition(t) => format!("transition '{}' chosen: waits for phase {} of '{}', then '{}' at {} (rule 4.2)", t.via, t.from, player.movement_name(), t.to, t.to_phase),
     };
     format!("KQAnimPlayEvent {m} to {what}{from}: {before}: {outcome}")
 }

@@ -3093,9 +3093,10 @@ impl Placer<'_> {
                 self.log.detail(format!("animated {label}: {problem}"));
             }
             if !l.transitions.is_empty() {
-                // anim-scripts.md rule 4.2: no placed object has any (data).
-                let who = if character.is_some() { "characters yet (characters.md rule 20; waits for Q124)" } else { "objects (anim-scripts.md rule 4.2)" };
-                self.log.summary(format!("animated {label}: movement {name} has transitions; not played for {who}"));
+                // anim-scripts.md rule 4.2: no placed object has any (data);
+                // characters play them (characters.md rule 20, M4 4d-11).
+                let who = if character.is_some() { "a character's: played (characters.md rule 20)" } else { "on an object: played as for characters (anim-scripts.md rule 4.2 says none exist)" };
+                self.log.summary(format!("animated {label}: movement {name} has transitions, {who}: {:?}", l.transitions.iter().map(|t| format!("{} -> {} via {} from {}", name, t.to, t.via, t.from)).collect::<Vec<_>>()));
             }
             movements.push((name, l, index));
         }

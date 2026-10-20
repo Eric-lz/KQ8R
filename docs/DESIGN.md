@@ -726,7 +726,7 @@ inventory and menus.
       the queue's owner, if a character, gets `Stop` and Wait before
       its `TalkComplete`; nothing if it is already in Wait; from Special
       only once the list's last movement has started; never Connor.
-    - **4d-11, transitions on characters** (rule 20, Q124 a, b; rules 2–6
+    - **4d-11, transitions on characters** (**done** 2026-10-19; rule 20, Q124 a, b; rules 2–6
       of `connor-movement.md`): the movement player chooses a
       transition by its from point, waits for it, plays the transition
       movement, then starts its target at its phase. The transition's

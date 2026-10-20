@@ -72,6 +72,9 @@ pub struct DoorMovement {
     /// Each frame's own step (frame 0 first; frame 0's is zero).
     pub frame_steps: Vec<Transform>,
     pub cues: Vec<Cue>,
+    /// Its `transitionN` lines (`connor-movement.md` "Starting and
+    /// stopping"; played for characters from M4 4d-11).
+    pub transitions: Vec<kq8_data::objects::TransitionLine>,
 }
 
 impl DoorMovement {
@@ -339,6 +342,7 @@ pub(crate) mod tests {
             play_time: 1.0,
             frame_steps: steps.clone(),
             cues,
+            transitions: Vec::new(),
         };
         let close_cues = close_cue.map(|phase| Cue { phase, action: "playsound door4.aud".into() }).into_iter().collect();
         Door::new(
@@ -382,6 +386,7 @@ pub(crate) mod tests {
             play_time: 1.0,
             frame_steps: vec![identity(); 16],
             cues: vec![Cue { phase: 1.0, action: "one".into() }, Cue { phase: 0.0, action: "zero".into() }, Cue { phase: 0.5, action: "half".into() }],
+            transitions: Vec::new(),
         };
         // Forwards over the wrap: 1.0 (old..1.0001) and 0.0 (0..new).
         let s = mv(1.0).step(0.95, 0.1);
