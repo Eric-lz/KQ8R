@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d fix 9: the dagger has its own movement set
+
+**Changed:** A hand weapon's movement set is also loaded when a world script names the weapon (Connor is loaded before `WorldInv.cs` makes the dagger, so only the fists' set was loaded). A list without `draw` / `undraw` (all but the fists) readies with `out` and puts away with `away` (stand-in, Q138).
+**Why:** The user's check: the dagger had no draw, holster or stance; only its swings played.
+**Tested how:** `cargo test --workspace` (437 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 260784,228600,3.1416 --click NoName1,30 --key left:IDCTL_INVBAR_SHORT,60 --key left:IDCTL_INVBAR_SHORT,150 --frames 1300` (in Connor's house: the dagger is `NoName1`); `fight.log`, `connor.log`.
+**Result:** Sets loaded: fists, dagger, small axe, Lake sword. The dagger is picked up; readying at 60 plays `condag.anm/out` (16 frames), then `stop` is drawn from `condag.anm`; at 150 `condag.anm/away`, then his own `stop`.
+**Still broken / not tested:** Not looked at. Whether the original plays `out` or `draw` for the fists (Q138).
+**Next:** The user's look.
+
 ## 2026-10-20 M5 5d fix 8: a pushed barrel is hit where it is
 
 **Changed:** `push_apply` also moves the pushed object's box in the world's list, which clicks, Connor's swings and `getLoc` use; before, only the collider and the model moved.

@@ -2772,15 +2772,24 @@ impl Placer<'_> {
     /// `inventory.md` rule 9 say the weapon is readied, not what it plays;
     /// the user saw the fists-up stance, and `confists.anm` holds a whole
     /// set: Q138): for each `ShortAnimList` entry whose weapon is in the
-    /// world (`Fists` always), its file's sections, list name and file.
+    /// world or named in a world script (`Fists` always), its file's
+    /// sections, list name and file.
     fn weapon_sets(&mut self) -> Vec<(Vec<kq8_data::kq_text::Section>, String, Option<String>)> {
         let Some(f) = &self.connor_fight else { return Vec::new() };
         let kinds: Vec<String> = self.items.objects.iter().map(|o| o.kind.to_ascii_lowercase()).collect();
         let mut sets = Vec::new();
         for (weapon, file) in f.short_lists.clone() {
             let kind = format!("{}{weapon}", kq8_data::items::PREFIX).to_ascii_lowercase();
-            if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) {
+            // Also a weapon a world script names (made or given after
+            // Connor is loaded: `WorldInv.cs`'s dagger and small axe; the
+            // user's check, 5d fix 9).
+            let w = weapon.to_ascii_lowercase();
+            let named = self.all_scripts.iter().find(|(_, t)| t.to_ascii_lowercase().contains(&w)).map(|(n, _)| n.clone());
+            if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) && named.is_none() {
                 continue;
+            }
+            if let Some(n) = &named {
+                self.log.summary(format!("connor: weapon set {file} ({weapon}): named in {n}"));
             }
             let bytes = match self.world.load(&file) {
                 Some(Ok((_, b))) => Some(b),
@@ -2839,7 +2848,7 @@ impl Placer<'_> {
                 }
                 // Readying and putting away (M5 5c fix, stand-in, Q138);
                 // `away` before a conversation (conversation.md rule 7).
-                for m in ["draw", "undraw", "away"] {
+                for m in ["draw", "undraw", "away", "out"] {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
             }

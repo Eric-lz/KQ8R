@@ -2751,3 +2751,11 @@ executable looked at.
 | --- | --- | --- |
 | A pushed object's box in the world's list (clicks, Connor's swings, `getLoc`) moves with its collider and model | Fix of ours (the user's check: a pushed barrel was hit, and burst, where it had stood); `pushing.md` (the object moves) | Viewer: barrel.04 pushed to 208,225, hit there, burst and wreck there |
 
+### 5d fix 9, the dagger's (and every weapon's) movement set — viewer `load.rs` (`weapon_sets`, `out` loaded), `connor_view.rs` (`ready_set`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A hand weapon's whole set is also loaded when a world script names the weapon (Connor is loaded before `WorldInv.cs` makes the dagger) | Ours (the user's check: the dagger had no stance); which sets: data | `viewer.log`: dagger, small axe, Lake sword, fists |
+| Readying plays the list's `draw`, else `out`; putting away its `undraw`, else `away` | **Stand-in** (Q138 a): data (`out` = `cd_draw` / `ca_draw`, `away` = `cd_shth` / `Ca_shth`, with their sounds); `conversation.md` rule 7 (`away` puts away) | Viewer: the dagger picked up, `condag.anm/out`, `stop` drawn from `condag.anm`, `away` |
+| The alchemist's boards refuse the fists and the dagger | `anim-scripts.md` rule 12 (`boardup.cs`); the user's check | — |
+

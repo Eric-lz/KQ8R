@@ -901,9 +901,22 @@ impl ConnorSim {
             Some(l) => format!("his movements now come from {l} where it has them"),
             None => "his own movements again (Conner.anm)".into(),
         };
-        let wanted = kq8_core::connor::special_movement_name(&file, word);
-        let Some(m) = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name) else {
-            return format!("{set}; no {wanted} loaded: nothing plays");
+        // 5d fix 9 (stand-in, Q138 a): a list without `draw` / `undraw`
+        // (all but the fists) draws with `out` and puts away with `away`
+        // (the dagger's `out` is `cd_draw` with `dagout.aud`, its `away`
+        // `cd_shth` with `dagin.aud`; `conversation.md` rule 7 puts away
+        // with `away`).
+        let find = |w: &str| {
+            let wanted = kq8_core::connor::special_movement_name(&file, w);
+            self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
+        };
+        let other = if word == "draw" { "out" } else { "away" };
+        let (word, found) = match find(word) {
+            Some(m) => (word, Some(m)),
+            None => (other, find(other)),
+        };
+        let Some(m) = found else {
+            return format!("{set}; no {word} in {file} loaded: nothing plays");
         };
         if self.walker.mode != Mode::Free {
             return format!("{set}; mode {}: '{m}' not played (stand-in)", self.walker.mode.name());
