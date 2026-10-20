@@ -680,9 +680,13 @@ move (what it hit, stop / slide / land).
    with him, and stop as soon as he stands (rule 25)?
    **Checked by the user in the original (2026-10-20):** running away
    far enough sends the goblin running home. A goblin following a
-   walking Connor keeps up with him; when Connor stands still it catches
-   up and starts attacking (the attack comes soon after it stops: a hint
-   for the fight study about when the first attack is due).
+   walking Connor keeps up with him and, even while he keeps walking,
+   eventually closes in to within reach and **stops to attack**: the
+   attack is played standing still (it can't attack and move forward at
+   the same time). When Connor stands still it catches up and attacks
+   too. This fits rule 25: within reach, once its attack is due, it
+   attacks whatever Connor does. A hint for the fight study: the attack
+   seems due soon after it gets within reach.
 5. **Spriggans by the windmill** (`sprigwnd2`, `sprigwnd3`, team
    `windguys`): when one notices Connor, does the other come too even if
    farther away (rule 24)?

@@ -8,7 +8,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Changed:** `docs/behaviour/character-movement.md` How to check 4: the result recorded.
 **Why:** Check of A's Q133 answer in the original.
 **Tested how:** The user, by eye, in the original: ran away from a chasing goblin; walked with a goblin following, then stood still.
-**Result:** Far enough away, the goblin runs back home. While Connor walks it keeps up with him; when he stands still it catches up and attacks. Both fit rules 25 and 28 (follow a moving Connor, stop only when he has no forward / back key, then attack); B's stop-and-go stand-in is not what the original does.
+**Result:** Far enough away, the goblin runs back home. While Connor walks it keeps up with him and eventually closes in and stops to attack, standing still (it can't attack while moving); when he stands still it catches up and attacks too. Both fit rules 25 and 28 (follow a moving Connor; within reach, once the attack is due, attack whatever he does). B's stop-and-go stand-in is not what the original does; until the fight is built, the closest stand-in is "follow while he moves, stop within reach when the attack would be due".
 **Still broken / not tested:** The exact distances and timings were not measured.
 **Next:** B builds the Q131–Q134 answers.
 
