@@ -412,11 +412,16 @@ by eye**.
   to the spot, Jump and pushing while talking), Q126 (where the
   conversation camera aims).
 
-## Characters moving on their own (milestone M5, step 5a)
+## Characters moving on their own (milestone M5, steps 5a, 5b; done)
 
-From `docs/behaviour/character-movement.md` (A, 2026-10-19). **Checked in
-the logs only** (`kq8-artifacts/logs/characters.log`), not by eye and not
-against the original yet; the note's "How to check" lists what to compare.
+From `docs/behaviour/character-movement.md` (A, 2026-10-19, completed
+2026-10-20). **Checked by the user against the original (2026-10-20):**
+creatures move as in the original, the chickens and bats keep to the
+same routes, goblins, spriggans and zombies follow Connor; a goblin
+follows a walking Connor at reach, stops when he stands, and runs home
+when he gets far enough away; zombies rise, follow, sink when he is far
+and rise again from their graves when he comes back (the graveyard's
+too). Details and numbers in `kq8-artifacts/logs/characters.log`.
 
 - **Walking:** a character moves only by its `walk` / `run` model's steps
   (goblin22 917 / 3,068 units a second, chickens 119 / 947, bats 1,159),

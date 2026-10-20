@@ -7,9 +7,11 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
 
 ## Where we are (2026-10-20)
 
-- **New 2026-10-20 (B, M5 5b-1 to 5b-5): A's answers Q131–Q134 built**
-  (one commit each; plan in `docs/DESIGN.md` "5b"; checked in the logs
-  only): the exact character cylinder (goblin 0–1,600) and the one-ball
+- **Done 2026-10-20: characters moving on their own (M5 5a, 5b),
+  checked by the user against the original** (the chase, the leash, the
+  follow, the zombies sinking and rising again: "both match exactly").
+- **2026-10-20 (B, M5 5b-1 to 5b-5): A's answers Q131–Q134 built**
+  (one commit each; plan in `docs/DESIGN.md` "5b"): the exact character cylinder (goblin 0–1,600) and the one-ball
   vertical test; landing on a character's top pushes Connor 250 off; the
   stuck escape's world diagonals NE → NW → SW → SE, north when all are
   blocked, the check on only once the walk plays; **a goblin now follows
@@ -435,11 +437,11 @@ characters and conversations done; the menus postponed) and **M5**
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Next step, suggested:** for the user: a last look at the chase
-  (run away from a goblin; walk with one following, then stand) and the
-  zombies (sink when you get away, rise again from their graves when you
-  come back); then characters moving on their own (5a, 5b) can be called
-  done. For A: the fight study. For B: shadows on buildings (4d-7b-3, after a
+- **Next step, suggested:** for A: the fight study (attacks and their
+  timing, being hit, `react`, dying, Connor's weapons and stats in
+  battle); its first hint is in `character-movement.md` "How to check" 4
+  (the attack comes soon after a goblin gets within reach). For B
+  meanwhile: shadows on buildings (4d-7b-3). For B: shadows on buildings (4d-7b-3, after a
   question on the note's loose height band). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
