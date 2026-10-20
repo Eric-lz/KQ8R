@@ -102,7 +102,7 @@ struct Playing {
 /// What a new copy of an unused object needs (M5 5d-4): each movement's
 /// frames as (mesh, material) lists, its whole-object steps, its script.
 struct Recipe {
-    movements: Vec<(Vec<crate::item_view::Parts>, Vec<GameTransform>)>,
+    movements: Vec<(Vec<crate::item_view::Parts>, Vec<GameTransform>, crate::shadow_view::ModelBall)>,
     script: Option<String>,
 }
 
@@ -157,10 +157,10 @@ impl AnimSim {
         let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), crate::terrain_view::ObjectName(name.to_string()))).id();
         let mut movements = Vec::with_capacity(r.movements.len());
         let mut parts = Vec::new();
-        for (frames, steps) in &r.movements {
+        for (frames, steps, ball) in &r.movements {
             let mut drawn = Vec::with_capacity(frames.len());
             for frame in frames {
-                let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+                let parent = commands.spawn((Transform::default(), Visibility::Hidden, *ball)).id();
                 commands.entity(body).add_child(parent);
                 for (mesh, material) in frame {
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
@@ -256,6 +256,8 @@ pub fn spawn_animated(
         lights: std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>,
         /// Each material's texture file name (for a character's face).
         textures: Vec<(i32, Option<String>)>,
+        /// Its `.kqs` ball (rule 37 (2), M4 4d-7b-5b).
+        ball: crate::shadow_view::ModelBall,
     }
     let built: Vec<Built> = animations
         .into_iter()
@@ -284,7 +286,8 @@ pub fn spawn_animated(
                 })
                 .collect();
             let moves = a.frame_transforms.iter().skip(1).any(|t| !is_still(t));
-            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures }
+            let ball = crate::shadow_view::ModelBall::of(a.ball);
+            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures, ball }
         })
         .collect();
     let mut rng = Rng::new(SEED);
@@ -481,7 +484,7 @@ pub fn spawn_animated(
             let mut frames = Vec::with_capacity(b.frames.len());
             let mut recipe_frames = Vec::with_capacity(b.frames.len());
             for frame in &b.frames {
-                let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+                let parent = commands.spawn((Transform::default(), Visibility::Hidden, b.ball)).id();
                 commands.entity(body).add_child(parent);
                 let mut recipe_parts = Vec::new();
                 for (mesh, m) in frame {
@@ -505,7 +508,7 @@ pub fn spawn_animated(
                 frames.push(parent);
                 recipe_frames.push(recipe_parts);
             }
-            recipe.push((recipe_frames, if b.moves { b.steps.clone() } else { Vec::new() }));
+            recipe.push((recipe_frames, if b.moves { b.steps.clone() } else { Vec::new() }, b.ball));
             drawn.push(DrawnMovement { frames, steps: if b.moves { b.steps.clone() } else { Vec::new() } });
         }
         if *unused && a.character.is_none() {
@@ -856,7 +859,7 @@ pub fn anim_draw(
 /// transforms are propagated, so it sees this frame's pose. Buildings do
 /// not receive them yet (4d-7b-3). Once a second a line per shadow in
 /// `characters.log`.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn shadow_draw(
     mut commands: Commands,
     sim: Option<ResMut<AnimSim>>,
@@ -873,7 +876,12 @@ pub fn shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
-    (buildings, activity, mut spent): (Option<Res<crate::shadow_view::BuildingShadows>>, Option<Res<crate::draw_distance::ObjectActivity>>, Local<std::time::Duration>),
+    (buildings, activity, mut spent, balls): (
+        Option<Res<crate::shadow_view::BuildingShadows>>,
+        Option<Res<crate::draw_distance::ObjectActivity>>,
+        Local<std::time::Duration>,
+        Query<(&GlobalTransform, &crate::shadow_view::ModelBall)>,
+    ),
 ) {
     use kq8_core::shadow;
     let (Some(mut sim), Some(ground)) = (sim, ground) else { return };
@@ -887,18 +895,23 @@ pub fn shadow_draw(
     let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
     let mut lines = Vec::new();
     // On log frames only: how many of the pieces lie on buildings.
-    let line = |name: &str, model: &[[shadow::V3; 3]], receivers: &[[shadow::V3; 3]], terrain: usize, pick: &shadow::BuildingPick, cast: usize, above: f32| {
+    let line = |name: &str, model: &[[shadow::V3; 3]], on: &crate::shadow_view::Receivers, cast: usize, above: f32| {
+        let pick = &on.pick;
+        let search = pick.search.map_or("none (no downward sun)".to_string(), |(lo, hi)| format!("{:.0} x {:.0} x {:.0} (own space, z {:.0}..{:.0})", hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], lo[2], hi[2]));
         format!(
-            "update {}: {name}: shadow: {} model triangles, {} facing the sun, {terrain} terrain triangles, {} of {} active buildings in reach {:?}, {} building surfaces ({} triangles), {cast} pieces drawn, {} of them on buildings; {above:.0} above the drawn ground{} (rule 37)",
+            "update {}: {name}: shadow: {} model triangles, {} facing the sun, {} terrain triangles; buildings: s {:.0} ({}), box {search}, {} of {} active buildings in reach {:?}, {} building surfaces ({} triangles); {cast} pieces drawn, {} of them on buildings; {above:.0} above the drawn ground{} (rule 37)",
             sim.updates,
             model.len(),
             model.iter().filter(|t| shadow::faces_sun(t, dir)).count(),
+            on.terrain,
+            pick.s,
+            if on.fallback { "OUR FALLBACK: box around its points" } else { "its model's stored ball" },
             pick.in_reach.len(),
             active.len(),
             pick.in_reach,
             pick.surfaces,
-            receivers.len() - terrain,
-            shadow::cast(model, dir, &receivers[terrain..]).len(),
+            on.triangles.len() - on.terrain,
+            shadow::cast(model, dir, &on.triangles[on.terrain..]).len(),
             if above.abs() > shadow::TERRAIN_REACH { ": terrain beyond 1,500, none there" } else { "" }
         )
     };
@@ -917,10 +930,11 @@ pub fn shadow_draw(
             [v.x * 100.0, -v.z * 100.0, v.y * 100.0]
         });
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let (receivers, terrain, pick) = crate::shadow_view::receivers(&ground.0, at, &corners, dir, &active);
-        let cast = shadow::cast(&model, dir, &receivers);
+        let caster = c.shown.filter(|_| drawn).and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
+        let on = crate::shadow_view::receivers(&ground.0, at, &corners, dir, caster, &active);
+        let cast = shadow::cast(&model, dir, &on.triangles);
         if report && drawn {
-            lines.push(line("Connor", &model, &receivers, terrain, &pick, cast.len(), height_above(at)));
+            lines.push(line("Connor", &model, &on, cast.len(), height_above(at)));
         }
         crate::shadow_view::show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
     }
@@ -930,15 +944,17 @@ pub fn shadow_draw(
         let Source::Core(i) = p.source else { continue };
         let Some(a) = world.anims.get(i) else { continue };
         let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);
-        let model = match p.shown.filter(|_| drawn).and_then(|(m, f)| p.movements.get(m).and_then(|d| d.frames.get(f)).copied()) {
+        let frame = p.shown.filter(|_| drawn).and_then(|(m, f)| p.movements.get(m).and_then(|d| d.frames.get(f)).copied());
+        let model = match frame {
             Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes),
             None => Vec::new(),
         };
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let (receivers, terrain, pick) = crate::shadow_view::receivers(&ground.0, a.player.base.position, &corners, dir, &active);
-        let cast = shadow::cast(&model, dir, &receivers);
+        let caster = frame.and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
+        let on = crate::shadow_view::receivers(&ground.0, a.player.base.position, &corners, dir, caster, &active);
+        let cast = shadow::cast(&model, dir, &on.triangles);
         if report && drawn {
-            lines.push(line(&p.name, &model, &receivers, terrain, &pick, cast.len(), height_above(a.player.base.position)));
+            lines.push(line(&p.name, &model, &on, cast.len(), height_above(a.player.base.position)));
         }
         crate::shadow_view::show_shadow(&cast, &mut p.shadow, &mut commands, &mut meshes, &material);
     }

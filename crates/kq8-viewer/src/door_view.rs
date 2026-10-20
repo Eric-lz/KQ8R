@@ -266,7 +266,7 @@ fn spawn_body(
     commands: &mut Commands,
     placement: &Placement,
     animations: &[usize],
-    built: &[Vec<BuiltFrame>],
+    built: &[(crate::shadow_view::ModelBall, Vec<BuiltFrame>)],
     materials: &mut Assets<ObjectMaterial>,
     haze: (bool, f32),
     test: crate::draw_distance::DistanceTest,
@@ -282,8 +282,9 @@ fn spawn_body(
     let mut frames = Vec::new();
     for a in animations {
         let mut entities = Vec::new();
-        for frame in &built[*a] {
-            let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+        let (ball, built_frames) = &built[*a];
+        for frame in built_frames {
+            let parent = commands.spawn((Transform::default(), Visibility::Hidden, *ball)).id();
             commands.entity(body).add_child(parent);
             for (mesh, material) in frame {
                 let material = crate::object_light::for_object(materials, material, 1.0, haze.0, haze.1);
@@ -327,12 +328,15 @@ pub fn spawn_doors(
     let anim_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> =
         objects.door_animations.iter().map(|a| std::sync::Arc::new(a.frame_lights.clone())).collect();
     // Each animation once: per frame, (mesh, material) per material group.
-    let built: Vec<Vec<BuiltFrame>> = std::mem::take(&mut objects.door_animations)
+    // With its `.kqs` ball (shadows on buildings, M4 4d-7b-5b).
+    let built: Vec<(crate::shadow_view::ModelBall, Vec<BuiltFrame>)> = std::mem::take(&mut objects.door_animations)
         .into_iter()
         .map(|anim| {
+            let ball = crate::shadow_view::ModelBall::of(anim.ball);
             let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> =
                 anim.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l)).collect();
-            anim.frames
+            let frames = anim
+                .frames
                 .into_iter()
                 .map(|frame| {
                     frame
@@ -343,7 +347,8 @@ pub fn spawn_doors(
                         })
                         .collect()
                 })
-                .collect()
+                .collect();
+            (ball, frames)
         })
         .collect();
     let attack_dist = objects.attack_dist.unwrap_or_else(|| {

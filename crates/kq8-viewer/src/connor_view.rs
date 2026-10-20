@@ -352,8 +352,10 @@ pub fn spawn_connor(
             })
             .collect();
         let mut entities = Vec::new();
+        // Its `.kqs` ball, for shadows on buildings (rule 37 (2), M4 4d-7b-5b).
+        let ball = crate::shadow_view::ModelBall::of(anim.ball);
         for frame in anim.frames {
-            let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+            let parent = commands.spawn((Transform::default(), Visibility::Hidden, ball)).id();
             commands.entity(body).add_child(parent);
             let record = first_frame_normals.is_none();
             let mut normals = Vec::new();

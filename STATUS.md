@@ -37,10 +37,12 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 - **2026-10-20 (B, M4 4d-7b-3): shadows fall on buildings** (walls and
   floors of the near and far buildings around the caster: characters,
-  Connor, plain objects), built with logged stand-ins for Q135.
-  **Q135 answered by A the same day** (`characters.md` rule 37 (2): size
-  0.287 × the model's stored radius, band from the ball centre, area
-  turned with the character; not blocking). **Checked by the user against the original
+  Connor, plain objects). **2026-10-21 (B, 4d-7b-5): A's answer to Q135
+  built** (`characters.md` rule 37 (2): s = 0.287 × the shown model's
+  stored ball radius, the band from the ball's centre, the area turned
+  with the caster); checked in the logs (Connor standing: box 505 ×
+  1,800, 687 below to 1,079 above his feet, as A's numbers), **the new
+  numbers not looked at by eye**. **Checked by the user against the original
   (2026-10-20): works as expected**, shadows also show inside a
   building when Connor stands outside, as in the original. The
   original cuts some shadows off; by the user's decision we don't.
@@ -146,7 +148,7 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   user (2026-10-20):** they match the original (wading, the jump's cut),
   except that the original's flicker and gaps are, by the user's
   decision, not reproduced. Shadows on buildings (4d-7b-3, Q135
-  stand-ins) and plain objects casting (4d-7b-4) are built. New questions for A: **Q127** (doors, chests and the
+  built in 4d-7b-5) and plain objects casting (4d-7b-4) are built. New questions for A: **Q127** (doors, chests and the
   waiting `Stop`), **Q128** (what stops a character's fall: objects,
   characters, Connor), **Q129** (the flying drop over water).
 - **New 2026-10-19 (B, after the user's check of 4e): 4e-8 to 4e-10.**
@@ -441,8 +443,8 @@ characters and conversations done; the menus postponed) and **M5**
   watermill scene); the mouse's recentring near the window's edges is
   not built (not settled; the note says it may be left out).
 - **Stand-ins of 4d (characters):** a character's facing taken as
-  Connor's (−Y). Q116–Q124 are all built (Q123 on buildings with Q135's
-  stand-ins). Q127 (doors and chests keep the old load names: fine as they are) and
+  Connor's (−Y). Q116–Q124 are all built (Q123 on buildings with Q135,
+  4d-7b-5). Q127 (doors and chests keep the old load names: fine as they are) and
   Q130 (Connor's shadow test) answered by A, not built yet; Q128 and Q129
   built in M5 5a. Our
   readings: the shadow's terrain search uses the model's points, not
@@ -509,8 +511,8 @@ characters and conversations done; the menus postponed) and **M5**
 - **Next step, suggested:** for the user: play the fight by eye
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Connor's controls (the input side of the fight, his weapon lists,
-  game over), the bolt's flight, Q136, Q137. For B: optionally swap
-  4d-7b-3's stand-ins for Q135's traced numbers (not blocking). **The main
+  game over), the bolt's flight, Q136, Q137. For the user: a look at
+  shadows on buildings with Q135's numbers (MODLOG 4d-7b-5b). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.

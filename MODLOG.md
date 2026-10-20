@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M4 step 4d-7b-5b: shadows on buildings use the model's stored ball (viewer, Q135 built)
+
+**Changed:** `kq8-viewer`: `load.rs` (models and movements keep their `.kqs` ball); `shadow_view.rs` (`ModelBall` component, `caster` from a frame's place, `receivers` takes the caster and reports a fallback; plain objects find the ball of what is shown); `anim_view.rs`, `connor_view.rs`, `door_view.rs` (every shown frame carries its movement's ball), `terrain_view.rs` (still objects' parts carry their model's). Logs: per caster s, where the ball came from, the box (own space). DESIGN (4d-7b-5 done), provenance, STATUS, FEATURES, QUESTIONS (Q135 built).
+**Why:** A's answer to Q135 (`characters.md` rule 37 (2)); 5a built the rule, this passes it the real ball and heading.
+**Tested how:** `cargo test --workspace`, `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --sound off --at 240000,217000,3.1416 --hold 1,0,0,80 --frames 500` (into the barn wall) and `--at 146500,248928,1.5708 --frames 400` (the windmill floor); `characters.log`, `shadows.log`.
+**Result:** Barn: walking, s 318, box 637 × 1,800, z −919..881 (band cut to 1,800); standing at the wall, s 252, box 505 × 1,800 × 1,766, z −687..1,079 (A's numbers for Connor standing); 8 barn surfaces, 257 of 477 pieces on the barn (the stand-ins gave 21 surfaces, 143 pieces). Windmill: Connor facing +x gets a 1,800 × 505 box (turned with him), 4 floor surfaces, 270 pieces on them; spriggan `sprigwnd1` (s 485) 12 surfaces. No caster used the fallback box. Shadow time 2.4 ms (barn) / 4.2 ms (windmill, 5 casters) a frame on average.
+**Still broken / not tested:** **Not looked at by eye** with the new numbers. Items lying in the world use our fallback box (not checked).
+**Next:** The user's look at the barn wall and the windmill floor.
+
 ## 2026-10-21 M4 step 4d-7b-5a: the search box on buildings as traced (core, Q135)
 
 **Changed:** `kq8-core/src/shadow.rs`: `Caster` (own space + the model's stored ball), `search_box`, `building_receivers` rewritten to A's answer (s = 0.287 × ball radius; reach radius + s + 500; band s above to 6 s below the ball's centre, at most 1,800; the rectangle around the 2 s square and its copy along the sun, sides at most 1,800, turning with the heading; no downward sun = no search); the stand-in constants removed; 8 tests (4 replaced). `kq8-viewer`: `shadow_view.rs` builds a fallback caster from the box around the model's points (until 5b), `terrain_view.rs` load line. DESIGN (4d-7b-5 planned), provenance.

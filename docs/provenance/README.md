@@ -2290,6 +2290,14 @@ The stand-ins below were **replaced by A's traced answer in 4d-7b-5a** (next sec
 | Kind-0 (never drawn) surfaces skipped | Rule 37 (2) (d) "Do instead" | `viewer.log` (Daventry: none) |
 | A caster without a stored ball: the box around its points (world axes, ball = half the box diagonal) | **Our fallback** (not in the note) | Unit test `the_fallback_caster_is_the_box_around_the_points`; until 4d-7b-5b every caster uses it |
 
+### 4d-7b-5b, the model's stored ball in the viewer — `load.rs`, `shadow_view.rs` (`ModelBall`, `caster`), `anim_view.rs`, `connor_view.rs`, `door_view.rs`, `terrain_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The ball is the shown model's: each movement's `.kqs` (radius, centre after the version), on each shown frame; still objects' own model | `characters.md` rule 37 (2) "The character's size" (Q135); the ball's place in the file: GPL notes (`kq8kqs.txt`), already read by `shape.rs` | `characters.log`: Connor standing s 252 (879), walking s 318 |
+| The caster's own space = the shown frame's place (position, heading) | Rule 37 (2) (a)–(c) | `characters.log`: Connor facing +x gets a 1,800 × 505 box, facing +y 505 × 1,800 |
+| Items lying in the world have no ball on their entities: our fallback box | **Ours** (items not checked; no stored ball passed) | `shadows.log` counts fallbacks (0 at the windmill) |
+
 ### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
 
 | What | Source | Check |

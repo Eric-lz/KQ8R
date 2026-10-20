@@ -357,6 +357,8 @@ pub fn setup_objects(
     // Each building's drawn triangles by surface (own space), for shadows
     // on buildings (M4 4d-7b-3); empty for models.
     let mut shadow_surfaces: Vec<Vec<Vec<[[f32; 3]; 3]>>> = Vec::new();
+    // Each model's `.kqs` ball (M4 4d-7b-5b); `None` for buildings.
+    let mut model_balls: Vec<Option<crate::shadow_view::ModelBall>> = Vec::new();
     for (_, model) in objects.shapes {
         let mut by_surface = vec![Vec::new(); if model.light_atlas.is_some() { model.surfaces.len() } else { 0 }];
         for t in model.groups.iter().flat_map(|g| &g.triangles) {
@@ -365,6 +367,7 @@ pub fn setup_objects(
             }
         }
         shadow_surfaces.push(by_surface);
+        model_balls.push(model.ball.map(crate::shadow_view::ModelBall::of));
         shape_lights.push(std::sync::Arc::new(vec![model.lights.clone()]));
         smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.shading.lighting)).collect());
         let mut parts = Vec::new();
@@ -451,6 +454,9 @@ pub fn setup_objects(
             }
             if let Some(c) = carried.take() {
                 e.insert(c);
+            }
+            if let Some(b) = model_balls[*i] {
+                e.insert(b);
             }
         }
         // A building's draw-distance ball (rule 40, M1 7h).

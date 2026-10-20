@@ -82,6 +82,9 @@ pub struct Model {
     /// Buildings with a usable `.dil` only: what point lights on its
     /// surfaces need (M1 7d, rule 16).
     pub wall_light: Option<std::sync::Arc<crate::wall_lights::WallData>>,
+    /// The ball stored in its `.kqs` file (radius, centre in its own
+    /// space; `characters.md` rule 37 (2), Q135); `None` for buildings.
+    pub ball: Option<(f32, [f32; 3])>,
 }
 
 pub struct Group {
@@ -222,7 +225,7 @@ pub fn load_model(
     if !lights.is_empty() {
         log.summary(format!("  carries {} light(s) in its shown frame (rule 26b)", lights.len()));
     }
-    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights, wall_light: None })
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights, wall_light: None, ball: Some((shape.radius, shape.center)) })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -337,6 +340,9 @@ pub struct Animation {
     /// Each frame's lights (object-lighting.md rule 26b, M1 7c-1), model
     /// space.
     pub frame_lights: Vec<Vec<kq8_data::shape::ModelLight>>,
+    /// The ball stored in its `.kqs` file (radius, centre in its own
+    /// space; `characters.md` rule 37 (2), Q135).
+    pub ball: (f32, [f32; 3]),
 }
 
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
@@ -443,7 +449,7 @@ pub fn load_animation_skinned(
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() },
         if lit > 0 { format!("; carries lights in {lit} frame(s) (rule 26b)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights })
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center) })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
@@ -4179,6 +4185,7 @@ pub fn load_building(
         surfaces: (0..b.surfaces.len()).map(|i| b.surface_corners(i).map(|c| c.into_iter().map(|(p, _)| p).collect()).unwrap_or_default()).collect(),
         lights: Vec::new(),
         wall_light,
+        ball: None,
     })
 }
 

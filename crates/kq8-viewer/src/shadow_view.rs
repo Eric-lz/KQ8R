@@ -33,6 +33,34 @@ use crate::object_light::ObjectLight;
 #[derive(Resource)]
 pub struct ShadowWorld(pub u32);
 
+/// The ball stored in a model's `.kqs` file (`characters.md` rule 37 (2),
+/// Q135; M4 4d-7b-5b): radius and centre in the model's own space, game
+/// units. On each shown frame entity (and each still object's part),
+/// whose place is the model's own space in the world.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct ModelBall {
+    pub radius: f32,
+    pub centre: [f32; 3],
+}
+
+impl ModelBall {
+    pub fn of((radius, centre): (f32, [f32; 3])) -> Self {
+        ModelBall { radius, centre }
+    }
+}
+
+/// Rule 37 (2): the caster of a shown model whose own space is placed at
+/// `at`: origin and axes (turned with its heading) in the game's world.
+pub fn caster(at: &GlobalTransform, ball: &ModelBall) -> shadow::Caster {
+    // Bevy (x, y, z) = game (x, z, −y) / 100.
+    let o = at.translation() * 100.0;
+    let axis = |e: [f32; 3]| {
+        let v = at.affine().transform_vector3(Vec3::new(e[0], e[2], -e[1])).normalize_or_zero();
+        [v.x, -v.z, v.y]
+    };
+    shadow::Caster { origin: [o.x, -o.z, o.y], axes: [axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]), axis([0.0, 0.0, 1.0])], centre: ball.centre, radius: ball.radius }
+}
+
 /// Every building copy that can receive shadows (M4 4d-7b-3): its draw
 /// distance number (`DistanceTest::object`) and its drawn surfaces.
 #[derive(Resource, Default)]
@@ -47,22 +75,44 @@ impl BuildingShadows {
     }
 }
 
-/// Rule 37: what a caster's shadow lies on: the terrain's triangles
-/// (within 1,500 of the ground) and those of the `buildings` (active ones)
-/// that `shadow::building_receivers` picks. Also the count of terrain
-/// triangles and the buildings' pick, for the logs.
-pub fn receivers(ground: &kq8_data::Terrain, position: shadow::V3, corners: &[shadow::V3], dir: shadow::V3, buildings: &[(u32, &shadow::ReceivingBuilding)]) -> (Vec<[shadow::V3; 3]>, usize, shadow::BuildingPick) {
+/// What a caster's shadow lies on (rule 37), for the logs too.
+pub struct Receivers {
+    pub triangles: Vec<[shadow::V3; 3]>,
+    /// How many of `triangles` (the first ones) are the terrain's.
+    pub terrain: usize,
+    /// The buildings' pick (its triangles moved into `triangles`).
+    pub pick: shadow::BuildingPick,
+    /// No stored ball: the box around its points stood in (ours).
+    pub fallback: bool,
+}
+
+/// Rule 37: the terrain's triangles (within 1,500 of the ground) and those
+/// of the `buildings` (active ones) that `shadow::building_receivers`
+/// picks for `caster` (its model's stored ball; without one, our fallback:
+/// the box around `corners`, the shown model's points).
+pub fn receivers(ground: &kq8_data::Terrain, position: shadow::V3, corners: &[shadow::V3], dir: shadow::V3, caster: Option<shadow::Caster>, buildings: &[(u32, &shadow::ReceivingBuilding)]) -> Receivers {
+    let mut out = Receivers { triangles: Vec::new(), terrain: 0, pick: shadow::BuildingPick::default(), fallback: caster.is_none() };
     if corners.is_empty() {
-        return (Vec::new(), 0, shadow::BuildingPick::default());
+        return out;
     }
-    let mut all = shadow::terrain_receivers(ground, position, corners, dir);
-    let terrain = all.len();
-    // Until the model's stored ball is passed in (4d-7b-5b): the box
-    // around the caster's points.
-    let Some(caster) = shadow::Caster::around(corners) else { return (all, terrain, shadow::BuildingPick::default()) };
-    let mut pick = shadow::building_receivers(buildings.iter().map(|(_, b)| *b), &caster, dir);
-    all.append(&mut pick.triangles);
-    (all, terrain, pick)
+    out.triangles = shadow::terrain_receivers(ground, position, corners, dir);
+    out.terrain = out.triangles.len();
+    let Some(caster) = caster.or_else(|| shadow::Caster::around(corners)) else { return out };
+    out.pick = shadow::building_receivers(buildings.iter().map(|(_, b)| *b), &caster, dir);
+    out.triangles.append(&mut out.pick.triangles);
+    out
+}
+
+/// The stored ball of what is shown under `root` (itself first, then its
+/// shown children), as a caster.
+fn shown_caster(root: Entity, children: &Query<&Children>, visibility: &Query<&Visibility>, balls: &Query<(&GlobalTransform, &ModelBall)>) -> Option<shadow::Caster> {
+    if visibility.get(root).is_ok_and(|v| *v == Visibility::Hidden) {
+        return None;
+    }
+    if let Ok((at, ball)) = balls.get(root) {
+        return Some(caster(at, ball));
+    }
+    children.get(root).into_iter().flat_map(|c| c.iter()).find_map(|c| shown_caster(c, children, visibility, balls))
 }
 
 /// The shadows' look: unlit, multiply blending at the strength 0.5 (each
@@ -168,6 +218,8 @@ pub struct ObjectShadow {
     pieces: usize,
     /// Building surfaces it lies on (4d-7b-3).
     on_buildings: usize,
+    /// Worked out with our fallback box (no stored ball).
+    fallback: bool,
 }
 
 /// `shadows.log` and the counts for it.
@@ -184,7 +236,7 @@ pub struct ShadowLog {
 /// says it casts (not a character, not a building) gets its shown parts
 /// thrown along the sun onto the terrain; worked out again only when its
 /// shown parts or its place change. Every 10 s a count in `shadows.log`.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn object_shadow_draw(
     mut commands: Commands,
     world: Option<Res<ShadowWorld>>,
@@ -199,7 +251,7 @@ pub fn object_shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut shadows: Local<HashMap<Entity, ObjectShadow>>,
     mut log: Local<ShadowLog>,
-    (buildings, activity): (Option<Res<BuildingShadows>>, Option<Res<ObjectActivity>>),
+    (buildings, activity, balls): (Option<Res<BuildingShadows>>, Option<Res<ObjectActivity>>, Query<(&GlobalTransform, &ModelBall)>),
 ) {
     let (Some(world), Some(ground)) = (world, ground) else { return };
     let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
@@ -230,6 +282,7 @@ pub fn object_shadow_draw(
     let mut shown = 0;
     let mut pieces = 0;
     let mut on_buildings = (0, 0);
+    let mut fallbacks = 0;
     for (root, test, at, off) in &roots {
         if test.character || !kq8_data::characters::casts_shadow(world.0, test.shadow_mask, true, 256.0) {
             continue;
@@ -250,10 +303,12 @@ pub fn object_shadow_draw(
             }
             let position = [t.x * 100.0, -t.z * 100.0, t.y * 100.0];
             let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-            let (receivers, _, pick) = receivers(&ground.0, position, &corners, dir, &active);
-            let cast = shadow::cast(&model, dir, &receivers);
+            let caster = if model.is_empty() { None } else { shown_caster(root, &children, &visibility, &balls) };
+            let on = receivers(&ground.0, position, &corners, dir, caster, &active);
+            let cast = shadow::cast(&model, dir, &on.triangles);
             entry.pieces = cast.len();
-            entry.on_buildings = pick.surfaces;
+            entry.on_buildings = on.pick.surfaces;
+            entry.fallback = on.fallback && !model.is_empty();
             show_shadow(&cast, &mut entry.slot, &mut commands, &mut meshes, &material);
             entry.key = key;
             log.worked_out += 1;
@@ -266,15 +321,17 @@ pub fn object_shadow_draw(
             on_buildings.0 += 1;
             on_buildings.1 += entry.on_buildings;
         }
+        fallbacks += usize::from(entry.fallback);
     }
     log.spent += started.elapsed();
     if log.frames % 600 == 1 {
         let line = format!(
-            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; {} of them reach building surfaces ({} surfaces; {} buildings active); worked out {} times so far; {:.3} ms a frame on average in this system",
+            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; {} of them reach building surfaces ({} surfaces; {} buildings active); {} without a stored model ball (fallback box); worked out {} times so far; {:.3} ms a frame on average in this system",
             log.frames,
             on_buildings.0,
             on_buildings.1,
             active.len(),
+            fallbacks,
             log.worked_out,
             log.spent.as_secs_f64() * 1000.0 / log.frames as f64
         );
