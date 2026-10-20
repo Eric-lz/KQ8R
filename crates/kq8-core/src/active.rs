@@ -2268,6 +2268,7 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
+            "KQMonster::setHome" => Some(self.set_home(words, at)),
             "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
                 Some(self.character_switch(words, at))
@@ -4735,6 +4736,84 @@ mod tests {
         assert!(a.world.active_list.is_empty());
         assert_eq!(a.world.anims[0].player.base.position, [0.0, -1000.0, 100.0]);
         assert!(a.world.character_log.join("\n").contains("went off (neither near nor far); Connor 4000 away (2 × alarm radius 6000)"));
+    }
+
+    /// M5 5a-5: a goblin walker (917 / 3,068) at (0, 0, 100) with the
+    /// movement field `wander`, seeing Connor.
+    fn wanderer(wander: kq8_data::characters::Wander) -> Active {
+        let mut a = with_object("x\n", "x");
+        let (mut c, mut p) = crate::character::tests::walker(917.0, 3068.0);
+        p.name = "gob".into();
+        c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
+        let kq = kq8_data::kq_text::parse(b"[Gob]\nclassType=KQMonster\nanimFile=g.anm\n");
+        let mut s = kq8_data::characters::AiSettings::from_keys(&kq8_data::characters::CharacterKeys::from_section(&kq[0]).unwrap());
+        s.wander = wander;
+        s.alarm_radius = 1000.0;
+        c.ai = Some(crate::character_ai::Ai::new(s, p.base.position, 1300.0, false));
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.world.characters_in_range.insert("gob".into());
+        a.world.connor_at = Some([20_000.0, 0.0, 100.0]);
+        a
+    }
+
+    #[test]
+    fn an_active_wanderer_follows_its_points() {
+        // Rules 9–11: active → Move; the first point (its own position) is
+        // reached at once, it turns to the second and walks there, then
+        // back to the first.
+        use kq8_data::characters::Wander;
+        let mut a = wanderer(Wander::Loop(vec![[0.0, 0.0, -1.0], [0.0, -5000.0, -1.0]]));
+        watch(&mut a, &[], 14);
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Wait, "not active before the first sight test");
+        watch(&mut a, &[], 18);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("wander points (rule 10): loop: (0, 0) (0, -5000)"), "{log}");
+        assert!(log.contains("state Move (from Wait; wandering"), "{log}");
+        assert!(log.contains("point 1 reached (0 < 250); heads for point 2 (0, -5000), 5000 away"), "{log}");
+        // 5,000 − 250 at 917 a second: about 5.2 s.
+        watch(&mut a, &[], 18 + 15 * 6);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("point 2 reached") && log.contains("heads for point 1 (0, 0)"), "{log}");
+        assert!(!log.contains("is stuck"), "{log}");
+        // It turns round (3.5 rad/s) and walks back.
+        watch(&mut a, &[], 18 + 15 * 8);
+        let y = a.world.anims[0].player.base.position[1];
+        assert!(y > -4600.0, "on its way back: {y}");
+    }
+
+    #[test]
+    fn patrol_and_random_points() {
+        use kq8_data::characters::Wander;
+        let kq = kq8_data::kq_text::parse(b"[Gob]\nclassType=KQMonster\nanimFile=g.anm\n");
+        let mut s = kq8_data::characters::AiSettings::from_keys(&kq8_data::characters::CharacterKeys::from_section(&kq[0]).unwrap());
+        s.wander = Wander::Patrol(vec![[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]]);
+        let mut ai = crate::character_ai::Ai::new(s, [0.0; 3], 1300.0, false);
+        let (r, _) = ai.make_route([0.0; 3], &mut || 0.5);
+        assert_eq!(r.iter().map(|p| p[0]).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 3.0, 2.0, 1.0]);
+        ai.settings.wander = Wander::Random;
+        ai.settings.alarm_radius = 1000.0;
+        let mut k = 0.0;
+        let (r, _) = ai.make_route([100.0, 200.0, 0.0], &mut || {
+            k += 0.25;
+            k % 1.0
+        });
+        assert_eq!(r.len(), 4);
+        assert_eq!(r[0], [100.0, 200.0]);
+        for p in &r[1..] {
+            let d = ((p[0] - 100.0).powi(2) + (p[1] - 200.0).powi(2)).sqrt();
+            assert!((2000.0..=3000.0).contains(&d), "{d}");
+        }
+        ai.has_birth = true;
+        assert_eq!(ai.make_route([5.0, 6.0, 0.0], &mut || 0.5).0, [[5.0, 6.0]]);
+    }
+
+    #[test]
+    fn set_home_never_moves_the_character() {
+        let mut a = wanderer(kq8_data::characters::Wander::None);
+        assert_eq!(a.test_command("KQMonster::setHome gob 10 20 -1", "t").as_deref(), Some("0"));
+        let c = a.world.anims[0].character.as_ref().unwrap();
+        assert_eq!(c.ai.as_ref().unwrap().home, [10.0, 20.0, -1.0]);
+        assert_eq!(a.world.anims[0].player.base.position, [0.0, 0.0, 100.0]);
     }
 
     #[test]

@@ -231,6 +231,12 @@ impl Character {
         }
     }
 
+    /// A random number 0..1 from its own draws (M5: random wander points,
+    /// the fidget choice and times, the reaction delay).
+    pub fn random(&mut self) -> f32 {
+        self.rng.fraction()
+    }
+
     /// A seed from the character's name (so two goblins differ, and a run
     /// is the same every time).
     pub fn seed_for(name: &str) -> u64 {
@@ -660,6 +666,11 @@ impl Character {
         let step = AUTO_TURN_RATE * dt;
         let by = if left.abs() < step {
             self.turn_to = None;
+            // character-movement.md rule 5: steering aims anew each update
+            // until it faces the point, then it walks straight (M5 5a-5).
+            if self.state == State::Move {
+                self.walk.steer = None;
+            }
             left
         } else {
             step * left.signum()
@@ -1327,8 +1338,12 @@ pub(crate) mod tests {
         let h = heading_of(&p.base.rotation);
         assert!((h - 3.0 * 3.5 / 15.0).abs() < 0.01, "after 3 updates: {h}");
         walk_for(&mut c, &mut p, &Flat, 3, 12, &mut log);
-        let bearing = crate::connor_auto::heading_towards(p.base.position, [100_000.0, 0.0]);
-        assert!((heading_of(&p.base.rotation) - bearing).abs() < 0.001, "faces the point");
+        // It faced the point once (8 updates in), then walks straight.
+        assert!(c.walk.steer.is_none(), "steering ends once it faces the point");
+        let h = heading_of(&p.base.rotation);
+        assert!((h - std::f32::consts::FRAC_PI_2).abs() < 0.05, "{h}");
+        walk_for(&mut c, &mut p, &Flat, 15, 15, &mut log);
+        assert_eq!(heading_of(&p.base.rotation), h, "straight on");
         assert!(p.base.position[0] > 0.0 && p.base.position[1] < 0.0, "an arc: {:?}", p.base.position);
         // noTurn: no steering.
         let (mut c, mut p) = walker(917.0, 3068.0);

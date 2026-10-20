@@ -64,13 +64,63 @@ pub struct Ai {
     pub unseen: u32,
     /// On its way home (rules 21, 28).
     pub on_way_home: bool,
+    /// Its list has `Birth` (no random wander points then, rule 10).
+    pub has_birth: bool,
+    /// The wander points in the order it visits them, once round (rule
+    /// 10), made the first time it wanders; the one it heads for now; the
+    /// closest it has been to it (rule 11).
+    pub route: Option<Vec<[f32; 2]>>,
+    pub point: usize,
+    pub closest: f32,
+    /// `wanderAndStop` ended its points: no more wandering (rule 11).
+    pub wander_done: bool,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false }
+    }
+
+    /// Rule 10: the points once round. `loop`: in order; `patrol`: there
+    /// and back (`A B C D` → `A B C D C B A`); `random` or no points (and
+    /// no `Birth`): its own position and three random points at 2–3 × its
+    /// alarm radius, each direction at least 0.79 rad on from the last.
+    pub fn make_route(&self, at: [f32; 3], random: &mut dyn FnMut() -> f32) -> (Vec<[f32; 2]>, &'static str) {
+        use kq8_data::characters::Wander;
+        let flat = |p: &[f32; 3]| [p[0], p[1]];
+        match &self.settings.wander {
+            Wander::Loop(p) if !p.is_empty() => (p.iter().map(flat).collect(), "loop"),
+            Wander::Patrol(p) if !p.is_empty() => {
+                let mut r: Vec<[f32; 2]> = p.iter().map(flat).collect();
+                r.extend(p[..p.len() - 1].iter().rev().map(flat));
+                (r, "patrol (there and back)")
+            }
+            _ if self.has_birth => (vec![flat(&at)], "no points and a Birth movement: none (stays)"),
+            _ => {
+                let mut r = vec![flat(&at)];
+                let mut angle = random() * std::f32::consts::TAU;
+                for k in 0..3 {
+                    if k > 0 {
+                        // **Ours**: at least 0.79 on, the rest of the
+                        // circle short of 0.79 back, evenly.
+                        angle += RANDOM_POINT_TURN + random() * (std::f32::consts::TAU - 2.0 * RANDOM_POINT_TURN);
+                    }
+                    let d = self.settings.alarm_radius * (2.0 + random());
+                    r.push([at[0] + d * angle.sin(), at[1] - d * angle.cos()]);
+                }
+                (r, "random (own position + 3)")
+            }
+        }
     }
 }
+
+/// Rule 11: a wander point counts as reached within this (x, y).
+pub const POINT_REACHED: f32 = 250.0;
+/// Rule 11: it re-aims only when its distance² is more than its closest²
+/// plus this².
+pub const REAIM_DRIFT: f32 = 12500.0;
+/// Rule 10: random wander points' directions are at least this far apart.
+pub const RANDOM_POINT_TURN: f32 = 0.79;
 
 /// The plain distance between two points.
 fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -148,6 +198,73 @@ impl WorldState {
             if wants_in {
                 self.join_active(i, now);
             }
+            self.wander(i, now);
+        }
+    }
+
+    /// Rules 9–14: an active wanderer, in Wait (not on its way home, not
+    /// done), starts walking (`walk`) in whatever way it faces; in Move it
+    /// follows its points: within 250 → the next one, turning toward it;
+    /// otherwise it re-aims only when it has drifted well off (rule 11);
+    /// after the stuck escape it takes the next point (rule 7).
+    fn wander(&mut self, i: usize, now: f64) {
+        use crate::character::State;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_ref() else { return };
+        if !ai.active || !ai.settings.wanders || ai.wander_done || ai.on_way_home {
+            return;
+        }
+        let mut lines = Vec::new();
+        let pos = a.player.base.position;
+        if ai.route.is_none() {
+            let ai = c.ai.take().unwrap();
+            let (route, kind) = ai.make_route(pos, &mut || c.random());
+            lines.push(format!(
+                "wander points (rule 10): {kind}: {}",
+                route.iter().map(|p| format!("({:.0}, {:.0})", p[0], p[1])).collect::<Vec<_>>().join(" ")
+            ));
+            c.ai = Some(Ai { route: Some(route), point: 0, closest: f32::MAX, ..ai });
+        }
+        match c.state {
+            State::Wait => {
+                let line = c.enter_move(&mut a.player, now, false, "wandering, rules 9, 12");
+                lines.push(line);
+            }
+            State::Move => {
+                let stuck = std::mem::take(&mut c.walk.stuck_now);
+                let ai = c.ai.as_mut().unwrap();
+                let route = ai.route.as_ref().unwrap();
+                let target = route[ai.point % route.len()];
+                let d = ((pos[0] - target[0]).powi(2) + (pos[1] - target[1]).powi(2)).sqrt();
+                if d < POINT_REACHED || stuck {
+                    let n = route.len();
+                    let why = if stuck { "stuck: the next point (rule 7)".to_string() } else { format!("point {} reached ({d:.0} < {POINT_REACHED})", ai.point % n + 1) };
+                    ai.point += 1;
+                    if ai.point % n == 0 && ai.settings.wander_and_stop && !stuck {
+                        ai.wander_done = true;
+                        let w = c.set_state(&mut a.player, "Wait", &[], now);
+                        lines.push(format!("{why}: the last; wanderAndStop: no more wandering ({w}); its cue is not traced (rule 11)"));
+                    } else {
+                        let next = route[ai.point % n];
+                        ai.closest = ((pos[0] - next[0]).powi(2) + (pos[1] - next[1]).powi(2)).sqrt();
+                        c.walk.steer = Some(next);
+                        lines.push(format!("{why}; heads for point {} ({:.0}, {:.0}), {:.0} away (rule 11)", ai.point % n + 1, next[0], next[1], ai.closest));
+                    }
+                } else {
+                    if d * d > ai.closest * ai.closest + REAIM_DRIFT * REAIM_DRIFT {
+                        c.walk.steer = Some(target);
+                        lines.push(format!("drifted off: {d:.0} from point {}, closest was {:.0}: re-aims (rule 11)", ai.point % route.len() + 1, ai.closest));
+                        ai.closest = d;
+                    }
+                    ai.closest = ai.closest.min(d);
+                }
+            }
+            _ => {}
+        }
+        for l in lines {
+            self.character_note(&name, l);
         }
     }
 
@@ -237,4 +354,32 @@ fn status_line(player: &crate::named_anim::NamedAnimPlayer, c: &crate::character
         ai.unseen,
         if ai.on_way_home { "; on its way home" } else { "" }
     )
+}
+
+impl WorldState {
+    /// `KQMonster::setHome <name> x y z` (rule 13): its home point (z −1 =
+    /// the floor, kept as written and placed when used); it never moves
+    /// the character. Returns the result for `$Console::Return`.
+    pub(crate) fn set_home(&mut self, words: &[String], at: &str) -> String {
+        let nums: Vec<f32> = words.iter().skip(2).filter_map(|w| w.parse().ok()).collect();
+        let (Some(name), [x, y, z, ..]) = (words.get(1), nums.as_slice()) else {
+            self.note(format!("{at}: usage: KQMonster::setHome <name> x y z; nothing"));
+            return "1".into();
+        };
+        let Some(i) = self.character_index(name) else {
+            self.note(format!("{at}: KQMonster::setHome {name}: no such character; nothing"));
+            return "1".into();
+        };
+        let a = &mut self.anims[i];
+        let who = a.player.name.clone();
+        let line = match a.character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+            Some(ai) => {
+                ai.home = [*x, *y, *z];
+                format!("{at}: KQMonster::setHome: home ({x}, {y}, {z}); not moved (rule 13)")
+            }
+            None => format!("{at}: KQMonster::setHome: no movement rules; nothing"),
+        };
+        self.character_note(&who, line);
+        "0".into()
+    }
 }

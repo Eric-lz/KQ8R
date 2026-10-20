@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-5: active characters wander their points
+
+**Changed:** `kq8-core/src/character_ai.rs`: the wander points (`loop`, `patrol` there and back, `random`), following them (reached within 250, re-aim only after drifting 12,500 off, the next point after a stuck escape, `wanderAndStop`), `KQMonster::setHome` (no longer a stub). `character.rs`: steering ends once the character faces its point (rule 5). Viewer: `has_birth` per character. 3 new tests. DESIGN, provenance.
+**Why:** `character-movement.md` rules 9–14 (step 5 of 5a).
+**Tested how:** `cargo test --workspace` (402 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --frames 3500`, `characters.log`.
+**Result:** chicken1 joins the list at update 15, reaches its first point (its own position) at once and turns to point 2; walking about 119 a second it is stuck at its first check (update 30, moved 90), snaps to a diagonal, runs at **947** from then on and takes the next point; points 3 and 4 reached at updates 293 and 379, then round again, as the note predicts for the chickens. Unit tests: a goblin walks to its second point and back; patrol order; random points 2,000–3,000 out; `setHome` doesn't move it.
+**Still broken / not tested:** **Not looked at by eye.** No fidgets yet, so goblins and spriggans walk without stopping (5a-6). No alarm or chase (5a-7).
+**Next:** 5a-6, idling.
+
 ## 2026-10-20 M5 step 5a-4: characters see Connor; the active list
 
 **Changed:** New `kq8-core/src/character_ai.rs`: each character's movement rules (`Ai`: settings, home, eye height, what it knows), the sight test every 15th update, joining the world's active list (`KQWorld::MaxMonsters`, team members first), leaving it (off, pushed off) with the reset to home. `character.rs`, `active.rs`: the new state. Viewer: `anim_view.rs` gives each character its rules at load, `load.rs` / `door_view.rs` read `MaxMonsters` from `world.cs` and run the sight pass before the movers. 2 new tests. DESIGN, provenance.

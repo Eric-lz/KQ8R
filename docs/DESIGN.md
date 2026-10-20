@@ -1049,7 +1049,8 @@ stats.
     than 2 × its alarm radius away (**stand-in**: plain 3D distance, the
     note's open question 2): put on its home point at once (z −1 floor,
     −2 surface), `hide` lists back into Birth; Move → Wait.
-  - **5a-5, wandering** (rules 9–14). Active, `wanders` on, in Wait, not
+  - **5a-5, wandering** (**done** 2026-10-20; chicken1 runs its loop as
+    the note predicts) (rules 9–14). Active, `wanders` on, in Wait, not
     alarmed, idle not due → Move along its points (`loop`, `patrol`
     there and back, `random`: own position + 3 random points at 2–3 ×
     alarm radius); reached within 250 (x, y) → next point and turn to

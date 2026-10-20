@@ -2334,3 +2334,16 @@ marked otherwise.
 | In Wait, not active and seeing him → joins the list if there is room (`KQWorld::MaxMonsters`, from `world.cs`); a team member takes the place of the **first** one without a team (**our reading**) | Rule 20 | Unit test |
 | Off (not near or far) or pushed off → leaves; put home at once if on its way home or Connor > 2 × alarm radius (plain 3D distance: **stand-in**, the note's open question 2); `hide` → Birth; Move → Wait | Rule 21 | Unit tests |
 | `characters.log`: every change of sight (and what blocked it), joins and leaves, a status line per character every 15 updates | The note's "How to check" | Viewer run |
+
+### 5a-5, wandering — `crates/kq8-core/src/character_ai.rs` (`make_route`, `wander`, `set_home`), `character.rs`, `script.rs`, viewer `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Only active wanderers wander; in Wait they start walking (`walk`) the way they face | `character-movement.md` rules 3, 9, 11, 12 | Unit test; viewer: chicken1 |
+| The points: `loop` in order; `patrol` there and back (`A B C D C B A`, then round again); only the first n read | Rule 10 | Unit test |
+| `random` / no points without `Birth`: own position + 3 at 2–3 × alarm radius, ≥ 0.79 rad apart; the exact spread of the other directions is **ours** | Rule 10 | Unit test |
+| Reached within 250 (x, y) → next point, turn toward it; re-aim only when distance² > closest² + 12,500² | Rule 11 | Unit test |
+| Steering ends once it faces the point (it then walks straight) | Rule 5 | Unit test |
+| After the stuck escape a wanderer takes its next point | Rule 7 | Viewer: chicken1 |
+| `wanderAndStop`: no more wandering at the end of the points; its cue not traced | Rule 11 | — (no Daventry file has it) |
+| `KQMonster::setHome <name> x y z`: home only, never moves it | Rule 13 | Unit test |
