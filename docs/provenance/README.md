@@ -2418,3 +2418,13 @@ marked otherwise.
 | What | Source | Check |
 | --- | --- | --- |
 | He lands on a character's top as on any surface facing up more than 0.8, then is pushed 250 level from the contact, away from its axis (exactly over it: toward his back), as an across move (3 slides), in any state; Connor only | `connor-physics.md` "landing on a `KQMonster`" (Q131 c; replaces the ordinary-landing stand-in) | Unit test |
+
+### 5b-3, the stuck escape corrected — `crates/kq8-core/src/character.rs` (`after_move`, `stuck_escape`, `enter_move`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| The check is on only once `walk` / `run` really plays; first check 1 s after that | `character-movement.md` rule 7 (Q132) | Unit test; viewer: chicken1 |
+| The world's diagonals NE, NW, SW, SE, ±1,250 in x and y; the round starts at NE on each start of moving, one further per stuck event | Rule 7 (Q132 a; replaces our π/4-first, 1,250-long stand-in) | Unit test |
+| Level from its feet, lifted 1 | Rule 7 and its "Do not reproduce" (Q132 b) | — |
+| All four blocked: face north (+y) | Rule 7 (replaces "turned round") | Unit test |
+| Connor never blocks a diagonal (the line's mask 0xB has no bit 4), nor a box the line starts in | Rule 7 | — |

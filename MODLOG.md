@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 step 5b-3: the stuck escape as traced (Q132)
+
+**Changed:** `kq8-core/src/character.rs`: the stuck check starts only when the walk or run really plays; the world's diagonals NE, NW, SW, SE (±1,250 in x and y), the round starting at NE on each start of moving; all blocked: face north. Tests updated, DESIGN, provenance.
+**Why:** A's answer to Q132 (a), (b) (`character-movement.md` rule 7).
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer: `cargo play --world Daventry --sound off --frames 2500`, `characters.log`.
+**Result:** chicken1: "'walk' plays: the stuck check is on, first at 2.00" (update 15), stuck at update 30 (moved 90), north-east (2.356) free, snaps to it, runs. Unit tests: NE first, NW the next time, north when all are blocked.
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** 5b-4, the chase.
+
 ## 2026-10-20 M5 step 5b-2: landing on a character's top pushes Connor off (Q131 c)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: a down-pass landing on a character's top (its hit now carries the character's axis) is followed by a 250 level push away from it, as an across move. 1 new test. DESIGN, provenance.

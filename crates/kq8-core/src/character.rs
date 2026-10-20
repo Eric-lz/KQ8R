@@ -157,8 +157,11 @@ pub struct Walk {
     /// Game time of the next stuck check, and where it was at the last one.
     next_check: f64,
     check_from: [f32; 3],
-    /// Stuck events so far: each search starts one diagonal further round.
+    /// Stuck events since it started moving: each search starts one
+    /// diagonal further round (rule 7).
     stuck_count: usize,
+    /// The stuck check is on: its `walk` / `run` really plays (rule 7).
+    check_on: bool,
     /// This update's step from the movement playing (world space), taken
     /// by its mover.
     pub step: [f32; 3],
@@ -188,10 +191,17 @@ pub const STUCK_DISTANCE: f32 = 200.0;
 pub const STUCK_NO_STEER: f64 = 3.0;
 pub const STUCK_LOOK: f32 = 1250.0;
 pub const STUCK_MASK: u32 = 0xB;
-/// **Stand-in** (rule 7 says "at its own height"): the diagonal test line
-/// runs level this far above its position, so the flat ground under its
-/// feet does not block it by rounding (asked, Q132).
+/// Rule 7 (Q132 b): the diagonal test line runs level from its feet; we
+/// lift it this much, as the note's "Do not reproduce" recommends (the
+/// ground blocks a diagonal only where it is higher than its feet).
 pub const STUCK_LINE_LIFT: f32 = 1.0;
+/// Rule 7 (Q132 a): the world's diagonals in the order tried, as (x, y)
+/// steps: north-east, north-west, south-west, south-east.
+pub const STUCK_DIAGONALS: [[f32; 2]; 4] = [[1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0], [1.0, -1.0]];
+/// The heading of a level direction (heading 0 faces −y, π/2 faces +x).
+fn heading_of_direction(x: f32, y: f32) -> f32 {
+    x.atan2(-y)
+}
 
 /// What one update did: the player's step (`None` when not updated) and
 /// lines for the log.
@@ -365,6 +375,20 @@ impl Character {
             None => self.walk.second_from = Some((pos, now)),
             _ => {}
         }
+        // Rule 7 (Q132): the check is on only once its walk or run really
+        // plays; the first check is 1 s after that.
+        if !self.walk.check_on {
+            let wanted = Self::moving_name(player, self.walk.run);
+            let plays = player.movement_name().eq_ignore_ascii_case(wanted) || player.movement_name().eq_ignore_ascii_case(Self::moving_name(player, !self.walk.run));
+            if !plays {
+                return;
+            }
+            self.walk.check_on = true;
+            self.walk.next_check = now + STUCK_FIRST;
+            self.walk.check_from = pos;
+            notes.push(format!("'{}' plays: the stuck check is on, first at {:.2} (rule 7)", player.movement_name(), self.walk.next_check));
+            return;
+        }
         if now + 1e-6 < self.walk.next_check {
             return;
         }
@@ -388,10 +412,10 @@ impl Character {
         let mut chosen = None;
         for i in 0..4 {
             let k = (self.walk.stuck_count + i) % 4;
-            // Rule 7's "four diagonals", taken as the world's (**our
-            // reading**, asked as Q132): headings π/4 + k·π/2.
-            let h = std::f32::consts::FRAC_PI_4 + k as f32 * std::f32::consts::FRAC_PI_2;
-            let to = [from[0] + STUCK_LOOK * h.sin(), from[1] - STUCK_LOOK * h.cos(), from[2]];
+            // Rule 7 (Q132 a): NE, NW, SW, SE, ±1,250 in x and in y.
+            let [dx, dy] = STUCK_DIAGONALS[k];
+            let h = heading_of_direction(dx, dy);
+            let to = [from[0] + STUCK_LOOK * dx, from[1] + STUCK_LOOK * dy, from[2]];
             match world.line_blocked(from, to, STUCK_MASK, &player.name) {
                 Some(what) => tried.push(format!("{h:.3} blocked by {what}")),
                 None => {
@@ -403,11 +427,10 @@ impl Character {
         }
         self.walk.stuck_count += 1;
         let was = heading_of(&player.base.rotation);
-        // The note's open question 1: all four blocked → "a fixed
-        // half-turn heading"; **stand-in**: turned round.
+        // Rule 7: all four blocked → it faces north (+y).
         let (to, how) = match chosen {
             Some(h) => (h, "the first free diagonal"),
-            None => (wrap(was + std::f32::consts::PI), "all four blocked: turned round (stand-in, the note's open question 1)"),
+            None => (heading_of_direction(0.0, 1.0), "all four blocked: faces north (rule 7)"),
         };
         let r = player.base.rotation;
         player.base.rotation = times(&r, &kq8_data::objects::rotation([0.0, 0.0, wrap(to - was)]));
@@ -452,7 +475,7 @@ impl Character {
     /// Rule 4: into Move. `Stop` at a random frame and speed first, then at
     /// once `walk` or `run`; the stuck check starts (rule 7). Returns the
     /// log line.
-    pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, now: f64, run: bool, why: &str) -> String {
+    pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, _now: f64, run: bool, why: &str) -> String {
         let from = self.state;
         self.state = State::Move;
         self.wait_at = None;
@@ -462,11 +485,15 @@ impl Character {
         self.start_up_in_state(player, &mut first);
         let stop = self.ask_stop(player, true);
         let moving = self.set_moving(player, run);
-        self.walk.next_check = now + STUCK_FIRST;
+        // Rule 7 (Q132): the check waits for the walk to play; each start
+        // of moving begins the round at north-east again.
+        self.walk.check_on = false;
+        self.walk.stuck_count = 0;
+        self.walk.next_check = f64::MAX;
         self.walk.check_from = player.base.position;
         self.walk.second_from = None;
         let first = first.iter().map(|l| format!("{l}; ")).collect::<String>();
-        format!("{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4); first stuck check at {:.2} (rule 7)", self.walk.next_check)
+        format!("{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4)")
     }
 
     /// Rule 1: this update's step from a repeating movement (its frame
@@ -1390,24 +1417,26 @@ pub(crate) mod tests {
         assert!(!log.iter().any(|l| l.contains("is stuck")), "not before 1 s: {log:?}");
         walk_for(&mut c, &mut p, &Flat, 15, 1, &mut log);
         let stuck = log.iter().find(|l| l.contains("is stuck")).expect("stuck at 1 s");
-        assert!(stuck.contains("0.785 free") && stuck.contains("'run' starts at once"), "{stuck}");
-        assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_4).abs() < 0.001);
-        assert!(c.walk.run && (c.walk.steer_off_until - 4.0).abs() < 1e-6 && c.walk.stuck_now);
+        // North-east first: heading 3π/4 (+x, +y).
+        let ne = 3.0 * std::f32::consts::FRAC_PI_4;
+        assert!(stuck.contains("2.356 free") && stuck.contains("'run' starts at once"), "{stuck}");
+        assert!((heading_of(&p.base.rotation) - ne).abs() < 0.001);
+        assert!(c.walk.run && c.walk.stuck_now);
         // Steering stays off for 3 s: still facing the diagonal.
-        walk_for(&mut c, &mut p, &Flat, 16, 30, &mut log);
-        assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_4).abs() < 0.001);
+        walk_for(&mut c, &mut p, &Flat, 17, 30, &mut log);
+        assert!((heading_of(&p.base.rotation) - ne).abs() < 0.001);
         // All four blocked: turned round (stand-in).
         let (mut c, mut p) = walker(0.0, 0.0);
         let mut log = Vec::new();
         c.set_state(&mut p, "Move", &[], 0.0);
         walk_for(&mut c, &mut p, &Closed, 0, 16, &mut log);
         let stuck = log.iter().find(|l| l.contains("is stuck")).expect("stuck");
-        assert!(stuck.contains("all four blocked: turned round"), "{stuck}");
+        assert!(stuck.contains("all four blocked: faces north"), "{stuck}");
         assert!((heading_of(&p.base.rotation).abs() - std::f32::consts::PI).abs() < 0.001);
         // The next check is half a second later; the search starts one
         // diagonal further round.
         walk_for(&mut c, &mut p, &Flat, 16, 8, &mut log);
         let second = log.iter().filter(|l| l.contains("is stuck")).nth(1).expect("stuck again at 1.5 s");
-        assert!(second.starts_with("is stuck") && second.contains("diagonals: 2.356 free"), "{second}");
+        assert!(second.starts_with("is stuck") && second.contains("diagonals: -2.356 free"), "north-west next: {second}");
     }
 }

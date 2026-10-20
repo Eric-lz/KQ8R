@@ -1102,7 +1102,7 @@ stats.
     - **5b-2, landing on a character's top** (**done** 2026-10-20) (Q131 c): Connor lands, then
       is pushed 250 level, away from its position (over it: toward his
       back), as an across-pass move (3 slides), in any state.
-    - **5b-3, the stuck escape** (Q132): on only once `walk` / `run`
+    - **5b-3, the stuck escape** (**done** 2026-10-20) (Q132): on only once `walk` / `run`
       really plays; the world's diagonals NE, NW, SW, SE, ±1,250 in x and
       y, the round starting at NE on each start of moving; level from the
       feet (1 above, as the note recommends); Connor never blocks; all
