@@ -59,11 +59,12 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   away ends the talk with a goodbye. Characters stand on the ground
   and on building floors, and cast shadows on the ground.
   Connor can't walk through characters: he slides round them.
-- **M5 – So far.** Daventry's creatures move on their own: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground.
+- **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground.
 
 ### Next
 
-- **Characters:** shadows on buildings; the fight (waiting for its study).
+- **M5 – Fighting:** attacks, being hit and dying (waiting for its study).
+- **Characters:** shadows on buildings.
 
 ### Later
 

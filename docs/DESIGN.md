@@ -971,8 +971,8 @@ stats.
 - B: implement.
 
 - **5a — characters moving on their own, up to the first swing**
-  (planned 2026-10-20; **done** 2026-10-20, steps 5a-1 to 5a-9, checked
-  in the logs only; Q132–Q134 asked). From `docs/behaviour/character-movement.md` (A,
+  (planned 2026-10-20; **done** 2026-10-20, steps 5a-1 to 5a-9, with 5b;
+  **checked by the user against the original 2026-10-20**). From `docs/behaviour/character-movement.md` (A,
   2026-10-19, **not yet checked in the original**), with `characters.md`,
   `connor-physics.md`, `connor-collision.md`, `anim-scripts.md`. Words:
   **active** = on the world's short list of characters that "know"

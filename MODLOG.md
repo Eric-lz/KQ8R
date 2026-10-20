@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 The user's check of characters moving on their own (5a, 5b): done
+
+**Changed:** Docs only: FEATURES (checked, done), STATUS, DESIGN, README, provenance.
+**Why:** The user compared the last look (the chase and the zombies) with the original.
+**Tested how:** By eye in our viewer and in the original (user): a goblin's chase (walking away, standing, running far) and the road / graveyard zombies (sinking, rising again).
+**Result:** "Both match exactly." Earlier the same day: movement and routes of the chickens and bats, the follow, the leash, the zombies' cycle.
+**Still broken / not tested:** The attack is a stand-in until the fight study. Not run: losing sight, leaving and re-entering the graveyard trap, `wanderAndStop`, random wander points, ranged characters.
+**Next:** A: the fight study. B: shadows on buildings (4d-7b-3).
+
 ## 2026-10-20 M5 5b finished: STATUS, FEATURES, QUESTIONS
 
 **Changed:** Docs only: STATUS (where we are, stand-ins, next steps; Q131–Q134 built), FEATURES (characters moving on their own), QUESTIONS (Q131–Q134 marked built), DESIGN (5b done).

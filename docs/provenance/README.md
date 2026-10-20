@@ -2450,3 +2450,5 @@ marked otherwise.
 | Rising again only by the rising test, from home | Rule 30 | Unit test; viewer |
 | Solid for others and for Connor while not underground (a sinking zombie stays solid) | Rule 30; `characters.md` rule 16 | Unit test |
 | The chase during `birth`: Move at once, its walk waiting for `birth` (the stand-in "stay in Wait" removed); stuck check from the walk's start | Rules 7, 30 | Viewer |
+
+**5a / 5b checked by the user against the original (2026-10-20):** the creatures' movement and routes, the chase, following a walking Connor at reach and stopping when he stands, the leash sending a goblin home, and the zombies sinking and rising again from their graves all match.
