@@ -1062,7 +1062,8 @@ stats.
     the idle time has come (0 at first): a random fidget from that list,
     then Wait's `Stop`; the next due 2 + round(random × 10) s after it
     ended. A walking wanderer goes back to Wait for it.
-  - **5a-7, alarm, chase, giving up, going home** (rules 23–29). Seen
+  - **5a-7, alarm, chase, giving up, going home** (**done** 2026-10-20;
+    Q133 asked: the leash loops when Connor stays within reach) (rules 23–29). Seen
     within the alarm radius (straight distance) and `goHome` off →
     alarmed after a random 0–1 s, chase timer 5 s, the walk / run coin,
     the alarm spread (active and seeing, or a team member seeing; the

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-7: alarm, chase, giving up, going home
+
+**Changed:** `kq8-core/src/character_ai.rs`: the alarm (seen within the alarm radius, a random 0–1 s reaction, chase timer 5 s, the walk / run coin, telling the others and the team), the chase (turn to him standing, steer at him moving, stop within the attack distance where the fight will start), losing sight after 45 updates, the leash after the chase timer, giving up (on its way home; `hide` lists back into Birth), the way home and taking up the chase again; `KQMonster::goHome`, `setAlarmRadius`, `setChaseRadius`, `setHomeRadius` (no longer stubs in `script.rs`). No new fidget once alarmed. 2 new tests. New question **Q133**. DESIGN, provenance.
+**Why:** `character-movement.md` rules 22–29 (step 7 of 5a).
+**Tested how:** `cargo test --workspace` (405 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 286500,191000,0 --frames 1500` (Connor standing 3,175 from goblin22) and `--at 289284,190300,0 --hold 1,0,0 --frames 5000` (Connor walking away south), `characters.log`.
+**Result:** Standing Connor: goblin22 is alarmed at update 15, reacts after 0.91 s, runs (the coin) and stops 1,474 from him (within 1,500) at update 50, "the attack would start here". Walking Connor: it follows, stopping and starting at 1,500 (our stand-in for the attack), the coin giving run or walk at each start; at update 136, 6,007 from home, it gives up (chase radius 6,000) and runs home, but takes up the chase again at once because he is within its attack distance (rule 28), and so on every 5 s (Q133). Unit tests: the whole chase, stop at reach, give up when Connor is far, home reached; `goHome` keeps it unalarmed until `goHome 0`; the three radius commands.
+**Still broken / not tested:** **Not looked at by eye.** The stop at the attack distance stands in for the fight. The leash loop (Q133). Telling the others and teams not run in the game yet (the windmill spriggans); losing sight not seen in a run.
+**Next:** 5a-8, the zombies rising; Q133 for A.
+
 ## 2026-10-20 M5 step 5a-6: active characters fidget
 
 **Changed:** `kq8-core/src/character_ai.rs`: the idle rules (first fidget as soon as active, a random one of the idle list, the next 2 + round(random × 10) s after the last ended, a walking wanderer stops for it). Viewer `load.rs`: a character's `idleAnimFile` movements loaded with their models as `idle:<name>` (the model loading moved into `movement_animation`). 1 new test. DESIGN, provenance.

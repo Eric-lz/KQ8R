@@ -2269,6 +2269,7 @@ impl ScriptHost for WorldState {
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
+            "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
             "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
                 Some(self.character_switch(words, at))
@@ -4747,6 +4748,7 @@ mod tests {
         c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
         let kq = kq8_data::kq_text::parse(b"[Gob]\nclassType=KQMonster\nanimFile=g.anm\n");
         let mut s = kq8_data::characters::AiSettings::from_keys(&kq8_data::characters::CharacterKeys::from_section(&kq[0]).unwrap());
+        s.wanders = wander.wanders();
         s.wander = wander;
         s.alarm_radius = 1000.0;
         c.ai = Some(crate::character_ai::Ai::new(s, p.base.position, 1300.0, false));
@@ -4806,6 +4808,60 @@ mod tests {
         let log = a.world.character_log.join("\n");
         assert!(log.contains("idle time: stops walking for a fidget"), "{log}");
         assert_eq!(log.matches("idle time: fidget 'react'").count(), 2, "{log}");
+    }
+
+    #[test]
+    fn an_alarmed_character_chases_stops_at_reach_gives_up_and_goes_home() {
+        // Rules 23–28 (the fight itself is the next study).
+        use kq8_data::characters::Wander;
+        let mut a = wanderer(Wander::None);
+        {
+            let ai = a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap();
+            (ai.settings.alarm_radius, ai.settings.attack_dist, ai.settings.home_radius, ai.settings.chase_radius) = (4000.0, 1500.0, 3000.0, 6000.0);
+        }
+        a.world.connor_at = Some([0.0, -3500.0, 100.0]);
+        watch(&mut a, &[], 16);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("alarmed: sees Connor 3500 away, within its alarm radius 4000 (rule 23); reacts in"), "{log}");
+        // Within 1 s it reacts: after him (walking or running).
+        watch(&mut a, &[], 32);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("state Move (from Wait; after Connor"), "{log}");
+        // It stops within its attack distance, facing him.
+        watch(&mut a, &[], 90);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("within its attack distance 1500: stops, facing him") && log.contains("the attack would start here"), "{log}");
+        let y = a.world.anims[0].player.base.position[1];
+        assert!(y < -1900.0 && y > -2100.0, "1,500 short of him, give or take one update: {y}");
+        // Connor runs far off (beyond twice the alarm radius): after the
+        // chase timer it gives up and goes home, where it waits.
+        a.world.connor_at = Some([0.0, -20_000.0, 100.0]);
+        watch(&mut a, &[], 120);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("gives up: Connor") && log.contains("beyond twice its alarm radius (rule 27); on its way home"), "{log}");
+        watch(&mut a, &[], 300);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("home reached (0, 0)"), "{log}");
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Wait);
+    }
+
+    #[test]
+    fn go_home_and_the_radius_commands() {
+        // Rules 23, 27, 29.
+        let mut a = wanderer(kq8_data::characters::Wander::None);
+        assert_eq!(a.test_command("KQMonster::setAlarmRadius gob 4500", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("KQMonster::setChaseRadius gob 100", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("KQMonster::setHomeRadius gob 6000", "t").as_deref(), Some("0"));
+        let s = a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().settings.clone();
+        assert_eq!((s.alarm_radius, s.chase_radius, s.home_radius), (4500.0, 100.0, 6000.0));
+        // goHome: never alarmed until goHome 0.
+        a.world.connor_at = Some([0.0, -2000.0, 100.0]);
+        assert_eq!(a.test_command("KQMonster::goHome gob", "t").as_deref(), Some("0"));
+        watch(&mut a, &[], 40);
+        assert!(!a.world.character_log.join("\n").contains("alarmed:"));
+        assert_eq!(a.test_command("KQMonster::goHome gob 0", "t").as_deref(), Some("0"));
+        watch(&mut a, &[], 46);
+        assert!(a.world.character_log.join("\n").contains("alarmed: sees Connor 2000 away"), "{}", a.world.character_log.join("\n"));
     }
 
     #[test]

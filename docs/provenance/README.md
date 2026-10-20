@@ -2358,3 +2358,18 @@ marked otherwise.
 | The next due 2 + round(random × 10) s after it ended; any movement ending during it counts as its end (we take: the movement shown is no longer the fidget, or it has ended) | Rule 17 | Unit test |
 | Then Wait's `Stop` at a random frame and speed | Rule 18; `characters.md` rule 18 | Unit test |
 | Wanderers don't start walking while a fidget plays or is due | Rule 12 | Unit test |
+
+### 5a-7, alarm, chase, giving up, going home — `crates/kq8-core/src/character_ai.rs` (`alarm_rules`, `alarm`, `spread_alarm`, `give_up`, `way_home`, `monster_ai_command`), `active.rs`, `script.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Alarmed when active, not fidgeting, in Wait or walking its points, seeing Connor closer than its alarm radius (straight distance), `goHome` off, radius above 0 | `character-movement.md` rule 23 | Unit test; viewer: goblin22 at 3,175 |
+| A random 0–1 s before it reacts (wandering carries on; no new fidget once alarmed); chase timer 5 s; no alarm line (none in Daventry's files) | Rules 16, 23 | Unit test |
+| The walk / run coin at each start of a chase move | Rules 3, 23 | Viewer |
+| The alarm spreads to active characters (alarm radius > 0) that see Connor or whose team does, and to the alarmed one's team (made active if needed, **ours**: even past `MaxMonsters`); being told does not tell others again (**ours**) | Rule 24 | — (windmill spriggans not run yet) |
+| Standing: turns to him (or the last seen spot if more than 500 away); moves after him when out of sight or beyond its attack distance and its chase radius is above 0; `guard` (chase 0) only turns | Rule 25 | Unit test |
+| Moving: steers at him each update; seen and within its attack distance → Wait facing him, "the attack would start" logged | Rule 25; the stop in every case is a **stand-in** until the fight study (Q133 b) | Unit test; viewer |
+| Not seen for 45 updates → gives up, with the team exceptions | Rule 26 | — |
+| After the chase timer: no team and beyond 2 × alarm radius, or beyond its chase radius from home (x, y: **ours**) → gives up (`run` for the second) | Rule 27 | Unit test; viewer: goblin22 at 6,007 from home |
+| Giving up: target forgotten, on its way home, `hide` → Birth playing `hide`; steers home, within 100 in x and y → Wait; takes up the chase again as rule 28 says | Rule 28 (the loop it gives at the leash is asked as Q133 a) | Unit test; viewer |
+| `KQMonster::goHome <name> [0]`, `setAlarmRadius`, `setChaseRadius`, `setHomeRadius` (no longer stubs) | Rules 23, 27, 29 | Unit test |

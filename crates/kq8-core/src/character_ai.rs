@@ -79,11 +79,28 @@ pub struct Ai {
     pub idle_due: f64,
     /// The fidget playing now (its name in the player).
     pub fidget: Option<String>,
+    /// After Connor (rule 23): its target is Connor.
+    pub alarmed: bool,
+    /// It reacts from this game time on (a random 0–1 s after the alarm);
+    /// until then it carries on as before (rule 23).
+    pub react_at: f64,
+    /// The chase timer runs out at this game time (rules 23, 27).
+    pub chase_until: f64,
+    /// Where it last saw Connor (rules 23, 25).
+    pub last_seen: Option<[f32; 3]>,
+    /// `KQMonster::goHome <name>` is on (rule 29).
+    pub go_home: bool,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false }
+    }
+
+    /// Alarmed and past its reaction delay: the chase rules drive it, not
+    /// wandering or idling (rules 14, 16, 23).
+    pub fn engaged(&self, now: f64) -> bool {
+        self.alarmed && now + 1e-6 >= self.react_at
     }
 
     /// Rule 10: the points once round. `loop`: in order; `patrol`: there
@@ -207,6 +224,7 @@ impl WorldState {
             if wants_in {
                 self.join_active(i, now);
             }
+            self.alarm_rules(i, now);
             self.idle(i, now);
             self.wander(i, now);
         }
@@ -224,7 +242,9 @@ impl WorldState {
         let Some(c) = a.character.as_deref_mut() else { return };
         let Some(ai) = c.ai.as_ref() else { return };
         let fidgets: Vec<String> = a.player.movements.iter().filter(|m| m.name.starts_with(IDLE_PREFIX)).map(|m| m.name.clone()).collect();
-        if !ai.active || fidgets.is_empty() || ai.on_way_home {
+        // Rule 16: not alarmed (also during its reaction delay; wandering
+        // carries on then, rule 23).
+        if !ai.active || fidgets.is_empty() || ai.on_way_home || (ai.alarmed && ai.fidget.is_none()) {
             return;
         }
         let mut line = None;
@@ -272,7 +292,7 @@ impl WorldState {
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
         let Some(ai) = c.ai.as_ref() else { return };
-        if !ai.active || !ai.settings.wanders || ai.wander_done || ai.on_way_home {
+        if !ai.active || !ai.settings.wanders || ai.wander_done || ai.on_way_home || ai.engaged(now) {
             return;
         }
         let mut lines = Vec::new();
@@ -367,6 +387,7 @@ impl WorldState {
         let Some(c) = a.character.as_deref_mut() else { return };
         let Some(ai) = c.ai.as_mut() else { return };
         ai.active = false;
+        ai.alarmed = false;
         self.active_list.retain(|n| !n.eq_ignore_ascii_case(&name));
         let far = connor.map(|at| distance(at, a.player.base.position));
         let limit = 2.0 * ai.settings.alarm_radius;
@@ -444,6 +465,310 @@ impl WorldState {
             None => format!("{at}: KQMonster::setHome: no movement rules; nothing"),
         };
         self.character_note(&who, line);
+        "0".into()
+    }
+}
+
+/// Rule 26: it gives up after not seeing Connor for this many updates.
+pub const LOSE_SIGHT_UPDATES: u32 = 45;
+/// Rule 23: the chase timer (10 s after being hit: the fight study).
+pub const CHASE_TIME: f64 = 5.0;
+/// Rule 25: out of sight, it aims at the spot where it last saw him only
+/// when that is farther than this.
+pub const LAST_SEEN_AIM: f32 = 500.0;
+/// Rule 28: home is reached within this in x and in y.
+pub const HOME_REACHED: f32 = 100.0;
+
+/// The distance in x and y only.
+fn flat_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+}
+
+impl WorldState {
+    /// The character's team has a member (other than `i`) that can see
+    /// Connor now (rules 24, 26).
+    fn team_sees(&self, i: usize, team: Option<&str>) -> bool {
+        let Some(team) = team else { return false };
+        self.anims.iter().enumerate().any(|(j, a)| {
+            j != i
+                && !a.gone
+                && a.character.as_deref().and_then(|c| c.ai.as_ref()).is_some_and(|ai| ai.sees && ai.settings.team.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(team)))
+        })
+    }
+
+    /// Rules 23–29 for one character, each update: the alarm, then (once
+    /// its reaction delay is over) the chase, losing sight, the leash,
+    /// giving up and the way home.
+    fn alarm_rules(&mut self, i: usize, now: f64) {
+        use crate::character::State;
+        let Some(connor) = self.connor_at else { return };
+        let a = &self.anims[i];
+        let Some(c) = a.character.as_deref() else { return };
+        let Some(ai) = c.ai.as_ref() else { return };
+        if !ai.active {
+            return;
+        }
+        let (pos, state) = (a.player.base.position, c.state);
+        let d = distance(pos, connor);
+        let s = ai.settings.clone();
+        let (sees, home, go_home) = (ai.sees, ai.home, ai.go_home);
+        let home_d = flat_distance(pos, home);
+        if !ai.alarmed {
+            let retake = ai.on_way_home && !go_home && s.alarm_radius > 0.0 && ((sees && d <= s.attack_dist) || (home_d <= s.home_radius && d < s.alarm_radius));
+            let alarm = !ai.on_way_home && !go_home && s.alarm_radius > 0.0 && sees && d < s.alarm_radius && ai.fidget.is_none() && matches!(state, State::Wait | State::Move);
+            if retake {
+                self.alarm(i, &format!("on its way home it takes up the chase again (Connor {d:.0} away, home {home_d:.0} away; rule 28)"), false, now);
+            } else if alarm {
+                self.alarm(i, &format!("sees Connor {d:.0} away, within its alarm radius {} (rule 23)", s.alarm_radius), false, now);
+            } else if ai.on_way_home {
+                self.way_home(i, now);
+            }
+            return;
+        }
+        if now + 1e-6 < ai.react_at {
+            return;
+        }
+        let team_sees = self.team_sees(i, s.team.as_deref());
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let c = a.character.as_deref_mut().unwrap();
+        let ai = c.ai.as_mut().unwrap();
+        if sees {
+            ai.last_seen = Some(connor);
+        }
+        let mut lines = Vec::new();
+        // Rule 26: out of sight for 45 updates.
+        let mut give_up = None;
+        if !sees && ai.unseen >= LOSE_SIGHT_UPDATES {
+            let standing = state == State::Wait;
+            let excused = if standing { s.team.is_some() && s.chase_radius > 0.0 } else { team_sees };
+            if excused {
+                ai.unseen = 0;
+                lines.push(format!("not seen for {LOSE_SIGHT_UPDATES} updates, but {}: the count starts again (rule 26)", if standing { "it has a team and a chase radius" } else { "a team member sees him" }));
+            } else {
+                give_up = Some(format!("has not seen Connor for {LOSE_SIGHT_UPDATES} updates (rule 26)"));
+            }
+        }
+        // Rule 27: the leash, once the chase timer has run out.
+        let mut run_home = false;
+        if give_up.is_none() && now + 1e-6 >= ai.chase_until {
+            if s.team.is_none() && d > 2.0 * s.alarm_radius {
+                give_up = Some(format!("Connor {d:.0} away, beyond twice its alarm radius (rule 27)"));
+            } else if s.chase_radius > 0.0 && home_d > s.chase_radius {
+                give_up = Some(format!("{home_d:.0} from home, beyond its chase radius {} (rule 27)", s.chase_radius));
+                run_home = true;
+            }
+        }
+        let last_seen = ai.last_seen;
+        if let Some(why) = give_up {
+            if run_home {
+                let r = c.set_moving(&mut a.player, true);
+                lines.push(format!("switches to run: {r} (rule 27)"));
+            }
+            for l in lines {
+                self.character_note(&name, l);
+            }
+            self.give_up(i, &why, now);
+            return;
+        }
+        // Rule 25: what it does.
+        let aim = if sees { Some(connor) } else { last_seen.filter(|p| distance(*p, pos) > LAST_SEEN_AIM) };
+        let aim2 = aim.map(|p| [p[0], p[1]]);
+        match state {
+            State::Wait => {
+                if let Some(p) = aim2 {
+                    if c.turn_to.is_none() && !c.no_turn {
+                        c.ask_turn(p);
+                    }
+                }
+                if (!sees || d > s.attack_dist) && s.chase_radius > 0.0 {
+                    let run = c.random() < 0.5;
+                    let why = if run { "after Connor, running (the coin, rule 3)" } else { "after Connor, walking (the coin, rule 3)" };
+                    let line = c.enter_move(&mut a.player, now, run, why);
+                    c.walk.steer = aim2;
+                    lines.push(line);
+                }
+            }
+            State::Move => {
+                c.walk.steer = aim2;
+                if sees && d <= s.attack_dist {
+                    let w = c.set_state(&mut a.player, "Wait", &[], now);
+                    lines.push(format!(
+                        "Connor {d:.0} away, within its attack distance {}: stops, facing him ({w}); the attack would start here (the fight study; stand-in, rule 25)",
+                        s.attack_dist
+                    ));
+                    c.ask_turn([connor[0], connor[1]]);
+                }
+            }
+            _ => {}
+        }
+        for l in lines {
+            self.character_note(&name, l);
+        }
+    }
+
+    /// Rule 23: alarmed (`told`: by another, rule 24, no distance test).
+    fn alarm(&mut self, i: usize, why: &str, told: bool, now: f64) {
+        let connor = self.connor_at;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let delay = f64::from(c.random());
+        let Some(ai) = c.ai.as_mut() else { return };
+        ai.alarmed = true;
+        ai.on_way_home = false;
+        ai.last_seen = connor;
+        ai.react_at = now + delay;
+        ai.chase_until = now + CHASE_TIME;
+        let line = format!("alarmed: {why}; reacts in {delay:.2} s (rule 23); chase timer {CHASE_TIME} s; no alarm line in its file (Daventry has none)");
+        let team = ai.settings.team.clone();
+        self.character_note(&name, line);
+        if !told {
+            self.spread_alarm(i, &name, team.as_deref(), now);
+        }
+    }
+
+    /// Rule 24: the active characters with an alarm radius that see Connor
+    /// (or whose team has a member that does), and the alarmed one's team
+    /// members (made active if needed), are alarmed too. Being told does
+    /// not tell others again (**ours**).
+    fn spread_alarm(&mut self, from: usize, who: &str, team: Option<&str>, now: f64) {
+        for j in 0..self.anims.len() {
+            if j == from || self.anims[j].gone {
+                continue;
+            }
+            let Some(ai) = self.anims[j].character.as_deref().and_then(|c| c.ai.as_ref()) else { continue };
+            if ai.alarmed || ai.go_home || ai.settings.alarm_radius <= 0.0 {
+                continue;
+            }
+            let same_team = team.is_some_and(|t| ai.settings.team.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(t)));
+            let other_team = ai.settings.team.clone();
+            let active = ai.active;
+            let sees = active && (ai.sees || self.team_sees(j, other_team.as_deref()));
+            if !(sees || same_team) {
+                continue;
+            }
+            if !active {
+                // "made active if needed" (rule 24): **ours**, even past
+                // MaxMonsters.
+                let n = self.anims[j].player.name.clone();
+                self.active_list.push(n.to_ascii_lowercase());
+                self.anims[j].character.as_deref_mut().and_then(|c| c.ai.as_mut()).unwrap().active = true;
+                let line = format!("made active by its team member {who}'s alarm (rule 24): {} on the list", self.active_list.len());
+                self.character_note(&n, line);
+            }
+            let why = if same_team { format!("told by its team member {who} (rule 24)") } else { format!("told by {who}: it can see Connor, or a team member can (rule 24)") };
+            self.alarm(j, &why, true, now);
+        }
+    }
+
+    /// Rule 28: gives up: forgets its target, on its way home; a list with
+    /// `hide` goes back into the ground (Birth, `hide`).
+    fn give_up(&mut self, i: usize, why: &str, now: f64) {
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_mut() else { return };
+        ai.alarmed = false;
+        ai.on_way_home = true;
+        let mut line = format!("gives up: {why}; on its way home (rule 28)");
+        if ai.has_hide {
+            c.state = crate::character::State::Birth;
+            let h = match a.player.request("hide") {
+                crate::named_anim::Request::AtOnce(_) => "starts at once",
+                _ => "waits",
+            };
+            line.push_str(&format!("; its list has hide: Birth, 'hide' {h} (rule 28)"));
+        }
+        self.character_note(&name, line);
+        self.way_home(i, now);
+    }
+
+    /// Rule 28: on its way home, it steers home each update and keeps
+    /// moving; within 100 in x and y → Wait (its hit count cleared: the
+    /// fight study).
+    fn way_home(&mut self, i: usize, now: f64) {
+        use crate::character::State;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        if c.state == State::Birth {
+            return;
+        }
+        let Some(ai) = c.ai.as_mut() else { return };
+        let (pos, home) = (a.player.base.position, ai.home);
+        let line = if (pos[0] - home[0]).abs() <= HOME_REACHED && (pos[1] - home[1]).abs() <= HOME_REACHED {
+            ai.on_way_home = false;
+            let w = c.set_state(&mut a.player, "Wait", &[], now);
+            Some(format!("home reached ({:.0}, {:.0}): {w} (rule 28)", home[0], home[1]))
+        } else {
+            let line = if c.state == State::Wait {
+                let run = c.walk.run;
+                Some(c.enter_move(&mut a.player, now, run, "on its way home, rule 28"))
+            } else {
+                None
+            };
+            c.walk.steer = Some([home[0], home[1]]);
+            line
+        };
+        if let Some(l) = line {
+            self.character_note(&name, l);
+        }
+    }
+
+    /// `KQMonster::goHome <name> [0]`, `setAlarmRadius`, `setChaseRadius`,
+    /// `setHomeRadius <name> <value>` (rules 23, 27, 29). Returns the
+    /// result for `$Console::Return`.
+    pub(crate) fn monster_ai_command(&mut self, words: &[String], at: &str) -> String {
+        let cmd = words[0].clone();
+        let Some(i) = words.get(1).and_then(|n| self.character_index(n)) else {
+            self.note(format!("{at}: {}: no such character; nothing", words.join(" ")));
+            return "1".into();
+        };
+        let value: Option<f32> = words.get(2).and_then(|v| v.parse().ok());
+        let now = self.now();
+        let name = self.anims[i].player.name.clone();
+        let moving = self.anims[i].character.as_deref().is_some_and(|c| c.state == crate::character::State::Move);
+        let Some(ai) = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()) else {
+            self.note(format!("{at}: {}: no movement rules; nothing", words.join(" ")));
+            return "1".into();
+        };
+        let line = match (cmd.as_str(), value) {
+            ("KQMonster::goHome", v) if v.is_none_or(|v| v != 0.0) => {
+                ai.go_home = true;
+                let was = ai.alarmed;
+                self.character_note(&name, format!("{at}: KQMonster::goHome: walks home, not alarmed until goHome 0 (rule 29)"));
+                if was || moving {
+                    self.give_up(i, "KQMonster::goHome (rule 29)", now);
+                } else {
+                    let ai = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()).unwrap();
+                    ai.on_way_home = true;
+                    self.way_home(i, now);
+                }
+                return "0".into();
+            }
+            ("KQMonster::goHome", _) => {
+                ai.go_home = false;
+                "goHome 0: it can be alarmed again (rule 29)".to_string()
+            }
+            ("KQMonster::setAlarmRadius", Some(v)) => {
+                ai.settings.alarm_radius = v;
+                format!("alarm radius {v} (rule 23)")
+            }
+            ("KQMonster::setChaseRadius", Some(v)) => {
+                ai.settings.chase_radius = v;
+                format!("chase radius {v} (rule 27)")
+            }
+            ("KQMonster::setHomeRadius", Some(v)) => {
+                ai.settings.home_radius = v;
+                format!("home radius {v} (rule 27)")
+            }
+            _ => {
+                self.note(format!("{at}: usage: {cmd} <name> <value>; nothing"));
+                return "1".into();
+            }
+        };
+        self.character_note(&name, format!("{at}: {cmd}: {line}"));
         "0".into()
     }
 }
