@@ -3408,9 +3408,7 @@ impl Active {
         let fresh = talk.events.len();
         let finished = talk.update(now, captions, &exists);
         // Characters (M4 4d-5, characters.md rules 25-28): each mouth code
-        // and line end; the last line of a queue sends the speaker to Wait
-        // (Q117 stand-in).
-        let mut last_speaker: BTreeMap<String, String> = BTreeMap::new();
+        // and line end.
         for e in &talk.events {
             match e {
                 // conversation.md rule 18: Connor's gesture codes, for his
@@ -3426,25 +3424,13 @@ impl Active {
                         self.world.character_note(speaker, line);
                     }
                 }
-                crate::talk::TalkEvent::End { issuer, speaker, .. } => {
-                    last_speaker.insert(issuer.to_ascii_lowercase(), speaker.clone());
+                crate::talk::TalkEvent::End { speaker, .. } => {
                     if let Some(i) = self.world.character_index(speaker) {
                         let c = self.world.anims[i].character.as_mut().unwrap();
                         if !c.geometry && c.mouth != 0 {
                             c.mouth = 0;
                             self.world.character_note(speaker, "line ended: mouth shape 0 (rule 25)");
                         }
-                    }
-                }
-                // The speak queue's end only (the conversation's end is
-                // conversation.md rules 15-16).
-                crate::talk::TalkEvent::Empty { issuer, conv: false } => {
-                    let Some(speaker) = last_speaker.get(&issuer.to_ascii_lowercase()).cloned() else { continue };
-                    if let Some(i) = self.world.character_index(&speaker) {
-                        self.world.start_up_character(i, "the end of its speak");
-                        let a = &mut self.world.anims[i];
-                        let line = a.character.as_mut().unwrap().after_speech(&mut a.player);
-                        self.world.character_note(&speaker, line);
                     }
                 }
                 _ => {}
@@ -3469,6 +3455,17 @@ impl Active {
             let ends = f.conv && f.conv_end && self.world.conversation.as_ref().is_some_and(|c| c.entered() && c.partner.eq_ignore_ascii_case(&f.issuer));
             if ends {
                 self.conversation_leave("the conversation's last line ended", true);
+            }
+            // talking.md rule 13a (Q117): the line marked last of a speak in
+            // a character's queue: Stop and Wait, before its TalkComplete.
+            if f.last {
+                if let Some(i) = self.world.character_index(&f.issuer) {
+                    self.world.start_up_character(i, "the end of its speak");
+                    let a = &mut self.world.anims[i];
+                    let line = a.character.as_mut().unwrap().after_speech(&mut a.player);
+                    let name = a.player.name.clone();
+                    self.world.character_note(&name, format!("line #{}: {line}", f.id));
+                }
             }
             self.talk_complete(&f, now);
         }

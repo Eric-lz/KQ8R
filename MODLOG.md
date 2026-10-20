@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-10: the end of a `speak` (Q117 built)
+
+**Changed:** `kq8-core/src/character.rs` (`after_speech`) and `active.rs` (`talk_step`): when the line marked last of a `speak` ends in a character's queue (for a conversation, the partner's), before its `TalkComplete`: already in Wait, nothing (no `Stop`); otherwise `Stop` is asked for and it goes into Wait, accepted from no state, Talk, and Special once its list's last movement has started (else refused, the list goes on). Was: when the queue ran dry, for the last line's speaker, from no state or Wait. 1 unit test. `QUESTIONS.md` Q117 marked built. DESIGN, provenance.
+**Why:** A's answer to Q117 (`talking.md` rule 13a).
+**Tested how:** `cargo test --workspace` (507 pass, 1 new), clippy clean. Viewer (`--sound off`): `--at 252000,296000,0.6 --click Uglybeast,30 --frames 1500` (the "too far" line); `--at 193000,198000,-1.7 --click Wizard,30 --frames 11000` (the whole conversation); read `characters.log`, `conversation.log`.
+**Result:** The Uglybeast's line: "already in Wait: nothing", then `ugly.cs` sends `stop` on `TalkComplete 1000 59 0 32 2` (as A's answer to Q120 b says). The Wizard: at each conversation end TalkExit comes first (Wait), then rule 13a finds it in Wait and does nothing (updates 1694 and 1979).
+**Still broken / not tested:** Not looked at by eye. Walking out of Talk (rule 13a's first case) waits for M5. A Special list whose movement is replaced by this `Stop` stalls (literal reading; no Daventry case known).
+**Next:** 4d-11, transitions on characters (Q124).
+
 ## 2026-10-19 M4 step 4d-9: a character's start-up (Q116, Q121 built)
 
 **Changed:** `kq8-core/src/character.rs`: the start-up (`start_up`) runs once, at the first update or before the first movement request (`KQAnimPlayEvent`, a lip-sync code, Wait's or a Special list's request, a conversation), whatever the range; only with no state does it queue Birth or Wait; the Wait comes `birthDelay` s later in game time and is checked after each pass over the event queue (`wait_due`, whatever the range), so a delay of 0 lands before the first picture; mouth shape 0. Gone: the "empty name, no state" step and the Q121 stand-in. `active.rs`: `start_up_character`, `characters_due`. Tests: 3 replaced by 3. `QUESTIONS.md` Q116 and Q121 marked built. DESIGN, provenance.

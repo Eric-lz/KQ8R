@@ -234,16 +234,32 @@ impl Character {
         }
     }
 
-    /// The end of the last line of its queue (Q117 stand-in): Wait, from
-    /// no state or Wait only. Returns the log line.
+    /// `talking.md` rule 13a (Q117; M4 4d-10): the line marked last of a
+    /// `speak` in this character's queue has ended, before its
+    /// `TalkComplete`. Already in Wait: nothing (no `Stop`, a held pose
+    /// stays). Otherwise `Stop` is asked for and it goes into Wait, which
+    /// no state, Talk and Special accept, Special only once its list's
+    /// last movement has started (else the list goes on). Walking (Talk to
+    /// Move) waits for M5. Returns the log line.
     pub fn after_speech(&mut self, player: &mut NamedAnimPlayer) -> String {
+        const WHY: &str = "end of a speak (talking.md rule 13a)";
         match self.state {
-            State::None | State::Wait => {
+            State::Wait => format!("{WHY}: already in Wait: nothing (no Stop request)"),
+            State::Special if !self.special.is_empty() => {
+                let stop = self.ask_stop(player, false);
+                format!("{WHY}: Stop asked for ({stop}); Wait refused: {} item(s) of its Special list still to come, the list goes on", self.special.len())
+            }
+            State::None | State::Talk | State::Special => {
+                let from = self.state;
+                self.turn_to = None;
                 let mut notes = Vec::new();
                 self.enter_wait(player, &mut notes);
-                format!("last line of its queue: the speaker goes to Wait (characters.md rules 15, 27; Q117 stand-in): {}", notes.join("; "))
+                format!("{WHY}: from {from:?} (no walking before M5): {}", notes.join("; "))
             }
-            s => format!("last line of its queue: stays in {s:?} (Q117 stand-in: Wait only from no state or Wait)"),
+            s => {
+                let stop = self.ask_stop(player, false);
+                format!("{WHY}: Stop asked for ({stop}); state {s:?} kept (the note names only no state, Wait, Talk and Special)")
+            }
         }
     }
 
@@ -734,6 +750,34 @@ mod tests {
         run(&mut c, &mut p, n, 20, &mut log);
         assert!(log.iter().any(|l| l.contains("'caw' ended in no state")), "{log:?}");
         assert_eq!((c.state, p.movement_name()), (State::None, "caw"), "holds its last frame: {log:?}");
+    }
+
+    #[test]
+    fn the_end_of_a_speak_goes_to_wait_but_not_from_wait() {
+        let mut p = player(1, Some("stop"), None);
+        // No state: Stop and Wait.
+        let mut c = character(0x20);
+        c.started = true;
+        assert!(c.after_speech(&mut p).contains("from None"));
+        assert_eq!(c.state, State::Wait);
+        // Already in Wait: nothing, a held pose stays.
+        p.start("caw");
+        assert!(c.after_speech(&mut p).contains("nothing"));
+        assert_eq!(p.movement_name(), "caw");
+        // Talk accepts it.
+        c.enter_talk(&mut p);
+        c.after_speech(&mut p);
+        assert_eq!(c.state, State::Wait);
+        // Special with items to come: Stop asked for, the state stays.
+        let mut log = Vec::new();
+        c.set_state(&mut p, "special", &["attack,caw".to_string()]);
+        let line = c.after_speech(&mut p);
+        assert!(line.contains("refused") && c.state == State::Special, "{line}");
+        // ...with its last movement started: Wait.
+        run(&mut c, &mut p, 0, 17, &mut log);
+        assert_eq!(p.movement_name(), "caw", "{log:?}");
+        c.after_speech(&mut p);
+        assert_eq!(c.state, State::Wait);
     }
 
     #[test]

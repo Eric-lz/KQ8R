@@ -721,7 +721,7 @@ inventory and menus.
       `birthDelay` seconds later in game time, through the queue (so
       with 0 it is handled before the first picture, Q119). Mouth shape
       0. The stand-ins of Q121 and the "empty name, no state" step go.
-    - **4d-10, the end of a `speak`** (`talking.md` rule 13a, Q117): on
+    - **4d-10, the end of a `speak`** (**done** 2026-10-19; `talking.md` rule 13a, Q117): on
       the line marked last of a `speak` (not when the queue runs dry),
       the queue's owner, if a character, gets `Stop` and Wait before
       its `TalkComplete`; nothing if it is already in Wait; from Special

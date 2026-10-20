@@ -2161,3 +2161,12 @@ marked otherwise.
 | The queued Wait is checked after each pass over the event queue (start and end of the update), for every character, near or not | Rule 12 ("through the event queue") with `anim-scripts.md` rule 8 (Q119); applying it out of range is **our reading** of "through the queue" | Same tests |
 | The current movement is not restarted at the start-up: it was set at load and has not moved yet | Rule 12.1, with our load (4d-8) | — |
 | Replaces the 4d-3 rows "a state set before the first update is kept" (Q121 stand-in) and the "empty name: no state" step | Rule 12 (corrected) | — |
+
+### 4d-10, the end of a `speak` — `crates/kq8-core/src/character.rs`, `active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| On the line marked last of a `speak` in a character's queue (for a conversation, the partner's), before its `TalkComplete`: in Wait nothing; otherwise `Stop` asked for and Wait, accepted from no state, Talk, and Special once the list's last movement started | `talking.md` rule 13a (Q117) | Unit test `the_end_of_a_speak_goes_to_wait_but_not_from_wait`; Uglybeast and Wizard runs |
+| Birth, Move, Die: `Stop` asked for, state kept | **Our reading**: the note names only no state, Wait, Talk and Special | — |
+| Wait entered through Wait's own start (rule 13's random `Stop` with `flags` 0x10) | **Our reading** of "`Stop` is asked for and it is put into Wait": the same picture either way | — |
+| Replaces the 4d-5 row "after the last line of a queue the speaker goes to Wait" (Q117 stand-in) | Rule 13a | — |
