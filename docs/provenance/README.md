@@ -2602,3 +2602,19 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | Clickable in the air (its click box is where it is); picked up in the air: the flight ends | Rule 31 (the user's check), `items.md` rule 4 | — (not run) |
 | An entry naming an object already in the world: not handled (none in Daventry) | Rule 31 (not followed in the note) | — |
 | The drops' item models are loaded at the start | Ours (as the scripts' items) | Viewer |
+
+### 5c-9, the bow spriggans — `crates/kq8-core/src/{fight,active,character_ai}.rs` (`shoot`, `lead`, `Bolt`, `bolts_step`, `connor_was`, doMode 1), `crates/kq8-data/src/characters.rs` (`ProjectileKeys`), viewer `load.rs`, `door_view.rs`, `item_view.rs` (`bolt_draw`), `main.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Holding a `LongWeapon` makes it ranged: doMode 1 (rule 25's distances) | `fighting.md` rule 34 | `fight.log` at load |
+| Standing, it shoots within 1.25 × reach (5c-3) | Rules 7, 35 | Viewer: `sprigwnd1` at 3,046 (limit 7,500) |
+| The projectile file (`Prscbolt.kq`): `shapeName`, `velocity` 8,000, `maxDistance` 18,000 | Rule 36; data | Unit test; viewer |
+| At `Do`: a bolt at its target (Connor when alarmed); no reach or front test | Rule 36 | Viewer: first shot 177° off its heading |
+| Aimed ahead of him: his speed (from his last two positions) and the bolt's give the meeting point | Rule 36 | Unit test; viewer (speed (91, −1,938, 0) used) |
+| Leaves from 3/4 of the shooter's box height, aimed at 3/4 of his (1,300) | **Stand-in** (rule 36: default offset unknown, aiming height "not sure") | — |
+| The flight: straight on, no gravity; the first character (not its shooter, solid, not dying), Connor, building, plain object or drawn ground in its way; gone after `maxDistance` | **Stand-in** (open question 2: the flight was not traced) | Viewer: hits Connor; hits the windmill's wall and a hay bale |
+| The hit: `Projectile`, the shooter's ranged damage (`sprigwnd1` 11) | Rule 36 ("inferred from the original's log line") | Viewer |
+| "Immune to projectiles" flag and `ProjImmune`: not built (which bit it is was not given; none in Daventry known) | Rule 36 | — |
+| Drawn with its shape, turned to its heading only (no pitch) | **Stand-in** | — |
+| Keeping distance / fleeing (rule 37): **not built** (only ranged characters with a chase radius; Daventry's three are guards) | Rules 37, 38 | — |

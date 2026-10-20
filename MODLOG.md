@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-9: the bow spriggans (stand-in bolt)
+
+**Changed:** `kq8-data`: `ProjectileKeys` (a `KQProjectile` file). `kq8-core/fight.rs`: a ranged character's `Do` shoots (`shoot`, `lead`), bolts fly and hit (`Bolt`, `bolts_step`); `active.rs`: projectiles, bolts, Connor's last position; doMode 1 for ranged characters; `character_ai.rs`: the bolts each update. Viewer: the projectile file read and its shape loaded (`load.rs`), bolts drawn (`item_view.rs`). 2 new tests. DESIGN, provenance.
+**Why:** `fighting.md` rules 34–38. The bolt's flight is not traced (open question 2): a simple stand-in, as you asked.
+**Tested how:** `cargo test --workspace` (429 core tests), clippy clean. Viewer at the windmill: `cargo play --world Daventry --sound off --at 146500,248928,1.5708 --frames 3000` (Connor stands) and `--at 146500,248928,0 --hold 1,0,1,60 --frames 1200` (he runs); `fight.log`.
+**Result:** `sprigwnd1` shoots at once (update 31), then every 26 updates (1.73 s = 1.2 s + 0.5 s; How to check 7 says about 1.7 s); each bolt flies 0.4 s and hits a standing Connor for D 11 (loss 3, 4, 6): he dies at the third. Running, the shot is aimed ahead using his speed; two bolts hit the windmill's wall.
+**Still broken / not tested:** **Not looked at by eye.** The flight, start height and aiming height are stand-ins; the bolt has no pitch when drawn. Rule 37 (keeping distance) not built: no Daventry character uses it. The other two bow spriggans not run.
+**Next:** 5c-10, the combat level.
+
 ## 2026-10-20 M5 step 5c-8: drops thrown
 
 **Changed:** `kq8-core`: `item.rs` (`Flight`: the throw's launch and a per-update flight), `fight.rs` (the drops made and thrown when the dying starts; the flights each update, landing with the land sound), `active.rs`. Viewer: the drops' item models loaded (`load.rs`), a flying item moved each frame (`item_view.rs`). 1 new test. Q137 (the flight's exact stepping, not blocking). DESIGN, provenance.

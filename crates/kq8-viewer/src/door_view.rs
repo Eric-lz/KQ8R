@@ -599,6 +599,8 @@ pub fn spawn_doors(
         ));
     }
     active.world.connor_fight = objects.connor_fight.clone();
+    // fighting.md rule 36 (M5 5c-9): the projectiles the fighters shoot.
+    active.world.projectiles = std::mem::take(&mut objects.projectiles);
     match &objects.connor_stats {
         Some((line, level)) => {
             let words: Vec<&str> = line.split_whitespace().collect();

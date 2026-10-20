@@ -261,6 +261,11 @@ impl WorldState {
             self.idle(i, now);
             self.wander(i, now);
         }
+        // fighting.md rule 36 (M5 5c-9): the bolts fly; Connor's place is
+        // kept for the next shot's aim.
+        let walls = Scene::new(ground, buildings, objects);
+        self.bolts_step(&walls);
+        self.connor_was = self.connor_at;
     }
 
     /// Rules 15–19: an active character with an idle list, when its idle

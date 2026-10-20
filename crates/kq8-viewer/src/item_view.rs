@@ -99,12 +99,14 @@ pub struct CorpseDraw {
     parts: BTreeMap<String, Parts>,
     /// How many of the world's corpses have their entity.
     drawn: usize,
+    /// The bolts in the air drawn now (M5 5c-9), by name.
+    bolts: BTreeMap<String, Entity>,
 }
 
 /// `shapes`: lower-case shape name -> index into `built`.
 pub fn spawn_corpses(commands: &mut Commands, shapes: BTreeMap<String, usize>, built: &[Parts]) {
     let parts = shapes.into_iter().filter_map(|(k, slot)| built.get(slot).map(|p| (k, p.clone()))).collect();
-    commands.insert_resource(CorpseDraw { parts, drawn: 0 });
+    commands.insert_resource(CorpseDraw { parts, drawn: 0, bolts: BTreeMap::new() });
 }
 
 /// Each new corpse: its model where the character stood, turned the same
@@ -127,5 +129,43 @@ pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Opti
             commands.entity(body).add_child(part);
         }
         shared.log.lock().unwrap().summary(format!("corpse of {}: {} drawn at ({:.0}, {:.0}, {:.0})", c.name, c.shape, c.position[0], c.position[1], c.position[2]));
+    }
+}
+
+/// The bolts in the air (`fighting.md` rule 36; M5 5c-9): each drawn with
+/// its shape where it is, turned to its heading (**stand-in**: no pitch;
+/// the model's own direction is taken as the game's forward, −y);
+/// removed when it is gone.
+pub fn bolt_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<CorpseDraw>>, mut transforms: Query<&mut Transform>) {
+    let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
+    let draw = &mut *draw;
+    let bolts = &sim.active.world.bolts;
+    draw.bolts.retain(|name, e| {
+        let alive = bolts.iter().any(|b| &b.name == name);
+        if !alive {
+            commands.entity(*e).despawn();
+        }
+        alive
+    });
+    for b in bolts {
+        let heading = b.velocity[0].atan2(-b.velocity[1]);
+        let rotation = kq8_data::objects::rotation([0.0, 0.0, heading]);
+        let t = bevy_transform_from(rotation, b.position);
+        match draw.bolts.get(&b.name) {
+            Some(&e) => {
+                if let Ok(mut tr) = transforms.get_mut(e) {
+                    *tr = t;
+                }
+            }
+            None => {
+                let Some(parts) = b.shape.as_ref().and_then(|s| draw.parts.get(&s.to_ascii_lowercase())) else { continue };
+                let body = commands.spawn((t, Visibility::Inherited)).id();
+                for (mesh, material) in parts {
+                    let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+                    commands.entity(body).add_child(part);
+                }
+                draw.bolts.insert(b.name.clone(), body);
+            }
+        }
     }
 }

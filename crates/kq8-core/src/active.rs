@@ -679,6 +679,15 @@ pub struct WorldState {
     pub kill_tip: bool,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
     pub flights: Vec<crate::item::Flight>,
+    /// Projectile files by lower-case name (`fighting.md` rule 36; M5
+    /// 5c-9), set by the caller.
+    pub projectiles: std::collections::BTreeMap<String, kq8_data::characters::ProjectileKeys>,
+    /// Bolts in the air (M5 5c-9), and how many were shot (their names).
+    pub bolts: Vec<crate::fight::Bolt>,
+    pub bolts_shot: u64,
+    /// Where Connor was at the last update (his speed for the aim, rule
+    /// 36).
+    pub connor_was: Option<[f32; 3]>,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2511,6 +2520,10 @@ impl Active {
                 die_calls: Vec::new(),
                 kill_tip: false,
                 flights: Vec::new(),
+                projectiles: Default::default(),
+                bolts: Vec::new(),
+                bolts_shot: 0,
+                connor_was: None,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -2671,8 +2684,20 @@ impl Active {
         for a in anims {
             self.world.known.insert(a.player.name.to_ascii_lowercase());
             // fighting.md rule 2 (M5 5c-1): what it brings to the fight.
+            let mut a = a;
+            // fighting.md rule 34 (M5 5c-9): holding a LongWeapon, doMode 1.
+            let ranged = a.character.as_deref_mut().is_some_and(|c| {
+                let r = c.fight.as_ref().is_some_and(|f| f.ranged());
+                if let (true, Some(ai)) = (r, c.ai.as_mut()) {
+                    ai.settings.do_mode = 1;
+                }
+                r
+            });
             if let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) {
-                let line = format!("fights (rule 2): {}; from {}", f.settings.describe(), f.settings.from);
+                let mut line = format!("fights (rule 2): {}; from {}", f.settings.describe(), f.settings.from);
+                if ranged {
+                    line.push_str("; ranged: doMode 1 (rule 34)");
+                }
                 let name = a.player.name.clone();
                 self.world.anims.push(a);
                 self.world.fight_note(&name, line);

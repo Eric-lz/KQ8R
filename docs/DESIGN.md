@@ -1285,7 +1285,9 @@ stats.
     plain per-update motion), lands on the floor-grid height with its
     land sound; clickable in the air. **Test:** goblin22's two
     mushrooms fly up and land, positions in `items.log`.
-  - **5c-9, the bow spriggans** (rules 34–38; **stand-in bolt**, open
+  - **5c-9, the bow spriggans** (**done** 2026-10-20; `sprigwnd1` shoots
+    every 1.7 s; keeping distance, rule 37, **not built**: no Daventry
+    character can flee) (rules 34–38; **stand-in bolt**, open
     question 2). Ranged = holds a `LongWeapon`; they shoot from 1.25 ×
     reach standing. At `Do` a bolt (`Prscbolt.kq`'s shape) leaves from
     its position + the default offset, aimed where Connor will be

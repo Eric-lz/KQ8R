@@ -232,6 +232,52 @@ pub struct Fight {
     pub dying: Option<Option<String>>,
 }
 
+/// A bolt in the air (rule 36; M5 5c-9; its flight is a **stand-in**:
+/// open question 2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bolt {
+    /// `bolt<n>`, for the log and the viewer.
+    pub name: String,
+    pub shooter: String,
+    pub shape: Option<String>,
+    pub position: [f32; 3],
+    pub velocity: [f32; 3],
+    /// How far it has gone, and how far it may go (`maxDistance`).
+    pub travelled: f32,
+    pub max: f32,
+    /// The shooter's ranged damage.
+    pub damage: i64,
+}
+
+/// **Stand-in** (rule 36: "not sure"): a bolt leaves its shooter at this
+/// share of its box height, and is aimed at this share of Connor's.
+pub const SHOT_HEIGHT: f32 = 0.75;
+/// Connor's height for the aim (his box, `connor_mover::CONNOR_BOX`).
+pub const CONNOR_HEIGHT: f32 = 1300.0;
+
+/// Rule 36: where to aim so that a bolt of speed `speed` from `from`
+/// meets a target at `at` moving at `v`: the first time t > 0 with
+/// |at + v t − from| = speed × t; straight at it if there is none.
+pub fn lead(from: [f32; 3], at: [f32; 3], v: [f32; 3], speed: f32) -> ([f32; 3], Option<f32>) {
+    let d: [f32; 3] = std::array::from_fn(|k| at[k] - from[k]);
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let (qa, qb, qc) = (dot(v, v) - speed * speed, 2.0 * dot(v, d), dot(d, d));
+    let t = if qa.abs() < 1e-6 {
+        (qb.abs() > 1e-6).then(|| -qc / qb).filter(|t| *t > 0.0)
+    } else {
+        let disc = qb * qb - 4.0 * qa * qc;
+        (disc >= 0.0).then(|| {
+            let s = disc.sqrt();
+            let (t1, t2) = ((-qb - s) / (2.0 * qa), (-qb + s) / (2.0 * qa));
+            [t1, t2].into_iter().filter(|t| *t > 0.0).fold(f32::MAX, f32::min)
+        }).filter(|t| *t < f32::MAX)
+    };
+    match t {
+        Some(t) => (std::array::from_fn(|k| at[k] + v[k] * t), Some(t)),
+        None => (at, None),
+    }
+}
+
 /// A body left where a character died (rule 32; M5 5c-7), drawn by the
 /// viewer.
 #[derive(Debug, Clone, PartialEq)]
@@ -291,7 +337,7 @@ impl crate::active::WorldState {
         let Some(f) = c.fight.as_ref() else { return };
         let movement = format!("{} at phase {:.4}", a.player.movement_name(), a.player.phase);
         if f.ranged() {
-            self.fight_note(&name, format!("Do ({movement}): a ranged character shoots here; the bolt is 5c-9"));
+            self.shoot(i, &movement);
             return;
         }
         let alarmed = c.ai.as_ref().is_some_and(|ai| ai.alarmed);
@@ -796,6 +842,125 @@ impl crate::active::WorldState {
     }
 }
 
+impl crate::active::WorldState {
+    /// Rule 36 (M5 5c-9): a ranged character's `Do`: it shoots its
+    /// weapon's projectile at its target (Connor, when alarmed), aimed
+    /// ahead of him by his speed; no reach or front test. **Stand-ins**:
+    /// it leaves at 3/4 of the shooter's height (its default offset is not
+    /// known) and aims at 3/4 of his.
+    fn shoot(&mut self, i: usize, movement: &str) {
+        let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
+        let a = &self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref() else { return };
+        let Some(f) = c.fight.as_ref() else { return };
+        let Some(target) = self.connor_at.filter(|_| c.ai.as_ref().is_some_and(|ai| ai.alarmed)) else {
+            self.fight_note(&name, format!("Do ({movement}): no target (not alarmed): no shot (rule 36)"));
+            return;
+        };
+        let file = f.settings.projectile.clone().unwrap_or_default();
+        let Some(p) = self.projectiles.get(&file.to_ascii_lowercase()).cloned() else {
+            self.fight_note(&name, format!("Do ({movement}): projectile file {file} not read: no shot"));
+            return;
+        };
+        let eye = c.ai.as_ref().map_or(1000.0, |ai| ai.eye);
+        let pos = a.player.base.position;
+        let from = [pos[0], pos[1], pos[2] + SHOT_HEIGHT * eye];
+        let at = [target[0], target[1], target[2] + SHOT_HEIGHT * CONNOR_HEIGHT];
+        let v = self.connor_was.map_or([0.0; 3], |w| std::array::from_fn(|k| (target[k] - w[k]) / dt));
+        let (aim, t) = lead(from, at, v, p.speed);
+        let d: [f32; 3] = std::array::from_fn(|k| aim[k] - from[k]);
+        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
+        self.bolts_shot += 1;
+        let bolt = Bolt {
+            name: format!("bolt{}", self.bolts_shot),
+            shooter: name.clone(),
+            shape: p.shape.clone(),
+            position: from,
+            velocity: d.map(|x| x / len * p.speed),
+            travelled: 0.0,
+            max: p.max_distance,
+            damage: f.stats.0[2],
+        };
+        let lead_text = match t {
+            Some(t) => format!("aimed ahead of him: his speed ({:.0}, {:.0}, {:.0}), meeting in {t:.2} s at ({:.0}, {:.0}, {:.0})", v[0], v[1], v[2], aim[0], aim[1], aim[2]),
+            None => "aimed straight at him (no meeting point)".to_string(),
+        };
+        self.fight_note(&name, format!("Do ({movement}): shoots {} ({file}, speed {}, range {}) from ({:.0}, {:.0}, {:.0}), {lead_text}; ranged damage {} (rule 36; the flight is a stand-in)", bolt.name, p.speed, p.max_distance, from[0], from[1], from[2], bolt.damage));
+        self.bolts.push(bolt);
+    }
+
+    /// Rule 36 (M5 5c-9, **stand-in** flight: open question 2): each
+    /// update a bolt flies straight on (no gravity) and hits the first of:
+    /// a character (not its shooter, solid, not dying), Connor, a building
+    /// or plain object or the drawn ground (`scene`); after `maxDistance`
+    /// it is gone. Its hit is `Projectile`, its damage the shooter's ranged
+    /// damage.
+    pub(crate) fn bolts_step(&mut self, scene: &dyn crate::connor_mover::MoverWorld) {
+        let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
+        let bolts = std::mem::take(&mut self.bolts);
+        let mut kept = Vec::new();
+        for mut b in bolts {
+            let speed = (b.velocity[0].powi(2) + b.velocity[1].powi(2) + b.velocity[2].powi(2)).sqrt();
+            let step = (speed * dt).min(b.max - b.travelled).max(0.0);
+            let k = if speed > 0.0 { step / (speed * dt) } else { 0.0 };
+            let from = b.position;
+            let to: [f32; 3] = std::array::from_fn(|i| from[i] + b.velocity[i] * dt * k);
+            let dist = |p: [f32; 3]| ((p[0] - from[0]).powi(2) + (p[1] - from[1]).powi(2) + (p[2] - from[2]).powi(2)).sqrt();
+            // Who it meets first: (distance, Some(character index) / None = Connor, point).
+            let mut best: Option<(f32, Option<usize>, [f32; 3])> = None;
+            for (j, a) in self.anims.iter().enumerate() {
+                let Some(c) = a.character.as_deref() else { continue };
+                if a.gone || c.unborn || c.collision_type == 0 || a.player.name.eq_ignore_ascii_case(&b.shooter) || c.fight.as_ref().is_some_and(|f| f.dying.is_some()) {
+                    continue;
+                }
+                let Some((min, max)) = c.bounds else { continue };
+                let cyl = crate::collide::CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, c.collision_type, c.collision_mask);
+                if let Some(p) = cyl.line_hit(from, to) {
+                    if best.as_ref().is_none_or(|(d, _, _)| dist(p) < *d) {
+                        best = Some((dist(p), Some(j), p));
+                    }
+                }
+            }
+            if let Some(at) = self.connor_at.filter(|_| !self.connor_dying) {
+                let (min, max) = crate::connor_mover::CONNOR_BOX;
+                let cyl = crate::collide::CylinderCollider::from_box("Connor", at, min, max, crate::collide::CONNOR_TYPE, 0);
+                if let Some(p) = cyl.line_hit(from, to) {
+                    if best.as_ref().is_none_or(|(d, _, _)| dist(p) < *d) {
+                        best = Some((dist(p), None, p));
+                    }
+                }
+            }
+            let wall = scene.line_hit(from, to, 0x1 | 0x8, &b.shooter).filter(|(p, _)| best.as_ref().is_none_or(|(d, _, _)| dist(*p) < *d));
+            b.travelled += step;
+            if let Some((p, what)) = wall {
+                self.fight_note(&b.shooter, format!("{} hits {what} at ({:.0}, {:.0}, {:.0}) after {:.0}: gone (stand-in)", b.name, p[0], p[1], p[2], b.travelled));
+                continue;
+            }
+            match best {
+                Some((_, Some(j), p)) => {
+                    let who = self.anims[j].player.name.clone();
+                    self.fight_note(&b.shooter, format!("{} hits {who} at ({:.0}, {:.0}, {:.0}) after {:.0} (rule 36)", b.name, p[0], p[1], p[2], b.travelled));
+                    self.hit_character(j, &b.shooter, b.damage, HitKind::Projectile);
+                }
+                Some((_, None, p)) => {
+                    self.fight_note(&b.shooter, format!("{} hits Connor at ({:.0}, {:.0}, {:.0}) after {:.0} (rule 36)", b.name, p[0], p[1], p[2], b.travelled));
+                    let shooter = b.shooter.clone();
+                    self.hit_connor(&shooter, b.damage, HitKind::Projectile);
+                }
+                None if b.travelled + 0.5 >= b.max => {
+                    self.fight_note(&b.shooter, format!("{} has gone its range {:.0}: gone", b.name, b.max));
+                }
+                None => {
+                    b.position = to;
+                    kept.push(b);
+                }
+            }
+        }
+        self.bolts.extend(kept);
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -877,6 +1042,21 @@ pub(crate) mod tests {
         assert!(HitTest::new([0.0; 3], f, [1000.0, -20.0, 0.0], 1500.0, false).hit);
         // Behind it.
         assert!(!HitTest::new([0.0; 3], f, [0.0, 500.0, 0.0], 1500.0, false).hit);
+    }
+
+    #[test]
+    fn the_shot_leads_a_moving_target() {
+        // Rule 36: a target 8,000 off moving across at 2,000 a second.
+        let (aim, t) = lead([0.0; 3], [8000.0, 0.0, 0.0], [0.0, 2000.0, 0.0], 8000.0);
+        let t = t.unwrap();
+        // 8,000² + (2,000 t)² = (8,000 t)²: t = 1.0328.
+        assert!((t - 1.0328).abs() < 1e-3, "{t}");
+        assert!((aim[1] - 2000.0 * t).abs() < 0.5);
+        // Standing still: straight at it, 1 s.
+        let (aim, t) = lead([0.0; 3], [8000.0, 0.0, 0.0], [0.0; 3], 8000.0);
+        assert_eq!((aim, t), ([8000.0, 0.0, 0.0], Some(1.0)));
+        // Running away faster than the bolt: no meeting, straight at it.
+        assert_eq!(lead([0.0; 3], [8000.0, 0.0, 0.0], [9000.0, 0.0, 0.0], 8000.0).1, None);
     }
 
     #[test]

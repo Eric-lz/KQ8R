@@ -1246,9 +1246,11 @@ pub struct Objects {
     /// Each item type that can appear in this world (`IDName`) -> its
     /// model in `shapes`.
     pub item_shapes: BTreeMap<String, usize>,
-    /// Corpse shapes of the fighters (`fighting.md` rule 32; M5 5c-7): lower-case
-    /// shape name -> model slot.
+    /// Corpse shapes of the fighters (`fighting.md` rule 32; M5 5c-7), and
+    /// their bolts' (rule 36; 5c-9): lower-case shape name -> model slot.
     pub corpse_shapes: BTreeMap<String, usize>,
+    /// The projectile files the fighters shoot (M5 5c-9), by lower-case name.
+    pub projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
     /// Lines about items at load, for `items.log`.
     pub item_lines: Vec<String>,
     /// Lines about characters at load, for `characters.log` (M4 4d-2).
@@ -1491,6 +1493,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         items,
         corpse_shapes: BTreeMap::new(),
         drop_kinds: Vec::new(),
+        projectiles: BTreeMap::new(),
         item_lines: Vec::new(),
         monster_types: None,
         pending_line: None,
@@ -1710,6 +1713,8 @@ struct Placer<'a> {
     corpse_shapes: BTreeMap<String, usize>,
     /// The item types the fighters drop (M5 5c-8).
     drop_kinds: Vec<String>,
+    /// The projectile files read (M5 5c-9).
+    projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
     /// `GAME/Kq/Monstats.mtl`, read when a monster list is first loaded
@@ -2284,7 +2289,26 @@ impl Placer<'_> {
         // fighting.md rule 32 (M5 5c-7): its corpse shapes, ready for its death.
         if let Some(f) = character.as_ref().and_then(|c| c.fight.clone()) {
             self.drop_kinds.extend(f.drops.iter().map(|d| d.name.clone()));
-            for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs].into_iter().flatten() {
+            // fighting.md rule 36 (M5 5c-9): the projectile it shoots.
+            let mut bolt_shape = None;
+            if let Some(file) = f.projectile.clone() {
+                let key = file.to_ascii_lowercase();
+                if !self.projectiles.contains_key(&key) {
+                    let keys = match self.world.load(&file) {
+                        Some(Ok((_, b))) => kq8_data::kq_text::parse(&b).first().and_then(kq8_data::characters::ProjectileKeys::from_section),
+                        _ => None,
+                    };
+                    match keys {
+                        Some(k) => {
+                            self.character_lines.push(format!("[{}]: shoots {file}: shape {:?}, speed {}, range {} (fighting.md rule 36)", p.name, k.shape, k.speed, k.max_distance));
+                            self.projectiles.insert(key.clone(), k);
+                        }
+                        None => self.character_lines.push(format!("[{}]: projectile file {file} not found or not a KQProjectile", p.name)),
+                    }
+                }
+                bolt_shape = self.projectiles.get(&key).and_then(|k| k.shape.clone());
+            }
+            for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs, bolt_shape].into_iter().flatten() {
                 let key = shape.to_ascii_lowercase();
                 if self.corpse_shapes.contains_key(&key) {
                     continue;
@@ -3664,6 +3688,7 @@ impl Placer<'_> {
             items: Default::default(),
             item_shapes: BTreeMap::new(),
             corpse_shapes: self.corpse_shapes,
+            projectiles: self.projectiles,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

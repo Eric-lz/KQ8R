@@ -989,6 +989,32 @@ impl FightSettings {
     }
 }
 
+/// A projectile file (`classType=KQProjectile`, e.g. `Prscbolt.kq`;
+/// `fighting.md` rule 36, M5 5c-9): its shape, speed and range.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectileKeys {
+    pub shape: Option<String>,
+    /// `velocity`, units per second.
+    pub speed: f32,
+    /// `maxDistance`, units.
+    pub max_distance: f32,
+}
+
+impl ProjectileKeys {
+    /// `None` when the section is not a `KQProjectile`.
+    pub fn from_section(s: &Section) -> Option<Self> {
+        if !s.get("classType")?.trim().eq_ignore_ascii_case("KQProjectile") {
+            return None;
+        }
+        let number = |k: &str| s.number(k).and_then(Result::ok).map(|v| v as f32);
+        Some(ProjectileKeys {
+            shape: s.get("shapeName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            speed: number("velocity").unwrap_or(0.0),
+            max_distance: number("maxDistance").unwrap_or(0.0),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1063,6 +1089,13 @@ item0=\tKQInventoryItemType\tINVITEM_SmCrossbow\t1130\t0\t0\t5\t0\t0\t0\tLongWea
         let g = FightSettings::from_line(&keys, &list.lines[1], &types.types[1], &items);
         assert_eq!((g.stats, g.attack_delay, g.ranged_weapon.clone(), g.drops.len()), ([15, 2, 2, 0, 3], 1.0, None, 2));
         assert_eq!((g.dead_dts.as_deref(), g.ouch_sound.as_deref()), (Some("g2dead.kqs"), Some("gblnouch.aud")));
+    }
+
+    #[test]
+    fn a_projectile_file_gives_shape_speed_and_range() {
+        let p = ProjectileKeys::from_section(&kq_text::parse(b"[Arrow]\nclassType=KQProjectile\nshapeName=scbolt.kqs\nvelocity=8000\nmaxDistance=18000\n")[0]).unwrap();
+        assert_eq!((p.shape.as_deref(), p.speed, p.max_distance), (Some("scbolt.kqs"), 8000.0, 18000.0));
+        assert!(ProjectileKeys::from_section(&kq_text::parse(b"[X]\nclassType=KQMonster\n")[0]).is_none());
     }
 
     #[test]
