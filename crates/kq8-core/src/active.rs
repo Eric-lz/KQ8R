@@ -879,7 +879,12 @@ impl WorldState {
     /// the log line says about it.
     fn cue_sound(&mut self, what: &str, cue: &str, position: [f32; 3]) -> &'static str {
         let mut words = cue.split_whitespace();
-        if !words.next().is_some_and(|w| w.eq_ignore_ascii_case("playsound")) {
+        let first = words.next().unwrap_or("");
+        // anim-scripts.md rule 7 (M5 5c-2): done by the player itself.
+        if first.eq_ignore_ascii_case("interruptable") {
+            return if words.next().and_then(|n| n.parse::<f64>().ok()).is_some_and(|n| n != 0.0) { "can be cut short from here, anim-scripts.md rule 7" } else { "can't be cut short from here, anim-scripts.md rule 7" };
+        }
+        if !first.eq_ignore_ascii_case("playsound") {
             return "cue action not done";
         }
         match words.next() {

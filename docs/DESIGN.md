@@ -1213,7 +1213,8 @@ stats.
     them per character. **Test:** the numbers of the note's rule 5 table
     (e.g. `goblin22` 15 / 2 / 2 / 0 / 3, reach 1,500, delay 1;
     `sprgnbow` 130 / −3 / 2 / 15 / 15, ranged).
-  - **5c-2, the `interruptable` cue** (`anim-scripts.md` rule 7; not
+  - **5c-2, the `interruptable` cue** (**done** 2026-10-20; unit test
+    only, it plays from 5c-3 on) (`anim-scripts.md` rule 7; not
     built so far for any player). When a character's phase passes
     `interruptable <n>`, its "can be cut short" becomes n. **Test:** unit
     test; the log shows goblin22's `attack` turning uncuttable at 0.19.

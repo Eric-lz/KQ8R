@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-2: the `interruptable` cue
+
+**Changed:** `kq8-core/src/named_anim.rs`: a cue `interruptable <n>` sets the movement's "can be cut short" to n when the phase passes it; `active.rs`: the log says so instead of "cue action not done". 1 new test. DESIGN, provenance.
+**Why:** `anim-scripts.md` rule 7; `fighting.md` rules 7, 12, 23 depend on it (an attack can be cut short only in its first moment).
+**Tested how:** `cargo test --workspace` (414 core tests), clippy clean.
+**Result:** Unit test with goblin2's `attack` (1 s): can't be cut short at the start (its `loop=` line), can from its first moving update (cue at 0), can't after phase 0.1875; a request then waits for the end.
+**Still broken / not tested:** Not seen in the viewer: no Daventry movement that plays so far has the cue (only the attacks, next step).
+**Next:** 5c-3, characters attack.
+
 ## 2026-10-20 M5 step 5c-1: reading the fight's numbers
 
 **Changed:** Plan for the fight (5c-1 to 5c-10) in `docs/DESIGN.md`. `kq8-data/characters.rs`: the monster and type lists' fight columns (`xtra*`, `invHold`, `invDrop`, `attackDelay`, `tooClose farEnough`), the fight keys of a character file, `FightSettings` (rule 2: the five stats); `items.rs`: the projectile column. `kq8-core`: new `fight.rs` (`Fight`), `Character::fight`, `fight_note` and a new `kq8-artifacts/logs/fight.log`. `kq8 character-verify` prints each line's fight numbers. Q136 (`reactPause`, not blocking). Provenance.

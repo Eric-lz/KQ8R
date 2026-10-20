@@ -2496,3 +2496,11 @@ the user in the original) and the game's data; no executable looked at.
 | `reactPause` read and logged only | Data (3 files outside Daventry); not in the note: **Q136** | — |
 | Only monster-list characters fight (`.kq`-only characters get no fight part) | Rule 2 covers only the list; **ours** for the rest (Daventry: the scripted Knight, Henchman are list lines; the others never fight) | `fight.log`: 52 fighters |
 | `fight.log`: one line per fighter at load | AGENTS.md (log, don't look) | Viewer run |
+
+### 5c-2, the `interruptable` cue — `crates/kq8-core/src/named_anim.rs` (`interruptable_cues`), `active.rs` (`cue_sound`, log text)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A cue `interruptable <n>` the phase passes sets "can be cut short" to n, for every movement player (characters, objects) | `anim-scripts.md` rule 7 (data: only in `.anm` files) | Unit test (goblin2's `attack`: on at 0, off at 0.1875) |
+| Two such cues passed in one update: the later in the file wins | **Ours** (Daventry's lists have them in phase order, and never two in one update) | — |
+| The cue at phase 0 fires in the movement's first moving update (the update after its start, as every movement) | Our player's existing rule (M3 3i) | Unit test |

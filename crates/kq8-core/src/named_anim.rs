@@ -371,6 +371,18 @@ impl NamedAnimPlayer {
         (ahead >= 0.0 && ahead <= travel.abs()).then_some(ahead)
     }
 
+    /// `anim-scripts.md` rule 7 (M5 5c-2): a cue `interruptable <n>` the
+    /// phase passed sets "can be cut short" to n (the last one passed
+    /// wins). The cue stays in the list, for the log.
+    fn interruptable_cues(&mut self, cues: &[String]) {
+        for c in cues {
+            let mut w = c.split_whitespace();
+            if w.next().is_some_and(|k| k.eq_ignore_ascii_case("interruptable")) {
+                self.cut_short = w.next().and_then(|n| n.parse::<f64>().ok()).is_some_and(|n| n != 0.0);
+            }
+        }
+    }
+
     /// One update of `dt` seconds.
     pub fn advance(&mut self, dt: f32) -> Played {
         let mut out = Played { from: self.phase, to: self.phase, ..Default::default() };
@@ -423,6 +435,7 @@ impl NamedAnimPlayer {
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
+        self.interruptable_cues(&out.cues);
         if step.done && self.in_transition.is_some() {
             // Rule 6: an ordinary end of the transition movement; its
             // target starts at its phase; another wanted one is asked for
@@ -547,6 +560,27 @@ pub(crate) mod tests {
             0,
             Placement::at([0.0; 3]),
         )
+    }
+
+    #[test]
+    fn the_interruptable_cue_switches_cut_short() {
+        // anim-scripts.md rule 7 (M5 5c-2): goblin2.anm's attack, 1 s:
+        // `interruptable 1` at 0, `interruptable 0` at 0.1875.
+        let cue = |phase: f32, action: &str| Cue { phase, action: action.into() };
+        let attack = movement("attack", 0.0, 1.0, false, false, vec![cue(0.0, "interruptable 1"), cue(0.1875, "interruptable 0"), cue(0.5, "do")]);
+        let mut p = NamedAnimPlayer::new("goblin", vec![movement("stop", 0.0, 1.0, true, true, vec![]), attack], 0, Placement::at([0.0; 3]));
+        p.start("attack");
+        assert!(!p.cut_short, "its loop= line says it can't be cut short");
+        p.advance(DT);
+        assert!(!p.cut_short, "started this update: it first moves in the next");
+        p.advance(DT);
+        assert!(p.cut_short, "the cue at 0 fires in its first moving update");
+        p.advance(DT);
+        assert!(p.cut_short);
+        let cues = p.advance(DT).cues;
+        assert_eq!(cues, ["interruptable 0"], "phase 0.133 -> 0.2 passes 0.1875");
+        assert!(!p.cut_short);
+        assert!(matches!(p.request("stop"), Request::Waiting), "after the cue a request waits for the end");
     }
 
     #[test]
