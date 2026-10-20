@@ -230,6 +230,20 @@ pub struct Fight {
     /// Dying (rule 30): its die movement (`None` with `Die now` or an
     /// unknown kind: nothing plays).
     pub dying: Option<Option<String>>,
+    /// It was loaded while `applyCombatLevel` was on (rule 3): its
+    /// health and damage get the combat level's factor when it enters the
+    /// world (M5 5c-10), set by the loader.
+    pub combat_scaled: bool,
+}
+
+/// `setCombatLevel 1|2|3` (rule 3): the factor.
+pub fn combat_factor(level: i64) -> Option<f32> {
+    match level {
+        1 => Some(0.66),
+        2 => Some(1.0),
+        3 => Some(1.5),
+        _ => None,
+    }
 }
 
 /// A bolt in the air (rule 36; M5 5c-9; its flight is a **stand-in**:
@@ -300,7 +314,7 @@ impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
         let must_flee = settings.must_flee;
-        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None }
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -961,6 +975,38 @@ impl crate::active::WorldState {
     }
 }
 
+impl Fight {
+    /// Rule 3: health, hand and ranged damage × the combat level's factor,
+    /// cut to whole numbers (protection and experience are not scaled).
+    /// Returns the log text.
+    pub fn apply_combat_level(&mut self, factor: f32) -> String {
+        let before = self.stats.0;
+        for k in 0..3 {
+            self.stats.0[k] = (self.stats.0[k] as f32 * factor) as i64;
+        }
+        format!("combat level x {factor} (rule 3): {before:?} -> {:?}", self.stats.0)
+    }
+}
+
+impl crate::active::WorldState {
+    /// `setCombatLevel 1|2|3` (rule 3; M5 5c-10): 0.66 / 1.0 / 1.5 for the
+    /// characters that enter the world from now on, and the roll on
+    /// characters. Returns the result for `$Console::Return`.
+    pub(crate) fn set_combat_level(&mut self, words: &[String], at: &str) -> String {
+        match words.get(1).and_then(|w| w.parse::<i64>().ok()).and_then(combat_factor) {
+            Some(f) => {
+                self.combat_level = f;
+                self.fight_note("game", format!("{at}: setCombatLevel {}: factor {f} (rule 3)", words[1]));
+                "0".into()
+            }
+            None => {
+                self.note(format!("{at}: usage: setCombatLevel 1|2|3 (3 is hardest); nothing"));
+                "1".into()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -1042,6 +1088,18 @@ pub(crate) mod tests {
         assert!(HitTest::new([0.0; 3], f, [1000.0, -20.0, 0.0], 1500.0, false).hit);
         // Behind it.
         assert!(!HitTest::new([0.0; 3], f, [0.0, 500.0, 0.0], 1500.0, false).hit);
+    }
+
+    #[test]
+    fn the_combat_level_scales_health_and_damage_cut() {
+        // Rule 3: 0.66 / 1.0 / 1.5; health, hand, ranged; cut toward zero.
+        assert_eq!((combat_factor(1), combat_factor(2), combat_factor(3), combat_factor(4)), (Some(0.66), Some(1.0), Some(1.5), None));
+        let mut f = Fight::new(settings([130, -3, 2, 15, 15], 1.0));
+        f.apply_combat_level(1.5);
+        assert_eq!(f.stats.0, [195, -4, 3, 15, 15]);
+        let mut g = Fight::new(settings([15, 2, 2, 0, 3], 1.0));
+        g.apply_combat_level(0.66);
+        assert_eq!(g.stats.0, [9, 1, 1, 0, 3]);
     }
 
     #[test]

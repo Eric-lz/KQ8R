@@ -121,6 +121,9 @@ struct Args {
     /// (if none is ready) and swings at NAME, as a click on it with the
     /// weapon ready (Shift with `big`; M5 5c-5 test, repeatable).
     swing: Vec<(String, u64, bool)>,
+    /// `--combat-level 1|2|3`: the combat level before the world's
+    /// characters enter it (M5 5c-10; stand-in for the menu).
+    combat_level: Option<i64>,
     /// `--special ITEMS,N`: before update N + 1, Connor gets
     /// `KQMonster::setState Connor special ITEMS` as if from a script
     /// (M3 3i-7 test; ITEMS uses `;` between items, e.g.
@@ -170,6 +173,7 @@ fn parse_args() -> Result<Args, String> {
         click: Vec::new(),
         aim: Vec::new(),
         swing: Vec::new(),
+        combat_level: None,
         special: None,
         command: Vec::new(),
         right: None,
@@ -215,6 +219,11 @@ fn parse_args() -> Result<Args, String> {
                 let (name, n) = v.rsplit_once(',').ok_or("--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 let n = n.trim().parse::<u64>().map_err(|_| "--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 a.click.push((name.trim().to_string(), n));
+            }
+            "--combat-level" => {
+                let v = value()?;
+                let n = v.trim().parse::<i64>().ok().filter(|n| (1..=3).contains(n)).ok_or("--combat-level needs 1, 2 or 3".to_string())?;
+                a.combat_level = Some(n);
             }
             "--swing" => {
                 let v = value()?;
@@ -379,6 +388,8 @@ N is an update number (15 updates per second):
   --aim NAME,N               like --click, but only if the camera can see it
   --swing NAME,N[,big]       at update N ready the hand weapon and swing at NAME
                              (big: the Shift swing)
+  --combat-level 1|2|3       the combat level (0.66 / 1.0 / 1.5) before the
+                             characters enter the world
   --item TYPE                give Connor an item of that type and hold it
   --key NAME,N               press space or 1-8, or click a bar control
                              (left:NAME / right:NAME), before update N + 1 (repeatable)
@@ -545,7 +556,7 @@ fn main() -> ExitCode {
                 .init_resource::<door_view::Deleted>()
                 .init_resource::<door_view::CharacterColliders>()
                 .init_resource::<talk_view::Speech>()
-                .insert_resource(door_view::HeldItem(args.item))
+                .insert_resource(door_view::HeldItem(args.item, args.combat_level))
                 .insert_resource(gui_view::KeyAt(args.key))
                 .init_resource::<gui_view::GuiCover>()
                 .init_resource::<gui_view::ScreenFrame>()

@@ -2618,3 +2618,12 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | "Immune to projectiles" flag and `ProjImmune`: not built (which bit it is was not given; none in Daventry known) | Rule 36 | — |
 | Drawn with its shape, turned to its heading only (no pitch) | **Stand-in** | — |
 | Keeping distance / fleeing (rule 37): **not built** (only ranged characters with a chase radius; Daventry's three are guards) | Rules 37, 38 | — |
+
+### 5c-10, the combat level — `crates/kq8-data/src/world_script.rs` (`Host::apply_combat_level`), `crates/kq8-core/src/{fight,active}.rs` (`combat_factor`, `Fight::apply_combat_level`, `set_combat_level`, scaling in `add_anims`), viewer `load.rs`, `anim_view.rs`, `door_view.rs`, `terrain_view.rs`, `main.rs` (`--combat-level`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Factor 1.0 by default; `setCombatLevel 1|2|3` → 0.66 / 1.0 / 1.5 | `fighting.md` rule 3 | Unit test |
+| `applyCombatLevel 1` in `newworld.cs` (run at load, before the objects): characters loaded after it get the factor when they enter the world: health, hand and ranged damage × factor, cut toward zero; protection and experience not; Connor never | Rule 3 | Unit test; viewer: goblin22 `[15, 2, 2, 0, 3]` → `[22, 3, 3, 0, 3]` at level 3, sprgnbow's −3 → −4 |
+| The roll on characters 85–125 % below level 1.0 | Rule 16 (built in 5c-5) | — |
+| `--combat-level 1|2|3` sets it before the characters enter | **Stand-in** for the menu (open question 3) | Viewer |

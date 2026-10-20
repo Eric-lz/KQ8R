@@ -249,9 +249,10 @@ pub struct SwingClick {
     how: String,
 }
 
-/// `--item TYPE`.
+/// `--item TYPE`; `--combat-level 1|2|3` (M5 5c-10: **stand-in** for the
+/// menu that sets it, `fighting.md` open question 3).
 #[derive(Resource)]
-pub struct HeldItem(pub Option<String>);
+pub struct HeldItem(pub Option<String>, pub Option<i64>);
 
 /// A body entity at `placement` with, per movement (index into `built`),
 /// one hidden entity per frame. `haze`: the object's `b_hazeSolid` and
@@ -300,7 +301,7 @@ pub fn spawn_doors(
     commands: &mut Commands,
     objects: &mut Objects,
     colliders: &mut Vec<BoxCollider>,
-    item: Option<String>,
+    (item, combat): (Option<String>, Option<i64>),
     anims: Vec<kq8_core::active::AnimObject>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
@@ -570,6 +571,12 @@ pub fn spawn_doors(
     active.add_chests(active_chests);
     main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
     active.add_objects(active_objects);
+    // fighting.md rule 3 (M5 5c-10): the combat level, before the
+    // characters enter the world.
+    if let Some(level) = combat {
+        let line = active.test_command(&format!("setCombatLevel {level}"), "test --combat-level");
+        main_log.summary(format!("fight: --combat-level {level}: {line:?} (factor {})", active.world.combat_level));
+    }
     // The other animated objects (3i-4), drawn by anim_view.
     active.add_anims(anims);
     // Copies prepared for a script's loadKQ (3k-4).

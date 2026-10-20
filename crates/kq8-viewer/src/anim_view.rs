@@ -306,7 +306,11 @@ pub fn spawn_animated(
             ch.unborn = c.unborn;
             let mut ai = kq8_core::character_ai::Ai::new(c.ai.clone(), p.position, eye, has_hide);
             // fighting.md rule 2 (M5 5c-1): its stats.
-            ch.fight = c.fight.clone().map(kq8_core::fight::Fight::new);
+            ch.fight = c.fight.clone().map(|s| {
+                let mut f = kq8_core::fight::Fight::new(s);
+                f.combat_scaled = c.combat_scaled;
+                f
+            });
             ai.has_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
             ch.ai = Some(ai);
             if let Some((min, max)) = ch.bounds {

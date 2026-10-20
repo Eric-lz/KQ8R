@@ -138,6 +138,10 @@ pub trait Host {
     fn item_command(&mut self, _words: &[String], _at: &str) -> Option<String> {
         None
     }
+    /// `applyCombatLevel 0|1` (`fighting.md` rule 3; M5 5c-10): from now
+    /// on characters entering the world get the combat level's factor.
+    /// By default nothing is done.
+    fn apply_combat_level(&mut self, _on: bool, _at: &str) {}
 }
 
 #[derive(Debug, Clone, Default)]
@@ -264,6 +268,7 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
             }
             "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
             "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {}
+            "applycombatlevel" => {}
             c if c.ends_with(".cs") => {}
             // Not run: counted without looking at its variables.
             _ => {
@@ -341,6 +346,10 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
                 }
                 Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
             },
+            "applycombatlevel" => {
+                let on = words.get(1).and_then(|v| v.parse::<f64>().ok()).is_some_and(|v| v != 0.0);
+                host.apply_combat_level(on, &at);
+            }
             "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {
                 out.item_commands += 1;
                 if if_depth > 0 {

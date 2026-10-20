@@ -305,7 +305,7 @@ pub fn setup_objects(
         &std::mem::take(&mut objects.character_lines),
         &mut log,
     );
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, held.0.clone(), anims, &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), anims, &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log);
     // 3l-4: doors, chests and scripted objects were added after the
     // plain objects; the sweep tests them all in load order.
     let load_index = |name: &str| objects.placed.iter().position(|(p, _, _)| p.name.eq_ignore_ascii_case(name)).unwrap_or(usize::MAX);

@@ -1298,11 +1298,12 @@ stats.
     shooter's ranged damage, kind `Projectile`. Keeping distance (rule
     37) as written (no Daventry character uses it). **Test:** How to
     check 7 (`sprigwnd1` shoots about every 1.7 s within 7,500).
-  - **5c-10, the combat level** (rule 3). `applyCombatLevel`,
+  - **5c-10, the combat level** (**done** 2026-10-20) (rule 3). `applyCombatLevel`,
     `setCombatLevel 1|2|3` (0.66 / 1.0 / 1.5): health, hand and ranged
     damage of each character entering the world × the factor, cut; the
-    roll on characters 85–125 % below 1.0. Daventry stays at 1.0.
-    **Test:** `--command "setCombatLevel 3"` before load: goblin22 health
+    roll on characters 85–125 % below 1.0. Daventry stays at 1.0. The
+    menu that sets it is not traced: **stand-in** launch option
+    `--combat-level 1|2|3`. **Test:** `--combat-level 3`: goblin22 health
     22 in the log.
   - Not in 5c: Connor's full weapon lists, ranged weapons for Connor,
     Delete (switch weapons), game over, the tips' texts, smashing

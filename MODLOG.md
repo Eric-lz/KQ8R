@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-10: the combat level
+
+**Changed:** `kq8-data/world_script.rs`: `applyCombatLevel` reaches the loader. `kq8-core/fight.rs`, `active.rs`: `setCombatLevel 1|2|3`, the factor applied to characters loaded after `applyCombatLevel` when they enter the world. Viewer: the loader marks those characters; new launch option `--combat-level 1|2|3` (stand-in for the menu). 1 new test. DESIGN, provenance.
+**Why:** `fighting.md` rule 3.
+**Tested how:** `cargo test --workspace` (430 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --combat-level 3 --frames 30` and the same without the option; `fight.log`, `viewer.log`.
+**Result:** `newWorld.cs line 10: applyCombatLevel 1` logged at load. Level 3: goblin22 `[15, 2, 2, 0, 3]` → `[22, 3, 3, 0, 3]`, sprgnbow `[130, -3, 2, 15, 15]` → `[195, -4, 3, 15, 15]`. Default: × 1, unchanged.
+**Still broken / not tested:** Which menu sets the level in the original is not known (open question 3). Not played at level 1 or 3 beyond the numbers.
+**Next:** End of 5c: STATUS, FEATURES, README; the user's checks in "How to check".
+
 ## 2026-10-20 M5 step 5c-9: the bow spriggans (stand-in bolt)
 
 **Changed:** `kq8-data`: `ProjectileKeys` (a `KQProjectile` file). `kq8-core/fight.rs`: a ranged character's `Do` shoots (`shoot`, `lead`), bolts fly and hit (`Bolt`, `bolts_step`); `active.rs`: projectiles, bolts, Connor's last position; doMode 1 for ranged characters; `character_ai.rs`: the bolts each update. Viewer: the projectile file read and its shape loaded (`load.rs`), bolts drawn (`item_view.rs`). 2 new tests. DESIGN, provenance.

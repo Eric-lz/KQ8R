@@ -1494,6 +1494,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         corpse_shapes: BTreeMap::new(),
         drop_kinds: Vec::new(),
         projectiles: BTreeMap::new(),
+        combat_apply: false,
         item_lines: Vec::new(),
         monster_types: None,
         pending_line: None,
@@ -1715,6 +1716,8 @@ struct Placer<'a> {
     drop_kinds: Vec<String>,
     /// The projectile files read (M5 5c-9).
     projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
+    /// `applyCombatLevel` is on (M5 5c-10, `fighting.md` rule 3).
+    combat_apply: bool,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
     /// `GAME/Kq/Monstats.mtl`, read when a monster list is first loaded
@@ -1779,9 +1782,16 @@ pub struct CharacterAssets {
     /// What it brings to the fight (`fighting.md` rule 2; M5 5c-1): only
     /// for a monster-list line.
     pub fight: Option<kq8_data::characters::FightSettings>,
+    /// Loaded while `applyCombatLevel` was on (rule 3; M5 5c-10).
+    pub combat_scaled: bool,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
+    fn apply_combat_level(&mut self, on: bool, at: &str) {
+        self.combat_apply = on;
+        self.log.summary(format!("fight: {at}: applyCombatLevel {}: characters loaded from here on get the combat level (fighting.md rule 3)", u8::from(on)));
+    }
+
     fn read(&self, name: &str) -> Option<Vec<u8>> {
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
         self.world.load(base).and_then(Result::ok).map(|(_, b)| b)
@@ -2282,6 +2292,7 @@ impl Placer<'_> {
                 skin: pending.as_ref().and_then(|l| l.line.skin.clone()).or_else(|| keys.skin.clone()),
                 ai: pending.as_ref().map_or_else(|| kq8_data::characters::AiSettings::from_keys(&keys), |l| kq8_data::characters::AiSettings::from_line(&keys, &l.line, &l.kind)),
                 fight: pending.as_ref().map(|l| kq8_data::characters::FightSettings::from_line(&keys, &l.line, &l.kind, &self.items.types)),
+                combat_scaled: self.combat_apply,
                 keys,
                 casts_shadow: false,
             }

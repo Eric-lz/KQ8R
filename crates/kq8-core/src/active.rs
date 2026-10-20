@@ -2376,6 +2376,7 @@ impl ScriptHost for WorldState {
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
+            "setCombatLevel" => Some(self.set_combat_level(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
             "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
             "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
@@ -2693,8 +2694,15 @@ impl Active {
                 }
                 r
             });
+            // fighting.md rule 3 (M5 5c-10): the combat level on entry.
+            let factor = self.world.combat_level;
+            let scaled = a.character.as_deref_mut().and_then(|c| c.fight.as_mut()).filter(|f| f.combat_scaled).map(|f| f.apply_combat_level(factor));
             if let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) {
                 let mut line = format!("fights (rule 2): {}; from {}", f.settings.describe(), f.settings.from);
+                line.push_str(&match scaled {
+                    Some(s) => format!("; {s}"),
+                    None => "; loaded while applyCombatLevel was off: not scaled (rule 3)".to_string(),
+                });
                 if ranged {
                     line.push_str("; ranged: doMode 1 (rule 34)");
                 }
