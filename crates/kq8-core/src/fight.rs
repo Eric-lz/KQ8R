@@ -83,6 +83,11 @@ impl HitKind {
     }
 }
 
+/// The chase timer after the alarm with "run" (rule 26), seconds.
+pub const RUN_ALARM_CHASE: f64 = 10.0;
+/// `likelyToFlee`'s default; above this a hit makes it flee (rule 22.5).
+pub const LIKELY_TO_FLEE: f32 = 0.5;
+
 /// The roll's range on Connor: *a* + random × *b* (rule 16).
 pub const ROLL_ON_CONNOR: (f32, f32) = (0.25, 0.75);
 /// The roll's range on a character, combat level 1.0 or more (rule 16).
@@ -212,12 +217,23 @@ pub struct Fight {
     /// When its next attack is due (rule 6): 0 at first, [`NEVER`] while
     /// an attack plays.
     pub attack_time: f64,
+    /// The last hit's kind (rule 22.1; picks the die movement, rule 30).
+    pub last_kind: Option<HitKind>,
+    /// It must flee (rules 22.5, 37): `mustFlee`, or hit with
+    /// `likelyToFlee` above 0.5.
+    pub must_flee: bool,
+    /// When its last flinch ended, and its last ouch sound (rules 23, 24).
+    pub flinch_end: f64,
+    pub last_ouch: f64,
+    /// Its flinch movement playing now (`react` or its special one).
+    pub flinching: Option<String>,
 }
 
 impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
-        Fight { settings, stats, attack_time: 0.0 }
+        let must_flee = settings.must_flee;
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -369,21 +385,167 @@ impl crate::active::WorldState {
         self.hit_character(j, "Connor", d, kind);
     }
 
-    /// Rules 16–18 on a character (M5 5c-5: the damage; its reaction is
-    /// 5c-6, dying 5c-7).
+    /// Rules 16–18, 20–28 on a character (M5 5c-6), in rule 22's order:
+    /// the kind; active; chase timer 5 s; the hit count; must flee; the
+    /// damage (dying: 5c-7); the attack time put right; the flinch or the
+    /// ouch sound; where Connor is; the alarm with "run"; then rule 28 if
+    /// it is still not alarmed. No knock-back (rule 20).
     pub(crate) fn hit_character(&mut self, j: usize, from: &str, d: i64, kind: HitKind) {
+        let now = self.now();
         let range = if self.combat_level < 1.0 { ROLL_ON_CHARACTER_EASY } else { ROLL_ON_CHARACTER };
+        let name = self.anims[j].player.name.clone();
+        if self.anims[j].character.as_deref().is_none_or(|c| c.fight.is_none()) {
+            return;
+        }
+        let mut notes = Vec::new();
+        // 22.2: active if it was not (if there is room).
+        if !self.anims[j].character.as_deref().and_then(|c| c.ai.as_ref()).is_some_and(|ai| ai.active) {
+            self.join_active_pub(j, now);
+        }
+        let connor = self.connor_at;
         let a = &mut self.anims[j];
-        let name = a.player.name.clone();
-        let Some(f) = a.character.as_deref_mut().and_then(|c| c.fight.as_mut()) else { return };
+        let c = a.character.as_deref_mut().unwrap();
+        let had_target = c.ai.as_ref().is_some_and(|ai| ai.alarmed);
+        let standing = c.state == crate::character::State::Wait;
+        if let Some(ai) = c.ai.as_mut() {
+            // 22.3, 22.4.
+            ai.chase_until = now + ATTACK_CHASE;
+            ai.hit_count += 1;
+            notes.push(format!("chase timer 5 s, hit count {} (rule 22)", ai.hit_count));
+        }
+        let f = c.fight.as_mut().unwrap();
+        // 22.1, 22.5.
+        f.last_kind = Some(kind);
+        if f.settings.likely_to_flee.unwrap_or(LIKELY_TO_FLEE) > LIKELY_TO_FLEE && !f.must_flee {
+            f.must_flee = true;
+            notes.push("likelyToFlee above 0.5: it must flee (rule 22.5)".into());
+        }
+        // 22.6: the damage.
         let rng = &mut self.fight_rng;
         let dmg = Damage::roll(d, f.stats.0[3], range, &mut || rng.fraction());
         let before = f.stats.0[0];
         f.stats.0[0] -= dmg.loss;
         let after = f.stats.0[0];
-        let dies = if after < 0 { "; below 0: it would die (dying is 5c-7)" } else { "" };
-        let line = format!("hit by {from}, {}: {} (roll {:.0}-125 %, rule 16); health {before} -> {after}{dies}", kind.name(), dmg.describe(), range.0 * 100.0);
-        self.fight_note(&name, line);
+        let line = format!("hit by {from}, {}: {} (roll {:.0}-125 %, rule 16); health {before} -> {after}", kind.name(), dmg.describe(), range.0 * 100.0);
+        if after < 0 {
+            self.fight_note(&name, format!("{line}; below 0: it would die (dying is 5c-7); the rest of the hit is skipped (rule 22.6)"));
+            return;
+        }
+        // 22.7: an attack under way: its next is due attackDelay from now.
+        if f.attack_time == NEVER {
+            f.attack_time = now + f64::from(f.settings.attack_delay);
+            notes.push(format!("its attack was under way: next attack due at {:.2} (rule 22.7)", f.attack_time));
+        }
+        // 22.8: the flinch (rule 23) or the ouch sound (rule 24).
+        let percent = f.settings.normal_react_percent.unwrap_or(REACT_PERCENT);
+        let special = f.settings.special_react_anim.clone().filter(|_| f.settings.special_react_percent.is_some_and(|p| dmg.flinch_roll(p)));
+        let can_cut = a.player.cut_short || a.player.has_ended();
+        let paused = now < f.flinch_end + FLINCH_PAUSE;
+        let why_not = if special.is_none() && !dmg.flinch_roll(percent) {
+            Some(format!("R {} is not above {percent} x D", dmg.roll))
+        } else if !can_cut {
+            Some(format!("'{}' can't be cut short", a.player.movement_name()))
+        } else if paused {
+            Some(format!("its last flinch ended {:.2} s ago (2 s pause)", now - f.flinch_end))
+        } else {
+            None
+        };
+        match why_not {
+            None => {
+                let m = special.unwrap_or_else(|| "React".to_string());
+                let how = match a.player.request(&m) {
+                    crate::named_anim::Request::AtOnce(st) if !st.unknown => "starts at once".to_string(),
+                    crate::named_anim::Request::AtOnce(_) => "starts at once (not in its list: movement 0)".to_string(),
+                    _ => format!("waits for '{}'", a.player.movement_name()),
+                };
+                f.flinching = Some(m.clone());
+                f.last_ouch = now;
+                notes.push(format!("flinches: '{m}' {how} (rule 23)"));
+            }
+            Some(why) => {
+                if now + 1e-6 >= f.last_ouch + OUCH_EVERY {
+                    f.last_ouch = now;
+                    let ouch = f.settings.ouch_sound.clone().unwrap_or_else(|| DEFAULT_OUCH.to_string());
+                    let at = a.player.base.position;
+                    self.sounds.push(crate::sound::Start::placed_one_shot(&ouch, at, format!("{name}'s ouch sound (fighting.md rule 24)")));
+                    notes.push(format!("no flinch ({why}): ouch sound {ouch} (rule 24)"));
+                } else {
+                    notes.push(format!("no flinch ({why}); no ouch sound, the last was {:.2} s ago (rule 24)", now - f.last_ouch));
+                }
+            }
+        }
+        // 22.9: it learns where Connor is now.
+        if let Some(ai) = self.anims[j].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+            ai.last_seen = connor;
+        }
+        self.fight_note(&name, format!("{line}; {}", notes.join("; ")));
+        // 22.10: the alarm with "run" (rule 26).
+        let told = self.run_alarm(&name, now);
+        // Rule 25: no Daventry character has Surprise lines (not built).
+        // Rule 28: it had no target when hit and is still not alarmed.
+        let still = self.anims[j].character.as_deref().and_then(|c| c.ai.as_ref()).is_some_and(|ai| !ai.alarmed);
+        if !had_target && standing && still {
+            self.hit_unalarmed(j, now);
+        }
+        if !told.is_empty() {
+            self.fight_note(&name, format!("the alarm with run (rule 26): {}", told.join(", ")));
+        }
+    }
+
+    /// Rule 26: after every hit, every active character with an alarm
+    /// radius above 0 that can see Connor (or whose team has a member that
+    /// can): alarmed if it had no target (rule 23, its reaction delay and
+    /// team); then in every case hit count 2, `run` at once if moving,
+    /// chase timer 10 s. Returns who, for the log.
+    fn run_alarm(&mut self, hit: &str, now: f64) -> Vec<String> {
+        let mut told = Vec::new();
+        for k in 0..self.anims.len() {
+            if self.anims[k].gone {
+                continue;
+            }
+            let Some(ai) = self.anims[k].character.as_deref().and_then(|c| c.ai.as_ref()) else { continue };
+            if !ai.active || ai.settings.alarm_radius <= 0.0 || ai.sinking {
+                continue;
+            }
+            let team = ai.settings.team.clone();
+            let sees = ai.sees || self.team_sees_pub(k, team.as_deref());
+            if !sees {
+                continue;
+            }
+            let name = self.anims[k].player.name.clone();
+            if !ai.alarmed {
+                self.alarm_pub(k, &format!("the alarm with run after {hit} was hit (fighting.md rule 26)"), now);
+            }
+            let a = &mut self.anims[k];
+            let c = a.character.as_deref_mut().unwrap();
+            let moving = c.state == crate::character::State::Move;
+            let run = if moving { format!(", {}", c.set_moving(&mut a.player, true)) } else { String::new() };
+            let ai = c.ai.as_mut().unwrap();
+            ai.hit_count = ai.hit_count.max(2);
+            ai.chase_until = now + RUN_ALARM_CHASE;
+            told.push(format!("{name} (hit count 2, chase timer 10 s{run})"));
+        }
+        told
+    }
+
+    /// Rule 28: hit while not alarmed and standing. No team and a chase
+    /// radius above 0: it starts moving at `run` with no target (the hunt,
+    /// `character_ai`). Otherwise: alarmed at once, no reaction delay.
+    fn hit_unalarmed(&mut self, j: usize, now: f64) {
+        let a = &mut self.anims[j];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_ref() else { return };
+        if ai.settings.team.is_none() && ai.settings.chase_radius > 0.0 {
+            c.ai.as_mut().unwrap().hunting = true;
+            let line = c.enter_move(&mut a.player, now, true, "hit while not alarmed, no team: runs with no target, fighting.md rule 28");
+            self.fight_note(&name, line);
+            return;
+        }
+        self.alarm_pub(j, "hit while not alarmed (a team or a chase radius of 0): alarmed at once (fighting.md rule 28)", now);
+        if let Some(ai) = self.anims[j].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+            ai.react_at = now;
+        }
     }
 }
 

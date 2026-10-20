@@ -2559,3 +2559,19 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | Damage: his hand damage (stats, weapon included); Shift × a random factor from `minDamageFactor` to `maxDamageFactor` (0.75 to 4), cut | Rule 41; data (`Connor.kq`; the manual's 5 is not used: "Do not reproduce") | Unit test; viewer (× 3.804 → 38) |
 | `Fire` when the ready weapon is the Flame Sword | Rules 14, 41 | — |
 | On a character: roll 75–125 % (85–125 % below combat level 1.0), its protection, its health (its reaction: 5c-6; dying: 5c-7) | Rule 16 | Unit test; viewer (loss 11 then 8) |
+
+### 5c-6, characters being hit — `crates/kq8-core/src/{fight,character,character_ai}.rs` (`hit_character`, `run_alarm`, `hit_unalarmed`, `hunt`, `Fight::{last_kind, must_flee, flinch_end, last_ouch, flinching}`, `Ai::{hit_count, hunting}`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Rule 22's order: kind; active (if room); chase timer 5 s; hit count +1; must flee (`likelyToFlee` > 0.5); damage (below 0: the rest skipped); attack time "never" → now + `attackDelay`; flinch or ouch; where Connor is; the alarm with "run" | `fighting.md` rule 22 | Viewer (goblin21), unit tests |
+| From the second counted hit it always runs when it starts moving (the coin skipped); cleared at home | Rules 22.4, 27; `character-movement.md` rules 3, 28 | Viewer: "hit count 7" |
+| No knock-back | Rule 20 | — |
+| Flinch: *R* > `normalReactPercent` (0.9) × *D*, movement can be cut short or ended, last flinch ended > 2 s ago → `React` as an ordinary request in its state; a special flinch when `specialReactAnim` and *R* > `specialReactPercent` × *D* | Rule 23 | Unit test (never two within 2 s of an end); viewer: refused while its `Attack` can't be cut short |
+| The flinch's end: the 2 s pause starts, chase timer 5 s | Rule 23 | Viewer: update 102 |
+| The 2 s pause is fixed; `reactPause` not used | Rule 23; **Q136** asks about `reactPause` (none in Daventry) | — |
+| Ouch: `ouchSound` (default `sword.aud`), placed one-shot at its position, at most once a second (a flinch starts that second too) | Rule 24 | Viewer: "the last was 0.60 s ago" |
+| Surprise lines: not built (no Daventry file has the keys) | Rule 25 | — |
+| The alarm with "run": every active character with an alarm radius that sees Connor (or its team does), the hit one included: alarmed if it had no target (rule 23, its delay, team); hit count 2, `run` at once if moving, chase timer 10 s | Rule 26 (as written: no distance limit) | Viewer: goblin21 plus Brdgsprig and Fallsprig (active, seeing him); unit test |
+| Hit while not alarmed and standing: no team and a chase radius → runs with no target: alarmed (no delay) within its alarm radius; after its chase timer gives up beyond 4 × alarm radius or runs home beyond its chase radius; heads for the point at his distance 0.52 rad anticlockwise off the line to him; otherwise alarmed at once | Rule 28 with its "Do not reproduce" (the original's point is about twice the angle) | Unit test |
+| A hunting character neither wanders nor fidgets | **Ours** (rule 28 replaces its wandering) | — |

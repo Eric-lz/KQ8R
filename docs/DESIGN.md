@@ -1260,7 +1260,8 @@ stats.
     health (the rest of the hit is 5c-6). A viewer option to swing at a
     set update for tests. **Test:** two punches kill `goblin22` in the
     log (rule 19's example; it dies in 5c-7).
-  - **5c-6, characters being hit** (rules 20–28). In order: the kind;
+  - **5c-6, characters being hit** (**done** 2026-10-20; goblin21 under
+    Connor's fists) (rules 20–28). In order: the kind;
     active; chase timer 5 s; the hit count; must flee; the damage; the
     attack time put right; the flinch or the ouch sound (rules 23, 24);
     it learns where Connor is; the alarm with "run" (hit count 2, `run`,

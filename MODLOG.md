@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-6: characters being hit
+
+**Changed:** `kq8-core/fight.rs`: `hit_character` does all of rule 22 (kind, active, chase timer, hit count, must flee, damage, attack time, flinch or ouch, where Connor is, the alarm with "run"), `run_alarm` (rule 26), `hit_unalarmed` (rule 28); `character.rs`: the flinch's end (2 s pause, chase timer); `character_ai.rs`: the hit count (always `run` from the second hit, cleared at home), the hunt after an unseen hit (0.52 rad beside Connor: the note's Do instead). 2 new tests. DESIGN, provenance.
+**Why:** `fighting.md` rules 20–28.
+**Tested how:** `cargo test --workspace` (425 core tests), clippy clean. Viewer: Connor punches goblin21 (health 50, protection 14) every 10 updates: `cargo play --world Daventry --sound off --at 150552,269500,0 --swing goblin21,60 --swing goblin21,70 ... --swing goblin21,400 --frames 3500`, `fight.log`.
+**Result:** 9 hits land (loss 7–10 after its rolled protection 11–17); a flinch at update 94 (R 11), ended at 102; refused while its own `Attack` could not be cut short (77, 134) or R ≤ 9; ouch sound `gblnouch.aud` no more than once a second ("the last was 0.60 s ago"); its attack time put right while a swing was under way (rule 22.7). Each hit's alarm with "run" reached goblin21 and also Brdgsprig and Fallsprig (active and seeing Connor: rule 26 has no distance limit). Unit tests: never two flinches within 2 s of one ending; an unseen hit sends a goblin running beside Connor until he is within its alarm radius.
+**Still broken / not tested:** **Not looked at by eye.** It doesn't die yet below 0 (5c-7). Whether far characters really join the alarm with "run" in the original (rule 26 as written) is not checked. Fleeing (rule 37) is 5c-9. Fewer flinches than "3 in 5" in this run because its own swing often can't be cut short; not compared with the original.
+**Next:** 5c-7, dying.
+
 ## 2026-10-20 M5 step 5c-5: Connor hits back (stand-in input)
 
 **Changed:** `kq8-core`: `fight.rs` (`connor_do`, `hit_character`, `cut_short_at`), `connor_inventory.rs` (the hand-weapon slot readies the weapon; a second click puts it away), `active.rs` (`weapon_ready`, `combat_level`). Viewer: `connor_view.rs` (his swing: turn toward the click, `attack` / `attackb` / `attack2` from the weapon's list, his `Do` cue), `door_view.rs` (a click with a weapon ready swings, Ctrl gives the plain click, Shift the big swing; `--swing NAME,N[,big]`), `load.rs` (loads each hand weapon list's three swings), `main.rs`. 3 new tests. DESIGN, provenance.

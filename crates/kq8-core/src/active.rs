@@ -5150,6 +5150,76 @@ mod tests {
         assert!(a.world.fight_log.last().unwrap().contains("hit by Connor") && a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
     }
 
+    /// The goblin with a `react` (0.6 s, one-shot) added, health 500 so it
+    /// never dies, Connor 1,400 south of it standing.
+    fn hit_goblin() -> Active {
+        let mut a = fighter();
+        let o = &mut a.world.anims[0];
+        let mut react = crate::named_anim::tests::movement("react", 0.0, 1.0, false, false, vec![]);
+        react.play_time = 0.6;
+        o.player.movements.push(react);
+        o.character.as_mut().unwrap().fight.as_mut().unwrap().stats.0[0] = 500;
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.connor_at = Some([0.0, -1400.0, 100.0]);
+        a
+    }
+
+    #[test]
+    fn a_hit_character_flinches_or_says_ouch_and_runs_after_connor() {
+        // fighting.md rules 22-24, 26 (M5 5c-6).
+        let mut a = hit_goblin();
+        watch(&mut a, &[], 40);
+        let from = [0.0, -1400.0, 100.0];
+        let mut flinches = 0;
+        let mut ouches = 0;
+        for k in 0..40 {
+            watch(&mut a, &[], 40 + k * 5);
+            let last = a.world.fight_log.len();
+            a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), false, "attack");
+            let new = a.world.fight_log[last..].join("\n");
+            flinches += new.matches("flinches: 'React'").count();
+            ouches += new.matches("ouch sound sword.aud").count();
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(flinches > 0 && ouches > 0, "{log}");
+        assert!(log.contains("chase timer 5 s, hit count 1 (rule 22)"), "{log}");
+        assert!(log.contains("the alarm with run (rule 26): gob (hit count 2, chase timer 10 s"), "{log}");
+        assert!(log.contains("its last flinch ended") || log.contains("can't be cut short"), "a flinch refused at some point: {log}");
+        assert!(log.contains("its flinch 'React' ended: no flinch for 2 s"), "{log}");
+        // Never two flinches starting within 2 s of a flinch's end: with
+        // hits every 5 updates (1/3 s) and a 0.6 s flinch, at most one in
+        // about every 2.6 s.
+        let starts: Vec<u64> = a.world.fight_log.iter().filter(|l| l.contains("flinches: 'React'")).map(|l| l["update ".len()..].split(':').next().unwrap().parse().unwrap()).collect();
+        for w in starts.windows(2) {
+            assert!(w[1] - w[0] >= 39, "{starts:?}");
+        }
+        assert!(a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().hit_count >= 2, "the alarm with run: hit count 2 at least");
+    }
+
+    #[test]
+    fn hit_unseen_with_no_team_it_runs_with_no_target() {
+        // fighting.md rule 28 (M5 5c-6): it could not see him.
+        let mut a = hit_goblin();
+        a.world.connor_at = Some([0.0, -3000.0, 100.0]);
+        {
+            let ai = a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap();
+            ai.settings.alarm_radius = 1500.0;
+        }
+        watch(&mut a, &[], 20);
+        assert!(a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().active, "active by its first sight test");
+        a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap().sees = false;
+        a.world.hit_character(0, "Connor", 10, crate::fight::HitKind::Normal);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hit while not alarmed, no team: runs with no target, fighting.md rule 28"), "{log}");
+        assert!(a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().hunting);
+        // It heads for the point 0.52 rad anticlockwise off the line to
+        // him; within its alarm radius it is alarmed with no delay.
+        watch(&mut a, &[], 120);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("alarmed while hunting: no reaction delay (fighting.md rule 28)"), "{}", a.world.character_log.join("
+"));
+    }
+
     #[test]
     fn the_hand_weapon_slot_readies_and_puts_away() {
         // inventory.md rule 9, fighting.md rule 39 (M5 5c-5; putting it

@@ -100,11 +100,17 @@ pub struct Ai {
     pub following: bool,
     /// Sinking back: its `hide` plays where it gave up (rule 30).
     pub sinking: bool,
+    /// Hits counted (`fighting.md` rule 22.4): from the second on it always
+    /// runs when it starts moving (rule 3); cleared at home (rule 28).
+    pub hit_count: u32,
+    /// Hit while not alarmed, with no team (`fighting.md` rule 28): it
+    /// runs about with no target, toward a point beside Connor.
+    pub hunting: bool,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None, retaking: false, following: false, sinking: false }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None, retaking: false, following: false, sinking: false, hit_count: 0, hunting: false }
     }
 
     /// Alarmed and past its reaction delay: the chase rules drive it, not
@@ -267,7 +273,7 @@ impl WorldState {
         let fidgets: Vec<String> = a.player.movements.iter().filter(|m| m.name.starts_with(IDLE_PREFIX)).map(|m| m.name.clone()).collect();
         // Rule 16: not alarmed (also during its reaction delay; wandering
         // carries on then, rule 23).
-        if !ai.active || fidgets.is_empty() || ai.on_way_home || (ai.alarmed && ai.fidget.is_none()) {
+        if !ai.active || fidgets.is_empty() || ai.on_way_home || ai.hunting || (ai.alarmed && ai.fidget.is_none()) {
             return;
         }
         let mut line = None;
@@ -320,7 +326,7 @@ impl WorldState {
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
         let Some(ai) = c.ai.as_ref() else { return };
-        if !ai.active || !ai.settings.wanders || ai.wander_done || ai.on_way_home || ai.engaged(now) {
+        if !ai.active || !ai.settings.wanders || ai.wander_done || ai.on_way_home || ai.hunting || ai.engaged(now) {
             return;
         }
         let mut lines = Vec::new();
@@ -556,6 +562,10 @@ impl WorldState {
         if state == State::Birth {
             return;
         }
+        if !ai.alarmed && ai.hunting {
+            self.hunt(i, d, home_d, now);
+            return;
+        }
         if !ai.alarmed {
             // Rule 28: only while moving; case 2 needs it to see him too.
             let retake = ai.on_way_home && state == State::Move && !go_home && s.alarm_radius > 0.0 && sees && (d <= s.attack_dist || (home_d <= s.home_radius && d < s.alarm_radius));
@@ -646,8 +656,16 @@ impl WorldState {
                 // 30), and its stuck check for the walk (rule 7).
                 let start = if s.do_mode == 1 { 1.25 * s.attack_dist } else { s.attack_dist };
                 if (!sees || d > start) && s.chase_radius > 0.0 {
-                    let run = c.random() < 0.5;
-                    let why = if run { "after Connor, running (the coin, rule 3)" } else { "after Connor, walking (the coin, rule 3)" };
+                    // Rule 3, fighting.md rule 22.4: hit twice, it always runs.
+                    let hits = c.ai.as_ref().map_or(0, |ai| ai.hit_count);
+                    let run = hits >= 2 || c.random() < 0.5;
+                    let why = if hits >= 2 {
+                        "after Connor, running (hit twice: always, fighting.md rule 22.4)"
+                    } else if run {
+                        "after Connor, running (the coin, rule 3)"
+                    } else {
+                        "after Connor, walking (the coin, rule 3)"
+                    };
                     let line = c.enter_move(&mut a.player, now, run, why);
                     c.walk.steer = aim2;
                     lines.push(line);
@@ -700,6 +718,18 @@ impl WorldState {
         for l in fight_lines {
             self.fight_note(&name, l);
         }
+    }
+
+    /// For the fight (M5 5c-6): rule 20's join, rule 23's alarm (with its
+    /// spread, rule 24), rule 26's team test.
+    pub(crate) fn join_active_pub(&mut self, i: usize, now: f64) {
+        self.join_active(i, now);
+    }
+    pub(crate) fn alarm_pub(&mut self, i: usize, why: &str, now: f64) {
+        self.alarm(i, why, false, now);
+    }
+    pub(crate) fn team_sees_pub(&self, i: usize, team: Option<&str>) -> bool {
+        self.team_sees(i, team)
     }
 
     /// Rule 23: alarmed (`told`: by another, rule 24, no distance test).
@@ -802,6 +832,8 @@ impl WorldState {
         let (pos, home) = (a.player.base.position, ai.home);
         let line = if (pos[0] - home[0]).abs() <= HOME_REACHED && (pos[1] - home[1]).abs() <= HOME_REACHED {
             ai.on_way_home = false;
+            // Rule 28: its hit count is cleared (fighting.md rule 22.4).
+            ai.hit_count = 0;
             let w = c.set_state(&mut a.player, "Wait", &[], now);
             Some(format!("home reached ({:.0}, {:.0}): {w} (rule 28)", home[0], home[1]))
         } else {
@@ -991,4 +1023,55 @@ fn attack_now(player: &mut crate::named_anim::NamedAnimPlayer, c: &mut crate::ch
         off.to_degrees(),
         if back_key { "held" } else { "not held" }
     ))
+}
+
+/// `fighting.md` rule 28: the hunt's point is this far (radians,
+/// anticlockwise) off the straight line to Connor ("Do not reproduce":
+/// the original's point is about twice that, from a plain arctangent).
+pub const HUNT_ANGLE: f32 = 0.52;
+/// Rule 28: a hunting character gives up beyond this × its alarm radius
+/// from Connor (after its chase timer).
+pub const HUNT_GIVE_UP: f32 = 4.0;
+
+impl WorldState {
+    /// `fighting.md` rule 28 (M5 5c-6): hit while not alarmed, with no
+    /// team, it runs with no target. Each update: Connor within its alarm
+    /// radius → alarmed at once (no reaction delay); after its chase
+    /// timer, beyond 4 × its alarm radius from him it gives up, beyond its
+    /// chase radius from home it runs home; otherwise it heads for the
+    /// point at his distance, 0.52 rad anticlockwise off the line to him
+    /// (the Do instead).
+    fn hunt(&mut self, i: usize, d: f32, home_d: f32, now: f64) {
+        let Some(connor) = self.connor_at else { return };
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_mut() else { return };
+        let s = ai.settings.clone();
+        if s.alarm_radius > 0.0 && d < s.alarm_radius {
+            ai.hunting = false;
+            self.alarm(i, &format!("hunting, Connor {d:.0} away, within its alarm radius {} (fighting.md rule 28)", s.alarm_radius), false, now);
+            if let Some(ai) = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+                ai.react_at = now;
+            }
+            self.fight_note(&name, "alarmed while hunting: no reaction delay (fighting.md rule 28)");
+            return;
+        }
+        if now + 1e-6 >= ai.chase_until {
+            if d > HUNT_GIVE_UP * s.alarm_radius {
+                ai.hunting = false;
+                self.give_up(i, &format!("hunting: Connor {d:.0} away, beyond {HUNT_GIVE_UP} x its alarm radius (fighting.md rule 28)"), now);
+                return;
+            }
+            if home_d > s.chase_radius {
+                ai.hunting = false;
+                self.give_up(i, &format!("hunting: {home_d:.0} from home, beyond its chase radius {} (fighting.md rule 28)", s.chase_radius), now);
+                return;
+            }
+        }
+        let p = a.player.base.position;
+        let (vx, vy) = (connor[0] - p[0], connor[1] - p[1]);
+        let (sn, cs) = HUNT_ANGLE.sin_cos();
+        c.walk.steer = Some([p[0] + vx * cs - vy * sn, p[1] + vx * sn + vy * cs]);
+    }
 }

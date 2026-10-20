@@ -950,6 +950,16 @@ impl Character {
     /// fidget too): the next attack is due `attackDelay` from now, the
     /// chase timer 5 s.
     fn attack_ended(&mut self, ended: &str, now: f64) -> Option<String> {
+        // fighting.md rule 23 (M5 5c-6): its flinch ended: the 2 s pause
+        // starts, chase timer 5 s.
+        if let Some(f) = self.fight.as_mut().filter(|f| f.flinching.as_deref().is_some_and(|m| m.eq_ignore_ascii_case(ended))) {
+            f.flinching = None;
+            f.flinch_end = now;
+            if let Some(ai) = self.ai.as_mut() {
+                ai.chase_until = now + crate::fight::ATTACK_CHASE;
+            }
+            return Some(format!("fight: its flinch '{ended}' ended: no flinch for 2 s, chase timer 5 s (fighting.md rule 23)"));
+        }
         if !crate::fight::is_attack(ended) {
             return None;
         }
