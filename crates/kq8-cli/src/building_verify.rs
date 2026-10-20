@@ -58,6 +58,15 @@ struct Tally {
     leaf_first_bytes: BTreeMap<u8, usize>,
     /// (first byte, number of nodes leading to the leaf): count.
     leaf_byte_by_parents: BTreeMap<(u8, usize), usize>,
+    /// Shadow receivers (characters.md rule 37 (2), M4 4d-7b-3): surfaces
+    /// whose visible side faces up (more than 45 degrees), those wider than
+    /// 1,800 on x or y, and the widest (width, label, surface).
+    floors: usize,
+    floors_wider: usize,
+    widest_floor: (f32, String, usize),
+    /// Ball radius (half the `.dig` box diagonal, object-lighting.md rule
+    /// 40): smallest and largest (radius, label).
+    radius_range: Option<((f32, String), (f32, String))>,
 }
 
 pub fn run(game: &GameDir) -> ExitCode {
@@ -128,6 +137,13 @@ pub fn run(game: &GameDir) -> ExitCode {
     log.summary(format!("BSP leaf first bytes (value: count): {:?}", t.leaf_first_bytes));
     log.summary(format!("BSP leaves by (first byte, nodes leading to it): {:?}", t.leaf_byte_by_parents));
     log.summary(format!("plane normal length: {:.5} .. {:.5}", t.normal_length.0, t.normal_length.1));
+    log.summary(format!(
+        "shadow receivers (characters.md rule 37 (2)): {} surfaces face up (floors), {} of them wider than 1,800 on x or y; widest {:.0} ({} surface {})",
+        t.floors, t.floors_wider, t.widest_floor.0, t.widest_floor.1, t.widest_floor.2
+    ));
+    if let Some(((lo, lo_at), (hi, hi_at))) = &t.radius_range {
+        log.summary(format!("building balls (half the .dig box diagonal, object-lighting.md rule 40): radius {lo:.0} ({lo_at}) .. {hi:.0} ({hi_at})"));
+    }
     log.summary(format!("TOTAL buildings_ok={} failures={} time_ms={}", t.ok, t.failures, started.elapsed().as_millis()));
     let pass = t.failures == 0 && t.ok > 0 && t.bsp_bad == 0 && bounds_ok;
     log.summary(if pass { "RESULT: PASS" } else { "RESULT: FAIL" });
@@ -331,6 +347,35 @@ fn check(label: &str, bytes: &[u8], log: &mut Log, t: &mut Tally) {
             }
         }
     }
+    // Rule 37 (2) against the data: floors and their size, the ball.
+    let (mut floors, mut wider, mut widest) = (0, 0, 0.0f32);
+    for i in 0..b.surfaces.len() {
+        let (Some(c), Some(n)) = (b.surface_corners(i), b.corner_order_normal(i)) else { continue };
+        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        // The right-hand-rule normal points away from the visible side.
+        if len <= 0.0 || -n[2] / len < std::f32::consts::FRAC_1_SQRT_2 {
+            continue;
+        }
+        t.floors += 1;
+        floors += 1;
+        let width = (0..2)
+            .map(|k| c.iter().map(|(p, _)| p[k]).fold(f32::MIN, f32::max) - c.iter().map(|(p, _)| p[k]).fold(f32::MAX, f32::min))
+            .fold(0.0, f32::max);
+        t.floors_wider += usize::from(width > 1800.0);
+        wider += usize::from(width > 1800.0);
+        widest = widest.max(width);
+        if width > t.widest_floor.0 {
+            t.widest_floor = (width, label.to_string(), i);
+        }
+    }
+    let radius = (0..3).map(|k| (b.bounds_max[k] - b.bounds_min[k]).powi(2)).sum::<f32>().sqrt() / 2.0;
+    let r = t.radius_range.get_or_insert_with(|| ((radius, label.to_string()), (radius, label.to_string())));
+    if radius < r.0 .0 {
+        r.0 = (radius, label.to_string());
+    }
+    if radius > r.1 .0 {
+        r.1 = (radius, label.to_string());
+    }
     let bsp_problems = check_bsp(&b, t);
     if !bsp_problems.is_empty() {
         t.bsp_bad += 1;
@@ -346,7 +391,7 @@ fn check(label: &str, bytes: &[u8], log: &mut Log, t: &mut Tally) {
     };
     *t.lowest_z.entry(bucket.to_string()).or_default() += 1;
     log.detail(format!(
-        "ok {label}: v{} scale={} surfaces={} points={} triangles={} order_agrees={agree}/{} lowest_z={low:.1} box=({:.0},{:.0},{:.0})..({:.0},{:.0},{:.0}) trailing={} bsp_nodes={} leaves={} solid={}",
+        "ok {label}: v{} scale={} surfaces={} points={} triangles={} order_agrees={agree}/{} lowest_z={low:.1} box=({:.0},{:.0},{:.0})..({:.0},{:.0},{:.0}) trailing={} bsp_nodes={} leaves={} solid={} floors={floors} floors_wider_than_1800={wider} widest_floor={widest:.0} ball_radius={radius:.0}",
         b.version,
         b.texture_scale,
         b.surfaces.len(),

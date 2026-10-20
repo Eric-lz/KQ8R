@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-7b-3a: shadows on buildings planned, read against the data (Q135)
+
+**Changed:** `docs/DESIGN.md` (4d-7b-3 planned in three steps, with stand-ins); `docs/behaviour/QUESTIONS.md` (Q135); `kq8-cli/src/building_verify.rs` (new lines: floor surfaces and their width, building ball radii).
+**Why:** `characters.md` rule 37 (2) gives the idea (active buildings within reach, surfaces near the character's height, an area at most 1,800 across) but not all the numbers.
+**Tested how:** `cargo run --release -p kq8-cli -- building-verify`, `kq8-artifacts/logs/building-verify.log`.
+**Result:** RESULT: PASS (153 buildings). 33,962 surfaces face up, 17,295 of them wider than 1,800 (largest 4,096, Dead City `LITEHSE1`); Daventry's floors are tiles of up to about 2,040. Ball radii 876 (`zedrock2`) to 34,199 (Gnome `GNOME06`); Daventry up to 18,990 (`nchurch`). So whether the 1,800 area cuts the shadow or only picks surfaces shows in play. Q135 asks: the reach's sizes, the band's two numbers, the area's shape / centre / cut, invisible surfaces.
+**Still broken / not tested:** Nothing built yet.
+**Next:** 4d-7b-3b, the choice of surfaces in core.
+
 ## 2026-10-20 The user's check of the leash and the follow (original game)
 
 **Changed:** `docs/behaviour/character-movement.md` How to check 4: the result recorded.

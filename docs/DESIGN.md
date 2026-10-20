@@ -782,9 +782,44 @@ inventory and menus.
         original. **Not reproduced (the user's decision):** the original's
         shadows flicker and show gaps, seemingly at random (cause not
         known); ours are drawn steadily every frame.
-      - **4d-7b-3, buildings receive them** (rule 37 (2): active buildings
-        within reach, surfaces near the character's height, an area at
-        most 1,800 across).
+      - **4d-7b-3, buildings receive them** (planned 2026-10-20; rule 37
+        (2): active buildings within reach, surfaces near the character's
+        height, an area at most 1,800 across). Read against the data
+        first (`kq8 building-verify`): half of all floor surfaces are wider
+        than 1,800 (Daventry's: tiles up to about 2,040), building balls
+        876–18,990. What the note leaves open is **Q135** (the reach's
+        sizes, the band's numbers, the area's shape, centre and whether it
+        cuts, invisible surfaces); built with these **stand-ins**, each
+        logged:
+        - reach: centre-to-centre distance ≤ building radius + caster's
+          radius + 500; the building's ball as our draw distance has it
+          (the `.dig` box middle, turned); the caster's ball = the box
+          around its shown model triangles (middle, half diagonal);
+        - only buildings that are near or far (the draw distance's state;
+          off = not active);
+        - band: a surface counts when any part of it lies between 2 × the
+          caster's height below its feet and 100 above its top;
+        - area: a square 1,800 on x and y around the caster's middle moved
+          along the sun down to its feet; a surface counts when its x, y
+          extent reaches into it, and receives whole (no cut);
+        - only drawn surfaces (not kind-0 materials or surfaces skipped
+          for having no light map): a shadow on an invisible wall would
+          float.
+        - **4d-7b-3a, the plan, the data and Q135** (docs, the
+          `building-verify` lines).
+        - **4d-7b-3b, the choice of surfaces** (core `shadow.rs`): a
+          building receiver (its ball, its drawn surfaces as world
+          triangles with their box), the reach / band / area test giving
+          the receiving triangles and counts for the log. Unit tests.
+        - **4d-7b-3c, drawn** (viewer): at load, each drawn building copy
+          becomes a receiver (buildings don't move); the draw distance
+          shares each object's state; characters, Connor and plain
+          objects add the chosen building triangles to their terrain
+          ones (a plain object is worked out again when the set of active
+          buildings near it changes). Logs: `characters.log` per
+          character once a second (buildings in reach, surfaces, pieces);
+          `shadows.log` the receivers at load and the plain objects'
+          counts.
       - **4d-7b-4, plain objects cast them** (**done** 2026-10-20; **checked by the user**: the same pub barrel casts as in the original; rule 37 "Plain objects":
         `shadowMask` 8, the same drawing).
     - **4d-12, characters are solid for Connor** (planned 2026-10-20;
