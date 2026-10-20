@@ -56,11 +56,12 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   and move their mouths while they speak, and can be clicked.
   Conversations with the wizard and the beast at the pond work: Connor
   walks to his spot, the camera cuts between fixed views, and walking
-  away ends the talk with a goodbye.
+  away ends the talk with a goodbye. Characters stand on the ground
+  and on building floors, and cast shadows on the ground.
 
 ### Next
 
-- **Characters:** gravity and shadows (the last two steps of 4d).
+- **Characters:** shadows on buildings and from objects.
 - **The main menu:** pausing the game with Escape key.
 
 ### Later

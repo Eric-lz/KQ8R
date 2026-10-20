@@ -1,13 +1,30 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-19 at the
-end of B's session on M4 step 4e (conversations, 4e-1 to 4e-7; Q125 and
-Q126 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-10-19 after
+B built A's character answers (4d-8 to 4d-11, 4d-6b, 4d-7b-1 and -2;
+Q127 to Q129 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (B): A's character answers built** (one commit per
+  step; plan in `docs/DESIGN.md` "A's answers Q116, Q117, Q121–Q124";
+  **none looked at by eye yet**): the movement names start as `Stop`
+  (4d-8: every Daventry character starts on `stop`, the torches and
+  fish get their random start); the start-up at the first update or
+  first request, Wait after `birthDelay` through the queue (4d-9);
+  the end of a `speak` (4d-10: nothing when already in Wait);
+  transitions on characters (4d-11; the Girl's `cowerstop`, unit tests
+  only: she is never in range); gravity (4d-6b: characters fall onto
+  the terrain and building floors, mask 0 only the ground check, no
+  Fall state; the flying mover for the bats); shadows on the terrain
+  (4d-7b-1, -2: a dark copy of the figure along the sun, 0.5 multiply,
+  cut beyond 1,500). Left: shadows on buildings (4d-7b-3, the note's
+  vertical band is loose: needs a question first) and plain objects
+  casting (4d-7b-4). New questions for A: **Q127** (doors, chests and the
+  waiting `Stop`), **Q128** (what stops a character's fall: objects,
+  characters, Connor), **Q129** (the flying drop over water).
 - **New 2026-10-19 (B, after the user's check of 4e): 4e-8 to 4e-10.**
   The user found: offering an item, the camera cuts and their stop by the
   right button, and walking away and back all work; but the right-button
@@ -298,21 +315,16 @@ characters and conversations done; the menus next). M0–M3 are done.
   cutscene cameras (Q113 a–c; the user's check matched ours after the
   watermill scene); the mouse's recentring near the window's edges is
   not built (not settled; the note says it may be left out).
-- **Stand-ins of 4d (characters):** `birthDelay` from the data (Q116);
-  Wait after the last line of a queue, characters only, from no state
-  or Wait (Q117); a state set before the first update is kept (Q121,
-  `sprdump`); `EndLoop` through the queue lets `Stop` show for one
-  update before a script's answer (Q119, the Uglybeast's `pivot`); the
-  Uglybeast's mouth movements bring `Stop` back in Wait (Q120); a
-  character's facing taken as Connor's (−Y). **All of Q116–Q124 are now
-  answered (A, 2026-10-19)**: to build: delay-0 events before drawing
-  (Q119), zero-duration movements hold (Q120), the `Stop` default names
-  and the start-up on a first request (Q121), end of queue does nothing
-  in Wait (Q117), gravity (Q122), shadows (Q123). Built since: `makeTranslucent`
-  (4d-5b), click boxes following characters (4d-5c), who casts a shadow
-  (4d-7a, logged), Q114's corrections. Q122–Q124 answered too (see
-  above), not built yet. Not built: `changeAnmFile`, collision against
-  characters (so Connor walks through the Wizard). Not tested: the
+- **Stand-ins of 4d (characters):** a character's facing taken as
+  Connor's (−Y). Q116–Q124 are all built (Q123 only on the terrain so
+  far). Waiting for answers: doors and chests keep the old load names
+  (Q127); objects, characters and Connor don't stop a character's fall
+  (Q128); a flyer over water sits 150 under the surface (Q129). Our
+  readings: the shadow's terrain search uses the model's points, not
+  its box; multiply by 0.5 for "strength 0.5"; a transition's target
+  first moves in the next update. Not built: `changeAnmFile`, the
+  `endLoop` cue (M5), collision against characters (so Connor walks
+  through the Wizard). Not tested: the
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), `sprdump`'s scene, a real turn in the viewer.
 - **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not
@@ -344,13 +356,12 @@ characters and conversations done; the menus next). M0–M3 are done.
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Next step, suggested:** for the user: look at a conversation in the
-  viewer (click the Wizard from inside his house; walk away mid-talk;
-  hold the right button). For B: build A's remaining answers Q116, Q117,
-  Q121–Q124 (4d: timing, start-up, end of a queue, then gravity 4d-6 and
-  shadows 4d-7; Q119 and Q120 are built); or
-  the main menu (Escape, the mask button) with the game paused. For A:
-  Q125, Q126, then Q108–Q113 (small).
+- **Next step, suggested:** for the user: look at the characters'
+  shadows (the goblin by the start, the spriggans at the castle ruins)
+  and at the spriggans standing on the windmill floor and the castle.
+  For B: shadows on buildings and from plain objects (4d-7b-3, -4); or
+  the main menu once A has studied it. For A: Q127–Q129, Q125, Q126,
+  then Q108–Q113 (small); a study of the main menu.
 - Sound, not done: the item land sound (nothing is thrown),
   hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
   for sound objects.

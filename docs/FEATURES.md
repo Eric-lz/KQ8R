@@ -568,7 +568,9 @@ message that shows the usage.
   built parts allow.
 - **Characters (M4 4d):** they stand, breathe and gesture but don't
   walk, notice Connor, fight or die (M5); they are not solid; zombies
-  stay in the ground; no gravity or shadows yet (4d-6, 4d-7).
+  stay in the ground; their shadows fall on the ground but not yet on
+  buildings, and objects cast none yet (4d-7b-3, -4); they don't land on
+  objects, other characters or Connor (Q128).
 - **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no
