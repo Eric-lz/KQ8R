@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of the fight in the original; `fighting.md` corrected
+
+**Changed:** `docs/behaviour/fighting.md`: new rule 11b (the swallowed swing), rule 31 corrected (drops are thrown), numbers, Do not reproduce, How to check 6 (results), open question 4 closed.
+**Why:** The user checked rules 6 and 31–32 in the original: (1) a goblin sometimes makes its attack sound with no swing and then attacks normally, but attacks at once when Connor walks or runs away; (2) the dropped items fling upward and land with a sound, can be picked up in the air, and the XP bar moves when the death animation ends.
+**Tested how:** (1) Explained from code already traced: a chasing goblin whose attack is due starts it, and next update (Connor has no forward / back key) switches to standing, whose `Stop` cuts the attack in its first cut-short moment; the real swing comes `attackDelay` later. (2) Traced the item mover's start: it picks the same random throw as `tossItems` (75°–85°, 5,000–6,500 units/s). Nothing run.
+**Result:** Both observations fit the note now. The first reading of the drops ("no throw") was wrong: it missed the mover's own start.
+**Still broken / not tested:** Not checked whether every "sound, no swing" the user saw is this case. Spriggans should skip silently (their sound comes later); not checked.
+**Next:** B builds the fight; keeping the swallowed swing is recommended (it comes free with the rules).
+
 ## 2026-10-20 The user's check of shadows on buildings (original game)
 
 **Changed:** Docs only: DESIGN (4d-7b-3 checked), STATUS, FEATURES, provenance, QUESTIONS (Q135 update, not blocking).

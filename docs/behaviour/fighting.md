@@ -168,6 +168,32 @@ Words used here:
     these happens: the character **enters** its standing or moving state
     (a state change), or it **is hit** (rule 22): then too the attack time
     becomes now + `attackDelay` (chase timer 5 s).
+11b. **The swallowed swing** (traced, added 2026-10-20 after the user's
+    check in the original: "sometimes he makes the attack sound but no
+    animation, then he attacks normally; when walking or running away
+    they attack at once"). It falls out of rules 7, 11 and 12 with
+    `character-movement.md` rule 25:
+    1. A **chasing** (moving) character comes within reach while its
+       attack is due: it starts `Attack` from its moving state. The
+       attack's sound cue at phase 0 plays (goblin, bone goblin, zombie).
+    2. In the **next update** its attack time is "never", so the moving
+       state's "before the attack is due" rule applies: if **Connor has
+       no forward / back key held**, it switches to standing.
+    3. Entering the standing state asks for `Stop` at a random frame.
+       The attack is still in its first, cut-short moment (rule 12:
+       0.18–0.25 s; one update is 0.067 s), so **`Stop` replaces it**:
+       the swing is never seen. The attack time becomes now +
+       `attackDelay`.
+    4. `attackDelay` later (0.5–1 s) it swings for real, from standing.
+    So: Connor standing (or only turning) when it arrives → sound, no
+    swing, then a real swing; Connor walking or running (key held) →
+    the moving state never switches and **the first swing plays in full
+    at once**. If its attack was not due yet when it arrived, it stops
+    first and swings normally later (no swallowed swing): hence
+    "sometimes". Spriggans' attack sound comes at 0.1875, after the cut,
+    so for them it is a silent skip. Not checked: whether this is what
+    the user saw every time (it is the only path traced that gives a
+    sound without a swing).
 12. **Daventry's attack movements** (data; seconds at speed 1.0):
 
     | List | Attack length | Can be cut short | Hit (`Do` cue) at | `react` length |
@@ -370,14 +396,19 @@ Words used here:
 31. **Drops** (traced): its drop list is the monster list's `invDrop`
     (`@` or `none` = nothing) followed by the type's `invDrop` (unless
     `none`), comma separated, quotes and an `INVITEM_` prefix allowed,
-    `SilverCoins(3)` = 3 coins. Each entry becomes a new item, and **all
-    of them are put at the character's position** (its feet, plus an
-    offset that is 0 for Daventry's characters; which key sets it: not
-    sure), each with
-    its own falling item mover (the same 8,085 units/s² gravity as
-    `items.md` rule 12, but **no throw**: they fall straight down and stay;
-    whether anything spreads them apart was not traced: inferred they lie
-    on one spot). An entry that names an object already in the world is
+    `SilverCoins(3)` = 3 coins. Each entry becomes a new item, started at
+    the character's position (its feet, plus an offset that is 0 for
+    Daventry's characters; which key sets it: not sure), and **thrown
+    exactly like `KQObject::tossItems`** (`items.md` rule 12): its item
+    mover picks, when it starts, a random direction all round, 75°–85°
+    up, 5,000–6,500 units/s, falls under the same gravity, lands on the
+    floor-grid height and plays the item's land sound. (Corrected
+    2026-10-20: this rule first said "no throw"; the throw is made by the
+    item mover's own start, which the first reading missed. The user saw
+    it in the original: the items fling upward and land with a sound.)
+    They can be clicked and picked up while still in the air (the user's
+    check; items are clickable wherever they are, `items.md` rule 4). An
+    entry that names an object already in the world is
     handled differently (it is moved to the character; not followed, no
     Daventry entry does this).
 32. **When the die movement ends** (traced):
@@ -512,6 +543,7 @@ Words used here:
 | hit while not alarmed | runs to ~30° beside Connor; gives up beyond 4 × alarm radius | traced |
 | ranged | holds a `LongWeapon`; stop 0.75 ×, shoot 1.25 × (standing) / 1 × (moving) reach | traced |
 | flee | once a second, chance `likelyToFlee` 0.5 within `attackTooClose` 0.25 × reach; stop beyond `attackFarEnough` 0.75 × reach; must flee if `likelyToFlee` > 0.5 and hit | traced |
+| drops | thrown as `tossItems`: random heading, 75°–85° up, 5,000–6,500 units/s | traced, user-checked |
 | bolt (Daventry `Prscbolt.kq`) | speed 8,000, `maxDistance` 18,000 | data |
 | big swing | × 0.75 to 4 (`Connor.kq`) | traced, data |
 | first-kill tip | 1.5 s after | traced |
@@ -575,6 +607,12 @@ Words used here:
   `Connor.kq` (4). Do: use the data (4).
 - Negative hand damage (data in `sprgnbow`): keep it as data; it is never
   used by a ranged character.
+- **The swallowed swing** (rule 11b) is arguably a slip in the original
+  (the stop rule meant for "before the attack is due" also fires while an
+  attack has just started), but it is what the original looks like and
+  it falls out of building the rules as written. Recommended: keep it.
+  If not wanted: don't switch a moving character to standing while its
+  `Attack` is playing.
 - Keep the rest, including the asymmetric rolls (25–100 % on Connor,
   75–125 % on characters), the first attack being due at once, and the
   1.25 × reach against a Connor walking backward.
@@ -606,6 +644,14 @@ experience sent, corpse shape, the `Die` line to the script.
 6. **Death**: kill a goblin: it plays its death, items appear at its feet
    at once (not when it is down), a body stays; the experience meter
    moves only when the death ends.
+   **Checked by the user in the original (2026-10-20):** the items
+   fling upward from it and fall to the ground with a sound (corrected
+   in rule 31); they can be picked up on the ground or in the air; the
+   experience bar moves when the death animation ends (as rule 32).
+   Also check 1: sometimes the goblin attacks at once, sometimes it
+   makes the attack sound with no swing and then attacks normally; while
+   Connor walks or runs away it attacks at once on reaching him
+   (explained in rule 11b).
 7. **Bow spriggan** at the windmill (`sprigwnd1`): it never leaves its
    spot, shoots about every 1.7 s while Connor is in view and within
    about 7,500, and leads its shot when he runs across.
@@ -624,7 +670,8 @@ experience sent, corpse shape, the `Die` line to the script.
    the `KQMonster::add` command gets the combat factor twice (once when
    added, once when it enters the world) (rule 3). Daventry's monsters all
    come from `monsters.kq` (once).
-4. Whether the dropped items are spread out or lie on one spot (rule 31).
+4. ~~Whether the dropped items are spread out~~: answered, they are
+   thrown (rule 31, corrected after the user's check).
 5. Connor's death and game over (rule 29), and the tips' texts (rules
    29, 33): other studies.
 6. What "tied to another object" is (rules 28, 37); it is never set for a
