@@ -7,6 +7,15 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (A): Q137 answered**, `docs/behaviour/thrown-items.md`
+  (`items.md` rule 12 points there): a thrown item follows the exact arc
+  (8,085 units/s²) from its launch point, 15 updates a second; it is
+  stopped by the floor grid, buildings and most objects (characters and
+  Connor are flown through), slides off walls and drops at their foot,
+  is flung up again by barrels (scripted or animated objects), tumbles
+  about one axis at a fixed angle per update, and rests with no turn.
+  For B: replace the 5c-8 / fix 7 stand-ins.
+
 - **2026-10-20 (B, after the user's fight check): fixes 1–7 and 5d.**
   Readying the fists plays `draw` and switches Connor to the weapon's
   movement set, sword pointer (Ctrl: the play pointer); no readying in a
@@ -493,7 +502,8 @@ characters and conversations done; the menus postponed) and **M5**
   `IDBMA_CURS03` (Q138, after the user's check); his swing and flinch
   play as one-item Special lists. The bolt (open question 2):
   straight, no gravity, from 3/4 of the shooter's height at 3/4 of his,
-  drawn without pitch. The thrown drops' stepping (Q137). Game over
+  drawn without pitch. The thrown drops' flight (Q137 now answered in
+  `thrown-items.md`, not built yet). Game over
   (Connor stays dead). The corpse has no draw-distance test and no skin
   swap (bossprig). The flinch pause is fixed at 2 s (Q136,
   `reactPause`). Not built: fleeing / keeping distance (rule 37; none
@@ -513,7 +523,8 @@ characters and conversations done; the menus postponed) and **M5**
 - **Next step, suggested:** for the user: play the fight by eye
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Connor's controls (the input side of the fight, his weapon lists,
-  game over), the bolt's flight, Q136, Q137. **The main
+  game over), the bolt's flight, Q136. For B: the thrown items' flight
+  (`thrown-items.md`). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -563,8 +574,7 @@ characters and conversations done; the menus postponed) and **M5**
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
 - For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
-  (`reactPause`: is it the flinch's 2 s pause?), **Q137** (how a thrown
-  item's flight steps through time), **Q138** (what readying a hand
+  (`reactPause`: is it the flinch's 2 s pause?), **Q138** (what readying a hand
   weapon does: the movement set, `draw` / `undraw`, the pointer). `fighting.md` open questions 1–3
   (Connor's input side, the bolt's flight, which menu sets the combat
   level) are built as stand-ins.

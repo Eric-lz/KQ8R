@@ -151,12 +151,15 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
     - a random direction all round (0–360°),
     - a steep launch: 75°–85° above the horizontal,
     - a launch speed of 5,000–6,500 units per second,
-    - it falls back under gravity (the item mover's value looks like
-      8,085 units/s²; not fully traced) and **lands when it comes down
-      to the floor-grid height**, where it stays; the type's **land
-      sound** plays then.
-    The exact flight formula (how time steps through it) was not fully
-    traced; the numbers above are the launch values.
+    - an exact arc from the launch point under 8,085 units/s², worked
+      out each update (15 per second); it is stopped by the floor grid,
+      buildings and most objects on the way (characters and Connor are
+      flown through), bounces up again off barrels and other scripted or
+      animated objects, tumbles about one axis, and ends lying still in
+      its resting pose (no turn). The land sound plays at its first touch.
+    **The whole flight is in `thrown-items.md`** (traced 2026-10-20, Q137;
+    this rule's first version said "lands when it comes down to the
+    floor-grid height, nothing tested on the way", which was incomplete).
 
 ## Numbers and units
 
@@ -169,7 +172,7 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
 | toss direction | random 0–360° | traced |
 | toss elevation | 75°–85° | traced |
 | toss speed | 5,000–6,500 units/s | traced |
-| toss gravity | about 8,085 units/s² | traced value, use not fully traced |
+| toss gravity | 8,085 units/s², exact arc (`thrown-items.md`) | traced |
 
 ## Data used
 
@@ -216,5 +219,6 @@ chests (`chests.md`), world scripts, and things that drop or throw them.
    inventory does on an add (stacking, swapping, weapons and armour put
    on): `inventory.md` rule 8.
 2. Whether Connor plays a pick-up animation (none found in this code).
-3. The exact flight of a tossed item (rule 12).
+3. ~~The exact flight of a tossed item (rule 12).~~ **Answered
+   2026-10-20** in `thrown-items.md`.
 4. What collision bit 0x200 in an item's type does.

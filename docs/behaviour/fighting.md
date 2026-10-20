@@ -402,8 +402,9 @@ Words used here:
     Daventry's characters; which key sets it: not sure), and **thrown
     exactly like `KQObject::tossItems`** (`items.md` rule 12): its item
     mover picks, when it starts, a random direction all round, 75°–85°
-    up, 5,000–6,500 units/s, falls under the same gravity, lands on the
-    floor-grid height and plays the item's land sound. (Corrected
+    up, 5,000–6,500 units/s, and the whole flight (arc, what stops it,
+    bounces, tumble, settling, land sound) is the same: see
+    `thrown-items.md` (traced 2026-10-20, Q137). (Corrected
     2026-10-20: this rule first said "no throw"; the throw is made by the
     item mover's own start, which the first reading missed. The user saw
     it in the original: the items fling upward and land with a sound.)
@@ -671,7 +672,9 @@ experience sent, corpse shape, the `Die` line to the script.
    Connor-controls study.
 2. The bolt's flight (gravity, `maxDistance`, what it does on the ground)
    and exactly how the ranged damage gets onto it (rule 36); the aiming
-   height. Only matters for the bow spriggans in Daventry.
+   height. Only matters for the bow spriggans in Daventry. (Checked
+   2026-10-20: the bolt is moved by the projectile's own code, not by the
+   thrower of `thrown-items.md`; still open.)
 3. Which menu sets the combat level, and whether a character added by
    the `KQMonster::add` command gets the combat factor twice (once when
    added, once when it enters the world) (rule 3). Daventry's monsters all

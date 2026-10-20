@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: thrown items' flight studied (Q137)
+
+**Changed:** New note `docs/behaviour/thrown-items.md`; `items.md` rule 12 (and its table and open question 3) and `fighting.md` rule 31 point to it; `fighting.md` open question 2 notes that the bolt uses other code. QUESTIONS (Q137 answered), STATUS. Scratch notes with addresses in `re/notes.md` (not committed).
+**Why:** B's stand-in lets thrown items pass through the pub's wall and land under its floor (the user's check); Q137 (c) was blocking.
+**Tested how:** Study only (Ghidra on `Mask.exe`, plus Daventry's `pub.kq`, `brlupcr.kq`, `brlupxcr.kq`). No code written, nothing run.
+**Result:** The flight is an exact arc from the launch point (8,085 units/s², 15 updates a second), moved with the ordinary collision passes. It is blocked by the floor grid, buildings and objects with type bit 0x1 / 0x100; it flies through characters, Connor and other items. A touch slides it along the surface for the rest of the update. Then a scripted or animated object (the barrels) throws it again, steeply up; anything else ends the arc, and it settles under ordinary gravity. Land sound at the first touch. Tumble: one axis, a random -0.5 to +0.5 rad per update. At the end its turn is set to 0, 0, 0.
+**Still broken / not tested:** The user saw an item bounce off the pub's wall; the trace says a building without a script stops the arc (it drops at the wall's foot), so that bounce may have been a barrel: needs one more look in the original. The "slow" tumble seen by the user vs up to 430°/s traced: not sure. Gravity after the arc assumed as measured for Connor (not measured for items). The bolt's flight is still open.
+**Next:** B: replace the 5c-8 / fix 7 stand-ins with `thrown-items.md`. The user: watch a crystal hit the pub's wall in the original (`thrown-items.md` "How to check").
+
 ## 2026-10-21 The user's check of shadows on buildings after 4d-7b-5c / 5d
 
 **Changed:** Docs only: DESIGN, FEATURES, STATUS.
