@@ -2220,3 +2220,12 @@ marked otherwise.
 | Only the part of a model triangle above the receiving plane is projected | Rule 37 "Over water" (its suggestion) | Same tests |
 | "Facing the sun" = the front (clockwise, Q2) turned toward the sun; a receiver facing away from the sun gets nothing | **Our reading** ("probably the side facing the sun"; projecting onto a back face would run toward the sun) | Same tests |
 | Terrain: the drawn ground's triangles under the box moved along the sun, none beyond 1,500 above or below the ground | Rule 37 (1) and "the 1,500 limit is a cut" | First used in 4d-7b-2 |
+
+### 4d-7b-2, characters' shadows on the terrain — `crates/kq8-viewer/src/anim_view.rs`, `load.rs`, `main.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Only characters that cast (rule 36) and are drawn (near or far, not hidden) | `characters.md` rules 36, 37 "When" | `characters.log` shadow lines |
+| The shown model frame's triangles, every frame, through `kq8_core::shadow` onto the terrain | Rule 37 | Same |
+| The terrain triangles searched: under the model's own corners moved along the sun (the box's are not used) | Rule 37 (1) says "its box"; **our stand-in**: the model's points cover the same shadow | — |
+| Drawn unlit, multiply blending at 0.5 (two layers: a quarter), no haze, no fading | Rule 37 "How dark" (0.5; "most likely" halves; blending not traced) and the user's check (half as bright, a quarter on overlaps) | Not checked by eye yet |

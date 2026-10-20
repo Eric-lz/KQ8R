@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-7b-2: characters' shadows on the terrain (Q123)
+
+**Changed:** `kq8-viewer/src/anim_view.rs`: new `shadow_draw` (PostUpdate, after the transforms): for each character that casts (rule 36) and is drawn (near or far, not hidden), every frame its shown model frame's triangles go through `kq8_core::shadow` onto the terrain into its own mesh, drawn unlit with multiply blending at 0.5, no haze; a line per shadow once a second in `characters.log`. `load.rs`: the rule-36 result is kept on the character. `main.rs`: the system. DESIGN, provenance.
+**Why:** A's answer to Q123 (`characters.md` rule 37) and the user's check of the look.
+**Tested how:** `cargo test --workspace` (521 pass), clippy clean. Viewer (`cargo play --world Daventry --sound off`): `--frames 400` (start), `--at 212000,286000,0 --frames 300` (castle ruins); read `characters.log` and `viewer.log`.
+**Result:** goblin22: 224 model triangles, about 107 facing the sun, 24 terrain triangles, about 150 pieces each frame. At the ruins: RuinSprig1, RuinSprig2 and Sprigan cast onto the terrain; RuinSprig3, RuinSprig4 (3,609 above) and bossprig (6,041 above) cast nothing on the terrain (beyond 1,500), as rule 37 says. Average frame 7.7 ms (start), 9.4 ms (ruins).
+**Still broken / not tested:** **Not checked by eye** (please look: a dark copy of the figure falling toward +y, about 1.5 sideways per unit of height, half as bright, darker where parts overlap). Buildings don't receive shadows yet (4d-7b-3); plain objects don't cast yet (4d-7b-4). The blending (multiply by 0.5) is our reading of "strength 0.5" (not traced).
+**Next:** 4d-7b-3, shadows on buildings.
+
 ## 2026-10-19 M4 step 4d-7b-1: shadow geometry (Q123)
 
 **Changed:** New `kq8-core/src/shadow.rs`: the sun direction (first sun's aim made length 1, else (1, 1, −1)); `cast` (each sun-facing model triangle, cut to the part above the receiving plane, projected along the sun onto the plane lifted 20, cut to the receiving triangle, each piece kept on its own); `terrain_receivers` (the surface grid's triangles under the box moved along the sun, none beyond 1,500 from the ground). 6 unit tests. Shadow plan in DESIGN (4d-7b-1 to -4). Provenance.

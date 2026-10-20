@@ -771,7 +771,7 @@ inventory and menus.
         its front, cut to the receiving triangle; the terrain receivers
         (the drawn surface grid's triangles under the box moved along the
         sun, only within 1,500 of the ground). Unit tests.
-      - **4d-7b-2, characters' shadows on the terrain** (viewer): every
+      - **4d-7b-2, characters' shadows on the terrain** (**done** 2026-10-19; viewer): every
         frame, for each character that casts (rule 36) and is drawn, its
         shown model triangles go through 4d-7b-1 into one mesh, drawn
         unlit with multiply blending at 0.5 (each layer halves what is

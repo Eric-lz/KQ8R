@@ -1738,6 +1738,8 @@ pub struct CharacterAssets {
     pub lips: Option<kq8_data::characters::Lips>,
     /// The skin swap (rule 4): the list's, else the keys'.
     pub skin: Option<(String, String)>,
+    /// It casts a shadow (rule 36), as tested at load.
+    pub casts_shadow: bool,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
@@ -2198,7 +2200,7 @@ impl Placer<'_> {
             p.z_on_ground = (l.line.position[2] == -1.0).then_some(kq8_data::terrain::Level::Floor);
             p.missing_loc = [false; 3];
         }
-        let character = character_keys.zip(character_list).map(|(keys, list)| {
+        let mut character = character_keys.zip(character_list).map(|(keys, list)| {
             let lips = match kq8_data::characters::Lips::of(&file, &keys) {
                 Some(Ok(l)) => Some(l),
                 Some(Err(e)) => {
@@ -2217,6 +2219,7 @@ impl Placer<'_> {
                 lips,
                 skin: pending.as_ref().and_then(|l| l.line.skin.clone()).or_else(|| keys.skin.clone()),
                 keys,
+                casts_shadow: false,
             }
         });
         // Missing locX/locY/locZ are 0 (objects.md Q19); only the file's
@@ -2371,13 +2374,14 @@ impl Placer<'_> {
             // world's mask from Options.cs (else the built-in 1);
             // `allowShadows` taken as on (its default; Daventry's world.cs
             // says 1).
-            if let Some(c) = &character {
+            if let Some(c) = character.as_mut() {
                 let world_mask = *self.shadow_world_mask.get_or_insert_with(|| {
                     self.game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::characters::shadow_mask_setting(&b)).unwrap_or(kq8_data::characters::BUILT_IN_SHADOW_MASK)
                 });
                 let casts = kq8_data::characters::casts_shadow(world_mask, c.keys.shadow_mask, true, p.translucency);
+                c.casts_shadow = casts;
                 self.character_lines.push(format!(
-                    "shadow [{}]: {} (world mask {world_mask} AND shadowMask {} = {}; translucency {}; allowShadows on) (rule 36; drawing not built)",
+                    "shadow [{}]: {} (world mask {world_mask} AND shadowMask {} = {}; translucency {}; allowShadows on) (rule 36; drawn on the terrain, 4d-7b-2)",
                     p.name,
                     if casts { "CASTS a shadow" } else { "no shadow" },
                     c.keys.shadow_mask,

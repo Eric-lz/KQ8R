@@ -90,6 +90,10 @@ struct Playing {
     parts: Vec<Entity>,
     opacity_shown: f32,
     own: std::collections::HashMap<AssetId<ObjectMaterial>, (Handle<ObjectMaterial>, f32)>,
+    /// A character that casts a shadow (rule 36), and its shadow mesh once
+    /// made (M4 4d-7b-2).
+    casts: bool,
+    shadow: Option<(Entity, Handle<Mesh>)>,
 }
 
 #[derive(Resource)]
@@ -480,6 +484,8 @@ pub fn spawn_animated(
             parts,
             opacity_shown: opacity,
             own: Default::default(),
+            casts: a.character.as_ref().is_some_and(|c| c.casts_shadow),
+            shadow: None,
         });
     }
     main_log.summary(format!(
@@ -703,6 +709,116 @@ pub fn anim_draw(
             if let Ok(mut t) = transforms.get_mut(p.body) {
                 *t = bevy_transform_from(m, at);
             }
+        }
+    }
+}
+
+/// `characters.md` rules 36, 37 (M4 4d-7b-2): each character that casts a
+/// shadow and is drawn (near or far, not hidden) gets, every frame, the
+/// triangles of its shown model frame thrown along the sun onto the
+/// terrain (`kq8_core::shadow`), drawn unlit with multiply blending at the
+/// strength 0.5, so each layer halves what is under it and overlaps darken
+/// twice (the user's check); no haze. Runs after the transforms are
+/// propagated, so it sees this frame's pose. Buildings do not receive them
+/// yet (4d-7b-3). Once a second a line per shadow in `characters.log`.
+#[allow(clippy::too_many_arguments)]
+pub fn shadow_draw(
+    mut commands: Commands,
+    sim: Option<ResMut<AnimSim>>,
+    doors: Option<Res<DoorSim>>,
+    light: Option<Res<ObjectLight>>,
+    ground: Option<Res<crate::terrain_view::GroundLookup>>,
+    children: Query<&Children>,
+    parts: Query<(&GlobalTransform, &Mesh3d)>,
+    visibility: Query<&Visibility>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut material: Local<Option<Handle<StandardMaterial>>>,
+    mut frames: Local<u64>,
+) {
+    use kq8_core::shadow;
+    let (Some(mut sim), Some(doors), Some(ground)) = (sim, doors, ground) else { return };
+    let sim = &mut *sim;
+    *frames += 1;
+    let report = (*frames).is_multiple_of(60);
+    let dir = shadow::direction(light.as_ref().and_then(|l| l.lights.suns.first()).map(|s| s.aim));
+    let material = material
+        .get_or_insert_with(|| {
+            let v = shadow::STRENGTH;
+            materials.add(StandardMaterial {
+                base_color: Color::linear_rgb(v, v, v),
+                alpha_mode: AlphaMode::Multiply,
+                unlit: true,
+                cull_mode: None,
+                fog_enabled: false,
+                ..default()
+            })
+        })
+        .clone();
+    let world = &doors.active.world;
+    let mut lines = Vec::new();
+    for p in sim.playing.iter_mut().filter(|p| p.casts) {
+        let Source::Core(i) = p.source else { continue };
+        let Some(a) = world.anims.get(i) else { continue };
+        let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);
+        // The shown frame's parts, in the game's space and corner order.
+        let mut model: Vec<[shadow::V3; 3]> = Vec::new();
+        if let Some((m, f)) = p.shown.filter(|_| drawn) {
+            let frame = p.movements.get(m).and_then(|d| d.frames.get(f)).copied();
+            for part in frame.and_then(|e| children.get(e).ok()).into_iter().flat_map(|c| c.iter()) {
+                let Ok((at, mesh)) = parts.get(part) else { continue };
+                let Some(mesh) = meshes.get(&mesh.0) else { continue };
+                let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { continue };
+                // Bevy (x, y, z) = game (x, z, −y) / 100, so back: (x, −z, y) × 100.
+                let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
+                let corners: Vec<usize> = match mesh.indices() {
+                    Some(ix) => ix.iter().collect(),
+                    None => (0..game.len()).collect(),
+                };
+                // Bevy's corners run anticlockwise: the game's are (a, c, b).
+                model.extend(corners.as_chunks::<3>().0.iter().map(|t| [game[t[0]], game[t[2]], game[t[1]]]));
+            }
+        }
+        let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
+        let receivers = if model.is_empty() { Vec::new() } else { shadow::terrain_receivers(&ground.0, a.player.base.position, &corners, dir) };
+        let cast = shadow::cast(&model, dir, &receivers);
+        if report && drawn {
+            let z = a.player.base.position[2];
+            let g = ground.0.height_at(a.player.base.position[0], a.player.base.position[1]).map_or(f32::NAN, |g| g.height);
+            lines.push(format!(
+                "update {}: {}: shadow: {} model triangles, {} facing the sun, {} terrain triangles, {} pieces drawn; {:.0} above the drawn ground{} (rule 37)",
+                sim.updates,
+                p.name,
+                model.len(),
+                model.iter().filter(|t| shadow::faces_sun(t, dir)).count(),
+                receivers.len(),
+                cast.len(),
+                z - g,
+                if (z - g).abs() > shadow::TERRAIN_REACH { ": beyond 1,500, none" } else { "" }
+            ));
+        }
+        // Into its mesh, Bevy's space and corner order.
+        let positions: Vec<[f32; 3]> = cast.iter().flat_map(|t| [t[0], t[2], t[1]]).map(|q| [q[0] / 100.0, q[2] / 100.0, -q[1] / 100.0]).collect();
+        let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
+        let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        match &p.shadow {
+            Some((_, h)) => {
+                if let Some(mut m) = meshes.get_mut(h) {
+                    *m = mesh;
+                }
+            }
+            None => {
+                let h = meshes.add(mesh);
+                let e = commands.spawn((Mesh3d(h.clone()), MeshMaterial3d(material.clone()), Transform::default(), bevy::light::NotShadowCaster)).id();
+                p.shadow = Some((e, h));
+            }
+        }
+    }
+    if let Some(log) = sim.characters.as_mut() {
+        for l in lines {
+            log.detail(l);
         }
     }
 }
