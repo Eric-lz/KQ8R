@@ -7,6 +7,17 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (B, after the user's fight check): fixes 1–7 and 5d.**
+  Readying the fists plays `draw` and switches Connor to the weapon's
+  movement set, sword pointer (Ctrl: the play pointer); no readying in a
+  jump, its landing or a stumble; `conversation.md` rule 7 (weapon away
+  first); attack clicks find creatures and scripted objects (stand-in,
+  Q139); drops drawn where they land and tumbling (stand-in rates,
+  Q137 e); **5d**: objects loaded by scripts while playing (templates,
+  `copies_view.rs`), `KQAnimOnce` ends, `tossItems`: the barrels burst,
+  leave their wreck and throw their items. Q138, Q139 open (partly
+  answered by the user). One commit each; see MODLOG.
+
 - **2026-10-20 (B, M5 5c-1 to 5c-10): the fight built** from
   `fighting.md` (plan and steps in `docs/DESIGN.md` "5c"; one commit
   each; every attack, hit, miss, roll, flinch, death, drop and shot in
