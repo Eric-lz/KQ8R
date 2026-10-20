@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M4 step 4d-7b-5d: the head's shadow climbs the wall too (the user's check)
+
+**Changed:** `kq8-core/src/shadow.rs`: the search area's far end is the shadow of the top of the model's ball (the original: of the band's top, 1,079 for Connor standing); test updated. Provenance, DESIGN.
+**Why:** The user's check of 4d-7b-5c: better, but the shadow's head still went under the barn wall before showing on it. The head is above the band's top, so its shadow ran past the area.
+**Tested how:** `cargo test --workspace`, `cargo clippy --workspace --all-targets` clean. Viewer: `cargo play --world Daventry --sound off --at 240000,217000,3.1416 --hold 1,0,0,80 --frames 500`, `characters.log`.
+**Result:** The barn wall's 7 surfaces are picked from update 18, before the shadow reaches them, so the area no longer holds any of it back; then 95, 183, 265 pieces on the barn as Connor nears it. Box: walking 637 × 3,495, standing 505 × 3,089. Shadow time 3.2 ms a frame on average.
+**Still broken / not tested:** **Not looked at by eye.** If the head still goes under first, the cause is not the choice of surfaces (they are all picked) and we keep it as is (the user: close enough; the rendering will be redone after the game is finished).
+**Next:** The user's look.
+
 ## 2026-10-21 M4 step 4d-7b-5c: shadows darker, and on walls as soon as they reach them (the user's check)
 
 **Changed:** `kq8-viewer/src/shadow_view.rs`: the shadow's 0.5 is now of the shown brightness (sRGB 0.5, linear 0.214). `kq8-core/src/shadow.rs`: the search area's sides are no longer cut to 1,800 (the band's height cut stays); test updated. Provenance, DESIGN.

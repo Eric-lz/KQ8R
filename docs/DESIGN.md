@@ -845,6 +845,9 @@ inventory and menus.
           (0.5 now of the shown brightness, sRGB) and late on walls (the
           area's 1,800 cut along the sun is not reproduced, the user's
           decision); the sun's angle is the data's (`tsLightAim`), kept.
+          Then the head still went under the wall: the area now runs
+          along the sun from the top of the model's ball (the user's
+          decision, 4d-7b-5d).
         - **4d-7b-5b, the model's ball in the viewer** (**done**; `load.rs`: models
           and movements keep the `.kqs` ball; a `ModelBall` component on
           each shown frame in `anim_view.rs`, `connor_view.rs`,
