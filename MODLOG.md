@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of solid characters (4d-12)
+
+**Changed:** Docs only: FEATURES, STATUS, DESIGN, provenance.
+**Why:** The user compared 4d-12 with the original.
+**Tested how:** By eye in our viewer and in the original (user): walking straight and at an angle into the goblin, turning away, walking into the Wizard, the Wizard's conversation.
+**Result:** All as in the original: he stops about as far from the goblin (our stand-in cylinder: 1,000 from its position) and slides round it; he can walk away; the Wizard and the conversation behave the same.
+**Still broken / not tested:** Q131 stays open for A (the exact size rule, vertical moves, landing on a character's top); the user's check supports the stand-in size for the goblin. Characters moving into Connor (Q128 side).
+**Next:** A's answer to Q131.
+
 ## 2026-10-19 Study (A): characters moving on their own; Q127–Q130
 
 **Changed:** Docs only. New `docs/behaviour/character-movement.md` (walking, wandering, idling, noticing Connor, chasing up to the first swing, giving up and going home, the zombies' rising, the flying mover, a character's own touches). `characters.md`: rules 8, 29–31, 36, numbers table and open question 3 corrected / refined, link to the new note. `anim-scripts.md` rule 3: doors, chests and the waiting `Stop` (Q127). `QUESTIONS.md`: Q127–Q130 answered. STATUS. Scratch addresses in `re/notes.md` (not committed).

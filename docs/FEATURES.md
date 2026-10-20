@@ -125,7 +125,10 @@ measures reach to its box in the building's own axes (Q75).
   he keeps his walk and slides round it; walking straight at its middle
   he stays put. He can always walk away. Checked in the logs
   (`characters.log`: every hit, at 1,000 from a goblin, 600 from the
-  Wizard, 940 from the Uglybeast), **not yet by eye**.
+  Wizard, 940 from the Uglybeast) and **checked by the user against the
+  original** (2026-10-20): he stops about as far from a goblin and
+  slides round it, as in the original; walking away and the Wizard's
+  conversation work.
 - **Water:** he walks into water on the bottom, with the water up to his
   chest, and switches to the wading walk and run while it is deep.
   Buildings and objects stand on the ground under the water where the

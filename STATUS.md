@@ -32,7 +32,9 @@ Q127 to Q130 answered). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.
   `shadowMask` is 1 and `allowShadows 0` hides his shadow too).
 - **New 2026-10-20 (B, M4 4d-12-1 to -3): characters are solid for
   Connor** (`connor-collision.md` rules 2–4, 18–19; one commit per step;
-  plan in `docs/DESIGN.md` "4d-12"; **not looked at by eye yet**). Each
+  plan in `docs/DESIGN.md` "4d-12"; **checked by the user against the
+  original 2026-10-20**: same stopping distance at a goblin, slides
+  round it; walking away, the Wizard and his conversation right). Each
   near character is an upright cylinder for him; a character hit is
   never head-on, so he slides round it (straight at its middle he stays,
   still in his walk). Checked in the logs at the goblin, the Wizard (and

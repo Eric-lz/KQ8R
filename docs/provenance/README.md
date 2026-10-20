@@ -2282,3 +2282,5 @@ marked otherwise.
 | Each character's type, mask (`colliderType`, `colliderMask`, defaults 0x42 / 0x281F) and `BOUNDS.KQ` box (by type, else by name) | `characters.md` rules 8, 9 | Same |
 | The list rebuilt each update after the characters' own update and gravity, before Connor's move | `connor-collision.md` rule 21 (order not traced; **ours**, as for objects) | — |
 | Every hit on a character logged (who, where, distance, surface direction, angle, slid or stayed) | AGENTS.md (log, don't look) | `characters.log` |
+
+**4d-12 checked by the user against the original (2026-10-20):** the goblin's stopping distance (stand-in cylinder size, Q131 a) and the slide round it, walking away, the Wizard and his conversation all match.
