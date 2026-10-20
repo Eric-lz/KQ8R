@@ -777,6 +777,11 @@ inventory and menus.
         unlit with multiply blending at 0.5 (each layer halves what is
         under it, two layers a quarter: the user's check), no haze. Logs:
         per character the triangles cast and drawn, once a second.
+        Connor casts too (4d-7b-2b, Q130). **Checked by the user
+        (2026-10-20)**: the look, wading and the jump's cut match the
+        original. **Not reproduced (the user's decision):** the original's
+        shadows flicker and show gaps, seemingly at random (cause not
+        known); ours are drawn steadily every frame.
       - **4d-7b-3, buildings receive them** (rule 37 (2): active buildings
         within reach, surfaces near the character's height, an area at
         most 1,800 across).

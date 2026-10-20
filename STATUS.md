@@ -20,7 +20,10 @@ Q127 to Q129 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`
   the terrain and building floors, mask 0 only the ground check, no
   Fall state; the flying mover for the bats); shadows on the terrain
   (4d-7b-1, -2: a dark copy of the figure along the sun, 0.5 multiply,
-  cut beyond 1,500). Left: shadows on buildings (4d-7b-3, the note's
+  cut beyond 1,500; Connor's too, 4d-7b-2b). **Shadows checked by the
+  user (2026-10-20):** they match the original (wading, the jump's cut),
+  except that the original's flicker and gaps are, by the user's
+  decision, not reproduced. Left: shadows on buildings (4d-7b-3, the note's
   vertical band is loose: needs a question first) and plain objects
   casting (4d-7b-4). New questions for A: **Q127** (doors, chests and the
   waiting `Stop`), **Q128** (what stops a character's fall: objects,

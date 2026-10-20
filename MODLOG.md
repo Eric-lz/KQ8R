@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of the shadows (4d-7b-2, -2b); the original's flicker not reproduced
+
+**Changed:** Docs only: DESIGN (4d-7b-2 checked; the flicker not reproduced), STATUS, provenance.
+**Why:** The user compared our shadows with the original.
+**Tested how:** By eye in our viewer and in the original (user).
+**Result:** The goblin's and Connor's shadows look right; wading, only the part above the water shows; at the top of a jump the shadow disappears and comes back as he comes down, as in the original. **Difference:** the original's shadow flickers and has gaps, seemingly at random; ours is smooth. The cause is not known. **The user's decision: do not reproduce the flicker**; ours stays.
+**Still broken / not tested:** Shadows on buildings and from plain objects (4d-7b-3, -4).
+**Next:** 4d-7b-3, -4; questions Q127–Q130 for A.
+
 ## 2026-10-20 M4 step 4d-7b-2b: Connor's shadow; no empty shadow meshes
 
 **Changed:** `kq8-viewer/src/anim_view.rs`: `shadow_draw` also throws Connor's shown model frame onto the terrain, the same way as the characters'; the parts shared in `frame_triangles` and `show_shadow`. A shadow with nothing to draw now hides its entity and keeps its mesh (it used to get an empty mesh). `connor_view.rs`: `shown` readable by the shadow code. New question **Q130** (Connor's own cast test). Provenance.

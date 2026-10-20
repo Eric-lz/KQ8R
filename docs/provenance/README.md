@@ -2237,3 +2237,4 @@ marked otherwise.
 | Connor's shown model frame cast like a character's (direction, pieces, 20 lift, 1,500 cut, 0.5) | `characters.md` rule 37 and its user's checks (his shadow at a jump, wading) | `characters.log` "Connor: shadow" lines |
 | He casts whenever his body is shown | **Stand-in**, asked as Q130 (his `shadowMask`, `allowShadows`) | — |
 | A shadow with nothing to draw is hidden, not given an empty mesh | **Ours** (Bevy warns about empty meshes) | Run at the ruins: no warning |
+| The original's shadow flicker and gaps are not reproduced | **The user's decision** (2026-10-20, after comparing with the original) | The user's check |
