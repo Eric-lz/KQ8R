@@ -412,6 +412,38 @@ by eye**.
   to the spot, Jump and pushing while talking), Q126 (where the
   conversation camera aims).
 
+## Characters moving on their own (milestone M5, step 5a)
+
+From `docs/behaviour/character-movement.md` (A, 2026-10-19). **Checked in
+the logs only** (`kq8-artifacts/logs/characters.log`), not by eye and not
+against the original yet; the note's "How to check" lists what to compare.
+
+- **Walking:** a character moves only by its `walk` / `run` model's steps
+  (goblin22 917 / 3,068 units a second, chickens 119 / 947, bats 1,159),
+  turns at 3.5 rad/s while walking, slides along walls, and gets "unstuck"
+  by snapping to a free diagonal and running (the chickens do it all the
+  time, as the note predicts). Its own moves meet objects, other
+  characters and Connor.
+- **Noticing Connor:** every second each character tests its line of
+  sight from the top of its box (the ground, objects and buildings block
+  it, characters don't); at most 6 in Daventry become "active".
+- **Wandering and fidgeting:** active characters follow their points
+  (`loop`, `patrol`), and goblins and spriggans stop now and then for a
+  fidget from their idle list.
+- **Alarm and chase:** seen within its alarm radius, a character reacts
+  after up to a second, tells its team, walks or runs after Connor and
+  stops at its attack distance (where the fight will start); it gives up
+  when it loses sight of him for 3 s or goes beyond its leash, and goes
+  home. `goHome`, `setHome` and the radius commands work.
+- **Zombies:** they rise when Connor comes within their alarm radius
+  (after their `birthDelay`), and sink back when they give up.
+- **Bats:** they fly their loop and sit on the water surface over the
+  lake.
+- Stand-ins until the study session answers: Q132 (the stuck escape's
+  diagonals and line height, Connor's shape for a character), Q133 (the
+  leash with Connor within reach; the stop instead of an attack), Q134
+  (the chase waits for a zombie's `birth`).
+
 ## The on-screen interface (milestone M4, step 4c)
 
 - **The bottom bar (4c-2):** the original's panels from `Gplayscr.gui`
@@ -577,11 +609,9 @@ message that shows the usage.
 - **Not playable:** there is no inventory screen, fighting, saving, or
   travel between worlds; the story's scenes run only as far as the
   built parts allow.
-- **Characters (M4 4d):** they stand, breathe and gesture but don't
-  walk, notice Connor, fight or die (M5); zombies
-  stay in the ground; their shadows fall on the ground but not yet on
-  buildings, and objects cast none yet (4d-7b-3, -4); they don't land on
-  objects, other characters or Connor (Q128).
+- **Characters:** they walk, notice Connor and chase him (M5 5a), but
+  don't fight or die yet (the fight study); their shadows fall on the
+  ground but not yet on buildings (4d-7b-3).
 - **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5a finished: the team check; STATUS, FEATURES, README
+
+**Changed:** Docs only: STATUS (where we are, stand-ins, next steps, open questions), FEATURES (new section "Characters moving on their own"), README (M5 under way), QUESTIONS (Q128 and Q129 marked built), DESIGN (5a done).
+**Why:** End of the implementation session (`docs/SESSIONS.md`).
+**Tested how:** Viewer: `cargo play --world Daventry --sound off --at 138000,250000,0 --frames 1500`, `characters.log`.
+**Result:** The windmill team (rule 24): sprigwnd3 sees Connor 11,176 away (alarm 12,000) and is alarmed; sprigwnd2, whose view a fence blocks, is made active and told by its team mate, as the note's check 5 expects.
+**Still broken / not tested:** Nothing of 5a has been looked at by eye or compared with the original.
+**Next:** The user's checks in the original; A: Q132–Q134.
+
 ## 2026-10-20 M5 step 5a-9: the flying mover corrected (Q129 built)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: `fly_update` follows `character-movement.md` rule 32: the 150 drop is all or nothing, and the raise looks down from the top of its shape to its feet against the drawn ground (the water surface) and buildings, at most 300, as an up pass; new `MoverWorld::line_hit` (the point a line meets first). `character.rs`: its log lines. 1 test rewritten. DESIGN, provenance.

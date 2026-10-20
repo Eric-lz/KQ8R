@@ -29,7 +29,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 | M2 | Walk Connor around Daventry | ✅ Done |
 | M3 | Daventry comes alive | ✅ Done |
 | M4 | Talk, listen, use the menus | 🟡 Under way |
-| M5 | Fight | ⬜ Not started |
+| M5 | Fight | 🟡 Under way |
 | M6 | The whole game | ⬜ Not started |
 | M7 | Match the original, then improve | ⬜ Not started |
 
@@ -59,10 +59,11 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   away ends the talk with a goodbye. Characters stand on the ground
   and on building floors, and cast shadows on the ground.
   Connor can't walk through characters: he slides round them.
+- **M5 – So far.** Daventry's creatures move on their own: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground.
 
 ### Next
 
-- **Characters:** shadows on buildings and from objects.
+- **Characters:** shadows on buildings; the fight (waiting for its study).
 
 ### Later
 

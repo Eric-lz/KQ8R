@@ -1,14 +1,31 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-19 after
-A's study of characters moving on their own (`character-movement.md`;
-Q127 to Q130 answered). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-10-20 after
+B built characters moving on their own (M5 5a, `character-movement.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-19)
+## Where we are (2026-10-20)
 
-- **New 2026-10-19 (A): characters moving on their own studied**, in
+- **New 2026-10-20 (B, M5 5a-1 to 5a-9): characters move on their own**,
+  from `character-movement.md` (one commit per step; plan in
+  `docs/DESIGN.md` "5a"; **checked in the logs only, not by eye, not
+  against the original**). New core module `character_ai.rs`. Walking by
+  the walk / run steps (goblin22 917 / 3,068), steering, sliding, the
+  stuck escape (chicken1 stuck at once and running at 947, as the note
+  predicts); its own moves meet objects, characters and Connor (Q128
+  built); sight every second and the active list (6); wandering
+  (`loop`, `patrol`); fidgets (goblin22 `react` / `attack`); alarm,
+  telling the team (the windmill spriggans), chase up to the attack
+  distance (**stand-in for the fight: it stops there**), losing sight,
+  the leash, the way home; `goHome`, `setHome`, the radius commands; the
+  road zombies rise (RoadZ2–4 at once, RoadZ1 after 3 s) and sink back;
+  bats on the lake's surface (Q129 built). New questions **Q132** (the
+  stuck escape's diagonals and line height; Connor's shape for a
+  character), **Q133** (the leash loops while Connor is within reach),
+  **Q134** (does the chase wait for `birth`?).
+
+- **2026-10-19 (A): characters moving on their own studied**, in
   new **`docs/behaviour/character-movement.md`** (M5's first part, up to
   the first swing; not yet checked in the original). In short: a
   character moves only by its `walk` / `run` model's steps (bone goblin
@@ -154,7 +171,8 @@ Q127 to Q130 answered). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.
 A Rust rewrite of *King's Quest: Mask of Eternity* that reads the player's
 own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
 milestone: **M4** (remarks and speech, the interface and the inventory,
-characters and conversations done; the menus next). M0–M3 are done.
+characters and conversations done; the menus postponed) and **M5**
+(characters moving on their own done; the fight next). M0–M3 are done.
 
 ## Setup
 
@@ -196,7 +214,7 @@ characters and conversations done; the menus next). M0–M3 are done.
   colour, `newSky`), object near / far / off rules (`objects.rs`), the
   lights a `.kqs` carries per frame (`shape.rs` `sequence_lights`), point
   lights on building surfaces (`wall_light.rs`).
-- `crates/kq8-core` (331 unit tests; named `kq8-game` until 2026-10-13):
+- `crates/kq8-core` (406 unit tests; named `kq8-game` until 2026-10-13):
   game rules without drawing. Connor: `connor_mover.rs` (steps, gravity,
   landing, Fall, fall death, building and object hits, Jump, pushing),
   `connor_auto.rs` (scripted turns and walks: `walkTo`, `pointAndCue`),
@@ -217,7 +235,7 @@ characters and conversations done; the menus next). M0–M3 are done.
   `sound.rs` (sound rules: groups, distance, balance, mix limit, sound
   objects, ducking; no sound card), `talk.rs` (speech queues, line
   timing, mouth schedule; M4 4a; the conversation queues, 4e),
-  `character.rs` (characters' states, M4 4d), `conversation.rs` (the
+  `character.rs` (characters' states, M4 4d; walking, M5 5a), `character_ai.rs` (sight, the active list, wandering, fidgets, alarm and chase, M5 5a), `conversation.rs` (the
   conversation command and Connor's talk state, M4 4e).
   `kq8-data/src/msg.rs`: message,
   talker and lip-sync files. Viewer `talk_view.rs`: voices, captions,
@@ -339,7 +357,7 @@ characters and conversations done; the menus next). M0–M3 are done.
   original, 2026-10-18 (the corner panels option: looked at by the user,
   no complaint). The back flip at a wall: checked by the user.
 - Conversations (M4 4e): checked in the logs only (see "Where we are").
-- Tests: 503 unit tests pass (125 + 362 + 5 + 11), 2026-10-19.
+- Tests: 548 unit tests pass (126 + 406 + 5 + 11), 2026-10-20.
 
 ## What doesn't work yet / next
 
@@ -354,17 +372,13 @@ characters and conversations done; the menus next). M0–M3 are done.
   not built (not settled; the note says it may be left out).
 - **Stand-ins of 4d (characters):** a character's facing taken as
   Connor's (−Y). Q116–Q124 are all built (Q123 only on the terrain so
-  far). **Answered by A 2026-10-19, not built yet:** doors and chests
-  keep the old load names (Q127: fine as they are, their own `open`
-  replaces the waiting `Stop`); objects, characters and Connor don't
-  stop a character's fall (Q128: they should); a flyer over water sits
-  150 under the surface (Q129: it should end on the surface); Connor's
-  shadow test (Q130). Our
+  far). Q127 (doors and chests keep the old load names: fine as they are) and
+  Q130 (Connor's shadow test) answered by A, not built yet; Q128 and Q129
+  built in M5 5a. Our
   readings: the shadow's terrain search uses the model's points, not
   its box; multiply by 0.5 for "strength 0.5"; a transition's target
   first moves in the next update. Not built: `changeAnmFile`, the
-  `endLoop` cue (M5), collision against characters (so Connor walks
-  through the Wizard). Not tested: the
+  `endLoop` cue (the fight). Not tested: the
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), `sprdump`'s scene, a real turn in the viewer.
 - **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not
@@ -396,11 +410,20 @@ characters and conversations done; the menus next). M0–M3 are done.
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Next step, suggested:** for B: shadows from plain objects (4d-7b-4),
-  then on buildings (4d-7b-3, after a question on the note's loose
-  height band); then M5's first part from `character-movement.md`
-  (wandering, idling, noticing, chasing up to the swing). For A: Q131,
-  Q125, Q126, then Q108–Q113 (small); next study: the fight. **The main
+- **Stand-ins of 5a (characters moving):** the stuck escape's world
+  diagonals and its line 1 above the feet, Connor as a cylinder for a
+  character (Q132); the stop at the attack distance instead of the
+  attack, and the leash loop it gives (Q133); the chase waits for a
+  zombie's `birth` (Q134); the reset distance (plain 3D, the note's open
+  question 2) and "all diagonals blocked: turned round" (open question
+  1); the idle list kept in the same player as `idle:<name>`. Not run in
+  the game yet: losing sight, the graveyard trap (`zomtrap.cs`),
+  `wanderAndStop`, random wander points.
+- **Next step, suggested:** for the user: the note's "How to check"
+  1–11 in the original (chickens, goblin22, a chase, the leash, the
+  windmill spriggans, the zombies, the bats). For A: Q132–Q134, Q131,
+  then the fight study. For B: shadows on buildings (4d-7b-3, after a
+  question on the note's loose height band). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -465,6 +488,11 @@ characters and conversations done; the menus next). M0–M3 are done.
 - For A: **Q131** (B, 2026-10-20: the cylinder Connor meets at a
   character; vertical moves; landing on a monster's top). Not studied
   in this session.
+- For A (asked 2026-10-20 by B, M5 5a): **Q132** (the stuck escape's
+  diagonals and line height; Connor's shape for a character's move),
+  **Q133** (the leash loops while Connor is within reach; "stops when
+  Connor is not walking forward"), **Q134** (the chase and `birth`; a
+  sunk zombie stays active).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.
@@ -505,7 +533,7 @@ characters and conversations done; the menus next). M0–M3 are done.
   difference).
 - Q14b: the teleport pad's see-through look.
 - All others are answered or closed (Q27, Q53, Q100, Q102 built
-  2026-10-19 (3o), Q101 and Q48 closed; Q105 answered and built
+  2026-10-19 (3o), Q128 and Q129 built 2026-10-20 (M5 5a-3, 5a-9), Q101 and Q48 closed; Q105 answered and built
   2026-10-18 (4c-5); Q103–Q104 answered, built and
   checked by the user 2026-10-18; Q94–Q96 answered and built
   2026-10-18; Q84–Q93 answered 2026-10-17 and built 2026-10-18; Q80 answered 2026-10-17; Q79 answered by A 2026-10-17 and checked
