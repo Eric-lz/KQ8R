@@ -193,7 +193,8 @@ Words used here:
     "sometimes". Spriggans' attack sound comes at 0.1875, after the cut,
     so for them it is a silent skip. Not checked: whether this is what
     the user saw every time (it is the only path traced that gives a
-    sound without a swing).
+    sound without a swing). **Not to be reproduced** (the user,
+    2026-10-20): see Do not reproduce.
 12. **Daventry's attack movements** (data; seconds at speed 1.0):
 
     | List | Attack length | Can be cut short | Hit (`Do` cue) at | `react` length |
@@ -607,12 +608,17 @@ Words used here:
   `Connor.kq` (4). Do: use the data (4).
 - Negative hand damage (data in `sprgnbow`): keep it as data; it is never
   used by a ranged character.
-- **The swallowed swing** (rule 11b) is arguably a slip in the original
-  (the stop rule meant for "before the attack is due" also fires while an
-  attack has just started), but it is what the original looks like and
-  it falls out of building the rules as written. Recommended: keep it.
-  If not wanted: don't switch a moving character to standing while its
-  `Attack` is playing.
+- **The swallowed swing** (rule 11b): a slip in the original (the stop
+  rule meant for "before the attack is due" also fires while an attack
+  has just started). **Decided by the user (2026-10-20): do not
+  reproduce.** Do instead: while a moving character's `Attack` is
+  playing, don't apply the moving state's stop rule (no switch to
+  standing); it stays in its moving state until the swing ends (rule 10:
+  then `walk` / `run` again, and the stop rule applies as usual, with the
+  attack time now + `attackDelay`). So a chasing character that arrives
+  when its attack is due **always swings in full at once**, whether
+  Connor stands or walks. Everything else in rules 7–11 stays (a state
+  change for any other reason still cuts the attack, rule 11).
 - Keep the rest, including the asymmetric rolls (25–100 % on Connor,
   75–125 % on characters), the first attack being due at once, and the
   1.25 × reach against a Connor walking backward.

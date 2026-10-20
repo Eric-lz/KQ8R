@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 `fighting.md`: the swallowed swing is not reproduced
+
+**Changed:** `docs/behaviour/fighting.md` rule 11b and Do not reproduce.
+**Why:** The user's decision: it is a slip in the original, and `docs/SESSIONS.md` says not to reproduce bugs.
+**Tested how:** — (docs only)
+**Result:** Do instead: while a moving character's `Attack` plays, the moving state's stop rule is not applied; a chasing character that arrives with its attack due always swings in full at once.
+**Still broken / not tested:** Nothing built yet.
+**Next:** B builds the fight with this rule.
+
 ## 2026-10-20 The user's check of the fight in the original; `fighting.md` corrected
 
 **Changed:** `docs/behaviour/fighting.md`: new rule 11b (the swallowed swing), rule 31 corrected (drops are thrown), numbers, Do not reproduce, How to check 6 (results), open question 4 closed.
