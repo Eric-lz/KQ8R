@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-3: a character's own move meets objects, characters and Connor
+
+**Changed:** `kq8-core/src/active.rs`: `characters_gravity` now builds each character's scene itself: terrain, buildings (mask 0x8), and the plain objects, other characters (cylinders where they stand now) and Connor (a cylinder from his box) whose type its mask covers in its own touch table (`OWN_TOUCH_OBSTACLES` in `character.rs`); `colliderMask=0` sees none of them. Viewer `door_view.rs` passes the object colliders. 1 new test. DESIGN, provenance.
+**Why:** `character-movement.md` rules 6, 33–35 (A's answer to Q128); step 3 of 5a.
+**Tested how:** `cargo test --workspace` (397 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 291102,193359,0 --command "KQMonster::setState goblin22 Move",30 --frames 1500`, `characters.log`.
+**Result:** goblin22 walks into Connor and stops 1,000 from his position (its 800 + his 200, stand-in shape), is stuck at update 53 (moved 122 in 0.5 s), snaps to the free diagonal 2.356 and runs round him sliding along. Unit test: a cart (0x41) stops it 800 + 25 short of the box, a trap (0x10) does not, Connor 1,000 + 25, another goblin 1,600 + 25, `colliderMask=0` walks through all.
+**Still broken / not tested:** **Not looked at by eye.** Connor's shape for a character is our stand-in (Q132 c). A character moving into Connor does not move him (rule 34: correct); Connor's own handling of a character pushing into him is the old one (it is a wall for him).
+**Next:** 5a-4, sight and the active list.
+
 ## 2026-10-20 M5 step 5a-2: characters walk
 
 **Changed:** `kq8-core/src/character.rs`: the Move state (new `Walk`): entering it (`Stop` at a random frame, then `walk` / `run`), the step from the movement playing (its frame steps × the phase moved, turned by its heading) given to its mover, steering with the 3.5 rad/s turn, the stuck check and escape, a once-a-second line; `KQMonster::setState <name> Move` now walks it straight on. `connor_mover.rs`: a character's across pass slides like an animated object (never head-on, 3 retries); the flying mover takes the step too; new line test `line_blocked` (drawn ground, buildings, objects, characters by mask). `collide.rs`: a line against a character's cylinder. `named_anim.rs` / viewer `anim_view.rs`: a character's repeating movement moves its place, not its drawing. New question **Q132** (the stuck escape's diagonals and line height; the shape of Connor for a character). 6 new tests. DESIGN, provenance.

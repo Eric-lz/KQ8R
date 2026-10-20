@@ -161,6 +161,13 @@ pub struct Walk {
     second_from: Option<([f32; 3], f64)>,
 }
 
+/// A character's own touch table (`character-movement.md` rule 33, Q128):
+/// another whose type has one of these bits (and which its mask covers)
+/// is an obstacle in its own move: pushables 0x100, buildings 0x8, plain
+/// objects 0x1, characters 0x2, Connor 0x4, 0x2000. Traps (0x10) are
+/// nothing.
+pub const OWN_TOUCH_OBSTACLES: u32 = 0x100 | 0x8 | 0x1 | 0x2 | 0x4 | 0x2000;
+
 /// The stuck check (rule 7): first this long after starting to move,
 /// then every [`STUCK_EVERY`] s; stuck if it moved less than
 /// [`STUCK_DISTANCE`] (3D) since the last check.
@@ -273,14 +280,15 @@ impl Character {
         if first {
             let ground = world.ground(m.position[0], m.position[1]).map_or("none".to_string(), |(h, _)| format!("{h:.0}"));
             notes.push(format!(
-                "mover: first update at z {:.0} (floor under it {ground}); gravity {}; steps {:.0}/{:.0}; terrain in the passes {}; buildings {}; keepOnGround {}; objects, characters and Connor not tested (Q128) (rule 8)",
+                "mover: first update at z {:.0} (floor under it {ground}); gravity {}; steps {:.0}/{:.0}; terrain in the passes {}; buildings {}; keepOnGround {}; plain objects, other characters and Connor are obstacles by its mask {:#x} (character-movement.md rule 33) (rule 8)",
                 m.position[2],
                 if gravity { "on" } else { "off" },
                 m.step_up,
                 m.step_down,
                 if m.terrain_in_passes { "yes" } else { "no (mask without 0x800)" },
                 if hits_buildings { "yes" } else { "no (mask without 0x8)" },
-                if !m.keep_on_ground { "off" } else if m.keep_on_surface { "the water surface" } else { "the floor" }
+                if !m.keep_on_ground { "off" } else if m.keep_on_surface { "the water surface" } else { "the floor" },
+                self.collision_mask
             ));
         }
         m.position = player.base.position;
@@ -875,7 +883,7 @@ fn times(a: &[[f32; 3]; 3], b: &[[f32; 3]; 3]) -> [[f32; 3]; 3] {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::named_anim::tests::movement;
 
@@ -1250,7 +1258,7 @@ mod tests {
 
     /// M5 5a-2: stop, a walk of `walk` units per second and a run of
     /// `run` (16 frames over 1 s, each stepping forward, −Y).
-    fn walker(walk: f32, run: f32) -> (Character, NamedAnimPlayer) {
+    pub(crate) fn walker(walk: f32, run: f32) -> (Character, NamedAnimPlayer) {
         let moving = |name: &str, speed: f32| {
             let mut m = movement(name, 0.0, 1.0, true, true, vec![]);
             m.frame_steps = vec![kq8_data::shape::Transform { flags: 0, m: crate::door::identity().m, p: [0.0, -speed / 16.0, 0.0] }; 16];

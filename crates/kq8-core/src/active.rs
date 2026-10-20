@@ -701,19 +701,52 @@ impl WorldState {
     }
 
     /// `characters.md` rule 8 (M4 4d-6b-2): every character's mover, once
-    /// per update after the characters' own update; `with_buildings` /
-    /// `without` are the world as a character whose mask has 0x8 / lacks
-    /// it sees it (objects, characters and Connor are not in either: Q128).
-    pub fn characters_gravity(&mut self, with_buildings: &dyn crate::connor_mover::MoverWorld, without: &dyn crate::connor_mover::MoverWorld) {
+    /// per update after the characters' own update.
+    ///
+    /// M5 5a-3 (`character-movement.md` rules 6, 33–35, Q128): each
+    /// character's move sees the terrain, the buildings (mask bit 0x8),
+    /// and as obstacles the plain objects, the other characters (their
+    /// cylinders where they stand now, while solid) and Connor whose type
+    /// its mask covers in the bits of its own touch table; `colliderMask=0`
+    /// sees nothing but the ground check.
+    pub fn characters_gravity(&mut self, ground: &dyn crate::connor_mover::GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) {
+        use crate::collide::CylinderCollider;
         let now = self.now();
+        // The objects each mask meets (most characters share 0x281F).
+        let mut by_mask: BTreeMap<u32, Vec<crate::collide::BoxCollider>> = BTreeMap::new();
         for i in 0..self.anims.len() {
             if self.anims[i].gone {
                 continue;
             }
+            let Some(c) = self.anims[i].character.as_deref() else { continue };
+            let (mask, hits_buildings) = (c.collision_mask, c.hits_buildings);
+            let obstacle = |t: u32| mask & t & crate::character::OWN_TOUCH_OBSTACLES != 0;
+            let objs = by_mask.entry(mask).or_insert_with(|| objects.iter().filter(|o| obstacle(o.kind.collision_type)).cloned().collect());
+            // The others where they stand now (those already moved in this
+            // pass, at their new place).
+            let mut others: Vec<CylinderCollider> = self
+                .anims
+                .iter()
+                .enumerate()
+                .filter(|(j, a)| *j != i && !a.gone && self.characters_solid.contains(&a.player.name.to_ascii_lowercase()))
+                .filter_map(|(_, a)| {
+                    let o = a.character.as_deref()?;
+                    let (min, max) = o.bounds?;
+                    (o.state != crate::character::State::Birth && obstacle(o.collision_type)).then(|| CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, o.collision_type, o.collision_mask))
+                })
+                .collect();
+            // Q132 (c) stand-in: Connor as the same cylinder, from his box.
+            if let (true, Some(at)) = (obstacle(crate::collide::CONNOR_TYPE), self.connor_at) {
+                let (min, max) = crate::connor_mover::CONNOR_BOX;
+                others.push(CylinderCollider::from_box("Connor", at, min, max, crate::collide::CONNOR_TYPE, CONNOR_MASK));
+            }
+            let mut world = crate::connor_mover::Scene::new(ground, if hits_buildings { buildings } else { &[] }, if mask == 0 { &[] } else { objs });
+            if mask != 0 {
+                world.characters = &others;
+            }
             let a = &mut self.anims[i];
             let Some(c) = a.character.as_deref_mut() else { continue };
-            let world = if c.hits_buildings { with_buildings } else { without };
-            let notes = c.gravity_step(&mut a.player, world, now);
+            let notes = c.gravity_step(&mut a.player, &world, now);
             let name = a.player.name.clone();
             let at = a.player.placement();
             if let Some(k) = self.clickables.iter_mut().find(|k| k.name.eq_ignore_ascii_case(&name)) {
@@ -4543,6 +4576,82 @@ mod tests {
         a.update();
         let c = a.world.clickables.iter().find(|c| c.name == "wiz").unwrap();
         assert_eq!(c.placement.position, [5000.0, 0.0, 0.0]);
+    }
+
+    struct FlatGround;
+    impl crate::connor_mover::GroundLookup for FlatGround {
+        fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+            Some((100.0, [0.0, 0.0, 1.0]))
+        }
+    }
+
+    /// M5 5a-3: a goblin walking −Y at 917 for 25 updates from (0, 0,
+    /// 100) (it moves 24 × 917 / 15 = 1,467; not long enough for a stuck
+    /// escape); where does it end?
+    fn walk_into(setup: impl FnOnce(&mut Active, &mut Vec<crate::collide::BoxCollider>)) -> ([f32; 3], String) {
+        let mut a = with_object("x\n", "x");
+        let (mut c, mut p) = crate::character::tests::walker(917.0, 3068.0);
+        p.name = "gob".into();
+        c.collision_type = 0x42;
+        c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.world.characters_in_range.insert("gob".into());
+        a.world.characters_solid.insert("gob".into());
+        let mut objects = Vec::new();
+        setup(&mut a, &mut objects);
+        assert_eq!(a.test_command("KQMonster::setState gob Move", "t").as_deref(), Some("0"));
+        for _ in 0..25 {
+            a.update();
+            a.world.characters_gravity(&FlatGround, &[], &objects);
+        }
+        let log = a.world.character_log.join("\n");
+        (a.world.anims[0].player.base.position, log)
+    }
+
+    #[test]
+    fn a_character_s_own_move_meets_objects_characters_and_connor() {
+        // character-movement.md rule 33 (Q128): obstacles in its own move.
+        let (free, _) = walk_into(|_, _| {});
+        assert!((free[1] + 1467.0).abs() < 1.0, "nothing in the way: {free:?}");
+        // A plain object (type 0x41) across its way at y −2000: it stops
+        // with its ball a radius (800) short of the box, less 25.
+        let (at, log) = walk_into(|_, o| {
+            let mut b = crate::collide::BoxCollider { name: "cart".into(), min: [-3000.0, -100.0, 0.0], max: [3000.0, 100.0, 1000.0], placement: Placement { rotation: crate::door::identity().m, position: [0.0, -2000.0, 100.0] }, kind: Default::default() };
+            b.kind.collision_type = 0x41;
+            o.push(b);
+        });
+        assert!(at[1] > -1100.0 && at[1] < -1000.0, "{at:?}");
+        assert!(log.contains("own move: across pass hit cart"), "{log}");
+        // A trap (0x10): nothing.
+        let (at, _) = walk_into(|_, o| {
+            let mut b = crate::collide::BoxCollider { name: "trap".into(), min: [-3000.0, -100.0, 0.0], max: [3000.0, 100.0, 1000.0], placement: Placement { rotation: crate::door::identity().m, position: [0.0, -2000.0, 100.0] }, kind: Default::default() };
+            b.kind.collision_type = 0x10;
+            o.push(b);
+        });
+        assert!((at[1] + 1467.0).abs() < 1.0, "{at:?}");
+        // Connor standing in its way (stand-in cylinder, radius 200): it
+        // stops 800 + 200 from his position, less 25.
+        let (at, log) = walk_into(|a, _| a.world.connor_at = Some([0.0, -2300.0, 100.0]));
+        assert!(at[1] > -1300.0 && at[1] < -1250.0, "{at:?} {log}");
+        assert!(log.contains("hit Connor"), "{log}");
+        // Another goblin, standing (solid): 800 + 800.
+        let (at, log) = walk_into(|a, _| {
+            let mut player = crate::named_anim::tests::still_then_open("gob2");
+            player.movements[0].name = "stop".into();
+            player.base.position = [0.0, -2800.0, 100.0];
+            let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, false, 2);
+            c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+            a.world.characters_solid.insert("gob2".into());
+        });
+        assert!(at[1] > -1200.0 && at[1] < -1150.0, "{at:?} {log}");
+        assert!(log.contains("hit gob2"), "{log}");
+        // colliderMask 0 (the Wizard, the Knight): through everything.
+        let (at, _) = walk_into(|a, _| {
+            a.world.connor_at = Some([0.0, -2300.0, 100.0]);
+            a.world.anims[0].character.as_mut().unwrap().collision_mask = 0;
+        });
+        assert!((at[1] + 1467.0).abs() < 1.0, "{at:?}");
     }
 
     #[test]

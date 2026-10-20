@@ -1101,13 +1101,14 @@ pub fn character_gravity(
     sim: Option<ResMut<DoorSim>>,
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<crate::terrain_view::Buildings>>,
+    objects: Option<Res<crate::terrain_view::ObjectColliders>>,
     mut solid: ResMut<CharacterColliders>,
 ) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let b = buildings.as_ref().map_or(&[][..], |b| &b.0[..]);
-    let with = kq8_core::connor_mover::Scene::new(&lookup.0, b, &[]);
-    let without = kq8_core::connor_mover::Scene::new(&lookup.0, &[], &[]);
-    sim.active.world.characters_gravity(&with, &without);
+    // M5 5a-3: their own moves meet objects, each other and Connor too.
+    let o = objects.as_ref().map_or(&[][..], |o| &o.0[..]);
+    sim.active.world.characters_gravity(&lookup.0, b, o);
     // M4 4d-12-3: the characters solid for Connor where they stand now,
     // for his scene; his hits on them since the last update to the log.
     solid.list = sim.active.world.character_colliders.clone();

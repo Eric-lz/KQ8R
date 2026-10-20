@@ -1026,7 +1026,8 @@ stats.
     walks straight: the note's edge case). Test: `--command
     "KQMonster::setState goblin22 Move",30`; speeds as the note's table
     (917 walking).
-  - **5a-3, a character's own touches** (rules 6, 33–35, Q128). The
+  - **5a-3, a character's own touches** (**done** 2026-10-20; goblin22
+    stops at Connor and runs round him) (rules 6, 33–35, Q128). The
     character's mover sees what its mask covers: buildings, plain
     objects, other characters (their cylinders), Connor (**stand-in**
     shape: the same cylinder rule as Q131's, from his box); every one an

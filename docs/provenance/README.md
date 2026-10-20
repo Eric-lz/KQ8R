@@ -2313,3 +2313,13 @@ marked otherwise.
 | `KQMonster::setState <name> Move`: walks straight on (`walk`) | Rule 2's edge case ("put there by a script"); `walk` is **our reading** | Viewer run |
 | No gestures while walking | `characters.md` rule 28 | — |
 | `characters.log`: Move, once a second while moving (place, heading, movement, distance in the last second, steering), every hit of its own move, every stuck event with the diagonals tried | The note's "How to check" (our logs) | Viewer run |
+
+### 5a-3, a character's own touches — `crates/kq8-core/src/active.rs` (`characters_gravity`), `character.rs` (`OWN_TOUCH_OBSTACLES`), viewer `door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A character's own move meets, as obstacles, whatever its mask covers with type bits 0x100, 0x8, 0x1, 0x2, 0x4, 0x2000: plain objects, buildings, other characters, Connor; traps (0x10) nothing; in every pass (up stops, across slides, down lands) | `character-movement.md` rule 33 (Q128) | Unit test (cart, trap, Connor, another goblin) |
+| Other characters as their cylinders where they stand now, only while solid (collider on, not in Birth, with a box) | Rule 33 with `connor-collision.md` rules 18–19 and `characters.md` rules 16, 33; "where they stand now" (already moved in this pass) is **ours** | Unit test |
+| Connor as the upright cylinder of his box (radius 200, height 1,300) | **Stand-in**, asked as Q132 (c) | Unit test; viewer: goblin22 stops 1,000 from him |
+| `colliderMask=0`: nothing but the ground check | Rule 35 | Unit test |
+| Nobody is pushed by a character's move | Rule 34 | — (nothing moves the other) |
