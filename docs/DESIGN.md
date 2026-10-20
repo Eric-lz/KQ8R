@@ -787,10 +787,65 @@ inventory and menus.
         most 1,800 across).
       - **4d-7b-4, plain objects cast them** (**done** 2026-10-20; **checked by the user**: the same pub barrel casts as in the original; rule 37 "Plain objects":
         `shadowMask` 8, the same drawing).
+    - **4d-12, characters are solid for Connor** (planned 2026-10-20;
+      `connor-collision.md` rules 2–4, 18, 19; `characters.md` rules 1,
+      8, 9, 16, 33; `connor-physics.md` "Collision shape", "Exact hit
+      handling"). Connor stops at characters or slides along them; what
+      a character does when bumped (M5), characters against each other
+      or objects in their own moves (Q128) and walking (M5) are not part
+      of it.
+      - **4d-12-1, the cylinder test** (**done** 2026-10-20; core `collide.rs`): a new
+        `CylinderCollider` (name, position, type, mask, radius, height).
+        Each of the mover's balls (its centre's path) is swept against
+        an upright cylinder standing on the other's position, widened by
+        the ball's radius sideways and at both ends; the earliest hit
+        counts. Side hit: level surface direction out from the axis; top
+        or bottom: straight up or down. Moves under 0.000001 in every
+        axis are not tested. A ball that starts inside: no hit when the
+        other's type has bit 2 or 4 (creatures, Connor); otherwise a hit
+        at the start, surface direction against the movement. The
+        contact is pulled back 25 like every object contact. **Stand-in
+        for the size** (rule 18 "not pinned down: likely its ball radius
+        and its box height"): radius = the other's ball radius (half the
+        larger of its box's x and y sizes), height = its box height,
+        standing on its position; asked as a new question. Unit tests:
+        side hit and its direction, top and bottom, nearest of several
+        balls, start inside a creature (no hit) and a non-creature (hit
+        at the start), tiny moves skipped.
+      - **4d-12-2, characters in Connor's scene** (core
+        `connor_mover.rs`, `character.rs`, `active.rs`): the mover's
+        scene gets a list of character cylinders tested after the
+        objects (nearest contact over all, as now). A character hit is
+        never head-on (`connor-physics.md` "Exact hit handling": not
+        against a `KQMonster`; every character is one, `characters.md`
+        rule 1), so it is always the glancing handling: straight in, the
+        slide has nothing left and he stays (still in his walk); at an
+        angle he slides along. A character is in the list when: not
+        deleted, it has a box, not in Birth (rule 16), its collider is
+        on (near, not far, not off or hidden: rule 33), and Connor's
+        mask covers its type (rules 2, 4: he is told, so it is a wall
+        for him; no character type has the push bit 0x100). The
+        cylinder follows the character's position every update.
+        `characters.log`: a line when a character becomes solid / not
+        solid (and why), with its cylinder. Unit tests: walking straight
+        into a character stays outside the cylinder (no `Stop`, no
+        block), at an angle slides along, starting inside a creature
+        walks out, the list's rules.
+      - **4d-12-3, the viewer** (`draw_distance.rs`: which characters
+        have their collider bit now; `door_view.rs` `character_gravity`
+        builds the list after the characters' own update; `connor_view.rs`
+        puts it in Connor's scene). `characters.log`: every Connor hit on
+        a character (who, where, surface direction, slid or stayed).
+        Runs: the goblin at the start, the Wizard (and a conversation
+        with him: Connor must still reach his spot), the Uglybeast, with
+        `--hold` into them.
+      - **Not built from the note** (asked): landing on top of a
+        character pushes Connor 250 sideways away from it
+        (`connor-physics.md`, "traced only this far"); until answered,
+        landing on top is an ordinary landing.
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
     dying, the flying mover (M5); conversations (4e, from
-    `conversation.md`); collision against characters (they stay not
-    solid, as now).
+    `conversation.md`).
   - Tests: unit tests for each core rule (first update, Wait and
     `Stop`, the return to `Stop`, no state, Special lists, turning, the
     mouth codes, gestures); `kq8 character-verify`; viewer runs near

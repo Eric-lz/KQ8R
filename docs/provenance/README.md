@@ -2250,3 +2250,14 @@ marked otherwise.
 | Worked out again only when its shown parts or place change | **Ours** (the same picture, less work) | 0.03 ms a frame |
 | `allowShadows` taken as on | **Stand-in**, as for characters (4d-7a) | — |
 | Which objects cast, compared with the original | The user's check (2026-10-20) | Pub barrels: only `barrel.07` casts, in both |
+
+### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Each of the mover's balls swept against an upright cylinder on the other's position, widened by the ball's radius sideways and at both ends; the earliest hit counts | `connor-collision.md` rule 18 | Unit tests |
+| Side hit: level direction out from the axis through the hit point; top / bottom: straight up / down | Rule 18 | Unit tests |
+| Moves under 0.000001 in every axis not tested | Rule 18 | Unit test |
+| A ball starting inside: no hit for type bit 2 or 4; otherwise a hit at the start, direction against the movement | Rule 19 ("along the movement"; **our reading** of the sign: against it, like every other contact; the slide comes out the same either way) | Unit test |
+| The 25 pull-back on the contact | `connor-physics.md` "Collision shape" (every object hit, Q33 b) | Unit test |
+| Radius = the other's ball radius, height = its box height, foot on its position; every ball tested on a vertical move | **Stand-in** (rule 18 "not pinned down"), asked as Q131 (a), (b) | — |

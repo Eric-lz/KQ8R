@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-12-1: the ball-stack-against-cylinder test
+
+**Changed:** `kq8-core/src/collide.rs`: new `CylinderCollider` (an upright cylinder on a ball-stack object's position: radius and height from its `BOUNDS.KQ` box, type, mask), its rough check and its sweep (`CylinderSweep`: the contact, and the balls that started inside a creature). 7 unit tests. Plan for 4d-12 (characters solid for Connor) in DESIGN. New question **Q131** (the cylinder's size; vertical moves; landing on top of a monster). Provenance.
+**Why:** `connor-collision.md` rules 18–19; first step of making characters solid for Connor.
+**Tested how:** `cargo test --workspace`, clippy clean.
+**Result:** Unit tests: walking into a goblin (ball radius 800) stops his centre 1,000 from its position (1,025 after the pull-back), direction straight out; at an angle the direction goes through the hit point; coming down on its top stops his feet at its box height, direction straight up; from below, straight down; the first ball to reach it counts; starting inside a creature or Connor (types 0x42, 4, 0xC022) is no hit, inside the Wizard's type 0xC021 a hit where he stands; a move of 0.0000001 is not tested.
+**Still broken / not tested:** Nothing uses it yet (4d-12-2). The cylinder's size is our stand-in (Q131).
+**Next:** 4d-12-2, characters in Connor's scene.
+
 ## 2026-10-20 The user's check of plain objects' shadows (4d-7b-4)
 
 **Changed:** Docs only: DESIGN, provenance.

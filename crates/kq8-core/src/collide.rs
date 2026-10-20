@@ -428,6 +428,132 @@ impl BoxCollider {
     }
 }
 
+/// A ball-stack object as the other side of a ball-stack-against-ball-stack
+/// test (`connor-collision.md` rules 18–19; M4 4d-12-1): an upright
+/// cylinder standing on its position. It does not turn with the object.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CylinderCollider {
+    pub name: String,
+    /// Its position (the cylinder's foot, on the axis).
+    pub position: [f32; 3],
+    pub collision_type: u32,
+    pub collision_mask: u32,
+    /// Before the mover's ball radius is added.
+    pub radius: f32,
+    pub height: f32,
+}
+
+/// A cylinder test is skipped for a move shorter than this in every axis
+/// (`connor-collision.md` rule 18).
+pub const CYLINDER_MIN_MOVE: f32 = 0.000001;
+/// Type bits of creatures (2) and Connor (4): a ball that starts inside
+/// their cylinder is no hit (rule 19).
+pub const CREATURE_BITS: u32 = 0x2 | 0x4;
+
+/// What a cylinder test found.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CylinderSweep {
+    pub contact: Option<Contact>,
+    /// Balls that started inside a creature's cylinder: not hits (rule 19).
+    pub inside: Vec<usize>,
+}
+
+impl CylinderCollider {
+    /// From the other object's `BOUNDS.KQ` box (own space). **Stand-in**
+    /// (rule 18: "not pinned down: likely its ball radius and its box
+    /// height"): the radius of its ball stack (half the larger of the x
+    /// and y sizes) and the box's height.
+    pub fn from_box(name: &str, position: [f32; 3], min: [f32; 3], max: [f32; 3], collision_type: u32, collision_mask: u32) -> Self {
+        CylinderCollider {
+            name: name.to_string(),
+            position,
+            collision_type,
+            collision_mask,
+            radius: BallStack::from_box(min, max).radius,
+            height: max[2] - min[2],
+        }
+    }
+
+    /// The rough check, only to save time: does the box `lo..hi`
+    /// (`BallStack::reach`) overlap the cylinder's box widened by `r`?
+    pub fn overlaps(&self, r: f32, lo: [f32; 3], hi: [f32; 3]) -> bool {
+        let p = self.position;
+        let reach = self.radius + r;
+        let (cmin, cmax) = ([p[0] - reach, p[1] - reach, p[2] - r], [p[0] + reach, p[1] + reach, p[2] + self.height + r]);
+        (0..3).all(|k| lo[k] <= cmax[k] && hi[k] >= cmin[k])
+    }
+
+    /// Rules 18–19: each of the mover's balls (its centre's path from
+    /// `from` to `to` plus its height) against the cylinder widened by the
+    /// ball's radius sideways and at both ends; the earliest hit counts.
+    /// A side hit's surface direction is level, out from the axis through
+    /// the hit point; a top or bottom hit's is straight up or down. A ball
+    /// that starts inside: no hit for a creature or Connor (type bit 2 or
+    /// 4), otherwise a hit at the start with the surface direction against
+    /// the movement. The contact is pulled back 25 (`PULL_BACK`).
+    pub fn sweep(&self, stack: &BallStack, from: [f32; 3], to: [f32; 3]) -> CylinderSweep {
+        let mut out = CylinderSweep::default();
+        let mv = sub(to, from);
+        if mv.iter().all(|v| v.abs() < CYLINDER_MIN_MOVE) {
+            return out;
+        }
+        let r = stack.radius;
+        let reach = self.radius + r;
+        let (low, high) = (self.position[2] - r, self.position[2] + self.height + r);
+        let (cx, cy) = (self.position[0], self.position[1]);
+        let mut best: Option<(f32, usize, [f32; 3])> = None;
+        let mut keep = |t: f32, ball: usize, normal: [f32; 3]| {
+            if best.is_none_or(|(bt, _, _)| t < bt) {
+                best = Some((t, ball, normal));
+            }
+        };
+        for (ball, h) in stack.heights.iter().enumerate() {
+            let s = [from[0] - cx, from[1] - cy, from[2] + h];
+            let inside_xy = |p: [f32; 3]| p[0] * p[0] + p[1] * p[1] < reach * reach;
+            if inside_xy(s) && s[2] > low && s[2] < high {
+                if self.collision_type & CREATURE_BITS != 0 {
+                    out.inside.push(ball);
+                } else {
+                    keep(0.0, ball, normalise(scale(mv, -1.0)));
+                }
+                continue;
+            }
+            // The side: where the level distance from the axis first
+            // becomes `reach`, with the centre between the ends then.
+            let (a, b, c) = (mv[0] * mv[0] + mv[1] * mv[1], 2.0 * (s[0] * mv[0] + s[1] * mv[1]), s[0] * s[0] + s[1] * s[1] - reach * reach);
+            if a > 0.0 && c >= 0.0 {
+                let disc = b * b - 4.0 * a * c;
+                if disc >= 0.0 {
+                    let t = (-b - disc.sqrt()) / (2.0 * a);
+                    let z = s[2] + mv[2] * t;
+                    if (0.0..=1.0).contains(&t) && z >= low && z <= high {
+                        let (x, y) = (s[0] + mv[0] * t, s[1] + mv[1] * t);
+                        keep(t, ball, normalise([x, y, 0.0]));
+                    }
+                }
+            }
+            // The ends: crossing the bottom going up or the top going down,
+            // within the radius there.
+            let ends = [(mv[2] > 0.0 && s[2] <= low, low, -1.0), (mv[2] < 0.0 && s[2] >= high, high, 1.0)];
+            for (crosses, z, up) in ends {
+                if !crosses {
+                    continue;
+                }
+                let t = (z - s[2]) / mv[2];
+                let p = [s[0] + mv[0] * t, s[1] + mv[1] * t, z];
+                if (0.0..=1.0).contains(&t) && p[0] * p[0] + p[1] * p[1] <= reach * reach {
+                    keep(t, ball, [0.0, 0.0, up]);
+                }
+            }
+        }
+        if let Some((t, ball, normal)) = best {
+            let touch = add(from, scale(mv, t));
+            out.contact = Some(Contact { position: pull_back(touch, from), touch, normal, ball });
+        }
+        out
+    }
+}
+
 /// The axis-aligned world box round the 8 corners of the own-space box
 /// `lo..hi` placed by `placement`.
 fn world_box(lo: [f32; 3], hi: [f32; 3], placement: &Placement) -> ([f32; 3], [f32; 3]) {
@@ -764,5 +890,99 @@ mod tests {
         }
         let (lo, hi) = stack.reach([2000.0, 0.0, 0.0], [3000.0, 0.0, 0.0]);
         assert!(!b.overlaps(stack.radius, lo, hi), "far away: skipped");
+    }
+
+    /// A goblin-like character: box ±350 × ±800 × 0–1,300 (ball radius
+    /// 800), standing at the origin; `kind` its collision type.
+    fn goblin(kind: u32) -> CylinderCollider {
+        CylinderCollider::from_box("goblin", [0.0; 3], [-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0], kind, 0x281F)
+    }
+
+    #[test]
+    fn the_cylinder_is_the_ball_radius_and_the_box_height() {
+        let g = goblin(0x42);
+        assert_eq!((g.radius, g.height), (800.0, 1300.0));
+    }
+
+    #[test]
+    fn a_side_hit_stops_his_centre_1000_out_with_a_level_direction() {
+        // Walking along −x into it: widened radius 800 + 200.
+        let s = goblin(0x42).sweep(&connor(), [2000.0, 0.0, 0.0], [500.0, 0.0, 0.0]);
+        let c = s.contact.expect("hit");
+        assert!(near(c.touch, [1000.0, 0.0, 0.0]), "{c:?}");
+        assert!(near(c.position, [1025.0, 0.0, 0.0]), "pulled back 25: {c:?}");
+        assert!(near(c.normal, [1.0, 0.0, 0.0]), "{c:?}");
+        // At an angle: the direction is out from the axis through the hit
+        // point, level.
+        let c = goblin(0x42).sweep(&connor(), [2000.0, 600.0, 0.0], [0.0, 600.0, 0.0]).contact.expect("hit");
+        assert!(near(c.touch, [800.0, 600.0, 0.0]), "{c:?}");
+        assert!(near(c.normal, [0.8, 0.6, 0.0]), "{c:?}");
+        // Passing beside it, or stopping short: no hit.
+        assert_eq!(goblin(0x42).sweep(&connor(), [2000.0, 1001.0, 0.0], [-2000.0, 1001.0, 0.0]).contact, None);
+        assert_eq!(goblin(0x42).sweep(&connor(), [2000.0, 0.0, 0.0], [1001.0, 0.0, 0.0]).contact, None);
+    }
+
+    #[test]
+    fn top_and_bottom_hits_point_straight_up_and_down() {
+        // Coming down on its top: his bottom ball (centre 200 above his
+        // feet) meets 1,300 + 200, so his feet at 1,300.
+        let c = goblin(0x42).sweep(&connor(), [100.0, 0.0, 2000.0], [100.0, 0.0, 1000.0]).contact.expect("top");
+        assert!(near(c.touch, [100.0, 0.0, 1300.0]), "{c:?}");
+        assert!(near(c.normal, [0.0, 0.0, 1.0]), "{c:?}");
+        // Going up into it from below: his top ball (centre 1,100 above
+        // his feet) meets −200, so his feet at −1,300.
+        let c = goblin(0x42).sweep(&connor(), [100.0, 0.0, -2000.0], [100.0, 0.0, -1000.0]).contact.expect("bottom");
+        assert!(near(c.touch, [100.0, 0.0, -1300.0]), "{c:?}");
+        assert!(near(c.normal, [0.0, 0.0, -1.0]), "{c:?}");
+    }
+
+    #[test]
+    fn the_nearest_of_his_balls_counts() {
+        // A short thing (box 0–300 high, radius 100) on a step: only his
+        // lowest ball reaches it as he walks; and one high up only his
+        // top ball.
+        let low = CylinderCollider::from_box("low", [0.0; 3], [-100.0; 3], [100.0, 100.0, 200.0], 0x42, 0);
+        let c = low.sweep(&connor(), [1000.0, 0.0, 0.0], [0.0, 0.0, 0.0]).contact.expect("hit");
+        assert_eq!(c.ball, 0, "{c:?}");
+        assert!(near(c.touch, [300.0, 0.0, 0.0]), "{c:?}");
+        let high = CylinderCollider { position: [0.0, 0.0, 1250.0], ..low.clone() };
+        let c = high.sweep(&connor(), [1000.0, 0.0, 0.0], [0.0, 0.0, 0.0]).contact.expect("hit");
+        assert_eq!(c.ball, 3, "{c:?}");
+        // Coming in at a slant, the ball that reaches it first wins.
+        let c = goblin(0x42).sweep(&connor(), [1500.0, 0.0, 1500.0], [500.0, 0.0, 500.0]).contact.expect("hit");
+        assert_eq!(c.ball, 0, "{c:?}");
+    }
+
+    #[test]
+    fn starting_inside_a_creature_is_no_hit_inside_anything_else_is() {
+        // A creature (bit 2) or Connor (bit 4): he can walk out, or on.
+        for kind in [0x42, 0x4, 0xC022] {
+            let s = goblin(kind).sweep(&connor(), [500.0, 0.0, 0.0], [600.0, 0.0, 0.0]);
+            assert_eq!(s.contact, None, "type {kind:#x}");
+            assert_eq!(s.inside, vec![0, 1, 2, 3], "type {kind:#x}");
+        }
+        // The Wizard's type 0xC021 has neither: a hit where he stands,
+        // the surface direction against his movement.
+        let c = goblin(0xC021).sweep(&connor(), [500.0, 0.0, 0.0], [600.0, 0.0, 0.0]).contact.expect("hit");
+        assert!(near(c.touch, [500.0, 0.0, 0.0]) && near(c.position, [500.0, 0.0, 0.0]), "{c:?}");
+        assert!(near(c.normal, [-1.0, 0.0, 0.0]), "{c:?}");
+    }
+
+    #[test]
+    fn tiny_moves_are_not_tested() {
+        let s = goblin(0xC021).sweep(&connor(), [500.0, 0.0, 0.0], [500.0000001, 0.0, 0.0]);
+        assert_eq!(s, CylinderSweep::default());
+    }
+
+    #[test]
+    fn the_rough_check_covers_the_widened_cylinder() {
+        let g = goblin(0x42);
+        let stack = connor();
+        let (lo, hi) = stack.reach([2000.0, 0.0, 0.0], [1100.0, 0.0, 0.0]);
+        assert!(g.overlaps(stack.radius, lo, hi));
+        let (lo, hi) = stack.reach([2000.0, 0.0, 0.0], [1300.0, 0.0, 0.0]);
+        assert!(!g.overlaps(stack.radius, lo, hi));
+        let (lo, hi) = stack.reach([0.0, 0.0, 1600.0], [0.0, 0.0, 1700.0]);
+        assert!(!g.overlaps(stack.radius, lo, hi), "above it");
     }
 }
