@@ -800,8 +800,24 @@ contact the hit handler kept, i.e. **already pulled back 25** (see
     then press and hold a turn key, and watch whether he walks (stop,
     walk, stop…) or turns.
 - **Landing on top of a `KQMonster`** (surface direction exactly
-  straight up): instead of all this he is pushed 250 sideways, straight
-  away from the monster's position (traced only this far).
+  straight up, i.e. the top of its cylinder, `connor-collision.md` rule
+  18; traced 2026-10-20, answers Q131 (c)):
+  - he **does land**: the contact counts as ground under him, as on any
+    surface facing up more than 0.8, so his air count and Fall work as
+    for any landing;
+  - instead of the slide he is then **pushed 250, level**, from the
+    contact point straight away from the monster's position (x and y
+    only). If he is exactly over its position, the push goes toward his
+    own back (opposite the way he faces);
+  - the push is a **real move through the mover**, done like an across
+    pass (a 0.06 s sweep): a wall stops it or he slides along it, with
+    the same limit of 3 slides in a row, after which he stays at the
+    contact;
+  - it does not depend on his state. Because a character's cylinder is
+    usually wider than 250 (a goblin's reaches 1,000 from its middle,
+    counting his own ball), he can land on it again in the next update
+    and be pushed again: he slides off its top about 250 per update
+    (inferred from the rules, not watched).
 
 This matches the manual: straight into an object stops him; at an angle he
 glances off and keeps going.

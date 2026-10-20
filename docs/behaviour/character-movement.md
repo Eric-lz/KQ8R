@@ -4,7 +4,9 @@ Study session A, 2026-10-19. Traced in `Mask.exe` unless marked "data"
 (read from the game's files), "inferred" or "not sure". Stops where an
 attack starts (the fight is the next study). Answers Q128 and Q129
 (`QUESTIONS.md`); corrects `characters.md` rules 8, 29–31 and open
-question 3 (said there too).
+question 3 (said there too). **Updated 2026-10-20 (A)**: answers Q132,
+Q133 and Q134 (rules 7, 18, 21, 25, 27, 28, 30 corrected, open
+questions 1–3 settled) and Q131 (in `connor-collision.md` rule 18).
 
 ## Purpose
 
@@ -62,9 +64,11 @@ Words used here:
 3. **Which movement** (traced): wandering always asks for **`walk`**.
    When a character is alarmed (rule 23) it tosses a coin: **half the
    time `run`, half the time `walk`**, and it tosses again every time it
-   starts moving after Connor again. After it has been hit twice it
-   always runs (the fight study). Going home after leaving its chase
-   area, and the "stuck" escape (rule 7), use `run`. A list without `run`
+   starts moving after Connor again from standing. After it has been hit
+   twice it always runs (the fight study). Going home after leaving its
+   chase area, and the "stuck" escape (rule 7), use `run`. Taking up the
+   chase again while moving home (rule 28) tosses no coin: it keeps the
+   movement it has (usually `run`). A list without `run`
    uses `walk`; a list without `walk` but with `run` uses `run`.
 4. **Starting and ending a walk** (traced): entering the moving state
    first asks for `Stop` at a random frame and speed (as Wait does,
@@ -104,19 +108,34 @@ Words used here:
    - **no path finding, no edge or water avoidance**: the AI only steers
      straight at a point (rules 9, 24, 27) and uses the stuck escape
      (rule 7). Nothing tests ahead for drops, water or buildings.
-7. **The stuck escape** (traced): while moving, one second after it
-   started and then every half second, the character compares where it
-   is with where it was at the last check. If it has moved **less than
-   200 units** (in 3D) since then:
+7. **The stuck escape** (traced; answers Q132 (a), (b)): the check is
+   switched on only once its `walk` or `run` is **actually playing**. If
+   the request has to wait (behind a movement that can't be cut short,
+   such as a zombie's `birth`), the check starts when the walk starts.
+   One second after that, and then every half second, the character
+   compares where it is with where it was at the last check. If it has
+   moved **less than 200 units** (in 3D) since then:
    - it stops steering for **3 seconds**;
-   - it looks along the four diagonals (1,250 units out each way, at its
-     own height), starting one further round each time it is stuck, for
-     the first one where neither the ground nor anything solid (plain
-     objects, buildings, other characters; mask 0xB) is in the way, and
-     **turns at once** to face along it (no turning time: a snap). If all
-     four are blocked it is turned to a fixed half-turn heading (not
-     sure whether that means "turned round" or "facing a fixed world
-     direction");
+   - it tests the four **world** diagonals, not ones relative to its
+     heading, in this order: **north-east** (+x, +y), **north-west**
+     (−x, +y), **south-west** (−x, −y), **south-east** (+x, −y), i.e.
+     anticlockwise seen from above. Each test is a **level line from its
+     feet** (its position; both ends at that height) to a point 1,250
+     out in x and 1,250 in y (so about 1,770 long). The first one tried
+     is north-east the first time it is stuck after it went into its
+     moving state; each further time it is stuck while it stays moving,
+     the first one tried is one further on. Every new start of moving
+     (from standing) starts again at north-east;
+   - a diagonal is blocked by the **drawn ground** (see Do not
+     reproduce for the exact test at foot height) or by the box of
+     anything solid it runs into: plain objects, **other characters**
+     and buildings (types with bit 0x1, 0x2 or 0x8). **Connor never
+     blocks it.** Its own box never counts, nor does any box the line
+     starts inside;
+   - it **turns at once** to face along the first free diagonal, outward
+     (no turning time: a snap). If all four are blocked it snaps to face
+     **north (+y)**, a fixed world direction, whatever way it faced
+     before (answers open question 1);
    - a wanderer moves on to its **next wander point** (rule 11);
    - it switches to **`run`**.
    (Logged by the original as "`<name> is stuck`" to the debugger, which
@@ -205,11 +224,24 @@ Words used here:
     plus a random whole number of seconds from 0 to 10** later (0 and 10
     half as likely as the others: a random number from 0 to 10, rounded).
     Any movement that ends while a fidget is under way counts as its end.
-18. **Which one** (traced): picked at random, all equally likely, from
-    the idle list. It is played from that list (the character's own list
-    is set aside while it plays and comes back afterwards; not sure of
-    every detail), as an ordinary request. When it ends, Wait brings back
-    `Stop` at a random frame and speed (`characters.md` rule 18).
+18. **Which one, and the list swap** (traced; answers open question 3):
+    the idle list file is read (the game keeps it once loaded) and one
+    of its movements is picked at random, all equally likely. For that
+    fidget the idle list **takes the place of the character's own list**
+    as its current movement list, and the movement is asked for from it
+    as an ordinary request. The character's **own list is put back as
+    soon as any movement ends** (the fidget's end, or the end of
+    whatever cut it short), and also whenever its state asks for a new
+    movement in the usual way (e.g. `walk` when it starts moving). When
+    the fidget ends, Wait asks for `Stop` (from its own list, back by
+    then) at a random frame and speed (`characters.md` rule 18).
+    - Side effect (traced): when a movement **named `attack`** (or
+      `attack2`) ends, its next attack becomes due `attackDelay` later
+      and its chase timer (rule 23) is set to 5 s; when one **named
+      `react`** ends, its chase timer is set to 5 s (and a 2 s timer of
+      the fight study). This happens for Daventry's fidgets too, whose
+      names are `attack` and `react`. Harmless before the fight: the
+      chase timer only matters with a target.
 19. Characters without an idle list never fidget; their `Stop` loops.
 
 ### 4. Noticing Connor
@@ -244,9 +276,10 @@ Words used here:
     (neither near nor far, `object-lighting.md` rules 34–37), or is
     pushed off the list by a team member, it is taken off the active
     list and forgets its target. Then, if it was on its way home, or if
-    Connor is more than **twice its alarm radius** away (probably the
-    plain distance between the two; not sure), it is **put back on its
-    home point at once** (z −1 = floor, −2 = surface), and a character
+    Connor is more than **twice its alarm radius** away (the straight 3D
+    distance between Connor's current position and its own; traced,
+    answers open question 2), it is **put back on its home point at
+    once** (z −1 = floor, −2 = surface), and a character
     whose list has `hide` (the zombies) goes back underground (Birth). A
     moving character switches to Wait. **With an alarm radius of 0 this
     always happens**: chickens and bats are back at their home point
@@ -281,21 +314,36 @@ Words used here:
     see him is alarmed too; and the alarmed one's team members (made
     active if needed) with an alarm radius above 0 are alarmed. Being
     told counts as an alarm (rule 23) without the distance test.
-25. **What it does then** (traced; the fight starts at the end):
+25. **What it does then** (traced; the fight starts at the end; answers
+    Q133 (b)):
     - **Standing (Wait)**: it turns to face Connor (or, while it can't
       see him, the spot where it last saw him, if that is more than 500
       away), on the spot. If Connor is out of sight or farther than its
-      attack distance, and its chase radius is above 0, it starts moving
-      after him (rule 3 for walk or run). A character with a chase radius
-      of 0 (`guard`, `none`) **never moves**: it only turns to follow
-      Connor and fights if he comes within reach.
+      attack distance (`doMode=1`: 1.25 × its attack distance), and its
+      chase radius is above 0, it starts moving after him (rule 3 for
+      walk or run). While he is in view and within that distance it
+      stays, turning to him, and **attacks once its attack time has
+      come, whatever Connor is doing** (**next study**). A character with
+      a chase radius of 0 (`guard`, `none`) **never moves**: it only
+      turns to follow Connor and fights if he comes within reach.
     - **Moving**: in every update it steers at Connor (or the last seen
       spot, as above). When it can see him and he is within its attack
       distance (`attackDist`, default 1,250; Daventry's list mostly `@`):
-      before its attack time has come, a melee character stops (Wait,
-      facing him) when Connor is not walking forward; otherwise the
-      attack starts (**next study**). Characters with `doMode=1` (ranged)
-      may back away instead (fight study).
+      - once its attack time has come, the attack starts, whatever
+        Connor is doing (**next study**);
+      - before that, a melee character **stops** (Wait, then turns to
+        face him) only when **Connor has no forward or backward movement
+        input** at that moment: his forward / back key is not held (he
+        stands, or only turns on the spot). A walk or run forward, or
+        walking backward, counts as moving. A scripted walk of Connor
+        sends no key, so it counts as not moving. While he is moving it
+        keeps steering at him and walking or running, so it **follows a
+        walking Connor at reach** instead of stopping and starting;
+      - `doMode=1` (ranged) characters stop when within 0.75 × their
+        attack distance, whatever Connor does; they may also back away
+        (fight study).
+    - When its next attack is due is the fight study's (not traced here:
+      whether the first one is due at once).
 26. **Losing sight** (traced): once it has not seen Connor for **45
     updates (3 seconds)**, it gives up (rule 28), unless it has a team and
     a team member can see him (then the count starts again). While
@@ -306,36 +354,98 @@ Words used here:
     - with no team, if Connor is more than **twice its alarm radius**
       away, it gives up;
     - if its chase radius is above 0 and it is farther than that from its
-      **home**, it switches to `run` and gives up.
+      **home** (3D), it switches to `run` and gives up.
+    Standing (Wait), the first test is slightly wider: it gives up beyond
+    twice its alarm radius when it has no team **or** a chase radius of
+    0 (traced). Each time it takes up the chase again (rule 28) the chase
+    timer starts anew at 5 s, so the leash is tested again only 5 s
+    later.
     `chase a b` in the monster list sets **home radius a** and **chase
     radius b** (traced); `guard` or `none` set both to 0; `@` takes the
     type's. Scripts: `KQMonster::setChaseRadius`, `setHomeRadius`.
-28. **Giving up and going home** (traced):
+28. **Giving up and going home** (traced; answers Q133 (a)):
     - it forgets its target and marks itself "on the way home";
     - **a character whose list has `hide`** (the zombies) goes back into
-      the ground instead: the Birth state, which plays `hide` (then it is
-      not drawn and not solid again, `characters.md` rule 16);
-    - otherwise it steers toward its home point in every update and keeps
-      moving; when it is within **100 in x and in y** of it, it stops
-      (Wait) and its hit count is cleared;
-    - on the way home it takes up the chase again when it can see Connor
-      and he is within its attack distance, or when it is back within its
-      **home radius** of home and Connor is within its alarm radius (both
-      only while `goHome` is off).
+      the ground instead (rule 30);
+    - otherwise it turns toward its home point. **Moving**, it steers
+      toward home in every update and keeps moving. **Standing**, it
+      starts moving home at a `run` at its next update; a character with
+      a chase radius of 0 instead stays where it is and is no longer "on
+      its way home". When it is within **100 in x and in y** of home, it
+      stops (Wait) and its hit count is cleared;
+    - **taking up the chase again** (only while moving, and only while
+      `goHome` is off), in either of two cases:
+      1. it **can see Connor and he is within its attack distance**.
+         **There is no other condition**: no minimum time on the way
+         home, no chase timer, no direction test;
+      2. it is within its **home radius** of home (3D), can see Connor
+         and he is within its alarm radius.
+      This is an alarm (rule 23), with its 0–1 s reaction delay (in that
+      time it keeps going the way it was: toward home) and a new 5 s
+      chase timer, but **no walk / run coin**: it keeps its `run`.
+    - **Consequence**: while Connor stays in its view within its attack
+      distance, a character can't be shaken off by its leash. Every 5 s
+      (the chase timer) it is past the leash, gives up for one update,
+      heads home for up to a second, and turns on Connor again. In the
+      original this is the time when it is **fighting him** (it attacks
+      whenever its attack time comes, rule 25), so in practice the chase
+      ends only once Connor is beyond its attack distance (or out of
+      sight) at a moment the leash is tested; then it goes home and
+      comes back only by case 2 (near home) or if he comes within its
+      attack distance again. The loop B found is the original's
+      behaviour; what makes it look wrong is the stand-in for the attack
+      (see rule 25: follow a moving Connor, don't stop and start).
+    - (A character with no collision shape, none in Daventry, behaves
+      differently in case 1: fight study.)
 29. **`KQMonster::goHome <name>`** (traced): it gives up at once and
     walks home, and stays unalarmable until `KQMonster::goHome <name> 0`.
     Daventry's `home1.cs` and `home6.cs` traps use it for the ruin
     spriggans and some goblins and spriggans while Connor is in certain
     places (data).
-30. **The zombies** (traced and data): a zombie in Birth is not drawn
-    (`characters.md` rule 16). It still does the sight check. When it is
-    **not active, can see Connor and he is within its alarm radius**, it
-    becomes active (if there is room) and is alarmed; **`birthDelay`
-    seconds later** it goes to Wait, which waits until Connor is not
-    standing on it (farther than its ball and his added together), then
-    plays `birth`, makes it drawn and solid, switches its gravity on and
-    turns it toward Connor. After `birth` it chases as in rules 25–27
-    (zombies have no `run`: they walk at 511).
+30. **The zombies** (traced and data; answers Q134): a zombie in Birth
+    is not drawn (`characters.md` rule 16). It still does the sight
+    check.
+    - **Rising**: when it is **not active, can see Connor and he is
+      within its alarm radius**, it becomes active (if there is room) and
+      is alarmed; **`birthDelay` seconds later** it goes to Wait, which
+      waits until Connor is not standing on it (farther than its ball
+      and his added together), then plays `birth`, makes it drawn and
+      solid, switches its gravity on and turns it toward Connor.
+    - **The chase during `birth`**: at the next update it is in the
+      standing chase of rule 25 and normally goes into its moving state
+      at once. But `birth` can't be cut short, so its `walk` waits until
+      `birth` has ended: it stays on the spot, steered toward Connor
+      (turning on the spot) while it rises. Its stuck check is switched
+      on only when the walk really starts (rule 7), and its first check
+      comes 1 s after that. So, as seen, **the chase waits for `birth`
+      to end**; B's stand-in (staying in Wait while `birth` plays) looks
+      the same, except that the original can turn to follow Connor while
+      it rises. If Connor comes within its attack distance during
+      `birth`, the attack waits for `birth` to end too (fight study).
+      After `birth` it chases as in rules 25–27 (zombies have no `run`:
+      they walk at 511).
+    - **Sinking back** (rule 28): it goes into Birth and plays `hide`
+      where it stands, still drawn, still solid and **still active**.
+      When `hide` ends it is **taken off the active list** (freeing a
+      place), made not drawn and not solid, gravity off, and **put back
+      on its home point** (z −1 = floor, −2 = surface). It is then no
+      longer on its way home.
+    - **While `hide` plays it can't be alarmed again.** If another
+      character tells it (rule 24) during `hide`, it is taken off the
+      active list at once and goes underground at its home point that
+      moment (the rest of `hide` is not shown).
+    - **Rising again**: only by the "Rising" case above, from its home
+      point: once it is off the active list, can see Connor (from its
+      eye at home) and he is within its alarm radius, it rises
+      `birthDelay` s later. **Rule 28's re-take never applies
+      underground**: it applies only to a character that is moving. So
+      B's current version (rule 28's re-take from underground, then
+      `birthDelay`, not before `hide` has ended) is **not** how the
+      original does it; the "not before `hide` has ended" part is right,
+      as a consequence. With Daventry's numbers this doesn't loop: a
+      zombie that passed its leash is more than its chase radius from
+      home, so Connor near it is usually outside its alarm radius of
+      home.
     - **Graveyard** (data, `zomtrap.cs`): the 14 `zograv` zombies start
       100,000 south of the graveyard with alarm radius 0. Entering the
       trap moves them into the graveyard, makes that their home, and gives
@@ -343,7 +453,10 @@ Words used here:
       radius 6,000. Leaving it sets their alarm radius to 0 and their
       chase radius to **100**: any alarmed zombie is then over its leash,
       gives up and sinks back (`hide`); 10 seconds later, if Connor has
-      not come back, they are moved away south again.
+      not come back, they are moved away south again. With an alarm
+      radius of 0 they can't rise; entering the trap again gives them
+      their radii back, and they rise again from their graveyard homes
+      (fits what the user saw in the original).
     - **Road** (data): `RoadZ1` alarm 4,000, rises 3 s after noticing;
       `RoadZ5` 4,000, 3.5 s; `RoadZ2`–`RoadZ4` 18,000, at once. Chase 8,000
       / 12,000 or 4,000 / 8,000 (home / chase).
@@ -408,6 +521,16 @@ Words used here:
     (a character falling onto him lands on his head). This holds for
     **every pass**: up (stop), across (slide) and down (land): answers
     Q128 (a), (b) and (c).
+    - **The shape it meets at Connor** (traced; answers Q132 (c)): the
+      same ball-against-cylinder test as Connor meets at a character
+      (`connor-collision.md` rule 18, now exact), with the roles
+      swapped. The character's balls are swept against an upright
+      cylinder around Connor: radius 200 (his ball radius), from his
+      feet to 1,300 above them (the top of his top ball), widened by the
+      moving ball's radius. A ball that starts inside it is no hit
+      (Connor's type has bit 0x4), so a character overlapping him can
+      walk out. Other characters are met the same way (their own
+      cylinders).
 34. **When something else moves into a standing character** (traced):
     Connor's touch is ignored by it (the "own move" condition); the
     other kinds are noted but play no part until its own next move
@@ -426,8 +549,11 @@ Words used here:
 | speed | the `walk` / `run` model's distance per loop ÷ loop length | traced |
 | walk or run when alarmed | 50 / 50, tossed at each start of a chase move | traced |
 | turn rate while walking | 3.5 rad/s (automatic turn) | traced |
-| stuck check | after 1 s, then every 0.5 s; stuck if moved < 200 | traced |
-| stuck escape | 4 diagonals at 1,250; snap turn; no steering 3 s; `run` | traced |
+| stuck check | 1 s after its walk / run really starts, then every 0.5 s; stuck if moved < 200 | traced |
+| stuck escape | world diagonals NE, NW, SW, SE, level from its feet, ±1,250 in x and y; snap turn; all blocked → face north (+y); no steering 3 s; `run` | traced |
+| way-home re-take | sees Connor within attack distance (nothing else), or within home radius of home and Connor within alarm radius | traced |
+| stop within reach (melee, before its attack is due) | only when Connor has no forward / back input | traced |
+| ranged stop / start distances | stop within 0.75 ×, start moving beyond 1.25 × attack distance | traced |
 | wander point reached | within 250 (x, y) | traced |
 | re-aim at a wander point | distance² > closest² + 12,500² | traced |
 | random wander points | own position + 3 at 2–3 × alarm radius, angles ≥ 0.79 rad apart | traced |
@@ -444,7 +570,8 @@ Words used here:
 | give up after not seeing Connor | 45 updates (3 s) | traced |
 | leash | beyond 2 × alarm radius (no team) or chase radius from home | traced |
 | home reached | within 100 in x and y | traced |
-| reset to home on leaving range | when Connor > 2 × alarm radius away, or on the way home | traced |
+| reset to home on leaving range | when Connor > 2 × alarm radius away (3D), or on the way home | traced |
+| zombie sinking back | `hide` where it gave up; at its end off the list, hidden, put on its home point | traced |
 | attack distance default | 1,250 | traced |
 | flying mover | down 150 (all or nothing), up ≤ 300 onto drawn ground / buildings | traced |
 | walkable slope default | cos 35° (Connor's) | traced |
@@ -480,6 +607,13 @@ Words used here:
   alarmed zombie give up at its next leash check (rule 30).
 - During a chase the walk / run coin is tossed again at each new start, so
   a goblin can switch between running and walking after Connor.
+- The stuck escape's round (rule 7) and the "stuck check on" switch belong
+  to the moving state and start afresh each time it starts moving: a
+  character that stops and starts often always tries north-east first.
+- A zombie told by a team mate while its `hide` plays goes underground at
+  its home at once (rule 30).
+- A guard (chase radius 0) that loses sight of Connor stays where it is
+  (rule 28).
 
 ## Do not reproduce
 
@@ -493,6 +627,17 @@ Words used here:
   checked, How to check 1); then consider scaling the stuck distance with
   the walking speed.
 - **`goblin.anm`'s swapped `walk` / `run`** (rule 2): keep the data.
+- **The stuck escape's ground test at foot height** (rule 7): the line
+  starts exactly at the character's feet, and the ground test decides by
+  which side of the surface the start point is on. A character standing
+  exactly on the ground then counts ground that falls away along the line
+  as "blocked" and ground that rises as free; one a hair above it counts
+  rising ground as blocked. Which case the original is in depends on the
+  last digits of the numbers (not sure). Do instead: a diagonal is blocked
+  when the ground anywhere along it is higher than its feet (B's 1 unit
+  above the feet is fine).
+- **The stuck escape's snap faces 3.14, not π, from the free diagonal**
+  (off by 0.0016 rad, invisible). Do instead: face exactly along it.
 - Keep the rest, including the random reaction delay, the snap turn of the
   stuck escape and the reset to home.
 
@@ -523,10 +668,16 @@ move (what it hit, stop / slide / land).
    4,000. After up to a second it turns to him and comes after him; some
    chases at a run faster than Connor's run, some at a walk. Hide behind
    a building: about 3 s later it runs back toward its points.
-4. **The leash**: run away from a chasing bone goblin; after 5 s and once
-   it is beyond its chase radius from home (6,000–9,000), it turns and
-   runs home; on its way back it comes for Connor again only once it is
-   near home (4,000 of it) and he is close.
+4. **The leash**: run away from a chasing bone goblin until it is more
+   than its attack distance behind you (it then walks: the coin; its run
+   is faster than yours); after 5 s and once it is beyond its chase
+   radius from home (6,000–9,000), it turns and runs home; on its way
+   back it comes for Connor again only if he is within its attack
+   distance and in view, or once it is near home (4,000 of it) and he is
+   within its alarm radius. If instead Connor lets it stay within reach,
+   it keeps fighting him and the leash never takes it home (rule 28).
+   Also: does a goblin following a walking Connor at reach keep walking
+   with him, and stop as soon as he stands (rule 25)?
 5. **Spriggans by the windmill** (`sprigwnd2`, `sprigwnd3`, team
    `windguys`): when one notices Connor, does the other come too even if
    farther away (rule 24)?
@@ -550,14 +701,16 @@ move (what it hit, stop / slide / land).
 
 ## Open questions
 
-1. The stuck escape's "all four blocked" heading (rule 7): a half turn,
-   or a fixed world heading? Rare.
-2. The distance used for the reset to home (rule 21): probably the plain
-   distance to Connor; the code was hard to read there.
-3. The idle list swap (rule 18) in detail; the result (a random fidget,
-   then `Stop`) is sure.
-4. Water for walking characters: the water test that drives Connor's
+Answered 2026-10-20: the "all four blocked" heading (face north, rule
+7), the reset distance (3D to Connor's current position, rule 21), the
+idle list swap (rule 18).
+
+1. Water for walking characters: the water test that drives Connor's
    wading was not followed for characters (rule 6).
-5. The fight: attack choice and timing, `doMode`, keeping distance and
-   fleeing (`likelyToFlee`, `mustFlee`, `attackTooClose`,
-   `attackFarEnough`), being hit, `react`, dying: next study.
+2. The fight: attack choice and timing (including whether the first
+   attack is due at once), `doMode`, keeping distance and fleeing
+   (`likelyToFlee`, `mustFlee`, `attackTooClose`, `attackFarEnough`),
+   being hit, `react`, dying, and what characters without a collision
+   shape do on their way home (rule 28): next study.
+3. The exact side the stuck escape's ground test takes at foot height
+   (Do not reproduce): not sure, and not worth copying.

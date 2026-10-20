@@ -7,6 +7,24 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
 
 ## Where we are (2026-10-20)
 
+- **New 2026-10-20 (A): Q131–Q134 answered**, in
+  `character-movement.md` (rules 7, 18, 21, 25, 27, 28, 30, 33),
+  `connor-collision.md` rule 18 and `connor-physics.md` (landing on a
+  `KQMonster`). For B to build: **the leash loop is the original's**
+  (no extra condition on the way-home re-take; it keeps `run`, has the
+  0–1 s reaction delay); "not walking forward" = Connor has no forward /
+  back key, so a melee character **follows a walking Connor** at reach
+  and stops only when he stands (fixes the stop-and-go). Zombies:
+  **no re-take underground**; at the end of `hide` they leave the active
+  list and go to their home point, and rise again only by rule 30's own
+  test from there. Stuck escape: world diagonals NE → NW → SW → SE from
+  its feet, the round restarting on each new move, all blocked → face
+  north; the check is armed only once the walk really plays. The
+  cylinder: bottom at position + box min z, height = the larger of box
+  height and box width (goblin 0–1,600); a vertical move tests one
+  ball; landing on a monster's top = a landing plus a 250 push through
+  the mover. Idle list swap, reset distance (3D) settled.
+
 - **New 2026-10-20 (B, M5 5a-1 to 5a-9): characters move on their own**,
   from `character-movement.md` (one commit per step; plan in
   `docs/DESIGN.md` "5a"; **checked in the logs only, not by eye, not
@@ -410,19 +428,25 @@ characters and conversations done; the menus postponed) and **M5**
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Stand-ins of 5a (characters moving):** the stuck escape's world
-  diagonals and its line 1 above the feet, Connor as a cylinder for a
-  character (Q132); the stop at the attack distance instead of the
-  attack, and the leash loop it gives (Q133); the chase waits for a
-  zombie's `birth` (Q134); the reset distance (plain 3D, the note's open
-  question 2) and "all diagonals blocked: turned round" (open question
-  1); the idle list kept in the same player as `idle:<name>`. Not run in
-  the game yet: losing sight, the graveyard trap (`zomtrap.cs`),
-  `wanderAndStop`, random wander points.
+- **Stand-ins of 5a (characters moving):** A answered them all
+  2026-10-20 (Q131–Q134); what to change: the escape's round restarts
+  at north-east on each new move and all-blocked faces north (not
+  "turned round"); the stuck check starts only once the walk plays;
+  stop within reach only when Connor has no forward / back key; the
+  re-take on the way home keeps `run` and has the reaction delay; a sunk
+  zombie leaves the list and goes home at the end of `hide` and rises
+  only by rule 30 (no re-take underground); the cylinder's bottom and
+  height (goblin 0–1,600); vertical moves test one ball; the push off a
+  monster's top. Kept (confirmed or recommended): world diagonals, the
+  line 1 above the feet, the reset distance (3D), the attack stand-in
+  until the fight study, the idle list as `idle:<name>` (same look as
+  the original's swap, rule 18). Not run in the game yet: losing sight, the
+  graveyard trap leaving / re-entering, `wanderAndStop`, random wander
+  points.
 - **Next step, suggested:** for the user: the note's "How to check"
   1–11 in the original (chickens, goblin22, a chase, the leash, the
-  windmill spriggans, the zombies, the bats). For A: Q132–Q134, Q131,
-  then the fight study. For B: shadows on buildings (4d-7b-3, after a
+  windmill spriggans, the zombies, the bats). For B: build the
+  answers to Q131–Q134. For A: the fight study. For B: shadows on buildings (4d-7b-3, after a
   question on the note's loose height band). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
@@ -482,17 +506,11 @@ characters and conversations done; the menus postponed) and **M5**
 - `characters.md` open questions 1, 2 and 4 (`flags` bit 0x20, how the
   renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
   question 3 (the AI) answered 2026-10-19 in `character-movement.md`,
-  whose own open questions 1–5 are small (the all-blocked stuck
-  heading, the reset distance, the idle list swap, water for walking
-  characters) except 5, the fight: the next study.
-- For A: **Q131** (B, 2026-10-20: the cylinder Connor meets at a
-  character; vertical moves; landing on a monster's top). Not studied
-  in this session.
-- For A (asked 2026-10-20 by B, M5 5a): **Q132** (the stuck escape's
-  diagonals and line height; Connor's shape for a character's move),
-  **Q133** (the leash loops while Connor is within reach; "stops when
-  Connor is not walking forward"), **Q134** (the chase and `birth`; a
-  sunk zombie stays active).
+  whose own open questions are now: 1 water for walking characters
+  (small), 2 the fight (the next study), 3 the stuck line's exact
+  ground test at foot height (not worth copying).
+- For B (answered 2026-10-20 by A, not built): **Q131–Q134** (see
+  "Where we are").
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

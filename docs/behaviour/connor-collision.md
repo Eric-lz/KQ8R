@@ -188,12 +188,37 @@ centre 900 above the object's position).
 18. When a ball-stack object moves and the other is also a ball stack,
     **each of the mover's balls** (its centre's path from old to new
     position) is tested against an **upright cylinder** around the other
-    object, standing on the other's position. The cylinder is widened by
-    the moving ball's radius sideways and at both ends (its exact radius
-    and height come from the other object's own shape; the parts were not
-    pinned down: likely its ball radius and its box height). The ball
-    stacks don't turn with the objects. The nearest hit along the path
-    counts.
+    object. The ball stacks don't turn with the objects. The nearest hit
+    along the path counts. The cylinder (traced 2026-10-20, answers
+    Q131 (a)) is the other's ball stack wrapped up:
+    - **axis** straight up through the other's position (x, y);
+    - **radius** = the other's ball radius, which is half the larger of
+      its box's x and y sizes (goblin, box 700 × 1,600: 800);
+    - **bottom** = the other's position height **plus its box's lowest
+      z** (the bottom of its lowest ball). So a box that doesn't start at
+      0 lifts the cylinder: the Knight's from 500, the bats' from 1,170,
+      the Uglybeast's from −10;
+    - **height** = from the bottom of its lowest ball to the top of its
+      highest: the box's height when the box is taller than it is wide
+      (more than one ball), else **2 × its ball radius** (a single ball
+      resting on the box's bottom, which can stick out above a low, wide
+      box);
+    - then widened by the **moving ball's radius**: added to the radius,
+      below the bottom and above the top. The three sizes are cut to
+      whole units.
+    - Worked example (data, `BOUNDS.KQ`): a goblin's box is 700 × 1,600
+      across and 0–1,300 high, so one ball of radius 800 and a cylinder
+      of radius 800 from its feet to **1,600** (300 above its box). For
+      Connor's balls (radius 200) that is radius 1,000, from 200 below
+      its feet to 1,800 above. Connor's own cylinder: radius 200, 0 to
+      1,300 (four balls).
+    - **A purely vertical move** (no change in x and y) tests **one ball
+      only**, as against a box: the top ball when going up (or not moving
+      at all), the bottom ball when going down (answers Q131 (b)). Any
+      other move tests every ball.
+    - The same test serves both ways: Connor against a character, and a
+      character's own move against Connor or another character
+      (`character-movement.md` rule 33).
     - Hit on the side: surface direction level, pointing from the
       cylinder's axis out through the hit point.
     - Hit on the top or bottom: straight up or straight down.
