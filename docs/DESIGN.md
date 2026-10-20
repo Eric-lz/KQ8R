@@ -1005,7 +1005,8 @@ stats.
     character-verify` prints them per line. Numbers to expect (data):
     goblin22 alarm 4,000, chase from type goblin2 (3,000 / 6,000);
     sprigwnd2 team `windguys`; bats and chickens alarm 0.
-  - **5a-2, walking** (rules 1–8). A Move state: entering it asks for
+  - **5a-2, walking** (**done** 2026-10-20; goblin22 walks 917, runs
+    3,068, slides along Sara's cottage and escapes; Q132 asked) (rules 1–8). A Move state: entering it asks for
     `Stop` at a random frame and speed, then at once for `walk` or `run`
     (rule 3's fallbacks); a walk or run that ends is asked for again.
     **The step comes from the movement**: per update the loop's added-up

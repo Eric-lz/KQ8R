@@ -474,6 +474,53 @@ impl CylinderCollider {
         }
     }
 
+    /// Where a straight line from `from` to `to` first enters the
+    /// cylinder (side, top or bottom); starting inside is not a hit (as
+    /// [`BoxCollider::line_hit`]). For line tests through characters
+    /// (`character-movement.md` rule 7, mask 0xB; M5 5a-2).
+    pub fn line_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+        let c = self.position;
+        let (bottom, top) = (c[2], c[2] + self.height);
+        let r2 = self.radius * self.radius;
+        let flat2 = |p: [f32; 3]| (p[0] - c[0]).powi(2) + (p[1] - c[1]).powi(2);
+        let inside = |p: [f32; 3]| flat2(p) < r2 && p[2] > bottom && p[2] < top;
+        if inside(from) {
+            return None;
+        }
+        let d = sub(to, from);
+        let mut best: Option<f32> = None;
+        let mut keep = |t: f32| {
+            if (0.0..=1.0).contains(&t) && best.is_none_or(|b| t < b) {
+                best = Some(t);
+            }
+        };
+        // The side: |from + t d - c|² = r² in x and y.
+        let (fx, fy) = (from[0] - c[0], from[1] - c[1]);
+        let a = d[0] * d[0] + d[1] * d[1];
+        if a > 0.0 {
+            let b = 2.0 * (fx * d[0] + fy * d[1]);
+            let k = fx * fx + fy * fy - r2;
+            let disc = b * b - 4.0 * a * k;
+            if disc >= 0.0 {
+                let t = (-b - disc.sqrt()) / (2.0 * a);
+                let z = from[2] + d[2] * t;
+                if z >= bottom && z <= top {
+                    keep(t);
+                }
+            }
+        }
+        // The top and the bottom.
+        if d[2] != 0.0 {
+            for plane in [bottom, top] {
+                let t = (plane - from[2]) / d[2];
+                if flat2(lerp(from, to, t.clamp(0.0, 1.0))) <= r2 {
+                    keep(t);
+                }
+            }
+        }
+        best.map(|t| lerp(from, to, t))
+    }
+
     /// The rough check, only to save time: does the box `lo..hi`
     /// (`BallStack::reach`) overlap the cylinder's box widened by `r`?
     pub fn overlaps(&self, r: f32, lo: [f32; 3], hi: [f32; 3]) -> bool {
@@ -984,5 +1031,19 @@ mod tests {
         assert!(!g.overlaps(stack.radius, lo, hi));
         let (lo, hi) = stack.reach([0.0, 0.0, 1600.0], [0.0, 0.0, 1700.0]);
         assert!(!g.overlaps(stack.radius, lo, hi), "above it");
+    }
+
+    #[test]
+    fn a_line_enters_the_cylinder_at_its_side_or_top() {
+        // M5 5a-2: the goblin's cylinder, radius 800, height 1,300.
+        let g = goblin(0x42);
+        let p = g.line_hit([2000.0, 0.0, 500.0], [-2000.0, 0.0, 500.0]).unwrap();
+        assert!((p[0] - 800.0).abs() < 0.01 && p[2] == 500.0, "{p:?}");
+        let p = g.line_hit([0.0, 0.0, 3000.0], [0.0, 0.0, 0.0]).unwrap();
+        assert!((p[2] - 1300.0).abs() < 0.01, "the top: {p:?}");
+        assert!(g.line_hit([2000.0, 0.0, 1500.0], [-2000.0, 0.0, 1500.0]).is_none(), "over it");
+        assert!(g.line_hit([2000.0, 900.0, 500.0], [-2000.0, 900.0, 500.0]).is_none(), "beside it");
+        assert!(g.line_hit([0.0, 0.0, 500.0], [3000.0, 0.0, 500.0]).is_none(), "from inside");
+        assert!(g.line_hit([2000.0, 0.0, 500.0], [1000.0, 0.0, 500.0]).is_none(), "short of it");
     }
 }

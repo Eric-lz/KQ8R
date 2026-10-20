@@ -2296,3 +2296,20 @@ marked otherwise.
 | `.kq` keys `homeRadius`, `chaseRadius`, `attackDist` (default 1,250), `team`, `canAlwaysSeeConner`, `wanderAndStop`, `doMode` | `character-movement.md` "Data used", rule 25 | Unit test |
 | A `.kq` character without `alarmRadius` / `homeRadius` / `chaseRadius`: 0 | **Ours** (no default in the notes; every Daventry character loaded this way has `wanders=0`) | — |
 | `KQWorld::MaxMonsters` from `world.cs` | `character-movement.md` rule 20; data (Daventry 6, Ice World 10) | `character-verify.log` |
+
+### 5a-2, walking — `crates/kq8-core/src/character.rs` (`Walk`, Move), `connor_mover.rs` (`object_slide`, `line_blocked`, `drawn_line_hit`), `collide.rs` (`CylinderCollider::line_hit`), `named_anim.rs` (`loops_move_base`), `active.rs`, viewer `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A character moves only by its movement's steps: a repeating movement's frame steps added up × the phase moved, spread evenly (as Connor's loops), turned by its rotation, through its mover | `character-movement.md` rule 1; `connor-movement.md` "Forward speed comes from the animation" | Unit test (917 / 3,068 units/s); viewer: goblin22 917 walking, 3,068 running |
+| The drawing does not add a character's repeating movement's shift (a turn in its frames stays) | **Ours**, following from rule 1 (otherwise the model would run ahead and jump back at each loop) | Unit test (placement = place) |
+| Entering Move: `Stop` at a random frame and speed, then at once `walk` / `run`; a walk or run that ends is asked for again | Rule 4 | Unit test; `characters.log` |
+| `walk` / `run` and their fallbacks | Rule 3 | Unit test |
+| Steering: the automatic turn (3.5 rad/s) aimed anew each update, walking on; `noTurn` blocks it | Rule 5; `characters.md` rule 23 | Unit test |
+| A character's across pass: the ordinary slide of an animated object (normal z 0–0.7 upright; the hit and 3 retries, then stays), never head-on, no push checks | Rule 6; `pushing.md` rule 4.1 | Unit test; viewer: goblin22 slides along Sara's cottage |
+| The stuck check: after 1 s, then every 0.5 s; moved < 200 (3D) → no steering for 3 s, the first free of four diagonals 1,250 out (blocked by the drawn ground and mask 0xB: objects, characters, buildings), one further round each time, a snap turn, `run` | Rule 7 | Unit tests; viewer: goblin22 at the cottage |
+| The diagonals are the world's, in the order π/4, 3π/4, …; the line 1 unit above its feet | **Stand-in**, asked as Q132 (a), (b) | — |
+| All four blocked: turned round | **Stand-in**, the note's open question 1 | Unit test |
+| `KQMonster::setState <name> Move`: walks straight on (`walk`) | Rule 2's edge case ("put there by a script"); `walk` is **our reading** | Viewer run |
+| No gestures while walking | `characters.md` rule 28 | — |
+| `characters.log`: Move, once a second while moving (place, heading, movement, distance in the last second, steering), every hit of its own move, every stuck event with the diagonals tried | The note's "How to check" (our logs) | Viewer run |

@@ -262,6 +262,8 @@ pub fn spawn_animated(
         if a.random {
             player = player.with_random_start(&mut rng);
         }
+        // character-movement.md rule 1 (M5 5a-2).
+        player.loops_move_base = a.character.is_some();
         let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
         // A character not born yet (characters.md rule 16): not drawn;
         // only with H, as hidden objects.
@@ -686,6 +688,9 @@ pub fn anim_draw(
         let movement = player.current.min(p.movements.len().saturating_sub(1));
         let Some(drawn) = p.movements.get(movement) else { continue };
         let frame = player.frame().min(drawn.frames.len().saturating_sub(1));
+        // A character's repeating movement moves its place, not the
+        // drawing (character-movement.md rule 1; M5 5a-2).
+        let loop_moves_base = player.loops_move_base && player.movement().is_some_and(|m| m.repeat);
         // Its place may have changed (a script's `move`, objects.md Q20 d;
         // core keeps it): the body follows (M4 4d-2).
         let base = player.base;
@@ -706,7 +711,10 @@ pub fn anim_draw(
             *v = Visibility::Inherited;
         }
         p.shown = Some((movement, frame));
-        let pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
+        let mut pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
+        if loop_moves_base {
+            pose.p = [0.0; 3];
+        }
         // Only bodies that move or just stopped moving need a new pose.
         if moved || !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
             let (m, at) = combine(&pose, &p.rotation, p.position);

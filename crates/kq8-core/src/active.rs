@@ -705,6 +705,7 @@ impl WorldState {
     /// `without` are the world as a character whose mask has 0x8 / lacks
     /// it sees it (objects, characters and Connor are not in either: Q128).
     pub fn characters_gravity(&mut self, with_buildings: &dyn crate::connor_mover::MoverWorld, without: &dyn crate::connor_mover::MoverWorld) {
+        let now = self.now();
         for i in 0..self.anims.len() {
             if self.anims[i].gone {
                 continue;
@@ -712,7 +713,7 @@ impl WorldState {
             let a = &mut self.anims[i];
             let Some(c) = a.character.as_deref_mut() else { continue };
             let world = if c.hits_buildings { with_buildings } else { without };
-            let notes = c.gravity_step(&mut a.player, world);
+            let notes = c.gravity_step(&mut a.player, world, now);
             let name = a.player.name.clone();
             let at = a.player.placement();
             if let Some(k) = self.clickables.iter_mut().find(|k| k.name.eq_ignore_ascii_case(&name)) {
@@ -1541,8 +1542,9 @@ impl WorldState {
             [_, who, state, rest @ ..] if self.character_index(who).is_some() => {
                 // characters.md rule 22.
                 let i = self.character_index(who).unwrap();
+                let now = self.now();
                 let a = &mut self.anims[i];
-                let line = a.character.as_mut().unwrap().set_state(&mut a.player, state, rest);
+                let line = a.character.as_mut().unwrap().set_state(&mut a.player, state, rest, now);
                 let name = a.player.name.clone();
                 self.character_note(&name, format!("{at}: KQMonster::setState {state} {}: {line}", rest.join(" ")));
             }
@@ -2074,7 +2076,7 @@ impl WorldState {
             if let Some(i) = self.character_index(name) {
                 let a = &mut self.anims[i];
                 let who = a.player.name.clone();
-                let line = a.character.as_mut().unwrap().set_state(&mut a.player, "Wait", &[]);
+                let line = a.character.as_mut().unwrap().set_state(&mut a.player, "Wait", &[], now);
                 self.character_note(&who, format!("clearSpeak on a partner: {line} (conversation.md rule 23)"));
                 notes.push(format!("{who} to Wait"));
             }

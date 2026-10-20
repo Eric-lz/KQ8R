@@ -154,6 +154,11 @@ pub struct NamedAnimPlayer {
     pub chosen: Option<kq8_data::objects::TransitionLine>,
     /// The transition playing now (rules 5 and 6).
     pub in_transition: Option<kq8_data::objects::TransitionLine>,
+    /// A character (`character-movement.md` rule 1; M5 5a-2): a repeating
+    /// movement's steps move its place (`base`, through its mover), so the
+    /// drawing does not add their shift (as Connor's loops); a turn in the
+    /// frames is still drawn.
+    pub loops_move_base: bool,
 }
 
 impl NamedAnimPlayer {
@@ -179,6 +184,7 @@ impl NamedAnimPlayer {
             random_speed: None,
             chosen: None,
             in_transition: None,
+            loops_move_base: false,
         }
     }
 
@@ -455,7 +461,12 @@ impl NamedAnimPlayer {
 
     /// The turn the shown frame's steps give it (own space).
     pub fn turn(&self) -> Transform {
-        self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()))
+        let mut t = self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()));
+        if self.loops_move_base && self.movement().is_some_and(|m| m.repeat) {
+            // Its steps moved the place instead; a turn in the frames stays.
+            t.p = [0.0; 3];
+        }
+        t
     }
 
     /// Where it stands now: the steps of the shown frame, then its place.

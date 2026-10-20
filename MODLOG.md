@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-2: characters walk
+
+**Changed:** `kq8-core/src/character.rs`: the Move state (new `Walk`): entering it (`Stop` at a random frame, then `walk` / `run`), the step from the movement playing (its frame steps × the phase moved, turned by its heading) given to its mover, steering with the 3.5 rad/s turn, the stuck check and escape, a once-a-second line; `KQMonster::setState <name> Move` now walks it straight on. `connor_mover.rs`: a character's across pass slides like an animated object (never head-on, 3 retries); the flying mover takes the step too; new line test `line_blocked` (drawn ground, buildings, objects, characters by mask). `collide.rs`: a line against a character's cylinder. `named_anim.rs` / viewer `anim_view.rs`: a character's repeating movement moves its place, not its drawing. New question **Q132** (the stuck escape's diagonals and line height; the shape of Connor for a character). 6 new tests. DESIGN, provenance.
+**Why:** `character-movement.md` rules 1–8 (step 2 of 5a).
+**Tested how:** `cargo test --workspace` (402 core tests pass), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 286284,192527,1.5708 --command "KQMonster::setState goblin22 Move",30 --frames 2500`, read `characters.log`.
+**Result:** goblin22 walks straight on at **917 units/s** (each once-a-second line: 917), meets Sara's cottage at update 93 and slides along its wall, is stuck at update 109 (moved 12 in 0.5 s): the first diagonal blocked by the ground, the second free, snap turn, `run`; after two more stuck events it runs off at **3,068 units/s**, steering off for 3 s each time. Unit tests: 917 / 3,068 a second from the steps, the model drawn at its place, the turn 3.5 rad/s and the arc, `noTurn`, stuck at 1 s and again at 1.5 s one diagonal further, all blocked → turned round, a wall slide that never stops head-on.
+**Still broken / not tested:** **Not looked at by eye.** Nobody walks by themselves yet (wandering, chasing: 5a-4 to 5a-7). The character's own move does not see objects, other characters or Connor yet (5a-3). The diagonals' frame and the test line's height are stand-ins (Q132).
+**Next:** 5a-3, a character's own touches.
+
 ## 2026-10-20 M5 step 5a-1: what the characters' movement rules read
 
 **Changed:** Plan for M5's first part (5a, `character-movement.md`) in `docs/DESIGN.md`. `kq8-data/src/characters.rs`: the monster list's team, chase mode and attack distance, the type list's chase mode and attack distance (new `ChaseMode`); the character keys `homeRadius`, `chaseRadius`, `attackDist`, `team`, `canAlwaysSeeConner`, `wanderAndStop`, `doMode`; new `AiSettings` (the list's / type's values replacing the keys). `kq8 character-verify` prints them per line and `KQWorld::MaxMonsters` per world; the viewer keeps them per character and logs them at load in `characters.log`. Provenance.

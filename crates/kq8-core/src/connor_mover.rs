@@ -27,11 +27,21 @@ pub trait GroundLookup {
     fn water(&self, _x: f32, _y: f32) -> Option<(f32, u32)> {
         None
     }
+    /// Where a straight line first meets the **drawn** ground (the
+    /// surface grid: the water surface where there is water); `None`
+    /// without such a grid (M5 5a-2).
+    fn drawn_line_hit(&self, _from: [f32; 3], _to: [f32; 3]) -> Option<[f32; 3]> {
+        None
+    }
 }
 
 impl GroundLookup for kq8_data::Terrain {
     fn ground(&self, x: f32, y: f32) -> Option<(f32, [f32; 3])> {
         self.floor_at(x, y).map(|g| (g.height, g.normal))
+    }
+
+    fn drawn_line_hit(&self, from: [f32; 3], to: [f32; 3]) -> Option<[f32; 3]> {
+        crate::camera::ground_line_hit(&|x, y| self.height_at(x, y).map(|g| g.height), self.settings.square_size(), from, to)
     }
 
     fn water(&self, x: f32, y: f32) -> Option<(f32, u32)> {
@@ -94,6 +104,15 @@ pub trait MoverWorld {
     /// A scripted pushable's touch is not a hit (`pushing.md` rule 3):
     /// `name` is passed through for the rest of this update's move.
     fn pass_through(&self, _name: &str) {}
+    /// What blocks a straight line from `from` to `to` first: the drawn
+    /// ground (always tested), and what the scene holds whose type shares
+    /// a bit with `mask` (buildings count as type 8). `skip` (lower case)
+    /// is never tested (the one looking). `None` = the line is free. For
+    /// the stuck escape (`character-movement.md` rule 7, M5 5a-2) and the
+    /// sight test (rule 20).
+    fn line_blocked(&self, _from: [f32; 3], _to: [f32; 3], _mask: u32, _skip: &str) -> Option<String> {
+        None
+    }
 }
 
 /// What the push check made of a touch, the answer of the `told` of
@@ -392,6 +411,37 @@ impl MoverWorld for Scene<'_> {
         std::mem::take(&mut *self.notes.borrow_mut())
     }
 
+    fn line_blocked(&self, from: [f32; 3], to: [f32; 3], mask: u32, skip: &str) -> Option<String> {
+        let mut best: Option<(f32, String)> = None;
+        let mut keep = |p: [f32; 3], what: &str| {
+            let d = length(sub(p, from));
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                best = Some((d, what.to_string()));
+            }
+        };
+        if let Some(p) = self.ground.drawn_line_hit(from, to) {
+            keep(p, "the ground");
+        }
+        if mask & 0x8 != 0 {
+            for b in self.buildings {
+                if let Some(p) = b.line_hit(from, to) {
+                    keep(p, &format!("building {}", b.name));
+                }
+            }
+        }
+        for o in self.objects.iter().filter(|o| o.kind.collision_type & mask != 0 && !o.name.eq_ignore_ascii_case(skip)) {
+            if let Some(p) = o.line_hit(from, to) {
+                keep(p, &format!("object {}", o.name));
+            }
+        }
+        for c in self.characters.iter().filter(|c| c.collision_type & mask != 0 && !c.name.eq_ignore_ascii_case(skip)) {
+            if let Some(p) = c.line_hit(from, to) {
+                keep(p, &format!("character {}", c.name));
+            }
+        }
+        best.map(|(_, w)| w)
+    }
+
     fn pass_through(&self, name: &str) {
         self.passed.borrow_mut().push(name.to_string());
     }
@@ -609,6 +659,12 @@ pub struct Mover {
     /// `keepOnGround=1`: the ground check puts it onto the water surface,
     /// not the floor (rule 8, `water.md`).
     pub keep_on_surface: bool,
+    /// A character's own move (`character-movement.md` rule 6; M5 5a-2):
+    /// the ordinary slide of an animated object in the across pass (a
+    /// surface whose normal z is between 0 and 0.7 counts as upright, the
+    /// hit and 3 retries, then it stays at the contact), never head-on, no
+    /// push checks. Connor: off.
+    pub object_slide: bool,
 }
 
 /// What the down pass ended on.
@@ -716,6 +772,7 @@ impl Mover {
             falls: true,
             terrain_in_passes: true,
             keep_on_surface: false,
+            object_slide: false,
         }
     }
 
@@ -734,6 +791,7 @@ impl Mover {
         m.terrain_in_passes = mask & TERRAIN_BIT != 0;
         m.keep_on_ground = keep_on_ground != 0;
         m.keep_on_surface = keep_on_ground == 1;
+        m.object_slide = true;
         m
     }
 
@@ -744,11 +802,11 @@ impl Mover {
     /// its feet within its height, up by up to [`FLY_UP`]. The raise uses
     /// the terrain only (a building surface above its feet: not built).
     /// Returns the update's report and what stopped the drop, if anything.
-    pub fn fly_update(&mut self, world: &dyn MoverWorld) -> (Report, Option<String>) {
+    pub fn fly_update(&mut self, wanted: [f32; 3], world: &dyn MoverWorld) -> (Report, Option<String>) {
         self.step_up = 0.0;
         self.step_down = 0.0;
         self.use_gravity = false;
-        let report = self.update([0.0; 3], world);
+        let report = self.update(wanted, world);
         let start = self.position;
         let end = add(start, [0.0, 0.0, -FLY_DOWN]);
         let stop = nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end));
@@ -921,7 +979,7 @@ impl Mover {
         // Head-on only acts in the Move state (Fall is not Move).
         // Head-on also acts while jumping (state Jump), where a steep
         // surface counts too.
-        let head_on_allowed = wish.moving && matches!(self.state, State::Normal | State::Jump);
+        let head_on_allowed = wish.moving && !self.object_slide && matches!(self.state, State::Normal | State::Jump);
         self.steep_head_on = head_on_allowed && wish.steep_head_on && self.state == State::Jump;
         self.push = wish.push;
         // Rule 2.2: not jumping or falling ("on the ground" when the
@@ -1108,6 +1166,9 @@ impl Mover {
         hits: &mut u32,
         report: &mut Report,
     ) -> &'static str {
+        if self.object_slide {
+            return self.object_across(world, start, target, pass, hits, report);
+        }
         let mut outcome = "free";
         // Rule 2.4: the across pass and its slides, not the down pass's.
         let across_pass = pass == "across";
@@ -1223,6 +1284,47 @@ impl Mover {
 }
 
 impl Mover {
+    /// A character's across move (`character-movement.md` rule 6, the
+    /// ordinary slide of an animated object as `pushing.md` rule 4.1):
+    /// against what its scene holds; a hit slides it along the surface (a
+    /// normal z between 0 and 0.7 counts as an upright wall), the hit and
+    /// [`OBJECT_RETRIES`] retries, then it stays at the contact. Never
+    /// head-on, nothing is pushed. Returns `free`, `glance` or `3 hits`.
+    fn object_across(&mut self, world: &dyn MoverWorld, mut start: [f32; 3], mut target: [f32; 3], pass: &'static str, hits: &mut u32, report: &mut Report) -> &'static str {
+        let mut outcome = "free";
+        let mut pass = if pass == "down slide" { "slide" } else { pass };
+        let mut retries = 0;
+        loop {
+            let Some(h) = world.sweep(&self.balls, start, target) else {
+                self.position = target;
+                return outcome;
+            };
+            *hits += 1;
+            let angle = head_on_angle(sub(target, start), h.normal);
+            let contact = h.position;
+            let mut n = h.normal;
+            if n[2] > 0.0 && n[2] < OBJECT_WALL_NORMAL_Z {
+                let flat = (n[0] * n[0] + n[1] * n[1]).sqrt();
+                n = [n[0] / flat, n[1] / flat, 0.0];
+            }
+            let last = retries == OBJECT_RETRIES;
+            report.hits.push(HitRecord { pass, hit: h, angle, result: if last { "3 hits" } else { "glance" } });
+            self.position = contact;
+            if last {
+                return "3 hits";
+            }
+            outcome = "glance";
+            let along = project_onto(target, contact, n);
+            if sub(along, contact).iter().all(|v| v.abs() < SLIDE_MIN) {
+                return outcome;
+            }
+            target = along;
+            start = contact;
+            pass = "slide";
+            retries += 1;
+        }
+    }
+
     /// The push check of `pushing.md` rule 2 for a hit `h` on pushable
     /// `t` (rule 2.1, Connor moving, holds: this is his move).
     fn push_check(&self, h: &Hit, t: &PushTarget, across_pass: bool) -> PushTouch {
@@ -1600,6 +1702,50 @@ mod tests {
         assert_eq!((r.down, r.check), (DownResult::None, "walkable"));
         assert!(m.on_ground);
         assert_eq!(m.fall_timer, 0.5);
+    }
+
+    /// A wall: the plane x = 1,000 (balls stop with their centre a radius
+    /// short of it), its surface direction `normal`.
+    struct Wall {
+        normal: [f32; 3],
+    }
+    impl MoverWorld for Wall {
+        fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+            Some((0.0, [0.0, 0.0, 1.0]))
+        }
+        fn sweep(&self, balls: &BallStack, from: [f32; 3], to: [f32; 3]) -> Option<Hit> {
+            let stop = 1000.0 - balls.radius;
+            if to[0] <= stop + 0.001 || from[0] > stop + 0.001 {
+                return None;
+            }
+            let t = (stop - from[0]) / (to[0] - from[0]);
+            let p = [stop, from[1] + (to[1] - from[1]) * t, from[2]];
+            Some(Hit { position: p, touch: p, normal: self.normal, what: "wall".into(), monster: false })
+        }
+    }
+
+    #[test]
+    fn a_character_slides_along_a_wall_never_head_on() {
+        // character-movement.md rule 6 (M5 5a-2): straight into the wall
+        // it is not stopped head-on but slides (nothing left: stays); at an
+        // angle it slides along.
+        let mut m = Mover::character([0.0, 0.0, 0.0], true, [-100.0; 3], [100.0, 100.0, 500.0], (0x42, 0x281F), (325.0, 325.0), -1);
+        m.position = [800.0, 0.0, 0.0];
+        let r = m.update([200.0, 0.0, 0.0], &Wall { normal: [-1.0, 0.0, 0.0] });
+        assert!(!r.head_on && r.across == "glance", "{:?}", r.hits);
+        assert!((m.position[0] - 900.0).abs() < 0.01 && m.position[1].abs() < 0.01);
+        let r = m.update([200.0, 200.0, 0.0], &Wall { normal: [-1.0, 0.0, 0.0] });
+        assert_eq!(r.across, "glance");
+        assert!((m.position[0] - 900.0).abs() < 0.01 && (m.position[1] - 200.0).abs() < 0.01, "{:?}", m.position);
+        // A surface tilted less than 0.7 toward up counts as upright: the
+        // slide stays level.
+        m.position = [800.0, 0.0, 0.0];
+        m.update([200.0, 200.0, 0.0], &Wall { normal: [-0.8, 0.0, 0.6] });
+        assert!(m.position[2].abs() < 0.01, "{:?}", m.position);
+        // Connor keeps his head-on stop.
+        let mut c = Mover::new([800.0, 0.0, 0.0], true);
+        let r = c.update([200.0, 0.0, 0.0], &Wall { normal: [-1.0, 0.0, 0.0] });
+        assert!(r.head_on);
     }
 
     #[test]
@@ -2223,14 +2369,14 @@ mod tests {
         let mut m = Mover::character([2000.0, 0.0, 1000.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), -1);
         let mut zs = Vec::new();
         for _ in 0..8 {
-            m.fly_update(&Pond);
+            m.fly_update([0.0; 3], &Pond);
             zs.push(m.position[2]);
         }
         assert_eq!(&zs[..3], &[850.0, 700.0, 550.0]);
         assert_eq!(*zs.last().unwrap(), 0.0, "{zs:?}");
         // Under the ground by 400 (within its height): up 300 a time.
         let mut u = Mover::character([2000.0, 0.0, -400.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 0);
-        u.fly_update(&Pond);
+        u.fly_update([0.0; 3], &Pond);
         assert!(u.position[2] > -400.0, "{}", u.position[2]);
     }
 

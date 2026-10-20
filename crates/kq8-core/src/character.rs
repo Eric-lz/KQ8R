@@ -133,7 +133,50 @@ pub struct Character {
     falling_from: Option<f32>,
     /// Its mover has run once (the first update's log line).
     mover_started: bool,
+    /// Walking (M5 5a-2, `character-movement.md` rules 1–8).
+    pub walk: Walk,
 }
+
+/// A character's walking (`character-movement.md` rules 1–8; M5 5a-2).
+#[derive(Debug, Clone, Default)]
+pub struct Walk {
+    /// `run` was asked for rather than `walk` (rule 3).
+    pub run: bool,
+    /// The point (x, y) it steers at, if any (rule 8); `None` = straight on.
+    pub steer: Option<[f32; 2]>,
+    /// No steering before this game time (the stuck escape, rule 7).
+    pub steer_off_until: f64,
+    /// Game time of the next stuck check, and where it was at the last one.
+    next_check: f64,
+    check_from: [f32; 3],
+    /// Stuck events so far: each search starts one diagonal further round.
+    stuck_count: usize,
+    /// This update's step from the movement playing (world space), taken
+    /// by its mover.
+    pub step: [f32; 3],
+    /// The stuck escape ran in the last mover update (a wanderer takes its
+    /// next point then, rule 7; M5 5a-5).
+    pub stuck_now: bool,
+    /// Once a second while moving: where it was then, and when (the log).
+    second_from: Option<([f32; 3], f64)>,
+}
+
+/// The stuck check (rule 7): first this long after starting to move,
+/// then every [`STUCK_EVERY`] s; stuck if it moved less than
+/// [`STUCK_DISTANCE`] (3D) since the last check.
+pub const STUCK_FIRST: f64 = 1.0;
+pub const STUCK_EVERY: f64 = 0.5;
+pub const STUCK_DISTANCE: f32 = 200.0;
+/// The stuck escape: no steering for this long; the diagonals are tested
+/// this far out; the mask of what blocks them (plain objects, characters,
+/// buildings; rule 7).
+pub const STUCK_NO_STEER: f64 = 3.0;
+pub const STUCK_LOOK: f32 = 1250.0;
+pub const STUCK_MASK: u32 = 0xB;
+/// **Stand-in** (rule 7 says "at its own height"): the diagonal test line
+/// runs level this far above its position, so the flat ground under its
+/// feet does not block it by rounding (asked, Q132).
+pub const STUCK_LINE_LIFT: f32 = 1.0;
 
 /// What one update did: the player's step (`None` when not updated) and
 /// lines for the log.
@@ -173,6 +216,7 @@ impl Character {
             bounds: None,
             falling_from: None,
             mover_started: false,
+            walk: Walk::default(),
         }
     }
 
@@ -187,11 +231,14 @@ impl Character {
     /// off until born). A script's `move` has set the player's position;
     /// the mover starts from there. Returns log lines: the first update,
     /// leaving the ground, landing.
-    pub fn gravity_step(&mut self, player: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld) -> Vec<String> {
+    pub fn gravity_step(&mut self, player: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld, now: f64) -> Vec<String> {
         let mut notes = Vec::new();
         if !self.in_range || self.state == State::Birth {
             return notes;
         }
+        // M5 5a-2 (character-movement.md rule 1): the movement's step.
+        let wanted = std::mem::take(&mut self.walk.step);
+        self.walk.stuck_now = false;
         let first = !std::mem::replace(&mut self.mover_started, true);
         if self.flying {
             let Some(m) = self.mover.as_deref_mut() else { return notes };
@@ -200,8 +247,9 @@ impl Character {
                 notes.push(format!("mover: first update at z {:.0}: flyingObject=1, the flying mover (no gravity, no steps; down up to 150, up up to 300; rule 8, not sure of every detail)", m.position[2]));
             }
             let before = m.position[2];
-            let (_, on) = m.fly_update(world);
+            let (r, on) = m.fly_update(wanted, world);
             player.base.position = m.position;
+            own_hits(&r, &mut notes);
             let z = m.position[2];
             if (z - before).abs() > 0.5 {
                 if self.falling_from.is_none() {
@@ -211,6 +259,7 @@ impl Character {
             } else if let Some(from) = self.falling_from.take() {
                 notes.push(format!("flying: settles at z {z:.0} on {} (moved {:.0})", on.unwrap_or_else(|| "nothing (the raise)".into()), z - from));
             }
+            self.after_move(player, world, now, &mut notes);
             return notes;
         }
         let gravity = self.gravity;
@@ -240,10 +289,11 @@ impl Character {
             m.use_gravity = gravity;
         }
         let before = m.position[2];
-        let r = m.update([0.0; 3], world);
+        let r = m.update(wanted, world);
         player.base.position = m.position;
         let z = m.position[2];
-        for e in r.events {
+        own_hits(&r, &mut notes);
+        for e in &r.events {
             notes.push(format!("mover: {e}"));
         }
         if !m.on_ground && z < before - 0.5 && self.falling_from.is_none() {
@@ -256,7 +306,167 @@ impl Character {
                 notes.push(format!("lands on {on} at z {z:.0} (fell {:.0})", from - z));
             }
         }
+        self.after_move(player, world, now, &mut notes);
         notes
+    }
+
+    /// After its mover (rule 7): in Move, the once-a-second line and the
+    /// stuck check.
+    fn after_move(&mut self, player: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld, now: f64, notes: &mut Vec<String>) {
+        if self.state != State::Move {
+            self.walk.second_from = None;
+            return;
+        }
+        let pos = player.base.position;
+        match self.walk.second_from {
+            Some((from, t)) if now + 1e-6 >= t + 1.0 => {
+                let moved = ((pos[0] - from[0]).powi(2) + (pos[1] - from[1]).powi(2)).sqrt();
+                let steering = match self.walk.steer {
+                    _ if now < self.walk.steer_off_until => format!("off until {:.2} (stuck escape)", self.walk.steer_off_until),
+                    Some(p) => format!("at ({:.0}, {:.0})", p[0], p[1]),
+                    None => "none (straight on)".into(),
+                };
+                notes.push(format!(
+                    "moving: at ({:.0}, {:.0}, {:.0}) heading {:.3}, '{}' (speed {:.3}), {moved:.0} units across in the last {:.2} s; steering {steering}",
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    heading_of(&player.base.rotation),
+                    player.movement_name(),
+                    player.speed(),
+                    now - t,
+                ));
+                self.walk.second_from = Some((pos, now));
+            }
+            None => self.walk.second_from = Some((pos, now)),
+            _ => {}
+        }
+        if now + 1e-6 < self.walk.next_check {
+            return;
+        }
+        let d: [f32; 3] = std::array::from_fn(|k| pos[k] - self.walk.check_from[k]);
+        let moved = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        self.walk.check_from = pos;
+        self.walk.next_check = now + STUCK_EVERY;
+        if moved < STUCK_DISTANCE {
+            self.stuck_escape(player, world, now, moved, notes);
+        }
+    }
+
+    /// Rule 7, the stuck escape: no steering for 3 s; the first free one of
+    /// the four diagonals, from one further round each time; a snap turn
+    /// to it; `run`.
+    fn stuck_escape(&mut self, player: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld, now: f64, moved: f32, notes: &mut Vec<String>) {
+        use crate::connor_auto::wrap;
+        let pos = player.base.position;
+        let from = [pos[0], pos[1], pos[2] + STUCK_LINE_LIFT];
+        let mut tried = Vec::new();
+        let mut chosen = None;
+        for i in 0..4 {
+            let k = (self.walk.stuck_count + i) % 4;
+            // Rule 7's "four diagonals", taken as the world's (**our
+            // reading**, asked as Q132): headings π/4 + k·π/2.
+            let h = std::f32::consts::FRAC_PI_4 + k as f32 * std::f32::consts::FRAC_PI_2;
+            let to = [from[0] + STUCK_LOOK * h.sin(), from[1] - STUCK_LOOK * h.cos(), from[2]];
+            match world.line_blocked(from, to, STUCK_MASK, &player.name) {
+                Some(what) => tried.push(format!("{h:.3} blocked by {what}")),
+                None => {
+                    tried.push(format!("{h:.3} free"));
+                    chosen = Some(h);
+                    break;
+                }
+            }
+        }
+        self.walk.stuck_count += 1;
+        let was = heading_of(&player.base.rotation);
+        // The note's open question 1: all four blocked → "a fixed
+        // half-turn heading"; **stand-in**: turned round.
+        let (to, how) = match chosen {
+            Some(h) => (h, "the first free diagonal"),
+            None => (wrap(was + std::f32::consts::PI), "all four blocked: turned round (stand-in, the note's open question 1)"),
+        };
+        let r = player.base.rotation;
+        player.base.rotation = times(&r, &kq8_data::objects::rotation([0.0, 0.0, wrap(to - was)]));
+        self.turn_to = None;
+        self.walk.steer_off_until = now + STUCK_NO_STEER;
+        self.walk.stuck_now = true;
+        let run = self.set_moving(player, true);
+        notes.push(format!(
+            "is stuck (rule 7): moved {moved:.0} (< {STUCK_DISTANCE}) since the last check; diagonals: {}; snap turn {was:.3} -> {:.3} ({how}); no steering until {:.2}; run: {run}",
+            tried.join(", "),
+            heading_of(&player.base.rotation),
+            self.walk.steer_off_until
+        ));
+    }
+
+    /// Rule 3: the movement for walking or running, with its fallbacks
+    /// (no `run`: `walk`; no `walk` but `run`: `run`).
+    pub fn moving_name(player: &NamedAnimPlayer, run: bool) -> &'static str {
+        let has = |n: &str| player.movements.iter().any(|m| m.name.eq_ignore_ascii_case(n));
+        match (run, has("run"), has("walk")) {
+            (true, true, _) | (false, true, false) => "run",
+            _ => "walk",
+        }
+    }
+
+    /// Asks for `walk` or `run` (rule 3) the ordinary way. Returns what
+    /// happened, for the log.
+    pub fn set_moving(&mut self, player: &mut NamedAnimPlayer, run: bool) -> String {
+        self.walk.run = run;
+        let name = Self::moving_name(player, run);
+        if player.movement_name().eq_ignore_ascii_case(name) && player.waiting.is_none() {
+            return format!("'{name}' already playing");
+        }
+        match player.request(name) {
+            Request::AtOnce(st) => format!("'{name}' starts at once{}", if st.unknown { " (not in its list: movement 0)" } else { "" }),
+            Request::Waiting => format!("'{name}' waits for '{}' to end", player.movement_name()),
+            Request::WaitingForever => format!("'{name}' waits for '{}', which never ends", player.movement_name()),
+            Request::Transition(t) => format!("transition '{}' toward '{name}'", t.via),
+        }
+    }
+
+    /// Rule 4: into Move. `Stop` at a random frame and speed first, then at
+    /// once `walk` or `run`; the stuck check starts (rule 7). Returns the
+    /// log line.
+    pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, now: f64, run: bool, why: &str) -> String {
+        let from = self.state;
+        self.state = State::Move;
+        self.wait_at = None;
+        self.special.clear();
+        self.special_playing = None;
+        let mut first = Vec::new();
+        self.start_up_in_state(player, &mut first);
+        let stop = self.ask_stop(player, true);
+        let moving = self.set_moving(player, run);
+        self.walk.next_check = now + STUCK_FIRST;
+        self.walk.check_from = player.base.position;
+        self.walk.second_from = None;
+        let first = first.iter().map(|l| format!("{l}; ")).collect::<String>();
+        format!("{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4); first stuck check at {:.2} (rule 7)", self.walk.next_check)
+    }
+
+    /// Rule 1: this update's step from a repeating movement (its frame
+    /// steps added up × the phase moved, spread evenly as Connor's loops),
+    /// turned by its rotation, for its mover. Nothing when a movement
+    /// started, ended or changed in this update, or for a play-once one.
+    fn movement_step(&mut self, player: &NamedAnimPlayer, played: &Played) {
+        if played.started.is_some() || played.transition.is_some() || played.finished.is_some() {
+            return;
+        }
+        let Some(m) = player.movement().filter(|m| m.repeat) else { return };
+        let mut d = played.to - played.from;
+        if player.speed() >= 0.0 && d < 0.0 {
+            d += 1.0;
+        } else if player.speed() < 0.0 && d > 0.0 {
+            d -= 1.0;
+        }
+        if d == 0.0 {
+            return;
+        }
+        let sum = m.frame_steps.iter().fold([0.0f32; 3], |a, t| [a[0] + t.p[0], a[1] + t.p[1], a[2] + t.p[2]]);
+        let r = &player.base.rotation;
+        // Row vectors: own step × rotation.
+        self.walk.step = std::array::from_fn(|j| (0..3).map(|i| sum[i] * d * r[i][j]).sum());
     }
 
     /// One update (rule 11: nothing at all while off or hidden).
@@ -282,8 +492,16 @@ impl Character {
                 }
             }
         }
-        self.turn_step(player, dt, notes);
+        // M5 5a-2, rule 5: in Move, steering aims the turn at its point
+        // anew each update (not during the stuck escape's 3 s; noTurn
+        // blocks it).
+        let steering = self.state == State::Move && !self.no_turn && now >= self.walk.steer_off_until;
+        if let Some(p) = self.walk.steer.filter(|_| steering) {
+            self.turn_to = Some(p);
+        }
+        self.turn_step(player, dt, notes, self.state == State::Move);
         let played = player.advance(dt);
+        self.movement_step(player, &played);
         if let Some(t) = &played.transition {
             notes.push(format!("transition '{}' starts: the from point was reached at phase {:.4} (rule 20, connor-movement.md rule 3)", t.name, played.to));
         }
@@ -329,8 +547,11 @@ impl Character {
             16 => "stop",
             _ => return format!("code {code}: above 16, nothing (conversation.md rule 18)"),
         };
-        // Rule 28: not walking (none walk before M5), the movement playing
-        // can be cut short or has ended, and the list has the gesture.
+        // Rule 28: not walking, the movement playing can be cut short or
+        // has ended, and the list has the gesture.
+        if self.state == State::Move {
+            return format!("code {code}: '{gesture}' not played: walking (rule 28)");
+        }
         if !player.movements.iter().any(|m| m.name.eq_ignore_ascii_case(gesture)) {
             return format!("code {code}: no '{gesture}' in its list: nothing (rule 28)");
         }
@@ -418,7 +639,7 @@ impl Character {
 
     /// One update of the turn (rule 23): the rotation turns about the
     /// world's z by at most 3.5 rad/s × dt.
-    fn turn_step(&mut self, player: &mut NamedAnimPlayer, dt: f32, notes: &mut Vec<String>) {
+    fn turn_step(&mut self, player: &mut NamedAnimPlayer, dt: f32, notes: &mut Vec<String>, quiet: bool) {
         use crate::connor_auto::{heading_towards, wrap, AUTO_TURN_RATE};
         let Some(to) = self.turn_to else { return };
         let r = player.base.rotation;
@@ -432,6 +653,11 @@ impl Character {
             step * left.signum()
         };
         player.base.rotation = times(&r, &kq8_data::objects::rotation([0.0, 0.0, by]));
+        // While walking the turn is aimed anew each update: only real
+        // turns are logged.
+        if quiet && by.abs() < 0.001 {
+            return;
+        }
         let done = if self.turn_to.is_none() { "; turn done" } else { "" };
         notes.push(format!("turning to ({:.0}, {:.0}): heading {heading:.3} -> {:.3} (by {by:.3}){done}", to[0], to[1], heading_of(&player.base.rotation)));
     }
@@ -544,6 +770,13 @@ impl Character {
                 notes.push(format!("Special: '{ended}' ended; next item"));
                 self.special_next(player, notes);
             }
+            State::Move => {
+                // character-movement.md rule 4: a walk or run that ends is
+                // asked for again.
+                let run = self.walk.run;
+                let again = self.set_moving(player, run);
+                notes.push(format!("'{ended}' ended in Move: {again} (character-movement.md rule 4)"));
+            }
             State::None => notes.push(format!("'{ended}' ended in no state: holds its last frame (rule 15)")),
             s => notes.push(format!("'{ended}' ended in {s:?}: nothing more")),
         }
@@ -551,7 +784,7 @@ impl Character {
 
     /// `KQMonster::setState <name> <state> [words…]` (rule 22). Returns
     /// the log line.
-    pub fn set_state(&mut self, player: &mut NamedAnimPlayer, state: &str, words: &[String]) -> String {
+    pub fn set_state(&mut self, player: &mut NamedAnimPlayer, state: &str, words: &[String], now: f64) -> String {
         let mut notes = Vec::new();
         if state.eq_ignore_ascii_case("Wait") {
             self.wait_at = None;
@@ -570,8 +803,13 @@ impl Character {
             self.state = State::Birth;
             self.wait_at = None;
             notes.push("state Birth (Unborn); hiding a character that was drawn is not done (none in Daventry)".into());
-        } else if state.eq_ignore_ascii_case("Move") || state.eq_ignore_ascii_case("Die") {
-            notes.push(format!("{state}: walking and dying are M5; state unchanged ({:?})", self.state));
+        } else if state.eq_ignore_ascii_case("Move") {
+            // character-movement.md "Edge cases": not active, it just
+            // walks straight on (`walk`, as wandering asks: our reading).
+            self.walk.steer = None;
+            notes.push(self.enter_move(player, now, false, "setState Move"));
+        } else if state.eq_ignore_ascii_case("Die") {
+            notes.push(format!("{state}: dying is the fight study; state unchanged ({:?})", self.state));
         } else if CONNOR_ONLY.iter().any(|s| s.eq_ignore_ascii_case(state)) {
             // "Do not reproduce": the original leaves it in an empty state.
             notes.push(format!("{state} is a state only Connor has: logged and ignored (Do not reproduce); state stays {:?}", self.state));
@@ -616,6 +854,19 @@ pub fn heading_of(r: &[[f32; 3]; 3]) -> f32 {
     // Row vectors: (0, −1, 0) × R = −(second row).
     let (x, y) = (-r[1][0], -r[1][1]);
     x.atan2(-y)
+}
+
+/// `character-movement.md` rule 6: the hits of a character's own move
+/// (up: stop; across and slides: slide, stays after the 3rd retry), for
+/// the log. Down-pass landings are logged as landings.
+fn own_hits(r: &crate::connor_mover::Report, notes: &mut Vec<String>) {
+    for h in r.hits.iter().filter(|h| h.pass != "down") {
+        let (p, n) = (h.hit.position, h.hit.normal);
+        notes.push(format!(
+            "own move: {} pass hit {} at ({:.0}, {:.0}, {:.0}), surface ({:.2}, {:.2}, {:.2}): {} (rule 6)",
+            h.pass, h.hit.what, p[0], p[1], p[2], n[0], n[1], n[2], h.result
+        ));
+    }
 }
 
 /// a × b (row-vector rotations: a first, then b).
@@ -804,7 +1055,7 @@ mod tests {
         let mut c = character(0x10);
         c.in_range = false;
         let mut p = player(0, None, None);
-        let line = c.set_state(&mut p, "special", &["caw".to_string()]);
+        let line = c.set_state(&mut p, "special", &["caw".to_string()], 0.0);
         assert!(line.contains("start-up (the Special state's movement request") && line.contains("kept, nothing queued"), "{line}");
         assert!(c.start_up(&mut p, 0.0, "again").is_none(), "only once");
         assert_eq!(c.wait_due(&mut p, 1.0), None, "nothing queued");
@@ -881,7 +1132,7 @@ mod tests {
         assert_eq!(c.state, State::Wait);
         // Special with items to come: Stop asked for, the state stays.
         let mut log = Vec::new();
-        c.set_state(&mut p, "special", &["attack,caw".to_string()]);
+        c.set_state(&mut p, "special", &["attack,caw".to_string()], 0.0);
         let line = c.after_speech(&mut p);
         assert!(line.contains("refused") && c.state == State::Special, "{line}");
         // ...with its last movement started: Wait.
@@ -929,12 +1180,12 @@ mod tests {
         p.base.position = [0.0, 0.0, 2000.0];
         c.mover = Some(Box::new(crate::connor_mover::Mover::character(p.base.position, true, [-50.0; 3], [50.0, 50.0, 500.0], (0x42, 0x281F), (325.0, 325.0), -1)));
         c.in_range = false;
-        assert!(c.gravity_step(&mut p, &Flat).is_empty());
+        assert!(c.gravity_step(&mut p, &Flat, 0.0).is_empty());
         assert_eq!(p.base.position[2], 2000.0, "not while off");
         c.in_range = true;
         let mut log = Vec::new();
         for _ in 0..60 {
-            log.extend(c.gravity_step(&mut p, &Flat));
+            log.extend(c.gravity_step(&mut p, &Flat, 0.0));
         }
         assert_eq!(p.base.position[2], 100.0, "{log:?}");
         let joined = log.join("
@@ -943,7 +1194,7 @@ mod tests {
         // Gravity off (setMonUseGravity 0): it stays.
         p.base.position[2] = 900.0;
         c.gravity = false;
-        c.gravity_step(&mut p, &Flat);
+        c.gravity_step(&mut p, &Flat, 0.0);
         assert_eq!(p.base.position[2], 900.0);
     }
 
@@ -975,7 +1226,7 @@ mod tests {
         let mut p = player(1, Some("stop"), None);
         let mut log = Vec::new();
         let n = run(&mut c, &mut p, 0, 2, &mut log);
-        let line = c.set_state(&mut p, "special", &["caw,attack".to_string()]);
+        let line = c.set_state(&mut p, "special", &["caw,attack".to_string()], 0.0);
         assert!(line.contains("'caw' starts at once"), "{line}");
         assert_eq!(c.state, State::Special);
         let n = run(&mut c, &mut p, n, 17, &mut log);
@@ -989,11 +1240,136 @@ mod tests {
     fn other_states_are_logged() {
         let mut c = character(0x10);
         let mut p = player(1, Some("stop"), None);
-        assert!(c.set_state(&mut p, "jump", &[]).contains("only Connor has"));
-        assert!(c.set_state(&mut p, "dance", &[]).contains("cannot find state"));
-        assert!(c.set_state(&mut p, "die", &[]).contains("M5"));
+        assert!(c.set_state(&mut p, "jump", &[], 0.0).contains("only Connor has"));
+        assert!(c.set_state(&mut p, "dance", &[], 0.0).contains("cannot find state"));
+        assert!(c.set_state(&mut p, "die", &[], 0.0).contains("fight study"));
         assert_eq!(c.state, State::None);
-        c.set_state(&mut p, "WAIT", &[]);
+        c.set_state(&mut p, "WAIT", &[], 0.0);
         assert_eq!(c.state, State::Wait);
+    }
+
+    /// M5 5a-2: stop, a walk of `walk` units per second and a run of
+    /// `run` (16 frames over 1 s, each stepping forward, −Y).
+    fn walker(walk: f32, run: f32) -> (Character, NamedAnimPlayer) {
+        let moving = |name: &str, speed: f32| {
+            let mut m = movement(name, 0.0, 1.0, true, true, vec![]);
+            m.frame_steps = vec![kq8_data::shape::Transform { flags: 0, m: crate::door::identity().m, p: [0.0, -speed / 16.0, 0.0] }; 16];
+            m
+        };
+        let ms = vec![movement("stop", 0.0, 1.0, true, true, vec![]), moving("walk", walk), moving("run", run)];
+        let base = crate::collide::Placement { rotation: crate::door::identity().m, position: [0.0, 0.0, 100.0] };
+        let mut p = NamedAnimPlayer::new("goblin", ms, 0, base).with_stop_names(None, None);
+        p.loops_move_base = true;
+        let mut c = character(0x10);
+        c.mover = Some(Box::new(crate::connor_mover::Mover::character(p.base.position, true, [-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0], (0x42, 0x281F), (325.0, 325.0), -1)));
+        (c, p)
+    }
+
+    /// Updates `n` times from update `from`, each with its mover.
+    fn walk_for(c: &mut Character, p: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld, from: u64, n: u64, log: &mut Vec<String>) -> u64 {
+        for k in from..from + n {
+            let now = k as f64 / 15.0;
+            log.extend(c.update(p, now, 1.0 / 15.0, k).notes);
+            log.extend(c.gravity_step(p, world, now));
+        }
+        from + n
+    }
+
+    #[test]
+    fn walking_moves_by_the_walk_steps_and_the_drawing_does_not_add_them() {
+        // Rules 1, 4: Stop at a random frame, then walk at once; its speed
+        // is its steps per loop over the loop length.
+        let (mut c, mut p) = walker(917.0, 3068.0);
+        let mut log = Vec::new();
+        let n = walk_for(&mut c, &mut p, &Flat, 0, 2, &mut log);
+        let line = c.set_state(&mut p, "Move", &[], n as f64 / 15.0);
+        assert!(line.contains("state Move") && line.contains("'walk' starts at once"), "{line}");
+        assert_eq!(c.state, State::Move);
+        let start = p.base.position;
+        // The walk first moves in the next update (started this update).
+        let n = walk_for(&mut c, &mut p, &Flat, n, 16, &mut log);
+        let gone = start[1] - p.base.position[1];
+        assert!((gone - 917.0).abs() < 1.0, "15 moving updates = 1 s at 917: {gone} {log:?}");
+        assert!(p.base.position[0].abs() < 0.01 && p.base.position[2] == 100.0);
+        // The model is drawn at its place: no frame steps added.
+        assert_eq!(p.placement().position, p.base.position);
+        // No stuck event: it moved more than 200 since each check.
+        assert!(!log.iter().any(|l| l.contains("is stuck")), "{log:?}");
+        assert!(log.iter().any(|l| l.contains("moving: at")), "the once-a-second line");
+        // Running: 3,068 a second.
+        c.set_moving(&mut p, true);
+        let from = p.base.position;
+        walk_for(&mut c, &mut p, &Flat, n, 16, &mut log);
+        let gone = from[1] - p.base.position[1];
+        assert!((gone - 3068.0).abs() < 2.0, "{gone}");
+    }
+
+    #[test]
+    fn steering_turns_at_three_and_a_half_radians_a_second_while_walking() {
+        // Rule 5: the automatic turn aimed anew each update; it walks on.
+        let (mut c, mut p) = walker(917.0, 3068.0);
+        let mut log = Vec::new();
+        c.set_state(&mut p, "Move", &[], 0.0);
+        c.walk.steer = Some([100_000.0, 0.0]);
+        walk_for(&mut c, &mut p, &Flat, 0, 3, &mut log);
+        let h = heading_of(&p.base.rotation);
+        assert!((h - 3.0 * 3.5 / 15.0).abs() < 0.01, "after 3 updates: {h}");
+        walk_for(&mut c, &mut p, &Flat, 3, 12, &mut log);
+        let bearing = crate::connor_auto::heading_towards(p.base.position, [100_000.0, 0.0]);
+        assert!((heading_of(&p.base.rotation) - bearing).abs() < 0.001, "faces the point");
+        assert!(p.base.position[0] > 0.0 && p.base.position[1] < 0.0, "an arc: {:?}", p.base.position);
+        // noTurn: no steering.
+        let (mut c, mut p) = walker(917.0, 3068.0);
+        c.no_turn = true;
+        c.set_state(&mut p, "Move", &[], 0.0);
+        c.walk.steer = Some([100_000.0, 0.0]);
+        walk_for(&mut c, &mut p, &Flat, 0, 15, &mut log);
+        assert_eq!(heading_of(&p.base.rotation), 0.0);
+    }
+
+    /// Every line is blocked.
+    struct Closed;
+    impl crate::connor_mover::MoverWorld for Closed {
+        fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+            Some((100.0, [0.0, 0.0, 1.0]))
+        }
+        fn line_blocked(&self, _from: [f32; 3], _to: [f32; 3], mask: u32, _skip: &str) -> Option<String> {
+            assert_eq!(mask, 0xB);
+            Some("a wall".into())
+        }
+    }
+
+    #[test]
+    fn the_stuck_escape_snaps_to_a_free_diagonal_and_runs() {
+        // Rule 7: a slow walker (60 units a second) is stuck at the check
+        // 1 s after it started: no steering for 3 s, a snap turn to the
+        // first free diagonal (one further round each time), then run.
+        let (mut c, mut p) = walker(60.0, 947.0);
+        let mut log = Vec::new();
+        c.set_state(&mut p, "Move", &[], 0.0);
+        c.walk.steer = Some([0.0, -100_000.0]);
+        walk_for(&mut c, &mut p, &Flat, 0, 15, &mut log);
+        assert!(!log.iter().any(|l| l.contains("is stuck")), "not before 1 s: {log:?}");
+        walk_for(&mut c, &mut p, &Flat, 15, 1, &mut log);
+        let stuck = log.iter().find(|l| l.contains("is stuck")).expect("stuck at 1 s");
+        assert!(stuck.contains("0.785 free") && stuck.contains("'run' starts at once"), "{stuck}");
+        assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_4).abs() < 0.001);
+        assert!(c.walk.run && (c.walk.steer_off_until - 4.0).abs() < 1e-6 && c.walk.stuck_now);
+        // Steering stays off for 3 s: still facing the diagonal.
+        walk_for(&mut c, &mut p, &Flat, 16, 30, &mut log);
+        assert!((heading_of(&p.base.rotation) - std::f32::consts::FRAC_PI_4).abs() < 0.001);
+        // All four blocked: turned round (stand-in).
+        let (mut c, mut p) = walker(0.0, 0.0);
+        let mut log = Vec::new();
+        c.set_state(&mut p, "Move", &[], 0.0);
+        walk_for(&mut c, &mut p, &Closed, 0, 16, &mut log);
+        let stuck = log.iter().find(|l| l.contains("is stuck")).expect("stuck");
+        assert!(stuck.contains("all four blocked: turned round"), "{stuck}");
+        assert!((heading_of(&p.base.rotation).abs() - std::f32::consts::PI).abs() < 0.001);
+        // The next check is half a second later; the search starts one
+        // diagonal further round.
+        walk_for(&mut c, &mut p, &Flat, 16, 8, &mut log);
+        let second = log.iter().filter(|l| l.contains("is stuck")).nth(1).expect("stuck again at 1.5 s");
+        assert!(second.starts_with("is stuck") && second.contains("diagonals: 2.356 free"), "{second}");
     }
 }
