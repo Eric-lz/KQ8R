@@ -2135,3 +2135,10 @@ marked otherwise.
 | What | Source | Check |
 | --- | --- | --- |
 | A movement whose model loop lasts 0 s (or less) does not move and never ends, whatever its speed, loop or play-once: no `EndLoop`, Wait brings no `Stop` back | `anim-scripts.md` rule 10a (Q120) | Unit test `a_zero_length_mouth_pose_holds_in_wait` |
+
+### 4e-10, delay-0 events before drawing — `crates/kq8-core/src/active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| After the objects' update, the queue is handled again until nothing is due now; what those handlers send with delay 0 is handled in the same pass | `anim-scripts.md` rule 8 (Q119) | Unit test `what_an_end_loop_script_sends_with_delay_0_happens_before_drawing`; the four older timing tests changed |
+| Scripts run after Connor's update (traps, `trap_step`): their delay-0 events wait for the start of the next update | **Our order**, not changed in this step | — |

@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-10: events sent with delay 0 are handled before drawing (Q119 built)
+
+**Changed:** `kq8-core/src/active.rs`: at the end of every update the event queue is handled again, until nothing is due now (`handle_due`), so the ends of movements (`EndLoop`, `Cue 300`), a line's notify-group `TalkComplete` and what scripts send with delay 0 during the update arrive in the same update, before the frame is drawn (was: the next update). Four older tests changed to the new timing, 1 new. `QUESTIONS.md` Q119 marked built. DESIGN, provenance.
+**Why:** A's answer to Q119 (`anim-scripts.md` rule 8): nothing sent with delay 0 waits for the next update. The one-update wait showed as the Uglybeast's snap at the end of `pivot` (`Stop` drawn for a frame at the old heading before `ugly.cs`'s `move` and `stand`), which the user saw again (2026-10-19).
+**Tested how:** `cargo test --workspace` (505 pass), clippy clean. Viewer: **not run yet** (a viewer window was open).
+**Result:** Unit test: an `EndLoop` script's `sendEvent 0 … KQAnimPlayEvent stop` starts `stop` in the same update `open` ends. A door's `EndLoop` and its listener's `Cue 300`, a chest's and a basket's `EndLoop`, and the notify group's `TalkComplete` now come one update (1/15 s) earlier than before.
+**Still broken / not tested:** Not run in the viewer. This shifts the timing of M3's checked scenes (doors, chests, cutscene cues) by one update earlier; worth a look. Scripts run after the update (traps, in the viewer's `trap_step`) still have their delay-0 events handled at the start of the next update.
+**Next:** The viewer runs for 4e-8 to 4e-10 (needs the open viewer closed).
+
 ## 2026-10-19 M4 step 4e-9: a movement whose loop lasts 0 never ends (Q120 built)
 
 **Changed:** `kq8-core/src/door.rs` (`DoorMovement::step_with`): a model loop of 0 s (or less) neither moves nor ends, loop or play-once (was: a play-once one ended at once). 1 unit test. `QUESTIONS.md` Q120 marked built. DESIGN, provenance.

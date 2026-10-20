@@ -8,8 +8,9 @@
 //! 2. events due by now, also those just sent with delay 0;
 //! 3. each moving door moves (one started in this update waits for the
 //!    next), its cues fire, and a finished `open` / `close` calls the
-//!    script with `Open` / `Close` (events sent there wait for the next
-//!    update).
+//!    script with `Open` / `Close`;
+//! 4. the events sent meanwhile with delay 0 (M4 4e-10, `anim-scripts.md`
+//!    rule 8, Q119: handled before the frame is drawn).
 //!
 //! Every line worth checking goes to [`WorldState::log`], which the caller
 //! writes to `doors.log`.
@@ -43,7 +44,8 @@
 //!
 //! `EndLoop` (M3 step 3g-4, `clicking.md` rule 21): when a play-once
 //! movement of a door, chest or scripted object ends, the object cues
-//! itself 3333 through the queue (so it arrives the next update) and its
+//! itself 3333 through the queue (handled at the end of the same update,
+//! Q119) and its
 //! script gets `EndLoop <movement>`; doors get it after `Open`/`Close`.
 //! `getEndLoop <from> <to> 1` makes `<to>` get `Cue 300 0 <movement>` at
 //! the same moment. Cue 500 (projectile) is only logged.
@@ -3168,9 +3170,10 @@ impl Active {
         std::mem::take(&mut self.world.item_log)
     }
 
-    /// One update (15 per second): events due, then the doors move.
-    pub fn update(&mut self) {
-        let now = self.world.now();
+    /// The events due by `now`, in time order, until none is left: what
+    /// they send with delay 0 is handled in the same pass (`anim-scripts.md`
+    /// rule 8, Q119).
+    fn handle_due(&mut self, now: f64) -> usize {
         let mut handled = 0;
         while let Some(e) = self.world.queue.take_due(now) {
             self.handle(e);
@@ -3180,6 +3183,16 @@ impl Active {
                 break;
             }
         }
+        handled
+    }
+
+    /// One update (15 per second): events due, then the doors move; then
+    /// the events sent meanwhile with delay 0 (the ends of movements,
+    /// `EndLoop`, `Cue 300`, scripts' `sendEvent 0`), before the frame is
+    /// drawn (`anim-scripts.md` rule 8, Q119; M4 4e-10).
+    pub fn update(&mut self) {
+        let now = self.world.now();
+        self.handle_due(now);
         self.talk_step(now);
         // M4 4c-3: potions whose Dur ran out (inventory.md rule 14).
         crate::connor_inventory::timers(&mut self.world);
@@ -3344,6 +3357,11 @@ impl Active {
                 let has_script = w.anims[i].script.is_some() || w.clickables.iter().any(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&name));
                 self.world.movement_ended(&name, &m, has_script);
             }
+        }
+        // Q119: nothing sent with delay 0 waits for the next update.
+        let late = self.handle_due(now);
+        if late > 0 {
+            self.world.note(format!("{late} event(s) sent with delay 0 during this update handled before drawing (anim-scripts.md rule 8, Q119)"));
         }
         self.world.updates += 1;
     }
@@ -3764,10 +3782,10 @@ mod tests {
         while state(&a) != DoorState::Opened {
             a.update();
         }
-        // Open at once; EndLoop and the listener's cue wait in the queue.
+        // Open at once; EndLoop and the listener's cue go through the queue,
+        // handled in the same update before drawing (anim-scripts.md rule 8,
+        // Q119).
         assert_eq!(a.scripts.vars.get("D::Open"), Some("yes"));
-        assert_eq!((a.scripts.vars.get("D::End"), a.scripts.vars.get("D::Cue")), (None, None));
-        a.update();
         assert_eq!(a.scripts.vars.get("D::End"), Some("open"), "clicking.md rule 21: doors get EndLoop too");
         assert_eq!(a.scripts.vars.get("D::Cue"), Some("300 0 open"), "getEndLoop: Cue 300 0 <movement>");
         // getEndLoop ... 0 stops it; the door's own EndLoop stays.
@@ -4104,8 +4122,9 @@ mod tests {
         // The crystal lies inside the chest's box: the ray picks the chest.
         assert_eq!(a.pick([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]).map(|(n, _)| n), Some("smlchst3".to_string()));
         // `open` ends after 1 s (started in update 1, moves in 2..16); its
-        // cue 3333 goes through the queue: EndLoop open one update later.
-        for _ in 0..16 {
+        // cue 3333 goes through the queue, handled in that same update
+        // (Q119).
+        for _ in 0..15 {
             a.update();
         }
         assert_eq!(a.scripts.vars.get("C::EndLoop"), None);
@@ -4793,6 +4812,31 @@ endif
     }
 
     #[test]
+    fn what_an_end_loop_script_sends_with_delay_0_happens_before_drawing() {
+        // anim-scripts.md rule 8 (Q119): the Uglybeast's `pivot` → `stand`.
+        let script = "if test $2 == ConnorAction\n sendEvent 0 $1 KQAnimPlayEvent open\nelse if test $2 == EndLoop\n sendEvent 0 $1 KQAnimPlayEvent stop\nendif\nendif\n";
+        let mut a = with_object(script, "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let mut n = 0;
+        while a.world.objects[0].player.movement_name() != "open" && n < 5 {
+            a.update();
+            n += 1;
+        }
+        // Until `open` has played: then, in the update it ends, `stop` is
+        // already the movement (never a frame of `open`'s end left over).
+        while a.world.objects[0].player.movement_name() == "open" && n < 40 {
+            a.update();
+            n += 1;
+        }
+        assert_eq!(a.world.objects[0].player.movement_name(), "stop");
+        let log = a.take_log().join("\n");
+        assert!(log.contains("handled before drawing"), "{log}");
+        let ended = log.lines().find(|l| l.contains("movement 'open' finished")).map(|l| l.split(':').next().unwrap().to_string());
+        let stopped = log.lines().find(|l| l.contains("KQAnimPlayEvent stop to")).map(|l| l.split(':').next().unwrap().to_string());
+        assert_eq!(ended, stopped, "the same update: {log}");
+    }
+
+    #[test]
     fn a_basket_gives_once_and_opens() {
         let mut a = with_object(BASKET, "B::full");
         assert_eq!(a.scripts.vars.get("B::init"), Some("basket1"), "Init at the start (Q64 stand-in)");
@@ -4803,10 +4847,10 @@ endif
         // The event is handled in the next update, which starts `open`.
         a.update();
         assert_eq!(a.world.objects[0].player.movement_name(), "open");
-        for _ in 0..15 {
+        for _ in 0..14 {
             a.update();
         }
-        assert_eq!(a.scripts.vars.get("B::ended"), None, "the cue 3333 waits in the queue");
+        assert_eq!(a.scripts.vars.get("B::ended"), None, "open still playing");
         a.update();
         assert_eq!(a.scripts.vars.get("B::ended"), Some("open"), "EndLoop open (clicking.md rule 21)");
         // Second click: empty now, nothing more given.
@@ -4904,9 +4948,9 @@ mod talk_tests {
         a.start();
         let door = a.world.doors[0].door.name.clone();
         a.scripts.call("door.cs", &[door.clone(), "ConnorAction".into()], &mut a.world);
-        // 0.4 s = 6 updates: the line ends in update 6, the group hears it
-        // in update 7 (queued, not at once).
-        for _ in 0..7 {
+        // 0.4 s = 6 updates: the line ends in update 6; the group hears it
+        // through the queue, in that same update (Q119: delay 0 doesn't wait).
+        for _ in 0..6 {
             a.update();
         }
         assert_eq!(a.scripts.vars.get("L::heard"), None);
