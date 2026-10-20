@@ -31,6 +31,7 @@ pub mod music;
 pub mod named_anim;
 pub mod panels;
 pub mod script;
+pub mod shadow;
 pub mod sound;
 pub mod stats;
 pub mod talk;

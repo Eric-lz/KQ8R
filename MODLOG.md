@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-7b-1: shadow geometry (Q123)
+
+**Changed:** New `kq8-core/src/shadow.rs`: the sun direction (first sun's aim made length 1, else (1, 1, −1)); `cast` (each sun-facing model triangle, cut to the part above the receiving plane, projected along the sun onto the plane lifted 20, cut to the receiving triangle, each piece kept on its own); `terrain_receivers` (the surface grid's triangles under the box moved along the sun, none beyond 1,500 from the ground). 6 unit tests. Shadow plan in DESIGN (4d-7b-1 to -4). Provenance.
+**Why:** A's answer to Q123 (`characters.md` rule 37).
+**Tested how:** `cargo test --workspace` (521 pass, 6 new), clippy clean. Nothing draws it yet.
+**Result:** Unit tests: straight-down sun keeps the area and lifts 20; Daventry's sun (0, 1, −0.66) moves a point 1,000 up by 1,000/0.66 toward +y (less the lift); a triangle below the receiving plane casts nothing, one crossing it only its upper part; two triangles over one spot give two pieces; a shadow is cut to its receiver.
+**Still broken / not tested:** `terrain_receivers` has no unit test (needs a terrain); it is first used in 4d-7b-2.
+**Next:** 4d-7b-2, characters' shadows drawn on the terrain.
+
 ## 2026-10-19 M4 step 4d-6b-3: the flying mover (Q122 built)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: `fly_update` (steps 0, gravity off, the ordinary move, then down by up to 150 stopped as the down pass, then up by up to 300 if the terrain is above its feet within its height). `character.rs`: `flyingObject=1` characters use it, logged (first update, moving, settling on what). 1 unit test. New question **Q129** (the order of the flying drop and the `keepOnGround=1` ground check; buildings in the raise). `QUESTIONS.md` Q122 marked built. DESIGN, provenance.

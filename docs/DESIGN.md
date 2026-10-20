@@ -762,8 +762,26 @@ inventory and menus.
         (stopped as in the down pass) and up by up to 300 onto a surface
         above its feet within its height. The note is "not sure of every
         detail": built as written, logged.
-    - **4d-7b, shadows** (rule 37, Q123): planned in detail when it
-      starts (after 4d-6b).
+    - **4d-7b, shadows** (rules 36, 37, Q123; the user's check: a dark
+      copy of the figure, each part darkening on its own).
+      - **4d-7b-1, the geometry** (**done** 2026-10-19; core, new `shadow.rs`): the direction
+        (the first sun's aim made length 1, else (1, 1, −1)); each model
+        triangle facing the sun, cut to the part above the receiving
+        plane, projected along the sun onto that plane lifted 20 toward
+        its front, cut to the receiving triangle; the terrain receivers
+        (the drawn surface grid's triangles under the box moved along the
+        sun, only within 1,500 of the ground). Unit tests.
+      - **4d-7b-2, characters' shadows on the terrain** (viewer): every
+        frame, for each character that casts (rule 36) and is drawn, its
+        shown model triangles go through 4d-7b-1 into one mesh, drawn
+        unlit with multiply blending at 0.5 (each layer halves what is
+        under it, two layers a quarter: the user's check), no haze. Logs:
+        per character the triangles cast and drawn, once a second.
+      - **4d-7b-3, buildings receive them** (rule 37 (2): active buildings
+        within reach, surfaces near the character's height, an area at
+        most 1,800 across).
+      - **4d-7b-4, plain objects cast them** (rule 37 "Plain objects":
+        `shadowMask` 8, the same drawing).
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
     dying, the flying mover (M5); conversations (4e, from
     `conversation.md`); collision against characters (they stay not

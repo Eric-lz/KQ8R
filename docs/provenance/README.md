@@ -2209,3 +2209,14 @@ marked otherwise.
 | `flyingObject=1`: steps 0, gravity off, the ordinary move, then down by up to 150 (stopped as the down pass), then up by up to 300 if the ground is above its feet within its height | `characters.md` rule 8 (Q122 c; the note: "not sure of every detail") | Unit test `a_flyer_settles_150_per_update_and_rises_up_to_300`; bat3 run |
 | The raise tests the terrain only | **Our cut**: how a building surface "above its feet" is found is not described (Q129 b) | — |
 | The ground check (in the ordinary move) comes before the drop, so over water a `keepOnGround=1` flyer sits 150 under the surface | Literal order of rule 8; asked as Q129 (a) | bat2 run: settles at 6,480 |
+
+### 4d-7b-1, shadow geometry — `crates/kq8-core/src/shadow.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Direction: the first sun's aim made length 1, else (1, 1, −1) made length 1 | `characters.md` rule 37 (Q123 a) | Unit test `the_direction_is_the_suns_made_length_1_else_1_1_minus_1` |
+| Each sun-facing model triangle projected along the sun onto each receiving triangle's plane, cut to it, each piece on its own (overlaps darken twice) | Rule 37 "The copy", rule 36 (user's check) | Unit tests `a_triangle_straight_under_the_sun_lands_lifted_20_with_its_own_area`, `a_shadow_is_cut_to_the_receiving_triangle`, `only_the_part_above_the_plane_casts_and_overlaps_stay_two_layers` |
+| The receiving plane lifted 20 toward its front | Rule 37 | Same tests |
+| Only the part of a model triangle above the receiving plane is projected | Rule 37 "Over water" (its suggestion) | Same tests |
+| "Facing the sun" = the front (clockwise, Q2) turned toward the sun; a receiver facing away from the sun gets nothing | **Our reading** ("probably the side facing the sun"; projecting onto a back face would run toward the sun) | Same tests |
+| Terrain: the drawn ground's triangles under the box moved along the sun, none beyond 1,500 above or below the ground | Rule 37 (1) and "the 1,500 limit is a cut" | First used in 4d-7b-2 |
