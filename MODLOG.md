@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-9: a character's start-up (Q116, Q121 built)
+
+**Changed:** `kq8-core/src/character.rs`: the start-up (`start_up`) runs once, at the first update or before the first movement request (`KQAnimPlayEvent`, a lip-sync code, Wait's or a Special list's request, a conversation), whatever the range; only with no state does it queue Birth or Wait; the Wait comes `birthDelay` s later in game time and is checked after each pass over the event queue (`wait_due`, whatever the range), so a delay of 0 lands before the first picture; mouth shape 0. Gone: the "empty name, no state" step and the Q121 stand-in. `active.rs`: `start_up_character`, `characters_due`. Tests: 3 replaced by 3. `QUESTIONS.md` Q116 and Q121 marked built. DESIGN, provenance.
+**Why:** A's answers to Q116 and Q121 (`characters.md` rules 12, 15).
+**Tested how:** `cargo test --workspace` (506 pass), clippy clean. Viewer (`cargo play --world Daventry`): `--frames 60`; `--at 170500,191000,0 --frames 400` (goblin18); `--frames 200 --command "KQMonster::setState sprdump special dump",10` (from afar); `--at 193000,198000,-1.7 --click Wizard,30 --frames 2200 --sound off`; read `characters.log`, `conversation.log`.
+**Result:** goblin18: start-up at update 0 on `stop`, frame 0, speed 1; Wait at update 15 (1 s), `Stop` restarted at random frame 4, speed 1.085, as rule 12 describes. Characters with `birthDelay` 0 (goblin22, chicken1) get Wait and the random `Stop` in update 0, before the first picture. sprdump, sent its Special list while far away: the start-up runs at that request ("already in Special: kept, nothing queued"), then `dump` starts at once. The Wizard conversation runs as before (Talk at update 30, the camera cuts).
+**Still broken / not tested:** Not looked at by eye. The Lady's `Init` (`KQAnimPlayEvent up`) not run: she is loaded later in the story.
+**Next:** 4d-10, the end of a `speak` (Q117).
+
 ## 2026-10-19 M4 step 4d-8: the movement names start as `Stop` (Q121's correction)
 
 **Changed:** `kq8-core/src/named_anim.rs`: new `with_stop_names`: both names start as `Stop`, `currAnimName` / `nextAnimName` replace them, the current movement is the one the name finds (else movement 0 under that name). Used for animated objects and characters (`anim_view.rs`) and scripted objects (`door_view.rs`); doors and chests keep the old load names. `viewer.log` lists each object whose first movement changed. 1 unit test. Plan in DESIGN ("A's answers Q116, Q117, Q121–Q124"). New question **Q127** (doors, chests and what clears the waiting `Stop`). Provenance.

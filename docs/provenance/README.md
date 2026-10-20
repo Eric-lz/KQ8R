@@ -2151,3 +2151,13 @@ marked otherwise.
 | `flags=8` objects without `currAnimName` get the random start | `anim-scripts.md` rule 3 (correction) | `anim.log`: `fishies.01`–`.03` at random speeds |
 | A play-once first movement that ends lets the waiting `Stop` start | `anim-scripts.md` rule 3 and 8.1 (`tombdoor`) | Same unit test |
 | Doors and chests keep the old load names | **Our choice** until Q127 | — |
+
+### 4d-9, a character's start-up — `crates/kq8-core/src/character.rs`, `active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The start-up runs once: at the first update, or before the first movement request (`KQAnimPlayEvent`, lip-sync code, a state's request, a conversation), whatever the range or `hidden` | `characters.md` rule 12 (Q121) | Unit test `the_start_up_runs_at_the_first_movement_request_whatever_the_range`; sprdump run |
+| Only with no state: Birth, or Wait `birthDelay` s later in game time through the queue; a state set first is kept and nothing is queued | Rule 12 (Q116, Q121) | Unit tests `the_start_up_queues_wait_handled_before_the_first_picture`, `no_state_until_the_queued_wait`; goblin18 run (Wait at update 15) |
+| The queued Wait is checked after each pass over the event queue (start and end of the update), for every character, near or not | Rule 12 ("through the event queue") with `anim-scripts.md` rule 8 (Q119); applying it out of range is **our reading** of "through the queue" | Same tests |
+| The current movement is not restarted at the start-up: it was set at load and has not moved yet | Rule 12.1, with our load (4d-8) | — |
+| Replaces the 4d-3 rows "a state set before the first update is kept" (Q121 stand-in) and the "empty name: no state" step | Rule 12 (corrected) | — |

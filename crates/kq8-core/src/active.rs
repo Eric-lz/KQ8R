@@ -664,6 +664,34 @@ impl WorldState {
         self.note(line);
     }
 
+    /// `characters.md` rule 12 (M4 4d-9): the start-up runs before a
+    /// character's first movement request (`why`), whatever its range.
+    pub(crate) fn start_up_character(&mut self, i: usize, why: &str) {
+        let now = self.now();
+        let a = &mut self.anims[i];
+        let Some(c) = a.character.as_mut() else { return };
+        if let Some(line) = c.start_up(&mut a.player, now, why) {
+            let name = a.player.name.clone();
+            self.character_note(&name, line);
+        }
+    }
+
+    /// Rule 12.2: each character's queued Wait, if due (after each pass
+    /// over the event queue; whatever its range).
+    fn characters_due(&mut self, now: f64) {
+        for i in 0..self.anims.len() {
+            if self.anims[i].gone {
+                continue;
+            }
+            let a = &mut self.anims[i];
+            let Some(c) = a.character.as_mut() else { continue };
+            if let Some(line) = c.wait_due(&mut a.player, now) {
+                let name = a.player.name.clone();
+                self.character_note(&name, line);
+            }
+        }
+    }
+
     /// The character called `name` (not deleted): its index in `anims`.
     pub fn character_index(&self, name: &str) -> Option<usize> {
         self.anims.iter().position(|a| !a.gone && a.character.is_some() && a.player.name.eq_ignore_ascii_case(name))
@@ -3193,6 +3221,7 @@ impl Active {
     pub fn update(&mut self) {
         let now = self.world.now();
         self.handle_due(now);
+        self.world.characters_due(now);
         self.talk_step(now);
         // M4 4c-3: potions whose Dur ran out (inventory.md rule 14).
         crate::connor_inventory::timers(&mut self.world);
@@ -3363,6 +3392,7 @@ impl Active {
         if late > 0 {
             self.world.note(format!("{late} event(s) sent with delay 0 during this update handled before drawing (anim-scripts.md rule 8, Q119)"));
         }
+        self.world.characters_due(now);
         self.world.updates += 1;
     }
 
@@ -3390,6 +3420,7 @@ impl Active {
                 }
                 crate::talk::TalkEvent::Mouth { speaker, shape, .. } => {
                     if let Some(i) = self.world.character_index(speaker) {
+                        self.world.start_up_character(i, &format!("lip-sync code {shape}"));
                         let a = &mut self.world.anims[i];
                         let line = a.character.as_mut().unwrap().mouth_code(&mut a.player, *shape);
                         self.world.character_note(speaker, line);
@@ -3410,6 +3441,7 @@ impl Active {
                 crate::talk::TalkEvent::Empty { issuer, conv: false } => {
                     let Some(speaker) = last_speaker.get(&issuer.to_ascii_lowercase()).cloned() else { continue };
                     if let Some(i) = self.world.character_index(&speaker) {
+                        self.world.start_up_character(i, "the end of its speak");
                         let a = &mut self.world.anims[i];
                         let line = a.character.as_mut().unwrap().after_speech(&mut a.player);
                         self.world.character_note(&speaker, line);
@@ -3573,6 +3605,7 @@ impl Active {
         }
         // anim-scripts.md rule 4 for the other animated objects (3i-4).
         if let Some(i) = self.world.anim_index(&e.target).filter(|_| e.kind == "KQAnimPlayEvent") {
+            self.world.start_up_character(i, &format!("KQAnimPlayEvent {}", e.data.join(" ")));
             let line = anim_request(&mut self.world.anims[i].player, &e.data, &format!("object {}", e.target), &from);
             self.world.note(line);
             return;

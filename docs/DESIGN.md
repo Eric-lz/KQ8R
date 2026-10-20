@@ -706,7 +706,7 @@ inventory and menus.
     when it starts.
   - **A's answers Q116, Q117, Q121–Q124** (planned 2026-10-19, after 4e).
     One step and one commit each:
-    - **4d-8, the names start as `Stop`** (`anim-scripts.md` rule 3
+    - **4d-8, the names start as `Stop`** (**done** 2026-10-19; `anim-scripts.md` rule 3
       correction, `characters.md` rules 12, 14). Every animated object
       and character starts with current and waiting movement `Stop`;
       `currAnimName` / `nextAnimName` replace them. So characters
@@ -714,7 +714,7 @@ inventory and menus.
       `flags=8` torches and fish get the random start. Doors and chests
       keep today's load names until Q127 is answered (their own `open`
       could otherwise end in a leftover waiting `Stop`).
-    - **4d-9, the start-up** (rule 12, Q116, Q121). It runs at the first
+    - **4d-9, the start-up** (**done** 2026-10-19; rule 12, Q116, Q121). It runs at the first
       update or the first movement request (`KQAnimPlayEvent`, a state,
       a mouth code or gesture, a conversation), whatever the range;
       only with no state does it queue Birth or Wait, and the Wait comes
