@@ -90,11 +90,13 @@ pub struct Ai {
     pub last_seen: Option<[f32; 3]>,
     /// `KQMonster::goHome <name>` is on (rule 29).
     pub go_home: bool,
+    /// A zombie seen from Birth rises from this game time on (rule 30).
+    pub rise_at: Option<f64>,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None }
     }
 
     /// Alarmed and past its reaction delay: the chase rules drive it, not
@@ -215,6 +217,13 @@ impl WorldState {
             let ai = c.ai.as_mut().unwrap();
             ai.unseen = if ai.sees { 0 } else { ai.unseen.saturating_add(1) };
             let wants_in = !ai.active && ai.sees && state == crate::character::State::Wait;
+            // Rule 30: from Birth only when he is within its alarm radius.
+            let rises = !ai.active
+                && ai.sees
+                && state == crate::character::State::Birth
+                && ai.settings.alarm_radius > 0.0
+                && !ai.go_home
+                && connor.is_some_and(|at| distance(at, a.player.base.position) < ai.settings.alarm_radius);
             if check {
                 lines.push(status_line(&a.player, c, connor));
             }
@@ -224,6 +233,11 @@ impl WorldState {
             if wants_in {
                 self.join_active(i, now);
             }
+            if rises {
+                self.join_active(i, now);
+                self.wake(i, now);
+            }
+            self.rise(i, now);
             self.alarm_rules(i, now);
             self.idle(i, now);
             self.wander(i, now);
@@ -410,7 +424,9 @@ impl WorldState {
             line.push_str(&format!("; put back on its home point ({:.0}, {:.0}, {:.0}) at once", home[0], home[1], home[2]));
             if has_hide {
                 c.state = crate::character::State::Birth;
-                line.push_str("; its list has hide: back into Birth (hiding a drawn character is not built yet)");
+                c.unborn = true;
+                ai.rise_at = None;
+                line.push_str("; its list has hide: back underground (Birth, not drawn, not solid)");
             }
         }
         if c.state == crate::character::State::Move {
@@ -509,6 +525,9 @@ impl WorldState {
             return;
         }
         let (pos, state) = (a.player.base.position, c.state);
+        if state == State::Birth {
+            return;
+        }
         let d = distance(pos, connor);
         let s = ai.settings.clone();
         let (sees, home, go_home) = (ai.sees, ai.home, ai.go_home);
@@ -581,7 +600,9 @@ impl WorldState {
                         c.ask_turn(p);
                     }
                 }
-                if (!sees || d > s.attack_dist) && s.chase_radius > 0.0 {
+                // **Stand-in** (Q134): not while its `birth` still plays.
+                let rising = a.player.movement_name().eq_ignore_ascii_case("birth") && !a.player.has_ended();
+                if (!sees || d > s.attack_dist) && s.chase_radius > 0.0 && !rising {
                     let run = c.random() < 0.5;
                     let why = if run { "after Connor, running (the coin, rule 3)" } else { "after Connor, walking (the coin, rule 3)" };
                     let line = c.enter_move(&mut a.player, now, run, why);
@@ -770,5 +791,58 @@ impl WorldState {
         };
         self.character_note(&name, format!("{at}: {cmd}: {line}"));
         "0".into()
+    }
+}
+
+/// Rule 30: Connor's ball radius, added to the zombie's for "not standing
+/// on it" (his `BOUNDS.KQ` box, 200).
+pub const CONNOR_BALL: f32 = 200.0;
+
+impl WorldState {
+    /// Rule 30: a zombie in Birth that has just become active is alarmed;
+    /// it rises `birthDelay` seconds later.
+    fn wake(&mut self, i: usize, now: f64) {
+        let Some(c) = self.anims[i].character.as_deref() else { return };
+        if !c.ai.as_ref().is_some_and(|ai| ai.active) {
+            return;
+        }
+        let delay = f64::from(c.birth_delay.max(0.0));
+        self.alarm(i, "seen from underground within its alarm radius (rule 30)", false, now);
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let ai = a.character.as_deref_mut().and_then(|c| c.ai.as_mut()).unwrap();
+        ai.rise_at = Some(now + delay);
+        self.character_note(&name, format!("rises in {delay} s (birthDelay, rule 30)"));
+    }
+
+    /// Rule 30: when its rise is due and Connor is not standing on it
+    /// (farther than its ball and his added), it plays `birth`, is drawn
+    /// and solid, its gravity on, turned toward him; in Wait.
+    fn rise(&mut self, i: usize, now: f64) {
+        let connor = self.connor_at;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_ref() else { return };
+        let Some(t) = ai.rise_at else { return };
+        if now + 1e-6 < t || c.state != crate::character::State::Birth {
+            return;
+        }
+        let pos = a.player.base.position;
+        let ball = c.bounds.map_or(0.0, |(min, max)| crate::collide::BallStack::from_box(min, max).radius);
+        let d = connor.map_or(f32::MAX, |at| flat_distance(at, pos));
+        if d <= ball + CONNOR_BALL {
+            return;
+        }
+        c.ai.as_mut().unwrap().rise_at = None;
+        c.unborn = false;
+        c.gravity = true;
+        let w = c.set_state(&mut a.player, "Wait", &[], now);
+        let st = a.player.start("birth");
+        if let Some(at) = connor {
+            c.ask_turn([at[0], at[1]]);
+        }
+        let birth = if st.unknown { "no 'birth' in its list (movement 0)" } else { "'birth' starts at once" };
+        self.character_note(&name, format!("rises (rule 30): Connor {d:.0} away (more than {:.0}); {w}; {birth}; drawn and solid, gravity on, turns toward him", ball + CONNOR_BALL));
     }
 }

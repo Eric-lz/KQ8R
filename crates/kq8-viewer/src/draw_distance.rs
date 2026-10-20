@@ -72,6 +72,10 @@ pub struct DistanceTest {
     pub too_far: f32,
     /// groupsAlways, groupsActive3D, groupsActive3DFar.
     pub groups: [u32; 3],
+    /// A character loaded underground (`characters.md` rule 16): its own
+    /// groups, used while the running game says it has risen
+    /// (`character-movement.md` rule 30; M5 5a-8).
+    pub born_groups: Option<[u32; 3]>,
     /// Where the ball came from (for the log).
     pub ball_from: &'static str,
     /// `hidden=` from its file (always off, rule 36); scripted objects,
@@ -133,6 +137,7 @@ impl DistanceTest {
             radius,
             too_far: placement.too_far,
             groups: [placement.groups_always, placement.groups_near, placement.groups_far],
+            born_groups: None,
             ball_from,
             hidden: placement.hidden,
             character: false,
@@ -343,7 +348,11 @@ pub fn update_activity(
         if test.character && activity != Activity::Off {
             characters.0.insert(test.name.to_ascii_lowercase());
         }
-        let [always, near, far] = test.groups;
+        // M5 5a-8: a risen character has its own groups again.
+        let risen = test.born_groups.filter(|_| {
+            sim.as_ref().is_some_and(|s| s.active.world.character_index(&test.name).and_then(|i| s.active.world.anims[i].character.as_deref()).is_some_and(|c| !c.unborn))
+        });
+        let [always, near, far] = risen.unwrap_or(test.groups);
         let drawn = !light.haze_on || activity.groups(always, near, far) & DRAW_BITS != 0;
         if !drawn && !has_layer {
             commands.entity(entity).insert(Propagate(RenderLayers::layer(OFF_LAYER)));

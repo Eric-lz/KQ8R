@@ -138,6 +138,11 @@ pub struct Character {
     /// Its movement rules and what it knows (M5 5a-4), set by the loader;
     /// `None` = none (it only does what it is told).
     pub ai: Option<crate::character_ai::Ai>,
+    /// Underground: not drawn, not solid (`characters.md` rule 16): set by
+    /// the loader for a list with `Birth`; cleared when it rises
+    /// (`character-movement.md` rule 30), set again when its `hide` ends
+    /// after sinking back (rule 28; M5 5a-8).
+    pub unborn: bool,
 }
 
 /// A character's walking (`character-movement.md` rules 1–8; M5 5a-2).
@@ -228,6 +233,7 @@ impl Character {
             mover_started: false,
             walk: Walk::default(),
             ai: None,
+            unborn: false,
         }
     }
 
@@ -799,6 +805,11 @@ impl Character {
                 let run = self.walk.run;
                 let again = self.set_moving(player, run);
                 notes.push(format!("'{ended}' ended in Move: {again} (character-movement.md rule 4)"));
+            }
+            State::Birth if ended.eq_ignore_ascii_case("hide") => {
+                // character-movement.md rule 28 (M5 5a-8): back underground.
+                self.unborn = true;
+                notes.push("'hide' ended in Birth: underground again, not drawn and not solid (character-movement.md rule 28)".into());
             }
             State::None => notes.push(format!("'{ended}' ended in no state: holds its last frame (rule 15)")),
             s => notes.push(format!("'{ended}' ended in {s:?}: nothing more")),

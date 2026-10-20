@@ -4846,6 +4846,48 @@ mod tests {
     }
 
     #[test]
+    fn a_zombie_rises_chases_and_sinks_back() {
+        // character-movement.md rules 28, 30 (M5 5a-8).
+        let mut a = with_object("x\n", "x");
+        let (_, mut p) = crate::character::tests::walker(511.0, 511.0);
+        p.name = "zom".into();
+        p.movements.push(crate::named_anim::tests::movement("birth", 0.0, 1.0, false, false, vec![]));
+        p.movements.push(crate::named_anim::tests::movement("hide", 0.0, 1.0, false, false, vec![]));
+        let mut c = crate::character::Character::new(false, 0x10, 1.0, true, false, true, 3);
+        c.in_range = true;
+        c.unborn = true;
+        c.bounds = Some(([-350.0, -350.0, 0.0], [350.0, 350.0, 1750.0]));
+        c.mover = Some(Box::new(crate::connor_mover::Mover::character(p.base.position, true, [-350.0, -350.0, 0.0], [350.0, 350.0, 1750.0], (0x42, 0x281F), (325.0, 325.0), -1)));
+        let kq = kq8_data::kq_text::parse(b"[Zombie]\nclassType=KQMonster\nanimFile=zombie.anm\nwanders=0\n");
+        let mut s = kq8_data::characters::AiSettings::from_keys(&kq8_data::characters::CharacterKeys::from_section(&kq[0]).unwrap());
+        (s.alarm_radius, s.attack_dist, s.home_radius, s.chase_radius) = (4000.0, 1100.0, 8000.0, 12000.0);
+        let mut ai = crate::character_ai::Ai::new(s, p.base.position, 1750.0, true);
+        ai.has_birth = true;
+        c.ai = Some(ai);
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.world.characters_in_range.insert("zom".into());
+        a.world.connor_at = Some([0.0, -3000.0, 100.0]);
+        watch(&mut a, &[], 16);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("alarmed: seen from underground within its alarm radius (rule 30)") && log.contains("rises in 1 s"), "{log}");
+        assert!(a.world.anims[0].character.as_ref().unwrap().unborn, "still underground");
+        watch(&mut a, &[], 32);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("rises (rule 30): Connor 3000 away") && log.contains("'birth' starts at once"), "{log}");
+        let c = a.world.anims[0].character.as_ref().unwrap();
+        assert!(!c.unborn && c.state != crate::character::State::Birth);
+        // After 'birth' it comes after him.
+        watch(&mut a, &[], 60);
+        assert!(a.world.character_log.join("\n").contains("state Move (from Wait; after Connor"));
+        // Connor far away: it gives up, sinks back ('hide'), underground again.
+        a.world.connor_at = Some([0.0, -50_000.0, 100.0]);
+        watch(&mut a, &[], 140);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("its list has hide: Birth, 'hide'") && log.contains("'hide' ended in Birth: underground again"), "{log}");
+        assert!(a.world.anims[0].character.as_ref().unwrap().unborn);
+    }
+
+    #[test]
     fn go_home_and_the_radius_commands() {
         // Rules 23, 27, 29.
         let mut a = wanderer(kq8_data::characters::Wander::None);

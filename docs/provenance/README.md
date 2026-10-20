@@ -2373,3 +2373,13 @@ marked otherwise.
 | After the chase timer: no team and beyond 2 × alarm radius, or beyond its chase radius from home (x, y: **ours**) → gives up (`run` for the second) | Rule 27 | Unit test; viewer: goblin22 at 6,007 from home |
 | Giving up: target forgotten, on its way home, `hide` → Birth playing `hide`; steers home, within 100 in x and y → Wait; takes up the chase again as rule 28 says | Rule 28 (the loop it gives at the leash is asked as Q133 a) | Unit test; viewer |
 | `KQMonster::goHome <name> [0]`, `setAlarmRadius`, `setChaseRadius`, `setHomeRadius` (no longer stubs) | Rules 23, 27, 29 | Unit test |
+
+### 5a-8, the zombies rising — `crates/kq8-core/src/character_ai.rs` (`wake`, `rise`), `character.rs` (`unborn`), viewer `anim_view.rs`, `draw_distance.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| In Birth the sight test runs; not active, seen, within its alarm radius → active (if there is room) and alarmed | `character-movement.md` rule 30 | Unit test; viewer: the road zombies |
+| `birthDelay` s later: waits until Connor is farther than its ball + his (200), then `birth` at once, drawn and solid, gravity on, turned toward him, in Wait | Rule 30; Connor's 200 from `BOUNDS.KQ` | Unit test; viewer: RoadZ2–4 at once, RoadZ1 after 3 s, RoadZ5 not while he stands on it |
+| The chase waits until `birth` has ended | **Stand-in**, asked as Q134 | Viewer |
+| Giving up with `hide`: Birth, `hide`; when it ends, underground again (not drawn, not solid); the reset to home with `hide` (rule 21) at once | Rules 21, 28; `characters.md` rule 16 | Unit test |
+| The viewer shows the body and gives back its own draw / collider groups while the running game says it has risen | `characters.md` rules 16, 33 | `characters.log` "risen: drawn" |

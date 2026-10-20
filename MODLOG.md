@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-8: the zombies rise, and sink back
+
+**Changed:** `kq8-core/src/character_ai.rs`: from Birth, a zombie seen within its alarm radius becomes active and alarmed and rises `birthDelay` s later once Connor is not standing on it (`birth`, drawn, solid, gravity on, turned to him); giving up with `hide` sends it underground again when `hide` ends. `character.rs`: the `unborn` flag. Viewer: `anim_view.rs` shows / hides the body from it, `draw_distance.rs` gives a risen one its own groups (drawn, solid). Stand-in: the chase waits until `birth` has ended (Q134 asked). 1 new test. DESIGN, provenance.
+**Why:** `character-movement.md` rules 28, 30 (step 8 of 5a).
+**Tested how:** `cargo test --workspace` (406 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 192916,313500,0 --frames 2500` (Connor on the road, 3,200 south of RoadZ1), `characters.log`.
+**Result:** At update 15 all five road zombies see Connor and join the list; RoadZ2–RoadZ4 (alarm 18,000, birthDelay 0) rise at once and are drawn; RoadZ1 (4,000, 3 s) rises at update 60; RoadZ5 (3.5 s) doesn't rise, as Connor stands within 550 of it. After `birth` they walk after him (zombies have no `run`) and stop at 1,100 (their attack distance). Before the stand-in, they went into Move during `birth` and their stuck check snapped them away from Connor (Q134). Unit test: rise after 1 s, chase, give up when Connor is far, `hide`, underground again.
+**Still broken / not tested:** **Not looked at by eye.** The graveyard trap (`zomtrap.cs`: their homes, radii, the move south) not run yet. A zombie that sank back stays active and can't rise again until it goes off (rules as written; asked in Q134).
+**Next:** 5a-9, the flying mover corrected.
+
 ## 2026-10-20 M5 step 5a-7: alarm, chase, giving up, going home
 
 **Changed:** `kq8-core/src/character_ai.rs`: the alarm (seen within the alarm radius, a random 0–1 s reaction, chase timer 5 s, the walk / run coin, telling the others and the team), the chase (turn to him standing, steer at him moving, stop within the attack distance where the fight will start), losing sight after 45 updates, the leash after the chase timer, giving up (on its way home; `hide` lists back into Birth), the way home and taking up the chase again; `KQMonster::goHome`, `setAlarmRadius`, `setChaseRadius`, `setHomeRadius` (no longer stubs in `script.rs`). No new fidget once alarmed. 2 new tests. New question **Q133**. DESIGN, provenance.

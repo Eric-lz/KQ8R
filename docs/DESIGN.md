@@ -1078,7 +1078,7 @@ stats.
     in x and y → Wait; re-takes the chase as rule 28 says.
     `KQMonster::goHome`, `setAlarmRadius`, `setChaseRadius`,
     `setHomeRadius`.
-  - **5a-8, the zombies rising** (rule 30). In Birth the sight check
+  - **5a-8, the zombies rising** (**done** 2026-10-20; Q134 asked) (rule 30). In Birth the sight check
     runs; not active, seen and within the alarm radius → active and
     alarmed; `birthDelay` s later Wait, which waits until Connor is
     farther than the two balls added, then plays `birth`, drawn, solid,

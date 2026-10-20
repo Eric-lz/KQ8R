@@ -94,6 +94,9 @@ struct Playing {
     /// made (M4 4d-7b-2).
     casts: bool,
     shadow: Option<crate::shadow_view::ShadowSlot>,
+    /// A character loaded underground: whether its body is shown now
+    /// (`character-movement.md` rules 28, 30; M5 5a-8).
+    birth_shown: Option<bool>,
 }
 
 #[derive(Resource)]
@@ -298,6 +301,7 @@ pub fn spawn_animated(
             // was placed; the eye at the top of its box (rule 20).
             let eye = ch.bounds.map_or(1000.0, |(_, max)| max[2]);
             let has_hide = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("hide"));
+            ch.unborn = c.unborn;
             let mut ai = kq8_core::character_ai::Ai::new(c.ai.clone(), p.position, eye, has_hide);
             ai.has_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
             ch.ai = Some(ai);
@@ -331,7 +335,8 @@ pub fn spawn_animated(
                     let mut test = balls.test_character(p, c.box_type.as_deref());
                     if c.unborn {
                         // Rule 16: groupsAlways plus bit 1 only, no draw
-                        // or collider bits.
+                        // or collider bits (its own again once risen).
+                        test.born_groups = Some(test.groups);
                         test.groups = [p.groups_always | 1, 0, 0];
                     }
                     test
@@ -499,6 +504,7 @@ pub fn spawn_animated(
             own: Default::default(),
             casts: a.character.as_ref().is_some_and(|c| c.casts_shadow),
             shadow: None,
+            birth_shown: unborn.then_some(false),
         });
     }
     main_log.summary(format!(
@@ -689,6 +695,19 @@ pub fn anim_draw(
             p.mouth_shown = shape;
             if let Some(log) = sim.characters.as_mut() {
                 log.detail(format!("update {}: {}: mouth shape {shape}: {what} (rule 25)", sim.updates, p.name));
+            }
+        }
+        // M5 5a-8: a zombie rises (shown) or goes back underground.
+        if let (Some(shown), Source::Core(i), Some(d)) = (p.birth_shown, &p.source, doors) {
+            let up = d.active.world.anims.get(*i).and_then(|a| a.character.as_deref()).is_some_and(|c| !c.unborn);
+            if up != shown {
+                if let Ok(mut v) = visibility.get_mut(p.body) {
+                    *v = if up { Visibility::Inherited } else { Visibility::Hidden };
+                }
+                p.birth_shown = Some(up);
+                if let Some(log) = sim.characters.as_mut() {
+                    log.detail(format!("update {}: {}: {} (character-movement.md rules 28, 30)", sim.updates, p.name, if up { "risen: drawn" } else { "underground: not drawn" }));
+                }
             }
         }
         let Some(player) = player(p, doors) else { continue };
