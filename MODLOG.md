@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-7b-4: plain objects' shadows on the terrain (Q123 d)
+
+**Changed:** `kq8-data/src/objects.rs`: `shadowMask` read for every placement (default 8). `kq8-viewer`: new `shadow_view.rs` (the shadow material, mesh and slot helpers moved from `anim_view.rs`, and `object_shadow_draw`): every drawn object whose distance test says it casts (world mask AND `shadowMask`, solid; not characters, not buildings) throws its shown parts onto the terrain the same way as the characters; worked out again only when its shown parts or place change. `draw_distance.rs`: the test carries the mask (0 for buildings and see-through objects). `load.rs`, `terrain_view.rs`: the world's mask as a resource. New log `shadows.log` (who casts, counts, time spent). DESIGN, provenance.
+**Why:** A's answer to Q123 (d) (`characters.md` rule 37 "Plain objects").
+**Tested how:** `cargo test --workspace` (521 pass), clippy clean. Viewer: `cargo play --world Daventry --frames 1300 --sound off`, terminal output kept, `shadows.log`, `viewer.log`.
+**Result:** 77 of Daventry's 617 objects cast (most files say `shadowMask=0`): tables, stools, baskets, signposts, barrels, the hay bale, items lying about, …; 9 near the start, 333 pieces, each worked out once; the system takes 0.03 ms a frame; no warnings. (One run measured 17 ms a frame on average, the next 9.2 ms with the system timed at 0.03 ms: the 17 was something else on the machine.)
+**Still broken / not tested:** **Not checked by eye.** Buildings still don't receive shadows (4d-7b-3). `allowShadows` is still taken as on in every world (as for characters; Castle of the Dead, Gnome and the Temples switch it off). A few click-box objects are on the "cast" list; they only throw a shadow if they have shown parts.
+**Next:** 4d-7b-3 (buildings receive), after a question on the note's height band.
+
 ## 2026-10-20 The user's check of the shadows (4d-7b-2, -2b); the original's flicker not reproduced
 
 **Changed:** Docs only: DESIGN (4d-7b-2 checked; the flicker not reproduced), STATUS, provenance.

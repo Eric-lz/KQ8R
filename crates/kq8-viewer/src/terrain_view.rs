@@ -287,6 +287,7 @@ pub fn setup_objects(
             None
         }
     };
+    commands.insert_resource(crate::shadow_view::ShadowWorld(objects.shadow_world_mask));
     let balls = crate::draw_distance::ShapeBalls::new(bounds, objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
     // Animated objects whose movement plays or can be switched (3c,
     // 3i-4): drawn by anim_view, played by the world's rules.

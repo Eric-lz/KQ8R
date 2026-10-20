@@ -59,6 +59,7 @@ mod log;
 mod object_light;
 mod renderer;
 mod scene_lights;
+mod shadow_view;
 mod sound_view;
 mod talk_view;
 mod terrain_view;
@@ -552,7 +553,7 @@ fn main() -> ExitCode {
                 // The panels (M4 4c-2), before the caption is placed on them.
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
-                .add_systems(PostUpdate, anim_view::shadow_draw.after(bevy::transform::TransformSystems::Propagate))
+                .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate))
                 .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain())
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw))

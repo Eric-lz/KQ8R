@@ -102,7 +102,14 @@ pub struct Placement {
     /// `turnOffDynLighting` not 0: the lights this object carries reach
     /// models only, not walls or the ground (object-lighting.md rule 26b).
     pub turn_off_dyn_lighting: bool,
+    /// `shadowMask`, default 8 for plain objects (`characters.md` rule 36;
+    /// characters read their own default, 2).
+    pub shadow_mask: u32,
 }
+
+/// A plain object's `shadowMask` when its file sets none (`characters.md`
+/// rule 36).
+pub const PLAIN_SHADOW_MASK: u32 = 8;
 
 /// Group bits that put an object in a draw list: any of them means
 /// "drawn" (object-lighting.md rule 37).
@@ -186,6 +193,7 @@ impl Placement {
             groups_near: s.number("groupsActive3D").and_then(Result::ok).map_or(0x448, |v| v as u32),
             groups_far: s.number("groupsActive3DFar").and_then(Result::ok).map_or(0x440, |v| v as u32),
             turn_off_dyn_lighting: s.number("turnOffDynLighting").and_then(Result::ok).is_some_and(|v| v != 0.0),
+            shadow_mask: s.number("shadowMask").and_then(Result::ok).map_or(PLAIN_SHADOW_MASK, |v| v as i64 as u32),
         }
     }
 

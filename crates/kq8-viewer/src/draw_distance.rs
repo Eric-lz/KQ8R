@@ -80,6 +80,10 @@ pub struct DistanceTest {
     /// A character (M4 4d-3): core is told each frame whether it is near
     /// or far (`characters.md` rule 11).
     pub character: bool,
+    /// Its `shadowMask` for a plain object's shadow (M4 4d-7b-4; 0 for a
+    /// building, which only receives, and for a see-through object:
+    /// `characters.md` rule 36). Characters cast through `anim_view`.
+    pub shadow_mask: u32,
 }
 
 /// What the scripts asked of the distance test (rule 42).
@@ -132,6 +136,7 @@ impl DistanceTest {
             ball_from,
             hidden: placement.hidden,
             character: false,
+            shadow_mask: if placement.translucency < 256.0 { 0 } else { placement.shadow_mask },
         }
     }
 
@@ -188,7 +193,7 @@ impl ShapeBalls {
     /// (its collision shape: an animated object's current movement's).
     pub fn test_at(&self, placement: &Placement, shape_index: usize) -> DistanceTest {
         match self.shapes.get(shape_index) {
-            Some((_, Some(building))) => DistanceTest::new(placement, Some(*building), "building .dig box (rule 40)"),
+            Some((_, Some(building))) => DistanceTest { shadow_mask: 0, ..DistanceTest::new(placement, Some(*building), "building .dig box (rule 40)") },
             Some((name, None)) => self.test_shape(placement, name),
             None => self.test(placement),
         }

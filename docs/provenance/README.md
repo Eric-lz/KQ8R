@@ -2238,3 +2238,14 @@ marked otherwise.
 | He casts whenever his body is shown | **Stand-in**, asked as Q130 (his `shadowMask`, `allowShadows`) | — |
 | A shadow with nothing to draw is hidden, not given an empty mesh | **Ours** (Bevy warns about empty meshes) | Run at the ruins: no warning |
 | The original's shadow flicker and gaps are not reproduced | **The user's decision** (2026-10-20, after comparing with the original) | The user's check |
+
+### 4d-7b-4, plain objects' shadows — `crates/kq8-data/src/objects.rs`, viewer `shadow_view.rs`, `draw_distance.rs`, `load.rs`, `terrain_view.rs`, `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `shadowMask` default 8 for plain objects; casts when (world mask) AND it is not 0 and it is solid | `characters.md` rule 36 | `shadows.log`: 77 of 617 cast in Daventry |
+| The same drawing as characters (sun, pieces, 20 lift, 0.5, terrain within 1,500), only while drawn | Rule 37 "Plain objects" (Q123 d), "When" | `shadows.log` counts |
+| The sun's aim made length 1 for objects too | Rule 37 says objects use it "not made length 1, which only changes how far the terrain search reaches"; our terrain search uses the model's points, so it makes no difference | — |
+| Buildings only receive (no shadow of their own) | Rule 37 "What it lies on" (buildings receive); **our reading** that they don't cast | — |
+| Worked out again only when its shown parts or place change | **Ours** (the same picture, less work) | 0.03 ms a frame |
+| `allowShadows` taken as on | **Stand-in**, as for characters (4d-7a) | — |

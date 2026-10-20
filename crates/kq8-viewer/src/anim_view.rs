@@ -93,7 +93,7 @@ struct Playing {
     /// A character that casts a shadow (rule 36), and its shadow mesh once
     /// made (M4 4d-7b-2).
     casts: bool,
-    shadow: Option<ShadowSlot>,
+    shadow: Option<crate::shadow_view::ShadowSlot>,
 }
 
 #[derive(Resource)]
@@ -713,68 +713,6 @@ pub fn anim_draw(
     }
 }
 
-/// The triangles of a shown model frame (`frame`'s children), in the
-/// game's space and corner order (Bevy's run anticlockwise, the game's
-/// clockwise: (a, c, b)).
-fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>) -> Vec<[kq8_core::shadow::V3; 3]> {
-    let mut model = Vec::new();
-    for part in children.get(frame).into_iter().flat_map(|c| c.iter()) {
-        let Ok((at, mesh)) = parts.get(part) else { continue };
-        let Some(mesh) = meshes.get(&mesh.0) else { continue };
-        let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { continue };
-        // Bevy (x, y, z) = game (x, z, −y) / 100, so back: (x, −z, y) × 100.
-        let game: Vec<kq8_core::shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
-        let corners: Vec<usize> = match mesh.indices() {
-            Some(ix) => ix.iter().collect(),
-            None => (0..game.len()).collect(),
-        };
-        model.extend(corners.as_chunks::<3>().0.iter().map(|t| [game[t[0]], game[t[2]], game[t[1]]]));
-    }
-    model
-}
-
-/// A shadow's entity: its mesh, and whether it is shown.
-pub struct ShadowSlot {
-    entity: Entity,
-    mesh: Handle<Mesh>,
-    shown: bool,
-}
-
-/// Puts `cast` into the shadow `slot` (made on first use). With nothing to
-/// draw the entity is hidden and its mesh left as it was: an empty mesh
-/// makes Bevy warn every frame.
-fn show_shadow(cast: &[[kq8_core::shadow::V3; 3]], slot: &mut Option<ShadowSlot>, commands: &mut Commands, meshes: &mut Assets<Mesh>, material: &Handle<StandardMaterial>) {
-    if cast.is_empty() {
-        if let Some(s) = slot.as_mut().filter(|s| s.shown) {
-            commands.entity(s.entity).insert(Visibility::Hidden);
-            s.shown = false;
-        }
-        return;
-    }
-    // Bevy's space and corner order.
-    let positions: Vec<[f32; 3]> = cast.iter().flat_map(|t| [t[0], t[2], t[1]]).map(|q| [q[0] / 100.0, q[2] / 100.0, -q[1] / 100.0]).collect();
-    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
-    let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    match slot {
-        Some(s) => {
-            if let Some(mut m) = meshes.get_mut(&s.mesh) {
-                *m = mesh;
-            }
-            if !s.shown {
-                commands.entity(s.entity).insert(Visibility::Inherited);
-                s.shown = true;
-            }
-        }
-        None => {
-            let h = meshes.add(mesh);
-            let entity = commands.spawn((Mesh3d(h.clone()), MeshMaterial3d(material.clone()), Transform::default(), Visibility::Inherited, bevy::light::NotShadowCaster)).id();
-            *slot = Some(ShadowSlot { entity, mesh: h, shown: true });
-        }
-    }
-}
-
 /// `characters.md` rules 36, 37 (M4 4d-7b-2): each character that casts a
 /// shadow and is drawn (near or far, not hidden), and Connor (4d-7b-2b),
 /// get, every frame, the triangles of their shown model frame thrown along
@@ -799,7 +737,7 @@ pub fn shadow_draw(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut material: Local<Option<Handle<StandardMaterial>>>,
-    mut connor_shadow: Local<Option<ShadowSlot>>,
+    mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
 ) {
     use kq8_core::shadow;
@@ -808,19 +746,7 @@ pub fn shadow_draw(
     *frames += 1;
     let report = (*frames).is_multiple_of(60);
     let dir = shadow::direction(light.as_ref().and_then(|l| l.lights.suns.first()).map(|s| s.aim));
-    let material = material
-        .get_or_insert_with(|| {
-            let v = shadow::STRENGTH;
-            materials.add(StandardMaterial {
-                base_color: Color::linear_rgb(v, v, v),
-                alpha_mode: AlphaMode::Multiply,
-                unlit: true,
-                cull_mode: None,
-                fog_enabled: false,
-                ..default()
-            })
-        })
-        .clone();
+    let material = material.get_or_insert_with(|| crate::shadow_view::shadow_material(&mut materials)).clone();
     let mut lines = Vec::new();
     let line = |name: &str, model: &[[shadow::V3; 3]], receivers: usize, cast: usize, above: f32| {
         format!(
@@ -838,7 +764,7 @@ pub fn shadow_draw(
         let body = connor_body.iter().next();
         let drawn = body.is_some_and(|(_, v)| *v != Visibility::Hidden);
         let model = match c.shown.filter(|_| drawn) {
-            Some(frame) => frame_triangles(frame, &children, &parts, &meshes),
+            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes),
             None => Vec::new(),
         };
         let at = body.map_or([0.0; 3], |(t, _)| {
@@ -851,7 +777,7 @@ pub fn shadow_draw(
         if report && drawn {
             lines.push(line("Connor", &model, receivers.len(), cast.len(), height_above(at)));
         }
-        show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
+        crate::shadow_view::show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
     }
     let Some(doors) = doors else { return };
     let world = &doors.active.world;
@@ -860,7 +786,7 @@ pub fn shadow_draw(
         let Some(a) = world.anims.get(i) else { continue };
         let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);
         let model = match p.shown.filter(|_| drawn).and_then(|(m, f)| p.movements.get(m).and_then(|d| d.frames.get(f)).copied()) {
-            Some(frame) => frame_triangles(frame, &children, &parts, &meshes),
+            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes),
             None => Vec::new(),
         };
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
@@ -869,7 +795,7 @@ pub fn shadow_draw(
         if report && drawn {
             lines.push(line(&p.name, &model, receivers.len(), cast.len(), height_above(a.player.base.position)));
         }
-        show_shadow(&cast, &mut p.shadow, &mut commands, &mut meshes, &material);
+        crate::shadow_view::show_shadow(&cast, &mut p.shadow, &mut commands, &mut meshes, &material);
     }
     if let Some(log) = sim.characters.as_mut() {
         for l in lines {

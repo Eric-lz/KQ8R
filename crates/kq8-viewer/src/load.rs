@@ -1140,6 +1140,9 @@ pub fn screen_palette_paths(game: &GameDir, world: &str) -> (Vec<String>, String
 /// Daventry's (or any world's) placed objects: each different model once,
 /// plus where each copy goes.
 pub struct Objects {
+    /// The world's shadow mask (`setShadowMask` in `Options.cs`, else the
+    /// built-in 1; `characters.md` rule 36).
+    pub shadow_world_mask: u32,
     /// (shape name as first written, model in model space).
     pub shapes: Vec<(String, Model)>,
     /// A placement, the index of its model in `shapes`, and whether it is
@@ -3493,7 +3496,11 @@ impl Placer<'_> {
         }
         let mut known: Vec<String> = self.located.keys().cloned().collect();
         known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
+        let shadow_world_mask = self.shadow_world_mask.unwrap_or_else(|| {
+            self.game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::characters::shadow_mask_setting(&b)).unwrap_or(kq8_data::characters::BUILT_IN_SHADOW_MASK)
+        });
         Objects {
+            shadow_world_mask,
             shapes: self.shapes,
             placed: self.placed,
             markers: self.markers,
