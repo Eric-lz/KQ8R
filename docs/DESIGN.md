@@ -782,7 +782,7 @@ inventory and menus.
         original. **Not reproduced (the user's decision):** the original's
         shadows flicker and show gaps, seemingly at random (cause not
         known); ours are drawn steadily every frame.
-      - **4d-7b-3, buildings receive them** (planned 2026-10-20; rule 37
+      - **4d-7b-3, buildings receive them** (**done** 2026-10-20, Q135 stand-ins, not checked by eye; rule 37
         (2): active buildings within reach, surfaces near the character's
         height, an area at most 1,800 across). Read against the data
         first (`kq8 building-verify`): half of all floor surfaces are wider
@@ -805,13 +805,13 @@ inventory and menus.
         - only drawn surfaces (not kind-0 materials or surfaces skipped
           for having no light map): a shadow on an invisible wall would
           float.
-        - **4d-7b-3a, the plan, the data and Q135** (docs, the
+        - **4d-7b-3a, the plan, the data and Q135** (**done**; docs, the
           `building-verify` lines).
-        - **4d-7b-3b, the choice of surfaces** (core `shadow.rs`): a
+        - **4d-7b-3b, the choice of surfaces** (**done**; core `shadow.rs`): a
           building receiver (its ball, its drawn surfaces as world
           triangles with their box), the reach / band / area test giving
           the receiving triangles and counts for the log. Unit tests.
-        - **4d-7b-3c, drawn** (viewer): at load, each drawn building copy
+        - **4d-7b-3c, drawn** (**done**; viewer): at load, each drawn building copy
           becomes a receiver (buildings don't move); the draw distance
           shares each object's state; characters, Connor and plain
           objects add the chosen building triangles to their terrain

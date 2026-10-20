@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-7b-3c: shadows drawn on buildings (viewer)
+
+**Changed:** `kq8-viewer`: `terrain_view.rs` (each building copy's drawn surfaces placed in the world at load, with its draw-distance ball: `BuildingShadows`); `draw_distance.rs` (each object's near / far / off state shared: `ObjectActivity`); `shadow_view.rs` (`receivers`: terrain plus the active buildings' chosen surfaces; plain objects use it, and are worked out again when the active buildings change); `anim_view.rs` (Connor and characters use it; log lines). DESIGN (4d-7b-3 done), provenance, STATUS, FEATURES, README.
+**Why:** `characters.md` rule 37 (2): near and far buildings receive shadows. Open points are Q135, built as logged stand-ins.
+**Tested how:** `cargo test --workspace`, `cargo clippy --workspace --all-targets` clean. Viewer runs, `characters.log`, `shadows.log`, `viewer.log`: (1) the windmill floor `cargo play --world Daventry --sound off --at 146500,248928,1.5708 --frames 400`; (2) Connor walking into the barn's south wall, the sun behind him `--at 240000,217000,3.1416 --hold 1,0,0,80 --frames 500`; (3) the open walk north by the church `--at 193000,193000,3.1416 --hold 1,0,1,90 --frames 900`.
+**Result:** Load: 26 building copies receive, 19,660 drawn surfaces (none left out in Daventry). (1) Connor and spriggan `sprigwnd1` on the windmill floor: "1 of 5 active buildings in reach [Windmill], 10 building surfaces". (2) Before the wall 0 pieces on buildings, then 36, 168, 289 as he nears it; standing against it (update 44 on): 21 barn surfaces, 143 of 364 pieces on the barn. (3) No building in reach: terrain only, as before. Cost: the shadows of Connor and the characters take 4.7 ms a frame on average at the windmill (5 casters, 2 on the floor); 3.6 ms with the buildings switched off (a one-off measuring build, reverted). Plain objects: one object's shadow reaches 8 building surfaces at the windmill.
+**Still broken / not tested:** **Not looked at by eye**, not compared with the original. All of Q135 (reach sizes, band, area, whole surfaces) are stand-ins. No occlusion: as rule 37 describes, a shadow is drawn on every chosen surface, so part of it can also land on a surface behind a wall (e.g. inside a building), which the original probably does too (not traced). The shadow time (3.6 ms before this step) is high; not optimised.
+**Next:** The user's look (below); A answers Q135.
+
 ## 2026-10-20 Study (A): the fight — new `fighting.md`
 
 **Changed:** Docs only. New `docs/behaviour/fighting.md`; pointers to it in `character-movement.md` (rules 3, 18, 25, open question 2 answered) and `anim-scripts.md` rule 20; STATUS. Scratch notes and addresses in `re/` (not committed).

@@ -2262,6 +2262,16 @@ marked otherwise.
 | Area: a square 1,800 across on x and y, around the caster's middle moved along the sun down to its feet; surfaces reaching into it receive whole | Rule 37 (2) ("at most 1,800 across centred on the shadow"); the shape, centre and "no cut" are a **stand-in**, Q135 (c). Data: 17,295 of 33,962 floor surfaces are wider than 1,800 (`kq8 building-verify`) | Unit test `the_area_is_1800_across_around_the_shadows_middle_on_the_floor` |
 | The chosen surfaces get the same drawing as the terrain (pieces, 20 lift, part above the plane) | Rule 37 "The copy" | Unit test `the_chosen_floor_receives_the_shadow` |
 
+### 4d-7b-3c, shadows drawn on buildings — viewer `terrain_view.rs`, `shadow_view.rs`, `anim_view.rs`, `draw_distance.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| "Active" buildings = near or far in the draw-distance test this frame | `characters.md` rule 37 (2) ("near or far (active)"), `object-lighting.md` rules 36, 40 | `characters.log`: "N of M active buildings in reach" |
+| A building's surfaces taken once at load, placed in the world (buildings don't move) | **Ours** (no Daventry script moves a building; not checked in other worlds) | `viewer.log` "shadows on buildings": 26 copies, 19,660 surfaces |
+| Only drawn surfaces receive | **Stand-in**, Q135 (d) | Daventry: 0 surfaces left out |
+| Characters, Connor and plain objects all receive on buildings | Rule 37 (2) for characters; "Plain objects": "the same"; Connor: rule 36 (Q130, the same test); confirmation asked in Q135 | Barn wall run: Connor 143 of 364 pieces on the barn; windmill run: one plain object's shadow on 8 building surfaces (`shadows.log`) |
+| A plain object's shadow is worked out again when the set of active buildings changes | **Ours** (as its other "worked out again" rule) | `shadows.log` counts |
+
 ### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
 
 | What | Source | Check |

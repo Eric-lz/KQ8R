@@ -264,6 +264,12 @@ pub struct CharactersInRange(pub std::collections::BTreeSet<String>);
 #[derive(Resource, Default)]
 pub struct CharactersSolid(pub std::collections::BTreeSet<String>);
 
+/// Each object's state from the last test, by its number
+/// (`DistanceTest::object`); buildings' shadows use it (M4 4d-7b-3:
+/// only near or far buildings receive, `characters.md` rule 37 (2)).
+#[derive(Resource, Default)]
+pub struct ObjectActivity(pub HashMap<u32, Activity>);
+
 /// What `update_activity` saw, for the log.
 #[derive(Resource, Default)]
 pub struct ActivityLog {
@@ -277,6 +283,7 @@ pub fn add(app: &mut App) {
         .configure_sets(PostUpdate, PropagateSet::<RenderLayers>::default().before(VisibilitySystems::CheckVisibility))
         .init_resource::<ActivePoint>()
         .init_resource::<ActivityLog>()
+        .init_resource::<ObjectActivity>()
         .init_resource::<CharactersInRange>()
         .init_resource::<CharactersSolid>()
         .init_resource::<ActiveRules>()
@@ -305,7 +312,7 @@ pub fn update_activity(
     tests: Query<(Entity, &DistanceTest, &Transform, Has<Propagate<RenderLayers>>)>,
     layered: Query<(), (With<Mesh3d>, With<RenderLayers>)>,
     mut point: ResMut<ActivePoint>,
-    mut states: Local<HashMap<u32, Activity>>,
+    mut states: ResMut<ObjectActivity>,
     mut solid: Local<HashMap<u32, bool>>,
     mut log_state: ResMut<ActivityLog>,
     rules: Res<ActiveRules>,
@@ -388,7 +395,7 @@ pub fn update_activity(
         } else if farthest_on.as_ref().is_none_or(|n| d + test.radius > n.0) {
             farthest_on = entry;
         }
-        let before = states.insert(test.object, activity);
+        let before = states.0.insert(test.object, activity);
         if before.is_none() && activity != Activity::Off && !drawn {
             changes.push(format!(
                 "draw distance: [{}] {activity:?} but not drawn: groups always {:#x} near {:#x} far {:#x}",

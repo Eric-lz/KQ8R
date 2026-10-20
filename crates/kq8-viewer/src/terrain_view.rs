@@ -354,7 +354,17 @@ pub fn setup_objects(
     let mut wall_info: Vec<Option<WallInfo>> = Vec::new();
     // Each model's lights in its shown frame (M1 7c, rule 26b).
     let mut shape_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> = Vec::new();
+    // Each building's drawn triangles by surface (own space), for shadows
+    // on buildings (M4 4d-7b-3); empty for models.
+    let mut shadow_surfaces: Vec<Vec<Vec<[[f32; 3]; 3]>>> = Vec::new();
     for (_, model) in objects.shapes {
+        let mut by_surface = vec![Vec::new(); if model.light_atlas.is_some() { model.surfaces.len() } else { 0 }];
+        for t in model.groups.iter().flat_map(|g| &g.triangles) {
+            if let Some(s) = by_surface.get_mut(t.node) {
+                s.push(t.positions);
+            }
+        }
+        shadow_surfaces.push(by_surface);
         shape_lights.push(std::sync::Arc::new(vec![model.lights.clone()]));
         smooth.push(model.groups.iter().flat_map(|g| crate::object_light::smooth_normals(&g.triangles, g.shading.lighting)).collect());
         let mut parts = Vec::new();
@@ -399,6 +409,7 @@ pub fn setup_objects(
     let collider_keys: Vec<(String, [f32; 3])> = buildings.iter().map(|b| (b.name.clone(), b.placement.position)).collect();
     commands.insert_resource(Buildings(buildings));
     let mut wall_lit = (0, Vec::new());
+    let mut shadow_receivers = Vec::new();
     let mut worst = 0.0f32;
     let mut see_through = 0;
     for (k, (p, i, unused)) in objects.placed.iter().enumerate() {
@@ -447,6 +458,14 @@ pub fn setup_objects(
                 t.centre.length() * UNITS_PER_METRE
             ));
         }
+        // Shadows on buildings (M4 4d-7b-3, `characters.md` rule 37 (2)):
+        // its drawn surfaces in the world and its draw-distance ball.
+        if let (false, Some(t)) = (built_walls[*i].is_empty(), &test) {
+            let place = p.transform();
+            let surfaces = shadow_surfaces[*i].iter().filter_map(|s| kq8_core::shadow::ReceivingSurface::new(s.iter().map(|tri| tri.map(|c| place.apply(c))).collect())).collect();
+            let c = transform.transform_point(t.centre) * UNITS_PER_METRE;
+            shadow_receivers.push((t.object, kq8_core::shadow::ReceivingBuilding { name: p.name.clone(), centre: [c.x, -c.z, c.y], radius: t.radius, surfaces }));
+        }
         // Point lights (M1 7d): this copy's own light picture and haze
         // factors, so copies of one building are lit separately.
         let own = (!built_walls[*i].is_empty()).then(|| wall_info[*i].clone()).flatten().map(|(atlas, data)| {
@@ -489,6 +508,18 @@ pub fn setup_objects(
         "wall point lights (M1 7d): {} building copies can be lit; without a collider (no lights): {:?}",
         wall_lit.0, wall_lit.1
     ));
+    let drawn_surfaces: usize = shadow_receivers.iter().map(|(_, b)| b.surfaces.len()).sum();
+    let all_surfaces: usize = objects.placed.iter().filter(|(_, i, unused)| !*unused && !built_walls[*i].is_empty()).map(|(_, i, _)| shadow_surfaces[*i].len()).sum();
+    log.summary(format!(
+        "shadows on buildings (characters.md rule 37 (2), M4 4d-7b-3): {} building copies receive, {drawn_surfaces} drawn surfaces ({} not drawn left out); stand-ins (Q135): reach = ball centres within the two radii + {}, band {} x the caster's height below its feet to {} above its top, a square {} across around the shadow's middle at its feet, whole surfaces",
+        shadow_receivers.len(),
+        all_surfaces - drawn_surfaces,
+        kq8_core::shadow::BUILDING_REACH,
+        kq8_core::shadow::BAND_BELOW_HEIGHTS,
+        kq8_core::shadow::BAND_ABOVE,
+        kq8_core::shadow::BUILDING_AREA
+    ));
+    commands.insert_resource(crate::shadow_view::BuildingShadows(shadow_receivers));
     // The placed objects and the buildings' wall surfaces (world space,
     // game units) for the haze log (M1 steps 6, 6f).
     let drawn = || objects.placed.iter().filter(|(p, _, unused)| !*unused && p.drawn());

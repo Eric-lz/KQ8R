@@ -57,14 +57,13 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   Conversations with the wizard and the beast at the pond work: Connor
   walks to his spot, the camera cuts between fixed views, and walking
   away ends the talk with a goodbye. Characters stand on the ground
-  and on building floors, and cast shadows on the ground.
+  and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them.
 - **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground.
 
 ### Next
 
 - **M5 – Fighting:** attacks, being hit and dying (waiting for its study).
-- **Characters:** shadows on buildings.
 
 ### Later
 

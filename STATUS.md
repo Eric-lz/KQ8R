@@ -7,6 +7,13 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (B, M4 4d-7b-3): shadows fall on buildings** (walls and
+  floors of the near and far buildings around the caster: characters,
+  Connor, plain objects). The note leaves the reach's sizes, the height
+  band's numbers and the 1,800 area's shape open: **Q135**, built with
+  logged stand-ins. Checked in the logs only (Connor against the barn
+  wall: 143 of 364 pieces on it), **not by eye**.
+
 - **2026-10-20 (A): the fight studied**, in new
   **`docs/behaviour/fighting.md`** (M5's next part; not yet checked in
   the original). In short: a character's first attack is due at once,
@@ -107,9 +114,8 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
   cut beyond 1,500; Connor's too, 4d-7b-2b). **Shadows checked by the
   user (2026-10-20):** they match the original (wading, the jump's cut),
   except that the original's flicker and gaps are, by the user's
-  decision, not reproduced. Left: shadows on buildings (4d-7b-3, the note's
-  vertical band is loose: needs a question first) and plain objects
-  casting (4d-7b-4). New questions for A: **Q127** (doors, chests and the
+  decision, not reproduced. Shadows on buildings (4d-7b-3, Q135
+  stand-ins) and plain objects casting (4d-7b-4) are built. New questions for A: **Q127** (doors, chests and the
   waiting `Stop`), **Q128** (what stops a character's fall: objects,
   characters, Connor), **Q129** (the flying drop over water).
 - **New 2026-10-19 (B, after the user's check of 4e): 4e-8 to 4e-10.**
@@ -404,8 +410,8 @@ characters and conversations done; the menus postponed) and **M5**
   watermill scene); the mouse's recentring near the window's edges is
   not built (not settled; the note says it may be left out).
 - **Stand-ins of 4d (characters):** a character's facing taken as
-  Connor's (−Y). Q116–Q124 are all built (Q123 only on the terrain so
-  far). Q127 (doors and chests keep the old load names: fine as they are) and
+  Connor's (−Y). Q116–Q124 are all built (Q123 on buildings with Q135's
+  stand-ins). Q127 (doors and chests keep the old load names: fine as they are) and
   Q130 (Connor's shadow test) answered by A, not built yet; Q128 and Q129
   built in M5 5a. Our
   readings: the shadow's terrain search uses the model's points, not
@@ -453,8 +459,8 @@ characters and conversations done; the menus postponed) and **M5**
   goblin's top (unit test only), ranged characters (`doMode=1`).
 - **Next step, suggested:** for B: build the fight from
   `fighting.md` (studied 2026-10-20 by A; replaces the 5a / 5b attack
-  stand-in), then shadows on buildings (4d-7b-3, after a question on the
-  note's loose height band). For the user: `fighting.md` "How to check"
+  stand-in). For the user: compare shadows on buildings with the
+  original (MODLOG 4d-7b-3c); for A: Q135. For the user: `fighting.md` "How to check"
   in the original. **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
@@ -511,6 +517,9 @@ characters and conversations done; the menus postponed) and **M5**
   Not a question, for A's notes: the data has **17** `KQConvInfo`
   objects, not 16 (Barren's `AlthillmanInfo` and `FrghillmanInfo` besides
   the Witch Doctor's).
+- For A (asked 2026-10-20 by B, M4 4d-7b-3): **Q135** (shadows on
+  buildings: the reach's sizes, the height band's numbers, the 1,800
+  area's shape and centre and whether it cuts the shadow).
 - `characters.md` open questions 1, 2 and 4 (`flags` bit 0x20, how the
   renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
   question 3 (the AI) answered 2026-10-19 in `character-movement.md`,

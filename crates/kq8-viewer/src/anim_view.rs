@@ -777,22 +777,33 @@ pub fn shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
+    (buildings, activity, mut spent): (Option<Res<crate::shadow_view::BuildingShadows>>, Option<Res<crate::draw_distance::ObjectActivity>>, Local<std::time::Duration>),
 ) {
     use kq8_core::shadow;
     let (Some(mut sim), Some(ground)) = (sim, ground) else { return };
+    let started = std::time::Instant::now();
     let sim = &mut *sim;
     *frames += 1;
     let report = (*frames).is_multiple_of(60);
     let dir = shadow::direction(light.as_ref().and_then(|l| l.lights.suns.first()).map(|s| s.aim));
     let material = material.get_or_insert_with(|| crate::shadow_view::shadow_material(&mut materials)).clone();
+    // Rule 37 (2): the near and far buildings receive too (M4 4d-7b-3).
+    let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
     let mut lines = Vec::new();
-    let line = |name: &str, model: &[[shadow::V3; 3]], receivers: usize, cast: usize, above: f32| {
+    // On log frames only: how many of the pieces lie on buildings.
+    let line = |name: &str, model: &[[shadow::V3; 3]], receivers: &[[shadow::V3; 3]], terrain: usize, pick: &shadow::BuildingPick, cast: usize, above: f32| {
         format!(
-            "update {}: {name}: shadow: {} model triangles, {} facing the sun, {receivers} terrain triangles, {cast} pieces drawn; {above:.0} above the drawn ground{} (rule 37)",
+            "update {}: {name}: shadow: {} model triangles, {} facing the sun, {terrain} terrain triangles, {} of {} active buildings in reach {:?}, {} building surfaces ({} triangles), {cast} pieces drawn, {} of them on buildings; {above:.0} above the drawn ground{} (rule 37)",
             sim.updates,
             model.len(),
             model.iter().filter(|t| shadow::faces_sun(t, dir)).count(),
-            if above.abs() > shadow::TERRAIN_REACH { ": beyond 1,500, none" } else { "" }
+            pick.in_reach.len(),
+            active.len(),
+            pick.in_reach,
+            pick.surfaces,
+            receivers.len() - terrain,
+            shadow::cast(model, dir, &receivers[terrain..]).len(),
+            if above.abs() > shadow::TERRAIN_REACH { ": terrain beyond 1,500, none there" } else { "" }
         )
     };
     let height_above = |p: shadow::V3| p[2] - ground.0.height_at(p[0], p[1]).map_or(f32::NAN, |g| g.height);
@@ -810,10 +821,10 @@ pub fn shadow_draw(
             [v.x * 100.0, -v.z * 100.0, v.y * 100.0]
         });
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let receivers = if model.is_empty() { Vec::new() } else { shadow::terrain_receivers(&ground.0, at, &corners, dir) };
+        let (receivers, terrain, pick) = crate::shadow_view::receivers(&ground.0, at, &corners, dir, &active);
         let cast = shadow::cast(&model, dir, &receivers);
         if report && drawn {
-            lines.push(line("Connor", &model, receivers.len(), cast.len(), height_above(at)));
+            lines.push(line("Connor", &model, &receivers, terrain, &pick, cast.len(), height_above(at)));
         }
         crate::shadow_view::show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
     }
@@ -828,12 +839,16 @@ pub fn shadow_draw(
             None => Vec::new(),
         };
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let receivers = if model.is_empty() { Vec::new() } else { shadow::terrain_receivers(&ground.0, a.player.base.position, &corners, dir) };
+        let (receivers, terrain, pick) = crate::shadow_view::receivers(&ground.0, a.player.base.position, &corners, dir, &active);
         let cast = shadow::cast(&model, dir, &receivers);
         if report && drawn {
-            lines.push(line(&p.name, &model, receivers.len(), cast.len(), height_above(a.player.base.position)));
+            lines.push(line(&p.name, &model, &receivers, terrain, &pick, cast.len(), height_above(a.player.base.position)));
         }
         crate::shadow_view::show_shadow(&cast, &mut p.shadow, &mut commands, &mut meshes, &material);
+    }
+    *spent += started.elapsed();
+    if report {
+        lines.push(format!("update {}: shadows of Connor and the characters: {:.3} ms a frame on average (rule 37)", sim.updates, spent.as_secs_f64() * 1000.0 / *frames as f64));
     }
     if let Some(log) = sim.characters.as_mut() {
         for l in lines {

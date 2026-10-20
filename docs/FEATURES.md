@@ -620,8 +620,9 @@ message that shows the usage.
   travel between worlds; the story's scenes run only as far as the
   built parts allow.
 - **Characters:** they walk, notice Connor and chase him (M5 5a), but
-  don't fight or die yet (the fight study); their shadows fall on the
-  ground but not yet on buildings (4d-7b-3).
+  don't fight or die yet (the fight study); their shadows on buildings
+  use stand-ins for what the note leaves open (Q135) and are not yet
+  compared with the original.
 - **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no

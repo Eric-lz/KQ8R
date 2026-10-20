@@ -13,6 +13,11 @@
 //! shown of it (its parts and its place) changes, so a still object costs
 //! nothing after its first frame. The terrain search uses its model's
 //! points (as for characters, 4d-7b-2).
+//!
+//! Buildings receive (M4 4d-7b-3, rule 37 (2)): [`BuildingShadows`] holds
+//! each building copy's drawn surfaces; [`receivers`] adds those of the
+//! near and far ones that `kq8_core::shadow::building_receivers` picks to
+//! the terrain's, for characters, Connor and plain objects alike.
 
 use std::collections::HashMap;
 
@@ -20,13 +25,42 @@ use bevy::prelude::*;
 use bevy::camera::visibility::RenderLayers;
 use kq8_core::shadow;
 
-use crate::draw_distance::DistanceTest;
+use crate::draw_distance::{DistanceTest, ObjectActivity};
 use crate::log::Log;
 use crate::object_light::ObjectLight;
 
 /// The world's shadow mask (`characters.md` rule 36).
 #[derive(Resource)]
 pub struct ShadowWorld(pub u32);
+
+/// Every building copy that can receive shadows (M4 4d-7b-3): its draw
+/// distance number (`DistanceTest::object`) and its drawn surfaces.
+#[derive(Resource, Default)]
+pub struct BuildingShadows(pub Vec<(u32, shadow::ReceivingBuilding)>);
+
+impl BuildingShadows {
+    /// Those near or far in the last draw-distance test (rule 37 (2):
+    /// "active"); with no test yet, none.
+    pub fn active<'a>(&'a self, states: Option<&ObjectActivity>) -> Vec<(u32, &'a shadow::ReceivingBuilding)> {
+        let Some(states) = states else { return Vec::new() };
+        self.0.iter().filter(|(id, _)| states.0.get(id).is_some_and(|a| *a != kq8_data::objects::Activity::Off)).map(|(id, b)| (*id, b)).collect()
+    }
+}
+
+/// Rule 37: what a caster's shadow lies on: the terrain's triangles
+/// (within 1,500 of the ground) and those of the `buildings` (active ones)
+/// that `shadow::building_receivers` picks. Also the count of terrain
+/// triangles and the buildings' pick, for the logs.
+pub fn receivers(ground: &kq8_data::Terrain, position: shadow::V3, corners: &[shadow::V3], dir: shadow::V3, buildings: &[(u32, &shadow::ReceivingBuilding)]) -> (Vec<[shadow::V3; 3]>, usize, shadow::BuildingPick) {
+    if corners.is_empty() {
+        return (Vec::new(), 0, shadow::BuildingPick::default());
+    }
+    let mut all = shadow::terrain_receivers(ground, position, corners, dir);
+    let terrain = all.len();
+    let mut pick = shadow::building_receivers(buildings.iter().map(|(_, b)| *b), corners, dir);
+    all.append(&mut pick.triangles);
+    (all, terrain, pick)
+}
 
 /// The shadows' look: unlit, multiply blending at the strength 0.5 (each
 /// layer halves what is under it), no haze (rule 37).
@@ -125,9 +159,12 @@ pub fn show_shadow(cast: &[[shadow::V3; 3]], slot: &mut Option<ShadowSlot>, comm
 /// One plain object's shadow: what it was worked out from, and its slot.
 #[derive(Default)]
 pub struct ObjectShadow {
-    key: Option<(Vec<Entity>, [u32; 7])>,
+    /// Its shown meshes, its place, and the active buildings' numbers.
+    key: Option<(Vec<Entity>, [u32; 7], Vec<u32>)>,
     slot: Option<ShadowSlot>,
     pieces: usize,
+    /// Building surfaces it lies on (4d-7b-3).
+    on_buildings: usize,
 }
 
 /// `shadows.log` and the counts for it.
@@ -159,8 +196,11 @@ pub fn object_shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut shadows: Local<HashMap<Entity, ObjectShadow>>,
     mut log: Local<ShadowLog>,
+    (buildings, activity): (Option<Res<BuildingShadows>>, Option<Res<ObjectActivity>>),
 ) {
     let (Some(world), Some(ground)) = (world, ground) else { return };
+    let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
+    let active_ids: Vec<u32> = active.iter().map(|(id, _)| *id).collect();
     let started = std::time::Instant::now();
     let dir = shadow::direction(light.as_ref().and_then(|l| l.lights.suns.first()).map(|s| s.aim));
     let material = material.get_or_insert_with(|| shadow_material(&mut materials)).clone();
@@ -186,6 +226,7 @@ pub fn object_shadow_draw(
     log.frames += 1;
     let mut shown = 0;
     let mut pieces = 0;
+    let mut on_buildings = (0, 0);
     for (root, test, at, off) in &roots {
         if test.character || !kq8_data::characters::casts_shadow(world.0, test.shadow_mask, true, 256.0) {
             continue;
@@ -198,7 +239,7 @@ pub fn object_shadow_draw(
         }
         let (r, t) = (at.rotation(), at.translation());
         let place = [r.x, r.y, r.z, r.w, t.x, t.y, t.z].map(f32::to_bits);
-        let key = Some((meshes_shown, place));
+        let key = Some((meshes_shown, place, active_ids.clone()));
         if entry.key != key {
             let mut model = Vec::new();
             for &m in key.as_ref().map_or(&[][..], |k| &k.0[..]) {
@@ -206,9 +247,10 @@ pub fn object_shadow_draw(
             }
             let position = [t.x * 100.0, -t.z * 100.0, t.y * 100.0];
             let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-            let receivers = if model.is_empty() { Vec::new() } else { shadow::terrain_receivers(&ground.0, position, &corners, dir) };
+            let (receivers, _, pick) = receivers(&ground.0, position, &corners, dir, &active);
             let cast = shadow::cast(&model, dir, &receivers);
             entry.pieces = cast.len();
+            entry.on_buildings = pick.surfaces;
             show_shadow(&cast, &mut entry.slot, &mut commands, &mut meshes, &material);
             entry.key = key;
             log.worked_out += 1;
@@ -217,12 +259,19 @@ pub fn object_shadow_draw(
             shown += 1;
             pieces += entry.pieces;
         }
+        if entry.on_buildings > 0 {
+            on_buildings.0 += 1;
+            on_buildings.1 += entry.on_buildings;
+        }
     }
     log.spent += started.elapsed();
     if log.frames % 600 == 1 {
         let line = format!(
-            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; worked out {} times so far; {:.3} ms a frame on average in this system",
+            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; {} of them reach building surfaces ({} surfaces; {} buildings active); worked out {} times so far; {:.3} ms a frame on average in this system",
             log.frames,
+            on_buildings.0,
+            on_buildings.1,
+            active.len(),
             log.worked_out,
             log.spent.as_secs_f64() * 1000.0 / log.frames as f64
         );
