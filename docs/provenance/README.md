@@ -2736,3 +2736,12 @@ executable looked at.
 | Its end reaches its script (5d-1), whose `deleteObject $1` hides it and `loadKQ barelded.kq @ $KQObject::loc` makes the wreck (5d-3) | `anim-scripts.md` rules 11–12 | `traps.log`: update 65 burst, 88 wreck |
 | A copy of an unused character is not made (none in the data's runtime loads) | Ours | — |
 
+### 5d-5, `KQObject::tossItems` — `crates/kq8-core/src/active.rs` (`toss_items`, `place_of`), `fight.rs` (`toss`, shared with the drops), `script.rs` (off the stub list); viewer `door_view.rs` (`--swing` at an object)
+
+| What | Source | Check |
+| --- | --- | --- |
+| One item (quantity 1) per listed type, comma separated, `INVITEM_` optional, thrown from the object's place raised by `offsetZ`, each with its own flight | `items.md` rule 12 | Unit test; viewer: barrel.12's four crystals fly and land 1,271–2,304 away |
+| An object that doesn't exist: an error line, nothing made | `items.md` "Edge cases" | Unit test |
+| The object's place as `getLoc` finds it (any kind of object, also a copy loaded the line before) | `objects.md` (getLoc) | Viewer: `tossItems NoName22` (the burst) |
+| `--swing NAME,N` can aim at an object (the middle of its box) | Test option (ours) | Viewer |
+

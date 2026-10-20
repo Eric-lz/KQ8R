@@ -483,6 +483,9 @@ miss, roll, flinch, death, drop and shot is in
   last) or say ouch, run after him from then on, and alarm everyone who
   sees him; hit unseen, a lone one runs about beside him until it finds
   him.
+- **Barrels (M5 5d):** a punch breaks Daventry's barrels: each bursts,
+  leaves its wreck, and the crystal and mushroom barrels throw their
+  items (objects loaded by scripts while playing, `copies_view.rs`).
 - **Dying:** its die movement; its drops fling up and land with their
   sound; when the death ends Connor gets its experience, a body stays
   where it fell, and it is removed.

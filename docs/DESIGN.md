@@ -1375,7 +1375,9 @@ Steps (one commit each; each logged in `viewer.log` / the script logs):
    played by core from its first update; its end (5d-1) reaches its
    script. **Test:** viewer: punch `barrel.07`: `barelupx` bursts,
    then `barelded` stays (`viewer.log`, script logs).
-5. **5d-5, `KQObject::tossItems <object> <offsetZ> <types>`** from a
+5. **5d-5, `KQObject::tossItems <object> <offsetZ> <types>`** (**done**
+   2026-10-20; barrel.12's four crystals; the plan's test option became
+   `--swing barrel.12,N`, the camera there sits behind the pub) from a
    script (`items.md` rule 12): one item per type thrown from the
    object's place raised by `offsetZ`, with 5c-8's throw and fix 7's
    tumble. **Test:** viewer: punch `barrel.12`: four crystals fly and

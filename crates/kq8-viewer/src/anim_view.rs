@@ -102,7 +102,7 @@ struct Playing {
 /// What a new copy of an unused object needs (M5 5d-4): each movement's
 /// frames as (mesh, material) lists, its whole-object steps, its script.
 struct Recipe {
-    movements: Vec<(Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>>, Vec<GameTransform>)>,
+    movements: Vec<(Vec<crate::item_view::Parts>, Vec<GameTransform>)>,
     script: Option<String>,
 }
 

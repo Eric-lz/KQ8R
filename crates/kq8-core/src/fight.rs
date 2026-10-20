@@ -775,39 +775,40 @@ impl crate::active::WorldState {
             self.fight_note(&name, "drops: nothing (rule 31)");
             return;
         }
-        let mut lines = Vec::new();
-        for d in drops {
-            let made = self.items.make(&d.name, d.quantity, crate::item::Place::World { position: at, angles: [0.0; 3] }).map(|o| o.name.clone());
-            match made {
-                Ok(item) => {
-                    self.known.insert(item.to_ascii_lowercase());
-                    let rng = &mut self.fight_rng;
-                    let r = [rng.fraction(), rng.fraction(), rng.fraction()];
-                    let spin = [rng.fraction(), rng.fraction(), rng.fraction()];
-                    let fl = crate::item::Flight::launch(&item, at, r).with_tumble(spin);
-                    let v = fl.velocity;
-                    lines.push(format!(
-                        "{item} ({} x{}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
-                        d.name,
-                        d.quantity,
-                        at[0],
-                        at[1],
-                        at[2],
-                        v[0],
-                        v[1],
-                        v[2],
-                        r[0] * 360.0,
-                        crate::item::TOSS_ELEVATION.0 + r[1] * (crate::item::TOSS_ELEVATION.1 - crate::item::TOSS_ELEVATION.0),
-                        (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
-                    ));
-                    self.flights.push(fl);
-                }
-                Err(e) => lines.push(format!("{}: {e}; not made", d.name)),
-            }
-        }
+        let lines: Vec<String> = drops.iter().map(|d| self.toss(&d.name, d.quantity, at)).collect();
         let line = format!("drops (rule 31, thrown as tossItems, items.md rule 12): {}", lines.join("; "));
         self.item_note(format!("{name}: {line}"));
         self.fight_note(&name, line);
+    }
+
+    /// `items.md` rule 12: makes one item of `kind` x `quantity` at `at`
+    /// and throws it (5c-8's launch, fix 7's tumble). Returns the log text.
+    pub(crate) fn toss(&mut self, kind: &str, quantity: i64, at: [f32; 3]) -> String {
+        let made = self.items.make(kind, quantity, crate::item::Place::World { position: at, angles: [0.0; 3] }).map(|o| o.name.clone());
+        match made {
+            Ok(item) => {
+                self.known.insert(item.to_ascii_lowercase());
+                let rng = &mut self.fight_rng;
+                let r = [rng.fraction(), rng.fraction(), rng.fraction()];
+                let spin = [rng.fraction(), rng.fraction(), rng.fraction()];
+                let fl = crate::item::Flight::launch(&item, at, r).with_tumble(spin);
+                let v = fl.velocity;
+                self.flights.push(fl);
+                format!(
+                    "{item} ({kind} x{quantity}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
+                    at[0],
+                    at[1],
+                    at[2],
+                    v[0],
+                    v[1],
+                    v[2],
+                    r[0] * 360.0,
+                    crate::item::TOSS_ELEVATION.0 + r[1] * (crate::item::TOSS_ELEVATION.1 - crate::item::TOSS_ELEVATION.0),
+                    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+                )
+            }
+            Err(e) => format!("{kind}: {e}; not made"),
+        }
     }
 
     /// `items.md` rule 12 (M5 5c-8): each thrown item flies one update; it

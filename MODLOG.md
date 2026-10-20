@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d-5: `KQObject::tossItems` from a script (the crystal and mushroom barrels)
+
+**Changed:** `KQObject::tossItems <object> <offsetZ> <types>` is built (it was a stub): one item per type thrown from the object's place raised by `offsetZ`, with the drops' throw and tumble (shared code `toss`). `getLoc`'s object lookup is shared (`place_of`). `--swing NAME,N` can aim at an object. A clippy warning from 5d-4 fixed.
+**Why:** Plan 5d step 5; the user's check: barrels should throw their items like the creatures.
+**Tested how:** `cargo test --workspace` (437 core tests, 1 new), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 188861,270713,0 --key left:IDCTL_INVBAR_SHORT,40 --swing barrel.12,60 --frames 1000`; `fight.log`, `items.log`, `traps.log`, `viewer.log`.
+**Result:** Update 64: the punch kills barrel.12; `brlupcr.cs` loads the burst `NoName22` and throws four crystals from it (`NoName23`–`26`); they land at updates 84–86, 1,271–2,304 away, with `potnland.aud`; update 88 the burst's end loads the wreck. A first try with `--aim` failed: the camera there sits behind the pub, so the click line hits the pub.
+**Still broken / not tested:** Not looked at. The mushroom barrels and the alchemist's boards not run (same scripts' pattern). Picking the crystals up not run.
+**Next:** The user's check of the barrels.
+
 ## 2026-10-20 M5 5d-4: animated copies loaded while playing (the barrel bursts and leaves its wreck)
 
 **Changed:** `anim_view` keeps a recipe (frames' meshes and materials, steps, script) and the player of every unused animated object; core gets the players of the animated templates; a copy core makes is drawn from the recipe and played by core (`AnimSim::spawn_copy`, through `copies_view`).

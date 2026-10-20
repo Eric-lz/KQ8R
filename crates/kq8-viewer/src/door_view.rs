@@ -1414,9 +1414,11 @@ pub fn door_step(
             w.fight_note("Connor", format!("test --swing: {line}"));
         }
         let at = w.character_index(&name).map(|j| w.anims[j].player.base.position);
+        // M5 5d-5: or an object (a barrel), by the middle of its box.
+        let at = at.or_else(|| sim.active.target_point(&name));
         match at {
             Some(p) => sim.swing_clicks.push(SwingClick { target: Some(name.clone()), point: [p[0], p[1]], big, how: format!("test --swing {name}") }),
-            None => sim.log.detail(format!("update {updates}: test --swing {name}: no such character")),
+            None => sim.log.detail(format!("update {updates}: test --swing {name}: no such character or object")),
         }
     }
     // fighting.md rules 39-41 (M5 5c-5): swings asked for, the swing that

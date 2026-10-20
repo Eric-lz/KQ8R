@@ -1696,7 +1696,42 @@ impl WorldState {
             self.note(format!("{at}: getLoc without a name; nothing"));
             return "1".into();
         };
-        let base = if let Some(i) = self.object_index(who) {
+        let Some(b) = self.place_of(who) else {
+            self.note(format!("{at}: getLoc {who}: no such object; variables unchanged"));
+            return "1".into();
+        };
+        let a = angles_of(&b.rotation);
+        let f = |v: &[f32]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
+        let only = f(&b.position);
+        self.vars_out.push(("KQObject::loc".into(), format!("{only} {}", f(&a))));
+        self.vars_out.push(("KQObject::locOnly".into(), only.clone()));
+        self.note(format!("{at}: getLoc {who}: {only} (turn {:.3} {:.3} {:.3})", a[0], a[1], a[2]));
+        "0".into()
+    }
+
+    /// `KQObject::tossItems <object> <offsetZ> <type1,type2,...>`
+    /// (`items.md` rule 12; M5 5d-5): one item (quantity 1) per listed type
+    /// (`INVITEM_` optional), thrown from the object's place raised by
+    /// `offsetZ`, each with its own flight (5c-8) and tumble (fix 7). An
+    /// object that doesn't exist: an error line, nothing made.
+    fn toss_items(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(dz), Some(list)) = (words.get(1), words.get(2), words.get(3)) else {
+            self.note(format!("{at}: usage: KQObject::tossItems <object> <offsetZ> <type1,type2,...>: '{}'", words.join(" ")));
+            return "1".into();
+        };
+        let Some(b) = self.place_of(who) else {
+            self.note(format!("{at}: ERROR tossItems: no object '{who}'; nothing made (items.md rule 12)"));
+            return "1".into();
+        };
+        let from = [b.position[0], b.position[1], b.position[2] + number_value(dz) as f32];
+        let lines: Vec<String> = list.split(',').map(str::trim).filter(|t| !t.is_empty()).map(|t| self.toss(t, 1, from)).collect();
+        self.item_note(format!("{at}: tossItems {who} {dz}: {} (items.md rule 12)", lines.join("; ")));
+        "0".into()
+    }
+
+    /// Where an object stands, for `getLoc` and `tossItems`.
+    fn place_of(&self, who: &str) -> Option<Placement> {
+        if let Some(i) = self.object_index(who) {
             Some(self.objects[i].player.base)
         } else if let Some(i) = self.anim_index(who) {
             Some(self.anims[i].player.base)
@@ -1709,18 +1744,7 @@ impl WorldState {
         } else {
             // A box object (a barrel; M5 5c fix 5).
             self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
-        };
-        let Some(b) = base else {
-            self.note(format!("{at}: getLoc {who}: no such object; variables unchanged"));
-            return "1".into();
-        };
-        let a = angles_of(&b.rotation);
-        let f = |v: &[f32]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
-        let only = f(&b.position);
-        self.vars_out.push(("KQObject::loc".into(), format!("{only} {}", f(&a))));
-        self.vars_out.push(("KQObject::locOnly".into(), only.clone()));
-        self.note(format!("{at}: getLoc {who}: {only} (turn {:.3} {:.3} {:.3})", a[0], a[1], a[2]));
-        "0".into()
+        }
     }
 
     /// `move <who> <flags> x y z [rx ry rz]` (`objects.md` "(d)"): set
@@ -2497,6 +2521,7 @@ impl ScriptHost for WorldState {
             "setCombatLevel" => Some(self.set_combat_level(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
             "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
+            "KQObject::tossItems" => Some(self.toss_items(words, at)),
             "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
             "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
@@ -4933,6 +4958,18 @@ mod tests {
         assert!(a.world.clickables.iter().any(|c| c.name == "other"));
         let spawns = a.world.requests.iter().filter(|r| matches!(r, Request::Spawn { .. })).count();
         assert_eq!(spawns, 4);
+    }
+
+    #[test]
+    fn toss_items_throws_one_of_each_type_from_the_object_raised() {
+        // M5 5d-5: items.md rule 12.
+        let script = "if test $2 == ConnorAction\n KQObject::tossItems $1 100 Crystal,INVITEM_Crystal\n KQObject::tossItems nosuch 0 Crystal\nendif\n";
+        let mut a = with_object(script, "x");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let log = a.world.item_log.join("\n");
+        assert_eq!(a.world.flights.len(), 2, "{log}");
+        assert!(a.world.flights.iter().all(|f| f.from == [0.0, 0.0, 100.0]), "raised by offsetZ: {log}");
+        assert!(a.take_log().join("\n").contains("ERROR tossItems: no object 'nosuch'; nothing made"));
     }
 
     #[test]
