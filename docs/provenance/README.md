@@ -2249,3 +2249,4 @@ marked otherwise.
 | Buildings only receive (no shadow of their own) | Rule 37 "What it lies on" (buildings receive); **our reading** that they don't cast | — |
 | Worked out again only when its shown parts or place change | **Ours** (the same picture, less work) | 0.03 ms a frame |
 | `allowShadows` taken as on | **Stand-in**, as for characters (4d-7a) | — |
+| Which objects cast, compared with the original | The user's check (2026-10-20) | Pub barrels: only `barrel.07` casts, in both |

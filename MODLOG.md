@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of plain objects' shadows (4d-7b-4)
+
+**Changed:** Docs only: DESIGN, provenance.
+**Why:** The user compared the barrels by the pub with the original.
+**Tested how:** By eye in our viewer and in the original (user).
+**Result:** One barrel casts a shadow and the others don't, in both, and it is the same barrel (`barrel.07`, the only barrel on the casting list in `shadows.log`; the others' files say `shadowMask=0`).
+**Still broken / not tested:** Shadows on buildings (4d-7b-3).
+**Next:** 4d-7b-3, after a question on the note's height band.
+
 ## 2026-10-20 M4 step 4d-7b-4: plain objects' shadows on the terrain (Q123 d)
 
 **Changed:** `kq8-data/src/objects.rs`: `shadowMask` read for every placement (default 8). `kq8-viewer`: new `shadow_view.rs` (the shadow material, mesh and slot helpers moved from `anim_view.rs`, and `object_shadow_draw`): every drawn object whose distance test says it casts (world mask AND `shadowMask`, solid; not characters, not buildings) throws its shown parts onto the terrain the same way as the characters; worked out again only when its shown parts or place change. `draw_distance.rs`: the test carries the mask (0 for buildings and see-through objects). `load.rs`, `terrain_view.rs`: the world's mask as a resource. New log `shadows.log` (who casts, counts, time spent). DESIGN, provenance.

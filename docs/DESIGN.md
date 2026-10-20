@@ -785,7 +785,7 @@ inventory and menus.
       - **4d-7b-3, buildings receive them** (rule 37 (2): active buildings
         within reach, surfaces near the character's height, an area at
         most 1,800 across).
-      - **4d-7b-4, plain objects cast them** (**done** 2026-10-20; rule 37 "Plain objects":
+      - **4d-7b-4, plain objects cast them** (**done** 2026-10-20; **checked by the user**: the same pub barrel casts as in the original; rule 37 "Plain objects":
         `shadowMask` 8, the same drawing).
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
     dying, the flying mover (M5); conversations (4e, from
