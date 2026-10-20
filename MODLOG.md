@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 5b finished: STATUS, FEATURES, QUESTIONS
+
+**Changed:** Docs only: STATUS (where we are, stand-ins, next steps; Q131–Q134 built), FEATURES (characters moving on their own), QUESTIONS (Q131–Q134 marked built), DESIGN (5b done).
+**Why:** End of the implementation session (`docs/SESSIONS.md`).
+**Tested how:** —
+**Result:** —
+**Still broken / not tested:** The 5b changes are checked in the logs only; the attack is a stand-in until the fight study.
+**Next:** The user's last look at the chase and the zombies; then 5a / 5b are done. A: the fight study.
+
 ## 2026-10-20 M5 step 5b-5: the zombies as traced (Q134)
 
 **Changed:** `kq8-core/src/character_ai.rs`: a zombie gives up by playing `hide` where it is (still drawn, solid, active); when `hide` ends (or a team mate tells it during `hide`) it leaves the active list and goes underground on its home point; it rises again only by the rising test from home. The 5a fix's re-take underground and the 5a-8 stand-in (stay in Wait during `birth`) are removed. `active.rs`: solidity follows "underground", so a sinking zombie stays solid. Test updated. DESIGN, provenance.

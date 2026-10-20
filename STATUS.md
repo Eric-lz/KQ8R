@@ -7,25 +7,24 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
 
 ## Where we are (2026-10-20)
 
-- **New 2026-10-20 (A): Q131–Q134 answered**, in
-  `character-movement.md` (rules 7, 18, 21, 25, 27, 28, 30, 33),
-  `connor-collision.md` rule 18 and `connor-physics.md` (landing on a
-  `KQMonster`). For B to build: **the leash loop is the original's**
-  (no extra condition on the way-home re-take; it keeps `run`, has the
-  0–1 s reaction delay); "not walking forward" = Connor has no forward /
-  back key, so a melee character **follows a walking Connor** at reach
-  and stops only when he stands (fixes the stop-and-go). Zombies:
-  **no re-take underground**; at the end of `hide` they leave the active
-  list and go to their home point, and rise again only by rule 30's own
-  test from there. Stuck escape: world diagonals NE → NW → SW → SE from
-  its feet, the round restarting on each new move, all blocked → face
-  north; the check is armed only once the walk really plays. The
-  cylinder: bottom at position + box min z, height = the larger of box
-  height and box width (goblin 0–1,600); a vertical move tests one
-  ball; landing on a monster's top = a landing plus a 250 push through
-  the mover. Idle list swap, reset distance (3D) settled.
+- **New 2026-10-20 (B, M5 5b-1 to 5b-5): A's answers Q131–Q134 built**
+  (one commit each; plan in `docs/DESIGN.md` "5b"; checked in the logs
+  only): the exact character cylinder (goblin 0–1,600) and the one-ball
+  vertical test; landing on a character's top pushes Connor 250 off; the
+  stuck escape's world diagonals NE → NW → SW → SE, north when all are
+  blocked, the check on only once the walk plays; **a goblin now follows
+  a walking Connor at reach** and stops only when he has no forward /
+  back key (the user's check in the original; no more stop-and-go); the
+  way-home re-take keeps `run` (the leash can't take it home while he
+  stays within reach: the original's, A); zombies sink with `hide`, go
+  underground on their home point and rise again only from there.
+  Earlier the same day (B, after the user's check of 5a): `getLoc`
+  while playing (the graveyard zombies got no home).
+- **2026-10-20 (A): Q131–Q134 answered** (`character-movement.md`,
+  `connor-collision.md` rule 18, `connor-physics.md`), and the user
+  checked the leash and the follow in the original.
 
-- **New 2026-10-20 (B, M5 5a-1 to 5a-9): characters move on their own**,
+- **2026-10-20 (B, M5 5a-1 to 5a-9): characters move on their own**,
   from `character-movement.md` (one commit per step; plan in
   `docs/DESIGN.md` "5a"; **checked in the logs only, not by eye, not
   against the original**). New core module `character_ai.rs`. Walking by
@@ -428,25 +427,19 @@ characters and conversations done; the menus postponed) and **M5**
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Stand-ins of 5a (characters moving):** A answered them all
-  2026-10-20 (Q131–Q134); what to change: the escape's round restarts
-  at north-east on each new move and all-blocked faces north (not
-  "turned round"); the stuck check starts only once the walk plays;
-  stop within reach only when Connor has no forward / back key; the
-  re-take on the way home keeps `run` and has the reaction delay; a sunk
-  zombie leaves the list and goes home at the end of `hide` and rises
-  only by rule 30 (no re-take underground); the cylinder's bottom and
-  height (goblin 0–1,600); vertical moves test one ball; the push off a
-  monster's top. Kept (confirmed or recommended): world diagonals, the
-  line 1 above the feet, the reset distance (3D), the attack stand-in
-  until the fight study, the idle list as `idle:<name>` (same look as
-  the original's swap, rule 18). Not run in the game yet: losing sight, the
-  graveyard trap leaving / re-entering, `wanderAndStop`, random wander
-  points.
-- **Next step, suggested:** for the user: the note's "How to check"
-  1–11 in the original (chickens, goblin22, a chase, the leash, the
-  windmill spriggans, the zombies, the bats). For B: build the
-  answers to Q131–Q134. For A: the fight study. For B: shadows on buildings (4d-7b-3, after a
+- **Stand-ins of 5a / 5b (characters moving):** the attack: where it
+  would be due a character stops (Connor standing) or keeps following
+  (Connor walking), until the fight study; the idle list kept in the
+  same player as `idle:<name>` (the same result as the original's swap,
+  rule 18); the stuck line 1 above the feet (the note's recommendation).
+  Not run in the game yet: losing sight, leaving / re-entering the
+  graveyard trap, `wanderAndStop`, random wander points, landing on a
+  goblin's top (unit test only), ranged characters (`doMode=1`).
+- **Next step, suggested:** for the user: a last look at the chase
+  (run away from a goblin; walk with one following, then stand) and the
+  zombies (sink when you get away, rise again from their graves when you
+  come back); then characters moving on their own (5a, 5b) can be called
+  done. For A: the fight study. For B: shadows on buildings (4d-7b-3, after a
   question on the note's loose height band). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
@@ -509,8 +502,7 @@ characters and conversations done; the menus postponed) and **M5**
   whose own open questions are now: 1 water for walking characters
   (small), 2 the fight (the next study), 3 the stuck line's exact
   ground test at foot height (not worth copying).
-- For B (answered 2026-10-20 by A, not built): **Q131–Q134** (see
-  "Where we are").
+- Q131–Q134: answered by A and built 2026-10-20 (M5 5b).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

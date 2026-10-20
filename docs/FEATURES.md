@@ -431,18 +431,23 @@ against the original yet; the note's "How to check" lists what to compare.
   (`loop`, `patrol`), and goblins and spriggans stop now and then for a
   fidget from their idle list.
 - **Alarm and chase:** seen within its alarm radius, a character reacts
-  after up to a second, tells its team, walks or runs after Connor and
-  stops at its attack distance (where the fight will start); it gives up
-  when it loses sight of him for 3 s or goes beyond its leash, and goes
-  home. `goHome`, `setHome` and the radius commands work.
+  after up to a second, tells its team and walks or runs after Connor; it
+  follows him at reach while he walks and stops when he stands (where the
+  fight will start); it gives up when it loses sight of him for 3 s or
+  goes beyond its leash, and goes home. Scripts can set its home
+  (`getLoc`, `setHome`), its radii and `goHome`.
 - **Zombies:** they rise when Connor comes within their alarm radius
-  (after their `birthDelay`), and sink back when they give up.
+  (after their `birthDelay`), sink back when they give up, and rise again
+  from their home when he comes back.
 - **Bats:** they fly their loop and sit on the water surface over the
   lake.
-- Stand-ins until the study session answers: Q132 (the stuck escape's
-  diagonals and line height, Connor's shape for a character), Q133 (the
-  leash with Connor within reach; the stop instead of an attack), Q134
-  (the chase waits for a zombie's `birth`).
+- Built from A's answers Q131–Q134 (M5 5b): the exact character
+  cylinder, landing on a character's top pushes Connor off, the stuck
+  escape's compass diagonals, following a walking Connor at reach (the
+  user's check in the original), zombies sinking home and rising again
+  from there.
+- Stand-in until the fight study: where a character would attack, it
+  stops (Connor standing) or keeps following (Connor walking).
 
 ## The on-screen interface (milestone M4, step 4c)
 
