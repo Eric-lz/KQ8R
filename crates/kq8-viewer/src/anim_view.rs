@@ -822,7 +822,7 @@ pub fn shadow_draw(
         })
         .clone();
     let mut lines = Vec::new();
-    let mut line = |name: &str, model: &[[shadow::V3; 3]], receivers: usize, cast: usize, above: f32| {
+    let line = |name: &str, model: &[[shadow::V3; 3]], receivers: usize, cast: usize, above: f32| {
         format!(
             "update {}: {name}: shadow: {} model triangles, {} facing the sun, {receivers} terrain triangles, {cast} pieces drawn; {above:.0} above the drawn ground{} (rule 37)",
             sim.updates,
