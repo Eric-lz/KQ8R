@@ -34,27 +34,27 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 
 **Changed:** `kq8-core/src/active.rs`: at the end of every update the event queue is handled again, until nothing is due now (`handle_due`), so the ends of movements (`EndLoop`, `Cue 300`), a line's notify-group `TalkComplete` and what scripts send with delay 0 during the update arrive in the same update, before the frame is drawn (was: the next update). Four older tests changed to the new timing, 1 new. `QUESTIONS.md` Q119 marked built. DESIGN, provenance.
 **Why:** A's answer to Q119 (`anim-scripts.md` rule 8): nothing sent with delay 0 waits for the next update. The one-update wait showed as the Uglybeast's snap at the end of `pivot` (`Stop` drawn for a frame at the old heading before `ugly.cs`'s `move` and `stand`), which the user saw again (2026-10-19).
-**Tested how:** `cargo test --workspace` (505 pass), clippy clean. Viewer: **not run yet** (a viewer window was open).
-**Result:** Unit test: an `EndLoop` script's `sendEvent 0 … KQAnimPlayEvent stop` starts `stop` in the same update `open` ends. A door's `EndLoop` and its listener's `Cue 300`, a chest's and a basket's `EndLoop`, and the notify group's `TalkComplete` now come one update (1/15 s) earlier than before.
-**Still broken / not tested:** Not run in the viewer. This shifts the timing of M3's checked scenes (doors, chests, cutscene cues) by one update earlier; worth a look. Scripts run after the update (traps, in the viewer's `trap_step`) still have their delay-0 events handled at the start of the next update.
-**Next:** The viewer runs for 4e-8 to 4e-10 (needs the open viewer closed).
+**Tested how:** `cargo test --workspace` (505 pass), clippy clean. Viewer: `--at 258500,296500,0.6 --click Uglybeast,30 --frames 1800 --sound off`, read in `characters.log`, `doors.log`.
+**Result:** Unit test: an `EndLoop` script's `sendEvent 0 … KQAnimPlayEvent stop` starts `stop` in the same update `open` ends. A door's `EndLoop` and its listener's `Cue 300`, a chest's and a basket's `EndLoop`, and the notify group's `TalkComplete` now come one update (1/15 s) earlier than before. Viewer: in update 80 `pivot` ends, Wait asks for `Stop`, then (same update, before drawing) `EndLoop pivot`, `ugly.cs`'s `move Uglybeast 3` to (262035, 298992) and `stand`, which replaces `Stop`: `Stop` is never drawn (before: drawn in update 80, `stand` in 81).
+**Still broken / not tested:** Not checked by eye. This shifts the timing of M3's checked scenes (doors, chests, cutscene cues) by one update earlier; worth a look. Scripts run after the update (traps, in the viewer's `trap_step`) still have their delay-0 events handled at the start of the next update.
+**Next:** The user's check of the Uglybeast and the right-button camera; B: A's answers Q116, Q117, Q121–Q124.
 
 ## 2026-10-19 M4 step 4e-9: a movement whose loop lasts 0 never ends (Q120 built)
 
 **Changed:** `kq8-core/src/door.rs` (`DoorMovement::step_with`): a model loop of 0 s (or less) neither moves nor ends, loop or play-once (was: a play-once one ended at once). 1 unit test. `QUESTIONS.md` Q120 marked built. DESIGN, provenance.
 **Why:** A's answer to Q120 (`anim-scripts.md` rule 10a): the Uglybeast's mouth poses last 0 s, so they hold; our "ended at once" made Wait bring `Stop` back between mouth codes: the flicker the user saw again (2026-10-19).
-**Tested how:** `cargo test --workspace` (504 pass, 1 new; the new test fails without the change), clippy clean. Viewer: **not run yet** (a viewer window was open).
-**Result:** Unit test: a geometry talker in Wait given code 1 holds `f` for 30 updates, no `Stop`.
-**Still broken / not tested:** Not run in the viewer. Which other models last 0 s (the note asks to check) is not counted: our model check does not report loop lengths.
+**Tested how:** `cargo test --workspace` (504 pass, 1 new; the new test fails without the change), clippy clean. Viewer (`--sound off`): `--at 252000,296000,0.6 --click Uglybeast,30 --frames 1500` (the "too far" line) and `--at 258500,296500,0.6 --click Uglybeast,30 --frames 1800`, read in `characters.log`.
+**Result:** Unit test: a geometry talker in Wait given code 1 holds `f` for 30 updates, no `Stop`. Viewer, "too far" line: 16 mouth poses, 0 returns to `Stop` between them (before: `Stop` after every pose); at the end of its queue our Q117 stand-in still asks for `Stop` (A's answer: nothing while in Wait; `ugly.cs` sends `stop` itself), not changed here.
+**Still broken / not tested:** Not checked by eye. Q117's answer not built. Which other models last 0 s (the note asks to check) is not counted: our model check does not report loop lengths.
 **Next:** Q119 (the snap at the end of the Uglybeast's turn).
 
 ## 2026-10-19 M4 step 4e-8: the right-button camera turns between the two (the user's check)
 
 **Changed:** `kq8-core/src/conversation.rs`: with the right button held during a conversation the camera is placed at `cam0` aimed at, and swings around, the point half-way between the partner and Connor (was: the partner). Unit test changed. `QUESTIONS.md` Q126: the user's observation added. DESIGN, provenance.
 **Why:** The user's check in the original (2026-10-19): the camera pivots in the space between the Wizard and Connor. The note says "aimed at the partner"; the exact point is not traced (Q126).
-**Tested how:** `cargo test -p kq8-core conversation` (11 pass). Viewer: **not run** (a viewer window was open, so the build could not replace the program).
-**Result:** Unit test: Bob at (1000, 1000, 0), Connor at (1200, 1000, 100) → the swing's centre (1100, 1000, 50).
-**Still broken / not tested:** Not run in the viewer; not checked by eye. The end of a conversation still puts the camera at `cam0` looking at the partner.
+**Tested how:** `cargo test -p kq8-core conversation` (11 pass). Viewer (after the open viewer was closed): `--at 193000,198000,-1.7 --click Wizard,30 --right 200 --frames 2600 --sound off`, read in `conversation.log`.
+**Result:** Unit test: Bob at (1000, 1000, 0), Connor at (1200, 1000, 100) → the swing's centre (1100, 1000, 50). Viewer: at update 200 the camera at `cam0` aimed at (191489, 198182, 8030), swinging around (191489, 198182, 6630), half-way between the Wizard (190807, 198274) and Connor's spot.
+**Still broken / not tested:** Not checked by eye (only `--right`, no real drag). The end of a conversation still puts the camera at `cam0` looking at the partner.
 **Next:** Q120 and Q119 (the Uglybeast's flicker and snap).
 
 ## 2026-10-19 End of M4 4e (docs only)
