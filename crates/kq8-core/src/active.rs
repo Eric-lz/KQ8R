@@ -634,6 +634,8 @@ pub struct WorldState {
     pub character_colliders: Vec<crate::collide::CylinderCollider>,
     /// Lines for `characters.log` (M4 4d-3), taken by the caller.
     pub character_log: Vec<String>,
+    /// Lines for `fight.log` (M5 5c), taken by the caller.
+    pub fight_log: Vec<String>,
     /// The active characters, lower case, in the order they joined
     /// (`character-movement.md` rule 20; M5 5a-4).
     pub active_list: Vec<String>,
@@ -671,6 +673,13 @@ pub struct Monster {
 impl WorldState {
     pub fn now(&self) -> f64 {
         self.updates as f64 / crate::UPDATES_PER_SECOND
+    }
+
+    /// A line about the fight (M5 5c): `fight.log`, `characters.log` and
+    /// the current log.
+    pub(crate) fn fight_note(&mut self, who: &str, line: impl AsRef<str>) {
+        self.fight_log.push(format!("update {}: {who}: {}", self.updates, line.as_ref()));
+        self.character_note(who, line);
     }
 
     /// A line about a character: the current log and `characters.log`.
@@ -2439,6 +2448,7 @@ impl Active {
                 characters_solid: BTreeSet::new(),
                 character_colliders: Vec::new(),
                 character_log: Vec::new(),
+                fight_log: Vec::new(),
                 active_list: Vec::new(),
                 max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
                 connor_move_key: false,
@@ -2601,6 +2611,14 @@ impl Active {
     pub fn add_anims(&mut self, anims: impl IntoIterator<Item = AnimObject>) {
         for a in anims {
             self.world.known.insert(a.player.name.to_ascii_lowercase());
+            // fighting.md rule 2 (M5 5c-1): what it brings to the fight.
+            if let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) {
+                let line = format!("fights (rule 2): {}; from {}", f.settings.describe(), f.settings.from);
+                let name = a.player.name.clone();
+                self.world.anims.push(a);
+                self.world.fight_note(&name, line);
+                continue;
+            }
             self.world.anims.push(a);
         }
     }

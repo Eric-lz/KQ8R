@@ -23,6 +23,7 @@ pub mod conversation;
 pub mod door;
 pub mod emitter;
 pub mod events;
+pub mod fight;
 pub mod ground_anim;
 pub mod gui_draw;
 pub mod inventory;

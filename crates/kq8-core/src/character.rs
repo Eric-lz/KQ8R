@@ -138,6 +138,9 @@ pub struct Character {
     /// Its movement rules and what it knows (M5 5a-4), set by the loader;
     /// `None` = none (it only does what it is told).
     pub ai: Option<crate::character_ai::Ai>,
+    /// Its part in the fight (M5 5c, `fighting.md`), set by the loader for
+    /// a monster-list line; `None` = it never fights.
+    pub fight: Option<crate::fight::Fight>,
     /// Underground: not drawn, not solid (`characters.md` rule 16): set by
     /// the loader for a list with `Birth`; cleared when it rises
     /// (`character-movement.md` rule 30), set again when its `hide` ends
@@ -243,6 +246,7 @@ impl Character {
             mover_started: false,
             walk: Walk::default(),
             ai: None,
+            fight: None,
             unborn: false,
         }
     }

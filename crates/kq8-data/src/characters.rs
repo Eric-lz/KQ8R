@@ -205,18 +205,65 @@ fn first_number(text: &str) -> Option<f32> {
     text.split_whitespace().next()?.parse().ok()
 }
 
+/// The attack distance field's second and third numbers, `tooClose
+/// farEnough` (`fighting.md` rule 37: `slime`'s `5000 0.4 3.0`); `None`
+/// when the field has only the distance.
+fn more_numbers(text: &str) -> Option<[f32; 2]> {
+    let w: Vec<f32> = text.split_whitespace().skip(1).filter_map(|w| w.parse().ok()).collect();
+    (w.len() >= 2).then(|| [w[0], w[1]])
+}
+
+/// One entry of an item list (`invHold`, `invDrop`): the type as written
+/// (the `INVITEM_` prefix may be missing, `items.md` rule 2) and how many
+/// (`SilverCoins(3)` = 3; `fighting.md` rule 31).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemEntry {
+    pub name: String,
+    pub quantity: i64,
+}
+
+/// An item list field (`fighting.md` rules 2, 31): comma separated,
+/// quotes allowed; `none` and `@` (and empty) are no items.
+pub fn item_entries(text: &str) -> Vec<ItemEntry> {
+    let t = unquote(text);
+    if t.is_empty() || t == "@" || t.eq_ignore_ascii_case("none") {
+        return Vec::new();
+    }
+    t.split(',')
+        .map(unquote)
+        .filter(|w| !w.is_empty() && *w != "@" && !w.eq_ignore_ascii_case("none"))
+        .map(|w| match w.split_once('(') {
+            Some((n, rest)) => ItemEntry { name: n.trim().to_string(), quantity: rest.trim_end_matches(')').trim().parse().unwrap_or(1) },
+            None => ItemEntry { name: w.to_string(), quantity: 1 },
+        })
+        .collect()
+}
+
+/// A whole-number column that may be `@` (counted as 0, `fighting.md`
+/// rule 2).
+fn whole_or_zero(text: &str) -> Result<i64, String> {
+    if text == "@" || text.is_empty() {
+        return Ok(0);
+    }
+    text.parse::<f64>().map(|v| v as i64).map_err(|_| format!("'{text}' is not a number"))
+}
+
 /// Field positions in a `monsterN=` value (rule 3).
 mod line {
     pub const NAME: usize = 0;
     pub const TYPE: usize = 1;
     pub const TEAM: usize = 2;
+    pub const EXTRA: usize = 3;
     pub const X: usize = 7;
     pub const HEADING: usize = 10;
     pub const MOVEMENT: usize = 12;
+    pub const INV_HOLD: usize = 13;
+    pub const INV_DROP: usize = 14;
     pub const CHASE_MODE: usize = 15;
     pub const ALARM_RADIUS: usize = 16;
     pub const BIRTH_DELAY: usize = 17;
     pub const ATTACK_DIST: usize = 18;
+    pub const ATTACK_DELAY: usize = 19;
     pub const COUNT: usize = 20;
 }
 
@@ -225,12 +272,16 @@ mod line {
 mod kind {
     pub const CLASS: usize = 0;
     pub const NAME: usize = 1;
+    pub const HEALTH: usize = 2;
     pub const FILE: usize = 6;
     pub const MOVEMENT: usize = 7;
+    pub const INV_HOLD: usize = 8;
+    pub const INV_DROP: usize = 9;
     pub const CHASE_MODE: usize = 10;
     pub const ALARM_RADIUS: usize = 11;
     pub const BIRTH_DELAY: usize = 12;
     pub const ATTACK_DIST: usize = 13;
+    pub const ATTACK_DELAY: usize = 14;
     pub const COUNT: usize = 15;
 }
 
@@ -274,6 +325,15 @@ pub struct MonsterLine {
     pub chase: Field<ChaseMode>,
     /// The attack distance (first number); `@` = the type's.
     pub attack_dist: Field<f32>,
+    /// The fight (`fighting.md` rules 2, 31, 37; M5 5c-1): `xtraHealth`,
+    /// `xtraDamage`, `xtraProtect`, `xtraExp` (`@` = 0); the items it
+    /// holds and drops; `attackDelay` (`@` = the type's); the attack
+    /// distance's `tooClose farEnough`, if given.
+    pub extra: [i64; 4],
+    pub inv_hold: Vec<ItemEntry>,
+    pub inv_drop: Vec<ItemEntry>,
+    pub attack_delay: Field<f32>,
+    pub attack_more: Option<[f32; 2]>,
 }
 
 impl MonsterLine {
@@ -304,7 +364,16 @@ impl MonsterLine {
             a => Field::Value(first_number(a).ok_or(format!("{key}: attack distance '{a}' is not a number"))?),
         };
         let team = Some(fields[line::TEAM]).filter(|t| !t.is_empty() && *t != "@").map(str::to_string);
+        let mut extra = [0i64; 4];
+        for (k, v) in extra.iter_mut().enumerate() {
+            *v = whole_or_zero(fields[line::EXTRA + k]).map_err(|e| format!("{key}: {} {e}", ["xtraHealth", "xtraDamage", "xtraProtect", "xtraExp"][k]))?;
+        }
         Ok(MonsterLine {
+            extra,
+            inv_hold: item_entries(fields[line::INV_HOLD]),
+            inv_drop: item_entries(fields[line::INV_DROP]),
+            attack_delay: number_field(fields[line::ATTACK_DELAY], "attack delay").map_err(|e| format!("{key}: {e}"))?,
+            attack_more: more_numbers(fields[line::ATTACK_DIST]),
             team,
             chase,
             attack_dist,
@@ -385,6 +454,14 @@ pub struct MonsterType {
     pub birth_delay: f32,
     pub chase: ChaseMode,
     pub attack_dist: f32,
+    /// The fight (`fighting.md` rules 2, 31, 37; M5 5c-1): `Health`,
+    /// `Damage`, `Protect`, `Experience`; the items it holds and drops;
+    /// `attackDelay`; the attack distance's `tooClose farEnough`.
+    pub stats: [i64; 4],
+    pub inv_hold: Vec<ItemEntry>,
+    pub inv_drop: Vec<ItemEntry>,
+    pub attack_delay: f32,
+    pub attack_more: Option<[f32; 2]>,
 }
 
 /// The type list (rule 4).
@@ -428,6 +505,17 @@ impl MonsterTypes {
                     birth_delay: number(kind::BIRTH_DELAY, "birth delay")?,
                     chase: ChaseMode::parse(f[kind::CHASE_MODE]).map_err(|e| format!("{key}: {e}"))?,
                     attack_dist: first_number(f[kind::ATTACK_DIST]).ok_or(format!("{key}: attack distance '{}' is not a number", f[kind::ATTACK_DIST]))?,
+                    stats: {
+                        let mut st = [0i64; 4];
+                        for (k, v) in st.iter_mut().enumerate() {
+                            *v = whole_or_zero(f[kind::HEALTH + k]).map_err(|e| format!("{key}: {} {e}", ["Health", "Damage", "Protect", "Experience"][k]))?;
+                        }
+                        st
+                    },
+                    inv_hold: item_entries(f[kind::INV_HOLD]),
+                    inv_drop: item_entries(f[kind::INV_DROP]),
+                    attack_delay: number(kind::ATTACK_DELAY, "attack delay")?,
+                    attack_more: more_numbers(f[kind::ATTACK_DIST]),
                 })
             };
             match read() {
@@ -508,6 +596,21 @@ pub struct CharacterKeys {
     pub wander_and_stop: bool,
     /// `doMode=` (ranged characters, the fight study).
     pub do_mode: i32,
+    /// The fight (`fighting.md` "Data used"; M5 5c-1): the corpse shapes
+    /// (rule 32), the ouch sound (rule 24), the flinch (rule 23), fleeing
+    /// (rule 37). `None` = not in the file (the rule's default applies).
+    pub dead_dts: Option<String>,
+    pub ided_kqs: Option<String>,
+    pub projd_kqs: Option<String>,
+    pub ouch_sound: Option<String>,
+    pub normal_react_percent: Option<f32>,
+    pub special_react_anim: Option<String>,
+    pub special_react_percent: Option<f32>,
+    pub likely_to_flee: Option<f32>,
+    pub must_flee: bool,
+    /// `reactPause` (in the data, not in `fighting.md`: Q136; none in
+    /// Daventry). Read for the log only.
+    pub react_pause: Option<f32>,
 }
 
 /// A character's own collision type and mask when its file sets none
@@ -551,6 +654,16 @@ impl CharacterKeys {
             can_always_see: switch("canAlwaysSeeConner", false),
             wander_and_stop: switch("wanderAndStop", false),
             do_mode: number("doMode").map_or(0, |v| v as i32),
+            dead_dts: text("deadDts"),
+            ided_kqs: text("idedKqs"),
+            projd_kqs: text("projdKqs"),
+            ouch_sound: text("ouchSound"),
+            normal_react_percent: number("normalReactPercent").map(|v| v as f32),
+            special_react_anim: text("specialReactAnim"),
+            special_react_percent: number("specialReactPercent").map(|v| v as f32),
+            likely_to_flee: number("likelyToFlee").map(|v| v as f32),
+            must_flee: switch("mustFlee", false),
+            react_pause: number("reactPause").map(|v| v as f32),
         })
     }
 
@@ -743,6 +856,136 @@ impl AiSettings {
     }
 }
 
+/// The Flame Sword's id: a character holding one hits with fire
+/// (`fighting.md` rule 14).
+pub const FLAME_SWORD_ID: i64 = 1110;
+/// Protection is capped at this whenever it is set (`fighting.md` rule 1).
+pub const PROTECTION_CAP: i64 = 100;
+
+/// What a character brings to the fight (`fighting.md` rules 1, 2, 23, 24,
+/// 31, 32, 34, 37; M5 5c-1): its five stats (health, hand damage, ranged
+/// damage, protection, experience), worked out from its monster-list line
+/// and type, and the keys the fight reads. Before the combat level
+/// (rule 3, applied when it enters the world).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FightSettings {
+    pub stats: [i64; 5],
+    /// `attackDelay` in seconds (the line's, `@` = the type's).
+    pub attack_delay: f32,
+    /// The `LongWeapon` it holds (its `IDName`) and that item's projectile
+    /// file: it is ranged (rule 34).
+    pub ranged_weapon: Option<String>,
+    pub projectile: Option<String>,
+    /// It holds a Flame Sword: its hits are `Fire` (rule 14).
+    pub fire: bool,
+    /// Its drop list: the line's `invDrop`, then the type's (rule 31).
+    pub drops: Vec<ItemEntry>,
+    /// The attack distance's `tooClose farEnough` (rule 37), if given.
+    pub attack_more: Option<[f32; 2]>,
+    pub dead_dts: Option<String>,
+    pub ided_kqs: Option<String>,
+    pub projd_kqs: Option<String>,
+    pub ouch_sound: Option<String>,
+    pub normal_react_percent: Option<f32>,
+    pub special_react_anim: Option<String>,
+    pub special_react_percent: Option<f32>,
+    pub likely_to_flee: Option<f32>,
+    pub must_flee: bool,
+    /// How the stats were made, for the log (held items, missing ones).
+    pub from: String,
+}
+
+impl FightSettings {
+    /// Rule 2 for a monster-list line of type `kind`: type + extra (`@` =
+    /// 0); `Damage` fills hand and ranged; protection capped at 100; then
+    /// each held item (the type's, then the line's): its health and
+    /// protection added; a `LongWeapon` adds its ranged damage and becomes
+    /// the weapon it shoots with, anything else adds its hand damage.
+    /// Items' experience is not added. A held item missing from the item
+    /// list is skipped (noted in `from`).
+    pub fn from_line(keys: &CharacterKeys, line: &MonsterLine, kind: &MonsterType, items: &crate::items::ItemTypes) -> Self {
+        let t = &kind.stats;
+        let x = &line.extra;
+        let damage = t[1] + x[1];
+        let mut stats = [t[0] + x[0], damage, damage, (t[2] + x[2]).min(PROTECTION_CAP), t[3] + x[3]];
+        let (mut ranged_weapon, mut projectile, mut fire) = (None, None, false);
+        let mut held = Vec::new();
+        for e in kind.inv_hold.iter().chain(&line.inv_hold) {
+            let Some(it) = items.find(&e.name) else {
+                held.push(format!("{} (not in the item list: skipped)", e.name));
+                continue;
+            };
+            stats[0] += it.stats[0];
+            stats[3] = (stats[3] + it.stats[3]).min(PROTECTION_CAP);
+            if it.category.eq_ignore_ascii_case("LongWeapon") {
+                stats[2] += it.stats[2];
+                ranged_weapon = Some(it.name.clone());
+                projectile = it.extra.clone();
+                held.push(format!("{} (LongWeapon: ranged +{}, health +{}, protection +{})", it.name, it.stats[2], it.stats[0], it.stats[3]));
+            } else {
+                stats[1] += it.stats[1];
+                fire |= it.id == Some(FLAME_SWORD_ID);
+                held.push(format!("{} (hand +{}, health +{}, protection +{})", it.name, it.stats[1], it.stats[0], it.stats[3]));
+            }
+        }
+        let attack_more = match line.attack_dist {
+            Field::Value(_) => line.attack_more,
+            Field::FromType => kind.attack_more,
+        };
+        FightSettings {
+            stats,
+            attack_delay: line.attack_delay.or(kind.attack_delay),
+            ranged_weapon,
+            projectile,
+            fire,
+            drops: line.inv_drop.iter().chain(&kind.inv_drop).cloned().collect(),
+            attack_more,
+            dead_dts: keys.dead_dts.clone(),
+            ided_kqs: keys.ided_kqs.clone(),
+            projd_kqs: keys.projd_kqs.clone(),
+            ouch_sound: keys.ouch_sound.clone(),
+            normal_react_percent: keys.normal_react_percent,
+            special_react_anim: keys.special_react_anim.clone(),
+            special_react_percent: keys.special_react_percent,
+            likely_to_flee: keys.likely_to_flee,
+            must_flee: keys.must_flee,
+            from: format!(
+                "type {} {:?} + extra {:?}; holds {}",
+                kind.name,
+                kind.stats,
+                line.extra,
+                if held.is_empty() { "nothing".to_string() } else { held.join(", ") }
+            ),
+        }
+    }
+
+    /// One line for the logs.
+    pub fn describe(&self) -> String {
+        let drops = if self.drops.is_empty() {
+            "nothing".to_string()
+        } else {
+            self.drops.iter().map(|d| if d.quantity == 1 { d.name.clone() } else { format!("{} x{}", d.name, d.quantity) }).collect::<Vec<_>>().join(", ")
+        };
+        format!(
+            "stats {:?} (health, hand, ranged, protection, experience); attack delay {} s; {}{}; drops {drops}; corpse {} / ice {} / projectile {}; ouch {}{}{}{}",
+            self.stats,
+            self.attack_delay,
+            match &self.ranged_weapon {
+                Some(w) => format!("ranged with {w} (shoots {})", self.projectile.as_deref().unwrap_or("nothing")),
+                None => "melee".to_string(),
+            },
+            if self.fire { "; hits with fire (Flame Sword)" } else { "" },
+            self.dead_dts.as_deref().unwrap_or("none"),
+            self.ided_kqs.as_deref().unwrap_or("none"),
+            self.projd_kqs.as_deref().unwrap_or("none"),
+            self.ouch_sound.as_deref().unwrap_or("none (default sword.aud)"),
+            self.normal_react_percent.map_or(String::new(), |v| format!("; normalReactPercent {v}")),
+            self.likely_to_flee.map_or(String::new(), |v| format!("; likelyToFlee {v}")),
+            self.attack_more.map_or(String::new(), |m| format!("; tooClose {} farEnough {}", m[0], m[1])),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,6 +1025,51 @@ monster3=\tchicken3\tchicken\t@\t@\t@\t1\t-1\t244688\t216198\t-2\t0\t@\tpatrol 2
         assert_eq!(gob.chase, Field::Value(ChaseMode::Chase { home_radius: 4000.0, chase_radius: 9000.0 }));
         assert_eq!((gob.team.as_deref(), gob.attack_dist.clone()), (None, Field::FromType));
         assert_eq!((chick.chase.clone(), chick.alarm_radius.clone()), (Field::FromType, Field::FromType));
+        // fighting.md rules 2, 31 (M5 5c-1).
+        let entry = |n: &str, q: i64| ItemEntry { name: n.into(), quantity: q };
+        assert_eq!((bow.extra, bow.inv_hold.clone(), bow.inv_drop.clone()), ([100, -13, 10, 8], vec![], vec![entry("INVITEM_SmCrossbow", 1)]));
+        assert_eq!((bow.attack_delay.clone(), bow.attack_more), (Field::Value(1.0), None));
+        assert_eq!(gob.extra, [-5, -3, -4, 1]);
+        assert_eq!(gob.inv_drop, vec![entry("INVITEM_SilverCoins", 3), entry("INVITEM_mushroom", 1)]);
+        assert_eq!((boss.extra, boss.attack_delay.clone()), ([200, 13, 25, 0], Field::Value(0.2)));
+        assert_eq!((chick.extra, chick.attack_delay.clone()), ([0, 0, 1, -1], Field::Value(1.5)));
+    }
+
+    #[test]
+    fn fight_settings_follow_rule_2() {
+        let list = "[Monsters]\nnumMonsters=2\n\
+monster0=\tsprgnbow\tsprgnbowtype\t@\t100\t-13\t10\t8\t1\t2\t3\t0\t@\t@\t@\tINVITEM_SmCrossbow\tguard\t12000\t@\t12000\t1\n\
+monster1=\tgoblin22\tgoblin2\t@\t-5\t-3\t-4\t@\t1\t2\t-1\t2\t@\t@\t@\t\"INVITEM_mushroom,INVITEM_mushroom\"\t@\t4000\t@\t@\t1\n";
+        let (list, problems) = MonsterList::from_section(&kq_text::parse(list.as_bytes())[0]);
+        assert!(problems.is_empty(), "{problems:?}");
+        let types = "[T]\nnumTypes=2\n\
+type0=\tKQMonsterType\tsprgnbowtype\t30\t10\t5\t7\tsprgnbow.kq\tnone\tINVITEM_SmCrossbow\tnone\tguard\t8000\t0\t6000\t0.5\n\
+type1=\tKQMonsterType\tgoblin2\t20\t5\t4\t3\tgoblin2.kq\tnone\tnone\tnone\tchase 3000 6000\t3000\t0\t1500\t0.5\n";
+        let (types, problems) = MonsterTypes::parse(types.as_bytes());
+        assert!(problems.is_empty(), "{problems:?}");
+        let items = b"[InventoryItemTypeList]\nnumItems=1\n\
+item0=\tKQInventoryItemType\tINVITEM_SmCrossbow\t1130\t0\t0\t5\t0\t0\t0\tLongWeapon\tIDBMP_2RNG1\t62 0 0 1\tBowMode\t0\t0\tnone\tweapon.aud\tcrossbow.aud\tscbow.kqs\tnone\t400\t256\tPrscbolt.kq\n";
+        let (items, _) = crate::items::ItemTypes::parse(items);
+        let keys = CharacterKeys::from_section(&kq_text::parse(b"[G]\nclassType=KQMonster\ndeadDts=g2dead.kqs\nouchSound=gblnouch.aud\n")[0]).unwrap();
+        // fighting.md rule 5's table: sprgnbow 130 / -3 / 2 / 15 / 15, ranged.
+        let bow = FightSettings::from_line(&keys, &list.lines[0], &types.types[0], &items);
+        assert_eq!(bow.stats, [130, -3, 2, 15, 15]);
+        assert_eq!((bow.ranged_weapon.as_deref(), bow.projectile.as_deref(), bow.attack_delay), (Some("INVITEM_SmCrossbow"), Some("Prscbolt.kq"), 1.0));
+        assert_eq!(bow.drops.len(), 1);
+        // goblin22: 15 / 2 / 2 / 0 / 3, delay 1, two mushrooms dropped.
+        let g = FightSettings::from_line(&keys, &list.lines[1], &types.types[1], &items);
+        assert_eq!((g.stats, g.attack_delay, g.ranged_weapon.clone(), g.drops.len()), ([15, 2, 2, 0, 3], 1.0, None, 2));
+        assert_eq!((g.dead_dts.as_deref(), g.ouch_sound.as_deref()), (Some("g2dead.kqs"), Some("gblnouch.aud")));
+    }
+
+    #[test]
+    fn item_lists_and_the_extra_attack_numbers() {
+        assert_eq!(item_entries("none"), vec![]);
+        assert_eq!(item_entries("@"), vec![]);
+        assert_eq!(item_entries("\"INVITEM_mushroom,INVITEM_mushroom\"").len(), 2);
+        assert_eq!(item_entries("Crystal, SilverCoins(3)")[1], ItemEntry { name: "SilverCoins".into(), quantity: 3 });
+        assert_eq!(more_numbers("5000 0.4 3.0"), Some([0.4, 3.0]));
+        assert_eq!(more_numbers("1500"), None);
     }
 
     #[test]
@@ -839,6 +1127,10 @@ type1=\tKQMonsterType\tslime\t100\t20\t20\t5000\tslime.kq\tnone\tINVITEM_SlmSlim
         assert_eq!((s.file.as_str(), folded), ("sprigan.kq", false));
         assert_eq!(t.find("SLIME").map(|(t, f)| (t.birth_delay, f)), Some((2.0, true)));
         assert!(t.find("nothing").is_none());
+        // fighting.md rules 2, 37 (M5 5c-1).
+        assert_eq!((s.stats, s.attack_delay, s.attack_more), ([30, 10, 5, 7], 1.0, None));
+        let (sl, _) = t.find("slime").unwrap();
+        assert_eq!((sl.inv_hold.len(), sl.attack_more), (1, Some([0.4, 3.0])));
     }
 
     #[test]

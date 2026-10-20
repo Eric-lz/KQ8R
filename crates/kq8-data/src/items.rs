@@ -44,6 +44,7 @@ const SHAPE: usize = 18;
 const CURSOR: usize = 19;
 const RADIUS: usize = 20;
 const TRANSLUCENCY: usize = 21;
+const EXTRA: usize = 22;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemType {
@@ -83,6 +84,9 @@ pub struct ItemType {
     pub use_sound: Option<String>,
     /// `cursor`: the pointer's tag name while held; `None` for `none`.
     pub cursor: Option<String>,
+    /// The last column (`extraData`): for a `LongWeapon` the projectile
+    /// file it shoots (`Prscbolt.kq`; `fighting.md` rule 36, M5 5c-1).
+    pub extra: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -157,6 +161,7 @@ impl ItemTypes {
                 duration: field(DURATION).parse().unwrap_or(0.0),
                 use_sound: sound(field(USE_SOUND)),
                 cursor: sound(field(CURSOR)),
+                extra: sound(field(EXTRA)),
             });
         }
         (ItemTypes { types, declared }, problems)
@@ -197,6 +202,7 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         assert_eq!((s.land_sound.as_deref(), s.pickup_sound.as_deref()), (None, Some("coins.aud")));
         assert_eq!((s.shape.as_str(), s.translucency), ("pouch.kqs", Some(256.0)));
         assert_eq!(s.cursor.as_deref(), Some("IDBMA_GOLDCURS"));
+        assert_eq!((c.extra.as_deref(), s.extra.as_deref()), (None, None));
     }
 
     #[test]

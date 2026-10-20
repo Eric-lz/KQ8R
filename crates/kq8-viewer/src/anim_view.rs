@@ -106,6 +106,8 @@ pub struct AnimSim {
     log: Log,
     /// `characters.log` (M4 4d), if it could be made.
     characters: Option<Log>,
+    /// `fight.log` (M5 5c), if it could be made.
+    fight: Option<Log>,
 }
 
 /// A step that does nothing (no move, no turn), within rounding.
@@ -303,6 +305,8 @@ pub fn spawn_animated(
             let has_hide = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("hide"));
             ch.unborn = c.unborn;
             let mut ai = kq8_core::character_ai::Ai::new(c.ai.clone(), p.position, eye, has_hide);
+            // fighting.md rule 2 (M5 5c-1): its stats.
+            ch.fight = c.fight.clone().map(kq8_core::fight::Fight::new);
             ai.has_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
             ch.ai = Some(ai);
             if let Some((min, max)) = ch.bounds {
@@ -534,7 +538,11 @@ pub fn spawn_animated(
         characters.iter().filter(|l| l.contains("NOT DRAWN")).count(),
         character_lines.len()
     ));
-    commands.insert_resource(AnimSim { playing, updates: 0, log, characters: clog });
+    let fight = Log::create("fight").ok();
+    if let Some(f) = fight.as_ref() {
+        main_log.summary(format!("fight: log in {}", f.path().display()));
+    }
+    commands.insert_resource(AnimSim { playing, updates: 0, log, characters: clog, fight });
     core
 }
 
@@ -550,6 +558,13 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
     // characters.log (M4 4d-3): core's lines, and every 10 s how many
     // characters are in each state.
     if let Some(d) = doors.as_mut() {
+        // fight.log (M5 5c): core's fight lines.
+        let fight = std::mem::take(&mut d.active.world.fight_log);
+        if let Some(log) = sim.fight.as_mut() {
+            for l in fight {
+                log.detail(l);
+            }
+        }
         let lines = std::mem::take(&mut d.active.world.character_log);
         if let Some(log) = sim.characters.as_mut() {
             for l in lines {

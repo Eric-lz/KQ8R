@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-1: reading the fight's numbers
+
+**Changed:** Plan for the fight (5c-1 to 5c-10) in `docs/DESIGN.md`. `kq8-data/characters.rs`: the monster and type lists' fight columns (`xtra*`, `invHold`, `invDrop`, `attackDelay`, `tooClose farEnough`), the fight keys of a character file, `FightSettings` (rule 2: the five stats); `items.rs`: the projectile column. `kq8-core`: new `fight.rs` (`Fight`), `Character::fight`, `fight_note` and a new `kq8-artifacts/logs/fight.log`. `kq8 character-verify` prints each line's fight numbers. Q136 (`reactPause`, not blocking). Provenance.
+**Why:** `fighting.md` rules 1, 2, 5: every fighter's stats before anything can hit.
+**Tested how:** `cargo test --workspace`, `cargo clippy --workspace --all-targets` clean. `cargo run --release -p kq8-cli -- character-verify` (`character-verify.log`); `cargo play --world Daventry --sound off --frames 30` (`fight.log`).
+**Result:** All of the note's rule 5 table matches, e.g. goblin22 `[15, 2, 2, 0, 3]` delay 1 s, drops two mushrooms; sprgnbow `[130, -3, 2, 15, 15]` ranged with `INVITEM_SmCrossbow` (`Prscbolt.kq`); bossprig `[230, 23, 23, 32, 7]` (Leather Armor +2 protection); RoadZ1 `[40, 6, 6, 37, 2]`; bats, chickens, pig `[5, 5, 5, 3, 0]`. `fight.log`: 52 fighters at load.
+**Still broken / not tested:** Nothing fights yet. The combat level (rule 3) is 5c-10 (Daventry's 1.0 changes nothing).
+**Next:** 5c-2, the `interruptable` cue.
+
 ## 2026-10-20 Q135 answered: which building surfaces receive a shadow (study, A)
 
 **Changed:** `docs/behaviour/characters.md` rule 37 (2) (reach, band, area, surfaces left out; Connor and plain objects), Numbers and units, Do not reproduce; `docs/behaviour/QUESTIONS.md` (Q135 answered); STATUS.

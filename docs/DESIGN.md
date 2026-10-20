@@ -1165,6 +1165,139 @@ stats.
     (Sara's house), the chickens behind the farm, the windmill
     spriggans, the graveyard and the road zombies, the bats, read in
     `characters.log`; the note's "How to check" for the user.
+- **5c — the fight** (planned 2026-10-20). From
+  `docs/behaviour/fighting.md` (A, 2026-10-20; rules 6 and 31–32 checked
+  by the user in the original), with `anim-scripts.md` rule 7 (the
+  `interruptable` cue), `items.md` rule 12 (the throw),
+  `inventory.md` rules 9 and 13 (readying a weapon, equipment stats).
+  Replaces the attack stand-in of 5a / 5b (a character within reach
+  only stopped or followed). Words: **attack time** = when its next
+  attack is due; **roll** = the random part of the damage; **flinch** =
+  the `react` movement; **kind** = `Normal`, `Projectile`, `Fire`,
+  `Ice`. One step and one commit at a time. Everything about the fight
+  goes to a new `kq8-artifacts/logs/fight.log` (and, as now, to
+  `characters.log`): per attack start (who, distance, angle off its
+  heading, Connor's back key, attack time before / after, the
+  movement); per `Do` (hit or miss and why, *D*, *R*, *P'*, loss, health
+  after); per hit taken (flinch or ouch and why not, hit count, chase
+  timer, who got the alarm with "run"); per death (kind, die movement,
+  drops with names and places, experience sent, corpse shape, the `Die`
+  line to the script).
+  - **Decisions taken (the user, 2026-10-20):** the swallowed swing
+    (rule 11b) is **not** reproduced: while a moving character's
+    `Attack` plays, the moving state's stop rule is not applied (it
+    stays in Move until the swing ends). Drops are thrown as
+    `tossItems`. Connor's input side and the bow's bolt flight are not
+    traced: **stand-ins**, logged as such (5c-5, 5c-9).
+  - **Where the code goes.** `kq8-data`: the missing columns and keys.
+    `kq8-core`: new `fight.rs` (the rules that decide: stats, the attack
+    time, the hit test, the rolls, the flinch, dying; no drawing, unit
+    tests); `character_ai.rs` (the attack in the standing and moving
+    states, replacing the stand-in); `named_anim.rs` (the cue);
+    `connor.rs` / `connor_update.rs` (his swing, flinch and death);
+    `item.rs` (a thrown item's flight). Viewer: `fight.log`, the click
+    that swings, drawing a thrown item and a corpse where they are.
+  - **5c-1, reading the fight's numbers** (**done** 2026-10-20; all of
+    rule 5's table matches; Q136 asked, not blocking) (rules 1, 2, 4, 5; data).
+    Monster list: `xtraHealth`, `xtraDamage`, `xtraProtect`, `xtraExp`,
+    `invHold`, `invDrop`, `attackDelay`; type list: `Health`, `Damage`,
+    `Protect`, `Experience`, `invHold`, `invDrop`, `attackDelay`; the
+    attack distance's extra numbers (`tooClose farEnough`); item list:
+    the last column (projectile file); character keys `deadDts`,
+    `idedKqs`, `projdKqs`, `ouchSound`, `normalReactPercent`,
+    `specialReactAnim`, `specialReactPercent`, `likelyToFlee`,
+    `mustFlee` (`Connor.kq`'s `minDamageFactor`, `maxDamageFactor` and
+    weapon lists moved to 5c-5, where they are used). A character's five stats
+    (rule 2: type + extra, `Damage` fills hand and ranged, held items
+    add, a `LongWeapon` makes it ranged). `kq8 character-verify` prints
+    them per character. **Test:** the numbers of the note's rule 5 table
+    (e.g. `goblin22` 15 / 2 / 2 / 0 / 3, reach 1,500, delay 1;
+    `sprgnbow` 130 / −3 / 2 / 15 / 15, ranged).
+  - **5c-2, the `interruptable` cue** (`anim-scripts.md` rule 7; not
+    built so far for any player). When a character's phase passes
+    `interruptable <n>`, its "can be cut short" becomes n. **Test:** unit
+    test; the log shows goblin22's `attack` turning uncuttable at 0.19.
+  - **5c-3, characters attack** (rules 6–12 with the Do instead of 11b).
+    Attack time 0 at the start (first attack at once), never while an
+    attack plays, now + `attackDelay` when it ends (or, cut short, at
+    the next state change or hit). Standing: seen, closer than reach
+    (ranged 1.25 ×), due, movement can be cut short → `Attack`. Moving:
+    seen, closer than reach, due → `Attack` from Move (whatever Connor
+    does); not due → 5b-4's stop rule as before; **while `Attack`
+    plays the stop rule is skipped** (Do instead). It keeps turning;
+    the stuck check is off during the swing; the chase timer 5 s at its
+    start and end. The idle list's `attack` stays a fidget (no hit).
+    At the `Do` cue only a log line ("hit test: 5c-4"). **Test:**
+    goblin22 swings as soon as it is within 1,500 and then every
+    ~2 s (1 s swing + 1 s delay) at a standing Connor (How to check 1).
+  - **5c-4, the swing lands on Connor** (rules 13, 14, 16–19, 29). At
+    `Do`: in reach (≤ reach, 1.25 × with his back key held) and in front
+    (< 90°) → a hit of its hand damage (`Fire` with a Flame Sword); the
+    roll 25–100 %, his protection, at least 1 lost; his health in the
+    meter. He flinches (`react`) when *R* > 0.9 *D*, his movement can be
+    cut short and his last flinch ended over 2 s ago; else his
+    `ouchSound` (at most once a second). Below 0: his dying state
+    (`die`, `firedie` / `icedie`), then he lies dead (**stand-in**: game
+    over is another study; the tips are logged only). **Test:** How to
+    check 2 and 3 in the log (misses "too far" / "behind").
+  - **5c-5, Connor hits back** (rules 39–41; **stand-in input**, the
+    manual's description, open question 1). Clicking the hand-weapon
+    slot readies it (`INVITEM_Fists` at the start → `confists.anm` by
+    `Connor.kq`'s `ShortAnimList`; **stand-in**: only his `attack`,
+    `attackb`, `attack2` come from that list, the rest stays
+    `Conner.anm`); clicking it again puts it away (**stand-in**). With
+    it ready, a left click in the world (not Ctrl) turns him toward the
+    click (the automatic turn) and swings: `Attack` / `AttackB` 50/50,
+    Shift `Attack2`; only when his movement can be cut short; nothing
+    while a swing plays; the clicked character becomes his target. His
+    `Do`: the same test with reach 2,350; damage = his hand damage
+    (Shift: × 0.75–4, cut); the roll 75–125 %, its protection, its
+    health (the rest of the hit is 5c-6). A viewer option to swing at a
+    set update for tests. **Test:** two punches kill `goblin22` in the
+    log (rule 19's example; it dies in 5c-7).
+  - **5c-6, characters being hit** (rules 20–28). In order: the kind;
+    active; chase timer 5 s; the hit count; must flee; the damage; the
+    attack time put right; the flinch or the ouch sound (rules 23, 24);
+    it learns where Connor is; the alarm with "run" (hit count 2, `run`,
+    10 s). Hit while not alarmed: rule 28 (with the Do instead: the
+    point 0.52 rad off the line to Connor). **Test:** How to check 4
+    and 5 (flinch ~3 in 5, never twice in 2 s; runs after one hit).
+  - **5c-7, dying** (rules 30, 32, 33). Health 0; the die movement by
+    kind; off the active list, not solid, gravity off, no state change
+    ever again; when it ends: experience to Connor (his levels), a
+    corpse (`deadDts` / `projdKqs` / `idedKqs`, none for fire) where it
+    stood, turned the same way, same skin, no shadow, not solid; `Die
+    <kind>` to its script; removed. `setState <name> Die now`. The
+    first-kill tip is logged only. **Test:** How to check 6 (body
+    stays, experience only when the death ends).
+  - **5c-8, drops thrown** (rule 31, `items.md` rule 12). At the start
+    of the dying: `invDrop` (list then type), each a new item at its
+    feet, thrown: random heading, 75°–85° up, 5,000–6,500 units/s,
+    gravity 8,085 units/s² (**stand-in** for the untraced time step:
+    plain per-update motion), lands on the floor-grid height with its
+    land sound; clickable in the air. **Test:** goblin22's two
+    mushrooms fly up and land, positions in `items.log`.
+  - **5c-9, the bow spriggans** (rules 34–38; **stand-in bolt**, open
+    question 2). Ranged = holds a `LongWeapon`; they shoot from 1.25 ×
+    reach standing. At `Do` a bolt (`Prscbolt.kq`'s shape) leaves from
+    its position + the default offset, aimed where Connor will be
+    (his velocity, bolt speed 8,000) at three quarters of his height
+    (**not sure**, the note); **stand-in**: it flies straight, no
+    gravity, until it hits a character, Connor, the ground or a
+    building, or has gone `maxDistance` 18,000; it carries the
+    shooter's ranged damage, kind `Projectile`. Keeping distance (rule
+    37) as written (no Daventry character uses it). **Test:** How to
+    check 7 (`sprigwnd1` shoots about every 1.7 s within 7,500).
+  - **5c-10, the combat level** (rule 3). `applyCombatLevel`,
+    `setCombatLevel 1|2|3` (0.66 / 1.0 / 1.5): health, hand and ranged
+    damage of each character entering the world × the factor, cut; the
+    roll on characters 85–125 % below 1.0. Daventry stays at 1.0.
+    **Test:** `--command "setCombatLevel 3"` before load: goblin22 health
+    22 in the log.
+  - Not in 5c: Connor's full weapon lists, ranged weapons for Connor,
+    Delete (switch weapons), game over, the tips' texts, smashing
+    barrels (`tossItems` from scripts; the throw of 5c-8 makes it easy
+    later).
 
 ### M6 — The whole game
 

@@ -14,13 +14,17 @@
 //! Boxes (rule 9): `GAME/patch/BOUNDS.KQ` by the type (monster list) or
 //! `monsterType`, else by the object's name, exact (capitals count).
 //!
+//! M5 5c-1 (`docs/behaviour/fighting.md` rules 2, 5): each monster-list
+//! line's fight numbers (stats, attack delay, ranged weapon, drops), with
+//! the item list `GAME/Kq/Invinfo.itl`.
+//!
 //! Log: `kq8-artifacts/logs/character-verify.log`.
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
 use kq8_data::bounds::BoundingBoxes;
-use kq8_data::characters::{AiSettings, AnimList, CharacterKeys, Class, Lips, MonsterList, MonsterTypes, Wander, GEOMETRY_MOUTH, GESTURES};
+use kq8_data::characters::{AiSettings, AnimList, FightSettings, CharacterKeys, Class, Lips, MonsterList, MonsterTypes, Wander, GEOMETRY_MOUTH, GESTURES};
 use kq8_data::game_dir::{VOLUMES, WORLDS};
 use kq8_data::{kq_text, GameDir, Shape, VolArchive};
 
@@ -28,6 +32,7 @@ use crate::log::Log;
 
 const TYPES: &str = "GAME/Kq/Monstats.mtl";
 const BOUNDS: &str = "GAME/patch/BOUNDS.KQ";
+const ITEMS: &str = "GAME/Kq/Invinfo.itl";
 
 /// A world's archives.
 struct World {
@@ -92,11 +97,18 @@ pub fn run(game: &GameDir) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let items = match read(ITEMS) {
+        Some(b) => kq8_data::items::ItemTypes::parse(&b).0,
+        None => {
+            log.summary(format!("FAIL {ITEMS} not found"));
+            return ExitCode::FAILURE;
+        }
+    };
     let mut totals = Totals { problems: problems.len(), ..Default::default() };
     for name in WORLDS {
         let vols = VOLUMES.iter().filter_map(|v| game.volume_path(name, v)).filter_map(|p| VolArchive::open(&p).ok()).collect();
         let world = World { name: name.to_string(), vols };
-        verify_world(game, &world, &types, &bounds, &mut log, &mut totals);
+        verify_world(game, &world, &types, &bounds, &items, &mut log, &mut totals);
     }
     log.summary(format!(
         "ALL WORLDS: character files {:?}, monster-list lines {}, problems {}",
@@ -122,7 +134,7 @@ fn find_box(bounds: &BoundingBoxes, first: Option<&str>, name: &str) -> String {
     }
 }
 
-fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &BoundingBoxes, log: &mut Log, totals: &mut Totals) {
+fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &BoundingBoxes, items: &kq8_data::items::ItemTypes, log: &mut Log, totals: &mut Totals) {
     log.detail(format!("== {} ==", world.name));
     let mut classes: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut lists = Vec::new();
@@ -316,6 +328,10 @@ fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &Bo
             // movement rules will use.
             if let Some(k) = &character {
                 log.detail(format!("    movement rules: {}", AiSettings::from_line(k, l, t).describe()));
+                // M5 5c-1 (fighting.md rules 2, 5): the fight's numbers,
+                // reach from the movement rules.
+                let f = FightSettings::from_line(k, l, t, items);
+                log.detail(format!("    fight: {}; reach {}; from {}", f.describe(), AiSettings::from_line(k, l, t).attack_dist, f.from));
             }
         }
     }

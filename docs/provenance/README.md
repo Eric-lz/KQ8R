@@ -2475,3 +2475,24 @@ marked otherwise.
 | The chase during `birth`: Move at once, its walk waiting for `birth` (the stand-in "stay in Wait" removed); stuck check from the walk's start | Rules 7, 30 | Viewer |
 
 **5a / 5b checked by the user against the original (2026-10-20):** the creatures' movement and routes, the chase, following a walking Connor at reach and stopping when he stands, the leash sending a goblin home, and the zombies sinking and rising again from their graves all match.
+
+## The fight (M5 5c) — `docs/behaviour/fighting.md`
+
+Written from `fighting.md` (A, 2026-10-20; rules 6 and 31–32 checked by
+the user in the original) and the game's data; no executable looked at.
+
+### 5c-1, reading the fight's numbers — `crates/kq8-data/src/{characters,items}.rs` (`ItemEntry`, `item_entries`, `FightSettings`, `ItemType::extra`), `crates/kq8-cli/src/character_verify.rs`, `crates/kq8-core/src/{fight,character,active}.rs`, viewer `load.rs`, `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Monster list columns 4–7 `xtraHealth xtraDamage xtraProtect xtraExp` (`@` = 0), 14–15 `invHold invDrop`, 20 `attackDelay` (`@` = the type's) | `fighting.md` rules 2, 31, "Data used"; data: the file's own `;monsterX=` header | Unit test; `character-verify` |
+| Type list columns `Health Damage Protect Experience invHold invDrop attackDelay` | Same; data: `Monstats.mtl`'s `;typeX=` header | Unit test |
+| The attack distance's 2nd and 3rd numbers are `tooClose farEnough` | Rule 37 | Unit test (`slime` `5000 0.4 3.0`) |
+| Item lists: comma separated, quotes, `none` / `@` = nothing, `SilverCoins(3)` = 3 | Rules 2, 31 | Unit test |
+| Item list's last column (`extraData`) = a `LongWeapon`'s projectile file | Rule 36; data (`INVITEM_SmCrossbow` → `Prscbolt.kq`) | `character-verify` |
+| Stats = type + extra; `Damage` fills hand and ranged; protection capped at 100 (also after each item); held items (type's, then line's) add health and protection; a `LongWeapon` adds ranged damage and makes it ranged, others add hand damage; items' experience not added; Flame Sword (id 1110) → fire | Rules 1, 2, 14, 34 | Unit test; all of rule 5's table matches `character-verify` and `fight.log` |
+| Drops = the line's `invDrop`, then the type's | Rule 31 | `character-verify` |
+| Keys `deadDts`, `idedKqs`, `projdKqs`, `ouchSound`, `normalReactPercent`, `specialReactAnim`, `specialReactPercent`, `likelyToFlee`, `mustFlee` | "Data used" | `character-verify` |
+| `reactPause` read and logged only | Data (3 files outside Daventry); not in the note: **Q136** | — |
+| Only monster-list characters fight (`.kq`-only characters get no fight part) | Rule 2 covers only the list; **ours** for the rest (Daventry: the scripted Knight, Henchman are list lines; the others never fight) | `fight.log`: 52 fighters |
+| `fight.log`: one line per fighter at load | AGENTS.md (log, don't look) | Viewer run |

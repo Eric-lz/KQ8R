@@ -1751,6 +1751,9 @@ pub struct CharacterAssets {
     pub casts_shadow: bool,
     /// What its movement rules use (`character-movement.md`; M5 5a-1).
     pub ai: kq8_data::characters::AiSettings,
+    /// What it brings to the fight (`fighting.md` rule 2; M5 5c-1): only
+    /// for a monster-list line.
+    pub fight: Option<kq8_data::characters::FightSettings>,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
@@ -2230,6 +2233,7 @@ impl Placer<'_> {
                 lips,
                 skin: pending.as_ref().and_then(|l| l.line.skin.clone()).or_else(|| keys.skin.clone()),
                 ai: pending.as_ref().map_or_else(|| kq8_data::characters::AiSettings::from_keys(&keys), |l| kq8_data::characters::AiSettings::from_line(&keys, &l.line, &l.kind)),
+                fight: pending.as_ref().map(|l| kq8_data::characters::FightSettings::from_line(&keys, &l.line, &l.kind, &self.items.types)),
                 keys,
                 casts_shadow: false,
             }
