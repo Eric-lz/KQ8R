@@ -951,6 +951,7 @@ fn watch_walk_end(sim: &mut ConnorSim, ended: bool) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn connor_step(
     sim: Option<ResMut<ConnorSim>>,
     lookup: Option<Res<GroundLookup>>,
@@ -959,6 +960,7 @@ pub fn connor_step(
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
     footsounds: Option<Res<FootSounds>>,
     shared: Res<Shared>,
+    mut characters: ResMut<crate::door_view::CharacterColliders>,
 ) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let sim = &mut *sim;
@@ -969,6 +971,9 @@ pub fn connor_step(
     );
     scene.not_pushable = sim.not_pushable.clone();
     scene.order = order.as_ref().map(|o| &o.0[..]);
+    // M4 4d-12-3: the characters solid for him now.
+    let solid = characters.list.clone();
+    scene.characters = &solid;
     if let Some((_, what)) = sim.repeat.filter(|_| !sim.hands_off) {
         let cleared = sim.walker.key_event(what, true);
         if cleared != (false, false) {
@@ -1023,6 +1028,32 @@ pub fn connor_step(
     sim.previous = sim.current;
     let bank_before = sim.current.3;
     sim.current = (sim.mover.position, sim.walker.heading, sim.walker.phase, sim.walker.bank);
+    // M4 4d-12-3: his hits on characters, for characters.log.
+    for h in report.hits.iter().filter(|h| h.hit.monster) {
+        let at = solid.iter().find(|c| c.name == h.hit.what).map_or([0.0; 3], |c| c.position);
+        let (t, n, p) = (h.hit.touch, h.hit.normal, h.hit.position);
+        let moved = [sim.current.0[0] - sim.previous.0[0], sim.current.0[1] - sim.previous.0[1]];
+        let (want, got) = ((wanted[0] * wanted[0] + wanted[1] * wanted[1]).sqrt(), (moved[0] * moved[0] + moved[1] * moved[1]).sqrt());
+        characters.hits.push(format!(
+            "update {}: {}: Connor's hit ({} pass, {}): touched with his feet at ({:.1}, {:.1}, {:.1}), {:.1} level from its position; put at ({:.1}, {:.1}, {:.1}); surface direction ({:.3}, {:.3}, {:.3}); angle from head-on {}; this update he wanted {want:.1} and moved {got:.1}: {}",
+            sim.updates,
+            h.hit.what,
+            h.pass,
+            h.result,
+            t[0],
+            t[1],
+            t[2],
+            ((t[0] - at[0]).powi(2) + (t[1] - at[1]).powi(2)).sqrt(),
+            p[0],
+            p[1],
+            p[2],
+            n[0],
+            n[1],
+            n[2],
+            h.angle.map_or("none".into(), |a| format!("{:.1} deg", a.to_degrees())),
+            if want < 0.001 { "not walking" } else if got < 0.05 * want { "stayed" } else { "slid" }
+        ));
+    }
     let m = &sim.mover;
     let down_hit = report.hits.iter().find(|h| h.pass == "down");
     // The drawn ground (the water's surface where there is water).

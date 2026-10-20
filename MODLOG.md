@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-12-3: characters solid for Connor in the viewer
+
+**Changed:** `kq8-viewer`: `draw_distance.rs` new `CharactersSolid` (characters whose collider bit is on in the frame: near, not far, off or hidden); `door_view.rs` passes it to the running game, and `character_gravity` copies the solid characters' cylinders into a new resource `CharacterColliders` after the characters' gravity; `connor_view.rs` puts them in Connor's scene and logs each hit on a character to `characters.log` (who, where, distance from its position, surface direction, angle, slid or stayed); `anim_view.rs` gives each character its type, mask and box at load. FEATURES, README, STATUS, DESIGN, provenance.
+**Why:** M4 4d-12 (`connor-collision.md` rules 2–4, 18–19; `characters.md` rule 33).
+**Tested how:** `cargo test --workspace` (532 pass), clippy clean. Viewer (`cargo play --world Daventry --sound off`), reading `characters.log`, `connor.log`, `conversation.log`: start (`--frames 300`); goblin22 from the west, nearly straight (`--at 286284,192527,1.5708 --hold 1,0,0 --frames 1000`) and 500 to the side (`--at 286284,193027,1.5708 ...`); the same with `--turn 40,-1`; the Wizard (`--at 193000,198274,-1.5708 --hold 1,0,0`) and the conversation (`--at 193000,198000,-1.7 --click Wizard,30 --frames 2500`); the Uglybeast (`--at 258500,296500,2.03 --hold 1,0,0`).
+**Result:** At the start goblin22 and chicken1 are solid (cylinders 800 and 210). goblin22: 3° off its middle, he touches at 1,000 from its position, slides 4 units an update at first, round it in about 50 updates, and walks on past; 34° off, 16 hits, slides round. Never closer than 1,000. With a turn key pressed after the bump he turns and walks away. Wizard (0xC021, radius 400): touched at 600, slides round him, then stops head-on at a stump (`stump2`), as at any object. The conversation still works: case "close" puts him on his spot 1,376 from the Wizard. Uglybeast (0xC022): 46 hits, all at 940, slides round. No hit ever started inside a character.
+**Still broken / not tested:** **Not checked by eye.** The cylinder's size is our stand-in (Q131 a). Landing on a character's top is an ordinary landing (the 250 push asked, Q131 c). Characters still pass through Connor and each other in their own moves (Q128; they don't walk yet).
+**Next:** the user's look; A's answer to Q131.
+
 ## 2026-10-20 M4 step 4d-12-2: characters in Connor's scene (core)
 
 **Changed:** `kq8-core/src/connor_mover.rs`: the scene's new `characters` list (cylinders), tested after the objects; `Hit` says whether it is a character (`monster`), and such a hit is never head-on. `character.rs`: each character carries its collision type, mask and box. `active.rs`: `characters_solid` (set by the caller: collider on now) and `character_colliders`, rebuilt after the characters' gravity: not deleted, with a box, not in Birth, collider on, Connor's mask covers its type (0x10 ignored); a line in `characters.log` for each change. 4 unit tests. DESIGN, provenance.

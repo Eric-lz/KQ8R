@@ -58,6 +58,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   walks to his spot, the camera cuts between fixed views, and walking
   away ends the talk with a goodbye. Characters stand on the ground
   and on building floors, and cast shadows on the ground.
+  Connor can't walk through characters: he slides round them.
 
 ### Next
 

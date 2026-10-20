@@ -1097,12 +1097,31 @@ impl kq8_core::active::ClickWalls for ClickBuildings<'_> {
 /// `characters.md` rule 8 (M4 4d-6b-2): each character's mover, after
 /// the characters' own update in `door_step`; buildings only for a mask
 /// with 0x8; no objects, characters or Connor yet (Q128).
-pub fn character_gravity(sim: Option<ResMut<DoorSim>>, lookup: Option<Res<crate::terrain_view::GroundLookup>>, buildings: Option<Res<crate::terrain_view::Buildings>>) {
+pub fn character_gravity(
+    sim: Option<ResMut<DoorSim>>,
+    lookup: Option<Res<crate::terrain_view::GroundLookup>>,
+    buildings: Option<Res<crate::terrain_view::Buildings>>,
+    mut solid: ResMut<CharacterColliders>,
+) {
     let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
     let b = buildings.as_ref().map_or(&[][..], |b| &b.0[..]);
     let with = kq8_core::connor_mover::Scene::new(&lookup.0, b, &[]);
     let without = kq8_core::connor_mover::Scene::new(&lookup.0, &[], &[]);
     sim.active.world.characters_gravity(&with, &without);
+    // M4 4d-12-3: the characters solid for Connor where they stand now,
+    // for his scene; his hits on them since the last update to the log.
+    solid.list = sim.active.world.character_colliders.clone();
+    let hits = std::mem::take(&mut solid.hits);
+    sim.active.world.character_log.extend(hits);
+}
+
+/// The characters solid for Connor now (`connor-collision.md` rules 2–4,
+/// 18–19; M4 4d-12-3), copied from the running game after the characters'
+/// gravity, for Connor's scene; and his hits on them, for `characters.log`.
+#[derive(Resource, Default)]
+pub struct CharacterColliders {
+    pub list: Vec<kq8_core::collide::CylinderCollider>,
+    pub hits: Vec<String>,
 }
 
 /// Left click: the click line from the camera through the mouse picks the
@@ -1190,7 +1209,7 @@ pub fn door_step(
     colliders: Option<ResMut<ObjectColliders>>,
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
-    in_range: Res<crate::draw_distance::CharactersInRange>,
+    (in_range, solid): (Res<crate::draw_distance::CharactersInRange>, Res<crate::draw_distance::CharactersSolid>),
     mut command_at: ResMut<CommandAt>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -1205,6 +1224,8 @@ pub fn door_step(
     }
     // characters.md rule 11: which characters update now.
     sim.active.world.characters_in_range = in_range.0.clone();
+    // Rule 33 (M4 4d-12-3): which have their collider on.
+    sim.active.world.characters_solid = solid.0.clone();
     // KQConner::JumpDir / endJump in timed cues (3m-1).
     sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
     // talking.md rule 7: whether he can turn to a listener, and where.

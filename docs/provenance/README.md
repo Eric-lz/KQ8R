@@ -2273,3 +2273,12 @@ marked otherwise.
 | The cylinder follows the character's position each update, after its gravity | Rule 18 ("standing on the other's position") | Unit test |
 | Landing on a character's top is an ordinary landing | **Stand-in**; the 250 sideways push is asked as Q131 (c) | — |
 | `characters.log`: solid / not solid and why, with the cylinder | AGENTS.md (log, don't look) | Unit test |
+
+### 4d-12-3, characters solid for Connor in the viewer — `crates/kq8-viewer/src/draw_distance.rs`, `door_view.rs`, `connor_view.rs`, `anim_view.rs`, `main.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Solid only while its collider bit (0x8) is on: near yes, far, off and hidden no; unborn zombies never (their groups have no collider bit) | `characters.md` rules 16, 33; `object-lighting.md` rule 37 | `characters.log` "solid for Connor" lines |
+| Each character's type, mask (`colliderType`, `colliderMask`, defaults 0x42 / 0x281F) and `BOUNDS.KQ` box (by type, else by name) | `characters.md` rules 8, 9 | Same |
+| The list rebuilt each update after the characters' own update and gravity, before Connor's move | `connor-collision.md` rule 21 (order not traced; **ours**, as for objects) | — |
+| Every hit on a character logged (who, where, distance, surface direction, angle, slid or stayed) | AGENTS.md (log, don't look) | `characters.log` |

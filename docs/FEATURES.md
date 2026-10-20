@@ -118,6 +118,14 @@ measures reach to its box in the building's own axes (Q75).
 - **Objects are solid too** (trees, signposts, doors, crates, stone
   villagers…), with each object's box from the game's table (checked by
   eye).
+- **Characters are solid** (M4 4d-12, 2026-10-20): Connor can't walk
+  through the goblins, the Wizard, the Uglybeast and the others while
+  they are near. Each is a round pillar for him (its size is our
+  stand-in, Q131): he never bumps into one "head-on" as into a wall, so
+  he keeps his walk and slides round it; walking straight at its middle
+  he stays put. He can always walk away. Checked in the logs
+  (`characters.log`: every hit, at 1,000 from a goblin, 600 from the
+  Wizard, 940 from the Uglybeast), **not yet by eye**.
 - **Water:** he walks into water on the bottom, with the water up to his
   chest, and switches to the wading walk and run while it is deep.
   Buildings and objects stand on the ground under the water where the
@@ -567,7 +575,7 @@ message that shows the usage.
   travel between worlds; the story's scenes run only as far as the
   built parts allow.
 - **Characters (M4 4d):** they stand, breathe and gesture but don't
-  walk, notice Connor, fight or die (M5); they are not solid; zombies
+  walk, notice Connor, fight or die (M5); zombies
   stay in the ground; their shadows fall on the ground but not yet on
   buildings, and objects cast none yet (4d-7b-3, -4); they don't land on
   objects, other characters or Connor (Q128).

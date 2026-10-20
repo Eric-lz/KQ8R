@@ -524,6 +524,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
                 .init_resource::<door_view::Deleted>()
+                .init_resource::<door_view::CharacterColliders>()
                 .init_resource::<talk_view::Speech>()
                 .insert_resource(door_view::HeldItem(args.item))
                 .insert_resource(gui_view::KeyAt(args.key))

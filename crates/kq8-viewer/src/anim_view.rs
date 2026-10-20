@@ -289,7 +289,10 @@ pub fn spawn_animated(
             let k = &c.keys;
             ch.flying = k.flying;
             ch.hits_buildings = k.collider_mask & 0x8 != 0;
-            if let Some((min, max)) = balls.character_box(&p.name, c.box_type.as_deref()) {
+            // M4 4d-12-3: what Connor's scene needs to make it solid.
+            (ch.collision_type, ch.collision_mask) = (k.collider_type, k.collider_mask);
+            ch.bounds = balls.character_box(&p.name, c.box_type.as_deref());
+            if let Some((min, max)) = ch.bounds {
                 let keep = match p.keep_on_ground {
                     kq8_data::objects::KeepOnGround::Floor => -1,
                     kq8_data::objects::KeepOnGround::Surface => 1,

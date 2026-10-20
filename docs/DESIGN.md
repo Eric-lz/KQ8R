@@ -831,7 +831,7 @@ inventory and menus.
         into a character stays outside the cylinder (no `Stop`, no
         block), at an angle slides along, starting inside a creature
         walks out, the list's rules.
-      - **4d-12-3, the viewer** (`draw_distance.rs`: which characters
+      - **4d-12-3, the viewer** (**done** 2026-10-20; `draw_distance.rs`: which characters
         have their collider bit now; `door_view.rs` `character_gravity`
         builds the list after the characters' own update; `connor_view.rs`
         puts it in Connor's scene). `characters.log`: every Connor hit on

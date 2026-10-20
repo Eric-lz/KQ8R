@@ -8,6 +8,16 @@ Q127 to Q129 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-20 (B, M4 4d-12-1 to -3): characters are solid for
+  Connor** (`connor-collision.md` rules 2–4, 18–19; one commit per step;
+  plan in `docs/DESIGN.md` "4d-12"; **not looked at by eye yet**). Each
+  near character is an upright cylinder for him; a character hit is
+  never head-on, so he slides round it (straight at its middle he stays,
+  still in his walk). Checked in the logs at the goblin, the Wizard (and
+  the conversation still puts him on his spot), the Uglybeast, and
+  turning away. New question **Q131** (the cylinder's size; vertical
+  moves; landing on a monster's top: until answered an ordinary
+  landing).
 - **New 2026-10-19 (B): A's character answers built** (one commit per
   step; plan in `docs/DESIGN.md` "A's answers Q116, Q117, Q121–Q124";
   **none looked at by eye yet**): the movement names start as `Stop`

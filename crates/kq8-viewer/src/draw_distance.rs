@@ -254,6 +254,11 @@ pub struct ActivePoint {
 #[derive(Resource, Default)]
 pub struct CharactersInRange(pub std::collections::BTreeSet<String>);
 
+/// The characters whose collider bit is on in the last frame (lower case):
+/// near, not far, off or hidden (`characters.md` rule 33; M4 4d-12-3).
+#[derive(Resource, Default)]
+pub struct CharactersSolid(pub std::collections::BTreeSet<String>);
+
 /// What `update_activity` saw, for the log.
 #[derive(Resource, Default)]
 pub struct ActivityLog {
@@ -268,6 +273,7 @@ pub fn add(app: &mut App) {
         .init_resource::<ActivePoint>()
         .init_resource::<ActivityLog>()
         .init_resource::<CharactersInRange>()
+        .init_resource::<CharactersSolid>()
         .init_resource::<ActiveRules>()
         .init_resource::<ColliderSwitches>()
         .init_resource::<SwitchedOut>();
@@ -302,10 +308,11 @@ pub fn update_activity(
     sim: Option<Res<crate::door_view::DoorSim>>,
     mut lights_group: ResMut<crate::scene_lights::LightsGroup>,
     shared: Res<Shared>,
-    mut characters: ResMut<CharactersInRange>,
+    (mut characters, mut solid_characters): (ResMut<CharactersInRange>, ResMut<CharactersSolid>),
 ) {
     lights_group.0.clear();
     characters.0.clear();
+    solid_characters.0.clear();
     // Rule 42: Connor unless a script asked for the camera.
     let from_connor = if rules.camera { None } else { connor.iter().next() };
     let Some(reference) = from_connor.or(camera.iter().next()).map(|t| t.translation) else { return };
@@ -349,6 +356,9 @@ pub fn update_activity(
         // Rule 41: the collider follows bit 0x8; colliders exist at load,
         // so only a loss or a later gain is a switch.
         let has_collider = activity.groups(always, near, far) & COLLIDER_BIT != 0;
+        if test.character && has_collider {
+            solid_characters.0.insert(test.name.to_ascii_lowercase());
+        }
         // Rule 37: its own lights shine while it has bit 0x400 (M1 7c).
         if activity.groups(always, near, far) & crate::scene_lights::LIGHTS_BIT != 0 {
             lights_group.0.insert(test.object);
