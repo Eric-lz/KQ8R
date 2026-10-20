@@ -18,7 +18,7 @@ use crate::draw_distance::{DistanceTest, ShapeBalls};
 use crate::object_light::{see_through, ObjectMaterial};
 
 /// One drawn model: (mesh, material) per material group.
-type Parts = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
+pub type Parts = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
 
 #[derive(Resource)]
 pub struct ItemDraw {

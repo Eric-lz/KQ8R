@@ -66,6 +66,9 @@ struct DrawnDoor {
 #[derive(Resource)]
 pub struct DoorSim {
     pub active: Active,
+    /// Copies a script loaded while playing, to draw (M5 5d-3): file,
+    /// name, place.
+    pub spawns: Vec<(String, String, kq8_core::collide::Placement)>,
     drawn: Vec<DrawnDoor>,
     /// Each door's entry in `ObjectColliders`, if it collides with Connor.
     collider: Vec<Option<usize>>,
@@ -86,7 +89,7 @@ pub struct DoorSim {
     /// Connor's state at each click whose turn is waiting (M4 4c-5,
     /// `clicking.md` rule 35): whether it allows the turn, its name.
     click_states: std::collections::VecDeque<(bool, &'static str)>,
-    log: Log,
+    pub log: Log,
     /// `traps.log`; `None` if it could not be made.
     trap_log: Option<Log>,
     /// Where the traps last checked Connor.
@@ -581,6 +584,20 @@ pub fn spawn_doors(
     active.add_anims(anims);
     // Copies prepared for a script's loadKQ (3k-4).
     active.set_dormant(std::mem::take(&mut objects.dormant));
+    // M5 5d-3: the still templates for new copies (animated ones: 5d-4).
+    let stills: Vec<(String, kq8_core::active::Template)> = objects
+        .templates
+        .iter()
+        .filter(|t| !t.animated)
+        .map(|t| {
+            let p = &objects.placed[t.placed].0;
+            let placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
+            let kind = kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type };
+            (t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind })
+        })
+        .collect();
+    main_log.summary(format!("templates: {} still one(s) for loadKQ while playing (M5 5d-3)", stills.len()));
+    active.world.set_templates(stills);
     // Stats (3i-6, anim-scripts.md rule 19): doors without a line have
     // 10,000 health (doors.md rule 18); Connor from Connor.kq.
     for d in &active.world.doors.iter().map(|d| d.door.name.clone()).collect::<Vec<_>>() {
@@ -724,7 +741,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1008,10 +1025,11 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: {}", c.around(point)),
                 None => format!("{at}: camera around a point: no game camera; not applied"),
             },
-            // M5 5d-2: a new copy; drawn from 5d-3 / 5d-4 on.
+            // M5 5d-2, 5d-3: a new copy, drawn by copies_view.
             Request::Spawn { file, name, placement, at } => {
                 let p = placement.position;
-                format!("{at}: loadKQ {file}: new copy {name} at ({:.0}, {:.0}, {:.0}): not drawn yet", p[0], p[1], p[2])
+                sim.spawns.push((file.clone(), name.clone(), placement));
+                format!("{at}: loadKQ {file}: new copy {name} at ({:.0}, {:.0}, {:.0}): to be drawn", p[0], p[1], p[2])
             }
             Request::Load { file, name, at } => {
                 loads.0.push(name.clone());

@@ -1225,6 +1225,9 @@ pub struct Objects {
     /// Objects prepared for a script's `loadKQ` while playing (M3 3k-4):
     /// lower-case file name, object name.
     pub dormant: Vec<(String, String, Option<String>)>,
+    /// The files a script may load while playing as new copies (M5 5d-3):
+    /// read and built at the start like an unused object, hidden.
+    pub templates: Vec<TemplateAssets>,
     /// The world's music object (`KQMusic`, `music.kq`; M3 step 3h-5,
     /// sound.md rule 57), if a start-up script loads one.
     pub music: Option<kq8_core::music::Music>,
@@ -1287,6 +1290,25 @@ pub struct AnimatedAssets {
     /// A character's mouth textures `lip0`…`lip7` (M4 4d-5, rule 25),
     /// coloured with the object palette; `None` where one is missing.
     pub lip_looks: Vec<Option<Look>>,
+}
+
+/// A file a script may load while playing as new copies (M5 5d-3; plan
+/// 5d): built at the start (hidden, at its own place), with what core
+/// needs for a copy.
+pub struct TemplateAssets {
+    /// Lower-case file name, as `loadKQ` names it.
+    pub file: String,
+    /// Index into `Objects::placed` (its model slot is there).
+    pub placed: usize,
+    pub name: String,
+    pub script: Option<String>,
+    /// Its `BOUNDS.KQ` box (by shape, then name), its collision type and
+    /// mask.
+    pub bounds: Option<([f32; 3], [f32; 3])>,
+    pub collider_type: u32,
+    pub collider_mask: u32,
+    /// Animated (in `Objects::animated`): 5d-4.
+    pub animated: bool,
 }
 
 /// An emitter (`classType=KQEmitter`) as loaded (docs/behaviour/emitters.md).
@@ -1442,6 +1464,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut placer = Placer {
         load_targets,
         dormant: Vec::new(),
+        template_files: Vec::new(),
         game,
         world,
         terrain,
@@ -1684,6 +1707,8 @@ struct Placer<'a> {
     /// (M3 3k-4).
     load_targets: std::collections::BTreeSet<String>,
     dormant: Vec<(String, String, Option<String>)>,
+    /// (file, index into `placed`) of each template (M5 5d-3).
+    template_files: Vec<(String, usize)>,
     music: Option<kq8_core::music::Music>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
@@ -2376,8 +2401,9 @@ impl Placer<'_> {
             ));
         }
         if unused {
-            // Templates for script copies sit at (0, 0, 0): nothing to see there.
-            if p.position == [0.0; 3] {
+            // Templates for script copies sit at (0, 0, 0): nothing to see
+            // there; one a script loads is kept as a template (M5 5d-3).
+            if p.position == [0.0; 3] && !self.load_targets.contains(&base.to_ascii_lowercase()) {
                 *self.unused_skipped.entry("at (0, 0, 0) (template)".into()).or_default() += 1;
                 return;
             }
@@ -2713,6 +2739,11 @@ impl Placer<'_> {
             character_box: character.as_ref().map(|c| c.box_type.clone()),
         });
         let flags = p.flags.clone();
+        // M5 5d-3: a file a script loads, with no place of its own.
+        if unused && p.position == [0.0; 3] && self.load_targets.contains(&base.to_ascii_lowercase()) && !self.template_files.iter().any(|(f, _)| f.eq_ignore_ascii_case(base)) {
+            self.template_files.push((base.to_ascii_lowercase(), self.placed.len()));
+            self.log.summary(format!("template {label}[{}]: kept for a script's loadKQ while playing (M5 5d-3)", p.name));
+        }
         self.placed.push((p, i, unused));
         // A movement that plays (speed not 0), or more than one movement
         // (a script may switch it, 3i-4): every movement's frames (3c).
@@ -3669,6 +3700,27 @@ impl Placer<'_> {
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
         let (objects, clickables, view_boxes) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, log);
+        // M5 5d-3: the templates, with their boxes from BOUNDS.KQ.
+        let table = self.game.find("GAME/patch/BOUNDS.KQ").and_then(|p| std::fs::read(p).ok()).map(|b| kq8_data::bounds::BoundingBoxes::parse(&b).0);
+        let templates: Vec<TemplateAssets> = self
+            .template_files
+            .iter()
+            .map(|(file, k)| {
+                let (p, _, _) = &self.placed[*k];
+                let info = &self.collision[*k];
+                let bounds = table.as_ref().and_then(|t| t.lookup(&info.shape.to_ascii_lowercase()).or_else(|| t.lookup(&p.name))).map(|e| (e.min, e.max));
+                let animated = self.animated.iter().any(|a| a.placed == *k);
+                log.summary(format!(
+                    "template {file}: [{}] {}, script {:?}, box {bounds:?}, type 0x{:X} mask 0x{:X}",
+                    p.name,
+                    if animated { "animated" } else { "still" },
+                    info.script,
+                    info.collider_type,
+                    info.collider_mask
+                ));
+                TemplateAssets { file: file.clone(), placed: *k, name: p.name.clone(), script: info.script.clone(), bounds, collider_type: info.collider_type, collider_mask: info.collider_mask, animated }
+            })
+            .collect();
         let not_blocking: Vec<String> = buildings
             .iter()
             .zip(&building_types)
@@ -3744,6 +3796,7 @@ impl Placer<'_> {
             conv_infos: self.conv_infos,
             audibles: self.audibles,
             dormant: self.dormant,
+            templates,
             music: self.music,
             footsounds,
             point_lights: self.point_lights,

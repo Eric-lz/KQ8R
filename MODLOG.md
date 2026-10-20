@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d-3: still copies loaded while playing are drawn
+
+**Changed:** The loader keeps the files a script may load (named on a `loadKQ` line, no place of their own) as templates, built at the start and hidden; their boxes from `BOUNDS.KQ`. Core gets the still ones; the viewer keeps their models (new `copies_view.rs`) and draws each copy core asks for, with a collider when its box and type collide with Connor.
+**Why:** Plan 5d step 3 (the barrels' wreck `barelded`).
+**Tested how:** `cargo test --workspace` (436 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 193000,193000,3.1416 --command "loadKQ barelded.kq @ 193000 194500 -1 0 0 0.5",30 --frames 300`; `viewer.log`, `traps.log`.
+**Result:** 7 templates found (2 still, 5 animated). The command makes `NoName22` (still, with its box) at (193000, 194500, 7377) (z −1 → the floor height); the viewer draws it (1 part) with a collider (−130..160 × −190..150 × 0..40, type 0x41).
+**Still broken / not tested:** Not looked at. Copies have no draw-distance test or camera box. Animated copies: 5d-4.
+**Next:** 5d-4, animated copies (the burst).
+
 ## 2026-10-20 M5 5d-2: `loadKQ` while playing with a name and a place (core)
 
 **Changed:** Core keeps templates of the files scripts may load (given by the viewer; none yet). A runtime `loadKQ` with a name or place, or for a file with no prepared copy, makes a new copy: the name rule (`same`, `@` → `NoName<n>`, a new name), the place and angles (or the file's), the −1 / −2 ground rule, a name in use refused; the object is in core's world at once, `$ObjectName` is set, its script gets `Init`, and `Request::Spawn` asks the viewer to draw it (only logged for now).

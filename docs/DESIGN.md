@@ -1362,7 +1362,8 @@ Steps (one commit each; each logged in `viewer.log` / the script logs):
    set, position and angles replace the file's (0 0 0 if no angles),
    the −1 / −2 ground rule; a live name refused as today. Asks the
    viewer for a copy of the template. **Test:** unit tests.
-3. **5d-3, templates for still models** (viewer): the shapes of the
+3. **5d-3, templates for still models** (**done** 2026-10-20; the
+   wreck copied by `--command`; new module `copies_view.rs`) (viewer): the shapes of the
    `loadKQ` files kept (as `CorpseDraw`); a copy spawned where core
    says, with its draw-distance test and, if `BOUNDS.KQ` has a box and
    its type collides, its collider and click entry. **Test:** viewer:

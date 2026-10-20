@@ -2718,3 +2718,12 @@ executable looked at.
 | A file with a prepared copy and no name or place on the line still uses that copy (M3 3k-4) | Ours (kept until a later step) | Existing tests |
 | The viewer is asked to draw it (`Request::Spawn`); not drawn yet in 5d-2 | Ours | — |
 
+### 5d-3, still copies drawn — viewer `load.rs` (`TemplateAssets`, `template_files`), `door_view.rs` (`spawn_doors`: the still templates to core; `DoorSim::spawns`), `terrain_view.rs`, new `copies_view.rs` (`keep_templates`, `spawn_copies`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A file named on a world script's `loadKQ` line and not loaded at the start with no place of its own is read and built at the start (hidden) as a template | `objects.md` rule 6 (the same steps as at the start); which files: data (B's `load_targets`) | `viewer.log`: 7 templates in Daventry (the wreck, three bursts, the boards' two and their wreck) |
+| Its box from `BOUNDS.KQ` (by shape, then name), its collision type and mask as for any object | `clicking.md` rule 8, `characters.md` / `connor-physics.md` pair rule | `viewer.log` template lines |
+| A copy is drawn from the template's model at its place; with a box and a type that collides with Connor it gets a collider, tested after all others | `objects.md` rule 6; the load order of the sweep (`connor-physics.md`, Q88) | `--command "loadKQ barelded.kq @ …"`: drawn, collider |
+| A copy has no draw-distance test, lights, see-through settings or camera box of its own | **Ours** (stand-in until needed) | — |
+
