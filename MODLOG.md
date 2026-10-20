@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 The user's check of shadows on buildings (original game)
+
+**Changed:** Docs only: DESIGN (4d-7b-3 checked), STATUS, FEATURES, provenance, QUESTIONS (Q135 update, not blocking).
+**Why:** The user compared 4d-7b-3 with the original.
+**Tested how:** The user, by eye, in our viewer and in the original.
+**Result:** "Working exactly as expected." Shadows show inside a building when Connor stands outside it, in both. The original cuts some shadows off in places; **the user's decision: don't reproduce that**, keep ours as it is (whole surfaces, no cut).
+**Still broken / not tested:** Q135's numbers are still stand-ins (not blocking).
+**Next:** B: the fight (`fighting.md`); A: Q135 when convenient.
+
 ## 2026-10-20 M4 step 4d-7b-3c: shadows drawn on buildings (viewer)
 
 **Changed:** `kq8-viewer`: `terrain_view.rs` (each building copy's drawn surfaces placed in the world at load, with its draw-distance ball: `BuildingShadows`); `draw_distance.rs` (each object's near / far / off state shared: `ObjectActivity`); `shadow_view.rs` (`receivers`: terrain plus the active buildings' chosen surfaces; plain objects use it, and are worked out again when the active buildings change); `anim_view.rs` (Connor and characters use it; log lines). DESIGN (4d-7b-3 done), provenance, STATUS, FEATURES, README.

@@ -11,8 +11,10 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
   floors of the near and far buildings around the caster: characters,
   Connor, plain objects). The note leaves the reach's sizes, the height
   band's numbers and the 1,800 area's shape open: **Q135**, built with
-  logged stand-ins. Checked in the logs only (Connor against the barn
-  wall: 143 of 364 pieces on it), **not by eye**.
+  logged stand-ins. **Checked by the user against the original
+  (2026-10-20): works as expected**, shadows also show inside a
+  building when Connor stands outside, as in the original. The
+  original cuts some shadows off; by the user's decision we don't.
 
 - **2026-10-20 (A): the fight studied**, in new
   **`docs/behaviour/fighting.md`** (M5's next part; not yet checked in
@@ -459,8 +461,7 @@ characters and conversations done; the menus postponed) and **M5**
   goblin's top (unit test only), ranged characters (`doMode=1`).
 - **Next step, suggested:** for B: build the fight from
   `fighting.md` (studied 2026-10-20 by A; replaces the 5a / 5b attack
-  stand-in). For the user: compare shadows on buildings with the
-  original (MODLOG 4d-7b-3c); for A: Q135. For the user: `fighting.md` "How to check"
+  stand-in); for A: Q135 (not blocking). For the user: `fighting.md` "How to check"
   in the original. **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
@@ -519,7 +520,8 @@ characters and conversations done; the menus postponed) and **M5**
   the Witch Doctor's).
 - For A (asked 2026-10-20 by B, M4 4d-7b-3): **Q135** (shadows on
   buildings: the reach's sizes, the height band's numbers, the 1,800
-  area's shape and centre and whether it cuts the shadow).
+  area's shape and centre). Not blocking: the user's check found ours
+  as expected; the original's cut is not to be reproduced.
 - `characters.md` open questions 1, 2 and 4 (`flags` bit 0x20, how the
   renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
   question 3 (the AI) answered 2026-10-19 in `character-movement.md`,

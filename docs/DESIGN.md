@@ -782,7 +782,10 @@ inventory and menus.
         original. **Not reproduced (the user's decision):** the original's
         shadows flicker and show gaps, seemingly at random (cause not
         known); ours are drawn steadily every frame.
-      - **4d-7b-3, buildings receive them** (**done** 2026-10-20, Q135 stand-ins, not checked by eye; rule 37
+      - **4d-7b-3, buildings receive them** (**done** 2026-10-20, Q135 stand-ins; **checked by the user
+        (2026-10-20)**: as expected, shadows show inside a building when
+        Connor is outside, as in the original; the original cuts some
+        shadows off, **not reproduced (the user's decision)**; rule 37
         (2): active buildings within reach, surfaces near the character's
         height, an area at most 1,800 across). Read against the data
         first (`kq8 building-verify`): half of all floor surfaces are wider

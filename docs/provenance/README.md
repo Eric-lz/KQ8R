@@ -2270,6 +2270,8 @@ marked otherwise.
 | A building's surfaces taken once at load, placed in the world (buildings don't move) | **Ours** (no Daventry script moves a building; not checked in other worlds) | `viewer.log` "shadows on buildings": 26 copies, 19,660 surfaces |
 | Only drawn surfaces receive | **Stand-in**, Q135 (d) | Daventry: 0 surfaces left out |
 | Characters, Connor and plain objects all receive on buildings | Rule 37 (2) for characters; "Plain objects": "the same"; Connor: rule 36 (Q130, the same test); confirmation asked in Q135 | Barn wall run: Connor 143 of 364 pieces on the barn; windmill run: one plain object's shadow on 8 building surfaces (`shadows.log`) |
+| Shadows on buildings compared with the original | The user's check (2026-10-20): as expected; shadows also show inside a building when Connor stands outside, in both | The user's check |
+| No cut at the edge of the 1,800 area (whole surfaces receive) | **The user's decision** (2026-10-20): the original cuts some shadows off; not reproduced | The user's check |
 | A plain object's shadow is worked out again when the set of active buildings changes | **Ours** (as its other "worked out again" rule) | `shadows.log` counts |
 
 ### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
