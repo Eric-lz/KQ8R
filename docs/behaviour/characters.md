@@ -697,12 +697,68 @@ Words used here:
       character is within **1,500** units (up or down) of the ground
       height under its position; the terrain triangles searched are those
       under its box moved along the sun by its height above the ground.
-      (2) **Buildings**: every building that is near or far (active) and
-      whose ball comes within reach of the character's box (sum of their
-      sizes plus 500); its surfaces from a little above the character's
-      top down to several times its size below are used, in an area at
-      most **1,800** across centred on the shadow. **Not on objects or
-      other characters.**
+      (2) **Buildings** (detailed 2026-10-20, Q135, traced): every
+      building that is near or far (active) and close enough, and of it
+      the surfaces that reach into a search box. **Not on objects or
+      other characters.** In detail:
+      - **The character's size.** Every model file (`.kqs`) stores a
+        ball after its version number: a radius and a centre, in the
+        model's own space (origin at the character's position, turned
+        with its heading). The game uses the ball of the model currently
+        shown (each movement file has its own; e.g. Connor's
+        `C_stop.kqs` radius 879, centre 827 up; `C_run.kqs` 1,134 /
+        799; the goblin's `gobnew33.kqs` 942 / 741). From it the
+        shadow code takes a **reach size s = 0.287 × that radius**
+        (Connor standing: 252). Not the `BOUNDS.KQ` box. (That the
+        game's model holds exactly these stored values is matched by
+        their size and place, not traced in the file reader.)
+      - **(a) Reach.** The building's ball is the one of
+        `object-lighting.md` rule 40 with its centre on the **turned
+        middle of the `.dig` box** (the box in the `.dig` header, moved
+        and turned by the building's placement; radius half its
+        diagonal). The character's point is its **model ball's centre**,
+        moved and turned with the character into the world. The building
+        is searched when the **distance between the two centres is at
+        most building radius + s + 500**.
+      - **(b) Height band.** In the character's own space: from **s
+        above the model ball's centre** down to **6 × s below it** (so
+        7 × s tall; Connor standing: 1,079 above his feet down to 687
+        below them). It is measured from the ball's centre, not from the
+        top or the feet. If it is taller than 1,800 it is cut to 1,800
+        around its own middle (any model ball radius over about 896,
+        e.g. Connor running: about 915 below his feet to 885 above).
+      - **(c) The area.** Also in the character's own space, so it
+        **turns with the character's heading** (its sides are along the
+        character's front and side, not the world's x and y). Take a
+        square 2 × s across centred on the model ball's centre, at the
+        band's top height; move a copy of it along the sun down to the
+        character's foot level (height 0 of its own space). The area is
+        the smallest rectangle around both squares. Each side longer
+        than **1,800** is cut to 1,800 around its own middle; shorter
+        sides stay as they are. (Connor standing in Daventry, facing
+        along the sun: the copy moves about 1,635, so about 505 across by
+        2,139, cut to 1,800 along the sun.) With the band it makes a box;
+        no sun-type light pointing level (no downward part) means no
+        building search at all.
+      - **Which surfaces count:** the game walks the building's space
+        partition (the `.dig` BSP) to the regions the box reaches and
+        takes their surfaces whole when they reach the box. Its own test
+        per surface is looser than intended (see "Do not reproduce"), so
+        some surfaces just outside the box are also taken. Do: a surface
+        counts when any part of it is inside the box. A chosen surface
+        receives the whole shadow (cut only to that surface's own
+        triangles, as above). **The box only picks surfaces; it does not
+        cut the shadow at its edge.** Surfaces outside it get none, so a
+        long shadow that runs past the box onto another surface is
+        missing there (probably the cut the user saw; not reproduced,
+        the user's decision).
+      - **(d) Which surfaces never receive:** only surfaces with
+        material number 255 (Castle D's 96, `object-lighting.md`) and a
+        surface type that no `.dig` uses (all 172,783 surfaces have type
+        0, data). Surfaces whose material is of kind 0 (nothing drawn,
+        `models-and-textures.md`) **are not left out** by the original,
+        so a shadow could float on an invisible surface there. Do
+        instead: skip them (B's choice; Daventry has none).
     - **The 1,500 limit is a cut, not a fade** (user's check,
       2026-10-19): at the top of Connor's standing jump (about 1,697 above
       the ground, `connor-physics.md` "Jumping") his shadow disappears,
@@ -721,8 +777,13 @@ Words used here:
       distance or haze was found in the shadow code (not traced further).
     - **When:** only while the character is drawn (near or far, not
       hidden), and only when the cast test of rule 36 passes in that frame.
+    - **Connor** goes through the same character code (his class is
+      built on the characters' one, Q135), so all of the above applies to
+      him, buildings included.
     - **Plain objects** (Q123 d): **the same**, through their own drawing
-      code: same direction (the sun's aim, there not made length 1, which
+      code (Q135: its building search is a copy of the characters' one
+      with the same numbers, 0.287, 500, 6, 1,800, using the plain
+      object's own model ball): same direction (the sun's aim, there not made length 1, which
       only changes how far the terrain search reaches), the same 20-unit
       lift and 0.5 strength. Default `shadowMask` 8 and the world mask 15,
       so every plain object without `shadowMask=0` casts one in Daventry
@@ -749,7 +810,11 @@ Words used here:
 | shadow direction | the sun's aim, length 1; (1, 1, −1) with no sun | traced |
 | shadow lift / strength | 20 units / 0.5 | traced |
 | shadow on terrain only within | 1,500 of the ground under the position | traced |
-| shadow area on buildings | at most 1,800 across | traced |
+| shadow reach size s | 0.287 × the shown model's stored ball radius (Connor standing 252) | traced, data |
+| building searched when | centre distance ≤ building radius + s + 500 | traced |
+| shadow height band on buildings | s above to 6 × s below the model ball's centre; at most 1,800 tall | traced |
+| shadow area on buildings | rectangle around a 2 × s square at the band top and its copy moved along the sun to the feet; each side at most 1,800 (cut around its middle); turns with the character | traced |
+| surfaces left out | material 255 only (kind-0 materials not left out; we skip them) | traced, data |
 | automatic turn rate | 3.5 rad/s (`rotateSpeed` 1.75 × 2) | traced |
 | turn toward Connor in Talk | every 4th update | traced |
 | sight test | every 15th update; eye at its box top (corrected), target 1,250 above Connor's | traced |
@@ -817,6 +882,14 @@ Words used here:
   `EndLoop`). Only the Knight's and archon's `attack` have the cue, and it
   can be cut short, so Wait's `Stop` always replaces it at the cue. Keep
   it; log a second `EndLoop` if it ever happens.
+- **The loose per-surface test for shadows on buildings** (rule 37 (2),
+  Q135): the original means to test a ball around each surface against
+  the search box, but a whole-number division makes the ball's centre
+  the building's own origin (its radius is the surface's farthest corner
+  from there). Surfaces inside the box always pass; some outside it pass
+  too. Do instead: any part of the surface inside the box.
+- **Shadows on invisible surfaces** (rule 37 (2) (d)): the original does
+  not leave out kind-0 materials. Do instead: skip them.
 - Keep the rest, including the random `Stop`, the return to `Stop` in Wait
   only, the `noTurn` block, and no turning movement.
 

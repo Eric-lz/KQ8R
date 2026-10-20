@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Q135 answered: which building surfaces receive a shadow (study, A)
+
+**Changed:** `docs/behaviour/characters.md` rule 37 (2) (reach, band, area, surfaces left out; Connor and plain objects), Numbers and units, Do not reproduce; `docs/behaviour/QUESTIONS.md` (Q135 answered); STATUS.
+**Why:** B built rule 37 (2) with stand-ins; Q135 asked for the traced numbers.
+**Tested how:** Traced in `Mask.exe` (Ghidra). Data: model ball radii from the `.kqs` headers (Connor `C_stop` 879, `C_run` 1,134, goblin 942); surface types over all 153 `.dig` (172,783 surfaces, all type 0; material 255 only Castle D's 96). Nothing run in the game.
+**Result:** The size is s = 0.287 × the shown model's stored radius (Connor 252), not the `BOUNDS.KQ` box. Reach: centre distance ≤ building radius + s + 500 (B's building ball is right). Band: s above to 6 × s below the model ball's centre, at most 1,800. Area: a rectangle in the character's own space (turns with it) around a 2 × s square and its copy moved along the sun to the feet, each side at most 1,800; it picks surfaces, it does not cut. The original does not leave out kind-0 materials (we keep skipping them). Two slips in the original noted under Do not reproduce. Differences from B's stand-ins: smaller caster size, band measured from the ball centre (Connor: 1,079 above the feet to 687 below), area turned with the character and often narrower than 1,800.
+**Still broken / not tested:** Not checked in the game. That the game reads the model's stored ball into the place the shadow code uses is inferred from matching values, not traced in the file reader. Kind-0 surfaces counted in Daventry only (by B: none).
+**Next:** B may swap the stand-ins for these numbers (not blocking; the user found the stand-ins look right).
+
 ## 2026-10-20 `fighting.md`: the swallowed swing is not reproduced
 
 **Changed:** `docs/behaviour/fighting.md` rule 11b and Do not reproduce.
