@@ -65,7 +65,8 @@ Words used here:
    When a character is alarmed (rule 23) it tosses a coin: **half the
    time `run`, half the time `walk`**, and it tosses again every time it
    starts moving after Connor again from standing. After it has been hit
-   twice it always runs (the fight study). Going home after leaving its
+   twice it always runs; one hit is enough while it can see Connor
+   (`fighting.md` rules 26–27). Going home after leaving its
    chase area, and the "stuck" escape (rule 7), use `run`. Taking up the
    chase again while moving home (rule 28) tosses no coin: it keeps the
    movement it has (usually `run`). A list without `run`
@@ -238,8 +239,8 @@ Words used here:
     - Side effect (traced): when a movement **named `attack`** (or
       `attack2`) ends, its next attack becomes due `attackDelay` later
       and its chase timer (rule 23) is set to 5 s; when one **named
-      `react`** ends, its chase timer is set to 5 s (and a 2 s timer of
-      the fight study). This happens for Daventry's fidgets too, whose
+      `react`** ends, its chase timer is set to 5 s (and the 2 s pause
+      before it can flinch again, `fighting.md` rule 23). This happens for Daventry's fidgets too, whose
       names are `attack` and `react`. Harmless before the fight: the
       chase timer only matters with a target.
 19. Characters without an idle list never fidget; their `Stop` loops.
@@ -342,8 +343,8 @@ Words used here:
       - `doMode=1` (ranged) characters stop when within 0.75 × their
         attack distance, whatever Connor does; they may also back away
         (fight study).
-    - When its next attack is due is the fight study's (not traced here:
-      whether the first one is due at once).
+    - When its next attack is due: `fighting.md` rules 6–11 (the first
+      one is due at once).
 26. **Losing sight** (traced): once it has not seen Connor for **45
     updates (3 seconds)**, it gives up (rule 28), unless it has a team and
     a team member can see him (then the count starts again). While
@@ -716,10 +717,8 @@ idle list swap (rule 18).
 
 1. Water for walking characters: the water test that drives Connor's
    wading was not followed for characters (rule 6).
-2. The fight: attack choice and timing (including whether the first
-   attack is due at once), `doMode`, keeping distance and fleeing
-   (`likelyToFlee`, `mustFlee`, `attackTooClose`, `attackFarEnough`),
-   being hit, `react`, dying, and what characters without a collision
-   shape do on their way home (rule 28): next study.
+2. ~~The fight~~: answered 2026-10-20 in `fighting.md` (attack timing,
+   hits, damage, `react`, dying, ranged characters and fleeing;
+   characters without a collision shape on their way home: its rule 15).
 3. The exact side the stuck escape's ground test takes at foot height
    (Do not reproduce): not sure, and not worth copying.

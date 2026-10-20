@@ -7,6 +7,20 @@ B built characters moving on their own (M5 5a, `character-movement.md`). Read wi
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (A): the fight studied**, in new
+  **`docs/behaviour/fighting.md`** (M5's next part; not yet checked in
+  the original). In short: a character's first attack is due at once,
+  then every swing length + `attackDelay`; it starts only when its
+  running movement can be cut short, and it stands still while swinging.
+  The hit is decided at the attack's `Do` cue: within reach (× 1.25 if
+  Connor walks backward) and Connor in its front half. Damage is rolled
+  (25–100 % on Connor, 75–125 % on characters), then protection; dead
+  below 0. A hit makes it flinch (`react`) if the roll is high and its
+  last flinch ended over 2 s ago, and alarms everyone who sees Connor
+  "with run". Dying: items drop at its feet at once, the die movement by
+  the hit's kind, then experience to Connor, a corpse, `Die <kind>` to its
+  script. Bow spriggans are ranged (they hold a crossbow), never move.
+  Daventry's fighters' numbers are tabled in its rule 5.
 - **Done 2026-10-20: characters moving on their own (M5 5a, 5b),
   checked by the user against the original** (the chase, the leash, the
   follow, the zombies sinking and rising again: "both match exactly").
@@ -437,12 +451,11 @@ characters and conversations done; the menus postponed) and **M5**
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Next step, suggested:** for A: the fight study (attacks and their
-  timing, being hit, `react`, dying, Connor's weapons and stats in
-  battle); its first hint is in `character-movement.md` "How to check" 4
-  (the attack comes soon after a goblin gets within reach). For B
-  meanwhile: shadows on buildings (4d-7b-3). For B: shadows on buildings (4d-7b-3, after a
-  question on the note's loose height band). **The main
+- **Next step, suggested:** for B: build the fight from
+  `fighting.md` (studied 2026-10-20 by A; replaces the 5a / 5b attack
+  stand-in), then shadows on buildings (4d-7b-3, after a question on the
+  note's loose height band). For the user: `fighting.md` "How to check"
+  in the original. **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -502,8 +515,11 @@ characters and conversations done; the menus postponed) and **M5**
   renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
   question 3 (the AI) answered 2026-10-19 in `character-movement.md`,
   whose own open questions are now: 1 water for walking characters
-  (small), 2 the fight (the next study), 3 the stuck line's exact
-  ground test at foot height (not worth copying).
+  (small), 3 the stuck line's exact ground test at foot height (not
+  worth copying); 2 (the fight) answered 2026-10-20 in `fighting.md`.
+- `fighting.md` open questions (not blocking the Daventry fight): the
+  input side of Connor's attack, the bolt's flight and aim height, which
+  menu sets the combat level, whether drops spread, Connor's death.
 - Q131–Q134: answered by A and built 2026-10-20 (M5 5b).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font

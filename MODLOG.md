@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Study (A): the fight — new `fighting.md`
+
+**Changed:** Docs only. New `docs/behaviour/fighting.md`; pointers to it in `character-movement.md` (rules 3, 18, 25, open question 2 answered) and `anim-scripts.md` rule 20; STATUS. Scratch notes and addresses in `re/` (not committed).
+**Why:** M5's next part: how characters attack, hit, take damage, flinch, die and drop items; ranged characters; Connor's side as far as needed to hit back. Starts where `character-movement.md` rule 25 stops.
+**Tested how:** Traced in `Mask.exe` (Ghidra, plus a small instruction search in the scratchpad): the attack start in the standing and moving states, the movement-ended step, the `Do` cue's hit test, the hit message and its handlers (character and Connor), the damage roll, the flinch, the alarm spread, the dying state and its end, drops, experience, the monster list and type readers, the combat level, Connor's level up. Daventry's numbers computed from `Monstats.mtl`, `monsters.kq`, `Invinfo.itl` and the `.anm` / `.kqs` files. Nothing run in the game.
+**Result:** First attack due **at once** (the attack time starts at 0), then swing length + `attackDelay`; an attack starts only when the running movement can be cut short; characters stand still while swinging (attack models have no step). Hit at the `Do` cue: distance ≤ reach (1.25 × if Connor holds back) and target in the front half. Damage: roll 25–100 % on Connor, 75–125 % on characters, then protection (rolled 75–125 %, 100 = immune), loss at least 1; dead below 0. Flinch when the roll > 0.9 × damage, at most once per 2 s after the last; else ouch sound. Every hit alarms everyone who sees Connor "with run" (always run, 10 s chase). Dying: drops at once at its feet, die movement by kind (`die`/`projdie`/`firedie`/`icedie`), then experience to Connor, a corpse (`deadDts`; none for fire), `Die <kind>` to its script. Ranged = holds a `LongWeapon` (the three bow spriggans; guards, never move or flee). Combat level 0.66 / 1.0 / 1.5 scales health and damage. Connor: stats 10/10/0/0/0, reach 2,350, `Attack`/`AttackB`, Shift = `Attack2` × 0.75–4.
+**Still broken / not tested:** Nothing checked in the original. Not traced: the input side of Connor's attack, the bolt's flight, the aiming height, which menu sets the combat level, whether drops spread. One bug found (the 30° approach after an unseen hit), with a recommended fix in Do not reproduce.
+**Next:** B builds the fight (M5); the user's "How to check" in the original.
+
 ## 2026-10-20 M4 step 4d-7b-3b: which building surfaces receive a shadow (core)
 
 **Changed:** `kq8-core/src/shadow.rs`: `ReceivingBuilding` / `ReceivingSurface` (a building's ball and its drawn surfaces in the world), `building_receivers` (reach, height band, 1,800 area), constants; 4 unit tests. Provenance.

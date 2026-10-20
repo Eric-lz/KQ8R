@@ -401,8 +401,9 @@ duration 0 the same way (B's model reader has the duration).
     `Fire`, `Ice`), and `Normal` if it was never hit. So a death from a
     stats event gives `$3 = Normal` unless an earlier hit was of another
     kind. A `KQMonster` whose health drops below 0 does not call its
-    `Die` script here; it switches to its dying state instead (not
-    followed further; M5).
+    `Die` script here; it switches to its dying state instead; its
+    script gets `Die <kind>` only when the die movement has ended
+    (`fighting.md` rules 30–32).
 
 ### Cutscene control: `handsOff`, `walkTo`, `pointAndCue` (traced 2026-10-17, Q89 a, Q93)
 
