@@ -257,13 +257,18 @@ impl MovementLoop {
         self.duration
     }
 
-    /// The frame shown at `phase` (0..1 of one play).
+    /// The frame shown at `phase` (0..1 of one play). A one-shot with
+    /// speed −1 (`undraw`, `c_shth`) shows its frames last to first
+    /// (`anim-scripts.md` rule 5; M5 5c fix). **Stand-in**: its `loop=`
+    /// start phase is not used (his walker starts every movement at 0).
     pub fn frame_at(&self, phase: f32) -> usize {
         let n = self.frames.max(1);
         if self.repeat {
             ((phase.rem_euclid(1.0) * n as f32) as usize).min(n - 1)
         } else {
-            (phase.clamp(0.0, 1.0) * (n - 1) as f32).round() as usize
+            let p = phase.clamp(0.0, 1.0);
+            let p = if self.speed < 0.0 { 1.0 - p } else { p };
+            (p * (n - 1) as f32).round() as usize
         }
     }
 }
@@ -1732,6 +1737,14 @@ mod tests {
         let once = MovementLoop { repeat: false, ..running };
         assert_eq!(once.choose_transition(0.95, "stop"), None);
         assert_eq!(once.choose_transition(0.5, "stop").map(|(t, _)| t.via), Some("runstopleft"));
+    }
+
+    #[test]
+    fn a_backwards_one_shot_shows_its_last_frame_first() {
+        let l = MovementLoop { speed: -1.0, repeat: false, frames: 9, ..Default::default() };
+        assert_eq!((l.frame_at(0.0), l.frame_at(0.5), l.frame_at(1.0)), (8, 4, 0));
+        let f = MovementLoop { speed: 1.0, ..l };
+        assert_eq!((f.frame_at(0.0), f.frame_at(1.0)), (0, 8));
     }
 
     #[test]

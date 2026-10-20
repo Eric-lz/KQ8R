@@ -40,6 +40,11 @@ const ANIMATION_FPS: f64 = 15.0;
 
 /// The play pointer (`Gplayscr.kq` `cursor=`, `interface.md` rule 1).
 const PLAY_POINTER: &str = "IDBMA_CURS04";
+/// The sword pointer while a hand weapon is ready (`fighting.md` rule 39,
+/// manual: "the pointer is a sword"): `curs03.pba`, the only sword among
+/// the attack cursors of `interface.md` rule 12 (seen in its picture; M5
+/// 5c fix, Q138).
+const SWORD_POINTER: &str = "IDBMA_CURS03";
 
 /// Rule 44: a blink changes the picture every 0.25 s, 5 times.
 const BLINK_MS: f64 = 250.0;
@@ -682,6 +687,7 @@ pub fn gui_step(
     mut actions: ResMut<BarActions>,
     mut speech: ResMut<crate::talk_view::Speech>,
     shared: Res<Shared>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
     let gui = &mut *gui;
@@ -784,10 +790,13 @@ pub fn gui_step(
     let (types, why) = kq8_core::inventory::slot_types(&sim.active.world.items, "Connor");
     // 4c-4: the item in hand and the pointer (inventory.md rules 7, 9).
     let hand = kq8_core::connor_inventory::hand(&mut sim.active.world);
+    // fighting.md rule 39 (manual): with a hand weapon ready the pointer
+    // is the sword; Ctrl held gives the play pointer.
+    let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
     let pointer = hand
         .as_ref()
         .and_then(|(_, kind)| sim.active.world.items.kind(kind).and_then(|t| t.cursor.clone()))
-        .unwrap_or_else(|| PLAY_POINTER.to_string());
+        .unwrap_or_else(|| if sim.active.world.weapon_ready.is_some() && !ctrl { SWORD_POINTER } else { PLAY_POINTER }.to_string());
     let hand = hand.map(|(n, _)| n);
     if hand != gui.hand || pointer != gui.pointer {
         let line = format!("update {updates}: the item in hand {:?} -> {hand:?}; the pointer {pointer} (inventory.md rules 7, 9, 12)", gui.hand);

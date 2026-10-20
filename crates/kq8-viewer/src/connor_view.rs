@@ -160,6 +160,10 @@ pub struct ConnorSim {
     pub swing: Option<Swing>,
     /// His swing passed its `Do` cue this update: taken by `door_view`.
     pub do_cues: Vec<String>,
+    /// The hand weapon's movement list in use (`confists.anm`), while one
+    /// is ready (M5 5c fix, **stand-in**, Q138): his movements come from
+    /// it where it has them.
+    pub weapon_set: Option<String>,
 }
 
 /// One of Connor's swings (M5 5c-5).
@@ -197,9 +201,26 @@ struct WalkEnd {
 #[derive(Resource, Default)]
 pub struct FootSounds(pub std::collections::BTreeMap<String, Option<i64>>);
 
+/// A movement by the name the walker knows it by: with a hand weapon
+/// ready (`set`, its list file) the weapon's own version first
+/// (`confists.anm/stop` for `stop`), else his own (M5 5c fix,
+/// **stand-in**, Q138).
+fn find<'a>(movements: &'a [DrawnMovement], set: Option<&str>, name: &str) -> Option<&'a DrawnMovement> {
+    set.and_then(|f| {
+        let wanted = kq8_core::connor::special_movement_name(f, name);
+        movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted))
+    })
+    .or_else(|| movements.iter().find(|m| m.name == name))
+}
+
 impl ConnorSim {
     fn movement_loop(&self, name: &str) -> Option<&MovementLoop> {
-        self.movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop)
+        self.drawn(name).map(|m| &m.movement_loop)
+    }
+
+    /// See [`find`].
+    fn drawn(&self, name: &str) -> Option<&DrawnMovement> {
+        find(&self.movements, self.weapon_set.as_deref(), name).or_else(|| self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(name)))
     }
 }
 
@@ -465,6 +486,7 @@ pub fn spawn_connor(
         last_ouch: f64::NEG_INFINITY,
         swing: None,
         do_cues: Vec::new(),
+        weapon_set: None,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -767,7 +789,7 @@ impl ConnorSim {
         use kq8_core::fight::{FLINCH_PAUSE, OUCH_EVERY};
         let can_cut = self.can_be_cut_short();
         let w = &self.walker;
-        let react = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case("react")).map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
+        let react = self.drawn("react").map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
         let why_not = if !roll_over {
             Some("the roll is not above 0.9 x D".to_string())
         } else if !can_cut {
@@ -857,6 +879,39 @@ impl ConnorSim {
         line
     }
 
+    /// A hand weapon readied or put away (M5 5c fix, **stand-in**, Q138;
+    /// `inventory.md` rule 9 says the weapon is readied, not what that
+    /// plays): readying switches his movements to the weapon's list
+    /// (`list`, e.g. `confists.anm`: its `stop` is the fists-up stance)
+    /// and plays its `draw`; putting it away plays the list's `undraw` and
+    /// switches back to his own. Either plays only while he stands or
+    /// walks (Wait, Move: our Free mode); otherwise only the set switches. Returns the
+    /// line for `fight.log`.
+    pub fn ready_set(&mut self, list: Option<String>) -> String {
+        let (word, file) = match (&list, &self.weapon_set) {
+            (Some(l), _) => ("draw", l.clone()),
+            (None, Some(old)) => ("undraw", old.clone()),
+            (None, None) => return "no weapon set: nothing".into(),
+        };
+        self.weapon_set = list;
+        let set = match &self.weapon_set {
+            Some(l) => format!("his movements now come from {l} where it has them"),
+            None => "his own movements again (Conner.anm)".into(),
+        };
+        let wanted = kq8_core::connor::special_movement_name(&file, word);
+        let Some(m) = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name) else {
+            return format!("{set}; no {wanted} loaded: nothing plays");
+        };
+        if self.walker.mode != Mode::Free {
+            return format!("{set}; mode {}: '{m}' not played (stand-in)", self.walker.mode.name());
+        }
+        self.walker.auto = None;
+        let notes = self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(m, word.into())]);
+        let line = format!("{set}; plays '{m}' ({})", notes.join("; "));
+        self.log.detail(format!("connor update {}: weapon: {line}", self.updates));
+        line
+    }
+
     /// Each update after his own (M5 5c-5): a swing that waited for his
     /// turn starts when the turn is over; a swing that ended (or was
     /// replaced) is forgotten. Returns a line for `fight.log`.
@@ -894,7 +949,7 @@ impl ConnorSim {
         };
         let mut steps: Vec<SpecialStep> = names
             .iter()
-            .map(|n| match self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(n)) {
+            .map(|n| match self.drawn(n) {
                 Some(m) => SpecialStep::Play(m.name, n.to_string()),
                 None => SpecialStep::Note(format!("{n} not in his list: skipped")),
             })
@@ -1060,7 +1115,7 @@ fn watch_walk_end(sim: &mut ConnorSim, ended: bool) {
     if ended {
         let movement = sim.walker.movement;
         let phase = sim.walker.phase;
-        let lp = sim.movements.iter().find(|m| m.name == movement).map(|m| &m.movement_loop);
+        let lp = sim.movement_loop(movement);
         let stops: Vec<String> = lp.map_or(Vec::new(), |l| l.transitions.iter().filter(|t| t.to == "stop").map(|t| format!("{} from {:.2}", t.via, t.from)).collect());
         let next = lp.and_then(|l| l.choose_transition(phase, "stop")).map_or("none".to_string(), |(t, d)| format!("{} from {:.2} ({d:.4} of a loop on)", t.via, t.from));
         sim.log.detail(format!(
@@ -1100,7 +1155,7 @@ fn watch_walk_end(sim: &mut ConnorSim, ended: bool) {
         let straight = ((p[0] - w.at[0]).powi(2) + (p[1] - w.at[1]).powi(2)).sqrt();
         // The transition's own steps in the data (its frames added up, flat).
         let own = |via: &str| {
-            sim.movements.iter().find(|m| m.name == via).map_or("unknown".to_string(), |m| {
+            sim.drawn(via).map_or("unknown".to_string(), |m| {
                 let l = &m.movement_loop;
                 let sum = if l.frame_steps.is_empty() { l.step_sum } else { l.frame_steps.iter().fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]) };
                 format!("{:.1} (left {:.1}, forward {:.1}) over {:.3} s", (sum[0] * sum[0] + sum[1] * sum[1]).sqrt(), sum[0], -sum[1], l.duration)
@@ -1166,8 +1221,8 @@ pub fn connor_step(
     let jump = std::mem::take(&mut sim.jump_pressed) && !sim.hands_off;
     let z_before = sim.mover.position[2];
     let tick = {
-        let ConnorSim { mover, walker, movements, .. } = &mut *sim;
-        let loops = |name: &str| movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop);
+        let ConnorSim { mover, walker, movements, weapon_set, .. } = &mut *sim;
+        let loops = |name: &str| find(movements, weapon_set.as_deref(), name).map(|m| &m.movement_loop);
         kq8_core::connor_update::tick(mover, walker, intent, jump, &loops, &scene)
     };
     if sim.walker.mode == Mode::Jump && sim.jump_start_z.is_none() {
@@ -1304,7 +1359,9 @@ pub fn connor_step(
         }
         events.extend(s.notes.iter().cloned());
         if let Some((from, to)) = s.changed {
-            events.push(format!("movement {from} -> {to}"));
+            // The version drawn (M5 5c fix): the weapon's with one ready.
+            let drawn = sim.drawn(to).map_or("none", |m| m.name);
+            events.push(if drawn == to { format!("movement {from} -> {to}") } else { format!("movement {from} -> {to} (drawn: {drawn})") });
         }
         if s.missing {
             events.push(format!("movement {} has no loop loaded; not moving", sim.walker.movement));
@@ -1459,7 +1516,7 @@ pub fn connor_draw(
     }
     // The frame: loop position blended forward from the last update.
     let movement = sim.walker.movement;
-    let frame = sim.movements.iter().find(|m| m.name == movement).and_then(|m| {
+    let frame = sim.drawn(movement).and_then(|m| {
         let n = m.frames.len();
         (n > 0).then(|| m.frames[m.movement_loop.frame_at(phase + sim.phase_step * a).min(n - 1)])
     });

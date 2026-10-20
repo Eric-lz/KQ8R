@@ -37,7 +37,14 @@ pub fn run(game: &GameDir, image: &str, palette: Option<&str>) -> ExitCode {
 fn convert(game: &GameDir, image: &str, palette: Option<&str>, log: &mut Log) -> Result<(), String> {
     log.summary(format!("log file: {}", log.path().display()));
     let bytes = source::load(game, image)?;
-    let bmp = Bitmap::parse(&bytes).map_err(|e| format!("{image}: {e}"))?;
+    // A bitmap array (`.pba`: cursors, buttons): its first bitmap.
+    let bmp = if bytes.starts_with(b"PBMA") {
+        let all = kq8_data::font::bitmap_array(&bytes).map_err(|e| format!("{image}: {e}"))?;
+        log.summary(format!("bitmap array: {} bitmaps, writing the first", all.len()));
+        all.into_iter().next().ok_or(format!("{image}: empty bitmap array"))?
+    } else {
+        Bitmap::parse(&bytes).map_err(|e| format!("{image}: {e}"))?
+    };
 
     log.summary(format!("image: {image} ({} bytes)", bytes.len()));
     log.summary(format!(

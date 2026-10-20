@@ -2627,3 +2627,18 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | `applyCombatLevel 1` in `newworld.cs` (run at load, before the objects): characters loaded after it get the factor when they enter the world: health, hand and ranged damage × factor, cut toward zero; protection and experience not; Connor never | Rule 3 | Unit test; viewer: goblin22 `[15, 2, 2, 0, 3]` → `[22, 3, 3, 0, 3]` at level 3, sprgnbow's −3 → −4 |
 | The roll on characters 85–125 % below level 1.0 | Rule 16 (built in 5c-5) | — |
 | `--combat-level 1|2|3` sets it before the characters enter | **Stand-in** for the menu (open question 3) | Viewer |
+
+### 5c fix 1, the ready stance and the sword pointer — viewer `load.rs` (`weapon_sets`, the movement loop), `connor_view.rs` (`find`, `drawn`, `ready_set`, `weapon_set`), `door_view.rs` (`weapon_list`), `gui_view.rs` (`SWORD_POINTER`), `crates/kq8-core/src/connor.rs` (`MovementLoop::frame_at`)
+
+After the user's check in the original (2026-10-20): readying the fists
+did not show his fists-up stance nor the sword pointer.
+
+| What | Source | Check |
+| --- | --- | --- |
+| With a hand weapon ready the pointer is a sword; Ctrl held gives the play pointer | `fighting.md` rule 39 (manual), `doors.md` rule 10; the user's check | Viewer: `gui.log` pointer `IDBMA_CURS03` at the ready, `IDBMA_CURS04` after |
+| The sword is `IDBMA_CURS03` (`curs03.pba`) | `interface.md` rule 12 lists the attack cursors; **picked by its picture** (`kq8 bitmap-png`): `curs05` an arrow, `curs07` a rock or glove; **Q138 (d)** | — |
+| An item in hand keeps its own pointer even with a weapon ready | **Ours** (Q138 d) | — |
+| Each hand weapon's list in `Connor.kq`'s `ShortAnimList` whose weapon is in the world (`Fists` always) is loaded as a whole set, `<file>/<movement>`, with its transitions; its `draw` and `undraw` too | Data (`confists.anm` has 59 movements); **stand-in** for what readying does (Q138 a) | `viewer.log`: `confists.anm` loaded, 11 of his movements not in it (`push`, gestures) |
+| With a weapon ready every movement the walker asks for is drawn and timed from the weapon's version where it has one (his flinch and deaths too) | The user's check (fists up when readied); **stand-in** (Q138 a) | `connor.log`: `walk (drawn: confists.anm/walk)`, `stop (drawn: confists.anm/stop)` |
+| Readying plays the list's `draw`, putting away its `undraw`, as a one-item Special list, only from Wait / Move (else only the set switches); the set switches at the start of either | **Stand-in** (Q138 a, b) | `fight.log`: `draw` at update 30 (walking: he stops, then walks on in the fists set), `undraw` at 150 |
+| A one-shot with speed −1 shows its frames last to first; its start phase is not used | `anim-scripts.md` rule 5 (start phase and speed from the `loop=` line), our walker starts at 0 (Q138 e) | Unit test |

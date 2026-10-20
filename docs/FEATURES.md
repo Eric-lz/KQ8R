@@ -473,7 +473,9 @@ miss, roll, flinch, death, drop and shot is in
   then his protection; he flinches now and then (`react`) or says ouch;
   below 0 health he dies and stays dead (game over is not built).
 - **Connor hits back (stand-in controls):** click the hand-weapon slot
-  to ready his fists (again to put them away); then a left click on a
+  to ready his fists (again to put them away): he raises them (`draw`,
+  then the fists' own stand and walk) and the pointer turns into the
+  sword (Ctrl held: the golden pointer); then a left click on a
   creature turns him toward it and swings (`attack` / `attackb`; Shift:
   `attack2`, × 0.75–4 damage; Ctrl: the normal click). Test option
   `--swing NAME,N[,big]`.

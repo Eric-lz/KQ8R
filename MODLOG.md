@@ -3,6 +3,24 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 1: the ready stance and the sword pointer
+
+**Changed:** Readying a hand weapon switches Connor's movements to the weapon's own set (`confists.anm` for the fists: the fists-up stance, its walk, run, flinch and deaths) and plays its `draw`; putting it away plays `undraw` and switches back. The loader reads each ready-able weapon's whole set with its transitions (`load.rs` `weapon_sets`); `connor_view.rs` draws and times the weapon's version of each movement the walker asks for. The pointer is the sword (`IDBMA_CURS03`) while a weapon is ready, the golden pointer while Ctrl is held. A one-shot played backwards (`undraw`) now shows its frames last to first (`kq8-core` `MovementLoop::frame_at`). New question Q138; provenance "5c fix 1".
+**Why:** The user's check in the original: clicking the fists slot should raise his fists and turn the pointer into a sword; ours did neither.
+**Tested how:** `cargo test --workspace` (431 core tests, 1 new), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 193000,193000,3.1416 --key left:IDCTL_INVBAR_SHORT,30 --hold 1,0,0,90 --key left:IDCTL_INVBAR_SHORT,150 --frames 1500`; `fight.log`, `connor.log`, `gui.log`.
+**Result:** Update 30: `confists.anm/draw` plays (he was walking: he stops for 8 updates), pointer `IDBMA_CURS03`; then `stopwalk`, `walk`, `walkstopleft`, `stop` are drawn from `confists.anm`; update 150: `undraw`, then his own `stop`, pointer `IDBMA_CURS04`. A first run at the windmill was spoiled: the bow spriggan killed Connor before the put-away.
+**Still broken / not tested:** Not looked at by eye (the stance, the sword picture, the Ctrl switch). What readying really does is a stand-in (Q138): whether the walk stops for `draw`, when the set switches, what puts the weapon away. The `undraw` start phase (0.89) is not used.
+**Next:** The user's look; then the next point from the fight check.
+
+## 2026-10-20 `kq8 bitmap-png` reads cursor files
+
+**Changed:** `kq8 bitmap-png` also takes a bitmap array (`.pba`: cursors, buttons) and writes its first bitmap.
+**Why:** To tell which attack cursor is the sword (fix 1 above).
+**Tested how:** `kq8 bitmap-png daventry/8gui/curs03.pba` (and `curs04`, `curs05`, `curs07`): PNGs in `kq8-artifacts/png/` (greyscale, no palette given).
+**Result:** `curs03` 32×32 is a sword, `curs04` 20×20 the play pointer, `curs05` an arrow, `curs07` a rock or glove.
+**Still broken / not tested:** Only the first bitmap of an array is written.
+**Next:** —
+
 ## 2026-10-20 M5 5c finished: STATUS, FEATURES, README
 
 **Changed:** Docs only: STATUS (where we are, the 5c stand-ins, next steps, Q136–Q137), FEATURES (the fight, the two new launch options), README (M5 so far, how to fight), DESIGN (5c done).

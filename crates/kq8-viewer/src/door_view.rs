@@ -1293,6 +1293,14 @@ pub fn door_click_input(
     sim.log.detail(line);
 }
 
+/// The ready hand weapon's movement list (`Connor.kq`'s `ShortAnimList`,
+/// `fighting.md` rule 40): `confists.anm` for `INVITEM_Fists`.
+fn weapon_list(w: &kq8_core::active::WorldState) -> Option<String> {
+    let ready = w.weapon_ready.as_deref()?;
+    let short = ready.strip_prefix(kq8_data::items::PREFIX).unwrap_or(ready);
+    w.connor_fight.as_ref()?.short_lists.iter().find(|(n, _)| n.eq_ignore_ascii_case(short)).map(|(_, f)| f.clone())
+}
+
 /// One update of the doors (15 per second), before Connor's: clicks,
 /// events, door movements; then the door colliders are moved.
 pub fn door_step(
@@ -1369,12 +1377,16 @@ pub fn door_step(
     // fighting.md rules 39-41 (M5 5c-5): swings asked for, the swing that
     // waited for his turn, and his `Do` cues.
     if let Some(c) = connor.as_mut() {
+        // M5 5c fix (stand-in, Q138): the weapon readied or put away
+        // switches his movement set (draw / undraw).
+        let list = weapon_list(&sim.active.world);
+        if list != c.weapon_set {
+            let line = c.ready_set(list);
+            sim.active.world.fight_note("Connor", format!("weapon {:?}: {line}", sim.active.world.weapon_ready));
+        }
         for s in std::mem::take(&mut sim.swing_clicks) {
             let w = &mut sim.active.world;
-            let list = w.weapon_ready.as_deref().and_then(|ready| {
-                let short = ready.strip_prefix(kq8_data::items::PREFIX).unwrap_or(ready);
-                w.connor_fight.as_ref()?.short_lists.iter().find(|(n, _)| n.eq_ignore_ascii_case(short)).map(|(_, f)| f.clone())
-            });
+            let list = weapon_list(w);
             let line = match list {
                 Some(list) => {
                     let coin = w.fight_rng.fraction();

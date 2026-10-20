@@ -472,9 +472,11 @@ characters and conversations done; the menus postponed) and **M5**
 - **Stand-ins of 5c (the fight):** Connor's input side (open question
   1): a second click on the ready weapon's slot puts it away; a click on
   no creature aims at the level of his feet; turning toward the click
-  first only when it is behind him; only his three swings come from the
-  weapon's list (`confists.anm`), he walks with `Conner.anm`; his swing
-  and flinch play as one-item Special lists. The bolt (open question 2):
+  first only when it is behind him; readying switches his whole
+  movement set to the weapon's list (`confists.anm`: fists-up stance)
+  with its `draw` / `undraw`, and the pointer to the sword
+  `IDBMA_CURS03` (Q138, after the user's check); his swing and flinch
+  play as one-item Special lists. The bolt (open question 2):
   straight, no gravity, from 3/4 of the shooter's height at 3/4 of his,
   drawn without pitch. The thrown drops' stepping (Q137). Game over
   (Connor stays dead). The corpse has no draw-distance test and no skin
@@ -548,7 +550,8 @@ characters and conversations done; the menus postponed) and **M5**
   unfinished jump.
 - For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
   (`reactPause`: is it the flinch's 2 s pause?), **Q137** (how a thrown
-  item's flight steps through time). `fighting.md` open questions 1–3
+  item's flight steps through time), **Q138** (what readying a hand
+  weapon does: the movement set, `draw` / `undraw`, the pointer). `fighting.md` open questions 1–3
   (Connor's input side, the bolt's flight, which menu sets the combat
   level) are built as stand-ins.
 - For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before

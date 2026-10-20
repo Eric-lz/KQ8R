@@ -2076,13 +2076,27 @@ impl Placer<'_> {
             let mut assets =
                 ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
-            for name in CONNOR_MOVEMENTS {
-                let mut with_ask = anm.clone();
-                with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={list}\ncurrAnimName={name}\n").as_bytes()));
+            // His own set (Conner.anm), then each hand weapon's (M5 5c fix:
+            // **stand-in**, see `weapon_sets`), loaded as `<file>/<name>`.
+            let mut sets = vec![(anm.clone(), list.to_string(), None)];
+            sets.extend(self.weapon_sets());
+            for (sections, set_list, file) in &sets {
+            let mut missing = Vec::new();
+            for word in CONNOR_MOVEMENTS {
+                let mut with_ask = sections.clone();
+                with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={set_list}\ncurrAnimName={word}\n").as_bytes()));
                 let c = kq8_data::objects::current_loop(&with_ask, with_ask.last().unwrap())?.ok_or("no animation list")?;
                 if c.fell_back {
-                    return Err(format!("Conner.anm has no movement called {name}"));
+                    if file.is_none() {
+                        return Err(format!("Conner.anm has no movement called {word}"));
+                    }
+                    missing.push(word);
+                    continue;
                 }
+                let name = match file {
+                    Some(f) => kq8_core::connor::intern(&kq8_core::connor::special_movement_name(f, word)),
+                    None => word,
+                };
                 let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
                 let animation = match index_of.get(&key) {
                     Some(&i) => i,
@@ -2143,6 +2157,10 @@ impl Placer<'_> {
                     transitions,
                     cues: c.cues.clone(),
                 });
+            }
+            if let Some(f) = file {
+                self.log.summary(format!("connor: weapon set {f}: its own versions of his movements loaded; not in it (his own play): {missing:?}"));
+            }
             }
             self.special_movements(&anm, &list, &palette, &mut assets, &mut index_of);
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
@@ -2716,6 +2734,34 @@ impl Placer<'_> {
         }
     }
 
+    /// The hand weapons' movement sets Connor switches to when one is
+    /// ready (M5 5c fix, **stand-in**: `fighting.md` rule 39 and
+    /// `inventory.md` rule 9 say the weapon is readied, not what it plays;
+    /// the user saw the fists-up stance, and `confists.anm` holds a whole
+    /// set: Q138): for each `ShortAnimList` entry whose weapon is in the
+    /// world (`Fists` always), its file's sections, list name and file.
+    fn weapon_sets(&mut self) -> Vec<(Vec<kq8_data::kq_text::Section>, String, Option<String>)> {
+        let Some(f) = &self.connor_fight else { return Vec::new() };
+        let kinds: Vec<String> = self.items.objects.iter().map(|o| o.kind.to_ascii_lowercase()).collect();
+        let mut sets = Vec::new();
+        for (weapon, file) in f.short_lists.clone() {
+            let kind = format!("{}{weapon}", kq8_data::items::PREFIX).to_ascii_lowercase();
+            if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) {
+                continue;
+            }
+            let bytes = match self.world.load(&file) {
+                Some(Ok((_, b))) => Some(b),
+                _ => self.game.find(&format!("GAME/Kq/{file}")).and_then(|p| std::fs::read(p).ok()),
+            };
+            let sections = bytes.map(|b| kq8_data::kq_text::parse(&b)).unwrap_or_default();
+            match sections.first().map(|s| s.name.clone()) {
+                Some(name) => sets.push((sections, name, Some(file))),
+                None => self.log.summary(format!("connor: weapon set {file} ({weapon}): not found")),
+            }
+        }
+        sets
+    }
+
     /// The movements Connor's Special state can play (M3 step 3i-7,
     /// `anim-scripts.md` rule 16), found in the world's scripts
     /// (`KQMonster::setState Connor special <list>`): his own beyond
@@ -2756,6 +2802,10 @@ impl Placer<'_> {
         if let Some(f) = &self.connor_fight {
             for (_, file) in &f.short_lists {
                 for m in kq8_core::fight::SWINGS {
+                    wanted.insert((Some(file.clone()), m.to_string()));
+                }
+                // Readying and putting away (M5 5c fix, stand-in, Q138).
+                for m in ["draw", "undraw"] {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
             }
