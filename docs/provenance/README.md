@@ -2668,3 +2668,14 @@ did not show his fists-up stance nor the sword pointer.
 | --- | --- | --- |
 | With a hand weapon ready the click line also meets the boxes (`BOUNDS.KQ`, as they stand) of characters that fight and are not dying, whatever their collision type; the nearest is his target unless a building is between the camera and it; else the old rule (a clickable character picked) | `fighting.md` rule 39 ("the clicked character becomes his target"); **stand-in** (Q139): by `clicking.md` rule 1 and `characters.md` rule 8 no creature is clickable | Viewer (`--aim goblin22`): hits for 11 and 8, goblin22 dies |
 | `--aim NAME` also aims at a character's box | Test option (ours) | Viewer |
+| A click near a creature but not on it misses | The user's check in the original (Q139 b) | — |
+
+### 5c fix 5, Connor's hits on objects (the barrels) — `crates/kq8-core/src/active.rs` (`pick_attack`, `get_loc`), `fight.rs` (`object_at`, `connor_hits_object`), viewer `load.rs` (`object_colliders`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Objects with a script are kept with their box even when not clickable (the barrels, type 0x141): they get `Init` and can be hit; the plain click still needs bit 0x20 | `clicking.md` rule 21 (every object with a script gets `Init`), rule 1 | Unit test; `viewer.log`: `Init` for the four barrels and the boards |
+| The attack click also meets objects with a script and a box (not gone, collider in) | **Stand-in** (Q139 e); `anim-scripts.md` rule 12 (barrels die when hit in a fight) | Unit test; viewer: barrel.07 |
+| Connor's swing on an object: rule 13's reach and front test; damage = his hand damage (× the big swing's factor), rolled 75–125 % with its 4th stat as protection, at least 1 | `fighting.md` rules 13, 41; the roll is a **stand-in** (`doors.md` rule 19: "random, at least 1") | Unit test |
+| Taken off its health (`stats=`, all 0 without one); below 0 its script gets `Die <kind>` (again on every hit while below 0) | `doors.md` rules 19–20, `anim-scripts.md` rules 19–20 | Unit test; viewer: barrel.07 0 → −9, `barelup.cs` gets `Die Normal` |
+| `KQObject::getLoc` also finds those box objects | `objects.md` "Script variables, getLoc and move" (any object) | Viewer: `getLoc barrel.07: 199536 262152 8185` |

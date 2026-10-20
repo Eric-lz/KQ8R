@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 5: Connor's punches break barrels (as far as their script)
+
+**Changed:** Objects with a script but no clickable bit (Daventry's barrels) are kept with their box: they now get `Init`, `getLoc` finds them, and the attack click can target them. Connor's swing on such an object takes rolled damage off its stats (all 0 without a `stats=` line); below 0 its script gets `Die <kind>`. Q139 updated (the user's answer: a click near a creature misses; the object hit is a stand-in).
+**Why:** The user's check: the barrels near the pub can't be broken.
+**Tested how:** `cargo test --workspace` (433 core tests, 1 new), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 198000,262152,1.5708 --key left:IDCTL_INVBAR_SHORT,40 --aim barrel.07,60 --frames 800`; `fight.log`, `viewer.log`.
+**Result:** Update 64: the punch hits barrel.07 (distance 1,544; health 0 → −9); `barelup.cs` gets `Die Normal`: `getLoc` gives its place, it is deleted, `breakbox.aud` plays. Then `loadKQ barelupx.kq @ <its place>` is not done (a position on a runtime `loadKQ` is not built): no burst, no wreck yet.
+**Still broken / not tested:** The burst and the wreck (next: runtime `loadKQ` with a position, more than one copy of a file). How the original rolls damage on objects and which objects can be hit (Q139 e).
+**Next:** The dropped items' landing height and click spot, their tumble; then runtime `loadKQ` with a position.
+
 ## 2026-10-20 M5 5c fix 4: Connor's punches find their target
 
 **Changed:** With a hand weapon ready, the click line also tests the boxes of the characters that fight (not dying), whatever their collision type; the nearest one not behind a building becomes Connor's target. `--aim NAME` can aim at a character. New question Q139.

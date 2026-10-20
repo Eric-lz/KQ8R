@@ -1253,7 +1253,7 @@ pub fn door_click_input(
     let from = format!("update {updates}: {how}: line from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
     // M5 5c fix 4 (stand-in, Q139): a fighting character's box on the
     // line, unless a building is nearer.
-    let fighter = sim.active.pick_fighter(origin, dir).filter(|(_, t)| {
+    let fighter = sim.active.pick_attack(origin, dir).filter(|(_, t)| {
         let to: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * t);
         kq8_core::active::ClickWalls::first_hit(&walls, origin, to).is_none()
     });
@@ -1278,7 +1278,7 @@ pub fn door_click_input(
             None => picked.clone().filter(|n| sim.active.world.character_index(n).is_some()),
         };
         let line = match &fighter {
-            Some((n, t)) => format!("{line}; the line meets fighter {n}'s box at {t:.0} (stand-in, Q139)"),
+            Some((n, t)) => format!("{line}; the line meets {n}'s box at {t:.0} (attack target, stand-in, Q139)"),
             None => line,
         };
         let point = match target.as_deref().and_then(|n| sim.active.world.character_index(n)) {

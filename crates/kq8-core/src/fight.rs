@@ -439,6 +439,9 @@ impl crate::active::WorldState {
     /// `target`: the character clicked for this swing; `big`: Shift.
     pub fn connor_do(&mut self, from: [f32; 3], heading: f32, reach: f32, target: Option<&str>, big: bool, movement: &str) {
         let Some(j) = target.and_then(|t| self.character_index(t)).filter(|&j| self.anims[j].character.as_deref().is_some_and(|c| c.fight.is_some())) else {
+            if let Some(at) = target.and_then(|t| self.object_at(t)) {
+                return self.connor_hits_object(target.unwrap_or_default(), at, from, heading, reach, big, movement);
+            }
             self.fight_note("Connor", format!("Do ({movement}): no target: he hits dead air (rule 39)"));
             return;
         };
@@ -464,6 +467,59 @@ impl crate::active::WorldState {
         let kind = if self.weapon_ready.as_deref().is_some_and(|w| w.eq_ignore_ascii_case(FLAME_SWORD)) { HitKind::Fire } else { HitKind::Normal };
         self.fight_note("Connor", format!("Do ({movement}): hits {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; hand damage {hand}{factor} = {d}, {} (rule 41)", t.distance, t.reach, t.angle, kind.name()));
         self.hit_character(j, "Connor", d, kind);
+    }
+
+    /// Where an object with a script stands (a box object or an animated
+    /// one), for Connor's hit on it (M5 5c fix 5).
+    fn object_at(&self, name: &str) -> Option<[f32; 3]> {
+        if let Some(c) = self.clickables.iter().find(|c| !c.gone && c.script.is_some() && c.name.eq_ignore_ascii_case(name)) {
+            return Some(c.placement.position);
+        }
+        self.objects.iter().find(|o| !o.gone && o.script.is_some() && o.name().eq_ignore_ascii_case(name)).map(|o| o.player.placement().position)
+    }
+
+    /// Connor's swing on an object (M5 5c fix 5; the barrels): rule 13's
+    /// test with his reach, then `doors.md` rules 19-20 on its stats
+    /// (`stats=`, all 0 without one, `anim-scripts.md` rule 19): damage
+    /// rolled as on a character (rule 16's 75-125 % and its protection,
+    /// the 4th stat; **stand-in**, doors.md says only "random, at least
+    /// 1"), taken off its health; below 0 its script gets `Die <kind>`
+    /// (every hit while below 0 again).
+    #[allow(clippy::too_many_arguments)]
+    fn connor_hits_object(&mut self, name: &str, at: [f32; 3], from: [f32; 3], heading: f32, reach: f32, big: bool, movement: &str) {
+        let facing = [heading.sin(), -heading.cos(), 0.0];
+        let t = HitTest::new(from, facing, at, reach, false);
+        if !t.hit {
+            let why = t.why_missed();
+            self.fight_note("Connor", format!("Do ({movement}): Connor missing {name}, too far away: miss, {why}: distance {:.0}, reach {:.0}, {:.0} deg off his facing (rule 41)", t.distance, t.reach, t.angle));
+            return;
+        }
+        let Some(hand) = self.connor_stats.map(|c| c.stats.0[1]) else {
+            self.fight_note("Connor", format!("Do ({movement}): his stats are unknown; nothing"));
+            return;
+        };
+        let d = match (big, self.connor_fight.as_ref()) {
+            (true, Some(f)) => (hand as f32 * (f.min_damage_factor + self.fight_rng.fraction() * (f.max_damage_factor - f.min_damage_factor))) as i64,
+            _ => hand,
+        };
+        let kind = if self.weapon_ready.as_deref().is_some_and(|w| w.eq_ignore_ascii_case(FLAME_SWORD)) { HitKind::Fire } else { HitKind::Normal };
+        let key = name.to_ascii_lowercase();
+        let known = self.stats.contains_key(&key);
+        let s = *self.stats.entry(key.clone()).or_default();
+        let rng = &mut self.fight_rng;
+        let dmg = Damage::roll(d, s.0[3].min(PROTECTION_CAP), ROLL_ON_CHARACTER, &mut || rng.fraction());
+        let mut after = s;
+        after.0[0] -= dmg.loss;
+        self.stats.insert(key, after);
+        let start = if known { "" } else { " (no stats= line: all 0)" };
+        self.fight_note(
+            "Connor",
+            format!("Do ({movement}): hits object {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; {} (75-125 %, stand-in); health {} -> {}{start} (doors.md rule 19)", t.distance, t.reach, t.angle, dmg.describe(), s.0[0], after.0[0]),
+        );
+        if after.0[0] < 0 {
+            self.fight_note(name, format!("health below 0: its script gets Die {} (doors.md rule 20)", kind.name()));
+            self.die_calls.push((name.to_string(), kind.name()));
+        }
     }
 
     /// Rules 16–18, 20–28 on a character (M5 5c-6), in rule 22's order:

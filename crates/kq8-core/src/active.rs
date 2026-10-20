@@ -1597,7 +1597,8 @@ impl WorldState {
         } else if who.eq_ignore_ascii_case("Connor") {
             self.connor_at.map(|p| Placement { rotation: crate::door::identity().m, position: p })
         } else {
-            None
+            // A box object (a barrel; M5 5c fix 5).
+            self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
         };
         let Some(b) = base else {
             self.note(format!("{at}: getLoc {who}: no such object; variables unchanged"));
@@ -2979,8 +2980,21 @@ impl Active {
     /// as it stands) the line meets, whatever its collision type: the
     /// creatures' type 0x42 has no clickable bit (`characters.md` rule 8,
     /// `clicking.md` rule 1), yet `fighting.md` rule 39 says the clicked
-    /// character becomes his target. Name and distance along the line.
-    pub fn pick_fighter(&self, origin: [f32; 3], dir: [f32; 3]) -> Option<(String, f32)> {
+    /// character becomes his target. Fix 5: also an object with a script
+    /// and a box (the barrels, type 0x141), which a hit can kill
+    /// (`doors.md` rules 19-20). Name and distance along the line.
+    pub fn pick_attack(&self, origin: [f32; 3], dir: [f32; 3]) -> Option<(String, f32)> {
+        let off = |n: &str| self.world.is_switched_off(n);
+        let objects = self
+            .world
+            .clickables
+            .iter()
+            .filter(|c| c.script.is_some() && !c.gone && !off(&c.name))
+            .filter_map(|c| Some((c.name.clone(), ray_box(origin, dir, &c.placement, c.min, c.max)?)));
+        let animated = self.world.objects.iter().filter(|o| o.script.is_some() && !o.hidden && !o.gone && !off(o.name())).filter_map(|o| {
+            let (min, max) = o.bounds?;
+            Some((o.name().to_string(), ray_box(origin, dir, &o.player.placement(), min, max)?))
+        });
         self.world
             .anims
             .iter()
@@ -2994,6 +3008,8 @@ impl Active {
                 let (min, max) = c.bounds?;
                 Some((a.player.name.clone(), ray_box(origin, dir, &a.player.placement(), min, max)?))
             })
+            .chain(objects)
+            .chain(animated)
             .min_by(|a, b| a.1.total_cmp(&b.1))
     }
 
@@ -5756,6 +5772,25 @@ endif
         let mut a = Active::new(v, vec![], vec![fish], ["Connor".to_string()], sources);
         a.start();
         a
+    }
+
+    #[test]
+    fn connor_s_hit_on_a_scripted_object_kills_it_below_0() {
+        // M5 5c fix 5: doors.md rules 19-20, anim-scripts.md rule 19 (all 0
+        // without a stats= line); a barrel's type 0x141 (not clickable).
+        let script = "if test $2 == Die\n set B::died $1 $3\nendif\n";
+        let mut barrel = Clickable::plain("barrel.07", "KQObject", [-300.0, -310.0, 0.0], [300.0, 310.0, 680.0], Placement::at([0.0, 0.0, 100.0]), 0x141);
+        barrel.script = Some("barelup.cs".into());
+        let mut a = Active::new(Vars::default(), vec![], vec![barrel], ["Connor".to_string()], [("barelup.cs".to_string(), script.as_bytes().to_vec())]);
+        a.start();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        assert_eq!(a.pick_attack([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]).map(|(n, _)| n).as_deref(), Some("barrel.07"));
+        assert!(a.pick([0.0, -5000.0, 400.0], [0.0, 1.0, 0.0]).is_none(), "the plain click doesn't pick it");
+        a.world.connor_do([0.0, -1500.0, 100.0], std::f32::consts::PI, 2350.0, Some("barrel.07"), false, "attack");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hits object barrel.07") && log.contains("health 0 -> -") && log.contains("Die Normal"), "{log}");
+        a.update();
+        assert_eq!(a.scripts.vars.get("B::died"), Some("barrel.07 Normal"));
     }
 
     #[test]

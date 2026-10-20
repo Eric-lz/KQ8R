@@ -3875,7 +3875,11 @@ fn object_colliders(
                 kind: kind(info, p),
             });
         }
-        if info.collider_type & kq8_core::click::CLICKABLE != 0 {
+        // Not clickable but with a script (the barrels, type 0x141): kept
+        // too, for its script (`clicking.md` rule 21: every object with a
+        // script gets `Init`) and Connor's hits (M5 5c fix 5); the click
+        // pick tests the clickable bit itself.
+        if info.collider_type & kq8_core::click::CLICKABLE != 0 || info.script.is_some() {
             let mut c = kq8_core::active::Clickable::plain(
                 &p.name,
                 class,
