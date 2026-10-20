@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-6: active characters fidget
+
+**Changed:** `kq8-core/src/character_ai.rs`: the idle rules (first fidget as soon as active, a random one of the idle list, the next 2 + round(random × 10) s after the last ended, a walking wanderer stops for it). Viewer `load.rs`: a character's `idleAnimFile` movements loaded with their models as `idle:<name>` (the model loading moved into `movement_animation`). 1 new test. DESIGN, provenance.
+**Why:** `character-movement.md` rules 15–19 (step 6 of 5a).
+**Tested how:** `cargo test --workspace` (403 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 283000,186000,0 --frames 3500`, `characters.log`.
+**Result:** goblin22 sees Connor at update 15, joins the list, plays `react` at once, walks on at update 24 (next fidget due in 4 s), stops at update 84 for `attack`, walks on at 101 (next in 6 s), again at 191; reaches its second point at update 262 (about 13.5 s of walking for the 11,700 leg, as the note's check 2 expects, plus the fidgets). Unit test: the same sequence with a made-up fidget.
+**Still broken / not tested:** **Not looked at by eye.** No alarm or chase yet (5a-7). How the idle list is swapped in is our reading (the note's open question 3).
+**Next:** 5a-7, alarm, chase, going home.
+
 ## 2026-10-20 M5 step 5a-5: active characters wander their points
 
 **Changed:** `kq8-core/src/character_ai.rs`: the wander points (`loop`, `patrol` there and back, `random`), following them (reached within 250, re-aim only after drifting 12,500 off, the next point after a stuck escape, `wanderAndStop`), `KQMonster::setHome` (no longer a stub). `character.rs`: steering ends once the character faces its point (rule 5). Viewer: `has_birth` per character. 3 new tests. DESIGN, provenance.

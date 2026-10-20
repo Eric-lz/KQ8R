@@ -2347,3 +2347,14 @@ marked otherwise.
 | After the stuck escape a wanderer takes its next point | Rule 7 | Viewer: chicken1 |
 | `wanderAndStop`: no more wandering at the end of the points; its cue not traced | Rule 11 | — (no Daventry file has it) |
 | `KQMonster::setHome <name> x y z`: home only, never moves it | Rule 13 | Unit test |
+
+### 5a-6, idling — `crates/kq8-core/src/character_ai.rs` (`idle`), viewer `load.rs` (`movement_animation`, the idle list)
+
+| What | Source | Check |
+| --- | --- | --- |
+| `idleAnimFile`'s movements loaded with their models, kept in the character's player as `idle:<name>` | `character-movement.md` rules 15, 18 ("played from that list"); keeping both lists in one player under a prefix is **ours** (the result is the same: a fidget, then `Stop`; the note's open question 3) | Viewer: goblin22's `react` / `attack` |
+| Only active, not on its way home; the first fidget as soon as it is active; a walking wanderer goes back to Wait for it | Rule 16 | Unit test; viewer |
+| Picked at random, all equally likely; an ordinary request | Rule 18 | Unit test |
+| The next due 2 + round(random × 10) s after it ended; any movement ending during it counts as its end (we take: the movement shown is no longer the fidget, or it has ended) | Rule 17 | Unit test |
+| Then Wait's `Stop` at a random frame and speed | Rule 18; `characters.md` rule 18 | Unit test |
+| Wanderers don't start walking while a fidget plays or is due | Rule 12 | Unit test |

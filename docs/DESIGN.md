@@ -1056,7 +1056,8 @@ stats.
     alarm radius); reached within 250 (x, y) → next point and turn to
     it; re-aim only when distance² > closest² + 12,500²; the stuck
     escape takes the next point; `wanderAndStop`. `setHome`.
-  - **5a-6, idling** (rules 15–19). The idle list (`idleAnimFile`) loaded
+  - **5a-6, idling** (**done** 2026-10-20; goblin22 fidgets and walks
+    on) (rules 15–19). The idle list (`idleAnimFile`) loaded
     as a second movement list; only active, in Wait, not alarmed, when
     the idle time has come (0 at first): a random fidget from that list,
     then Wait's `Stop`; the next due 2 + round(random × 10) s after it

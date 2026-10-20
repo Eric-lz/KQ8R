@@ -74,11 +74,16 @@ pub struct Ai {
     pub closest: f32,
     /// `wanderAndStop` ended its points: no more wandering (rule 11).
     pub wander_done: bool,
+    /// Game time its next fidget is due (rules 16, 17): 0 at first, so the
+    /// first comes as soon as it is active.
+    pub idle_due: f64,
+    /// The fidget playing now (its name in the player).
+    pub fidget: Option<String>,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None }
     }
 
     /// Rule 10: the points once round. `loop`: in order; `patrol`: there
@@ -113,6 +118,10 @@ impl Ai {
         }
     }
 }
+
+/// The idle list's movements are in the character's player under this
+/// prefix (`idle:attack`), after its own (rules 15, 18; M5 5a-6).
+pub const IDLE_PREFIX: &str = "idle:";
 
 /// Rule 11: a wander point counts as reached within this (x, y).
 pub const POINT_REACHED: f32 = 250.0;
@@ -198,7 +207,57 @@ impl WorldState {
             if wants_in {
                 self.join_active(i, now);
             }
+            self.idle(i, now);
             self.wander(i, now);
+        }
+    }
+
+    /// Rules 15–19: an active character with an idle list, when its idle
+    /// time has come: a walking one goes back to Wait; in Wait it plays a
+    /// fidget picked at random from the list (an ordinary request). When
+    /// the fidget ends (any movement that ends while it plays counts), the
+    /// next is due 2 + round(random × 10) s later; Wait brings back `Stop`.
+    fn idle(&mut self, i: usize, now: f64) {
+        use crate::character::State;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_ref() else { return };
+        let fidgets: Vec<String> = a.player.movements.iter().filter(|m| m.name.starts_with(IDLE_PREFIX)).map(|m| m.name.clone()).collect();
+        if !ai.active || fidgets.is_empty() || ai.on_way_home {
+            return;
+        }
+        let mut line = None;
+        if let Some(f) = ai.fidget.clone() {
+            let ended = !a.player.movement_name().eq_ignore_ascii_case(&f) || a.player.has_ended();
+            if ended {
+                let extra = (c.random() * 10.0).round();
+                let ai = c.ai.as_mut().unwrap();
+                ai.fidget = None;
+                ai.idle_due = now + 2.0 + f64::from(extra);
+                line = Some(format!("fidget '{}' ended: the next is due in {} s, at {:.2} (rule 17)", &f[IDLE_PREFIX.len()..], 2.0 + extra, ai.idle_due));
+            }
+        } else if now + 1e-6 >= ai.idle_due {
+            match c.state {
+                State::Move => {
+                    let w = c.set_state(&mut a.player, "Wait", &[], now);
+                    line = Some(format!("idle time: stops walking for a fidget (rule 16): {w}"));
+                }
+                State::Wait => {
+                    let k = ((c.random() * fidgets.len() as f32) as usize).min(fidgets.len() - 1);
+                    let f = fidgets[k].clone();
+                    let how = match a.player.request(&f) {
+                        crate::named_anim::Request::AtOnce(_) => "starts at once".to_string(),
+                        _ => format!("waits for '{}'", a.player.movement_name()),
+                    };
+                    line = Some(format!("idle time: fidget '{}' (1 of {}, at random) {how} (rules 16, 18)", &f[IDLE_PREFIX.len()..], fidgets.len()));
+                    c.ai.as_mut().unwrap().fidget = Some(f);
+                }
+                _ => {}
+            }
+        }
+        if let Some(l) = line {
+            self.character_note(&name, l);
         }
     }
 
@@ -227,7 +286,12 @@ impl WorldState {
             ));
             c.ai = Some(Ai { route: Some(route), point: 0, closest: f32::MAX, ..ai });
         }
+        // Rule 12: not while a fidget plays or is due.
+        let has_idle = a.player.movements.iter().any(|m| m.name.starts_with(IDLE_PREFIX));
+        let ai = c.ai.as_ref().unwrap();
+        let idle_waits = has_idle && (ai.fidget.is_some() || now + 1e-6 >= ai.idle_due);
         match c.state {
+            State::Wait if idle_waits => {}
             State::Wait => {
                 let line = c.enter_move(&mut a.player, now, false, "wandering, rules 9, 12");
                 lines.push(line);

@@ -4782,6 +4782,33 @@ mod tests {
     }
 
     #[test]
+    fn an_active_character_fidgets_then_walks_on() {
+        // Rules 15–18: the first fidget as soon as it is active, then Wait's
+        // Stop and walking; the next due 2–12 s after the fidget ended; a
+        // walking wanderer stops for it.
+        use kq8_data::characters::Wander;
+        let mut a = wanderer(Wander::Loop(vec![[0.0, 0.0, -1.0], [0.0, -50_000.0, -1.0]]));
+        a.world.anims[0].player.movements.push(crate::named_anim::tests::movement("idle:react", 0.0, 1.0, false, false, vec![]));
+        watch(&mut a, &[], 17);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("idle time: fidget 'react' (1 of 1, at random) starts at once"), "{log}");
+        assert!(!log.contains("state Move"), "no walking during the fidget: {log}");
+        // The fidget lasts 1 s; then Stop, and walking on.
+        watch(&mut a, &[], 40);
+        let log = a.world.character_log.join("\n");
+        let due_line = log.lines().find(|l| l.contains("fidget 'react' ended")).expect("ended");
+        assert!(log.contains("'idle:react' ended in Wait: asks for Stop again"), "{log}");
+        assert!(log.contains("state Move (from Wait; wandering"), "{log}");
+        let secs: f64 = due_line.split("due in ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        assert!((2.0..=12.0).contains(&secs), "{due_line}");
+        // When it is due again it stops walking and fidgets.
+        watch(&mut a, &[], 40 + ((secs + 1.0) * 15.0) as u64);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("idle time: stops walking for a fidget"), "{log}");
+        assert_eq!(log.matches("idle time: fidget 'react'").count(), 2, "{log}");
+    }
+
+    #[test]
     fn patrol_and_random_points() {
         use kq8_data::characters::Wander;
         let kq = kq8_data::kq_text::parse(b"[Gob]\nclassType=KQMonster\nanimFile=g.anm\n");

@@ -3027,6 +3027,36 @@ impl Placer<'_> {
         });
     }
 
+    /// A movement's frames, loaded once per (model, loop, skin): its index
+    /// in `object_animations`, `None` if it can't be loaded.
+    fn movement_animation(&mut self, label: &str, name: &str, l: &kq8_data::objects::CurrentLoop, skin: Option<&(String, String)>) -> Option<usize> {
+        let mut key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
+        if let Some((a, b)) = skin {
+            key = format!("{key}|{}>{}", a.to_ascii_lowercase(), b.to_ascii_lowercase());
+        }
+        if let Some(i) = self.object_animation_index.get(&key) {
+            return *i;
+        }
+        let loaded = self.object_palette().and_then(|palette| {
+            self.log.quiet = true;
+            let a = load_animation_skinned(self.game, self.world, &l.shape, &l.sequence, &palette, skin, self.log);
+            self.log.quiet = false;
+            a
+        });
+        let i = match loaded {
+            Ok(a) => {
+                self.object_animations.push(a);
+                Some(self.object_animations.len() - 1)
+            }
+            Err(e) => {
+                self.log.summary(format!("animated {label}: movement {name}: {} {}: {e}; drawn still", l.shape, l.sequence));
+                None
+            }
+        };
+        self.object_animation_index.insert(key, i);
+        i
+    }
+
     /// The object palette, loaded once.
     fn object_palette(&mut self) -> Result<[Rgb; 256], String> {
         let (game, world) = (self.game, self.world);
@@ -3077,34 +3107,7 @@ impl Placer<'_> {
         };
         let mut movements = Vec::with_capacity(listed.len());
         for (name, l) in listed {
-            let mut key = format!("{}|{}", l.shape.to_ascii_lowercase(), l.sequence.to_ascii_lowercase());
-            if let Some((a, b)) = &skin {
-                key = format!("{key}|{}>{}", a.to_ascii_lowercase(), b.to_ascii_lowercase());
-            }
-            let index = match self.object_animation_index.get(&key) {
-                Some(i) => *i,
-                None => {
-                    let loaded = self.object_palette().and_then(|palette| {
-                        self.log.quiet = true;
-                        let a = load_animation_skinned(self.game, self.world, &l.shape, &l.sequence, &palette, skin.as_ref(), self.log);
-                        self.log.quiet = false;
-                        a
-                    });
-                    let i = match loaded {
-                        Ok(a) => {
-                            self.object_animations.push(a);
-                            Some(self.object_animations.len() - 1)
-                        }
-                        Err(e) => {
-                            self.log.summary(format!("animated {label}: movement {name}: {} {}: {e}; drawn still", l.shape, l.sequence));
-                            None
-                        }
-                    };
-                    self.object_animation_index.insert(key, i);
-                    i
-                }
-            };
-            let Some(index) = index else { return };
+            let Some(index) = self.movement_animation(label, &name, &l, skin.as_ref()) else { return };
             for problem in l.cue_problems.iter().chain(&l.transition_problems) {
                 self.log.detail(format!("animated {label}: {problem}"));
             }
@@ -3115,6 +3118,31 @@ impl Placer<'_> {
                 self.log.summary(format!("animated {label}: movement {name} has transitions, {who}: {:?}", l.transitions.iter().map(|t| format!("{} -> {} via {} from {}", name, t.to, t.via, t.from)).collect::<Vec<_>>()));
             }
             movements.push((name, l, index));
+        }
+        // character-movement.md rules 15, 18 (M5 5a-6): the idle list's
+        // fidgets, as `idle:<name>` after its own movements.
+        if let Some(idle) = character.as_ref().and_then(|c| c.keys.idle_anim_file.clone()) {
+            match self.read_anm(&idle) {
+                Ok(list) => {
+                    let file = kq8_data::kq_text::parse(&list.bytes);
+                    let head = kq8_data::kq_text::Section { name: "idle".into(), entries: vec![("animLoops".to_string(), list.list.name.clone())] };
+                    match kq8_data::objects::movement_loops(&file, &head) {
+                        Ok(Some(listed)) => {
+                            let mut names = Vec::new();
+                            for (name, l) in listed {
+                                if let Some(index) = self.movement_animation(label, &name, &l, skin.as_ref()) {
+                                    names.push(name.clone());
+                                    movements.push((format!("{}{name}", kq8_core::character_ai::IDLE_PREFIX), l, index));
+                                }
+                            }
+                            self.character_lines.push(format!("{label}: idleAnimFile {idle}: fidgets {names:?} (character-movement.md rule 15)"));
+                        }
+                        Ok(None) => self.character_lines.push(format!("{label}: idleAnimFile {idle}: no movements")),
+                        Err(e) => self.character_lines.push(format!("{label}: idleAnimFile {idle}: {e}")),
+                    }
+                }
+                Err(e) => self.character_lines.push(format!("{label}: idleAnimFile {idle}: {e}; no fidgets")),
+            }
         }
         // `flags` bit 8 (objects.md rule 4); a value that is not a whole
         // number counts as no flags.
