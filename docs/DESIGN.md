@@ -1310,6 +1310,74 @@ stats.
     Delete (switch weapons), game over, the tips' texts, smashing
     barrels (`tossItems` from scripts; the throw of 5c-8 makes it easy
     later).
+  - **After 5c: the user's fight check, fixes 1–7** (2026-10-20, one
+    commit each, see MODLOG): the ready stance and sword pointer, no
+    readying in a jump / landing / stumble, the weapon away before a
+    conversation, attack targets (creatures, barrels), drops drawn where
+    they land, the tumble.
+
+#### 5d — Objects loaded while playing (planned 2026-10-20)
+
+Why: a smashed barrel's script (`barelup.cs` and the two others) deletes
+the barrel, then `loadKQ barelupx.kq @ $KQObject::loc` (the bursting
+barrel, a `KQAnimOnce`), then (two of them) `KQObject::tossItems
+$ObjectName 0 Crystal,…`; at the burst's end its script loads
+`barelded.kq` (the wreck) the same way. The alchemist's boards work the
+same. Today: a name or position on a runtime `loadKQ` is refused; only
+one copy per file, prepared hidden at the start, can come in; nothing
+built at start-up is kept, so no new copy can be made; `KQAnimOnce`
+never reports its end; `tossItems` from a script is not built.
+
+Sources: `objects.md` "Where a world's objects come from" rules 2 and 6
+(the name rule: `same`, `@` = no name, a new name; x y z and angles
+replace the file's; `Init` at once; the near/far test at once),
+`anim-scripts.md` rules 11–12 (`KQAnimOnce`: at its end `Die` to its
+script, `getEndLoop`, `setDeleteWhenDone`; `@` gives `NoName<n>` at the
+line itself; `$ObjectName`), `items.md` rules 9 and 12 (`NoName`
+counter, `tossItems`).
+
+How: **templates**. At load, every file a world script names on a
+`loadKQ` line is read once and its model or movements are built (as for
+corpse shapes today), whatever its own position; the built meshes and
+materials are **kept in resources** after start-up. A runtime `loadKQ`
+in core makes a new object from the template (core side: name, place,
+script, collision box, stats) and asks the viewer to spawn its entities
+from the kept handles. The existing "dormant copy" path stays for the
+files that have a place of their own, until a step replaces it (not
+in 5d).
+
+Steps (one commit each; each logged in `viewer.log` / the script logs):
+
+1. **5d-1, `KQAnimOnce` ends** (core only): a play-once object's end
+   sends `Die` to its script (and `getEndLoop` 300, `setDeleteWhenDone`),
+   for objects in `world.anims` too; `once` set by the loader from
+   `classType`. **Test:** unit test; viewer: none yet in Daventry at the
+   start.
+2. **5d-2, the name and place rules in core**: `loadKQ <file> <name>
+   [x y z [rx ry rz]]` while playing: `same` / `@` / a new name, `@`
+   gives `NoName<n>` (the items' counter) at the line, `$ObjectName`
+   set, position and angles replace the file's (0 0 0 if no angles),
+   the −1 / −2 ground rule; a live name refused as today. Asks the
+   viewer for a copy of the template. **Test:** unit tests.
+3. **5d-3, templates for still models** (viewer): the shapes of the
+   `loadKQ` files kept (as `CorpseDraw`); a copy spawned where core
+   says, with its draw-distance test and, if `BOUNDS.KQ` has a box and
+   its type collides, its collider and click entry. **Test:** viewer:
+   `--command "loadKQ barelded.kq @ <x y z 0 0 0>",N`: the wreck in
+   `viewer.log` at that place.
+4. **5d-4, templates for animated objects** (viewer): the movements
+   kept (anim_view's built frames in a resource); a copy spawned and
+   played by core from its first update; its end (5d-1) reaches its
+   script. **Test:** viewer: punch `barrel.07`: `barelupx` bursts,
+   then `barelded` stays (`viewer.log`, script logs).
+5. **5d-5, `KQObject::tossItems <object> <offsetZ> <types>`** from a
+   script (`items.md` rule 12): one item per type thrown from the
+   object's place raised by `offsetZ`, with 5c-8's throw and fix 7's
+   tumble. **Test:** viewer: punch `barrel.12`: four crystals fly and
+   land; they can be picked up.
+
+Not in 5d: replacing the dormant copies, saving `NoName` (M6), a
+template's sound objects and emitters (none in the barrels' files).
 
 ### M6 — The whole game
 
