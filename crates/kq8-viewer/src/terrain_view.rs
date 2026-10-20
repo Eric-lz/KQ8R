@@ -515,13 +515,13 @@ pub fn setup_objects(
     let drawn_surfaces: usize = shadow_receivers.iter().map(|(_, b)| b.surfaces.len()).sum();
     let all_surfaces: usize = objects.placed.iter().filter(|(_, i, unused)| !*unused && !built_walls[*i].is_empty()).map(|(_, i, _)| shadow_surfaces[*i].len()).sum();
     log.summary(format!(
-        "shadows on buildings (characters.md rule 37 (2), M4 4d-7b-3): {} building copies receive, {drawn_surfaces} drawn surfaces ({} not drawn left out); stand-ins (Q135): reach = ball centres within the two radii + {}, band {} x the caster's height below its feet to {} above its top, a square {} across around the shadow's middle at its feet, whole surfaces",
+        "shadows on buildings (characters.md rule 37 (2), Q135, M4 4d-7b-3 / 5): {} building copies receive, {drawn_surfaces} drawn surfaces ({} not drawn left out); s = {} x the caster's model ball radius; reach = building radius + s + {}; box in the caster's own space: {} s below to s above its ball's centre, the 2 s square and its copy along the sun, sides at most {}; whole surfaces",
         shadow_receivers.len(),
         all_surfaces - drawn_surfaces,
+        kq8_core::shadow::REACH_SIZE,
         kq8_core::shadow::BUILDING_REACH,
-        kq8_core::shadow::BAND_BELOW_HEIGHTS,
-        kq8_core::shadow::BAND_ABOVE,
-        kq8_core::shadow::BUILDING_AREA
+        kq8_core::shadow::BAND_BELOW_SIZES,
+        kq8_core::shadow::BUILDING_BOX
     ));
     commands.insert_resource(crate::shadow_view::BuildingShadows(shadow_receivers));
     // The placed objects and the buildings' wall surfaces (world space,

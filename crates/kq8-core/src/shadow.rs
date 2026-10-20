@@ -18,12 +18,11 @@
 //!   character; the triangles searched are those of the drawn ground (the
 //!   surface grid) under its box moved along the sun
 //!   ([`terrain_receivers`]).
-//! - **Buildings** (rule 37 (2), M4 4d-7b-3) receive it: those near or far
-//!   (the caller passes only those) whose ball comes within reach of the
-//!   caster (the sum of their sizes plus 500); their surfaces near the
-//!   caster's height, in an area at most 1,800 across centred on the
-//!   shadow ([`building_receivers`]). The sizes, the band's numbers and
-//!   the area's shape are not in the note: **stand-ins**, question Q135.
+//! - **Buildings** (rule 37 (2), M4 4d-7b-3; detailed by A in Q135, M4
+//!   4d-7b-5) receive it: those near or far (the caller passes only
+//!   those) whose ball comes within reach of the caster's model ball;
+//!   their surfaces that reach into a search box in the caster's own
+//!   space ([`Caster`], [`search_box`], [`building_receivers`]).
 //!
 //! Our readings (not in the note): "facing the sun" is the model
 //! triangle's front (clockwise corners seen from the front, Q2) turned
@@ -42,13 +41,14 @@ pub const STRENGTH: f32 = 0.5;
 /// A building receives when its ball comes within the sum of the two
 /// sizes plus this (rule 37 (2)).
 pub const BUILDING_REACH: f32 = 500.0;
-/// The area on buildings is at most this across (rule 37 (2)).
-pub const BUILDING_AREA: f32 = 1800.0;
-/// STAND-IN (Q135 b): "a little above the character's top".
-pub const BAND_ABOVE: f32 = 100.0;
-/// STAND-IN (Q135 b): "several times its size below": this many times
-/// the caster's height below its feet.
-pub const BAND_BELOW_HEIGHTS: f32 = 2.0;
+/// The search box on buildings is at most this tall and this long on
+/// each side (rule 37 (2) (b), (c)).
+pub const BUILDING_BOX: f32 = 1800.0;
+/// The reach size s = this × the caster's model ball radius (rule 37 (2)).
+pub const REACH_SIZE: f32 = 0.287;
+/// The band runs from s above the ball's centre to this many s below it
+/// (rule 37 (2) (b)).
+pub const BAND_BELOW_SIZES: f32 = 6.0;
 
 fn sub(a: V3, b: V3) -> V3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -243,11 +243,115 @@ pub struct ReceivingBuilding {
 /// What [`building_receivers`] chose, with its counts for the logs.
 #[derive(Debug, Clone, Default)]
 pub struct BuildingPick {
+    /// The reach size s.
+    pub s: f32,
+    /// The search box in the caster's own space; `None`: no search (no
+    /// downward sun).
+    pub search: Option<(V3, V3)>,
     /// The buildings within reach, by name.
     pub in_reach: Vec<String>,
-    /// Surfaces chosen (within reach, in the band and the area).
+    /// Surfaces chosen (within reach, reaching into the box).
     pub surfaces: usize,
     pub triangles: Vec<[V3; 3]>,
+}
+
+/// A caster as rule 37 (2) sees it: its own space (`origin` = its
+/// position, `axes` = its own x, y, z in the world, length 1, turned with
+/// its heading) and the ball stored in its shown model's `.kqs` file
+/// (`radius`, `centre` in its own space).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Caster {
+    pub origin: V3,
+    pub axes: [V3; 3],
+    pub centre: V3,
+    pub radius: f32,
+}
+
+impl Caster {
+    /// A point of its own space in the world.
+    pub fn to_world(&self, p: V3) -> V3 {
+        (0..3).fold(self.origin, |w, k| add(w, scale(self.axes[k], p[k])))
+    }
+
+    /// A world point in its own space.
+    pub fn to_own(&self, p: V3) -> V3 {
+        let d = sub(p, self.origin);
+        self.axes.map(|a| dot(d, a))
+    }
+
+    /// A world direction in its own space.
+    fn dir_to_own(&self, d: V3) -> V3 {
+        self.axes.map(|a| dot(d, a))
+    }
+
+    /// OUR FALLBACK for a caster without a stored ball (not in the note):
+    /// world axes, origin at the middle of the bottom of the box around
+    /// `points`, the ball around that box (middle, half diagonal).
+    pub fn around(points: &[V3]) -> Option<Caster> {
+        let (lo, hi) = bounds(points)?;
+        let d = sub(hi, lo);
+        Some(Caster {
+            origin: [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2]],
+            axes: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            centre: [0.0, 0.0, d[2] / 2.0],
+            radius: dot(d, d).sqrt() / 2.0,
+        })
+    }
+}
+
+/// A span `lo..hi` longer than `max` cut to `max` around its middle.
+fn at_most(lo: f32, hi: f32, max: f32) -> (f32, f32) {
+    if hi - lo > max {
+        let m = (lo + hi) / 2.0;
+        (m - max / 2.0, m + max / 2.0)
+    } else {
+        (lo, hi)
+    }
+}
+
+/// Rule 37 (2) (b), (c): the search box in the caster's own space, as
+/// (low corner, high corner), with s = [`REACH_SIZE`] × its ball radius:
+/// height from 6 s below to s above the ball's centre (at most 1,800, cut
+/// around its middle); across, the rectangle around a 2 s square on the
+/// ball's centre at the band's top and its copy moved along the sun down
+/// to height 0, each side at most 1,800 (cut around its middle). `None`
+/// when the sun has no downward part (no search).
+pub fn search_box(c: &Caster, dir: V3) -> Option<(V3, V3)> {
+    let d = c.dir_to_own(dir);
+    if d[2] >= 0.0 {
+        return None;
+    }
+    let s = REACH_SIZE * c.radius;
+    let (bottom, top) = at_most(c.centre[2] - BAND_BELOW_SIZES * s, c.centre[2] + s, BUILDING_BOX);
+    // Our reading: "the band's top" is the top after the 1,800 cut.
+    let t = top / -d[2];
+    let copy = [c.centre[0] + d[0] * t, c.centre[1] + d[1] * t];
+    let (mut lo, mut hi) = ([0.0; 3], [0.0; 3]);
+    for k in 0..2 {
+        let (a, b) = at_most(c.centre[k].min(copy[k]) - s, c.centre[k].max(copy[k]) + s, BUILDING_BOX);
+        lo[k] = a;
+        hi[k] = b;
+    }
+    lo[2] = bottom;
+    hi[2] = top;
+    Some((lo, hi))
+}
+
+/// Any part of world triangle `t` inside the caster's own-space box
+/// `lo..hi`.
+fn reaches_into(c: &Caster, t: &[V3; 3], lo: V3, hi: V3) -> bool {
+    let mut poly: Vec<V3> = t.iter().map(|&p| c.to_own(p)).collect();
+    for k in 0..3 {
+        let mut n = [0.0; 3];
+        n[k] = 1.0;
+        poly = clip_front(&poly, &Plane { n, d: lo[k] });
+        n[k] = -1.0;
+        poly = clip_front(&poly, &Plane { n, d: -hi[k] });
+        if poly.is_empty() {
+            return false;
+        }
+    }
+    !poly.is_empty()
 }
 
 /// The box around `points`; `None` if there are none.
@@ -264,42 +368,34 @@ fn bounds<'a>(points: impl IntoIterator<Item = &'a V3>) -> Option<(V3, V3)> {
     Some((lo, hi))
 }
 
-/// Rule 37 (2): the building surfaces that receive the shadow of a caster
-/// whose shown model has the points `corners` (world), from `buildings`
-/// (the caller passes only the near and far ones). **Stand-ins** for what
-/// the note leaves open (Q135), all from the box around `corners`:
-///
-/// - **reach**: distance between the building's ball centre and the box's
-///   middle <= building radius + half the box's diagonal +
-///   [`BUILDING_REACH`];
-/// - **band**: a surface counts when any part of it lies between
-///   [`BAND_BELOW_HEIGHTS`] x the box's height below its bottom and
-///   [`BAND_ABOVE`] above its top;
-/// - **area**: a square [`BUILDING_AREA`] across on x and y, around the
-///   box's middle moved along `dir` down to the box's bottom (the middle
-///   of the shadow on a floor at the feet); a surface counts when its x, y
-///   extent reaches into it, and receives whole (no cut).
-pub fn building_receivers<'a>(buildings: impl IntoIterator<Item = &'a ReceivingBuilding>, corners: &[V3], dir: V3) -> BuildingPick {
-    let mut pick = BuildingPick::default();
-    let Some((lo, hi)) = bounds(corners) else { return pick };
-    let middle = scale(add(lo, hi), 0.5);
-    let size = dot(sub(hi, lo), sub(hi, lo)).sqrt() / 2.0;
-    let height = hi[2] - lo[2];
-    let (band_lo, band_hi) = (lo[2] - BAND_BELOW_HEIGHTS * height, hi[2] + BAND_ABOVE);
-    let centre = if dir[2] < 0.0 { add(middle, scale(dir, (middle[2] - lo[2]) / -dir[2])) } else { middle };
-    let half = BUILDING_AREA / 2.0;
+/// Rule 37 (2): the building surfaces that receive the shadow of `caster`,
+/// from `buildings` (the caller passes only the near and far ones). A
+/// building is searched when its ball centre is within its radius + s +
+/// [`BUILDING_REACH`] of the caster's ball centre in the world; of it,
+/// each surface any part of which is inside the [`search_box`] is taken
+/// whole (the box picks surfaces, it does not cut the shadow).
+pub fn building_receivers<'a>(buildings: impl IntoIterator<Item = &'a ReceivingBuilding>, caster: &Caster, dir: V3) -> BuildingPick {
+    let s = REACH_SIZE * caster.radius;
+    let search = search_box(caster, dir);
+    let mut pick = BuildingPick { s, search, ..Default::default() };
+    let Some((lo, hi)) = search else { return pick };
+    let centre = caster.to_world(caster.centre);
+    // The box's corners in the world, for a quick first test per surface.
+    let corners: Vec<V3> = (0..8).map(|i| caster.to_world([if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }])).collect();
+    let (wlo, whi) = bounds(&corners).expect("8 corners");
     for b in buildings {
-        let d = sub(b.centre, middle);
-        if dot(d, d).sqrt() > b.radius + size + BUILDING_REACH {
+        let d = sub(b.centre, centre);
+        if dot(d, d).sqrt() > b.radius + s + BUILDING_REACH {
             continue;
         }
         pick.in_reach.push(b.name.clone());
-        for s in &b.surfaces {
-            let in_band = s.hi[2] >= band_lo && s.lo[2] <= band_hi;
-            let in_area = (0..2).all(|k| s.hi[k] >= centre[k] - half && s.lo[k] <= centre[k] + half);
-            if in_band && in_area {
+        for surface in &b.surfaces {
+            if !(0..3).all(|k| surface.hi[k] >= wlo[k] && surface.lo[k] <= whi[k]) {
+                continue;
+            }
+            if surface.triangles.iter().any(|t| reaches_into(caster, t, lo, hi)) {
                 pick.surfaces += 1;
-                pick.triangles.extend_from_slice(&s.triangles);
+                pick.triangles.extend_from_slice(&surface.triangles);
             }
         }
     }
@@ -386,62 +482,110 @@ mod tests {
         ReceivingBuilding { name: "hut".into(), centre, radius, surfaces }
     }
 
-    /// A caster standing at the origin: 400 wide, 1,300 high (Connor's box).
-    fn caster() -> Vec<V3> {
-        vec![[-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]]
+    const WORLD_AXES: [V3; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+    /// Connor standing at the origin, facing along the world's axes:
+    /// `C_stop.kqs` ball radius 879, centre 827 up (rule 37 (2)).
+    fn connor() -> Caster {
+        Caster { origin: [0.0; 3], axes: WORLD_AXES, centre: [0.0, 0.0, 827.0], radius: 879.0 }
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 0.5
     }
 
     #[test]
-    fn a_building_receives_only_within_the_sum_of_sizes_plus_500() {
+    fn a_building_is_searched_within_its_radius_plus_s_plus_500() {
         let dir = [0.0, 0.0, -1.0];
-        // Caster's ball: middle (0, 0, 650), radius ~743.
-        let size = (400.0f32 * 400.0 * 2.0 + 1300.0 * 1300.0).sqrt() / 2.0;
-        let reach = 1000.0 + size + BUILDING_REACH;
-        let near = building([reach - 1.0, 0.0, 650.0], 1000.0, vec![tile(0.0, 0.0, 0.0, 1000.0)]);
-        let far = building([reach + 1.0, 0.0, 650.0], 1000.0, vec![tile(0.0, 0.0, 0.0, 1000.0)]);
-        let p = building_receivers([&near], &caster(), dir);
+        let s = REACH_SIZE * 879.0;
+        assert!(near(s, 252.3), "{s}");
+        // Measured from the ball's centre (827 up), not the feet.
+        let reach = 1000.0 + s + BUILDING_REACH;
+        let at = |x: f32| building([x, 0.0, 827.0], 1000.0, vec![tile(0.0, 0.0, 0.0, 400.0)]);
+        let p = building_receivers([&at(reach - 1.0)], &connor(), dir);
         assert_eq!((p.in_reach.len(), p.surfaces, p.triangles.len()), (1, 1, 2));
-        let p = building_receivers([&far], &caster(), dir);
-        assert_eq!((p.in_reach.len(), p.surfaces), (0, 0));
+        assert_eq!(building_receivers([&at(reach + 1.0)], &connor(), dir).in_reach.len(), 0);
     }
 
     #[test]
-    fn the_band_runs_from_2_heights_below_the_feet_to_100_above_the_top() {
+    fn the_band_runs_from_6_s_below_to_s_above_the_balls_centre() {
         let dir = [0.0, 0.0, -1.0];
-        let at = |z: f32| building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, z, 1000.0)]);
-        let n = |z: f32| building_receivers([&at(z)], &caster(), dir).surfaces;
-        // Feet at 0, top at 1,300: band -2,600 .. 1,400.
-        assert_eq!((n(0.0), n(-2599.0), n(-2601.0), n(1399.0), n(1401.0)), (1, 1, 0, 1, 0));
+        // Connor standing: 1,079 above his feet down to 687 below them.
+        let (lo, hi) = search_box(&connor(), dir).unwrap();
+        assert!(near(hi[2], 1079.3) && near(lo[2], -686.6), "{lo:?} {hi:?}");
+        let n = |z: f32| building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, z, 100.0)])], &connor(), dir).surfaces;
+        assert_eq!((n(1078.0), n(1081.0), n(-685.0), n(-688.0)), (1, 0, 1, 0));
     }
 
     #[test]
-    fn the_area_is_1800_across_around_the_shadows_middle_on_the_floor() {
-        // Daventry's sun: the shadow's middle on the floor lies 650 / 0.66
-        // = 985 toward +y from the feet.
+    fn a_band_over_1800_is_cut_around_its_middle() {
+        // Connor running: C_run.kqs 1,134 / 799: about 915 below his feet
+        // to 885 above.
+        let run = Caster { centre: [0.0, 0.0, 799.0], radius: 1134.0, ..connor() };
+        let (lo, hi) = search_box(&run, [0.0, 0.0, -1.0]).unwrap();
+        assert!(near(hi[2] - lo[2], 1800.0) && near(hi[2], 885.4) && near(lo[2], -914.6), "{lo:?} {hi:?}");
+    }
+
+    #[test]
+    fn the_area_spans_the_square_and_its_copy_along_the_sun_cut_to_1800() {
+        // Daventry's sun, Connor facing along it: the copy moves 1,079 /
+        // 0.66 = 1,635; 505 across by 2,139, cut to 1,800 along the sun.
         let dir = direction(Some([0.0, 1.0, -0.66]));
-        let n = |x: f32, y: f32| building_receivers([&building([0.0; 3], 5000.0, vec![tile(x, y, 0.0, 100.0)])], &caster(), dir).surfaces;
-        let mid = 650.0 / 0.66;
-        // Tiles 100 wide: their near edge 50 from their centre.
-        assert_eq!((n(0.0, mid + 949.0), n(0.0, mid + 951.0)), (1, 0));
-        assert_eq!((n(0.0, mid - 949.0), n(0.0, mid - 951.0)), (1, 0));
-        assert_eq!((n(949.0, mid), n(951.0, mid)), (1, 0));
-        // A big tile reaching into the area is taken whole (no cut).
-        let p = building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, mid + 1900.0, 0.0, 4000.0)])], &caster(), dir);
+        let (lo, hi) = search_box(&connor(), dir).unwrap();
+        let s = REACH_SIZE * 879.0;
+        assert!(near(lo[0], -s) && near(hi[0], s), "{lo:?} {hi:?}");
+        let (y0, y1) = (-s, 1079.3 / 0.66 + s);
+        assert!((y1 - y0 - 2139.0).abs() < 1.0, "{y0} {y1}");
+        let m = (y0 + y1) / 2.0;
+        assert!(near(lo[1], m - 900.0) && near(hi[1], m + 900.0), "{lo:?} {hi:?}");
+        // Whole surfaces: a big tile reaching in is taken whole.
+        let p = building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, hi[1] + 1900.0, 0.0, 4000.0)])], &connor(), dir);
         assert_eq!((p.surfaces, p.triangles.len()), (1, 2));
+        let n = |x: f32, y: f32| building_receivers([&building([0.0; 3], 5000.0, vec![tile(x, y, 0.0, 10.0)])], &connor(), dir).surfaces;
+        assert_eq!((n(0.0, hi[1] - 6.0), n(0.0, hi[1] + 6.0), n(s - 6.0, m), n(s + 6.0, m)), (1, 0, 1, 0));
+    }
+
+    #[test]
+    fn the_box_turns_with_the_casters_heading() {
+        // Sun straight down: a 2 s square around the ball's centre. Turned
+        // 45 degrees, a tile near the world-axes square's corner is out.
+        let dir = [0.0, 0.0, -1.0];
+        let s = REACH_SIZE * 879.0;
+        let r = std::f32::consts::FRAC_1_SQRT_2;
+        let turned = Caster { axes: [[r, r, 0.0], [-r, r, 0.0], [0.0, 0.0, 1.0]], ..connor() };
+        let n = |c: &Caster, x: f32, y: f32| building_receivers([&building([0.0; 3], 5000.0, vec![tile(x, y, 0.0, 10.0)])], c, dir).surfaces;
+        let corner = 0.9 * s;
+        assert_eq!((n(&connor(), corner, corner), n(&turned, corner, corner)), (1, 0));
+        // Along its own turned axis it reaches s.
+        assert_eq!((n(&turned, 0.9 * s * r, 0.9 * s * r), n(&turned, 1.1 * s * r, 1.1 * s * r)), (1, 0));
+    }
+
+    #[test]
+    fn no_downward_sun_means_no_search() {
+        let p = building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, 0.0, 1000.0)])], &connor(), [1.0, 0.0, 0.0]);
+        assert_eq!((p.search, p.in_reach.len(), p.surfaces), (None, 0, 0));
     }
 
     #[test]
     fn the_chosen_floor_receives_the_shadow() {
         let dir = [0.0, 0.0, -1.0];
         let floor_at_500 = building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, 500.0, 2000.0)]);
-        // The caster stands on it; a sun-facing triangle 500 above it.
+        // Connor standing on it; a sun-facing triangle 500 above it.
         let up = [[0.0, 0.0, 1000.0], [0.0, 100.0, 1000.0], [100.0, 0.0, 1000.0]];
-        let corners = vec![[-200.0, -200.0, 500.0], [200.0, 200.0, 1800.0]];
-        let p = building_receivers([&floor_at_500], &corners, dir);
+        let on_floor = Caster { origin: [0.0, 0.0, 500.0], ..connor() };
+        let p = building_receivers([&floor_at_500], &on_floor, dir);
         let s = cast(&[up], dir, &p.triangles);
         assert!(!s.is_empty() && s.iter().flatten().all(|q| (q[2] - 500.0 - LIFT).abs() < 1e-3), "{s:?}");
-        // No points: nothing chosen.
-        assert_eq!(building_receivers([&floor_at_500], &[], dir).surfaces, 0);
+    }
+
+    #[test]
+    fn the_fallback_caster_is_the_box_around_the_points() {
+        let c = Caster::around(&[[-200.0, -200.0, 100.0], [200.0, 200.0, 1400.0]]).unwrap();
+        assert_eq!((c.origin, c.centre[2]), ([0.0, 0.0, 100.0], 650.0));
+        assert!(Caster::around(&[]).is_none());
+        // Own space and world agree.
+        let w = connor().to_world([1.0, 2.0, 3.0]);
+        assert_eq!(connor().to_own(w), [1.0, 2.0, 3.0]);
     }
 
     #[test]

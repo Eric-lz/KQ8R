@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M4 step 4d-7b-5a: the search box on buildings as traced (core, Q135)
+
+**Changed:** `kq8-core/src/shadow.rs`: `Caster` (own space + the model's stored ball), `search_box`, `building_receivers` rewritten to A's answer (s = 0.287 × ball radius; reach radius + s + 500; band s above to 6 s below the ball's centre, at most 1,800; the rectangle around the 2 s square and its copy along the sun, sides at most 1,800, turning with the heading; no downward sun = no search); the stand-in constants removed; 8 tests (4 replaced). `kq8-viewer`: `shadow_view.rs` builds a fallback caster from the box around the model's points (until 5b), `terrain_view.rs` load line. DESIGN (4d-7b-5 planned), provenance.
+**Why:** A answered Q135 (`characters.md` rule 37 (2)).
+**Tested how:** `cargo test --workspace` (441 core tests), `cargo clippy --workspace --all-targets` clean.
+**Result:** All pass, with A's numbers: Connor standing (ball 879 / 827): s 252, band 1,079 above to 687 below his feet; running (1,134 / 799): cut to 885 above / 915 below; in Daventry's sun facing along it the area is 505 × 2,140, cut to 1,800 along the sun; a caster turned 45 degrees leaves out a tile its unturned box would take.
+**Still broken / not tested:** The viewer doesn't yet pass the model's stored ball or the heading: every caster uses the fallback box (world axes), logged in the load line only. Not run in the viewer.
+**Next:** 4d-7b-5b, the model's ball in the viewer.
+
 ## 2026-10-20 M5 5d fix 11: a weapon picked up while one is ready: straight into its stance
 
 **Changed:** Picking up a hand weapon while another is ready switches Connor's movement set at once; nothing plays (before: the old one's put-away and the new one's draw).

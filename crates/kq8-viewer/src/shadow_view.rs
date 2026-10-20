@@ -57,7 +57,10 @@ pub fn receivers(ground: &kq8_data::Terrain, position: shadow::V3, corners: &[sh
     }
     let mut all = shadow::terrain_receivers(ground, position, corners, dir);
     let terrain = all.len();
-    let mut pick = shadow::building_receivers(buildings.iter().map(|(_, b)| *b), corners, dir);
+    // Until the model's stored ball is passed in (4d-7b-5b): the box
+    // around the caster's points.
+    let Some(caster) = shadow::Caster::around(corners) else { return (all, terrain, shadow::BuildingPick::default()) };
+    let mut pick = shadow::building_receivers(buildings.iter().map(|(_, b)| *b), &caster, dir);
     all.append(&mut pick.triangles);
     (all, terrain, pick)
 }

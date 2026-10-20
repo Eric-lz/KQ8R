@@ -825,6 +825,30 @@ inventory and menus.
           counts.
       - **4d-7b-4, plain objects cast them** (**done** 2026-10-20; **checked by the user**: the same pub barrel casts as in the original; rule 37 "Plain objects":
         `shadowMask` 8, the same drawing).
+      - **4d-7b-5, A's answer to Q135** (planned 2026-10-21; `characters.md`
+        rule 37 (2) as detailed by A). Replaces 4d-7b-3's stand-ins:
+        - **4d-7b-5a, the search box** (core `shadow.rs`): a caster =
+          its own space (position, axes turned with its heading) and its
+          shown model's stored ball (radius, centre). s = 0.287 ×
+          radius. Reach: building ball centre to the ball's centre in
+          the world ≤ building radius + s + 500. Band (own space): s
+          above to 6 × s below the ball's centre, cut to 1,800 around its
+          middle. Area (own space): the rectangle around a 2 × s square
+          at the band's top and its copy moved along the sun to height 0,
+          each side cut to 1,800 around its middle. No downward sun: no
+          search. A surface counts when any part of it is inside the box
+          (whole surfaces, no cut, as the user decided). Kind-0
+          surfaces stay skipped (A: "Do instead"). Unit tests with A's
+          numbers (Connor standing: band 1,079 above to 687 below his
+          feet; running: 885 / 915; the area 505 × 2,139 cut to 1,800).
+        - **4d-7b-5b, the model's ball in the viewer** (`load.rs`: models
+          and movements keep the `.kqs` ball; a `ModelBall` component on
+          each shown frame in `anim_view.rs`, `connor_view.rs`,
+          `door_view.rs`, and on still objects' parts in
+          `terrain_view.rs`; `shadow_view.rs` / `anim_view.rs` build the
+          caster from the frame's place). A caster without a ball (an
+          item) falls back to a box around its points, logged. Logs: the
+          caster's s, ball and box per character once a second.
     - **4d-12, characters are solid for Connor** (planned 2026-10-20;
       `connor-collision.md` rules 2–4, 18, 19; `characters.md` rules 1,
       8, 9, 16, 33; `connor-physics.md` "Collision shape", "Exact hit

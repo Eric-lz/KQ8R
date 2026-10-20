@@ -2253,6 +2253,8 @@ marked otherwise.
 
 ### 4d-7b-3b, which building surfaces receive a shadow — `crates/kq8-core/src/shadow.rs` (`building_receivers`)
 
+The stand-ins below were **replaced by A's traced answer in 4d-7b-5a** (next sections).
+
 | What | Source | Check |
 | --- | --- | --- |
 | Buildings receive shadows, only near or far ones (the caller's filter) | `characters.md` rule 37 (2) | — (viewer, 4d-7b-3c) |
@@ -2273,6 +2275,20 @@ marked otherwise.
 | Shadows on buildings compared with the original | The user's check (2026-10-20): as expected; shadows also show inside a building when Connor stands outside, in both | The user's check |
 | No cut at the edge of the 1,800 area (whole surfaces receive) | **The user's decision** (2026-10-20): the original cuts some shadows off; not reproduced | The user's check |
 | A plain object's shadow is worked out again when the set of active buildings changes | **Ours** (as its other "worked out again" rule) | `shadows.log` counts |
+
+### 4d-7b-5a, the search box on buildings as traced — `crates/kq8-core/src/shadow.rs` (`Caster`, `search_box`, `building_receivers`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| The caster's size: its shown model's stored `.kqs` ball (radius, centre in its own space); s = 0.287 × radius | `characters.md` rule 37 (2) (Q135, traced) | Unit test `a_building_is_searched_within_its_radius_plus_s_plus_500` (Connor 879 → s 252) |
+| Reach: building ball centre (turned `.dig` box middle) to the caster's ball centre in the world ≤ building radius + s + 500 | Rule 37 (2) (a) | Same test |
+| Band (own space): s above to 6 × s below the ball's centre; over 1,800 cut around its middle | Rule 37 (2) (b) | Unit tests `the_band_runs_from_6_s_below_to_s_above_the_balls_centre` (1,079 / 687), `a_band_over_1800_is_cut_around_its_middle` (885 / 915) |
+| Area (own space, turns with the heading): the rectangle around a 2 × s square at the band's top and its copy moved along the sun to height 0; each side over 1,800 cut around its middle | Rule 37 (2) (c) | Unit tests `the_area_spans_the_square_and_its_copy_along_the_sun_cut_to_1800` (505 × 2,139 → 1,800), `the_box_turns_with_the_casters_heading` |
+| "The band's top" for the square = the top after the 1,800 cut | **Our reading** (A's example only covers an uncut band) | — |
+| No sun with a downward part: no building search | Rule 37 (2) (c) | Unit test `no_downward_sun_means_no_search` |
+| A surface counts when any part of it is inside the box; taken whole, the shadow not cut at the box | Rule 37 (2) "Which surfaces count" ("Do"; the original's looser test not reproduced) and the user's decision (no cut) | Unit tests above, `the_chosen_floor_receives_the_shadow` |
+| Kind-0 (never drawn) surfaces skipped | Rule 37 (2) (d) "Do instead" | `viewer.log` (Daventry: none) |
+| A caster without a stored ball: the box around its points (world axes, ball = half the box diagonal) | **Our fallback** (not in the note) | Unit test `the_fallback_caster_is_the_box_around_the_points`; until 4d-7b-5b every caster uses it |
 
 ### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
 
