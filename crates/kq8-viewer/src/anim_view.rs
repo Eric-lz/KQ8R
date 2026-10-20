@@ -99,9 +99,18 @@ struct Playing {
     birth_shown: Option<bool>,
 }
 
+/// What a new copy of an unused object needs (M5 5d-4): each movement's
+/// frames as (mesh, material) lists, its whole-object steps, its script.
+struct Recipe {
+    movements: Vec<(Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>>, Vec<GameTransform>)>,
+    script: Option<String>,
+}
+
 #[derive(Resource)]
 pub struct AnimSim {
     playing: Vec<Playing>,
+    /// The unused objects' recipes, by lower-case name (M5 5d-4).
+    recipes: std::collections::BTreeMap<String, Recipe>,
     updates: u64,
     log: Log,
     /// `characters.log` (M4 4d), if it could be made.
@@ -136,6 +145,57 @@ impl AnimSim {
         let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
         active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take(), translucency: None }]);
         true
+    }
+
+    /// A new copy of an unused object (M5 5d-4, a script's `loadKQ` while
+    /// playing): its body and frames from the template's recipe, at its
+    /// place, played by core's `anims[index]`. Returns the log line.
+    pub fn spawn_copy(&mut self, commands: &mut Commands, template: &str, name: &str, placement: Placement, index: usize) -> String {
+        let Some(r) = self.recipes.get(&template.to_ascii_lowercase()) else {
+            return format!("copy {name}: no recipe for {template}; not drawn");
+        };
+        let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), crate::terrain_view::ObjectName(name.to_string()))).id();
+        let mut movements = Vec::with_capacity(r.movements.len());
+        let mut parts = Vec::new();
+        for (frames, steps) in &r.movements {
+            let mut drawn = Vec::with_capacity(frames.len());
+            for frame in frames {
+                let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
+                commands.entity(body).add_child(parent);
+                for (mesh, material) in frame {
+                    let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+                    commands.entity(parent).add_child(part);
+                    parts.push(part);
+                }
+                drawn.push(parent);
+            }
+            movements.push(DrawnMovement { frames: drawn, steps: steps.clone() });
+        }
+        let line = format!("copy {name} of {template}: drawn, {} movement(s), {} part(s), played by the world's rules (M5 5d-4)", movements.len(), parts.len());
+        self.playing.push(Playing {
+            name: name.to_string(),
+            source: Source::Core(index),
+            script: r.script.clone(),
+            rotation: placement.rotation,
+            position: placement.position,
+            movements,
+            body,
+            shown: None,
+            tracked: false,
+            collider: Some(None),
+            character: None,
+            test: None,
+            face: Vec::new(),
+            lip_images: Vec::new(),
+            mouth_shown: 0,
+            parts,
+            opacity_shown: 1.0,
+            own: Default::default(),
+            casts: false,
+            shadow: None,
+            birth_shown: None,
+        });
+        line
     }
 
     /// The draw-distance test of a character that just came in (M4 4d-3),
@@ -176,12 +236,12 @@ pub fn spawn_animated(
     balls: &crate::draw_distance::ShapeBalls,
     character_lines: &[String],
     main_log: &mut Log,
-) -> Vec<AnimObject> {
+) -> (Vec<AnimObject>, Vec<NamedAnimPlayer>) {
     let mut log = match Log::create("anim") {
         Ok(l) => l,
         Err(e) => {
             main_log.summary(format!("animated objects: cannot create anim.log: {e}; not started"));
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
     };
     // Per animation: its frames as (mesh, material index) lists, the
@@ -231,6 +291,9 @@ pub fn spawn_animated(
     let mut characters: Vec<String> = Vec::new();
     let mut playing = Vec::new();
     let mut core = Vec::new();
+    // M5 5d-4: the unused objects' players and recipes (templates).
+    let mut own_players = Vec::new();
+    let mut recipes = std::collections::BTreeMap::new();
     let mut moving = Vec::new();
     let (mut random, mut switchable) = (0, 0);
     let mut stop_starts: Vec<String> = Vec::new();
@@ -412,12 +475,15 @@ pub fn spawn_animated(
             .collect();
         let mut drawn = Vec::with_capacity(a.movements.len());
         let mut parts = Vec::new();
+        let mut recipe = Vec::new();
         for (_, _, i) in &a.movements {
             let b = &built[*i];
             let mut frames = Vec::with_capacity(b.frames.len());
+            let mut recipe_frames = Vec::with_capacity(b.frames.len());
             for frame in &b.frames {
                 let parent = commands.spawn((Transform::default(), Visibility::Hidden)).id();
                 commands.entity(body).add_child(parent);
+                let mut recipe_parts = Vec::new();
                 for (mesh, m) in frame {
                     let Some((_, material)) = b.materials.iter().find(|(i, _)| i == m) else { continue };
                     let mut material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
@@ -431,13 +497,19 @@ pub fn spawn_animated(
                             })
                             .clone();
                     }
+                    recipe_parts.push((mesh.clone(), material.clone()));
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
                     commands.entity(parent).add_child(part);
                     parts.push(part);
                 }
                 frames.push(parent);
+                recipe_frames.push(recipe_parts);
             }
+            recipe.push((recipe_frames, if b.moves { b.steps.clone() } else { Vec::new() }));
             drawn.push(DrawnMovement { frames, steps: if b.moves { b.steps.clone() } else { Vec::new() } });
+        }
+        if *unused && a.character.is_none() {
+            recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone() });
         }
         // Whole-object steps of the movement shown at load: how far the
         // chained pose goes over the loop.
@@ -488,6 +560,9 @@ pub fn spawn_animated(
         });
         let tracked = TRACKED.iter().any(|t| t.eq_ignore_ascii_case(&p.name));
         let source = if *unused {
+            if a.character.is_none() {
+                own_players.push(player.clone());
+            }
             Source::Own(Box::new(player))
         } else {
             core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take(), translucency: None });
@@ -548,8 +623,8 @@ pub fn spawn_animated(
     if let Some(f) = fight.as_ref() {
         main_log.summary(format!("fight: log in {}", f.path().display()));
     }
-    commands.insert_resource(AnimSim { playing, updates: 0, log, characters: clog, fight });
-    core
+    commands.insert_resource(AnimSim { playing, recipes, updates: 0, log, characters: clog, fight });
+    (core, own_players)
 }
 
 /// One update (15 per second), after `door_step` has run core's update:

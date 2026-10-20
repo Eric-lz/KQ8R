@@ -305,7 +305,7 @@ pub fn spawn_doors(
     objects: &mut Objects,
     colliders: &mut Vec<BoxCollider>,
     (item, combat): (Option<String>, Option<i64>),
-    anims: Vec<kq8_core::active::AnimObject>,
+    (anims, own_players): (Vec<kq8_core::active::AnimObject>, Vec<kq8_core::named_anim::NamedAnimPlayer>),
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
@@ -584,20 +584,26 @@ pub fn spawn_doors(
     active.add_anims(anims);
     // Copies prepared for a script's loadKQ (3k-4).
     active.set_dormant(std::mem::take(&mut objects.dormant));
-    // M5 5d-3: the still templates for new copies (animated ones: 5d-4).
-    let stills: Vec<(String, kq8_core::active::Template)> = objects
+    // M5 5d-3, 5d-4: the templates for new copies: still ones, and
+    // animated ones with their player as built (at the start).
+    let templates: Vec<(String, kq8_core::active::Template)> = objects
         .templates
         .iter()
-        .filter(|t| !t.animated)
-        .map(|t| {
+        .filter_map(|t| {
             let p = &objects.placed[t.placed].0;
             let placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
-            let kind = kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type };
-            (t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind })
+            let kind = if t.animated {
+                let player = own_players.iter().find(|o| o.name.eq_ignore_ascii_case(&t.name))?;
+                kq8_core::active::TemplateKind::Anim(Box::new(player.clone()))
+            } else {
+                kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type }
+            };
+            Some((t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind }))
         })
         .collect();
-    main_log.summary(format!("templates: {} still one(s) for loadKQ while playing (M5 5d-3)", stills.len()));
-    active.world.set_templates(stills);
+    let animated = templates.iter().filter(|(_, t)| matches!(t.kind, kq8_core::active::TemplateKind::Anim(_))).count();
+    main_log.summary(format!("templates: {} for loadKQ while playing ({animated} animated; M5 5d-3, 5d-4)", templates.len()));
+    active.world.set_templates(templates);
     // Stats (3i-6, anim-scripts.md rule 19): doors without a line have
     // 10,000 health (doors.md rule 18); Connor from Connor.kq.
     for d in &active.world.doors.iter().map(|d| d.door.name.clone()).collect::<Vec<_>>() {

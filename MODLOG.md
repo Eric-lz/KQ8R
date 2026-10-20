@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d-4: animated copies loaded while playing (the barrel bursts and leaves its wreck)
+
+**Changed:** `anim_view` keeps a recipe (frames' meshes and materials, steps, script) and the player of every unused animated object; core gets the players of the animated templates; a copy core makes is drawn from the recipe and played by core (`AnimSim::spawn_copy`, through `copies_view`).
+**Why:** Plan 5d step 4 (the barrels' burst `barelupx`, `brlupxcr`, `brlupxms`; the alchemist's boards).
+**Tested how:** `cargo test --workspace` (436 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 198000,262152,1.5708 --key left:IDCTL_INVBAR_SHORT,40 --aim barrel.07,60 --frames 900`; `viewer.log`, `traps.log`.
+**Result:** Update 64 the punch; 65: barrel.07 deleted, `NoName22` (the burst, 24 parts) drawn at its place; 88: the burst's end gives `Die`, its script deletes it and loads `NoName23` (the wreck, with its collider) at the same place.
+**Still broken / not tested:** Not looked at. The crystal and mushroom barrels' `tossItems` (5d-5). The boards not run.
+**Next:** 5d-5, `KQObject::tossItems` from a script.
+
 ## 2026-10-20 M5 5d-3: still copies loaded while playing are drawn
 
 **Changed:** The loader keeps the files a script may load (named on a `loadKQ` line, no place of their own) as templates, built at the start and hidden; their boxes from `BOUNDS.KQ`. Core gets the still ones; the viewer keeps their models (new `copies_view.rs`) and draws each copy core asks for, with a collider when its box and type collide with Connor.

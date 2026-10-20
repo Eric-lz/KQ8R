@@ -1369,7 +1369,8 @@ Steps (one commit each; each logged in `viewer.log` / the script logs):
    its type collides, its collider and click entry. **Test:** viewer:
    `--command "loadKQ barelded.kq @ <x y z 0 0 0>",N`: the wreck in
    `viewer.log` at that place.
-4. **5d-4, templates for animated objects** (viewer): the movements
+4. **5d-4, templates for animated objects** (**done** 2026-10-20;
+   barrel.07: burst, then wreck) (viewer): the movements
    kept (anim_view's built frames in a resource); a copy spawned and
    played by core from its first update; its end (5d-1) reaches its
    script. **Test:** viewer: punch `barrel.07`: `barelupx` bursts,

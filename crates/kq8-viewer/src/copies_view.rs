@@ -5,7 +5,8 @@
 //! (`Request::Spawn`); this module draws it from the template's model,
 //! kept from the start, and gives it its collider.
 //!
-//! 5d-3: still models (the barrels' wreck `barelded`). **Ours**: a copy
+//! 5d-3: still models (the barrels' wreck `barelded`); 5d-4: animated
+//! ones (the burst `barelupx`), drawn by `anim_view`. **Ours**: a copy
 //! has no draw-distance test (always drawn when in view) and no lights
 //! or see-through settings of its own; it doesn't block the camera.
 
@@ -26,10 +27,12 @@ struct Still {
     collider_mask: u32,
 }
 
-/// The templates' models, by lower-case file name.
+/// The templates' models, by lower-case file name; the animated ones'
+/// object names (their recipes are in `AnimSim`, 5d-4).
 #[derive(Resource)]
 pub struct TemplateDraw {
     stills: BTreeMap<String, Still>,
+    anims: BTreeMap<String, String>,
 }
 
 /// After the models are built (`terrain_view::setup_objects`): keeps the
@@ -43,7 +46,8 @@ pub fn keep_templates(commands: &mut Commands, templates: &[crate::load::Templat
             Some((t.file.clone(), Still { parts, bounds: t.bounds, collider_type: t.collider_type, collider_mask: t.collider_mask }))
         })
         .collect();
-    commands.insert_resource(TemplateDraw { stills });
+    let anims = templates.iter().filter(|t| t.animated).map(|t| (t.file.clone(), t.name.clone())).collect();
+    commands.insert_resource(TemplateDraw { stills, anims });
 }
 
 /// Each update, after the scripts: the copies asked for are drawn; a
@@ -55,6 +59,7 @@ pub fn spawn_copies(
     draw: Option<Res<TemplateDraw>>,
     mut colliders: Option<ResMut<ObjectColliders>>,
     mut order: Option<ResMut<ColliderOrder>>,
+    mut anim: Option<ResMut<crate::anim_view::AnimSim>>,
     shared: Res<Shared>,
 ) {
     use kq8_core::collide::{pair_collides, BoxCollider, ColliderKind, CONNOR_MASK, CONNOR_TYPE};
@@ -81,7 +86,14 @@ pub fn spawn_copies(
                 };
                 format!("copy {name} of {file} drawn at ({:.0}, {:.0}, {:.0}), {} part(s); {collider} (M5 5d-3)", p[0], p[1], p[2], t.parts.len())
             }
-            None => format!("copy {name} of {file} at ({:.0}, {:.0}, {:.0}): no still template (animated: 5d-4); not drawn", p[0], p[1], p[2]),
+            None => match (draw.as_ref().and_then(|d| d.anims.get(&file)), anim.as_mut(), sim.active.world.anim_index(&name)) {
+                // 5d-4: an animated copy, played by core's object.
+                (Some(template), Some(a), Some(index)) => {
+                    let line = a.spawn_copy(&mut commands, template, &name, placement, index);
+                    format!("{line} at ({:.0}, {:.0}, {:.0})", p[0], p[1], p[2])
+                }
+                _ => format!("copy {name} of {file} at ({:.0}, {:.0}, {:.0}): no template drawn here; not drawn", p[0], p[1], p[2]),
+            },
         };
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);

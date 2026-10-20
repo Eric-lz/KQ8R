@@ -2727,3 +2727,12 @@ executable looked at.
 | A copy is drawn from the template's model at its place; with a box and a type that collides with Connor it gets a collider, tested after all others | `objects.md` rule 6; the load order of the sweep (`connor-physics.md`, Q88) | `--command "loadKQ barelded.kq @ …"`: drawn, collider |
 | A copy has no draw-distance test, lights, see-through settings or camera box of its own | **Ours** (stand-in until needed) | — |
 
+### 5d-4, animated copies — viewer `anim_view.rs` (`Recipe`, `AnimSim::spawn_copy`, `spawn_animated` returns the unused players), `door_view.rs` (`spawn_doors`: animated templates), `copies_view.rs`, `terrain_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| An animated template's player as built at the start (not yet played) is core's template; a copy gets it with its own name and place and starts its movement as at the start | `objects.md` rule 6 ("an animated object starts its movement as at the start"), `anim-scripts.md` rule 3 | Viewer: barrel.07 |
+| The copy is drawn from the template's frames (meshes and materials kept), played by core's object, at its place | Ours (drawing) | `viewer.log`: `copy NoName22 of barrelsm: drawn, 1 movement(s), 24 part(s)` |
+| Its end reaches its script (5d-1), whose `deleteObject $1` hides it and `loadKQ barelded.kq @ $KQObject::loc` makes the wreck (5d-3) | `anim-scripts.md` rules 11–12 | `traps.log`: update 65 burst, 88 wreck |
+| A copy of an unused character is not made (none in the data's runtime loads) | Ours | — |
+
