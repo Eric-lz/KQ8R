@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 6: a thrown item is drawn where it landed
+
+**Changed:** `item_view.rs`: a world item's model is moved whenever its place changes. Before, it was moved only while its flight was listed, and the landing update removes the flight, so the model stayed at its last place in the air.
+**Why:** The user's check: dropped items sit a little above the ground, and only a click on the ground below them picks them up (the click box was on the ground, the model was not).
+**Tested how:** `cargo build`, `cargo test --workspace` (433 core tests), clippy clean. Not run in the viewer: the fix is in the drawing, which only the eye can check.
+**Result:** —
+**Still broken / not tested:** Not looked at. The tumble while flying is not built (asked the user how the items rest after landing).
+**Next:** The tumble; runtime `loadKQ` with a position (the barrel's burst and wreck).
+
 ## 2026-10-20 M5 5c fix 5: Connor's punches break barrels (as far as their script)
 
 **Changed:** Objects with a script but no clickable bit (Daventry's barrels) are kept with their box: they now get `Init`, `getLoc` finds them, and the attack click can target them. Connor's swing on such an object takes rolled damage off its stats (all 0 without a `stats=` line); below 0 its script gets `Die <kind>`. Q139 updated (the user's answer: a click near a creature misses; the object hit is a stand-in).

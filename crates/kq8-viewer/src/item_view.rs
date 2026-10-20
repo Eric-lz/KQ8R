@@ -24,8 +24,9 @@ type Parts = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
 pub struct ItemDraw {
     /// Each item type (`IDName`) that has a model here.
     parts: BTreeMap<String, Parts>,
-    /// Each item object drawn so far, by name.
-    drawn: BTreeMap<String, Entity>,
+    /// Each item object drawn so far, by name, and the place it was last
+    /// drawn at.
+    drawn: BTreeMap<String, (Entity, kq8_core::collide::Placement)>,
     /// Each item type's draw distance test (M1 6h).
     tests: BTreeMap<String, DistanceTest>,
 }
@@ -56,12 +57,14 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
     for o in &sim.active.world.items.objects {
         let at = o.placement().filter(|_| !o.hidden);
         match (draw.drawn.get(&o.name), at) {
-            (Some(&e), at) => {
-                // M5 5c-8: a thrown item moves while it flies.
-                if let Some(p) = at.filter(|_| sim.active.world.flights.iter().any(|f| f.item == o.name)) {
+            (Some(&(e, shown)), at) => {
+                // M5 5c-8: a thrown item moves while it flies; fix 6: also
+                // to where it landed (its flight ends in that update).
+                if let Some(p) = at.filter(|p| p.position != shown.position || p.rotation != shown.rotation) {
                     if let Ok(mut t) = transforms.get_mut(e) {
                         *t = bevy_transform_from(p.rotation, p.position);
                     }
+                    draw.drawn.insert(o.name.clone(), (e, p));
                 }
                 let want = if at.is_some() { Visibility::Inherited } else { Visibility::Hidden };
                 if let Ok(mut v) = visibility.get_mut(e) {
@@ -84,7 +87,7 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
                     commands.entity(body).add_child(part);
                 }
-                draw.drawn.insert(o.name.clone(), body);
+                draw.drawn.insert(o.name.clone(), (body, p));
             }
             (None, None) => {}
         }

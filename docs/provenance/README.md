@@ -2679,3 +2679,9 @@ did not show his fists-up stance nor the sword pointer.
 | Connor's swing on an object: rule 13's reach and front test; damage = his hand damage (× the big swing's factor), rolled 75–125 % with its 4th stat as protection, at least 1 | `fighting.md` rules 13, 41; the roll is a **stand-in** (`doors.md` rule 19: "random, at least 1") | Unit test |
 | Taken off its health (`stats=`, all 0 without one); below 0 its script gets `Die <kind>` (again on every hit while below 0) | `doors.md` rules 19–20, `anim-scripts.md` rules 19–20 | Unit test; viewer: barrel.07 0 → −9, `barelup.cs` gets `Die Normal` |
 | `KQObject::getLoc` also finds those box objects | `objects.md` "Script variables, getLoc and move" (any object) | Viewer: `getLoc barrel.07: 199536 262152 8185` |
+
+### 5c fix 6, a thrown item drawn where it landed — viewer `item_view.rs` (`item_draw`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A world item's model follows every change of its place, not only while it flies (the update it lands in also ends its flight: it stayed drawn at its last place in the air, above its click box) | Fix of our own drawing (the user's check) | — (by eye) |
