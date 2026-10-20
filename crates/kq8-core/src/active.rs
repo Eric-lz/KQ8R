@@ -665,6 +665,11 @@ pub struct WorldState {
     pub connor_tips: [bool; 2],
     /// The fight's random draws (the rolls, M5 5c).
     pub fight_rng: crate::emitter::Rng,
+    /// The hand weapon Connor has ready (its type name; `inventory.md`
+    /// rule 9, `fighting.md` rule 39; M5 5c-5), `None` = none drawn.
+    pub weapon_ready: Option<String>,
+    /// The combat level's factor (`fighting.md` rule 3): 1.0 by default.
+    pub combat_level: f32,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2483,6 +2488,8 @@ impl Active {
                 connor_dying: false,
                 connor_tips: [false; 2],
                 fight_rng: crate::emitter::Rng::new(0x5EED_F1647),
+                weapon_ready: None,
+                combat_level: 1.0,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -5115,6 +5122,43 @@ mod tests {
         assert!(log.contains("gob missing Connor, too far away: miss, not in its front half: distance 1000, reach 1500"), "{log}");
         assert!(!log.contains("hits Connor"), "{log}");
         assert_eq!(a.world.connor_stats.unwrap().stats.0[0], 10);
+    }
+
+    #[test]
+    fn connor_s_do_hits_his_target_misses_or_hits_dead_air() {
+        // fighting.md rules 39-41, 16 (M5 5c-5).
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.connor_fight = Some(crate::fight::ConnorFight { ouch_sound: "conrow3.aud".into(), min_damage_factor: 0.75, max_damage_factor: 4.0, short_lists: vec![] });
+        // The goblin at (0, 0, 100); Connor 2,000 south of it, facing it
+        // (heading pi faces +y).
+        let from = [0.0, -2000.0, 100.0];
+        a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), false, "attack");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hits gob: distance 2000, reach 2350") && log.contains("hand damage 10 = 10, Normal"), "{log}");
+        assert!(log.contains("gob: hit by Connor, Normal: D 10, R "), "{log}");
+        let h = a.world.anims[0].character.as_ref().unwrap().fight.as_ref().unwrap().stats.0[0];
+        assert!((3..=7).contains(&h), "15 - (8 to 12): {h}");
+        // Facing away: a miss; no target: dead air.
+        a.world.connor_do(from, 0.0, 2350.0, Some("gob"), false, "attack");
+        a.world.connor_do(from, std::f32::consts::PI, 2350.0, None, false, "attack");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("Connor missing gob, too far away: miss, not in its front half"), "{log}");
+        assert!(log.contains("no target: he hits dead air"), "{log}");
+        // The big swing: x 0.75 to 4, cut.
+        a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), true, "attack2");
+        assert!(a.world.fight_log.last().unwrap().contains("hit by Connor") && a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
+    }
+
+    #[test]
+    fn the_hand_weapon_slot_readies_and_puts_away() {
+        // inventory.md rule 9, fighting.md rule 39 (M5 5c-5; putting it
+        // away with a second click is our stand-in).
+        let mut a = with_object("x\n", "x");
+        assert_eq!(crate::connor_inventory::ready_hand_weapon(&mut a.world, "INVITEM_Fists").split(':').next(), Some("readies INVITEM_Fists"));
+        assert_eq!(a.world.weapon_ready.as_deref(), Some("INVITEM_Fists"));
+        assert!(crate::connor_inventory::ready_hand_weapon(&mut a.world, "INVITEM_Fists").starts_with("puts INVITEM_Fists away"));
+        assert_eq!(a.world.weapon_ready, None);
     }
 
     #[test]

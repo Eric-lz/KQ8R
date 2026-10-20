@@ -81,6 +81,8 @@ pub struct DoorSim {
     /// Clicks in the world since the last update, picked or not, for
     /// `talking.md` rule 16 (M4 4a-5).
     world_clicks: Vec<String>,
+    /// Clicks that swing (a hand weapon ready, M5 5c-5).
+    swing_clicks: Vec<SwingClick>,
     /// Connor's state at each click whose turn is waiting (M4 4c-5,
     /// `clicking.md` rule 35): whether it allows the turn, its name.
     click_states: std::collections::VecDeque<(bool, &'static str)>,
@@ -230,6 +232,22 @@ pub struct RightAt(pub Option<u64>);
 /// `--aim NAME,N` (each may be given more than once).
 #[derive(Resource)]
 pub struct AimAt(pub Vec<(String, u64)>);
+
+/// `--swing NAME,N[,big]` (M5 5c-5 test; each may be given more than once).
+#[derive(Resource)]
+pub struct SwingAt(pub Vec<(String, u64, bool)>);
+
+/// A click in the world with a hand weapon ready (`fighting.md` rule 39;
+/// M5 5c-5): Connor swings toward it.
+pub struct SwingClick {
+    /// The character clicked, if any: his target.
+    target: Option<String>,
+    /// Where the click points (x, y).
+    point: [f32; 2],
+    /// Shift held: the big swing.
+    big: bool,
+    how: String,
+}
 
 /// `--item TYPE`.
 #[derive(Resource)]
@@ -697,7 +715,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1176,6 +1194,7 @@ pub fn door_click_input(
     mut aim: ResMut<AimAt>,
     cover: Res<crate::gui_view::GuiCover>,
     shared: Res<Shared>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
     let Some(mut sim) = sim else { return };
     let updates = sim.active.world.updates;
@@ -1231,6 +1250,33 @@ pub fn door_click_input(
         }
         Pick::Nothing => (format!("{from} meets nothing clickable"), None),
     };
+    // fighting.md rule 39 (M5 5c-5; the input side is a stand-in from the
+    // manual): with a hand weapon ready a left click swings toward the
+    // click (Shift: the big swing); Ctrl held gives the plain click.
+    let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+    if sim.active.world.weapon_ready.is_some() && !ctrl {
+        let target = picked.clone().filter(|n| sim.active.world.character_index(n).is_some());
+        let point = match target.as_deref().and_then(|n| sim.active.world.character_index(n)) {
+            Some(j) => {
+                let p = sim.active.world.anims[j].player.base.position;
+                [p[0], p[1]]
+            }
+            // **Stand-in**: the click line meets the level of his feet
+            // (the ground is not tested); straight ahead along it if it
+            // never comes down.
+            None => {
+                let z = sim.active.world.connor_at.map_or(origin[2], |c| c[2]);
+                let t = if dir[2] < -1e-4 { (z - origin[2]) / dir[2] } else { 10_000.0 };
+                [origin[0] + dir[0] * t, origin[1] + dir[1] * t]
+            }
+        };
+        let big = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        let line = format!("{line}; a hand weapon is ready: a swing toward ({:.0}, {:.0}), target {}{}", point[0], point[1], target.as_deref().unwrap_or("none"), if big { ", Shift" } else { "" });
+        sim.swing_clicks.push(SwingClick { target, point, big, how: how.clone() });
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+        return;
+    }
     if let Some(name) = picked {
         sim.pending.push((name, "mouse".into()));
     }
@@ -1247,7 +1293,7 @@ pub fn door_step(
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
     (in_range, solid): (Res<crate::draw_distance::CharactersInRange>, Res<crate::draw_distance::CharactersSolid>),
-    mut command_at: ResMut<CommandAt>,
+    (mut command_at, mut swing_at): (ResMut<CommandAt>, ResMut<SwingAt>),
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
@@ -1291,6 +1337,52 @@ pub fn door_step(
             continue;
         }
         sim.active.world.talk.cut_short(&why, now);
+    }
+    // `--swing NAME,N[,big]` (M5 5c-5 test): ready the hand weapon if none
+    // is, then a swing click on NAME.
+    let (swing_due, swing_later): (Vec<_>, Vec<_>) = std::mem::take(&mut swing_at.0).into_iter().partition(|(_, n, _)| updates >= *n);
+    swing_at.0 = swing_later;
+    for (name, _, big) in swing_due {
+        let w = &mut sim.active.world;
+        if w.weapon_ready.is_none() {
+            let line = match kq8_core::connor_inventory::hand_weapon(w) {
+                Some(kind) => kq8_core::connor_inventory::ready_hand_weapon(w, &kind),
+                None => "he carries no hand weapon".to_string(),
+            };
+            w.fight_note("Connor", format!("test --swing: {line}"));
+        }
+        let at = w.character_index(&name).map(|j| w.anims[j].player.base.position);
+        match at {
+            Some(p) => sim.swing_clicks.push(SwingClick { target: Some(name.clone()), point: [p[0], p[1]], big, how: format!("test --swing {name}") }),
+            None => sim.log.detail(format!("update {updates}: test --swing {name}: no such character")),
+        }
+    }
+    // fighting.md rules 39-41 (M5 5c-5): swings asked for, the swing that
+    // waited for his turn, and his `Do` cues.
+    if let Some(c) = connor.as_mut() {
+        for s in std::mem::take(&mut sim.swing_clicks) {
+            let w = &mut sim.active.world;
+            let list = w.weapon_ready.as_deref().and_then(|ready| {
+                let short = ready.strip_prefix(kq8_data::items::PREFIX).unwrap_or(ready);
+                w.connor_fight.as_ref()?.short_lists.iter().find(|(n, _)| n.eq_ignore_ascii_case(short)).map(|(_, f)| f.clone())
+            });
+            let line = match list {
+                Some(list) => {
+                    let coin = w.fight_rng.fraction();
+                    c.swing_click(&list, s.target, s.point, s.big, coin)
+                }
+                None => format!("no movement list for {:?} in Connor.kq's ShortAnimList: no swing", w.weapon_ready),
+            };
+            w.fight_note("Connor", format!("{}: {line}", s.how));
+        }
+        if let Some(line) = c.swing_step() {
+            sim.active.world.fight_note("Connor", line);
+        }
+        for m in std::mem::take(&mut c.do_cues) {
+            let (target, big) = c.swing.as_ref().map_or((None, false), |s| (s.target.clone(), s.big));
+            let (from, heading, reach) = (c.mover.position, c.walker.heading, sim.attack_dist);
+            sim.active.world.connor_do(from, heading, reach, target.as_deref(), big, &m);
+        }
     }
     for (name, _) in due {
         let line = format!("update {updates}: test --click: clicks {name}");

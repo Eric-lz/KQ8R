@@ -2542,3 +2542,20 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | The flinch played as a one-item Special list (keys ignored while it plays) | **Stand-in**: how his own flinch state works was not traced beyond rule 29 | — |
 | Death: `die` (Normal, Projectile), `dropweapon` then `firedie` / `icedie` (Fire, Ice), then his Die state holding the last frame; during a jump the death waits like any state request (rule 28) | Rule 29; **stand-in**: game over is another study, he stays dead | Viewer |
 | `Connor.kq`: `ouchSound`, `minDamageFactor`, `maxDamageFactor`, `ShortAnimList` (weapon → `.anm`) | Rules 24, 39–41; data | Viewer log line at load |
+
+### 5c-5, Connor hits back — `crates/kq8-core/src/{fight,connor_inventory,active}.rs` (`connor_do`, `hit_character`, `cut_short_at`, `SWINGS`, `ready_hand_weapon`, `hand_weapon`, `weapon_ready`, `combat_level`), viewer `connor_view.rs` (`Swing`, `swing_click`, `swing_step`, `can_be_cut_short`, the `do` cue), `door_view.rs` (`SwingClick`, `SwingAt`), `load.rs` (the weapon lists' swings), `main.rs` (`--swing`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Clicking the hand-weapon slot readies the weapon (`INVITEM_Fists` too) | `inventory.md` rule 9; `fighting.md` rule 39 (manual) | Unit test |
+| A second click on the ready weapon's slot puts it away | **Stand-in** (not traced) | Unit test |
+| With a weapon ready, a left click in the world swings; Ctrl held gives the plain click; Shift the big swing | Rule 39 (**manual only**: open question 1; stand-in, logged) | Viewer (`--swing`) |
+| The clicked character becomes his target; a click on no character: the point where the click line meets the level of his feet | Rule 39; **stand-in** for the point (the ground is not tested) | — |
+| He turns toward the click (the automatic turn, 3.5 rad/s); more than 90° off: the swing waits for the turn, otherwise it starts at once and he turns during it | Rule 39 ("turning round first if it was behind him"); **stand-in** for the details | Viewer: 130° off → turn, then `attack` 10 updates later |
+| `Attack` / `AttackB` 50/50, Shift `Attack2`; nothing while a swing plays; only when his movement can be cut short (its `loop=` line and `interruptable` cues) | Rule 40; `anim-scripts.md` rule 7 | Viewer: the click at update 92 refused; unit test of the cues |
+| The swings come from the ready weapon's list in `Connor.kq`'s `ShortAnimList` (`INVITEM_Fists` → `confists.anm`), loaded as `<list>/<movement>`; his other movements stay `Conner.anm`'s | Data; **stand-in** (switching his whole set of movements belongs to the Connor-controls study) | Viewer |
+| The swing plays as a one-item Special list (keys ignored while it plays) | **Stand-in** | — |
+| His `Do`: rule 13's test with his reach (`attackDist` 2,350) and his target; misses say "missing … too far away"; no target: dead air | Rule 41 | Unit test; viewer |
+| Damage: his hand damage (stats, weapon included); Shift × a random factor from `minDamageFactor` to `maxDamageFactor` (0.75 to 4), cut | Rule 41; data (`Connor.kq`; the manual's 5 is not used: "Do not reproduce") | Unit test; viewer (× 3.804 → 38) |
+| `Fire` when the ready weapon is the Flame Sword | Rules 14, 41 | — |
+| On a character: roll 75–125 % (85–125 % below combat level 1.0), its protection, its health (its reaction: 5c-6; dying: 5c-7) | Rule 16 | Unit test; viewer (loss 11 then 8) |

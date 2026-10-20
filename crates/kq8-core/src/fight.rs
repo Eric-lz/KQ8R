@@ -36,6 +36,14 @@
 //!   cut short and his last flinch ended over 2 s ago, else his ouch
 //!   sound at most once a second (the viewer decides, it has his
 //!   movement: `Request::ConnorHurt`, `Request::ConnorDies`).
+//! - Rules 39–41 (M5 5c-5; the input side is a **stand-in** from the
+//!   manual, open question 1): with a hand weapon ready a click swings
+//!   (`Attack` / `AttackB` 50/50, Shift `Attack2`, from the weapon's list
+//!   in `Connor.kq`'s `ShortAnimList`); at his `Do` cue the same test as
+//!   rule 13 with his reach and his target (the clicked character); his
+//!   hand damage (Shift: × `minDamageFactor`..`maxDamageFactor`, cut);
+//!   `Fire` with the Flame Sword. On a character: the roll 75–125 %
+//!   (85–125 % below combat level 1.0), its protection, its health.
 //!
 //! Everything about the fight is logged to `fight.log` (and
 //! `characters.log`) through [`crate::active::WorldState::fight_note`].
@@ -309,6 +317,76 @@ impl crate::active::WorldState {
     }
 }
 
+/// Connor's swings in a hand weapon's list (rule 40): `Attack` or
+/// `AttackB` for a plain click, `Attack2` with Shift.
+pub const SWINGS: [&str; 3] = ["attack", "attackb", "attack2"];
+
+/// "Can be cut short" at `phase` of a movement: its `loop=` line's value,
+/// then each `interruptable <n>` cue at or before the phase, in phase
+/// order (`anim-scripts.md` rule 7); an ended movement always can.
+pub fn cut_short_at(cut_short: bool, cues: &[(f32, String)], phase: f32) -> bool {
+    if phase >= 1.0 {
+        return true;
+    }
+    let mut passed: Vec<&(f32, String)> = cues.iter().filter(|(p, a)| *p <= phase && a.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case("interruptable"))).collect();
+    passed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    passed.last().map_or(cut_short, |(_, a)| a.split_whitespace().nth(1).and_then(|n| n.parse::<f64>().ok()).is_some_and(|n| n != 0.0))
+}
+
+/// The Flame Sword's type (rule 14).
+pub const FLAME_SWORD: &str = "INVITEM_FlameSword";
+
+impl crate::active::WorldState {
+    /// Rule 41 (M5 5c-5): Connor's swing passed its `Do` cue. `from` and
+    /// `heading`: his feet and heading; `reach`: his `attackDist`;
+    /// `target`: the character clicked for this swing; `big`: Shift.
+    pub fn connor_do(&mut self, from: [f32; 3], heading: f32, reach: f32, target: Option<&str>, big: bool, movement: &str) {
+        let Some(j) = target.and_then(|t| self.character_index(t)).filter(|&j| self.anims[j].character.as_deref().is_some_and(|c| c.fight.is_some())) else {
+            self.fight_note("Connor", format!("Do ({movement}): no target: he hits dead air (rule 39)"));
+            return;
+        };
+        let name = self.anims[j].player.name.clone();
+        let facing = [heading.sin(), -heading.cos(), 0.0];
+        let t = HitTest::new(from, facing, self.anims[j].player.base.position, reach, false);
+        if !t.hit {
+            let why = t.why_missed();
+            self.fight_note("Connor", format!("Do ({movement}): Connor missing {name}, too far away: miss, {why}: distance {:.0}, reach {:.0}, {:.0} deg off his facing (rule 41)", t.distance, t.reach, t.angle));
+            return;
+        }
+        let Some(hand) = self.connor_stats.map(|c| c.stats.0[1]) else {
+            self.fight_note("Connor", format!("Do ({movement}): his stats are unknown; nothing"));
+            return;
+        };
+        let (d, factor) = match (big, self.connor_fight.as_ref()) {
+            (true, Some(f)) => {
+                let k = f.min_damage_factor + self.fight_rng.fraction() * (f.max_damage_factor - f.min_damage_factor);
+                ((hand as f32 * k) as i64, format!(" x {k:.3} (the big swing, {} to {}, cut)", f.min_damage_factor, f.max_damage_factor))
+            }
+            _ => (hand, String::new()),
+        };
+        let kind = if self.weapon_ready.as_deref().is_some_and(|w| w.eq_ignore_ascii_case(FLAME_SWORD)) { HitKind::Fire } else { HitKind::Normal };
+        self.fight_note("Connor", format!("Do ({movement}): hits {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; hand damage {hand}{factor} = {d}, {} (rule 41)", t.distance, t.reach, t.angle, kind.name()));
+        self.hit_character(j, "Connor", d, kind);
+    }
+
+    /// Rules 16–18 on a character (M5 5c-5: the damage; its reaction is
+    /// 5c-6, dying 5c-7).
+    pub(crate) fn hit_character(&mut self, j: usize, from: &str, d: i64, kind: HitKind) {
+        let range = if self.combat_level < 1.0 { ROLL_ON_CHARACTER_EASY } else { ROLL_ON_CHARACTER };
+        let a = &mut self.anims[j];
+        let name = a.player.name.clone();
+        let Some(f) = a.character.as_deref_mut().and_then(|c| c.fight.as_mut()) else { return };
+        let rng = &mut self.fight_rng;
+        let dmg = Damage::roll(d, f.stats.0[3], range, &mut || rng.fraction());
+        let before = f.stats.0[0];
+        f.stats.0[0] -= dmg.loss;
+        let after = f.stats.0[0];
+        let dies = if after < 0 { "; below 0: it would die (dying is 5c-7)" } else { "" };
+        let line = format!("hit by {from}, {}: {} (roll {:.0}-125 %, rule 16); health {before} -> {after}{dies}", kind.name(), dmg.describe(), range.0 * 100.0);
+        self.fight_note(&name, line);
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -389,6 +467,17 @@ pub(crate) mod tests {
         assert!(HitTest::new([0.0; 3], f, [1000.0, -20.0, 0.0], 1500.0, false).hit);
         // Behind it.
         assert!(!HitTest::new([0.0; 3], f, [0.0, 500.0, 0.0], 1500.0, false).hit);
+    }
+
+    #[test]
+    fn interruptable_cues_decide_cut_short_by_phase() {
+        // confists.anm's attack: `0 0` in its loop= line, on at 0, off at 0.111.
+        let cues = vec![(0.111111, "interruptable 0".to_string()), (0.0, "interruptable 1".to_string()), (0.444444, "do".to_string())];
+        assert!(cut_short_at(false, &cues, 0.0));
+        assert!(cut_short_at(false, &cues, 0.1));
+        assert!(!cut_short_at(false, &cues, 0.2));
+        assert!(cut_short_at(false, &cues, 1.0), "ended");
+        assert!(cut_short_at(true, &[], 0.5) && !cut_short_at(false, &[], 0.5));
     }
 
     #[test]

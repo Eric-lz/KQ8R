@@ -326,7 +326,7 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
                 (_, true) => "; already applied: no use sound".into(),
             };
             let ready = match (t.category.as_str(), t.mode.as_str()) {
-                ("ShortWeapon", m) => format!("; readies the weapon ({m}; M5, not done)"),
+                ("ShortWeapon", m) => format!("; {} ({m})", ready_hand_weapon(w, &o.kind)),
                 ("LongWeapon", "BowMode") => "; readies the bow (BowMode; M5, not done)".into(),
                 _ => String::new(),
             };
@@ -334,6 +334,26 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
             BarResult::Applied
         }
     }
+}
+
+/// `inventory.md` rule 9, `fighting.md` rule 39 (M5 5c-5): clicking the
+/// hand-weapon slot readies that weapon (`INVITEM_Fists` too: Connor
+/// readies his fists); **stand-in**: clicking it again while it is ready
+/// puts it away (how a weapon is put away was not traced). Returns the log
+/// text.
+pub fn ready_hand_weapon(w: &mut WorldState, kind: &str) -> String {
+    if w.weapon_ready.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(kind)) {
+        w.weapon_ready = None;
+        return format!("puts {kind} away (stand-in: a second click on a ready weapon)");
+    }
+    w.weapon_ready = Some(kind.to_string());
+    format!("readies {kind}: a left click in the world now swings (fighting.md rule 39; the input side is a stand-in)")
+}
+
+/// The hand weapon Connor carries (the first carried `ShortWeapon`; the
+/// placeholder `INVITEM_Fists` when he has no other), its type name.
+pub fn hand_weapon(w: &WorldState) -> Option<String> {
+    w.items.objects.iter().filter(|o| o.carried_by(crate::talk::CONNOR)).find(|o| w.items.types.find(&o.kind).is_some_and(|t| t.category == "ShortWeapon")).map(|o| o.kind.clone())
 }
 
 /// Rule 9: a left click on a quest item, coins, rocks or the rope.

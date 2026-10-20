@@ -155,6 +155,24 @@ pub struct ConnorSim {
     /// (game time) and when his ouch sound last played.
     flinch_end: f64,
     last_ouch: f64,
+    /// The swing playing or waiting for his turn (M5 5c-5, `fighting.md`
+    /// rules 39-41).
+    pub swing: Option<Swing>,
+    /// His swing passed its `Do` cue this update: taken by `door_view`.
+    pub do_cues: Vec<String>,
+}
+
+/// One of Connor's swings (M5 5c-5).
+#[derive(Debug, Clone)]
+pub struct Swing {
+    /// The movement as loaded (`confists.anm/attack`).
+    pub movement: &'static str,
+    /// The character clicked (his target), if any.
+    pub target: Option<String>,
+    pub big: bool,
+    /// It waits for his turn toward the click to end (the click was
+    /// behind him).
+    pub waiting: bool,
 }
 
 /// Q98 (M3 3n-5, logs only): from the update a scripted walk ends until
@@ -445,6 +463,8 @@ pub fn spawn_connor(
         walk_end: None,
         flinch_end: f64::NEG_INFINITY,
         last_ouch: f64::NEG_INFINITY,
+        swing: None,
+        do_cues: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -745,9 +765,8 @@ impl ConnorSim {
     /// flinch also starts that second). Returns the line for `fight.log`.
     pub fn hurt(&mut self, roll_over: bool, ouch: &str, now: f64) -> String {
         use kq8_core::fight::{FLINCH_PAUSE, OUCH_EVERY};
+        let can_cut = self.can_be_cut_short();
         let w = &self.walker;
-        let current = self.movements.iter().find(|m| m.name == w.movement).map(|m| &m.movement_loop);
-        let can_cut = w.keys_choose() && w.playing.is_none() && current.is_none_or(|l| l.cut_short || w.phase >= 1.0);
         let react = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case("react")).map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
         let why_not = if !roll_over {
             Some("the roll is not above 0.9 x D".to_string())
@@ -780,6 +799,84 @@ impl ConnorSim {
         };
         self.log.detail(format!("connor update {}: hurt: {line}", self.updates));
         line
+    }
+
+    /// His running movement can be cut short now (`fighting.md` rules 23,
+    /// 40): the keys choose it (or it is his swing) and no start or stop
+    /// transition plays, and its `loop=` line with its `interruptable`
+    /// cues says so, or it has ended.
+    fn can_be_cut_short(&self) -> bool {
+        let w = &self.walker;
+        let swinging = self.swing.as_ref().is_some_and(|s| !s.waiting && w.mode == Mode::Special && w.movement == s.movement);
+        if !(w.keys_choose() || swinging) || w.playing.is_some() {
+            return false;
+        }
+        self.movement_loop(w.movement).is_none_or(|l| kq8_core::fight::cut_short_at(l.cut_short, &l.cues, w.phase))
+    }
+
+    /// `fighting.md` rules 39-40 (M5 5c-5; the input side is a **stand-in**
+    /// from the manual): a click with a hand weapon ready. Nothing while a
+    /// swing plays or his movement can't be cut short. He turns toward the
+    /// click (the automatic turn); if it was behind him (more than 90
+    /// degrees off) the swing waits for the turn, otherwise it starts at
+    /// once and he turns during it. `Attack` / `AttackB` 50/50, Shift
+    /// `Attack2`, from the weapon's list (`list`). Returns the line for
+    /// `fight.log`.
+    pub fn swing_click(&mut self, list: &str, target: Option<String>, point: [f32; 2], big: bool, coin: f32) -> String {
+        use kq8_core::connor_auto::{heading_towards, wrap, AutoKind, AutoMove};
+        if self.swing.is_some() {
+            return "a swing is already playing or waiting: nothing (rule 40)".into();
+        }
+        if !self.can_be_cut_short() {
+            return format!("'{}' can't be cut short (mode {}): no swing (rule 40)", self.walker.movement, self.walker.mode.name());
+        }
+        let word = if big { "attack2" } else if coin < 0.5 { "attack" } else { "attackb" };
+        let wanted = kq8_core::connor::special_movement_name(list, word);
+        let Some(movement) = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name) else {
+            return format!("no {wanted} loaded: no swing");
+        };
+        let off = wrap(heading_towards(self.mover.position, point) - self.walker.heading);
+        let behind = off.abs() > std::f32::consts::FRAC_PI_2;
+        let turn = self.walker.start_auto(AutoMove::new(AutoKind::Point, point, None));
+        self.swing = Some(Swing { movement, target: target.clone(), big, waiting: behind });
+        let start = if behind {
+            "the click is behind him: the swing waits for the turn (stand-in)".to_string()
+        } else {
+            self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(movement, word.into())]);
+            format!("'{movement}' starts at once, he turns during it (stand-in)")
+        };
+        let line = format!(
+            "swing ({}): {start}; target {}; click point ({:.0}, {:.0}), {:.0} deg off his heading; {turn}",
+            if big { "Shift: Attack2" } else { "Attack or AttackB, 50/50" },
+            target.as_deref().unwrap_or("none"),
+            point[0],
+            point[1],
+            off.to_degrees()
+        );
+        self.log.detail(format!("connor update {}: {line}", self.updates));
+        line
+    }
+
+    /// Each update after his own (M5 5c-5): a swing that waited for his
+    /// turn starts when the turn is over; a swing that ended (or was
+    /// replaced) is forgotten. Returns a line for `fight.log`.
+    pub fn swing_step(&mut self) -> Option<String> {
+        let s = self.swing.as_mut()?;
+        if s.waiting {
+            if self.walker.auto.is_some() {
+                return None;
+            }
+            s.waiting = false;
+            let m = s.movement;
+            self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(m, kq8_core::connor::plain_movement_name(m).to_string())]);
+            return Some(format!("his turn is over: '{m}' starts"));
+        }
+        if self.walker.mode != Mode::Special || self.walker.movement != s.movement {
+            let m = s.movement;
+            self.swing = None;
+            return Some(format!("'{m}' is over: the next click can swing"));
+        }
+        None
     }
 
     /// `fighting.md` rule 29 (M5 5c-4): his health fell below 0: his dying
@@ -1279,6 +1376,12 @@ pub fn connor_step(
                     }
                     None => "playsound without a file name; nothing".to_string(),
                 },
+                // fighting.md rule 41 (M5 5c-5): his swing's hit test.
+                "do" if sim.swing.as_ref().is_some_and(|w| w.movement == s.played) => {
+                    sim.do_cues.push(s.played.to_string());
+                    "his hit test (fighting.md rule 41)".to_string()
+                }
+                "interruptable" => "can be cut short or not from here (anim-scripts.md rule 7)".to_string(),
                 _ => "cue action not done for Connor".to_string(),
             };
             events.push(format!("cue '{cue}' of {} fires (phase {:.4} -> {:.4}): {what}", s.played, s.played_from, s.played_to));

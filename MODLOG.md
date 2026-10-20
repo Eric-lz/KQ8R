@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-5: Connor hits back (stand-in input)
+
+**Changed:** `kq8-core`: `fight.rs` (`connor_do`, `hit_character`, `cut_short_at`), `connor_inventory.rs` (the hand-weapon slot readies the weapon; a second click puts it away), `active.rs` (`weapon_ready`, `combat_level`). Viewer: `connor_view.rs` (his swing: turn toward the click, `attack` / `attackb` / `attack2` from the weapon's list, his `Do` cue), `door_view.rs` (a click with a weapon ready swings, Ctrl gives the plain click, Shift the big swing; `--swing NAME,N[,big]`), `load.rs` (loads each hand weapon list's three swings), `main.rs`. 3 new tests. DESIGN, provenance.
+**Why:** `fighting.md` rules 39–41. The input side is not traced (open question 1): built from the manual's description, logged as a stand-in.
+**Tested how:** `cargo test --workspace` (423 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --swing goblin22,60 --swing goblin22,90 --swing goblin22,92 --swing goblin22,120,big --frames 1500`, `fight.log`.
+**Result:** Update 60: fists readied; goblin22 is 130° off his heading, so he turns first and `confists.anm/attack` starts at 70; its `Do` at 74 hits (1,154 away, reach 2,350): D 10, R 11 → goblin22 15 → 4. Update 90: a swing at once; the click at 92 does nothing (a swing is playing); `Do` at 94: R 8 → −4 (rule 19's "dies at the second hit"; dying is 5c-7). The Shift swing at 120: × 3.804 → D 38, R 46.
+**Still broken / not tested:** **Not looked at by eye**, and not tried with the real mouse (only `--swing`). The goblin doesn't react or die yet (5c-6, 5c-7). Only his swings come from the weapon's list; he walks with `Conner.anm` (stand-in). Ranged weapons and Delete not done.
+**Next:** 5c-6, characters being hit.
+
 ## 2026-10-20 M5 step 5c-4: the swing lands on Connor
 
 **Changed:** `kq8-core/fight.rs`: `HitKind`, `Damage` (the rolls), `HitTest`, `ConnorFight`, the `Do` cue's hit test and `hit_connor`; `active.rs`: `Request::ConnorHurt` / `ConnorDies`, Connor's fight state, the fight's random draws; `connor.rs`: `Walker::death`. Viewer: `connor_view.rs` (`hurt`: flinch or ouch sound; `die_from_hit`), `door_view.rs` (the two requests; `Connor.kq`'s fight keys to core), `load.rs` (reads `ouchSound`, the damage factors, `ShortAnimList`; loads his `react`, `die`, `dropweapon`, `firedie`, `icedie`). 4 new tests. DESIGN, provenance.

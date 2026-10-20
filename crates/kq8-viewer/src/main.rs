@@ -117,6 +117,10 @@ struct Args {
     click: Vec<(String, u64)>,
     /// `--aim NAME,N`: a ray from the camera to NAME at update N (3e-4b).
     aim: Vec<(String, u64)>,
+    /// `--swing NAME,N[,big]`: at update N Connor readies his hand weapon
+    /// (if none is ready) and swings at NAME, as a click on it with the
+    /// weapon ready (Shift with `big`; M5 5c-5 test, repeatable).
+    swing: Vec<(String, u64, bool)>,
     /// `--special ITEMS,N`: before update N + 1, Connor gets
     /// `KQMonster::setState Connor special ITEMS` as if from a script
     /// (M3 3i-7 test; ITEMS uses `;` between items, e.g.
@@ -165,6 +169,7 @@ fn parse_args() -> Result<Args, String> {
         at: None,
         click: Vec::new(),
         aim: Vec::new(),
+        swing: Vec::new(),
         special: None,
         command: Vec::new(),
         right: None,
@@ -210,6 +215,17 @@ fn parse_args() -> Result<Args, String> {
                 let (name, n) = v.rsplit_once(',').ok_or("--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 let n = n.trim().parse::<u64>().map_err(|_| "--click needs NAME,UPDATE e.g. Condoor,30".to_string())?;
                 a.click.push((name.trim().to_string(), n));
+            }
+            "--swing" => {
+                let v = value()?;
+                let usage = "--swing needs NAME,UPDATE[,big] e.g. goblin22,60".to_string();
+                let w: Vec<&str> = v.split(',').map(str::trim).collect();
+                let (name, n, big) = match w[..] {
+                    [name, n] => (name, n, false),
+                    [name, n, b] if b.eq_ignore_ascii_case("big") => (name, n, true),
+                    _ => return Err(usage),
+                };
+                a.swing.push((name.to_string(), n.parse::<u64>().map_err(|_| usage.clone())?, big));
             }
             "--aim" => {
                 let v = value()?;
@@ -361,6 +377,8 @@ N is an update number (15 updates per second):
   --click NAME,N             click object NAME before update N + 1 (repeatable;
                              skips the line-of-sight test)
   --aim NAME,N               like --click, but only if the camera can see it
+  --swing NAME,N[,big]       at update N ready the hand weapon and swing at NAME
+                             (big: the Shift swing)
   --item TYPE                give Connor an item of that type and hold it
   --key NAME,N               press space or 1-8, or click a bar control
                              (left:NAME / right:NAME), before update N + 1 (repeatable)
@@ -523,6 +541,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::RightAt(args.right))
                 .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
+                .insert_resource(door_view::SwingAt(args.swing))
                 .init_resource::<door_view::Deleted>()
                 .init_resource::<door_view::CharacterColliders>()
                 .init_resource::<talk_view::Speech>()

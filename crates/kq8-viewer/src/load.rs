@@ -2682,6 +2682,16 @@ impl Placer<'_> {
                 wanted.extend(record.into_inner());
             }
         }
+        // fighting.md rules 39-40 (M5 5c-5): the swings of each hand
+        // weapon's list (Connor.kq's ShortAnimList); **stand-in**: only
+        // these come from the weapon's list, the rest stays Conner.anm.
+        if let Some(f) = &self.connor_fight {
+            for (_, file) in &f.short_lists {
+                for m in kq8_core::fight::SWINGS {
+                    wanted.insert((Some(file.clone()), m.to_string()));
+                }
+            }
+        }
         let mut loaded = Vec::new();
         let mut problems = Vec::new();
         let mut files: BTreeMap<String, Option<Vec<kq_text::Section>>> = BTreeMap::new();

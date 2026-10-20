@@ -1244,7 +1244,8 @@ stats.
     (`die`, `firedie` / `icedie`), then he lies dead (**stand-in**: game
     over is another study; the tips are logged only). **Test:** How to
     check 2 and 3 in the log (misses "too far" / "behind").
-  - **5c-5, Connor hits back** (rules 39–41; **stand-in input**, the
+  - **5c-5, Connor hits back** (**done** 2026-10-20; two punches take
+    goblin22 15 → 4 → −4; test option `--swing NAME,N[,big]`) (rules 39–41; **stand-in input**, the
     manual's description, open question 1). Clicking the hand-weapon
     slot readies it (`INVITEM_Fists` at the start → `confists.anm` by
     `Connor.kq`'s `ShortAnimList`; **stand-in**: only his `attack`,
