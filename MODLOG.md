@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d-2: `loadKQ` while playing with a name and a place (core)
+
+**Changed:** Core keeps templates of the files scripts may load (given by the viewer; none yet). A runtime `loadKQ` with a name or place, or for a file with no prepared copy, makes a new copy: the name rule (`same`, `@` → `NoName<n>`, a new name), the place and angles (or the file's), the −1 / −2 ground rule, a name in use refused; the object is in core's world at once, `$ObjectName` is set, its script gets `Init`, and `Request::Spawn` asks the viewer to draw it (only logged for now).
+**Why:** Plan 5d step 2 (the barrels' `loadKQ barelupx.kq @ $KQObject::loc`).
+**Tested how:** `cargo test --workspace` (436 core tests, 1 new), clippy clean.
+**Result:** The new test: two `@` copies are `NoName0` and `NoName1` at the given places and angles; `same` keeps the file's name and place; a second `same` is refused; four spawn requests.
+**Still broken / not tested:** The viewer gives no templates yet and draws nothing: 5d-3 and 5d-4.
+**Next:** 5d-3, templates for still models (the wreck).
+
 ## 2026-10-20 M5 5d-1: `KQAnimOnce` objects report their end
 
 **Changed:** The loader marks `classType=KQAnimOnce` objects as play-once (it never did: the flag was only set in tests). The other animated objects (`world.anims`) now handle a play-once end as `world.objects` did: `Die Normal` to the script, `getEndLoop`'s cue, `setDeleteWhenDone`.

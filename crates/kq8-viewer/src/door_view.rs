@@ -1008,6 +1008,11 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: {}", c.around(point)),
                 None => format!("{at}: camera around a point: no game camera; not applied"),
             },
+            // M5 5d-2: a new copy; drawn from 5d-3 / 5d-4 on.
+            Request::Spawn { file, name, placement, at } => {
+                let p = placement.position;
+                format!("{at}: loadKQ {file}: new copy {name} at ({:.0}, {:.0}, {:.0}): not drawn yet", p[0], p[1], p[2])
+            }
             Request::Load { file, name, at } => {
                 loads.0.push(name.clone());
                 format!("{at}: applied: loadKQ {file}: {name} comes in (next system)")

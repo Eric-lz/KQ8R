@@ -149,6 +149,9 @@ pub enum Request {
     /// `loadKQ <file>` while playing (M3 3k-4, Q90 stand-in): the copy
     /// of `name` prepared at the start comes into the world.
     Load { file: String, name: String, at: String },
+    /// `loadKQ` while playing made a new copy of a template (M5 5d-2):
+    /// the viewer draws it there.
+    Spawn { file: String, name: String, placement: Placement, at: String },
     /// `KQConner::walkTo` / `runTo` / `pointAndCue` (`anim-scripts.md`
     /// rules 24–25, M3 3l-2): a scripted walk or turn; a walk also
     /// switches `handsOff` on.
@@ -435,6 +438,27 @@ fn describe_accepts(a: &Accepts) -> String {
     }
 }
 
+/// A file a script may load while playing (M5 5d-2; `objects.md` "Where
+/// a world's objects come from" rules 2, 6): what the viewer read from it
+/// at the start, to make new copies of.
+#[derive(Debug, Clone)]
+pub struct Template {
+    /// Its section name (kept with `same` or no name word).
+    pub name: String,
+    pub script: Option<String>,
+    /// The file's own place (used when the line gives none).
+    pub placement: Placement,
+    pub kind: TemplateKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum TemplateKind {
+    /// An animated object (`KQAnimOnce`, `KQAnimObject`): its player.
+    Anim(Box<NamedAnimPlayer>),
+    /// A still model: its `BOUNDS.KQ` box, if any, and collision type.
+    Still { bounds: Option<([f32; 3], [f32; 3])>, collision_type: u32 },
+}
+
 /// Any other object that can be clicked: never moves in this step.
 #[derive(Debug, Clone)]
 pub struct Clickable {
@@ -580,6 +604,9 @@ pub struct WorldState {
     /// Names deleted during the event running now: free only once it has
     /// finished (`clicking.md` rule 22, 3l-7).
     deleted_this_event: BTreeSet<String>,
+    /// The files scripts may load while playing, by lower-case base name
+    /// (M5 5d-2).
+    templates: BTreeMap<String, Template>,
     /// Scripts a world command asked to run at once (`ScriptHost::take_calls`).
     calls_out: Vec<(String, Vec<String>)>,
     /// `setThirdPerson` (`camera.md` "First person" rule 7): the
@@ -1490,11 +1517,18 @@ impl WorldState {
             self.note(format!("{at}: usage: loadKQ <file> [name [x y z [rx ry rz]]]"));
             return "1".into();
         };
+        let key = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
+        // M5 5d-2: a name or a place on the line, or no prepared copy: a
+        // new copy of its template.
+        if words.len() > 2 || !self.dormant.contains_key(&key) {
+            if let Some(t) = self.templates.get(&key).cloned() {
+                return self.load_copy(&key, t, words, at);
+            }
+        }
         if words.len() > 2 {
-            self.note(format!("{at}: loadKQ {}: a name or position while playing: not done yet", words[1..].join(" ")));
+            self.note(format!("{at}: loadKQ {}: a name or position while playing, and no template of {file}: not done", words[1..].join(" ")));
             return "0".into();
         }
-        let key = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
         let Some((name, script)) = self.dormant.get(&key).cloned() else {
             self.note(format!("{at}: loadKQ {file}: no copy prepared at the start (already loaded, or not found): not done"));
             return "0".into();
@@ -1511,6 +1545,80 @@ impl WorldState {
         self.note(format!("{at}: loadKQ {file}: {name} comes into the world (as at the start){}", if script.is_some() { "; its script gets Init now" } else { "; no script" }));
         self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
         if let Some(script) = script {
+            self.calls_out.push((script, vec![name, "Init".into()]));
+        }
+        "0".into()
+    }
+
+    /// The template files (M5 5d-2), from the viewer at the start.
+    pub fn set_templates(&mut self, t: impl IntoIterator<Item = (String, Template)>) {
+        self.templates.extend(t.into_iter().map(|(f, t)| (f.to_ascii_lowercase(), t)));
+    }
+
+    /// `loadKQ <file> [name [x y z [rx ry rz]]]` making a new copy of a
+    /// template (M5 5d-2; `objects.md` rules 2, 6; `anim-scripts.md` rule
+    /// 12): the name (`same` or none: the file's; `@`: `NoName<n>` now; else
+    /// that name), the place (x y z and the angles, 0 0 0 if missing,
+    /// replace the file's; z −1 / −2: the floor / surface height), refused
+    /// for a name in use as today; `$ObjectName` set; the object is in the
+    /// world at once (core side), its script gets `Init` now, and the
+    /// viewer is asked to draw it.
+    fn load_copy(&mut self, key: &str, t: Template, words: &[String], at: &str) -> String {
+        let name = match words.get(2).map(String::as_str) {
+            None | Some("same") => t.name.clone(),
+            Some("@") => self.items.next_name(),
+            Some(n) => n.to_string(),
+        };
+        let lower = name.to_ascii_lowercase();
+        let live = self.known.contains(&lower) && !self.deleted.contains(&lower);
+        if live || self.deleted_this_event.contains(&lower) {
+            let why = if live { "a live object already has that name" } else { "its name was deleted in this same event and is not free yet" };
+            self.note(format!("{at}: ERROR loadKQ {key}: {why} ({name}): the original stops with a fatal error; load refused"));
+            return "1".into();
+        }
+        let num = |k: usize| words.get(k).filter(|w| looks_like_number(w)).map(|w| number_value(w) as f32);
+        let placement = match (num(3), num(4), num(5)) {
+            (Some(x), Some(y), Some(mut z)) => {
+                if z == -1.0 || z == -2.0 {
+                    match self.heights.as_ref().and_then(|h| h(x, y, z == -1.0)) {
+                        Some(g) => z = g,
+                        None => self.note(format!("{at}: loadKQ {key}: z {z} at ({x:.0}, {y:.0}): no ground height known; kept")),
+                    }
+                }
+                let angles = [num(6).unwrap_or(0.0), num(7).unwrap_or(0.0), num(8).unwrap_or(0.0)];
+                Placement { rotation: kq8_data::objects::rotation(angles), position: [x, y, z] }
+            }
+            _ => t.placement,
+        };
+        self.deleted.remove(&lower);
+        self.known.insert(lower);
+        let what = match &t.kind {
+            TemplateKind::Anim(p) => {
+                let mut player = (**p).clone();
+                player.name = name.clone();
+                player.base = placement;
+                self.anims.push(AnimObject { player, script: t.script.clone(), gone: false, character: None, translucency: None });
+                "animated"
+            }
+            TemplateKind::Still { bounds: Some((min, max)), collision_type } => {
+                let mut c = Clickable::plain(&name, "KQObject", *min, *max, placement, *collision_type);
+                c.script = t.script.clone();
+                self.clickables.push(c);
+                "still, with its box"
+            }
+            TemplateKind::Still { bounds: None, .. } => "still, no box",
+        };
+        self.vars_out.push(("ObjectName".into(), name.clone()));
+        let p = placement.position;
+        self.note(format!(
+            "{at}: loadKQ {key}: a new copy {name} ({what}) at ({:.0}, {:.0}, {:.0}); $ObjectName = {name}{} (objects.md rules 2, 6)",
+            p[0],
+            p[1],
+            p[2],
+            if t.script.is_some() { "; its script gets Init now" } else { "; no script" }
+        ));
+        self.requests.push(Request::Spawn { file: key.to_string(), name: name.clone(), placement, at: at.to_string() });
+        if let Some(script) = t.script {
             self.calls_out.push((script, vec![name, "Init".into()]));
         }
         "0".into()
@@ -2504,6 +2612,7 @@ impl Active {
                 dormant: BTreeMap::new(),
                 deleted_this_event: BTreeSet::new(),
                 calls_out: Vec::new(),
+                templates: BTreeMap::new(),
                 first_person_locked: false,
                 was_first_person: false,
                 connor_jump: None,
@@ -4796,6 +4905,34 @@ mod tests {
         assert_eq!(a.scripts.vars.get("D::died"), Some("burst Normal"), "{log}");
         assert!(log.contains("(KQAnimOnce): deleted (setDeleteWhenDone"), "{log}");
         assert!(!log.contains("EndLoop open"), "no EndLoop for a KQAnimOnce: {log}");
+    }
+
+    #[test]
+    fn load_kq_while_playing_makes_new_copies_by_the_name_and_place_rules() {
+        // M5 5d-2: objects.md rules 2, 6; anim-scripts.md rule 12.
+        let script = "if test $2 == ConnorAction\n loadKQ burst.kq @ 100 200 300 0 0 1.57\n set T::n $ObjectName\n loadKQ burst.kq @ 400 200 300\n set T::m $ObjectName\n loadKQ wreck.kq same\n loadKQ wreck.kq same\n loadKQ wreck.kq other\nendif\n";
+        let mut a = with_object(script, "x");
+        let player = crate::named_anim::tests::still_then_open("barrelsm");
+        let at = Placement::at([0.0; 3]);
+        a.world.set_templates([
+            ("BURST.KQ".to_string(), Template { name: "barrelsm".into(), script: None, placement: at, kind: TemplateKind::Anim(Box::new(player)) }),
+            ("wreck.kq".to_string(), Template { name: "barelded".into(), script: None, placement: Placement::at([7.0, 8.0, 9.0]), kind: TemplateKind::Still { bounds: Some(([-1.0; 3], [1.0; 3])), collision_type: 0x41 } }),
+        ]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let log = a.take_log().join("\n");
+        let (n, m) = (a.scripts.vars.get("T::n").map(str::to_string), a.scripts.vars.get("T::m").map(str::to_string));
+        assert_eq!((n.as_deref(), m.as_deref()), (Some("NoName0"), Some("NoName1")), "@: the counter, at the line: {log}");
+        let burst = a.world.anims.iter().find(|o| o.player.name == "NoName0").expect("in the world at once");
+        assert_eq!(burst.player.base.position, [100.0, 200.0, 300.0]);
+        assert!((burst.player.base.rotation[0][0] - 1.57f32.cos()).abs() < 1e-4, "the angles given");
+        let second = a.world.anims.iter().find(|o| o.player.name == "NoName1").unwrap();
+        assert_eq!(second.player.base.rotation, kq8_data::objects::rotation([0.0; 3]), "no angles: 0 0 0");
+        let wreck = a.world.clickables.iter().find(|c| c.name == "barelded").expect("same: the file's name");
+        assert_eq!(wreck.placement.position, [7.0, 8.0, 9.0], "no place: the file's");
+        assert!(log.contains("ERROR loadKQ wreck.kq: a live object already has that name (barelded)"), "{log}");
+        assert!(a.world.clickables.iter().any(|c| c.name == "other"));
+        let spawns = a.world.requests.iter().filter(|r| matches!(r, Request::Spawn { .. })).count();
+        assert_eq!(spawns, 4);
     }
 
     #[test]

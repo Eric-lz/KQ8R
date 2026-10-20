@@ -2706,3 +2706,15 @@ executable looked at.
 | At its movement's end, also for the other animated objects (`world.anims`, where runtime loads come in): `Die Normal` to its script, `Cue 300` to its `getEndLoop` listener, no `EndLoop`; deleted if `setDeleteWhenDone 1` | `anim-scripts.md` rules 11, 13, 20 | Unit test |
 | `setDeleteWhenDone` finds a `KQAnimOnce` among them too | Rule 13 | Unit test |
 
+### 5d-2, the name and place rules — `crates/kq8-core/src/active.rs` (`Template`, `TemplateKind`, `set_templates`, `load_copy`, `Request::Spawn`), `item.rs` (`next_name`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| The name word: missing or `same` = the file's section name; `@` = `NoName<n>` from the game-wide counter, given at the line; anything else = that name | `objects.md` "Where a world's objects come from" rule 2; `anim-scripts.md` rule 12; `items.md` rule 9 | Unit test |
+| With x y z the place replaces the file's; the angles given, or 0 0 0; z −1 / −2 = the floor / surface height | `objects.md` rules 2, "Ground heights −1 and −2" 1–2 | Unit test (place, angles) |
+| A name in use (live, or deleted in this same event) refused with an error line | `objects.md` rule 6 ("for us: log an error and refuse") | Unit test |
+| `$ObjectName` = the new object's name | `anim-scripts.md` rule 12 | Unit test |
+| The object is in core's world at once (an animated one with the template's player; a still one with a box as a box object) and its script gets `Init` during the line | `objects.md` rule 6 | Unit test |
+| A file with a prepared copy and no name or place on the line still uses that copy (M3 3k-4) | Ours (kept until a later step) | Existing tests |
+| The viewer is asked to draw it (`Request::Spawn`); not drawn yet in 5d-2 | Ours | — |
+

@@ -1354,7 +1354,9 @@ Steps (one commit each; each logged in `viewer.log` / the script logs):
    for objects in `world.anims` too; `once` set by the loader from
    `classType`. **Test:** unit test; viewer: none yet in Daventry at the
    start.
-2. **5d-2, the name and place rules in core**: `loadKQ <file> <name>
+2. **5d-2, the name and place rules in core** (**done** 2026-10-20;
+   unit test; the object is made in core at the line itself, so the
+   next line (`tossItems $ObjectName`) finds it): `loadKQ <file> <name>
    [x y z [rx ry rz]]` while playing: `same` / `@` / a new name, `@`
    gives `NoName<n>` (the items' counter) at the line, `$ObjectName`
    set, position and angles replace the file's (0 0 0 if no angles),

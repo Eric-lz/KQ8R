@@ -250,6 +250,14 @@ impl Items {
         self.index(name).map(|i| &self.objects[i])
     }
 
+    /// The next `NoName<n>` name of the game-wide counter (rule 9; also
+    /// `loadKQ … @`, `anim-scripts.md` rule 12, M5 5d-2).
+    pub fn next_name(&mut self) -> String {
+        let name = format!("NoName{}", self.next_no_name);
+        self.next_no_name += 1;
+        name
+    }
+
     /// Makes a new item object of type `kind` (any spelling rule 2
     /// allows). `Err` if there is no such type.
     pub fn make(&mut self, kind: &str, quantity: i64, place: Place) -> Result<&ItemObject, String> {
