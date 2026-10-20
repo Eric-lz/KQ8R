@@ -2660,4 +2660,11 @@ did not show his fists-up stance nor the sword pointer.
 | Readying sets his hand mode to sword (0), putting away back to empty hands (4); `KQConner::getDoMode` answers it | `pushing.md` "Words used here" (sword 0, bow 1, empty 4), `inventory.md` rule 9 (`SwordMode`, the fists too) | — |
 | A conversation with `<enemy>` 0 and his weapon drawn: `away` plays (the weapon's version), then bare-hand mode (the weapon no longer ready), `out`, then the case (rules 8–10); our 150-update guard on each | `conversation.md` rule 7; the user's check (the Wizard) | Unit test; `conversation.log`: `away` 32–38, `out` 39–44, the Wizard starts at 44 |
 | With a weapon ready, a left click that picks a character with no fight part (the Wizard) is the plain click, not a swing | The user's check in the original (the Wizard); **ours** for which characters count (Q138) | — |
-| His hand mode now also stops pushing and gestures while a weapon is ready | `pushing.md`, `conversation.md` rule 18 (already built; the mode was always empty) | — |
+| His hand mode now also stops pushing and gestures while a weapon is ready | `pushing.md`, `conversation.md` rule 18 (already built; the mode was always empty) | The user's check: no pushing with a weapon drawn |
+
+### 5c fix 4, the attack click's target — `crates/kq8-core/src/active.rs` (`pick_fighter`, `target_point` for characters), viewer `door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| With a hand weapon ready the click line also meets the boxes (`BOUNDS.KQ`, as they stand) of characters that fight and are not dying, whatever their collision type; the nearest is his target unless a building is between the camera and it; else the old rule (a clickable character picked) | `fighting.md` rule 39 ("the clicked character becomes his target"); **stand-in** (Q139): by `clicking.md` rule 1 and `characters.md` rule 8 no creature is clickable | Viewer (`--aim goblin22`): hits for 11 and 8, goblin22 dies |
+| `--aim NAME` also aims at a character's box | Test option (ours) | Viewer |

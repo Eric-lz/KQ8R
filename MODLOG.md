@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 4: Connor's punches find their target
+
+**Changed:** With a hand weapon ready, the click line also tests the boxes of the characters that fight (not dying), whatever their collision type; the nearest one not behind a building becomes Connor's target. `--aim NAME` can aim at a character. New question Q139.
+**Why:** The user's check: punches did no damage. The log of the user's run: every mouse click "meets nothing clickable", target none, "hits dead air". By the notes no creature is clickable (type 0x42 has no bit 0x20), so a swing could never have a target.
+**Tested how:** `cargo test --workspace` (432 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --key left:IDCTL_INVBAR_SHORT,40 --aim goblin22,60 --aim goblin22,75 --aim goblin22,90 --aim goblin22,105 --aim goblin22,120 --frames 2500`; `viewer.log`, `fight.log`.
+**Result:** Update 60: the line meets goblin22's box at 4,677; he turns, the swing hits at 74 (loss 11, health 15 → 4); at 93 the second hit (loss 8) kills it; at 124 its death ends: 3 experience, a corpse. Later clicks: target none (it's gone), dead air. A first run was spoiled: the fists slot clicked at update 10 was refused because Connor was still landing from `--at` (fix 3 working).
+**Still broken / not tested:** The real mouse click on a creature is not run by me (the `--aim` click takes the same path). How the original finds the target is a stand-in (Q139): a click near but not on a creature misses.
+**Next:** The user's look.
+
 ## 2026-10-20 M5 5c fix 3: the landing and the stumble; the weapon away before a conversation
 
 **Changed:** No readying or putting away while a jump's landing (`jumpend`, `jumprun`, `jumpstop`) or a stumble (`crash`) plays. Readying sets Connor's hand mode (sword 0 / empty 4, also answered by `getDoMode`). `conversation.md` rule 7 is built: with a weapon drawn, `away` plays, he goes to bare hands (the weapon is no longer ready), `out` plays, then the conversation goes on. With a weapon ready, a click on a character that doesn't fight (the Wizard) is the plain click.

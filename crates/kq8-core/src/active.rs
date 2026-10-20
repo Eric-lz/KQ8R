@@ -2974,6 +2974,29 @@ impl Active {
         doors.chain(others).chain(items).min_by(|a, b| a.1.total_cmp(&b.1))
     }
 
+    /// An attack click's target (M5 5c fix 4, **stand-in**, Q139): the
+    /// nearest character that fights (not dying) whose box (`BOUNDS.KQ`,
+    /// as it stands) the line meets, whatever its collision type: the
+    /// creatures' type 0x42 has no clickable bit (`characters.md` rule 8,
+    /// `clicking.md` rule 1), yet `fighting.md` rule 39 says the clicked
+    /// character becomes his target. Name and distance along the line.
+    pub fn pick_fighter(&self, origin: [f32; 3], dir: [f32; 3]) -> Option<(String, f32)> {
+        self.world
+            .anims
+            .iter()
+            .filter(|a| !a.gone && !self.world.is_switched_off(&a.player.name))
+            .filter_map(|a| {
+                let c = a.character.as_deref()?;
+                let f = c.fight.as_ref()?;
+                if f.dying.is_some() {
+                    return None;
+                }
+                let (min, max) = c.bounds?;
+                Some((a.player.name.clone(), ray_box(origin, dir, &a.player.placement(), min, max)?))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+    }
+
     /// The middle of a clickable object's box in the world (for the
     /// viewer's `--aim` test option).
     pub fn target_point(&self, name: &str) -> Option<[f32; 3]> {
@@ -2981,6 +3004,10 @@ impl Active {
         let w = &self.world;
         if let Some(i) = w.door_index(name) {
             return w.doors[i].bounds.map(|b| mid(&w.doors[i].door.placement(), b));
+        }
+        // A character's box (M5 5c fix 4: `--aim` at a creature).
+        if let Some(j) = w.character_index(name) {
+            return w.anims[j].character.as_ref()?.bounds.map(|b| mid(&w.anims[j].player.placement(), b));
         }
         if let Some(i) = w.chest_index(name) {
             return w.chests[i].bounds.map(|b| mid(&w.chests[i].chest.placement(), b));

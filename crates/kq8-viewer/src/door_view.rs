@@ -1251,6 +1251,12 @@ pub fn door_click_input(
     let walls = ClickBuildings { buildings: buildings.as_deref().map_or(&[][..], |b| &b.0[..]), active: &sim.active };
     let pick = sim.active.pick_line(origin, dir, &walls);
     let from = format!("update {updates}: {how}: line from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
+    // M5 5c fix 4 (stand-in, Q139): a fighting character's box on the
+    // line, unless a building is nearer.
+    let fighter = sim.active.pick_fighter(origin, dir).filter(|(_, t)| {
+        let to: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * t);
+        kq8_core::active::ClickWalls::first_hit(&walls, origin, to).is_none()
+    });
     let (line, picked) = match pick {
         Pick::Seen { name, t } => (format!("{from} hits {name} first, at {t:.0} units (box)"), Some(name)),
         Pick::Building { name, t, behind } => {
@@ -1267,7 +1273,14 @@ pub fn door_click_input(
     // (the user's check in the original, 2026-10-20: fix 3).
     let peaceful = picked.as_deref().and_then(|n| sim.active.world.character_index(n)).is_some_and(|j| sim.active.world.anims[j].character.as_ref().is_some_and(|c| c.fight.is_none()));
     if sim.active.world.weapon_ready.is_some() && !ctrl && !peaceful {
-        let target = picked.clone().filter(|n| sim.active.world.character_index(n).is_some());
+        let target = match &fighter {
+            Some((n, _)) => Some(n.clone()),
+            None => picked.clone().filter(|n| sim.active.world.character_index(n).is_some()),
+        };
+        let line = match &fighter {
+            Some((n, t)) => format!("{line}; the line meets fighter {n}'s box at {t:.0} (stand-in, Q139)"),
+            None => line,
+        };
         let point = match target.as_deref().and_then(|n| sim.active.world.character_index(n)) {
             Some(j) => {
                 let p = sim.active.world.anims[j].player.base.position;
