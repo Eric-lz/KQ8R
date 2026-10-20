@@ -1084,7 +1084,8 @@ stats.
     farther than the two balls added, then plays `birth`, drawn, solid,
     gravity on, turned toward Connor; then the chase. The graveyard trap
     (`zomtrap.cs`) through its script commands.
-  - **5a-9, the flying mover corrected** (rule 32, Q129): the down 150
+  - **5a-9, the flying mover corrected** (**done** 2026-10-20; bat2 on
+    the lake's surface, 6,630) (rule 32, Q129): the down 150
     all or nothing; the raise from the top of its shape onto the drawn
     ground (the water surface) or a building, at most 300, as an up
     pass. Bats end each update on the water surface.

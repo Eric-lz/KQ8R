@@ -267,7 +267,7 @@ impl Character {
             let Some(m) = self.mover.as_deref_mut() else { return notes };
             m.position = player.base.position;
             if first {
-                notes.push(format!("mover: first update at z {:.0}: flyingObject=1, the flying mover (no gravity, no steps; down up to 150, up up to 300; rule 8, not sure of every detail)", m.position[2]));
+                notes.push(format!("mover: first update at z {:.0}: flyingObject=1, the flying mover (no gravity, no steps; down 150 all or nothing, raised up to 300 onto the drawn ground or a building; character-movement.md rule 32)", m.position[2]));
             }
             let before = m.position[2];
             let (r, on) = m.fly_update(wanted, world);
@@ -280,7 +280,7 @@ impl Character {
                     notes.push(format!("flying: moves from z {before:.0}"));
                 }
             } else if let Some(from) = self.falling_from.take() {
-                notes.push(format!("flying: settles at z {z:.0} on {} (moved {:.0})", on.unwrap_or_else(|| "nothing (the raise)".into()), z - from));
+                notes.push(format!("flying: settles at z {z:.0} (moved {:.0}); last update: {} (character-movement.md rule 32)", z - from, on.unwrap_or_default()));
             }
             self.after_move(player, world, now, &mut notes);
             return notes;

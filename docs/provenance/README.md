@@ -2383,3 +2383,11 @@ marked otherwise.
 | The chase waits until `birth` has ended | **Stand-in**, asked as Q134 | Viewer |
 | Giving up with `hide`: Birth, `hide`; when it ends, underground again (not drawn, not solid); the reset to home with `hide` (rule 21) at once | Rules 21, 28; `characters.md` rule 16 | Unit test |
 | The viewer shows the body and gives back its own draw / collider groups while the running game says it has risen | `characters.md` rules 16, 33 | `characters.log` "risen: drawn" |
+
+### 5a-9, the flying mover corrected — `crates/kq8-core/src/connor_mover.rs` (`fly_update`, `line_hit`), `character.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Steps 0, gravity off; the ordinary move with the `keepOnGround` raise | `character-movement.md` rule 32 | Unit test |
+| The drop of 150 as a down pass, cancelled completely if it hits anything | Rule 32 (corrects `characters.md` rule 8, Q129) | Unit test (stays 100 above land) |
+| A line down from the top of its shape to its feet against the drawn ground and buildings; raised onto what it finds, at most 300, as an up pass, cancelled if that hits something | Rule 32; the up pass not testing the terrain it is put on is **ours** | Unit test; viewer: bat2 ends on the lake's surface, 6,630 |

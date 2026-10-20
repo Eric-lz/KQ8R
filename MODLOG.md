@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-9: the flying mover corrected (Q129 built)
+
+**Changed:** `kq8-core/src/connor_mover.rs`: `fly_update` follows `character-movement.md` rule 32: the 150 drop is all or nothing, and the raise looks down from the top of its shape to its feet against the drawn ground (the water surface) and buildings, at most 300, as an up pass; new `MoverWorld::line_hit` (the point a line meets first). `character.rs`: its log lines. 1 test rewritten. DESIGN, provenance.
+**Why:** Rule 32 (A's answer to Q129), the last step of 5a.
+**Tested how:** `cargo test --workspace` (406 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 161976,199500,0 --frames 2500`, `characters.log`.
+**Result:** bat2 (placed at 6,790 over the lake) sinks and settles at **6,630**, the water surface, at update 3 ("dropped 150; raised 150 onto the ground"), then flies its loop over the lake at 1,159 units/s, staying at 6,630. Unit tests: over land from 1,000 it drops 150 at a time and stops 100 up (the next drop would hit the ground: cancelled); over the pond it ends every update on the surface.
+**Still broken / not tested:** **Not looked at by eye.** A flyer starting less than 150 above land stays that high (the rule as written).
+**Next:** the user's checks in the original (`character-movement.md` "How to check"); A: Q132–Q134, then the fight study.
+
 ## 2026-10-20 M5 step 5a-8: the zombies rise, and sink back
 
 **Changed:** `kq8-core/src/character_ai.rs`: from Birth, a zombie seen within its alarm radius becomes active and alarmed and rises `birthDelay` s later once Connor is not standing on it (`birth`, drawn, solid, gravity on, turned to him); giving up with `hide` sends it underground again when `hide` ends. `character.rs`: the `unborn` flag. Viewer: `anim_view.rs` shows / hides the body from it, `draw_distance.rs` gives a risen one its own groups (drawn, solid). Stand-in: the chase waits until `birth` has ended (Q134 asked). 1 new test. DESIGN, provenance.

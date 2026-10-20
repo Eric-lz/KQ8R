@@ -110,7 +110,13 @@ pub trait MoverWorld {
     /// is never tested (the one looking). `None` = the line is free. For
     /// the stuck escape (`character-movement.md` rule 7, M5 5a-2) and the
     /// sight test (rule 20).
-    fn line_blocked(&self, _from: [f32; 3], _to: [f32; 3], _mask: u32, _skip: &str) -> Option<String> {
+    fn line_blocked(&self, from: [f32; 3], to: [f32; 3], mask: u32, skip: &str) -> Option<String> {
+        self.line_hit(from, to, mask, skip).map(|(_, w)| w)
+    }
+    /// Like [`MoverWorld::line_blocked`], with the point where the line
+    /// first meets it (the flying mover's raise, `character-movement.md`
+    /// rule 32; M5 5a-9).
+    fn line_hit(&self, _from: [f32; 3], _to: [f32; 3], _mask: u32, _skip: &str) -> Option<([f32; 3], String)> {
         None
     }
 }
@@ -411,12 +417,12 @@ impl MoverWorld for Scene<'_> {
         std::mem::take(&mut *self.notes.borrow_mut())
     }
 
-    fn line_blocked(&self, from: [f32; 3], to: [f32; 3], mask: u32, skip: &str) -> Option<String> {
-        let mut best: Option<(f32, String)> = None;
+    fn line_hit(&self, from: [f32; 3], to: [f32; 3], mask: u32, skip: &str) -> Option<([f32; 3], String)> {
+        let mut best: Option<(f32, [f32; 3], String)> = None;
         let mut keep = |p: [f32; 3], what: &str| {
             let d = length(sub(p, from));
-            if best.as_ref().is_none_or(|(b, _)| d < *b) {
-                best = Some((d, what.to_string()));
+            if best.as_ref().is_none_or(|(b, _, _)| d < *b) {
+                best = Some((d, p, what.to_string()));
             }
         };
         if let Some(p) = self.ground.drawn_line_hit(from, to) {
@@ -439,7 +445,7 @@ impl MoverWorld for Scene<'_> {
                 keep(p, &format!("character {}", c.name));
             }
         }
-        best.map(|(_, w)| w)
+        best.map(|(_, p, w)| (p, w))
     }
 
     fn pass_through(&self, name: &str) {
@@ -795,13 +801,20 @@ impl Mover {
         m
     }
 
-    /// `flyingObject=1` (`characters.md` rule 8, Q122 c; M4 4d-6b-3; the
-    /// note is "not sure of every detail"): step up and down 0 and gravity
-    /// off, the ordinary move, then down by up to [`FLY_DOWN`] (stopped by
-    /// what the down pass would land on), then, if the ground lies above
-    /// its feet within its height, up by up to [`FLY_UP`]. The raise uses
-    /// the terrain only (a building surface above its feet: not built).
-    /// Returns the update's report and what stopped the drop, if anything.
+    /// `flyingObject=1` (`character-movement.md` rule 32, Q129; M5 5a-9):
+    ///
+    /// 1. step up and down 0, gravity off;
+    /// 2. the ordinary move (with the `keepOnGround` raise);
+    /// 3. down [`FLY_DOWN`] as a down pass: if it hits anything the drop is
+    ///    cancelled completely;
+    /// 4. a line straight down from the top of its shape to its feet
+    ///    against the drawn ground (the water surface) and buildings: a
+    ///    surface found there raises it onto it by at most [`FLY_UP`], as
+    ///    an up pass (cancelled if that pass hits something; **ours**: the
+    ///    up pass tests buildings, objects and characters, not the terrain
+    ///    it is being put on).
+    ///
+    /// Returns the update's report and what the drop or the raise did.
     pub fn fly_update(&mut self, wanted: [f32; 3], world: &dyn MoverWorld) -> (Report, Option<String>) {
         self.step_up = 0.0;
         self.step_down = 0.0;
@@ -809,17 +822,31 @@ impl Mover {
         let report = self.update(wanted, world);
         let start = self.position;
         let end = add(start, [0.0, 0.0, -FLY_DOWN]);
-        let stop = nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end));
-        let landed = stop.as_ref().map(|h| h.what.clone());
-        self.position = stop.map_or(end, |h| h.position);
-        let height = self.balls.heights.last().map_or(0.0, |h| h + self.balls.radius);
-        if let Some((g, _)) = world.ground(self.position[0], self.position[1]) {
-            let above = g - self.position[2];
-            if above > 0.0 && above <= height {
-                self.position[2] += above.min(FLY_UP);
+        let mut what = Vec::new();
+        match nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end)) {
+            Some(h) => what.push(format!("drop cancelled: it would hit {}", h.what)),
+            None => {
+                self.position = end;
+                what.push("dropped 150".to_string());
             }
         }
-        (report, landed)
+        let height = self.balls.heights.last().map_or(0.0, |h| h + self.balls.radius);
+        let feet = self.position;
+        let top = add(feet, [0.0, 0.0, height]);
+        if let Some((p, on)) = world.line_hit(top, feet, 0x8, "") {
+            let up = (p[2] - feet[2]).clamp(0.0, FLY_UP);
+            if up > 0.0 {
+                let to = add(feet, [0.0, 0.0, up]);
+                match world.sweep(&self.balls, feet, to) {
+                    Some(h) => what.push(format!("raise onto {on} cancelled: it would hit {}", h.what)),
+                    None => {
+                        self.position = to;
+                        what.push(format!("raised {up:.0} onto {on}"));
+                    }
+                }
+            }
+        }
+        (report, Some(what.join("; ")))
     }
 
     /// The terrain contact at the end of a pass, if the terrain counts.
@@ -2317,6 +2344,12 @@ mod tests {
         fn water(&self, x: f32, _y: f32) -> Option<(f32, u32)> {
             (0.0..1000.0).contains(&x).then_some((500.0, 0))
         }
+        /// The drawn ground: the water surface (500) on the pond, else the
+        /// floor (0); a level line down only.
+        fn line_hit(&self, from: [f32; 3], to: [f32; 3], _mask: u32, _skip: &str) -> Option<([f32; 3], String)> {
+            let surface = if (0.0..1000.0).contains(&from[0]) { 500.0 } else { 0.0 };
+            (from[2] >= surface && to[2] <= surface).then_some(([from[0], from[1], surface], "the ground".to_string()))
+        }
     }
 
     #[test]
@@ -2364,20 +2397,34 @@ mod tests {
     }
 
     #[test]
-    fn a_flyer_settles_150_per_update_and_rises_up_to_300() {
-        // characters.md rule 8 (Q122 c): Pond's floor is at 0.
+    fn a_flyer_drops_150_all_or_nothing_and_ends_on_the_water_surface() {
+        // character-movement.md rule 32 (Q129): over land (floor 0) from
+        // 1,000: 850, 700, ... 100, then the drop would hit the ground and
+        // is cancelled: it stays 100 up.
         let mut m = Mover::character([2000.0, 0.0, 1000.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), -1);
         let mut zs = Vec::new();
-        for _ in 0..8 {
-            m.fly_update([0.0; 3], &Pond);
+        let mut last = None;
+        for _ in 0..10 {
+            last = m.fly_update([0.0; 3], &Pond).1;
             zs.push(m.position[2]);
         }
         assert_eq!(&zs[..3], &[850.0, 700.0, 550.0]);
-        assert_eq!(*zs.last().unwrap(), 0.0, "{zs:?}");
-        // Under the ground by 400 (within its height): up 300 a time.
-        let mut u = Mover::character([2000.0, 0.0, -400.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 0);
-        u.fly_update([0.0; 3], &Pond);
-        assert!(u.position[2] > -400.0, "{}", u.position[2]);
+        assert_eq!(*zs.last().unwrap(), 100.0, "{zs:?}");
+        assert!(last.unwrap().contains("drop cancelled: it would hit terrain"));
+        // Over the pond (surface 500, floor 0), keepOnGround=1: the drop
+        // goes through the surface and the raise puts it straight back.
+        let mut b = Mover::character([500.0, 0.0, 660.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 1);
+        let mut zs = Vec::new();
+        for _ in 0..4 {
+            b.fly_update([0.0; 3], &Pond);
+            zs.push(b.position[2]);
+        }
+        assert_eq!(zs, [510.0, 500.0, 500.0, 500.0], "ends every update on the surface");
+        // Under the ground: it comes up (the ordinary move's terrain pass
+        // already puts it on the ground).
+        let mut u = Mover::character([2000.0, 0.0, -250.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 0);
+        let (_, what) = u.fly_update([0.0; 3], &Pond);
+        assert!(u.position[2] >= 0.0, "{what:?}");
     }
 
     // --- Characters (M4 4d-12-2) ---
