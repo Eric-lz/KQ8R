@@ -373,6 +373,8 @@ pub const PUSH_UPDATES: u32 = 4;
 
 /// Hand mode with empty hands (`pushing.md`: sword 0, bow 1, empty 4).
 pub const EMPTY_HANDS: i64 = 4;
+/// Hand mode with a hand weapon ready (the fists too, `inventory.md` rule 9).
+pub const SWORD_MODE: i64 = 0;
 
 impl Mode {
     pub fn name(&self) -> &'static str {

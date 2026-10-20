@@ -50,6 +50,10 @@ pub const WALK_STOP_RIGHT: &str = "walkstopright";
 /// Our guard: an approach movement that has not ended after this many
 /// updates (not loaded, or held) is given up and the next step taken.
 pub const APPROACH_GUARD: u32 = 150;
+/// Rule 7: the weapon put away (`away`), then the bare-hand movement
+/// (`out`).
+pub const WEAPON_AWAY: &str = "away";
+pub const WEAPON_OUT: &str = "out";
 
 /// Rule 6: how Connor gets to his talking spot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +68,10 @@ pub enum Case {
 pub enum Stage {
     /// The command was given; he has not entered his talk state yet.
     Asked,
+    /// Rule 7 (M5 5c fix 3): his weapon was drawn: `away` plays.
+    Away,
+    /// Rule 7: then, in bare-hand mode, `out` plays; rules 8–10 after.
+    Out,
     /// Case "walk": `stopwalk` plays while he turns toward the spot.
     StopWalk,
     /// Case "walk": put 440 short; `walkstopright` plays.
@@ -285,6 +293,7 @@ impl Active {
                 Ok(()) => self.conversation_enter(walker, position),
                 Err(why) => self.world.conversation_note(format!("Connor can't go into his talk state now ({why}); tried again next update")),
             },
+            Stage::Away | Stage::Out => self.weapon_away(walker, position, stage),
             Stage::StopWalk | Stage::WalkStopRight => self.approach(walker, position, stage),
             Stage::Talking => {
                 if right_held {
@@ -380,10 +389,52 @@ impl Active {
         });
         c.case = Some(case);
         c.walk_from = position;
-        // Rule 7: weapons are not built; he never holds one drawn.
+        // Rule 7 (M5 5c fix 3): a drawn weapon is put away first.
         if walker.hand_mode == EMPTY_HANDS || c.keep_weapon {
             notes.push(format!("weapon: {} (rule 7: no away/out)", if c.keep_weapon { "<enemy> not 0, kept" } else { "none drawn (empty hands)" }));
+        } else {
+            c.stage = Stage::Away;
+            c.approach_updates = 0;
+            walker.talk_play = Some(WEAPON_AWAY);
+            notes.push(format!("weapon drawn (hand mode {}): plays {WEAPON_AWAY} first; then bare hands, {WEAPON_OUT}, then the case (rule 7)", walker.hand_mode));
+            self.world.conversation_note(format!("Connor enters his talk state: {}", notes.join("; ")));
+            return;
         }
+        self.conversation_case(walker, position, notes);
+    }
+
+    /// Rule 7 (M5 5c fix 3): `away` ended: bare-hand mode (the weapon is
+    /// no longer ready), `out` plays; `out` ended: the case (rules 8–10).
+    /// Our guard as in the approach.
+    fn weapon_away(&mut self, walker: &mut Walker, position: [f32; 3], stage: Stage) {
+        let movement = if stage == Stage::Away { WEAPON_AWAY } else { WEAPON_OUT };
+        let c = self.world.conversation.as_mut().expect("in a stage");
+        c.approach_updates += 1;
+        let ended = walker.movement == movement && walker.phase >= 1.0;
+        let guard = c.approach_updates > APPROACH_GUARD;
+        if !ended && !guard {
+            return;
+        }
+        let why = if ended { format!("{movement} ended") } else { format!("{movement} did not end in {APPROACH_GUARD} updates (our guard; movement now {})", walker.movement) };
+        if stage == Stage::Away {
+            c.stage = Stage::Out;
+            c.approach_updates = 0;
+            walker.hand_mode = EMPTY_HANDS;
+            walker.talk_play = Some(WEAPON_OUT);
+            let was = self.world.weapon_ready.take();
+            self.world.conversation_note(format!("{why}: bare-hand mode ({was:?} no longer ready); plays {WEAPON_OUT} (rule 7)"));
+        } else {
+            walker.talk_play = None;
+            self.world.conversation_note(format!("{why}: the conversation goes on (rule 7)"));
+            self.conversation_case(walker, position, Vec::new());
+        }
+    }
+
+    /// Rules 8–10: what the case does, once he is ready.
+    fn conversation_case(&mut self, walker: &mut Walker, position: [f32; 3], mut notes: Vec<String>) {
+        let w = &mut self.world;
+        let c = w.conversation.as_mut().expect("asked");
+        let case = c.case.unwrap_or(Case::There);
         match case {
             Case::There => {
                 c.stage = Stage::Talking;
@@ -612,6 +663,25 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), false);
         assert_eq!(walker.mode, crate::connor::Mode::Free, "Wait");
         assert!(a.world.gui_orders.iter().filter(|o| matches!(o, GuiOrder::Conversation { .. })).count() == 2, "the bar away and back");
+    }
+
+    #[test]
+    fn a_drawn_weapon_is_put_away_with_away_and_out_first() {
+        let mut a = world();
+        a.world.weapon_ready = Some("INVITEM_Fists".into());
+        a.test_command("KQConner::conversation Bob 1000 60 0 0 1 0 0", "test");
+        let mut walker = Walker::new(0.0);
+        walker.hand_mode = crate::connor::SWORD_MODE;
+        let at = [1000.0, 1000.0, 100.0];
+        a.conversation_tick(&mut walker, at, Ok(()), false);
+        assert_eq!(a.world.conversation.as_ref().map(|c| c.stage), Some(Stage::Away));
+        assert_eq!((walker.mode, walker.talk_play), (crate::connor::Mode::Talk, Some(WEAPON_AWAY)));
+        (walker.movement, walker.phase) = (WEAPON_AWAY, 1.0);
+        a.conversation_tick(&mut walker, at, Ok(()), false);
+        assert_eq!((walker.hand_mode, walker.talk_play, a.world.weapon_ready.clone()), (EMPTY_HANDS, Some(WEAPON_OUT), None), "bare hands");
+        (walker.movement, walker.phase) = (WEAPON_OUT, 1.0);
+        a.conversation_tick(&mut walker, at, Ok(()), false);
+        assert_eq!((a.world.conversation.as_ref().map(|c| c.stage), walker.talk_play), (Some(Stage::Talking), None), "then case there");
     }
 
     #[test]

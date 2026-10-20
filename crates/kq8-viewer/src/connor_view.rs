@@ -894,6 +894,9 @@ impl ConnorSim {
             (None, None) => return "no weapon set: nothing".into(),
         };
         self.weapon_set = list;
+        // pushing.md: sword 0, empty hands 4 (conversation.md rule 7,
+        // gestures, pushing; fix 3).
+        self.walker.hand_mode = if self.weapon_set.is_some() { kq8_core::connor::SWORD_MODE } else { kq8_core::connor::EMPTY_HANDS };
         let set = match &self.weapon_set {
             Some(l) => format!("his movements now come from {l} where it has them"),
             None => "his own movements again (Conner.anm)".into(),
@@ -910,6 +913,23 @@ impl ConnorSim {
         let line = format!("{set}; plays '{m}' ({})", notes.join("; "));
         self.log.detail(format!("connor update {}: weapon: {line}", self.updates));
         line
+    }
+
+    /// Whether a weapon may be readied or put away now: not during a jump,
+    /// its landing (`jumpend`, and `jumprun` / `jumpstop`, which play
+    /// with the keys choosing again) or a stumble (`crash`) (the user's
+    /// checks in the original, 2026-10-20: fixes 2 and 3); not while
+    /// falling or dying (ours). `Err`: why not.
+    pub fn may_ready(&self) -> Result<(), String> {
+        let w = &self.walker;
+        if matches!(w.mode, Mode::Jump | Mode::Fall | Mode::Land | Mode::Crash | Mode::Dying | Mode::Dead) {
+            return Err(format!("mode {}", w.mode.name()));
+        }
+        let landing = |n: &str| n.eq_ignore_ascii_case("jumprun") || n.eq_ignore_ascii_case("jumpstop");
+        if landing(w.movement) || w.playing.is_some_and(|t| landing(t.via)) {
+            return Err(format!("the landing {} plays", w.movement));
+        }
+        Ok(())
     }
 
     /// Each update after his own (M5 5c-5): a swing that waited for his

@@ -1263,7 +1263,10 @@ pub fn door_click_input(
     // manual): with a hand weapon ready a left click swings toward the
     // click (Shift: the big swing); Ctrl held gives the plain click.
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-    if sim.active.world.weapon_ready.is_some() && !ctrl {
+    // A character that doesn't fight (the wizard) gets the plain click
+    // (the user's check in the original, 2026-10-20: fix 3).
+    let peaceful = picked.as_deref().and_then(|n| sim.active.world.character_index(n)).is_some_and(|j| sim.active.world.anims[j].character.as_ref().is_some_and(|c| c.fight.is_none()));
+    if sim.active.world.weapon_ready.is_some() && !ctrl && !peaceful {
         let target = picked.clone().filter(|n| sim.active.world.character_index(n).is_some());
         let point = match target.as_deref().and_then(|n| sim.active.world.character_index(n)) {
             Some(j) => {
@@ -1381,16 +1384,15 @@ pub fn door_step(
         // switches his movement set (draw / undraw).
         let list = weapon_list(&sim.active.world);
         if list != c.weapon_set {
-            use kq8_core::connor::Mode;
             let w = &mut sim.active.world;
-            if matches!(c.walker.mode, Mode::Jump | Mode::Fall | Mode::Land | Mode::Dying | Mode::Dead) {
-                // The user's check in the original (2026-10-20): no
-                // readying or putting away during a jump; the click is
-                // undone (fix 2; falling, landing and dying: ours).
+            if let Err(why) = c.may_ready() {
+                // The user's checks in the original (2026-10-20): no
+                // readying or putting away during a jump, its landing or a
+                // stumble; the click is undone (fixes 2, 3).
                 let kept = c.weapon_set.as_ref().and_then(|f| {
                     w.connor_fight.as_ref()?.short_lists.iter().find(|(_, file)| file.eq_ignore_ascii_case(f)).map(|(n, _)| format!("{}{n}", kq8_data::items::PREFIX))
                 });
-                let line = format!("weapon {:?} asked in mode {}: refused, stays {kept:?} (no readying during a jump)", w.weapon_ready, c.walker.mode.name());
+                let line = format!("weapon {:?} asked ({why}): refused, stays {kept:?} (no readying during a jump, its landing or a stumble)", w.weapon_ready);
                 w.weapon_ready = kept;
                 w.fight_note("Connor", line);
             } else {

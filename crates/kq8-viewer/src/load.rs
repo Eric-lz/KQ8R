@@ -2804,8 +2804,9 @@ impl Placer<'_> {
                 for m in kq8_core::fight::SWINGS {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
-                // Readying and putting away (M5 5c fix, stand-in, Q138).
-                for m in ["draw", "undraw"] {
+                // Readying and putting away (M5 5c fix, stand-in, Q138);
+                // `away` before a conversation (conversation.md rule 7).
+                for m in ["draw", "undraw", "away"] {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
             }

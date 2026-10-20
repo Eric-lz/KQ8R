@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 3: the landing and the stumble; the weapon away before a conversation
+
+**Changed:** No readying or putting away while a jump's landing (`jumpend`, `jumprun`, `jumpstop`) or a stumble (`crash`) plays. Readying sets Connor's hand mode (sword 0 / empty 4, also answered by `getDoMode`). `conversation.md` rule 7 is built: with a weapon drawn, `away` plays, he goes to bare hands (the weapon is no longer ready), `out` plays, then the conversation goes on. With a weapon ready, a click on a character that doesn't fight (the Wizard) is the plain click.
+**Why:** The user's checks in the original: readying was still possible during the running-jump landing and the stumble; clicking the Wizard with the fists out puts them away, then the conversation starts.
+**Tested how:** `cargo test --workspace` (432 core tests, 1 new), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 193000,198000,-1.7 --key left:IDCTL_INVBAR_SHORT,10 --click Wizard,30 --frames 1500` (`conversation.log`, `connor.log`); `--at 193000,193000,3.1416 --hold 1,0,1,80 --jump 30 --key left:IDCTL_INVBAR_SHORT,54 --key left:IDCTL_INVBAR_SHORT,100 --frames 1200` (`fight.log`).
+**Result:** Wizard: `confists.anm/away` at 32–38, bare hands, `out` 39–44, the Wizard starts talking at 44. Landing: the click at 54 (`jumprun`) refused, the one at 100 readies.
+**Still broken / not tested:** The stumble refusal is not run (by eye). The mouse click on the Wizard (the plain-click rule) is not run: `--click` skips the swing path. With the fists ready Connor can no longer push (rule of `pushing.md`, newly in effect): not checked in the original.
+**Next:** The user's look.
+
 ## 2026-10-20 M5 5c fix 2: no readying during a jump; the put-away jitter
 
 **Changed:** A click on the weapon slot while Connor jumps, falls, lands or dies is refused (the weapon stays as it was). The sword pointer now follows what Connor took, one update after the click. The drawing's blend between updates for a one-shot played backwards (`undraw`) now goes the same way as its phase (it went the other way: each update the picture jumped and slid back). Q138 notes the user's answers.

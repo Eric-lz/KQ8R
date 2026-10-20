@@ -2359,11 +2359,12 @@ impl ScriptHost for WorldState {
             "KQConner::setRun" => Some(self.set_run(words, at)),
             "KQConner::getDoMode" => {
                 // pushing.md "Words used here": the hand mode, sword 0, bow
-                // 1, empty hands 4 (the game's help text). Connor has no
-                // weapons yet and `KQConner::setDoMode` is a stub (M5), so
-                // always empty hands.
-                let mode = crate::connor::EMPTY_HANDS;
-                self.note(format!("{at}: KQConner::getDoMode: {mode} (empty hands; no weapons yet)"));
+                // 1, empty hands 4 (the game's help text). A ready hand
+                // weapon is sword mode (inventory.md rule 9: `SwordMode`,
+                // the fists too; M5 5c fix 3); `KQConner::setDoMode` is a
+                // stub.
+                let mode = if self.weapon_ready.is_some() { crate::connor::SWORD_MODE } else { crate::connor::EMPTY_HANDS };
+                self.note(format!("{at}: KQConner::getDoMode: {mode} ({:?} ready)", self.weapon_ready));
                 Some(mode.to_string())
             }
             "KQConner::JumpDir" => Some(self.jump_dir(at)),

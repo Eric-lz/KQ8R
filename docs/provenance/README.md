@@ -2651,3 +2651,13 @@ did not show his fists-up stance nor the sword pointer.
 | The same while falling, landing, dying or dead | **Ours** (Q138 b) | — |
 | The sword pointer follows what Connor took (his weapon set), not the click: one update later | **Ours** (no sword flash on a refused click) | `gui.log`: pointer at update 91 for a click at 90 |
 | A one-shot's blend between updates goes forward even when it plays backwards | Fix of our own drawing (the user saw `undraw` jitter) | — (by eye) |
+
+### 5c fix 3, the landing and the stumble; the weapon away before a conversation — viewer `connor_view.rs` (`may_ready`, `ready_set` hand mode), `door_view.rs` (the refusal, the plain click on a peaceful character), `load.rs` (`away`), `crates/kq8-core/src/conversation.rs` (`Stage::Away`, `Stage::Out`, `weapon_away`, `conversation_case`), `active.rs` (`getDoMode`), `connor.rs` (`SWORD_MODE`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| No readying or putting away during a stumble (`crash`) or a jump's landing (`jumpend`, and `jumprun` / `jumpstop`, which play with the keys choosing again) | The user's check in the original (2026-10-20) | `fight.log`: update 54 "the landing jumprun plays: refused" |
+| Readying sets his hand mode to sword (0), putting away back to empty hands (4); `KQConner::getDoMode` answers it | `pushing.md` "Words used here" (sword 0, bow 1, empty 4), `inventory.md` rule 9 (`SwordMode`, the fists too) | — |
+| A conversation with `<enemy>` 0 and his weapon drawn: `away` plays (the weapon's version), then bare-hand mode (the weapon no longer ready), `out`, then the case (rules 8–10); our 150-update guard on each | `conversation.md` rule 7; the user's check (the Wizard) | Unit test; `conversation.log`: `away` 32–38, `out` 39–44, the Wizard starts at 44 |
+| With a weapon ready, a left click that picks a character with no fight part (the Wizard) is the plain click, not a swing | The user's check in the original (the Wizard); **ours** for which characters count (Q138) | — |
+| His hand mode now also stops pushing and gestures while a weapon is ready | `pushing.md`, `conversation.md` rule 18 (already built; the mode was always empty) | — |
