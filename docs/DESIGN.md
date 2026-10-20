@@ -1348,7 +1348,8 @@ in 5d).
 
 Steps (one commit each; each logged in `viewer.log` / the script logs):
 
-1. **5d-1, `KQAnimOnce` ends** (core only): a play-once object's end
+1. **5d-1, `KQAnimOnce` ends** (**done** 2026-10-20; unit test; nothing
+   in Daventry is one at the start) (core, and the loader's flag): a play-once object's end
    sends `Die` to its script (and `getEndLoop` 300, `setDeleteWhenDone`),
    for objects in `world.anims` too; `once` set by the loader from
    `classType`. **Test:** unit test; viewer: none yet in Daventry at the

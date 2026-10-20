@@ -260,6 +260,8 @@ pub fn spawn_animated(
         // anim-scripts.md rule 3 as corrected 2026-10-19 (M4 4d-8): both
         // names start as `Stop`, the keys replace them.
         let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_stop_names(names.0, names.1);
+        // anim-scripts.md rule 11 (M5 5d-1).
+        player.once = a.once;
         if player.current != a.current {
             let was = player.movements.get(a.current).map_or("none", |m| m.name.as_str()).to_string();
             stop_starts.push(format!("{} starts on '{}' (movement {}), not '{was}' (movement {}): no currAnimName, so the name Stop (anim-scripts.md rule 3 corrected)", p.name, player.movement().map_or("none", |m| m.name.as_str()), player.current, a.current));

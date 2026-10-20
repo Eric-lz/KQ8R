@@ -1280,6 +1280,8 @@ pub struct AnimatedAssets {
     pub random: bool,
     /// `script=`, if any.
     pub script: Option<String>,
+    /// `classType=KQAnimOnce` (`anim-scripts.md` rule 11; M5 5d-1).
+    pub once: bool,
     /// A character's own values (M4 4d-2), `None` for other objects.
     pub character: Option<CharacterAssets>,
     /// A character's mouth textures `lip0`…`lip7` (M4 4d-5, rule 25),
@@ -3323,6 +3325,7 @@ impl Placer<'_> {
             anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
             script: text("script"),
+            once: s.get("classType").is_some_and(|c| c.trim().eq_ignore_ascii_case("KQAnimOnce")),
             lip_looks,
             character,
         });

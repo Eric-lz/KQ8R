@@ -1841,11 +1841,17 @@ impl WorldState {
             self.note(format!("{at}: usage: setDeleteWhenDone <object> <1|0>: '{}'", words.join(" ")));
             return "1".into();
         };
+        let on = number_value(on) != 0.0;
+        // M5 5d-1: a KQAnimOnce among the other animated objects too.
+        if let Some(j) = self.anim_index(name).filter(|&j| self.anims[j].player.once && !self.anims[j].gone) {
+            self.anims[j].player.delete_when_done = on;
+            self.note(format!("{at}: setDeleteWhenDone {name}: {}", if on { "deleted when its movement ends" } else { "stays when its movement ends" }));
+            return "0".into();
+        }
         let Some(i) = self.object_index(name).filter(|&i| self.objects[i].player.once && !self.objects[i].gone) else {
             self.note(format!("{at}: setDeleteWhenDone: could not find object '{name}'"));
             return "1".into();
         };
-        let on = number_value(on) != 0.0;
         self.objects[i].delete_when_done = on;
         self.note(format!("{at}: setDeleteWhenDone {name}: {}", if on { "deleted when its movement ends" } else { "stays when its movement ends" }));
         "0".into()
@@ -3720,6 +3726,21 @@ impl Active {
                 self.world.note(line);
             }
             if let Some(m) = a.finished {
+                // anim-scripts.md rule 11 (M5 5d-1): a KQAnimOnce's end.
+                if self.world.anims[i].player.once {
+                    self.world.note(format!("object {name} (KQAnimOnce): movement '{m}' finished: its script gets Die {DIE_KIND} (rules 11, 20)"));
+                    if !self.call_named(&name, &["Die", DIE_KIND]) {
+                        self.world.note(format!("object {name} (KQAnimOnce): no script; Die not called"));
+                    }
+                    self.world.report_end(&name, &m, false);
+                    if self.world.anims[i].player.delete_when_done {
+                        let at = format!("{name}: KQAnimOnce done");
+                        if self.world.delete_one(&name, &at) {
+                            self.world.note(format!("object {name} (KQAnimOnce): deleted (setDeleteWhenDone, rule 11.3)"));
+                        }
+                    }
+                    continue;
+                }
                 let after = if a.started.is_some() { "the waiting movement plays" } else { "stays on its last frame" };
                 self.world.note(format!("object {name}: movement '{m}' finished; {after}"));
                 let w = &self.world;
@@ -4756,6 +4777,25 @@ mod tests {
         assert!(log.contains("tells Connor (getEndLoop: Cue 300 0 open)"), "{log}");
         assert!(!log.contains("EndLoop open"), "no EndLoop for a KQAnimOnce: {log}");
         assert!(a.world.is_deleted("basket1") && a.world.objects[0].gone, "{log}");
+    }
+
+    #[test]
+    fn a_kq_anim_once_among_the_other_animated_objects_reports_die_too() {
+        // M5 5d-1 (the barrels' burst): rule 11 for `world.anims`.
+        let script = "if test $2 == Init\n setDeleteWhenDone $1 1\n sendEvent 0 $1 KQAnimPlayEvent open\nendif\nif test $2 == Die\n set D::died $1 $3\nendif\n";
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("o.cs".to_string(), script.as_bytes().to_vec())]);
+        let mut player = crate::named_anim::tests::still_then_open("burst");
+        player.once = true;
+        a.add_anims([AnimObject { player, script: Some("o.cs".into()), gone: false, character: None, translucency: None }]);
+        a.call_named("burst", &["Init"]);
+        let mut log = String::new();
+        for _ in 0..25 {
+            a.update();
+            log.push_str(&a.take_log().join("\n"));
+        }
+        assert_eq!(a.scripts.vars.get("D::died"), Some("burst Normal"), "{log}");
+        assert!(log.contains("(KQAnimOnce): deleted (setDeleteWhenDone"), "{log}");
+        assert!(!log.contains("EndLoop open"), "no EndLoop for a KQAnimOnce: {log}");
     }
 
     #[test]

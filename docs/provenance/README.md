@@ -2692,3 +2692,17 @@ did not show his fists-up stance nor the sword pointer.
 | --- | --- | --- |
 | A thrown item tumbles slowly while it flies and lands in its normal resting pose | The user's check in the original (2026-10-20) | Unit test |
 | Each axis turns at a random 90–180° per second, either way | **Ours** (Q137 e) | Unit test |
+
+## Objects loaded while playing (M5 5d) — `docs/behaviour/objects.md`, `anim-scripts.md`, `items.md`
+
+Plan in `docs/DESIGN.md` "5d". Written from the notes and the data; no
+executable looked at.
+
+### 5d-1, `KQAnimOnce` ends — `crates/kq8-core/src/active.rs` (the other animated objects' loop, `set_delete_when_done`), `named_anim.rs` (`delete_when_done`), viewer `load.rs` (`AnimatedAssets::once`), `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `classType=KQAnimOnce` marks the object's player as play-once (no waiting movement starts at its end) | `anim-scripts.md` rule 11 | — |
+| At its movement's end, also for the other animated objects (`world.anims`, where runtime loads come in): `Die Normal` to its script, `Cue 300` to its `getEndLoop` listener, no `EndLoop`; deleted if `setDeleteWhenDone 1` | `anim-scripts.md` rules 11, 13, 20 | Unit test |
+| `setDeleteWhenDone` finds a `KQAnimOnce` among them too | Rule 13 | Unit test |
+

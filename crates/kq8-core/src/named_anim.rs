@@ -141,6 +141,9 @@ pub struct NamedAnimPlayer {
     /// A `KQAnimOnce`: at the end of a movement no waiting movement starts
     /// (rule 11); the caller reports the end as `Die`.
     pub once: bool,
+    /// `setDeleteWhenDone` on a `KQAnimOnce` of the other animated objects
+    /// (rule 13; M5 5d-1): deleted when its movement ends.
+    pub delete_when_done: bool,
     /// `pauseAnim` (rule 14): the phase doesn't move, no cues fire, nothing
     /// ends, no waiting movement starts.
     pub paused: bool,
@@ -180,6 +183,7 @@ impl NamedAnimPlayer {
             started_this_update: false,
             base,
             once: false,
+            delete_when_done: false,
             paused: false,
             random_speed: None,
             chosen: None,

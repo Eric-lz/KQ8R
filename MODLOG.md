@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d-1: `KQAnimOnce` objects report their end
+
+**Changed:** The loader marks `classType=KQAnimOnce` objects as play-once (it never did: the flag was only set in tests). The other animated objects (`world.anims`) now handle a play-once end as `world.objects` did: `Die Normal` to the script, `getEndLoop`'s cue, `setDeleteWhenDone`.
+**Why:** Plan 5d step 1: the barrel's burst (`barelupx`, a `KQAnimOnce`) must tell its script it ended, which then loads the wreck.
+**Tested how:** `cargo test --workspace` (435 core tests, 1 new), clippy clean. No Daventry object is a `KQAnimOnce` at the start, so nothing to see in the viewer yet.
+**Result:** The new test: the object's script gets `Die Normal` at the end of `open`, no `EndLoop`, it is deleted.
+**Still broken / not tested:** Not run in the viewer (comes with 5d-4).
+**Next:** 5d-2, the name and place rules of a runtime `loadKQ`.
+
 ## 2026-10-20 M5 5c fix 7: thrown items tumble
 
 **Changed:** A thrown item turns about all three axes while it flies (each at a random 90–180° per second, either way: a stand-in) and gets its resting angles back when it lands. Q137 (e) notes the user's answer.
