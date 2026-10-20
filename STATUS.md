@@ -1,13 +1,35 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-19 after
-B built A's character answers (4d-8 to 4d-11, 4d-6b, 4d-7b-1 and -2;
-Q127 to Q129 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+A's study of characters moving on their own (`character-movement.md`;
+Q127 to Q130 answered). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (A): characters moving on their own studied**, in
+  new **`docs/behaviour/character-movement.md`** (M5's first part, up to
+  the first swing; not yet checked in the original). In short: a
+  character moves only by its `walk` / `run` model's steps (bone goblin
+  917 / 3,068 units/s, spriggan 1,588 / 3,366, zombie 511, bat 1,159,
+  chicken 119 / 947) and steers with the 3.5 rad/s turn; no path finding,
+  only a "stuck" escape (moved < 200 in 0.5 s: snap to a free diagonal,
+  run; the chickens trigger it all the time). Wanderers follow their
+  `loop` / `patrol` points once **active** (seen Connor once; at most 6
+  at a time; lost again when out of range, and then reset to their home
+  point if Connor is far); goblins and spriggans stop for a random
+  fidget (`attack` / `react`) every 2–12 s. Sight: every second, from the
+  top of the character's box, blocked by ground, objects and buildings
+  but not by characters. Alarm when seen inside the alarm radius:
+  0–1 s reaction, then turn and chase (walk or run, 50/50); gives up
+  after 3 s out of sight or beyond its leash (`chase a b`: home radius a,
+  chase radius b) and goes home; zombies sink back (`hide`). Corrects
+  `characters.md` rules 8 and 29–31. **Q127–Q130 answered** (doors and
+  chests start on `Stop`/`Stop` but their own `open` replaces the waiting
+  `Stop`; characters' own touch table, Connor an obstacle in their own
+  move; a flyer over water ends each update on the surface; Connor's
+  `shadowMask` is 1 and `allowShadows 0` hides his shadow too).
 - **New 2026-10-20 (B, M4 4d-12-1 to -3): characters are solid for
   Connor** (`connor-collision.md` rules 2–4, 18–19; one commit per step;
   plan in `docs/DESIGN.md` "4d-12"; **not looked at by eye yet**). Each
@@ -330,9 +352,12 @@ characters and conversations done; the menus next). M0–M3 are done.
   not built (not settled; the note says it may be left out).
 - **Stand-ins of 4d (characters):** a character's facing taken as
   Connor's (−Y). Q116–Q124 are all built (Q123 only on the terrain so
-  far). Waiting for answers: doors and chests keep the old load names
-  (Q127); objects, characters and Connor don't stop a character's fall
-  (Q128); a flyer over water sits 150 under the surface (Q129). Our
+  far). **Answered by A 2026-10-19, not built yet:** doors and chests
+  keep the old load names (Q127: fine as they are, their own `open`
+  replaces the waiting `Stop`); objects, characters and Connor don't
+  stop a character's fall (Q128: they should); a flyer over water sits
+  150 under the surface (Q129: it should end on the surface); Connor's
+  shadow test (Q130). Our
   readings: the shadow's terrain search uses the model's points, not
   its box; multiply by 0.5 for "strength 0.5"; a transition's target
   first moves in the next update. Not built: `changeAnmFile`, the
@@ -371,7 +396,9 @@ characters and conversations done; the menus next). M0–M3 are done.
   partner, a real mouse drag during a talk.
 - **Next step, suggested:** for B: shadows from plain objects (4d-7b-4),
   then on buildings (4d-7b-3, after a question on the note's loose
-  height band). For A: Q125–Q130, then Q108–Q113 (small). **The main
+  height band); then M5's first part from `character-movement.md`
+  (wandering, idling, noticing, chasing up to the swing). For A: Q131,
+  Q125, Q126, then Q108–Q113 (small); next study: the fight. **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -427,9 +454,15 @@ characters and conversations done; the menus next). M0–M3 are done.
   Not a question, for A's notes: the data has **17** `KQConvInfo`
   objects, not 16 (Barren's `AlthillmanInfo` and `FrghillmanInfo` besides
   the Witch Doctor's).
-- `characters.md` open questions 1–4 (`flags` bit 0x20, how the renderer
-  blends shadows and whether they fade, the AI (M5), `changeBmp` /
-  `changeAnmFile`): not blocking the drawing of characters.
+- `characters.md` open questions 1, 2 and 4 (`flags` bit 0x20, how the
+  renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
+  question 3 (the AI) answered 2026-10-19 in `character-movement.md`,
+  whose own open questions 1–5 are small (the all-blocked stuck
+  heading, the reset distance, the idle list swap, water for walking
+  characters) except 5, the fight: the next study.
+- For A: **Q131** (B, 2026-10-20: the cylinder Connor meets at a
+  character; vertical moves; landing on a monster's top). Not studied
+  in this session.
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.

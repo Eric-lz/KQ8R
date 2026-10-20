@@ -70,6 +70,26 @@ Words used here:
        of all worlds: in Daventry only `tombdoor` (starts on a play-once
        `stop`, so it plays it twice); elsewhere 16 objects in Dead City,
        Gnome and Swamp (traps' `up`/`down`, `flower1`, …).
+     - **Doors, chests and other starts (traced 2026-10-19, Q127):**
+       (a) **doors (`KQDoor`) and chests (`KQChest`) are animated objects
+       and also start with `Stop` / `Stop`** (`tombdoor` above is a
+       door). (b) A door's own `open` / `close` and a chest's `open` are
+       **the same ordinary request as `KQAnimPlayEvent`** (rule 4), and
+       every such request **writes its own name into the waiting slot**
+       first: the old `Stop` is gone whether or not the request starts at
+       once. If it starts at once, the slot is then empty; if it has to
+       wait, the requested movement is what waits. So at the end of a
+       door's or chest's `open` nothing is waiting (unless another
+       request came meanwhile): no `stop` or movement 0 appears, as the
+       user's M3 checks saw. "Until the first request that starts at once
+       clears it" above is therefore exact only for requests that start
+       at once; any request replaces it. (c) A character's **Special
+       list** items (and its idle fidgets, `character-movement.md` rule
+       18) also go through that request (the Special state first marks
+       the running movement "can be cut short", so they start at once and
+       empty the slot). A `KQGeometryTalker`'s **mouth poses** do not:
+       they start directly and **leave the waiting slot as it was**; this
+       never shows, because the poses never end (rule 10a).
      - Objects whose list has `stop` but whose movement 0 is something
        else now start differently from the old rule: none in Daventry;
        9 special classes elsewhere (Dead City's `death` and tower

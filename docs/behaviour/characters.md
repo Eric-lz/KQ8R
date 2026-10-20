@@ -3,7 +3,11 @@
 Study session A, 2026-10-19. Traced in `Mask.exe` unless marked "data"
 (read from the game's files), "inferred" or "not traced". Updated the same
 day for B's questions Q116–Q124: rules 8, 12, 14, 15, 18, 20, 27, 36 and a
-new rule 37 (how shadows are drawn).
+new rule 37 (how shadows are drawn). **Moving on their own** (walking,
+wandering, idling, noticing Connor, the flying mover, touches in their
+own moves) is in **`character-movement.md`** (2026-10-19), which corrects
+rules 8 and 29–31 here (marked below; Q128, Q129). Rule 36 gained
+Connor's own shadow test (Q130).
 
 ## Purpose
 
@@ -174,7 +178,11 @@ Words used here:
      bit with buildings (0x28), plain objects (0x41), characters (0x42)
      and Connor (4), so with the defaults a falling character lands on a
      building floor, an object, another character or Connor's head.
-     There is no separate rule for characters.
+     **Refined 2026-10-19 (Q128):** what the character then *does* is
+     its own table, not the plain-object one of `connor-collision.md`
+     rule 3: plain objects, buildings, characters and Connor (in its own
+     move only) are all obstacles, in every pass
+     (`character-movement.md` rules 33–35).
    - **A file with `colliderMask=0`** (Daventry: the Wizard and the Knight,
      type 49185 = 0xC021) has **no terrain bit**: the terrain is not
      tested in its passes, and its mover hits only things whose own mask
@@ -197,14 +205,17 @@ Words used here:
    - **`flyingObject=1`** (Daventry: the Knight and the bats): a different
      mover. Each update it sets the character's step up and step down to
      0 and its gravity off, does the ordinary move, then moves it **down
-     by up to 150** (stopped by what it would land on, as the down pass)
-     and, if a ground or building surface lies above its feet within its
-     height, **raises it by up to 300**. So a flyer settles onto the
-     surface below at up to 150 units per update (2,250 per second) and
-     rides over bumps (traced; **not sure** of every detail, and not
-     checked in the game). Daventry's bats have their model 1,170 above
-     their position (rule 7), so this keeps them hanging in the air above
-     the ground. How they fly about is M5.
+     by 150** and, if a ground or building surface lies above its feet
+     within its height, **raises it by up to 300**. So a flyer settles
+     onto the surface below at up to 150 units per update (2,250 per
+     second) and rides over bumps. Daventry's bats have their model 1,170
+     above their position (rule 7), so this keeps them hanging in the air
+     above the ground. **Corrected 2026-10-19 (Q129):** the 150 drop is
+     all or nothing (cancelled if the down pass hits anything), and the
+     raise tests the **drawn ground (the water surface)** and buildings,
+     so a flyer over water ends each update **on the surface**, not 150
+     under it. Details and how they fly about: `character-movement.md`
+     rules 31–32.
 9. **The box** (traced): a character's collision box comes from `BOUNDS.KQ`
    looked up by its `monsterType` (from the monster list: the line's type,
    e.g. `goblin2`, `sprgnbowtype`, `knighttype`) and, if that finds
@@ -563,7 +574,13 @@ Words used here:
     solid other than itself; **no distance limit** (`canAlwaysSeeConner=1`
     skips the test; the Knight has it). The first time it can see him in
     Wait, it becomes **active** (at most `KQWorld::MaxMonsters` active at
-    once). Only an active character:
+    once). **Corrected 2026-10-19 (`character-movement.md` rules 20–21):**
+    the eye is at the **top of its `BOUNDS.KQ` box** (the 1,000 and the
+    key are replaced when it enters the world); the line is blocked only
+    by the drawn ground, plain objects and buildings, **not by other
+    characters or Connor**; `MaxMonsters` is 6 in Daventry; and a
+    character **stops being active when it goes off** (out of range).
+    Only an active character:
     - **wanders** (if `wanders` is on: walks from point to point; M5),
     - **idles** (rule 30),
     - is **alarmed** when it can see Connor and is closer than
@@ -572,6 +589,10 @@ Words used here:
     an `idleAnimFile` (Daventry: `goblin2`, `sprigan`, `sprigan2`) now and
     then plays a fidget from that list in Wait (about every 2 s plus a
     random part), then returns to `Stop` (rule 18). M5 with the rest.
+    **Made exact 2026-10-19** (`character-movement.md` rules 15–19): the
+    first fidget comes as soon as it is active; the next is due 2 s plus
+    a random 0–10 whole seconds after the last one ends; it is picked at
+    random from the list; a wanderer stops walking for it.
 31. **Which keys keep a character still** (data and traced): `wanders=0`
     (or movement `none` in the monster list), `alarmRadius=0`,
     `homeRadius=0`, `chaseRadius=0`, `noTurn=1`. Daventry's people all have
@@ -582,13 +603,21 @@ Words used here:
     wander once active; `chicken2` and the pig (`piggy1`, `none`) don't.
     Script commands that change this: `KQMonster::setAlarmRadius`,
     `setChaseRadius`, `setHomeRadius`, `goHome` (M5).
+    **Refined 2026-10-19** (`character-movement.md` rules 9, 23, 27, 31):
+    for characters from the monster list, the list's (or the type's, for
+    `@`) movement, alarm radius and chase mode **replace** the `.kq`
+    keys (`goblin2.kq`'s `alarmRadius=1500` is never used); the bats too
+    have alarm radius 0 (they wander but are never alarmed); `guard`
+    means chase radius 0: such a character turns to follow Connor but
+    never moves after him.
 32. **What B can show before M5** (our recommendation, not a game rule):
     every character in Wait, **standing in `Stop`**, never active. That is
     exactly what the original shows **until a character first sees
     Connor**; after that, wanderers walk about and enemies attack, which
     is M5. Zombies stay unborn (not drawn, rule 16). Turning toward Connor
     happens only through `speak`, conversations and scripts, which are
-    built.
+    built. (M5's first part, everything up to the first swing, is now
+    described in `character-movement.md`.)
 
 ### Visibility (question 8)
 
@@ -626,6 +655,17 @@ Words used here:
     So in Daventry **the Wizard, the Girl, the ravens, the goblins,
     spriggans, zombies, bats, the Henchman, the Lady and the Uglybeast cast
     shadows**; the chickens, the pig, the Knight and the Shadow don't.
+    - **Connor** (traced 2026-10-19, Q130): the **same test** as every
+      character, with **his own `shadowMask` 1**, set by his constructor
+      (`Connor.kq` has none, and no script changes it, data). So (a) 15
+      AND 1 → he casts in every world whose mask has bit 1 (all of them,
+      with `Options.cs`'s 15); (b) **`allowShadows 0` switches his off
+      too** (Castle of the Dead, Gnome, the Temples, Dead City's rope
+      traps …); (c) he casts only while he is **solid** (`translucency`
+      256: a see-through Connor has no shadow) and while his figure is
+      drawn (the shadow is made as part of drawing it, so a hidden Connor
+      has none). Whether first person skips that drawing step was **not
+      traced**.
     **The user's check in the original (2026-10-19):** the shadow is a
     **dark copy of the figure** on the ground, and where parts of it
     overlap (e.g. an arm over the body) the ground gets **darker again**:
@@ -705,19 +745,19 @@ Words used here:
 | `birthDelay` default | 0 s (Daventry: goblin18, goblin20 1 s; RoadZ1 3, RoadZ5 3.5) | traced, data |
 | starting movement names | current `Stop`, waiting `Stop` (until a key replaces them) | traced |
 | collision type / mask default | 0x42 / 0x281F | traced |
-| flying mover | steps 0, no gravity; down up to 150, up up to 300 per update | traced (not sure) |
+| flying mover | steps 0, no gravity; down 150 (all or nothing), up up to 300 per update | traced (Q129) |
 | shadow direction | the sun's aim, length 1; (1, 1, −1) with no sun | traced |
 | shadow lift / strength | 20 units / 0.5 | traced |
 | shadow on terrain only within | 1,500 of the ground under the position | traced |
 | shadow area on buildings | at most 1,800 across | traced |
 | automatic turn rate | 3.5 rad/s (`rotateSpeed` 1.75 × 2) | traced |
 | turn toward Connor in Talk | every 4th update | traced |
-| sight test | every 15th update; eye 1,000 above feet, target 1,250 above Connor's | traced |
+| sight test | every 15th update; eye at its box top (corrected), target 1,250 above Connor's | traced |
 | sight test distance limit | none | traced |
 | `wanders` default (`.kq` without the key) | 1 | traced |
 | gravity default (`monUseGravity`) | on | traced |
 | step up / down | 325 | traced |
-| `shadowMask` default | 2 (characters), 8 (other objects) | traced |
+| `shadowMask` default | 2 (characters), 8 (other objects), 1 (Connor) | traced |
 | world shadow mask | 1 built in, 15 from `Options.cs` | traced, data |
 | mouth shapes | 0–7 (`lip0`–`lip7`), 8+ → `lip0` | traced |
 | geometry mouth | 0/16 `rest`, 1 `f`, 2 `m`, 3 `r`, 4 `w`, 5 `ih`, 6 `ah`, 7 `e` | traced |
@@ -871,7 +911,10 @@ Words used here:
    facing test keeps, and how parts below a water surface are left out:
    not traced. (No fading, and the water surface receiving them: settled
    by the user's checks.)
-3. Wandering, idling, alarm, chasing, walking speed and the flying mover's
-   movement: M5. The flying mover's settling (rule 8) is traced but not
-   fully sure.
+3. ~~Wandering, idling, alarm, chasing, walking speed and the flying
+   mover's movement: M5. The flying mover's settling (rule 8) is traced
+   but not fully sure.~~ **Answered 2026-10-19** in
+   `character-movement.md` (up to the first swing; the fight itself is
+   the next study). Its findings differ from rules 8 and 29–31 here in
+   the points marked "corrected" / "refined" there.
 4. `KQObject::changeBmp` and `changeAnmFile` in detail.
