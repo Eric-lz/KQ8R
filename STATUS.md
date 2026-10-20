@@ -8,6 +8,16 @@ Q126 asked). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 
 ## Where we are (2026-10-19)
 
+- **New 2026-10-19 (B, after the user's check of 4e): 4e-8 to 4e-10.**
+  The user found: offering an item, the camera cuts and their stop by the
+  right button, and walking away and back all work; but the right-button
+  camera turns between the Wizard and Connor in the original (now so,
+  Q126 updated), and the Uglybeast still snapped and flickered (now
+  fixed from A's answers: Q120 a 0 s loop never ends, Q119 delay-0 events
+  before drawing; checked in the logs, not yet by eye). Other characters
+  standing still is expected until M5 (wandering, `characters.md`).
+  Q119's change makes every `EndLoop` and delay-0 event one update
+  earlier, also in M3's scenes.
 - **New 2026-10-19 (B, M4 4e-1 to 4e-7): conversations are built** from
   `conversation.md` (one commit per step; plan in `docs/DESIGN.md` "4e";
   **not looked at by eye yet**): the info objects (`kq8 conv-verify`: 17
@@ -335,8 +345,9 @@ characters and conversations done; the menus next). M0–M3 are done.
   partner, a real mouse drag during a talk.
 - **Next step, suggested:** for the user: look at a conversation in the
   viewer (click the Wizard from inside his house; walk away mid-talk;
-  hold the right button). For B: build A's answers to Q116–Q124 (4d:
-  timing, mouth poses, start-up, then gravity 4d-6 and shadows 4d-7); or
+  hold the right button). For B: build A's remaining answers Q116, Q117,
+  Q121–Q124 (4d: timing, start-up, end of a queue, then gravity 4d-6 and
+  shadows 4d-7; Q119 and Q120 are built); or
   the main menu (Escape, the mask button) with the game paused. For A:
   Q125, Q126, then Q108–Q113 (small).
 - Sound, not done: the item land sound (nothing is thrown),
