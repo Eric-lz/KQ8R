@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-7b-3b: which building surfaces receive a shadow (core)
+
+**Changed:** `kq8-core/src/shadow.rs`: `ReceivingBuilding` / `ReceivingSurface` (a building's ball and its drawn surfaces in the world), `building_receivers` (reach, height band, 1,800 area), constants; 4 unit tests. Provenance.
+**Why:** `characters.md` rule 37 (2); the open numbers are Q135 stand-ins (see 4d-7b-3a).
+**Tested how:** `cargo test --workspace` (413 core tests), `cargo clippy --workspace --all-targets` clean.
+**Result:** All pass. The tests check: a building just inside / outside radius + caster's radius + 500; the band −2,600 .. 1,400 for a 1,300-high caster standing at 0; the area's edges 900 around the shadow's middle (985 toward +y in Daventry's sun for that caster), a 4,000-wide tile reaching in taken whole; a chosen floor 500 up gets the shadow lifted 20.
+**Still broken / not tested:** Not used by the viewer yet, nothing to see.
+**Next:** 4d-7b-3c, drawing them in the viewer.
+
 ## 2026-10-20 M4 step 4d-7b-3a: shadows on buildings planned, read against the data (Q135)
 
 **Changed:** `docs/DESIGN.md` (4d-7b-3 planned in three steps, with stand-ins); `docs/behaviour/QUESTIONS.md` (Q135); `kq8-cli/src/building_verify.rs` (new lines: floor surfaces and their width, building ball radii).

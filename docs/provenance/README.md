@@ -2251,6 +2251,17 @@ marked otherwise.
 | `allowShadows` taken as on | **Stand-in**, as for characters (4d-7a) | — |
 | Which objects cast, compared with the original | The user's check (2026-10-20) | Pub barrels: only `barrel.07` casts, in both |
 
+### 4d-7b-3b, which building surfaces receive a shadow — `crates/kq8-core/src/shadow.rs` (`building_receivers`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Buildings receive shadows, only near or far ones (the caller's filter) | `characters.md` rule 37 (2) | — (viewer, 4d-7b-3c) |
+| Within reach: the sum of the two sizes plus 500 | Rule 37 (2) | Unit test `a_building_receives_only_within_the_sum_of_sizes_plus_500` |
+| The sizes: centre-to-centre distance; the building's ball as our draw distance has it; the caster's ball = the box around its shown model (middle, half diagonal) | **Stand-in**, asked as Q135 (a) | Same test |
+| Band: any part of a surface between 2 × the caster's height below its feet and 100 above its top | Rule 37 (2) says "a little above the top" and "several times its size below"; the numbers are a **stand-in**, Q135 (b) | Unit test `the_band_runs_from_2_heights_below_the_feet_to_100_above_the_top` |
+| Area: a square 1,800 across on x and y, around the caster's middle moved along the sun down to its feet; surfaces reaching into it receive whole | Rule 37 (2) ("at most 1,800 across centred on the shadow"); the shape, centre and "no cut" are a **stand-in**, Q135 (c). Data: 17,295 of 33,962 floor surfaces are wider than 1,800 (`kq8 building-verify`) | Unit test `the_area_is_1800_across_around_the_shadows_middle_on_the_floor` |
+| The chosen surfaces get the same drawing as the terrain (pieces, 20 lift, part above the plane) | Rule 37 "The copy" | Unit test `the_chosen_floor_receives_the_shadow` |
+
 ### 4d-12-1, the cylinder test — `crates/kq8-core/src/collide.rs` (`CylinderCollider`)
 
 | What | Source | Check |

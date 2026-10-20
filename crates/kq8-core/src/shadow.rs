@@ -18,6 +18,12 @@
 //!   character; the triangles searched are those of the drawn ground (the
 //!   surface grid) under its box moved along the sun
 //!   ([`terrain_receivers`]).
+//! - **Buildings** (rule 37 (2), M4 4d-7b-3) receive it: those near or far
+//!   (the caller passes only those) whose ball comes within reach of the
+//!   caster (the sum of their sizes plus 500); their surfaces near the
+//!   caster's height, in an area at most 1,800 across centred on the
+//!   shadow ([`building_receivers`]). The sizes, the band's numbers and
+//!   the area's shape are not in the note: **stand-ins**, question Q135.
 //!
 //! Our readings (not in the note): "facing the sun" is the model
 //! triangle's front (clockwise corners seen from the front, Q2) turned
@@ -33,6 +39,16 @@ pub const LIFT: f32 = 20.0;
 pub const TERRAIN_REACH: f32 = 1500.0;
 /// The strength passed to the renderer (rule 37): each layer halves.
 pub const STRENGTH: f32 = 0.5;
+/// A building receives when its ball comes within the sum of the two
+/// sizes plus this (rule 37 (2)).
+pub const BUILDING_REACH: f32 = 500.0;
+/// The area on buildings is at most this across (rule 37 (2)).
+pub const BUILDING_AREA: f32 = 1800.0;
+/// STAND-IN (Q135 b): "a little above the character's top".
+pub const BAND_ABOVE: f32 = 100.0;
+/// STAND-IN (Q135 b): "several times its size below": this many times
+/// the caster's height below its feet.
+pub const BAND_BELOW_HEIGHTS: f32 = 2.0;
 
 fn sub(a: V3, b: V3) -> V3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -197,6 +213,99 @@ pub fn terrain_receivers(terrain: &kq8_data::Terrain, position: V3, corners: &[V
     out
 }
 
+/// One drawn surface of a building, in the world: its triangles (game
+/// corner order) and the box around them.
+#[derive(Debug, Clone)]
+pub struct ReceivingSurface {
+    pub triangles: Vec<[V3; 3]>,
+    pub lo: V3,
+    pub hi: V3,
+}
+
+impl ReceivingSurface {
+    /// `None` without triangles.
+    pub fn new(triangles: Vec<[V3; 3]>) -> Option<Self> {
+        let (lo, hi) = bounds(triangles.iter().flatten())?;
+        Some(ReceivingSurface { triangles, lo, hi })
+    }
+}
+
+/// A building that can receive shadows: its ball (world centre, radius)
+/// and its drawn surfaces in the world (buildings don't move).
+#[derive(Debug, Clone)]
+pub struct ReceivingBuilding {
+    pub name: String,
+    pub centre: V3,
+    pub radius: f32,
+    pub surfaces: Vec<ReceivingSurface>,
+}
+
+/// What [`building_receivers`] chose, with its counts for the logs.
+#[derive(Debug, Clone, Default)]
+pub struct BuildingPick {
+    /// The buildings within reach, by name.
+    pub in_reach: Vec<String>,
+    /// Surfaces chosen (within reach, in the band and the area).
+    pub surfaces: usize,
+    pub triangles: Vec<[V3; 3]>,
+}
+
+/// The box around `points`; `None` if there are none.
+fn bounds<'a>(points: impl IntoIterator<Item = &'a V3>) -> Option<(V3, V3)> {
+    let mut it = points.into_iter().peekable();
+    it.peek()?;
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for p in it {
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    Some((lo, hi))
+}
+
+/// Rule 37 (2): the building surfaces that receive the shadow of a caster
+/// whose shown model has the points `corners` (world), from `buildings`
+/// (the caller passes only the near and far ones). **Stand-ins** for what
+/// the note leaves open (Q135), all from the box around `corners`:
+///
+/// - **reach**: distance between the building's ball centre and the box's
+///   middle <= building radius + half the box's diagonal +
+///   [`BUILDING_REACH`];
+/// - **band**: a surface counts when any part of it lies between
+///   [`BAND_BELOW_HEIGHTS`] x the box's height below its bottom and
+///   [`BAND_ABOVE`] above its top;
+/// - **area**: a square [`BUILDING_AREA`] across on x and y, around the
+///   box's middle moved along `dir` down to the box's bottom (the middle
+///   of the shadow on a floor at the feet); a surface counts when its x, y
+///   extent reaches into it, and receives whole (no cut).
+pub fn building_receivers<'a>(buildings: impl IntoIterator<Item = &'a ReceivingBuilding>, corners: &[V3], dir: V3) -> BuildingPick {
+    let mut pick = BuildingPick::default();
+    let Some((lo, hi)) = bounds(corners) else { return pick };
+    let middle = scale(add(lo, hi), 0.5);
+    let size = dot(sub(hi, lo), sub(hi, lo)).sqrt() / 2.0;
+    let height = hi[2] - lo[2];
+    let (band_lo, band_hi) = (lo[2] - BAND_BELOW_HEIGHTS * height, hi[2] + BAND_ABOVE);
+    let centre = if dir[2] < 0.0 { add(middle, scale(dir, (middle[2] - lo[2]) / -dir[2])) } else { middle };
+    let half = BUILDING_AREA / 2.0;
+    for b in buildings {
+        let d = sub(b.centre, middle);
+        if dot(d, d).sqrt() > b.radius + size + BUILDING_REACH {
+            continue;
+        }
+        pick.in_reach.push(b.name.clone());
+        for s in &b.surfaces {
+            let in_band = s.hi[2] >= band_lo && s.lo[2] <= band_hi;
+            let in_area = (0..2).all(|k| s.hi[k] >= centre[k] - half && s.lo[k] <= centre[k] + half);
+            if in_band && in_area {
+                pick.surfaces += 1;
+                pick.triangles.extend_from_slice(&s.triangles);
+            }
+        }
+    }
+    pick
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,6 +372,76 @@ mod tests {
         let a = [[0.0, 0.0, 500.0], [0.0, 100.0, 500.0], [100.0, 0.0, 500.0]];
         let b = [[0.0, 0.0, 900.0], [0.0, 100.0, 900.0], [100.0, 0.0, 900.0]];
         assert_eq!(cast(&[a, b], dir, &floor()).len(), 2 * cast(&[a], dir, &floor()).len());
+    }
+
+    /// A square floor surface `w` across centred on (x, y) at height z,
+    /// clockwise seen from above.
+    fn tile(x: f32, y: f32, z: f32, w: f32) -> ReceivingSurface {
+        let h = w / 2.0;
+        let (a, b, c, d) = ([x - h, y - h, z], [x - h, y + h, z], [x + h, y + h, z], [x + h, y - h, z]);
+        ReceivingSurface::new(vec![[a, b, d], [d, b, c]]).unwrap()
+    }
+
+    fn building(centre: V3, radius: f32, surfaces: Vec<ReceivingSurface>) -> ReceivingBuilding {
+        ReceivingBuilding { name: "hut".into(), centre, radius, surfaces }
+    }
+
+    /// A caster standing at the origin: 400 wide, 1,300 high (Connor's box).
+    fn caster() -> Vec<V3> {
+        vec![[-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]]
+    }
+
+    #[test]
+    fn a_building_receives_only_within_the_sum_of_sizes_plus_500() {
+        let dir = [0.0, 0.0, -1.0];
+        // Caster's ball: middle (0, 0, 650), radius ~743.
+        let size = (400.0f32 * 400.0 * 2.0 + 1300.0 * 1300.0).sqrt() / 2.0;
+        let reach = 1000.0 + size + BUILDING_REACH;
+        let near = building([reach - 1.0, 0.0, 650.0], 1000.0, vec![tile(0.0, 0.0, 0.0, 1000.0)]);
+        let far = building([reach + 1.0, 0.0, 650.0], 1000.0, vec![tile(0.0, 0.0, 0.0, 1000.0)]);
+        let p = building_receivers([&near], &caster(), dir);
+        assert_eq!((p.in_reach.len(), p.surfaces, p.triangles.len()), (1, 1, 2));
+        let p = building_receivers([&far], &caster(), dir);
+        assert_eq!((p.in_reach.len(), p.surfaces), (0, 0));
+    }
+
+    #[test]
+    fn the_band_runs_from_2_heights_below_the_feet_to_100_above_the_top() {
+        let dir = [0.0, 0.0, -1.0];
+        let at = |z: f32| building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, z, 1000.0)]);
+        let n = |z: f32| building_receivers([&at(z)], &caster(), dir).surfaces;
+        // Feet at 0, top at 1,300: band -2,600 .. 1,400.
+        assert_eq!((n(0.0), n(-2599.0), n(-2601.0), n(1399.0), n(1401.0)), (1, 1, 0, 1, 0));
+    }
+
+    #[test]
+    fn the_area_is_1800_across_around_the_shadows_middle_on_the_floor() {
+        // Daventry's sun: the shadow's middle on the floor lies 650 / 0.66
+        // = 985 toward +y from the feet.
+        let dir = direction(Some([0.0, 1.0, -0.66]));
+        let n = |x: f32, y: f32| building_receivers([&building([0.0; 3], 5000.0, vec![tile(x, y, 0.0, 100.0)])], &caster(), dir).surfaces;
+        let mid = 650.0 / 0.66;
+        // Tiles 100 wide: their near edge 50 from their centre.
+        assert_eq!((n(0.0, mid + 949.0), n(0.0, mid + 951.0)), (1, 0));
+        assert_eq!((n(0.0, mid - 949.0), n(0.0, mid - 951.0)), (1, 0));
+        assert_eq!((n(949.0, mid), n(951.0, mid)), (1, 0));
+        // A big tile reaching into the area is taken whole (no cut).
+        let p = building_receivers([&building([0.0; 3], 5000.0, vec![tile(0.0, mid + 1900.0, 0.0, 4000.0)])], &caster(), dir);
+        assert_eq!((p.surfaces, p.triangles.len()), (1, 2));
+    }
+
+    #[test]
+    fn the_chosen_floor_receives_the_shadow() {
+        let dir = [0.0, 0.0, -1.0];
+        let floor_at_500 = building([0.0; 3], 5000.0, vec![tile(0.0, 0.0, 500.0, 2000.0)]);
+        // The caster stands on it; a sun-facing triangle 500 above it.
+        let up = [[0.0, 0.0, 1000.0], [0.0, 100.0, 1000.0], [100.0, 0.0, 1000.0]];
+        let corners = vec![[-200.0, -200.0, 500.0], [200.0, 200.0, 1800.0]];
+        let p = building_receivers([&floor_at_500], &corners, dir);
+        let s = cast(&[up], dir, &p.triangles);
+        assert!(!s.is_empty() && s.iter().flatten().all(|q| (q[2] - 500.0 - LIFT).abs() < 1e-3), "{s:?}");
+        // No points: nothing chosen.
+        assert_eq!(building_receivers([&floor_at_500], &[], dir).surfaces, 0);
     }
 
     #[test]
