@@ -2123,3 +2123,9 @@ marked otherwise.
 | Connor's codes 8–15 play `gesturea`…`gestureh`, 16 `stop`, at once from phase 0; the mouth unchanged; only when he stands still (Wait, or the talk state outside its approach; no start or stop movement playing), no weapon drawn, not in first person | Rule 18 | Unit test `gestures_play_only_while_he_stands`; viewer: line 1 of the first meeting plays `gesturee`, `gestured`, `gestureg`, `gesturef`, `stop` |
 | "Stands still" read as: the keys choose and choose standing, and no transition plays | **Our reading** of rule 18 | Same test |
 | His eight gesture movements loaded from `Conner.anm` | Data (`Conner.anm` Movement13–20) | `viewer.log` "connor: movement gesturea = movement 13 …" |
+
+### 4e-8, the right-button camera's centre — `crates/kq8-core/src/conversation.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| With the right button held, the camera is aimed at and swings around the point half-way between the partner and Connor (where he stands when the button is pressed), 1,400 above | **The user's check in the original** (2026-10-19); the exact point is our stand-in (Q126) | Unit test `camera_numbers_cut_the_camera_until_the_right_button` |

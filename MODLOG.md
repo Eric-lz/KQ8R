@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-8: the right-button camera turns between the two (the user's check)
+
+**Changed:** `kq8-core/src/conversation.rs`: with the right button held during a conversation the camera is placed at `cam0` aimed at, and swings around, the point half-way between the partner and Connor (was: the partner). Unit test changed. `QUESTIONS.md` Q126: the user's observation added. DESIGN, provenance.
+**Why:** The user's check in the original (2026-10-19): the camera pivots in the space between the Wizard and Connor. The note says "aimed at the partner"; the exact point is not traced (Q126).
+**Tested how:** `cargo test -p kq8-core conversation` (11 pass). Viewer: **not run** (a viewer window was open, so the build could not replace the program).
+**Result:** Unit test: Bob at (1000, 1000, 0), Connor at (1200, 1000, 100) → the swing's centre (1100, 1000, 50).
+**Still broken / not tested:** Not run in the viewer; not checked by eye. The end of a conversation still puts the camera at `cam0` looking at the partner.
+**Next:** Q120 and Q119 (the Uglybeast's flicker and snap).
+
 ## 2026-10-19 End of M4 4e (docs only)
 
 **Changed:** `STATUS.md` (where we are, the 4e stand-ins, next steps, open questions Q125–Q126; older entries shortened; A's new entries kept), `README.md` (conversations under M4 "So far"; out of "Next"), `docs/FEATURES.md` (a "Conversations" section, `--right N`, what doesn't work).

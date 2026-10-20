@@ -808,6 +808,12 @@ inventory and menus.
   - **4e-7, Connor's gestures** (**done** 2026-10-19) (rule 18). Codes 8–15 play
     `gesturea`…`gestureh`, 16 `stop`, when he stands still (no weapon
     drawn, not in first person: always true for now).
+  - **After the user's check (2026-10-19):** 4e-8, the right-button
+    camera turns around the point half-way between the partner and
+    Connor (Q126 updated). Then A's answers Q120 (4e-9: a movement whose
+    model's loop lasts 0 never ends) and Q119 (4e-10: events sent with
+    delay 0 are handled in the same update, before drawing), which fix the
+    Uglybeast's flicker and snap.
   - Tests: unit tests for each core rule (inside test, case, placing,
     stay test, the queue's goodbye and welcome back, the click areas);
     `kq8 conv-verify`; viewer runs at the Wizard (`--at 193000,198000,-1.7`

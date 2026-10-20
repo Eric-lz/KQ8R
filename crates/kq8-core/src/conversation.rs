@@ -158,6 +158,11 @@ pub fn walk_in_point(from: [f32; 3], spot: [f32; 3]) -> ([f32; 3], f32) {
     (p, heading_towards(p, [spot[0], spot[1]]))
 }
 
+/// The point half-way between `a` and `b`.
+pub fn between(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|k| 0.5 * (a[k] + b[k]))
+}
+
 /// The point a conversation camera looks at: the partner's position plus
 /// the following camera's 1,400 (Q126 stand-in).
 pub fn partner_aim(partner_at: [f32; 3]) -> [f32; 3] {
@@ -283,7 +288,7 @@ impl Active {
             Stage::StopWalk | Stage::WalkStopRight => self.approach(walker, position, stage),
             Stage::Talking => {
                 if right_held {
-                    self.camera_moved_by_player();
+                    self.camera_moved_by_player(position);
                 }
                 self.stay_test(walker, position);
             }
@@ -291,12 +296,16 @@ impl Active {
     }
 
     /// Rule 14: the first update the right button is held during the stay
-    /// test: the camera placed once at `cam0` aimed at the partner, then
-    /// swung around it by the player; camera numbers ignored from now on.
-    fn camera_moved_by_player(&mut self) {
+    /// test: the camera placed once at `cam0`, then swung around by the
+    /// player; camera numbers ignored from now on. The centre is the point
+    /// half-way between the partner and Connor (`connor_at`, where he
+    /// stands now): the user's check in the original (2026-10-19, Q126;
+    /// the note says "aimed at the partner").
+    fn camera_moved_by_player(&mut self, connor_at: [f32; 3]) {
         let Some(c) = self.world.conversation.as_mut().filter(|c| !c.cuts_stopped) else { return };
         c.cuts_stopped = true;
-        let aim = partner_aim(c.partner_at);
+        let centre = between(c.partner_at, connor_at);
+        let aim = partner_aim(centre);
         let at = format!("conversation with {} (right button)", c.partner);
         let line = match c.info.as_ref().and_then(|i| i.cameras.first()) {
             Some(cam0) => {
@@ -307,11 +316,10 @@ impl Active {
             }
             None => "no cam0: the camera stays where it is".to_string(),
         };
-        let partner_at = c.partner_at;
-        self.world.requests.push(Request::CameraAround { point: Some(partner_at), at });
+        self.world.requests.push(Request::CameraAround { point: Some(centre), at });
         self.world.conversation_note(format!(
-            "the right button is held during the stay test: {line}; the player swings and zooms it around the partner at ({:.0}, {:.0}, {:.0}) (Q126 stand-in: as the following camera, aiming 1400 above); camera numbers ignored for the rest of this conversation (rule 14)",
-            partner_at[0], partner_at[1], partner_at[2]
+            "the right button is held during the stay test: {line}; the player swings and zooms it around ({:.0}, {:.0}, {:.0}), half-way between the partner and Connor (the user's check, Q126; as the following camera, aiming 1400 above); camera numbers ignored for the rest of this conversation (rule 14)",
+            centre[0], centre[1], centre[2]
         ));
     }
 
@@ -714,8 +722,10 @@ box0=0 0 4000 0 4000 4000 0 4000\nbox1=500 500 1500 500 1500 1500 500 1500\nnCam
         assert!(a.world.conversation_log.iter().any(|l| l.contains("not below nCam 1")));
         // The right button during the stay test: cam0 aimed at the partner,
         // the swing around it, and no more cuts.
-        a.conversation_tick(&mut walker, [1000.0, 1000.0, 100.0], Ok(()), true);
-        assert!(a.world.requests.iter().any(|r| matches!(r, Request::CameraAround { point: Some(_), .. })));
+        // Connor 200 east of Bob: the swing's centre half-way (the user's
+        // check, Q126).
+        a.conversation_tick(&mut walker, [1200.0, 1000.0, 100.0], Ok(()), true);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::CameraAround { point: Some(p), .. } if *p == [1100.0, 1000.0, 50.0])), "{:?}", a.world.requests);
         a.world.requests.clear();
         for _ in 0..16 {
             a.update();
