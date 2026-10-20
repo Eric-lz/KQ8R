@@ -757,7 +757,7 @@ inventory and menus.
         Logs in `characters.log`: per character the first mover update
         (start z, ground under it, what it collides with), every landing
         (on what, z), and a line when it stops moving.
-      - **4d-6b-3, the flying mover** (`flyingObject=1`: the bats, the
+      - **4d-6b-3, the flying mover** (**done** 2026-10-19; `flyingObject=1`: the bats, the
         Knight): no gravity and no steps; each update down by up to 150
         (stopped as in the down pass) and up by up to 300 onto a surface
         above its feet within its height. The note is "not sure of every

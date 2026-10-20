@@ -2201,3 +2201,11 @@ marked otherwise.
 | Buildings count when its mask has 0x8 (every building type in the data has it) | Rule 8 (pair rule); the building types are **data** (0x28, 0x88) | Ruins: lands on Castle |
 | Objects, other characters, Connor: not tested | Waits for Q128 | Log line "not tested (Q128)" |
 | The mover runs in a step right after the characters' own update, not inside it | **Our order** (the update's parts are the same) | — |
+
+### 4d-6b-3, the flying mover — `crates/kq8-core/src/connor_mover.rs`, `character.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| `flyingObject=1`: steps 0, gravity off, the ordinary move, then down by up to 150 (stopped as the down pass), then up by up to 300 if the ground is above its feet within its height | `characters.md` rule 8 (Q122 c; the note: "not sure of every detail") | Unit test `a_flyer_settles_150_per_update_and_rises_up_to_300`; bat3 run |
+| The raise tests the terrain only | **Our cut**: how a building surface "above its feet" is found is not described (Q129 b) | — |
+| The ground check (in the ordinary move) comes before the drop, so over water a `keepOnGround=1` flyer sits 150 under the surface | Literal order of rule 8; asked as Q129 (a) | bat2 run: settles at 6,480 |

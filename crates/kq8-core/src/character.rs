@@ -184,8 +184,22 @@ impl Character {
         }
         let first = !std::mem::replace(&mut self.mover_started, true);
         if self.flying {
+            let Some(m) = self.mover.as_deref_mut() else { return notes };
+            m.position = player.base.position;
             if first {
-                notes.push("mover: flyingObject=1: the flying mover is not built yet (4d-6b-3); it stays where it is".into());
+                notes.push(format!("mover: first update at z {:.0}: flyingObject=1, the flying mover (no gravity, no steps; down up to 150, up up to 300; rule 8, not sure of every detail)", m.position[2]));
+            }
+            let before = m.position[2];
+            let (_, on) = m.fly_update(world);
+            player.base.position = m.position;
+            let z = m.position[2];
+            if (z - before).abs() > 0.5 {
+                if self.falling_from.is_none() {
+                    self.falling_from = Some(before);
+                    notes.push(format!("flying: moves from z {before:.0}"));
+                }
+            } else if let Some(from) = self.falling_from.take() {
+                notes.push(format!("flying: settles at z {z:.0} on {} (moved {:.0})", on.unwrap_or_else(|| "nothing (the raise)".into()), z - from));
             }
             return notes;
         }

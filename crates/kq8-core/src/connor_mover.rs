@@ -479,6 +479,9 @@ pub const TERRAIN_BIT: u32 = 0x800;
 /// The collision type bit the Fall state needs (Connor's 4; `characters.md`
 /// rule 8).
 pub const FALL_TYPE_BIT: u32 = 0x4;
+/// The flying mover's drop and raise per update (`characters.md` rule 8).
+pub const FLY_DOWN: f32 = 150.0;
+pub const FLY_UP: f32 = 300.0;
 /// A surface is walkable if its normal's z is above this (about 36.9°).
 pub const WALKABLE_NORMAL_Z: f32 = 0.8;
 /// Gravity in units per second squared (with the fall timer's seconds):
@@ -713,6 +716,33 @@ impl Mover {
         m.keep_on_ground = keep_on_ground != 0;
         m.keep_on_surface = keep_on_ground == 1;
         m
+    }
+
+    /// `flyingObject=1` (`characters.md` rule 8, Q122 c; M4 4d-6b-3; the
+    /// note is "not sure of every detail"): step up and down 0 and gravity
+    /// off, the ordinary move, then down by up to [`FLY_DOWN`] (stopped by
+    /// what the down pass would land on), then, if the ground lies above
+    /// its feet within its height, up by up to [`FLY_UP`]. The raise uses
+    /// the terrain only (a building surface above its feet: not built).
+    /// Returns the update's report and what stopped the drop, if anything.
+    pub fn fly_update(&mut self, world: &dyn MoverWorld) -> (Report, Option<String>) {
+        self.step_up = 0.0;
+        self.step_down = 0.0;
+        self.use_gravity = false;
+        let report = self.update([0.0; 3], world);
+        let start = self.position;
+        let end = add(start, [0.0, 0.0, -FLY_DOWN]);
+        let stop = nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end));
+        let landed = stop.as_ref().map(|h| h.what.clone());
+        self.position = stop.map_or(end, |h| h.position);
+        let height = self.balls.heights.last().map_or(0.0, |h| h + self.balls.radius);
+        if let Some((g, _)) = world.ground(self.position[0], self.position[1]) {
+            let above = g - self.position[2];
+            if above > 0.0 && above <= height {
+                self.position[2] += above.min(FLY_UP);
+            }
+        }
+        (report, landed)
     }
 
     /// The terrain contact at the end of a pass, if the terrain counts.
@@ -2164,5 +2194,22 @@ mod tests {
             d.update([0.0; 3], &Pond);
         }
         assert_eq!(d.position[2], 0.0);
+    }
+
+    #[test]
+    fn a_flyer_settles_150_per_update_and_rises_up_to_300() {
+        // characters.md rule 8 (Q122 c): Pond's floor is at 0.
+        let mut m = Mover::character([2000.0, 0.0, 1000.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), -1);
+        let mut zs = Vec::new();
+        for _ in 0..8 {
+            m.fly_update(&Pond);
+            zs.push(m.position[2]);
+        }
+        assert_eq!(&zs[..3], &[850.0, 700.0, 550.0]);
+        assert_eq!(*zs.last().unwrap(), 0.0, "{zs:?}");
+        // Under the ground by 400 (within its height): up 300 a time.
+        let mut u = Mover::character([2000.0, 0.0, -400.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 0);
+        u.fly_update(&Pond);
+        assert!(u.position[2] > -400.0, "{}", u.position[2]);
     }
 }

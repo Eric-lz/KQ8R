@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-6b-3: the flying mover (Q122 built)
+
+**Changed:** `kq8-core/src/connor_mover.rs`: `fly_update` (steps 0, gravity off, the ordinary move, then down by up to 150 stopped as the down pass, then up by up to 300 if the terrain is above its feet within its height). `character.rs`: `flyingObject=1` characters use it, logged (first update, moving, settling on what). 1 unit test. New question **Q129** (the order of the flying drop and the `keepOnGround=1` ground check; buildings in the raise). `QUESTIONS.md` Q122 marked built. DESIGN, provenance.
+**Why:** A's answer to Q122 (c) (`characters.md` rule 8).
+**Tested how:** `cargo test --workspace` (515 pass, 1 new), clippy clean. Viewer: `cargo play --world Daventry --at 152000,201400,1.57 --frames 500 --sound off`, read `characters.log`.
+**Result:** bat3 (6,350 above the terrain) comes down 150 per update and settles on the terrain at 7,650 at update 44. bat2 (over water) settles at 6,480, 150 under the water surface: the literal order (ground check onto the surface, then the drop to the floor side), asked as Q129.
+**Still broken / not tested:** Not looked at by eye. The raise ignores buildings (Q129 b). How flyers fly about is M5. The Knight is not in the world before his scene.
+**Next:** 4d-7b, shadows (Q123): plan first.
+
 ## 2026-10-19 M4 step 4d-6b-2: characters fall onto the ground and buildings (Q122)
 
 **Changed:** `kq8-data/src/characters.rs`: `colliderType` / `colliderMask` read (defaults 0x42 / 0x281F). `kq8-core`: `Mover::character` takes the type (Fall only with bit 4); `Character` carries its mover, `gravity_step` (in range, not in Birth, standing still; a script's `move` is its start; logs the first update, leaving the ground, landing on what); `World::characters_gravity`. Viewer: each character gets a mover at load (its `BOUNDS.KQ` box, steps, `keepOnGround`), `draw_distance.rs` `character_box`, new fixed-update step `character_gravity` right after `door_step` (buildings only for a mask with 0x8). The click box follows. 1 unit test. DESIGN, provenance.
