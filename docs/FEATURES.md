@@ -669,8 +669,8 @@ message that shows the usage.
 - **Characters:** the fight is a first version (M5 5c): Connor's
   controls, the bolt's flight and the drops' flight are stand-ins; not
   compared with the original by eye. Their shadows on buildings
-  follow the traced rule (Q135, 4d-7b-5); the earlier version was
-  checked against the original by the user, the traced numbers not yet.
+  follow the traced rule (Q135, 4d-7b-5), without the original's cut
+  shadows (the user's decision); checked by the user.
 - **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** music doesn't pause (no pause yet); monsters have no

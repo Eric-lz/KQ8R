@@ -41,8 +41,10 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   built** (`characters.md` rule 37 (2): s = 0.287 × the shown model's
   stored ball radius, the band from the ball's centre, the area turned
   with the caster); checked in the logs (Connor standing: box 505 ×
-  1,800, 687 below to 1,079 above his feet, as A's numbers), **the new
-  numbers not looked at by eye**. **Checked by the user against the original
+  1,800, 687 below to 1,079 above his feet, as A's numbers). After the
+  user's look (2026-10-21): darker (sRGB 0.5), and the area reaches the
+  whole shadow so it climbs walls at once (4d-7b-5c, -5d); **checked by
+  the user: "looks a lot better"**. **Checked by the user against the original
   (2026-10-20): works as expected**, shadows also show inside a
   building when Connor stands outside, as in the original. The
   original cuts some shadows off; by the user's decision we don't.
@@ -511,8 +513,7 @@ characters and conversations done; the menus postponed) and **M5**
 - **Next step, suggested:** for the user: play the fight by eye
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Connor's controls (the input side of the fight, his weapon lists,
-  game over), the bolt's flight, Q136, Q137. For the user: a look at
-  shadows on buildings with Q135's numbers (MODLOG 4d-7b-5b). **The main
+  game over), the bolt's flight, Q136, Q137. **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.

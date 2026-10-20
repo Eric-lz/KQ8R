@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 The user's check of shadows on buildings after 4d-7b-5c / 5d
+
+**Changed:** Docs only: DESIGN, FEATURES, STATUS.
+**Why:** The user looked at the barn wall walk after the darkness and wall fixes.
+**Tested how:** The user, by eye, in our viewer.
+**Result:** "It looks a lot better now." Shadows on buildings are done.
+**Still broken / not tested:** The shadow drawing as a whole may be redone later, when the user rebuilds the rendering after the game is finished.
+**Next:** —
+
 ## 2026-10-21 M4 step 4d-7b-5d: the head's shadow climbs the wall too (the user's check)
 
 **Changed:** `kq8-core/src/shadow.rs`: the search area's far end is the shadow of the top of the model's ball (the original: of the band's top, 1,079 for Connor standing); test updated. Provenance, DESIGN.

@@ -847,7 +847,8 @@ inventory and menus.
           decision); the sun's angle is the data's (`tsLightAim`), kept.
           Then the head still went under the wall: the area now runs
           along the sun from the top of the model's ball (the user's
-          decision, 4d-7b-5d).
+          decision, 4d-7b-5d). **Checked by the user (2026-10-21):
+          "looks a lot better".**
         - **4d-7b-5b, the model's ball in the viewer** (**done**; `load.rs`: models
           and movements keep the `.kqs` ball; a `ModelBall` component on
           each shown frame in `anim_view.rs`, `connor_view.rs`,
