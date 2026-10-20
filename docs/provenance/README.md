@@ -2129,3 +2129,9 @@ marked otherwise.
 | What | Source | Check |
 | --- | --- | --- |
 | With the right button held, the camera is aimed at and swings around the point half-way between the partner and Connor (where he stands when the button is pressed), 1,400 above | **The user's check in the original** (2026-10-19); the exact point is our stand-in (Q126) | Unit test `camera_numbers_cut_the_camera_until_the_right_button` |
+
+### 4e-9, a 0 s loop never ends — `crates/kq8-core/src/door.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A movement whose model loop lasts 0 s (or less) does not move and never ends, whatever its speed, loop or play-once: no `EndLoop`, Wait brings no `Stop` back | `anim-scripts.md` rule 10a (Q120) | Unit test `a_zero_length_mouth_pose_holds_in_wait` |

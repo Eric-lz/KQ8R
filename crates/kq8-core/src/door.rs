@@ -107,8 +107,10 @@ impl DoorMovement {
     /// chests and animated objects.
     pub fn step_with(&self, phase: f32, dt: f32, speed: f32) -> Step {
         if self.play_time <= 0.0 {
-            // No length: a loop stays; a play-once movement has ended.
-            return Step { to: phase, done: !self.repeat, cues: Vec::new() };
+            // `anim-scripts.md` rule 10a (Q120): a model loop that lasts 0
+            // s never moves and never ends, loop or play-once (the
+            // Uglybeast's mouth poses hold).
+            return Step { to: phase, done: false, cues: Vec::new() };
         }
         let raw = phase + speed * dt / self.play_time;
         let mut to = raw;

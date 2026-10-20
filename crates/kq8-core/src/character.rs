@@ -534,6 +534,25 @@ mod tests {
     }
 
     #[test]
+    fn a_zero_length_mouth_pose_holds_in_wait() {
+        // anim-scripts.md rule 10a (Q120): the Uglybeast's mouth poses'
+        // models last 0 s: they never end, so Wait brings no Stop back.
+        let mut ms = vec![movement("stop", 0.0, 1.0, true, true, vec![]), movement("f", 0.0, 1.0, false, true, vec![])];
+        ms[1].play_time = 0.0;
+        let base = crate::collide::Placement { rotation: crate::door::identity().m, position: [0.0; 3] };
+        let mut p = NamedAnimPlayer::new("ugly", ms, 0, base).with_names_at_load(Some("stop"), None);
+        let mut c = Character::new(true, 0x20, 0.0, false, true, true, 1);
+        c.in_range = true;
+        let mut log = Vec::new();
+        let n = run(&mut c, &mut p, 0, 3, &mut log);
+        assert_eq!(c.state, State::Wait);
+        c.mouth_code(&mut p, 1);
+        run(&mut c, &mut p, n, 30, &mut log);
+        assert_eq!(p.movement_name(), "f", "the pose holds: {log:?}");
+        assert!(!log.iter().any(|l| l.contains("'f' ended")));
+    }
+
+    #[test]
     fn heading_of_matches_dir_z() {
         for h in [0.0f32, 0.8, -1.57, 3.0] {
             let r = kq8_data::objects::rotation([0.0, 0.0, h]);

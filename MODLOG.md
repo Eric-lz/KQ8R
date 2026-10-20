@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the running original yet (checks listed in `characters.md` "How to check" 6–10). Not traced: how the renderer blends the 0.5 shadow, distance/haze fading of shadows, which model side the shadow keeps, shadows over water; the flying mover is traced but not fully sure.
 **Next:** B: drain delay-0 events before drawing (fixes the snap), let zero-duration movements hold (fixes the flicker), the `Stop` default names, then gravity and shadows. User: the checks in `characters.md` "How to check" 6–10.
 
+## 2026-10-19 M4 step 4e-9: a movement whose loop lasts 0 never ends (Q120 built)
+
+**Changed:** `kq8-core/src/door.rs` (`DoorMovement::step_with`): a model loop of 0 s (or less) neither moves nor ends, loop or play-once (was: a play-once one ended at once). 1 unit test. `QUESTIONS.md` Q120 marked built. DESIGN, provenance.
+**Why:** A's answer to Q120 (`anim-scripts.md` rule 10a): the Uglybeast's mouth poses last 0 s, so they hold; our "ended at once" made Wait bring `Stop` back between mouth codes: the flicker the user saw again (2026-10-19).
+**Tested how:** `cargo test --workspace` (504 pass, 1 new; the new test fails without the change), clippy clean. Viewer: **not run yet** (a viewer window was open).
+**Result:** Unit test: a geometry talker in Wait given code 1 holds `f` for 30 updates, no `Stop`.
+**Still broken / not tested:** Not run in the viewer. Which other models last 0 s (the note asks to check) is not counted: our model check does not report loop lengths.
+**Next:** Q119 (the snap at the end of the Uglybeast's turn).
+
 ## 2026-10-19 M4 step 4e-8: the right-button camera turns between the two (the user's check)
 
 **Changed:** `kq8-core/src/conversation.rs`: with the right button held during a conversation the camera is placed at `cam0` aimed at, and swings around, the point half-way between the partner and Connor (was: the partner). Unit test changed. `QUESTIONS.md` Q126: the user's observation added. DESIGN, provenance.
