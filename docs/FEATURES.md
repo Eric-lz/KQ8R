@@ -464,7 +464,7 @@ miss, roll, flinch, death, drop and shot is in
   the item list (`kq8 character-verify` prints them; all match the
   note's table).
 - **Creatures attack:** at once when they reach Connor, then every swing
-  + attack delay (goblin22: every 2 s); they stand still while swinging
+  plus attack delay (goblin22: every 2 s); they stand still while swinging
   and keep turning to him. A chasing creature always swings in full on
   arriving (the original's "swallowed swing" is not reproduced: the
   user's decision).
@@ -484,7 +484,7 @@ miss, roll, flinch, death, drop and shot is in
 - **Dying:** its die movement; its drops fling up and land with their
   sound; when the death ends Connor gets its experience, a body stays
   where it fell, and it is removed.
-- **Bow spriggans:** they never move, and shoot a bolt every swing +
+- **Bow spriggans:** they never move, and shoot a bolt every swing plus
   delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor (the
   bolt's flight is a stand-in: straight, no gravity).
 - **Combat level:** `--combat-level 1|2|3` (0.66 / 1.0 / 1.5 × the
