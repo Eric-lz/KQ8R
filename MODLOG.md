@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 step 5b-2: landing on a character's top pushes Connor off (Q131 c)
+
+**Changed:** `kq8-core/src/connor_mover.rs`: a down-pass landing on a character's top (its hit now carries the character's axis) is followed by a 250 level push away from it, as an across move. 1 new test. DESIGN, provenance.
+**Why:** A's answer to Q131 (c) (`connor-physics.md`).
+**Tested how:** `cargo test --workspace`, clippy clean.
+**Result:** Unit test: Connor dropping onto a goblin 300 off its middle lands on its top (1,600) and is pushed out along +x; the note says he slides off its top about 250 an update.
+**Still broken / not tested:** **Not looked at by eye**; not run in the viewer (needs a jump onto a goblin).
+**Next:** 5b-3, the stuck escape.
+
 ## 2026-10-20 M5 step 5b-1: the exact cylinder of a character (Q131 a, b)
 
 **Changed:** `kq8-core/src/collide.rs`: a character's cylinder is its ball stack wrapped up (bottom at its box's lowest z, height 2 × the radius for one ball), and a purely vertical move tests one ball. Plan for 5b (A's answers Q131–Q134 and the user's checks) in DESIGN. Tests updated, provenance.

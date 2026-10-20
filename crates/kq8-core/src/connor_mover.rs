@@ -63,6 +63,9 @@ pub struct Hit {
     /// A character (`KQMonster`, `characters.md` rule 1): never head-on
     /// (`connor-physics.md` "Exact hit handling"; M4 4d-12-2).
     pub monster: bool,
+    /// A character's cylinder foot (its axis), for the push off its top
+    /// (`connor-physics.md`, Q131 c; M5 5b-2).
+    pub other_at: Option<[f32; 3]>,
 }
 
 /// What the mover moves through: the ground, and the solid things a pass
@@ -366,7 +369,7 @@ impl MoverWorld for Scene<'_> {
         };
         for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
             if let Some(c) = b.sweep(balls, from, to) {
-                keep(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone(), monster: false });
+                keep(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone(), monster: false, other_at: None });
             }
         }
         let passed = self.passed.borrow().clone();
@@ -374,7 +377,7 @@ impl MoverWorld for Scene<'_> {
         while let Some(o) = list.next() {
             match o.sweep(balls, from, to) {
                 Some(ObjectHit::Contact(c)) => {
-                    let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone(), monster: false };
+                    let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone(), monster: false, other_at: None };
                     match told(&h) {
                         Told::Contact => keep(h),
                         Told::Pushed => {}
@@ -407,7 +410,7 @@ impl MoverWorld for Scene<'_> {
                 self.notes.borrow_mut().push(format!("ball(s) {:?} started inside {}'s cylinder: a creature, no hit (rule 19)", s.inside, c.name));
             }
             if let Some(k) = s.contact {
-                keep(Hit { position: k.position, touch: k.touch, normal: k.normal, what: c.name.clone(), monster: true });
+                keep(Hit { position: k.position, touch: k.touch, normal: k.normal, what: c.name.clone(), monster: true, other_at: Some(c.position) });
             }
         }
         best
@@ -590,6 +593,9 @@ pub const STUCK_DROP: f32 = 50.0;
 pub const STUCK_UPDATES: u32 = 5;
 /// Falling further than this kills Connor.
 pub const DEATH_DROP: f32 = 3840.0;
+/// Landing on a character's top pushes him this far, level
+/// (`connor-physics.md`, Q131 c).
+pub const MONSTER_TOP_PUSH: f32 = 250.0;
 /// On this many hits in one update he stays at the last contact.
 pub const MAX_HITS: u32 = 3;
 /// A hit is head-on when his horizontal movement is less than this
@@ -1138,10 +1144,26 @@ impl Mover {
                 "glance"
             };
             let contact = h.position;
+            let monster_top = (!self.object_slide && h.monster && normal[2] > WALKABLE_NORMAL_Z).then_some(h.other_at).flatten();
             report.head_on |= head_on;
             report.hits.push(HitRecord { pass: "down", hit: h, angle, result });
             self.position = contact;
-            if result == "glance" {
+            if let Some(at) = monster_top {
+                // connor-physics.md "landing on a KQMonster" (Q131 c; M5
+                // 5b-2): he lands, then is pushed 250 level, away from its
+                // position (exactly over it: toward his back), as an across
+                // move (walls stop or slide it, 3 slides).
+                let (dx, dy) = (contact[0] - at[0], contact[1] - at[1]);
+                let len = (dx * dx + dy * dy).sqrt();
+                let dir = if len > 0.0 { [dx / len, dy / len] } else { [-self.push.facing[0], -self.push.facing[1]] };
+                let target = [contact[0] + MONSTER_TOP_PUSH * dir[0], contact[1] + MONSTER_TOP_PUSH * dir[1], contact[2]];
+                let mut push_hits = 0;
+                let how = self.across(world, contact, target, false, "monster push", &mut push_hits, report);
+                report.events.push(format!(
+                    "landed on a character's top: pushed {MONSTER_TOP_PUSH} away from it ({how}) to ({:.0}, {:.0}, {:.0})",
+                    self.position[0], self.position[1], self.position[2]
+                ));
+            } else if result == "glance" {
                 let target = project_onto(end, contact, normal);
                 report.push = length(sub(target, contact));
                 self.across(world, contact, target, head_on_allowed, "down slide", hits, report);
@@ -1441,7 +1463,7 @@ fn head_on_angle(movement: [f32; 3], normal: [f32; 3]) -> Option<f32> {
 fn terrain_hit(world: &dyn MoverWorld, end: [f32; 3]) -> Option<Hit> {
     let (height, normal) = world.ground(end[0], end[1]).filter(|(h, _)| *h > end[2])?;
     let p = [end[0], end[1], height];
-    Some(Hit { position: p, touch: p, normal, what: "terrain".into(), monster: false })
+    Some(Hit { position: p, touch: p, normal, what: "terrain".into(), monster: false, other_at: None })
 }
 
 /// Of a building contact and a terrain contact, the one nearer the start
@@ -1747,7 +1769,7 @@ mod tests {
             }
             let t = (stop - from[0]) / (to[0] - from[0]);
             let p = [stop, from[1] + (to[1] - from[1]) * t, from[2]];
-            Some(Hit { position: p, touch: p, normal: self.normal, what: "wall".into(), monster: false })
+            Some(Hit { position: p, touch: p, normal: self.normal, what: "wall".into(), monster: false, other_at: None })
         }
     }
 
@@ -2437,6 +2459,26 @@ mod tests {
 
     fn flat_distance(p: [f32; 3]) -> f32 {
         (p[0] * p[0] + p[1] * p[1]).sqrt()
+    }
+
+    #[test]
+    fn landing_on_a_character_s_top_pushes_him_250_away() {
+        // connor-physics.md "landing on a KQMonster" (Q131 c; M5 5b-2).
+        let g = [goblin(0x42)];
+        let mut scene = Scene::new(&Flat(0.0), &[], &[]);
+        scene.characters = &g;
+        let mut m = Mover::new([300.0, 0.0, 1700.0], true);
+        let mut log = Vec::new();
+        for _ in 0..3 {
+            let r = m.update([0.0; 3], &scene);
+            log.extend(r.events);
+        }
+        let joined = log.join("
+");
+        assert!(joined.contains("landed on a character's top: pushed 250"), "{joined}");
+        // Pushed level from 300 to 550 at the first landing, on its top.
+        assert!((m.position[0] - 550.0).abs() < 1.0 || m.position[0] > 550.0, "{:?} {joined}", m.position);
+        assert!(m.position[1].abs() < 0.01);
     }
 
     #[test]

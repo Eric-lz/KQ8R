@@ -2412,3 +2412,9 @@ marked otherwise.
 | --- | --- | --- |
 | Radius = the ball radius; bottom = position + box's lowest z; height = box height with more than one ball, else 2 × radius; whole units | `connor-collision.md` rule 18 (Q131 a; replaces the 4d-12-1 stand-in) | Unit test: goblin 0–1,600, Connor 0–1,300, a bat from 1,170 |
 | A purely vertical move tests one ball: the top one going up, the bottom one going down | Rule 18 (Q131 b) | Unit test |
+
+### 5b-2, landing on a character's top — `crates/kq8-core/src/connor_mover.rs` (down pass, `MONSTER_TOP_PUSH`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| He lands on a character's top as on any surface facing up more than 0.8, then is pushed 250 level from the contact, away from its axis (exactly over it: toward his back), as an across move (3 slides), in any state; Connor only | `connor-physics.md` "landing on a `KQMonster`" (Q131 c; replaces the ordinary-landing stand-in) | Unit test |

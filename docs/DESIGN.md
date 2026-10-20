@@ -1099,7 +1099,7 @@ stats.
       bottom = position + the box's lowest z; height = box height with
       more than one ball, else 2 × the radius (goblin 0–1,600); whole
       units; a purely vertical move tests one ball (top up, bottom down).
-    - **5b-2, landing on a character's top** (Q131 c): Connor lands, then
+    - **5b-2, landing on a character's top** (**done** 2026-10-20) (Q131 c): Connor lands, then
       is pushed 250 level, away from its position (over it: toward his
       back), as an across-pass move (3 slides), in any state.
     - **5b-3, the stuck escape** (Q132): on only once `walk` / `run`
