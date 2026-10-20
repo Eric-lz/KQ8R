@@ -1218,7 +1218,8 @@ stats.
     built so far for any player). When a character's phase passes
     `interruptable <n>`, its "can be cut short" becomes n. **Test:** unit
     test; the log shows goblin22's `attack` turning uncuttable at 0.19.
-  - **5c-3, characters attack** (rules 6–12 with the Do instead of 11b).
+  - **5c-3, characters attack** (**done** 2026-10-20; goblin22 swings at
+    once on arrival, then every 2 s at a standing Connor) (rules 6–12 with the Do instead of 11b).
     Attack time 0 at the start (first attack at once), never while an
     attack plays, now + `attackDelay` when it ends (or, cut short, at
     the next state change or hit). Standing: seen, closer than reach

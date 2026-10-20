@@ -763,6 +763,7 @@ pub fn trap_step(
     sim.active.world.connor_can_turn = connor.can_turn_to_listener();
     sim.active.world.connor_at = Some(connor.mover.position);
     sim.active.world.connor_move_key = connor.intent.forward != 0;
+    sim.active.world.connor_back_key = connor.intent.forward == -1;
     let position = connor.mover.position;
     if sim.connor_checked_at != Some(position) {
         // His move since the last check (traps.md rule 6: swept).
@@ -1242,6 +1243,8 @@ pub fn door_step(
     sim.active.world.connor_at = connor.as_ref().map(|c| c.mover.position);
     // character-movement.md rule 25 (M5 5b-4): his forward / back key.
     sim.active.world.connor_move_key = connor.as_ref().is_some_and(|c| c.intent.forward != 0);
+    // fighting.md rule 13 (M5 5c-3): his back key.
+    sim.active.world.connor_back_key = connor.as_ref().is_some_and(|c| c.intent.forward == -1);
     let updates = sim.active.world.updates;
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut click_at.0).into_iter().partition(|(_, n)| updates >= *n);
     click_at.0 = later;

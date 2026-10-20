@@ -628,6 +628,8 @@ impl WorldState {
         // Rule 25: what it does.
         let aim = if sees { Some(connor) } else { last_seen.filter(|p| distance(*p, pos) > LAST_SEEN_AIM) };
         let aim2 = aim.map(|p| [p[0], p[1]]);
+        let back_key = self.connor_back_key;
+        let mut fight_lines = Vec::new();
         match state {
             State::Wait => {
                 if let Some(p) = aim2 {
@@ -635,6 +637,10 @@ impl WorldState {
                         c.ask_turn(p);
                     }
                 }
+                // fighting.md rule 7 (M5 5c-3): standing, it attacks when it
+                // can see him, he is closer than its reach (ranged 1.25 ×),
+                // the attack is due and its movement can be cut short.
+                fight_lines.extend(attack_now(&mut a.player, c, sees, d, connor, back_key, now, false));
                 // Rule 25: ranged (doMode 1) start beyond 1.25 ×. During a
                 // zombie's `birth` its walk waits for `birth` to end (rule
                 // 30), and its stuck check for the walk (rule 7).
@@ -651,34 +657,48 @@ impl WorldState {
                 c.walk.steer = aim2;
                 // Rule 25 (Q133 b): a melee character within reach stops only
                 // while Connor has no forward / back key; else it follows him
-                // at reach. Ranged (doMode 1): stops within 0.75 ×. The attack
-                // itself (once due, whatever he does) is the fight study.
+                // at reach. Ranged (doMode 1): stops within 0.75 ×.
                 let ranged = s.do_mode == 1;
                 let reach = if ranged { 0.75 * s.attack_dist } else { s.attack_dist };
                 let moving = self.connor_move_key;
-                let ai = c.ai.as_mut().unwrap();
-                if sees && d <= reach && (ranged || !moving) {
-                    ai.following = false;
-                    let w = c.set_state(&mut a.player, "Wait", &[], now);
-                    lines.push(format!(
-                        "Connor {d:.0} away, within its {} {reach:.0}{}: stops, facing him ({w}); the attack would be due here (the fight study, rule 25)",
-                        if ranged { "stop distance" } else { "attack distance" },
-                        if ranged { " (doMode 1)" } else { ", and he has no forward / back key" }
-                    ));
-                    c.ask_turn([connor[0], connor[1]]);
-                } else if sees && d <= reach {
-                    if !ai.following {
-                        ai.following = true;
-                        lines.push(format!("Connor {d:.0} away, within reach but moving (forward / back key): it follows him at reach (rule 25)"));
-                    }
+                if c.attack_playing(&a.player) {
+                    // fighting.md rule 11b, Do instead (the user's decision):
+                    // while its `Attack` plays, no stop rule; it stays in
+                    // Move, steering at him.
+                } else if let Some(line) = attack_now(&mut a.player, c, sees, d, connor, back_key, now, true) {
+                    // fighting.md rule 7 (M5 5c-3): moving, it attacks when
+                    // it can see him, he is closer than its reach (1 ×,
+                    // ranged too) and the attack is due, whatever he does.
+                    c.ai.as_mut().unwrap().following = false;
+                    fight_lines.push(line);
                 } else {
-                    ai.following = false;
+                    let ai = c.ai.as_mut().unwrap();
+                    if sees && d <= reach && (ranged || !moving) {
+                        ai.following = false;
+                        let w = c.set_state(&mut a.player, "Wait", &[], now);
+                        lines.push(format!(
+                            "Connor {d:.0} away, within its {} {reach:.0}{}: stops, facing him ({w}); its attack is not due yet (rule 25; fighting.md rule 7)",
+                            if ranged { "stop distance" } else { "attack distance" },
+                            if ranged { " (doMode 1)" } else { ", and he has no forward / back key" }
+                        ));
+                        c.ask_turn([connor[0], connor[1]]);
+                    } else if sees && d <= reach {
+                        if !ai.following {
+                            ai.following = true;
+                            lines.push(format!("Connor {d:.0} away, within reach but moving (forward / back key): it follows him at reach (rule 25)"));
+                        }
+                    } else {
+                        ai.following = false;
+                    }
                 }
             }
             _ => {}
         }
         for l in lines {
             self.character_note(&name, l);
+        }
+        for l in fight_lines {
+            self.fight_note(&name, l);
         }
     }
 
@@ -945,4 +965,30 @@ impl WorldState {
         let line = format!("underground (rule 30): {why}; off the active list, not drawn, not solid, gravity off, on its home point ({:.0}, {:.0}, {:.0})", home[0], home[1], home[2]);
         self.character_note(&name, line);
     }
+}
+
+/// `fighting.md` rule 7 (M5 5c-3): the attack starts now when it can see
+/// Connor, he is closer than its reach (a ranged one standing: 1.25 ×),
+/// its attack is due and its running movement can be cut short or has
+/// ended (otherwise it is tried again next update). `moving`: from Move.
+/// Returns the log line when it starts.
+#[allow(clippy::too_many_arguments)]
+fn attack_now(player: &mut crate::named_anim::NamedAnimPlayer, c: &mut crate::character::Character, sees: bool, d: f32, connor: [f32; 3], back_key: bool, now: f64, moving: bool) -> Option<String> {
+    use crate::connor_auto::{heading_towards, wrap};
+    let f = c.fight.as_ref()?;
+    let reach = c.ai.as_ref()?.settings.attack_dist;
+    let limit = if !moving && f.ranged() { crate::fight::RANGED_STANDING * reach } else { reach };
+    if !sees || d >= limit || !f.due(now) || !(player.cut_short || player.has_ended()) {
+        return None;
+    }
+    let before = f.attack_time_text();
+    let off = wrap(heading_towards(player.base.position, [connor[0], connor[1]]) - crate::character::heading_of(&player.base.rotation));
+    let was = player.movement_name().to_string();
+    let how = c.start_attack(player, now);
+    Some(format!(
+        "attack (rule 7, {}): Connor {d:.0} away (closer than {limit:.0}), {:.0} deg off its heading, his back key {}; attack time {before} -> never; '{was}' replaced: {how}; chase timer 5 s (rules 8, 9)",
+        if moving { "moving" } else { "standing" },
+        off.to_degrees(),
+        if back_key { "held" } else { "not held" }
+    ))
 }

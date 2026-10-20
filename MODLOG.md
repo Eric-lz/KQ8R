@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-3: characters attack
+
+**Changed:** `kq8-core`: `fight.rs` (the attack time, `is_attack`, the `Do` cue logged); `character.rs` (`start_attack`, the end and the cut-short cases of rules 10, 11); `character_ai.rs` (the attack in Wait and Move, replacing the 5a / 5b stand-in; no stop rule while a swing from Move plays: the user's decision on rule 11b); `active.rs` (`connor_back_key`, the `Do` cue, the character's fight lines to `fight.log`). Viewer `door_view.rs`: his back key. 2 new tests, 1 updated. DESIGN, provenance.
+**Why:** `fighting.md` rules 6–12.
+**Tested how:** `cargo test --workspace` (416 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --frames 3000` (Connor stands by Sara's house), `fight.log`, `doors.log`.
+**Result:** goblin22 runs up and swings at once from its run (update 40, 1,352 away, attack time 0 -> never), its `Do` at update 48, the swing ends at 55 (next due now + 1 s); from then on a standing swing every 30 updates (70, 100, 130, ... 310): 1 s swing + 1 s delay, as How to check 1 says. `interruptable 1` / `0` fire at updates 41 / 43 (0.19 s). Unit test: the same with no stop between the moving swing's start and end.
+**Still broken / not tested:** **Not looked at by eye.** No hit yet (the `Do` cue only logs). Connor walking away during the swing, the cut-short case and the bow spriggans' standing swing (1.25 ×) not run.
+**Next:** 5c-4, the swing lands on Connor.
+
 ## 2026-10-20 M5 step 5c-2: the `interruptable` cue
 
 **Changed:** `kq8-core/src/named_anim.rs`: a cue `interruptable <n>` sets the movement's "can be cut short" to n when the phase passes it; `active.rs`: the log says so instead of "cue action not done". 1 new test. DESIGN, provenance.

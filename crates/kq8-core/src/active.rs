@@ -644,6 +644,9 @@ pub struct WorldState {
     /// Connor's forward or back key is held now (`character-movement.md`
     /// rule 25, Q133 b; a scripted walk sends no key), set by the caller.
     pub connor_move_key: bool,
+    /// Connor's back key is held now (`fighting.md` rule 13: the reach is
+    /// 1.25 × then; M5 5c-3), set by the caller.
+    pub connor_back_key: bool,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2457,6 +2460,7 @@ impl Active {
                 active_list: Vec::new(),
                 max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
                 connor_move_key: false,
+                connor_back_key: false,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -3555,7 +3559,11 @@ impl Active {
             };
             let who = self.world.anims[i].player.name.clone();
             for n in notes {
-                self.world.character_note(&who, n);
+                // M5 5c: the character's own fight lines go to fight.log too.
+                match n.strip_prefix("fight: ") {
+                    Some(f) => self.world.fight_note(&who, f),
+                    None => self.world.character_note(&who, n),
+                }
             }
             // A character's click box is where the character is (after a
             // script's `move` or a turn, M4 4d-4).
@@ -3568,6 +3576,11 @@ impl Active {
             let p = &self.world.anims[i].player;
             let (name, at) = (p.name.clone(), p.placement().position);
             for cue in &a.cues {
+                // fighting.md rule 13 (M5 5c): a fighter's `Do` cue.
+                if cue.trim().eq_ignore_ascii_case("do") && self.world.anims[i].character.as_deref().is_some_and(|c| c.fight.is_some()) {
+                    self.world.character_do(i);
+                    continue;
+                }
                 let what = self.world.cue_sound(&format!("object {name}"), cue, at);
                 self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
             }
@@ -4907,7 +4920,7 @@ mod tests {
         // It stops within its attack distance, facing him.
         watch(&mut a, &[], 90);
         let log = a.world.character_log.join("\n");
-        assert!(log.contains("within its attack distance 1500, and he has no forward / back key: stops, facing him") && log.contains("the attack would be due here"), "{log}");
+        assert!(log.contains("within its attack distance 1500, and he has no forward / back key: stops, facing him") && log.contains("its attack is not due yet"), "{log}");
         let y = a.world.anims[0].player.base.position[1];
         assert!(y < -1900.0 && y > -2100.0, "1,500 short of him, give or take one update: {y}");
         // Connor runs far off (beyond twice the alarm radius): after the
@@ -5000,6 +5013,48 @@ mod tests {
         watch(&mut a, &[], 73);
         let log = a.world.character_log.join("\n");
         assert!(log.contains("he has no forward / back key: stops, facing him"), "{log}");
+    }
+
+    /// goblin22 for the fight (M5 5c): the wanderer with `attack` (1 s,
+    /// cut short until 0.1875, `Do` at 0.5), alarm 4,000, reach 1,500,
+    /// stats 15 / 2 / 2 / 0 / 3, attack delay 1 s.
+    fn fighter() -> Active {
+        use crate::door::Cue;
+        let mut a = wanderer(kq8_data::characters::Wander::None);
+        let cue = |phase: f32, action: &str| Cue { phase, action: action.into() };
+        let o = &mut a.world.anims[0];
+        o.player.movements.push(crate::named_anim::tests::movement("attack", 0.0, 1.0, false, false, vec![cue(0.0, "interruptable 1"), cue(0.1875, "interruptable 0"), cue(0.5, "do")]));
+        let c = o.character.as_mut().unwrap();
+        c.fight = Some(crate::fight::Fight::new(crate::fight::tests::settings([15, 2, 2, 0, 3], 1.0)));
+        let ai = c.ai.as_mut().unwrap();
+        (ai.settings.alarm_radius, ai.settings.attack_dist, ai.settings.home_radius, ai.settings.chase_radius) = (4000.0, 1500.0, 3000.0, 6000.0);
+        a
+    }
+
+    #[test]
+    fn a_character_attacks_at_once_then_every_swing_plus_its_delay() {
+        // fighting.md rules 6–10 and the Do instead of rule 11b (M5 5c-3).
+        let mut a = fighter();
+        a.world.connor_at = Some([0.0, -3500.0, 100.0]);
+        watch(&mut a, &[], 200);
+        let log = a.world.fight_log.join("
+");
+        let starts: Vec<u64> = a.world.fight_log.iter().filter(|l| l.contains(": attack (rule 7,")).map(|l| l["update ".len()..].split(':').next().unwrap().parse().unwrap()).collect();
+        assert!(log.contains("attack (rule 7, moving)") && log.contains("attack time 0.00 -> never"), "the first comes at once, from Move: {log}");
+        assert!(log.contains("attack (rule 7, standing)"), "then standing (no key held): {log}");
+        assert!(log.contains("Do cue of 'Attack' at phase 0.5"), "{log}");
+        assert!(log.contains("'Attack' ended: next attack due at") && log.contains("now + attackDelay 1 s"), "{log}");
+        assert!(starts.len() >= 3, "{log}");
+        // Between two swings: its length (1 s) + the delay (1 s), give or
+        // take the update it starts in.
+        for w in starts.windows(2).skip(1) {
+            assert!((29..=32).contains(&(w[1] - w[0])), "{starts:?}
+{log}");
+        }
+        // Rule 11b's Do instead: no stop while the swing from Move plays.
+        let first = a.world.character_log.iter().position(|l| l.contains("attack (rule 7, moving)")).unwrap();
+        let ended = a.world.character_log.iter().position(|l| l.contains("'Attack' ended")).unwrap();
+        assert!(!a.world.character_log[first..ended].iter().any(|l| l.contains("stops, facing him")), "{log}");
     }
 
     #[test]

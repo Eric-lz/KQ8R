@@ -2504,3 +2504,21 @@ the user in the original) and the game's data; no executable looked at.
 | A cue `interruptable <n>` the phase passes sets "can be cut short" to n, for every movement player (characters, objects) | `anim-scripts.md` rule 7 (data: only in `.anm` files) | Unit test (goblin2's `attack`: on at 0, off at 0.1875) |
 | Two such cues passed in one update: the later in the file wins | **Ours** (Daventry's lists have them in phase order, and never two in one update) | — |
 | The cue at phase 0 fires in the movement's first moving update (the update after its start, as every movement) | Our player's existing rule (M3 3i) | Unit test |
+
+### 5c-3, characters attack — `crates/kq8-core/src/{fight,character,character_ai,active}.rs` (`Fight::attack_time`, `start_attack`, `attack_ended`, `attack_cut_short`, `attack_now`, `character_do`), viewer `door_view.rs` (`connor_back_key`)
+
+Replaces the 5a / 5b stand-in (within reach a character only stopped or followed).
+
+| What | Source | Check |
+| --- | --- | --- |
+| The attack time starts at 0 (first attack at once), never reset by an alarm | `fighting.md` rule 6 | Unit test; viewer: goblin22's first swing on arrival |
+| Standing (Wait, alarmed, past its reaction): sees him, closer than reach (ranged 1.25 ×), due, movement can be cut short or ended → `Attack` | Rule 7 | Viewer |
+| Moving: the same with 1 × reach, whatever Connor does; before it is due, 5b-4's stop rule | Rule 7 with `character-movement.md` rule 25 | Unit test; viewer (from `run`) |
+| While `Attack` plays from Move, no stop rule: it stays in Move until the swing ends | Rule 11b, "Do not reproduce" (**the user's decision**: the swallowed swing is not reproduced) | Unit test (no "stops" between the start and the end) |
+| `Attack` asked for as an ordinary request (any capitals) | Rule 8; `anim-scripts.md` rules 4–5 | — |
+| While it plays: attack time "never", chase timer 5 s from its start, stuck check off until `walk` / `run` plays again; steering / turning go on; no step (the models have none, and only repeating movements step) | Rule 9 | Viewer: the swing at Connor 1,154 away stays there |
+| Its end (any movement named `Attack` / `Attack2`, idle fidgets too): attack time now + `attackDelay`, chase timer 5 s | Rule 10; `character-movement.md` rule 18 | Unit test; viewer: one swing every 30 updates (1 s + 1 s) |
+| Cut short by something else: put right at the next entry into Wait (`set_state`, the start-up's Wait) or Move (`enter_move`) | Rule 11 (the hit case comes with 5c-6) | — |
+| The `Do` cue of a fighter: logged only (hit test in 5c-4) | Rule 13 | Viewer |
+| `fight.log`: per attack who, distance, angle off its heading, his back key, attack time before / after, the movement replaced | The note's "How to check" (our logs) | Viewer |
+| His back key (forward key −1) handed to core each update | Rule 13 (used in 5c-4) | — |

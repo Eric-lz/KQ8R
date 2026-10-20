@@ -479,7 +479,8 @@ impl Character {
     /// Rule 4: into Move. `Stop` at a random frame and speed first, then at
     /// once `walk` or `run`; the stuck check starts (rule 7). Returns the
     /// log line.
-    pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, _now: f64, run: bool, why: &str) -> String {
+    pub fn enter_move(&mut self, player: &mut NamedAnimPlayer, now: f64, run: bool, why: &str) -> String {
+        let cut = self.attack_cut_short(now).map(|l| format!("{l}; ")).unwrap_or_default();
         let from = self.state;
         self.state = State::Move;
         self.wait_at = None;
@@ -497,7 +498,7 @@ impl Character {
         self.walk.check_from = player.base.position;
         self.walk.second_from = None;
         let first = first.iter().map(|l| format!("{l}; ")).collect::<String>();
-        format!("{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4)")
+        format!("{cut}{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4)")
     }
 
     /// Rule 1: this update's step from a repeating movement (its frame
@@ -572,6 +573,9 @@ impl Character {
         }
         if let Some(m) = &played.finished {
             self.after_end(player, m, notes);
+            if let Some(l) = self.attack_ended(m, now) {
+                notes.push(l);
+            }
         }
         step.played = Some(played);
         step
@@ -774,6 +778,7 @@ impl Character {
         }
         self.wait_at = None;
         let mut notes = vec![format!("Wait begins (rule 12, birthDelay {} s)", self.birth_delay)];
+        notes.extend(self.attack_cut_short(now));
         self.enter_wait(player, &mut notes);
         Some(notes.join("; "))
     }
@@ -852,6 +857,7 @@ impl Character {
     pub fn set_state(&mut self, player: &mut NamedAnimPlayer, state: &str, words: &[String], now: f64) -> String {
         let mut notes = Vec::new();
         if state.eq_ignore_ascii_case("Wait") {
+            notes.extend(self.attack_cut_short(now));
             self.wait_at = None;
             self.enter_wait(player, &mut notes);
         } else if state.eq_ignore_ascii_case("Special") {
@@ -910,6 +916,66 @@ impl Character {
         }
         notes.push("Special list used up".into());
         self.enter_wait(player, notes);
+    }
+}
+
+impl Character {
+    /// `fighting.md` rule 8 (M5 5c-3): asks for `Attack` the ordinary way
+    /// (the caller made sure the running movement can be cut short); the
+    /// attack time is "never" and the chase timer 5 s from now (rule 9); a
+    /// moving one's stuck check is off until its `walk` / `run` plays
+    /// again. Returns what happened, for the log.
+    pub fn start_attack(&mut self, player: &mut NamedAnimPlayer, now: f64) -> String {
+        let how = match player.request(crate::fight::ATTACK) {
+            Request::AtOnce(st) => format!("'{}' starts at once{}", crate::fight::ATTACK, if st.unknown { " (not in its list: movement 0)" } else { "" }),
+            _ => format!("'{}' waits for '{}' (should not happen: it can be cut short)", crate::fight::ATTACK, player.movement_name()),
+        };
+        if let Some(f) = self.fight.as_mut() {
+            f.attack_time = crate::fight::NEVER;
+        }
+        if let Some(ai) = self.ai.as_mut() {
+            ai.chase_until = now + crate::fight::ATTACK_CHASE;
+        }
+        self.walk.check_on = false;
+        self.walk.next_check = f64::MAX;
+        how
+    }
+
+    /// `Attack` is playing (rule 9; for the Do instead of rule 11b).
+    pub fn attack_playing(&self, player: &NamedAnimPlayer) -> bool {
+        player.movement_name().eq_ignore_ascii_case(crate::fight::ATTACK) && !player.has_ended()
+    }
+
+    /// Rule 10: a movement named `Attack` or `Attack2` ended (an idle
+    /// fidget too): the next attack is due `attackDelay` from now, the
+    /// chase timer 5 s.
+    fn attack_ended(&mut self, ended: &str, now: f64) -> Option<String> {
+        if !crate::fight::is_attack(ended) {
+            return None;
+        }
+        let f = self.fight.as_mut()?;
+        let delay = f64::from(f.settings.attack_delay);
+        f.attack_time = now + delay;
+        if let Some(ai) = self.ai.as_mut() {
+            ai.chase_until = now + crate::fight::ATTACK_CHASE;
+        }
+        Some(format!("fight: '{ended}' ended: next attack due at {:.2} (now + attackDelay {delay} s), chase timer 5 s (fighting.md rule 10)", f.attack_time))
+    }
+
+    /// Rule 11: an attack that never ended (something replaced it) leaves
+    /// the attack time at "never"; entering Wait or Move puts it right:
+    /// now + `attackDelay`, chase timer 5 s.
+    fn attack_cut_short(&mut self, now: f64) -> Option<String> {
+        let f = self.fight.as_mut()?;
+        if f.attack_time != crate::fight::NEVER {
+            return None;
+        }
+        let delay = f64::from(f.settings.attack_delay);
+        f.attack_time = now + delay;
+        if let Some(ai) = self.ai.as_mut() {
+            ai.chase_until = now + crate::fight::ATTACK_CHASE;
+        }
+        Some(format!("fight: the attack was cut short: next attack due at {:.2} (now + attackDelay {delay} s), chase timer 5 s (fighting.md rule 11)", f.attack_time))
     }
 }
 
