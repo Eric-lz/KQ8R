@@ -2685,3 +2685,10 @@ did not show his fists-up stance nor the sword pointer.
 | What | Source | Check |
 | --- | --- | --- |
 | A world item's model follows every change of its place, not only while it flies (the update it lands in also ends its flight: it stayed drawn at its last place in the air, above its click box) | Fix of our own drawing (the user's check) | — (by eye) |
+
+### 5c fix 7, the tumble — `crates/kq8-core/src/item.rs` (`Flight::spin`, `with_tumble`, `angles`, `TUMBLE_RATE`), `fight.rs` (`flights_step`), `active.rs` (`flight_rest`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A thrown item tumbles slowly while it flies and lands in its normal resting pose | The user's check in the original (2026-10-20) | Unit test |
+| Each axis turns at a random 90–180° per second, either way | **Ours** (Q137 e) | Unit test |

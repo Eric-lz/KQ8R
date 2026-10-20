@@ -331,7 +331,14 @@ pub struct Flight {
     /// Updates flown, and where it started (for the log).
     pub updates: u32,
     pub from: [f32; 3],
+    /// Its tumble while it flies, radians per second about x, y, z (M5 5c
+    /// fix 7, **stand-in**: the user saw a slow tumble in the original;
+    /// the rates are ours, Q137 e). It lands in its resting pose.
+    pub spin: [f32; 3],
 }
+
+/// The tumble's rate per axis (ours, Q137 e): 90-180 degrees per second.
+pub const TUMBLE_RATE: (f32, f32) = (90.0, 180.0);
 
 impl Flight {
     /// The launch from three random numbers in [0, 1): heading,
@@ -341,7 +348,27 @@ impl Flight {
         let up = (TOSS_ELEVATION.0 + r[1] * (TOSS_ELEVATION.1 - TOSS_ELEVATION.0)).to_radians();
         let speed = TOSS_SPEED.0 + r[2] * (TOSS_SPEED.1 - TOSS_SPEED.0);
         let flat = speed * up.cos();
-        Flight { item: item.to_string(), velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()], updates: 0, from }
+        Flight { item: item.to_string(), velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()], updates: 0, from, spin: [0.0; 3] }
+    }
+
+    /// The tumble from three random numbers in [0, 1): per axis a rate of
+    /// [`TUMBLE_RATE`], turning one way below 0.5, the other above.
+    pub fn with_tumble(mut self, r: [f32; 3]) -> Self {
+        self.spin = r.map(|v| {
+            let rate = (TUMBLE_RATE.0 + (v * 2.0).fract() * (TUMBLE_RATE.1 - TUMBLE_RATE.0)).to_radians();
+            if v < 0.5 { -rate } else { rate }
+        });
+        self
+    }
+
+    /// Its angles after `updates` updates of `dt` s, from its resting
+    /// angles `rest` (the tumble; the resting pose once landed).
+    pub fn angles(&self, rest: [f32; 3], dt: f32, landed: bool) -> [f32; 3] {
+        if landed {
+            return rest;
+        }
+        let t = self.updates as f32 * dt;
+        std::array::from_fn(|k| rest[k] + self.spin[k] * t)
     }
 
     /// One update of `dt` s from `at`: the new position, and whether it
@@ -363,6 +390,17 @@ impl Flight {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn a_thrown_item_tumbles_slowly_and_lands_in_its_resting_pose() {
+        let mut f = Flight::launch("x", [0.0; 3], [0.0; 3]).with_tumble([0.0, 0.75, 0.25]);
+        let deg: Vec<f32> = f.spin.iter().map(|s| s.to_degrees()).collect();
+        assert!((deg[0] + 90.0).abs() < 1e-3 && (deg[1] - 135.0).abs() < 1e-3 && (deg[2] + 135.0).abs() < 1e-3, "{deg:?}");
+        f.updates = 15;
+        let a = f.angles([0.0, 0.0, 1.0], 1.0 / 15.0, false);
+        assert!((a[1] - 135f32.to_radians()).abs() < 1e-4 && (a[2] - (1.0 - 135f32.to_radians())).abs() < 1e-4, "{a:?}");
+        assert_eq!(f.angles([0.0, 0.0, 1.0], 1.0 / 15.0, true), [0.0, 0.0, 1.0]);
+    }
 
     #[test]
     fn a_thrown_item_goes_up_steeply_and_lands_on_the_ground() {

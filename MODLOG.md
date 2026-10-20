@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 7: thrown items tumble
+
+**Changed:** A thrown item turns about all three axes while it flies (each at a random 90–180° per second, either way: a stand-in) and gets its resting angles back when it lands. Q137 (e) notes the user's answer.
+**Why:** The user's check in the original: dropped items tumble slowly and end in their normal resting pose.
+**Tested how:** `cargo test --workspace` (434 core tests, 1 new), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --key left:IDCTL_INVBAR_SHORT,40 --aim goblin22,60 --aim goblin22,90 --aim goblin22,110 --aim goblin22,130 --frames 2500`; `fight.log`.
+**Result:** goblin22 dies at 94; its two mushrooms fly 19 and 24 updates and land 1,034 and 1,556 away, as before.
+**Still broken / not tested:** The tumble is not looked at (drawing). The rates are ours.
+**Next:** Runtime `loadKQ` with a name or position and `KQObject::tossItems` (the barrels' burst, wreck and items): plan in DESIGN.md first.
+
 ## 2026-10-20 M5 5c fix 6: a thrown item is drawn where it landed
 
 **Changed:** `item_view.rs`: a world item's model is moved whenever its place changes. Before, it was moved only while its flight was listed, and the landing update removes the flight, so the model stayed at its last place in the air.

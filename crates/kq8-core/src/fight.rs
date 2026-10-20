@@ -783,7 +783,8 @@ impl crate::active::WorldState {
                     self.known.insert(item.to_ascii_lowercase());
                     let rng = &mut self.fight_rng;
                     let r = [rng.fraction(), rng.fraction(), rng.fraction()];
-                    let fl = crate::item::Flight::launch(&item, at, r);
+                    let spin = [rng.fraction(), rng.fraction(), rng.fraction()];
+                    let fl = crate::item::Flight::launch(&item, at, r).with_tumble(spin);
                     let v = fl.velocity;
                     lines.push(format!(
                         "{item} ({} x{}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
@@ -823,7 +824,13 @@ impl crate::active::WorldState {
             };
             let ground = self.heights.as_ref().and_then(|h| h(position[0], position[1], true));
             let (p, landed) = f.step(position, dt, ground);
-            self.items.objects[i].place = crate::item::Place::World { position: p, angles };
+            // Fix 7 (stand-in): the tumble; its resting angles kept aside.
+            let rest = *self.flight_rest.entry(f.item.clone()).or_insert(angles);
+            let shown = f.angles(rest, dt, landed);
+            if landed {
+                self.flight_rest.remove(&f.item);
+            }
+            self.items.objects[i].place = crate::item::Place::World { position: p, angles: shown };
             if landed {
                 let kind = self.items.objects[i].kind.clone();
                 let sound = self.items.kind(&kind).and_then(|t| t.land_sound.clone());

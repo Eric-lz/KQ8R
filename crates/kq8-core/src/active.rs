@@ -675,6 +675,8 @@ pub struct WorldState {
     /// Scripts of the dead to call with `Die <kind>` (rule 32.3), taken
     /// by `Active::update`.
     pub die_calls: Vec<(String, &'static str)>,
+    /// A flying item's resting angles while it tumbles (M5 5c fix 7).
+    pub flight_rest: BTreeMap<String, [f32; 3]>,
     /// The first-kill tip was sent (rule 33; logged only).
     pub kill_tip: bool,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
@@ -2521,6 +2523,7 @@ impl Active {
                 combat_level: 1.0,
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
+                flight_rest: BTreeMap::new(),
                 kill_tip: false,
                 flights: Vec::new(),
                 projectiles: Default::default(),
