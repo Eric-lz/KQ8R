@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 step 5b-4: the chase as traced (Q133, the user's check)
+
+**Changed:** `kq8-core/src/character_ai.rs`: within reach a character stops only while Connor has no forward / back key, else follows him at reach (no more stop-and-go); ranged stop / start at 0.75 × / 1.25 ×; the way-home re-take only while moving, without the coin, heading home during its reaction delay; the standing leash and give-up rules; 3D home distance; `setHome` −1 / −2 placed; the chase timer after an `attack` / `react` fidget. `active.rs`: `connor_move_key`, set by the viewer from Connor's forward / back input. 1 new test. DESIGN, provenance.
+**Why:** A's answer to Q133 and the user's check in the original (a goblin keeps up with a walking Connor; far enough away it runs home).
+**Tested how:** `cargo test --workspace` (409 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --hold 1,0,0 --frames 5000`, `characters.log`.
+**Result:** goblin22 is alarmed, runs after Connor and from update 45 follows him at reach while he walks (no stops). It passes its leash at updates 126 and 202 but takes up the chase again at once (he is within reach: the original's behaviour, A); at 291 it gives up for good, reaches home at 335 and wanders again from 351. Unit test: it follows while the key is held and stops when it is let go.
+**Still broken / not tested:** **Not looked at by eye.** No attack (fight study): where it would attack it only stops (standing Connor) or keeps following (walking Connor).
+**Next:** 5b-5, the zombies.
+
 ## 2026-10-20 M5 step 5b-3: the stuck escape as traced (Q132)
 
 **Changed:** `kq8-core/src/character.rs`: the stuck check starts only when the walk or run really plays; the world's diagonals NE, NW, SW, SE (±1,250 in x and y), the round starting at NE on each start of moving; all blocked: face north. Tests updated, DESIGN, provenance.

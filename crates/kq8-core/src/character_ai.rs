@@ -92,11 +92,17 @@ pub struct Ai {
     pub go_home: bool,
     /// A zombie seen from Birth rises from this game time on (rule 30).
     pub rise_at: Option<f64>,
+    /// Took up the chase again on its way home: during its reaction delay
+    /// it keeps heading home (rule 28).
+    pub retaking: bool,
+    /// Within reach of a Connor who is moving: it follows him (rule 25;
+    /// for the log, once per change).
+    pub following: bool,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None, retaking: false, following: false }
     }
 
     /// Alarmed and past its reaction delay: the chase rules drive it, not
@@ -269,6 +275,11 @@ impl WorldState {
                 let ai = c.ai.as_mut().unwrap();
                 ai.fidget = None;
                 ai.idle_due = now + 2.0 + f64::from(extra);
+                // Rule 18: an `attack` or `react` ending sets the chase timer.
+                let n = f[IDLE_PREFIX.len()..].to_ascii_lowercase();
+                if matches!(n.as_str(), "attack" | "attack2" | "react") {
+                    ai.chase_until = now + CHASE_TIME;
+                }
                 line = Some(format!("fidget '{}' ended: the next is due in {} s, at {:.2} (rule 17)", &f[IDLE_PREFIX.len()..], 2.0 + extra, ai.idle_due));
             }
         } else if now + 1e-6 >= ai.idle_due {
@@ -475,8 +486,15 @@ impl WorldState {
         let who = a.player.name.clone();
         let line = match a.character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
             Some(ai) => {
-                ai.home = [*x, *y, *z];
-                format!("{at}: KQMonster::setHome: home ({x}, {y}, {z}); not moved (rule 13)")
+                // z −1 = the floor, −2 = the surface (rule 13).
+                let mut home = [*x, *y, *z];
+                if *z == -1.0 || *z == -2.0 {
+                    if let Some(h) = self.heights.as_ref().and_then(|h| h(*x, *y, *z == -1.0)) {
+                        home[2] = h;
+                    }
+                }
+                ai.home = home;
+                format!("{at}: KQMonster::setHome: home ({x}, {y}, {}); not moved (rule 13)", home[2])
             }
             None => format!("{at}: KQMonster::setHome: no movement rules; nothing"),
         };
@@ -528,7 +546,8 @@ impl WorldState {
         let d = distance(pos, connor);
         let s = ai.settings.clone();
         let (sees, home, go_home) = (ai.sees, ai.home, ai.go_home);
-        let home_d = flat_distance(pos, home);
+        // Rules 27, 28: the home distance is 3D (Q133).
+        let home_d = distance(pos, home);
         if state == State::Birth {
             // A zombie that sank back is still on its way home: rule 28's
             // re-take applies underground too, then it rises as rule 30
@@ -547,10 +566,14 @@ impl WorldState {
             return;
         }
         if !ai.alarmed {
-            let retake = ai.on_way_home && !go_home && s.alarm_radius > 0.0 && ((sees && d <= s.attack_dist) || (home_d <= s.home_radius && d < s.alarm_radius));
+            // Rule 28: only while moving; case 2 needs it to see him too.
+            let retake = ai.on_way_home && state == State::Move && !go_home && s.alarm_radius > 0.0 && sees && (d <= s.attack_dist || (home_d <= s.home_radius && d < s.alarm_radius));
             let alarm = !ai.on_way_home && !go_home && s.alarm_radius > 0.0 && sees && d < s.alarm_radius && ai.fidget.is_none() && matches!(state, State::Wait | State::Move);
             if retake {
-                self.alarm(i, &format!("on its way home it takes up the chase again (Connor {d:.0} away, home {home_d:.0} away; rule 28)"), false, now);
+                self.alarm(i, &format!("on its way home it takes up the chase again (Connor {d:.0} away, home {home_d:.0} away; rule 28: no coin, it keeps '{}')", a.player.movement_name()), false, now);
+                if let Some(ai) = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+                    ai.retaking = true;
+                }
             } else if alarm {
                 self.alarm(i, &format!("sees Connor {d:.0} away, within its alarm radius {} (rule 23)", s.alarm_radius), false, now);
             } else if ai.on_way_home {
@@ -559,6 +582,10 @@ impl WorldState {
             return;
         }
         if now + 1e-6 < ai.react_at {
+            // Rule 28: a re-take keeps heading home during its delay.
+            if ai.retaking {
+                self.way_home(i, now);
+            }
             return;
         }
         let team_sees = self.team_sees(i, s.team.as_deref());
@@ -566,6 +593,7 @@ impl WorldState {
         let name = a.player.name.clone();
         let c = a.character.as_deref_mut().unwrap();
         let ai = c.ai.as_mut().unwrap();
+        ai.retaking = false;
         if sees {
             ai.last_seen = Some(connor);
         }
@@ -585,7 +613,9 @@ impl WorldState {
         // Rule 27: the leash, once the chase timer has run out.
         let mut run_home = false;
         if give_up.is_none() && now + 1e-6 >= ai.chase_until {
-            if s.team.is_none() && d > 2.0 * s.alarm_radius {
+            // Standing, also with a chase radius of 0 (rule 27).
+            let loose = s.team.is_none() || (state == State::Wait && s.chase_radius <= 0.0);
+            if loose && d > 2.0 * s.alarm_radius {
                 give_up = Some(format!("Connor {d:.0} away, beyond twice its alarm radius (rule 27)"));
             } else if s.chase_radius > 0.0 && home_d > s.chase_radius {
                 give_up = Some(format!("{home_d:.0} from home, beyond its chase radius {} (rule 27)", s.chase_radius));
@@ -616,7 +646,9 @@ impl WorldState {
                 }
                 // **Stand-in** (Q134): not while its `birth` still plays.
                 let rising = a.player.movement_name().eq_ignore_ascii_case("birth") && !a.player.has_ended();
-                if (!sees || d > s.attack_dist) && s.chase_radius > 0.0 && !rising {
+                // Rule 25: ranged (doMode 1) start beyond 1.25 ×.
+                let start = if s.do_mode == 1 { 1.25 * s.attack_dist } else { s.attack_dist };
+                if (!sees || d > start) && s.chase_radius > 0.0 && !rising {
                     let run = c.random() < 0.5;
                     let why = if run { "after Connor, running (the coin, rule 3)" } else { "after Connor, walking (the coin, rule 3)" };
                     let line = c.enter_move(&mut a.player, now, run, why);
@@ -626,13 +658,30 @@ impl WorldState {
             }
             State::Move => {
                 c.walk.steer = aim2;
-                if sees && d <= s.attack_dist {
+                // Rule 25 (Q133 b): a melee character within reach stops only
+                // while Connor has no forward / back key; else it follows him
+                // at reach. Ranged (doMode 1): stops within 0.75 ×. The attack
+                // itself (once due, whatever he does) is the fight study.
+                let ranged = s.do_mode == 1;
+                let reach = if ranged { 0.75 * s.attack_dist } else { s.attack_dist };
+                let moving = self.connor_move_key;
+                let ai = c.ai.as_mut().unwrap();
+                if sees && d <= reach && (ranged || !moving) {
+                    ai.following = false;
                     let w = c.set_state(&mut a.player, "Wait", &[], now);
                     lines.push(format!(
-                        "Connor {d:.0} away, within its attack distance {}: stops, facing him ({w}); the attack would start here (the fight study; stand-in, rule 25)",
-                        s.attack_dist
+                        "Connor {d:.0} away, within its {} {reach:.0}{}: stops, facing him ({w}); the attack would be due here (the fight study, rule 25)",
+                        if ranged { "stop distance" } else { "attack distance" },
+                        if ranged { " (doMode 1)" } else { ", and he has no forward / back key" }
                     ));
                     c.ask_turn([connor[0], connor[1]]);
+                } else if sees && d <= reach {
+                    if !ai.following {
+                        ai.following = true;
+                        lines.push(format!("Connor {d:.0} away, within reach but moving (forward / back key): it follows him at reach (rule 25)"));
+                    }
+                } else {
+                    ai.following = false;
                 }
             }
             _ => {}
@@ -737,9 +786,12 @@ impl WorldState {
             let w = c.set_state(&mut a.player, "Wait", &[], now);
             Some(format!("home reached ({:.0}, {:.0}): {w} (rule 28)", home[0], home[1]))
         } else {
-            let line = if c.state == State::Wait {
-                let run = c.walk.run;
-                Some(c.enter_move(&mut a.player, now, run, "on its way home, rule 28"))
+            let line = if c.state == State::Wait && ai.settings.chase_radius <= 0.0 {
+                // Rule 28: a guard stays where it is.
+                ai.on_way_home = false;
+                Some("gave up standing with a chase radius of 0: stays where it is, no longer on its way home (rule 28)".to_string())
+            } else if c.state == State::Wait {
+                Some(c.enter_move(&mut a.player, now, true, "on its way home, at a run, rule 28"))
             } else {
                 None
             };

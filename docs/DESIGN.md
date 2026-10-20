@@ -1107,7 +1107,7 @@ stats.
       y, the round starting at NE on each start of moving; level from the
       feet (1 above, as the note recommends); Connor never blocks; all
       blocked → face north.
-    - **5b-4, the chase** (Q133, the user's check): a melee character
+    - **5b-4, the chase** (**done** 2026-10-20) (Q133, the user's check): a melee character
       within reach stops only while Connor has no forward / back key;
       otherwise it follows him at reach (the attack itself is the fight
       study); `doMode=1`: stop within 0.75 ×, start beyond 1.25 ×; the

@@ -2428,3 +2428,15 @@ marked otherwise.
 | Level from its feet, lifted 1 | Rule 7 and its "Do not reproduce" (Q132 b) | — |
 | All four blocked: face north (+y) | Rule 7 (replaces "turned round") | Unit test |
 | Connor never blocks a diagonal (the line's mask 0xB has no bit 4), nor a box the line starts in | Rule 7 | — |
+
+### 5b-4, the chase corrected — `crates/kq8-core/src/character_ai.rs` (`alarm_rules`, `way_home`, `idle`, `set_home`), `active.rs` (`connor_move_key`), viewer `door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Within reach, a melee character stops only while Connor has no forward / back key (a scripted walk sends none); otherwise it follows him at reach | `character-movement.md` rule 25 (Q133 b); the user's check in the original | Unit test; viewer: goblin22 follows a walking Connor |
+| Where the attack would be due it stops and logs it (the attack itself is the fight study) | **Stand-in** until the fight study | — |
+| `doMode=1`: stop within 0.75 ×, start beyond 1.25 × the attack distance | Rule 25 | — (none in Daventry's moving characters) |
+| Taking up the chase on the way home: only while moving, seeing him; no coin (keeps its movement); keeps heading home during its reaction delay; new chase timer | Rules 3, 28 (Q133 a) | Viewer: "no coin, it keeps 'run'" |
+| Standing leash also with a chase radius of 0; the home distance 3D; standing give-up goes home at a `run`, a guard stays | Rules 27, 28 | — |
+| `setHome` z −1 / −2 placed on the floor / surface | Rule 13 | — |
+| A fidget named `attack` / `react` ending sets the chase timer to 5 s | Rule 18 | — |

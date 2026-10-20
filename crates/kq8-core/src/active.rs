@@ -639,6 +639,9 @@ pub struct WorldState {
     pub active_list: Vec<String>,
     /// `KQWorld::MaxMonsters` (rule 20), set by the caller.
     pub max_monsters: usize,
+    /// Connor's forward or back key is held now (`character-movement.md`
+    /// rule 25, Q133 b; a scripted walk sends no key), set by the caller.
+    pub connor_move_key: bool,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2436,6 +2439,7 @@ impl Active {
                 character_log: Vec::new(),
                 active_list: Vec::new(),
                 max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
+                connor_move_key: false,
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -4878,7 +4882,7 @@ mod tests {
         // It stops within its attack distance, facing him.
         watch(&mut a, &[], 90);
         let log = a.world.character_log.join("\n");
-        assert!(log.contains("within its attack distance 1500: stops, facing him") && log.contains("the attack would start here"), "{log}");
+        assert!(log.contains("within its attack distance 1500, and he has no forward / back key: stops, facing him") && log.contains("the attack would be due here"), "{log}");
         let y = a.world.anims[0].player.base.position[1];
         assert!(y < -1900.0 && y > -2100.0, "1,500 short of him, give or take one update: {y}");
         // Connor runs far off (beyond twice the alarm radius): after the
@@ -4941,6 +4945,32 @@ mod tests {
         assert!(log.contains("underground on its way home, it takes up the chase again"), "{log}");
         assert_eq!(log.matches("rises (rule 30)").count(), 2, "{log}");
         assert!(!a.world.anims[0].character.as_ref().unwrap().unborn);
+    }
+
+    #[test]
+    fn within_reach_it_follows_a_connor_who_holds_a_move_key() {
+        // Rule 25 (Q133 b, the user's check): it stops only while he has no
+        // forward / back key.
+        use kq8_data::characters::Wander;
+        let mut a = wanderer(Wander::None);
+        {
+            let ai = a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap();
+            (ai.settings.alarm_radius, ai.settings.attack_dist, ai.settings.home_radius, ai.settings.chase_radius) = (4000.0, 1500.0, 3000.0, 6000.0);
+        }
+        a.world.connor_at = Some([0.0, -3500.0, 100.0]);
+        a.world.connor_move_key = true;
+        // (He doesn't really move here: held long enough, it would walk
+        // into him, be stuck and run off, rule 7.)
+        watch(&mut a, &[], 70);
+        let log = a.world.character_log.join("
+");
+        assert!(log.contains("within reach but moving (forward / back key): it follows him at reach"), "{log}");
+        assert!(!log.contains("stops, facing him"), "{log}");
+        // He lets go of the key: it stops.
+        a.world.connor_move_key = false;
+        watch(&mut a, &[], 73);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("he has no forward / back key: stops, facing him"), "{log}");
     }
 
     #[test]
