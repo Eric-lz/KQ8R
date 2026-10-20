@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d fix 11: a weapon picked up while one is ready: straight into its stance
+
+**Changed:** Picking up a hand weapon while another is ready switches Connor's movement set at once; nothing plays (before: the old one's put-away and the new one's draw).
+**Why:** The user's check in the original.
+**Tested how:** `cargo test --workspace` (437 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 260784,228600,3.1416 --key left:IDCTL_INVBAR_SHORT,40 --click NoName1,70 --key left:IDCTL_INVBAR_SHORT,150 --frames 1500`; `fight.log`, `connor.log`.
+**Result:** 40: the fists' `draw`; 71: the dagger picked up, its set at once, nothing plays; 150: the dagger's `away`, his own `out`.
+**Still broken / not tested:** Not looked at.
+**Next:** The user's next check.
+
 ## 2026-10-20 M5 5d fix 10: drawing and sheathing in two parts; a weapon picked up while ready; no clicks meanwhile
 
 **Changed:** Weapons other than the fists are drawn with his own `away` (hand to the sheath) then the weapon's `out`, and put away with the weapon's `away` then his own `out` (as `conversation.md` rule 7); the set switches when the second part starts. A hand weapon picked up while one is ready becomes the ready one. While a draw or put-away plays, slot clicks are refused.

@@ -898,13 +898,20 @@ impl ConnorSim {
     /// switches back to his own. Either plays only while he stands or
     /// walks (Wait, Move: our Free mode); otherwise only the set switches. Returns the
     /// line for `fight.log`.
-    pub fn ready_set(&mut self, list: Option<String>) -> String {
+    pub fn ready_set(&mut self, list: Option<String>, at_once: bool) -> String {
         use kq8_core::connor::SpecialStep;
         let old = self.weapon_target.clone();
         if old == list {
             return "no change".into();
         }
         self.weapon_target = list.clone();
+        // 5d fix 11 (the user's check): a weapon picked up while another
+        // is ready: straight into its stance, nothing plays.
+        if at_once {
+            self.pending_set = None;
+            self.switch_set(list.clone());
+            return format!("picked up while another was ready: {list:?} at once, nothing plays (the user's check)");
+        }
         let named = |file: &str, w: &str| {
             let wanted = kq8_core::connor::special_movement_name(file, w);
             self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)

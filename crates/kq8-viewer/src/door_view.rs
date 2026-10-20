@@ -1440,7 +1440,8 @@ pub fn door_step(
                 w.weapon_ready = kept;
                 w.fight_note("Connor", line);
             } else {
-                let line = c.ready_set(list);
+                let at_once = std::mem::take(&mut w.weapon_swapped);
+                let line = c.ready_set(list, at_once);
                 w.fight_note("Connor", format!("weapon {:?}: {line}", w.weapon_ready));
             }
         }

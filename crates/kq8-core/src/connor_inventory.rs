@@ -179,6 +179,7 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
         // while one is ready is readied in its place.
         if t.category == "ShortWeapon" && w.weapon_ready.is_some() {
             let was = w.weapon_ready.replace(o.kind.clone());
+            w.weapon_swapped = true;
             w.item_note(format!("{}: a hand weapon was ready ({was:?}): {} is ready now (the user's check)", o.name, o.kind));
         } else if t.category == "LongWeapon" || t.category == "ShortWeapon" {
             w.item_note(format!("{}: ranged weapon modes are not built; a hand weapon is readied from its slot", o.name));

@@ -695,6 +695,9 @@ pub struct WorldState {
     /// The hand weapon Connor has ready (its type name; `inventory.md`
     /// rule 9, `fighting.md` rule 39; M5 5c-5), `None` = none drawn.
     pub weapon_ready: Option<String>,
+    /// The ready weapon was swapped by picking up another (5d fix 11):
+    /// Connor takes its stance at once, nothing plays. Taken by the viewer.
+    pub weapon_swapped: bool,
     /// The combat level's factor (`fighting.md` rule 3): 1.0 by default.
     pub combat_level: f32,
     /// Bodies left by the dead (`fighting.md` rule 32; M5 5c-7).
@@ -2660,6 +2663,7 @@ impl Active {
                 connor_tips: [false; 2],
                 fight_rng: crate::emitter::Rng::new(0x5EED_F1647),
                 weapon_ready: None,
+                weapon_swapped: false,
                 combat_level: 1.0,
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
