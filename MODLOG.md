@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c fix 2: no readying during a jump; the put-away jitter
+
+**Changed:** A click on the weapon slot while Connor jumps, falls, lands or dies is refused (the weapon stays as it was). The sword pointer now follows what Connor took, one update after the click. The drawing's blend between updates for a one-shot played backwards (`undraw`) now goes the same way as its phase (it went the other way: each update the picture jumped and slid back). Q138 notes the user's answers.
+**Why:** The user's check in the original: no (un)readying during a jump; our put-away looked jittery.
+**Tested how:** `cargo test --workspace` (431 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 193000,193000,3.1416 --jump 28 --key left:IDCTL_INVBAR_SHORT,32 --key left:IDCTL_INVBAR_SHORT,90 --key left:IDCTL_INVBAR_SHORT,150 --frames 1500`; `fight.log`, `gui.log`.
+**Result:** Update 32 (mid-jump): refused, no sword pointer; 90: `draw`, sword at 91; 150: `undraw`, play pointer at 151.
+**Still broken / not tested:** The jitter fix is not looked at by eye. Refusing while falling, landing or dying is ours. Switching to the other slot's weapon is not built (no ranged weapon in Daventry yet). Whether cutscenes put the weapon away: unknown (the watermill one doesn't; ours never does).
+**Next:** The user's look at the put-away.
+
 ## 2026-10-20 M5 5c fix 1: the ready stance and the sword pointer
 
 **Changed:** Readying a hand weapon switches Connor's movements to the weapon's own set (`confists.anm` for the fists: the fists-up stance, its walk, run, flinch and deaths) and plays its `draw`; putting it away plays `undraw` and switches back. The loader reads each ready-able weapon's whole set with its transitions (`load.rs` `weapon_sets`); `connor_view.rs` draws and times the weapon's version of each movement the walker asks for. The pointer is the sword (`IDBMA_CURS03`) while a weapon is ready, the golden pointer while Ctrl is held. A one-shot played backwards (`undraw`) now shows its frames last to first (`kq8-core` `MovementLoop::frame_at`). New question Q138; provenance "5c fix 1".

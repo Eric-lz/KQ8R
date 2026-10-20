@@ -2642,3 +2642,12 @@ did not show his fists-up stance nor the sword pointer.
 | With a weapon ready every movement the walker asks for is drawn and timed from the weapon's version where it has one (his flinch and deaths too) | The user's check (fists up when readied); **stand-in** (Q138 a) | `connor.log`: `walk (drawn: confists.anm/walk)`, `stop (drawn: confists.anm/stop)` |
 | Readying plays the list's `draw`, putting away its `undraw`, as a one-item Special list, only from Wait / Move (else only the set switches); the set switches at the start of either | **Stand-in** (Q138 a, b) | `fight.log`: `draw` at update 30 (walking: he stops, then walks on in the fists set), `undraw` at 150 |
 | A one-shot with speed −1 shows its frames last to first; its start phase is not used | `anim-scripts.md` rule 5 (start phase and speed from the `loop=` line), our walker starts at 0 (Q138 e) | Unit test |
+
+### 5c fix 2, no readying during a jump; the put-away jitter — viewer `door_view.rs` (the refusal), `gui_view.rs` (the pointer), `connor_view.rs` (`phase_step`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Readying or putting away asked during a jump is refused: the click is undone, the weapon stays as it was | The user's check in the original (2026-10-20, Q138 b) | `fight.log`: update 32 "asked in mode jump: refused" |
+| The same while falling, landing, dying or dead | **Ours** (Q138 b) | — |
+| The sword pointer follows what Connor took (his weapon set), not the click: one update later | **Ours** (no sword flash on a refused click) | `gui.log`: pointer at update 91 for a click at 90 |
+| A one-shot's blend between updates goes forward even when it plays backwards | Fix of our own drawing (the user saw `undraw` jitter) | — (by eye) |

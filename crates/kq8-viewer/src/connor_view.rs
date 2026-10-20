@@ -1254,7 +1254,11 @@ pub fn connor_step(
     }
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
-        if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * l.speed / time } else { 0.0 }
+        // A one-shot's phase always grows, even played backwards (`undraw`;
+        // `frame_at` shows those last frame first): blend forward too (M5
+        // 5c fix 2: the put-away jittered).
+        let speed = if l.repeat { l.speed } else { l.speed.abs() };
+        if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * speed / time } else { 0.0 }
     });
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
     sim.updates += 1;

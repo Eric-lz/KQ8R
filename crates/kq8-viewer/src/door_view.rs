@@ -1381,8 +1381,22 @@ pub fn door_step(
         // switches his movement set (draw / undraw).
         let list = weapon_list(&sim.active.world);
         if list != c.weapon_set {
-            let line = c.ready_set(list);
-            sim.active.world.fight_note("Connor", format!("weapon {:?}: {line}", sim.active.world.weapon_ready));
+            use kq8_core::connor::Mode;
+            let w = &mut sim.active.world;
+            if matches!(c.walker.mode, Mode::Jump | Mode::Fall | Mode::Land | Mode::Dying | Mode::Dead) {
+                // The user's check in the original (2026-10-20): no
+                // readying or putting away during a jump; the click is
+                // undone (fix 2; falling, landing and dying: ours).
+                let kept = c.weapon_set.as_ref().and_then(|f| {
+                    w.connor_fight.as_ref()?.short_lists.iter().find(|(_, file)| file.eq_ignore_ascii_case(f)).map(|(n, _)| format!("{}{n}", kq8_data::items::PREFIX))
+                });
+                let line = format!("weapon {:?} asked in mode {}: refused, stays {kept:?} (no readying during a jump)", w.weapon_ready, c.walker.mode.name());
+                w.weapon_ready = kept;
+                w.fight_note("Connor", line);
+            } else {
+                let line = c.ready_set(list);
+                w.fight_note("Connor", format!("weapon {:?}: {line}", w.weapon_ready));
+            }
         }
         for s in std::mem::take(&mut sim.swing_clicks) {
             let w = &mut sim.active.world;
