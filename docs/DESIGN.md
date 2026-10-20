@@ -733,8 +733,37 @@ inventory and menus.
       end is an ordinary end (`EndLoop`, `Cue 300`, Wait's `Stop` at a
       random frame). The `endLoop` cue waits for M5 (only on the
       Knight's `attack`).
-    - **4d-6b, gravity** (rule 8, Q122) and **4d-7b, shadows** (rule 37,
-      Q123): planned in detail when they start (after 4d-11).
+    - **4d-6b, gravity** (rule 8, Q122; `connor-physics.md` "Other
+      characters on the same mover"). Characters use Connor's mover
+      (`connor_mover.rs`), with their own collision type and mask (0x42 /
+      0x281F unless the file says), their `BOUNDS.KQ` box as the ball
+      stack, steps 325 (or `stepUpAmount` / `stepDownAmount`), and
+      `keepOnGround` (−1 floor, 1 water surface, 0 none). It runs in the
+      character's update only (near or far, not hidden), standing still
+      (no walking before M5); a script's `move` sets its position first.
+      - **4d-6b-1, the mover's switches** (core): no Fall state and no
+        "steep ground switches gravity on" without type bit 4; the terrain
+        in the up and down passes only with mask bit 0x800; the ground
+        check onto the water surface for `keepOnGround=1`. Connor keeps
+        all three as now. Unit tests.
+      - **4d-6b-2, characters fall** (viewer, a new fixed-update step
+        right after the characters' update): buildings count when the
+        character's mask has 0x8 (every building type in the data has
+        it: 0x28, 0x88); `colliderMask=0` (the Wizard, the Knight): no
+        terrain, no buildings, only the ground check. Objects, other
+        characters and Connor **wait for Q128** (which of
+        `connor-collision.md` rule 3's reactions a character's own move
+        has). `monUseGravity=0`, `setUseGravity`, `setMonUseGravity`.
+        Logs in `characters.log`: per character the first mover update
+        (start z, ground under it, what it collides with), every landing
+        (on what, z), and a line when it stops moving.
+      - **4d-6b-3, the flying mover** (`flyingObject=1`: the bats, the
+        Knight): no gravity and no steps; each update down by up to 150
+        (stopped as in the down pass) and up by up to 300 onto a surface
+        above its feet within its height. The note is "not sure of every
+        detail": built as written, logged.
+    - **4d-7b, shadows** (rule 37, Q123): planned in detail when it
+      starts (after 4d-6b).
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
     dying, the flying mover (M5); conversations (4e, from
     `conversation.md`); collision against characters (they stay not

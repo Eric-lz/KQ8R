@@ -2181,3 +2181,12 @@ marked otherwise.
 | The transition and its target first move in the next update | As Connor's walker (`connor.rs`, rule 3 "first advanced in the next update"); for the target **our reading** (the rule does not say) | Same tests |
 | Backwards: the distance measured the other way | `connor-movement.md` rule 2 ("the other way round"); no data has one | — |
 | The `endLoop` cue not built | `characters.md` rule 20 (Q124 c: M5) | — |
+
+### 4d-6b-1, the mover's switches — `crates/kq8-core/src/connor_mover.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| No Fall state and no "steep ground switches gravity on" without collision type bit 4 | `characters.md` rule 8, `connor-physics.md` "Other characters on the same mover" (Q122 d) | Unit test `a_character_falls_and_lands_with_no_fall_state_q122` |
+| The terrain in the up and down passes only with mask bit 0x800 (`colliderMask=0`: only the ground check) | Rule 8 (Q122 a, b) | Unit test `mask_0_skips_the_terrain_in_the_passes_but_the_ground_check_catches_it` |
+| `keepOnGround=1`: the ground check onto the water surface (flat), where it is above the floor | Rule 8, `water.md` | Unit test `keep_on_ground_1_stands_on_the_water_surface` |
+| A character's ball stack from its box; steps 325 or its file's | Rule 8, rule 9 | Same tests |

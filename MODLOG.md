@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-6b-1: the mover's switches for characters
+
+**Changed:** `kq8-core/src/connor_mover.rs`: three switches on the mover, all on (or off) for Connor as before: `falls` (the Fall state and "steep ground switches gravity on", type bit 4), `terrain_in_passes` (the terrain in the up and down passes, mask bit 0x800), `keep_on_surface` (`keepOnGround=1`: the ground check onto the water surface). New `Mover::character` (box as ball stack, own steps, mask, `keepOnGround` −1/1/0). 3 unit tests. Plan for gravity in DESIGN (4d-6b-1 to -3). New question **Q128** (which of `connor-collision.md` rule 3's reactions a character's own move has: by that table plain objects and Connor would not stop its fall). Provenance.
+**Why:** A's answer to Q122 (`characters.md` rule 8, `connor-physics.md` "Other characters on the same mover").
+**Tested how:** `cargo test --workspace` (513 pass, 3 new; Connor's mover tests unchanged), clippy clean. No viewer run: nothing uses it yet.
+**Result:** Unit tests: a character dropped 3,000 lands with no Fall state and no events (Connor would have started Fall after 5 updates); with mask 0 no terrain hit, the ground check catches it; with `keepOnGround=1` it stands on a water surface at 500, off the water on the floor.
+**Still broken / not tested:** Not used by the viewer yet (4d-6b-2).
+**Next:** 4d-6b-2, characters fall in the viewer.
+
 ## 2026-10-19 M4 step 4d-11: transitions on characters (Q124 built)
 
 **Changed:** `kq8-core/src/named_anim.rs`: the movement player plays `transitionN` lines (`connor-movement.md` rules 2–6): a request first chooses the transition whose from point comes next (−1 at once; a point already passed on a play-once is never reached; a newer request chooses again), waits for it (that update cut at the point), plays the transition movement from 0 at speed 1, and at its ordinary end starts the target at its phase (then asks again for another wanted movement). Like Connor's walker, the transition and its target move from the next update. `door.rs`: movements carry their transitions; `anim_view.rs`, `door_view.rs` pass them on; `load.rs` logs them as played. `character.rs`, `active.rs`: log lines. 3 unit tests. `QUESTIONS.md` Q124 marked built. DESIGN, provenance.

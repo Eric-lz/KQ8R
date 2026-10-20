@@ -473,6 +473,9 @@ impl From<[f32; 3]> for Wish {
 
 /// Step up and step down for Connor (monster/Connor default, traced).
 pub const STEP: f32 = 325.0;
+/// The collision mask bit for the terrain (`connor-physics.md` "The
+/// terrain in the passes").
+pub const TERRAIN_BIT: u32 = 0x800;
 /// A surface is walkable if its normal's z is above this (about 36.9°).
 pub const WALKABLE_NORMAL_Z: f32 = 0.8;
 /// Gravity in units per second squared (with the fall timer's seconds):
@@ -571,6 +574,16 @@ pub struct Mover {
     pub submerged: bool,
     /// This jump has had a glancing steep hit already (for the log).
     pub jump_glanced: bool,
+    /// Collision type bit 4 (Connor's): the Fall state and "steep ground
+    /// switches gravity on" (`characters.md` rule 8, Q122; M4 4d-6b-1).
+    /// Characters: off.
+    pub falls: bool,
+    /// Collision mask bit 0x800: the terrain counts in the up and down
+    /// passes (rule 8). Off for a character with `colliderMask=0`.
+    pub terrain_in_passes: bool,
+    /// `keepOnGround=1`: the ground check puts it onto the water surface,
+    /// not the floor (rule 8, `water.md`).
+    pub keep_on_surface: bool,
 }
 
 /// What the down pass ended on.
@@ -675,7 +688,51 @@ impl Mover {
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
             submerged: false,
             jump_glanced: false,
+            falls: true,
+            terrain_in_passes: true,
+            keep_on_surface: false,
         }
+    }
+
+    /// A character's mover (`characters.md` rule 8, `connor-physics.md`
+    /// "Other characters on the same mover"; M4 4d-6b): its box as the
+    /// ball stack, its own steps, no Fall state, the terrain in the passes
+    /// only with mask bit 0x800, and its `keepOnGround` (−1 floor, 1 the
+    /// water surface, 0 none). Standing on the ground until its first
+    /// update says otherwise.
+    pub fn character(position: [f32; 3], use_gravity: bool, box_min: [f32; 3], box_max: [f32; 3], mask: u32, steps: (f32, f32), keep_on_ground: i32) -> Self {
+        let mut m = Mover::new(position, use_gravity);
+        m.balls = BallStack::from_box(box_min, box_max);
+        (m.step_up, m.step_down) = steps;
+        m.falls = false;
+        m.terrain_in_passes = mask & TERRAIN_BIT != 0;
+        m.keep_on_ground = keep_on_ground != 0;
+        m.keep_on_surface = keep_on_ground == 1;
+        m
+    }
+
+    /// The terrain contact at the end of a pass, if the terrain counts.
+    fn terrain_at(&self, world: &dyn MoverWorld, end: [f32; 3]) -> Option<Hit> {
+        if self.terrain_in_passes {
+            terrain_hit(world, end)
+        } else {
+            None
+        }
+    }
+
+    /// The ground check's height and normal: the floor, or for
+    /// `keepOnGround=1` the water surface where there is water (flat).
+    fn check_ground(&self, world: &dyn MoverWorld) -> Option<(f32, [f32; 3])> {
+        let (x, y) = (self.position[0], self.position[1]);
+        let floor = world.ground(x, y);
+        if self.keep_on_surface {
+            if let Some((h, _)) = world.water(x, y) {
+                if floor.is_none_or(|(f, _)| h > f) {
+                    return Some((h, [0.0, 0.0, 1.0]));
+                }
+            }
+        }
+        floor
     }
 
     /// Test helper: lift Connor by `height` (a dead Connor comes back to
@@ -796,7 +853,7 @@ impl Mover {
             self.air_updates += 1;
             // From 5 on, every update asks for Fall; normal play accepts.
             // Not after a jump (none yet), so gravity is left alone.
-            if self.air_updates >= AIR_UPDATES_TO_FALL && self.state == State::Normal {
+            if self.falls && self.air_updates >= AIR_UPDATES_TO_FALL && self.state == State::Normal {
                 self.state = State::Fall { start_z: self.position[2], stuck: 0 };
                 report.fall = Some(FallEvent::Started);
                 report.events.push(format!(
@@ -824,7 +881,7 @@ impl Mover {
         //    the nearer contact wins. Up-pass hits never slide.
         let start = self.position;
         let end = add(start, [0.0, 0.0, self.step_up + wanted[2]]);
-        match nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
+        match nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end)) {
             Some(h) => {
                 hits += 1;
                 self.position = h.position;
@@ -910,7 +967,7 @@ impl Mover {
         // Not hit: he is in the air. Going down a steep walkable slope that
         // is often for an update or a few; the gravity brings him back
         // before the air count reaches 5 (measured, Q32).
-        if let Some(h) = nearest(start, world.sweep(&self.balls, start, end), terrain_hit(world, end)) {
+        if let Some(h) = nearest(start, world.sweep(&self.balls, start, end), self.terrain_at(world, end)) {
             *hits += 1;
             let normal = h.normal;
             report.down_normal = Some(normal);
@@ -922,10 +979,12 @@ impl Mover {
                 self.fall_timer = 0.0;
             } else {
                 report.down = DownResult::Steep;
-                if !self.use_gravity {
-                    report.events.push("steep ground: gravity switched on".into());
+                if self.falls {
+                    if !self.use_gravity {
+                        report.events.push("steep ground: gravity switched on".into());
+                    }
+                    self.use_gravity = true;
                 }
-                self.use_gravity = true;
             }
             let head_on = head_on_allowed && angle.is_some_and(|a| a < HEAD_ON_ANGLE);
             // "Exact hit handling": walkable landings (surface z ≥ 0.8),
@@ -954,7 +1013,7 @@ impl Mover {
         // 5. Ground check (keepOnGround): at or below the ground -> on it.
         //    Only the height changes; the fall timer is left alone. The
         //    terrain only, as the note says.
-        let under = world.ground(self.position[0], self.position[1]);
+        let under = self.check_ground(world);
         report.ground = under;
         if let (true, Some((height, normal))) = (self.keep_on_ground, under) {
             if self.position[2] <= height {
@@ -966,10 +1025,12 @@ impl Mover {
                     report.check = "steep";
                     self.on_ground = false;
                     self.pull = down_slope(normal);
-                    if !self.use_gravity {
-                        report.events.push("steep ground: gravity switched on".into());
+                    if self.falls {
+                        if !self.use_gravity {
+                            report.events.push("steep ground: gravity switched on".into());
+                        }
+                        self.use_gravity = true;
                     }
-                    self.use_gravity = true;
                 }
             } else {
                 report.check = "above";
@@ -2044,5 +2105,60 @@ mod tests {
             assert!(near(m.position[2], 25.0, 0.001) && m.on_ground, "{:?}", m.position);
             assert_eq!(m.air_updates, 0);
         }
+    }
+
+    /// A flat world: the floor at 0, water up to 500 between x 0 and 1000.
+    struct Pond;
+    impl MoverWorld for Pond {
+        fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+            Some((0.0, [0.0, 0.0, 1.0]))
+        }
+        fn water(&self, x: f32, _y: f32) -> Option<(f32, u32)> {
+            (0.0..1000.0).contains(&x).then_some((500.0, 0))
+        }
+    }
+
+    #[test]
+    fn a_character_falls_and_lands_with_no_fall_state_q122() {
+        let mut m = Mover::character([2000.0, 0.0, 3000.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), -1);
+        let mut events = Vec::new();
+        let mut n = 0;
+        while !(m.on_ground && m.position[2] == 0.0) {
+            let r = m.update([0.0; 3], &Pond);
+            events.extend(r.events);
+            assert!(r.fall.is_none() && m.state == State::Normal, "no Fall state for a character");
+            n += 1;
+            assert!(n < 100);
+        }
+        assert!(n > AIR_UPDATES_TO_FALL as usize, "it was in the air long enough for Connor's Fall: {n}");
+        assert!(events.is_empty(), "{events:?}");
+    }
+
+    #[test]
+    fn mask_0_skips_the_terrain_in_the_passes_but_the_ground_check_catches_it() {
+        let mut m = Mover::character([2000.0, 0.0, 100.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0, (STEP, STEP), -1);
+        let mut checks = Vec::new();
+        for _ in 0..5 {
+            let r = m.update([0.0; 3], &Pond);
+            assert!(r.hits.is_empty(), "no terrain hit: {:?}", r.hits);
+            checks.push(r.check);
+        }
+        assert_eq!(m.position[2], 0.0);
+        assert!(checks.contains(&"walkable"), "{checks:?}");
+    }
+
+    #[test]
+    fn keep_on_ground_1_stands_on_the_water_surface() {
+        let mut m = Mover::character([500.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), 1);
+        for _ in 0..10 {
+            m.update([0.0; 3], &Pond);
+        }
+        assert_eq!(m.position[2], 500.0);
+        // Off the water: the floor.
+        let mut d = Mover::character([2000.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), 1);
+        for _ in 0..20 {
+            d.update([0.0; 3], &Pond);
+        }
+        assert_eq!(d.position[2], 0.0);
     }
 }
