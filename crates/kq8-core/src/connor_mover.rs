@@ -476,6 +476,9 @@ pub const STEP: f32 = 325.0;
 /// The collision mask bit for the terrain (`connor-physics.md` "The
 /// terrain in the passes").
 pub const TERRAIN_BIT: u32 = 0x800;
+/// The collision type bit the Fall state needs (Connor's 4; `characters.md`
+/// rule 8).
+pub const FALL_TYPE_BIT: u32 = 0x4;
 /// A surface is walkable if its normal's z is above this (about 36.9°).
 pub const WALKABLE_NORMAL_Z: f32 = 0.8;
 /// Gravity in units per second squared (with the fall timer's seconds):
@@ -700,11 +703,12 @@ impl Mover {
     /// only with mask bit 0x800, and its `keepOnGround` (−1 floor, 1 the
     /// water surface, 0 none). Standing on the ground until its first
     /// update says otherwise.
-    pub fn character(position: [f32; 3], use_gravity: bool, box_min: [f32; 3], box_max: [f32; 3], mask: u32, steps: (f32, f32), keep_on_ground: i32) -> Self {
+    pub fn character(position: [f32; 3], use_gravity: bool, box_min: [f32; 3], box_max: [f32; 3], kind: (u32, u32), steps: (f32, f32), keep_on_ground: i32) -> Self {
+        let (collision_type, mask) = kind;
         let mut m = Mover::new(position, use_gravity);
         m.balls = BallStack::from_box(box_min, box_max);
         (m.step_up, m.step_down) = steps;
-        m.falls = false;
+        m.falls = collision_type & FALL_TYPE_BIT != 0;
         m.terrain_in_passes = mask & TERRAIN_BIT != 0;
         m.keep_on_ground = keep_on_ground != 0;
         m.keep_on_surface = keep_on_ground == 1;
@@ -2120,7 +2124,7 @@ mod tests {
 
     #[test]
     fn a_character_falls_and_lands_with_no_fall_state_q122() {
-        let mut m = Mover::character([2000.0, 0.0, 3000.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), -1);
+        let mut m = Mover::character([2000.0, 0.0, 3000.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), -1);
         let mut events = Vec::new();
         let mut n = 0;
         while !(m.on_ground && m.position[2] == 0.0) {
@@ -2136,7 +2140,7 @@ mod tests {
 
     #[test]
     fn mask_0_skips_the_terrain_in_the_passes_but_the_ground_check_catches_it() {
-        let mut m = Mover::character([2000.0, 0.0, 100.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0, (STEP, STEP), -1);
+        let mut m = Mover::character([2000.0, 0.0, 100.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0xC021, 0), (STEP, STEP), -1);
         let mut checks = Vec::new();
         for _ in 0..5 {
             let r = m.update([0.0; 3], &Pond);
@@ -2149,13 +2153,13 @@ mod tests {
 
     #[test]
     fn keep_on_ground_1_stands_on_the_water_surface() {
-        let mut m = Mover::character([500.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), 1);
+        let mut m = Mover::character([500.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 1);
         for _ in 0..10 {
             m.update([0.0; 3], &Pond);
         }
         assert_eq!(m.position[2], 500.0);
         // Off the water: the floor.
-        let mut d = Mover::character([2000.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], 0x281F, (STEP, STEP), 1);
+        let mut d = Mover::character([2000.0, 0.0, 500.0], true, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 1);
         for _ in 0..20 {
             d.update([0.0; 3], &Pond);
         }

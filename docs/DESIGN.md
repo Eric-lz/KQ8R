@@ -741,12 +741,12 @@ inventory and menus.
       `keepOnGround` (−1 floor, 1 water surface, 0 none). It runs in the
       character's update only (near or far, not hidden), standing still
       (no walking before M5); a script's `move` sets its position first.
-      - **4d-6b-1, the mover's switches** (core): no Fall state and no
+      - **4d-6b-1, the mover's switches** (**done** 2026-10-19; core): no Fall state and no
         "steep ground switches gravity on" without type bit 4; the terrain
         in the up and down passes only with mask bit 0x800; the ground
         check onto the water surface for `keepOnGround=1`. Connor keeps
         all three as now. Unit tests.
-      - **4d-6b-2, characters fall** (viewer, a new fixed-update step
+      - **4d-6b-2, characters fall** (**done** 2026-10-19; viewer, a new fixed-update step
         right after the characters' update): buildings count when the
         character's mask has 0x8 (every building type in the data has
         it: 0x28, 0x88); `colliderMask=0` (the Wizard, the Knight): no

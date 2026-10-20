@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-6b-2: characters fall onto the ground and buildings (Q122)
+
+**Changed:** `kq8-data/src/characters.rs`: `colliderType` / `colliderMask` read (defaults 0x42 / 0x281F). `kq8-core`: `Mover::character` takes the type (Fall only with bit 4); `Character` carries its mover, `gravity_step` (in range, not in Birth, standing still; a script's `move` is its start; logs the first update, leaving the ground, landing on what); `World::characters_gravity`. Viewer: each character gets a mover at load (its `BOUNDS.KQ` box, steps, `keepOnGround`), `draw_distance.rs` `character_box`, new fixed-update step `character_gravity` right after `door_step` (buildings only for a mask with 0x8). The click box follows. 1 unit test. DESIGN, provenance.
+**Why:** A's answer to Q122 (`characters.md` rule 8).
+**Tested how:** `cargo test --workspace` (514 pass, 1 new), clippy clean. Viewer (`cargo play --world Daventry --sound off`): `--at 146500,248928,1.5708 --frames 300` (windmill), `--at 212000,286000,0 --frames 400` (castle ruins), `--at 258500,296500,0.6 --frames 300` (Uglybeast), `--at 193000,198000,-1.7 --frames 300` (Wizard); read `characters.log`.
+**Result:** sprigwnd1 (305 above the terrain) settles 12 onto the Windmill's floor (z 15,338); RuinSprig3 and RuinSprig4 (3,635 above the terrain) settle 26 onto the Castle (z 22,224); bossprig (6,035 above) is already standing on it; the others stand on the floor grid. The Wizard (mask 0): no terrain or building tests, stays at his floor. The Uglybeast: on the water surface.
+**Still broken / not tested:** Not looked at by eye. Objects, other characters and Connor do not stop a character's fall (Q128). Flying characters (the bats, the Knight) do not move yet (4d-6b-3). Characters are still not solid for Connor.
+**Next:** 4d-6b-3, the flying mover.
+
 ## 2026-10-19 M4 step 4d-6b-1: the mover's switches for characters
 
 **Changed:** `kq8-core/src/connor_mover.rs`: three switches on the mover, all on (or off) for Connor as before: `falls` (the Fall state and "steep ground switches gravity on", type bit 4), `terrain_in_passes` (the terrain in the up and down passes, mask bit 0x800), `keep_on_surface` (`keepOnGround=1`: the ground check onto the water surface). New `Mover::character` (box as ball stack, own steps, mask, `keepOnGround` −1/1/0). 3 unit tests. Plan for gravity in DESIGN (4d-6b-1 to -3). New question **Q128** (which of `connor-collision.md` rule 3's reactions a character's own move has: by that table plain objects and Connor would not stop its fall). Provenance.

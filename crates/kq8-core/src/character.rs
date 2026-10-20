@@ -115,6 +115,17 @@ pub struct Character {
     /// Where Connor stands now, set by the caller before each update
     /// (the Talk state's turn, `conversation.md` rule 17).
     pub connor_at: Option<[f32; 2]>,
+    /// Its mover (rule 8, M4 4d-6b), set by the loader; `None` = never
+    /// moves (no box).
+    pub mover: Option<Box<crate::connor_mover::Mover>>,
+    /// `flyingObject=1`: the flying mover (4d-6b-3).
+    pub flying: bool,
+    /// Its mask has 0x8: buildings stop its mover (the pair rule).
+    pub hits_buildings: bool,
+    /// The z it began falling from, while in the air (for the log).
+    falling_from: Option<f32>,
+    /// Its mover has run once (the first update's log line).
+    mover_started: bool,
 }
 
 /// What one update did: the player's step (`None` when not updated) and
@@ -147,6 +158,11 @@ impl Character {
             turn_to: None,
             mouth: 0,
             connor_at: None,
+            mover: None,
+            flying: false,
+            hits_buildings: false,
+            falling_from: None,
+            mover_started: false,
         }
     }
 
@@ -154,6 +170,69 @@ impl Character {
     /// is the same every time).
     pub fn seed_for(name: &str) -> u64 {
         name.bytes().fold(0xCBF2_9CE4_8422_2325u64, |h, b| (h ^ u64::from(b.to_ascii_lowercase())).wrapping_mul(0x0100_0000_01B3))
+    }
+
+    /// Rule 8 (M4 4d-6b-2): its mover's update, standing still (walking
+    /// is M5), only while near or far and not in Birth (rule 16: gravity
+    /// off until born). A script's `move` has set the player's position;
+    /// the mover starts from there. Returns log lines: the first update,
+    /// leaving the ground, landing.
+    pub fn gravity_step(&mut self, player: &mut NamedAnimPlayer, world: &dyn crate::connor_mover::MoverWorld) -> Vec<String> {
+        let mut notes = Vec::new();
+        if !self.in_range || self.state == State::Birth {
+            return notes;
+        }
+        let first = !std::mem::replace(&mut self.mover_started, true);
+        if self.flying {
+            if first {
+                notes.push("mover: flyingObject=1: the flying mover is not built yet (4d-6b-3); it stays where it is".into());
+            }
+            return notes;
+        }
+        let gravity = self.gravity;
+        let hits_buildings = self.hits_buildings;
+        let Some(m) = self.mover.as_deref_mut() else {
+            if first {
+                notes.push("mover: no box, so no mover; it stays where it is".into());
+            }
+            return notes;
+        };
+        if first {
+            let ground = world.ground(m.position[0], m.position[1]).map_or("none".to_string(), |(h, _)| format!("{h:.0}"));
+            notes.push(format!(
+                "mover: first update at z {:.0} (floor under it {ground}); gravity {}; steps {:.0}/{:.0}; terrain in the passes {}; buildings {}; keepOnGround {}; objects, characters and Connor not tested (Q128) (rule 8)",
+                m.position[2],
+                if gravity { "on" } else { "off" },
+                m.step_up,
+                m.step_down,
+                if m.terrain_in_passes { "yes" } else { "no (mask without 0x800)" },
+                if hits_buildings { "yes" } else { "no (mask without 0x8)" },
+                if !m.keep_on_ground { "off" } else if m.keep_on_surface { "the water surface" } else { "the floor" }
+            ));
+        }
+        m.position = player.base.position;
+        if m.use_gravity != gravity {
+            notes.push(format!("gravity {} (setUseGravity / setMonUseGravity)", if gravity { "on" } else { "off" }));
+            m.use_gravity = gravity;
+        }
+        let before = m.position[2];
+        let r = m.update([0.0; 3], world);
+        player.base.position = m.position;
+        let z = m.position[2];
+        for e in r.events {
+            notes.push(format!("mover: {e}"));
+        }
+        if !m.on_ground && z < before - 0.5 && self.falling_from.is_none() {
+            self.falling_from = Some(before);
+            notes.push(format!("leaves the ground: falling from z {before:.0} (rule 8; no Fall state for characters)"));
+        }
+        if m.on_ground {
+            if let Some(from) = self.falling_from.take() {
+                let on = r.hits.iter().rev().find(|h| h.pass == "down").map_or_else(|| format!("the ground check ({})", r.check), |h| h.hit.what.clone());
+                notes.push(format!("lands on {on} at z {z:.0} (fell {:.0})", from - z));
+            }
+        }
+        notes
     }
 
     /// One update (rule 11: nothing at all while off or hidden).
@@ -809,6 +888,39 @@ mod tests {
         assert!(joined.contains("transition 'cowerstop' starts"), "{joined}");
         assert!(joined.contains("'cowerstop' ended in Wait: asks for Stop again"), "{joined}");
         assert!(p.movement_name().eq_ignore_ascii_case("stop") && p.random_speed.is_some(), "{joined}");
+    }
+
+    struct Flat;
+    impl crate::connor_mover::MoverWorld for Flat {
+        fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+            Some((100.0, [0.0, 0.0, 1.0]))
+        }
+    }
+
+    #[test]
+    fn a_character_in_range_falls_onto_the_ground_and_says_so() {
+        // Rule 8 (Q122): only while in range; its player follows the mover.
+        let mut c = character(0x20);
+        let mut p = player(1, Some("stop"), None);
+        p.base.position = [0.0, 0.0, 2000.0];
+        c.mover = Some(Box::new(crate::connor_mover::Mover::character(p.base.position, true, [-50.0; 3], [50.0, 50.0, 500.0], (0x42, 0x281F), (325.0, 325.0), -1)));
+        c.in_range = false;
+        assert!(c.gravity_step(&mut p, &Flat).is_empty());
+        assert_eq!(p.base.position[2], 2000.0, "not while off");
+        c.in_range = true;
+        let mut log = Vec::new();
+        for _ in 0..60 {
+            log.extend(c.gravity_step(&mut p, &Flat));
+        }
+        assert_eq!(p.base.position[2], 100.0, "{log:?}");
+        let joined = log.join("
+");
+        assert!(joined.contains("first update at z 2000") && joined.contains("leaves the ground") && joined.contains("lands on"), "{joined}");
+        // Gravity off (setMonUseGravity 0): it stays.
+        p.base.position[2] = 900.0;
+        c.gravity = false;
+        c.gravity_step(&mut p, &Flat);
+        assert_eq!(p.base.position[2], 900.0);
     }
 
     #[test]

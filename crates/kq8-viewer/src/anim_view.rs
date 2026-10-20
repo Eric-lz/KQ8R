@@ -280,6 +280,29 @@ pub fn spawn_animated(
                 kq8_core::character::Character::seed_for(&p.name),
             ))
         });
+        // characters.md rule 8 (M4 4d-6b-2): its mover.
+        if let (Some(ch), Some(c)) = (character.as_deref_mut(), &a.character) {
+            let k = &c.keys;
+            ch.flying = k.flying;
+            ch.hits_buildings = k.collider_mask & 0x8 != 0;
+            if let Some((min, max)) = balls.character_box(&p.name, c.box_type.as_deref()) {
+                let keep = match p.keep_on_ground {
+                    kq8_data::objects::KeepOnGround::Floor => -1,
+                    kq8_data::objects::KeepOnGround::Surface => 1,
+                    kq8_data::objects::KeepOnGround::Off => 0,
+                };
+                let step = kq8_core::connor_mover::STEP;
+                ch.mover = Some(Box::new(kq8_core::connor_mover::Mover::character(
+                    p.position,
+                    k.gravity,
+                    min,
+                    max,
+                    (k.collider_type, k.collider_mask),
+                    (k.step_up.unwrap_or(step), k.step_down.unwrap_or(step)),
+                    keep,
+                )));
+            }
+        }
         let mut prepared_test = None;
         if *unused {
             if let Some(c) = &a.character {

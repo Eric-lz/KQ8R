@@ -417,6 +417,10 @@ pub struct CharacterKeys {
     /// `stepUpAmount=` / `stepDownAmount=`, if given (rule 8).
     pub step_up: Option<f32>,
     pub step_down: Option<f32>,
+    /// `colliderType=` / `colliderMask=`, else the character's own
+    /// defaults 0x42 / 0x281F (rule 8, Q122).
+    pub collider_type: u32,
+    pub collider_mask: u32,
     /// `GBMsg`, `GBNoun`, `GBVerb`, `GBCase`, `GBSeq`: the goodbye line
     /// (`conversation.md` rule 20); `None` when file and noun are both 0
     /// (a missing key counts as 0).
@@ -424,6 +428,11 @@ pub struct CharacterKeys {
     /// `WBMsg`…`WBSeq`: the welcome-back line (rule 20).
     pub welcome_back: Option<crate::msg::Tuple>,
 }
+
+/// A character's own collision type and mask when its file sets none
+/// (`characters.md` rule 8, Q122).
+pub const CHARACTER_TYPE: u32 = 0x42;
+pub const CHARACTER_MASK: u32 = 0x281F;
 
 impl CharacterKeys {
     /// `None` when the section is not a character.
@@ -450,6 +459,8 @@ impl CharacterKeys {
             skin: text("originalBmp").zip(text("alternateBmp")),
             step_up: number("stepUpAmount").map(|v| v as f32),
             step_down: number("stepDownAmount").map(|v| v as f32),
+            collider_type: number("colliderType").map_or(CHARACTER_TYPE, |v| v as i64 as u32),
+            collider_mask: number("colliderMask").map_or(CHARACTER_MASK, |v| v as i64 as u32),
             goodbye: line_keys(s, "GB"),
             welcome_back: line_keys(s, "WB"),
         })

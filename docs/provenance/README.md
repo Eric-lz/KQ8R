@@ -2190,3 +2190,14 @@ marked otherwise.
 | The terrain in the up and down passes only with mask bit 0x800 (`colliderMask=0`: only the ground check) | Rule 8 (Q122 a, b) | Unit test `mask_0_skips_the_terrain_in_the_passes_but_the_ground_check_catches_it` |
 | `keepOnGround=1`: the ground check onto the water surface (flat), where it is above the floor | Rule 8, `water.md` | Unit test `keep_on_ground_1_stands_on_the_water_surface` |
 | A character's ball stack from its box; steps 325 or its file's | Rule 8, rule 9 | Same tests |
+
+### 4d-6b-2, characters fall — `crates/kq8-data/src/characters.rs`, `crates/kq8-core/src/character.rs`, `active.rs`, viewer `anim_view.rs`, `door_view.rs`, `draw_distance.rs`, `main.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| A character's type and mask: `colliderType` / `colliderMask`, else 0x42 / 0x281F | `characters.md` rule 8 (Q122 a) | Wizard's log line: terrain no, buildings no (mask 0) |
+| Its mover: Connor's, with its `BOUNDS.KQ` box (by type, else name) as ball stack, steps 325 or its file's, `keepOnGround` | Rules 8, 9 | Windmill and ruins runs |
+| Runs only while near or far, not in Birth; standing still; a script's `move` sets its start | Rules 8 (Q122 e), 11, 16 | Unit test `a_character_in_range_falls_onto_the_ground_and_says_so` |
+| Buildings count when its mask has 0x8 (every building type in the data has it) | Rule 8 (pair rule); the building types are **data** (0x28, 0x88) | Ruins: lands on Castle |
+| Objects, other characters, Connor: not tested | Waits for Q128 | Log line "not tested (Q128)" |
+| The mover runs in a step right after the characters' own update, not inside it | **Our order** (the update's parts are the same) | — |

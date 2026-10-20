@@ -693,6 +693,30 @@ impl WorldState {
         }
     }
 
+    /// `characters.md` rule 8 (M4 4d-6b-2): every character's mover, once
+    /// per update after the characters' own update; `with_buildings` /
+    /// `without` are the world as a character whose mask has 0x8 / lacks
+    /// it sees it (objects, characters and Connor are not in either: Q128).
+    pub fn characters_gravity(&mut self, with_buildings: &dyn crate::connor_mover::MoverWorld, without: &dyn crate::connor_mover::MoverWorld) {
+        for i in 0..self.anims.len() {
+            if self.anims[i].gone {
+                continue;
+            }
+            let a = &mut self.anims[i];
+            let Some(c) = a.character.as_deref_mut() else { continue };
+            let world = if c.hits_buildings { with_buildings } else { without };
+            let notes = c.gravity_step(&mut a.player, world);
+            let name = a.player.name.clone();
+            let at = a.player.placement();
+            if let Some(k) = self.clickables.iter_mut().find(|k| k.name.eq_ignore_ascii_case(&name)) {
+                k.placement = at;
+            }
+            for n in notes {
+                self.character_note(&name, n);
+            }
+        }
+    }
+
     /// The character called `name` (not deleted): its index in `anims`.
     pub fn character_index(&self, name: &str) -> Option<usize> {
         self.anims.iter().position(|a| !a.gone && a.character.is_some() && a.player.name.eq_ignore_ascii_case(name))

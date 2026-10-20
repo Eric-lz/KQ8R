@@ -1094,6 +1094,17 @@ impl kq8_core::active::ClickWalls for ClickBuildings<'_> {
     }
 }
 
+/// `characters.md` rule 8 (M4 4d-6b-2): each character's mover, after
+/// the characters' own update in `door_step`; buildings only for a mask
+/// with 0x8; no objects, characters or Connor yet (Q128).
+pub fn character_gravity(sim: Option<ResMut<DoorSim>>, lookup: Option<Res<crate::terrain_view::GroundLookup>>, buildings: Option<Res<crate::terrain_view::Buildings>>) {
+    let (Some(mut sim), Some(lookup)) = (sim, lookup) else { return };
+    let b = buildings.as_ref().map_or(&[][..], |b| &b.0[..]);
+    let with = kq8_core::connor_mover::Scene::new(&lookup.0, b, &[]);
+    let without = kq8_core::connor_mover::Scene::new(&lookup.0, &[], &[]);
+    sim.active.world.characters_gravity(&with, &without);
+}
+
 /// Left click: the click line from the camera through the mouse picks the
 /// nearest clickable box or clickable building (clicking.md rules 1-8;
 /// the ground is not tested), handled at the next update. `--aim NAME,N`

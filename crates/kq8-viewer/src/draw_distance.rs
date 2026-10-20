@@ -160,6 +160,13 @@ impl ShapeBalls {
         ShapeBalls { table, shapes }
     }
 
+    /// A character's collision box (`characters.md` rules 8, 9): its
+    /// `BOUNDS.KQ` entry by type, else by name (exact).
+    pub fn character_box(&self, name: &str, box_type: Option<&str>) -> Option<([f32; 3], [f32; 3])> {
+        let table = self.table.as_ref()?;
+        box_type.and_then(|t| table.lookup(t)).or_else(|| table.lookup(name)).map(|e| (e.min, e.max))
+    }
+
     /// The ball of a `BOUNDS.KQ` entry for `name` exactly.
     fn bounds(&self, name: &str) -> Option<([f32; 3], f32)> {
         self.table.as_ref()?.lookup(name).map(|e| shape_ball(e.min, e.max))
