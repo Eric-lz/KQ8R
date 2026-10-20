@@ -451,8 +451,46 @@ too). Details and numbers in `kq8-artifacts/logs/characters.log`.
   escape's compass diagonals, following a walking Connor at reach (the
   user's check in the original), zombies sinking home and rising again
   from there.
-- Stand-in until the fight study: where a character would attack, it
-  stops (Connor standing) or keeps following (Connor walking).
+- Where its attack is due it attacks (M5 5c, below).
+
+## The fight (milestone M5, step 5c, 2026-10-20)
+
+From `docs/behaviour/fighting.md` (A, 2026-10-20). Every attack, hit,
+miss, roll, flinch, death, drop and shot is in
+`kq8-artifacts/logs/fight.log`. **Checked in the logs only, not by eye.**
+
+- **Numbers:** every Daventry fighter's health, damage, protection,
+  experience, attack delay, drops and corpse from the monster lists and
+  the item list (`kq8 character-verify` prints them; all match the
+  note's table).
+- **Creatures attack:** at once when they reach Connor, then every swing
+  + attack delay (goblin22: every 2 s); they stand still while swinging
+  and keep turning to him. A chasing creature always swings in full on
+  arriving (the original's "swallowed swing" is not reproduced: the
+  user's decision).
+- **Hits on Connor:** at the swing's hit moment, within reach (a step
+  back gives 1.25 × reach) and in front of it; damage rolled 25–100 %,
+  then his protection; he flinches now and then (`react`) or says ouch;
+  below 0 health he dies and stays dead (game over is not built).
+- **Connor hits back (stand-in controls):** click the hand-weapon slot
+  to ready his fists (again to put them away); then a left click on a
+  creature turns him toward it and swings (`attack` / `attackb`; Shift:
+  `attack2`, × 0.75–4 damage; Ctrl: the normal click). Test option
+  `--swing NAME,N[,big]`.
+- **Hit creatures:** they flinch (`react`, never twice within 2 s of the
+  last) or say ouch, run after him from then on, and alarm everyone who
+  sees him; hit unseen, a lone one runs about beside him until it finds
+  him.
+- **Dying:** its die movement; its drops fling up and land with their
+  sound; when the death ends Connor gets its experience, a body stays
+  where it fell, and it is removed.
+- **Bow spriggans:** they never move, and shoot a bolt every swing +
+  delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor (the
+  bolt's flight is a stand-in: straight, no gravity).
+- **Combat level:** `--combat-level 1|2|3` (0.66 / 1.0 / 1.5 × the
+  creatures' health and damage; stand-in for the menu).
+- Not built: Connor's bows and other weapons' full movement sets, game
+  over, fleeing (no Daventry creature flees), the tips' texts.
 
 ## The on-screen interface (milestone M4, step 4c)
 
@@ -595,6 +633,10 @@ repeated and checked in the logs. They do not change the game's rules.
   be given more than once. It skips the line-of-sight test (see below).
 - `--aim NAME,N`: like `--click`, but the click only works if the camera
   can see the object, as in the game.
+- `--swing NAME,N[,big]`: at update N ready Connor's hand weapon (if none
+  is ready) and swing at the creature NAME (`big`: the Shift swing).
+- `--combat-level 1|2|3`: the combat level before the creatures enter
+  the world (0.66 / 1.0 / 1.5).
 - `--item TYPE`: give Connor an item of that type (called `TestItem`)
   and put it in his hand, for example the key that opens the castle
   keep's doors.
@@ -616,16 +658,17 @@ message that shows the usage.
 
 ## What doesn't work yet
 
-- **Not playable:** there is no inventory screen, fighting, saving, or
+- **Not playable:** there is no inventory screen, saving, game over, or
   travel between worlds; the story's scenes run only as far as the
   built parts allow.
-- **Characters:** they walk, notice Connor and chase him (M5 5a), but
-  don't fight or die yet (the fight study); their shadows on buildings
+- **Characters:** the fight is a first version (M5 5c): Connor's
+  controls, the bolt's flight and the drops' flight are stand-ins; not
+  compared with the original by eye. Their shadows on buildings
   use stand-ins for what the note leaves open (Q135); checked against
   the original by the user.
 - **Not drawn:** fire and ice arrow sparks and
   the dragon fire (they come with fighting), the teleport pad's look.
-- **Sound:** no hurt sounds yet; music doesn't pause (no pause yet); monsters have no
+- **Sound:** music doesn't pause (no pause yet); monsters have no
   footsteps (there are no monsters yet); scenery
   animations (signs, the mill wheel's own movement) make no sound;
   nothing is thrown, so there is no landing sound.

@@ -59,19 +59,18 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   away ends the talk with a goodbye. Characters stand on the ground
   and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them.
-- **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground.
+- **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground. They fight: they swing at Connor, he can punch back, they flinch, die, drop items and leave bodies; the bow spriggans shoot (first version, checked in the logs only).
 
 ### Next
 
-- **M5 – Fighting:** attacks, being hit and dying (waiting for its study).
+- **M5 – Fighting:** check the fight by eye against the original; Connor's controls and weapons (the click-to-swing is a stand-in for now).
 
 ### Later
 
 - **The main menu** (postponed: the viewer starts straight in Daventry,
   which keeps testing quick).
 
-- **M5 – Fighting.** Monsters that move, attack and die; Connor's weapons,
-  armour, health and experience in battle.
+- **M5 – Fighting.** Connor's other weapons and bows, game over.
 - **M6 – The whole game.** Saving and loading, travelling between worlds,
   all 12 worlds playable, the cutscene videos, the options screen.
 - **M7 – Match the original, then improve.** Play the original side by
@@ -138,6 +137,10 @@ Follows original game's default keybindings, plus extra debugging keys.
 | F8 | Haze (distance fog) on / off |
 | F9 | Dynamic lights on / off |
 | G / B | Test: lift Connor high / a little and let him fall |
+
+Fighting (first version): click the hand-weapon slot in the bottom bar
+to ready Connor's fists, then left-click a creature to swing (Shift:
+the big swing, Ctrl: a normal click).
 
 ## How the work is done
 

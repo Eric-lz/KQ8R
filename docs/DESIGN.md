@@ -1165,7 +1165,8 @@ stats.
     (Sara's house), the chickens behind the farm, the windmill
     spriggans, the graveyard and the road zombies, the bats, read in
     `characters.log`; the note's "How to check" for the user.
-- **5c — the fight** (planned 2026-10-20). From
+- **5c — the fight** (planned 2026-10-20; **done** 2026-10-20, steps 5c-1
+  to 5c-10, checked in the logs only, not yet by eye). From
   `docs/behaviour/fighting.md` (A, 2026-10-20; rules 6 and 31–32 checked
   by the user in the original), with `anim-scripts.md` rule 7 (the
   `interruptable` cue), `items.md` rule 12 (the throw),

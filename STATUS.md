@@ -1,11 +1,28 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-10-20 after
-B built characters moving on their own (M5 5a, `character-movement.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-10-20)
+
+- **2026-10-20 (B, M5 5c-1 to 5c-10): the fight built** from
+  `fighting.md` (plan and steps in `docs/DESIGN.md` "5c"; one commit
+  each; every attack, hit, miss, roll, flinch, death, drop and shot in
+  `kq8-artifacts/logs/fight.log`). Characters attack at once on
+  arriving, then every swing + `attackDelay` (no swallowed swing: the
+  user's decision); hits at the `Do` cue (reach, × 1.25 with his back
+  key, front half); rolls and protection; Connor flinches, says ouch,
+  dies (he stays dead: game over is another study). Connor hits back
+  with his fists: click the hand-weapon slot to ready them, then left
+  click a creature (Shift: the big swing; Ctrl: the plain click) — the
+  **input is a stand-in** from the manual. Hit characters flinch or say
+  ouch, run after him, die with their die movement, throw their drops,
+  leave a corpse and give experience when the death ends. The bow
+  spriggans shoot bolts (**stand-in flight**). Combat level
+  (`--combat-level 1|2|3`, stand-in for the menu). All checked in the
+  logs only; **not looked at by eye, not compared with the original.**
 
 - **2026-10-20 (B, M4 4d-7b-3): shadows fall on buildings** (walls and
   floors of the near and far buildings around the caster: characters,
@@ -452,27 +469,42 @@ characters and conversations done; the menus postponed) and **M5**
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Stand-ins of 5a / 5b (characters moving):** the attack: where it
-  would be due a character stops (Connor standing) or keeps following
-  (Connor walking), until the fight study; the idle list kept in the
+- **Stand-ins of 5c (the fight):** Connor's input side (open question
+  1): a second click on the ready weapon's slot puts it away; a click on
+  no creature aims at the level of his feet; turning toward the click
+  first only when it is behind him; only his three swings come from the
+  weapon's list (`confists.anm`), he walks with `Conner.anm`; his swing
+  and flinch play as one-item Special lists. The bolt (open question 2):
+  straight, no gravity, from 3/4 of the shooter's height at 3/4 of his,
+  drawn without pitch. The thrown drops' stepping (Q137). Game over
+  (Connor stays dead). The corpse has no draw-distance test and no skin
+  swap (bossprig). The flinch pause is fixed at 2 s (Q136,
+  `reactPause`). Not built: fleeing / keeping distance (rule 37; none
+  in Daventry), the tips' texts, surprise lines (none in Daventry),
+  "immune to projectiles", ranged weapons and Delete for Connor. Not
+  run in the viewer: the real mouse swing, fire / ice / projectile
+  deaths, picking up an item in the air, the other two bow spriggans.
+  Seen in the logs: rule 26's alarm with "run" also reaches far
+  characters that are active and see Connor (as written; not checked
+  in the original).
+- **Stand-ins of 5a / 5b (characters moving):** the idle list kept in the
   same player as `idle:<name>` (the same result as the original's swap,
   rule 18); the stuck line 1 above the feet (the note's recommendation).
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Next step, suggested:** for B: build the fight from
-  `fighting.md` (studied 2026-10-20 by A; replaces the 5a / 5b attack
-  stand-in); optionally swap 4d-7b-3's stand-ins for Q135's traced
-  numbers (not blocking). For the user: `fighting.md` "How to check"
-  in the original. **The main
+- **Next step, suggested:** for the user: play the fight by eye
+  (`fighting.md` "How to check" 1–8) in ours and the original. For A:
+  Connor's controls (the input side of the fight, his weapon lists,
+  game over), the bolt's flight, Q136, Q137. For B: optionally swap
+  4d-7b-3's stand-ins for Q135's traced numbers (not blocking). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
-- Sound, not done: the item land sound (nothing is thrown),
-  hurt sounds (fighting), pause, and `setActiveCamera` / `makeActive`
-  for sound objects.
-- Speech, not done: the Daventry monster-death remark (no monster dies),
-  helmets' and armour's faces (M5).
+- Sound, not done: pause, and `setActiveCamera` / `makeActive` for
+  sound objects.
+- Speech, not done: the Daventry monster-death remark, helmets' and
+  armour's faces (M5).
 - Clicking: only doors, chests, items, scripted objects, buildings and
   characters with a script react. `checkInventory` by id number (Q62 b)
   not built.
@@ -514,6 +546,11 @@ characters and conversations done; the menus postponed) and **M5**
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
+- For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
+  (`reactPause`: is it the flinch's 2 s pause?), **Q137** (how a thrown
+  item's flight steps through time). `fighting.md` open questions 1–3
+  (Connor's input side, the bolt's flight, which menu sets the combat
+  level) are built as stand-ins.
 - For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
   the stay test; Jump and push while talking), **Q126** (where the
   conversation camera aims and what the right-button swing centres on).

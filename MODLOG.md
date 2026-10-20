@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5c finished: STATUS, FEATURES, README
+
+**Changed:** Docs only: STATUS (where we are, the 5c stand-ins, next steps, Q136–Q137), FEATURES (the fight, the two new launch options), README (M5 so far, how to fight), DESIGN (5c done).
+**Why:** End of the implementation session (`docs/SESSIONS.md`).
+**Tested how:** —
+**Result:** —
+**Still broken / not tested:** The whole fight is checked in the logs only: not looked at by eye, not compared with the original, the real mouse swing not tried.
+**Next:** The user's checks (`fighting.md` "How to check"); A: Connor's controls, the bolt's flight, Q136, Q137.
+
 ## 2026-10-20 M5 step 5c-10: the combat level
 
 **Changed:** `kq8-data/world_script.rs`: `applyCombatLevel` reaches the loader. `kq8-core/fight.rs`, `active.rs`: `setCombatLevel 1|2|3`, the factor applied to characters loaded after `applyCombatLevel` when they enter the world. Viewer: the loader marks those characters; new launch option `--combat-level 1|2|3` (stand-in for the menu). 1 new test. DESIGN, provenance.
