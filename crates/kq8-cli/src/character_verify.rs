@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::process::ExitCode;
 
 use kq8_data::bounds::BoundingBoxes;
-use kq8_data::characters::{AnimList, CharacterKeys, Class, Lips, MonsterList, MonsterTypes, Wander, GEOMETRY_MOUTH, GESTURES};
+use kq8_data::characters::{AiSettings, AnimList, CharacterKeys, Class, Lips, MonsterList, MonsterTypes, Wander, GEOMETRY_MOUTH, GESTURES};
 use kq8_data::game_dir::{VOLUMES, WORLDS};
 use kq8_data::{kq_text, GameDir, Shape, VolArchive};
 
@@ -145,6 +145,7 @@ fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &Bo
             line += ", noTurn";
         }
         line += &format!(", wanders {}, shadowMask {}", u8::from(keys.wanders), keys.shadow_mask);
+        line += &format!("; movement rules from its keys: {}", AiSettings::from_keys(&keys).describe());
         if let Some((a, b)) = &keys.skin {
             line += &format!(", skin {a} -> {b}");
         }
@@ -311,7 +312,23 @@ fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &Bo
                 l.birth_delay.or(t.birth_delay),
                 find_box(bounds, Some(&t.name), &l.name)
             ));
+            // M5 5a-1 (character-movement.md rules 9, 23, 27): what the
+            // movement rules will use.
+            if let Some(k) = &character {
+                log.detail(format!("    movement rules: {}", AiSettings::from_line(k, l, t).describe()));
+            }
         }
+    }
+    // Rule 20: the active list's size.
+    let max = world.load("world.cs").and_then(|b| {
+        let text: String = b.iter().map(|&c| c as char).collect();
+        text.lines().find_map(|l| {
+            let mut w = l.split_whitespace();
+            (w.next()?.eq_ignore_ascii_case("set") && w.next()?.eq_ignore_ascii_case("KQWorld::MaxMonsters")).then(|| w.next().map(str::to_string)).flatten()
+        })
+    });
+    if files_or_lists(&classes, &lists) {
+        log.summary(format!("{}: KQWorld::MaxMonsters {} (world.cs; character-movement.md rule 20)", world.name, max.as_deref().unwrap_or("not set")));
     }
     let files: usize = classes.values().sum();
     if files + lines > 0 {
@@ -327,4 +344,9 @@ fn verify_world(game: &GameDir, world: &World, types: &MonsterTypes, bounds: &Bo
     }
     totals.lines += lines;
     totals.problems += problems;
+}
+
+/// The world has characters or monster lists.
+fn files_or_lists(classes: &BTreeMap<&'static str, usize>, lists: &[(String, Vec<kq_text::Section>)]) -> bool {
+    !classes.is_empty() || !lists.is_empty()
 }

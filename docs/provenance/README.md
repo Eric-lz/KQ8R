@@ -2284,3 +2284,15 @@ marked otherwise.
 | Every hit on a character logged (who, where, distance, surface direction, angle, slid or stayed) | AGENTS.md (log, don't look) | `characters.log` |
 
 **4d-12 checked by the user against the original (2026-10-20):** the goblin's stopping distance (stand-in cylinder size, Q131 a) and the slide round it, walking away, the Wizard and his conversation all match.
+
+### 5a-1, what the movement rules read — `crates/kq8-data/src/characters.rs` (`ChaseMode`, `AiSettings`), `crates/kq8-cli/src/character_verify.rs`, viewer `load.rs`, `anim_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Monster list fields: team (3rd), chase mode (16th), attack distance (19th); type list: chase mode (11th), attack distance (14th) | Data: the files' own header lines (`;monsterX=`, `;typeX=`) | Unit tests; `character-verify.log` |
+| `chase a b` = home radius a, chase radius b; `guard` / `none` = both 0 | `character-movement.md` rule 27 | Unit test |
+| Only the first number of `attackDist` (`slime`: `5000 0.4 3.0`) | Data; **ours** (the other numbers belong to the fight study) | Unit test |
+| The list's (or type's, for `@`) movement, alarm radius, chase mode and attack distance replace the `.kq` keys; the team is the line's | `character-movement.md` rules 9, 23, 27; `characters.md` rule 31 | Unit test; goblin22 alarm 4,000, chase 3,000 / 6,000 (type `goblin2`) |
+| `.kq` keys `homeRadius`, `chaseRadius`, `attackDist` (default 1,250), `team`, `canAlwaysSeeConner`, `wanderAndStop`, `doMode` | `character-movement.md` "Data used", rule 25 | Unit test |
+| A `.kq` character without `alarmRadius` / `homeRadius` / `chaseRadius`: 0 | **Ours** (no default in the notes; every Daventry character loaded this way has `wanders=0`) | — |
+| `KQWorld::MaxMonsters` from `world.cs` | `character-movement.md` rule 20; data (Daventry 6, Ice World 10) | `character-verify.log` |

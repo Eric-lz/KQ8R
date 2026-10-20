@@ -165,15 +165,58 @@ impl Wander {
     }
 }
 
+/// The chase mode field (`character-movement.md` rule 27): `chase a b`
+/// sets home radius a and chase radius b; `guard` and `none` set both
+/// to 0 (the character never moves after Connor).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChaseMode {
+    Guard,
+    None,
+    Chase { home_radius: f32, chase_radius: f32 },
+}
+
+impl ChaseMode {
+    /// Reads the field; `Err` names what is wrong.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        match words.as_slice() {
+            [w] if w.eq_ignore_ascii_case("guard") => Ok(ChaseMode::Guard),
+            [w] if w.eq_ignore_ascii_case("none") => Ok(ChaseMode::None),
+            [w, a, b, ..] if w.eq_ignore_ascii_case("chase") => match (a.parse(), b.parse()) {
+                (Ok(home_radius), Ok(chase_radius)) => Ok(ChaseMode::Chase { home_radius, chase_radius }),
+                _ => Err(format!("chase mode '{text}': the radii are not numbers")),
+            },
+            _ => Err(format!("chase mode '{text}' is not guard, none or chase <home> <chase>")),
+        }
+    }
+
+    /// (home radius, chase radius).
+    pub fn radii(&self) -> (f32, f32) {
+        match *self {
+            ChaseMode::Chase { home_radius, chase_radius } => (home_radius, chase_radius),
+            _ => (0.0, 0.0),
+        }
+    }
+}
+
+/// The first number of a field (`attackDist` can carry more:
+/// `slime`'s `5000 0.4 3.0`; only the distance is used here).
+fn first_number(text: &str) -> Option<f32> {
+    text.split_whitespace().next()?.parse().ok()
+}
+
 /// Field positions in a `monsterN=` value (rule 3).
 mod line {
     pub const NAME: usize = 0;
     pub const TYPE: usize = 1;
+    pub const TEAM: usize = 2;
     pub const X: usize = 7;
     pub const HEADING: usize = 10;
     pub const MOVEMENT: usize = 12;
+    pub const CHASE_MODE: usize = 15;
     pub const ALARM_RADIUS: usize = 16;
     pub const BIRTH_DELAY: usize = 17;
+    pub const ATTACK_DIST: usize = 18;
     pub const COUNT: usize = 20;
 }
 
@@ -184,8 +227,10 @@ mod kind {
     pub const NAME: usize = 1;
     pub const FILE: usize = 6;
     pub const MOVEMENT: usize = 7;
+    pub const CHASE_MODE: usize = 10;
     pub const ALARM_RADIUS: usize = 11;
     pub const BIRTH_DELAY: usize = 12;
+    pub const ATTACK_DIST: usize = 13;
     pub const COUNT: usize = 15;
 }
 
@@ -222,6 +267,13 @@ pub struct MonsterLine {
     pub movement: Field<Wander>,
     pub alarm_radius: Field<f32>,
     pub birth_delay: Field<f32>,
+    /// The team (`windguys`); `None` for `@` or empty (the type list has
+    /// no team column).
+    pub team: Option<String>,
+    /// `guard`, `none`, `chase a b`; `@` = the type's.
+    pub chase: Field<ChaseMode>,
+    /// The attack distance (first number); `@` = the type's.
+    pub attack_dist: Field<f32>,
 }
 
 impl MonsterLine {
@@ -243,7 +295,19 @@ impl MonsterLine {
             "@" => Field::FromType,
             m => Field::Value(Wander::parse(m).map_err(|e| format!("{key}: {e}"))?),
         };
+        let chase = match fields[line::CHASE_MODE] {
+            "@" => Field::FromType,
+            c => Field::Value(ChaseMode::parse(c).map_err(|e| format!("{key}: {e}"))?),
+        };
+        let attack_dist = match fields[line::ATTACK_DIST] {
+            "@" => Field::FromType,
+            a => Field::Value(first_number(a).ok_or(format!("{key}: attack distance '{a}' is not a number"))?),
+        };
+        let team = Some(fields[line::TEAM]).filter(|t| !t.is_empty() && *t != "@").map(str::to_string);
         Ok(MonsterLine {
+            team,
+            chase,
+            attack_dist,
             key: key.to_string(),
             name: fields[line::NAME].to_string(),
             type_name,
@@ -319,6 +383,8 @@ pub struct MonsterType {
     pub movement: Wander,
     pub alarm_radius: f32,
     pub birth_delay: f32,
+    pub chase: ChaseMode,
+    pub attack_dist: f32,
 }
 
 /// The type list (rule 4).
@@ -360,6 +426,8 @@ impl MonsterTypes {
                     movement: Wander::parse(f[kind::MOVEMENT]).map_err(|e| format!("{key}: {e}"))?,
                     alarm_radius: number(kind::ALARM_RADIUS, "alarm radius")?,
                     birth_delay: number(kind::BIRTH_DELAY, "birth delay")?,
+                    chase: ChaseMode::parse(f[kind::CHASE_MODE]).map_err(|e| format!("{key}: {e}"))?,
+                    attack_dist: first_number(f[kind::ATTACK_DIST]).ok_or(format!("{key}: attack distance '{}' is not a number", f[kind::ATTACK_DIST]))?,
                 })
             };
             match read() {
@@ -427,6 +495,19 @@ pub struct CharacterKeys {
     pub goodbye: Option<crate::msg::Tuple>,
     /// `WBMsg`…`WBSeq`: the welcome-back line (rule 20).
     pub welcome_back: Option<crate::msg::Tuple>,
+    /// `homeRadius=`, `chaseRadius=`, `attackDist=`, if given
+    /// (`character-movement.md` rules 25, 27).
+    pub home_radius: Option<f32>,
+    pub chase_radius: Option<f32>,
+    pub attack_dist: Option<f32>,
+    /// `team=`, if given (rules 20, 24).
+    pub team: Option<String>,
+    /// `canAlwaysSeeConner=1`: the sight test is skipped (rule 20).
+    pub can_always_see: bool,
+    /// `wanderAndStop=1`: stops wandering at the end of its points (rule 11).
+    pub wander_and_stop: bool,
+    /// `doMode=` (ranged characters, the fight study).
+    pub do_mode: i32,
 }
 
 /// A character's own collision type and mask when its file sets none
@@ -463,6 +544,13 @@ impl CharacterKeys {
             collider_mask: number("colliderMask").map_or(CHARACTER_MASK, |v| v as i64 as u32),
             goodbye: line_keys(s, "GB"),
             welcome_back: line_keys(s, "WB"),
+            home_radius: number("homeRadius").map(|v| v as f32),
+            chase_radius: number("chaseRadius").map(|v| v as f32),
+            attack_dist: number("attackDist").map(|v| v as f32),
+            team: text("team"),
+            can_always_see: switch("canAlwaysSeeConner", false),
+            wander_and_stop: switch("wanderAndStop", false),
+            do_mode: number("doMode").map_or(0, |v| v as i32),
         })
     }
 
@@ -565,6 +653,96 @@ impl AnimList {
     }
 }
 
+/// `attackDist`'s default (`character-movement.md` rule 25).
+pub const DEFAULT_ATTACK_DIST: f32 = 1250.0;
+
+/// What a character's movement rules need, with the monster list's (or
+/// its type's, for `@`) values replacing the `.kq` keys
+/// (`character-movement.md` rules 9, 23, 27; `characters.md` rule 31).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AiSettings {
+    pub wander: Wander,
+    /// May wander once active: the list's movement field, else `wanders`.
+    pub wanders: bool,
+    pub alarm_radius: f32,
+    pub home_radius: f32,
+    pub chase_radius: f32,
+    pub attack_dist: f32,
+    pub team: Option<String>,
+    pub can_always_see: bool,
+    pub wander_and_stop: bool,
+    pub do_mode: i32,
+    /// Where each value came from, for the log.
+    pub from: String,
+}
+
+impl AiSettings {
+    /// From the keys alone (a `.kq`-loaded character). A missing
+    /// `alarmRadius`, `homeRadius` or `chaseRadius` counts as 0 (**our
+    /// reading**: the note gives no default; every Daventry character
+    /// loaded this way has `wanders=0`, so it never moves either way).
+    pub fn from_keys(keys: &CharacterKeys) -> Self {
+        AiSettings {
+            wander: if keys.wanders { Wander::Random } else { Wander::None },
+            wanders: keys.wanders,
+            alarm_radius: keys.alarm_radius.unwrap_or(0.0),
+            home_radius: keys.home_radius.unwrap_or(0.0),
+            chase_radius: keys.chase_radius.unwrap_or(0.0),
+            attack_dist: keys.attack_dist.unwrap_or(DEFAULT_ATTACK_DIST),
+            team: keys.team.clone(),
+            can_always_see: keys.can_always_see,
+            wander_and_stop: keys.wander_and_stop,
+            do_mode: keys.do_mode,
+            from: "its .kq keys".into(),
+        }
+    }
+
+    /// For a monster-list line of type `kind`: its movement, alarm radius,
+    /// chase mode and attack distance (`@` = the type's) replace the keys;
+    /// the team is the line's.
+    pub fn from_line(keys: &CharacterKeys, line: &MonsterLine, kind: &MonsterType) -> Self {
+        let mut s = Self::from_keys(keys);
+        s.wander = line.movement.or(kind.movement.clone());
+        s.wanders = s.wander.wanders();
+        s.alarm_radius = line.alarm_radius.or(kind.alarm_radius);
+        (s.home_radius, s.chase_radius) = line.chase.or(kind.chase).radii();
+        s.attack_dist = line.attack_dist.or(kind.attack_dist);
+        s.team = line.team.clone();
+        let src = |f: bool| if f { "type" } else { "line" };
+        s.from = format!(
+            "movement {}, alarm {}, chase {}, attack {} (character-movement.md rules 9, 23, 27)",
+            src(line.movement == Field::FromType),
+            src(line.alarm_radius == Field::FromType),
+            src(line.chase == Field::FromType),
+            src(line.attack_dist == Field::FromType)
+        );
+        s
+    }
+
+    /// One line for the logs.
+    pub fn describe(&self) -> String {
+        let wander = match &self.wander {
+            Wander::None => "none".to_string(),
+            Wander::Random => "random".to_string(),
+            Wander::Loop(p) => format!("loop of {}", p.len()),
+            Wander::Patrol(p) => format!("patrol of {}", p.len()),
+        };
+        format!(
+            "wanders {} ({wander}); alarm radius {}; home radius {}; chase radius {}; attack distance {}; team {}; canAlwaysSeeConner {}; wanderAndStop {}; doMode {}; from {}",
+            if self.wanders { "yes" } else { "no" },
+            self.alarm_radius,
+            self.home_radius,
+            self.chase_radius,
+            self.attack_dist,
+            self.team.as_deref().unwrap_or("none"),
+            u8::from(self.can_always_see),
+            u8::from(self.wander_and_stop),
+            self.do_mode,
+            self.from
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,6 +776,45 @@ monster3=\tchicken3\tchicken\t@\t@\t@\t1\t-1\t244688\t216198\t-2\t0\t@\tpatrol 2
         let chick = &list.lines[3];
         assert_eq!(chick.movement, Field::Value(Wander::Patrol(vec![[1.0, 2.0, -2.0], [3.0, 4.0, -2.0]])));
         assert_eq!(chick.birth_delay, Field::Value(1.0));
+        // character-movement.md rules 23, 27 (M5 5a-1).
+        assert_eq!(bow.chase, Field::Value(ChaseMode::Guard));
+        assert_eq!(bow.attack_dist, Field::Value(12000.0));
+        assert_eq!(gob.chase, Field::Value(ChaseMode::Chase { home_radius: 4000.0, chase_radius: 9000.0 }));
+        assert_eq!((gob.team.as_deref(), gob.attack_dist.clone()), (None, Field::FromType));
+        assert_eq!((chick.chase.clone(), chick.alarm_radius.clone()), (Field::FromType, Field::FromType));
+    }
+
+    #[test]
+    fn ai_settings_take_the_line_then_the_type() {
+        let file = kq_text::parse(LIST.as_bytes());
+        let (list, _) = MonsterList::from_section(&file[0]);
+        let types = "[MonsterTypeList]
+classType=KQMonsterTypeList
+numTypes=1
+type0=	KQMonsterType	chicken	5	5	2	1	chicken.kq	none	none	none	chase 3000 6000	0	0	1500	0.5
+";
+        let (t, problems) = MonsterTypes::parse(types.as_bytes());
+        assert!(problems.is_empty(), "{problems:?}");
+        let kq = kq_text::parse(b"[Chicken]
+classType=KQMonster
+alarmRadius=1500
+animFile=chicken.anm
+team=x
+canAlwaysSeeConner=1
+");
+        let keys = CharacterKeys::from_section(&kq[0]).unwrap();
+        let own = AiSettings::from_keys(&keys);
+        assert_eq!((own.alarm_radius, own.attack_dist, own.team.as_deref(), own.can_always_see), (1500.0, DEFAULT_ATTACK_DIST, Some("x"), true));
+        assert_eq!((own.home_radius, own.chase_radius, own.wander.clone()), (0.0, 0.0, Wander::Random));
+        let s = AiSettings::from_line(&keys, &list.lines[3], &t.types[0]);
+        // The list's values (or the type's for @) replace the keys.
+        assert_eq!((s.alarm_radius, s.home_radius, s.chase_radius, s.attack_dist), (0.0, 3000.0, 6000.0, 1500.0));
+        assert!(s.wanders && matches!(s.wander, Wander::Patrol(_)));
+        assert_eq!(s.team, None);
+        let g = AiSettings::from_line(&keys, &list.lines[1], &t.types[0]);
+        assert_eq!((g.alarm_radius, g.home_radius, g.chase_radius), (6000.0, 4000.0, 9000.0));
+        assert!(ChaseMode::parse("chase 1").is_err() && ChaseMode::parse("follow").is_err());
+        assert_eq!(ChaseMode::parse("NONE").map(|c| c.radii()), Ok((0.0, 0.0)));
     }
 
     #[test]

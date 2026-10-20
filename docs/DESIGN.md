@@ -970,6 +970,123 @@ stats.
 - A: monster AI per type, combat rules and numbers, stats, death.
 - B: implement.
 
+- **5a — characters moving on their own, up to the first swing**
+  (planned 2026-10-20). From `docs/behaviour/character-movement.md` (A,
+  2026-10-19, **not yet checked in the original**), with `characters.md`,
+  `connor-physics.md`, `connor-collision.md`, `anim-scripts.md`. Words:
+  **active** = on the world's short list of characters that "know"
+  about Connor (rule 20); **alarmed** = after Connor (rule 23); **home**
+  = its home point (rule 13). The fight itself (the swing, being hit,
+  dying) is the next study: where the note says "the attack starts", we
+  stop (Wait, facing Connor) and log "attack would start (fight study)".
+  One step and one commit at a time; everything logs to
+  `kq8-artifacts/logs/characters.log` (per character once a second:
+  state, active, target, position, heading, distance to Connor, can
+  see / what blocked, wander point and its distance, movement playing,
+  idle time; and every alarm, give-up, stuck event, reset, touch).
+  - **Where the code goes.** `kq8-data/characters.rs`: the missing
+    fields. `kq8-core`: new `character_ai.rs` (the rules of the note
+    that decide: sight timing, the active list, wandering, idling,
+    alarm, chase, going home; no drawing, unit tests), `character.rs`
+    (the Move state, the walk's step, steering, the stuck check),
+    `connor_mover.rs` (the character's own touch table and slide),
+    `active.rs` (the script commands, the world's list). Viewer:
+    `door_view.rs` (the character's scene: terrain, buildings, objects,
+    other characters, Connor), `load.rs` / `anim_view.rs` (idle lists).
+  - **5a-1, reading what the AI needs** (**done** 2026-10-20; the
+    numbers below as expected, 0 new problems) (rules 9, 10, 20, 23, 27; data).
+    The monster list's `team`, `chaseMode` (`guard`, `none`, `chase a
+    b`, `@`) and `attackDist` (first number; `@` = the type's, the
+    type list has the same two columns); the character keys
+    `wanderAndStop`, `team`, `canAlwaysSeeConner`, `homeRadius`,
+    `chaseRadius`, `attackDist` (default 1,250), `doMode`, `startLoc`,
+    `Alarm*`; `KQWorld::MaxMonsters` from `world.cs` (Daventry 6). The
+    list's values replace the `.kq` keys (rule 23). `kq8
+    character-verify` prints them per line. Numbers to expect (data):
+    goblin22 alarm 4,000, chase from type goblin2 (3,000 / 6,000);
+    sprigwnd2 team `windguys`; bats and chickens alarm 0.
+  - **5a-2, walking** (rules 1–8). A Move state: entering it asks for
+    `Stop` at a random frame and speed, then at once for `walk` or `run`
+    (rule 3's fallbacks); a walk or run that ends is asked for again.
+    **The step comes from the movement**: per update the loop's added-up
+    frame steps × the phase moved (spread evenly, as Connor's loops),
+    turned by the character's heading, given to its mover (gravity,
+    steps 325, slopes as now). A repeating movement's steps then move
+    the character, not the drawing (otherwise the model would run ahead
+    and jump back at each loop). Steering: the automatic turn (3.5
+    rad/s) aimed anew at the point each update, walking on (`noTurn`
+    blocks it). The stuck check (rule 7): 1 s after the start, then
+    every 0.5 s; moved < 200 (3D) → no steering for 3 s, the first free
+    diagonal of four (1,250 out, at its height; blocked by the ground,
+    objects, buildings, other characters: mask 0xB) from one further
+    round each time, a snap turn; all four blocked: turned round
+    (**stand-in**, the note's open question 1); then `run`.
+    `KQMonster::setState <name> Move` puts a character in Move (it then
+    walks straight: the note's edge case). Test: `--command
+    "KQMonster::setState goblin22 Move",30`; speeds as the note's table
+    (917 walking).
+  - **5a-3, a character's own touches** (rules 6, 33–35, Q128). The
+    character's mover sees what its mask covers: buildings, plain
+    objects, other characters (their cylinders), Connor (**stand-in**
+    shape: the same cylinder rule as Q131's, from his box); every one an
+    obstacle in every pass: up stops, down lands (surface up more than
+    0.8), across slides (a surface tilted less than 0.7 toward up counts
+    as upright, 3 slides then stays); never head-on, no wall blocks, no
+    push-off. Traps (0x10) nothing. Nobody is pushed by a character.
+    `colliderMask=0`: nothing.
+  - **5a-4, sight and the active list** (rules 20–22). Every 15th
+    update (counted per character from its first update) a line from
+    the top of its box to 1,250 above Connor, blocked by the drawn
+    ground (water surface included), plain objects (type bit 1) and
+    buildings (bit 8), not characters or Connor; no distance limit;
+    `canAlwaysSeeConner`. In Wait (or Birth, rule 30), seen and not
+    active → joins the list if there is room (`MaxMonsters`); a team
+    member may take an untimed one's place. Losing active (off, or
+    pushed out): forgets its target; if on the way home or Connor more
+    than 2 × its alarm radius away (**stand-in**: plain 3D distance, the
+    note's open question 2): put on its home point at once (z −1 floor,
+    −2 surface), `hide` lists back into Birth; Move → Wait.
+  - **5a-5, wandering** (rules 9–14). Active, `wanders` on, in Wait, not
+    alarmed, idle not due → Move along its points (`loop`, `patrol`
+    there and back, `random`: own position + 3 random points at 2–3 ×
+    alarm radius); reached within 250 (x, y) → next point and turn to
+    it; re-aim only when distance² > closest² + 12,500²; the stuck
+    escape takes the next point; `wanderAndStop`. `setHome`.
+  - **5a-6, idling** (rules 15–19). The idle list (`idleAnimFile`) loaded
+    as a second movement list; only active, in Wait, not alarmed, when
+    the idle time has come (0 at first): a random fidget from that list,
+    then Wait's `Stop`; the next due 2 + round(random × 10) s after it
+    ended. A walking wanderer goes back to Wait for it.
+  - **5a-7, alarm, chase, giving up, going home** (rules 23–29). Seen
+    within the alarm radius (straight distance) and `goHome` off →
+    alarmed after a random 0–1 s, chase timer 5 s, the walk / run coin,
+    the alarm spread (active and seeing, or a team member seeing; the
+    team made active). Standing: turns to Connor (or the last seen spot
+    if more than 500 away), moves after him if out of sight or beyond
+    its attack distance and its chase radius > 0. Moving: steers at him;
+    within attack distance and seen → Wait facing him (the swing is the
+    fight study). Not seen for 45 updates → gives up (team exceptions).
+    After the chase timer: beyond 2 × alarm radius (no team) or beyond
+    its chase radius from home → gives up (`run`). Giving up: target
+    forgotten, on the way home (`hide` → Birth), steers home, within 100
+    in x and y → Wait; re-takes the chase as rule 28 says.
+    `KQMonster::goHome`, `setAlarmRadius`, `setChaseRadius`,
+    `setHomeRadius`.
+  - **5a-8, the zombies rising** (rule 30). In Birth the sight check
+    runs; not active, seen and within the alarm radius → active and
+    alarmed; `birthDelay` s later Wait, which waits until Connor is
+    farther than the two balls added, then plays `birth`, drawn, solid,
+    gravity on, turned toward Connor; then the chase. The graveyard trap
+    (`zomtrap.cs`) through its script commands.
+  - **5a-9, the flying mover corrected** (rule 32, Q129): the down 150
+    all or nothing; the raise from the top of its shape onto the drawn
+    ground (the water surface) or a building, at most 300, as an up
+    pass. Bats end each update on the water surface.
+  - Tests: unit tests for each rule in core; viewer runs at goblin22
+    (Sara's house), the chickens behind the farm, the windmill
+    spriggans, the graveyard and the road zombies, the bats, read in
+    `characters.log`; the note's "How to check" for the user.
+
 ### M6 — The whole game
 
 Save/load, moving between worlds, all 12 worlds, cutscene videos, music,

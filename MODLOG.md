@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5a-1: what the characters' movement rules read
+
+**Changed:** Plan for M5's first part (5a, `character-movement.md`) in `docs/DESIGN.md`. `kq8-data/src/characters.rs`: the monster list's team, chase mode and attack distance, the type list's chase mode and attack distance (new `ChaseMode`); the character keys `homeRadius`, `chaseRadius`, `attackDist`, `team`, `canAlwaysSeeConner`, `wanderAndStop`, `doMode`; new `AiSettings` (the list's / type's values replacing the keys). `kq8 character-verify` prints them per line and `KQWorld::MaxMonsters` per world; the viewer keeps them per character and logs them at load in `characters.log`. Provenance.
+**Why:** `character-movement.md` rules 9, 20, 23, 25, 27 (first step of 5a).
+**Tested how:** `cargo test --workspace` (2 new tests), clippy clean; `kq8 character-verify` before and after (problems 63 both times); viewer `cargo play --world Daventry --frames 60 --sound off`, `characters.log`.
+**Result:** goblin22: wanders (loop of 2), alarm 4,000, home / chase 3,000 / 6,000 (type `goblin2`), attack 1,500; sprigwnd2: team `windguys`, alarm 8,000, chase 4,000 / 9,000; bats and chickens alarm 0; RoadZ1 alarm 4,000, chase 8,000 / 12,000; the Wizard (own `.kq`): nothing. MaxMonsters: Daventry 6, Ice World 10, others 6.
+**Still broken / not tested:** Nothing uses the values yet. A `.kq` character without radius keys gets 0 (our reading).
+**Next:** 5a-2, walking.
+
 ## 2026-10-20 The user's check of solid characters (4d-12)
 
 **Changed:** Docs only: FEATURES, STATUS, DESIGN, provenance.

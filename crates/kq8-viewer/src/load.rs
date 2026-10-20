@@ -1711,6 +1711,8 @@ struct PendingLine {
     wander: kq8_data::characters::Wander,
     birth_delay: f32,
     from: String,
+    /// Its type (for the `@` fields of the movement rules, M5 5a-1).
+    kind: kq8_data::characters::MonsterType,
 }
 
 /// A character's `.anm` file, read: the list, and the bytes to attach.
@@ -1743,6 +1745,8 @@ pub struct CharacterAssets {
     pub skin: Option<(String, String)>,
     /// It casts a shadow (rule 36), as tested at load.
     pub casts_shadow: bool,
+    /// What its movement rules use (`character-movement.md`; M5 5a-1).
+    pub ai: kq8_data::characters::AiSettings,
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
@@ -2221,6 +2225,7 @@ impl Placer<'_> {
                 unborn,
                 lips,
                 skin: pending.as_ref().and_then(|l| l.line.skin.clone()).or_else(|| keys.skin.clone()),
+                ai: pending.as_ref().map_or_else(|| kq8_data::characters::AiSettings::from_keys(&keys), |l| kq8_data::characters::AiSettings::from_line(&keys, &l.line, &l.kind)),
                 keys,
                 casts_shadow: false,
             }
@@ -3195,6 +3200,7 @@ impl Placer<'_> {
                 wander: line.movement.or(kind.movement.clone()),
                 birth_delay: line.birth_delay.or(kind.birth_delay),
                 type_name: kind.name.clone(),
+                kind: kind.clone(),
                 line,
                 from,
             });

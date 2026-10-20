@@ -332,7 +332,7 @@ pub fn spawn_animated(
             if let Some(c) = &a.character {
                 let l = &a.movements[player.current].1;
                 characters.push(format!(
-                    "[{}] {}: from {}; at ({:.0}, {:.0}, {:.0}) heading {:.2}; {} movements, shown at load '{}' ({} {} speed {} repeat {} cut short {}); flags {:#x}{}{}; ball from {} (centre ({:.0}, {:.0}, {:.0}) m, radius {:.0}); wanders {} (M5); birthDelay {}{}{}{}",
+                    "[{}] {}: from {}; at ({:.0}, {:.0}, {:.0}) heading {:.2}; {} movements, shown at load '{}' ({} {} speed {} repeat {} cut short {}); flags {:#x}{}{}; ball from {} (centre ({:.0}, {:.0}, {:.0}) m, radius {:.0}); wanders {}; birthDelay {}{}{}{}; movement rules: {}",
                     p.name,
                     c.keys.class.name(),
                     c.from,
@@ -360,6 +360,7 @@ pub fn spawn_animated(
                     if c.unborn { "; has Birth: NOT DRAWN until born (rule 16)" } else { "" },
                     c.lips.as_ref().map_or(String::new(), |l| format!("; lips [{}] face {}", l.section, l.face)),
                     c.skin.as_ref().map_or(String::new(), |(f, t)| format!("; skin {f} -> {t}")),
+                    c.ai.describe(),
                 ));
             }
             body.insert(test);
