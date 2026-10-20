@@ -1086,6 +1086,7 @@ pub fn push_apply(
     colliders: Option<ResMut<ObjectColliders>>,
     view: Option<ResMut<crate::terrain_view::ViewBlockerSet>>,
     mut drawn: Query<(&crate::terrain_view::ObjectName, &mut Transform)>,
+    mut doors: Option<ResMut<crate::door_view::DoorSim>>,
     shared: Res<Shared>,
 ) {
     let Some(mut sim) = sim else { return };
@@ -1101,6 +1102,15 @@ pub fn push_apply(
                 at = Some(b.placement.position);
                 boxes += 1;
             }
+        }
+        // The world's own box of it moves too (its clicks, Connor's
+        // swings and `getLoc` go by it; the user's check after M5 5d: a
+        // pushed barrel was hit where it had been).
+        if let Some(c) = doors.as_mut().and_then(|s| s.active.world.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(&name))) {
+            for (p, v) in c.placement.position.iter_mut().zip(d) {
+                *p += v;
+            }
+            boxes += 1;
         }
         let shift = Vec3::from(crate::to_bevy(d, [0.0; 3]));
         let mut entities = 0;

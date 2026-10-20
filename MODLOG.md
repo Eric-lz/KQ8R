@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5d fix 8: a pushed barrel is hit where it is
+
+**Changed:** `push_apply` also moves the pushed object's box in the world's list, which clicks, Connor's swings and `getLoc` use; before, only the collider and the model moved.
+**Why:** The user's check: a pushed barrel couldn't be hit; a click where it had stood broke it, and the burst appeared there.
+**Tested how:** `cargo test --workspace` (437 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 205364,267646,1.5708 --hold 1,0,0,60 --key left:IDCTL_INVBAR_SHORT,90 --swing barrel.04,120 --frames 1500`; `connor.log`, `fight.log`, `viewer.log`.
+**Result:** barrel.04 pushed to (208225, 267646); the swing at 120 targets it there and hits at 124 (distance 988); `brlupms.cs` loads the burst and the wreck at (208225, 267646, 8345).
+**Still broken / not tested:** Not looked at.
+**Next:** The dagger's movement set.
+
 ## 2026-10-20 M5 5d-5: `KQObject::tossItems` from a script (the crystal and mushroom barrels)
 
 **Changed:** `KQObject::tossItems <object> <offsetZ> <types>` is built (it was a stub): one item per type thrown from the object's place raised by `offsetZ`, with the drops' throw and tumble (shared code `toss`). `getLoc`'s object lookup is shared (`place_of`). `--swing NAME,N` can aim at an object. A clippy warning from 5d-4 fixed.

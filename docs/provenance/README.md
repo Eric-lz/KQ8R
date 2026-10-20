@@ -2745,3 +2745,9 @@ executable looked at.
 | The object's place as `getLoc` finds it (any kind of object, also a copy loaded the line before) | `objects.md` (getLoc) | Viewer: `tossItems NoName22` (the burst) |
 | `--swing NAME,N` can aim at an object (the middle of its box) | Test option (ours) | Viewer |
 
+### 5d fix 8, a pushed object's own box moves — viewer `connor_view.rs` (`push_apply`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A pushed object's box in the world's list (clicks, Connor's swings, `getLoc`) moves with its collider and model | Fix of ours (the user's check: a pushed barrel was hit, and burst, where it had stood); `pushing.md` (the object moves) | Viewer: barrel.04 pushed to 208,225, hit there, burst and wreck there |
+
