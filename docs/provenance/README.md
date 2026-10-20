@@ -2440,3 +2440,13 @@ marked otherwise.
 | Standing leash also with a chase radius of 0; the home distance 3D; standing give-up goes home at a `run`, a guard stays | Rules 27, 28 | — |
 | `setHome` z −1 / −2 placed on the floor / surface | Rule 13 | — |
 | A fidget named `attack` / `react` ending sets the chase timer to 5 s | Rule 18 | — |
+
+### 5b-5, the zombies as traced — `crates/kq8-core/src/character_ai.rs` (`give_up`, `sunk`, `spread_alarm`, `alarm_rules`), `active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Sinking: `hide` where it gave up, still drawn, solid and active; when `hide` ends: off the active list, underground (not drawn, not solid), gravity off, on its home point, no longer on its way home | `character-movement.md` rule 30 (Q134; replaces the 5a fix's re-take underground) | Unit test; viewer: the road zombies |
+| No alarm during `hide`; told by a team mate during it: underground at home at once | Rule 30 | Viewer: RoadZ2 told by RoadZ3 |
+| Rising again only by the rising test, from home | Rule 30 | Unit test; viewer |
+| Solid for others and for Connor while not underground (a sinking zombie stays solid) | Rule 30; `characters.md` rule 16 | Unit test |
+| The chase during `birth`: Move at once, its walk waiting for `birth` (the stand-in "stay in Wait" removed); stuck check from the walk's start | Rules 7, 30 | Viewer |

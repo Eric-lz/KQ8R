@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing checked in the original. Not sure: the stuck line's ground test at exactly foot height (fragile in the original; recommended rule given). Not traced: when the first attack is due, characters without a collision shape on their way home (fight study).
 **Next:** B builds the answers; the user's "How to check" 4 (re-worded) in the original; A: the fight study.
 
+## 2026-10-20 M5 step 5b-5: the zombies as traced (Q134)
+
+**Changed:** `kq8-core/src/character_ai.rs`: a zombie gives up by playing `hide` where it is (still drawn, solid, active); when `hide` ends (or a team mate tells it during `hide`) it leaves the active list and goes underground on its home point; it rises again only by the rising test from home. The 5a fix's re-take underground and the 5a-8 stand-in (stay in Wait during `birth`) are removed. `active.rs`: solidity follows "underground", so a sinking zombie stays solid. Test updated. DESIGN, provenance.
+**Why:** A's answer to Q134 (`character-movement.md` rule 30).
+**Tested how:** `cargo test --workspace` (409 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 192916,313500,0 --hold 1,0,1 --turn 150,1 --frames 7000` (the road; Connor runs off, then circles) and `--at 215000,172000,0 --frames 3000` (the graveyard), `characters.log`.
+**Result:** Road: RoadZ4 gives up at 8,008 from home (update 297), `hide` plays, at update 328 it is underground on its home point and off the list; with its 18,000 alarm radius it sees Connor from home at once and rises again there. RoadZ2, told by RoadZ3 while its `hide` played, went underground at home at once. Graveyard: 4 zombies rise and stop at their attack distance (1,100) facing a standing Connor; no give-ups.
+**Still broken / not tested:** **Not looked at by eye.** Leaving the graveyard trap not run. No attack (fight study).
+**Next:** STATUS, FEATURES; the user's look.
+
 ## 2026-10-20 M5 step 5b-4: the chase as traced (Q133, the user's check)
 
 **Changed:** `kq8-core/src/character_ai.rs`: within reach a character stops only while Connor has no forward / back key, else follows him at reach (no more stop-and-go); ranged stop / start at 0.75 × / 1.25 ×; the way-home re-take only while moving, without the coin, heading home during its reaction delay; the standing leash and give-up rules; 3D home distance; `setHome` −1 / −2 placed; the chase timer after an `attack` / `react` fidget. `active.rs`: `connor_move_key`, set by the viewer from Connor's forward / back input. 1 new test. DESIGN, provenance.

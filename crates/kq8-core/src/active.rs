@@ -740,7 +740,7 @@ impl WorldState {
                 .filter_map(|(_, a)| {
                     let o = a.character.as_deref()?;
                     let (min, max) = o.bounds?;
-                    (o.state != crate::character::State::Birth && obstacle(o.collision_type)).then(|| CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, o.collision_type, o.collision_mask))
+                    (!o.unborn && obstacle(o.collision_type)).then(|| CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, o.collision_type, o.collision_mask))
                 })
                 .collect();
             // Q132 (c) stand-in: Connor as the same cylinder, from his box.
@@ -780,8 +780,10 @@ impl WorldState {
             let name = &a.player.name;
             let why = if a.gone {
                 Some("deleted")
-            } else if c.state == crate::character::State::Birth {
-                Some("in Birth (rule 16)")
+            } else if c.unborn {
+                // characters.md rule 16; a sinking zombie stays solid
+                // until its `hide` ends (character-movement.md rule 30).
+                Some("underground (rule 16)")
             } else if !self.characters_solid.contains(&name.to_ascii_lowercase()) {
                 Some("its collider is off (far, off or hidden, rule 33)")
             } else if CONNOR_MASK & !crate::trap::TRAP_TYPE & c.collision_type == 0 {
@@ -4937,12 +4939,16 @@ mod tests {
         let log = a.world.character_log.join("\n");
         assert!(log.contains("its list has hide: Birth, 'hide'") && log.contains("'hide' ended in Birth: underground again"), "{log}");
         assert!(a.world.anims[0].character.as_ref().unwrap().unborn);
-        // Connor comes back near its home: it rises again (rule 28 from
-        // underground, then rule 30).
+        // When `hide` ended it left the list and is back on its home point.
+        assert!(log.contains("underground (rule 30): its 'hide' ended; off the active list") && log.contains("on its home point (0, 0, 100)"), "{log}");
+        assert!(a.world.active_list.is_empty());
+        assert_eq!(a.world.anims[0].player.base.position, [0.0, 0.0, 100.0]);
+        // Connor comes back within its alarm radius: it rises again by the
+        // rising test (rule 30), from home.
         a.world.connor_at = Some([0.0, -3000.0, 100.0]);
         watch(&mut a, &[], 200);
         let log = a.world.character_log.join("\n");
-        assert!(log.contains("underground on its way home, it takes up the chase again"), "{log}");
+        assert_eq!(log.matches("alarmed: seen from underground").count(), 2, "{log}");
         assert_eq!(log.matches("rises (rule 30)").count(), 2, "{log}");
         assert!(!a.world.anims[0].character.as_ref().unwrap().unborn);
     }

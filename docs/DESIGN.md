@@ -1091,7 +1091,7 @@ stats.
     ground (the water surface) or a building, at most 300, as an up
     pass. Bats end each update on the water surface.
   - **5b — A's answers Q131–Q134 and the user's checks** (planned
-    2026-10-20; `character-movement.md` rules 3, 7, 18, 25, 27, 28, 30,
+    2026-10-20; **done** 2026-10-20, 5b-1 to 5b-5; `character-movement.md` rules 3, 7, 18, 25, 27, 28, 30,
     33 as corrected, `connor-collision.md` rule 18, `connor-physics.md`
     "landing on a `KQMonster`"; the user's check of the leash and the
     follow). One commit each:
@@ -1116,7 +1116,7 @@ stats.
       home at a `run` next update, chase radius 0 stays; the standing
       leash also with chase radius 0; home distance 3D; a fidget named
       `attack` / `react` ending sets the chase timer to 5 s.
-    - **5b-5, the zombies** (Q134): sinking plays `hide` where it is,
+    - **5b-5, the zombies** (**done** 2026-10-20) (Q134): sinking plays `hide` where it is,
       still drawn, solid and active; when `hide` ends: off the list,
       underground, gravity off, on its home point, no longer on its way
       home; no alarm during `hide` (told during it: underground at home

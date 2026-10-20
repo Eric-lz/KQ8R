@@ -98,11 +98,13 @@ pub struct Ai {
     /// Within reach of a Connor who is moving: it follows him (rule 25;
     /// for the log, once per change).
     pub following: bool,
+    /// Sinking back: its `hide` plays where it gave up (rule 30).
+    pub sinking: bool,
 }
 
 impl Ai {
     pub fn new(settings: AiSettings, home: [f32; 3], eye: f32, has_hide: bool) -> Self {
-        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None, retaking: false, following: false }
+        Ai { settings, home, eye, has_hide, active: false, sees: false, blocked_by: None, checked: false, unseen: 0, on_way_home: false, has_birth: false, route: None, point: 0, closest: f32::MAX, wander_done: false, idle_due: 0.0, fidget: None, alarmed: false, react_at: 0.0, chase_until: 0.0, last_seen: None, go_home: false, rise_at: None, retaking: false, following: false, sinking: false }
     }
 
     /// Alarmed and past its reaction delay: the chase rules drive it, not
@@ -239,6 +241,7 @@ impl WorldState {
             if wants_in {
                 self.join_active(i, now);
             }
+            self.sunk(i, now, None);
             if rises {
                 self.join_active(i, now);
                 self.wake(i, now);
@@ -548,21 +551,9 @@ impl WorldState {
         let (sees, home, go_home) = (ai.sees, ai.home, ai.go_home);
         // Rules 27, 28: the home distance is 3D (Q133).
         let home_d = distance(pos, home);
+        // Rule 30 (Q134): nothing underground or while sinking; a zombie
+        // rises again only by the rising test, from its home.
         if state == State::Birth {
-            // A zombie that sank back is still on its way home: rule 28's
-            // re-take applies underground too, then it rises as rule 30
-            // (**our reading**; the user saw them rise again in the
-            // original; asked in Q134).
-            let retake = ai.on_way_home && !ai.alarmed && ai.rise_at.is_none() && !go_home && s.alarm_radius > 0.0 && ((sees && d <= s.attack_dist) || (home_d <= s.home_radius && d < s.alarm_radius));
-            if retake {
-                let delay = f64::from(c.birth_delay.max(0.0));
-                self.alarm(i, &format!("underground on its way home, it takes up the chase again (Connor {d:.0} away, home {home_d:.0} away; rule 28)"), false, now);
-                let a = &mut self.anims[i];
-                let name = a.player.name.clone();
-                let ai = a.character.as_deref_mut().and_then(|c| c.ai.as_mut()).unwrap();
-                ai.rise_at = Some(now + delay);
-                self.character_note(&name, format!("rises in {delay} s (birthDelay, rule 30)"));
-            }
             return;
         }
         if !ai.alarmed {
@@ -644,11 +635,11 @@ impl WorldState {
                         c.ask_turn(p);
                     }
                 }
-                // **Stand-in** (Q134): not while its `birth` still plays.
-                let rising = a.player.movement_name().eq_ignore_ascii_case("birth") && !a.player.has_ended();
-                // Rule 25: ranged (doMode 1) start beyond 1.25 ×.
+                // Rule 25: ranged (doMode 1) start beyond 1.25 ×. During a
+                // zombie's `birth` its walk waits for `birth` to end (rule
+                // 30), and its stuck check for the walk (rule 7).
                 let start = if s.do_mode == 1 { 1.25 * s.attack_dist } else { s.attack_dist };
-                if (!sees || d > start) && s.chase_radius > 0.0 && !rising {
+                if (!sees || d > start) && s.chase_radius > 0.0 {
                     let run = c.random() < 0.5;
                     let why = if run { "after Connor, running (the coin, rule 3)" } else { "after Connor, walking (the coin, rule 3)" };
                     let line = c.enter_move(&mut a.player, now, run, why);
@@ -722,6 +713,12 @@ impl WorldState {
                 continue;
             }
             let Some(ai) = self.anims[j].character.as_deref().and_then(|c| c.ai.as_ref()) else { continue };
+            if ai.sinking {
+                // Rule 30: told while its `hide` plays: underground at
+                // home at once.
+                self.sunk(j, now, Some(who));
+                continue;
+            }
             if ai.alarmed || ai.go_home || ai.settings.alarm_radius <= 0.0 {
                 continue;
             }
@@ -757,12 +754,14 @@ impl WorldState {
         ai.on_way_home = true;
         let mut line = format!("gives up: {why}; on its way home (rule 28)");
         if ai.has_hide {
+            // Rule 30: `hide` where it stands, still drawn, solid, active.
+            ai.sinking = true;
             c.state = crate::character::State::Birth;
             let h = match a.player.request("hide") {
                 crate::named_anim::Request::AtOnce(_) => "starts at once",
                 _ => "waits",
             };
-            line.push_str(&format!("; its list has hide: Birth, 'hide' {h} (rule 28)"));
+            line.push_str(&format!("; its list has hide: Birth, 'hide' {h}, still drawn and solid (rules 28, 30)"));
         }
         self.character_note(&name, line);
         self.way_home(i, now);
@@ -911,5 +910,39 @@ impl WorldState {
         }
         let birth = if st.unknown { "no 'birth' in its list (movement 0)" } else { "'birth' starts at once" };
         self.character_note(&name, format!("rises (rule 30): Connor {d:.0} away (more than {:.0}); {w}; {birth}; drawn and solid, gravity on, turns toward him", ball + CONNOR_BALL));
+    }
+}
+
+impl WorldState {
+    /// Rule 30 (Q134): a sinking zombie whose `hide` has ended (or that was
+    /// told by `told_by` during it) leaves the active list, is
+    /// underground (not drawn, not solid), its gravity off, on its home
+    /// point, and no longer on its way home.
+    fn sunk(&mut self, i: usize, _now: f64, told_by: Option<&str>) {
+        let heights = self.heights.as_ref();
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(ai) = c.ai.as_mut() else { return };
+        if !ai.sinking || (told_by.is_none() && !c.unborn) {
+            return;
+        }
+        ai.sinking = false;
+        ai.on_way_home = false;
+        ai.alarmed = false;
+        ai.active = false;
+        let mut home = ai.home;
+        if home[2] == -1.0 || home[2] == -2.0 {
+            if let Some(z) = heights.and_then(|h| h(home[0], home[1], home[2] == -1.0)) {
+                home[2] = z;
+            }
+        }
+        c.unborn = true;
+        c.gravity = false;
+        a.player.base.position = home;
+        self.active_list.retain(|n| !n.eq_ignore_ascii_case(&name));
+        let why = told_by.map_or("its 'hide' ended".to_string(), |w| format!("told by {w} while its 'hide' played"));
+        let line = format!("underground (rule 30): {why}; off the active list, not drawn, not solid, gravity off, on its home point ({:.0}, {:.0}, {:.0})", home[0], home[1], home[2]);
+        self.character_note(&name, line);
     }
 }
