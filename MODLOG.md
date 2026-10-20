@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M4 step 4d-12-2: characters in Connor's scene (core)
+
+**Changed:** `kq8-core/src/connor_mover.rs`: the scene's new `characters` list (cylinders), tested after the objects; `Hit` says whether it is a character (`monster`), and such a hit is never head-on. `character.rs`: each character carries its collision type, mask and box. `active.rs`: `characters_solid` (set by the caller: collider on now) and `character_colliders`, rebuilt after the characters' gravity: not deleted, with a box, not in Birth, collider on, Connor's mask covers its type (0x10 ignored); a line in `characters.log` for each change. 4 unit tests. DESIGN, provenance.
+**Why:** `connor-collision.md` rules 2–4, 18–19; `connor-physics.md` "Exact hit handling"; `characters.md` rules 1, 9, 16, 33.
+**Tested how:** `cargo test --workspace` (532 pass, 4 new), clippy clean.
+**Result:** Unit tests: walking straight into a goblin, he never gets within 1,000 of its position, is never head-on, and stays at the contact; aimed 300 to the side he slides round it and gets past; standing inside a goblin (a creature) he walks out; inside a type-0xC021 character (the Wizard's) he can't move; the list keeps a goblin and a Wizard, drops a type-0x10 one and one without a box, and logs when one becomes not solid (far, deleted).
+**Still broken / not tested:** The viewer doesn't fill the list yet (4d-12-3): characters are still not solid in the game.
+**Next:** 4d-12-3, the viewer.
+
 ## 2026-10-20 M4 step 4d-12-1: the ball-stack-against-cylinder test
 
 **Changed:** `kq8-core/src/collide.rs`: new `CylinderCollider` (an upright cylinder on a ball-stack object's position: radius and height from its `BOUNDS.KQ` box, type, mask), its rough check and its sweep (`CylinderSweep`: the contact, and the balls that started inside a creature). 7 unit tests. Plan for 4d-12 (characters solid for Connor) in DESIGN. New question **Q131** (the cylinder's size; vertical moves; landing on top of a monster). Provenance.

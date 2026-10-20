@@ -625,6 +625,13 @@ pub struct WorldState {
     /// Characters near or far now (lower case), set by the caller before
     /// each update (`characters.md` rule 11).
     pub characters_in_range: BTreeSet<String>,
+    /// Characters whose collider is on now (lower case): near, not far,
+    /// off or hidden (`characters.md` rule 33), set by the caller before
+    /// each update (M4 4d-12-2).
+    pub characters_solid: BTreeSet<String>,
+    /// The characters solid for Connor where they stand now, rebuilt by
+    /// [`WorldState::characters_gravity`] (M4 4d-12-2).
+    pub character_colliders: Vec<crate::collide::CylinderCollider>,
     /// Lines for `characters.log` (M4 4d-3), taken by the caller.
     pub character_log: Vec<String>,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
@@ -715,6 +722,58 @@ impl WorldState {
                 self.character_note(&name, n);
             }
         }
+        self.update_character_colliders();
+    }
+
+    /// M4 4d-12-2: the characters solid for Connor, as cylinders where they
+    /// stand now (`connor-collision.md` rules 2, 4, 18; `characters.md`
+    /// rules 9, 16, 33): not deleted, with a box, not in Birth, its
+    /// collider on, and Connor's mask covering its type (so he is told and
+    /// it is a wall for him). Logs each change to solid / not solid.
+    pub fn update_character_colliders(&mut self) {
+        let mut now = Vec::new();
+        let mut why_not = Vec::new();
+        for a in &self.anims {
+            let Some(c) = a.character.as_deref() else { continue };
+            let name = &a.player.name;
+            let why = if a.gone {
+                Some("deleted")
+            } else if c.state == crate::character::State::Birth {
+                Some("in Birth (rule 16)")
+            } else if !self.characters_solid.contains(&name.to_ascii_lowercase()) {
+                Some("its collider is off (far, off or hidden, rule 33)")
+            } else if CONNOR_MASK & !crate::trap::TRAP_TYPE & c.collision_type == 0 {
+                // Rule 4: he ignores type 0x10 (traps).
+                Some("Connor's mask does not cover its type (traps' 0x10 ignored)")
+            } else {
+                None
+            };
+            match (why, c.bounds) {
+                (None, Some((min, max))) => now.push(crate::collide::CylinderCollider::from_box(name, a.player.base.position, min, max, c.collision_type, c.collision_mask)),
+                (None, None) => why_not.push((name.clone(), "no box (rule 9)")),
+                (Some(w), _) => why_not.push((name.clone(), w)),
+            }
+        }
+        let was: Vec<String> = self.character_colliders.iter().map(|c| c.name.clone()).collect();
+        for c in now.iter().filter(|c| !was.contains(&c.name)) {
+            let p = c.position;
+            let line = format!(
+                "solid for Connor: cylinder radius {:.0} (+ his ball radius), height {:.0} on ({:.0}, {:.0}, {:.0}); type {:#x} mask {:#x}{} (Q131 stand-in size)",
+                c.radius,
+                c.height,
+                p[0],
+                p[1],
+                p[2],
+                c.collision_type,
+                c.collision_mask,
+                if c.collision_type & crate::collide::CREATURE_BITS != 0 { "; a creature: starting inside is no hit" } else { "; not a creature: starting inside is a hit" }
+            );
+            self.character_note(&c.name.clone(), line);
+        }
+        for (name, why) in why_not.into_iter().filter(|(n, _)| was.contains(n)) {
+            self.character_note(&name, format!("not solid for Connor: {why}"));
+        }
+        self.character_colliders = now;
     }
 
     /// The character called `name` (not deleted): its index in `anims`.
@@ -2292,6 +2351,8 @@ impl Active {
                 connor_at: None,
                 monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
+                characters_solid: BTreeSet::new(),
+                character_colliders: Vec::new(),
                 character_log: Vec::new(),
                 conv_infos: Vec::new(),
                 conversation: None,
@@ -4480,6 +4541,46 @@ mod tests {
         a.update();
         let c = a.world.clickables.iter().find(|c| c.name == "wiz").unwrap();
         assert_eq!(c.placement.position, [5000.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn characters_are_solid_for_connor_only_with_their_collider_on() {
+        let mut a = with_object("x
+", "x");
+        let mut add = |name: &str, kind: u32, bounds: bool| {
+            let mut player = crate::named_anim::tests::still_then_open(name);
+            player.movements[0].name = "stop".into();
+            let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, false, 1);
+            c.collision_type = kind;
+            c.bounds = bounds.then_some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        };
+        add("gob", 0x42, true);
+        add("wiz", 0xC021, true);
+        add("ghost", 0x10, true);
+        add("nobox", 0x42, true);
+        a.world.anims[3].character.as_mut().unwrap().bounds = None;
+        for n in ["gob", "wiz", "ghost", "nobox"] {
+            a.world.characters_solid.insert(n.into());
+        }
+        a.world.characters_in_range.insert("gob".into());
+        assert_eq!(a.test_command("move gob 0 5000 0 0 0 0 0", "t").as_deref(), Some("0"));
+        a.update();
+        a.world.update_character_colliders();
+        let names: Vec<&str> = a.world.character_colliders.iter().map(|c| c.name.as_str()).collect();
+        // Only 0x10 (traps, which he ignores); no box: never solid.
+        assert_eq!(names, ["gob", "wiz"]);
+        let gob = &a.world.character_colliders[0];
+        assert_eq!((gob.position, gob.radius, gob.height), ([5000.0, 0.0, 0.0], 800.0, 1300.0));
+        // Far (collider off) or deleted: no longer solid, logged.
+        a.world.characters_solid.remove("gob");
+        a.world.anims[1].gone = true;
+        a.world.update_character_colliders();
+        assert!(a.world.character_colliders.is_empty());
+        let log = a.world.character_log.join("
+");
+        assert!(log.contains("gob: solid for Connor: cylinder radius 800") && log.contains("gob: not solid for Connor: its collider is off"), "{log}");
+        assert!(log.contains("wiz: not solid for Connor: deleted") && log.contains("not a creature"), "{log}");
     }
 
     #[test]

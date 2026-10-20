@@ -122,6 +122,13 @@ pub struct Character {
     pub flying: bool,
     /// Its mask has 0x8: buildings stop its mover (the pair rule).
     pub hits_buildings: bool,
+    /// Its collision type and mask (rule 8: `colliderType` /
+    /// `colliderMask`, default 0x42 / 0x281F), set by the loader.
+    pub collision_type: u32,
+    pub collision_mask: u32,
+    /// Its `BOUNDS.KQ` box (rule 9), set by the loader; `None` = no box
+    /// (never solid).
+    pub bounds: Option<([f32; 3], [f32; 3])>,
     /// The z it began falling from, while in the air (for the log).
     falling_from: Option<f32>,
     /// Its mover has run once (the first update's log line).
@@ -161,6 +168,9 @@ impl Character {
             mover: None,
             flying: false,
             hits_buildings: false,
+            collision_type: kq8_data::characters::CHARACTER_TYPE,
+            collision_mask: kq8_data::characters::CHARACTER_MASK,
+            bounds: None,
             falling_from: None,
             mover_started: false,
         }

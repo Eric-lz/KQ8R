@@ -739,7 +739,7 @@ mod tests {
             let len = (0..3).map(|i| (to[i] - from[i]).powi(2)).sum::<f32>().sqrt() * f;
             let back = if len > 25.0 { 25.0 / len } else { 1.0 };
             let position: [f32; 3] = std::array::from_fn(|i| touch[i] - (touch[i] - from[i]) * back);
-            Some(crate::connor_mover::Hit { position, touch, normal: [0.0, -side, 0.0], what: "wall".into() })
+            Some(crate::connor_mover::Hit { position, touch, normal: [0.0, -side, 0.0], what: "wall".into(), monster: false })
         }
     }
 
@@ -949,7 +949,7 @@ mod tests {
     fn only_head_on_or_down_pass_jump_hits_crash() {
         let record = |pass, result| HitRecord {
             pass,
-            hit: crate::connor_mover::Hit { position: [0.0; 3], touch: [0.0; 3], normal: [0.0, 1.0, 0.0], what: "x".into() },
+            hit: crate::connor_mover::Hit { position: [0.0; 3], touch: [0.0; 3], normal: [0.0, 1.0, 0.0], what: "x".into(), monster: false },
             angle: None,
             result,
         };

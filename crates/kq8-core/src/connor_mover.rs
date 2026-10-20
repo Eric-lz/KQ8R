@@ -13,7 +13,7 @@
 
 use std::cell::RefCell;
 
-use crate::collide::{BallStack, BoxCollider, BuildingCollider, ColliderKind, ObjectHit, OBSTACLE_BITS, PUSHABLE, SCRIPTED_PUSH};
+use crate::collide::{BallStack, BoxCollider, BuildingCollider, ColliderKind, CylinderCollider, ObjectHit, OBSTACLE_BITS, PUSHABLE, SCRIPTED_PUSH};
 
 /// The ground under a point: height and unit normal (z > 0), or `None`
 /// where there is no ground (outside the terrain grid). For the terrain
@@ -48,8 +48,11 @@ pub struct Hit {
     pub touch: [f32; 3],
     /// Unit surface direction (for buildings: pointing against the move).
     pub normal: [f32; 3],
-    /// `terrain`, or the building's or object's name.
+    /// `terrain`, or the building's, object's or character's name.
     pub what: String,
+    /// A character (`KQMonster`, `characters.md` rule 1): never head-on
+    /// (`connor-physics.md` "Exact hit handling"; M4 4d-12-2).
+    pub monster: bool,
 }
 
 /// What the mover moves through: the ground, and the solid things a pass
@@ -237,6 +240,10 @@ pub struct Scene<'a> {
     /// The order the objects entered the world (indices into `objects`),
     /// the order they are tested in (Q88); `None` = as listed.
     pub order: Option<&'a [usize]>,
+    /// The characters that are solid for Connor now, as upright cylinders
+    /// (`connor-collision.md` rules 18–19; M4 4d-12-2), tested after the
+    /// objects; empty unless the caller sets it.
+    pub characters: &'a [CylinderCollider],
 }
 
 impl<'a> Scene<'a> {
@@ -250,6 +257,7 @@ impl<'a> Scene<'a> {
             passed: RefCell::new(Vec::new()),
             not_pushable: Vec::new(),
             order: None,
+            characters: &[],
         }
     }
 
@@ -333,7 +341,7 @@ impl MoverWorld for Scene<'_> {
         };
         for b in self.buildings.iter().filter(|b| b.overlaps(lo, hi)) {
             if let Some(c) = b.sweep(balls, from, to) {
-                keep(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone() });
+                keep(Hit { position: c.position, touch: c.touch, normal: c.normal, what: b.name.clone(), monster: false });
             }
         }
         let passed = self.passed.borrow().clone();
@@ -341,7 +349,7 @@ impl MoverWorld for Scene<'_> {
         while let Some(o) = list.next() {
             match o.sweep(balls, from, to) {
                 Some(ObjectHit::Contact(c)) => {
-                    let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone() };
+                    let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone(), monster: false };
                     match told(&h) {
                         Told::Contact => keep(h),
                         Told::Pushed => {}
@@ -364,6 +372,17 @@ impl MoverWorld for Scene<'_> {
                     o.name
                 )),
                 None => {}
+            }
+        }
+        // M4 4d-12-2: the characters (no push bit: never told as a push;
+        // a ball inside a creature's cylinder is no hit, rule 19).
+        for c in self.characters.iter().filter(|c| c.overlaps(balls.radius, lo, hi)) {
+            let s = c.sweep(balls, from, to);
+            if !s.inside.is_empty() {
+                self.notes.borrow_mut().push(format!("ball(s) {:?} started inside {}'s cylinder: a creature, no hit (rule 19)", s.inside, c.name));
+            }
+            if let Some(k) = s.contact {
+                keep(Hit { position: k.position, touch: k.touch, normal: k.normal, what: c.name.clone(), monster: true });
             }
         }
         best
@@ -922,7 +941,7 @@ impl Mover {
                 report.up_contact = Some(h.normal);
                 // A vertical move is never head-on by angle; while jumping a
                 // steep surface (a ceiling too) is.
-                let head_on = self.steep_head_on && h.normal[2] < WALKABLE_NORMAL_Z;
+                let head_on = self.steep_head_on && !h.monster && h.normal[2] < WALKABLE_NORMAL_Z;
                 report.head_on |= head_on;
                 report.hits.push(HitRecord { pass: "up", hit: h, angle: None, result: if head_on { "head-on" } else { "stop" } });
             }
@@ -1174,7 +1193,9 @@ impl Mover {
             };
             *hits += 1;
             let angle = head_on_angle(sub(target, start), h.normal);
+            // Never against a character (a `KQMonster`), jumping or not.
             let head_on = head_on_allowed
+                && !h.monster
                 && (angle.is_some_and(|a| a < HEAD_ON_ANGLE) || (self.steep_head_on && h.normal[2] < WALKABLE_NORMAL_Z));
             let (contact, normal) = (h.position, h.normal);
             let result = if head_on {
@@ -1291,7 +1312,7 @@ fn head_on_angle(movement: [f32; 3], normal: [f32; 3]) -> Option<f32> {
 fn terrain_hit(world: &dyn MoverWorld, end: [f32; 3]) -> Option<Hit> {
     let (height, normal) = world.ground(end[0], end[1]).filter(|(h, _)| *h > end[2])?;
     let p = [end[0], end[1], height];
-    Some(Hit { position: p, touch: p, normal, what: "terrain".into() })
+    Some(Hit { position: p, touch: p, normal, what: "terrain".into(), monster: false })
 }
 
 /// Of a building contact and a terrain contact, the one nearer the start
@@ -2211,5 +2232,74 @@ mod tests {
         let mut u = Mover::character([2000.0, 0.0, -400.0], false, [-100.0, -100.0, 0.0], [100.0, 100.0, 600.0], (0x42, 0x281F), (STEP, STEP), 0);
         u.fly_update(&Pond);
         assert!(u.position[2] > -400.0, "{}", u.position[2]);
+    }
+
+    // --- Characters (M4 4d-12-2) ---
+
+    /// A goblin standing at the origin: ball radius 800, so Connor's
+    /// centre keeps 1,000 from its position.
+    fn goblin(kind: u32) -> crate::collide::CylinderCollider {
+        crate::collide::CylinderCollider::from_box("goblin22", [0.0; 3], [-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0], kind, 0x281F)
+    }
+
+    fn flat_distance(p: [f32; 3]) -> f32 {
+        (p[0] * p[0] + p[1] * p[1]).sqrt()
+    }
+
+    #[test]
+    fn walking_straight_into_a_character_stays_outside_never_head_on() {
+        let g = [goblin(0x42)];
+        let mut scene = Scene::new(&Flat(0.0), &[], &[]);
+        scene.characters = &g;
+        let mut m = Mover::new([0.0, 2000.0, 0.0], true);
+        let mut hit = false;
+        for _ in 1..=40 {
+            let r = m.update([0.0, -72.0, 0.0], &scene);
+            assert!(flat_distance(m.position) >= 999.9, "never inside: {:?}", m.position);
+            assert!(!r.head_on, "never head-on against a character");
+            for h in r.hits.iter().filter(|h| h.hit.what == "goblin22") {
+                hit = true;
+                assert!(h.hit.monster);
+                assert_eq!(h.result, "glance");
+            }
+        }
+        assert!(hit);
+        // Straight in, the slide has nothing left: he stays at the contact.
+        assert!(m.position[0].abs() < 0.01 && m.position[1] <= 1025.0 + 72.0, "{:?}", m.position);
+    }
+
+    #[test]
+    fn walking_into_a_character_at_an_angle_slides_round_it() {
+        let g = [goblin(0x42)];
+        let mut scene = Scene::new(&Flat(0.0), &[], &[]);
+        scene.characters = &g;
+        // Aimed 300 to the side of its centre, toward −y.
+        let mut m = Mover::new([300.0, 2000.0, 0.0], true);
+        for _ in 1..=60 {
+            m.update([0.0, -72.0, 0.0], &scene);
+            assert!(flat_distance(m.position) >= 999.9, "never inside: {:?}", m.position);
+        }
+        assert!(m.position[1] < -500.0, "got past it: {:?}", m.position);
+    }
+
+    #[test]
+    fn he_can_walk_out_of_a_creature_but_not_out_of_the_wizard() {
+        let creature = [goblin(0x42)];
+        let mut scene = Scene::new(&Flat(0.0), &[], &[]);
+        scene.characters = &creature;
+        let mut m = Mover::new([500.0, 0.0, 0.0], true);
+        for _ in 1..=10 {
+            m.update([72.0, 0.0, 0.0], &scene);
+        }
+        assert!(near(m.position[0], 1220.0, 0.1), "walked out: {:?}", m.position);
+        // The Wizard's type 0xC021 is no creature: a hit where he stands
+        // (rule 19), and nothing left to slide.
+        let wizard = [goblin(0xC021)];
+        scene.characters = &wizard;
+        let mut m = Mover::new([500.0, 0.0, 0.0], true);
+        for _ in 1..=10 {
+            m.update([72.0, 0.0, 0.0], &scene);
+        }
+        assert!(near(m.position[0], 500.0, 0.1), "stuck: {:?}", m.position);
     }
 }

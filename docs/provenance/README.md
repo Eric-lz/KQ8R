@@ -2261,3 +2261,15 @@ marked otherwise.
 | A ball starting inside: no hit for type bit 2 or 4; otherwise a hit at the start, direction against the movement | Rule 19 ("along the movement"; **our reading** of the sign: against it, like every other contact; the slide comes out the same either way) | Unit test |
 | The 25 pull-back on the contact | `connor-physics.md` "Collision shape" (every object hit, Q33 b) | Unit test |
 | Radius = the other's ball radius, height = its box height, foot on its position; every ball tested on a vertical move | **Stand-in** (rule 18 "not pinned down"), asked as Q131 (a), (b) | — |
+
+### 4d-12-2, characters in Connor's scene — `crates/kq8-core/src/connor_mover.rs`, `character.rs`, `active.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| The scene's character cylinders, tested after the objects; the nearest contact over everything is kept | `connor-collision.md` rule 18; `connor-physics.md` "Against a building" step 7 | Unit tests |
+| A character hit is never head-on, also while jumping (always the glancing handling: slide, or stay if nothing is left) | `connor-physics.md` "Exact hit handling" (never against a `KQMonster`; the jump rule does not win over it); `characters.md` rule 1 (every character is a `KQMonster`) | Unit tests |
+| Solid for Connor: not deleted, has a box, not in Birth, collider on now, his mask covers its type apart from 0x10 | `connor-collision.md` rules 2, 4 (he is told; ignores 0x10); `characters.md` rules 9, 16, 33 | Unit test |
+| Not a push: no character type has 0x100 (Daventry: 0x42, 0xC021, 0xC022) | Rule 4; data | — |
+| The cylinder follows the character's position each update, after its gravity | Rule 18 ("standing on the other's position") | Unit test |
+| Landing on a character's top is an ordinary landing | **Stand-in**; the 250 sideways push is asked as Q131 (c) | — |
+| `characters.log`: solid / not solid and why, with the cylinder | AGENTS.md (log, don't look) | Unit test |

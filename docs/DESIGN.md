@@ -812,7 +812,7 @@ inventory and menus.
         side hit and its direction, top and bottom, nearest of several
         balls, start inside a creature (no hit) and a non-creature (hit
         at the start), tiny moves skipped.
-      - **4d-12-2, characters in Connor's scene** (core
+      - **4d-12-2, characters in Connor's scene** (**done** 2026-10-20; core
         `connor_mover.rs`, `character.rs`, `active.rs`): the mover's
         scene gets a list of character cylinders tested after the
         objects (nearest contact over all, as now). A character hit is
