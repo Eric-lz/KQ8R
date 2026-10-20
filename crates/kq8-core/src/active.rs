@@ -677,6 +677,8 @@ pub struct WorldState {
     pub die_calls: Vec<(String, &'static str)>,
     /// The first-kill tip was sent (rule 33; logged only).
     pub kill_tip: bool,
+    /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
+    pub flights: Vec<crate::item::Flight>,
     /// The conversation info objects (M4 4e-3, `conversation.md` rule 3).
     pub conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     /// The conversation going on or asked for (`crate::conversation`).
@@ -2508,6 +2510,7 @@ impl Active {
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
                 kill_tip: false,
+                flights: Vec::new(),
                 conv_infos: Vec::new(),
                 conversation: None,
                 connor_leave: None,
@@ -3655,6 +3658,8 @@ impl Active {
                 self.world.fight_note(&name, format!("no script: Die {kind} not called (rule 32)"));
             }
         }
+        // items.md rule 12 (M5 5c-8): thrown items fly.
+        self.world.flights_step(dt);
         // Q119: nothing sent with delay 0 waits for the next update.
         let late = self.handle_due(now);
         if late > 0 {

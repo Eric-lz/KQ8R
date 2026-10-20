@@ -50,13 +50,19 @@ pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32, Stri
 }
 
 /// Shows the items lying in the world, hides the others.
-pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<ItemDraw>>, mut visibility: Query<&mut Visibility>) {
+pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<ItemDraw>>, mut visibility: Query<&mut Visibility>, mut transforms: Query<&mut Transform>) {
     let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
     let draw = &mut *draw;
     for o in &sim.active.world.items.objects {
         let at = o.placement().filter(|_| !o.hidden);
         match (draw.drawn.get(&o.name), at) {
             (Some(&e), at) => {
+                // M5 5c-8: a thrown item moves while it flies.
+                if let Some(p) = at.filter(|_| sim.active.world.flights.iter().any(|f| f.item == o.name)) {
+                    if let Ok(mut t) = transforms.get_mut(e) {
+                        *t = bevy_transform_from(p.rotation, p.position);
+                    }
+                }
                 let want = if at.is_some() { Visibility::Inherited } else { Visibility::Hidden };
                 if let Ok(mut v) = visibility.get_mut(e) {
                     if *v != want {

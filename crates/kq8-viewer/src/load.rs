@@ -1490,6 +1490,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         several_positions: 0,
         items,
         corpse_shapes: BTreeMap::new(),
+        drop_kinds: Vec::new(),
         item_lines: Vec::new(),
         monster_types: None,
         pending_line: None,
@@ -1707,6 +1708,8 @@ struct Placer<'a> {
     items: kq8_core::item::Items,
     /// Corpse shapes loaded (M5 5c-7).
     corpse_shapes: BTreeMap<String, usize>,
+    /// The item types the fighters drop (M5 5c-8).
+    drop_kinds: Vec<String>,
     /// Lines about items, for `items.log`.
     item_lines: Vec<String>,
     /// `GAME/Kq/Monstats.mtl`, read when a monster list is first loaded
@@ -2280,6 +2283,7 @@ impl Placer<'_> {
         });
         // fighting.md rule 32 (M5 5c-7): its corpse shapes, ready for its death.
         if let Some(f) = character.as_ref().and_then(|c| c.fight.clone()) {
+            self.drop_kinds.extend(f.drops.iter().map(|d| d.name.clone()));
             for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs].into_iter().flatten() {
                 let key = shape.to_ascii_lowercase();
                 if self.corpse_shapes.contains_key(&key) {
@@ -3364,6 +3368,8 @@ impl Placer<'_> {
     /// model, and the lines for `items.log`.
     fn item_models(&mut self, script: &kq8_data::world_script::ScriptRun) -> (BTreeMap<String, usize>, Vec<String>) {
         let mut named: Vec<String> = self.items.objects.iter().map(|o| o.kind.clone()).collect();
+        // fighting.md rule 31 (M5 5c-8): what the fighters drop.
+        named.extend(self.drop_kinds.iter().cloned());
         for (_, text) in &self.all_scripts {
             for line in text.lines() {
                 let w: Vec<&str> = line.split('#').next().unwrap_or("").split_whitespace().collect();

@@ -2591,3 +2591,14 @@ Replaces the 5a / 5b stand-in (within reach a character only stopped or followed
 | Removed: gone in core, the viewer hides it like a `deleteObject` | Rule 32.4 | Viewer |
 | First kill not of type `bat`, `chicken`, `chicken2`: a tip 1.5 s later, logged only | Rule 33 with its Do instead (`chicken2`, not the typo `checken2`) | Unit test |
 | The drops at the start of dying: logged here, thrown in 5c-8 | Rule 31 | Viewer |
+
+### 5c-8, drops thrown — `crates/kq8-core/src/{item,fight,active}.rs` (`Flight`, `TOSS_*`, `drop_items`, `flights_step`), viewer `load.rs` (the drops' item models), `item_view.rs` (a flying item moves)
+
+| What | Source | Check |
+| --- | --- | --- |
+| At the start of the dying, each drop entry (the line's `invDrop`, then the type's) becomes a new item (its quantity: `SilverCoins(3)` = one item of 3) at its feet (offset 0) | `fighting.md` rule 31 | Viewer: two mushrooms at update 94 |
+| Thrown: heading 0–360°, 75°–85° up, 5,000–6,500 units/s | `items.md` rule 12; rule 31 (checked by the user in the original) | Unit test |
+| The flight: position += velocity × 1/15 s, then gravity 8,085 units/s²; lands when it comes down to the floor-grid height, where it stays; its type's land sound | `items.md` rule 12 for the values; **stand-in** for the stepping (not traced: **Q137**) | Unit test; viewer: landed after 24–25 updates with `mushland.aud` |
+| Clickable in the air (its click box is where it is); picked up in the air: the flight ends | Rule 31 (the user's check), `items.md` rule 4 | — (not run) |
+| An entry naming an object already in the world: not handled (none in Daventry) | Rule 31 (not followed in the note) | — |
+| The drops' item models are loaded at the start | Ours (as the scripts' items) | Viewer |

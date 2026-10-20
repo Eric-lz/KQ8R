@@ -312,9 +312,82 @@ impl Items {
     }
 }
 
+/// `items.md` rule 12 (`KQObject::tossItems`; `fighting.md` rule 31 for
+/// drops, M5 5c-8): a thrown item's launch: a random heading all round,
+/// 75°–85° above the horizontal, 5,000–6,500 units per second.
+pub const TOSS_ELEVATION: (f32, f32) = (75.0, 85.0);
+pub const TOSS_SPEED: (f32, f32) = (5000.0, 6500.0);
+/// The item mover's gravity, units/s² (`items.md`: "looks like 8,085";
+/// how time steps through the flight was not traced: **stand-in**, plain
+/// motion per update).
+pub const TOSS_GRAVITY: f32 = 8085.0;
+
+/// A thrown item in the air (M5 5c-8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Flight {
+    /// The item object's name.
+    pub item: String,
+    pub velocity: [f32; 3],
+    /// Updates flown, and where it started (for the log).
+    pub updates: u32,
+    pub from: [f32; 3],
+}
+
+impl Flight {
+    /// The launch from three random numbers in [0, 1): heading,
+    /// elevation, speed.
+    pub fn launch(item: &str, from: [f32; 3], r: [f32; 3]) -> Self {
+        let heading = r[0] * std::f32::consts::TAU;
+        let up = (TOSS_ELEVATION.0 + r[1] * (TOSS_ELEVATION.1 - TOSS_ELEVATION.0)).to_radians();
+        let speed = TOSS_SPEED.0 + r[2] * (TOSS_SPEED.1 - TOSS_SPEED.0);
+        let flat = speed * up.cos();
+        Flight { item: item.to_string(), velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()], updates: 0, from }
+    }
+
+    /// One update of `dt` s from `at`: the new position, and whether it
+    /// landed (came down to `ground`, where it stays).
+    pub fn step(&mut self, at: [f32; 3], dt: f32, ground: Option<f32>) -> ([f32; 3], bool) {
+        self.updates += 1;
+        let mut p: [f32; 3] = std::array::from_fn(|k| at[k] + self.velocity[k] * dt);
+        self.velocity[2] -= TOSS_GRAVITY * dt;
+        match ground {
+            Some(g) if p[2] <= g && self.velocity[2] < 0.0 => {
+                p[2] = g;
+                (p, true)
+            }
+            _ => (p, false),
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn a_thrown_item_goes_up_steeply_and_lands_on_the_ground() {
+        // items.md rule 12 (M5 5c-8): 75-85 degrees, 5,000-6,500 units/s.
+        let low = Flight::launch("x", [0.0; 3], [0.0, 0.0, 0.0]);
+        let v = low.velocity;
+        assert!((v[2] / (v[0] * v[0] + v[1] * v[1]).sqrt() - 75f32.to_radians().tan()).abs() < 1e-3);
+        assert!(((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt() - 5000.0).abs() < 0.5);
+        let mut f = Flight::launch("x", [0.0, 0.0, 100.0], [0.25, 1.0, 1.0]);
+        let mut at = [0.0, 0.0, 100.0];
+        let mut n = 0;
+        loop {
+            let (p, landed) = f.step(at, 1.0 / 15.0, Some(100.0));
+            at = p;
+            n += 1;
+            if landed {
+                break;
+            }
+            assert!(n < 100);
+        }
+        // About 2 x 6,475 / 8,085 = 1.6 s up and down.
+        assert!((23..=26).contains(&n), "{n}");
+        assert_eq!(at[2], 100.0);
+        assert!(at[0] > 0.0 && at[1].abs() < 1.0, "heading 90 degrees is +x: {at:?}");
+    }
 
     /// A two-type list in the file's layout (made-up values).
     pub fn types() -> ItemTypes {

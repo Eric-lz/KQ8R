@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 step 5c-8: drops thrown
+
+**Changed:** `kq8-core`: `item.rs` (`Flight`: the throw's launch and a per-update flight), `fight.rs` (the drops made and thrown when the dying starts; the flights each update, landing with the land sound), `active.rs`. Viewer: the drops' item models loaded (`load.rs`), a flying item moved each frame (`item_view.rs`). 1 new test. Q137 (the flight's exact stepping, not blocking). DESIGN, provenance.
+**Why:** `fighting.md` rule 31 (the user saw the items fling up and land with a sound in the original), `items.md` rule 12.
+**Tested how:** `cargo test --workspace` (428 core tests), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --swing goblin22,60 --swing goblin22,90 --frames 1500`; `fight.log`, `items.log`.
+**Result:** At its death (update 94) goblin22 throws two mushrooms: 81.0° up at 6,209 units/s and 84.4° up at 6,347 units/s; they land at updates 117 and 118, 1,556 and 1,033 from it, each with `mushland.aud`.
+**Still broken / not tested:** **Not looked at by eye.** The flight's stepping is a stand-in (Q137); nothing stops it on the way (walls). Picking one up in the air not tried.
+**Next:** 5c-9, the bow spriggans.
+
 ## 2026-10-20 M5 step 5c-7: dying
 
 **Changed:** `kq8-core`: `fight.rs` (`character_dies`, `death_ended`, `Corpse`, the first-kill tip), `active.rs` (`setState <name> Die [now]`, the die movement's end, the dead's `Die <kind>` script call), `character.rs` / `character_ai.rs` (a dying character never changes state and has no movement rules); `kq8-data`: `FightSettings::type_name`. Viewer: corpse shapes loaded with each fighter (`load.rs`), drawn when a corpse appears (`item_view.rs`). 2 new tests. DESIGN, provenance.

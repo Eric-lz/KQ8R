@@ -1277,7 +1277,8 @@ stats.
     <kind>` to its script; removed. `setState <name> Die now`. The
     first-kill tip is logged only. **Test:** How to check 6 (body
     stays, experience only when the death ends).
-  - **5c-8, drops thrown** (rule 31, `items.md` rule 12). At the start
+  - **5c-8, drops thrown** (**done** 2026-10-20; goblin22's mushrooms
+    land 1.5 s later, 1,000–1,600 away; Q137 asked, not blocking) (rule 31, `items.md` rule 12). At the start
     of the dying: `invDrop` (list then type), each a new item at its
     feet, thrown: random heading, 75°–85° up, 5,000–6,500 units/s,
     gravity 8,085 units/s² (**stand-in** for the untraced time step:

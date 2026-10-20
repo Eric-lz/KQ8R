@@ -646,14 +646,92 @@ impl crate::active::WorldState {
         }
     }
 
-    /// Rule 31: its drops (M5 5c-7: logged only; thrown in 5c-8).
+    /// Rule 31 (M5 5c-8): its drops, when the dying starts: the line's
+    /// `invDrop`, then the type's; each a new item at its feet (offset 0
+    /// in Daventry), thrown as `KQObject::tossItems` (`items.md` rule 12).
     pub(crate) fn drop_items(&mut self, j: usize) {
         let a = &self.anims[j];
         let name = a.player.name.clone();
+        let at = a.player.base.position;
         let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) else { return };
-        let drops: Vec<String> = f.settings.drops.iter().map(|d| format!("{} x{}", d.name, d.quantity)).collect();
-        let line = if drops.is_empty() { "drops: nothing (rule 31)".to_string() } else { format!("drops (rule 31): {} (thrown in 5c-8)", drops.join(", ")) };
+        let drops = f.settings.drops.clone();
+        if drops.is_empty() {
+            self.fight_note(&name, "drops: nothing (rule 31)");
+            return;
+        }
+        let mut lines = Vec::new();
+        for d in drops {
+            let made = self.items.make(&d.name, d.quantity, crate::item::Place::World { position: at, angles: [0.0; 3] }).map(|o| o.name.clone());
+            match made {
+                Ok(item) => {
+                    self.known.insert(item.to_ascii_lowercase());
+                    let rng = &mut self.fight_rng;
+                    let r = [rng.fraction(), rng.fraction(), rng.fraction()];
+                    let fl = crate::item::Flight::launch(&item, at, r);
+                    let v = fl.velocity;
+                    lines.push(format!(
+                        "{item} ({} x{}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
+                        d.name,
+                        d.quantity,
+                        at[0],
+                        at[1],
+                        at[2],
+                        v[0],
+                        v[1],
+                        v[2],
+                        r[0] * 360.0,
+                        crate::item::TOSS_ELEVATION.0 + r[1] * (crate::item::TOSS_ELEVATION.1 - crate::item::TOSS_ELEVATION.0),
+                        (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+                    ));
+                    self.flights.push(fl);
+                }
+                Err(e) => lines.push(format!("{}: {e}; not made", d.name)),
+            }
+        }
+        let line = format!("drops (rule 31, thrown as tossItems, items.md rule 12): {}", lines.join("; "));
+        self.item_note(format!("{name}: {line}"));
         self.fight_note(&name, line);
+    }
+
+    /// `items.md` rule 12 (M5 5c-8): each thrown item flies one update; it
+    /// lands when it comes down to the floor-grid height, where it stays,
+    /// and its type's land sound plays. Picked up (or gone) in the air: the
+    /// flight ends.
+    pub(crate) fn flights_step(&mut self, dt: f32) {
+        let mut flights = std::mem::take(&mut self.flights);
+        flights.retain_mut(|f| {
+            let Some(i) = self.items.index(&f.item) else { return false };
+            let crate::item::Place::World { position, angles } = self.items.objects[i].place.clone() else {
+                self.item_log.push(format!("update {}: {}: no longer in the world: its flight ends", self.updates, f.item));
+                return false;
+            };
+            let ground = self.heights.as_ref().and_then(|h| h(position[0], position[1], true));
+            let (p, landed) = f.step(position, dt, ground);
+            self.items.objects[i].place = crate::item::Place::World { position: p, angles };
+            if landed {
+                let kind = self.items.objects[i].kind.clone();
+                let sound = self.items.kind(&kind).and_then(|t| t.land_sound.clone());
+                if let Some(s) = &sound {
+                    self.sounds.push(crate::sound::Start::placed_one_shot(s, p, format!("{} landed (items.md rule 12)", f.item)));
+                }
+                let flat = ((p[0] - f.from[0]).powi(2) + (p[1] - f.from[1]).powi(2)).sqrt();
+                let line = format!(
+                    "update {}: {} ({kind}) landed at ({:.0}, {:.0}, {:.0}) after {} updates, {flat:.0} from where it was thrown; land sound {}",
+                    self.updates,
+                    f.item,
+                    p[0],
+                    p[1],
+                    p[2],
+                    f.updates,
+                    sound.as_deref().unwrap_or("none")
+                );
+                self.item_log.push(line.clone());
+                self.fight_log.push(line);
+                return false;
+            }
+            true
+        });
+        self.flights.extend(flights);
     }
 
     /// Rule 32: its die movement ended (or `Die now`): Connor gets its
