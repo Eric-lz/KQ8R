@@ -1512,6 +1512,43 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQObject::getLoc <name>` / `getLoc <name>` while playing
+    /// (`objects.md` "Script variables, getLoc and move" rule 1): its
+    /// current position and turn into `$KQObject::loc` (`x y z dirX dirY
+    /// dirZ`) and `$KQObject::locOnly` (`x y z`). Objects, animated objects
+    /// and characters, chests and doors; Connor by his position (his turn:
+    /// 0 0 0, **ours**). Unknown: 1, the variables unchanged.
+    fn get_loc(&mut self, words: &[String], at: &str) -> String {
+        let Some(who) = words.get(1) else {
+            self.note(format!("{at}: getLoc without a name; nothing"));
+            return "1".into();
+        };
+        let base = if let Some(i) = self.object_index(who) {
+            Some(self.objects[i].player.base)
+        } else if let Some(i) = self.anim_index(who) {
+            Some(self.anims[i].player.base)
+        } else if let Some(i) = self.chest_index(who) {
+            Some(self.chests[i].chest.player.base)
+        } else if let Some(i) = self.door_index(who) {
+            Some(self.doors[i].door.player.base)
+        } else if who.eq_ignore_ascii_case("Connor") {
+            self.connor_at.map(|p| Placement { rotation: crate::door::identity().m, position: p })
+        } else {
+            None
+        };
+        let Some(b) = base else {
+            self.note(format!("{at}: getLoc {who}: no such object; variables unchanged"));
+            return "1".into();
+        };
+        let a = angles_of(&b.rotation);
+        let f = |v: &[f32]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
+        let only = f(&b.position);
+        self.vars_out.push(("KQObject::loc".into(), format!("{only} {}", f(&a))));
+        self.vars_out.push(("KQObject::locOnly".into(), only.clone()));
+        self.note(format!("{at}: getLoc {who}: {only} (turn {:.3} {:.3} {:.3})", a[0], a[1], a[2]));
+        "0".into()
+    }
+
     /// `move <who> <flags> x y z [rx ry rz]` (`objects.md` "(d)"): set
     /// directly, without collision passes. Doors, chests, scripted and
     /// animated objects are moved here; Connor, the camera and plain
@@ -2269,6 +2306,7 @@ impl ScriptHost for WorldState {
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
             "KQMonster::setState" => Some(self.set_state(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
+            "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
             "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
             "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
@@ -3836,6 +3874,16 @@ impl Active {
     }
 }
 
+/// The `dirX dirY dirZ` angles of a rotation, the reverse of
+/// `kq8_data::objects::rotation` (y, then x, then z, row vectors): the
+/// second row is (−cos x sin z, cos x cos z, sin x).
+pub fn angles_of(r: &[[f32; 3]; 3]) -> [f32; 3] {
+    let x = r[1][2].clamp(-1.0, 1.0).asin();
+    let z = (-r[1][0]).atan2(r[1][1]);
+    let y = (-r[0][2]).atan2(r[2][2]);
+    [x, y, z]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4885,6 +4933,14 @@ mod tests {
         let log = a.world.character_log.join("\n");
         assert!(log.contains("its list has hide: Birth, 'hide'") && log.contains("'hide' ended in Birth: underground again"), "{log}");
         assert!(a.world.anims[0].character.as_ref().unwrap().unborn);
+        // Connor comes back near its home: it rises again (rule 28 from
+        // underground, then rule 30).
+        a.world.connor_at = Some([0.0, -3000.0, 100.0]);
+        watch(&mut a, &[], 200);
+        let log = a.world.character_log.join("\n");
+        assert!(log.contains("underground on its way home, it takes up the chase again"), "{log}");
+        assert_eq!(log.matches("rises (rule 30)").count(), 2, "{log}");
+        assert!(!a.world.anims[0].character.as_ref().unwrap().unborn);
     }
 
     #[test]
@@ -4930,6 +4986,23 @@ mod tests {
         }
         ai.has_birth = true;
         assert_eq!(ai.make_route([5.0, 6.0, 0.0], &mut || 0.5).0, [[5.0, 6.0]]);
+    }
+
+    #[test]
+    fn get_loc_while_playing_feeds_set_home() {
+        // objects.md "Script variables, getLoc and move" rule 1: zomtrap.cs
+        // runs `getloc zograv3` then `KQMonster::setHome zograv3
+        // $KQObject::locOnly`.
+        let mut a = wanderer(kq8_data::characters::Wander::None);
+        a.world.anims[0].player.base.rotation = kq8_data::objects::rotation([0.1, -0.2, 1.3]);
+        assert_eq!(a.test_command("KQObject::getLoc gob", "t").as_deref(), Some("0"));
+        let vars = std::mem::take(&mut a.world.vars_out);
+        assert_eq!(vars[1], ("KQObject::locOnly".to_string(), "0 0 100".to_string()));
+        let loc: Vec<f32> = vars[0].1.split(' ').map(|w| w.parse().unwrap()).collect();
+        for (got, want) in loc[3..].iter().zip([0.1, -0.2, 1.3]) {
+            assert!((got - want).abs() < 1e-5, "{loc:?}");
+        }
+        assert_eq!(a.test_command("getLoc nobody", "t").as_deref(), Some("1"));
     }
 
     #[test]

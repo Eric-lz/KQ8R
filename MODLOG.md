@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Fix (the user's check of 5a): the graveyard zombies gave up at once — `getLoc` while playing
+
+**Changed:** `kq8-core/src/active.rs`: `KQObject::getLoc` / `getLoc` now work while playing (they only worked at load): `$KQObject::loc` and `$KQObject::locOnly` from the object's current place and turn. 1 new test. Provenance.
+**Why:** The user saw the graveyard zombies rise for a few seconds, hide and never come back. `traps.log` showed `zomtrap.cs`'s `getloc zograv3` failing (unknown command), so every `KQMonster::setHome` got no position and their home stayed 100,000 south; 5 s into a chase they were beyond their chase radius from home (rule 27) and gave up.
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer: `cargo play --world Daventry --sound off --at 215000,172000,0 --frames 3000`, `traps.log`, `characters.log`.
+**Result:** `getLoc zograv3: 205003 173351 8160`, `setHome: home (205003, 173351, 8160)`; the graveyard zombies rise (zograv6, 8, 9, 10 at update 15) and no give-up in about 25 s.
+**Still broken / not tested:** **Not looked at by eye.** Leaving the graveyard trap (alarm 0, chase 100, moved south 10 s later) not run.
+**Next:** the zombies rising again (next entry).
+
 ## 2026-10-20 M5 5a finished: the team check; STATUS, FEATURES, README
 
 **Changed:** Docs only: STATUS (where we are, stand-ins, next steps, open questions), FEATURES (new section "Characters moving on their own"), README (M5 under way), QUESTIONS (Q128 and Q129 marked built), DESIGN (5a done).

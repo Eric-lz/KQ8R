@@ -2391,3 +2391,10 @@ marked otherwise.
 | Steps 0, gravity off; the ordinary move with the `keepOnGround` raise | `character-movement.md` rule 32 | Unit test |
 | The drop of 150 as a down pass, cancelled completely if it hits anything | Rule 32 (corrects `characters.md` rule 8, Q129) | Unit test (stays 100 above land) |
 | A line down from the top of its shape to its feet against the drawn ground and buildings; raised onto what it finds, at most 300, as an up pass, cancelled if that hits something | Rule 32; the up pass not testing the terrain it is put on is **ours** | Unit test; viewer: bat2 ends on the lake's surface, 6,630 |
+
+### 5a fix: `getLoc` while playing — `crates/kq8-core/src/active.rs` (`get_loc`, `angles_of`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| `KQObject::getLoc` / `getLoc` sets `$KQObject::loc` (x y z and the angles worked back from the turn) and `$KQObject::locOnly` (x y z), from the object's current place | `objects.md` "Script variables, getLoc and move" rule 1 (Q20) | Unit test; viewer: `zomtrap.cs` sets the graveyard zombies' homes |
+| Connor's turn as 0 0 0 | **Ours** (his turn is not in core's world) | — |
