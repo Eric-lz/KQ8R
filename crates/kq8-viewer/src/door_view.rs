@@ -357,7 +357,8 @@ pub fn spawn_doors(
         if d.object {
             // A scripted object (3e-5).
             let o = ActiveObject {
-                player: NamedAnimPlayer::new(&p.name, movements, d.current, base).with_names_at_load(names.0, names.1),
+                // anim-scripts.md rule 3 corrected (M4 4d-8).
+                player: NamedAnimPlayer::new(&p.name, movements, d.current, base).with_stop_names(names.0, names.1),
                 script: d.script.clone(),
                 bounds: d.bounds,
                 collision_type: d.collider_type,

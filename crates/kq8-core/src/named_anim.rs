@@ -13,11 +13,17 @@
 //! - The current movement's name (as asked, even when unknown), a waiting
 //!   movement (at most one; a newer request replaces it) and the running
 //!   animation (rule 1).
-//! - At load, no `currAnimName`: movement 0 shows but the name stays
-//!   empty, and on the first update an empty name makes the waiting
-//!   movement (`nextAnimName`) start at once, plainly, without the
-//!   `flags` bit 8 random part; the phase moves on in that same update
-//!   (rule 3, refined Q85).
+//! - At load (rule 3, corrected 2026-10-19, M4 4d-8): animated objects
+//!   and characters start with both names `Stop`, replaced by
+//!   `currAnimName` / `nextAnimName` ([`NamedAnimPlayer::with_stop_names`]);
+//!   so without `currAnimName` they start on `stop` (with the bit-8
+//!   random part), and the waiting `Stop` stays until a request that
+//!   starts at once clears it or a play-once ends (rule 8.1).
+//! - Doors and chests until Q127 (the older reading): no `currAnimName`:
+//!   movement 0 shows but the name stays empty, and on the first update an
+//!   empty name makes the waiting movement (`nextAnimName`) start at once,
+//!   plainly, without the `flags` bit 8 random part; the phase moves on in
+//!   that same update (rule 3, refined Q85).
 //! - `KQAnimPlayEvent` (rule 4): the movement waits; it starts at once if
 //!   the running animation can be cut short (6th field of its `loop=`
 //!   line) or has ended (phase ≥ 0.9999 forwards, ≤ 0 backwards), else
@@ -43,6 +49,10 @@ use crate::door::{chain, identity, DoorMovement};
 
 /// "Has ended", forwards: phase at least this (`anim-scripts.md`).
 pub const ENDED_FORWARD: f32 = 0.9999;
+
+/// The name both movement slots start with (`anim-scripts.md` rule 3,
+/// corrected 2026-10-19).
+pub const STOP_NAME: &str = "Stop";
 
 /// What one update did.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -161,6 +171,25 @@ impl NamedAnimPlayer {
             self.current_name = curr.to_string();
         }
         self.waiting = next.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+        self
+    }
+
+    /// Rule 3 as corrected 2026-10-19 (Q121), for animated objects and
+    /// characters (M4 4d-8): both names start as `Stop`; `currAnimName`
+    /// and `nextAnimName` replace them (a missing or empty key leaves
+    /// `Stop`). The current movement is the one its name finds (capitals
+    /// ignored), else movement 0 under that name (rule 5), shown at its
+    /// own `loop=` start. So the current name is never empty. (Doors and
+    /// chests keep [`NamedAnimPlayer::with_names_at_load`] until Q127.)
+    pub fn with_stop_names(mut self, curr: Option<&str>, next: Option<&str>) -> Self {
+        let given = |v: Option<&str>| v.map(str::trim).filter(|v| !v.is_empty()).unwrap_or(STOP_NAME).to_string();
+        let (curr, next) = (given(curr), given(next));
+        let found = self.movements.iter().position(|m| m.name.eq_ignore_ascii_case(&curr));
+        self.current = found.unwrap_or(0).min(self.movements.len().saturating_sub(1));
+        let (phase, playing, cut_short) = self.movement().map_or((0.0, false, false), |m| (m.start, m.speed != 0.0, m.cut_short));
+        (self.phase, self.playing, self.cut_short) = (phase, playing, cut_short);
+        self.current_name = curr;
+        self.waiting = Some(next);
         self
     }
 
@@ -518,6 +547,34 @@ pub(crate) mod tests {
         p.cut_short = true;
         p.request("spin");
         assert_eq!(p.random_speed, None);
+    }
+
+    #[test]
+    fn the_names_start_as_stop_q121() {
+        // movement 0 'closed', 1 'open', and a looping 'stop' third.
+        let mut ms = still_then_open("x").movements;
+        ms.push(movement("Stop", 0.25, 1.0, true, true, vec![]));
+        let p = NamedAnimPlayer::new("torch", ms.clone(), 0, Placement::at([0.0; 3])).with_stop_names(None, None);
+        assert_eq!((p.current, p.movement_name(), p.waiting.as_deref(), p.phase, p.playing), (2, "Stop", Some("Stop"), 0.25, true));
+        // The bit-8 random part now applies to it (the torches and fish).
+        let mut rng = crate::emitter::Rng::new(3);
+        let r = p.clone().with_random_start(&mut rng);
+        assert!(r.random_speed.is_some());
+        // The keys replace them; an empty one counts as missing.
+        let q = NamedAnimPlayer::new("x", ms.clone(), 2, Placement::at([0.0; 3])).with_stop_names(Some("open"), Some(" "));
+        assert_eq!((q.current, q.movement_name(), q.waiting.as_deref()), (1, "open", Some("Stop")));
+        // No 'stop' in the list: movement 0 under the name Stop.
+        let z = NamedAnimPlayer::new("x", still_then_open("x").movements, 1, Placement::at([0.0; 3])).with_stop_names(None, None);
+        assert_eq!((z.current, z.movement_name()), (0, "Stop"));
+        // A first movement played once ends: the waiting Stop starts (rule
+        // 8.1; Daventry's tombdoor plays its stop twice).
+        let mut t = NamedAnimPlayer::new("tombdoor", ms, 0, Placement::at([0.0; 3])).with_stop_names(Some("open"), None);
+        let (_, a) = until_finished(&mut t);
+        assert_eq!(a.started.map(|s| (s.name, s.index)), Some(("Stop".to_string(), 2)));
+        // A request that starts at once clears the waiting slot.
+        let mut c = NamedAnimPlayer::new("x", still_then_open("x").movements, 0, Placement::at([0.0; 3])).with_stop_names(None, None);
+        assert!(matches!(c.request("open"), Request::AtOnce(_)));
+        assert_eq!(c.waiting, None);
     }
 
     #[test]

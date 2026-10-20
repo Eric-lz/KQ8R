@@ -224,6 +224,7 @@ pub fn spawn_animated(
     let mut core = Vec::new();
     let mut moving = Vec::new();
     let (mut random, mut switchable) = (0, 0);
+    let mut stop_starts: Vec<String> = Vec::new();
     for a in animated {
         let (p, shape_index, unused) = &placed[a.placed];
         random += usize::from(a.random);
@@ -245,7 +246,13 @@ pub fn spawn_animated(
             })
             .collect();
         let names = (a.anim_names.0.as_deref(), a.anim_names.1.as_deref());
-        let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_names_at_load(names.0, names.1);
+        // anim-scripts.md rule 3 as corrected 2026-10-19 (M4 4d-8): both
+        // names start as `Stop`, the keys replace them.
+        let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_stop_names(names.0, names.1);
+        if player.current != a.current {
+            let was = player.movements.get(a.current).map_or("none", |m| m.name.as_str()).to_string();
+            stop_starts.push(format!("{} starts on '{}' (movement {}), not '{was}' (movement {}): no currAnimName, so the name Stop (anim-scripts.md rule 3 corrected)", p.name, player.movement().map_or("none", |m| m.name.as_str()), player.current, a.current));
+        }
         if a.random {
             player = player.with_random_start(&mut rng);
         }
@@ -460,6 +467,10 @@ pub fn spawn_animated(
         moving.len(),
         log.path().display()
     ));
+    main_log.summary(format!("animated objects and characters: {} start on another movement than the loader's because the names start as Stop (M4 4d-8); listed in the log", stop_starts.len()));
+    for line in &stop_starts {
+        main_log.detail(format!("names Stop: {line}"));
+    }
     // Characters (M4 4d-2): one line each, and the loader's lines.
     let mut clog = Log::create("characters").ok();
     let drawn = characters.len();

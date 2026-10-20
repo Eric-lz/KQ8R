@@ -2142,3 +2142,12 @@ marked otherwise.
 | --- | --- | --- |
 | After the objects' update, the queue is handled again until nothing is due now; what those handlers send with delay 0 is handled in the same pass | `anim-scripts.md` rule 8 (Q119) | Unit test `what_an_end_loop_script_sends_with_delay_0_happens_before_drawing`; the four older timing tests changed |
 | Scripts run after Connor's update (traps, `trap_step`): their delay-0 events wait for the start of the next update | **Our order**, not changed in this step | — |
+
+### 4d-8, the names start as `Stop` — `crates/kq8-core/src/named_anim.rs`, `crates/kq8-viewer/src/anim_view.rs`, `door_view.rs`
+
+| What | Source | Check |
+| --- | --- | --- |
+| Animated objects and characters start with current and waiting movement `Stop`; `currAnimName` / `nextAnimName` replace them; the current movement is found by name, else movement 0 under that name | `anim-scripts.md` rule 3 (correction 2026-10-19), `characters.md` rules 12, 14 | Unit test `the_names_start_as_stop_q121`; `viewer.log` "names Stop" lines (Daventry: 55) |
+| `flags=8` objects without `currAnimName` get the random start | `anim-scripts.md` rule 3 (correction) | `anim.log`: `fishies.01`–`.03` at random speeds |
+| A play-once first movement that ends lets the waiting `Stop` start | `anim-scripts.md` rule 3 and 8.1 (`tombdoor`) | Same unit test |
+| Doors and chests keep the old load names | **Our choice** until Q127 | — |

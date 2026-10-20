@@ -704,6 +704,37 @@ inventory and menus.
     darkening on its own. The direction is not traced (open question
     2): stand-in straight down, asked as a question. Planned in detail
     when it starts.
+  - **A's answers Q116, Q117, Q121–Q124** (planned 2026-10-19, after 4e).
+    One step and one commit each:
+    - **4d-8, the names start as `Stop`** (`anim-scripts.md` rule 3
+      correction, `characters.md` rules 12, 14). Every animated object
+      and character starts with current and waiting movement `Stop`;
+      `currAnimName` / `nextAnimName` replace them. So characters
+      without `currAnimName` start on `stop` (not movement 0), and the
+      `flags=8` torches and fish get the random start. Doors and chests
+      keep today's load names until Q127 is answered (their own `open`
+      could otherwise end in a leftover waiting `Stop`).
+    - **4d-9, the start-up** (rule 12, Q116, Q121). It runs at the first
+      update or the first movement request (`KQAnimPlayEvent`, a state,
+      a mouth code or gesture, a conversation), whatever the range;
+      only with no state does it queue Birth or Wait, and the Wait comes
+      `birthDelay` seconds later in game time, through the queue (so
+      with 0 it is handled before the first picture, Q119). Mouth shape
+      0. The stand-ins of Q121 and the "empty name, no state" step go.
+    - **4d-10, the end of a `speak`** (`talking.md` rule 13a, Q117): on
+      the line marked last of a `speak` (not when the queue runs dry),
+      the queue's owner, if a character, gets `Stop` and Wait before
+      its `TalkComplete`; nothing if it is already in Wait; from Special
+      only once the list's last movement has started; never Connor.
+    - **4d-11, transitions on characters** (rule 20, Q124 a, b; rules 2–6
+      of `connor-movement.md`): the movement player chooses a
+      transition by its from point, waits for it, plays the transition
+      movement, then starts its target at its phase. The transition's
+      end is an ordinary end (`EndLoop`, `Cue 300`, Wait's `Stop` at a
+      random frame). The `endLoop` cue waits for M5 (only on the
+      Knight's `attack`).
+    - **4d-6b, gravity** (rule 8, Q122) and **4d-7b, shadows** (rule 37,
+      Q123): planned in detail when they start (after 4d-11).
   - Not in 4d: noticing Connor, wandering, idling, alarm, chasing,
     dying, the flying mover (M5); conversations (4e, from
     `conversation.md`); collision against characters (they stay not

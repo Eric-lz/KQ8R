@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-19 M4 step 4d-8: the movement names start as `Stop` (Q121's correction)
+
+**Changed:** `kq8-core/src/named_anim.rs`: new `with_stop_names`: both names start as `Stop`, `currAnimName` / `nextAnimName` replace them, the current movement is the one the name finds (else movement 0 under that name). Used for animated objects and characters (`anim_view.rs`) and scripted objects (`door_view.rs`); doors and chests keep the old load names. `viewer.log` lists each object whose first movement changed. 1 unit test. Plan in DESIGN ("A's answers Q116, Q117, Q121–Q124"). New question **Q127** (doors, chests and what clears the waiting `Stop`). Provenance.
+**Why:** A's correction of `anim-scripts.md` rule 3 and `characters.md` rules 12, 14 (found while answering Q121).
+**Tested how:** `cargo test --workspace` (506 pass, 1 new), clippy clean; `cargo play --world Daventry --frames 60`, read `viewer.log` and `anim.log`.
+**Result:** 55 animated objects and characters now start on another movement than before: every Daventry character without `currAnimName` starts on `stop` (was movement 0, `attack`; the Lady `stop`, was `down`), as rule 14 says. The fish start at random frames and speeds (`fishies.01` 0.92, `.02` 1.02, `.03` 1.05; were all speed 1).
+**Still broken / not tested:** Not looked at in the viewer by eye. Doors and chests wait for Q127. The start-up itself (rule 12) is still the old stand-in until 4d-9.
+**Next:** 4d-9, the start-up.
+
 ## 2026-10-19 Study (A): shadows, second user's check (jump, water)
 
 **Changed:** `docs/behaviour/characters.md` rule 37 (the 1,500 cut, water), "How to check", open question 2. No code.
