@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-1: using a health item or potion
+
+**Changed:** `connor_inventory.rs`: a slot click or key 1–8 is refused while Connor is dying or dead (until now only in handsOff); the same potion clicked while it runs does nothing and says so in the log; the use line names the slot. `gui_view.rs`: the viewer's own "dead" stand-in removed. DESIGN (the 5g plan, 8 steps), provenance. 1 new unit test.
+**Why:** Step 1 of `potions.md` (rules 1–13).
+**Tested how:** `cargo test -p kq8-core connor_inventory` (6 pass). `kq8-viewer --world Daventry --sound off --frames 600 --command "give Strength 2,10" --key 6,30 --key 6,40`, and with `give Mushroom 2` and a −6 health event, keys 1 at 20 and 25; `items.log`.
+**Result:** Mushroom: health 4 → 9 → 10 (capped), `healing.aud` both times, count 2 → 1 → 0, then it leaves. Strength at update 30: count 2 → 1, `strength.aud`; at update 40: "already running: nothing (no sound, count stays x1, timer untouched)".
+**Still broken / not tested:** Potions still do nothing (steps 4–7). The dying refusal is tested only in the unit test. Not looked at by eye.
+**Next:** 5g-2, the whole-second timer.
+
 ## 2026-10-21 The user's check of the console
 
 **Changed:** This entry.

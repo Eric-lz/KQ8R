@@ -1574,6 +1574,107 @@ Steps (one commit each):
    **Test:** `--swing goblin22` then a ground click: the second swing
    still has goblin22 as target.
 
+#### 5g — Health items and potions (planned 2026-10-21)
+
+Why: the eight bottom-bar slots, their counts and keys 1–8 are built
+(M4 4c-3), but potions only add their (all-zero) numbers and wait out
+their time: no shield, strength, invisibility or clarity, no timer
+icons, no red numbers. Source: `potions.md` (A, 2026-10-20; "How to
+check" 2–6 done by the user in the original), with `inventory.md`
+rules 8–18 and `interface.md` rules 20–33. Not in 5g: the help pop-ups
+(rule 41's 0x80, 0x83, 0x84: not studied), the Temple 4 armour and
+helmet skins and faces of armour in general (only what a potion
+changes), the rope (M6), saved games and world changes (we have
+neither yet: the potions are kept in a form that a save can store
+later).
+
+Words: **potion** = one of the four timed items (Clarity, Invisible,
+Invulnerable = shield, Strength); **health item** = mushroom, crystal,
+sacred water, elixir; **dose** = one use from a stack; **timer icon** =
+the potion's picture in the status icons (`IDCTL_TIMER`, bottom right);
+**reported position** = where the characters are told Connor is.
+
+Game time: our updates (15 a second). They keep running when the
+window loses focus (Bevy keeps updating an unfocused window) and stop
+only when the game stops; there is no main menu yet, so "only the main
+menu stops it" is true by construction (the menu, when it comes, must
+stop the updates).
+
+Everything logs to `items.log` (and `gui.log` for the icons and red
+numbers, `characters.log` for Invisible, `doors.log` for Reveal):
+per use the slot, item, count before/after, refused (why), sound; per
+potion start/end the game time, protection and hand before/after;
+every tick the seconds left, icon place and percent.
+
+Steps (one commit each):
+
+1. **5g-1, using an item** (rules 1–13). Mostly built in 4c-3; adds:
+   refused while Connor is dying or dead (rule 2; until now only
+   handsOff); the log line per use gets the slot, count before/after,
+   "refused (why)" and the sound; a running potion clicked again (the
+   stack's object is already applied) → nothing, logged; the last dose
+   leaves the item at count 0 until its time is up, its slot drawn
+   empty and not clickable (already so; tested). **Test:** unit tests;
+   `cargo play --world Daventry --key 1,30 ...` with `give`.
+2. **5g-2, the timer** (rules 33–34). Each running potion counts whole
+   seconds: `Dur` at the start, −1 every 1 s of game time, ends when it
+   would drop below 1 (exactly `Dur` seconds). Its state (item, seconds
+   left, next tick, the remembered raises) is one record Connor keeps,
+   so a save can store it later. **Test:** unit test; `items.log` shows
+   20, 19, ... 1 then the end 20 s (300 updates) after the start.
+3. **5g-3, the timer icons and the red numbers** (rules 35, 37–39). A
+   potion's picture goes to the first free place of `IDCTL_TIMER_1`–`_7`
+   (`_1` is the right-most in the layout) and is freed at the end. It
+   is drawn in two parts split at the height of the percent left
+   (seconds left × 100 / `Dur`): the lower part from the picture's
+   full frame, the upper part from its empty frame (each `.pba` has
+   two: frame 0 a black square with the gold outline, frame 1 the
+   picture; matches the user's description); redrawn only when the
+   percent changes. While Strength runs the hand number is written in
+   `14red.pft` (`IDCTL_INVBAR_SHORT_ALTTXT`) instead of the white one;
+   the shield the armour number (`..._ARMOR_ALTTXT`). The spinning mask
+   (handsOff) takes a place the same way and animates at 10 frames a
+   second (rule 35, last point; was 15, Q108 d). **Test:** `gui.log`:
+   place, percent 100 → 95 → ... → gone; the red flag on/off.
+4. **5g-4, the shield** (rules 17–20, Do not reproduce 1). Protection
+   → p + ⌊p/2⌋, at least 50, at most 100; the amount added is
+   remembered and taken off at the end (not the old value restored).
+   `setConnorFlag InTemple4 1`: each hit uses old + ⌊(raised − old)/2⌋,
+   at most 85, the shown number unchanged. The orbit: `orbit1.kq`
+   (`invulnfx.kqs`, see-through 165/256, no shadow), centre his `body`
+   part − 820 + 500, radius 500, turned 0.2 rad every update, removed
+   at the end. **Test:** `fight.log`/`items.log`: protection 0 → 50 →
+   0; the orbit's place logged every update.
+5. **5g-5, strength** (rules 21–25). Hand number + ⌊hand/2⌋ (ranged
+   unchanged), the half remembered and taken off at the end. Body skin:
+   `ConnerSkinList` bit 2048 (`coniron.bmp`; first person
+   `armconfx.bmp`, not drawn: no first person yet). Face: Connor's face
+   pictures come from `ConnerLipsList` by bits (helmet 1, temple
+   armour 2, Clarity 4, Strength 8; a missing combination → the entry
+   with most of the wanted bits, Do not reproduce 3). **Test:** hand 10
+   → 15 → 10; `connor.log` names the skin and face set.
+6. **5g-6, invisible** (rules 26–29). The reported position: characters
+   are told Connor is 100,000 below where he is while it runs (sight,
+   alarm, chase and leash use it). `KQConner::checkInvisible`. His
+   textures: an `I_` version if the world has one (first two letters
+   replaced), else a copy with 3 of 4 pixels see-through (one kept
+   every 4 along a row, shifted 2 on each next row); redone when a skin
+   or face changes; restored at the end. The hurt line (rule 27) is not
+   built (which characters use it is not traced). **Test:** a goblin
+   chasing him gives up within ~3 s (`characters.log`).
+7. **5g-7, clarity** (rules 30–32). At the start every object whose
+   `groupsAlways` has bit 2048 gets its script with `Reveal True`, at
+   the end `Reveal False` (Daventry: `keepwall`, `wizchest1`). Face bit
+   4 (`cclf`). **Test:** `doors.log`: keepwall `dither 1` / `0`,
+   wizchest1 `setHidden 0` / back.
+8. **5g-8, experience at pickup** (rules 40–41). The candle +25 0.3 s
+   after it is added; ring of the dead hero, ashes +25; lady bell +20;
+   rope and hook +10 (0.3 s); feather +1,000, green mushroom piece
+   +5,000, mold +6,000, hearing horn +10,000, deciphering amulet
+   +25,000, ladle +50,000 at once; every time added. The help pop-ups
+   are logged only. **Test:** `give Candle`: experience +25 at the
+   fifth update after.
+
 ### M6 — The whole game
 
 Save/load, moving between worlds, all 12 worlds, cutscene videos, music,

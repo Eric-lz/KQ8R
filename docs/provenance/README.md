@@ -3003,3 +3003,17 @@ save / restore cursor).
 | `spawn <item>` | `KQMonster::inventory world` | `items.md` rule 9 |
 | `kill` (`fight.rs` `console_kill`) | The death of a hit (die movement, drop, body, experience), without the hit's alarm | `fighting.md` rules 30–32 |
 | `help` examples: `KQDoorEvent 1`/`2`, `setCombatLevel 1|2|3` | Existing commands | `doors.md` rules 2–3, `fighting.md` rule 3 |
+
+## M5 5g: health items and potions — `crates/kq8-core/src/connor_inventory.rs`, `potions.rs`; viewer `gui_view.rs`
+
+Source: `docs/behaviour/potions.md` (A, 2026-10-20; checks 2–6 done by
+the user in the original), with `inventory.md` rules 8–18 and
+`interface.md` rules 20–33. No other source.
+
+| What | Source | Check |
+| --- | --- | --- |
+| 5g-1: a slot click or key 1–8 is refused only in handsOff and while Connor is dying or dead; nothing, no sound, no remark | `potions.md` rules 2, 5 | Unit test `the_last_dose_runs_at_count_0_and_dying_refuses` |
+| 5g-1: the same potion while it runs: nothing (no sound, count kept, timer untouched) | Rule 7 | Unit test; viewer: `--key 6` twice, `items.log` "already running" |
+| 5g-1: the use sound plays only when the item takes effect, not placed | Rule 4 | Viewer: `healing.aud`, `strength.aud` in `items.log` |
+| 5g-1: the last dose stays at count 0 until its time is up; its slot is empty and not clickable; a new one picked up joins it | Rule 8 (the join inferred there) | Unit test |
+| 5g-1: a health item at full health is still used (one taken, sound) | Rule 6 | Viewer: second mushroom at health 10 |

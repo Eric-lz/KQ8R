@@ -304,7 +304,8 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
         return BarResult::Nothing;
     };
     let Some(t) = w.items.kind(&o.kind).cloned() else { return BarResult::Nothing };
-    let head = format!("bar click {} on {name} ({}, {}, x{}; {how})", if left { "left" } else { "right" }, o.kind, t.category, o.quantity);
+    let slot = SLOT_TYPES.iter().position(|s| s.eq_ignore_ascii_case(&o.kind)).map_or(String::new(), |k| format!("slot {}, ", k + 1));
+    let head = format!("bar click {} on {name} ({slot}{}, {}, x{}; {how})", if left { "left" } else { "right" }, o.kind, t.category, o.quantity);
     if !left {
         // Rule 10, talking.md rule 20: the description, as a plain voice.
         let words: Vec<u8> = t.message.split_whitespace().filter_map(|v| v.parse().ok()).collect();
@@ -322,7 +323,11 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
         return BarResult::Described;
     }
     if hands_off {
-        w.item_note(format!("{head}: ignored during handsOff (inventory.md rule 9)"));
+        w.item_note(format!("{head}: refused (handsOff): nothing, no sound, no remark (inventory.md rule 9, potions.md rule 2)"));
+        return BarResult::Ignored;
+    }
+    if w.connor_dying {
+        w.item_note(format!("{head}: refused (Connor is dying or dead): nothing, no sound, no remark (potions.md rule 2)"));
         return BarResult::Ignored;
     }
     match t.category.as_str() {
@@ -333,11 +338,18 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
         }
         _ => {
             let was = o.third != -1;
+            if was && t.category == "HealthItem" {
+                // potions.md rule 7: the same potion while it runs: no
+                // sound, no count change, the timer untouched.
+                w.item_note(format!("{head}: already running: nothing (no sound, count stays x{}, timer untouched; potions.md rule 7)", o.quantity));
+                return BarResult::Nothing;
+            }
             let line = apply(w, name, "slot used");
+            // potions.md rule 4: the use sound only when it takes effect.
             let sound = match (&t.use_sound, was) {
                 (Some(s), false) => {
                     w.sounds.push(crate::sound::Start::plain_one_shot(s, format!("use of {}", o.kind)));
-                    format!("; use sound {s}")
+                    format!("; use sound {s} (plain, not placed)")
                 }
                 (None, false) => "; no use sound".into(),
                 (_, true) => "; already applied: no use sound".into(),
@@ -543,6 +555,30 @@ mod tests {
         timers(&mut a.world);
         assert_eq!((stats(&a)[1], a.world.items.get(&p).map(|o| o.third)), (10, Some(-1)));
         assert!(a.world.item_timers.is_empty());
+    }
+
+    #[test]
+    fn the_last_dose_runs_at_count_0_and_dying_refuses() {
+        let mut a = active();
+        let p = carry(&mut a, "Strength", 1);
+        assert_eq!(bar_click(&mut a.world, &p, true, false, "key 6"), BarResult::Applied);
+        assert_eq!(a.world.sounds.len(), 0, "the test type's use sound is none");
+        // potions.md rule 8: kept at count 0 while it runs, the slot empty.
+        let o = a.world.items.get(&p).unwrap();
+        assert_eq!((o.quantity, o.carried_by("Connor")), (0, true));
+        assert_eq!(slot_item(&a.world, 5), None);
+        // A new one picked up meanwhile joins it; clicking it is the
+        // running potion again: nothing (rule 7).
+        carry(&mut a, "Strength", 1);
+        assert_eq!(a.world.items.get(&p).map(|o| o.quantity), Some(1));
+        assert_eq!(bar_click(&mut a.world, &p, true, false, "key 6"), BarResult::Nothing);
+        assert_eq!(a.world.items.get(&p).map(|o| o.quantity), Some(1));
+        // Rule 2: refused while dying.
+        let m = carry(&mut a, "Mushroom", 1);
+        a.world.connor_dying = true;
+        assert_eq!(bar_click(&mut a.world, &m, true, false, "key 1"), BarResult::Ignored);
+        assert_eq!(a.world.items.get(&m).map(|o| o.quantity), Some(1));
+        assert!(a.world.sounds.is_empty());
     }
 
     #[test]

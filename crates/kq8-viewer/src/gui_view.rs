@@ -731,7 +731,6 @@ pub fn gui_step(
     }
     // inventory.md rules 6, 9-11, interface.md rule 40: the bars' clicks
     // and keys since the last update.
-    let dead = false;
     for action in std::mem::take(&mut actions.0) {
         let w = &mut sim.active.world;
         match action {
@@ -745,7 +744,7 @@ pub fn gui_step(
                 gui.note(line);
             }
             BarAction::Key { slot, how } => match kq8_core::connor_inventory::slot_item(w, slot) {
-                Some(name) if !dead => {
+                Some(name) => {
                     kq8_core::connor_inventory::bar_click(w, &name, true, gui.hands_off, &how);
                 }
                 _ => {
