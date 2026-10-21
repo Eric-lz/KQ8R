@@ -785,6 +785,9 @@ pub fn spawn_doors(
     active.world.set_connor_fight(objects.connor_fight.clone());
     // fighting.md rule 36 (M5 5c-9): the projectiles the fighters shoot.
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
+    // potions.md rule 31 (M5 5g-7): the objects Clarity reveals.
+    active.world.reveal_objects = std::mem::take(&mut objects.reveal_objects);
+    main_log.summary(format!("clarity: objects with groupsAlways bit 2048: {:?} (potions.md rule 31)", active.world.reveal_objects));
     match &objects.connor_stats {
         Some((line, level)) => {
             let words: Vec<&str> = line.split_whitespace().collect();

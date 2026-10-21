@@ -1303,6 +1303,8 @@ pub struct Objects {
     pub corpse_shapes: BTreeMap<String, usize>,
     /// The projectile files the fighters shoot (M5 5c-9), by lower-case name.
     pub projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
+    /// The objects whose `groupsAlways` has bit 2048 (M5 5g-7).
+    pub reveal_objects: Vec<String>,
     /// The shield's orbit (`orbit1.kq`, M5 5g-4) and its model slot.
     pub orbit: Option<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// Lines about items at load, for `items.log`.
@@ -1570,6 +1572,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         items,
         corpse_shapes: BTreeMap::new(),
         orbit: None,
+        reveal_objects: Vec::new(),
         drop_kinds: Vec::new(),
         projectiles: BTreeMap::new(),
         combat_apply: false,
@@ -1793,6 +1796,8 @@ struct Placer<'a> {
     items: kq8_core::item::Items,
     /// Corpse shapes loaded (M5 5c-7).
     corpse_shapes: BTreeMap<String, usize>,
+    /// The objects Clarity reveals (M5 5g-7).
+    reveal_objects: Vec<String>,
     /// The shield's orbit (M5 5g-4).
     orbit: Option<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// The item types the fighters drop (M5 5c-8).
@@ -2747,6 +2752,10 @@ impl Placer<'_> {
         }
         // A particle catcher: no model; its names are looked up once all
         // start-up scripts have run (emitters.md "Particle catchers" rule 2).
+        // potions.md rule 31 (M5 5g-7): an object Clarity reveals.
+        if !unused && p.groups_always & kq8_core::potions::REVEAL_BIT != 0 && !self.reveal_objects.iter().any(|n| n.eq_ignore_ascii_case(&p.name)) {
+            self.reveal_objects.push(p.name.clone());
+        }
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQParticleCatcher")) {
             self.catchers.push((p.name.clone(), kq8_data::effects::CatcherSettings::from_section(s)));
         }
@@ -4025,6 +4034,7 @@ impl Placer<'_> {
             corpse_shapes: self.corpse_shapes,
             projectiles: self.projectiles,
             orbit: self.orbit,
+            reveal_objects: self.reveal_objects,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

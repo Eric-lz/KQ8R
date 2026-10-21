@@ -1666,7 +1666,7 @@ Steps (one commit each):
    lowering already happens during cutscenes (handsOff with the pointer
    hidden), while Connor talks and on the rope; that changes characters
    outside potions, so it waits for the user's go-ahead.
-7. **5g-7, clarity** (rules 30–32). At the start every object whose
+7. **5g-7, clarity** (**done** 2026-10-21; keepwall dithered 30–930, `wizchest1` shown, drawn and opened; `dither`: stand-in, Q144) (rules 30–32). At the start every object whose
    `groupsAlways` has bit 2048 gets its script with `Reveal True`, at
    the end `Reveal False` (Daventry: `keepwall`, `wizchest1`). Face bit
    4 (`cclf`). **Test:** `doors.log`: keepwall `dither 1` / `0`,

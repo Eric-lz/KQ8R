@@ -19,6 +19,10 @@
 //! takes the entry with most of the wanted bits ("Do not reproduce" 3).
 //! Not built: the first-person arms (`armconfx.bmp`, no first person
 //! yet), the temple armour's skin (`con65.bmp`, armour skins not built).
+//!
+//! 5g-7, `KQObject::dither` (rule 31: the keep wall "becomes
+//! see-through"): STAND-IN (Q144): a dithered object's parts are drawn
+//! half see-through until `dither 0`.
 
 use std::collections::BTreeMap;
 
@@ -254,4 +258,51 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     let line = format!("{}; mouth {mouth} shown", lines.join("; "));
     c.log.detail(format!("connor update {}: {line}", c.updates));
     w.item_log.push(format!("update {updates}: {line}"));
+}
+
+/// The parts drawn dithered now, with their own materials (5g-7).
+#[derive(Default)]
+pub struct Dithered {
+    names: std::collections::BTreeSet<String>,
+    parts: BTreeMap<Entity, Handle<ObjectMaterial>>,
+}
+
+/// STAND-IN (Q144): how much a dithered object shows.
+const DITHER_OPACITY: f32 = 0.5;
+
+/// Every update (5g-7): objects `KQObject::dither`ed are drawn half
+/// see-through; `dither 0` brings their own materials back.
+pub fn dither_step(
+    sim: Option<Res<DoorSim>>,
+    mut parts: Query<(Entity, &crate::terrain_view::ObjectName, &mut MeshMaterial3d<ObjectMaterial>)>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut state: Local<Dithered>,
+    shared: Res<crate::Shared>,
+) {
+    let Some(sim) = sim else { return };
+    let wanted = &sim.active.world.dithered;
+    if *wanted == state.names {
+        return;
+    }
+    let (mut on, mut off) = (0, 0);
+    for (e, name, mut m) in &mut parts {
+        let dithered = wanted.contains(&name.0.to_ascii_lowercase());
+        match (dithered, state.parts.contains_key(&e)) {
+            (true, false) => {
+                let own = m.0.clone();
+                m.0 = see_through(&mut materials, &own, DITHER_OPACITY);
+                state.parts.insert(e, own);
+                on += 1;
+            }
+            (false, true) => {
+                if let Some(own) = state.parts.remove(&e) {
+                    m.0 = own;
+                    off += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    state.names = wanted.clone();
+    shared.log.lock().unwrap().summary(format!("dither: {wanted:?} now; {on} parts drawn half see-through, {off} back to their own (potions.md rule 31; stand-in, Q144)"));
 }

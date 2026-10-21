@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-7: the clarity potion
+
+**Changed:** `potions.rs`: Clarity queues `Reveal True` / `False` for the objects with `groupsAlways` bit 2048. `active.rs`: the calls run at the start of the next update; `KQObject::dither` (kept for the viewer); `hidden_now` lets a chest's or scripted object's own hidden state win over its file's `hidden=` (a revealed `wizchest1` stayed undrawn). Viewer: `load.rs` collects the reveal objects at load (every class), `door_view.rs` hands them to the rules, `potion_view.rs` `dither_step` draws dithered objects half see-through (stand-in). QUESTIONS Q144. DESIGN, provenance. 1 new unit test. (The Clarity face came with 5g-5.)
+**Why:** Step 7 of `potions.md` (rules 30–32).
+**Tested how:** `cargo test` (core 467 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 6500 --command "give Clarity 1,10" --key 7,30`; and `--frames 900 --at 141087,203800,3.1416 --lift 6000 --command "give Clarity 1,10" --key 7,30 --click wizchest1,60`; `items.log`, `doors.log`, `viewer.log`.
+**Result:** Reveal objects at load: `keepwall`, `wizchest1`. Update 30: `keepwall.cs` runs `KQObject::dither keepwall 1` (1 part half see-through); `wizchest.cs`: hidden false, collision 0x1 → 0x21. Update 930 (60 s): `Reveal False`, dither 0, the wall back. By the chest: `[wizchest1] Off -> Near (drawn)`, the click opens it and puts out the lady bell.
+**Still broken / not tested:** **Not looked at by eye.** How a dithered object really looks is not known (Q144; stand-in half see-through); `dithered=1` ignored. `KQObject::setGroupsAlways` is still a stub, so a script can't add or remove the reveal bit. Objects loaded while playing are never on the reveal list (the note says new ones get no `True`; whether they get `False` is not said).
+**Next:** 5g-8, experience at pickup.
+
 ## 2026-10-21 M5 5g-6: the invisible potion
 
 **Changed:** `active.rs`: `connor_reported` (100,000 below while Invisible runs), `connor_invisible`, `KQConner::checkInvisible`. `character_ai.rs`: sight, alarm, chase, leash and leaving the active list use the reported place. `potions.rs`: start/end lines in `characters.log`. Viewer: `load.rs` loads the `I_` versions of his textures (entry 0 see-through); `object_light.rs` / `.wesl`: a `cutout` switch (holes where alpha < ½); `potion_view.rs`: the look is worked out from Strength, the face set and Invisible together, with mesh copies (1 pixel in 4) where there is no `I_` picture. DESIGN, provenance. 1 new unit test.

@@ -613,7 +613,7 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step))
-                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step).after(gui_view::gui_step))
+                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
                 .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate))
                 .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain())

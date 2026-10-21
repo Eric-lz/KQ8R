@@ -39,6 +39,13 @@
 //!   it is not traced), and the same lowering during cutscenes, talk and
 //!   the rope (rule 26's other cases; a later step).
 //!
+//! - Clarity (rules 30–32): at its start every object whose
+//!   `groupsAlways` has bit 2048 (the list the loader gives,
+//!   `WorldState::reveal_objects`) gets its script with `Reveal True`, at
+//!   the end `Reveal False`; the calls run at the next update's start
+//!   (queued: the click comes between updates). Objects entering the
+//!   world meanwhile are not told (rule 32). The face: the viewer's.
+//!
 //! Each running potion is one record ([`Running`]) Connor keeps, holding
 //! everything a saved game needs (rule 34: the potions survive a save);
 //! there are no saves yet.
@@ -108,6 +115,9 @@ pub fn red_numbers(running: &[Running]) -> [bool; 3] {
 /// while Invisible runs.
 pub const HIDDEN_DROP: f32 = 100_000.0;
 
+/// Rule 31: the `groupsAlways` bit of the objects Clarity reveals.
+pub const REVEAL_BIT: u32 = 2048;
+
 /// Rule 17: the shield's lowest and highest protection.
 pub const SHIELD_MIN: i64 = 50;
 pub const SHIELD_MAX: i64 = 100;
@@ -154,6 +164,11 @@ pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, Str
             c.stats.0[1] = h + half;
             (half, format!("strength: hand number {h} -> {} (+ half, remembered; ranged unchanged; potions.md rule 21)", c.stats.0[1]))
         }
+        Effect::Clarity => {
+            let names = w.reveal_objects.clone();
+            w.reveal_calls.extend(names.iter().map(|n| (n.clone(), true)));
+            (0, format!("clarity: Reveal True queued for {} objects with groupsAlways bit 2048: {names:?} (potions.md rule 31)", names.len()))
+        }
         Effect::Invisible => {
             let line = "invisible: characters are told Connor is 100,000 below where he is (potions.md rule 26)";
             w.character_log.push(format!("update {}: Connor: {line}", w.updates));
@@ -176,6 +191,11 @@ pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
             let h = c.stats.0[1];
             c.stats.0[1] = h - r.added;
             format!("strength ends: hand number {h} -> {} (the remembered {} taken off; potions.md rule 22)", c.stats.0[1], r.added)
+        }
+        Effect::Clarity => {
+            let names = w.reveal_objects.clone();
+            w.reveal_calls.extend(names.iter().map(|n| (n.clone(), false)));
+            format!("clarity ends: Reveal False queued for {} objects (potions.md rule 31)", names.len())
         }
         Effect::Invisible => {
             let line = "invisible ends: characters are told where Connor really is (potions.md rule 26)";

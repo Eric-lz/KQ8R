@@ -629,6 +629,15 @@ pub struct WorldState {
     /// Applied items with a duration: the running potions and their
     /// whole-second timers (M5 5g-2, `potions.md` rules 33–34).
     pub potions: Vec<crate::potions::Running>,
+    /// The objects whose `groupsAlways` has bit 2048 (`potions.md` rule
+    /// 31), set by the loader (M5 5g-7).
+    pub reveal_objects: Vec<String>,
+    /// `Reveal True` / `False` script calls to make, taken by
+    /// `Active::update` (M5 5g-7).
+    pub reveal_calls: Vec<(String, bool)>,
+    /// `KQObject::dither <name> 1` (lower case), for the viewer (M5 5g-7;
+    /// STAND-IN, Q144).
+    pub dithered: BTreeSet<String>,
     /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
     pub connor_in_temple4: bool,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
@@ -1677,6 +1686,25 @@ impl WorldState {
     /// `goldCoinPersists 0|1` (`inventory.md` rule 12, M4 4c-4): while on,
     /// coins accepted from the hand stay there; 0 also empties the hand at
     /// once.
+    /// `KQObject::dither <name> 0|1` (`potions.md` rule 31: the keep wall
+    /// "becomes see-through"): kept for the viewer. STAND-IN (Q144): how a
+    /// dithered object is drawn is not described; the viewer draws it half
+    /// see-through.
+    fn dither(&mut self, words: &[String], at: &str) -> String {
+        let (Some(name), Some(v)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
+            self.note(format!("{at}: usage: KQObject::dither <name> 0|1; nothing"));
+            return "1".into();
+        };
+        let on = number_value(v) != 0.0;
+        if on {
+            self.dithered.insert(name.to_ascii_lowercase());
+        } else {
+            self.dithered.remove(&name.to_ascii_lowercase());
+        }
+        self.item_note(format!("{at}: KQObject::dither {name} {}: drawn {} (potions.md rule 31; how it looks: stand-in, Q144)", u8::from(on), if on { "dithered (half see-through, stand-in)" } else { "as before" }));
+        "0".into()
+    }
+
     /// `setConnorFlag <flag> 0|1` (`potions.md` rule 19): only `InTemple4`
     /// is known (`temple4/kq/archon.cs`).
     fn set_connor_flag(&mut self, words: &[String], at: &str) -> String {
@@ -2175,10 +2203,15 @@ impl WorldState {
     /// wins over its file's `hidden=` (`file_hidden`); scripted objects,
     /// chests and items as [`Self::is_hidden`].
     pub fn hidden_now(&self, name: &str, file_hidden: bool) -> bool {
-        match self.plain_hidden.get(&name.to_ascii_lowercase()) {
-            Some(h) => *h,
-            None => file_hidden || self.is_hidden(name),
+        if let Some(h) = self.plain_hidden.get(&name.to_ascii_lowercase()) {
+            return *h;
         }
+        // M5 5g-7: a tracked object starts from its file's `hidden=`, so
+        // its own state wins (`wizchest1` shown by `setHidden 0`).
+        if self.object_index(name).is_some() || self.chest_index(name).is_some() || self.items.get(name).is_some() {
+            return self.is_hidden(name);
+        }
+        file_hidden
     }
 
     /// Whether `name` is hidden now (scripted objects, chests, items;
@@ -2611,6 +2644,7 @@ impl ScriptHost for WorldState {
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
+            "KQObject::dither" => Some(self.dither(words, at)),
             "KQConner::checkInvisible" => {
                 let v = u8::from(self.connor_invisible());
                 self.note(format!("{at}: KQConner::checkInvisible: {v} (potions.md rule 28)"));
@@ -2714,6 +2748,9 @@ impl Active {
                 potions: Vec::new(),
                 status_icons: Default::default(),
                 connor_in_temple4: false,
+                reveal_objects: Vec::new(),
+                reveal_calls: Vec::new(),
+                dithered: BTreeSet::new(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,
@@ -3794,6 +3831,12 @@ impl Active {
         self.talk_step(now);
         // M5 5g-2: the potions' whole seconds (potions.md rule 33).
         crate::connor_inventory::timers(&mut self.world);
+        // M5 5g-7: Clarity's Reveal calls (potions.md rule 31).
+        for (name, on) in std::mem::take(&mut self.world.reveal_calls) {
+            let word = if on { "True" } else { "False" };
+            let line = if self.call_named(&name, &["Reveal", word]) { format!("{name}: its script gets Reveal {word}") } else { format!("{name}: no script: Reveal {word} not called") };
+            self.world.item_note(format!("clarity: {line} (potions.md rule 31)"));
+        }
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {
             let a = self.world.doors[i].door.advance(dt);

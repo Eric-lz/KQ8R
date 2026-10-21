@@ -509,7 +509,8 @@ mod tests {
     type Row = (&'static str, [i64; 5], u8, &'static str, i32, &'static str);
 
     fn types() -> ItemTypes {
-        let rows: [Row; 10] = [
+        let rows: [Row; 11] = [
+            ("INVITEM_Clarity", [0; 5], 1, "HealthItem", 60, "clarity.aud"),
             ("INVITEM_Invisible", [0; 5], 1, "HealthItem", 15, "invisibl.aud"),
             ("INVITEM_Invulnerable", [0; 5], 1, "HealthItem", 20, "invuln.aud"),
             ("INVITEM_Mushroom", [5, 0, 0, 0, 0], 1, "HealthItem", -1, "healing.aud"),
@@ -646,6 +647,18 @@ mod tests {
         a.world.updates = 15 * 15;
         timers(&mut a.world);
         assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0]));
+    }
+
+    #[test]
+    fn clarity_tells_the_reveal_objects_at_start_and_end() {
+        let mut a = active();
+        a.world.reveal_objects = vec!["keepwall".into(), "wizchest1".into()];
+        let p = carry(&mut a, "Clarity", 1);
+        bar_click(&mut a.world, &p, true, false, "key 7");
+        assert_eq!(std::mem::take(&mut a.world.reveal_calls), vec![("keepwall".to_string(), true), ("wizchest1".to_string(), true)]);
+        a.world.updates = 60 * 15;
+        timers(&mut a.world);
+        assert_eq!(a.world.reveal_calls, vec![("keepwall".to_string(), false), ("wizchest1".to_string(), false)]);
     }
 
     #[test]
