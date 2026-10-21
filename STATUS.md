@@ -7,6 +7,13 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (A): Q142 and Q141 answered** in `anim-scripts.md` rules
+  31–32. `checkDistance`: straight 3D distance between positions
+  (Connor's feet, an object's placed point); 1 if at most the max, else
+  0 (also 0 on any error). This decides the axe: never from the floor,
+  from the hay bale within about 830 sideways. Q141: a script's walk
+  waits for any weapon swap to end (B's build is right).
+
 - **2026-10-21 (A): Q147 answered** in `ropeandhook.md` (traced, and
   measured in the running original at the church rope). The camera after
   the throw from below is at the rope's place + (0, 2,250, 350) in the

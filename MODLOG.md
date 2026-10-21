@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 A: Q142 and Q141 answered (`checkDistance`, the walk after the axe swap)
+
+**Changed:** `docs/behaviour/anim-scripts.md` rules 31 (`checkDistance`) and 32 (a script's walk during a weapon swap), numbers, "How to check"; QUESTIONS Q141, Q142 answered; STATUS. No code.
+**Why:** Q142 blocks Daventry's axe puzzle (ours always gives the axe); Q141 had two small points left.
+**Tested how:** Read in `Mask.exe` (Ghidra). Checked the axe numbers against the data: `ax.kq`, `newworld.cs`'s hay bale, `BOUNDS.KQ`. Not measured in the running original: the code is plain, and the user's check already gives the outcome.
+**Result:** `checkDistance` measures straight 3D distance between positions (Connor's feet, an object's placed point). It leaves 1 if the distance is at most the max, 0 if farther or on any error. Axe: from the floor his feet are 2,475 or more below it, so never; from the bale it works within about 830 sideways. Q141: any swap holds a script's walk as the pending request until the swap ends. The `move` between only places him.
+**Still broken / not tested:** The 830 reach is worked out from the bale's box and Connor's feet height, not measured. Whether the automatic turn turns Connor during a swap was not traced.
+**Next:** B: build `checkDistance` (the axe puzzle) and drop the always-1 stand-in; nothing to change for Q141.
+
 ## 2026-10-21 M6 6a, A's answer to Q147 (f): the rope model's place and the throw camera
 
 **Changed:** `rope.rs`: `ROPE_MODEL_OFFSET` (2,000 along the rope's +y), `THROW_CAM` = 2,250 behind, 350 up, tilt 1.27, heading the rope's + 3.14 (`THROW_CAM_TURN`, the original's own number); the unit test is now A's measured church case. Viewer `connor_view.rs`: the rope model's frame drawn 2,000 behind Connor. The `--rope-cam` test option is removed (the values are known). FEATURES.

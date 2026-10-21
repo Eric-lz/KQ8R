@@ -657,6 +657,76 @@ duration 0 the same way (B's model reader has the duration).
     script is wrong. `endJump` (or the `handsOff` rule above) finishes
     the jump, Special replaces it, and gravity is on from then on.
 
+### Distance tests: `checkDistance` (traced 2026-10-21, Q142)
+
+31. **`checkDistance`** tells a script whether two things are within a
+    given distance. Three forms, chosen by the number of words after the
+    command (traced):
+    - `checkDistance <obj1> <obj2> <maxDist>`: between two objects;
+    - `checkDistance <obj1> <x> <y> <z> <maxDist>`: between an object and
+      a point;
+    - `checkDistance <x> <y> <z> <x2> <y2> <z2> <maxDist>`: between two
+      points (no script in the data uses this form).
+    - **What it measures:** the **straight 3D distance** (x, y and z
+      together, not level distance) between the objects' **positions**:
+      the point each object is placed at (for Connor, his feet,
+      `connor-physics.md`; for a placed object, its `loc` as it stands
+      now, moved or not). Not their boxes, balls or middles.
+    - **The result** in `$Console::Return`: **1 if the distance is at
+      most `maxDist`** (exactly equal counts as within), **0 if it is
+      farther**. It also prints the distance to the console.
+    - **Errors**, each prints a console line and leaves **0**: an object
+      name that isn't found ("can't find obj1/obj2"), an object whose
+      position can't be read, or a wrong number of words (the three usage
+      lines). Objects are found by name the same way `move` finds them.
+    - **Daventry's axe** (`ax.cs`, data + the rule above): clicking the
+      axe runs `checkDistance Connor ax 1700`; 1 gives the Small Axe and
+      the cutscene, 0 makes the Henchman speak (`1000 9 14 18`). The axe
+      hangs at (145910, 249914, 17670). From the windmill floor (about
+      15,045–15,195) his feet are at least 2,475 below it, so he can
+      **never** reach it from the floor. On the hay bale (placed at
+      z 15,195, top 990 higher by `BOUNDS.KQ`'s `haypush.kqs`) his feet
+      are about 16,185, 1,485 below the axe, so it works when his feet
+      are within **about 830** of the axe's spot sideways (x, y)
+      [inferred from the numbers; matches the user's check: not from
+      the floor, yes from the bale].
+    - Other uses (data): 28 scripts in 9 worlds, all with the first two
+      forms; Connor to an object or a point, and also object to object
+      (`girltrap girlbx.02`, `booktrap pushbook`, the boulders, the Gnome
+      armoury's stands). None needs anything more.
+
+### A script's walk during a weapon swap (Q141, 2026-10-21)
+
+32. `ax.cs` cue 5 runs `KQConner::setDoMode 0` (the weapon is put away
+    and the axe drawn: `ranged-weapons.md` rules 6–9), then `move Connor
+    0 …`, then `KQConner::walkTo …` in the same event:
+    - **The `move`** places Connor at once at (142879, 250000, 15325),
+      heading −1.57 (the door side), in the middle of the swap: a script
+      `move` is a placing, not a state change, so the swap doesn't stop
+      it and it doesn't stop the swap (`objects.md`, `traps.md` rule 5).
+      The swap's animations go on at the new spot. Its use here: the
+      walk then starts from a known spot and heading.
+    - **The `walkTo`** (rule 24) asks for standing; the swap refuses it
+      (`ranged-weapons.md` rule 7) and the request is kept as
+      **pending** (`connor-physics.md` "Falling off an edge": a refused
+      request is tried first at the next state change). The automatic
+      turn toward the target starts at once on its own. When it ends,
+      the request becomes "walk", still pending. When the swap's
+      last movement ends, the pending request is applied: **he walks
+      after the swap** [traced]. That matches the user's check in the
+      original ("he stops, draws the axe, then walks outside") and
+      B's build.
+    - **It is the same for any swap**, whoever started it (a slot click,
+      a key, a script): the swap state refuses every request until its
+      end, and the pending one is applied then [traced: nothing in this
+      path depends on who started the swap]. Whether the automatic turn
+      actually turns him while the swap plays was not traced. Here it
+      hardly matters: from the `move`'s spot and heading the target is
+      only about 0.16 rad off.
+    - If the walk's request is replaced by another request before the
+      swap ends (only the latest pending request is kept), the walk is
+      lost and its cue never comes (rule 26) [inferred].
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -674,6 +744,9 @@ duration 0 the same way (B's model reader has the duration).
 | `endJump`: gravity / step up and down afterwards | on / 325 | traced |
 | windmill tumble: cue 300 after | 2.2 s (`normal`), 2.74 s (back flip) | data |
 | windmill trap box height | z 8630–10630 (ground 7650) | data |
+| `checkDistance`: distance kind / result | straight 3D between positions; 1 if ≤ max, 0 if farther or on any error | traced |
+| the axe (`ax.cs`): max / axe's place | 1,700 / (145910, 249914, 17670) | data |
+| the axe from the bale: feet below the axe / sideways reach | about 1,485 / about 830 | inferred from data |
 
 ## Data used
 
@@ -772,6 +845,16 @@ duration 0 the same way (B's model reader has the duration).
   the alchemist's boards. Expected: the boards fall (one animation), then
   lie on the ground; the falling animation plays once and doesn't repeat.
   Barrels likewise: burst, then the wreck stays.
+- **The axe (rule 31), ours against the original:** click the axe from the
+  windmill floor: the Henchman's remark, no axe; push the hay bale under
+  it, stand on the bale, click: the axe and the cutscene. Our log should
+  show each `checkDistance` with both positions, the distance and the
+  result (on the bale near the axe: about 1,485–1,700; on the floor:
+  2,475 or more).
+- **The swap then walk (rule 32):** in the axe cutscene Connor stands
+  where the `move` put him, puts his weapon away and draws the axe, then
+  walks out; the walk's start should be logged after the swap's last
+  movement ends (checked by the user in the original, 2026-10-21).
 
 ## Open questions
 
