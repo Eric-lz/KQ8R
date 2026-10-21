@@ -3017,3 +3017,5 @@ the user in the original), with `inventory.md` rules 8–18 and
 | 5g-1: the use sound plays only when the item takes effect, not placed | Rule 4 | Viewer: `healing.aud`, `strength.aud` in `items.log` |
 | 5g-1: the last dose stays at count 0 until its time is up; its slot is empty and not clickable; a new one picked up joins it | Rule 8 (the join inferred there) | Unit test |
 | 5g-1: a health item at full health is still used (one taken, sound) | Rule 6 | Viewer: second mushroom at health 10 |
+| 5g-2 (`potions.rs`): whole seconds from `Dur`, one off every 15 updates, over when it would drop below 1 (exactly `Dur` s) | Rule 33 | Unit test; viewer: Strength from update 30 to 330 |
+| 5g-2: game time = our updates; they go on when the window loses focus (Bevy's default keeps an unfocused window updating at up to 60 frames a second) | Rule 34 (the user's check in the original); the Bevy part is ours | Not tested by switching windows |

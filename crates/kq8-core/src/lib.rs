@@ -32,6 +32,7 @@ pub mod meters;
 pub mod music;
 pub mod named_anim;
 pub mod panels;
+pub mod potions;
 pub mod script;
 pub mod shadow;
 pub mod sound;

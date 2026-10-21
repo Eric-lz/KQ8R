@@ -42,8 +42,8 @@
 //! STAND-INS: "applied" is kept in the item's `userId` (rule 13) as 0 for
 //! Connor (the original keeps an object id there); an old piece taken off
 //! by a `give` (no place where the new one lay) drops at Connor's feet
-//! ("Edge cases" infers the new object's own position); the potions'
-//! timers count game time.
+//! ("Edge cases" infers the new object's own position). The potions'
+//! timers: `crate::potions` (M5 5g-2).
 
 use crate::active::WorldState;
 use crate::item::Place;
@@ -218,9 +218,10 @@ pub fn apply(w: &mut WorldState, name: &str, why: &str) -> String {
     let stats = connor_add(w, Stats(t.stats), &format!("its numbers {:?} added", t.stats));
     let mut line = format!("apply {name} ({}, {why}): x{} -> x{}; {stats}", o.kind, o.quantity, w.items.objects[i].quantity);
     if t.duration > 0.0 {
-        let due = w.now() + t.duration as f64;
-        w.item_timers.push((name.to_string(), due));
-        line.push_str(&format!("; Dur {} s: un-applied at t {due:.3}", t.duration));
+        // potions.md rule 33: whole seconds, counted from this update.
+        let r = crate::potions::Running::new(name, &o.kind, t.duration.round() as i64, w.updates);
+        line.push_str(&format!("; Dur {} s: the timer starts at {} s left (game time {:.3}), the next second off at update {} (potions.md rule 33)", t.duration, r.left, w.now(), r.next_tick));
+        w.potions.push(r);
     } else if t.duration < 0.0 {
         // Dur -1: un-applied at once, the numbers kept.
         w.items.objects[i].third = -1;
@@ -253,19 +254,33 @@ pub fn unapply(w: &mut WorldState, name: &str, why: &str) -> String {
     }
     let Some(t) = w.items.kind(&o.kind).cloned() else { return String::new() };
     w.items.objects[i].third = -1;
-    w.item_timers.retain(|(n, _)| n != name);
+    w.potions.retain(|r| r.item != name);
     let back = Stats(t.stats.map(|v| -v));
     let stats = connor_add(w, back, &format!("{name} un-applied ({why}): its numbers taken back"));
     format!("; {stats}{} (inventory.md rule 15)", remove_if_empty(w, name))
 }
 
-/// The potions' timers (rule 14): un-applies those due by now.
+/// The potions' timers (`potions.md` rule 33): one second off each
+/// running potion per second of game time; un-applies those over.
 pub fn timers(w: &mut WorldState) {
-    let now = w.now();
-    let due: Vec<String> = w.item_timers.iter().filter(|(_, t)| *t <= now).map(|(n, _)| n.clone()).collect();
-    for name in due {
-        let line = unapply(w, &name, "its Dur ran out");
-        w.item_note(format!("{name}: timer over{line}"));
+    let now = w.updates;
+    let mut over = Vec::new();
+    let mut lines = Vec::new();
+    for r in &mut w.potions {
+        let (seconds, ended) = r.tick(now);
+        for left in seconds {
+            lines.push(format!("{} ({}): {left} s left of {}, {} % (potions.md rule 33)", r.item, r.kind, r.duration, left * 100 / r.duration.max(1)));
+        }
+        if ended {
+            over.push(r.item.clone());
+        }
+    }
+    for line in lines {
+        w.item_note(line);
+    }
+    for name in over {
+        let line = unapply(w, &name, "its time is up");
+        w.item_note(format!("{name}: its time is up at game time {:.3}{line}", w.now()));
     }
 }
 
@@ -551,10 +566,13 @@ mod tests {
         assert_eq!(stats(&a)[1], 15);
         bar_click(&mut a.world, &p, true, false, "key 6");
         assert_eq!((stats(&a)[1], a.world.items.get(&p).map(|o| o.quantity)), (15, Some(1)), "already applied: nothing");
+        a.world.updates = 20 * 15 - 1;
+        timers(&mut a.world);
+        assert_eq!((stats(&a)[1], a.world.potions[0].left), (15, 1), "1 s left at 19 s");
         a.world.updates = 20 * 15;
         timers(&mut a.world);
         assert_eq!((stats(&a)[1], a.world.items.get(&p).map(|o| o.third)), (10, Some(-1)));
-        assert!(a.world.item_timers.is_empty());
+        assert!(a.world.potions.is_empty());
     }
 
     #[test]

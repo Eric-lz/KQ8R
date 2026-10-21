@@ -626,9 +626,9 @@ pub struct WorldState {
     /// The panel commands of scripts since the caller last looked (M4
     /// 4c-2, `interface.md` rule 15).
     pub gui_orders: Vec<GuiOrder>,
-    /// Applied items with a duration and when they run out, game time
-    /// (M4 4c-3, `inventory.md` rule 14).
-    pub item_timers: Vec<(String, f64)>,
+    /// Applied items with a duration: the running potions and their
+    /// whole-second timers (M5 5g-2, `potions.md` rules 33–34).
+    pub potions: Vec<crate::potions::Running>,
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
     pub item_voices: Vec<crate::connor_inventory::ItemVoice>,
     /// The item Connor holds as the pointer (M4 4c-4, `inventory.md`
@@ -2673,7 +2673,7 @@ impl Active {
                 connor_stats: None,
                 connor_stats_events: 0,
                 gui_orders: Vec::new(),
-                item_timers: Vec::new(),
+                potions: Vec::new(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,
@@ -3752,7 +3752,7 @@ impl Active {
         self.handle_due(now);
         self.world.characters_due(now);
         self.talk_step(now);
-        // M4 4c-3: potions whose Dur ran out (inventory.md rule 14).
+        // M5 5g-2: the potions' whole seconds (potions.md rule 33).
         crate::connor_inventory::timers(&mut self.world);
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {

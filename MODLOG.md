@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-2: the potions' whole-second timer
+
+**Changed:** New `crates/kq8-core/src/potions.rs` (`Running`: item, effect, `Dur`, seconds left, next tick; `Effect` by item type). `active.rs`: `item_timers` replaced by `potions`. `connor_inventory.rs`: applying an item with a duration starts its record; `timers` takes one second off per 15 updates and un-applies it when it would drop below 1, logging each second. DESIGN, provenance. 1 new unit test, 1 updated.
+**Why:** Step 2 of `potions.md` (rules 33–34).
+**Tested how:** `cargo test -p kq8-core potion` (2 pass). `kq8-viewer --world Daventry --sound off --frames 3000 --command "give Strength 1,10" --key 6,30`; `items.log`.
+**Result:** "update 45: 19 s left of 20, 95 %", ... "update 315: 1 s left of 20, 5 %", "update 330: its time is up at game time 22.000", count 0: the item leaves. 300 updates = 20 s.
+**Still broken / not tested:** Losing window focus not tested (Bevy keeps updating an unfocused window, so it should keep counting). No saves or world changes yet to keep potions across. No main menu yet to pause it.
+**Next:** 5g-3, the timer icons and red numbers.
+
 ## 2026-10-21 M5 5g-1: using a health item or potion
 
 **Changed:** `connor_inventory.rs`: a slot click or key 1–8 is refused while Connor is dying or dead (until now only in handsOff); the same potion clicked while it runs does nothing and says so in the log; the use line names the slot. `gui_view.rs`: the viewer's own "dead" stand-in removed. DESIGN (the 5g plan, 8 steps), provenance. 1 new unit test.

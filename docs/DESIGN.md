@@ -1608,7 +1608,7 @@ every tick the seconds left, icon place and percent.
 
 Steps (one commit each):
 
-1. **5g-1, using an item** (rules 1–13). Mostly built in 4c-3; adds:
+1. **5g-1, using an item** (**done** 2026-10-21) (rules 1–13). Mostly built in 4c-3; adds:
    refused while Connor is dying or dead (rule 2; until now only
    handsOff); the log line per use gets the slot, count before/after,
    "refused (why)" and the sound; a running potion clicked again (the
@@ -1616,7 +1616,7 @@ Steps (one commit each):
    leaves the item at count 0 until its time is up, its slot drawn
    empty and not clickable (already so; tested). **Test:** unit tests;
    `cargo play --world Daventry --key 1,30 ...` with `give`.
-2. **5g-2, the timer** (rules 33–34). Each running potion counts whole
+2. **5g-2, the timer** (**done** 2026-10-21; Strength from update 30 to 330) (rules 33–34). Each running potion counts whole
    seconds: `Dur` at the start, −1 every 1 s of game time, ends when it
    would drop below 1 (exactly `Dur` seconds). Its state (item, seconds
    left, next tick, the remembered raises) is one record Connor keeps,
