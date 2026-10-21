@@ -1810,7 +1810,7 @@ Steps (one commit each):
    climb ends at whichever end it reaches in the direction it plays.
    **Test:** `--hold 1,0,0,N` / `--hold -1,...`; `rope.log` per update:
    key, direction, frame, camera height.
-5. **6a-5, getting off** (rules 23–26). Top end: icons may show,
+5. **6a-5, getting off** (**done** 2026-10-21) (rules 23–26). Top end: icons may show,
    turning on, handsOff on, `toff`, the camera follows again, `taway`.
    Foot end: moved 1,000 toward his back and 4,900 down, gravity on,
    `boff`, `baway`, the camera follows. Then gravity on, step heights back

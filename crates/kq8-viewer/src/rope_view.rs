@@ -148,6 +148,35 @@ impl RopeHost for Host<'_> {
     fn climbed_to_top(&self) -> bool {
         self.c.walker.climb_dir > 0
     }
+
+    fn camera_follow(&mut self) {
+        let at = self.c.mover.position;
+        if let Some(c) = self.cam.as_mut() {
+            if !c.following {
+                let line = c.follow(true, at);
+                self.w.rope_note(format!("camera: {line}"));
+            }
+        }
+    }
+
+    fn restore_hand(&mut self, mode: WeaponMode, weapon: Option<String>) -> bool {
+        if mode == WeaponMode::None {
+            return false;
+        }
+        self.w.set_weapon(mode, weapon.clone());
+        let list = crate::door_view::weapon_list(self.w);
+        let line = self.c.ready_set(list, mode, weapon, true, false, false);
+        self.c.log.detail(format!("connor update {}: rope state: the weapon back: {line}", self.c.updates));
+        true
+    }
+
+    fn leave(&mut self) {
+        self.c.walker.rope_leave();
+        let lock = kq8_core::connor_inventory::rope_lock(self.w, false, "the rope state is over");
+        if !lock.is_empty() {
+            self.w.rope_note(format!("rope state{lock} (rule 26)"));
+        }
+    }
 }
 
 /// `ropeandhook.md` rule 22 (M6 6a-4): while he hangs, the camera's
@@ -282,7 +311,7 @@ pub fn rope_step(
         let calls = if calls.is_empty() { "no trap call".to_string() } else { calls.join("; ") };
         d.active.world.rope_note(format!("placed at ({:.0}, {:.0}, {:.0}): the traps' stay test, then the enter test there (stand-in, Q147 e): {calls}", p[0], p[1], p[2]));
     }
-    c.rope = climb;
+    c.rope = climb.filter(|cl| !cl.done);
     d.active.world.connor_roping = c.rope.is_some();
     d.flush_rope(&shared);
 }

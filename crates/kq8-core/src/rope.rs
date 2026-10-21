@@ -269,7 +269,7 @@ pub enum Anim {
 impl Anim {
     pub fn name(self) -> String {
         match self {
-            Anim::Own(n) => format!("{n} (his own list)"),
+            Anim::Own(n) => format!("{n} (his list in use)"),
             Anim::Rope(n) => format!("{n} ({ROPE_LIST})"),
         }
     }
@@ -308,6 +308,10 @@ pub enum Stage {
     Baway,
     Out,
 }
+
+/// Rule 23: where he is put when the climb reaches the foot, in his own
+/// frame (x his left, y his back, z up).
+pub const FOOT_DROP: [f32; 3] = [0.0, 1000.0, -4900.0];
 
 /// Rule 18: the lift when he grabs the rope from below.
 pub const GRAB_LIFT: f32 = 5000.0;
@@ -413,6 +417,14 @@ pub trait RopeHost {
     fn on_rope(&mut self, on: bool);
     /// The climb that just ended was playing forwards (up) (rule 23).
     fn climbed_to_top(&self) -> bool;
+    /// The camera follows Connor again (rules 24, 25).
+    fn camera_follow(&mut self);
+    /// Rule 25: his hand mode and weapon back as they were; `true` if a
+    /// weapon is to be drawn (`out` from its list).
+    fn restore_hand(&mut self, mode: crate::weapons::WeaponMode, weapon: Option<String>) -> bool;
+    /// Rule 26: standing (`Wait`), the first-person key allowed again, the
+    /// rope list let go.
+    fn leave(&mut self);
 }
 
 /// The rope state (rules 12–26): what was copied at its start, and its
@@ -439,6 +451,8 @@ pub struct Climb {
     pub range: (f32, f32),
     /// The step heights saved at the foot (rule 15).
     pub saved_steps: Option<(f32, f32)>,
+    /// The rope state is over (rule 26).
+    pub done: bool,
 }
 
 /// Rule 22: how fast the camera's height and the aim point move while
@@ -494,6 +508,7 @@ impl Climb {
             aim: [0.0; 3],
             range: (0.0, 0.0),
             saved_steps: None,
+            done: false,
         };
         host.camera_stay();
         host.turn_to([r.place[0], r.place[1]]);
@@ -512,6 +527,17 @@ impl Climb {
         ));
         c.go(Stage::Away, host);
         Some(c)
+    }
+
+    /// Rule 26: the end of the rope state.
+    fn finish(&mut self, host: &mut dyn RopeHost) {
+        host.hands_off(false);
+        host.leave();
+        self.done = true;
+        host.note(format!(
+            "rope state: over (rule 26): handsOff off, the first-person key allowed again, {ROPE_LIST} let go, standing (Wait); first person not restored (never left: we have none); Connor at {}",
+            fmt3(host.connor_at())
+        ));
     }
 
     /// The movement of `stage`, if it plays one.
@@ -652,13 +678,60 @@ impl Climb {
                 self.stage = Stage::Hanging;
             }
             Stage::Hanging => {
-                // Rule 23: the climb reached an end (M6 6a-5 gets him off).
+                // Rule 23: the climb reached an end.
                 let top = host.climbed_to_top();
-                host.note(format!("climb: reached the {} end: getting off is not built yet (M6 6a-5): he stays hanging", if top { "top" } else { "bottom" }));
+                host.on_rope(false);
+                host.hands_off(true);
+                let p = host.connor_at();
+                if top {
+                    host.note(format!("climb: reached the top end at {}: the hook icon may show again, turning on, handsOff on (pointer kept) (rule 23)", fmt3(p)));
+                    self.go(Stage::Toff, host);
+                } else {
+                    let h = host.heading();
+                    let to = add(p, turned([0.0, 0.0, h], FOOT_DROP));
+                    host.place(to, h);
+                    host.set_gravity(true);
+                    host.note(format!(
+                        "climb: reached the bottom end at {}: the hook icon may show again, turning on, handsOff on (pointer kept); moved 1,000 toward his back and 4,900 down to {}, gravity on (rule 23)",
+                        fmt3(p),
+                        fmt3(to)
+                    ));
+                    self.go(Stage::Boff, host);
+                }
             }
-            Stage::Toff | Stage::Taway | Stage::Boff | Stage::Baway | Stage::Out => {
-                host.note(format!("rope state: {:?} ended: getting off is not built yet (M6 6a-5)", self.stage));
+            Stage::Toff => {
+                // Rule 24.
+                host.camera_follow();
+                host.note("rope state: the camera follows Connor again (rule 24)".into());
+                self.go(Stage::Taway, host);
             }
+            Stage::Boff => self.go(Stage::Baway, host),
+            Stage::Taway | Stage::Baway => {
+                // Rule 25.
+                host.set_gravity(true);
+                let steps = match self.saved_steps {
+                    Some((up, down)) if up != 0.0 || down != 0.0 => {
+                        let (u, d) = host.step_heights();
+                        host.set_step_heights(if up != 0.0 { up } else { u }, if down != 0.0 { down } else { d });
+                        format!("step heights back to up {up:.0}, down {down:.0}")
+                    }
+                    Some(_) => "the saved step heights are 0: not put back".into(),
+                    None => "the step heights were never saved (from the top): unchanged".into(),
+                };
+                host.camera_follow();
+                let draw = host.restore_hand(self.hand_before, self.weapon_before.clone());
+                host.note(format!(
+                    "rope state: gravity on; {steps}; the camera follows Connor; hand mode back to {}{} (rule 25)",
+                    self.hand_before.name(),
+                    if draw { ": out is played (he held a weapon)" } else { ": nothing drawn (his weapon was put away; the user's check)" }
+                ));
+                if draw {
+                    self.go(Stage::Out, host);
+                } else {
+                    self.finish(host);
+                }
+            }
+            Stage::Out => self.finish(host),
         }
     }
 }
@@ -736,6 +809,7 @@ mod tests {
         on_rope: bool,
         empty: bool,
         model: bool,
+        left: bool,
         lines: Vec<String>,
     }
 
@@ -798,6 +872,16 @@ mod tests {
         }
         fn climbed_to_top(&self) -> bool {
             self.hung == Some(1.0)
+        }
+        fn camera_follow(&mut self) {
+            self.following = true;
+        }
+        fn restore_hand(&mut self, mode: crate::weapons::WeaponMode, _weapon: Option<String>) -> bool {
+            self.empty = false;
+            mode != crate::weapons::WeaponMode::None
+        }
+        fn leave(&mut self) {
+            self.left = true;
         }
     }
 
@@ -869,6 +953,53 @@ mod tests {
         assert_eq!(h.hung, Some(1.0));
         assert_eq!(h.camera_aim, Some([1000.0, 2000.0, 300.0]), "aimed at the rope's place");
         assert_eq!(c.range.1, h.camera[2]);
+    }
+
+    #[test]
+    fn up_from_the_foot_and_off_at_the_top_with_the_weapon_drawn() {
+        let mut h = Host { at: [990.0, 2010.0, 300.0], steps: (325.0, 325.0), camera: [5000.0, 0.0, 2000.0], gravity: true, ..Default::default() };
+        let mut c = Climb::start(&place(Status::Bottom), crate::weapons::WeaponMode::Hand, Some("INVITEM_Fists".into()), &mut h).unwrap();
+        for _ in 0..5 {
+            c.ended(&mut h);
+        }
+        assert_eq!(c.stage, Stage::Hanging);
+        h.hung = Some(1.0); // climbed to the top
+        c.ended(&mut h);
+        assert_eq!(c.stage, Stage::Toff);
+        assert!(h.hands_off && !h.on_rope);
+        assert_eq!(h.at, [1000.0, 2000.0, 5300.0], "no move at the top end");
+        c.ended(&mut h);
+        assert!(h.following, "the camera follows after toff");
+        c.ended(&mut h);
+        assert_eq!(c.stage, Stage::Out, "he held a weapon: out");
+        assert!(h.gravity);
+        assert_eq!(h.steps, (325.0, 325.0), "put back");
+        c.ended(&mut h);
+        assert!(c.done && h.left && !h.hands_off);
+        assert_eq!(&h.played[5..], [Anim::Rope("toff"), Anim::Rope("taway"), Anim::Own("out")]);
+    }
+
+    #[test]
+    fn down_from_the_top_and_off_at_the_foot_with_nothing_drawn() {
+        let mut h = Host { at: [990.0, 2010.0, 5300.0], steps: (325.0, 325.0), camera: [5000.0, 0.0, 2000.0], gravity: true, ..Default::default() };
+        let mut c = Climb::start(&place(Status::Top), crate::weapons::WeaponMode::None, None, &mut h).unwrap();
+        for _ in 0..4 {
+            c.ended(&mut h);
+        }
+        assert_eq!(c.stage, Stage::Hanging);
+        h.hung = Some(0.0); // climbed down
+        let before = h.at;
+        c.ended(&mut h);
+        assert_eq!(c.stage, Stage::Boff);
+        assert!(h.gravity, "gravity on for the drop");
+        // He faces +pi/2 after the half turn (from -pi/2): his back is -x.
+        assert!((h.at[0] - (before[0] - 1000.0)).abs() < 0.1 && (h.at[1] - before[1]).abs() < 0.1 && h.at[2] == before[2] - 4900.0, "{:?}", h.at);
+        c.ended(&mut h);
+        assert_eq!(c.stage, Stage::Baway);
+        c.ended(&mut h);
+        assert!(c.done, "no weapon: no out");
+        assert!(h.following);
+        assert_eq!(h.steps, (325.0, 325.0), "never changed from the top");
     }
 
     #[test]

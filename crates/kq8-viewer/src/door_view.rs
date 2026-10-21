@@ -1619,7 +1619,7 @@ pub fn door_click_input(
 /// weapon's from `Connor.kq`'s `ShortAnimList` (`fighting.md` rule 40:
 /// `confists.anm` for `INVITEM_Fists`); a ranged one's from
 /// `LongAnimList` (M5 5f-4); none: his own (`None`).
-fn weapon_list(w: &kq8_core::active::WorldState) -> Option<String> {
+pub(crate) fn weapon_list(w: &kq8_core::active::WorldState) -> Option<String> {
     let ready = w.weapon_ready.as_deref()?;
     let short = ready.strip_prefix(kq8_data::items::PREFIX).unwrap_or(ready);
     let f = w.connor_fight.as_ref()?;

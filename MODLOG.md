@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a-5: getting off the rope at either end
+
+**Changed:** `rope.rs`: the climb's end at the top (`toff`, the camera follows, `taway`) and at the foot (the 1,000 / 4,900 drop, gravity on, `boff`, `baway`), then gravity, the step heights, the camera, the weapon (`out` only if he held one), standing; `done`; 2 new unit tests. Viewer `rope_view.rs`: `camera_follow`, `restore_hand` (the weapon's list back at once, then its `out`), `leave`; the record is dropped when done. `door_view.rs`: `weapon_list` visible to the crate. DESIGN, provenance.
+**Why:** Step 5 of `ropeandhook.md` (rules 23–26).
+**Tested how:** `cargo test -p kq8-core` (481 pass), clippy clean. Viewer, Daventry, `--sound off`, `--command "give RopeAndHook 1,5"`: (up) `--frames 6000 --at 152500,207968,-1.5708 --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80 --aim-point 150000,207968,30000,90 --hold 1,0,0,200,300`; (down, fists ready) `--frames 7000 --command "move Connor 0 147200 207586 13300 0 0 1.57,10" --key left:IDCTL_INVBAR_SHORT,20 --key left:IDCTL_INVBAR_ROPE,60 --aim-point 150000,207968,30000,70 --hold -1,0,0,220,330`; `rope.log`, `connor.log`, `fight.log`.
+**Result:** Up (empty hands): top end at 277 at (147646, 207586, 12800); `toff` 277–297, the camera follows; `taway` 297–332 (moved 405 forward, Q147 d); steps back to 325/325; nothing drawn; standing at 332, landing on the ledge at z 12,795. Down (fists): hanging at 211; bottom end at 297, moved to (148616, 207585, 7920) (1,000 toward his back), traps `ropetrp2 Off`, `ropetrap On` (status top → none → bottom, `HookUp` back); `boff` 297–329, `baway` 329–369, the camera follows; steps unchanged (never saved from the top); the fists' list back, `confists.anm/out` 369–382; standing at (148526, 207614, 7583).
+**Still broken / not tested:** **Not looked at by eye.** The hook icon reappears in the place after the spinning mask's (handsOff is on while he gets off: Q147 a, b). A ranged weapon held at the start not run. `taway`'s 405 forward step is our stand-in (Q147 d).
+**Next:** 6a-6, while on the rope.
+
 ## 2026-10-21 M6 6a-4: climbing the rope
 
 **Changed:** `connor.rs`: the climb update (forward up, back down, anything else frozen; ends at the end it plays toward), 1 unit test. `rope.rs`: `climb_camera` (750 a second, the height in its range), 1 unit test; the climb's end is logged (getting off is step 5). Viewer `rope_view.rs`: each update while he hangs, the camera and aim point follow and every climbing update is logged (key, direction, frame, phase, camera height, range, aim). Test option `--hold F,T,R,FROM,N` (held from update FROM to N), repeatable (`main.rs`, `connor_view.rs`, FEATURES). DESIGN, provenance.
