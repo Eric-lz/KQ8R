@@ -491,7 +491,8 @@ miss, roll, flinch, death, drop and shot is in
   where it fell, and it is removed.
 - **Thrown items (M5 5e):** drops and barrel items fly in the traced arc;
   walls, roofs, floors and objects stop them (at a wall they drop to its
-  foot); the land sound plays at the first touch. Characters are flown
+  foot), barrels and other scripted or animated objects throw them up
+  again; the land sound plays at the first touch. Characters are flown
   through.
 - **Bow spriggans:** they never move, and shoot a bolt every swing plus
   delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor (the

@@ -835,6 +835,17 @@ impl crate::active::WorldState {
         let blocking: Vec<crate::collide::BoxCollider> = objects.iter().filter(|o| o.kind.collision_type & crate::item::ITEM_OBSTACLE_BITS != 0).cloned().collect();
         let shaped = crate::connor_mover::Scene::new(ground, buildings, &blocking);
         let bare = crate::connor_mover::Scene::new(ground, &[], &[]);
+        // Rule 12.3: what throws it again: anything with a script, and any
+        // animated object (doors, chests and the rest, `anim-scripts.md`
+        // rule 8; the play-once ones too), lower case.
+        let mut again: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        again.extend(self.doors.iter().map(|d| d.door.name.to_ascii_lowercase()));
+        again.extend(self.chests.iter().map(|c| c.chest.name.to_ascii_lowercase()));
+        again.extend(self.objects.iter().map(|o| o.player.name.to_ascii_lowercase()));
+        again.extend(self.anims.iter().filter(|a| a.character.is_none()).map(|a| a.player.name.to_ascii_lowercase()));
+        again.extend(self.clickables.iter().filter(|c| c.script.is_some()).map(|c| c.name.to_ascii_lowercase()));
+        again.extend(self.buildings.iter().filter(|b| b.script.is_some()).map(|b| b.name.to_ascii_lowercase()));
+        let throws_again = |name: &str| again.contains(&name.to_ascii_lowercase());
         let mut flights = std::mem::take(&mut self.flights);
         flights.retain_mut(|f| {
             let Some(i) = self.items.index(&f.item) else { return false };
@@ -842,7 +853,8 @@ impl crate::active::WorldState {
                 self.item_log.push(format!("update {}: {}: no longer in the world: its flight ends", self.updates, f.item));
                 return false;
             };
-            let s = f.update(position, dt, if f.shaped { &shaped } else { &bare });
+            let rng = &mut self.fight_rng;
+            let s = f.update(position, dt, if f.shaped { &shaped } else { &bare }, &throws_again, &mut || rng.fraction());
             let p = s.position;
             let kind = self.items.objects[i].kind.clone();
             let mut line = match s.wanted {
@@ -861,6 +873,9 @@ impl crate::active::WorldState {
                     self.sounds.push(crate::sound::Start::placed_one_shot(snd, p, format!("{} touched {what} (thrown-items.md rule 12.2)", f.item)));
                 }
                 line += &format!("; first touch: land sound {}", sound.as_deref().unwrap_or("none"));
+            }
+            for t in &s.thrown_again {
+                line += &format!("; thrown again (rule 12.3) by {t}");
             }
             if let Some(why) = &s.arc_ended {
                 line += &format!("; the arc ends: {why}, ordinary gravity on");

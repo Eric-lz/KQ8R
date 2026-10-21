@@ -386,19 +386,37 @@ pub struct FlightStep {
     pub first_touch: Option<String>,
     /// The arc ended this update, and why (rules 12.3, 14).
     pub arc_ended: Option<String>,
+    /// Thrown again this update (rule 12.3): what by, and the new launch
+    /// for the log.
+    pub thrown_again: Vec<String>,
     /// The flight ended at the start of this update (rule 16): `held` or
     /// `10 s`. Nothing moved then.
     pub ended: Option<&'static str>,
+}
+
+/// Rule 3: the launch speeds from three random numbers in [0, 1):
+/// heading, elevation, speed.
+fn launch_velocity(r: [f32; 3]) -> [f32; 3] {
+    let heading = r[0] * std::f32::consts::TAU;
+    let up = (TOSS_ELEVATION.0 + r[1] * (TOSS_ELEVATION.1 - TOSS_ELEVATION.0)).to_radians();
+    let speed = TOSS_SPEED.0 + r[2] * (TOSS_SPEED.1 - TOSS_SPEED.0);
+    let flat = speed * up.cos();
+    [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()]
+}
+
+/// The tumble's rates from three random numbers in [0, 1) (fix 7's
+/// stand-in): per axis [`TUMBLE_RATE`], one way below 0.5, the other above.
+fn tumble_rates(r: [f32; 3]) -> [f32; 3] {
+    r.map(|v| {
+        let rate = (TUMBLE_RATE.0 + (v * 2.0).fract() * (TUMBLE_RATE.1 - TUMBLE_RATE.0)).to_radians();
+        if v < 0.5 { -rate } else { rate }
+    })
 }
 
 impl Flight {
     /// The launch from three random numbers in [0, 1): heading,
     /// elevation, speed (rule 3). `shape`: the item's `BOUNDS.KQ` box.
     pub fn launch(item: &str, from: [f32; 3], r: [f32; 3], shape: Option<([f32; 3], [f32; 3])>) -> Self {
-        let heading = r[0] * std::f32::consts::TAU;
-        let up = (TOSS_ELEVATION.0 + r[1] * (TOSS_ELEVATION.1 - TOSS_ELEVATION.0)).to_radians();
-        let speed = TOSS_SPEED.0 + r[2] * (TOSS_SPEED.1 - TOSS_SPEED.0);
-        let flat = speed * up.cos();
         let (min, max) = shape.unwrap_or(([-1.0; 3], [1.0; 3]));
         let mut mover = crate::connor_mover::Mover::character(from, false, min, max, (ITEM_TYPE, ITEM_MASK), (0.0, 0.0), -1);
         // "Edge cases": no box, no collision shape: not even the floor grid
@@ -406,7 +424,7 @@ impl Flight {
         mover.terrain_in_passes = shape.is_some();
         Flight {
             item: item.to_string(),
-            velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()],
+            velocity: launch_velocity(r),
             from,
             clock: 0.0,
             updates: 0,
@@ -423,10 +441,7 @@ impl Flight {
     /// The tumble from three random numbers in [0, 1): per axis a rate of
     /// [`TUMBLE_RATE`], turning one way below 0.5, the other above.
     pub fn with_tumble(mut self, r: [f32; 3]) -> Self {
-        self.spin = r.map(|v| {
-            let rate = (TUMBLE_RATE.0 + (v * 2.0).fract() * (TUMBLE_RATE.1 - TUMBLE_RATE.0)).to_radians();
-            if v < 0.5 { -rate } else { rate }
-        });
+        self.spin = tumble_rates(r);
         self
     }
 
@@ -438,6 +453,21 @@ impl Flight {
         }
         let t = self.updates as f32 * dt;
         std::array::from_fn(|k| rest[k] + self.spin[k] * t)
+    }
+
+    /// Rule 12.3: thrown again from `from` with fresh random launch values
+    /// `r` and tumble `spin`: clock back to 0, not coming down, landed
+    /// flag cleared, the arc's own gravity again (ordinary gravity off).
+    /// The land sound stays played (once per flight).
+    pub fn throw_again(&mut self, from: [f32; 3], r: [f32; 3], spin: [f32; 3]) {
+        self.from = from;
+        self.velocity = launch_velocity(r);
+        self.clock = 0.0;
+        self.coming_down = false;
+        self.arc_over = false;
+        self.mover.use_gravity = false;
+        self.mover.fall_timer = 0.0;
+        self.spin = tumble_rates(spin);
     }
 
     /// Rule 5: where the arc puts it `t` seconds after the throw.
@@ -458,7 +488,10 @@ impl Flight {
     /// `world`: the end test (rule 16), the arc's wanted position (rules
     /// 5, 6, 8, 14) or where it is (rule 15), the move through its mover
     /// (rule 7) and what its touches do (rule 12).
-    pub fn update(&mut self, at: [f32; 3], dt: f32, world: &dyn crate::connor_mover::MoverWorld) -> FlightStep {
+    ///
+    /// `throws_again`: whether a touched thing (by name) has a script or is
+    /// animated (rule 12.3); `random`: fractions in [0, 1) for a new throw.
+    pub fn update(&mut self, at: [f32; 3], dt: f32, world: &dyn crate::connor_mover::MoverWorld, throws_again: &dyn Fn(&str) -> bool, random: &mut dyn FnMut() -> f32) -> FlightStep {
         let mut step = FlightStep { position: at, ..Default::default() };
         // Rule 16, at the start of the update.
         let whole = at.map(|v| v as i32);
@@ -501,14 +534,23 @@ impl Flight {
         let report = self.mover.update(std::array::from_fn(|k| wanted[k] - at[k]), world);
         step.position = self.mover.position;
         step.touches = report.hits.iter().map(|h| format!("{} {} ({})", h.pass, h.hit.what, h.result)).collect();
-        if let Some(h) = report.hits.first() {
+        // Rule 12, at each touch in order.
+        for h in &report.hits {
             if !self.touched {
                 self.touched = true;
                 step.first_touch = Some(h.hit.what.clone());
             }
-            if !self.arc_over {
-                // 5e-1: every touch ends the arc (5e-2: thrown again off
-                // scripted or animated objects).
+            if h.hit.what != "terrain" && throws_again(&h.hit.what) {
+                let r = [random(), random(), random()];
+                let spin = [random(), random(), random()];
+                self.throw_again(h.hit.position, r, spin);
+                let v = self.velocity;
+                step.arc_ended = None;
+                step.thrown_again.push(format!(
+                    "{} from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0})",
+                    h.hit.what, h.hit.position[0], h.hit.position[1], h.hit.position[2], v[0], v[1], v[2]
+                ));
+            } else if !self.arc_over {
                 self.end_arc();
                 step.arc_ended = Some(format!("touched {} (rule 12)", h.hit.what));
             }
@@ -537,10 +579,16 @@ pub(crate) mod tests {
 
     /// Flies until the flight ends (at most 200 updates): every step.
     fn fly(f: &mut Flight, world: &dyn crate::connor_mover::MoverWorld) -> Vec<FlightStep> {
+        fly_by(f, world, &|_| false)
+    }
+
+    /// As [`fly`], with what throws it again (rule 12.3).
+    fn fly_by(f: &mut Flight, world: &dyn crate::connor_mover::MoverWorld, again: &dyn Fn(&str) -> bool) -> Vec<FlightStep> {
+        let mut rng = crate::emitter::Rng::new(7);
         let mut at = f.from;
         let mut steps = Vec::new();
         for _ in 0..200 {
-            let s = f.update(at, DT, world);
+            let s = f.update(at, DT, world, again, &mut || rng.fraction());
             at = s.position;
             let done = s.ended.is_some();
             steps.push(s);
@@ -614,6 +662,31 @@ pub(crate) mod tests {
         assert_eq!(last.ended, Some("held"));
         assert!(last.position[2] >= 499.0 && last.position[2] < 600.0, "on the floor: {:?}", last.position);
         assert_eq!(steps.iter().find_map(|s| s.first_touch.clone()).as_deref(), Some("test"));
+    }
+
+    #[test]
+    fn a_thrown_item_is_thrown_again_off_a_scripted_object() {
+        // Rule 12.3 (M5 5e-2): a wide made-up "barrel" top at z 500 under
+        // the launch point throws it up again until it comes down off it,
+        // on the terrain at 0; a plain object of the same size stops it.
+        use crate::collide::{BoxCollider, ColliderKind, Placement};
+        let ground = crate::connor_mover::tests::Flat(0.0);
+        let kind = ColliderKind { collision_type: 0x141, ..ColliderKind::default() };
+        let o = [BoxCollider { name: "barrel".into(), min: [-1500.0, -1500.0, 0.0], max: [1500.0, 1500.0, 500.0], placement: Placement::at([0.0; 3]), kind }];
+        let scene = crate::connor_mover::Scene::new(&ground, &[], &o);
+        let mut f = Flight::launch("x", [0.0, 0.0, 600.0], [0.1, 1.0, 0.0], PEBBLE);
+        let steps = fly_by(&mut f, &scene, &|n| n == "barrel");
+        let again = steps.iter().filter(|s| !s.thrown_again.is_empty()).count();
+        assert!(again >= 1, "thrown again at least once: {:?}", steps.iter().map(|s| (s.position, s.touches.clone())).collect::<Vec<_>>());
+        assert_eq!(steps.iter().filter(|s| s.first_touch.is_some()).count(), 1, "the land sound once per flight");
+        let last = steps.last().unwrap();
+        assert_eq!((last.ended, last.position[2]), (Some("held"), 0.0), "off the barrel, on the terrain: {:?}", last.position);
+        assert!(last.position[0].abs().max(last.position[1].abs()) > 1500.0, "{:?}", last.position);
+        let mut f = Flight::launch("x", [0.0, 0.0, 600.0], [0.1, 1.0, 0.0], PEBBLE);
+        let steps = fly(&mut f, &scene);
+        let last = steps.last().unwrap();
+        assert_eq!(last.ended, Some("held"));
+        assert!((499.0..600.0).contains(&last.position[2]), "a plain object stops it on its top: {:?}", last.position);
     }
 
     #[test]

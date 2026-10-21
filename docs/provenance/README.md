@@ -2832,3 +2832,13 @@ Replaces 5c-8's stand-in flight. The tumble stays fix 7's stand-in until 5e-3.
 | The flight ends at the start of an update when coming down and unchanged in whole units since the last, or after 10 s; "whole units" cut toward zero | Rule 16; the rounding is **ours** (the note doesn't say) | Unit tests; viewer: ends one update after it is held |
 | No `BOUNDS.KQ` box: nothing tested on the way (not even the floor grid in the passes) | "Edge cases" | Unit test |
 | Flights run after the characters' movers, with the same buildings and objects | Ours (the note gives no order) | Viewer |
+
+### 5e-2, thrown again — `crates/kq8-core/src/item.rs` (`Flight::throw_again`, `launch_velocity`), `fight.rs` (`flights_step`: what throws again)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A touch on anything with a script, or on any animated object, throws it again from the touch point: fresh heading, elevation, speed and tumble, clock 0, not coming down, landed flag cleared, the arc's gravity again | `thrown-items.md` rule 12.3 | Unit test; viewer: crystals on barrel.13 |
+| "Animated": doors, chests, the scripted and animated objects' lists (also play-once copies); "with a script": also clickables and buildings with `script=` | Rule 12.3; `anim-scripts.md` rule 8 (doors, chests and the rest are animated objects) | — |
+| Touches in one update are handled in the order the mover found them; a later touch in the same update can end the new arc | Rule 12 ("at a touch"); the order within one update is **ours** (the note's edge case says the rest of the move still runs) | — |
+| The land sound stays once per flight (not again after a re-throw) | Rule 12.2 ("only the first time ... in its whole flight") | Unit test |
+| The new tumble is fix 7's stand-in until 5e-3 | Ours (stand-in) | — |

@@ -1446,7 +1446,8 @@ Steps (one commit each; logged in `items.log`):
    Tumble and resting pose as before. **Test:** viewer, `--swing
    barrel.12`: crystals that hit the pub drop at its wall; every flight
    logs its touches and its end.
-2. **5e-2, thrown again** (rule 12.3): a touch on an object with a script
+2. **5e-2, thrown again** (**done** 2026-10-20; crystals landing on
+   barrel.13 fly up again) (rule 12.3): a touch on an object with a script
    or an animated object throws it again (fresh launch, clock 0).
    **Test:** an item hitting a barrel flies up again (`items.log`).
 3. **5e-3, the tumble** (rules 9–10): one axis (its own x), −0.5 to +0.5
