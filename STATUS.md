@@ -14,6 +14,13 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   from the hay bale within about 830 sideways. Q141: a script's walk
   waits for any weapon swap to end (B's build is right).
 
+- **2026-10-21 (B): Q147's answers built** (one commit each): the rope
+  model drawn 2,000 behind Connor (it was inside the wall: the user saw
+  no rope fly), the throw camera as traced, the grab's tie takes the +
+  spot, a rope placing runs only the traps' stay test, the top camera
+  skips his first move. Also fixed after the user's look: the snaps at
+  each rope animation's start. Checked in the logs only.
+
 - **2026-10-21 (A): Q147 answered** in `ropeandhook.md` (traced, and
   measured in the running original at the church rope). The camera after
   the throw from below is at the rope's place + (0, 2,250, 350) in the
@@ -505,23 +512,17 @@ M6 has started with the Rope and Hook (6a).
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Stand-ins of 6a (the rope, Q147):** the hook icon takes the first
-  free status place (a); the rope state's handsOff does what `handsOff 1`
-  does to the panels (bottom bar away, spinning mask) but keeps the
-  pointer (b); taking the rope at the top moves the camera as a `move
-  KQCamera` while following (c); `taway`'s own 405 forward step moves him
-  (d); each placing by the rope state is a script `move` for the traps,
-  then an enter test (e); the camera after `btoss`: close behind him at
-  eye level looking up, from the user's check and the note's numbers (f). Not built: first person (only logged), saved games (none
+- **Left in 6a (the rope):** the top trap's `On` comes at his first
+  move (in `taway`), not during the climb as in the original (cause not
+  found: the note's open question 7); the grab tie's 0.5 tolerance is
+  ours. Not built: first person (only logged), saved games (none
   yet), rock throws (none yet: "ignored on the rope" by construction).
   Not run: a ranged weapon held at the start, the cave rope
   (`ropetrp3/4`), other worlds' ropes, a chaser losing him on the rope
   (only the report line and far bats seen), `setRopeCam` spots and the
   camera limits in the viewer (unit tests only).
 - **Next step, suggested:** for the user: the rope by eye in Daventry
-  (`ropeandhook.md` "How to check"); for B: build Q147's answers into
-  the rope (the throw camera, plain `handsOff`, the top camera's
-  skipped first follow). Then: check ranged weapons by eye
+  (`ropeandhook.md` "How to check"). Then: check ranged weapons by eye
   (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Q140, Q141, Q136, Q143, Q144, game over. For the user: potions by eye
@@ -574,9 +575,9 @@ M6 has started with the Rope and Hook (6a).
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
-- For B (answered 2026-10-21 by A): **Q147** (the rope's six stand-ins;
-  see "Where we are"). Left open, small: `ropeandhook.md` open question 7
-  (what sets off the top trap mid-climb).
+- **Q147** answered by A and built by B (2026-10-21). Left open, small:
+  `ropeandhook.md` open question 7 (what sets off the top trap
+  mid-climb).
 - For A (asked 2026-10-21 by B, M5 5g, not blocking): **Q143** (the
   spinning mask and potion icons sharing the 7 status places; which
   frame is the icon's used part), **Q144** (`KQObject::dither` and

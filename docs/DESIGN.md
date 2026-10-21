@@ -1759,6 +1759,13 @@ trap's `Off` comes before the top's `On`; (f) the camera after `btoss`
 looking up): 2,000 behind him (250 was too close), 1,400 up, tilted 1.27 rad, looking the
 way he faces.
 
+Q147 answered by A (2026-10-21) and built, one commit each: (a), (d)
+as built; (b) the rope's handsOff is a plain `handsOff 1`; (c) the top
+camera skips his first move, the lock goes then; (e) a placing runs
+only the stay test; (f) the rope model 2,000 behind him, the throw
+camera at the rope's place + (0, 2,250, 350), tilt 1.27, heading + 3.14;
+the grab's tie takes the + spot. `--rope-cam` removed.
+
 Fix after the user's look (2026-10-21): every movement the rope state
 starts after his own update is drawn from its own start at once (it
 was drawn at the old one's end for one update: the snaps).

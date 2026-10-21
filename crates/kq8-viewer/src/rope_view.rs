@@ -5,7 +5,7 @@
 //! What it does to the game, by the note's rules: his movements (Rope
 //! mode), gravity and step heights (his mover), placing and lifting him,
 //! his turn to the rope's place (the `walkTo` turn), the camera (stays,
-//! spots, looks at the aim point), handsOff with the pointer kept, empty
+//! spots, looks at the aim point), handsOff (as a script's), empty
 //! hands, the hook icons hidden while he hangs. The rope model (`rope`,
 //! `Conrope.anm`) is drawn 2,000 behind him by `connor_view::connor_draw`;
 //! its cues' sounds play from here. Every step goes to `rope.log` (and

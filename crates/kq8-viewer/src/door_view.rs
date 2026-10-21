@@ -1214,7 +1214,7 @@ pub fn trap_step(
                 None => format!("{at}: move KQCamera: no game camera; not applied"),
             },
             // ropeandhook.md rule 9 (M6 6a-2): as a `move KQCamera` while
-            // following (STAND-IN, Q147 c).
+            // following (Q147 c).
             Request::RopeCamera { spot, aim, at } => match camera.as_mut() {
                 Some(c) => {
                     let (tilt, heading) = kq8_core::camera::view_angles(std::array::from_fn(|k| aim[k] - spot[k]));

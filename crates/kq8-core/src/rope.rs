@@ -236,7 +236,7 @@ impl Rope {
 }
 
 /// Rule 7: puts `wanted` in the status icon places (the first free one:
-/// STAND-IN, Q147 a) and takes the other hook icon out. Returns the log
+/// Q147 a) and takes the other hook icon out. Returns the log
 /// lines (the places as `IDCTL_TIMER_<n>`).
 pub fn sync_icon(places: &mut [Option<StatusIcon>; crate::potions::ICON_PLACES], wanted: Option<Hook>) -> Vec<String> {
     use crate::potions::{free_place, take_place};
@@ -246,7 +246,7 @@ pub fn sync_icon(places: &mut [Option<StatusIcon>; crate::potions::ICON_PLACES],
         let has = places.contains(&Some(icon.clone()));
         if Some(h) == wanted && !has {
             match take_place(places, icon) {
-                Some(k) => out.push(format!("{} shown in IDCTL_TIMER_{} (rule 7; the first free place: stand-in, Q147 a)", h.name(), k + 1)),
+                Some(k) => out.push(format!("{} shown in IDCTL_TIMER_{} (rule 7; the first free place, Q147 a)", h.name(), k + 1)),
                 None => out.push(format!("{} not shown: all 7 status places are taken", h.name())),
             }
         } else if Some(h) != wanted && has {
@@ -440,7 +440,8 @@ pub trait RopeHost {
     fn solid_between(&self, from: [f32; 3], to: [f32; 3]) -> Option<(f32, String)>;
     /// Starts the separate rope model (rule 15); `false` if it can't.
     fn start_rope_model(&mut self) -> bool;
-    /// handsOff with the pointer kept (rules 13, 19, 21, 23).
+    /// handsOff, exactly a script's `handsOff 1` / `0` (rules 13, 19, 21,
+    /// 23; Q147 b).
     fn hands_off(&mut self, on: bool);
     /// He hangs, the climb at `phase`, frozen (rules 19, 21).
     fn hang(&mut self, phase: f32);
@@ -548,7 +549,7 @@ impl Climb {
         host.hands_off(true);
         let weapon = c.weapon_before.as_deref().map_or(String::new(), |w| format!(" ({w})"));
         host.note(format!(
-            "rope state: starts from the {} (rule 13): the camera stops following and stays at {}; he turns to face the rope's place {}; the setRopeCam spots 1 {}, 2 {}, limits top {}, bottom {} copied; third person already (no first person: nothing to switch or restore); handsOff on, the pointer kept; hand mode before: {}{weapon}; {ROPE_LIST} ready",
+            "rope state: starts from the {} (rule 13): the camera stops following and stays at {}; he turns to face the rope's place {}; the setRopeCam spots 1 {}, 2 {}, limits top {}, bottom {} copied; third person already (no first person: nothing to switch or restore); handsOff on (as handsOff 1, Q147 b); hand mode before: {}{weapon}; {ROPE_LIST} ready",
             if from == End::Bottom { "foot" } else { "top" },
             fmt3(host.camera_at()),
             fmt3(r.place),
@@ -726,7 +727,7 @@ impl Climb {
                 host.hands_off(true);
                 let p = host.connor_at();
                 if top {
-                    host.note(format!("climb: reached the top end at {}: the hook icon may show again, turning on, handsOff on (pointer kept) (rule 23)", fmt3(p)));
+                    host.note(format!("climb: reached the top end at {}: the hook icon may show again, turning on, handsOff on (rule 23)", fmt3(p)));
                     self.go(Stage::Toff, host);
                 } else {
                     let h = host.heading();
@@ -734,7 +735,7 @@ impl Climb {
                     host.place(to, h);
                     host.set_gravity(true);
                     host.note(format!(
-                        "climb: reached the bottom end at {}: the hook icon may show again, turning on, handsOff on (pointer kept); moved 1,000 toward his back and 4,900 down to {}, gravity on (rule 23)",
+                        "climb: reached the bottom end at {}: the hook icon may show again, turning on, handsOff on; moved 1,000 toward his back and 4,900 down to {}, gravity on (rule 23)",
                         fmt3(p),
                         fmt3(to)
                     ));

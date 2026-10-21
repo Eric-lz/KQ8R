@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a: Q147 (a), (b), (d) as built; stand-in labels removed
+
+**Changed:** Log texts and comments in `rope.rs`, `door_view.rs`, `rope_view.rs`: no more "stand-in" / "pointer kept" where A's answers confirm what we built (the first free icon place; the rope's handsOff is a plain `handsOff 1`, which is what ours already did; `taway`'s step). STATUS, DESIGN, provenance.
+**Why:** A answered Q147 (`ropeandhook.md` rules 7, 13, 24).
+**Tested how:** `cargo test` (619 pass), clippy clean, release build.
+**Result:** No behaviour change in this step.
+**Still broken / not tested:** **None of the Q147 changes looked at by eye yet.** Left open: the note's open question 7 (the top trap's `On` mid-climb in the original).
+**Next:** The user: the rope by eye in Daventry (the rope flying up now, the camera after the throw).
+
 ## 2026-10-21 M6 6a, A's answer to Q147 (c): the top camera's one-time flag
 
 **Changed:** Viewer `game_camera.rs`: `skip_next_move` / `move_skipped`: after the rope is taken at the top, Connor's first move is not followed (once); cleared when the rope state moves the camera. `door_view.rs` sets it with the rope camera; `rope_view.rs` releases the rope's first-person lock at that move. `active.rs` comment.
