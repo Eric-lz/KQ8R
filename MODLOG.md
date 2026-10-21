@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 The user's check of the console
+
+**Changed:** This entry.
+**Why:** The user tried the console (typing line, `list`, `goto`, `heal`, `kill`, ...) while playing.
+**Tested how:** The user's check, typing in the terminal.
+**Result:** "Works very nicely." The typing line at the bottom of the terminal is now checked by hand.
+**Still broken / not tested:** As in the entries below (`goto` can land in a wall; items of later worlds may have no model).
+**Next:** —
+
 ## 2026-10-21 Console: list, goto, heal, kill and a fuller help
 
 **Changed:** New `crates/kq8-viewer/src/console_words.rs`: `help` grouped by use, `list` (item types by category; creatures, doors, chests, objects of this world, nearest first), `find`, `inv`, `stats`, `heal`, `xp`, `god`, `ai`, `goto`, `spawn`, `kill <name>` / `kill near [distance]`, `where`. `fight.rs`: `console_kill` (the death of a hit, no alarm), 1 unit test. `console.rs` uses them. DESIGN (step 3), README, FEATURES, provenance.
