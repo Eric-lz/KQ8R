@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Quieter terminal: the movements' "frame steps" lines go to viewer.log only
+
+**Changed:** Viewer `load.rs` (`connor_set`): the "connor: <movement>: can be cut short …; frame steps …" line is written with `detail` (file only) instead of `summary` (terminal and file).
+**Why:** The user saw these long lines in the terminal at start-up and at a `give`; they are only for checking movements in the log.
+**Tested how:** Release build; `kq8-viewer --world DeadCity --sound off --frames 600 --command "give LakeSword 1,5"`, its terminal output saved and counted.
+**Result:** "frame steps" lines: 0 in the terminal, 287 in `viewer.log` (start-up and the Lake Sword's set). Nothing else changes.
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-21 M6 6c-2: a weapon's movement set is loaded when it is given
 
 **Changed:** Viewer `load.rs`: `weapon_sets` also returns the weapons it left out; `LateSets` (game folder, world, palette, face texture, those weapons) goes with Connor's assets; `read_set`, `ghost_texture`. `connor_view.rs`: the drawing of one animation is now `spawn_frames` (used by `spawn_connor` and the new step); new `late_set_step` (after `door_step`): a carried weapon whose set isn't loaded gets it, drawn under his body. `potion_view.rs`: `ConnorLooks::add` and a redo of the looks. `main.rs`: the step registered. DESIGN, provenance.

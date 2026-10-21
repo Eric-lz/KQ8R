@@ -483,7 +483,7 @@ pub fn connor_set(
         if !c.repeat || !c.transitions.is_empty() {
             let steps: Vec<String> =
                 a.frame_steps.iter().map(|p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])).collect();
-            log.summary(format!("connor: {name}: can be cut short {}; frame steps {}", c.unknown != 0, steps.join(" ")));
+            log.detail(format!("connor: {name}: can be cut short {}; frame steps {}", c.unknown != 0, steps.join(" ")));
         }
         movements.push(ConnorMovement {
             name,
