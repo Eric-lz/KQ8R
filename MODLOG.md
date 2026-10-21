@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a fix 2: the camera after the throw, farther back and adjustable
+
+**Changed:** `rope.rs`: `THROW_CAM` [behind, up, tilt] = [2000, 1400, 1.27] (was 250 behind), kept in the climb's record; `throw_camera` takes it. Viewer: launch option `--rope-cam BACK,HEIGHT,TILT` (`main.rs`, `rope_view.rs` `RopeCam`), FEATURES.
+**Why:** The user's look: the snaps are fixed, but the camera after the throw was too close to the wall and didn't show the rope flying up. The exact placement is not known (Q147 f), so the user can try values against the original.
+**Tested how:** `cargo test -p kq8-core rope` (14 pass), clippy clean. The foot climb run (`--at 152500,207968,-1.5708 ... --aim-point 150000,207968,30000,90`); `rope.log`.
+**Result:** At 142 the camera goes to (149646, 207588, 9200): 2,000 behind him, 1,400 up, tilt 1.270, looking toward the wall and up.
+**Still broken / not tested:** **Not looked at by eye.** Whether the rope is seen flying up from there is for the user to check; the values are a stand-in (Q147 f).
+**Next:** The user: compare with the original, try `--rope-cam` if it's still off.
+
 ## 2026-10-21 M6 6a fix: rope animation snaps and the camera after the throw
 
 **Changed:** Viewer `connor_view.rs`: `redraw_from_walker`, `phase_step_now`, `drawn_phase`; `rope_view.rs`: when the rope state starts a movement after his own update, the drawing starts from that movement's phase at once (logged). `rope.rs`: `throw_camera` (the camera at the end of `btoss`), 1 unit test. QUESTIONS Q147 (f), DESIGN, STATUS, provenance.

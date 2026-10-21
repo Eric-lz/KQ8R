@@ -316,19 +316,21 @@ pub const FOOT_DROP: [f32; 3] = [0.0, 1000.0, -4900.0];
 /// Open question 2 (the camera at the end of `btoss`), STAND-IN (Q147 f)
 /// from the user's check in the original ("close to Connor's eye level,
 /// looking straight up, seeing the rope fly up") and the note's partly
-/// read numbers: 250 behind him (the note's (0, 250, …)), at
-/// `THROW_CAM_HEIGHT` (ours: the height our camera treats as his chest,
-/// `camera.md`), tilted up 1.27 rad, turned half round from the rope's
-/// heading (a camera's heading looks the opposite way to Connor's, so
-/// this looks the way he faces).
-pub const THROW_CAM_BACK: f32 = 250.0;
-pub const THROW_CAM_HEIGHT: f32 = 1400.0;
-pub const THROW_CAM_TILT: f32 = 1.27;
+/// read numbers: [how far behind him, how high above his feet, the tilt
+/// up]: 2,000 behind (the note's 2,000; 250 was too close to the wall,
+/// the user's look), 1,400 up (ours: the height our camera treats as his
+/// chest, `camera.md`), tilted up 1.27 rad, turned half round from the
+/// rope's heading (a camera's heading looks the opposite way to
+/// Connor's, so this looks the way he faces). The viewer's `--rope-cam`
+/// changes it, to find the original's by eye.
+pub const THROW_CAM: [f32; 3] = [2000.0, 1400.0, 1.27];
 
-/// The camera's spot and a point it looks at, for the throw from below.
-pub fn throw_camera(place: [f32; 3], dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
-    let spot = add(place, turned(dir, [0.0, THROW_CAM_BACK, THROW_CAM_HEIGHT]));
-    let look = crate::camera::view_direction(THROW_CAM_TILT, dir[2] + std::f32::consts::PI);
+/// The camera's spot and a point it looks at, for the throw from below;
+/// `cam` as [`THROW_CAM`].
+pub fn throw_camera(place: [f32; 3], dir: [f32; 3], cam: [f32; 3]) -> ([f32; 3], [f32; 3]) {
+    let [back, height, tilt] = cam;
+    let spot = add(place, turned(dir, [0.0, back, height]));
+    let look = crate::camera::view_direction(tilt, dir[2] + std::f32::consts::PI);
     (spot, std::array::from_fn(|k| spot[k] + look[k] * 1000.0))
 }
 
@@ -472,6 +474,8 @@ pub struct Climb {
     pub saved_steps: Option<(f32, f32)>,
     /// The rope state is over (rule 26).
     pub done: bool,
+    /// The camera after the throw from below ([`THROW_CAM`]).
+    pub throw_cam: [f32; 3],
 }
 
 /// Rule 22: how fast the camera's height and the aim point move while
@@ -528,6 +532,7 @@ impl Climb {
             range: (0.0, 0.0),
             saved_steps: None,
             done: false,
+            throw_cam: THROW_CAM,
         };
         host.camera_stay();
         host.turn_to([r.place[0], r.place[1]]);
@@ -617,13 +622,16 @@ impl Climb {
                 let model = if host.start_rope_model() { "the rope model starts (rope, Conrope.anm)" } else { "the rope model could not start" };
                 // Open question 2 (STAND-IN, Q147 f): close behind him at
                 // eye level, looking straight up the rope.
-                let (spot, aim) = throw_camera(self.place, self.dir);
+                let (spot, aim) = throw_camera(self.place, self.dir, self.throw_cam);
                 host.camera_to(spot, aim);
                 host.note(format!(
-                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera close to him at {}, tilted up {THROW_CAM_TILT} rad, looking the way he faces (open question 2: stand-in from the user's check, Q147 f); Connor told to stand still (rule 15)",
+                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera {:.0} behind him and {:.0} up at {}, tilted up {} rad, looking the way he faces (open question 2: stand-in from the user's check, Q147 f); Connor told to stand still (rule 15)",
                     fmt3(self.place),
                     self.dir[2],
-                    fmt3(spot)
+                    self.throw_cam[0],
+                    self.throw_cam[1],
+                    fmt3(spot),
+                    self.throw_cam[2]
                 ));
                 self.stage = Stage::RopeModel;
                 if !host.play(Anim::Own("stop")) {
@@ -931,7 +939,7 @@ mod tests {
     fn the_throw_camera_looks_up_the_way_he_faces() {
         // He faces -x (heading -pi/2): the camera 250 behind (+x), looking
         // toward -x and up.
-        let (spot, aim) = throw_camera([0.0; 3], [0.0, 0.0, -std::f32::consts::FRAC_PI_2]);
+        let (spot, aim) = throw_camera([0.0; 3], [0.0, 0.0, -std::f32::consts::FRAC_PI_2], [250.0, 1400.0, 1.27]);
         assert!((spot[0] - 250.0).abs() < 0.01 && spot[1].abs() < 0.01 && spot[2] == 1400.0, "{spot:?}");
         let d: [f32; 3] = std::array::from_fn(|k| aim[k] - spot[k]);
         assert!(d[0] < 0.0 && d[1].abs() < 0.01 && d[2] > 900.0, "{d:?}");

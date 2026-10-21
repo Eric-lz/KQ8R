@@ -213,6 +213,10 @@ fn climb_step(cl: &mut Climb, host: &mut Host) {
     ));
 }
 
+/// `--rope-cam` (M6 6a fix): the camera after the throw from below.
+#[derive(Resource)]
+pub struct RopeCam(pub [f32; 3]);
+
 /// One update of the rope state, after Connor's own update.
 #[allow(clippy::too_many_arguments)]
 pub fn rope_step(
@@ -223,6 +227,7 @@ pub fn rope_step(
     buildings: Option<Res<Buildings>>,
     objects: Option<Res<ObjectColliders>>,
     shared: Res<Shared>,
+    rope_cam: Res<RopeCam>,
 ) {
     let (Some(mut connor), Some(mut sim)) = (connor, sim) else { return };
     let (c, d) = (&mut *connor, &mut *sim);
@@ -285,6 +290,9 @@ pub fn rope_step(
                 }
                 let (rope, mode, weapon) = (host.w.rope.clone(), host.w.weapon_mode, host.w.weapon_ready.clone());
                 climb = Climb::start(&rope, mode, weapon, &mut host);
+                if let Some(cl) = climb.as_mut() {
+                    cl.throw_cam = rope_cam.0;
+                }
             }
         }
         if let Some(cl) = climb.as_mut() {

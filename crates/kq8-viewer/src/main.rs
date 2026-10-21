@@ -110,6 +110,7 @@ struct Args {
     /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor,
     /// optionally only for the first N updates (`1,0,0,30`).
     hold: Vec<([i8; 3], u64, Option<u64>)>,
+    rope_cam: [f32; 3],
     /// Test: press Jump once, before update N + 1.
     jump: Vec<u64>,
     /// Test: press a turn key before update N + 1 and hold it (`N` or
@@ -176,6 +177,7 @@ fn parse_args() -> Result<Args, String> {
         frames: None,
         lift: None,
         hold: Vec::new(),
+        rope_cam: kq8_core::rope::THROW_CAM,
         jump: Vec::new(),
         turn: None,
         at: None,
@@ -330,6 +332,13 @@ fn parse_args() -> Result<Args, String> {
                     _ => return Err("--turn needs updates[,1 left / -1 right] e.g. 40 or 40,-1".into()),
                 };
             }
+            "--rope-cam" => {
+                // M6 6a fix: the camera after the rope's throw (Q147 f).
+                let v = value()?;
+                let n: Vec<f32> = v.split(',').map(|x| x.trim().parse::<f32>()).collect::<Result<_, _>>().map_err(|_| "--rope-cam needs BACK,HEIGHT,TILT e.g. 2000,1400,1.27".to_string())?;
+                let [b, h, t] = n[..] else { return Err("--rope-cam needs three numbers, e.g. 2000,1400,1.27".into()) };
+                a.rope_cam = [b, h, t];
+            }
             "--frames" => a.frames = Some(value()?.parse().map_err(|_| "--frames needs a number".to_string())?),
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => positional.push(arg),
@@ -399,6 +408,9 @@ Showing things:
 Used mostly for debugging:
   --model <file>             show one model, e.g. --model smlchest.KQS
   --palette <file>           another palette for --model
+  --rope-cam BACK,HEIGHT,TILT  the camera after the rope's throw from below: how far
+                             behind Connor, how high above his feet, its tilt up in
+                             radians (default 2000,1400,1.27; a stand-in, Q147 f)
   --frames <number>          close the window by itself after that many frames
 
 Test options (drive Connor from the command line; ground view only).
@@ -574,6 +586,7 @@ fn main() -> ExitCode {
                 .insert_resource(terrain_view::Fly::new())
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
+                .insert_resource(rope_view::RopeCam(args.rope_cam))
                 .insert_resource(connor_view::JumpAt(args.jump.clone()))
                 .insert_resource(connor_view::TurnAt(args.turn))
                 .insert_resource(connor_view::StartAt(args.at))

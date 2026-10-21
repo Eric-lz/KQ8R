@@ -1755,8 +1755,8 @@ their steps as any one-shot does (only `taway` has one, 405 forward);
 (e) each placing by the rope state counts for the traps as a script's
 `move` (stay test), then the enter test at the new place, so the foot
 trap's `Off` comes before the top's `On`; (f) the camera after `btoss`
-(open question 2): replaced after the user's check (close at eye level,
-looking up): 250 behind him, 1,400 up, tilted 1.27 rad, looking the
+(open question 2): from the user's check (close at eye level,
+looking up): 2,000 behind him (250 was too close), 1,400 up, tilted 1.27 rad, looking the
 way he faces.
 
 Fix after the user's look (2026-10-21): every movement the rope state
