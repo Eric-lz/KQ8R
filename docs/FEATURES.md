@@ -544,8 +544,8 @@ miss, roll, flinch, death, drop and shot is in
   reaches the top of the window and goes up when it moves away; it also
   drops down for 1.5 s when a quest item comes in. The eight slots show
   mushrooms, crystals, waters, elixirs and the four potions with their
-  counts; keys **1–8** or a click use one (health added, capped; potions
-  wear off after their time). Picked-up stacks join (one gold entry);
+  counts; keys **1–8** or a click use one (health added, capped; potions:
+  see "Health items and potions"). Picked-up stacks join (one gold entry);
   a new weapon or armour piece pushes out the old one, which drops
   where the new one lay, and its numbers change the bar. New items and
   higher counts blink. A right click on an item: Connor describes it
@@ -573,6 +573,37 @@ miss, roll, flinch, death, drop and shot is in
   right corner at its own size, standing on the bottom bar and rising
   and falling with it (4c-9); the empty part of the meters' bars is
   black; the meters fit the bar without a gap (4c-9).
+
+## Health items and potions (milestone M5, step 5g, 2026-10-21)
+
+Checked in the logs only (`items.log`, `gui.log`, `characters.log`);
+not looked at by eye yet.
+
+- **Using one:** keys 1–8 or a click use the slot at once, even while
+  jumping, talking or fighting; refused only in cutscenes (handsOff) or
+  while Connor is dying. The use sound plays only when it takes effect;
+  no remark. A health item heals (capped at 10 × level) even at full
+  health. The same potion again while it runs does nothing.
+- **The timer:** whole seconds of game time (Clarity 60, Invisible 15,
+  shield and Strength 20); nothing ends a potion early. Its icon sits in
+  the status icons at the bottom right (first free place) and drains
+  from the top, the used part black with a gold outline; the spinning
+  mask shares the places. The last dose's slot looks empty while it runs.
+- **Shield:** armour → itself + half, at least 50, at most 100, shown in
+  red; a see-through shape circles Connor. At the end only what it added
+  is taken off, so armour put on meanwhile is kept (the original loses
+  it). In the last temple it gives half per hit (`setConnorFlag
+  InTemple4`).
+- **Strength:** hand-weapon number + half, in red; Connor turns iron
+  grey with the iron face.
+- **Invisible:** characters lose him (a chasing goblin gives up within
+  3 s and walks home); Connor is drawn as a see-through mesh (the game's
+  `I_` pictures for weapons and items).
+- **Clarity:** the clarity face; hidden things show for 60 s (Daventry:
+  the keep wall turns see-through, the wizard's hidden chest appears and
+  can be opened).
+- **Experience at pickup:** the candle +25 (never taken back) and the
+  game's other built-in amounts for quest items.
 
 ## Viewer helpers (not in the original)
 

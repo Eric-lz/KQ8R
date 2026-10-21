@@ -5,20 +5,22 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-20)
+## Where we are (2026-10-21)
 
-- **2026-10-20 (A): health items and potions**, `docs/behaviour/potions.md`
-  (inventory.md rules 16, 18 and interface.md rule 32 point there). Slot
-  click / keys 1–8 refused only in `handsOff` or dying; no movement, no
-  remark; a running potion can't be taken again (nothing happens). Shield:
-  protection + half, 50–100, an `orbit1` shape circles him; Strength:
-  hand number + half, iron skin; both red on the bar. Invisible: characters
-  are told he is 100,000 below (they lose him), Connor drawn as a mesh.
-  Clarity: `Reveal True/False` to objects with `groupsAlways` bit 2048
-  (Daventry: keep wall, wizard's hidden chest). Timer: whole seconds of
-  game time, stops in the main menu; drain icon in the first free
-  `IDCTL_TIMER` place. Candle: +25 experience at pickup, never taken
-  back. Q109 (d) answered, (a) for the slots. For B: build it.
+- **2026-10-21 (B, M5 5g-1 to 5g-8): health items and potions built**
+  from `docs/behaviour/potions.md` (plan in `docs/DESIGN.md` "5g", one
+  commit per step; **checked in the logs only, not by eye**). Keys 1–8
+  refused only in handsOff or dying; a running potion can't be taken
+  again; whole-second timers on game time. Timer icons drain in the
+  status places (from the top, black and gold) and the red numbers.
+  Shield: protection + half (50–100), the `orbit1` shape circles him,
+  the end takes off only what it added ("Do not reproduce" 1);
+  `setConnorFlag InTemple4`. Strength: hand + half, iron skin, potion
+  faces. Invisible: characters lose him (a chasing goblin gives up after
+  3 s), `I_` and mesh textures. Clarity: `Reveal True/False` (Daventry:
+  the keep wall, the wizard's hidden chest, which now shows and opens).
+  Candle +25 at pickup and the other built-in pickup experience. New
+  questions **Q143** (the mask's icon place), **Q144** (`dither`).
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
@@ -151,143 +153,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   character), **Q133** (the leash loops while Connor is within reach),
   **Q134** (does the chase wait for `birth`?).
 
-- **2026-10-19 (A): characters moving on their own studied**, in
-  new **`docs/behaviour/character-movement.md`** (M5's first part, up to
-  the first swing; not yet checked in the original). In short: a
-  character moves only by its `walk` / `run` model's steps (bone goblin
-  917 / 3,068 units/s, spriggan 1,588 / 3,366, zombie 511, bat 1,159,
-  chicken 119 / 947) and steers with the 3.5 rad/s turn; no path finding,
-  only a "stuck" escape (moved < 200 in 0.5 s: snap to a free diagonal,
-  run; the chickens trigger it all the time). Wanderers follow their
-  `loop` / `patrol` points once **active** (seen Connor once; at most 6
-  at a time; lost again when out of range, and then reset to their home
-  point if Connor is far); goblins and spriggans stop for a random
-  fidget (`attack` / `react`) every 2–12 s. Sight: every second, from the
-  top of the character's box, blocked by ground, objects and buildings
-  but not by characters. Alarm when seen inside the alarm radius:
-  0–1 s reaction, then turn and chase (walk or run, 50/50); gives up
-  after 3 s out of sight or beyond its leash (`chase a b`: home radius a,
-  chase radius b) and goes home; zombies sink back (`hide`). Corrects
-  `characters.md` rules 8 and 29–31. **Q127–Q130 answered** (doors and
-  chests start on `Stop`/`Stop` but their own `open` replaces the waiting
-  `Stop`; characters' own touch table, Connor an obstacle in their own
-  move; a flyer over water ends each update on the surface; Connor's
-  `shadowMask` is 1 and `allowShadows 0` hides his shadow too).
-- **New 2026-10-20 (B, M4 4d-12-1 to -3): characters are solid for
-  Connor** (`connor-collision.md` rules 2–4, 18–19; one commit per step;
-  plan in `docs/DESIGN.md` "4d-12"; **checked by the user against the
-  original 2026-10-20**: same stopping distance at a goblin, slides
-  round it; walking away, the Wizard and his conversation right). Each
-  near character is an upright cylinder for him; a character hit is
-  never head-on, so he slides round it (straight at its middle he stays,
-  still in his walk). Checked in the logs at the goblin, the Wizard (and
-  the conversation still puts him on his spot), the Uglybeast, and
-  turning away. New question **Q131** (the cylinder's size; vertical
-  moves; landing on a monster's top: until answered an ordinary
-  landing).
-- **New 2026-10-19 (B): A's character answers built** (one commit per
-  step; plan in `docs/DESIGN.md` "A's answers Q116, Q117, Q121–Q124";
-  **none looked at by eye yet**): the movement names start as `Stop`
-  (4d-8: every Daventry character starts on `stop`, the torches and
-  fish get their random start); the start-up at the first update or
-  first request, Wait after `birthDelay` through the queue (4d-9);
-  the end of a `speak` (4d-10: nothing when already in Wait);
-  transitions on characters (4d-11; the Girl's `cowerstop`, unit tests
-  only: she is never in range); gravity (4d-6b: characters fall onto
-  the terrain and building floors, mask 0 only the ground check, no
-  Fall state; the flying mover for the bats); shadows on the terrain
-  (4d-7b-1, -2: a dark copy of the figure along the sun, 0.5 multiply,
-  cut beyond 1,500; Connor's too, 4d-7b-2b). **Shadows checked by the
-  user (2026-10-20):** they match the original (wading, the jump's cut),
-  except that the original's flicker and gaps are, by the user's
-  decision, not reproduced. Shadows on buildings (4d-7b-3, Q135
-  built in 4d-7b-5) and plain objects casting (4d-7b-4) are built. New questions for A: **Q127** (doors, chests and the
-  waiting `Stop`), **Q128** (what stops a character's fall: objects,
-  characters, Connor), **Q129** (the flying drop over water).
-- **New 2026-10-19 (B, after the user's check of 4e): 4e-8 to 4e-10.**
-  The user found: offering an item, the camera cuts and their stop by the
-  right button, and walking away and back all work; but the right-button
-  camera turns between the Wizard and Connor in the original (now so,
-  Q126 updated), and the Uglybeast still snapped and flickered (now
-  fixed from A's answers: Q120 a 0 s loop never ends, Q119 delay-0 events
-  before drawing). **All three checked by the user in our viewer
-  (2026-10-19): fixed.** Other characters
-  standing still is expected until M5 (wandering, `characters.md`).
-  Q119's change makes every `EndLoop` and delay-0 event one update
-  earlier, also in M3's scenes.
-- **New 2026-10-19 (B, M4 4e-1 to 4e-7): conversations are built** from
-  `conversation.md` (one commit per step; plan in `docs/DESIGN.md` "4e";
-  **not looked at by eye yet**): the info objects (`kq8 conv-verify`: 17
-  in the data, 169 `KQConner::conversation` calls all with `<enemy>` 0,
-  19 characters with goodbye/welcome-back keys); the partner's second
-  line queue with goodbye and welcome back; the command, the partner's
-  Talk state and Connor's talk state (cases "there", "close", "walk" with
-  `stopwalk` / `walkstopright`, the stay test, the end with `TalkExit`
-  before the last `TalkComplete`); clicks by area (`Special`, `do`,
-  `TooFar`) and `InvConv`; the camera cuts (the Wizard's first meeting
-  2 3 3 5 2 1 1 1 1 3 5 2 3 6, as the note) and the right button (new
-  test option `--right N`); the bottom bar away and back; Connor's
-  gestures. Checked from the logs against every Daventry check in the
-  note (Wizard: the three click spots, the first meeting, walking away
-  and coming back; Uglybeast: case "there", `TalkExit` then
-  `TalkComplete 6 11`). New log `conversation.log`. Q125 (keys before
-  the stay test, Jump, push) and Q126 (the camera's aim) for A.
-- **New 2026-10-19 (B, M4 4d-1 to 4d-5): characters are drawn and
-  animated** from `characters.md` (one commit per step; plan in
-  `docs/DESIGN.md` "4d"; checked by the user after 4d-2): the monster
-  list and the types (`kq8 character-verify`: Daventry 22 + 2 files, 52
-  lines, 0 problems); every character drawn from its `.anm` list (the
-  orange cubes are gone; zombies hidden until born; the boss spriggan's
-  skin swap; clickable by their box, not solid); the states (updated
-  only while near or far, the first update, Wait and `Stop` at a random
-  frame and speed, back to `Stop` after a one-shot, no state, `setState`
-  and Special lists); turning toward a `speak` listener at 3.5 rad/s
-  (`noTurn` blocks it); mouths (lip textures, the Uglybeast's mouth
-  movements) and gestures; Wait after the last line. New test option
-  `--command "WORDS",N`; new log `characters.log`. Left: A's answers to
-  Q116–Q124 (below), 4d-6 gravity, 4d-7 shadows.
-
-- **New 2026-10-19 (A): Q116, Q117, Q119–Q124 answered** (`characters.md`
-  rules 8, 12, 14, 15, 18, 20, 27, 36, new 37; `talking.md` 13a;
-  `anim-scripts.md` 3, 8, 10a; `connor-physics.md`). For the user's two
-  sightings: **the snap (Q119)**: the original handles everything sent
-  with delay 0 before drawing the frame, so `stand` replaces `Stop`
-  unseen; **the flicker (Q120)**: the Uglybeast's mouth poses have a loop
-  duration of 0 and never end, so no `Stop` comes back between codes
-  (the "too far" line's return to idle is `ugly.cs` sending `stop`).
-  Found on the way: every animated object starts with the movement
-  names `Stop`/`Stop`, so all Daventry characters start on `stop`, the
-  Lady and the Shadow are in Wait, and `flags=8` torches and fish get the
-  random start (corrects `anim-scripts.md` rule 3). Gravity (Q122):
-  characters are type 0x42 / mask 0x281F (terrain and buildings count),
-  no Fall state. Shadows (Q123): along the sun, onto terrain and
-  buildings, each triangle on its own, strength 0.5; `shadowvisible` is
-  only for the relighting tool. **User's check:** shadows fall to one
-  side like the hills', about half as bright (a quarter on overlaps), and
-  land on building floors and walls, from characters and barrels alike. No fading; cut beyond 1,500
-  above the ground (gone at the top of a jump); on water they lie on the
-  surface (a wading Connor shows only his part above it).
-- **2026-10-19 (A, B): Q118** (the world palette is `KQWorld::objectPalette`): built,
-  the bars and captions show in all 12 worlds.
-- **2026-10-19 (A): characters and conversations studied**
-  (`characters.md`, `conversation.md`), both checked by the user in the
-  original.
-- **2026-10-19 (B): M3 is done** (the camera checked by the user against
-  the original). **2026-10-18 (B, M4 4c):** the on-screen interface and
-  Connor's inventory, checked by the user (`docs/FEATURES.md`).
-- **New 2026-10-18 (B): the back flip at a wall.** Backed against a
-  wall with back still held, Jump is the back flip (the user's check in
-  the original); stand-in rule: `stop` with the back wall block on
-  (Q112). Checked by the user.
-- **Before that (A, 2026-10-18):** `interface.md` and `inventory.md`
-  written and checked by the user in the original.
-- **M2 and M3 (Daventry comes alive) are done**: doors, emitters,
-  flowing water, animated objects, traps, items, chests, scripted
-  objects, clicking, sound effects and world music, scripted animations,
-  pushing and the bricks puzzle, cutscenes and the camera (checked by
-  eye; see `docs/FEATURES.md`).
-- **Before that (B, M4 4a, 4b): remarks and speech** (`talking.md`),
-  checked by the user against the original.
+- **Earlier (2026-10-18 to 2026-10-19):** M2 and M3 done; M4's speech,
+  interface, inventory, characters and conversations built and checked
+  by the user. Details: `docs/FEATURES.md` and `MODLOG.md`.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Connor against monsters.
 
@@ -368,7 +236,10 @@ characters and conversations done; the menus postponed) and **M5**
   `panels.rs` (shown/hidden, sliding, pop-ups), `meters.rs` (bar
   percents and widths), `gui_draw.rs` (a panel drawn from its layout),
   `inventory.rs` (slot pictures), `connor_inventory.rs` (adding,
-  stacking, equipment, applying, slot clicks, the hand). Viewer
+  stacking, equipment, applying, slot clicks, the hand). M5 5g:
+  `potions.rs` (timers, icon places, the four effects, pickup
+  experience); viewer `potion_view.rs` (the orbit, Connor's skin, faces
+  and Invisible look, `dither`). Viewer
   `gui_view.rs`: the panels, the pointer, clicks and keys on the bars.
 - `crates/kq8-audio` (5 unit tests): our mixer and the sound card (cpal).
   Runs at a fixed **15 updates per second**; the ground animators run on
@@ -414,7 +285,7 @@ characters and conversations done; the menus postponed) and **M5**
 - M1 (checked by eye in Daventry): ground with textures; 30 buildings; the
   objects the world scripts load; see-through objects. All 12 worlds load.
   Lighting of the ground, models and buildings, and the haze/fog (see
-  "Where we are"). F7 (light) and F8 (haze) switch them; start options
+  `docs/FEATURES.md`). F7 (light) and F8 (haze) switch them; start options
   tested, the key presses not tested by a test option.
 - Viewer helpers: H shows invisible, unused and hidden objects; U shows
   the floor grid under the water (key presses not tested by a test
@@ -474,15 +345,18 @@ characters and conversations done; the menus postponed) and **M5**
 - Checked by eye by the user (2026-10-16): point lights on building
   surfaces, `KQPointLight` always shining, reach to a building in its
   own axes. F9 (dynamic lighting) checked by the user 2026-10-17.
-- Sound effects (M3 3h, 2026-10-17): see "Where we are". Checked by
+- Sound effects (M3 3h, 2026-10-17): see `docs/FEATURES.md`. Checked by
   ear by the user. World music (3h-5) too.
 - Remarks and speech (M4 4a) and the click turn and turn keys (4a-7
   to 4a-9): checked by the user against the original, 2026-10-18.
 - The interface and inventory (M4 4c): checked by the user against the
   original, 2026-10-18 (the corner panels option: looked at by the user,
   no complaint). The back flip at a wall: checked by the user.
-- Conversations (M4 4e): checked in the logs only (see "Where we are").
-- Tests: 548 unit tests pass (126 + 406 + 5 + 11), 2026-10-20.
+- Conversations (M4 4e): built from the logs, then checked by the user
+  (walking away and back, the cuts, the Uglybeast; `docs/FEATURES.md`).
+- Health items and potions (M5 5g, 2026-10-21): checked in the logs only
+  (`MODLOG.md`); not looked at by eye yet.
+- Tests: 615 unit tests pass (131 + 468 + 5 + 11), 2026-10-21.
 
 ## What doesn't work yet / next
 
@@ -512,17 +386,26 @@ characters and conversations done; the menus postponed) and **M5**
 - **Stand-ins of 4c** (Q108–Q111): the 800 × 600 screen and how the
   layout's pictures scale with it (× 1.25, nearest pixel, tiled when
   smaller); the panels' animations at 15 frames per second; counts of 0
-  not written; the rocks picture; the blink's order; potions on game
-  time; a `give`'s pushed-out piece at Connor's feet; the rope held and
-  its remark; the pointer's click point at its top-left. Not built: the
-  map (M6), the help popup and F1, the red boosted numbers and the
-  potion timer icons (M5), the level-up flame (not traced), weapon
-  readying (M5). Escape still quits: the original's main menu pauses
+  not written; the rocks picture; the blink's order; a `give`'s
+  pushed-out piece at Connor's feet; the rope held and its remark; the
+  pointer's click point at its top-left. Not built: the map (M6), the
+  help popup and F1, the level-up flame (not traced). Escape still quits: the original's main menu pauses
   the game (a menu step must stop the updates and the panels' timers).
   When standing, an automatic turn plays `Stop` for its first update
   even if he was already turning on the spot (as rules 24–25 say).
   Q111 (Space's sounds, the mask's place and size, black behind the
   bars) built from the user's checks; the exact rules are not traced.
+- **Stand-ins and gaps of 5g (potions):** the spinning mask takes the
+  first free status place like a potion, and the potion icon's used
+  part is its `.pba`'s frame 0 (Q143); `KQObject::dither` draws half
+  see-through, `dithered=1` ignored (Q144); the orbit's angle 0 along +x
+  and the shape turning with it (ours). Not built: the hurt line while
+  invisible (rule 27), the same lowering of Connor's reported place
+  during cutscenes, talk and the rope (rule 26; waits for the user's
+  go-ahead, it changes characters outside potions), first-person arms,
+  armour skins (the temple armour's `con65`), the help pop-ups (logged).
+  The helmet's face set `chf` exists in no world, so his face stays.
+  Potions are not kept across saves or worlds (we have neither yet).
 - **Stand-in of the back flip at a wall (Q112):** the game may test the
   back key or the movement asked for rather than the back wall block;
   it only differs in cases not seen yet.
@@ -567,8 +450,8 @@ characters and conversations done; the menus postponed) and **M5**
 - **Next step, suggested:** for the user: check ranged weapons by eye
   (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
-  Q140, Q141, Q136, game over. For B: `potions.md` (health items and
-  potions, studied by A). **The main
+  Q140, Q141, Q136, Q143, Q144, game over. For the user: potions by eye
+  in Daventry (`potions.md` "How to check" 2–7). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -617,6 +500,11 @@ characters and conversations done; the menus postponed) and **M5**
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
+- For A (asked 2026-10-21 by B, M5 5g, not blocking): **Q143** (the
+  spinning mask and potion icons sharing the 7 status places; which
+  frame is the icon's used part), **Q144** (`KQObject::dither` and
+  `dithered=1`: how a dithered object is drawn). `potions.md` open
+  questions 3 (help pop-ups) and 4 (missing face combinations) remain.
 - For A (asked 2026-10-21 by B, the user's check): **Q142**
   (`checkDistance`: what distance, between what, which result; it
   decides the axe puzzle: from the floor Connor must not reach the axe,
@@ -660,8 +548,8 @@ characters and conversations done; the menus postponed) and **M5**
   how rectangles, pictures and fonts scale; how smaller pictures fill
   their box; the panels' animation speed), **Q109** (counts of 0 for
   gold and rocks, the rocks picture, the blink's order, a `give`'s
-  pushed-out piece, the top bar in a window; the potions' clock and the
-  slots' count 0 answered in `potions.md`), **Q110** (the remark
+  pushed-out piece, the top bar in a window; (d) the potions' clock and
+  (a) the slots' count 0 answered in `potions.md` and built in M5 5g), **Q110** (the remark
   numbers in `inventory.md` rule 9: our reading names the right lines;
   the rope held or not; the pointer's click point; the gold button
   while the coins are held), **Q111** (answered by the user's checks
