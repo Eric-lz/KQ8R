@@ -1912,6 +1912,10 @@ Steps (one commit each):
    creature, at nothing, at the ground near him; the time from throw to
    catch (1.0 s of flight at Daventry's range 15,000 → 1.25 s).
 
+Fix after the user's check (2026-10-21, Q148 c): the hammer back while
+`attack` plays cuts it short with `catch` at once (against a wall he
+catches it the moment it leaves his hand).
+
 Not in 6b: first person (not built); Dead City (not loaded yet, so the
 lever is unit-tested only); the M7 base damage idea. How the hammer model
 is turned in flight is not in the note: drawn like a bolt (pointing along

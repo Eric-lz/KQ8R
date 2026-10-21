@@ -442,8 +442,7 @@ M6 has started with the Rope and Hook (6a).
   chain mail, boots and gloves are carried but not put on (protection 0
   in Swamp). Only the ranged weapon's bolt file is now taken (6b-1).
 - **Stand-ins of 6b (Q148):** where the hammer turns back without a touch;
-  the model drawn pointing along its flight; back before `attack` ends:
-  `catch` after it; requests during the throw wait for the catch; the
+  the model drawn pointing along its flight; requests during the throw wait for the catch; the
   throw leaves the panels as they are. Not run: a throw from a real walk,
   Dead City's lever.
 
@@ -588,7 +587,7 @@ M6 has started with the Rope and Hook (6a).
 
 - For A (asked 2026-10-21 by B, M6 6b, not blocking): **Q148** (a: where
   the hammer turns back at its range or the ground; b: how its model
-  turns in flight; c: back before `attack` ends; d: requests during the
+  turns in flight; c: answered by the user's check and built; d: requests during the
   throw; e: whether the throw's handsOff moves the panels).
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only

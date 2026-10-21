@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6b fix: the hammer's return cuts the throw short
+
+**Changed:** Viewer `connor_view.rs`: `throw_caught` starts `catch` at once also while `attack` plays (it waited for `attack`'s end); `throw_step` doesn't start `catch` again when `attack` was already cut; each throw movement is drawn from its start at once (`redraw_from_walker`, as the rope's 6a fix). Q148 (c) marked answered; provenance, DESIGN, STATUS.
+**Why:** The user's check in the original: right against a wall Connor plays the catch the moment the hammer leaves his hand; ours finished the throw first.
+**Tested how:** `cargo test --workspace` (637 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 1500 --no-ai --command "give AzrielHammer 1,5" --command "move Connor 0 280866 195989 15000 0 0 0.75,10" --key left:IDCTL_INVBAR_LONG,20 --aim-point 281478,195332,14757,80`; `fight.log`.
+**Result:** `do` at 91; the hammer touches the cottage in its first update (470 out) and is back at 93: "'conhamr.anm/catch' starts, 'conhamr.anm/attack' cut short at 0.722"; standing at 104 (1.60 s, was 1.93 s). A longer throw (back after `attack` ended) is unchanged.
+**Still broken / not tested:** **Not looked at by eye.** Q148 a, b, d, e still open.
+**Next:** The user: the wall throw by eye.
+
 ## 2026-10-21 M6 6b-3: Connor throws Azriel's Hammer and catches it
 
 **Changed:** `kq8-core/connor.rs`: walker mode `Throw` (`throw_play`, `throw_leave`), shielded from falls, landings and pushes in `connor_update.rs` like the rope's; unit test. Viewer `connor_view.rs`: `Throw`, `throw_click`, `throw_caught`, `throw_step`, the `do` cue, state requests refused during the throw. `door_view.rs`: with a `KQHammer` bolt file the click throws instead of shooting; the hammer launched at the cue from his shoot offset; `hammers_back` → `catch`; characters still see him during the throw. `gui_view.rs`: the throw's handsOff leaves the panels alone. `load.rs`: the hammer list's `wait` and `catch` loaded; every ranged weapon's bolt file the world has is read (a console `give` in Daventry). Q148 (c)–(e); provenance; DESIGN.

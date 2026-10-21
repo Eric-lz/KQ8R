@@ -1318,22 +1318,25 @@ impl ConnorSim {
         line
     }
 
-    /// Rule 9 (M6 6b-3): the hammer came back: `catch` at once from `wait`,
-    /// or after `attack` if it is still playing (ours, Q148 c). Returns
-    /// the line for `fight.log`.
+    /// Rule 9 (M6 6b-3): the hammer came back: `catch` at once, from
+    /// `wait` or cutting `attack` short (the user's check in the original,
+    /// Q148 c: against a wall he catches it as soon as it leaves his hand).
+    /// Returns the line for `fight.log`.
     pub fn throw_caught(&mut self, how: &str) -> String {
         let Some(t) = self.throw.as_mut() else {
             return format!("{how}: he is not throwing: nothing");
         };
         t.back = true;
         let secs = (self.updates - t.from_update) as f64 / kq8_core::UPDATES_PER_SECOND;
-        if self.walker.mode == Mode::Throw && self.walker.movement == t.wait {
-            let c = t.catch;
-            self.walker.throw_play(c);
-            format!("{how}: '{c}' starts, {secs:.2} s after the click (rule 3)")
-        } else {
-            format!("{how}: '{}' still plays: '{}' when it ends ({secs:.2} s after the click; ours, Q148 c)", self.walker.movement, t.catch)
+        if self.walker.mode != Mode::Throw || self.walker.movement == t.catch {
+            return format!("{how}: '{}' plays already or he is not in the throw state ({secs:.2} s after the click)", t.catch);
         }
+        let (c, attack, was, phase) = (t.catch, t.attack, self.walker.movement, self.walker.phase);
+        self.walker.throw_play(c);
+        // Drawn from its start at once (as the rope's, 6a fix).
+        self.redraw_from_walker();
+        let cut = if was == attack { format!(", '{was}' cut short at {phase:.3} (the user's check, Q148 c)") } else { String::new() };
+        format!("{how}: '{c}' starts{cut}, {secs:.2} s after the click (rule 3)")
     }
 
     /// Rule 3 (M6 6b-3), each update after his own: `attack` ended ->
@@ -1344,9 +1347,11 @@ impl ConnorSim {
         let t = self.throw.clone()?;
         let mut lines = Vec::new();
         for e in ended {
-            if e == t.attack {
+            // Not when the hammer's return already cut it short (Q148 c).
+            if e == t.attack && self.walker.movement == t.attack {
                 let next = if t.back { t.catch } else { t.wait };
                 self.walker.throw_play(next);
+                self.redraw_from_walker();
                 lines.push(format!("'{e}' ended: '{next}' (rule 3)"));
             } else if e == t.catch {
                 self.walker.throw_leave();
