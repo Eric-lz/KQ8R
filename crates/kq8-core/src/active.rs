@@ -6168,6 +6168,35 @@ endif
     }
 
     #[test]
+    fn connor_s_bolt_starts_at_the_crossbow_part_and_flies_to_the_aim_point() {
+        // ranged-weapons.md rules 17, 21-25 (M5 5f-4, 5f-5).
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().collision_type = 0x42;
+        a.world.characters_solid.insert("gob".into());
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 5, 0, 0]), level: 1 });
+        a.world.projectiles.insert("prscbolt.kq".into(), scbolt());
+        a.world.connor_projectile = Some("Prscbolt.kq".into());
+        a.world.connor_shoot_offset = [-315.0, -327.0, 1027.0];
+        // Connor 5,000 south of gob, facing it (heading pi: +y).
+        let r = kq8_data::objects::rotation([0.0, 0.0, std::f32::consts::PI]);
+        a.world.connor_shoot([0.0, -5000.0, 100.0], r, Some(([-231.0, -832.0, 1067.0], "test part".into())), [0.0, 0.0, 1167.0], "attack");
+        let b = a.world.bolts[0].clone();
+        assert_eq!(b.position.map(f32::round), [231.0, -4168.0, 1167.0], "832 ahead, 231 to his right, 1,067 up");
+        assert_eq!((b.damage, b.shooter.as_str()), (5, "Connor"));
+        assert_eq!(a.world.connor_shoot_offset, [-231.0, -832.0, 1067.0], "kept as his shoot offset");
+        for _ in 0..10 {
+            fly(&mut a);
+        }
+        assert!(a.world.fight_log.join("\n").contains("gob: hit by Connor, Projectile"));
+        // No part in the frame: his shoot offset; NoRanged: no bolt.
+        a.world.connor_shoot([0.0, -5000.0, 100.0], r, None, [0.0, 0.0, 1167.0], "attack");
+        assert!(a.world.fight_log.join("\n").contains("start offset (-231, -832, 1067): no such part in the frame: his shoot offset"));
+        a.world.connor_projectile = None;
+        a.world.connor_shoot([0.0, -5000.0, 100.0], r, None, [0.0, 0.0, 1167.0], "attack");
+        assert!(a.world.fight_log.join("\n").contains("he has no bolt file (NoRanged): no shot"));
+    }
+
+    #[test]
     fn a_bolt_on_an_immune_character_does_no_damage_and_tells_its_script() {
         // Rule 30: type bit 0x4000 (the Wizard and the Knight, 0xC021).
         let mut a = fighter();

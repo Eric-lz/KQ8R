@@ -480,8 +480,16 @@ miss, roll, flinch, death, drop and shot is in
   weapon away and takes the new one out, and his whole set of
   movements becomes the weapon's. The pointer: sword, crossbow arrow or
   the golden one (Ctrl held with a weapon ready: the golden one). The
-  Small Crossbow (`sprgnbow`'s drop) can be readied; it doesn't shoot
-  yet. `KQConner::setDoMode` / `getDoMode` work.
+  Small Crossbow (`sprgnbow`'s drop) can be readied.
+  `KQConner::setDoMode` / `getDoMode` work.
+- **Shooting (M5 5f-5):** with the crossbow ready a left click aims at
+  what it points at (a creature, an object, a building, the ground, or
+  far away into the sky; never steeper than about 33°); Connor turns to
+  it (far behind him he shoots near the end of the turn), plays his
+  shot and the bolt leaves from the crossbow's tip, flies straight to
+  the spot and on. No ammunition. A click on the Wizard or the Knight
+  talks instead. Standing only so far. Test options `--aim NAME,N`,
+  `--aim-point X,Y,Z,N`.
 - **Connor hits back (stand-in click):** with his fists ready a left
   click on a creature turns him toward it and swings (`attack` /
   `attackb`; Shift: `attack2`, × 0.75–4 damage; Ctrl: the normal click).

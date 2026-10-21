@@ -40,6 +40,9 @@ pub struct DrawnMovement {
     pub name: &'static str,
     pub movement_loop: MovementLoop,
     pub frames: Vec<Entity>,
+    /// Each frame's named model parts and their places (the `arrow` part
+    /// his bolt starts at, `ranged-weapons.md` rule 24; M5 5f-5).
+    pub parts: Vec<Vec<(String, [f32; 3])>>,
 }
 
 /// Keys from `Connor.sae`, and which of them are held, oldest first.
@@ -166,6 +169,11 @@ pub struct ConnorSim {
     pub swing: Option<Swing>,
     /// His swing passed its `Do` cue this update: taken by `door_view`.
     pub do_cues: Vec<String>,
+    /// The shot asked or playing (`ranged-weapons.md` rule 20; M5 5f-5).
+    pub shot: Option<Shot>,
+    /// His shot's `do` cue passed this update (movement, the cue's
+    /// phase): taken by `door_view`.
+    pub shot_cues: Vec<(&'static str, f32)>,
     /// The hand weapon's movement list in use (`confists.anm`), while one
     /// is ready (M5 5c fix, **stand-in**, Q138): his movements come from
     /// it where it has them.
@@ -188,6 +196,19 @@ pub struct ConnorSim {
     pub weapon_keys: Vec<(kq8_core::weapons::Ask, String)>,
     /// The big-swing key (Shift) is held (rule 6's `away2`).
     pub shift_held: bool,
+}
+
+/// Connor's shot (`ranged-weapons.md` rule 20; M5 5f-5).
+#[derive(Debug, Clone)]
+pub struct Shot {
+    /// The ranged list's `attack` (`conscbow.anm/attack`).
+    pub movement: &'static str,
+    /// The aim point (after the steepness limit).
+    pub aim: [f32; 3],
+    /// Waiting for the turn (more than 45° off at the click).
+    pub waiting: bool,
+    /// `attack` started.
+    pub started: bool,
 }
 
 /// One of Connor's swings (M5 5c-5).
@@ -352,6 +373,8 @@ pub fn spawn_connor(
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
     // His first animation's first frame, for the light log (M1 5b).
     let mut first_frame_normals: Option<Vec<Vec3>> = None;
+    // ranged-weapons.md rule 24 (M5 5f-5): each animation's named parts.
+    let frame_parts: Vec<_> = assets.animations.iter().map(|a| a.frame_parts.clone()).collect();
     for anim in assets.animations {
         let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
             .looks
@@ -411,6 +434,7 @@ pub fn spawn_connor(
                     ..loops[m.animation].clone()
                 },
                 frames: frame_entities[m.animation].clone(),
+                parts: frame_parts[m.animation].clone(),
             }
         })
         .collect();
@@ -515,6 +539,8 @@ pub fn spawn_connor(
         last_ouch: f64::NEG_INFINITY,
         swing: None,
         do_cues: Vec::new(),
+        shot: None,
+        shot_cues: Vec::new(),
         weapon_set: None,
         weapon_target: None,
         pending_set: None,
@@ -1070,6 +1096,108 @@ impl ConnorSim {
         Ok(())
     }
 
+    /// His full turn now: the lean about his forward axis, then his
+    /// heading (as he is drawn; `ranged-weapons.md` rule 23).
+    pub fn turn_matrix(&self) -> [[f32; 3]; 3] {
+        let (_, heading, _, bank) = self.current;
+        let lean = kq8_data::objects::rotation([0.0, bank, 0.0]);
+        let r = kq8_data::objects::rotation([0.0, 0.0, heading]);
+        std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| lean[i][k] * r[k][j]).sum()))
+    }
+
+    /// The named part `part` of `movement`'s frame at `phase` (rule 24).
+    pub fn part_at(&self, movement: &str, phase: f32, part: &str) -> Option<([f32; 3], String)> {
+        let m = self.drawn(movement)?;
+        let frame = m.movement_loop.frame_at(phase);
+        let place = m.parts.get(frame)?.iter().find(|(n, _)| n.eq_ignore_ascii_case(part))?.1;
+        Some((place, format!("its part '{part}' in frame {frame} of '{movement}'")))
+    }
+
+    /// `ranged-weapons.md` rule 20 (M5 5f-5): a shot click with the ranged
+    /// weapon ready, aim point `aim` (rules 16, 18). He turns toward it
+    /// (the automatic turn, 3.5 rad/s; we are always in third person);
+    /// more than 45° off his facing the shot waits until the turn has 3
+    /// updates or fewer to go; otherwise it is asked at once. Returns the
+    /// line for `fight.log`.
+    pub fn shot_click(&mut self, list: &str, aim: [f32; 3]) -> String {
+        use kq8_core::connor_auto::{heading_towards, wrap, AutoKind, AutoMove};
+        let wanted = kq8_core::connor::special_movement_name(list, "attack");
+        let Some(movement) = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name) else {
+            return format!("no {wanted} loaded: no shot");
+        };
+        let off = wrap(heading_towards(self.mover.position, [aim[0], aim[1]]) - self.walker.heading);
+        let turn = self.walker.start_auto(AutoMove::new(AutoKind::Point, [aim[0], aim[1]], None));
+        let waits = off.abs() > kq8_core::weapons::SHOT_WAIT_ANGLE;
+        if self.shot.as_ref().is_some_and(|s| s.waiting) {
+            self.log.detail(format!("connor update {}: a new click: the shot waiting for the turn is lost (rule 20)", self.updates));
+        }
+        // A shot already playing stays; only a waiting one is replaced.
+        if self.shot.as_ref().is_some_and(|s| s.started) {
+            let line = self.ask_shot(movement, aim);
+            return format!("{:.0} deg off his facing; {turn}; {line}", off.to_degrees());
+        }
+        self.shot = Some(Shot { movement, aim, waiting: waits, started: false });
+        let line = if waits { "more than 45 deg off: the shot waits until 3 updates of turn are left (rule 20)".to_string() } else { self.ask_shot(movement, aim) };
+        format!("{:.0} deg off his facing; {turn}; {line}", off.to_degrees())
+    }
+
+    /// Rule 20: the shot is asked. Standing (our Free mode, no movement
+    /// key): `attack` only if his movement can be cut short (a click
+    /// during `attack` does nothing). Moving: 5f-6 (not built yet).
+    fn ask_shot(&mut self, movement: &'static str, aim: [f32; 3]) -> String {
+        use kq8_core::connor::SpecialStep;
+        if self.intent.forward != 0 && self.walker.mode == Mode::Free {
+            self.shot = None;
+            return "he is moving: the moving shot is M5 5f-6 (not built): nothing".into();
+        }
+        let can = {
+            let w = &self.walker;
+            let shooting = self.shot.as_ref().is_some_and(|s| s.started && w.mode == Mode::Special && w.movement == s.movement);
+            !shooting && w.keys_choose() && w.playing.is_none() && self.movement_loop(w.movement).is_none_or(|l| kq8_core::fight::cut_short_at(l.cut_short, &l.cues, w.phase))
+        };
+        if !can {
+            if !self.shot.as_ref().is_some_and(|s| s.started) {
+                self.shot = None;
+            }
+            return format!("standing: '{}' can't be cut short (mode {}): no shot (rule 20)", self.walker.movement, self.walker.mode.name());
+        }
+        let notes = self.walker.start_special(vec![SpecialStep::Play(movement, "attack".into())]);
+        self.shot = Some(Shot { movement, aim, waiting: false, started: true });
+        let line = format!("standing: '{movement}' starts ({}); the bolt leaves at its do cue (rule 20)", notes.join("; "));
+        self.log.detail(format!("connor update {}: shot: {line}", self.updates));
+        line
+    }
+
+    /// Each update after his own (rule 20): a waiting shot is asked when
+    /// the turn has 3 updates or fewer to go (lost if the turn was
+    /// replaced or cancelled); a shot whose `attack` ended is over.
+    pub fn shot_step(&mut self) -> Option<String> {
+        use kq8_core::connor_auto::{heading_towards, wrap};
+        let s = self.shot.clone()?;
+        if s.waiting {
+            let Some(auto) = &self.walker.auto else {
+                self.shot = None;
+                return Some("the turn was replaced or cancelled: the waiting shot is lost (rule 20)".into());
+            };
+            if auto.target != [s.aim[0], s.aim[1]] {
+                self.shot = None;
+                return Some("another turn order: the waiting shot is lost (rule 20)".into());
+            }
+            let left = wrap(heading_towards(self.mover.position, [s.aim[0], s.aim[1]]) - self.walker.heading);
+            let per_update = kq8_core::connor_auto::AUTO_TURN_RATE / kq8_core::UPDATES_PER_SECOND as f32;
+            if left.abs() > kq8_core::weapons::SHOT_TURN_UPDATES * per_update + 1e-4 {
+                return None;
+            }
+            let line = self.ask_shot(s.movement, s.aim);
+            return Some(format!("{:.2} rad of turn left (3 updates or fewer): {line}", left.abs()));
+        }
+        if s.started && (self.walker.mode != Mode::Special || self.walker.movement != s.movement) {
+            self.shot = None;
+            return Some(format!("'{}' is over: the next shot can start (no extra delay, rule 20)", s.movement));
+        }
+        None
+    }
+
     /// Each update after his own (M5 5c-5): a swing that waited for his
     /// turn starts when the turn is over; a swing that ended (or was
     /// replaced) is forgotten. Returns a line for `fight.log`.
@@ -1611,6 +1739,12 @@ pub fn connor_step(
                 "do" if sim.swing.as_ref().is_some_and(|w| w.movement == s.played) => {
                     sim.do_cues.push(s.played.to_string());
                     "his hit test (fighting.md rule 41)".to_string()
+                }
+                // ranged-weapons.md rule 20 (M5 5f-5): the bolt leaves.
+                "do" if sim.shot.as_ref().is_some_and(|w| w.started && w.movement == s.played) => {
+                    let phase = sim.movement_loop(s.played).and_then(|l| l.cues.iter().find(|(p, a)| a.trim().eq_ignore_ascii_case("do") && *p >= s.played_from.min(s.played_to) - 1e-4).map(|(p, _)| *p)).unwrap_or(s.played_to);
+                    sim.shot_cues.push((s.played, phase));
+                    "his bolt leaves (ranged-weapons.md rule 23)".to_string()
                 }
                 "interruptable" => "can be cut short or not from here (anim-scripts.md rule 7)".to_string(),
                 _ => "cue action not done for Connor".to_string(),

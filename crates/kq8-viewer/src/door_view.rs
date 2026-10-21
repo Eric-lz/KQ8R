@@ -86,6 +86,7 @@ pub struct DoorSim {
     world_clicks: Vec<String>,
     /// Clicks that swing (a hand weapon ready, M5 5c-5).
     swing_clicks: Vec<SwingClick>,
+    shot_clicks: Vec<ShotClick>,
     /// Connor's state at each click whose turn is waiting (M4 4c-5,
     /// `clicking.md` rule 35): whether it allows the turn, its name.
     click_states: std::collections::VecDeque<(bool, &'static str)>,
@@ -242,6 +243,15 @@ pub struct SwingAt(pub Vec<(String, u64, bool)>);
 
 /// A click in the world with a hand weapon ready (`fighting.md` rule 39;
 /// M5 5c-5): Connor swings toward it.
+/// A shot click with the ranged weapon ready (`ranged-weapons.md` rules
+/// 13–16; M5 5f-5): the aim point before the steepness limit, what the
+/// click line met.
+pub struct ShotClick {
+    aim: [f32; 3],
+    what: String,
+    how: String,
+}
+
 pub struct SwingClick {
     /// The character clicked, if any: his target.
     target: Option<String>,
@@ -882,7 +892,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1371,6 +1381,7 @@ pub fn door_click_input(
     cover: Res<crate::gui_view::GuiCover>,
     shared: Res<Shared>,
     keys: Res<ButtonInput<KeyCode>>,
+    (objects, lookup): (Option<Res<crate::terrain_view::ObjectColliders>>, Option<Res<crate::terrain_view::GroundLookup>>),
 ) {
     let Some(mut sim) = sim else { return };
     let updates = sim.active.world.updates;
@@ -1396,6 +1407,16 @@ pub fn door_click_input(
     // Bevy (x, y, z) = game (x, z, -y) / 100, so back: (x, -z, y) x 100.
     let to_game = |v: Vec3| [v.x, -v.z, v.y];
     let (origin, dir, how) = match due {
+        // `--aim-point X,Y,Z,N` (M5 5f-5 test): the line from the camera to
+        // that point.
+        Some(name) if name.starts_with('@') => {
+            let origin = to_game(at.translation() * UNITS_PER_METRE);
+            let p: Vec<f32> = name[1..].split(':').filter_map(|v| v.parse().ok()).collect();
+            let target = [p.first().copied().unwrap_or(0.0), p.get(1).copied().unwrap_or(0.0), p.get(2).copied().unwrap_or(0.0)];
+            let d: [f32; 3] = std::array::from_fn(|k| target[k] - origin[k]);
+            let len = d.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-6);
+            (origin, d.map(|v| v / len), format!("test --aim-point ({:.0}, {:.0}, {:.0})", target[0], target[1], target[2]))
+        }
         Some(name) => {
             let origin = to_game(at.translation() * UNITS_PER_METRE);
             let Some(target) = sim.active.target_point(&name) else {
@@ -1436,10 +1457,47 @@ pub fn door_click_input(
     // manual): with a hand weapon ready a left click swings toward the
     // click (Shift: the big swing); Ctrl held gives the plain click.
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+    // ranged-weapons.md rule 13 (M5 5f-5): an item on the pointer wins:
+    // the click uses it, whatever is ready.
+    let held = sim.active.world.hand.is_some();
+    // Rules 14-16: the shot click (Ctrl: the plain click).
+    let mut line = line;
+    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Ranged && !ctrl && !held {
+        use kq8_core::weapons::{AIM_PICK, ICEWATER, PLAIN_CLICK_BIT, TALK_PICK};
+        let w = &sim.active.world;
+        let objs = objects.as_deref().map_or(&[][..], |o| &o.0[..]);
+        let blds = buildings.as_deref().map_or(&[][..], |b| &b.0[..]);
+        let talk = w.mask_pick(origin, dir, TALK_PICK, objs, blds);
+        let plain = talk.as_ref().is_some_and(|h| (h.character.is_some() && h.collision_type & PLAIN_CLICK_BIT != 0) || h.name.eq_ignore_ascii_case(ICEWATER));
+        if plain {
+            line += &format!("; the ranged weapon is ready, the talk pick meets {} (type 0x{:X}): the plain click (ranged-weapons.md rule 15)", talk.as_ref().map_or("", |h| h.name.as_str()), talk.as_ref().map_or(0, |h| h.collision_type));
+        } else {
+            let far: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * kq8_core::active::CLICK_LINE_LENGTH);
+            let (aim, what) = match w.mask_pick(origin, dir, AIM_PICK, objs, blds) {
+                Some(h) => match h.character {
+                    // Rule 16: a character: its x, y, the height where the line met its box.
+                    Some(j) => {
+                        let p = w.anims[j].player.base.position;
+                        ([p[0], p[1], h.point[2]], format!("character {} (type 0x{:X})", h.name, h.collision_type))
+                    }
+                    None => (h.point, format!("{} {} (type 0x{:X})", if h.building { "building" } else { "object" }, h.name, h.collision_type)),
+                },
+                None => match lookup.as_deref().and_then(|g| kq8_core::connor_mover::GroundLookup::drawn_line_hit(&g.0, origin, far)) {
+                    Some(p) => (p, "the drawn ground".to_string()),
+                    None => (far, "nothing: the line's far end (the sky)".to_string()),
+                },
+            };
+            let line = format!("{line}; the ranged weapon is ready: the aim pick meets {what} at ({:.0}, {:.0}, {:.0}) (ranged-weapons.md rule 16)", aim[0], aim[1], aim[2]);
+            sim.shot_clicks.push(ShotClick { aim, what, how: how.clone() });
+            shared.log.lock().unwrap().summary(&line);
+            sim.log.detail(line);
+            return;
+        }
+    }
     // A character that doesn't fight (the wizard) gets the plain click
     // (the user's check in the original, 2026-10-20: fix 3).
     let peaceful = picked.as_deref().and_then(|n| sim.active.world.character_index(n)).is_some_and(|j| sim.active.world.anims[j].character.as_ref().is_some_and(|c| c.fight.is_none()));
-    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Hand && !ctrl && !peaceful {
+    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Hand && !ctrl && !peaceful && !held {
         let target = match &fighter {
             Some((n, _)) => Some(n.clone()),
             None => picked.clone().filter(|n| sim.active.world.character_index(n).is_some()),
@@ -1619,6 +1677,29 @@ pub fn door_step(
         }
         if let Some(line) = c.swing_step() {
             sim.active.world.fight_note("Connor", line);
+        }
+        // ranged-weapons.md rules 18, 20 (M5 5f-5): the shot clicks, the
+        // shot that waits for the turn, the bolt at the `do` cue.
+        for s in std::mem::take(&mut sim.shot_clicks) {
+            let w = &mut sim.active.world;
+            let feet = c.mover.position;
+            let (aim, moved) = kq8_core::weapons::steepness_limit(feet, w.connor_shoot_offset[2], s.aim);
+            let steep = if moved { format!("; steeper than 1 rad from the vertical: moved out to ({:.0}, {:.0}, {:.0}) (rule 18)", aim[0], aim[1], aim[2]) } else { String::new() };
+            let line = match weapon_list(w) {
+                Some(list) => c.shot_click(&list, aim),
+                None => format!("no movement list for {:?} in Connor.kq's LongAnimList: no shot", w.weapon_ready),
+            };
+            w.fight_note("Connor", format!("{}: shot click at {} ({:.0}, {:.0}, {:.0}){steep}: {line}", s.how, s.what, s.aim[0], s.aim[1], s.aim[2]));
+        }
+        if let Some(line) = c.shot_step() {
+            sim.active.world.fight_note("Connor", line);
+        }
+        for (m, phase) in std::mem::take(&mut c.shot_cues) {
+            let w = &mut sim.active.world;
+            let mesh = w.connor_projectile.as_ref().and_then(|f| w.projectiles.get(&f.to_ascii_lowercase())).and_then(|p| p.mesh_name.clone()).unwrap_or_default();
+            let part = c.part_at(m, phase, &mesh);
+            let aim = c.shot.as_ref().map_or(c.mover.position, |s| s.aim);
+            w.connor_shoot(c.mover.position, c.turn_matrix(), part, aim, &format!("{m} at the cue's phase {phase:.4}"));
         }
         for m in std::mem::take(&mut c.do_cues) {
             let (target, big) = c.swing.as_ref().map_or((None, false), |s| (s.target.clone(), s.big));

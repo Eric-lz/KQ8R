@@ -143,7 +143,8 @@ Follows original game's default keybindings, plus extra debugging keys.
 Fighting (first version): click the hand-weapon slot in the bottom bar
 (or press Delete) to ready Connor's fists, then left-click a creature to
 swing (Shift: the big swing, Ctrl: a normal click). Delete swaps between
-the hand and the ranged weapon, Alt puts the weapon away.
+the hand and the ranged weapon, Alt puts the weapon away. With the
+crossbow ready a left click shoots where you point.
 
 ## How the work is done
 

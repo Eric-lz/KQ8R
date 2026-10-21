@@ -2929,3 +2929,20 @@ Replaces 5c fixes 2–3 and 5d fixes 9–10's stand-ins (Q138) where the note di
 | Picked up while the ranged mode is ready: the new item is ready, its list at once, no swap | "Edge cases" | — (not run) |
 | The bolt files and shapes of every ranged weapon that can appear in the world are read at load | Ours (as for the characters' bolts) | `characters.log`: "[Connor's INVITEM_SmCrossbow]: shoots Prscbolt.kq" |
 | Bow pointer `IDBMA_CURS05` with the ranged mode ready | Rule 11 (5f-3) | `gui.log`: CURS05 at update 37 |
+
+### 5f-5, the standing shot — `crates/kq8-core/src/weapons.rs` (`mask_pick`, `steepness_limit`, `connor_shoot`, the pick constants), viewer `door_view.rs` (`ShotClick`, the click, the shot in `door_step`), `connor_view.rs` (`Shot`, `shot_click`, `ask_shot`, `shot_step`, `part_at`, `turn_matrix`, `DrawnMovement::parts`, the `do` cue), `main.rs` (`--aim-point`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A world click: an item on the pointer is used whatever is ready (also now for the swing click); then hand → the swing click, ranged → the shot click, none → the plain click; Ctrl with a weapon ready → the plain click | Rules 12–14 | Viewer runs |
+| The talk pick: the click line against characters, objects and buildings whose type has bit 0x40, 0x20 or 0x08; the first is a character with bit 0x8000 (Wizard, Knight 0xC021) or an object named `icewater` → the plain click | Rule 15 | Viewer: `--aim Wizard`: "talk pick meets Wizard (type 0xC021): the plain click", the conversation starts |
+| The aim pick: types with bit 0x40 or 0x08 (characters' `BOUNDS.KQ` boxes, objects' boxes, all buildings by their solids); else the drawn ground; else the line's far end (1,000,000, our click line length); a character: its x, y and the height where the line met its box | Rule 16 | Viewer: goblin22, the windmill (type 0x28), the drawn ground |
+| The right button held (the camera's kept point): not done | Rule 16, open question 2 | — |
+| The steepness limit: *h* = aim height − (feet + the shoot offset's z), *d* the level distance; *d* < tan(1) × \|*h*\| → *d* = tan(1) × \|*h*\| (same direction, same height) | Rule 18 | Unit test (≈ 32.7° down); viewer: "moved out" |
+| He turns toward the aim point with the automatic turn (3.5 rad/s; we are always in third person); more than 45° off: the shot is asked when 3 updates of turn or fewer are left (≤ 0.70 rad), lost if the turn is replaced or cancelled; within 45°: at once, he keeps turning | Rule 20 | Viewer: −133° off, asked with 0.69 rad left |
+| Standing: `attack` from the ranged list only when his movement can be cut short (a click during `attack` does nothing, but the click's turn still happens); when `attack` ends, `stop`; no extra delay; no ammunition | Rule 20 | Viewer: a second click during `attack`: "can't be cut short: no shot" |
+| A click while moving: not a shot yet (5f-6) | Rule 20 "Moving" | — |
+| At the `do` cue the bolt starts at his position + his full turn (lean, then heading) × the bolt file's part (`arrow`) in the frame at the cue's phase (`conscbow.anm/attack` frame 2: (−231, −832, 1,067)), which is kept as his shoot offset; no part: his shoot offset; no bolt file (`NoRanged`): no shot | Rules 21, 23, 24; the frame at the cue's phase as for characters (Q140 c) | Unit test; viewer: (−231, −832, 1,067), the note's number |
+| Aimed at the aim point, no lead; his ranged damage at the shot (5 with the Small Crossbow at level 1); the bolt is his (`Connor`): never hits him | Rules 22, 25, 29 | Unit test; viewer: goblin22 15 → 11 → 7 |
+| The crossbow's sound is its `attack`'s own `playsound Crossbow.aud` cue | Rule 20 (data) | — |
+| `--aim-point X,Y,Z,N`: a click along the camera's line to a point | Ours (a test option) | — |

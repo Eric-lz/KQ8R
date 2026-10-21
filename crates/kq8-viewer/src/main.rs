@@ -251,6 +251,17 @@ fn parse_args() -> Result<Args, String> {
                 let n = n.trim().parse::<u64>().map_err(|_| "--aim needs NAME,UPDATE e.g. smlchst3,30".to_string())?;
                 a.aim.push((name.trim().to_string(), n));
             }
+            "--aim-point" => {
+                // M5 5f-5 test: a click along the line from the camera to (x, y, z).
+                let v = value()?;
+                let w: Vec<&str> = v.split(',').map(str::trim).collect();
+                let bad = || "--aim-point needs X,Y,Z,UPDATE e.g. 146500,247000,16000,60".to_string();
+                if w.len() != 4 || w[..3].iter().any(|x| x.parse::<f32>().is_err()) {
+                    return Err(bad());
+                }
+                let n = w[3].parse::<u64>().map_err(|_| bad())?;
+                a.aim.push((format!("@{}:{}:{}", w[0], w[1], w[2]), n));
+            }
             "--special" => {
                 let v = value()?;
                 let (items, n) = v.rsplit_once(',').ok_or("--special needs ITEMS,UPDATE e.g. kneel;kneelstop,30".to_string())?;
@@ -395,6 +406,8 @@ N is an update number (15 updates per second):
   --click NAME,N             click object NAME before update N + 1 (repeatable;
                              skips the line-of-sight test)
   --aim NAME,N               like --click, but only if the camera can see it
+  --aim-point X,Y,Z,N        a click along the line from the camera to X,Y,Z
+                             at update N (the ground, a shot's aim)
   --swing NAME,N[,big]       at update N ready the hand weapon and swing at NAME
                              (big: the Shift swing)
   --combat-level 1|2|3       the combat level (0.66 / 1.0 / 1.5) before the

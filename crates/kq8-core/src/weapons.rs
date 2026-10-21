@@ -146,6 +146,54 @@ pub fn decide(ask: &Ask, ready: WeaponMode, real_ranged: bool, last_away_ranged:
     Decision::Asks(mode, why)
 }
 
+/// Rule 15: the talk pick's types (bits 0x40, 0x20, 0x08).
+pub const TALK_PICK: u32 = 0x40 | 0x20 | 0x08;
+/// Rule 16: the aim pick's types (bits 0x40, 0x08).
+pub const AIM_PICK: u32 = 0x40 | 0x08;
+/// Rule 15: a character whose type has this bit gets the plain click.
+pub const PLAIN_CLICK_BIT: u32 = 0x8000;
+/// Rule 15: an object of this name gets the plain click.
+pub const ICEWATER: &str = "icewater";
+/// Rule 18: the shot is never steeper than 1 rad from the vertical.
+pub const STEEPEST: f32 = 1.0;
+/// Rule 20: more than this off his facing, the shot waits for the turn.
+pub const SHOT_WAIT_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
+/// Rule 20: a waiting shot is asked when the turn has this many updates
+/// or fewer to go.
+pub const SHOT_TURN_UPDATES: f32 = 3.0;
+
+/// What the click line met first among the things a mask covers (rules
+/// 15, 16, 32).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MaskHit {
+    pub name: String,
+    /// A character (its index in `anims`).
+    pub character: Option<usize>,
+    pub building: bool,
+    pub collision_type: u32,
+    /// Where the line meets it.
+    pub point: [f32; 3],
+}
+
+/// Rule 18: the aim point moved out so that the line from his feet + the
+/// offset's height to it is at most 1 rad from the vertical: with *h* the
+/// height difference and *d* the level distance, *d* < tan(1) × |*h*| →
+/// *d* = tan(1) × |*h*|, same direction and height. Returns the point and
+/// whether it moved.
+pub fn steepness_limit(feet: [f32; 3], offset_z: f32, aim: [f32; 3]) -> ([f32; 3], bool) {
+    let h = aim[2] - (feet[2] + offset_z);
+    let (dx, dy) = (aim[0] - feet[0], aim[1] - feet[1]);
+    let d = (dx * dx + dy * dy).sqrt();
+    let least = STEEPEST.tan() * h.abs();
+    if d >= least {
+        return (aim, false);
+    }
+    // Straight above or below: out along his facing is not known here;
+    // the caller's direction is kept (none: +x, ours).
+    let (ux, uy) = if d > 1e-3 { (dx / d, dy / d) } else { (1.0, 0.0) };
+    ([feet[0] + ux * least, feet[1] + uy * least, aim[2]], true)
+}
+
 /// What changed when a request was taken, for the viewer's swap (rule 6).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Change {
@@ -256,6 +304,79 @@ impl WorldState {
         )
     }
 
+    /// Rules 15, 16, 32: the first thing the click line from `origin`
+    /// along `dir` (length 1) meets among those whose collision type
+    /// shares a bit with `mask`: characters (their `BOUNDS.KQ` boxes),
+    /// objects (`objects`: every object's box; switched-off ones left out)
+    /// and buildings (`buildings`, in the world's order: their type is
+    /// `self.buildings`').
+    pub fn mask_pick(&self, origin: [f32; 3], dir: [f32; 3], mask: u32, objects: &[crate::collide::BoxCollider], buildings: &[crate::collide::BuildingCollider]) -> Option<MaskHit> {
+        let mut best: Option<(f32, MaskHit)> = None;
+        let mut keep = |t: f32, h: MaskHit| {
+            if best.as_ref().is_none_or(|(b, _)| t < *b) {
+                best = Some((t, h));
+            }
+        };
+        let at = |t: f32| -> [f32; 3] { std::array::from_fn(|k| origin[k] + dir[k] * t) };
+        for (j, a) in self.anims.iter().enumerate() {
+            let Some(c) = a.character.as_deref() else { continue };
+            if a.gone || c.unborn || c.collision_type & mask == 0 || self.is_switched_off(&a.player.name) {
+                continue;
+            }
+            let Some((min, max)) = c.bounds else { continue };
+            if let Some(t) = crate::click::ray_box(origin, dir, &a.player.placement(), min, max) {
+                keep(t, MaskHit { name: a.player.name.clone(), character: Some(j), building: false, collision_type: c.collision_type, point: at(t) });
+            }
+        }
+        for o in objects.iter().filter(|o| o.kind.collision_type & mask != 0 && !self.is_switched_off(&o.name)) {
+            if self.character_index(&o.name).is_some() {
+                continue;
+            }
+            if let Some(t) = crate::click::ray_box(origin, dir, &o.placement, o.min, o.max) {
+                keep(t, MaskHit { name: o.name.clone(), character: None, building: false, collision_type: o.kind.collision_type, point: at(t) });
+            }
+        }
+        let far = at(crate::active::CLICK_LINE_LENGTH);
+        for (b, info) in buildings.iter().zip(&self.buildings) {
+            if info.collision_type & mask == 0 || self.is_switched_off(&info.name) {
+                continue;
+            }
+            if let Some(p) = b.line_hit(origin, far) {
+                let t = (0..3).map(|k| (p[k] - origin[k]).powi(2)).sum::<f32>().sqrt();
+                keep(t, MaskHit { name: b.name.clone(), character: None, building: true, collision_type: info.collision_type, point: p });
+            }
+        }
+        best.map(|(_, h)| h)
+    }
+
+    /// Rules 22–24 (M5 5f-5): Connor's bolt leaves at his `do` cue. `feet`,
+    /// `rotation`: his position and his full turn (lean included); `part`:
+    /// the bolt file's model part in the frame playing (found: it is also
+    /// kept as his shoot offset), else his shoot offset; `aim`: the aim
+    /// point (rules 16, 18); his ranged damage now.
+    pub fn connor_shoot(&mut self, feet: [f32; 3], rotation: [[f32; 3]; 3], part: Option<([f32; 3], String)>, aim: [f32; 3], movement: &str) {
+        let Some(file) = self.connor_projectile.clone() else {
+            self.fight_note("Connor", format!("do ({movement}): he has no bolt file (NoRanged): no shot (rule 21)"));
+            return;
+        };
+        let Some(p) = self.projectiles.get(&file.to_ascii_lowercase()).cloned() else {
+            self.fight_note("Connor", format!("do ({movement}): projectile file {file} not read: no shot"));
+            return;
+        };
+        let (offset, how) = match part {
+            Some((o, how)) => {
+                self.connor_shoot_offset = o;
+                (o, format!("{how} (kept as his shoot offset)"))
+            }
+            None => (self.connor_shoot_offset, "no such part in the frame: his shoot offset".to_string()),
+        };
+        let r = rotation;
+        let from: [f32; 3] = std::array::from_fn(|k| feet[k] + offset[0] * r[0][k] + offset[1] * r[1][k] + offset[2] * r[2][k]);
+        let damage = self.connor_stats.map_or(0, |c| c.stats.0[2]);
+        let why = format!("do ({movement}): start offset ({:.0}, {:.0}, {:.0}): {how} (rule 24); aim point ({:.0}, {:.0}, {:.0}), no lead (rule 25); ranged damage {damage} (rule 22)", offset[0], offset[1], offset[2], aim[0], aim[1], aim[2]);
+        self.launch_bolt(crate::talk::CONNOR, &file, &p, from, aim, damage, &why);
+    }
+
     /// A weapon readied or put away outside a request (the `--swing` test,
     /// a conversation's put-away): the mode follows the item.
     pub fn set_weapon(&mut self, mode: WeaponMode, item: Option<String>) {
@@ -304,6 +425,20 @@ mod tests {
         assert_eq!(asks(decide(&slot("BowMode"), None, false, false)), Some(Hand), "NoRanged's slot: Do instead");
         assert_eq!(asks(decide(&slot("NoModeChange"), None, true, false)), Option::None);
         assert_eq!(asks(decide(&slot("HandMode"), Hand, true, false)), Some(None));
+    }
+
+    #[test]
+    fn the_aim_is_never_steeper_than_one_radian_from_the_vertical() {
+        // Rule 18: a click on the ground at his feet: out to 1.557 × h.
+        let feet = [0.0, 0.0, 0.0];
+        let (p, moved) = steepness_limit(feet, 1065.0, [0.0, -100.0, 0.0]);
+        assert!(moved);
+        assert!((p[1] + 1.5574 * 1065.0).abs() < 1.0 && p[0].abs() < 1e-3 && p[2] == 0.0, "{p:?}");
+        // The bolt then goes down at about 33° (90° − 57.3°).
+        let deg = (1065.0f32 / (1.5574 * 1065.0)).atan().to_degrees();
+        assert!((deg - 32.7).abs() < 0.1, "{deg}");
+        // Far enough: unchanged.
+        assert_eq!(steepness_limit(feet, 1065.0, [0.0, -5000.0, 0.0]), ([0.0, -5000.0, 0.0], false));
     }
 
     #[test]

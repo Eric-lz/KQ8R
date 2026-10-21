@@ -1540,7 +1540,9 @@ Steps (one commit each):
    refreshes the list at once. **Test:** take the crossbow from
    `sprgnbow`'s drop, ready it by its slot and with Delete; the log shows
    `away` then `out` from `conscbow.anm` and the pointer.
-5. **5f-5, the standing shot** (rules 13–18, 20, 22–25). The click with
+5. **5f-5, the standing shot** (**done** 2026-10-20; goblin22 hit for 5
+   from (−231, −832, 1,067); the test option became `--aim NAME,N` and
+   the new `--aim-point X,Y,Z,N`) (rules 13–18, 20, 22–25). The click with
    the ranged mode ready: an item on the pointer wins; Ctrl → plain
    click; the talk pick (types 0x40 / 0x20 / 0x08, a character with bit
    0x8000 → plain click); the aim pick (types 0x40 / 0x08, else the
