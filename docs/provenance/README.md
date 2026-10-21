@@ -2802,4 +2802,5 @@ executable looked at.
 | --- | --- | --- |
 | With the switch on no character is alarmed (seeing Connor, being told, being hit); an alarmed or hunting one gives up as rule 28 has it (home, or back into the ground) | Ours (a test switch, not in the original); giving up: `fighting.md` rule 28 | Viewer: goblin22 hits Connor 9 times with it off, 0 with `--no-ai`; `--key f4,100`: it gives up at update 101, no hits to update 759 |
 | F4 flips it; `--no-ai` starts with it on | Ours | Viewer |
+| An on-screen line under the F8 line: "AI: on (F4)" in white, "AI: off, creatures ignore Connor (F4)" in yellow | Ours | Not looked at |
 

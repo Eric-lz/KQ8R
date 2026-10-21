@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Test switch: on-screen line for the AI switch
+
+**Changed:** A line under the haze line (top left) shows the AI switch: "AI: on (F4)" in white, or "AI: off, creatures ignore Connor (F4)" in yellow. It follows core's switch every frame, so F4, `--no-ai` and `--key f4` all update it.
+**Why:** The user asked for an on-screen indicator.
+**Tested how:** Clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --no-ai --key f4,100 --frames 1500`; `viewer.log`.
+**Result:** The run passes; the log shows the switch off at update 0 and on again at update 100.
+**Still broken / not tested:** Not looked at (the line's place and colour need your eyes).
+**Next:** —
+
 ## 2026-10-20 Test switch: creatures' AI off (F4, `--no-ai`)
 
 **Changed:** A core switch `ai_off`: no character gets alarmed, so none chases, attacks or shoots at Connor; alarmed or hunting ones give up and go home (rule 28's give-up). F4 flips it while playing, `--no-ai` starts with it on, `--key f4,N` presses it in a test. README key list updated.

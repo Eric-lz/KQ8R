@@ -585,7 +585,7 @@ fn main() -> ExitCode {
                 )
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .init_resource::<object_light::HazeCheck>()
-                .add_systems(Startup, object_light::setup_haze_label)
+                .add_systems(Startup, (object_light::setup_haze_label, door_view::setup_ai_label))
                 // Captions (M4 4a-4).
                 .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.

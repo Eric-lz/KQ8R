@@ -264,14 +264,46 @@ pub struct HeldItem(pub Option<String>, pub Option<i64>);
 #[derive(Resource)]
 pub struct AiOff(pub bool);
 
-/// `--no-ai` at the start, then F4.
-pub fn toggle_ai(keys: Res<ButtonInput<KeyCode>>, mut start: ResMut<AiOff>, sim: Option<ResMut<DoorSim>>) {
+/// The on-screen line of the AI test switch.
+#[derive(Component)]
+pub struct AiLabel;
+
+fn ai_label(off: bool) -> (String, Color) {
+    if off {
+        ("AI: off, creatures ignore Connor (F4)".into(), Color::srgb(1.0, 0.8, 0.2))
+    } else {
+        ("AI: on (F4)".into(), Color::WHITE)
+    }
+}
+
+/// The on-screen line under the F8 line.
+pub fn setup_ai_label(mut commands: Commands, start: Res<AiOff>) {
+    let (text, color) = ai_label(start.0);
+    commands.spawn((
+        Text::new(text),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(color),
+        Node { position_type: PositionType::Absolute, top: Val::Px(96.0), left: Val::Px(10.0), ..default() },
+        AiLabel,
+    ));
+}
+
+/// `--no-ai` at the start, then F4; the on-screen line follows core's
+/// switch (also `--key f4,N`).
+pub fn toggle_ai(keys: Res<ButtonInput<KeyCode>>, mut start: ResMut<AiOff>, sim: Option<ResMut<DoorSim>>, mut label: Query<(&mut Text, &mut TextColor), With<AiLabel>>) {
     let Some(mut sim) = sim else { return };
     if std::mem::take(&mut start.0) {
         flip_ai(&mut sim, "--no-ai");
     }
     if keys.just_pressed(KeyCode::F4) {
         flip_ai(&mut sim, "key F4");
+    }
+    let (text, color) = ai_label(sim.active.world.ai_off);
+    for (mut t, mut c) in &mut label {
+        if t.0 != text {
+            t.0 = text.clone();
+            c.0 = color;
+        }
     }
 }
 
