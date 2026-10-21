@@ -1922,6 +1922,39 @@ is turned in flight is not in the note: drawn like a bolt (pointing along
 its flight, so it turns round for the way back), asked as a question if
 it looks wrong.
 
+#### 6c — A weapon's movement set loaded when it is given (planned 2026-10-21)
+
+Why: the user's check: the Lake Sword given by the console in Dead City has
+no stance (no sword-in-hand `stop`, walk, run). A weapon's **set** (its
+`.anm` list's own versions of Connor's movements) is loaded at start-up
+only for weapons the world mentions (carried, named in a script or an
+object file, the fists). Loading every set in every world was tried and
+undone: +2.2 s on every load (Dead City 2.4 → 4.6 s, Daventry 3.4 →
+5.6 s). The user chose: load a set when its weapon is given. Not from a
+behaviour note (the original's loading is not studied); only how the
+movements are read is the same as at start-up. In normal play, once
+moving between worlds exists, carried weapons are loaded at start-up as
+now.
+
+Steps (one commit each; logged in `viewer.log` and `connor.log`):
+
+1. **6c-1, one set's loading as its own piece** (**done** 2026-10-21; no
+   behaviour change). `load.rs`: the part of `place_connor` that reads one
+   set's movements and their animations becomes a function (`connor_set`)
+   both start-up and the viewer while playing can call. **Test:** Daventry's and
+   Swamp's `viewer.log` "connor: movement …" lines unchanged.
+2. **6c-2, loaded at the give.** At start-up a resource keeps what it
+   needs: the game folder, the world's name, Connor's palette, and the
+   lists of the weapons whose sets were not loaded. Each update the viewer looks at the
+   weapons Connor carries; one whose set isn't loaded gets it now: the
+   world's archives opened again, the movements read and drawn (frames
+   under his body, his materials added to the potion looks and the
+   mouth, so Strength / Invisible apply to them too). A weapon already
+   ready switches to its set's movements at once. Logged: which set,
+   how many movements, how long it took. **Test:** Dead City, `give
+   LakeSword`, ready it: `connor.log` draws `conSword.anm/stop`;
+   `viewer.log` the load time (~0.1 s expected).
+
 ### M7 — Match the original, then improve
 
 Play the original next to ours, list differences, fix them. After that,

@@ -367,6 +367,109 @@ pub struct Animation {
     pub frame_parts: Vec<Vec<(String, [f32; 3])>>,
 }
 
+/// One movement set's own versions of Connor's movements (M2; the
+/// weapons' sets: M5 5c fix, 5d fix 9): each of [`CONNOR_MOVEMENTS`] the
+/// list `set_list` (in `sections`) has, its animation read once (shared by
+/// shape and sequence through `index_of`), named `<file>/<name>` for a
+/// weapon's list (`file`), plain for his own. Used at start-up and, for a
+/// weapon given while playing, by the viewer (M6 6c).
+#[allow(clippy::too_many_arguments)]
+pub fn connor_set(
+    game: &GameDir,
+    world: &World,
+    palette: &[Rgb; 256],
+    log: &mut Log,
+    sections: &[kq8_data::kq_text::Section],
+    set_list: &str,
+    file: Option<&str>,
+    movements: &mut Vec<ConnorMovement>,
+    animations: &mut Vec<Animation>,
+    index_of: &mut BTreeMap<String, usize>,
+) -> Result<(), String> {
+    use kq8_data::kq_text;
+    let mut missing = Vec::new();
+    for word in CONNOR_MOVEMENTS {
+        let mut with_ask = sections.to_vec();
+        with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={set_list}\ncurrAnimName={word}\n").as_bytes()));
+        let c = kq8_data::objects::current_loop(&with_ask, with_ask.last().unwrap())?.ok_or("no animation list")?;
+        if c.fell_back {
+            if file.is_none() {
+                return Err(format!("Conner.anm has no movement called {word}"));
+            }
+            missing.push(word);
+            continue;
+        }
+        let name = match file {
+            Some(f) => kq8_core::connor::intern(&kq8_core::connor::special_movement_name(f, word)),
+            None => word,
+        };
+        let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
+        let animation = match index_of.get(&key) {
+            Some(&i) => i,
+            None => {
+                log.quiet = true;
+                let a = load_animation(game, world, &c.shape, &c.sequence, palette, log);
+                log.quiet = false;
+                animations.push(a?);
+                index_of.insert(key, animations.len() - 1);
+                animations.len() - 1
+            }
+        };
+        let a = &animations[animation];
+        let speed_now = if a.duration > 0.0 {
+            (a.step_sum[0].powi(2) + a.step_sum[1].powi(2)).sqrt() / a.duration * c.speed
+        } else {
+            0.0
+        };
+        log.summary(format!(
+            "connor: movement {name} = movement {} loop={} {} speed {} repeat {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
+            c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
+        ));
+        // Transitions: only those whose movements are loaded
+        // (connor-movement.md "Starting and stopping").
+        let known = |n: &str| CONNOR_MOVEMENTS.into_iter().find(|k| k.eq_ignore_ascii_case(n));
+        let mut transitions = Vec::new();
+        for t in &c.transitions {
+            let line = format!("{} {} {} {}", t.from, t.to, t.to_phase, t.via);
+            match (known(&t.to), known(&t.via)) {
+                (Some(to), Some(via)) => {
+                    log.summary(format!("connor: {name}: transition {line}"));
+                    transitions.push(kq8_core::connor::Transition { from: t.from, to, to_phase: t.to_phase, via });
+                }
+                _ => log.summary(format!("connor: {name}: transition {line} skipped (movement not loaded)")),
+            }
+        }
+        for p in &c.transition_problems {
+            log.summary(format!("connor: {name}: {p}"));
+        }
+        if !c.cues.is_empty() {
+            let cues: Vec<String> = c.cues.iter().map(|(ph, a)| format!("{ph} {a}")).collect();
+            log.detail(format!("connor: {name}: cues {}", cues.join(", ")));
+        }
+        for p in &c.cue_problems {
+            log.summary(format!("connor: {name}: {p}"));
+        }
+        if !c.repeat || !c.transitions.is_empty() {
+            let steps: Vec<String> =
+                a.frame_steps.iter().map(|p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])).collect();
+            log.summary(format!("connor: {name}: can be cut short {}; frame steps {}", c.unknown != 0, steps.join(" ")));
+        }
+        movements.push(ConnorMovement {
+            name,
+            animation,
+            speed: c.speed,
+            repeat: c.repeat,
+            cut_short: c.unknown != 0,
+            transitions,
+            cues: c.cues.clone(),
+        });
+    }
+    if let Some(f) = file {
+        log.summary(format!("connor: weapon set {f}: its own versions of his movements loaded; not in it (his own play): {missing:?}"));
+    }
+    Ok(())
+}
+
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
 /// whole-body steps, not drawn (models-and-textures.md Q1 b); they are
 /// added up into `step_sum` (connor-movement.md "Forward speed comes from
@@ -2284,86 +2387,7 @@ impl Placer<'_> {
             let mut sets = vec![(anm.clone(), list.to_string(), None)];
             sets.extend(self.weapon_sets());
             for (sections, set_list, file) in &sets {
-            let mut missing = Vec::new();
-            for word in CONNOR_MOVEMENTS {
-                let mut with_ask = sections.clone();
-                with_ask.extend(kq_text::parse(format!("[ConnorAsks]\nanimLoops={set_list}\ncurrAnimName={word}\n").as_bytes()));
-                let c = kq8_data::objects::current_loop(&with_ask, with_ask.last().unwrap())?.ok_or("no animation list")?;
-                if c.fell_back {
-                    if file.is_none() {
-                        return Err(format!("Conner.anm has no movement called {word}"));
-                    }
-                    missing.push(word);
-                    continue;
-                }
-                let name = match file {
-                    Some(f) => kq8_core::connor::intern(&kq8_core::connor::special_movement_name(f, word)),
-                    None => word,
-                };
-                let key = format!("{}|{}", c.shape.to_ascii_lowercase(), c.sequence.to_ascii_lowercase());
-                let animation = match index_of.get(&key) {
-                    Some(&i) => i,
-                    None => {
-                        self.log.quiet = true;
-                        let a = load_animation(self.game, self.world, &c.shape, &c.sequence, &palette, self.log);
-                        self.log.quiet = false;
-                        assets.animations.push(a?);
-                        index_of.insert(key, assets.animations.len() - 1);
-                        assets.animations.len() - 1
-                    }
-                };
-                let a = &assets.animations[animation];
-                let speed_now = if a.duration > 0.0 {
-                    (a.step_sum[0].powi(2) + a.step_sum[1].powi(2)).sqrt() / a.duration * c.speed
-                } else {
-                    0.0
-                };
-                self.log.summary(format!(
-                    "connor: movement {name} = movement {} loop={} {} speed {} repeat {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
-                    c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
-                ));
-                // Transitions: only those whose movements are loaded
-                // (connor-movement.md "Starting and stopping").
-                let known = |n: &str| CONNOR_MOVEMENTS.into_iter().find(|k| k.eq_ignore_ascii_case(n));
-                let mut transitions = Vec::new();
-                for t in &c.transitions {
-                    let line = format!("{} {} {} {}", t.from, t.to, t.to_phase, t.via);
-                    match (known(&t.to), known(&t.via)) {
-                        (Some(to), Some(via)) => {
-                            self.log.summary(format!("connor: {name}: transition {line}"));
-                            transitions.push(kq8_core::connor::Transition { from: t.from, to, to_phase: t.to_phase, via });
-                        }
-                        _ => self.log.summary(format!("connor: {name}: transition {line} skipped (movement not loaded)")),
-                    }
-                }
-                for p in &c.transition_problems {
-                    self.log.summary(format!("connor: {name}: {p}"));
-                }
-                if !c.cues.is_empty() {
-                    let cues: Vec<String> = c.cues.iter().map(|(ph, a)| format!("{ph} {a}")).collect();
-                    self.log.detail(format!("connor: {name}: cues {}", cues.join(", ")));
-                }
-                for p in &c.cue_problems {
-                    self.log.summary(format!("connor: {name}: {p}"));
-                }
-                if !c.repeat || !c.transitions.is_empty() {
-                    let steps: Vec<String> =
-                        a.frame_steps.iter().map(|p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])).collect();
-                    self.log.summary(format!("connor: {name}: can be cut short {}; frame steps {}", c.unknown != 0, steps.join(" ")));
-                }
-                assets.movements.push(ConnorMovement {
-                    name,
-                    animation,
-                    speed: c.speed,
-                    repeat: c.repeat,
-                    cut_short: c.unknown != 0,
-                    transitions,
-                    cues: c.cues.clone(),
-                });
-            }
-            if let Some(f) = file {
-                self.log.summary(format!("connor: weapon set {f}: its own versions of his movements loaded; not in it (his own play): {missing:?}"));
-            }
+                connor_set(self.game, self.world, &palette, self.log, sections, set_list, file.as_deref(), &mut assets.movements, &mut assets.animations, &mut index_of)?;
             }
             self.special_movements(&anm, &list, &palette, &mut assets, &mut index_of);
             // potions.md rule 29 (M5 5g-6): the `I_` versions of his

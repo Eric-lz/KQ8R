@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6c-1: one movement set's loading as its own function
+
+**Changed:** Viewer `load.rs`: the loop in `place_connor` that reads one movement set (his own or a weapon's) is now `connor_set`, a function the viewer can also call while playing (6c-2). Plan "6c" in `docs/DESIGN.md`. Also tried and undone before this: loading every weapon's set in every world (+2.2 s per load: Dead City 2.4 → 4.6 s, Daventry 3.4 → 5.6 s); the user chose loading a set when its weapon is given.
+**Why:** The user's check: the Lake Sword given by the console in Dead City has no stance; its set `conSword.anm` is not loaded there (no Dead City file names it).
+**Tested how:** Release build; the "connor:" lines of `viewer.log` for Daventry (1,601) and Swamp (1,451) compared with the previous commit's build: identical.
+**Result:** No behaviour change.
+**Still broken / not tested:** The Lake Sword in Dead City still has no stance (6c-2).
+**Next:** 6c-2, the set loaded at the give.
+
 ## 2026-10-21 Fix: every weapon's draw and put-away has both parts in every world
 
 **Changed:** Viewer `load.rs`: Connor's own `away` and `out` (`Conner.anm`) are always loaded with the weapon lists. Provenance (5d fix 10's table).
