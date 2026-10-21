@@ -1943,7 +1943,8 @@ Steps (one commit each; logged in `viewer.log` and `connor.log`):
    set's movements and their animations becomes a function (`connor_set`)
    both start-up and the viewer while playing can call. **Test:** Daventry's and
    Swamp's `viewer.log` "connor: movement …" lines unchanged.
-2. **6c-2, loaded at the give.** At start-up a resource keeps what it
+2. **6c-2, loaded at the give** (**done** 2026-10-21; the Lake Sword in
+   Dead City: 39 movements in 157 ms). At start-up a resource keeps what it
    needs: the game folder, the world's name, Connor's palette, and the
    lists of the weapons whose sets were not loaded. Each update the viewer looks at the
    weapons Connor carries; one whose set isn't loaded gets it now: the

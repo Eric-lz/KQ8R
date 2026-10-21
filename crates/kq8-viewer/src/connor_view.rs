@@ -229,6 +229,8 @@ pub struct ConnorSim {
     pub throw_cues: Vec<(&'static str, f32)>,
     /// His throw-state movements that ended this update.
     throw_ended: Vec<&'static str>,
+    /// The weapon sets not loaded at start-up (M6 6c-2, `late_set_step`).
+    pub late: Option<crate::load::LateSets>,
 }
 
 /// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
@@ -378,6 +380,173 @@ pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
     })
 }
 
+/// An animation's loop data (the movements add speed, flags, transitions).
+fn animation_loop(a: &crate::load::Animation) -> MovementLoop {
+    MovementLoop { duration: a.duration, step_sum: a.step_sum, frames: a.frames.len(), frame_steps: a.frame_steps.clone(), ..Default::default() }
+}
+
+/// A movement drawn with its animation's loop, frames and parts.
+#[allow(clippy::type_complexity)]
+fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frames: &[Vec<Entity>], parts: &[Vec<Vec<(String, [f32; 3])>>]) -> DrawnMovement {
+    DrawnMovement {
+        name: m.name,
+        movement_loop: MovementLoop {
+            speed: m.speed,
+            repeat: m.repeat,
+            cut_short: m.cut_short,
+            transitions: m.transitions.clone(),
+            cues: m.cues.clone(),
+            ..loops[m.animation].clone()
+        },
+        frames: frames[m.animation].clone(),
+        parts: parts[m.animation].clone(),
+    }
+}
+
+/// One animation drawn under his body: one material per look (its texture
+/// file and own picture go to `all_materials`, the face's to `face`), one
+/// hidden entity per frame. With `record`, also the first frame's smooth
+/// normals (for the light log, M1 5b).
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn spawn_frames(
+    commands: &mut Commands,
+    body: Entity,
+    anim: crate::load::Animation,
+    lip_base: Option<&str>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ObjectMaterial>,
+    light: &ObjectLight,
+    images: &mut Assets<Image>,
+    face: &mut Vec<Handle<ObjectMaterial>>,
+    all_materials: &mut Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>,
+    record: bool,
+) -> (Vec<Entity>, Option<Vec<Vec3>>) {
+    let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
+        .looks
+        .into_iter()
+        .map(|(m, look, l)| {
+            // The look's name is where it was found (`vol:…/CF0.BMP`).
+            let file = |name: &str| name.rsplit(['/', '\\']).next().unwrap_or(name).to_string();
+            let is_face = matches!(&look, crate::load::Look::Texture { name, .. } if lip_base.is_some_and(|b| b.eq_ignore_ascii_case(&file(name))));
+            let texture = match &look {
+                crate::load::Look::Texture { name, .. } => file(name).to_ascii_lowercase(),
+                _ => String::new(),
+            };
+            let handle = materials.add(object_material(look, l, light, images));
+            all_materials.push((handle.clone(), texture, materials.get(&handle).and_then(|m| m.texture.clone())));
+            if is_face {
+                face.push(handle.clone());
+            }
+            (m, handle, l)
+        })
+        .collect();
+    let mut entities = Vec::new();
+    let mut first = None;
+    // Its `.kqs` ball, for shadows on buildings (rule 37 (2), M4 4d-7b-5b).
+    let ball = crate::shadow_view::ModelBall::of(anim.ball);
+    for frame in anim.frames {
+        let parent = commands.spawn((Transform::default(), Visibility::Hidden, ball)).id();
+        commands.entity(body).add_child(parent);
+        let record = record && first.is_none();
+        let mut normals = Vec::new();
+        for (m, triangles) in frame {
+            let Some((_, material, shading)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
+            if record {
+                normals.extend(crate::object_light::smooth_normals(&triangles, shading.lighting));
+            }
+            let mesh = model_mesh(&triangles, shading.lighting, [0.0; 3]);
+            let part = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()))).id();
+            commands.entity(parent).add_child(part);
+        }
+        entities.push(parent);
+        if record {
+            first = Some(normals);
+        }
+    }
+    (entities, first)
+}
+
+/// M6 6c-2 (DESIGN "6c"; not from a behaviour note): a weapon Connor
+/// carries whose movement set was not loaded at start-up (a console `give`
+/// of a weapon no file of this world names) gets it now: the world's
+/// archives opened again, the set read as at start-up (`connor_set`), drawn
+/// as at start-up, its materials added to the potion looks and the mouth.
+/// Logged in `viewer.log` and `connor.log` with the time it took.
+#[allow(clippy::too_many_arguments)]
+pub fn late_set_step(
+    mut commands: Commands,
+    connor: Option<ResMut<ConnorSim>>,
+    sim: Option<Res<crate::door_view::DoorSim>>,
+    body: Query<Entity, With<ConnorBody>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+    light: Option<Res<ObjectLight>>,
+    shared: Res<Shared>,
+) {
+    let (Some(mut c), Some(sim), Some(light)) = (connor, sim, light) else { return };
+    let Ok(body) = body.single() else { return };
+    let c = &mut *c;
+    let carried: Vec<String> = sim.active.world.items.objects.iter().filter(|o| o.carried_by(kq8_core::talk::CONNOR)).map(|o| o.kind.to_ascii_lowercase()).collect();
+    let Some(mut late) = c.late.take_if(|l| l.sets.iter().any(|(k, _)| carried.contains(k))) else { return };
+    let due: Vec<(String, String)> = late.sets.iter().filter(|(k, _)| carried.contains(k)).cloned().collect();
+    late.sets.retain(|(k, _)| !carried.contains(k));
+    let started = std::time::Instant::now();
+    let mut log = shared.log.lock().unwrap();
+    match crate::load::World::open(&late.game, &late.world) {
+        Err(e) => log.summary(format!("connor: weapon sets {due:?}: world {} can't be opened again: {e}; not loaded", late.world)),
+        Ok(world) => {
+            for (kind, file) in due {
+                let sections = crate::load::read_set(&late.game, &world, &file);
+                let Some(list) = sections.first().map(|s| s.name.clone()) else {
+                    log.summary(format!("connor: weapon set {file} ({kind}): not found; not loaded"));
+                    continue;
+                };
+                let (mut movements, mut animations, mut index_of) = (Vec::new(), Vec::new(), std::collections::BTreeMap::new());
+                if let Err(e) = crate::load::connor_set(&late.game, &world, &late.palette, &mut log, &sections, &list, Some(&file), &mut movements, &mut animations, &mut index_of) {
+                    log.summary(format!("connor: weapon set {file} ({kind}): {e}; not loaded"));
+                    continue;
+                }
+                // potions.md rule 29: the `I_` versions of its textures.
+                let mut textures: Vec<String> = animations.iter().flat_map(|a| a.looks.iter()).filter_map(|(_, l, _)| match l {
+                    crate::load::Look::Texture { name, .. } => Some(name.rsplit(['/', '\\']).next().unwrap_or(name).to_ascii_lowercase()),
+                    _ => None,
+                }).collect();
+                textures.sort();
+                textures.dedup();
+                let ghosts: Vec<(String, crate::load::Look)> = textures.into_iter().filter_map(|t| {
+                    let ghost = format!("i_{}", t.get(2..)?);
+                    Some((t, crate::load::ghost_texture(&world, &ghost, &late.palette)?))
+                }).collect();
+                let loops: Vec<MovementLoop> = animations.iter().map(animation_loop).collect();
+                let parts: Vec<_> = animations.iter().map(|a| a.frame_parts.clone()).collect();
+                let mut added = Vec::new();
+                let frames: Vec<Vec<Entity>> = animations
+                    .into_iter()
+                    .map(|a| spawn_frames(&mut commands, body, a, late.lip_base.as_deref(), &mut meshes, &mut materials, &light, &mut images, &mut c.face, &mut added, false).0)
+                    .collect();
+                let mut new = 0;
+                for m in &movements {
+                    if !c.movements.iter().any(|d| d.name == m.name) {
+                        c.movements.push(drawn_movement(m, &loops, &frames, &parts));
+                        new += 1;
+                    }
+                }
+                let (n_materials, n_ghosts) = (added.len(), ghosts.len());
+                c.looks.add(added, ghosts, &mut images);
+                let line = format!(
+                    "weapon set {file} ({kind}) loaded while playing: {new} movements, {} animations, {n_materials} materials ({n_ghosts} I_ pictures), {} ms so far (M6 6c-2)",
+                    frames.len(),
+                    started.elapsed().as_millis()
+                );
+                log.summary(format!("connor: {line}"));
+                c.log.detail(format!("connor update {}: {line}", c.updates));
+            }
+        }
+    }
+    c.late = Some(late);
+}
+
 /// Spawns Connor (every frame of every movement, hidden but one) and
 /// starts his mover with gravity on (connor-physics.md "Is gravity on at
 /// the start?", recommendation).
@@ -415,19 +584,10 @@ pub fn spawn_connor(
     // M5 5g-5: every material with its texture file and own picture.
     let mut all_materials = Vec::new();
     let potion_looks = std::mem::take(&mut assets.potion_looks);
+    let late = assets.late.take();
     // Each animation's loop data; the movements add speed, flags and
     // transitions.
-    let loops: Vec<MovementLoop> = assets
-        .animations
-        .iter()
-        .map(|a| MovementLoop {
-            duration: a.duration,
-            step_sum: a.step_sum,
-            frames: a.frames.len(),
-            frame_steps: a.frame_steps.clone(),
-            ..Default::default()
-        })
-        .collect();
+    let loops: Vec<MovementLoop> = assets.animations.iter().map(animation_loop).collect();
     // Each animation: one material per look, one entity per frame.
     let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
@@ -436,46 +596,10 @@ pub fn spawn_connor(
     // ranged-weapons.md rule 24 (M5 5f-5): each animation's named parts.
     let frame_parts: Vec<_> = assets.animations.iter().map(|a| a.frame_parts.clone()).collect();
     for anim in assets.animations {
-        let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
-            .looks
-            .into_iter()
-            .map(|(m, look, l)| {
-                // The look's name is where it was found (`vol:…/CF0.BMP`).
-                let file = |name: &str| name.rsplit(['/', '\\']).next().unwrap_or(name).to_string();
-                let is_face = matches!(&look, crate::load::Look::Texture { name, .. } if lip_base.as_ref().is_some_and(|b| b.eq_ignore_ascii_case(&file(name))));
-                let texture = match &look {
-                    crate::load::Look::Texture { name, .. } => file(name).to_ascii_lowercase(),
-                    _ => String::new(),
-                };
-                let handle = materials.add(object_material(look, l, light, images));
-                all_materials.push((handle.clone(), texture, materials.get(&handle).and_then(|m| m.texture.clone())));
-                if is_face {
-                    face.push(handle.clone());
-                }
-                (m, handle, l)
-            })
-            .collect();
-        let mut entities = Vec::new();
-        // Its `.kqs` ball, for shadows on buildings (rule 37 (2), M4 4d-7b-5b).
-        let ball = crate::shadow_view::ModelBall::of(anim.ball);
-        for frame in anim.frames {
-            let parent = commands.spawn((Transform::default(), Visibility::Hidden, ball)).id();
-            commands.entity(body).add_child(parent);
-            let record = first_frame_normals.is_none();
-            let mut normals = Vec::new();
-            for (m, triangles) in frame {
-                let Some((_, material, shading)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
-                if record {
-                    normals.extend(crate::object_light::smooth_normals(&triangles, shading.lighting));
-                }
-                let mesh = model_mesh(&triangles, shading.lighting, [0.0; 3]);
-                let part = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()))).id();
-                commands.entity(parent).add_child(part);
-            }
-            entities.push(parent);
-            if record {
-                first_frame_normals = Some(normals);
-            }
+        let record = first_frame_normals.is_none();
+        let (entities, normals) = spawn_frames(commands, body, anim, lip_base.as_deref(), meshes, materials, light, images, &mut face, &mut all_materials, record);
+        if normals.is_some() {
+            first_frame_normals = normals;
         }
         frame_entities.push(entities);
     }
@@ -484,25 +608,7 @@ pub fn spawn_connor(
         Some(stats) => main_log.summary(format!("object light: Connor at his start (first frame): {stats}")),
         None => main_log.summary("object light: Connor has no smooth corners in his first frame"),
     }
-    let movements: Vec<DrawnMovement> = assets
-        .movements
-        .iter()
-        .map(|m| {
-            DrawnMovement {
-                name: m.name,
-                movement_loop: MovementLoop {
-                    speed: m.speed,
-                    repeat: m.repeat,
-                    cut_short: m.cut_short,
-                    transitions: m.transitions.clone(),
-                    cues: m.cues.clone(),
-                    ..loops[m.animation].clone()
-                },
-                frames: frame_entities[m.animation].clone(),
-                parts: frame_parts[m.animation].clone(),
-            }
-        })
-        .collect();
+    let movements: Vec<DrawnMovement> = assets.movements.iter().map(|m| drawn_movement(m, &loops, &frame_entities, &frame_parts)).collect();
     for d in &movements {
         main_log.summary(format!(
             "connor: {} moves at {:.1} units/s ({} frames)",
@@ -629,6 +735,7 @@ pub fn spawn_connor(
         throw: None,
         throw_cues: Vec::new(),
         throw_ended: Vec::new(),
+        late,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",

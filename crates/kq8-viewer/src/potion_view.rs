@@ -55,6 +55,8 @@ pub struct ConnorLooks {
     face: Option<String>,
     face_shown: Option<String>,
     invisible: bool,
+    /// Materials were added (M6 6c-2): the next look step redoes them all.
+    redo: bool,
 }
 
 impl ConnorLooks {
@@ -78,7 +80,21 @@ impl ConnorLooks {
             face: None,
             face_shown: None,
             invisible: false,
+            redo: false,
         }
+    }
+
+    /// M6 6c-2: the materials of a weapon set loaded while playing, and the
+    /// `I_` pictures of its textures; the next look step gives them the
+    /// looks shown now (Strength, Invisible, the face set).
+    pub fn add(&mut self, materials: Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>, ghosts: Vec<(String, crate::load::Look)>, images: &mut Assets<Image>) {
+        self.materials.extend(materials);
+        for (n, look) in ghosts {
+            if let crate::load::Look::Texture { width, height, rgba, .. } = look {
+                self.ghosts.entry(n).or_insert_with(|| images.add(crate::object_light::texture_image(width, height, rgba, bevy::image::ImageAddressMode::Repeat)));
+            }
+        }
+        self.redo = true;
     }
 
     /// Rule 29: a copy of `pic` with 3 of every 4 pixels see-through, one
@@ -198,9 +214,10 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     let invisible = w.connor_invisible();
     let bits = kq8_core::potions::list_bits(w, &c.looks.faces.items);
     let wanted = c.looks.faces.best(bits).map(str::to_ascii_lowercase);
-    if strength == c.looks.iron_on && wanted == c.looks.face && invisible == c.looks.invisible {
+    if strength == c.looks.iron_on && wanted == c.looks.face && invisible == c.looks.invisible && !c.looks.redo {
         return;
     }
+    c.looks.redo = false;
     let mut lines = Vec::new();
     if strength != c.looks.iron_on {
         lines.push(match (&c.looks.body_skin, &c.looks.iron) {

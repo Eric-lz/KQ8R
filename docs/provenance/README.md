@@ -3106,3 +3106,15 @@ source.
 | 6b-3: state requests during the throw (special lists, scripted walks, the dying state) refused and tried again every update, so they happen after the catch | Rule 3; retrying: **stand-in as for a jump (`anim-scripts.md` rule 28), Q148 d** | Not run in the viewer (no hit took him below 0 during a throw) |
 | 6b-3: the throw's handsOff blocks keys and clicks only: the panels, the spinning mask and the pointer unchanged, and characters still see him | Rule 3 ("no pointer change"); `potions.md` rule 26 (a cutscene's handsOff hides the pointer); the panels: **stand-in, Q148 e** | Viewer: no `gui.log` handsOff line during a throw |
 | 6b-3: the bolt files of every ranged weapon whose file the world has are read at load (a console `give AzrielHammer` in Daventry) | Rule 10 (Daventry has `prhammer.kq`) | Viewer: Daventry `characters.log` "shoots Prhammer.kq ... speed 24000, range 15000" |
+
+## M6 6c: a weapon's movement set loaded when it is given — viewer `load.rs` (`connor_set`, `LateSets`, `read_set`), `connor_view.rs` (`late_set_step`, `spawn_frames`), `potion_view.rs` (`ConnorLooks::add`)
+
+Not from a behaviour note: when the original loads a weapon's movements
+is not studied. The user's check (2026-10-21: the Lake Sword given in
+Dead City had no stance) and the user's choice (load when given, not
+every set at start-up: +2.2 s per load, measured).
+
+| What | Source | Check |
+| --- | --- | --- |
+| 6c-1: one set's movements read by one function, at start-up as before | Ours (refactor) | `viewer.log` "connor:" lines of Daventry and Swamp identical to the earlier build |
+| 6c-2: the sets of weapons no file of the world names are listed at start-up; when Connor carries one, its set is read (the world's archives opened again) and drawn as at start-up; its materials join the potion looks (Strength, Invisible, with this world's `I_` pictures) and the mouth | Ours; the drawing and the looks as 5d fix 9, M5 5g-5, 5g-6 | Viewer, Dead City, `give LakeSword`: "conSword.anm ... loaded while playing: 39 movements, ... 157 ms"; after the draw `consword.anm/stop` drawn; looks redone (823 -> 900 materials). Daventry's first-frame light line identical to the earlier build |

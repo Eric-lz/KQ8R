@@ -323,6 +323,37 @@ pub struct ConnorAssets {
     /// What the potions change on him (M5 5g-5, `potions.md` rules 25,
     /// 30).
     pub potion_looks: PotionLooks,
+    /// The weapons whose sets were not loaded, and what loading one while
+    /// playing needs (M6 6c-2).
+    pub late: Option<LateSets>,
+}
+
+/// M6 6c-2: what the viewer needs to load a weapon's movement set while
+/// playing (a weapon given that no file of this world names): the game
+/// folder, the world, Connor's palette and face texture, and for each such
+/// weapon its item type (lower case, `invitem_…`) and list file.
+pub struct LateSets {
+    pub game: GameDir,
+    pub world: String,
+    pub palette: [Rgb; 256],
+    pub lip_base: Option<String>,
+    pub sets: Vec<(String, String)>,
+}
+
+/// A movement list file (`conSword.anm`): from the world's archives, else
+/// `GAME/Kq` (M5 5c fix; M6 6c-2).
+pub fn read_set(game: &GameDir, world: &World, file: &str) -> Vec<kq8_data::kq_text::Section> {
+    let bytes = match world.load(file) {
+        Some(Ok((_, b))) => Some(b),
+        _ => game.find(&format!("GAME/Kq/{file}")).and_then(|p| std::fs::read(p).ok()),
+    };
+    bytes.map(|b| kq8_data::kq_text::parse(&b)).unwrap_or_default()
+}
+
+/// The `I_` version of a texture this world has (`potions.md` rule 29):
+/// for a set loaded while playing (M6 6c-2).
+pub fn ghost_texture(world: &World, texture: &str, palette: &[Rgb; 256]) -> Option<Look> {
+    load_ghost_texture(world, texture, palette)
 }
 
 /// Connor's skin and face lists and the pictures the potions need (M5
@@ -2379,13 +2410,17 @@ impl Placer<'_> {
                 potion_looks.face_sets.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(),
                 potion_looks.face_sets.iter().map(|(_, s)| s.iter().filter(|l| l.is_some()).count()).collect::<Vec<_>>()
             ));
+            let lip_base = lips.as_ref().map(|(b, _)| b.clone());
             let mut assets =
-                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips, potion_looks };
+                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips, potion_looks, late: None };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
             // His own set (Conner.anm), then each hand weapon's (M5 5c fix:
             // **stand-in**, see `weapon_sets`), loaded as `<file>/<name>`.
             let mut sets = vec![(anm.clone(), list.to_string(), None)];
-            sets.extend(self.weapon_sets());
+            let (weapons, late) = self.weapon_sets();
+            sets.extend(weapons);
+            self.log.summary(format!("connor: weapon sets not loaded now, loaded when the weapon is given (M6 6c-2): {:?}", late.iter().map(|(_, f)| f.clone()).collect::<Vec<_>>()));
+            assets.late = Some(LateSets { game: self.game.clone(), world: self.world.name.clone(), palette, lip_base, sets: late });
             for (sections, set_list, file) in &sets {
                 connor_set(self.game, self.world, &palette, self.log, sections, set_list, file.as_deref(), &mut assets.movements, &mut assets.animations, &mut index_of)?;
             }
@@ -2967,8 +3002,12 @@ impl Placer<'_> {
     /// set: Q138): for each `ShortAnimList` entry whose weapon is in the
     /// world or named in a world script (`Fists` always), its file's
     /// sections, list name and file.
-    fn weapon_sets(&mut self) -> Vec<(Vec<kq8_data::kq_text::Section>, String, Option<String>)> {
-        let Some(f) = &self.connor_fight else { return Vec::new() };
+    /// The weapons left out: their item type (lower case) and list file
+    /// (M6 6c-2: loaded when given).
+    #[allow(clippy::type_complexity)]
+    fn weapon_sets(&mut self) -> (Vec<(Vec<kq8_data::kq_text::Section>, String, Option<String>)>, Vec<(String, String)>) {
+        let Some(f) = &self.connor_fight else { return (Vec::new(), Vec::new()) };
+        let mut late = Vec::new();
         let kinds: Vec<String> = self.items.objects.iter().map(|o| o.kind.to_ascii_lowercase()).collect();
         // ranged-weapons.md rule 10 (M5 5f-4): the ranged weapons' lists
         // too, for those this world's object files name (a monster's drop:
@@ -2994,22 +3033,19 @@ impl Placer<'_> {
             let named = self.all_scripts.iter().find(|(_, t)| t.to_ascii_lowercase().contains(&w)).map(|(n, _)| n.clone());
             let in_files = ranged && kq_text.contains(&kind);
             if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) && named.is_none() && !in_files {
+                late.push((kind, file));
                 continue;
             }
             if let Some(n) = &named {
                 self.log.summary(format!("connor: weapon set {file} ({weapon}): named in {n}"));
             }
-            let bytes = match self.world.load(&file) {
-                Some(Ok((_, b))) => Some(b),
-                _ => self.game.find(&format!("GAME/Kq/{file}")).and_then(|p| std::fs::read(p).ok()),
-            };
-            let sections = bytes.map(|b| kq8_data::kq_text::parse(&b)).unwrap_or_default();
+            let sections = read_set(self.game, self.world, &file);
             match sections.first().map(|s| s.name.clone()) {
                 Some(name) => sets.push((sections, name, Some(file))),
                 None => self.log.summary(format!("connor: weapon set {file} ({weapon}): not found")),
             }
         }
-        sets
+        (sets, late)
     }
 
     /// The movements Connor's Special state can play (M3 step 3i-7,

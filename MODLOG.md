@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6c-2: a weapon's movement set is loaded when it is given
+
+**Changed:** Viewer `load.rs`: `weapon_sets` also returns the weapons it left out; `LateSets` (game folder, world, palette, face texture, those weapons) goes with Connor's assets; `read_set`, `ghost_texture`. `connor_view.rs`: the drawing of one animation is now `spawn_frames` (used by `spawn_connor` and the new step); new `late_set_step` (after `door_step`): a carried weapon whose set isn't loaded gets it, drawn under his body. `potion_view.rs`: `ConnorLooks::add` and a redo of the looks. `main.rs`: the step registered. DESIGN, provenance.
+**Why:** The user's check: the Lake Sword given in Dead City had no stance. The user chose loading at the give over loading every set (+2.2 s per world).
+**Tested how:** `cargo test --workspace` (637 pass), clippy clean. `kq8-viewer --world DeadCity --sound off --frames 1500 --no-ai --command "give LakeSword 1,5" --key left:IDCTL_INVBAR_SHORT,30`; `viewer.log`, `fight.log`, `connor.log`. Daventry's start-up lines and first-frame light line compared with the earlier build.
+**Result:** Dead City: "weapon set conSword.anm (invitem_lakesword) loaded while playing: 39 movements, 38 animations, 115 materials (1 I_ pictures), 157 ms" at the give (update 5); start-up still 2.4 s. Readied at 30: `["away", "consword.anm/out"]`, then `consword.anm/stop` drawn (the sword stance). Looks redone: 823 → 900 materials. Daventry: start-up lines and light identical.
+**Still broken / not tested:** **Not looked at by eye.** Strength or Invisible on a set loaded this way not run (the looks are redone, logged). The 157 ms are a pause in that one update.
+**Next:** The user: the Lake Sword in Dead City by eye.
+
 ## 2026-10-21 M6 6c-1: one movement set's loading as its own function
 
 **Changed:** Viewer `load.rs`: the loop in `place_connor` that reads one movement set (his own or a weapon's) is now `connor_set`, a function the viewer can also call while playing (6c-2). Plan "6c" in `docs/DESIGN.md`. Also tried and undone before this: loading every weapon's set in every world (+2.2 s per load: Dead City 2.4 → 4.6 s, Daventry 3.4 → 5.6 s); the user chose loading a set when its weapon is given.
