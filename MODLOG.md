@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 The user's check of the Rope and Hook
+
+**Changed:** This entry; STATUS, FEATURES, README.
+**Why:** The user tried the rope in our viewer after Q147's answers were built.
+**Tested how:** The user's check by eye, at two rope places.
+**Result:** "The rope is working perfectly."
+**Still broken / not tested:** Ropes of the other worlds not tried (Daventry only); saved games and first person don't exist yet. The note's open question 7 (the top trap's `On` mid-climb) is still open, small.
+**Next:** —
+
 ## 2026-10-21 M6 6a: Q147 (a), (b), (d) as built; stand-in labels removed
 
 **Changed:** Log texts and comments in `rope.rs`, `door_view.rs`, `rope_view.rs`: no more "stand-in" / "pointer kept" where A's answers confirm what we built (the first free icon place; the rope's handsOff is a plain `handsOff 1`, which is what ours already did; `taway`'s step). STATUS, DESIGN, provenance.

@@ -419,8 +419,8 @@ M6 has started with the Rope and Hook (6a).
   (walking away and back, the cuts, the Uglybeast; `docs/FEATURES.md`).
 - Health items and potions (M5 5g, 2026-10-21): checked in the logs only
   (`MODLOG.md`); not looked at by eye yet.
-- The Rope and Hook (M6 6a, 2026-10-21): checked in the logs only
-  (`MODLOG.md`); not looked at by eye yet.
+- The Rope and Hook (M6 6a, 2026-10-21): **checked by the user by eye
+  at two rope places: "working perfectly"**.
 - Tests: 618 unit tests pass (131 + 482 + 5), 2026-10-21.
 
 ## What doesn't work yet / next

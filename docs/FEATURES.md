@@ -610,8 +610,8 @@ not looked at by eye yet.
 
 ## The Rope and Hook (milestone M6, step 6a, 2026-10-21)
 
-Checked in the logs only (`rope.log`, `connor.log`, `camera.log`); not
-looked at by eye yet. Built from `ropeandhook.md`.
+Checked by the user by eye at two rope places (2026-10-21: "working
+perfectly"); logged in `rope.log`. Built from `ropeandhook.md`.
 
 - **Rope places:** each pair of rope traps tells Connor he is at the foot
   or the top of a rope, only if he carries the Rope and Hook; the
