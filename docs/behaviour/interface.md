@@ -355,10 +355,9 @@ uses whatever the window holds [traced].
     has a second text in `14red.pft` (`IDCTL_INVBAR_*_ALTTXT`) that is
     turned on by a flag sent with the number [traced]. The flags come
     from three switches on Connor that the potions of shield and
-    strength set while they last [inferred: the stats code changes the
-    armour and hand-weapon numbers when those switches are on; the
-    manual: "protection increases to 50% or by 50%", "hand weapon stat
-    to 150%"]. M5.
+    strength set while they last [traced in `potions.md` rules 17, 21,
+    37–39: Strength reddens the hand number, the shield the armour
+    number; the ranged one is never used].
 33. **A changed slot number flashes**: when the armour, hand or ranged
     number differs from the last one shown, the slot's `fx.pba`
     animation plays once over it [traced].

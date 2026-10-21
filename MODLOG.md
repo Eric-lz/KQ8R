@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: health items and potions
+
+**Changed:** New `docs/behaviour/potions.md`. `inventory.md` rules 16, 18 and open question 2, `interface.md` rule 32 point there (the candle's rule corrected). QUESTIONS Q109 partly answered. STATUS. Scratch notes in `re/notes.md`.
+**Why:** The user asked for the study of health items and potions (what B needs for the potion effects, timers, icons and red numbers).
+**Tested how:** Traced in `Mask.exe` with Ghidra; checked against the data (`Invinfo.itl`, `Connor.kq` skin and face lists, `orbit1.kq`, the `Reveal` scripts, `I_*` / `cclf*` / `cironf*` / `coniron` textures in the worlds' `8bit.vol`). Not checked in the original game.
+**Result:** Use refused only in `handsOff` or dying; no movement or remark; a running potion can't be stacked or restarted. Shield: protection + half (50–100), halved in Temple 4, one `invulnfx` orbit; Strength: hand + half, iron skin and face; red numbers on both. Invisible: Connor's reported position is 100,000 below him, so characters lose him; drawn as a mesh. Clarity: `Reveal True/False` to objects with group bit 2048. Timers: whole seconds of game time, paused by the main menu, kept over world changes and saves; drain icon in `IDCTL_TIMER`. Candle: +25 experience at pickup, never taken back. Found: the shield's end overwrites protection (Do not reproduce 1).
+**Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
+**Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
+
 ## 2026-10-20 M5 5f-1: the bolt's flight as traced (the bow spriggans)
 
 **Changed:** Plan 5f (ranged weapons, 7 steps) in `docs/DESIGN.md`. `fight.rs`: a bolt is turned once toward its aim (heading and pitch) and moves 533 units per update (8,000 / 15), no gravity. Its move is swept with its `BOUNDS.KQ` box's ball stack against the buildings, the objects and characters its mask (0x1F) covers and Connor; never its shooter. At the first touch it hits and is removed; otherwise it is removed at or below the floor grid, or past `maxDistance`. Immune bit 0x4000: a hit of 0 and `ProjImmune` to the script. Objects get 5c fix 5's barrel stand-in. A character aims at Connor + 0.75 × his box top (975), led as before. `ProjectileKeys` reads `colliderMask`, `weaponType`, `meshName` and the note's defaults; the loader adds the bolt's box. The viewer draws the bolt pitched, its model's front along the flight. Q140 asked. Provenance, FEATURES.

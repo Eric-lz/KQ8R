@@ -190,8 +190,10 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
     bar click never applies a quest item (it is held instead, rule 9),
     so applying one comes from elsewhere (scripts or other code; not
     traced). Only the candle has a duration and stats among quest items
-    (`Exp` 25, 60 s); by rule 15 its 25 experience would be taken back
-    after 60 s [inferred from the rules, not seen].
+    (`Exp` 25, 60 s). **Corrected (`potions.md` rule 40):** the candle
+    is never applied by the bars, so these two columns are not used; its
+    25 experience comes, built in, when it is picked up and is never
+    taken back.
 17. Taking an item out of the inventory removes the given count; if
     that is all of it, the item is un-applied first and leaves the list
     (to the world, for `dropItem`, `items.md` rule 11) [traced].
@@ -201,7 +203,8 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
 18. The four potions put a timer icon in the status icons
     (`Invinfo.itl` `extraData`: `IDBMA_CLAR`, `IDBMA_INV`, `IDBMA_VUL`,
     `IDBMA_STR`) for their `Dur` [data, manual]. Their real effects
-    (shield, strength, reveal, invisibility) are M5.
+    (shield, strength, reveal, invisibility), the timer and the red
+    numbers: **`potions.md`**.
 
 ## The wizard's quest items (Daventry)
 
@@ -288,7 +291,8 @@ item closes the gap in the strip (not checked with 8 or more items).
 
 1. Whether a held item goes back to its slot on world change, cutscene
    or death (rule 12). Either way it stays in the inventory (the user).
-2. What applying a quest item does beyond the stats (the candle's
-   light, +25 experience: probably its script or its stats; rule 16).
+2. ~~What applying a quest item does beyond the stats (the candle)~~:
+   the bars never apply one; the candle's experience: `potions.md`
+   rule 40.
 3. Weapon readying and the attack pointers: M5.
 4. The rope and rock throwing: M6.

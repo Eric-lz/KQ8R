@@ -7,6 +7,19 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (A): health items and potions**, `docs/behaviour/potions.md`
+  (inventory.md rules 16, 18 and interface.md rule 32 point there). Slot
+  click / keys 1–8 refused only in `handsOff` or dying; no movement, no
+  remark; a running potion can't be taken again (nothing happens). Shield:
+  protection + half, 50–100, an `orbit1` shape circles him; Strength:
+  hand number + half, iron skin; both red on the bar. Invisible: characters
+  are told he is 100,000 below (they lose him), Connor drawn as a mesh.
+  Clarity: `Reveal True/False` to objects with `groupsAlways` bit 2048
+  (Daventry: keep wall, wizard's hidden chest). Timer: whole seconds of
+  game time, stops in the main menu; drain icon in the first free
+  `IDCTL_TIMER` place. Candle: +25 experience at pickup, never taken
+  back. Q109 (d) answered, (a) for the slots. For B: build it.
+
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
   caught; hits one thing, flies back along its line, always caught. Checked
@@ -616,9 +629,10 @@ characters and conversations done; the menus postponed) and **M5**
   flag bit 6, the picture attribute bits.
 - For A (asked 2026-10-18 by B, M4 4c): **Q108** (the 800 × 600 screen:
   how rectangles, pictures and fonts scale; how smaller pictures fill
-  their box; the panels' animation speed), **Q109** (counts of 0, the
-  rocks picture, the blink's order, the potions' clock, a `give`'s
-  pushed-out piece, the top bar in a window), **Q110** (the remark
+  their box; the panels' animation speed), **Q109** (counts of 0 for
+  gold and rocks, the rocks picture, the blink's order, a `give`'s
+  pushed-out piece, the top bar in a window; the potions' clock and the
+  slots' count 0 answered in `potions.md`), **Q110** (the remark
   numbers in `inventory.md` rule 9: our reading names the right lines;
   the rope held or not; the pointer's click point; the gold button
   while the coins are held), **Q111** (answered by the user's checks
