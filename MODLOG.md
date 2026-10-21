@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-20 M5 5f: end of the ranged-weapons session (B)
+
+**Changed:** STATUS.md ("Where we are", the 5c and 5f stand-ins, the next step, the open questions), QUESTIONS (Q138, Q139 marked built), DESIGN (5f done).
+**Why:** `docs/SESSIONS.md`, the end of an implementation session.
+**Tested how:** — (documents only).
+**Result:** 5f-1 to 5f-7 are in, one commit each. Open for A: Q140 (the bolt's shape, Connor's aim height 975 vs 1,200, the frame at the cue), Q141 (a script's walk during the swap), `ranged-weapons.md` open questions 1–5.
+**Still broken / not tested:** Nothing in 5f looked at by eye or compared with the original.
+**Next:** The user: `ranged-weapons.md` "How to check" 1–9 in ours. B: `potions.md`.
+
 ## 2026-10-20 M5 5f-7: the swing click picks its target as traced
 
 **Changed:** With a hand weapon ready, the click line is tested against the characters, objects and buildings whose type has bit 0x40 or 0x20 (`weapons.rs`: `SWING_PICK`). The Wizard and the Knight (type bit 0x8000) get the plain click. Nothing or a building: he turns to the click point and swings at once. Anything else within his reach (2,350, 3D between the positions) becomes his target, and the target stays for later swings; more than 45° off, the swing waits until 8 updates of turn are left. `--swing NAME,N` clicks NAME the same way. FEATURES, provenance, DESIGN.

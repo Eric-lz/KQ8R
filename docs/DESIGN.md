@@ -1456,7 +1456,7 @@ Steps (one commit each; logged in `items.log`):
    **Test:** by eye against the original (`thrown-items.md` open
    question 2).
 
-#### 5f — Ranged weapons (planned 2026-10-20)
+#### 5f — Ranged weapons (planned 2026-10-20; done 2026-10-20, steps 5f-1 to 5f-7, checked in the logs only)
 
 Why: Connor can't use the Small Crossbow `sprgnbow` drops, and the bow
 spriggans' bolt is a stand-in (5c-9). Source: `ranged-weapons.md` (A,

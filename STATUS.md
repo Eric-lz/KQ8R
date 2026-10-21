@@ -26,15 +26,24 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   by the user in the original. The 0-damage worlds are not reachable
   with the hammer; a default base damage per weapon is an M7 idea.
 
-- **2026-10-20 (A): Connor's ranged weapons**,
-  `docs/behaviour/ranged-weapons.md`: readying / swapping (Delete, Alt,
-  slot; only from standing or moving; `away` → `out`), the bow pointer
-  `IDBMA_CURS05`, the shot (standing: `attack`, bolt at `do`; moving: at
-  once, ≥ 0.5 s apart), aim and the 33° limit, and the bolt's real flight
-  (from the model's `arrow` part, straight and pitched, no gravity,
-  removed at the first touch, the floor grid or `maxDistance`) for
-  Connor and the spriggans. Q138 mostly, Q139 answered. For B: build it
-  and replace the 5c bolt stand-in.
+- **2026-10-20 (B, M5 5f-1 to 5f-7): Connor's ranged weapons built**
+  from `docs/behaviour/ranged-weapons.md` (plan and steps in
+  `docs/DESIGN.md` "5f"; one commit each; everything in `fight.log`).
+  Bolts (the spriggans' and his) fly as traced: turned once to the aim
+  (pitch too), 533 units per update, no gravity, swept with their box
+  against what their mask covers, gone at the first touch, the floor
+  grid or their range; they start at the shooter's `arrow` model part.
+  Weapon modes hand / ranged / none: slot clicks, **Delete** (swap),
+  **Alt** (put away), `KQConner::setDoMode`; taken only while he stands
+  or moves; the swap plays `draw` / `undraw` (fists) or `away` → `out`;
+  pointer sword / bow / play. The Small Crossbow can be readied and
+  shoots: standing (`attack`, bolt at its `do`) and moving (at once,
+  ≤ 2 a second, run → walk for 1 s); the aim pick, the 33° limit, the
+  turn and its wait; the Wizard / Knight get the plain click. The swing
+  click picks its target as traced (within 2,350, kept). Q140 (the
+  bolt's shape; aim height 975 vs 1,200; which frame at the cue) and
+  Q141 (a script's walk during the swap) asked, not blocking. **Not
+  looked at by eye; not compared with the original.**
 
 - **2026-10-20 (A): Q137 answered**, `docs/behaviour/thrown-items.md`
   (`items.md` rule 12 points there): a thrown item follows the exact arc
@@ -43,7 +52,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   Connor are flown through), slides off walls and drops at their foot,
   is flung up again by barrels (scripted or animated objects), tumbles
   about one axis at a fixed angle per update, and rests with no turn.
-  For B: replace the 5c-8 / fix 7 stand-ins.
+  Built by B in M5 5e and checked by the user ("pretty much exactly like
+  the original").
 
 - **2026-10-20 (B, after the user's fight check): fixes 1–7 and 5d.**
   Readying the fists plays `draw` and switches Connor to the weapon's
@@ -522,38 +532,40 @@ characters and conversations done; the menus postponed) and **M5**
   `out`, no weapons yet), first person, the right button's lock release
   on entering. Not run: the horn on the Uglybeast, `clearSpeak` on a
   partner, a real mouse drag during a talk.
-- **Stand-ins of 5c (the fight):** Connor's input side (open question
-  1): a second click on the ready weapon's slot puts it away; a click on
-  no creature aims at the level of his feet; turning toward the click
-  first only when it is behind him; readying switches his whole
-  movement set to the weapon's list (`confists.anm`: fists-up stance)
-  with its `draw` / `undraw`, and the pointer to the sword
-  `IDBMA_CURS03` (Q138, after the user's check); his swing and flinch
-  play as one-item Special lists. The bolt (open question 2):
-  straight, no gravity, from 3/4 of the shooter's height at 3/4 of his,
-  drawn without pitch. The thrown drops' flight (Q137 now answered in
-  `thrown-items.md`, not built yet). Game over
+- **Stand-ins of 5c (the fight):** his swing and flinch play as one-item
+  Special lists (so a weapon request during a swing waits for its end:
+  `ranged-weapons.md` open question 1); a swing click on nothing turns
+  him toward where the line meets the level of his feet. Game over
   (Connor stays dead). The corpse has no draw-distance test and no skin
   swap (bossprig). The flinch pause is fixed at 2 s (Q136,
   `reactPause`). Not built: fleeing / keeping distance (rule 37; none
-  in Daventry), the tips' texts, surprise lines (none in Daventry),
-  "immune to projectiles", ranged weapons and Delete for Connor. Not
+  in Daventry), the tips' texts, surprise lines (none in Daventry). Not
   run in the viewer: the real mouse swing, fire / ice / projectile
   deaths, picking up an item in the air, the other two bow spriggans.
   Seen in the logs: rule 26's alarm with "run" also reaches far
   characters that are active and see Connor (as written; not checked
   in the original).
+- **Stand-ins and open points of 5f (ranged weapons):** the bolt's own
+  shape is its box's ball stack (one ball, radius 235: Q140 a); a
+  character aims at Connor + 975 (0.75 × his box top 1,300; the note
+  says 1,200: Q140 b); the `arrow` part is taken from the frame at the
+  `do` cue's own phase (Q140 c); a script's `walkTo` right after
+  `setDoMode` cuts the swap (the axe cutscene, Q141); `setDoMode` doesn't
+  end a jump; the right button held (open question 2) and first person
+  not done; the run comes back the simpler way (1 s after the last
+  moving shot); how objects take damage is still the barrel stand-in
+  (Q139 e); fire / ice bolts' sparks (`emitter`) not drawn.
 - **Stand-ins of 5a / 5b (characters moving):** the idle list kept in the
   same player as `idle:<name>` (the same result as the original's swap,
   rule 18); the stuck line 1 above the feet (the note's recommendation).
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Next step, suggested:** for the user: play the fight by eye
+- **Next step, suggested:** for the user: check ranged weapons by eye
+  (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
-  Connor's controls (the input side of the fight, his weapon lists,
-  game over), the bolt's flight, Q136. For B: the thrown items' flight
-  (`thrown-items.md`). **The main
+  Q140, Q141, Q136, game over. For B: `potions.md` (health items and
+  potions, studied by A). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
   that skips it.
@@ -602,12 +614,21 @@ characters and conversations done; the menus postponed) and **M5**
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
+- For A (asked 2026-10-20 by B, M5 5f, not blocking): **Q140** (a: the
+  bolt's own shape, the ball stack of its box or something else, with
+  `collisionDetail`; b: Connor's aim height, 0.75 × 1,300 = 975 from
+  `BOUNDS.KQ` vs the note's 1,600 → 1,200; c: which frame gives the
+  `arrow` part at the `do` cue); **Q141** (what a script's `walkTo` does
+  while the weapon swap plays: `ax.cs`). `ranged-weapons.md` open
+  questions 1–5 (a swap during a swing, the right-button click point,
+  `collisionDetail`, the pointer names, rocks) are still open.
 - For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
-  (`reactPause`: is it the flinch's 2 s pause?); **Q138** mostly
-  answered 2026-10-20 in `ranged-weapons.md` (left: (e), and whether a
-  swap cuts a swing); **Q139** answered there (rule 32) except how
-  objects take damage. `fighting.md` open question 3 (which menu sets
-  the combat level) is still open.
+  (`reactPause`: is it the flinch's 2 s pause?); **Q138** answered in
+  `ranged-weapons.md` and built in M5 5f-3 / 5f-4 (left: (e), and
+  whether a swap cuts a swing); **Q139** answered there (rule 32) and
+  built in M5 5f-7, except how objects take damage (e).
+  `fighting.md` open question 3 (which menu sets the combat level) is
+  still open.
 - For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
   the stay test; Jump and push while talking), **Q126** (where the
   conversation camera aims and what the right-button swing centres on).
@@ -622,7 +643,8 @@ characters and conversations done; the menus postponed) and **M5**
   worth copying); 2 (the fight) answered 2026-10-20 in `fighting.md`.
 - `fighting.md` open questions (not blocking the Daventry fight): which
   menu sets the combat level, Connor's death (the input side and the
-  bolt's flight answered 2026-10-20 in `ranged-weapons.md`).
+  bolt's flight answered 2026-10-20 in `ranged-weapons.md`, built in M5
+  5f).
 - Q131–Q134: answered by A and built 2026-10-20 (M5 5b).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
