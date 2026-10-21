@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 Axe cutscene: Connor draws the axe, then walks out (Q141, the user's check)
+
+**Changed:** `connor_view.rs` (`ready_set`, `weapon_step`, `held_walk`): a script's walk asked while a script's weapon swap starts (`ax.cs`: `setDoMode 0`, then `walkTo` in the same event) waits until the swap is over, then starts. Replaces the stand-in of earlier today (the set switched at once, no draw). QUESTIONS (Q141 answered by the user's check, built), provenance.
+**Why:** The user's check in the original: in that cutscene Connor stops, draws the axe, then walks outside; ours didn't draw it.
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer: `cargo play --world Daventry --sound off --at 145000,249800,-1.5708 --no-ai --god --click Winddoor,5 --click ax,40 --hold 1,0,0,150 --frames 6000` (the door opened first, as in play); `connor.log` (copy `connor-q141-draw-then-walk.log`), `doors.log`.
+**Result:** Update 42: the walk is held; his `away`, then `conaxe.anm/out` with `Weapon.aud`. Update 58: the swap is over, the walk starts. Update 84: the walk is done (1,456 of 1,414), cue 20; the cutscene goes on to `handsOff 0` at update 594. With the door closed (an earlier test) the walk stops head-on at `Winddoor`; in play the door is open.
+**Still broken / not tested:** Not looked at by eye. No unit test (the hold lives in the viewer's Connor). Only a script's request with a script's walk is held; other combinations are not traced. The axe from the floor (Q142).
+**Next:** The user: the cutscene by eye. A: Q142.
+
 ## 2026-10-21 The user's check of the axe cutscene: works
 
 **Changed:** This entry; Q141 notes the user's check.

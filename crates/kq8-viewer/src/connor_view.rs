@@ -206,6 +206,9 @@ pub struct ConnorSim {
     pub weapon_keys: Vec<(kq8_core::weapons::Ask, String)>,
     /// The big-swing key (Shift) is held (rule 6's `away2`).
     pub shift_held: bool,
+    /// A script's walk asked while a script's swap starts: it waits for
+    /// the swap's end (Q141, the user's check).
+    held_walk: Option<kq8_core::connor_auto::AutoMove>,
 }
 
 /// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
@@ -574,6 +577,7 @@ pub fn spawn_connor(
         set_mode: WeaponMode::None,
         weapon_keys: Vec::new(),
         shift_held: false,
+        held_walk: None,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -1074,16 +1078,17 @@ impl ConnorSim {
         };
         let played: Vec<&str> = steps.iter().map(|(m, _)| *m).collect();
         let plays = self.walker.mode == Mode::Free || (script && matches!(self.walker.mode, Mode::Special | Mode::Push | Mode::Talk));
-        // **Stand-in** (Q141): a script's request while a scripted walk
-        // runs (`ax.cs`: `setDoMode 0`, then `walkTo` in the same event):
-        // the walk goes on (its end cues the cutscene), the set switches at
-        // once and nothing plays.
+        // Q141 (the user's check in the original, 2026-10-21): a script's
+        // request while a scripted walk runs (`ax.cs`: `setDoMode 0`, then
+        // `walkTo` in the same event): he stops, the swap plays, then the
+        // walk starts (held until the swap is over, `weapon_step`).
         let scripted_walk = self.walker.auto.as_ref().is_some_and(|a| matches!(a.kind, kq8_core::connor_auto::AutoKind::Walk { .. }));
-        if script && scripted_walk {
-            self.pending_set = None;
-            self.switch_set(list, mode);
-            return format!("rule 6 case {case}; a scripted walk runs: {set} at once, {played:?} not played, the walk goes on (stand-in, Q141)");
-        }
+        let held = if script && scripted_walk && !steps.is_empty() {
+            self.held_walk = self.walker.auto.take();
+            "; the scripted walk waits until the swap is over (Q141, the user's check)"
+        } else {
+            ""
+        };
         if !plays || steps.is_empty() {
             self.pending_set = None;
             self.switch_set(list, mode);
@@ -1098,7 +1103,7 @@ impl ConnorSim {
         self.walker.auto = None;
         self.readying = true;
         let notes = self.walker.start_special(steps.iter().map(|(m, w)| SpecialStep::Play(m, w.clone())).collect());
-        let line = format!("rule 6 case {case}: plays {played:?}; {set} from item {switch_at} ({})", notes.join("; "));
+        let line = format!("rule 6 case {case}: plays {played:?}; {set} from item {switch_at} ({}){held}", notes.join("; "));
         self.log.detail(format!("connor update {}: weapon: {line}", self.updates));
         line
     }
@@ -1127,6 +1132,11 @@ impl ConnorSim {
         }
         if self.readying && self.walker.mode != Mode::Special {
             self.readying = false;
+            // Q141: the scripted walk held during the swap starts now.
+            if let Some(a) = self.held_walk.take() {
+                let line = self.walker.start_auto(a);
+                self.log.detail(format!("connor update {}: weapon: the swap is over: {line} (Q141)", self.updates));
+            }
         }
     }
 
