@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-8: experience when some items are added
+
+**Changed:** `potions.rs`: the list of items with built-in experience (rules 40–41). `connor_inventory.rs`: every add gives it (0.3 s later through a small queue in `timers`, or at once) and logs the help pop-ups 0x83 / 0x84 / 0x80 (not studied: logged only). `active.rs`: the queue and the pop-ups asked. DESIGN (5g done), provenance. 1 new unit test.
+**Why:** Step 8 of `potions.md` (rules 40–41; corrects `inventory.md` rule 16: the candle's 25 comes at pickup).
+**Tested how:** `cargo test` (core 468 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 600 --command "give Candle 1,10" --command "give Feather 1,20" --command "give Mushroom 1,20"`; `items.log`.
+**Result:** Candle added at update 10, "+25 experience" at 15 (0.33 s): level 1 → 2, 15 left. Feather at 20: +1,000 at once, level 3. Help 0x84 at the candle, 0x83 at the mushroom (logged). Unit test: still 15 at update 2000 (never taken back).
+**Still broken / not tested:** The help pop-ups themselves (not studied). Picking the candle up in the church by hand not run (the church is walled in for our tests).
+**Next:** The user's checks by eye; A: Q143, Q144.
+
 ## 2026-10-21 M5 5g-7: the clarity potion
 
 **Changed:** `potions.rs`: Clarity queues `Reveal True` / `False` for the objects with `groupsAlways` bit 2048. `active.rs`: the calls run at the start of the next update; `KQObject::dither` (kept for the viewer); `hidden_now` lets a chest's or scripted object's own hidden state win over its file's `hidden=` (a revealed `wizchest1` stayed undrawn). Viewer: `load.rs` collects the reveal objects at load (every class), `door_view.rs` hands them to the rules, `potion_view.rs` `dither_step` draws dithered objects half see-through (stand-in). QUESTIONS Q144. DESIGN, provenance. 1 new unit test. (The Clarity face came with 5g-5.)

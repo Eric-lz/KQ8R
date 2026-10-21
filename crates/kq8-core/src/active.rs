@@ -629,6 +629,11 @@ pub struct WorldState {
     /// Applied items with a duration: the running potions and their
     /// whole-second timers (M5 5g-2, `potions.md` rules 33–34).
     pub potions: Vec<crate::potions::Running>,
+    /// Experience due for an item added (`potions.md` rule 41; M5 5g-8):
+    /// game time, amount, the item type.
+    pub pickup_experience: Vec<(f64, i64, String)>,
+    /// The help pop-ups of rule 41 already asked for (logged only).
+    pub helps_asked: BTreeSet<&'static str>,
     /// The objects whose `groupsAlways` has bit 2048 (`potions.md` rule
     /// 31), set by the loader (M5 5g-7).
     pub reveal_objects: Vec<String>,
@@ -2749,6 +2754,8 @@ impl Active {
                 status_icons: Default::default(),
                 connor_in_temple4: false,
                 reveal_objects: Vec::new(),
+                pickup_experience: Vec::new(),
+                helps_asked: BTreeSet::new(),
                 reveal_calls: Vec::new(),
                 dithered: BTreeSet::new(),
                 item_voices: Vec::new(),

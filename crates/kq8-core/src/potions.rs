@@ -118,6 +118,26 @@ pub const HIDDEN_DROP: f32 = 100_000.0;
 /// Rule 31: the `groupsAlways` bit of the objects Clarity reveals.
 pub const REVEAL_BIT: u32 = 2048;
 
+/// Rules 40–41: experience built in for some items each time one is
+/// added to Connor's inventory, and whether it comes 0.3 s later (else at
+/// once). Names from the IDs in `Invinfo.itl`.
+pub const PICKUP_EXPERIENCE: [(&str, i64, bool); 11] = [
+    ("INVITEM_RingOfDeadHero", 25, true),
+    ("INVITEM_Ashes", 25, true),
+    ("INVITEM_Candle", 25, true),
+    ("INVITEM_LadyBell", 20, true),
+    ("INVITEM_RopeAndHook", 10, true),
+    ("INVITEM_Feather", 1_000, false),
+    ("INVITEM_GreenMushroomPiece", 5_000, false),
+    ("INVITEM_Mold", 6_000, false),
+    ("INVITEM_HearingHorn", 10_000, false),
+    ("INVITEM_DecipheringAmulet", 25_000, false),
+    ("INVITEM_Ladle", 50_000, false),
+];
+
+/// Rule 41: the delay of the experience given 0.3 s after an add.
+pub const PICKUP_DELAY: f64 = 0.3;
+
 /// Rule 17: the shield's lowest and highest protection.
 pub const SHIELD_MIN: i64 = 50;
 pub const SHIELD_MAX: i64 = 100;

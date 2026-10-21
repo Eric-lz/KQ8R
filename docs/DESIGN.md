@@ -1574,7 +1574,7 @@ Steps (one commit each):
    **Test:** `--swing goblin22` then a ground click: the second swing
    still has goblin22 as target.
 
-#### 5g — Health items and potions (planned 2026-10-21)
+#### 5g — Health items and potions (planned 2026-10-21; done 2026-10-21, steps 5g-1 to 5g-8, checked in the logs only)
 
 Why: the eight bottom-bar slots, their counts and keys 1–8 are built
 (M4 4c-3), but potions only add their (all-zero) numbers and wait out
@@ -1671,7 +1671,7 @@ Steps (one commit each):
    the end `Reveal False` (Daventry: `keepwall`, `wizchest1`). Face bit
    4 (`cclf`). **Test:** `doors.log`: keepwall `dither 1` / `0`,
    wizchest1 `setHidden 0` / back.
-8. **5g-8, experience at pickup** (rules 40–41). The candle +25 0.3 s
+8. **5g-8, experience at pickup** (**done** 2026-10-21; candle +25 five updates after, feather +1,000 at once) (rules 40–41). The candle +25 0.3 s
    after it is added; ring of the dead hero, ashes +25; lady bell +20;
    rope and hook +10 (0.3 s); feather +1,000, green mushroom piece
    +5,000, mold +6,000, hearing horn +10,000, deciphering amulet

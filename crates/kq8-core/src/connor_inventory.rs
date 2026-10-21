@@ -127,6 +127,7 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
     let Some(i) = w.items.index(name) else { return };
     let o = w.items.objects[i].clone();
     let Some(t) = w.items.kind(&o.kind).cloned() else { return };
+    added_extras(w, &o.kind, &t.category);
     // What he had of this type, the new object left out (a give makes it
     // carried already).
     let before = w.items.count("Connor", &o.kind) - if o.carried_by("Connor") { o.quantity } else { 0 };
@@ -203,6 +204,34 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
     w.item_note(line + " (inventory.md rule 8)");
 }
 
+/// `potions.md` rules 40–41 (M5 5g-8): what Connor does when any item is
+/// added, every time: built-in experience for some quest items (0.3 s
+/// later or at once), and the help pop-ups (logged only: not studied).
+fn added_extras(w: &mut WorldState, kind: &str, category: &str) {
+    if let Some(&(_, exp, later)) = crate::potions::PICKUP_EXPERIENCE.iter().find(|(k, ..)| k.eq_ignore_ascii_case(kind)) {
+        if later {
+            let due = w.now() + crate::potions::PICKUP_DELAY;
+            w.pickup_experience.push((due, exp, kind.to_string()));
+            w.item_note(format!("{kind} added: +{exp} experience due 0.3 s later, at game time {due:.3} (potions.md rules 40-41)"));
+        } else {
+            let line = connor_add(w, Stats([0, 0, 0, 0, exp]), &format!("{kind} added: +{exp} experience at once (potions.md rule 41)"));
+            w.item_note(line);
+        }
+    }
+    let help = match category {
+        "HealthItem" => Some(("0x83", 3.0, "the first health item or potion")),
+        "QuestItem" => Some(("0x84", 0.0, "the first quest item")),
+        _ => None,
+    };
+    if let Some((id, after, what)) = help.filter(|(id, ..)| !w.helps_asked.contains(id)) {
+        w.helps_asked.insert(id);
+        w.item_note(format!("{what} ({kind}): help pop-up {id} asked for{} (potions.md rule 41; pop-ups not studied: logged only)", if after > 0.0 { format!(" {after} s later") } else { String::new() }));
+    }
+    if kind.eq_ignore_ascii_case("INVITEM_RopeAndHook") {
+        w.item_note("INVITEM_RopeAndHook added: help pop-up 0x80 asked for 4.5 s later (potions.md rule 41; logged only)");
+    }
+}
+
 /// Rule 14: applies item `name` to Connor. Returns the log line.
 pub fn apply(w: &mut WorldState, name: &str, why: &str) -> String {
     let Some(i) = w.items.index(name) else { return format!("apply {name}: no such item") };
@@ -277,6 +306,14 @@ pub fn unapply(w: &mut WorldState, name: &str, why: &str) -> String {
 /// The potions' timers (`potions.md` rule 33): one second off each
 /// running potion per second of game time; un-applies those over.
 pub fn timers(w: &mut WorldState) {
+    // potions.md rules 40-41: experience due for items added.
+    let t = w.now();
+    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut w.pickup_experience).into_iter().partition(|(at, ..)| *at <= t + 1e-9);
+    w.pickup_experience = later;
+    for (_, exp, kind) in due {
+        let line = connor_add(w, Stats([0, 0, 0, 0, exp]), &format!("{kind} added 0.3 s ago: +{exp} experience (potions.md rules 40-41)"));
+        w.item_note(line);
+    }
     let now = w.updates;
     let mut over = Vec::new();
     let mut lines = Vec::new();
@@ -659,6 +696,25 @@ mod tests {
         a.world.updates = 60 * 15;
         timers(&mut a.world);
         assert_eq!(a.world.reveal_calls, vec![("keepwall".to_string(), false), ("wizchest1".to_string(), false)]);
+    }
+
+    #[test]
+    fn the_candle_gives_25_experience_0_3_s_after_it_is_added() {
+        let mut a = active();
+        carry(&mut a, "Candle", 1);
+        assert_eq!(stats(&a)[4], 0);
+        a.world.updates = 4;
+        timers(&mut a.world);
+        assert_eq!(stats(&a)[4], 0, "0.27 s: not yet");
+        a.world.updates = 5;
+        timers(&mut a.world);
+        // +25 at level 1 (threshold 10): level 2, 15 left.
+        let level = |a: &Active| a.world.connor_stats.unwrap().level;
+        assert_eq!((level(&a), stats(&a)[4]), (2, 15));
+        // Never taken back (rule 40): its Dur is not used.
+        a.world.updates = 2000;
+        timers(&mut a.world);
+        assert_eq!((level(&a), stats(&a)[4]), (2, 15));
     }
 
     #[test]
