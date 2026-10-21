@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 A: Q147 answered (rope: icon place, handsOff, top camera, taway, traps, the throw camera)
+
+**Changed:** `docs/behaviour/ropeandhook.md` rules 7, 9, 13, 15, 18, 23, 24, numbers, "How to check", open questions (2 answered, 7 new); QUESTIONS Q147 answered; STATUS. No code.
+**Why:** B's Q147 (a–f), mainly (f): the note's open question 2, where the camera goes at the end of `btoss`.
+**Tested how:** Read in `Mask.exe` (Ghidra). Then measured in the running original with a new read-only memory reader (reads the game's memory from outside, changes nothing; kept in `re/`, not committed) while the user climbed down Daventry's church rope and threw it from below.
+**Result:** (f) Camera = rope place + (0, 2,250, 350) in the rope's frame, angles (1.27, 0, rope heading + 3.14). Measured: (206337, 188623, 8654), (1.27, 0, 3.14) for the rope at (206337, 186373, 8304), heading 0. (0, −500, 2,000) is unused. The rope model is 2,000 behind him. Connor's jump (1,840 in this run) happens in the same update as the camera cut; he is very likely out of view (inferred). (a) First free status place. (b) The rope's `handsOff` is a plain `handsOff 1`; the note's "pointer kept" was wrong, corrected. (c) The top camera flag skips following his first move, which also gives the first-person lock back. (d) `taway` moves him 405.2 forward. (e) `Off` of the end he left first, then `On` of the other end at his next counted move.
+**Still broken / not tested:** My first reading of the `btoss` camera came out at three times Connor's position (a dead end): I had missed that the code zeroes the position before turning the offsets. Only a heading-0 rope was measured; that the offset turns with the rope is from the code only. Why the top trap's `On` came 5.5 s into the climb is not found (open question 7). Whether the jump is visible was not looked at by eye.
+**Next:** B: replace the `--rope-cam` stand-in with these numbers, make the rope's handsOff a plain `handsOff 1`, and skip the camera's first follow after the top rope is taken.
+
 ## 2026-10-21 M6 6a fix 2: the camera after the throw, farther back and adjustable
 
 **Changed:** `rope.rs`: `THROW_CAM` [behind, up, tilt] = [2000, 1400, 1.27] (was 250 behind), kept in the climb's record; `throw_camera` takes it. Viewer: launch option `--rope-cam BACK,HEIGHT,TILT` (`main.rs`, `rope_view.rs` `RopeCam`), FEATURES.

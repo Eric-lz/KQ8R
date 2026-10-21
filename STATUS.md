@@ -7,6 +7,16 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (A): Q147 answered** in `ropeandhook.md` (traced, and
+  measured in the running original at the church rope). The camera after
+  the throw from below is at the rope's place + (0, 2,250, 350) in the
+  rope's frame, tilted up 1.27, heading = rope + 3.14 (rule 15). Connor's
+  jump to the rope's place happens in the same update as that camera
+  cut. Changes for B's stand-ins: the rope's `handsOff` is a plain
+  `handsOff 1` (no "pointer kept"); the top camera skips following his
+  first move, which also gives first person back (rule 9). Confirmed:
+  first free icon place; `taway` 405 forward; trap order `Off` then `On`.
+
 - **2026-10-21 (B, M5 5g-1 to 5g-8): health items and potions built**
   from `docs/behaviour/potions.md` (plan in `docs/DESIGN.md` "5g", one
   commit per step; **checked in the logs only, not by eye**). Keys 1–8
@@ -502,7 +512,9 @@ M6 has started with the Rope and Hook (6a).
   (only the report line and far bats seen), `setRopeCam` spots and the
   camera limits in the viewer (unit tests only).
 - **Next step, suggested:** for the user: the rope by eye in Daventry
-  (`ropeandhook.md` "How to check"); for A: Q147. Then: check ranged weapons by eye
+  (`ropeandhook.md` "How to check"); for B: build Q147's answers into
+  the rope (the throw camera, plain `handsOff`, the top camera's
+  skipped first follow). Then: check ranged weapons by eye
   (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Q140, Q141, Q136, Q143, Q144, game over. For the user: potions by eye
@@ -555,11 +567,9 @@ M6 has started with the Rope and Hook (6a).
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
-- For A (asked 2026-10-21 by B, M6 6a, not blocking): **Q147** (the
-  rope: (a) the hook icon's place, (b) the rope state's handsOff and the
-  panels, (c) the top camera's "flag", (d) `taway`'s step, (e) the trap
-  order when the rope state places him). `ropeandhook.md` open question
-  2 (the camera during the throw from below) is still open.
+- For B (answered 2026-10-21 by A): **Q147** (the rope's six stand-ins;
+  see "Where we are"). Left open, small: `ropeandhook.md` open question 7
+  (what sets off the top trap mid-climb).
 - For A (asked 2026-10-21 by B, M5 5g, not blocking): **Q143** (the
   spinning mask and potion icons sharing the 7 status places; which
   frame is the icon's used part), **Q144** (`KQObject::dither` and

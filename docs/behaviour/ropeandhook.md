@@ -10,8 +10,10 @@ our own words), `GAME/Kq/Conrope.anm`, `GAME/Kq/Invinfo.itl`,
 (clicking a slot, the item in hand), `interface.md` rules 15 and 45 (status
 icons, the rope button), `traps.md` (trap boxes and their `On`/`Off`
 scripts) and `camera.md` (follow, `move`). Marks: **[traced]** (read in
-the code), **[data]** (read in the game files), **[inferred]**,
-**[not traced]**.
+the code), **[data]** (read in the game files), **[measured]** (read
+from the running original's memory from outside, without changing it,
+2026-10-21: a climb down and a throw from below at Daventry's church
+rope, `churchr1/2`), **[inferred]**, **[not traced]**.
 
 ## Purpose
 
@@ -92,6 +94,11 @@ lose him.
      the end of the climb the icon for the current status comes back
      (normally the other end's trap has set it by then).
    - Without the rope in the inventory, no icon (rule 4).
+   - **Where it shows** (Q147 a) [traced]: in the **first free** status
+     place, the same way the spinning mask and the potion timers are
+     placed (`interface.md` rule 15); if the icon is already showing,
+     nothing changes. The layout file's own places for `hookup.pba` /
+     `hookdown.pba` (`IDCTL_TIMER_5` / `_6`) are not used.
 
 ### Taking the rope from the inventory (answers Q110 b)
 
@@ -114,11 +121,28 @@ lose him.
    to third person and remembers that) and blocks the first-person key;
    then it sends the camera straight to the `setRopeCam2` spot, aimed at a
    point **1,000 above Connor's position** (the camera turns to look at
-   it; no roll). The camera also gets a flag that keeps it there
-   [inferred; what the flag does exactly was not traced]. Putting the rope
+   it; no roll). The camera **keeps following Connor** (follow is not
+   switched off), but gets a one-time flag (Q147 c) [traced]:
+   - the camera only moves to follow Connor when he moves (a turn or a
+     step), plus when the player turns the view; while he stands still
+     it stays at the `setRopeCam2` spot, even though that spot is
+     farther than the follow range (measured: about 7,000 from him, 9 s
+     without a move, the camera didn't move) [measured];
+   - **Connor's first move after that** is not followed: the flag is
+     cleared, the camera stays put for that move, and the first-person
+     lock of this rule is released (back to first person if it was
+     forced; the rope stays on the pointer) [traced];
+   - from his next move on the camera follows as usual (`camera.md`)
+     [traced].
+
+   Putting the rope
    back (rule 8, second case) releases the first-person lock and returns
    to first person if it was forced; **the camera stays where it is**
-   (the user's check in the original, 2026-10-21).
+   (the user's check in the original, 2026-10-21). Measured at the church
+   top: the camera went to (209450, 189994, 11300), the spot from
+   `churchr2.cs`, turned to look at the point 1,000 above Connor's
+   position (tilt 0.4545, heading 2.6267, exactly that direction).
+
 ### Starting the climb: the click in the world
 
 10. With the rope on the pointer, **a left click anywhere in the world**
@@ -147,9 +171,16 @@ lose him.
     - the camera spots and limits of rule 3 are copied for this climb;
     - if Connor is in **first person**, the view switches to third person
       and the game remembers to switch back at the end (rule 26);
-    - the first-person key is blocked; **`handsOff` is switched on with the
-      pointer kept** (the player can't move him) until he hangs on the
-      rope (rules 19, 21);
+    - the first-person key is blocked; **`handsOff` is switched on**
+      (the player can't move him) until he hangs on the rope (rules 19,
+      21). It is **exactly a script's `handsOff 1`** (Q147 b) [traced]:
+      the bottom bar slides away (remembered), the map is hidden, the
+      spinning mask appears in the status places (`interface.md` rule 15),
+      and whatever `handsOff 1` does to the pointer happens here too.
+      (An earlier reading, "with the pointer kept", was wrong: the rope
+      state uses the same call, with the same settings, as the script
+      command.) Switching it off (rules 19, 21, 26) is `handsOff 0`: the
+      bottom bar comes back if it was showing, the mask goes;
     - Connor's current **hand mode** (`inventory.md`, `fighting.md`: hands,
       sword, bow …) is remembered;
     - the rope animation list `GAME/Kq/Conrope.anm` is loaded and its
@@ -173,9 +204,49 @@ lose him.
       rx ry rz); a separate **rope model** is created at Connor's place,
       playing `Conrope.anm`'s **`rope`** animation (`cr_rope.kqs`,
       21 frames, sounds `cr_rope.aud` and `cr_rope2.aud`), with gravity
-      off, deleted when its animation ends; the camera is moved close to
-      Connor (exact placement partly traced, open question 2);
+      off, deleted when its animation ends; the camera is moved (below);
       Connor is told to stand still (`Stop`).
+    - **The rope model's place** [traced]: Connor's new place and
+      direction (= the rope's), moved **2,000 along the rope's +y** (the
+      side his back is on, away from the wall), same height, same
+      direction as Connor. Not measured (the reader didn't track it).
+    - **The camera's place at the end of `btoss`** (Q147 f, open
+      question 2) [traced and measured]: all offsets below are in **the
+      rope's frame** (x, y turned by the rope's heading, z up; Connor's
+      frame is the same, since he has just been put at the rope's place
+      and direction):
+      - **position** = the rope's place + **(0, 2,250, 350)**, i.e. the
+        rope model's place (2,000) plus (0, 250, 350): **2,250 behind
+        Connor** (on his back's side, away from the wall), **350 above
+        his position** (his feet), straight behind him (no sideways
+        offset);
+      - **angles**, set directly (the camera is not aimed at a point):
+        **tilt 1.27 rad up** (about 73°), **no roll**, **heading = the
+        rope's heading + 3.14** (the original adds 3.14, not exactly
+        π). The camera looks the way Connor faces (toward the wall), and
+        steeply up the wall: where the hook flies;
+      - the camera stays there (it doesn't follow, rule 13) until the
+        rope model's animation ends and rule 18 moves it.
+      - The code also works out the rope's place + (0, −500, 2,000)
+        (rope's frame) and **never uses it**: it looks like a planned
+        aim point. Don't build it.
+      - Measured at the church foot (rope place (206337, 186373, 8304),
+        heading 0): camera at (206337, 188623, 8654), angles (1.2700, 0,
+        3.1400), looking along (0, −0.296, 0.955). The user's own look
+        in the original ("close to Connor's eye level, looking straight
+        up, sees the rope fly up") fits.
+    - **Connor's jump to the rope's place** (Q147 f) [measured]: it
+      happens in one update, in the same update as the camera's cut to
+      the spot above, with nothing else done to hide it (no fade, no
+      walk). Measured: he stood 1,840 away (turned 0.84 rad from the
+      rope's heading, 144 lower) when the throw ended, and was at the
+      rope's place and heading at the next reading, together with the
+      camera. From the new camera his feet are about 80° and his head
+      (about 1,400 up) about 50° below the middle of the view, so he is
+      very likely out of the picture at that moment and the jump is not
+      seen [inferred from the numbers; the field of view was not
+      checked; not looked at by eye]. So: do the
+      same (place him and cut the camera in the same update).
     - The rope model's animation ends → rule 18 (Connor grabs the rope).
 16. **From the top** [traced]:
     - `drawdown` ends: Connor is **placed exactly at the rope's place and
@@ -209,6 +280,24 @@ lose him.
       below his position [inferred from the data: every top place is
       about 5,000 above its foot, see "Numbers"];
     - he plays **`bon`** (getting onto the rope from below, 32 frames).
+    - Measured at the church foot (no `setRopeCam` there): the camera went
+      from (206337, 188623, 8654) to the game-made spot (208837, 188873,
+      13104) = rope place + (2,500, 2,500, 4,800), angles (−0.9359, 0,
+      2.3562): aimed exactly at the rope's place, i.e. at Connor's
+      position **before** the lift; Connor then at z 13,304 (8,304 +
+      5,000). Both game-made spots were equally near the old camera here
+      (2,512 each); the + one was taken [measured].
+    - **The traps at the lift** (Q147 e) [measured]: the lift is a
+      placing without a sweep (`traps.md` rule 5): the foot trap's `Off`
+      comes **at once**, in the same update (status none), and the top
+      trap's `On` comes **later**, at his next move that the trap test
+      counts. In the run it came 5.5 s later, during the climb (1.9 s
+      after he started climbing), with no position change seen; what
+      triggered it was not found. It always comes before he gets off at
+      the top in practice [inferred]. The drop at the foot end (rule 23)
+      measured the same way: the top trap's `Off`, then the foot trap's
+      `On` about 0.08 s later. So the order is always `Off` of the end
+      he left first, then `On` of the other end.
 19. **`bon` ends** [traced]: the camera's height range for the climb is
     set: lowest = the camera's height now; highest = 5,000 above that,
     or, if something solid is in the way straight above the camera
@@ -266,7 +355,8 @@ lose him.
     backwards. **The climb ends when the animation reaches an end in the
     direction it is playing** [traced]:
     - the hook icons may show again (rule 7); turning is switched back
-      on; **`handsOff` goes on again** (pointer kept) for the getting-off;
+      on; **`handsOff` goes on again** for the getting-off (the same
+      `handsOff 1` as rule 13: panels away, spinning mask);
     - reached the **top end** (playing forwards) → **`toff`** (getting off
       at the top, 21 frames);
     - reached the **bottom end** (playing backwards) → Connor is **moved to
@@ -283,6 +373,11 @@ lose him.
     (`camera.md` follow) and he plays **`taway`** (putting the rope away,
     26 frames). At the foot: `boff` ends → **`baway`** (41 frames); the
     camera follows Connor again when `baway` ends [traced].
+    **`taway` moves Connor by its own step** (Q147 d), like any one-shot
+    (`connor-movement.md`): measured at the church top, 405.2 forward
+    (from y 186,373 to 185,968, heading 0, so −y is forward), in small
+    even steps through the later part of the animation [measured]. The
+    other rope animations have no step in the data, so nothing to move.
 25. `taway` or `baway` ends [traced]: gravity on; the step heights saved
     in rule 15 are put back (only at the foot side: the top side never
     saved them, see "Edge cases"); the camera follows Connor. Then his
@@ -389,6 +484,9 @@ lose him.
 | Camera spots made by the game, foot | rope place + (±2,500, 2,500, 4,800) in the rope's frame [traced] |
 | Camera spots made by the game, top | rope place + (±5,000, −5,000, −2,000) in the rope's frame [traced] |
 | Foot, first-person start | camera 1,000 from the rope's place (direction of the 1,000 not read reliably) [traced] |
+| Rope model's place (end of `btoss`) | rope place + (0, 2,000, 0) in the rope's frame [traced] |
+| Camera at the end of `btoss` | rope place + (0, 2,250, 350) in the rope's frame; angles (1.27, 0, rope heading + 3.14) [traced, measured] |
+| `taway`'s own step | 405 forward [data, measured] |
 | Camera height range while climbing | 5,000 (up from the start at the foot, down from the start at the top), shortened by an obstacle, then 250 kept clear, then the limit [traced] |
 | Camera and aim point speed while climbing | 50 per update (750 per second at 15 updates/s) [traced] |
 | Animations (frames, `Conrope.anm`) | `baway` 41, `boff` 33, `bon` 32, `btoss` 29, `climb` 78, `draw` 18, `drawdown` 18, `rope` 21, `taway` 26, `toff` 21, `ton` 38, `ttoss` 80 [data] |
@@ -480,7 +578,7 @@ lose him.
   `Bottom` one, x and y within 225.
 - **In the original** (the user): in Daventry, take the rope (mill), walk
   to the wizard's house rope foot (`ropetrp1`, near 147,646 207,586): the
-  `HookUp` icon appears beside the spinning-mask place. Click the rope
+  `HookUp` icon appears in the first free status place. Click the rope
   button: the pointer becomes the rope. Click anywhere (even the sky):
   Connor puts his weapon away, takes the rope out, throws, the rope
   model swings up, he climbs on. Hold forward: he climbs, the camera rises;
@@ -489,6 +587,17 @@ lose him.
   user in the original, 2026-10-21: all of this matches). Away from a rope place, clicking the
   rope button only gives "I am not near anything to climb." and the
   pointer stays normal.
+- **Measured in the original** (2026-10-21, church rope `churchr1/2`,
+  read from the game's memory while the user played): the camera at the
+  end of `btoss` at the rope's place + (0, 2,250, 350), angles (1.27, 0,
+  3.14) for a rope heading of 0; Connor at the rope's place in the same
+  update; the grab camera at + (2,500, 2,500, 4,800) aimed at his place
+  before the lift; the lift of 5,000; the camera rising 50 per update
+  while climbing; `taway` 405 forward; the trap order of rule 18. Ours
+  should log the same numbers for the same place.
+- Not yet measured: a rope with a heading other than 0 (e.g. the wizard's
+  house, −1.57), to see the (0, 2,250, 350) offset turn with the rope; the
+  code says it does.
 - **Ours (to log)**: status changes with their trap name, the icon shown,
   each animation start/end of the sequence, the camera spot chosen (and
   which of the two), Connor's position at grab and at the end, the camera
@@ -498,14 +607,14 @@ lose him.
 ## Open questions
 
 1. ~~What the camera does if the rope is put back at the top~~: it stays
-   where it is (the user's check, rule 9). What the camera flag set then
-   does inside the game was not traced; nothing visible depends on it.
-2. The camera placement at the end of `btoss` (rule 15): it is built from
-   Connor's frame with the numbers 2,000, (0, 250, 350), (0, −500, 2,000),
-   a tilt of 1.27 rad and a half turn added to the rope's heading, but the
-   way they are combined was not read reliably. Stand-in until answered:
-   leave the camera where it is until rule 18 moves it. Not checked in the
-   original.
+   where it is (the user's check, rule 9). ~~What the camera flag
+   does~~: it makes the camera skip following Connor's first move and
+   gives the first-person lock back then (rule 9, Q147 c).
+2. ~~The camera placement at the end of `btoss`~~: answered (rule 15,
+   Q147 f): the rope's place + (0, 2,250, 350) in the rope's frame,
+   angles (1.27, 0, rope heading + 3.14); traced and measured. The
+   (0, −500, 2,000) point is worked out but unused. Only a heading-0
+   rope was measured.
 3. ~~Clicks and rocks while hanging~~: answered by the user's check
    (rule 30).
 4. ~~Which weapon is drawn at the end~~: answered by the user's check
@@ -514,3 +623,6 @@ lose him.
    rule 32).
 6. ~~Which movement keys climb~~: only forward (up) and back (down); the
    others do nothing (the user's check, rule 22).
+7. What makes the top trap's `On` come in the middle of the climb
+   (rule 18, measured 5.5 s after the lift with Connor not moving) was
+   not found. Small: icons are hidden while he hangs anyway.
