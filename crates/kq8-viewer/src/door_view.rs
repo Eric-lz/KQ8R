@@ -697,7 +697,15 @@ pub fn spawn_doors(
             None
         }
     };
-    let traps: Vec<Trap> = std::mem::take(&mut objects.traps).into_iter().map(Trap::new).collect();
+    // A trap a script loads while playing is switched off until then
+    // (`objects.md` rule 6; `ax.cs`'s `henchtp.kq`).
+    let traps: Vec<Trap> = std::mem::take(&mut objects.traps)
+        .into_iter()
+        .map(|s| {
+            let off = objects.dormant_traps.contains(&s.name.to_ascii_lowercase());
+            Trap { gone: off, ..Trap::new(s) }
+        })
+        .collect();
     let sticky = traps.iter().filter(|t| t.shrunk).count();
     main_log.summary(format!(
         "traps: {} traps ({sticky} sticky, start shrunk); log in {}",

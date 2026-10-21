@@ -1568,7 +1568,15 @@ impl WorldState {
         }
         self.dormant.remove(&key);
         self.known.insert(lower);
-        self.note(format!("{at}: loadKQ {file}: {name} comes into the world (as at the start){}", if script.is_some() { "; its script gets Init now" } else { "; no script" }));
+        // A trap: its box is in place from now on (it was off since the start).
+        let trap = match self.trap_index(&name) {
+            Some(i) => {
+                self.traps[i].gone = false;
+                "; its trap box is in place now (traps.md rules 1, 2)"
+            }
+            None => "",
+        };
+        self.note(format!("{at}: loadKQ {file}: {name} comes into the world (as at the start){}{trap}", if script.is_some() { "; its script gets Init now" } else { "; no script" }));
         self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
         if let Some(script) = script {
             self.calls_out.push((script, vec![name, "Init".into()]));
@@ -3125,6 +3133,10 @@ impl Active {
         }
         // traps.md rule 13 (after the doors, chests, objects: our order).
         for i in 0..self.world.traps.len() {
+            // A trap a script loads later gets its Init then (loadKQ).
+            if self.world.traps[i].gone {
+                continue;
+            }
             self.call_trap(i, &["Init"]);
         }
     }
@@ -4542,6 +4554,26 @@ mod tests {
         let p = [x, 0.0, 0.0];
         let v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: p, position: p, min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
         a.connor_moved(&v)
+    }
+
+    #[test]
+    fn a_trap_loaded_while_playing_works_only_from_its_load_kq() {
+        // objects.md rule 6, traps.md rules 1, 2: `ax.cs` loads
+        // `henchtp.kq` when Connor takes the axe; its box counts from then.
+        use crate::trap::TrapSettings;
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), TRAP.as_bytes().to_vec())]);
+        let settings = TrapSettings { name: "Henchtp".into(), position: [0.0; 3], min: [-500.0, -500.0, 0.0], max: [500.0, 500.0, 500.0], script: Some("trap.cs".into()), mask: 4, trap_type: 0, inner_percent: None };
+        a.add_traps([Trap { gone: true, ..Trap::new(settings) }]);
+        a.set_dormant([("henchtp.kq".to_string(), "Henchtp".to_string(), Some("trap.cs".to_string()))]);
+        a.start();
+        assert_eq!(a.scripts.vars.get("T::Init"), None, "no Init before its loadKQ");
+        assert!(connor_at(&mut a, 0.0).is_empty(), "switched off: Connor walks through");
+        connor_at(&mut a, 5000.0);
+        assert_eq!(a.test_command("loadKQ henchtp.kq", "t").as_deref(), Some("0"));
+        assert!(!a.world.traps[0].gone, "its box is in place");
+        assert!(a.take_log().join("
+").contains("its trap box is in place now"));
+        assert_eq!(connor_at(&mut a, 0.0), vec!["Henchtp On Connor".to_string()]);
     }
 
     #[test]

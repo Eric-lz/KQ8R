@@ -1236,6 +1236,9 @@ pub struct Objects {
     /// Objects prepared for a script's `loadKQ` while playing (M3 3k-4):
     /// lower-case file name, object name.
     pub dormant: Vec<(String, String, Option<String>)>,
+    /// The traps among them (lower-case names): built, switched off until
+    /// their `loadKQ`.
+    pub dormant_traps: Vec<String>,
     /// The files a script may load while playing as new copies (M5 5d-3):
     /// read and built at the start like an unused object, hidden.
     pub templates: Vec<TemplateAssets>,
@@ -1475,6 +1478,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut placer = Placer {
         load_targets,
         dormant: Vec::new(),
+        dormant_traps: Vec::new(),
         template_files: Vec::new(),
         game,
         world,
@@ -1718,6 +1722,7 @@ struct Placer<'a> {
     /// (M3 3k-4).
     load_targets: std::collections::BTreeSet<String>,
     dormant: Vec<(String, String, Option<String>)>,
+    dormant_traps: Vec<String>,
     /// (file, index into `placed`) of each template (M5 5d-3).
     template_files: Vec<(String, usize)>,
     music: Option<kq8_core::music::Music>,
@@ -2522,6 +2527,14 @@ impl Placer<'_> {
             let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
             self.dormant.push((base.to_ascii_lowercase(), p.name.clone(), script));
             self.log.summary(format!("dormant {label}[{}]: prepared for a script's loadKQ (M3 3k-4)", p.name));
+        }
+        // A trap a script loads while playing (`ax.cs`'s `henchtp.kq`): its
+        // box built as at the start (`objects.md` rule 6), switched off
+        // until the `loadKQ` (traps.md rules 1, 2).
+        if dormant && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap")) {
+            self.dormant_traps.push(p.name.to_ascii_lowercase());
+            self.place_trap(&label, s, p);
+            return;
         }
         if (!unused || dormant) && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAudibleObject")) {
             self.place_audible(&label, s, p);
@@ -3897,6 +3910,7 @@ impl Placer<'_> {
             conv_infos: self.conv_infos,
             audibles: self.audibles,
             dormant: self.dormant,
+            dormant_traps: self.dormant_traps,
             templates,
             music: self.music,
             footsounds,

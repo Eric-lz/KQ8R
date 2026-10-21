@@ -2973,3 +2973,10 @@ Replaces 5c fixes 3–5's stand-ins (Q139): the fighters' boxes on the line, "a 
 | The target stays until another pick within reach replaces it; the hit test at `Do` is `fighting.md` rule 41's with it | Rule 32 | Viewer: the second swing hits goblin22 |
 | Objects get the hit only through the barrel stand-in (objects with a script) | Q139 e (not traced) | Viewer: barrel.12 bursts |
 | An item on the pointer wins over the swing click | Rule 13 (5f-5) | — |
+
+### After 5f: the axe cutscene — viewer `load.rs` (`dormant_traps`), `door_view.rs`, `connor_view.rs` (`ready_set`); `crates/kq8-core/src/active.rs` (`load_kq`, `start`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| A trap prepared for a script's `loadKQ` is built at load as any trap (box, mask, script), switched off; the `loadKQ` switches it on; its `Init` comes at the `loadKQ`, not at the start | `objects.md` rule 6 (a runtime `loadKQ` does the same as at the start); `traps.md` rules 1, 2, 13 | Unit test; viewer: `Henchtp: On Connor` at update 41 |
+| A script's weapon request while a scripted walk runs: the set switches at once, nothing plays, the walk goes on | **Stand-in, Q141** (rule 7 says the swap can't be left; what a script's walk does then is not traced) | Viewer: the axe cutscene runs to its end |

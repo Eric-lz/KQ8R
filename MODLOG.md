@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 The axe cutscene starts: a trap loaded while playing has its box
+
+**Changed:** A `KQTrap` prepared for a script's `loadKQ` (Daventry: `henchtp.kq`, loaded by `ax.cs` when Connor takes the axe) is built at load like any trap, switched off; the `loadKQ` switches it on (`load.rs` `dormant_traps`, `door_view.rs`, `active.rs` `load_kq`); no `Init` at the start for it (it gets its `Init` at the `loadKQ`). **Stand-in (Q141):** a script's weapon request while a scripted walk runs switches the weapon's set at once and plays nothing, so the walk goes on (`connor_view.rs` `ready_set`). QUESTIONS (Q141), provenance.
+**Why:** The user: after taking the axe and walking out, the cutscene never started. The trap that starts it came in without a box ("prepared copies have no collider; not done"), so Connor's walk never touched it. Then, once it fired, the axe's swap (from `setDoMode 0`) cancelled the scripted walk that follows it in the same event, so the walk's cue never came and the cutscene hung with `handsOff` on.
+**Tested how:** `cargo test --workspace` (457 core tests, 1 new: a trap loaded while playing), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 144500,249800,-1.5708 --no-ai --god --click ax,30 --hold 1,0,0,150 --frames 6000`; `traps.log`, `doors.log` (copy `doors-axe-cutscene.log`), `connor.log` (copy `connor-axe-cutscene.log`).
+**Result:** Update 41: `Henchtp: On Connor`, cue 5 to `ax`; the cutscene runs: camera cuts, `setDoMode 0` (the axe's set at once), the walk, cue 20 at update 49, Connor's `henchman.anm` list, the battle music, the Henchman's lines and `cdhm5`, and at update 559 `handsOff 0`, the camera follows Connor again, `ax` deleted. `henchtp.cs` gets `Init` once (at the `loadKQ`).
+**Still broken / not tested:** Not looked at by eye. The walk out runs head-on into `Winddoor` and ends early (the cue still comes; asked in Q141). The axe appears in his hand with no draw (stand-in, Q141). The axe is still taken from the floor (Q142, `checkDistance`). The test click skips the distance check, and the test walks in from the west, not out of the windmill's door.
+**Next:** The user: the cutscene by eye. A: Q141, Q142.
+
 ## 2026-10-21 The user's check of ranged weapons (5f); the axe can be taken from the floor (Q142)
 
 **Changed:** QUESTIONS: new Q142 (`checkDistance`). STATUS, FEATURES: 5f checked by the user. This entry.

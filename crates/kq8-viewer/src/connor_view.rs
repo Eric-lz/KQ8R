@@ -1074,6 +1074,16 @@ impl ConnorSim {
         };
         let played: Vec<&str> = steps.iter().map(|(m, _)| *m).collect();
         let plays = self.walker.mode == Mode::Free || (script && matches!(self.walker.mode, Mode::Special | Mode::Push | Mode::Talk));
+        // **Stand-in** (Q141): a script's request while a scripted walk
+        // runs (`ax.cs`: `setDoMode 0`, then `walkTo` in the same event):
+        // the walk goes on (its end cues the cutscene), the set switches at
+        // once and nothing plays.
+        let scripted_walk = self.walker.auto.as_ref().is_some_and(|a| matches!(a.kind, kq8_core::connor_auto::AutoKind::Walk { .. }));
+        if script && scripted_walk {
+            self.pending_set = None;
+            self.switch_set(list, mode);
+            return format!("rule 6 case {case}; a scripted walk runs: {set} at once, {played:?} not played, the walk goes on (stand-in, Q141)");
+        }
         if !plays || steps.is_empty() {
             self.pending_set = None;
             self.switch_set(list, mode);
