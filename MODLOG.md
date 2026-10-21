@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** The user's check (2026-10-20): F4 works in play. Hitting a creature with the AI off not tested (the test punch missed: too far). Bolts already flying when it is switched off still fly and can hit. Switching back on: creatures notice him again by the usual rules (not run).
 **Next:** —
 
+## 2026-10-20 A: the user confirms thrown items fall at a building wall
+
+**Changed:** `thrown-items.md` open question 1 closed and "How to check" updated; Q137 (c1) marked confirmed in QUESTIONS.
+**Why:** The user looked again in the original: items hit the pub's wall and then fall down, no bounce.
+**Tested how:** The user's check in the original game.
+**Result:** Matches the trace (`thrown-items.md` rule 12: a building without a script ends the arc; the item drops at the wall's foot).
+**Still broken / not tested:** The tumble's speed vs "slow" (open question 2) still not settled.
+**Next:** B: build `thrown-items.md`.
+
 ## 2026-10-20 A: thrown items' flight studied (Q137)
 
 **Changed:** New note `docs/behaviour/thrown-items.md`; `items.md` rule 12 (and its table and open question 3) and `fighting.md` rule 31 point to it; `fighting.md` open question 2 notes that the bolt uses other code. QUESTIONS (Q137 answered), STATUS. Scratch notes with addresses in `re/notes.md` (not committed).

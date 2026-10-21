@@ -256,19 +256,15 @@ item lies still and is an ordinary item again.
     drop at the foot of the wall, no farther out; one that hits a barrel
     is flung up again in a new direction;
   - a crystal coming down on a roof or floor stays up there.
-  If a crystal visibly bounces back off a **building** wall, this note is
-  wrong somewhere (see open question 1).
+  (Confirmed by the user 2026-10-20: at the pub's wall the items hit it
+  and fall down.)
 
 ## Open questions
 
-1. **The user's report (2026-10-20) of an item bouncing off the pub's
-   wall** does not match the trace: the pub has no script and is not an
-   animated object, so by rule 12 a touch ends the arc and the item drops
-   beside the wall. A likely explanation is a re-throw off one of the
-   **barrels** near the pub (rule 12: barrels have scripts, so items are
-   flung up again from them), which looks like a bounce. Not sure; worth
-   one more look in the original: does the item come back **from the
-   wall** itself, or from a barrel standing by it?
+1. ~~The user's report of an item bouncing off the pub's wall.~~
+   **Settled 2026-10-20 by the user's second look in the original:** the
+   items hit the wall and then fall down, as rule 12 says (the arc ends
+   at a building without a script; no bounce).
 2. The user saw a "slow" tumble. The traced rate is up to 430°/s (average
    215°/s) about one axis. That may look slow because it is about one
    axis only and some items get a small angle; not sure.
