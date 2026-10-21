@@ -1120,6 +1120,16 @@ pub fn trap_step(
             _ => None,
         };
         if let Some((what, at)) = state {
+            // ropeandhook.md rule 28 (M6 6a-6): refused and dropped.
+            if connor.roping() {
+                connor.state_request(what, &at);
+                let line = format!("{at}: {what}{again}: refused, Connor is in the rope state; dropped (ropeandhook.md rule 28)");
+                sim.active.world.rope_note(line.clone());
+                if let Some(log) = &mut sim.trap_log {
+                    log.detail(format!("update {}: {line}", sim.active.world.updates));
+                }
+                continue;
+            }
             if !connor.state_request(what, &at) {
                 let line = format!("update {}: {at}: {what}{again}: refused (Connor's jump is not finished); tried again next update", sim.active.world.updates);
                 if let Some(log) = &mut sim.trap_log {

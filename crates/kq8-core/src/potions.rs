@@ -37,7 +37,8 @@
 //!   `KQConner::checkInvisible` gives 1 while it runs. The look is the
 //!   viewer's. Not built: the hurt line of rule 27 (which characters use
 //!   it is not traced). M5 5g-9: the same lowering during a cutscene
-//!   (handsOff on); not yet while Connor talks (Q146) or on the rope (M6).
+//!   (handsOff on); M6 6a-6: in the rope state (`ropeandhook.md` rule 29);
+//!   not yet while Connor talks (Q146).
 //!
 //! - Clarity (rules 30–32): at its start every object whose
 //!   `groupsAlways` has bit 2048 (the list the loader gives,

@@ -268,8 +268,9 @@ and by eye: the user (2026-10-19) found it matches the original.
   to a walk and the camera follows closer (1,000–2,500); outside he runs
   again (1,500–5,000). Checked in the logs (`traps.log`) and by eye, the
   same as in the original. Music zones play their tune (see "World
-  music"); ropes, teleporters and cutscenes
-  started by traps are later milestones (their commands are only logged).
+  music"); rope places work (see "The Rope and Hook"); teleporters and
+  cutscenes started by traps are later milestones (their commands are
+  only logged).
 - **Items lying around:** the coins, mushrooms, crystals, weapons and
   other things the original puts in Daventry at the start (22, from its
   start-up scripts), each with its own model. Clicking one near Connor
@@ -552,7 +553,7 @@ miss, roll, flinch, death, drop and shot is in
   (voice only). Logged in `gui.log` and `items.log`. Checked by the
   user 2026-10-18.
 - **The item in hand (4c-4):** a left click on a quest item, the gold,
-  the rope or the rocks puts it on the mouse pointer (the game's own
+  the rope (at a rope place only) or the rocks puts it on the mouse pointer (the game's own
   pointer pictures; the play pointer otherwise) and takes it out of the
   quest strip; clicking it again puts it back. Clicking something in the
   world with it offers it: if the object takes it (its accept list, as in
@@ -606,6 +607,29 @@ not looked at by eye yet.
   can be opened).
 - **Experience at pickup:** the candle +25 (never taken back) and the
   game's other built-in amounts for quest items.
+
+## The Rope and Hook (milestone M6, step 6a, 2026-10-21)
+
+Checked in the logs only (`rope.log`, `connor.log`, `camera.log`); not
+looked at by eye yet. Built from `ropeandhook.md`.
+
+- **Rope places:** each pair of rope traps tells Connor he is at the foot
+  or the top of a rope, only if he carries the Rope and Hook; the
+  `HookUp` / `HookDown` icon shows in the status icons meanwhile.
+- **The rope button:** away from a rope place Connor says "I am not
+  near anything to climb."; at one the rope goes on the pointer (at the
+  top the camera first moves to the place's own view); clicking it
+  again puts it back.
+- **The climb:** with the rope on the pointer, any click in the world
+  starts it: Connor puts his weapon away, takes the rope out, throws it
+  up (a separate rope swings up) or hooks it over the edge, and gets on.
+  Forward climbs up, back climbs down, other keys do nothing; the camera
+  rises and falls with him. He gets off at whichever end he reaches and
+  takes his weapon out again only if he held one.
+- **While on the rope:** no damage, no other state (scripts, jumps,
+  weapons are ignored), characters lose him; items can still be clicked
+  and picked up.
+- **Not yet:** saved games (we have none), first person (not built).
 
 ## Viewer helpers (not in the original)
 
@@ -770,4 +794,4 @@ message that shows the usage.
   weapons come with M5).
 - **Water:** no damage yet (poison, lava, swamp).
 - **Collision:** some objects have no box in the game's table and stay
-  walk-through (as in the original, if we read it right); no ropes.
+  walk-through (as in the original, if we read it right).

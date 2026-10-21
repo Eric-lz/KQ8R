@@ -842,6 +842,25 @@ mod tests {
     }
 
     #[test]
+    fn on_the_rope_hits_weapons_are_ignored_and_characters_lose_him() {
+        // ropeandhook.md rules 27-30 (M6 6a-6).
+        let mut a = active();
+        a.world.connor_roping = true;
+        let health = stats(&a)[0];
+        a.world.hit_connor("goblin", 5, crate::fight::HitKind::Normal);
+        assert_eq!(stats(&a)[0], health, "no damage");
+        assert!(a.world.requests.is_empty(), "no hurt or dying request");
+        a.world.ask_weapon(crate::weapons::Ask::Draw, "Delete");
+        let r = a.world.weapon_requests.pop().unwrap();
+        assert_eq!(a.world.take_weapon_request(&r, Ok(()), false), None, "the rope state ignores it");
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0 - crate::potions::HIDDEN_DROP]));
+        assert_eq!(a.world.connor_hidden_why(), Some("the rope state"));
+        a.world.connor_roping = false;
+        a.world.hit_connor("goblin", 5, crate::fight::HitKind::Normal);
+        assert!(stats(&a)[0] < health, "off the rope he is hurt again");
+    }
+
+    #[test]
     fn the_rope_button_by_status() {
         let words = |l: &str| l.split_whitespace().map(str::to_string).collect::<Vec<_>>();
         let mut a = active();

@@ -237,6 +237,13 @@ impl WorldState {
     /// change, if any; every request is logged in `fight.log`.
     pub fn take_weapon_request(&mut self, r: &Request, free: Result<(), String>, hands_off: bool) -> Option<Change> {
         let script = matches!(r.ask, Ask::Script(_));
+        if self.connor_roping {
+            // ropeandhook.md rules 28, 30 (M6 6a-6): the rope state ignores
+            // it, keys, slots and scripts alike; no remark.
+            self.fight_note("Connor", format!("weapon request ({}): ignored, he is in the rope state; no remark (ropeandhook.md rules 28, 30)", r.how));
+            self.rope_note(format!("weapon request ({}): ignored (rules 28, 30)", r.how));
+            return None;
+        }
         if hands_off && !script {
             self.fight_note("Connor", format!("weapon request ({}): ignored, handsOff (rule 1)", r.how));
             return None;

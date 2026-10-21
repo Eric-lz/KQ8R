@@ -902,6 +902,12 @@ impl ConnorSim {
     /// an unfinished jump, with `handsOff` on the jump is finished first;
     /// without it the request is refused (`false`). Logged either way.
     pub fn state_request(&mut self, what: &str, at: &str) -> bool {
+        // ropeandhook.md rule 28 (M6 6a-6): the rope state refuses every
+        // other state; the caller drops the request (`roping`).
+        if self.roping() {
+            self.log.detail(format!("connor update {}: {what}: refused, he is in the rope state (ropeandhook.md rule 28); dropped ({at})", self.updates));
+            return false;
+        }
         match kq8_core::connor_update::state_request(&mut self.mover, &mut self.walker, self.hands_off) {
             Ok(None) => true,
             Ok(Some(note)) => {
@@ -1458,6 +1464,11 @@ impl ConnorSim {
         );
         self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
         line
+    }
+
+    /// He is in the rope state (`ropeandhook.md` rules 13–26).
+    pub fn roping(&self) -> bool {
+        self.rope.is_some()
     }
 
     /// Puts him at `position` with `heading` at once, not blended from his

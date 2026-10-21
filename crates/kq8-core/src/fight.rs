@@ -445,6 +445,12 @@ impl crate::active::WorldState {
             self.fight_note("Connor", format!("hit by {from}: ignored, he is dying (rule 29)"));
             return;
         }
+        if self.connor_roping {
+            // ropeandhook.md rule 27 (M6 6a-6): no damage, sound or reaction.
+            self.fight_note("Connor", format!("hit by {from}, {}, damage {d}: ignored completely, he is in the rope state (ropeandhook.md rule 27)", kind.name()));
+            self.rope_note(format!("hit by {from} ({} damage): ignored (rule 27)", d));
+            return;
+        }
         let Some(mut c) = self.connor_stats else {
             self.fight_note("Connor", format!("hit by {from}: his stats are unknown (no Connor.kq); nothing"));
             return;

@@ -817,8 +817,9 @@ impl WorldState {
     }
 
     /// `potions.md` rule 26 (M5 5g-6, 5g-9): where the characters are
-    /// told Connor is: 100,000 below his place while Invisible runs or a
-    /// cutscene has handsOff on.
+    /// told Connor is: 100,000 below his place while Invisible runs, he is
+    /// in the rope state (`ropeandhook.md` rule 29, M6 6a-6) or a cutscene
+    /// has handsOff on.
     pub fn connor_reported(&self) -> Option<[f32; 3]> {
         let p = self.connor_at?;
         Some(if self.connor_hidden_why().is_some() { [p[0], p[1], p[2] - crate::potions::HIDDEN_DROP] } else { p })
@@ -829,6 +830,9 @@ impl WorldState {
     pub fn connor_hidden_why(&self) -> Option<&'static str> {
         if self.connor_invisible() {
             Some("the Invisible potion")
+        } else if self.connor_roping {
+            // ropeandhook.md rule 29 (M6 6a-6).
+            Some("the rope state")
         } else if self.connor_hands_off {
             Some("a cutscene (handsOff)")
         } else {

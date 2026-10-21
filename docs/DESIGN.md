@@ -1699,7 +1699,7 @@ damage needs M5), Gnome's pushable `boulder` (`KQBoulder`, not
 studied), the other pushable classes (`pushing.md` open question 1),
 damaging water (poison, lava, swamp).
 
-#### 6a — The Rope and Hook (planned 2026-10-21)
+#### 6a — The Rope and Hook (planned 2026-10-21; done 2026-10-21, steps 6a-1 to 6a-6, checked in the logs only)
 
 Why: the rope places' trap scripts only log `setRope` (stubs since M3
 3d-3), and clicking the rope gives a remark and holds it anyway (Q110
@@ -1818,7 +1818,8 @@ Steps (one commit each):
    held one (the user's check), else none; then standing, handsOff off,
    the first-person key free. **Test:** a full climb up and a full climb
    down; his place at the end, the mode back to Wait, the weapon.
-6. **6a-6, while on the rope** (rules 27–30). Hits ignored (no damage,
+6. **6a-6, while on the rope** (**done** 2026-10-21; a chaser losing
+   him not run: the report line and far bats only) (rules 27–30). Hits ignored (no damage,
    sound or flinch: `fight.log`); every state request refused and
    dropped (special, walks, dying); characters told he is 100,000
    below (`potions.md` rule 26's code, a third reason "the rope"); the

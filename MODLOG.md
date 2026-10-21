@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a-6: while Connor is on the rope
+
+**Changed:** `fight.rs`: hits on Connor ignored in the rope state. `weapons.rs`: weapon requests ignored there (keys, slots, scripts; no remark). `active.rs`: characters are told Connor is 100,000 below for "the rope state" (`potions.md` rule 26's code). Viewer: `connor_view.rs` `roping`, every state request refused; `door_view.rs` drops it (not tried again). 1 new unit test. `potions.rs` comment. DESIGN (6a done), provenance, STATUS, FEATURES (a rope section), README.
+**Why:** Step 6 of `ropeandhook.md` (rules 27–30), and the end of the 6a plan.
+**Tested how:** `cargo test` (all 618 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 4000 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80 --aim-point 150000,207968,30000,90 --command "KQMonster::setState Connor special stop,205" --key left:IDCTL_INVBAR_SHORT,210`; the same with `--command "KQMonster::inventory world INVITEM_Crystal 1 147300 207586 12900,195" --click NoName23,225`; `rope.log`, `characters.log`, `fight.log`, `items.log`.
+**Result:** `characters.log` update 91: "characters are told Connor is 100,000 below where he is: the rope state" (the bats then count him 94,000 away). 206: "setState special: refused, Connor is in the rope state; dropped". 210: the hand-weapon slot "ignored, he is in the rope state; no remark". 225, while hanging: the crystal "IN REACH: picked up". Unit test: a hit does no damage and asks no flinch; off the rope it hurts again.
+**Still broken / not tested:** **Not looked at by eye.** No creature near a rope place chased him in a run (the report is the same code as Invisible and cutscenes, which were tested with goblin22). A hit while on the rope was run only in the unit test. Rock throws and first person don't exist yet.
+**Next:** The user: the rope by eye in Daventry (wizard's house, the cave). A: Q147, the note's open question 2.
+
 ## 2026-10-21 M6 6a-5: getting off the rope at either end
 
 **Changed:** `rope.rs`: the climb's end at the top (`toff`, the camera follows, `taway`) and at the foot (the 1,000 / 4,900 drop, gravity on, `boff`, `baway`), then gravity, the step heights, the camera, the weapon (`out` only if he held one), standing; `done`; 2 new unit tests. Viewer `rope_view.rs`: `camera_follow`, `restore_hand` (the weapon's list back at once, then its `out`), `leave`; the record is dropped when done. `door_view.rs`: `weapon_list` visible to the crate. DESIGN, provenance.

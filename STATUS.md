@@ -25,6 +25,22 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   checked Invisible, Clarity and the shield's orbits by eye. **5g-9:**
   characters also lose Connor during cutscenes (handsOff). Q146 asked.
 
+- **2026-10-21 (B, M6 6a-1 to 6a-6): the Rope and Hook built** from
+  `ropeandhook.md` (plan in `docs/DESIGN.md` "6a", one commit per step;
+  **checked in the logs only, not by eye**; everything in
+  `kq8-artifacts/logs/rope.log`). Rope places set the status only with
+  the rope carried, `HookUp` / `HookDown` icons; the rope button (the
+  remark away from a place, held at one, the top's camera); any world
+  click starts the sequence (`away`, `draw` / `drawdown`, `btoss` and
+  the separate rope model / `ttoss`, `bon` / `ton`), the camera spots,
+  the 5,000 lift, the half turn; forward / back scrub the climb, the
+  camera 750 a second in its range; off at either end (the 1,000 / 4,900
+  drop), the weapon drawn only if he held one. On the rope: no damage, no
+  state changes, characters lose him, weapons ignored, items can be
+  picked up. Run in Daventry at the wizard's house (`ropetrp1/2`), up and
+  down. New **Q147** (a–e, not blocking). Saved games don't exist yet, so
+  the rope isn't saved (kept as plain records for later).
+
 - **2026-10-21 (A): the Rope and Hook**, `docs/behaviour/ropeandhook.md`
   (27 rope places in 7 worlds; Daventry has 4). A pair of trap boxes
   sets "rope at the foot / at the top" (only if Connor carries the rope;
@@ -39,8 +55,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   all matches; the weapon is drawn at the end only if he held one; only
   forward / back climb; clicks pick items up; rock throws on the rope
   are ignored (the original is buggy there); mid-climb saves load fine.
-  Ready for B (an M6 item); one open question left (the camera during
-  the throw from below).
+  Built by B the same day (above); one open question left (the camera
+  during the throw from below).
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
@@ -186,6 +202,7 @@ own install at runtime. Roadmap M0–M7 in `docs/DESIGN.md`. Current
 milestone: **M4** (remarks and speech, the interface and the inventory,
 characters and conversations done; the menus postponed) and **M5**
 (characters moving on their own done; the fight next). M0–M3 are done.
+M6 has started with the Rope and Hook (6a).
 
 ## Setup
 
@@ -258,7 +275,9 @@ characters and conversations done; the menus postponed) and **M5**
   `inventory.rs` (slot pictures), `connor_inventory.rs` (adding,
   stacking, equipment, applying, slot clicks, the hand). M5 5g:
   `potions.rs` (timers, icon places, the four effects, pickup
-  experience); viewer `potion_view.rs` (the orbit, Connor's skin, faces
+  experience); M6 6a: `rope.rs` (rope places, the hook icons, the rope
+  state's sequence, camera spots and ranges) and viewer `rope_view.rs`
+  (runs it on Connor, the camera, the rope model); viewer `potion_view.rs` (the orbit, Connor's skin, faces
   and Invisible look, `dither`). Viewer
   `gui_view.rs`: the panels, the pointer, clicks and keys on the bars.
 - `crates/kq8-audio` (5 unit tests): our mixer and the sound card (cpal).
@@ -352,8 +371,8 @@ characters and conversations done; the menus postponed) and **M5**
     them. Gnome's pushable `boulder` stands still, as in the original.
   - Traps: Daventry's 52 trap boxes switch on and off and run their
     scripts; walk and run zones change Connor's pace and the camera's
-    leash (1,000–2,500 inside). Music, ropes, teleporters and cutscenes
-    are only logged.
+    leash (1,000–2,500 inside). Teleporters and cutscenes are only
+    logged (ropes: M6 6a).
   - Items: the 22 items Daventry puts out at the start are drawn and can
     be picked up (counted in `items.log`); item scripts run (farm coins).
   - Chests: the pub's big chest and the keep's chest of coins (open,
@@ -376,7 +395,9 @@ characters and conversations done; the menus postponed) and **M5**
   (walking away and back, the cuts, the Uglybeast; `docs/FEATURES.md`).
 - Health items and potions (M5 5g, 2026-10-21): checked in the logs only
   (`MODLOG.md`); not looked at by eye yet.
-- Tests: 615 unit tests pass (131 + 468 + 5 + 11), 2026-10-21.
+- The Rope and Hook (M6 6a, 2026-10-21): checked in the logs only
+  (`MODLOG.md`); not looked at by eye yet.
+- Tests: 618 unit tests pass (131 + 482 + 5), 2026-10-21.
 
 ## What doesn't work yet / next
 
@@ -407,7 +428,7 @@ characters and conversations done; the menus postponed) and **M5**
   layout's pictures scale with it (× 1.25, nearest pixel, tiled when
   smaller); the panels' animations at 15 frames per second; counts of 0
   not written; the rocks picture; the blink's order; a `give`'s
-  pushed-out piece at Connor's feet; the rope held and its remark; the
+  pushed-out piece at Connor's feet; the
   pointer's click point at its top-left. Not built: the map (M6), the
   help popup and F1, the level-up flame (not traced). Escape still quits: the original's main menu pauses
   the game (a menu step must stop the updates and the panels' timers).
@@ -421,8 +442,8 @@ characters and conversations done; the menus postponed) and **M5**
   see-through, `dithered=1` ignored (Q144); the orbit's angle 0 along +x
   and the shape turning with it (ours). Not built: the hurt line while
   invisible (rule 27), the same lowering of Connor's reported place
-  while he talks (Q146 a) and on the rope (no rope yet; cutscenes done
-  in 5g-9: every handsOff, Q146 b), first-person arms,
+  while he talks (Q146 a) (cutscenes done in 5g-9: every handsOff, Q146
+  b; the rope in M6 6a-6), first-person arms,
   armour skins (the temple armour's `con65`), the help pop-ups (logged).
   The helmet's face set `chf` exists in no world, so his face stays.
   Potions are not kept across saves or worlds (we have neither yet).
@@ -467,7 +488,21 @@ characters and conversations done; the menus postponed) and **M5**
   Not run in the game yet: losing sight, leaving / re-entering the
   graveyard trap, `wanderAndStop`, random wander points, landing on a
   goblin's top (unit test only), ranged characters (`doMode=1`).
-- **Next step, suggested:** for the user: check ranged weapons by eye
+- **Stand-ins of 6a (the rope, Q147):** the hook icon takes the first
+  free status place (a); the rope state's handsOff does what `handsOff 1`
+  does to the panels (bottom bar away, spinning mask) but keeps the
+  pointer (b); taking the rope at the top moves the camera as a `move
+  KQCamera` while following (c); `taway`'s own 405 forward step moves him
+  (d); each placing by the rope state is a script `move` for the traps,
+  then an enter test (e). The camera during `btoss` stays (open question
+  2's stand-in). Not built: first person (only logged), saved games (none
+  yet), rock throws (none yet: "ignored on the rope" by construction).
+  Not run: a ranged weapon held at the start, the cave rope
+  (`ropetrp3/4`), other worlds' ropes, a chaser losing him on the rope
+  (only the report line and far bats seen), `setRopeCam` spots and the
+  camera limits in the viewer (unit tests only).
+- **Next step, suggested:** for the user: the rope by eye in Daventry
+  (`ropeandhook.md` "How to check"); for A: Q147. Then: check ranged weapons by eye
   (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
   Q140, Q141, Q136, Q143, Q144, game over. For the user: potions by eye
@@ -489,7 +524,7 @@ characters and conversations done; the menus postponed) and **M5**
 - Animated objects: scenery animations' cues (sounds) don't fire.
   `loadKQ` with a name or position while playing is not done; a copy
   that comes in is not solid or clickable.
-- Collision, not done: Connor against monsters (none drawn), ropes;
+- Collision, not done: Connor against monsters (none drawn);
   objects with no box in the game's table stay
   walk-through. Hidden, far and off objects are not solid (rule 41; not
   checked in the original). A deleted or far building's walls stay
@@ -520,6 +555,11 @@ characters and conversations done; the menus postponed) and **M5**
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
+- For A (asked 2026-10-21 by B, M6 6a, not blocking): **Q147** (the
+  rope: (a) the hook icon's place, (b) the rope state's handsOff and the
+  panels, (c) the top camera's "flag", (d) `taway`'s step, (e) the trap
+  order when the rope state places him). `ropeandhook.md` open question
+  2 (the camera during the throw from below) is still open.
 - For A (asked 2026-10-21 by B, M5 5g, not blocking): **Q143** (the
   spinning mask and potion icons sharing the 7 status places; which
   frame is the icon's used part), **Q144** (`KQObject::dither` and
