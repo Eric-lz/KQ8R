@@ -258,6 +258,385 @@ pub fn sync_icon(places: &mut [Option<StatusIcon>; crate::potions::ICON_PLACES],
     out
 }
 
+/// The movement lists of the rope state (rule 17): Connor's own list in
+/// use for his hand mode (`away`, `out`), or `Conrope.anm` (the rest).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Anim {
+    Own(&'static str),
+    Rope(&'static str),
+}
+
+impl Anim {
+    pub fn name(self) -> String {
+        match self {
+            Anim::Own(n) => format!("{n} (his own list)"),
+            Anim::Rope(n) => format!("{n} ({ROPE_LIST})"),
+        }
+    }
+}
+
+/// The rope animation list (rule 13).
+pub const ROPE_LIST: &str = "Conrope.anm";
+/// Its twelve movements (`Conrope.anm`, observed).
+pub const ROPE_MOVEMENTS: [&str; 12] = ["baway", "boff", "bon", "btoss", "climb", "draw", "drawdown", "rope", "taway", "toff", "ton", "ttoss"];
+
+/// Which end the climb started from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum End {
+    Bottom,
+    Top,
+}
+
+/// Where the rope state is (rules 13–26): the movement playing, or what
+/// it waits for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Away,
+    Draw,
+    Btoss,
+    /// The separate rope model's `rope` plays; Connor stands still.
+    RopeModel,
+    Bon,
+    Drawdown,
+    Ttoss,
+    Ton,
+    /// He hangs on the rope; the keys climb (rule 22).
+    Hanging,
+    Toff,
+    Taway,
+    Boff,
+    Baway,
+    Out,
+}
+
+/// Rule 18: the lift when he grabs the rope from below.
+pub const GRAB_LIFT: f32 = 5000.0;
+/// Rules 19, 21: the camera's height range for the climb, and what is
+/// kept clear of an obstacle.
+pub const CAMERA_RANGE: f32 = 5000.0;
+pub const CAMERA_CLEAR: f32 = 250.0;
+/// Rule 18: the spots the game makes at the foot, in the rope's frame
+/// (x his left, y his back, z up), x taken + and −.
+pub const FOOT_SPOT: [f32; 3] = [2500.0, 2500.0, 4800.0];
+/// Rule 20: the same at the top.
+pub const TOP_SPOT: [f32; 3] = [5000.0, -5000.0, -2000.0];
+
+/// `v` in the rope's frame turned into the world by the rope's direction
+/// (its turn about z, as Connor's heading: x = his left, −y = his front;
+/// the data's rx and ry are always 0: not used).
+pub fn turned(dir: [f32; 3], v: [f32; 3]) -> [f32; 3] {
+    let (s, c) = dir[2].sin_cos();
+    [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]]
+}
+
+fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|k| a[k] + b[k])
+}
+
+fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
+    (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f32>().sqrt()
+}
+
+/// Rules 18, 20: the camera spot for the climb: with the place's
+/// `setRopeCam` spot 1 set, the nearer to `camera` of spots 1 and 2 (2
+/// when equally near; spot 1 alone if 2 is not set); otherwise the nearer
+/// of the two the game makes from `offset` (x taken + and −). Returns the
+/// spot and why.
+pub fn camera_spot(set: [Option<[f32; 3]>; 2], place: [f32; 3], dir: [f32; 3], offset: [f32; 3], camera: [f32; 3]) -> ([f32; 3], String) {
+    let (a, b, whose) = match set {
+        [Some(a), Some(b)] => (a, b, "the place's setRopeCam spots"),
+        [Some(a), None] => return (a, format!("the place's setRopeCam spot 1 {} (spot 2 not set)", fmt3(a))),
+        _ => {
+            let [x, y, z] = offset;
+            (add(place, turned(dir, [x, y, z])), add(place, turned(dir, [-x, y, z])), "the game's own spots")
+        }
+    };
+    let (da, db) = (dist(a, camera), dist(b, camera));
+    let (spot, which) = if da < db { (a, 1) } else { (b, 2) };
+    (spot, format!("{whose}: 1 {} at {da:.0}, 2 {} at {db:.0} from the camera {}: spot {which}, the nearer (2 when equal)", fmt3(a), fmt3(b), fmt3(camera)))
+}
+
+/// Rule 19 (from the foot): the camera's height range: lowest its height
+/// now; highest 5,000 above, or the height of something solid straight
+/// above (`solid`), less 250, then at most the top limit (0 = none).
+pub fn range_up(camera_z: f32, solid: Option<f32>, top_limit: f32) -> (f32, f32) {
+    let mut hi = solid.unwrap_or(camera_z + CAMERA_RANGE) - CAMERA_CLEAR;
+    if top_limit != 0.0 && hi > top_limit {
+        hi = top_limit;
+    }
+    (camera_z, hi)
+}
+
+/// Rule 21 (from the top): highest the camera's height now; lowest 5,000
+/// below or the height of something solid straight below, plus 250, then
+/// at least the bottom limit (0 = none).
+pub fn range_down(camera_z: f32, solid: Option<f32>, bottom_limit: f32) -> (f32, f32) {
+    let mut lo = solid.unwrap_or(camera_z - CAMERA_RANGE) + CAMERA_CLEAR;
+    if bottom_limit != 0.0 && lo < bottom_limit {
+        lo = bottom_limit;
+    }
+    (lo, camera_z)
+}
+
+/// What the rope state needs from the game (the viewer gives it).
+pub trait RopeHost {
+    fn note(&mut self, line: String);
+    /// Starts a movement of the rope state; `false` if it isn't loaded.
+    fn play(&mut self, anim: Anim) -> bool;
+    fn connor_at(&self) -> [f32; 3];
+    fn heading(&self) -> f32;
+    fn set_gravity(&mut self, on: bool);
+    /// His step-up and step-down heights (`connor-physics.md`).
+    fn step_heights(&self) -> (f32, f32);
+    fn set_step_heights(&mut self, up: f32, down: f32);
+    /// Puts him at `position` with `heading`, at once.
+    fn place(&mut self, position: [f32; 3], heading: f32);
+    /// His automatic turn to face a point (`walkTo`'s turn).
+    fn turn_to(&mut self, point: [f32; 2]);
+    fn camera_at(&self) -> [f32; 3];
+    /// The camera stops following and stays where it is.
+    fn camera_stay(&mut self);
+    /// The camera goes to `spot` and looks at `aim`.
+    fn camera_to(&mut self, spot: [f32; 3], aim: [f32; 3]);
+    /// Where the straight line from `from` to `to` first meets the
+    /// terrain or a world object (not Connor): its height and what.
+    fn solid_between(&self, from: [f32; 3], to: [f32; 3]) -> Option<(f32, String)>;
+    /// Starts the separate rope model (rule 15); `false` if it can't.
+    fn start_rope_model(&mut self) -> bool;
+    /// handsOff with the pointer kept (rules 13, 19, 21, 23).
+    fn hands_off(&mut self, on: bool);
+    /// He hangs, the climb at `phase`, frozen (rules 19, 21).
+    fn hang(&mut self, phase: f32);
+    /// His hand mode becomes empty hands (rule 14).
+    fn empty_hands(&mut self);
+    /// He hangs on the rope (no hook icon, rule 7).
+    fn on_rope(&mut self, on: bool);
+}
+
+/// The rope state (rules 12–26): what was copied at its start, and its
+/// progress. One plain record, so a saved game can keep it later (rule
+/// 32).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Climb {
+    pub from: End,
+    pub stage: Stage,
+    pub place: [f32; 3],
+    pub dir: [f32; 3],
+    /// The place's camera spots and limits (rule 13).
+    pub cam: [Option<[f32; 3]>; 2],
+    pub top_limit: f32,
+    pub bottom_limit: f32,
+    /// His hand mode and weapon before (rules 13, 25).
+    pub hand_before: crate::weapons::WeaponMode,
+    pub weapon_before: Option<String>,
+    /// Rule 13: switched out of first person (never: we have none).
+    pub first_to_third: bool,
+    /// Where the camera looks while he climbs (rules 18, 21).
+    pub aim: [f32; 3],
+    /// The camera's height range while he climbs (rules 19, 21).
+    pub range: (f32, f32),
+    /// The step heights saved at the foot (rule 15).
+    pub saved_steps: Option<(f32, f32)>,
+}
+
+fn solid_text(solid: &Option<(f32, String)>) -> String {
+    solid.as_ref().map_or("nothing within 5,000".to_string(), |(z, what)| format!("{what} at {z:.0}"))
+}
+
+fn limit_text(l: f32) -> String {
+    if l == 0.0 { "none".to_string() } else { format!("{l:.0}") }
+}
+
+impl Climb {
+    /// Rules 12–13: the rope state starts from the place's settings `r`
+    /// with his hand mode `hand` (and weapon); `None` without a status.
+    pub fn start(r: &Rope, hand: crate::weapons::WeaponMode, weapon: Option<String>, host: &mut dyn RopeHost) -> Option<Climb> {
+        let from = match r.status {
+            Status::None => {
+                host.note("rope state not started: the status is none".into());
+                return None;
+            }
+            Status::Bottom => End::Bottom,
+            Status::Top => End::Top,
+        };
+        let mut c = Climb {
+            from,
+            stage: Stage::Away,
+            place: r.place,
+            dir: r.dir,
+            cam: r.cam,
+            top_limit: r.top_limit,
+            bottom_limit: r.bottom_limit,
+            hand_before: hand,
+            weapon_before: weapon,
+            first_to_third: false,
+            aim: [0.0; 3],
+            range: (0.0, 0.0),
+            saved_steps: None,
+        };
+        host.camera_stay();
+        host.turn_to([r.place[0], r.place[1]]);
+        host.hands_off(true);
+        let weapon = c.weapon_before.as_deref().map_or(String::new(), |w| format!(" ({w})"));
+        host.note(format!(
+            "rope state: starts from the {} (rule 13): the camera stops following and stays at {}; he turns to face the rope's place {}; the setRopeCam spots 1 {}, 2 {}, limits top {}, bottom {} copied; third person already (no first person: nothing to switch or restore); handsOff on, the pointer kept; hand mode before: {}{weapon}; {ROPE_LIST} ready",
+            if from == End::Bottom { "foot" } else { "top" },
+            fmt3(host.camera_at()),
+            fmt3(r.place),
+            fmt_spot(r.cam[0]),
+            fmt_spot(r.cam[1]),
+            limit_text(r.top_limit),
+            limit_text(r.bottom_limit),
+            hand.name(),
+        ));
+        c.go(Stage::Away, host);
+        Some(c)
+    }
+
+    /// The movement of `stage`, if it plays one.
+    fn anim(stage: Stage) -> Option<Anim> {
+        Some(match stage {
+            Stage::Away => Anim::Own("away"),
+            Stage::Out => Anim::Own("out"),
+            Stage::Draw => Anim::Rope("draw"),
+            Stage::Btoss => Anim::Rope("btoss"),
+            Stage::Bon => Anim::Rope("bon"),
+            Stage::Drawdown => Anim::Rope("drawdown"),
+            Stage::Ttoss => Anim::Rope("ttoss"),
+            Stage::Ton => Anim::Rope("ton"),
+            Stage::Toff => Anim::Rope("toff"),
+            Stage::Taway => Anim::Rope("taway"),
+            Stage::Boff => Anim::Rope("boff"),
+            Stage::Baway => Anim::Rope("baway"),
+            Stage::RopeModel | Stage::Hanging => return None,
+        })
+    }
+
+    /// Enters `stage`: its movement starts (a missing one counts as ended
+    /// at once, logged).
+    fn go(&mut self, stage: Stage, host: &mut dyn RopeHost) {
+        self.stage = stage;
+        let Some(a) = Self::anim(stage) else { return };
+        if host.play(a) {
+            host.note(format!("rope state: {} starts", a.name()));
+        } else {
+            host.note(format!("rope state: {} is not loaded: skipped", a.name()));
+            self.ended(host);
+        }
+    }
+
+    /// The movement of the stage now ended (or the rope model's, in
+    /// `RopeModel`): what follows (rules 14–21).
+    pub fn ended(&mut self, host: &mut dyn RopeHost) {
+        if let Some(a) = Self::anim(self.stage) {
+            host.note(format!("rope state: {} ends; Connor at {}", a.name(), fmt3(host.connor_at())));
+        }
+        match self.stage {
+            Stage::Away => {
+                // Rule 14.
+                host.empty_hands();
+                host.note("rope state: empty hands (hand mode 4; rule 14)".into());
+                self.go(if self.from == End::Bottom { Stage::Draw } else { Stage::Drawdown }, host);
+            }
+            Stage::Draw => {
+                host.set_gravity(false);
+                host.note("rope state: gravity off (rule 15)".into());
+                self.go(Stage::Btoss, host);
+            }
+            Stage::Btoss => {
+                let (up, down) = host.step_heights();
+                self.saved_steps = Some((up, down));
+                host.set_step_heights(0.0, 0.0);
+                host.place(self.place, self.dir[2]);
+                let model = if host.start_rope_model() { "the rope model starts (rope, Conrope.anm)" } else { "the rope model could not start" };
+                host.note(format!(
+                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera stays (open question 2: the note's stand-in); Connor told to stand still (rule 15)",
+                    fmt3(self.place),
+                    self.dir[2]
+                ));
+                self.stage = Stage::RopeModel;
+                if !host.play(Anim::Own("stop")) {
+                    host.note("rope state: stop (his own list) is not loaded".into());
+                }
+            }
+            Stage::RopeModel => {
+                // Rule 18: the grab from below.
+                self.aim = host.connor_at();
+                let camera = host.camera_at();
+                let (spot, why) = camera_spot(self.cam, self.place, self.dir, FOOT_SPOT, camera);
+                host.camera_to(spot, self.aim);
+                host.set_gravity(false);
+                host.on_rope(true);
+                let p = host.connor_at();
+                let lifted = [p[0], p[1], p[2] + GRAB_LIFT];
+                host.place(lifted, host.heading());
+                host.note(format!(
+                    "rope state: the rope model ended: Connor grabs the rope at {} (the aim point); camera spot {} ({why}), aimed at the aim point; gravity off; the hook icons hidden; lifted 5,000 to {} (rule 18)",
+                    fmt3(p),
+                    fmt3(spot),
+                    fmt3(lifted)
+                ));
+                self.go(Stage::Bon, host);
+            }
+            Stage::Bon => {
+                // Rule 19.
+                let cam = host.camera_at();
+                let solid = host.solid_between(cam, [cam[0], cam[1], cam[2] + CAMERA_RANGE]);
+                self.range = range_up(cam[2], solid.as_ref().map(|s| s.0), self.top_limit);
+                host.hang(0.0);
+                host.hands_off(false);
+                host.note(format!(
+                    "rope state: hanging at the climb's first frame (the foot), frozen, turning off, handsOff off; camera height range {:.0}..{:.0} (from {:.0}; above it {}; top limit {}; rule 19)",
+                    self.range.0,
+                    self.range.1,
+                    cam[2],
+                    solid_text(&solid),
+                    limit_text(self.top_limit)
+                ));
+                self.stage = Stage::Hanging;
+            }
+            Stage::Drawdown => {
+                // Rules 16, 20.
+                host.place(self.place, self.dir[2]);
+                let camera = host.camera_at();
+                let (spot, why) = camera_spot(self.cam, self.place, self.dir, TOP_SPOT, camera);
+                host.camera_to(spot, self.place);
+                host.set_gravity(false);
+                host.note(format!("rope state: placed at the rope's place {} heading {:.3}; camera spot {} ({why}), aimed at the rope's place; gravity off (rules 16, 20)", fmt3(self.place), self.dir[2], fmt3(spot)));
+                self.go(Stage::Ttoss, host);
+            }
+            Stage::Ttoss => self.go(Stage::Ton, host),
+            Stage::Ton => {
+                // Rule 21.
+                let cam = host.camera_at();
+                let solid = host.solid_between(cam, [cam[0], cam[1], cam[2] - CAMERA_RANGE]);
+                self.range = range_down(cam[2], solid.as_ref().map(|s| s.0), self.bottom_limit);
+                host.set_gravity(false);
+                host.on_rope(true);
+                let h = host.heading() + std::f32::consts::PI;
+                let p = host.connor_at();
+                host.place(p, h);
+                self.aim = p;
+                host.hang(1.0);
+                host.hands_off(false);
+                host.note(format!(
+                    "rope state: gravity off, the hook icons hidden, a half turn to heading {h:.3}; the aim point {}; hanging at the climb's last frame (the top), frozen, turning off, handsOff off; camera height range {:.0}..{:.0} (from {:.0}; below it {}; bottom limit {}; rule 21)",
+                    fmt3(p),
+                    self.range.0,
+                    self.range.1,
+                    cam[2],
+                    solid_text(&solid),
+                    limit_text(self.bottom_limit)
+                ));
+                self.stage = Stage::Hanging;
+            }
+            Stage::Hanging | Stage::Toff | Stage::Taway | Stage::Boff | Stage::Baway | Stage::Out => {
+                host.note(format!("rope state: {:?} ended: getting off is not built yet (M6 6a-5)", self.stage));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +692,154 @@ mod tests {
         assert!(d.put_back);
         assert_eq!((r.top_limit, r.bottom_limit), (0.0, 0.0), "None clears them (rule 6)");
         assert_eq!(r.top_cam, Some([151584.0, 210996.0, 8520.0]), "sticky");
+    }
+
+    /// A pretend game: records what the rope state asked.
+    #[derive(Default)]
+    struct Host {
+        played: Vec<Anim>,
+        at: [f32; 3],
+        heading: f32,
+        gravity: bool,
+        steps: (f32, f32),
+        camera: [f32; 3],
+        camera_aim: Option<[f32; 3]>,
+        following: bool,
+        hands_off: bool,
+        hung: Option<f32>,
+        on_rope: bool,
+        empty: bool,
+        model: bool,
+        lines: Vec<String>,
+    }
+
+    impl RopeHost for Host {
+        fn note(&mut self, line: String) {
+            self.lines.push(line);
+        }
+        fn play(&mut self, anim: Anim) -> bool {
+            self.played.push(anim);
+            true
+        }
+        fn connor_at(&self) -> [f32; 3] {
+            self.at
+        }
+        fn heading(&self) -> f32 {
+            self.heading
+        }
+        fn set_gravity(&mut self, on: bool) {
+            self.gravity = on;
+        }
+        fn step_heights(&self) -> (f32, f32) {
+            self.steps
+        }
+        fn set_step_heights(&mut self, up: f32, down: f32) {
+            self.steps = (up, down);
+        }
+        fn place(&mut self, position: [f32; 3], heading: f32) {
+            self.at = position;
+            self.heading = heading;
+        }
+        fn turn_to(&mut self, _point: [f32; 2]) {}
+        fn camera_at(&self) -> [f32; 3] {
+            self.camera
+        }
+        fn camera_stay(&mut self) {
+            self.following = false;
+        }
+        fn camera_to(&mut self, spot: [f32; 3], aim: [f32; 3]) {
+            self.camera = spot;
+            self.camera_aim = Some(aim);
+        }
+        fn solid_between(&self, _from: [f32; 3], _to: [f32; 3]) -> Option<(f32, String)> {
+            None
+        }
+        fn start_rope_model(&mut self) -> bool {
+            self.model = true;
+            true
+        }
+        fn hands_off(&mut self, on: bool) {
+            self.hands_off = on;
+        }
+        fn hang(&mut self, phase: f32) {
+            self.hung = Some(phase);
+        }
+        fn empty_hands(&mut self) {
+            self.empty = true;
+        }
+        fn on_rope(&mut self, on: bool) {
+            self.on_rope = on;
+        }
+    }
+
+    fn place(status: Status) -> Rope {
+        Rope { status, place: [1000.0, 2000.0, 300.0], dir: [0.0, 0.0, -std::f32::consts::FRAC_PI_2], ..Default::default() }
+    }
+
+    #[test]
+    fn the_spots_the_game_makes_turn_with_the_rope() {
+        // Heading -pi/2: he faces -x; his left is -y... his back +x.
+        let d = [0.0, 0.0, -std::f32::consts::FRAC_PI_2];
+        let v = turned(d, [0.0, 2500.0, 0.0]);
+        assert!((v[0] - 2500.0).abs() < 0.01 && v[1].abs() < 0.01, "y (his back) goes to +x: {v:?}");
+        let (spot, why) = camera_spot([None, None], [0.0; 3], d, FOOT_SPOT, [2500.0, -2500.0, 0.0]);
+        assert!(why.contains("spot 1"), "{why}");
+        assert!((spot[0] - 2500.0).abs() < 0.01 && (spot[1] + 2500.0).abs() < 0.01 && spot[2] == 4800.0, "{spot:?}");
+        // Equally near: spot 2.
+        let (_, why) = camera_spot([Some([1.0, 0.0, 1.0]), Some([-1.0, 0.0, 1.0])], [0.0; 3], d, FOOT_SPOT, [0.0; 3]);
+        assert!(why.contains("spot 2"), "{why}");
+    }
+
+    #[test]
+    fn the_height_ranges_and_their_limits() {
+        assert_eq!(range_up(1000.0, None, 0.0), (1000.0, 5750.0));
+        assert_eq!(range_up(1000.0, Some(3000.0), 0.0), (1000.0, 2750.0), "an obstacle less 250");
+        assert_eq!(range_up(1000.0, None, 4000.0), (1000.0, 4000.0), "the top limit");
+        assert_eq!(range_down(9000.0, None, 0.0), (4250.0, 9000.0));
+        assert_eq!(range_down(9000.0, None, 6000.0), (6000.0, 9000.0), "a bottom limit only raises the lowest");
+        assert_eq!(range_down(9000.0, None, 2000.0), (4250.0, 9000.0));
+    }
+
+    #[test]
+    fn from_the_foot_to_hanging_in_order() {
+        let mut h = Host { at: [990.0, 2010.0, 300.0], steps: (325.0, 325.0), camera: [5000.0, 0.0, 2000.0], following: true, gravity: true, ..Default::default() };
+        let mut c = Climb::start(&place(Status::Bottom), crate::weapons::WeaponMode::Hand, Some("INVITEM_Fists".into()), &mut h).unwrap();
+        assert!(!h.following && h.hands_off);
+        for _ in 0..3 {
+            c.ended(&mut h);
+        }
+        assert!(h.empty && !h.gravity && h.model);
+        assert_eq!(h.steps, (0.0, 0.0));
+        assert_eq!(c.saved_steps, Some((325.0, 325.0)));
+        assert_eq!(h.at, [1000.0, 2000.0, 300.0], "placed at the rope's place");
+        assert_eq!(c.stage, Stage::RopeModel);
+        c.ended(&mut h);
+        assert_eq!(h.at, [1000.0, 2000.0, 5300.0], "lifted 5,000");
+        assert_eq!(h.camera_aim, Some([1000.0, 2000.0, 300.0]), "aimed at where he grabbed");
+        assert!(h.on_rope);
+        c.ended(&mut h);
+        assert_eq!(c.stage, Stage::Hanging);
+        assert_eq!(h.hung, Some(0.0));
+        assert!(!h.hands_off);
+        assert_eq!(c.range, (h.camera[2], h.camera[2] + 4750.0));
+        let names: Vec<Anim> = h.played.clone();
+        assert_eq!(names, [Anim::Own("away"), Anim::Rope("draw"), Anim::Rope("btoss"), Anim::Own("stop"), Anim::Rope("bon")]);
+    }
+
+    #[test]
+    fn from_the_top_to_hanging_with_the_half_turn() {
+        let mut h = Host { at: [990.0, 2010.0, 300.0], camera: [5000.0, 0.0, 2000.0], gravity: true, steps: (325.0, 325.0), ..Default::default() };
+        let mut c = Climb::start(&place(Status::Top), crate::weapons::WeaponMode::None, None, &mut h).unwrap();
+        for _ in 0..4 {
+            c.ended(&mut h);
+        }
+        assert_eq!(c.stage, Stage::Hanging);
+        assert_eq!(h.played, [Anim::Own("away"), Anim::Rope("drawdown"), Anim::Rope("ttoss"), Anim::Rope("ton")]);
+        assert_eq!(h.steps, (325.0, 325.0), "the top never changes the step heights");
+        assert!((h.heading - std::f32::consts::FRAC_PI_2).abs() < 1e-5, "half a turn from -pi/2: {}", h.heading);
+        assert_eq!(h.hung, Some(1.0));
+        assert_eq!(h.camera_aim, Some([1000.0, 2000.0, 300.0]), "aimed at the rope's place");
+        assert_eq!(c.range.1, h.camera[2]);
     }
 
     #[test]

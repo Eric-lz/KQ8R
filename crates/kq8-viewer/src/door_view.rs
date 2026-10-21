@@ -99,6 +99,10 @@ pub struct DoorSim {
     item_log: Option<Log>,
     /// `rope.log` (M6 6a).
     rope_log: Option<Log>,
+    /// World clicks made with the rope in hand (`ropeandhook.md` rule 10;
+    /// M6 6a-3), and the climb asked for (taken by `rope_view`).
+    rope_clicks: Vec<String>,
+    pub rope_asked: Option<String>,
     /// `talk.log` (M4 4a-2); `None` if it could not be made.
     talk_log: Option<Log>,
     /// `conversation.log` (M4 4e-3); `None` if it could not be made.
@@ -110,6 +114,22 @@ impl DoorSim {
     /// items made also to the main log. Returns the lines, so the door
     /// lines (which hold a copy of each) don't put them on the terminal
     /// a second time.
+    /// The rope state put Connor somewhere at once (`ropeandhook.md` rules
+    /// 15, 16, 18, 23; M6 6a-3): STAND-IN (Q147 e): as a script's `move`
+    /// (traps.md rule 5: every trap he is in runs its stay test now, so the
+    /// end he left gets `Off`), then the enter test at the new place (a
+    /// ball that starts inside counts, rule 6), so the other end's trap
+    /// gets `On` after it. Returns the trap calls.
+    pub fn connor_placed_by_rope(&mut self, name: &str, position: [f32; 3], balls: &kq8_core::collide::BallStack, shared: &Shared) -> Vec<String> {
+        let (min, max) = kq8_core::connor_mover::CONNOR_BOX;
+        let v = Visitor { name, collision_type: kq8_core::collide::CONNOR_TYPE, from: position, position, min, max, balls };
+        let mut calls = self.active.connor_placed(&v);
+        calls.extend(self.active.connor_moved(&v));
+        self.connor_checked_at = Some(position);
+        self.flush_traps(shared);
+        calls
+    }
+
     /// Writes the rope lines gathered since the last call (M6 6a) to
     /// `rope.log`; status changes also to the main log.
     pub fn flush_rope(&mut self, shared: &Shared) {
@@ -921,7 +941,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok() };
+    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1498,6 +1518,17 @@ pub fn door_click_input(
     // ranged-weapons.md rule 13 (M5 5f-5): an item on the pointer wins:
     // the click uses it, whatever is ready.
     let held = sim.active.world.hand.is_some();
+    // ropeandhook.md rule 10 (M6 6a-3): with the rope in hand any click in
+    // the world, whatever it meets, starts the climb.
+    let w = &sim.active.world;
+    let rope_held = w.hand.as_ref().and_then(|h| w.items.get(h)).and_then(|o| w.items.kind(&o.kind)).is_some_and(|t| t.category == kq8_core::rope::ROPE_CATEGORY);
+    if rope_held {
+        let line = format!("{line}; the rope is in hand: the click starts the climb, whatever it meets (ropeandhook.md rule 10)");
+        sim.rope_clicks.push(how.clone());
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+        return;
+    }
     // Rules 14-16: the shot click (Ctrl: the plain click).
     let mut line = line;
     if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Ranged && !ctrl && !held {
@@ -1772,6 +1803,22 @@ pub fn door_step(
             let (from, heading, reach) = (c.mover.position, c.walker.heading, sim.attack_dist);
             sim.active.world.connor_do(from, heading, reach, target.as_deref(), big, &m);
         }
+    }
+    // ropeandhook.md rules 10, 12 (M6 6a-3): a world click with the rope in
+    // hand: ignored in handsOff and while dying or dead; otherwise the
+    // rope leaves the pointer and the rope state is asked for.
+    for how in std::mem::take(&mut sim.rope_clicks) {
+        let w = &mut sim.active.world;
+        let line = if hands_off {
+            format!("world click with the rope ({how}): ignored (handsOff; rule 10)")
+        } else if w.connor_dying {
+            format!("world click with the rope ({how}): ignored (Connor is dying or dead; rule 10)")
+        } else {
+            let rope = w.hand.take().unwrap_or_default();
+            sim.rope_asked = Some(how.clone());
+            format!("world click with the rope ({how}): {rope} leaves the pointer; the camera aim test passes always (\"Do not reproduce\"); the rope state is asked for (rules 10-12)")
+        };
+        sim.active.world.rope_note(line);
     }
     for (name, _) in due {
         let line = format!("update {updates}: test --click: clicks {name}");

@@ -3040,6 +3040,13 @@ impl Placer<'_> {
                 }
             }
         }
+        // ropeandhook.md rule 13 (M6 6a-3): the rope list, in worlds whose
+        // scripts have rope places.
+        if self.all_scripts.iter().any(|(_, t)| t.to_ascii_lowercase().contains("kqconner::setrope")) {
+            for m in kq8_core::rope::ROPE_MOVEMENTS {
+                wanted.insert((Some(kq8_core::rope::ROPE_LIST.to_string()), m.to_string()));
+            }
+        }
         let mut loaded = Vec::new();
         let mut problems = Vec::new();
         let mut files: BTreeMap<String, Option<Vec<kq_text::Section>>> = BTreeMap::new();

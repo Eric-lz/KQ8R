@@ -238,6 +238,16 @@ impl GameCam {
         )
     }
 
+    /// `ropeandhook.md` rules 18, 20 (M6 6a-3): the camera stops following
+    /// and goes to `spot`, looking straight at `aim` (no roll).
+    pub fn look_from(&mut self, spot: [f32; 3], aim: [f32; 3]) -> String {
+        if self.following {
+            self.follow(false, aim);
+        }
+        let (tilt, heading) = view_angles(std::array::from_fn(|k| aim[k] - spot[k]));
+        self.move_to(0, spot, [tilt, 0.0, heading])
+    }
+
     /// The camera-move (right) button, if the key map gives one.
     pub fn mouse_button(&self) -> Option<MouseButton> {
         self.keys.mouse

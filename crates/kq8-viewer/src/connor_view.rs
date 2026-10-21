@@ -211,6 +211,15 @@ pub struct ConnorSim {
     /// A script's walk asked while a script's swap starts: it waits for
     /// the swap's end (Q141, the user's check).
     held_walk: Option<kq8_core::connor_auto::AutoMove>,
+    /// The rope state (M6 6a-3, `ropeandhook.md` rules 12-26), run by
+    /// `rope_view::rope_step`.
+    pub rope: Option<kq8_core::rope::Climb>,
+    /// The separate rope model playing (rule 15): its movement and phase
+    /// now and after the last update (for drawing), shown frame.
+    pub rope_model: Option<(&'static str, f32, f32)>,
+    rope_shown: Option<Entity>,
+    /// His rope-state movements that ended this update, for `rope_step`.
+    pub rope_ended: Vec<&'static str>,
 }
 
 /// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
@@ -589,6 +598,10 @@ pub fn spawn_connor(
         weapon_keys: Vec::new(),
         shift_held: false,
         held_walk: None,
+        rope: None,
+        rope_model: None,
+        rope_shown: None,
+        rope_ended: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -1436,6 +1449,32 @@ impl ConnorSim {
         line
     }
 
+    /// Puts him at `position` with `heading` at once, not blended from his
+    /// old place (the rope state, `ropeandhook.md` rules 15–23).
+    pub fn put(&mut self, position: [f32; 3], heading: f32) {
+        self.mover.position = position;
+        self.walker.heading = heading;
+        self.current = (position, heading, self.walker.phase, self.walker.bank);
+        self.previous = self.current;
+    }
+
+    /// A movement of his by the name the rope state asks for: his own
+    /// list's in use (the weapon's first), or `Conrope.anm`'s.
+    pub fn rope_movement(&self, anim: kq8_core::rope::Anim) -> Option<&'static str> {
+        match anim {
+            kq8_core::rope::Anim::Own(n) => self.drawn(n).map(|m| m.name),
+            kq8_core::rope::Anim::Rope(n) => {
+                let wanted = kq8_core::connor::special_movement_name(kq8_core::rope::ROPE_LIST, n);
+                self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
+            }
+        }
+    }
+
+    /// A movement's loop by its loaded name (for the rope model).
+    pub fn loop_of(&self, name: &str) -> Option<&MovementLoop> {
+        self.movements.iter().find(|m| m.name == name).map(|m| &m.movement_loop)
+    }
+
     /// `handsOff 0` (`anim-scripts.md` rule 22): every movement key still
     /// held is sent to him again as a press (which clears wall blocks as a
     /// press does), so it acts at once. Returns a line for the log.
@@ -1677,6 +1716,10 @@ pub fn connor_step(
     // M3 3i-7: a play-once movement ended: for getEndLoop listeners.
     if let Some(e) = step.as_ref().and_then(|s| s.ended) {
         sim.ended.push(kq8_core::connor::plain_movement_name(e).to_string());
+        // M6 6a-3: the rope state's next step (rope_view).
+        if sim.walker.mode == Mode::Rope {
+            sim.rope_ended.push(e);
+        }
     }
     sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
         let time = l.play_time();
@@ -1684,7 +1727,10 @@ pub fn connor_step(
         // `frame_at` shows those last frame first): blend forward too (M5
         // 5c fix 2: the put-away jittered).
         let speed = if l.repeat { l.speed } else { l.speed.abs() };
-        if time > 0.0 && sim.walker.mode != Mode::Dead { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * speed / time } else { 0.0 }
+        // Hanging on the rope: the climb is moved by the keys, not blended
+        // (rule 22).
+        let hanging = sim.walker.mode == Mode::Rope && sim.walker.rope_hang;
+        if time > 0.0 && sim.walker.mode != Mode::Dead && !hanging { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * speed / time } else { 0.0 }
     });
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
     sim.updates += 1;
@@ -1968,5 +2014,25 @@ pub fn connor_draw(
             }
         }
         sim.shown = frame;
+    }
+    // M6 6a-3 (ropeandhook.md rule 15): the separate rope model, at his
+    // place (he stands at the rope's place while it plays).
+    let rope = sim.rope_model.and_then(|(name, p0, p1)| {
+        let m = sim.movements.iter().find(|m| m.name == name)?;
+        let n = m.frames.len();
+        (n > 0).then(|| m.frames[m.movement_loop.frame_at(p0 + (p1 - p0) * a).min(n - 1)])
+    });
+    if rope != sim.rope_shown {
+        if let Some(old) = sim.rope_shown {
+            if let Ok(mut v) = visibility.get_mut(old) {
+                *v = Visibility::Hidden;
+            }
+        }
+        if let Some(new) = rope {
+            if let Ok(mut v) = visibility.get_mut(new) {
+                *v = Visibility::Inherited;
+            }
+        }
+        sim.rope_shown = rope;
     }
 }

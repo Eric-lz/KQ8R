@@ -231,7 +231,8 @@ pub fn tick<'a>(
             // A crash too (the user's check in the original, 2026-10-17:
             // after a standing jump into a tree the stumble is cut short
             // when he starts falling; Q82 b).
-            if fall == Some(FallEvent::Started) {
+            // ropeandhook.md rule 28 (M6 6a-3): not in the rope state.
+            if fall == Some(FallEvent::Started) && walker.mode != Mode::Rope {
                 walker.kind = crate::connor::JumpKind::Stand;
                 walker.set_mode(Mode::Fall);
             }
@@ -258,6 +259,11 @@ pub fn tick<'a>(
     }
     mover.submerged = submerged;
     match report.fall {
+        // ropeandhook.md rule 28 (M6 6a-3): the rope state can't be left
+        // for a landing or a fall death.
+        Some(e @ (FallEvent::Landed(_) | FallEvent::Died(_))) if walker.mode == Mode::Rope => {
+            notes.push(format!("{e:?} in the rope state: no state change (ropeandhook.md rule 28)"));
+        }
         Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
@@ -268,7 +274,10 @@ pub fn tick<'a>(
         notes.push(t.describe());
     }
     let pushed = report.pushes.iter().any(|t| t.result == PushResult::Push);
-    let state_note = if pushed {
+    let state_note = if walker.mode == Mode::Rope {
+        // Rule 28: no state change in the rope state.
+        None
+    } else if pushed {
         walker.push_touch()
     } else if report.pushes.iter().any(|t| t.result == PushResult::WallBackToMove) {
         walker.push_back_to_move()

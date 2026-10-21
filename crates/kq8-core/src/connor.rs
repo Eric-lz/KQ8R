@@ -365,6 +365,12 @@ pub enum Mode {
     /// ignored, Q125 stand-in), else the keys choose as in Wait and Move
     /// (rule 13). No Jump, no Push (Q125 stand-in).
     Talk,
+    /// The rope state (`ropeandhook.md` rules 13–26; M6 6a-3): the rope
+    /// sequence's movement plays (set by the caller), keys ignored, no
+    /// turning; while hanging ([`Walker::rope_hang`]) the climb is moved
+    /// by forward and back only (rule 22). Fall, landing, push and wall
+    /// events don't change it (rule 28).
+    Rope,
 }
 
 /// Updates without a pushing touch before the Push state ends
@@ -389,6 +395,7 @@ impl Mode {
             Mode::Special => "special",
             Mode::Push => "push",
             Mode::Talk => "talk",
+            Mode::Rope => "rope",
         }
     }
 }
@@ -457,6 +464,12 @@ pub struct Walker {
     /// Killed by a hit (`fighting.md` rule 29; M5 5c-4): the death
     /// movement the Dying and Dead modes show instead of the fall's.
     pub death: Option<&'static str>,
+    /// In the Rope mode: he hangs on the rope and `movement` is the climb
+    /// (`ropeandhook.md` rules 19, 21, 22).
+    pub rope_hang: bool,
+    /// The climb's direction this update: +1 up (forwards), −1 down, 0
+    /// frozen (rule 22).
+    pub climb_dir: i8,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -521,7 +534,35 @@ impl Walker {
             turn_press: false,
             talk_play: None,
             death: None,
+            rope_hang: false,
+            climb_dir: 0,
         }
+    }
+
+    /// The rope state starts or its next movement plays (`ropeandhook.md`
+    /// rules 13–17): `movement` from its start, keys ignored.
+    pub fn rope_play(&mut self, movement: &'static str) {
+        self.clear_transitions();
+        self.mode = Mode::Rope;
+        self.movement = movement;
+        self.phase = 0.0;
+        self.rope_hang = false;
+        self.climb_dir = 0;
+    }
+
+    /// Rules 19, 21: he hangs on the rope, the climb `movement` at `phase`
+    /// (0 = the foot of the rope, 1 = the top), frozen until a key moves it.
+    pub fn rope_hang_at(&mut self, movement: &'static str, phase: f32) {
+        self.rope_play(movement);
+        self.phase = phase;
+        self.rope_hang = true;
+    }
+
+    /// Rule 26: the rope state ends; standing (`Wait`).
+    pub fn rope_leave(&mut self) {
+        self.rope_hang = false;
+        self.climb_dir = 0;
+        self.set_mode(Mode::Free);
     }
 
     /// The keys choose his movement: Wait, Move, Push, or the talk state
@@ -712,6 +753,7 @@ impl Walker {
             // Push: the keys' path, with `push` as the choice (rule 6).
             Mode::Free | Mode::Push => None,
             Mode::Talk => self.talk_play,
+            Mode::Rope => Some(self.movement),
             Mode::Fall => Some(self.kind.hold()),
             // runJump has no landing animation; it never gets Land.
             Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
@@ -980,6 +1022,12 @@ impl Walker {
         Some((from, "stop"))
     }
 
+    /// Rule 22 (M6 6a-3: frozen; 6a-4 moves it): one update of the climb.
+    fn climb_update<'a>(&mut self, _intent: Intent, _loops: &dyn Fn(&str) -> Option<&'a MovementLoop>, step: &mut Step) {
+        self.climb_dir = 0;
+        step.played_to = self.phase;
+    }
+
     /// One update (1/15 s). `loops` gives a movement's loop by name.
     pub fn update<'a>(&mut self, intent: Intent, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>) -> Step {
         let dt = (1.0 / UPDATES_PER_SECOND) as f32;
@@ -1079,6 +1127,12 @@ impl Walker {
         self.update_bank(intent, dt);
         if self.mode == Mode::Dead {
             self.phase = 1.0;
+            return finish(step, self, notes);
+        }
+        // ropeandhook.md rule 23: hanging, his position doesn't change;
+        // the climb is moved by the keys (rule 22, `climb_update`).
+        if self.mode == Mode::Rope && self.rope_hang {
+            self.climb_update(intent, loops, &mut step);
             return finish(step, self, notes);
         }
         // The keys turn him only when they choose the movement; that

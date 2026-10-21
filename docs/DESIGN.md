@@ -1751,8 +1751,10 @@ would while it follows (it stays there until its next update; the
 "flag that keeps it there" is not known), so putting the rope back
 leaves it where it is (the user's check); (d) the rope animations'
 own steps: `climb` never moves him (rule 23); the others move him by
-their steps as any one-shot does (logged at load; if they are large,
-that's a question).
+their steps as any one-shot does (only `taway` has one, 405 forward);
+(e) each placing by the rope state counts for the traps as a script's
+`move` (stay test), then the enter test at the new place, so the foot
+trap's `Off` comes before the top's `On`.
 
 Steps (one commit each):
 
@@ -1781,7 +1783,9 @@ Steps (one commit each):
    `setRopeCam2` spot looking at 1,000 above Connor, then held. Put back
    at the top: the camera stays. **Test:** `--key left:IDCTL_INVBAR_ROPE,N`
    at each status; `items.log`, `camera.log`.
-3. **6a-3, the click and the sequence to hanging** (rules 10–21, 31).
+3. **6a-3, the click and the sequence to hanging** (**done** 2026-10-21;
+   foot: hanging at update 193, top: at 210; the traps at a placing:
+   stand-in, Q147 e) (rules 10–21, 31).
    With the rope held, any world click (whatever it meets, the sky too)
    empties the hand and asks for the rope state (no angle test: "Do
    not reproduce"); refused in handsOff, while dead or dying. Entering:
