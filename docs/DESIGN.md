@@ -1896,7 +1896,9 @@ Steps (one commit each):
    `modifier` + ranged damage, `maxDamage`), then at least `minDamage`,
    kind `Projectile`; buildings nothing. Way back ends touching Connor,
    past its range or at the floor grid: removed, "came back".
-3. **6b-3, the throw state** (rules 2–4; viewer). A click with the
+3. **6b-3, the throw state** (**done** 2026-10-21; stand-ins Q148 c–e: the
+   hammer back during `attack`, requests during the throw, the panels)
+   (rules 2–4; viewer). A click with the
    hammer ready (after the click rules 13–18 already built): turn toward
    the aim point with no waiting; refused unless standing or moving (not
    kept); handsOff on; `attack`; at its `do` cue the hammer leaves from
@@ -1904,7 +1906,9 @@ Steps (one commit each):
    from the user's check), aimed at the aim point, no lead; `attack`
    ends → `wait` repeating; "came back" → `catch`; its end → handsOff
    off, standing. Hits on him still count. No moving throw.
-4. **6b-4, runs** in Daventry (`give AzrielHammer`) and Swamp: at a
+4. **6b-4, runs** (**done with 6b-3**: Swamp at an object, Daventry at a
+   building, a goblin and the ground; not run: a throw from a real walk, a
+   long throw at nothing) in Daventry (`give AzrielHammer`) and Swamp: at a
    creature, at nothing, at the ground near him; the time from throw to
    catch (1.0 s of flight at Daventry's range 15,000 → 1.25 s).
 

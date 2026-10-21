@@ -1133,7 +1133,8 @@ pub fn trap_step(
                 continue;
             }
             if !connor.state_request(what, &at) {
-                let line = format!("update {}: {at}: {what}{again}: refused (Connor's jump is not finished); tried again next update", sim.active.world.updates);
+                let why = if connor.throw.is_some() { "Connor's hammer throw goes on, azriel-hammer.md rule 3; stand-in, Q148 d" } else { "Connor's jump is not finished" };
+                let line = format!("update {}: {at}: {what}{again}: refused ({why}); tried again next update", sim.active.world.updates);
                 if let Some(log) = &mut sim.trap_log {
                     log.detail(line);
                 }
@@ -1676,7 +1677,10 @@ pub fn door_step(
     // talking.md rule 7: whether he can turn to a listener, and where.
     sim.active.world.connor_can_turn = connor.as_ref().is_some_and(|c| c.can_turn_to_listener());
     sim.active.world.connor_at = connor.as_ref().map(|c| c.mover.position);
-    sim.active.world.connor_hands_off = connor.as_ref().is_some_and(|c| c.hands_off);
+    // potions.md rule 26: a cutscene's handsOff hides the pointer; the
+    // hammer throw's keeps it (azriel-hammer.md rule 3), so characters
+    // still see him then (M6 6b-3).
+    sim.active.world.connor_hands_off = connor.as_ref().is_some_and(|c| c.hands_off && c.throw.is_none());
     // character-movement.md rule 25 (M5 5b-4): his forward / back key.
     sim.active.world.connor_move_key = connor.as_ref().is_some_and(|c| c.intent.forward != 0);
     // fighting.md rule 13 (M5 5c-3): his back key.
@@ -1784,7 +1788,19 @@ pub fn door_step(
             let feet = c.mover.position;
             let (aim, moved) = kq8_core::weapons::steepness_limit(feet, w.connor_shoot_offset[2], s.aim);
             let steep = if moved { format!("; steeper than 1 rad from the vertical: moved out to ({:.0}, {:.0}, {:.0}) (rule 18)", aim[0], aim[1], aim[2]) } else { String::new() };
+            // azriel-hammer.md rule 2 (M6 6b-3): with the hammer (a
+            // `KQHammer` bolt file) the throw instead of the shot.
+            let hammer = w.connor_projectile.as_ref().and_then(|f| w.projectiles.get(&f.to_ascii_lowercase())).is_some_and(|p| p.hammer);
             let line = match weapon_list(w) {
+                Some(list) if hammer => {
+                    let mut line = c.throw_click(&list, aim);
+                    if c.throw.is_some() {
+                        if let Some(held) = w.hand.take() {
+                            line.push_str(&format!("; {held} on the pointer is let go (rule 2)"));
+                        }
+                    }
+                    line
+                }
                 Some(list) => c.shot_click(&list, aim),
                 None => format!("no movement list for {:?} in Connor.kq's LongAnimList: no shot", w.weapon_ready),
             };
@@ -1794,6 +1810,23 @@ pub fn door_step(
             sim.active.world.fight_note("Connor", line);
         }
         if let Some(line) = c.run_back_step() {
+            sim.active.world.fight_note("Connor", line);
+        }
+        // azriel-hammer.md rules 3, 5, 9 (M6 6b-3): the hammer leaves at the
+        // `do` cue from his shoot offset (the part in the frame is not used:
+        // the user's check, rule 5), aimed at the aim point; it came back:
+        // `catch`; the throw's movements follow each other.
+        for (m, phase) in std::mem::take(&mut c.throw_cues) {
+            let w = &mut sim.active.world;
+            let aim = c.throw.as_ref().map_or(c.mover.position, |t| t.aim);
+            let what = format!("{m} at the cue's phase {phase:.4}; the hammer starts at his shoot offset, never the part (azriel-hammer.md rule 5, the user's check)");
+            w.connor_shoot(c.mover.position, c.turn_matrix(), None, aim, &what);
+        }
+        for (who, how) in std::mem::take(&mut sim.active.world.hammers_back) {
+            let line = if who.eq_ignore_ascii_case(kq8_core::talk::CONNOR) { c.throw_caught(&how) } else { format!("{how}: thrown by {who}, not Connor: nothing") };
+            sim.active.world.fight_note("Connor", line);
+        }
+        if let Some(line) = c.throw_step() {
             sim.active.world.fight_note("Connor", line);
         }
         let aim_now = c.shot.as_ref().map(|s| s.aim);

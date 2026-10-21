@@ -222,6 +222,13 @@ pub struct ConnorSim {
     pub rope_ended: Vec<&'static str>,
     /// He climbed last update (for the log's "frozen" line, rule 22).
     pub rope_was_climbing: bool,
+    /// The hammer-throw state (`azriel-hammer.md` rules 2-4; M6 6b-3).
+    pub throw: Option<Throw>,
+    /// His throw's `do` cue passed this update (movement, the cue's
+    /// phase): the hammer leaves, taken by `door_view`.
+    pub throw_cues: Vec<(&'static str, f32)>,
+    /// His throw-state movements that ended this update.
+    throw_ended: Vec<&'static str>,
 }
 
 /// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
@@ -239,6 +246,20 @@ pub struct Shot {
     pub waiting: bool,
     /// `attack` started.
     pub started: bool,
+}
+
+/// Connor's throw of Azriel's Hammer (`azriel-hammer.md` rules 2-4; M6
+/// 6b-3): the hammer list's movements, the aim point, where it stands.
+#[derive(Debug, Clone)]
+pub struct Throw {
+    pub attack: &'static str,
+    pub wait: &'static str,
+    pub catch: &'static str,
+    pub aim: [f32; 3],
+    /// The hammer came back (rule 9): `catch` plays next.
+    pub back: bool,
+    /// His update at the click, for the log's times.
+    pub from_update: u64,
 }
 
 /// One of Connor's swings (M5 5c-5).
@@ -605,6 +626,9 @@ pub fn spawn_connor(
         rope_shown: None,
         rope_ended: Vec::new(),
         rope_was_climbing: false,
+        throw: None,
+        throw_cues: Vec::new(),
+        throw_ended: Vec::new(),
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -906,6 +930,13 @@ impl ConnorSim {
         // other state; the caller drops the request (`roping`).
         if self.roping() {
             self.log.detail(format!("connor update {}: {what}: refused, he is in the rope state (ropeandhook.md rule 28); dropped ({at})", self.updates));
+            return false;
+        }
+        // azriel-hammer.md rule 3 (M6 6b-3): the throw state can't be left
+        // before `catch` has ended; tried again next update (STAND-IN, as a
+        // jump's refusal; Q148 d).
+        if self.throw.is_some() {
+            self.log.detail(format!("connor update {}: {what}: refused, the hammer throw goes on (azriel-hammer.md rule 3); tried again next update (stand-in, Q148 d) ({at})", self.updates));
             return false;
         }
         match kq8_core::connor_update::state_request(&mut self.mover, &mut self.walker, self.hands_off) {
@@ -1251,6 +1282,87 @@ impl ConnorSim {
         self.shot = Some(Shot { movement, aim, waiting: waits, started: false });
         let line = if waits { "more than 45 deg off: the shot waits until 3 updates of turn are left (rule 20)".to_string() } else { self.ask_shot(movement, aim) };
         format!("{:.0} deg off his facing; {turn}; {line}", off.to_degrees())
+    }
+
+    /// `azriel-hammer.md` rules 2-4 (M6 6b-3): a throw click with the hammer
+    /// ready, aim point `aim` (after `ranged-weapons.md` rules 13-18). Only
+    /// from standing or moving, not kept otherwise; he turns toward the aim
+    /// point (the automatic turn) with no waiting; handsOff on; `attack`.
+    /// Returns the line for `fight.log`.
+    pub fn throw_click(&mut self, list: &str, aim: [f32; 3]) -> String {
+        use kq8_core::connor_auto::{heading_towards, wrap, AutoKind, AutoMove};
+        if self.throw.is_some() {
+            return "a throw goes on: nothing (rule 4)".into();
+        }
+        if let Err(why) = self.may_ready() {
+            return format!("not standing or moving ({why}): no throw, the click is not kept (rule 2)");
+        }
+        let find = |word: &str| {
+            let wanted = kq8_core::connor::special_movement_name(list, word);
+            self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
+        };
+        let (Some(attack), Some(wait), Some(catch)) = (find("attack"), find("wait"), find("catch")) else {
+            return format!("{list} lacks attack, wait or catch: no throw");
+        };
+        let off = wrap(heading_towards(self.mover.position, [aim[0], aim[1]]) - self.walker.heading);
+        let turn = self.walker.start_auto(AutoMove::new(AutoKind::Point, [aim[0], aim[1]], None));
+        let was = self.walker.movement;
+        self.walker.throw_play(attack);
+        self.hands_off = true;
+        self.throw = Some(Throw { attack, wait, catch, aim, back: false, from_update: self.updates });
+        let line = format!(
+            "{:.0} deg off his facing; {turn}, no waiting (rule 2); from '{was}': the hammer-throw state, handsOff on (keys and clicks; the panels and the pointer unchanged: stand-in, Q148 e), '{attack}' starts (rule 3)",
+            off.to_degrees()
+        );
+        self.log.detail(format!("connor update {}: throw: {line}", self.updates));
+        line
+    }
+
+    /// Rule 9 (M6 6b-3): the hammer came back: `catch` at once from `wait`,
+    /// or after `attack` if it is still playing (ours, Q148 c). Returns
+    /// the line for `fight.log`.
+    pub fn throw_caught(&mut self, how: &str) -> String {
+        let Some(t) = self.throw.as_mut() else {
+            return format!("{how}: he is not throwing: nothing");
+        };
+        t.back = true;
+        let secs = (self.updates - t.from_update) as f64 / kq8_core::UPDATES_PER_SECOND;
+        if self.walker.mode == Mode::Throw && self.walker.movement == t.wait {
+            let c = t.catch;
+            self.walker.throw_play(c);
+            format!("{how}: '{c}' starts, {secs:.2} s after the click (rule 3)")
+        } else {
+            format!("{how}: '{}' still plays: '{}' when it ends ({secs:.2} s after the click; ours, Q148 c)", self.walker.movement, t.catch)
+        }
+    }
+
+    /// Rule 3 (M6 6b-3), each update after his own: `attack` ended ->
+    /// `wait` (or `catch` if the hammer is back); `catch` ended -> handsOff
+    /// off, standing. Returns the line for `fight.log`.
+    pub fn throw_step(&mut self) -> Option<String> {
+        let ended = std::mem::take(&mut self.throw_ended);
+        let t = self.throw.clone()?;
+        let mut lines = Vec::new();
+        for e in ended {
+            if e == t.attack {
+                let next = if t.back { t.catch } else { t.wait };
+                self.walker.throw_play(next);
+                lines.push(format!("'{e}' ended: '{next}' (rule 3)"));
+            } else if e == t.catch {
+                self.walker.throw_leave();
+                self.throw = None;
+                self.hands_off = false;
+                let again = self.keys_sent_again();
+                let secs = (self.updates - t.from_update) as f64 / kq8_core::UPDATES_PER_SECOND;
+                lines.push(format!("'{e}' ended: handsOff off ({again}), standing; the throw took {secs:.2} s (rule 3)"));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        let line = lines.join("; ");
+        self.log.detail(format!("connor update {}: throw: {line}", self.updates));
+        Some(line)
     }
 
     /// Rule 20 (M5 5f-6): his updates as seconds.
@@ -1774,6 +1886,10 @@ pub fn connor_step(
         if sim.walker.mode == Mode::Rope {
             sim.rope_ended.push(e);
         }
+        // M6 6b-3: the throw state's next movement (`throw_step`).
+        if sim.walker.mode == Mode::Throw {
+            sim.throw_ended.push(e);
+        }
     }
     sim.phase_step = sim.phase_step_now();
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
@@ -1963,6 +2079,12 @@ pub fn connor_step(
                     let phase = sim.movement_loop(s.played).and_then(|l| l.cues.iter().find(|(p, a)| a.trim().eq_ignore_ascii_case("do") && *p >= s.played_from.min(s.played_to) - 1e-4).map(|(p, _)| *p)).unwrap_or(s.played_to);
                     sim.shot_cues.push((s.played, phase, false));
                     "his bolt leaves (ranged-weapons.md rule 23)".to_string()
+                }
+                // azriel-hammer.md rules 3, 5 (M6 6b-3): the hammer leaves.
+                "do" if sim.throw.as_ref().is_some_and(|t| t.attack == s.played) && sim.walker.mode == Mode::Throw => {
+                    let phase = sim.movement_loop(s.played).and_then(|l| l.cues.iter().find(|(p, a)| a.trim().eq_ignore_ascii_case("do") && *p >= s.played_from.min(s.played_to) - 1e-4).map(|(p, _)| *p)).unwrap_or(s.played_to);
+                    sim.throw_cues.push((s.played, phase));
+                    "the hammer leaves (azriel-hammer.md rule 3)".to_string()
                 }
                 "interruptable" => "can be cut short or not from here (anim-scripts.md rule 7)".to_string(),
                 _ => "cue action not done for Connor".to_string(),

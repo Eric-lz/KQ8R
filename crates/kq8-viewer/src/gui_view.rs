@@ -850,10 +850,11 @@ pub fn gui_step(
     }
     // Rule 15: handsOff going on or off.
     let hands_off = connor.as_ref().is_some_and(|c| c.hands_off);
-    if hands_off != gui.hands_off {
-        gui.hands_off = hands_off;
-        gui.panels.hands_off(hands_off);
-    }
+    gui.hands_off = hands_off;
+    // azriel-hammer.md rule 3 (M6 6b-3): the hammer throw's handsOff
+    // leaves the panels as they are (STAND-IN, Q148 e); clicks on them are
+    // still ignored (`gui.hands_off`).
+    gui.panels.hands_off(connor.as_ref().is_some_and(|c| c.hands_off && c.throw.is_none()));
     // M5 5g-3 (potions.md rule 35): the spinning mask takes a status icon
     // place like a potion (STAND-IN, Q143: first free).
     {

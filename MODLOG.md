@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6b-3: Connor throws Azriel's Hammer and catches it
+
+**Changed:** `kq8-core/connor.rs`: walker mode `Throw` (`throw_play`, `throw_leave`), shielded from falls, landings and pushes in `connor_update.rs` like the rope's; unit test. Viewer `connor_view.rs`: `Throw`, `throw_click`, `throw_caught`, `throw_step`, the `do` cue, state requests refused during the throw. `door_view.rs`: with a `KQHammer` bolt file the click throws instead of shooting; the hammer launched at the cue from his shoot offset; `hammers_back` → `catch`; characters still see him during the throw. `gui_view.rs`: the throw's handsOff leaves the panels alone. `load.rs`: the hammer list's `wait` and `catch` loaded; every ranged weapon's bolt file the world has is read (a console `give` in Daventry). Q148 (c)–(e); provenance; DESIGN.
+**Why:** `azriel-hammer.md` rules 2–5, 10: the throw state (`attack`, `wait`, `catch`, handsOff until the catch).
+**Tested how:** `cargo test --workspace` (637 pass), clippy clean. Viewer runs, read in `fight.log` / `connor.log`: Swamp `--key left:IDCTL_INVBAR_LONG,20 --aim-point 165975,80956,6646,60` (the user's own aim point); Daventry with `--command "give AzrielHammer 1,5"`: `--aim goblin22,60`, then Connor moved 5,000 south of the goblin (`move Connor 0 289284 187527 15000 0 0 3.14,10`) and `--aim-point` at the goblin, at the ground, and with forward held.
+**Result:** Swamp: click 60 (turned 20°, no waiting), `do` 71, out 7 updates to the object aimed at, back 7, caught at 86 (`catch` at once), standing at 97 (2.47 s); start offset (−41, −605, 1,226). Daventry: off the cottage wall; at goblin22 (which had run up to him): hit for 40, it died, the hammer back into Connor's hands the next update; at the ground: back at once; held forward sent again after the catch.
+**Still broken / not tested:** **Not looked at by eye.** Not run: a throw from a real walk (Connor had walked into a tree), a full-range throw at nothing, a hit taking Connor below 0 during a throw, Dead City's lever (no Dead City yet). Stand-ins asked in Q148: (c) back before `attack` ends → `catch` after it; (d) requests during the throw wait for the catch; (e) the panels stay. How the hammer model is turned in flight is not in the note (drawn like a bolt, Q148 b).
+**Next:** The user: throw the hammer by eye in Swamp (or `give AzrielHammer` in Daventry).
+
 ## 2026-10-21 M6 6b-2: Azriel's Hammer flies out and back
 
 **Changed:** `kq8-core/fight.rs`: `Bolt` gets an optional `HammerFlight` (way out / back, the damage keys); `launch_bolt` names it `hammer<n>`; `bolts_step` hands a hammer to the new `hammer_step` (turn back, the way back, the catch) and `hammer_hits` (rule 8); `hammer_damage`. `active.rs`: `hammer_calls` (the lever's `ConnorAction`, called like `ProjImmune`) and `hammers_back` (for the viewer, step 6b-3); 5 unit tests. Q148 in `QUESTIONS.md`; provenance; DESIGN.

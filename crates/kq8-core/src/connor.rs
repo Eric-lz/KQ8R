@@ -371,6 +371,12 @@ pub enum Mode {
     /// by forward and back only (rule 22). Fall, landing, push and wall
     /// events don't change it (rule 28).
     Rope,
+    /// The hammer-throw state (`azriel-hammer.md` rule 3; M6 6b-3): the
+    /// throw's movement plays (`attack`, `wait` repeating, `catch`; set by
+    /// the caller), keys ignored, no key turning (the automatic turn still
+    /// turns him, rule 2). Fall, landing, push and wall events don't change
+    /// it: it can't be left before `catch` has ended.
+    Throw,
 }
 
 /// Updates without a pushing touch before the Push state ends
@@ -396,6 +402,7 @@ impl Mode {
             Mode::Push => "push",
             Mode::Talk => "talk",
             Mode::Rope => "rope",
+            Mode::Throw => "throw",
         }
     }
 }
@@ -556,6 +563,20 @@ impl Walker {
         self.rope_play(movement);
         self.phase = phase;
         self.rope_hang = true;
+    }
+
+    /// `azriel-hammer.md` rule 3: the hammer-throw state starts or its next
+    /// movement plays: `movement` from its start, keys ignored.
+    pub fn throw_play(&mut self, movement: &'static str) {
+        self.clear_transitions();
+        self.mode = Mode::Throw;
+        self.movement = movement;
+        self.phase = 0.0;
+    }
+
+    /// Rule 3: `catch` ended: back to standing (the keys choose again).
+    pub fn throw_leave(&mut self) {
+        self.set_mode(Mode::Free);
     }
 
     /// Rule 26: the rope state ends; standing (`Wait`).
@@ -753,7 +774,7 @@ impl Walker {
             // Push: the keys' path, with `push` as the choice (rule 6).
             Mode::Free | Mode::Push => None,
             Mode::Talk => self.talk_play,
-            Mode::Rope => Some(self.movement),
+            Mode::Rope | Mode::Throw => Some(self.movement),
             Mode::Fall => Some(self.kind.hold()),
             // runJump has no landing animation; it never gets Land.
             Mode::Land => Some(self.kind.end().unwrap_or("jumpend")),
@@ -1271,6 +1292,39 @@ mod tests {
 
     fn intent(forward: i8, turn: i8, run: bool) -> Intent {
         Intent { forward, turn, run }
+    }
+
+    #[test]
+    fn the_throw_state_plays_its_movements_and_ignores_the_keys() {
+        // azriel-hammer.md rule 3 (M6 6b-3): `attack` once (19 frames),
+        // `wait` repeating; held keys neither move nor turn him.
+        let list = [
+            ("attack", MovementLoop { duration: 19.0 / 15.0, speed: 1.0, frames: 19, ..Default::default() }),
+            ("wait", MovementLoop { duration: 29.0 / 15.0, speed: 1.0, frames: 29, repeat: true, ..Default::default() }),
+        ];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.throw_play("attack");
+        assert_eq!(w.mode, Mode::Throw);
+        let mut ended = None;
+        for n in 1..=19 {
+            let s = w.update(intent(1, 1, true), &loops);
+            assert_eq!((s.played, w.heading), ("attack", 0.0), "update {n}");
+            if s.ended.is_some() {
+                ended = Some(n);
+            }
+        }
+        assert_eq!(ended, Some(19), "attack ends after its 19 frames");
+        // Held at its end until the caller moves on.
+        w.update(intent(0, 0, false), &loops);
+        assert_eq!((w.movement, w.phase, w.mode), ("attack", 1.0, Mode::Throw));
+        w.throw_play("wait");
+        for _ in 0..40 {
+            let s = w.update(intent(1, 0, false), &loops);
+            assert!(s.ended.is_none() && s.played == "wait");
+        }
+        w.throw_leave();
+        assert_eq!((w.mode, w.movement), (Mode::Free, "stop"));
     }
 
     #[test]

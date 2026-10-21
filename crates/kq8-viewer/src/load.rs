@@ -3045,6 +3045,13 @@ impl Placer<'_> {
                 for m in ["attack", "away", "away2", "out"] {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
+                // azriel-hammer.md rules 1, 3 (M6 6b-3): the throw's wait
+                // and catch.
+                if w.eq_ignore_ascii_case("AzrielHammer") {
+                    for m in ["wait", "catch"] {
+                        wanted.insert((Some(file.clone()), m.to_string()));
+                    }
+                }
             }
         }
         // ropeandhook.md rule 13 (M6 6a-3): the rope list, in worlds whose
@@ -3718,13 +3725,21 @@ impl Placer<'_> {
             }
         }
         // ranged-weapons.md rule 21 (M5 5f-4): the bolt files of the ranged
-        // weapons that can appear here, and their shapes.
-        let ranged: Vec<(String, String)> = named
+        // weapons that can appear here, and their shapes; also those of
+        // every other ranged weapon whose file this world has, for a
+        // console `give` (azriel-hammer.md rule 10: Daventry's
+        // `prhammer.kq`; M6 6b-3).
+        let mut ranged: Vec<(String, String)> = named
             .iter()
             .filter_map(|n| self.items.kind(n.strip_prefix("invitem_").unwrap_or(n)))
             .filter(|t| t.category == "LongWeapon")
             .filter_map(|t| Some((t.name.clone(), t.extra.clone()?)))
             .collect();
+        for t in self.items.types.types.iter().filter(|t| t.category == "LongWeapon") {
+            if let Some(file) = t.extra.clone().filter(|f| !ranged.iter().any(|(_, r)| r.eq_ignore_ascii_case(f)) && matches!(self.world.load(f), Some(Ok(_)))) {
+                ranged.push((t.name.clone(), file));
+            }
+        }
         for (kind, file) in ranged {
             if let Some(shape) = self.load_projectile(&file, &format!("Connor's {kind}")) {
                 self.load_corpse_shape(&shape, &kind);

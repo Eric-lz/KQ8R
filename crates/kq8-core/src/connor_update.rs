@@ -231,8 +231,9 @@ pub fn tick<'a>(
             // A crash too (the user's check in the original, 2026-10-17:
             // after a standing jump into a tree the stumble is cut short
             // when he starts falling; Q82 b).
-            // ropeandhook.md rule 28 (M6 6a-3): not in the rope state.
-            if fall == Some(FallEvent::Started) && walker.mode != Mode::Rope {
+            // ropeandhook.md rule 28 (M6 6a-3): not in the rope state;
+            // azriel-hammer.md rule 3 (M6 6b-3): nor in the throw state.
+            if fall == Some(FallEvent::Started) && !matches!(walker.mode, Mode::Rope | Mode::Throw) {
                 walker.kind = crate::connor::JumpKind::Stand;
                 walker.set_mode(Mode::Fall);
             }
@@ -264,6 +265,10 @@ pub fn tick<'a>(
         Some(e @ (FallEvent::Landed(_) | FallEvent::Died(_))) if walker.mode == Mode::Rope => {
             notes.push(format!("{e:?} in the rope state: no state change (ropeandhook.md rule 28)"));
         }
+        // azriel-hammer.md rule 3 (M6 6b-3): nor the throw state.
+        Some(e @ (FallEvent::Landed(_) | FallEvent::Died(_))) if walker.mode == Mode::Throw => {
+            notes.push(format!("{e:?} in the hammer-throw state: no state change (azriel-hammer.md rule 3)"));
+        }
         Some(FallEvent::Landed(_)) => walker.land(),
         Some(FallEvent::Died(_)) => walker.set_mode(Mode::Dying),
         _ => {}
@@ -274,8 +279,9 @@ pub fn tick<'a>(
         notes.push(t.describe());
     }
     let pushed = report.pushes.iter().any(|t| t.result == PushResult::Push);
-    let state_note = if walker.mode == Mode::Rope {
-        // Rule 28: no state change in the rope state.
+    let state_note = if matches!(walker.mode, Mode::Rope | Mode::Throw) {
+        // Rule 28: no state change in the rope state (nor the throw state,
+        // azriel-hammer.md rule 3).
         None
     } else if pushed {
         walker.push_touch()
