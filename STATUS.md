@@ -9,9 +9,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
-  caught; hits one thing, flies back along its line, always caught. For
-  the user: 9 worlds' `prhammer.kq` have no damage keys, so the hammer
-  does 0 damage there (keep or fix?).
+  caught; hits one thing, flies back along its line, always caught. Checked
+  by the user in the original. The 0-damage worlds are not reachable
+  with the hammer; a default base damage per weapon is an M7 idea.
 
 - **2026-10-20 (A): Connor's ranged weapons**,
   `docs/behaviour/ranged-weapons.md`: readying / swapping (Delete, Alt,

@@ -43,9 +43,12 @@ slot item, bolt).
    - he goes into the **hammer-throw state**, and the item on the
      pointer, if any, is let go;
    - there is **no moving throw**: walking or running, a click also
-     starts the throw state (whether that state change is refused in
-     some states, e.g. during a jump: not sure; the click itself has no
-     state test).
+     starts the throw state;
+   - **no throw while jumping, falling, landing or stumbling**, and the
+     click is **not kept for later** (the user's check in the original,
+     2026-10-20; the click itself has no state test, so it is the state
+     change that is refused there). Treat it like `ranged-weapons.md`
+     rule 5: throw only from standing or moving.
 3. **The hammer-throw state** (traced):
    - on entering, **`handsOff` is switched on** (no keys, no clicks, no
      pointer change) and **`attack`** plays (`ch_atack.kqs`, 19 frames;
@@ -71,9 +74,11 @@ slot item, bolt).
    `hammer` part (data, `Ch_atack.kqs`) is present up to frame 10 of 19
    and gone after; at frame 10 it is at about **(−804, 234, 1,109)**
    (804 to his right, 234 behind him, 1,109 up). The `do` cue at 0.579
-   falls at frame 10.4: **not sure** whether the game reads frame 10
-   (that place) or 11 (no part: the fallback 605 in front, 1,226 up).
-   Either way the hammer flies at the aim point from there.
+   falls at frame 10.4. **The user saw the hammer leave from in front of
+   Connor** (2026-10-20), so the game reads the following frame, which
+   has no `hammer` part: **use the fallback, (−41, −605, 1,226): 605 in
+   front of his feet, 1,226 up.** The hammer flies at the aim point from
+   there.
 6. **Its file** (data, `<world>/kq/prhammer.kq`, all `classType=KQHammer`,
    `shapeName=hammer.kqs`, `meshName=hammer`, no shadow):
 
@@ -169,11 +174,13 @@ slot item, bolt).
 - **No damage in 9 worlds** (data with the traced defaults): Barren,
   Ice World, Castle of the Dead, Gnome, Snow Exit and the four Temples
   have no `modifier` / `minDamage` / `maxDamage` keys, so the cap is 0
-  and every hit does **0** (no health lost, `fighting.md` rule 16). This
-  is most likely a data slip (the three worlds that have the keys use
-  0–300). **Decision for the user**: copy Dead City's +30 / 0 / 300 into
-  the other worlds, or keep the original's harmless hammer there. Until
-  decided, B should read the files as they are and log the result.
+  and every hit does **0** (no health lost, `fighting.md` rule 16).
+  **Not reachable in normal play** (the user, 2026-10-20): in Swamp the
+  player must trade the hammer for a bow to go on, and can't get it back,
+  so the hammer is only ever used in Daventry, Dead City and Swamp. For
+  now read the files as they are. **Later (M7, the user's idea):** give
+  every weapon a default base damage, so late-game weapons brought early
+  by cheat codes still work.
 - The order "cap at `maxDamage`, then raise to `minDamage`" means a
   minimum above the maximum wins; no file does this. Keep it.
 
@@ -186,6 +193,15 @@ position, distance, out / back; the touch (name, type, damage or
 Connor, range, floor grid) and the time from throw to catch.
 
 **In the original (user, by eye), Dead City:**
+
+**Checked by the user in the original (2026-10-20):** 1, 3, 4 and 5 as
+described; 2 as described (the distance can't be judged by eye; the
+round trip seemed to take about **1.5 s** after the hammer leaves his
+hand, "with a grain of salt": by the files it is 1.0 s in Dead City
+(12,000 out and back at 24,000) and 1.33 s in Swamp (20,000 at
+30,000)). Also: no throwing while jumping, falling, landing or
+stumbling, not queued (rule 2); the hammer leaves from in front of him
+(rule 5). 6: see Do not reproduce (not reachable in normal play).
 
 1. Throw at a creature: one creature hit, the hammer flies back along
    the same line and he catches it; he can't move until the catch.
@@ -200,10 +216,11 @@ Connor, range, floor grid) and the time from throw to catch.
 
 ## Open questions
 
-1. Which frame gives the hammer's start at the `do` cue (rule 5:
-   frame 10's part or the fallback offset).
-2. Whether the throw state change is refused in some states (a jump, a
-   fall), and whether a refused one is kept for later (rule 2).
-3. The damage in the worlds without the keys (Do not reproduce): the
-   user's check would settle whether the original really does nothing
-   there.
+1. ~~The start frame~~: settled by the user's check (rule 5: in front,
+   the fallback offset).
+2. ~~Refused states~~: settled by the user's check (rule 2).
+3. ~~The worlds without the damage keys~~: not reachable in normal play
+   (Do not reproduce).
+4. The user's round-trip estimate (about 1.5 s) is longer than the
+   files give (1.0 s Dead City, 1.33 s Swamp). Not enough to act on;
+   B's log of the time from throw to catch can be compared by eye.

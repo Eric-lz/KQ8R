@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: the user checks Azriel's Hammer in the original
+
+**Changed:** `azriel-hammer.md`: rules 2 and 5, "How to check", Do not reproduce and open questions updated from the user's check.
+**Why:** The user tried the "How to check" list in the original.
+**Tested how:** The user's check in the original game.
+**Result:** Checks 1–5 as described. No throw while jumping, falling, landing or stumbling, not queued. The hammer leaves from in front of Connor, so the start is the fallback offset (−41, −605, 1,226), not the model part. The 0-damage worlds can't be reached with the hammer in normal play (it is traded away in Swamp); a default base damage for every weapon is an M7 idea (cheats).
+**Still broken / not tested:** The user's round-trip estimate (~1.5 s) is longer than the files give (1.0 s Dead City, 1.33 s Swamp); left as open question 4.
+**Next:** B: build it when Dead City is reached.
+
 ## 2026-10-20 A: Azriel's Hammer
 
 **Changed:** New `docs/behaviour/azriel-hammer.md`; `ranged-weapons.md` rule 19 and open question 5 point there. Scratch notes in `re/notes.md`.
