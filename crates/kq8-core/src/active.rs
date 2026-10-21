@@ -1082,6 +1082,13 @@ impl WorldState {
         self.note(line);
     }
 
+    /// DESIGN L-3: Connor went up to `level`: the level-up sound. Returns
+    /// what the log line says about it.
+    pub(crate) fn level_up_sound(&mut self, level: i64) -> String {
+        self.sounds.push(Start::plain_one_shot(crate::stats::LEVEL_UP_SOUND, format!("level up to {level}")));
+        format!("; sound {} (stand-in Q149 c)", crate::stats::LEVEL_UP_SOUND)
+    }
+
     pub fn anim_index(&self, name: &str) -> Option<usize> {
         self.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(name))
     }
@@ -3074,8 +3081,9 @@ impl Active {
             let level = c.change(d);
             let after = *c;
             self.world.connor_stats_events += 1;
+            let sound = if level.is_some() { self.world.level_up_sound(after.level) } else { String::new() };
             self.world.note(format!(
-                "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}",
+                "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}{sound}",
                 before.stats.0,
                 before.level,
                 after.stats.0,
@@ -6098,6 +6106,8 @@ mod tests {
         a.update();
         let log = a.take_log().join("\n");
         assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 15, 2, 1, 40], 2)), "{log}");
+        // DESIGN L-3: the level-up sound, once.
+        assert_eq!(a.world.sounds.iter().filter(|s| s.name == crate::stats::LEVEL_UP_SOUND).count(), 1, "{log}");
         assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
         assert_eq!(a.scripts.vars.get("D::died"), Some("basket1 Normal"), "{log}");
     }

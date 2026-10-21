@@ -2116,3 +2116,7 @@ Steps:
 3. **L-3: the level-up sound.** Stand-in (Q149 c): `GAME/SOUND/LEVEL.AUD`,
    the only sound with a level name; no data file names it. The user
    compares it by ear with the original.
+   **Done** 2026-10-21 (`stats::LEVEL_UP_SOUND`, `level_up_sound`, at the
+   three places his level can go up: a stats event, an item applied, a
+   kill's experience); a plain one-shot in the effects group; checked in
+   `sound.log` only.

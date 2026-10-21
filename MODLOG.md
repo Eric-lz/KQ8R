@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 L-3: the level-up sound
+
+**Changed:** `kq8-core`: `stats::LEVEL_UP_SOUND` (`LEVEL.AUD`), `WorldState::level_up_sound`, called where Connor's level goes up (`active.rs` stats event, `connor_inventory.rs` an item applied, `fight.rs` a kill's experience); the unit test `stats_events_add_and_an_object_below_0_gets_die` checks it plays once. DESIGN, provenance.
+**Why:** The user: the original plays a sound on a level-up. No note or data file names it; `GAME/SOUND/LEVEL.AUD` is the only sound with a level name (stand-in, Q149 c).
+**Tested how:** `cargo test --workspace` (638 pass), clippy clean. Daventry with sound on, `--command "sendEvent 0 Connor KQStatsChangeRequestEvent 0 0 0 0 11,20"` and `... 5,40`; `sound.log`. `kq8 aud-verify --wav GAME/SOUND/LEVEL.AUD` wrote `kq8-artifacts/wav/LEVEL.wav` (1.792 s).
+**Result:** "start #5 LEVEL.AUD (GAME/SOUND/LEVEL.AUD, 1.792 s) group 0 plain ... [level up to 2]", finished 1.9 s later; nothing for the +5 (no level-up).
+**Still broken / not tested:** **Not heard by the user.** Whether it is the right sound, and its loudness (the effects group's), are stand-ins (Q149 c). The item and kill paths were not run in the viewer (same function; unit test covers the stats event).
+**Next:** The user: listen to `LEVEL.wav`, level up in game (`xp 11` in the console).
+
 ## 2026-10-21 L-2: the level-up flame over the level number
 
 **Changed:** Viewer `gui_view.rs`: `level_flame` (start time), `LEVEL_FLAME`, `flame_file`; the meters' sending starts it when the level sent is higher than the last one (not the first sending when a world opens); it is drawn in its layout place (`IDCTL_METERS_LEVELUP`, (113, 0)-(143, 14) of the meters, over the level number) frame by frame and hidden when it has played out. DESIGN, provenance.

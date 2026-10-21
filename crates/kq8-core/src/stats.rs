@@ -26,6 +26,10 @@ pub const FOURTH_CAP: i64 = 100;
 /// Experience needed from level 15 on.
 pub const TOP_THRESHOLD: i64 = 150_000;
 
+/// STAND-IN (Q149 c, DESIGN L-3): the level-up sound, `GAME/SOUND`'s only
+/// sound with a level name; no data file names one.
+pub const LEVEL_UP_SOUND: &str = "LEVEL.AUD";
+
 /// Health of a door without a `stats=` line (`doors.md` rule 18).
 pub const DOOR_HEALTH: i64 = 10_000;
 
