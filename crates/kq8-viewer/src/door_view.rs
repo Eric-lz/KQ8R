@@ -1184,6 +1184,17 @@ pub fn trap_step(
                 Some(c) => format!("{at}: applied: {}", c.move_to(flags, position, turn)),
                 None => format!("{at}: move KQCamera: no game camera; not applied"),
             },
+            // ropeandhook.md rule 9 (M6 6a-2): as a `move KQCamera` while
+            // following (STAND-IN, Q147 c).
+            Request::RopeCamera { spot, aim, at } => match camera.as_mut() {
+                Some(c) => {
+                    let (tilt, heading) = kq8_core::camera::view_angles(std::array::from_fn(|k| aim[k] - spot[k]));
+                    let line = format!("{at}: applied: rope camera looking at ({:.0}, {:.0}, {:.0}): {}", aim[0], aim[1], aim[2], c.move_to(0, spot, [tilt, 0.0, heading]));
+                    sim.active.world.rope_note(line.clone());
+                    line
+                }
+                None => format!("{at}: rope camera: no game camera; not applied"),
+            },
             Request::CamSpot { spot, newlist, at } => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.add_spot(spot, newlist)),
                 None => format!("{at}: addCamLoc: no game camera; not applied"),
@@ -1340,6 +1351,7 @@ pub fn trap_step(
             log.detail(line);
         }
     }
+    sim.flush_rope(&shared);
 }
 
 /// The clickable buildings' BSP for the click line (3g-2): the same line

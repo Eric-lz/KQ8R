@@ -344,6 +344,21 @@ const SCROLL_REMARK: kq8_data::msg::Tuple = kq8_data::msg::Tuple { file: 0, noun
 /// same way, Q110).
 const ROPE_REMARK: kq8_data::msg::Tuple = kq8_data::msg::Tuple { file: 0, noun: 0, verb: 58, case: 37, seq: 1 };
 
+/// `ropeandhook.md` rule 9: the camera looks this far above Connor when
+/// the rope is taken at the top.
+const ROPE_TOP_AIM: f32 = 1000.0;
+
+/// The rope's first-person lock on or off (`ropeandhook.md` rules 9, 12,
+/// 13, 26); the log text. We have no first person, so it changes nothing
+/// else.
+pub fn rope_lock(w: &mut WorldState, on: bool, why: &str) -> String {
+    if w.rope_first_person_lock == on {
+        return String::new();
+    }
+    w.rope_first_person_lock = on;
+    format!("; {why}: the first-person key {} (no first person yet: logged only)", if on { "locked" } else { "allowed again" })
+}
+
 /// Rule 9: at most one scroll remark every 3 s.
 const SCROLL_GAP: f64 = 3.0;
 
@@ -457,9 +472,22 @@ pub fn hand_weapon(w: &WorldState) -> Option<String> {
 
 /// Rule 9: a left click on a quest item, coins, rocks or the rope.
 fn hold(w: &mut WorldState, name: &str, t: &kq8_data::items::ItemType, head: &str) -> BarResult {
+    if t.category == crate::rope::ROPE_CATEGORY && w.connor_roping {
+        // ropeandhook.md rule 8: ignored in the rope state.
+        w.item_note(format!("{head}: Connor is in the rope state: ignored (ropeandhook.md rule 8)"));
+        return BarResult::Ignored;
+    }
     if w.hand.as_deref().is_some_and(|h| h.eq_ignore_ascii_case(name)) {
         w.hand = None;
-        w.item_note(format!("{head}: it is the item in hand: put back, the play pointer again (inventory.md rule 9)"));
+        let mut extra = String::new();
+        if t.category == crate::rope::ROPE_CATEGORY {
+            // Rules 8, 9: the first-person lock released; the camera stays
+            // where it is (the user's check).
+            extra = rope_lock(w, false, "the rope put back");
+            extra += "; the camera stays where it is (rule 9, the user's check)";
+            w.rope_note(format!("rope button: the rope was in hand: put back{extra} (rule 8)"));
+        }
+        w.item_note(format!("{head}: it is the item in hand: put back, the play pointer again{extra} (inventory.md rule 9)"));
         return BarResult::PutBack;
     }
     if t.name.eq_ignore_ascii_case(SCROLL) {
@@ -481,16 +509,42 @@ fn hold(w: &mut WorldState, name: &str, t: &kq8_data::items::ItemType, head: &st
         return BarResult::Nothing;
     };
     let mut extra = String::new();
-    if t.category == "Rope" {
-        // Rule 9: there are no rope places yet (M6). STAND-IN (Q110): held
-        // and the remark.
-        extra = format!("; not at a rope place (none yet): {}", w.connor_remark(ROPE_REMARK, "can't use the rope here"));
+    if t.category == crate::rope::ROPE_CATEGORY {
+        // ropeandhook.md rules 8, 9 (M6 6a-2; answers Q110 b).
+        match w.rope.status {
+            crate::rope::Status::None => {
+                let said = w.connor_remark(ROPE_REMARK, "not near anything to climb");
+                w.rope_note(format!("rope button at status none: \"I am not near anything to climb.\" ({said}); not held (rule 8)"));
+                w.item_note(format!("{head}: not at a rope place: {said}; the rope is not held (ropeandhook.md rule 8)"));
+                return BarResult::Nothing;
+            }
+            crate::rope::Status::Bottom => extra = "; at the foot of a rope (ropeandhook.md rule 8)".into(),
+            crate::rope::Status::Top => {
+                // Rule 9: third person forced, the first-person key locked,
+                // the camera to the setRopeCam2 spot looking 1,000 above him.
+                let lock = rope_lock(w, true, "the rope taken at the top");
+                let camera = match (w.rope.top_cam, w.connor_at) {
+                    (Some(spot), Some(c)) => {
+                        let aim = [c[0], c[1], c[2] + ROPE_TOP_AIM];
+                        w.requests.push(crate::active::Request::RopeCamera { spot, aim, at: "rope button".into() });
+                        format!("the camera to the setRopeCam2 spot ({:.0}, {:.0}, {:.0}), looking at ({:.0}, {:.0}, {:.0}) (1,000 above Connor)", spot[0], spot[1], spot[2], aim[0], aim[1], aim[2])
+                    }
+                    (None, _) => "no setRopeCam2 spot was ever set: the camera stays".into(),
+                    (_, None) => "Connor's place unknown: the camera stays".into(),
+                };
+                w.rope_note(format!("rope button at status top: third person forced (we have no first person: nothing to switch){lock}; {camera} (rule 9)"));
+                extra = format!("; at the top of a rope: {camera} (ropeandhook.md rule 9)");
+            }
+        }
     } else if t.category == "Rock" {
         extra = "; none of the three states that refuse it exists yet".into();
     }
     let before = w.hand.replace(name.to_string());
     let back = before.map_or(String::new(), |b| format!("; {b} goes back to its slot"));
     w.item_note(format!("{head}: now the item in hand, the pointer {cursor}{back}{extra} (inventory.md rule 9)"));
+    if t.category == crate::rope::ROPE_CATEGORY {
+        w.rope_note(format!("rope button at status {}: the rope is in hand, the pointer {cursor}{back} (rule 8)", w.rope.status.name()));
+    }
     BarResult::Hold
 }
 
@@ -546,7 +600,7 @@ mod tests {
     type Row = (&'static str, [i64; 5], u8, &'static str, i32, &'static str);
 
     fn types() -> ItemTypes {
-        let rows: [Row; 11] = [
+        let rows: [Row; 12] = [
             ("INVITEM_Clarity", [0; 5], 1, "HealthItem", 60, "clarity.aud"),
             ("INVITEM_Invisible", [0; 5], 1, "HealthItem", 15, "invisibl.aud"),
             ("INVITEM_Invulnerable", [0; 5], 1, "HealthItem", 20, "invuln.aud"),
@@ -558,10 +612,11 @@ mod tests {
             ("INVITEM_FullArmor", [0, 0, 0, 20, 0], 0, "FullArmor", 0, "none"),
             ("INVITEM_SilverCoins", [0; 5], 1, "Money", 0, "none"),
             ("INVITEM_Candle", [0, 0, 0, 0, 25], 0, "QuestItem", 60, "none"),
+            ("INVITEM_RopeAndHook", [0; 5], 0, "Rope", 0, "hook.aud"),
         ];
         let mut text = format!("[InventoryItemTypeList]\nnumItems={}\n", rows.len());
         for (n, (name, s, comb, cat, dur, snd)) in rows.iter().enumerate() {
-            let cursor = if matches!(*cat, "QuestItem" | "Money") { "IDBMA_CURS" } else { "none" };
+            let cursor = if matches!(*cat, "QuestItem" | "Money" | "Rope") { "IDBMA_CURS" } else { "none" };
             text.push_str(&format!(
                 "item{n}=\tKQInventoryItemType\t{name}\t1\t{}\t{}\t{}\t{}\t{}\t{comb}\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t{dur}\t1\tnone\tnone\t{snd}\tx.kqs\t{cursor}\t1\t256\n",
                 s[0], s[1], s[2], s[3], s[4]
@@ -784,5 +839,36 @@ mod tests {
         a.world.items.objects.iter_mut().find(|o| o.name == coins).unwrap().place = Place::Gone;
         assert_eq!(hand(&mut a.world), None);
         assert_eq!(a.world.hand, None);
+    }
+
+    #[test]
+    fn the_rope_button_by_status() {
+        let words = |l: &str| l.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        let mut a = active();
+        let rope = carry(&mut a, "RopeAndHook", 1);
+        // ropeandhook.md rule 8: away from a rope place, only the remark.
+        assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::Nothing);
+        assert_eq!(a.world.hand, None);
+        // At the foot: held.
+        a.world.rope.command(&words("KQConner::setRope Bottom 1 2 3 0 0 0"), true, 0.0);
+        assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::Hold);
+        assert_eq!(a.world.hand.as_deref(), Some(rope.as_str()));
+        assert!(a.world.requests.is_empty(), "no camera move at the foot");
+        // Rule 6: leaving the place puts it back.
+        let r = a.test_command("KQConner::setRope None", "test");
+        assert_eq!(r.as_deref(), Some("0"));
+        assert_eq!(a.world.hand, None);
+        // At the top: the camera to setRopeCam2 looking 1,000 above him, the lock.
+        a.test_command("KQConner::setRopeCam2 10 20 30", "test");
+        a.test_command("KQConner::setRope Top 1 2 3 0 0 0", "test");
+        assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::Hold);
+        assert!(a.world.rope_first_person_lock);
+        assert!(a.world.requests.iter().any(|r| matches!(r, crate::active::Request::RopeCamera { spot, aim, .. } if *spot == [10.0, 20.0, 30.0] && *aim == [1.0, 2.0, 1003.0])));
+        // Again: put back, the lock released.
+        assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::PutBack);
+        assert!(!a.world.rope_first_person_lock);
+        // In the rope state: ignored.
+        a.world.connor_roping = true;
+        assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::Ignored);
     }
 }

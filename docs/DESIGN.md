@@ -1773,7 +1773,7 @@ Steps (one commit each):
    RopeAndHook`, walk into `ropetrp1`: `rope.log` "status none ->
    bottom", the icon place; walk out: "-> none", gone. Without the rope:
    "refused: no rope carried".
-2. **6a-2, the rope button** (rule 8, 9). In the rope state: ignored.
+2. **6a-2, the rope button** (**done** 2026-10-21) (rule 8, 9). In the rope state: ignored.
    Rope already held: put back (first-person lock released). None: the
    remark `0.MSG` 0/0/58/37 only, **not held** (replaces the Q110
    stand-in). Bottom: held (`IDBMA_CURS06`). Top: third person forced

@@ -143,6 +143,10 @@ pub enum Request {
     /// Connor (`conversation.md` rule 14, the right button; M4 4e-5);
     /// `None`: around Connor again. `KQCamera::follow` ends it too.
     CameraAround { point: Option<[f32; 3]>, at: String },
+    /// `ropeandhook.md` rule 9 (M6 6a-2): the camera goes to `spot` and
+    /// looks at `aim` (no roll), as a `move KQCamera` does while it
+    /// follows (STAND-IN, Q147 c).
+    RopeCamera { spot: [f32; 3], aim: [f32; 3], at: String },
     /// `handsOff 1|0` (Q89 a stand-in): the player's movement keys, Jump
     /// and clicks are ignored while on.
     HandsOff { on: bool, at: String },
@@ -656,6 +660,13 @@ pub struct WorldState {
     /// Connor hangs on the rope (rule 7: no hook icon), set by the caller
     /// (M6 6a-3).
     pub connor_on_rope: bool,
+    /// Connor is in the rope state, from `away` to `out` (rules 8, 27–30),
+    /// set by the caller (M6 6a-3).
+    pub connor_roping: bool,
+    /// The rope's own first-person lock (rules 9, 12, 13, 26; M6 6a-2):
+    /// kept apart from `setThirdPerson`'s. We have no first person: only
+    /// logged.
+    pub rope_first_person_lock: bool,
     /// Lines for `rope.log` (M6 6a), taken by the caller.
     pub rope_log: Vec<String>,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
@@ -2838,6 +2849,8 @@ impl Active {
                 status_icons: Default::default(),
                 rope: Default::default(),
                 connor_on_rope: false,
+                connor_roping: false,
+                rope_first_person_lock: false,
                 rope_log: Vec::new(),
                 connor_in_temple4: false,
                 connor_hands_off: false,

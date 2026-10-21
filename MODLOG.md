@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a-2: the rope button
+
+**Changed:** `connor_inventory.rs`: a click on the rope by the rope status (ignored in the rope state; put back if held; none: the remark only, not held; bottom: held; top: the lock, the camera request, held), `rope_lock`; 1 new unit test (the test item list gets the rope). `active.rs`: `connor_roping`, `rope_first_person_lock`, `Request::RopeCamera`. Viewer `door_view.rs`: the rope camera as a `move KQCamera`. DESIGN, provenance.
+**Why:** Step 2 of `ropeandhook.md` (rules 8, 9; replaces the Q110 stand-in "held and the remark").
+**Tested how:** `cargo test -p kq8-core` (473 pass), clippy clean. Viewer, Daventry, `--command "give RopeAndHook 1,5"` with: (top) `--command "move Connor 0 147200 207586 13300 0 0 1.57,10" --key left:IDCTL_INVBAR_ROPE,60 --key left:IDCTL_INVBAR_ROPE,90`; (foot) `--at 152500,207968,-1.5708 --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80` then moved out at 120; (no place) the button pressed at the house's foot before the rope was given. `rope.log`, `camera.log`, `gui.log`.
+**Result:** Top: `ropetrp2` sets top and `setRopeCam2 (151584, 210996, 8520)`; at 60 "first-person key locked", the camera moved from (149875, 207575, 10353) to the spot, looking at 1,000 above Connor (z 13795), no camera update after; the rope in hand (`IDBMA_CURS06`); at 90 put back, the lock released, the camera left there. Foot: held at 80; walking out (setRope None) at 121 puts it back (rule 6), pointer `IDBMA_CURS04`. No place: "I am not near anything to climb." (0 0 58 37 1), not held.
+**Still broken / not tested:** **Not looked at by eye.** The camera's "flag that keeps it there" is not known (Q147 c). A world click with the rope does nothing special yet (step 3). No first person to force off (logged).
+**Next:** 6a-3, the click and the sequence to hanging.
+
 ## 2026-10-21 M6 6a-1: the rope commands, the rope status and the hook icons
 
 **Changed:** New `crates/kq8-core/src/rope.rs` (the status, the rope place's settings, the six `KQConner::setRope*` commands, the hook icon wanted, 4 unit tests). `active.rs`: the commands go there (no longer stubs), `connor_rope`, `rope_icon_step` each update, `rope_note` for the new `rope.log`. `potions.rs`: `StatusIcon::Hook`. Viewer: `gui_view.rs` draws the hook icon in its status place; `door_view.rs` writes `rope.log`. DESIGN (the 6a plan, 6 steps), QUESTIONS Q147, provenance.
