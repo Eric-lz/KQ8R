@@ -525,7 +525,7 @@ M6 has started with the Rope and Hook (6a).
   (`ropeandhook.md` "How to check"). Then: check ranged weapons by eye
   (`ranged-weapons.md` "How to check" 1–9) and the fight
   (`fighting.md` "How to check" 1–8) in ours and the original. For A:
-  Q140, Q141, Q136, Q143, Q144, game over. For the user: potions by eye
+  Q140, Q136, Q143, Q144, Q146, game over. For the user: potions by eye
   in Daventry (`potions.md` "How to check" 2–7). **The main
   menu is postponed (the user, 2026-10-20):** starting straight in
   Daventry keeps testing quick; when it comes, keep a launch option
@@ -583,10 +583,9 @@ M6 has started with the Rope and Hook (6a).
   frame is the icon's used part), **Q144** (`KQObject::dither` and
   `dithered=1`: how a dithered object is drawn). `potions.md` open
   questions 3 (help pop-ups) and 4 (missing face combinations) remain.
-- For A (asked 2026-10-21 by B, the user's check): **Q142**
-  (`checkDistance`: what distance, between what, which result; it
-  decides the axe puzzle: from the floor Connor must not reach the axe,
-  from the hay bale he must).
+- For B (answered 2026-10-21 by A, `anim-scripts.md` rules 31–32):
+  **Q142** (`checkDistance`: build it, the axe puzzle) and **Q141**
+  (nothing to change).
 - For A (asked 2026-10-20 by B, M5 5f, not blocking): **Q140** (a: the
   bolt's own shape, the ball stack of its box or something else, with
   `collisionDetail`; b: Connor's aim height, 0.75 × 1,300 = 975 from
