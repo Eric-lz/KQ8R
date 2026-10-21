@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-4: the shield potion
+
+**Changed:** `potions.rs`: the shield's raise (p + ⌊p/2⌋, 50–100), effect on/off, the Temple 4 hit rule, the orbit's place. `connor_inventory.rs`: a potion's effect switches on before the count drops and off after the end's stats event; the record remembers what it added. `active.rs`: `setConnorFlag InTemple4 0|1`. `fight.rs`: hits on Connor use the Temple 4 rule. kq8-data `characters.rs`: `OrbitKeys` (`orbit1.kq`). Viewer: new `potion_view.rs` (the orbit drawn and moved every update), `load.rs` loads `orbit1.kq` and `invulnfx.kqs`, `connor_view.rs` `part_now`. DESIGN, provenance. 3 new unit tests (+ the clippy note of 5g-3's test fixed).
+**Why:** Step 4 of `potions.md` (rules 17–20, "Do not reproduce" 1).
+**Tested how:** `cargo test` (core 465, data 130 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 3000 --command "give LeatherArmor 1,10" --command "give Invulnerable 1,10" --key 5,30 --command "give LeatherGloves 1,100"`; `items.log`, `gui.log`.
+**Result:** Protection 2 → 50 at update 30; the gloves at 100 → 51; at 330 "protection 51 -> 3 (the 48 it added taken off)". The orbit appears at 30 (1 model part), 301 places logged, 500 from his `body` part, 320 below it, +0.2 rad each update; removed at 331. Unit test: in the last temple 60 is used as 50.
+**Still broken / not tested:** **Not looked at by eye** (the orbit's look, size, see-through, where angle 0 points). A hit on Connor with the shield was not run in the viewer (unit test only). The original restores the old value at the end; we take off what was added (on purpose).
+**Next:** 5g-5, strength.
+
 ## 2026-10-21 M5 5g-3: potion timer icons and red numbers
 
 **Changed:** `potions.rs`: the 7 status icon places (`take_place`, `free_place`), the red switches (`red_numbers`). `connor_inventory.rs`: a potion takes the first free place at its start and frees it at its end. `meters.rs`: the red switches are sent with the numbers. `gui_draw.rs`: `Piece::Lower` (only a picture's lowest rows). Viewer `gui_view.rs`: the status icons drawn as one 336 × 57 picture at the screen's right, standing on the bottom bar; a potion's part left from its `.pba` frame 1, the part used from frame 0 (black square, gold outline); the spinning mask takes a place too and plays at 10 frames a second (was 15); the red number replaces the white one. QUESTIONS Q143. DESIGN, provenance. 2 new unit tests.

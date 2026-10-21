@@ -449,8 +449,17 @@ impl crate::active::WorldState {
             self.fight_note("Connor", format!("hit by {from}: his stats are unknown (no Connor.kq); nothing"));
             return;
         };
+        // potions.md rule 19: in the last temple the shield gives half.
+        let shield = self.potions.iter().find(|r| r.effect == crate::potions::Effect::Shield).map(|r| r.added);
+        let (protection, temple) = match shield {
+            Some(added) if self.connor_in_temple4 => {
+                let p = crate::potions::temple4_protection(c.stats.0[3], added);
+                (p, format!("; in the last temple with the shield: protection {} used as {p} (potions.md rule 19)", c.stats.0[3]))
+            }
+            _ => (c.stats.0[3], String::new()),
+        };
         let rng = &mut self.fight_rng;
-        let dmg = Damage::roll(d, c.stats.0[3], ROLL_ON_CONNOR, &mut || rng.fraction());
+        let dmg = Damage::roll(d, protection, ROLL_ON_CONNOR, &mut || rng.fraction());
         let before = c.stats.0[0];
         c.stats.0[0] -= dmg.loss;
         // Rule 29: his health is kept at most 10 × level.
@@ -459,7 +468,7 @@ impl crate::active::WorldState {
         self.connor_stats = Some(c);
         // interface.md rule 24: the bars follow his stats.
         self.connor_stats_events += 1;
-        self.fight_note("Connor", format!("hit by {from}, {}: {} (roll 25-100 %, rule 16); health {before} -> {after}", kind.name(), dmg.describe()));
+        self.fight_note("Connor", format!("hit by {from}, {}: {} (roll 25-100 %, rule 16); health {before} -> {after}{temple}", kind.name(), dmg.describe()));
         // Rule 29: two one-off tips (logged only; their texts are another study).
         if !self.connor_tips[0] {
             self.connor_tips[0] = true;

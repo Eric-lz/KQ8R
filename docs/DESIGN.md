@@ -1636,7 +1636,7 @@ Steps (one commit each):
    (handsOff) takes a place the same way and animates at 10 frames a
    second (rule 35, last point; was 15, Q108 d). **Test:** `gui.log`:
    place, percent 100 → 95 → ... → gone; the red flag on/off.
-4. **5g-4, the shield** (rules 17–20, Do not reproduce 1). Protection
+4. **5g-4, the shield** (**done** 2026-10-21; protection 2 → 50, gloves meanwhile → 51, end → 3) (rules 17–20, Do not reproduce 1). Protection
    → p + ⌊p/2⌋, at least 50, at most 100; the amount added is
    remembered and taken off at the end (not the old value restored).
    `setConnorFlag InTemple4 1`: each hit uses old + ⌊(raised − old)/2⌋,

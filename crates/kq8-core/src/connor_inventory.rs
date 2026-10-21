@@ -211,15 +211,19 @@ pub fn apply(w: &mut WorldState, name: &str, why: &str) -> String {
     if o.third != -1 {
         return format!("apply {name} ({why}): already applied (userId {}); nothing (inventory.md rule 14)", o.third);
     }
+    // potions.md rule 13: a potion's effect switches on first.
+    let (added, effect) = if t.duration > 0.0 { crate::potions::effect_on(w, crate::potions::Effect::of(&o.kind)) } else { (0, String::new()) };
     if stacks(&t.category) {
         w.items.objects[i].quantity -= 1;
     }
     w.items.objects[i].third = CONNOR_USER_ID;
     let stats = connor_add(w, Stats(t.stats), &format!("its numbers {:?} added", t.stats));
-    let mut line = format!("apply {name} ({}, {why}): x{} -> x{}; {stats}", o.kind, o.quantity, w.items.objects[i].quantity);
+    let effect = if effect.is_empty() { effect } else { format!("{effect}; ") };
+    let mut line = format!("apply {name} ({}, {why}): {effect}x{} -> x{}; {stats}", o.kind, o.quantity, w.items.objects[i].quantity);
     if t.duration > 0.0 {
         // potions.md rule 33: whole seconds, counted from this update.
         let mut r = crate::potions::Running::new(name, &o.kind, t.duration.round() as i64, w.updates);
+        r.added = added;
         line.push_str(&format!("; Dur {} s: the timer starts at {} s left (game time {:.3}), the next second off at update {} (potions.md rule 33)", t.duration, r.left, w.now(), r.next_tick));
         // Rule 35: its icon in the first free place.
         r.place = crate::potions::take_place(&mut w.status_icons, crate::potions::StatusIcon::Potion(name.to_string()));
@@ -260,12 +264,14 @@ pub fn unapply(w: &mut WorldState, name: &str, why: &str) -> String {
     }
     let Some(t) = w.items.kind(&o.kind).cloned() else { return String::new() };
     w.items.objects[i].third = -1;
-    w.potions.retain(|r| r.item != name);
+    let running = w.potions.iter().position(|r| r.item == name).map(|k| w.potions.remove(k));
     let icon = crate::potions::free_place(&mut w.status_icons, &crate::potions::StatusIcon::Potion(name.to_string()));
+    // potions.md rule 13: at the end the stats event, then the effect off.
     let back = Stats(t.stats.map(|v| -v));
     let stats = connor_add(w, back, &format!("{name} un-applied ({why}): its numbers taken back"));
+    let effect = running.map(|r| crate::potions::effect_off(w, &r)).filter(|e| !e.is_empty()).map_or(String::new(), |e| format!("; {e}"));
     let icon = icon.map_or(String::new(), |k| format!("; icon place IDCTL_TIMER_{} freed (potions.md rule 35)", k + 1));
-    format!("; {stats}{icon}{} (inventory.md rule 15)", remove_if_empty(w, name))
+    format!("; {stats}{effect}{icon}{} (inventory.md rule 15)", remove_if_empty(w, name))
 }
 
 /// The potions' timers (`potions.md` rule 33): one second off each
@@ -503,7 +509,8 @@ mod tests {
     type Row = (&'static str, [i64; 5], u8, &'static str, i32, &'static str);
 
     fn types() -> ItemTypes {
-        let rows: [Row; 8] = [
+        let rows: [Row; 9] = [
+            ("INVITEM_Invulnerable", [0; 5], 1, "HealthItem", 20, "invuln.aud"),
             ("INVITEM_Mushroom", [5, 0, 0, 0, 0], 1, "HealthItem", -1, "healing.aud"),
             ("INVITEM_Strength", [0, 5, 0, 0, 0], 1, "HealthItem", 20, "none"),
             ("INVITEM_Fists", [0; 5], 0, "ShortWeapon", 0, "none"),
@@ -605,6 +612,25 @@ mod tests {
         assert_eq!(bar_click(&mut a.world, &m, true, false, "key 1"), BarResult::Ignored);
         assert_eq!(a.world.items.get(&m).map(|o| o.quantity), Some(1));
         assert!(a.world.sounds.is_empty());
+    }
+
+    #[test]
+    fn the_shield_raises_protection_and_takes_off_only_what_it_added() {
+        let mut a = active();
+        a.world.connor_stats.as_mut().unwrap().stats.0[3] = 40;
+        let v = carry(&mut a, "Invulnerable", 1);
+        bar_click(&mut a.world, &v, true, false, "key 5");
+        assert_eq!(stats(&a)[3], 60);
+        // The last temple: a hit uses 40 + 20 / 2 = 50 (potions.md rule 19).
+        a.world.connor_in_temple4 = true;
+        a.world.hit_connor("goblin", 5, crate::fight::HitKind::Normal);
+        assert!(a.world.fight_log.iter().any(|l| l.contains("protection 60 used as 50")), "{:?}", a.world.fight_log);
+        // Armour put on meanwhile (+1) is kept at the end: 61 - 20 = 41.
+        a.world.connor_stats.as_mut().unwrap().stats.0[3] += 1;
+        a.world.updates = 20 * 15;
+        timers(&mut a.world);
+        assert_eq!(stats(&a)[3], 41);
+        assert!(a.world.status_icons.iter().all(Option::is_none));
     }
 
     #[test]

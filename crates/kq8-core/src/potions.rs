@@ -18,6 +18,14 @@
 //!   is red, while the shield runs the armour number; the ranged one is
 //!   never red.
 //!
+//! - The shield (rules 17–20): protection → p + ⌊p/2⌋, at least 50, at
+//!   most 100. **Do not reproduce 1**: at the end we take off exactly what
+//!   it added (the original puts back the value from before, losing
+//!   armour changes made meanwhile); cut to 0–100. In the last temple
+//!   (`setConnorFlag InTemple4 1`) each hit uses old + ⌊(raised − old)/2⌋,
+//!   at most 85; the number shown stays. The orbit `orbit1.kq` is drawn
+//!   by the viewer from [`orbit_place`].
+//!
 //! Each running potion is one record ([`Running`]) Connor keeps, holding
 //! everything a saved game needs (rule 34: the potions survive a save);
 //! there are no saves yet.
@@ -83,6 +91,63 @@ pub fn red_numbers(running: &[Running]) -> [bool; 3] {
     [on(Effect::Shield), on(Effect::Strength), false]
 }
 
+/// Rule 17: the shield's lowest and highest protection.
+pub const SHIELD_MIN: i64 = 50;
+pub const SHIELD_MAX: i64 = 100;
+/// Rule 19: the most a hit's protection can be in the last temple.
+pub const TEMPLE4_CAP: i64 = 85;
+/// Rule 20: the orbit's centre is Connor's `body` part lowered by this
+/// (then raised by the file's `orbitZoffset`).
+pub const ORBIT_DROP: f32 = 820.0;
+
+/// Rule 17: protection `p` under the shield.
+pub fn shield_raise(p: i64) -> i64 {
+    (p + p.div_euclid(2)).clamp(SHIELD_MIN, SHIELD_MAX)
+}
+
+/// Rule 19: a hit's protection in the last temple, from the protection
+/// now (`raised`) and what the shield added.
+pub fn temple4_protection(raised: i64, added: i64) -> i64 {
+    let old = raised - added;
+    (old + added.div_euclid(2)).min(TEMPLE4_CAP)
+}
+
+/// Rule 20: the orbit's place at `angle` (radians about the vertical)
+/// around Connor's `body` part at `body`: `radius` out in the ground
+/// plane, at `body` − 820 + `z_offset` height. Angle 0 is +x (our
+/// reading: `orbitStartAngZ` 0).
+pub fn orbit_place(body: [f32; 3], radius: f32, z_offset: f32, angle: f32) -> [f32; 3] {
+    [body[0] + radius * angle.cos(), body[1] + radius * angle.sin(), body[2] - ORBIT_DROP + z_offset]
+}
+
+/// Rule 13: the effect switches on at a potion's start. Returns what it
+/// added to remember (the shield's protection) and the log text.
+pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, String) {
+    let Some(c) = w.connor_stats.as_mut() else { return (0, "Connor's stats unknown: no effect".into()) };
+    match effect {
+        Effect::Shield => {
+            let p = c.stats.0[3];
+            let raised = shield_raise(p);
+            c.stats.0[3] = raised;
+            (raised - p, format!("the shield: protection {p} -> {raised} (p + p/2, 50 to 100; potions.md rule 17)"))
+        }
+        _ => (0, String::new()),
+    }
+}
+
+/// Rule 36: the effect switches off at the end of `r`.
+pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
+    let Some(c) = w.connor_stats.as_mut() else { return String::new() };
+    match r.effect {
+        Effect::Shield => {
+            let p = c.stats.0[3];
+            c.stats.0[3] = (p - r.added).clamp(0, crate::stats::FOURTH_CAP);
+            format!("the shield ends: protection {p} -> {} (the {} it added taken off: potions.md 'Do not reproduce' 1)", c.stats.0[3], r.added)
+        }
+        _ => String::new(),
+    }
+}
+
 /// A potion running on Connor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Running {
@@ -99,11 +164,14 @@ pub struct Running {
     /// Its status icon place (0 = `IDCTL_TIMER_1`), `None` if all were
     /// taken.
     pub place: Option<usize>,
+    /// What the effect added and takes off at the end (the shield's
+    /// protection).
+    pub added: i64,
 }
 
 impl Running {
     pub fn new(item: &str, kind: &str, duration: i64, now_update: u64) -> Running {
-        Running { item: item.to_string(), kind: kind.to_string(), effect: Effect::of(kind), duration, left: duration, next_tick: now_update + crate::UPDATES_PER_SECOND as u64, place: None }
+        Running { item: item.to_string(), kind: kind.to_string(), effect: Effect::of(kind), duration, left: duration, next_tick: now_update + crate::UPDATES_PER_SECOND as u64, place: None, added: 0 }
     }
 
     /// The part left in percent (rule 35: whole-number division).
@@ -155,6 +223,19 @@ mod tests {
     }
 
     #[test]
+    fn the_shield_numbers() {
+        // Rule 17's examples.
+        let got: Vec<i64> = [0, 10, 34, 40, 66, 80].iter().map(|&p| shield_raise(p)).collect();
+        assert_eq!(got, vec![50, 50, 51, 60, 99, 100]);
+        // Rule 19: 40 -> 60 (added 20): a hit uses 40 + 10 = 50; 80 -> 100:
+        // 80 + 10 = 90, cut to 85.
+        assert_eq!(temple4_protection(60, 20), 50);
+        assert_eq!(temple4_protection(100, 20), 85);
+        let o = orbit_place([100.0, 200.0, 1000.0], 500.0, 500.0, 0.0);
+        assert_eq!(o, [600.0, 200.0, 680.0]);
+    }
+
+    #[test]
     fn icons_take_the_first_free_place() {
         let mut places: [Option<StatusIcon>; ICON_PLACES] = Default::default();
         assert_eq!(take_place(&mut places, StatusIcon::Potion("a".into())), Some(0));
@@ -164,7 +245,7 @@ mod tests {
         assert_eq!(take_place(&mut places, StatusIcon::Potion("b".into())), Some(0), "the freed one is first");
         let s = Running::new("s", "INVITEM_Strength", 20, 0);
         let v = Running::new("v", "INVITEM_Invulnerable", 20, 0);
-        assert_eq!(red_numbers(&[s.clone()]), [false, true, false]);
+        assert_eq!(red_numbers(std::slice::from_ref(&s)), [false, true, false]);
         assert_eq!(red_numbers(&[s, v]), [true, true, false]);
     }
 }

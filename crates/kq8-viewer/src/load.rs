@@ -1268,6 +1268,8 @@ pub struct Objects {
     pub corpse_shapes: BTreeMap<String, usize>,
     /// The projectile files the fighters shoot (M5 5c-9), by lower-case name.
     pub projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
+    /// The shield's orbit (`orbit1.kq`, M5 5g-4) and its model slot.
+    pub orbit: Option<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// Lines about items at load, for `items.log`.
     pub item_lines: Vec<String>,
     /// Lines about characters at load, for `characters.log` (M4 4d-2).
@@ -1532,6 +1534,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         several_positions: 0,
         items,
         corpse_shapes: BTreeMap::new(),
+        orbit: None,
         drop_kinds: Vec::new(),
         projectiles: BTreeMap::new(),
         combat_apply: false,
@@ -1755,6 +1758,8 @@ struct Placer<'a> {
     items: kq8_core::item::Items,
     /// Corpse shapes loaded (M5 5c-7).
     corpse_shapes: BTreeMap<String, usize>,
+    /// The shield's orbit (M5 5g-4).
+    orbit: Option<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// The item types the fighters drop (M5 5c-8).
     drop_kinds: Vec<String>,
     /// The projectile files read (M5 5c-9).
@@ -3621,6 +3626,23 @@ impl Placer<'_> {
                 self.load_corpse_shape(&shape, &kind);
             }
         }
+        // potions.md rule 20 (M5 5g-4): the shield's orbit, `orbit1.kq`
+        // (the game also tries orbit2 and orbit3; no such files exist).
+        let bytes = match self.world.load("orbit1.kq") {
+            Some(Ok((_, b))) => Some(b),
+            _ => self.game.find("GAME/Kq/orbit1.kq").and_then(|p| std::fs::read(p).ok()),
+        };
+        match bytes.and_then(|b| kq8_data::kq_text::parse(&b).first().and_then(kq8_data::characters::OrbitKeys::from_section)) {
+            Some(k) => {
+                let slot = k.shape.clone().and_then(|s| {
+                    self.load_corpse_shape(&s, "orbit1");
+                    self.corpse_shapes.get(&s.to_ascii_lowercase()).copied()
+                });
+                self.item_lines.push(format!("orbit1.kq: shape {:?} (model slot {slot:?}), radius {}, step {:?} rad per update, z offset {}, translucency {} (potions.md rule 20)", k.shape, k.radius, k.step_angle, k.z_offset, k.translucency));
+                self.orbit = Some((k, slot));
+            }
+            None => self.item_lines.push("orbit1.kq not found or not a KQOrbitObj: no shield orbit (potions.md rule 20)".into()),
+        }
         let mut shapes = BTreeMap::new();
         let mut failed = Vec::new();
         let mut unknown = std::collections::BTreeSet::new();
@@ -3922,6 +3944,7 @@ impl Placer<'_> {
             item_shapes: BTreeMap::new(),
             corpse_shapes: self.corpse_shapes,
             projectiles: self.projectiles,
+            orbit: self.orbit,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

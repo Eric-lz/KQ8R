@@ -1176,6 +1176,14 @@ impl ConnorSim {
         Some((place, format!("its part '{part}' in frame {frame} of '{movement}'")))
     }
 
+    /// Where his named part `part` is in the world now, in the frame
+    /// playing (`potions.md` rule 20: the shield's orbit centre, M5 5g-4).
+    pub fn part_now(&self, part: &str) -> Option<[f32; 3]> {
+        let (o, _) = self.part_at(self.walker.movement, self.walker.phase, part)?;
+        let (r, feet) = (self.turn_matrix(), self.mover.position);
+        Some(std::array::from_fn(|k| feet[k] + o[0] * r[0][k] + o[1] * r[1][k] + o[2] * r[2][k]))
+    }
+
     /// `ranged-weapons.md` rule 20 (M5 5f-5): a shot click with the ranged
     /// weapon ready, aim point `aim` (rules 16, 18). He turns toward it
     /// (the automatic turn, 3.5 rad/s; we are always in third person);

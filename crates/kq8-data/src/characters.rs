@@ -1035,9 +1035,58 @@ impl ProjectileKeys {
     }
 }
 
+/// A `KQOrbitObj` file (`GAME/Kq/orbit1.kq`: the shape that circles
+/// Connor while the shield potion runs; `potions.md` rule 20). Missing
+/// numbers are 0.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrbitKeys {
+    pub shape: Option<String>,
+    pub radius: f32,
+    /// `orbitStartAngX/Y/Z` and `orbitStepAngX/Y/Z`, radians.
+    pub start_angle: [f32; 3],
+    pub step_angle: [f32; 3],
+    pub z_offset: f32,
+    /// 256 = solid.
+    pub translucency: f32,
+    pub shadow_mask: i64,
+}
+
+impl OrbitKeys {
+    pub fn from_section(s: &Section) -> Option<Self> {
+        if !s.get("classType")?.trim().eq_ignore_ascii_case("KQOrbitObj") {
+            return None;
+        }
+        let number = |k: &str| s.number(k).and_then(Result::ok).unwrap_or(0.0) as f32;
+        Some(OrbitKeys {
+            shape: s.get("shapeName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            radius: number("orbitRadius"),
+            start_angle: ["orbitStartAngX", "orbitStartAngY", "orbitStartAngZ"].map(number),
+            step_angle: ["orbitStepAngX", "orbitStepAngY", "orbitStepAngZ"].map(number),
+            z_offset: number("orbitZoffset"),
+            translucency: s.number("translucency").and_then(Result::ok).map_or(256.0, |v| v as f32),
+            shadow_mask: number("shadowMask") as i64,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn orbit_keys() {
+        let text = b"[orbit1]
+classType=KQOrbitObj
+shapeName=invulnfx.kqs
+shadowMask=0
+orbitRadius=500
+orbitStepAngZ=.2
+orbitZoffset=500
+translucency=165
+";
+        let k = OrbitKeys::from_section(&crate::kq_text::parse(text)[0]).unwrap();
+        assert_eq!((k.shape.as_deref(), k.radius, k.step_angle, k.z_offset, k.translucency), (Some("invulnfx.kqs"), 500.0, [0.0, 0.0, 0.2], 500.0, 165.0));
+    }
 
     const LIST: &str = "[Monsters]\nclassType=KQMonsterManager\n;monsterX=\tname\ttype\nnumMonsters=4\n\
 monster0=\tsprgnbow\tsprgnbowtype\t@\t100\t-13\t10\t8\t226700\t183000\t8370\t-1.57\t@\t@\t@\tINVITEM_SmCrossbow\tguard\t12000\t@\t12000\t1\n\

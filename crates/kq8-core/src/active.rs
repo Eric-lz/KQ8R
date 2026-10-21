@@ -629,6 +629,8 @@ pub struct WorldState {
     /// Applied items with a duration: the running potions and their
     /// whole-second timers (M5 5g-2, `potions.md` rules 33–34).
     pub potions: Vec<crate::potions::Running>,
+    /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
+    pub connor_in_temple4: bool,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
     pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
@@ -1663,6 +1665,22 @@ impl WorldState {
     /// `goldCoinPersists 0|1` (`inventory.md` rule 12, M4 4c-4): while on,
     /// coins accepted from the hand stay there; 0 also empties the hand at
     /// once.
+    /// `setConnorFlag <flag> 0|1` (`potions.md` rule 19): only `InTemple4`
+    /// is known (`temple4/kq/archon.cs`).
+    fn set_connor_flag(&mut self, words: &[String], at: &str) -> String {
+        let (Some(flag), Some(v)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
+            self.note(format!("{at}: usage: setConnorFlag <flag> 0|1; nothing"));
+            return "1".into();
+        };
+        if !flag.eq_ignore_ascii_case("InTemple4") {
+            self.note(format!("{at}: setConnorFlag {flag}: not a flag we know (only InTemple4, potions.md rule 19); nothing"));
+            return "1".into();
+        }
+        self.connor_in_temple4 = number_value(v) != 0.0;
+        self.item_note(format!("{at}: setConnorFlag InTemple4 {}: the shield gives half its raise per hit, at most 85 (potions.md rule 19)", u8::from(self.connor_in_temple4)));
+        "0".into()
+    }
+
     fn gold_coin_persists(&mut self, words: &[String], at: &str) -> String {
         let Some(v) = words.get(1).filter(|v| looks_like_number(v)) else {
             self.note(format!("{at}: usage: goldCoinPersists 0|1; nothing"));
@@ -2580,6 +2598,7 @@ impl ScriptHost for WorldState {
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
+            "setConnorFlag" => Some(self.set_connor_flag(words, at)),
             "setThirdPerson" => Some(self.set_third_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
@@ -2677,6 +2696,7 @@ impl Active {
                 gui_orders: Vec::new(),
                 potions: Vec::new(),
                 status_icons: Default::default(),
+                connor_in_temple4: false,
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,
