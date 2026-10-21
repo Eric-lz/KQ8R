@@ -9,7 +9,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** The user asked for god mode for testing.
 **Tested how:** `cargo test --workspace` (442 core tests, 1 new), clippy clean. Viewer: `--at 289284,190300,0 --god --frames 1500` (goblin22); `--at 150552,269500,0 --no-ai --lift 8000 --frames 900` without and with `--god`; `fight.log`, `connor.log`.
 **Result:** goblin22's 4 hits logged as "nothing, god mode is on", health unchanged. The 7,100 fall: "Connor dies" without, "safe landing" with god mode.
-**Still broken / not tested:** Not looked at (the on-screen line, the real F3 key). Nothing else hurts him yet (no poison, drowning or traps that damage), so those aren't covered.
+**Still broken / not tested:** The user's check (2026-10-20): F3, the on-screen line, hits and falls work. Nothing else hurts him yet (no poison, drowning or traps that damage), so those aren't covered.
 **Next:** —
 
 ## 2026-10-20 Test switch: on-screen line for the AI switch

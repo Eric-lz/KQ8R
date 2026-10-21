@@ -2810,5 +2810,5 @@ executable looked at.
 | --- | --- | --- |
 | With it on, a hit on Connor (a swing or a bolt) does nothing: no health lost, no flinch, no death | Ours (a test switch, not in the original) | Viewer: goblin22's 4 hits logged as "nothing, god mode is on" |
 | A fall past the death limit (`connor-physics.md`, 3,840) is a safe landing | Ours | Unit test; viewer: a 7,100 fall kills him without it, a safe landing with it |
-| F3 flips it, `--god` starts with it on; a line under the AI line shows it (yellow when on) | Ours | Viewer (the line not looked at) |
+| F3 flips it, `--god` starts with it on; a line under the AI line shows it (yellow when on) | Ours | The user's check (2026-10-20) |
 
