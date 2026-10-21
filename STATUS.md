@@ -7,6 +7,18 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (B, M6 6b-1 to 6b-3): Azriel's Hammer built** from
+  `azriel-hammer.md` (plan in `docs/DESIGN.md` "6b", one commit per step;
+  **checked in the logs only, not by eye**). The user had seen it fire an
+  arrow in Swamp: the `KQHammer` file was not read, and Connor's ranged
+  weapon was looked for before `constart.cs`'s items arrived. Now: the
+  click throws (turn at once, handsOff, `attack`); the hammer leaves at
+  the `do` cue from (−41, −605, 1,226), hits one thing (modifier + ranged
+  damage, capped), turns back at a touch, its range or the ground, flies
+  back along its line and is caught (`catch`), even if it falls short.
+  Run in Swamp and Daventry (`give AzrielHammer`). New **Q148** (a–e, not
+  blocking).
+
 - **2026-10-21 (A): Q142 and Q141 answered** in `anim-scripts.md` rules
   31–32. `checkDistance`: straight 3D distance between positions
   (Connor's feet, an object's placed point); 1 if at most the max, else
@@ -425,6 +437,16 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
+- **Found in 6b, not fixed:** the items the start-up scripts give
+  (Swamp's `constart.cs`) don't go through Connor's inventory rules: the
+  chain mail, boots and gloves are carried but not put on (protection 0
+  in Swamp). Only the ranged weapon's bolt file is now taken (6b-1).
+- **Stand-ins of 6b (Q148):** where the hammer turns back without a touch;
+  the model drawn pointing along its flight; back before `attack` ends:
+  `catch` after it; requests during the throw wait for the catch; the
+  throw leaves the panels as they are. Not run: a throw from a real walk,
+  Dead City's lever.
+
 - **Stand-ins of 3m** (not traced; none reached in Daventry): a
   state request refused during an unfinished jump is tried again every
   update; objects later in the collision list after a push are not
@@ -563,6 +585,11 @@ M6 has started with the Rope and Hook (6a).
   rocks hurting Connor, Gnome's pushable boulder, damaging water.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
+
+- For A (asked 2026-10-21 by B, M6 6b, not blocking): **Q148** (a: where
+  the hammer turns back at its range or the ground; b: how its model
+  turns in flight; c: back before `attack` ends; d: requests during the
+  throw; e: whether the throw's handsOff moves the panels).
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only
   the flames' 12,100 (traced and built) vs the user's ~11,000 (open

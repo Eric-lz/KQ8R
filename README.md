@@ -60,7 +60,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them.
 - **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground. They fight: they swing at Connor, he can punch back, they flinch, die, drop items and leave bodies; the bow spriggans shoot (first version, checked in the logs only). Health items and the four potions work, with their timer icons (checked in the logs only).
-- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye).
+- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only).
 
 ### Next
 
@@ -150,7 +150,8 @@ Fighting (first version): click the hand-weapon slot in the bottom bar
 (or press Delete) to ready Connor's fists, then left-click a creature to
 swing (Shift: the big swing, Ctrl: a normal click). Delete swaps between
 the hand and the ranged weapon, Alt puts the weapon away. With the
-crossbow ready a left click shoots where you point.
+crossbow ready a left click shoots where you point; with Azriel's Hammer
+ready it throws the hammer.
 
 ## How the work is done
 

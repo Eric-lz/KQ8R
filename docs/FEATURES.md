@@ -631,6 +631,23 @@ perfectly"); logged in `rope.log`. Built from `ropeandhook.md`.
   and picked up.
 - **Not yet:** saved games (we have none), first person (not built).
 
+## Azriel's Hammer (milestone M6, step 6b, 2026-10-21)
+
+Checked in the logs only (`fight.log`), **not by eye**. Built from
+`azriel-hammer.md`.
+
+- **The throw:** with the hammer ready (its slot, or Delete), a left click
+  turns Connor toward the point at once and he throws; only while standing
+  or walking, never in a jump, landing or stumble. He can't act until he
+  has caught it.
+- **The flight:** straight at the point, hits the first thing (a creature
+  takes the file's modifier + his ranged damage, up to its cap), then flies
+  back along the same line and he catches it, even if it falls short.
+  Walls and the ground send it back too.
+- **Where:** Swamp gives it at the start; in Daventry the console's
+  `give AzrielHammer`. Dead City's lever by hammer is built but not run
+  (no Dead City yet).
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,
