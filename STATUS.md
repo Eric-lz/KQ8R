@@ -7,6 +7,17 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (B): Connor's levels checked; level-up flame and sound**
+  (DESIGN "Connor's levels checked", steps L-1 to L-3, one commit each;
+  **checked in the logs only, not by eye or ear**). Experience
+  thresholds, level-ups, health, hand / ranged / armour numbers and
+  equipment all match the notes. Fixed: a world started directly now
+  gets its `conStart.cs` level and stats (Dead City level 8, health 80,
+  hand 60, ranged 19, armour 11; was level 1 with 10 / 10 / 0 / 0). New:
+  the level-up flame (`flame14.pba`) over the level number and the
+  level-up sound (`LEVEL.AUD`), both stand-ins. New **Q149** (a–e, not
+  blocking).
+
 - **2026-10-21 (B, M6 6b-1 to 6b-3): Azriel's Hammer built** from
   `azriel-hammer.md` (plan in `docs/DESIGN.md` "6b", one commit per step;
   **checked in the logs only, not by eye**). The user had seen it fire an
@@ -584,6 +595,11 @@ M6 has started with the Rope and Hook (6a).
   rocks hurting Connor, Gnome's pushable boulder, damaging water.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
+
+- For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
+  `KQConner::setLevel` does; b: when and how the level-up flame plays;
+  c: which sound plays on a level-up; d: `lvlup.pba`; e: built-in pickup
+  experience of start-up items).
 
 - For A (asked 2026-10-21 by B, M6 6b, not blocking): **Q148** (a: where
   the hammer turns back at its range or the ground; b: how its model

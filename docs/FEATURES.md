@@ -536,7 +536,8 @@ miss, roll, flinch, death, drop and shot is in
   map icon on the right (empty). **Space** slides the whole bar away or
   back in a fifth of a second. A change of health or experience while
   the bar is away pops the meters up alone for 1.5 s. A changed number
-  flashes its slot. Cutscenes (`handsOff`) slide the bar away and show
+  flashes its slot. A level-up plays the flame over the level number
+  and a sound (both stand-ins, Q149). Cutscenes (`handsOff`) slide the bar away and show
   the spinning mask; afterwards it comes back only if it was shown.
   The caption sits on top of the bar. Clicks on the bar don't reach the
   world. Logged in `gui.log`. Checked by the user 2026-10-18.
@@ -605,6 +606,8 @@ not looked at by eye yet.
 - **Clarity:** the clarity face; hidden things show for 60 s (Daventry:
   the keep wall turns see-through, the wizard's hidden chest appears and
   can be opened).
+- **Starting a world directly:** its `conStart.cs` gives Connor its items
+  (equipment put on), its level and its stats (Dead City: level 8).
 - **Experience at pickup:** the candle +25 (never taken back) and the
   game's other built-in amounts for quest items.
 
