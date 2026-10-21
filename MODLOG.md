@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6b-2: Azriel's Hammer flies out and back
+
+**Changed:** `kq8-core/fight.rs`: `Bolt` gets an optional `HammerFlight` (way out / back, the damage keys); `launch_bolt` names it `hammer<n>`; `bolts_step` hands a hammer to the new `hammer_step` (turn back, the way back, the catch) and `hammer_hits` (rule 8); `hammer_damage`. `active.rs`: `hammer_calls` (the lever's `ConnorAction`, called like `ProjImmune`) and `hammers_back` (for the viewer, step 6b-3); 5 unit tests. Q148 in `QUESTIONS.md`; provenance; DESIGN.
+**Why:** `azriel-hammer.md` rules 6–9: one thing hit, back along the same line, always caught.
+**Tested how:** `cargo test --workspace` (636 pass, 5 new), clippy clean. Core only: nothing in the viewer uses it yet.
+**Result:** Daventry's file, thrown level at nothing: turns back at 14,400, comes back 12,800, ends at update 19 (1.27 s) without reaching him (as rule 9: "about one step short"). At a character 4,400 away: hit for 40 (30 + 10), back after 5 updates; the character behind it untouched. At the ground: back at once. Connor on the line: passed through on the way out, stops it on the way back. `tmblrcyl` runs `lever1`'s script; an immune object takes 0, no `ProjImmune`.
+**Still broken / not tested:** Not run in the viewer (the throw state is 6b-3): a click now would launch the hammer and it would fly back, but Connor would not wait or catch it. Where it turns back at its range or the ground is our reading (**Q148 a**); how the model is turned in flight is not in the note (Q148 b).
+**Next:** 6b-3, the throw state.
+
 ## 2026-10-21 M6 6b-1: Azriel's Hammer: its file is read, and Connor takes it at the start
 
 **Changed:** `kq8-data/characters.rs`: `ProjectileKeys` also reads `classType=KQHammer` (flag `hammer`, `modifier`, `minDamage`, `maxDamage`, default mask 0x221F). Viewer `door_view.rs`: Connor's fight (`set_connor_fight`) and the projectile files are set up after the items the start-up scripts made, not before. `load.rs`: the log line shows the hammer's keys. Plan "6b" in `docs/DESIGN.md`; provenance.

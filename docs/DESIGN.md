@@ -1884,7 +1884,8 @@ Steps (one commit each):
    `shootOffsets` line `INVITEM_AzrielHammer -41 -605 1226` must be his
    offset too). **Test:** `--world Swamp`: `fight.log` names
    `Prhammer.kq` and offset (−41, −605, 1,226).
-2. **6b-2, the flight** (rules 6–9; core, unit tests). Way out: as a
+2. **6b-2, the flight** (**done** 2026-10-21; Q148 asked, not blocking:
+   where it turns back without a touch) (rules 6–9; core, unit tests). Way out: as a
    bolt (speed / 15 per update, its box as a ball stack, mask 0x221F,
    never Connor). Turns back at the first touch, past `maxDistance`, or
    at / below the floor grid: put back at its last position before the

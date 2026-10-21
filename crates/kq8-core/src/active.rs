@@ -772,6 +772,12 @@ pub struct WorldState {
     /// Scripts to call with `ProjImmune`: a bolt hit them and their type
     /// has bit 0x4000 (`ranged-weapons.md` rule 30; M5 5f-1).
     pub immune_calls: Vec<String>,
+    /// Scripts to call with `ConnorAction`: Azriel's Hammer touched the
+    /// Dead City lever (`azriel-hammer.md` rule 8; M6 6b-2).
+    pub hammer_calls: Vec<String>,
+    /// Azriel's Hammer came back (rule 9): the thrower and a log text,
+    /// taken by the viewer (Connor plays `catch`).
+    pub hammers_back: Vec<(String, String)>,
     /// The first-kill tip was sent (rule 33; logged only).
     pub kill_tip: bool,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
@@ -2908,6 +2914,8 @@ impl Active {
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
                 immune_calls: Vec::new(),
+                hammer_calls: Vec::new(),
+                hammers_back: Vec::new(),
                 kill_tip: false,
                 flights: Vec::new(),
                 projectiles: Default::default(),
@@ -4154,6 +4162,12 @@ impl Active {
         for name in std::mem::take(&mut self.world.immune_calls) {
             if !self.call_named(&name, &["ProjImmune"]) {
                 self.world.fight_note(&name, "no script: ProjImmune not called (ranged-weapons.md rule 30)");
+            }
+        }
+        // azriel-hammer.md rule 8 (M6 6b-2): the hammer on the lever.
+        for name in std::mem::take(&mut self.world.hammer_calls) {
+            if !self.call_named(&name, &["ConnorAction"]) {
+                self.world.fight_note(&name, "no script: ConnorAction from the hammer not called (azriel-hammer.md rule 8)");
             }
         }
         // Thrown items fly after the characters' movers (M5 5e-1:
@@ -6323,6 +6337,120 @@ endif
     /// One bolt update, with the flat ground at 100.
     fn fly(a: &mut Active) {
         a.world.bolts_step(&FlatGround, &[], &[]);
+    }
+
+    /// Daventry's `prhammer.kq` with `hammer.kqs`'s `BOUNDS.KQ` box (data).
+    fn prhammer() -> kq8_data::characters::ProjectileKeys {
+        let mut p = kq8_data::characters::ProjectileKeys::from_section(&kq8_data::kq_text::parse(b"[Hammer]\nclassType=KQHammer\nshapeName=hammer.kqs\nvelocity=24000\nmaxDistance=15000\nmeshName=hammer\nmodifier=30\nminDamage=0\nmaxDamage=300\n")[0]).unwrap();
+        p.bounds = Some(([-90.0, 370.0, 0.0], [80.0, 470.0, 70.0]));
+        p
+    }
+
+    #[test]
+    fn the_hammer_s_damage_is_capped_then_raised() {
+        // azriel-hammer.md rule 8 and "Do not reproduce" (the order kept).
+        assert_eq!(crate::fight::hammer_damage(30, 10, 0, 300), 40);
+        assert_eq!(crate::fight::hammer_damage(30, 400, 0, 300), 300);
+        assert_eq!(crate::fight::hammer_damage(0, 10, 0, 0), 0, "a world without the keys: 0");
+        assert_eq!(crate::fight::hammer_damage(30, 10, 50, 20), 50, "a minimum above the maximum wins");
+    }
+
+    #[test]
+    fn the_hammer_hits_one_character_flies_back_and_is_caught() {
+        // azriel-hammer.md rules 7-9 (M6 6b-2): Connor 5,000 south of gob,
+        // a second character behind gob on the same line.
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().collision_type = 0x42;
+        a.world.characters_solid.insert("gob".into());
+        let mut second = a.world.anims[0].clone();
+        second.player.name = "gob2".into();
+        second.player.base.position = [0.0, 3000.0, 100.0];
+        a.world.anims.push(second);
+        a.world.characters_solid.insert("gob2".into());
+        a.world.connor_at = Some([0.0, -5000.0, 100.0]);
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, -4400.0, 1300.0], [0.0, 5000.0, 1300.0], 10, "test");
+        assert_eq!(a.world.bolts[0].name, "hammer1");
+        for _ in 0..12 {
+            fly(&mut a);
+        }
+        assert!(a.world.bolts.is_empty(), "back in his hands");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("touches gob at") && log.contains("a hit of 40 (modifier 30 + ranged damage 10 = 40, capped at 300, at least 0: 40), Projectile"), "{log}");
+        assert!(!log.contains("touches gob2"), "one thing only: {log}");
+        // Out: 1,600 per update; the touch in update 3 (cylinder at y −1,035
+        // minus the ball): put back at its place after update 2.
+        assert!(log.contains("hammer1: turns back (its touch) at (") && log.contains(", -1200, 1300), its last place before; 3200 flown out, range back 1600 (3200 - one step 1600)"), "{log}");
+        assert!(log.contains("hammer1 update 4 (back): touches Connor at") || log.contains("hammer1: the way back ends (more than its range 1600)"), "{log}");
+        assert_eq!(a.world.hammers_back.len(), 1);
+        assert_eq!(a.world.hammers_back[0].0, "Connor");
+        assert_eq!(a.world.anims[1].character.as_ref().unwrap().fight.as_ref().unwrap().stats.0[0], 15, "gob2 untouched");
+    }
+
+    #[test]
+    fn the_hammer_turns_back_at_its_range_and_at_the_ground() {
+        // Rules 7, 9: nothing in the way: out past 15,000, back 15,000 − 1,600.
+        let mut a = fighter();
+        a.world.connor_at = Some([0.0, 1_000_000.0, 100.0]);
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 1300.0], [0.0, -5000.0, 1300.0], 10, "test");
+        let mut updates = 0;
+        while !a.world.bolts.is_empty() && updates < 40 {
+            fly(&mut a);
+            updates += 1;
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hammer1: turns back (more than its range 15000) at (0, -14400, 1300), its last place before; 14400 flown out, range back 12800"), "{log}");
+        assert!(log.contains("hammer1: the way back ends (more than its range 12800): removed; Connor is told it came back, 19 updates after the throw"), "{log}");
+        // 12,800 back is reached at update 18; it ends on passing it.
+        assert_eq!(updates, 19, "never reaches him: caught anyway");
+        // At the ground near him: back at once.
+        a.world.hammers_back.clear();
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 600.0], [0.0, -700.0, 0.0], 10, "test");
+        fly(&mut a);
+        fly(&mut a);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hammer2: turns back (at or below the floor grid (100)) at (0, 0, 600)"), "{log}");
+        assert_eq!(a.world.hammers_back.len(), 1, "{log}");
+        // Connor on its line: ignored on the way out, he stops it on the way back.
+        a.world.hammers_back.clear();
+        a.world.connor_at = Some([0.0, -8000.0, 100.0]);
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 1300.0], [0.0, -5000.0, 1300.0], 10, "test");
+        for _ in 0..20 {
+            fly(&mut a);
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hammer3 update 5 (out): at (") && !log.contains("hammer3 update 5 (out): touches"), "{log}");
+        assert!(log.contains("(back): touches Connor at") && log.contains("hammer3: the way back ends (touching Connor)"), "{log}");
+        assert_eq!(a.world.hammers_back.len(), 1);
+    }
+
+    #[test]
+    fn the_hammer_on_the_lever_runs_its_script_and_spares_immune_ones() {
+        // Rule 8: `tmblrcyl` (type 0x461) runs lever1's script; an object
+        // with bit 0x4000 takes 0 and gets no ProjImmune.
+        let mut a = fighter();
+        a.world.connor_at = None;
+        let obj = |name: &str, t: u32| crate::collide::BoxCollider {
+            name: name.into(),
+            min: [-300.0, -300.0, 0.0],
+            max: [300.0, 300.0, 2000.0],
+            placement: Placement::at([0.0, -4000.0, 100.0]),
+            kind: crate::collide::ColliderKind { collision_type: t, ..Default::default() },
+        };
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 1300.0], [0.0, -5000.0, 1300.0], 10, "test");
+        for _ in 0..3 {
+            a.world.bolts_step(&FlatGround, &[], &[obj("tmblrcyl", 0x461)]);
+        }
+        assert_eq!(a.world.hammer_calls, vec!["lever1".to_string()]);
+        assert!(a.world.fight_log.join("\n").contains("object tmblrcyl at") && a.world.fight_log.join("\n").contains("no damage; lever1's script runs with lever1 ConnorAction"));
+        a.world.hammer_calls.clear();
+        a.world.bolts.clear();
+        a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 1300.0], [0.0, -5000.0, 1300.0], 10, "test");
+        for _ in 0..3 {
+            a.world.bolts_step(&FlatGround, &[], &[obj("statue", 0x4001)]);
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("object statue at") && log.contains("a hit of 0, no ProjImmune"), "{log}");
+        assert!(a.world.immune_calls.is_empty() && a.world.hammer_calls.is_empty());
     }
 
     #[test]

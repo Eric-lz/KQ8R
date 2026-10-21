@@ -289,7 +289,34 @@ pub struct Bolt {
     pub balls: Option<crate::collide::BallStack>,
     /// Updates flown, for the log.
     pub updates: u32,
+    /// Azriel's Hammer (a `KQHammer` file): it flies back instead of
+    /// being removed (`azriel-hammer.md` rules 7–9; M6 6b-2).
+    pub hammer: Option<HammerFlight>,
 }
+
+/// Azriel's Hammer in flight (`azriel-hammer.md` rules 6–9).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HammerFlight {
+    /// On its way back (rule 9): only Connor stops it.
+    pub back: bool,
+    /// Its file's `modifier`, `minDamage`, `maxDamage` (rule 6).
+    pub modifier: i64,
+    pub min_damage: i64,
+    pub max_damage: i64,
+}
+
+/// `azriel-hammer.md` rule 8: the hammer's hit: `modifier` + the ranged
+/// damage, capped at `maxDamage`, then raised to at least `minDamage`
+/// (in that order: "Do not reproduce", kept).
+pub fn hammer_damage(modifier: i64, ranged: i64, min: i64, max: i64) -> i64 {
+    (modifier + ranged).min(max).max(min)
+}
+
+/// Rule 8: the Dead City objects whose touch runs `lever1.cs` with
+/// `lever1 ConnorAction` instead of a hit (the lever and its tumbler).
+pub const HAMMER_LEVER_OBJECTS: [&str; 2] = ["lever1", "tmblrcyl"];
+/// The object whose script that is.
+pub const HAMMER_LEVER: &str = "lever1";
 
 impl Bolt {
     /// Rule 27: its model turned to its direction (its model's front is
@@ -1144,8 +1171,9 @@ impl crate::active::WorldState {
         };
         self.bolts_shot += 1;
         let balls = p.bounds.map(|(min, max)| crate::collide::BallStack::from_box(min, max));
+        let hammer = p.hammer.then_some(HammerFlight { back: false, modifier: p.modifier, min_damage: p.min_damage, max_damage: p.max_damage });
         let bolt = Bolt {
-            name: format!("bolt{}", self.bolts_shot),
+            name: format!("{}{}", if hammer.is_some() { "hammer" } else { "bolt" }, self.bolts_shot),
             shooter: shooter.to_string(),
             shape: p.shape.clone(),
             position: from,
@@ -1156,10 +1184,12 @@ impl crate::active::WorldState {
             travelled: 0.0,
             max: p.max_distance,
             damage,
-            kind: bolt_kind(p.weapon_type),
+            // azriel-hammer.md rule 8: the hammer's hits are `Projectile`.
+            kind: if hammer.is_some() { HitKind::Projectile } else { bolt_kind(p.weapon_type) },
             mask: p.collider_mask,
             balls,
             updates: 0,
+            hammer,
         };
         let shape = match &bolt.balls {
             Some(b) => format!("box {:?} as {} ball(s) of radius {:.0} at {:?} above it (Q140 a)", p.bounds.unwrap_or_default(), b.heights.len(), b.radius, b.heights),
@@ -1168,13 +1198,23 @@ impl crate::active::WorldState {
         self.fight_note(
             shooter,
             format!(
-                "{why}; shoots {} ({file}, {} units/s = {:.0} per update, range {}, mask 0x{:X}, {}) from ({:.0}, {:.0}, {:.0}) at ({:.0}, {:.0}, {:.0}): heading {:.1} deg, pitch {:.1} deg; {shape} (ranged-weapons.md rules 26, 27)",
+                "{why}; shoots {} ({file}, {} units/s = {:.0} per update, range {}, mask 0x{:X}, {}{}) from ({:.0}, {:.0}, {:.0}) at ({:.0}, {:.0}, {:.0}): heading {:.1} deg, pitch {:.1} deg; {shape} (ranged-weapons.md rules 26, 27)",
                 bolt.name,
                 p.speed,
                 p.speed / crate::UPDATES_PER_SECOND as f32,
                 p.max_distance,
                 bolt.mask,
                 bolt.kind.name(),
+                match &bolt.hammer {
+                    Some(h) => format!(
+                        "; Azriel's Hammer: a hit is {} (modifier {} + ranged damage {damage}, capped at {}, at least {}; azriel-hammer.md rule 8)",
+                        hammer_damage(h.modifier, damage, h.min_damage, h.max_damage),
+                        h.modifier,
+                        h.max_damage,
+                        h.min_damage
+                    ),
+                    None => String::new(),
+                },
                 from[0],
                 from[1],
                 from[2],
@@ -1196,12 +1236,20 @@ impl crate::active::WorldState {
     /// inside counts as a hit (`connor-collision.md` rule 19). At the
     /// first touch it hits (rule 30) and is removed; otherwise, at or below
     /// the floor grid it is removed, and past `maxDistance` too.
+    ///
+    /// Azriel's Hammer (`azriel-hammer.md` rules 7–9; M6 6b-2): on its way
+    /// out the same move (never its thrower); at the first touch (rule 8's
+    /// hit), at or below the floor grid, or past `maxDistance` it turns
+    /// back instead of being removed. On the way back only Connor stops it;
+    /// touching him, passing its range or reaching the floor grid it is
+    /// removed and its thrower is told it came back (`hammers_back`).
     pub(crate) fn bolts_step(&mut self, ground: &dyn crate::connor_mover::GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) {
         use crate::collide::{BallStack, CylinderCollider, ObjectHit};
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         let bolts = std::mem::take(&mut self.bolts);
         let mut kept = Vec::new();
         for mut b in bolts {
+            let back = b.hammer.as_ref().is_some_and(|h| h.back);
             let from = b.position;
             let step = b.speed * dt;
             let to: [f32; 3] = std::array::from_fn(|k| from[k] + b.direction[k] * step);
@@ -1217,14 +1265,15 @@ impl crate::active::WorldState {
                     best = Some((d, what, p));
                 }
             };
-            if b.mask & 0x8 != 0 {
+            // azriel-hammer.md rule 9: on its way back only Connor.
+            if b.mask & 0x8 != 0 && !back {
                 for w in buildings.iter().filter(|w| !self.is_switched_off(&w.name)) {
                     if let Some(c) = w.sweep(balls, from, to) {
                         keep(c.touch, Touched::Building(w.name.clone()));
                     }
                 }
             }
-            for o in objects.iter().filter(|o| o.kind.collision_type & b.mask != 0 && !skip(&o.name) && !self.is_switched_off(&o.name)) {
+            for o in objects.iter().filter(|o| !back && o.kind.collision_type & b.mask != 0 && !skip(&o.name) && !self.is_switched_off(&o.name)) {
                 match o.sweep(balls, from, to) {
                     Some(ObjectHit::Contact(c)) => keep(c.touch, Touched::Object(o.name.clone(), o.kind.collision_type)),
                     // connor-collision.md rule 19: projectiles count a start inside as a hit.
@@ -1234,7 +1283,7 @@ impl crate::active::WorldState {
             }
             for (j, a) in self.anims.iter().enumerate() {
                 let Some(c) = a.character.as_deref() else { continue };
-                if a.gone || c.unborn || c.collision_type & b.mask == 0 || skip(&a.player.name) || !self.characters_solid.contains(&a.player.name.to_ascii_lowercase()) {
+                if back || a.gone || c.unborn || c.collision_type & b.mask == 0 || skip(&a.player.name) || !self.characters_solid.contains(&a.player.name.to_ascii_lowercase()) {
                     continue;
                 }
                 let Some((min, max)) = c.bounds else { continue };
@@ -1246,7 +1295,7 @@ impl crate::active::WorldState {
                     keep(k.touch, Touched::Character(j));
                 }
             }
-            if let (true, Some(at)) = (b.mask & crate::collide::CONNOR_TYPE != 0 && !skip("Connor"), self.connor_at) {
+            if let (true, Some(at)) = (back || (b.mask & crate::collide::CONNOR_TYPE != 0 && !skip("Connor")), self.connor_at) {
                 let (min, max) = crate::connor_mover::CONNOR_BOX;
                 let cyl = CylinderCollider::from_box("Connor", at, min, max, crate::collide::CONNOR_TYPE, 0);
                 let s = cyl.sweep(balls, from, to);
@@ -1257,6 +1306,12 @@ impl crate::active::WorldState {
                 }
             }
             b.updates += 1;
+            if b.hammer.is_some() {
+                if let Some(b) = self.hammer_step(b, best, from, to, step, ground) {
+                    kept.push(b);
+                }
+                continue;
+            }
             let Some((d, what, p)) = best else {
                 b.travelled += step;
                 b.position = to;
@@ -1312,6 +1367,113 @@ impl crate::active::WorldState {
                     self.fight_note(&shooter, format!("{}: {line}", b.name));
                 } else {
                     self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + ": no script: nothing (how objects take damage: Q139 e)");
+                }
+            }
+        }
+    }
+}
+
+impl crate::active::WorldState {
+    /// `azriel-hammer.md` rules 7–9 (M6 6b-2): the hammer's update after
+    /// its sweep (`best`: its first touch). Way out: a touch (its hit,
+    /// rule 8), the floor grid or its range turns it back: put back at
+    /// `from` (its last position before), direction reversed, distance 0,
+    /// range = the distance flown out − one step, only Connor in its mask.
+    /// Way back: touching Connor, passing its range or the floor grid
+    /// ends it: removed, and `hammers_back` tells the thrower. Returns it
+    /// while it flies.
+    fn hammer_step(&mut self, mut b: Bolt, best: Option<(f32, Touched, [f32; 3])>, from: [f32; 3], to: [f32; 3], step: f32, ground: &dyn crate::connor_mover::GroundLookup) -> Option<Bolt> {
+        let h = b.hammer.clone()?;
+        let way = if h.back { "back" } else { "out" };
+        let thrower = b.shooter.clone();
+        let end = match best {
+            Some((d, what, p)) => {
+                let line = format!("{} update {} ({way}): touches {{}} at ({:.0}, {:.0}, {:.0}), {:.0} travelled", b.name, b.updates, p[0], p[1], p[2], b.travelled + d);
+                if h.back {
+                    self.fight_note(&thrower, line.replace("{}", "Connor"));
+                    "touching Connor".to_string()
+                } else {
+                    self.hammer_hits(&b, &h, what, &line);
+                    "its touch".to_string()
+                }
+            }
+            None => {
+                let travelled = b.travelled + step;
+                self.fight_note(&thrower, format!("{} update {} ({way}): at ({:.0}, {:.0}, {:.0}), {travelled:.0} travelled", b.name, b.updates, to[0], to[1], to[2]));
+                if let Some(g) = ground.ground(to[0], to[1]).map(|(g, _)| g).filter(|g| to[2] <= *g) {
+                    format!("at or below the floor grid ({g:.0})")
+                } else if travelled > b.max {
+                    format!("more than its range {:.0}", b.max)
+                } else {
+                    b.travelled = travelled;
+                    b.position = to;
+                    return Some(b);
+                }
+            }
+        };
+        if h.back {
+            self.fight_note(&thrower, format!("{}: the way back ends ({end}): removed; {thrower} is told it came back, {} updates after the throw (rule 9)", b.name, b.updates));
+            self.hammers_back.push((thrower, format!("{} came back ({end}) after {} updates", b.name, b.updates)));
+            return None;
+        }
+        let out = b.travelled;
+        let direction = b.direction.map(|v| -v);
+        b.direction = direction;
+        b.heading = direction[0].atan2(-direction[1]);
+        b.pitch = direction[2].clamp(-1.0, 1.0).asin();
+        b.position = from;
+        b.travelled = 0.0;
+        b.max = out - step;
+        b.mask = crate::collide::CONNOR_TYPE;
+        b.hammer = Some(HammerFlight { back: true, ..h });
+        self.fight_note(
+            &thrower,
+            format!(
+                "{}: turns back ({end}) at ({:.0}, {:.0}, {:.0}), its last place before; {out:.0} flown out, range back {:.0} ({out:.0} - one step {step:.0}); heading {:.1} deg, pitch {:.1} deg; only Connor stops it now (rule 9)",
+                b.name,
+                from[0],
+                from[1],
+                from[2],
+                b.max,
+                b.heading.to_degrees(),
+                b.pitch.to_degrees()
+            ),
+        );
+        Some(b)
+    }
+
+    /// `azriel-hammer.md` rule 8: what the hammer's touch on its way out
+    /// does. `line`: the log line, with `{}` for what it touched.
+    fn hammer_hits(&mut self, b: &Bolt, h: &HammerFlight, what: Touched, line: &str) {
+        let thrower = b.shooter.clone();
+        let d = hammer_damage(h.modifier, b.damage, h.min_damage, h.max_damage);
+        let parts = format!("modifier {} + ranged damage {} = {}, capped at {}, at least {}: {d}", h.modifier, b.damage, h.modifier + b.damage, h.max_damage, h.min_damage);
+        match what {
+            Touched::Building(n) => self.fight_note(&thrower, line.replace("{}", &format!("building {n}")) + ": no hit (rule 8)"),
+            Touched::Connor => self.fight_note(&thrower, line.replace("{}", "Connor") + ": ignored on the way out (rule 7)"),
+            Touched::Character(j) => {
+                let who = self.anims[j].player.name.clone();
+                let t = self.anims[j].character.as_deref().map_or(0, |c| c.collision_type);
+                if t & IMMUNE_TO_PROJECTILES != 0 {
+                    self.fight_note(&thrower, line.replace("{}", &who) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, no ProjImmune (rule 8)"));
+                    self.hit_character(j, &thrower, 0, b.kind);
+                } else {
+                    self.fight_note(&thrower, line.replace("{}", &who) + &format!(": a hit of {d} ({parts}), {} (rule 8; fighting.md rules 16-33)", b.kind.name()));
+                    self.hit_character(j, &thrower, d, b.kind);
+                }
+            }
+            Touched::Object(n, t) => {
+                if HAMMER_LEVER_OBJECTS.iter().any(|l| l.eq_ignore_ascii_case(&n)) {
+                    self.fight_note(&thrower, line.replace("{}", &format!("object {n}")) + &format!(": no damage; {HAMMER_LEVER}'s script runs with {HAMMER_LEVER} ConnorAction (rule 8)"));
+                    self.hammer_calls.push(HAMMER_LEVER.to_string());
+                } else if t & IMMUNE_TO_PROJECTILES != 0 {
+                    self.fight_note(&thrower, line.replace("{}", &format!("object {n}")) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, no ProjImmune (rule 8)"));
+                } else if self.object_at(&n).is_some() {
+                    self.fight_note(&thrower, line.replace("{}", &format!("object {n}")) + &format!(": a hit of {d} ({parts}), {} (rule 8)", b.kind.name()));
+                    let taken = self.object_takes(&n, d, b.kind);
+                    self.fight_note(&thrower, format!("{}: {taken}", b.name));
+                } else {
+                    self.fight_note(&thrower, line.replace("{}", &format!("object {n}")) + ": no script: nothing (how objects take damage: Q139 e)");
                 }
             }
         }
