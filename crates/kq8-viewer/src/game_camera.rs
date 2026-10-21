@@ -370,7 +370,7 @@ impl GameCam {
                 line += "; the \"turn back\" switch goes OFF (a flight ended)";
             }
             line += &format!(
-                "; last update: on the spot, places on: {}{}; the flight is over, the camera stays here",
+                "; last update: its last step (on the spot unless a move during the flight, rule 6), places on: {}{}; the flight is over, the camera stays here",
                 s.pulled_from.map_or("within the range: stays".to_string(), |d| format!("{d:.1} from the point 1400 above the aim: pulled onto the range ({:.0}, {:.0})", self.cam.range.0, self.cam.range.1)),
                 s.height.map_or(String::new(), height_note)
             );

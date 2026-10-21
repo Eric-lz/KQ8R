@@ -185,7 +185,8 @@ impl Flight {
     }
 
     /// One update: the step and the roll step, then (if `aims`) the aim.
-    /// On the last update the camera is exactly on the spot, "places"
+    /// On the last update the camera is on the spot (unless a `move
+    /// KQCamera` moved it during the flight: rule 6), "places"
     /// comes back on, it is pulled onto `range` around the aim point and
     /// the height rule runs as "not moved" (`settle_height`); `ground` is
     /// the floor grid's height under a point, `surface_line` the line test
@@ -197,7 +198,13 @@ impl Flight {
         let mut height = None;
         if last {
             let start = *position;
-            let (p, from) = onto_range(self.spot, self.aim, range);
+            // The last step too (rule 4: on the spot after update N); a
+            // `move KQCamera` during the flight moved the camera, so the
+            // remaining steps end away from the spot (rule 6). Within half a
+            // unit: the spot itself (float rounding).
+            let end: [f32; 3] = std::array::from_fn(|k| start[k] + self.step[k]);
+            let end = if distance(end, self.spot) < 0.5 { self.spot } else { end };
+            let (p, from) = onto_range(end, self.aim, range);
             pulled_from = from;
             let (p, h, g) = settle_height(start, p, self.aim, range, ground, surface_line);
             *position = p;
@@ -267,6 +274,36 @@ mod tests {
         assert_eq!(flight_updates(Some(3.0), 1.0), 46);
         assert_eq!(flight_updates(None, 10_000.0), 31);
         assert_eq!(flight_updates(Some(-1.0), 0.0), 1);
+    }
+
+    #[test]
+    fn a_camera_move_during_a_flight_makes_it_end_away_from_the_spot() {
+        // camera.md rule 6 (`ax.cs`, cdhm1 then cdhm2): 0.6 s → 10
+        // updates from (139260, 249970, 19550) to the spot (139760, 249700,
+        // 17550); after 7 `move KQCamera` puts it at (137200, 250000,
+        // 16500); the 3 steps left are added from there, no jump back up.
+        let spot = [139760.0, 249700.0, 17550.0];
+        let mut f = Flight::new([139260.0, 249970.0, 19550.0], 0.0, spot, [141400.0, 249400.0, 13000.0], Some(0.6), None);
+        assert_eq!(f.n, 10);
+        let mut p = [139260.0, 249970.0, 19550.0];
+        let mut v = View { tilt: -1.15, heading: -1.5, roll: 0.0, locked: false };
+        let range = (1500.0, 5000.0);
+        for _ in 0..7 {
+            f.update(&mut p, &mut v, false, range, &|_, _| Some(15045.0), &|_, _| None);
+        }
+        p = [137200.0, 250000.0, 16500.0];
+        for _ in 0..3 {
+            f.update(&mut p, &mut v, false, range, &|_, _| Some(15045.0), &|_, _| None);
+        }
+        assert!(f.done());
+        assert!((p[0] - 137350.0).abs() < 1.0 && p[2] < 16500.0, "ends away from the spot, not at 17550: {p:?}");
+        // Undisturbed it ends exactly on the spot.
+        let mut g = Flight::new([139260.0, 249970.0, 19550.0], 0.0, spot, [141400.0, 249400.0, 13000.0], Some(0.6), None);
+        let mut q = [139260.0, 249970.0, 19550.0];
+        while !g.done() {
+            g.update(&mut q, &mut v, false, (0.0, 1.0e9), &|_, _| Some(0.0), &|_, _| None);
+        }
+        assert_eq!(q, spot);
     }
 
     #[test]

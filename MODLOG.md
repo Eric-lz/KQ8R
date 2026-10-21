@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 The camera no longer jumps back up during the axe cutscene
+
+**Changed:** `camera_flight.rs`: a flight's last update adds its step like every other update (exactly on the spot when nothing moved the camera), instead of snapping to the spot. So when `move KQCamera` places the camera during a flight, the remaining steps go on from there and the flight ends away from its spot. Before, the last update snapped back to the spot. 1 new test; the log wording in `game_camera.rs`; provenance.
+**Why:** The user's check of the axe cutscene: after Connor walks out looking at the axe, the camera jolts upwards and looks straight ahead. In the user's `camera.log`: at the end of `cdhm1` (`ax.cs` lines 40–42) the camera is put high (19,550), tilted down, and flies 10 updates toward (139760, 249700, 17550); `cdhm2` (line 45) moves it to (137200, 250000, 16500) after 8 of them; our last update then snapped it to 17,550. `camera.md` rule 6 ("`move KQCamera` during a flight ... the flight's remaining steps are then added from the new place, so it ends away from the spot").
+**Tested how:** `cargo test --workspace` (458 core tests), clippy clean. Viewer: the cutscene run of the entry below; `camera.log` (copy `camera-axe-cutscene.log`).
+**Result:** The flight now ends at (137350, 249919, 16445): the two steps after the move, then the height rule's lift to ground + 1,400 (16,100 → 16,445). No jump up to 17,550. An undisturbed flight still ends exactly on its spot (unit test; the watermill flight test unchanged).
+**Still broken / not tested:** Not looked at by eye. The user thought the camera should look up at the sky there. By the script it looks steeply down from high up at the end of `cdhm1` (tilt −1.15, looking 66° down), then the `cdhm2` shot (tilt −0.24). Whether our tilt sign for `move KQCamera` matches the original has not been checked for so steep an angle: needs the user's look.
+**Next:** The user: the cutscene by eye again, especially the shot at the end of `cdhm1`.
+
 ## 2026-10-21 The axe cutscene starts: a trap loaded while playing has its box
 
 **Changed:** A `KQTrap` prepared for a script's `loadKQ` (Daventry: `henchtp.kq`, loaded by `ax.cs` when Connor takes the axe) is built at load like any trap, switched off; the `loadKQ` switches it on (`load.rs` `dormant_traps`, `door_view.rs`, `active.rs` `load_kq`); no `Init` at the start for it (it gets its `Init` at the `loadKQ`). **Stand-in (Q141):** a script's weapon request while a scripted walk runs switches the weapon's set at once and plays nothing, so the walk goes on (`connor_view.rs` `ready_set`). QUESTIONS (Q141), provenance.
