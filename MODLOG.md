@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Console: a typing line at the bottom of the terminal
+
+**Changed:** `console.rs` (`screen`): in a real terminal the last line is the typing line, a divider above it, and the game's output scrolls only above (scrolling region); keys read one at a time with `crossterm` (new dependency, MIT; `Cargo.toml`, CREDITS), Enter / Backspace / Esc / Up / Down / Ctrl+C. `main.rs` gives the terminal back when the window closes; a panic does too. Piped input still reads plain lines. DESIGN (step 2), README, FEATURES, provenance.
+**Why:** The user: the game's output kept pushing the half-typed command up the screen.
+**Tested how:** clippy clean; `printf "give templesword
+where
+" | cargo play --world Daventry --sound off --frames 100` (the plain path), `console.log`.
+**Result:** The plain path works as before (`give templesword` result 0, `where`).
+**Still broken / not tested:** The typing line itself is **not tested**: it only turns on in a real terminal window, which this session can't type into. Unix terminals not tried (raw mode there changes how line ends print). Left/Right to move inside the text not done.
+**Next:** The user: run `cargo play` in a terminal and type.
+
 ## 2026-10-21 A command console in the terminal
 
 **Changed:** New `crates/kq8-viewer/src/console.rs`, wired in `main.rs`: lines typed in the terminal that started the game run as script commands at the next update (the same runner as `--command`), with `help` and `where` added. The terminal shows each line, the log lines it wrote and its result; also `kq8-artifacts/logs/console.log`. DESIGN (plan, done), README, FEATURES, provenance.

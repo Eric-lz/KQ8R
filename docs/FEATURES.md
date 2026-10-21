@@ -599,7 +599,8 @@ miss, roll, flinch, death, drop and shot is in
 - **Command console:** type script commands in the terminal that runs
   the game (`give SmCrossbow`, `move Connor 3 0 0 2000`, `where`,
   `help`); each runs at the next update as if a script ran it, and the
-  terminal shows its result. Also in `kq8-artifacts/logs/console.log`.
+  terminal shows its result. You type on the terminal's bottom line
+  (Up/Down: earlier commands); the game's output scrolls above it. Also in `kq8-artifacts/logs/console.log`.
 - **Graphics API** (`--renderer`): draw with Vulkan or DirectX 12 instead
   of letting the graphics library choose; `viewer.log` says which one
   ran. Checked by the user 2026-10-16 on Windows with one NVIDIA card;

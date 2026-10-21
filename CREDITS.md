@@ -18,6 +18,7 @@ or endorsed by them.
 | `arraydeque` crate (used by `explode`) | | MIT / Apache-2.0 | 0.4.5 | |
 | [`png`](https://github.com/image-rs/image-png) crate | image-rs contributors | MIT OR Apache-2.0 | 0.18.1 | Writing PNG files for checking |
 | [Bevy](https://bevy.org) | Bevy contributors | MIT OR Apache-2.0 | 0.20.0 | Window, 3D drawing, input (`kq8-viewer` only). Its many dependencies are listed in `Cargo.lock`; check their licences before any binary release |
+| [`crossterm`](https://github.com/crossterm-rs/crossterm) crate | crossterm contributors | MIT | 0.29.0 | The viewer's console: single keys, terminal size, raw mode |
 | Used by `png`: `adler2`, `bitflags`, `cfg-if`, `crc32fast`, `fdeflate`, `flate2`, `miniz_oxide`, `simd-adler32`, `zlib-rs` | | MIT, Apache-2.0, Zlib or 0BSD (each permissive) | see `Cargo.lock` | |
 
 Per-fact sources are listed in [docs/provenance/](docs/provenance/README.md).

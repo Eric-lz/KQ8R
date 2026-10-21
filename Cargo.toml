@@ -19,6 +19,8 @@ png = "0.18.1"
 # The sound card (M3 3h-2, chosen by the user): our own mixer feeds it.
 cpal = "0.18.2"
 # Only the 3D parts; no audio.
+# The viewer's command console: single keys and the terminal's layout.
+crossterm = { version = "0.29.0", default-features = false, features = ["events", "windows"] }
 bevy = { version = "0.20.0", default-features = false, features = ["3d", "bevy_ui", "bevy_ui_render"] }
 
 # Decompressing 133 MB byte-by-byte is slow in debug builds; optimise

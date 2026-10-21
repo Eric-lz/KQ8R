@@ -1660,3 +1660,14 @@ One step:
    given, 0).
    **Done** as planned (`crates/kq8-viewer/src/console.rs`); tested with
    commands piped in (not typed by hand), checked in the logs only.
+2. **The typing line** (the user's request after trying step 1: the
+   game's output moved the half-typed text up the screen). In a real
+   terminal the last line is kept for typing, with a divider above it;
+   the game's output scrolls only in the lines above (the terminal's
+   "scrolling region"). The console reads single keys (the `crossterm`
+   library) and draws the typed text itself: Enter runs it, Backspace,
+   Esc clears, Up/Down go through earlier lines, Ctrl+C still stops the
+   game. The terminal is given back when the game ends (or crashes).
+   With piped input (our tests) it reads plain lines as in step 1.
+   **Test:** `cargo play --world Daventry`; the bottom line shows `> `,
+   the game's lines appear above the divider while you type.

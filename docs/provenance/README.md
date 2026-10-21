@@ -2990,4 +2990,6 @@ the script commands already built (each keeps its own source above:
 `give` from `items.md` rule 9, `move` from `objects.md` "(d)"
 and `anim-scripts.md`, and so on). The results shown are
 `$Console::Return` as those commands already set it (`doors.md` "Q45"
-(e)). `help` and `where` are ours.
+(e)). `help` and `where` are ours. The typing line uses the `crossterm`
+library (MIT) and standard terminal control codes (scrolling region,
+save / restore cursor).

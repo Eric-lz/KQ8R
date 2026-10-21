@@ -620,6 +620,8 @@ fn main() -> ExitCode {
         }
     }
     app.run();
+    // The console's typing line gives the terminal back.
+    console::close_screen();
 
     let mut log = shared.log.lock().unwrap();
     let s = shared.stats.lock().unwrap();

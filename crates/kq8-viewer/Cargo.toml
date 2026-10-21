@@ -14,3 +14,4 @@ kq8-data.workspace = true
 kq8-core.workspace = true
 kq8-audio.workspace = true
 bevy.workspace = true
+crossterm.workspace = true
