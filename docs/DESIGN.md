@@ -2065,3 +2065,51 @@ One step:
    **Test:** piped commands, `console.log`, `fight.log`.
    **Done** 2026-10-21 (`console_words.rs`; `fight.rs` `console_kill`
    with a unit test); tested with piped commands and the logs only.
+
+### Outside the milestones: Connor's levels checked, level-up flame and sound (planned 2026-10-21)
+
+The user asked for a check of experience, levels, health, armour and
+attack, and for the level-up flame and sound.
+
+**The check (2026-10-21, logs only).** Daventry, stats events sent by
+`--command`: thresholds 10, 20, 40, 80, 160, 320, 640 (10 × 2^(level − 1));
+strictly more than the threshold; one level per event; each level +10
+maximum health with a full heal, hand +5, ranged +2, armour +1; health
+capped at 10 × level. All as `anim-scripts.md` rule 19, `interface.md`
+rules 21–30 and `fighting.md` rule 4. Equipment given while playing adds
+its columns (Small Axe hand +15, leather armour / boots / gloves armour
++2 / +1 / +1, Small Crossbow ranged +5). The data agrees: every world's
+`conStart.cs` (used when a world is started directly) sets a level with
+`KQConner::setLevel N` and adds exactly 10 × (N − 1) health and about
+5 / 2 / 1 × (N − 1) hand / ranged / armour (Dead City level 8:
+`70 35 14 7 0`).
+
+**Wrong:** a world started directly (every world but Daventry) gave
+Connor nothing of its `conStart.cs` but the items. He started Dead City
+at level 1, 10 health, hand 10, armour 0, although he carried the Small
+Axe and leather armour.
+
+Steps:
+
+1. **L-1: the start scripts' Connor lines.** While the start-up scripts
+   run, `KQConner::setLevel N` and `sendEvent 0 Connor
+   KQStatsChangeRequestEvent ...` are kept in script order with the items
+   given to Connor. When play starts they are done in that order: each
+   item goes into his inventory by the same rule as a `give`
+   (`inventory.md` rule 8: equipment put on, its numbers added); the level
+   is set; the stats event is sent. Stand-in (Q149 a): `setLevel` only
+   sets the level number; health and the rest come from the stats event
+   that follows it in every world.
+   **Test:** `cargo run --release -p kq8-viewer -- --world DeadCity`;
+   `stats` in the console: level 8, health 80 of 80, hand 60 (10 + Small
+   Axe 15 + 35), ranged 19 (5 + 14), armour 11 (4 + 7).
+   **Done** 2026-10-21 (`kq8-core/connor_start.rs`, `set_level`); checked
+   in the logs only (Dead City, Swamp, temple1, Daventry unchanged).
+2. **L-2: the level-up flame** (`IDCTL_METERS_LEVELUP`, `flame14.pba`,
+   over the level number). Stand-in (Q149 b, `interface.md` open
+   question 3): shown and played once from its first frame when Connor
+   goes up a level, at 15 frames per second (Q108 d), then hidden again;
+   the meters pop up as for any change.
+3. **L-3: the level-up sound.** Stand-in (Q149 c): `GAME/SOUND/LEVEL.AUD`,
+   the only sound with a level name; no data file names it. The user
+   compares it by ear with the original.

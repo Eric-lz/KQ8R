@@ -142,6 +142,13 @@ pub trait Host {
     /// on characters entering the world get the combat level's factor.
     /// By default nothing is done.
     fn apply_combat_level(&mut self, _on: bool, _at: &str) {}
+    /// `KQConner::setLevel` and `sendEvent` with their words expanded:
+    /// lines for Connor that are done when play starts (DESIGN "Connor's
+    /// levels checked", L-1). Returns false when not kept (then counted
+    /// as not run). By default nothing is kept.
+    fn connor_line(&mut self, _words: &[String], _at: &str) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -268,7 +275,7 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
             }
             "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
             "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {}
-            "applycombatlevel" => {}
+            "applycombatlevel" | "kqconner::setlevel" | "sendevent" => {}
             c if c.ends_with(".cs") => {}
             // Not run: counted without looking at its variables.
             _ => {
@@ -349,6 +356,11 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
             "applycombatlevel" => {
                 let on = words.get(1).and_then(|v| v.parse::<f64>().ok()).is_some_and(|v| v != 0.0);
                 host.apply_combat_level(on, &at);
+            }
+            "kqconner::setlevel" | "sendevent" => {
+                if !host.connor_line(&words, &at) {
+                    *out.other_commands.entry(command).or_default() += 1;
+                }
             }
             "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {
                 out.item_commands += 1;

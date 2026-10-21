@@ -884,6 +884,15 @@ pub fn spawn_doors(
     // carries gives his bolt file and shoot offset.
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
     active.world.set_connor_fight(objects.connor_fight.clone());
+    // DESIGN "Connor's levels checked" (L-1): what `conStart.cs` gives
+    // him (items put on, his level, a stats event), in script order.
+    let start = std::mem::take(&mut objects.connor_start);
+    for line in kq8_core::connor_start::run(&mut active.world, &start) {
+        main_log.summary(format!("connor start: {line}"));
+    }
+    if let Some(c) = active.world.connor_stats {
+        main_log.summary(format!("connor start: Connor {:?} level {} after the start-up scripts (health / hand / ranged / armour / experience)", c.stats.0, c.level));
+    }
     // character-movement.md rule 20 (M5 5a-4).
     if let Some(n) = objects.max_monsters {
         active.world.max_monsters = n;

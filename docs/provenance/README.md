@@ -3118,3 +3118,17 @@ every set at start-up: +2.2 s per load, measured).
 | --- | --- | --- |
 | 6c-1: one set's movements read by one function, at start-up as before | Ours (refactor) | `viewer.log` "connor:" lines of Daventry and Swamp identical to the earlier build |
 | 6c-2: the sets of weapons no file of the world names are listed at start-up; when Connor carries one, its set is read (the world's archives opened again) and drawn as at start-up; its materials join the potion looks (Strength, Invisible, with this world's `I_` pictures) and the mouth | Ours; the drawing and the looks as 5d fix 9, M5 5g-5, 5g-6 | Viewer, Dead City, `give LakeSword`: "conSword.anm ... loaded while playing: 39 movements, ... 157 ms"; after the draw `consword.anm/stop` drawn; looks redone (823 -> 900 materials). Daventry's first-frame light line identical to the earlier build |
+
+## Connor's levels checked, start-up lines — `crates/kq8-core/src/connor_start.rs`, `active.rs` (`set_level`); `kq8-data` `world_script.rs` (`connor_line`); viewer `load.rs`, `door_view.rs`
+
+Source: `anim-scripts.md` rule 19, `interface.md` rules 21–30,
+`fighting.md` rule 4, `inventory.md` rules 8 and 14 (the check), and the
+data: every world's `conStart.cs` (`KQConner::setLevel N`, then
+`sendEvent 0 Connor KQStatsChangeRequestEvent ...`). No other source.
+
+| What | Source | Check |
+| --- | --- | --- |
+| The level rules as built in M3 3l-6 are right: thresholds 10 × 2^(level − 1) (150,000 from 15), strictly more, one level per event, +10 health with a full heal, +5 / +2 / +1, health capped at 10 × level | The notes above; the data agrees (`conStart.cs`: health added = 10 × (N − 1) in all 11 worlds) | Viewer: Daventry, events of 10, 1, 20, 1,000, 0, 0, −5, 500 experience / health by `--command`; `viewer.log`, `gui.log` (levels 1 → 7, percents) |
+| L-1: items, `setLevel` and stats events to Connor in the start-up scripts are kept in script order and done when play starts; items by the rule of a `give` (put on, numbers added) | `inventory.md` rule 8; the scripts' order | Viewer: Dead City level 8, [80, 60, 19, 11, 0]; Swamp level 15, [150, 110, 38, 21, 0]; Daventry unchanged |
+| L-1: `KQConner::setLevel N` sets only the level number; the meters are sent again | **Stand-in, Q149 a** (the data: the stats event after it always brings the health) | Unit test `set_level_sets_only_the_level` |
+| L-1: built-in pickup experience of items given by a start-up script counts (temple 1: two level-ups before `setLevel 43`) | `potions.md` rule 41 as written; **Q149 e** | Viewer: temple1 `items.log` |

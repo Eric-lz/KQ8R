@@ -1380,6 +1380,10 @@ pub struct Objects {
     /// `inventory.md` rule 4): per item its section name, type,
     /// quantity and `userId`, in list order; and the problems met.
     pub connor_inventory: (Vec<ConnorItem>, Vec<String>),
+    /// What the start-up scripts give Connor (`conStart.cs`: items,
+    /// `setLevel`, a stats event), in script order, done when play starts
+    /// (DESIGN "Connor's levels checked", L-1).
+    pub connor_start: Vec<kq8_core::connor_start::StartLine>,
     /// Every placed object's `stats=` line (3i-6): name, the line.
     pub object_stats: Vec<(String, String)>,
     /// The placed `KQMonster`s (M4 4a-2, `talking.md` rule 6): name,
@@ -1671,6 +1675,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         connor_stats: None,
         connor_fight: None,
         connor_inventory: (Vec::new(), Vec::new()),
+        connor_start: Vec::new(),
         object_stats: Vec::new(),
         monsters: Vec::new(),
         doors: Vec::new(),
@@ -1884,6 +1889,7 @@ struct Placer<'a> {
     connor_stats: Option<(String, Option<String>)>,
     connor_fight: Option<kq8_core::fight::ConnorFight>,
     connor_inventory: (Vec<ConnorItem>, Vec<String>),
+    connor_start: Vec<kq8_core::connor_start::StartLine>,
     object_stats: Vec<(String, String)>,
     monsters: Vec<kq8_core::active::Monster>,
     doors: Vec<DoorAssets>,
@@ -2015,6 +2021,15 @@ impl kq8_data::world_script::Host for Placer<'_> {
         self.log.summary(format!("fight: {at}: applyCombatLevel {}: characters loaded from here on get the combat level (fighting.md rule 3)", u8::from(on)));
     }
 
+    fn connor_line(&mut self, words: &[String], at: &str) -> bool {
+        // `sendEvent <delay> <target> ...`: only those to Connor are kept.
+        let for_connor = !words[0].eq_ignore_ascii_case("sendEvent") || words.get(2).is_some_and(|t| t.eq_ignore_ascii_case("Connor"));
+        if for_connor {
+            self.connor_start.push(kq8_core::connor_start::StartLine::Command { words: words.to_vec(), at: at.to_string() });
+        }
+        for_connor
+    }
+
     fn read(&self, name: &str) -> Option<Vec<u8>> {
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
         self.world.load(base).and_then(Result::ok).map(|(_, b)| b)
@@ -2069,6 +2084,9 @@ impl kq8_data::world_script::Host for Placer<'_> {
             return match self.items.make(&m.kind, m.quantity, place) {
                 Ok(o) => {
                     let name = o.name.clone();
+                    if o.carried_by("Connor") {
+                        self.connor_start.push(kq8_core::connor_start::StartLine::Item { name: name.clone(), at: at.to_string() });
+                    }
                     self.item_lines.push(format!("{at}: made {}; NewInvItem = {name}", self.items.describe(&name)));
                     Some(name)
                 }
@@ -4111,6 +4129,7 @@ impl Placer<'_> {
             connor_stats: self.connor_stats,
             connor_fight: self.connor_fight,
             connor_inventory: self.connor_inventory,
+            connor_start: self.connor_start,
             object_stats: self.object_stats,
             monsters,
             talk: None,

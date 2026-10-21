@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Levels checked; L-1: a world's start-up script gives Connor his level, stats and equipment
+
+**Changed:** `kq8-data/world_script.rs`: `KQConner::setLevel` and `sendEvent` go to the host (`connor_line`) instead of only being counted. New `kq8-core/connor_start.rs` (`StartLine`, `run`, unit test). `active.rs`: the `KQConner::setLevel` command (`set_level`). Viewer `load.rs`: the items made for Connor, `setLevel` and stats events to Connor are kept in script order (`connor_start`); `door_view.rs` does them when play starts. DESIGN plan "Connor's levels checked", Q149, provenance.
+**Why:** The user asked to check experience, levels, health, armour and attack. The level rules were right (see Result), but a world started directly (all but Daventry) gave Connor only the items of its `conStart.cs`: Dead City started at level 1, 10 health, hand 10, armour 0, with the Small Axe and leather armour carried but not counted.
+**Tested how:** `cargo test --workspace` (638 pass), clippy clean. Daventry with `--command "sendEvent 0 Connor KQStatsChangeRequestEvent ..."` (experience 10, 1, 20, 1,000, 0, 0, health −5, +500), `--command "give ..."` for the Small Axe, leather armour / boots / gloves and Small Crossbow; Dead City, Swamp, temple1, Daventry started plainly; `viewer.log`, `gui.log`, `items.log`.
+**Result:** Levels: 10 is not enough at level 1, 11 is; one level per event; thresholds 10, 20, 40, 80, 160, 320, 640; each level +10 health (full heal), hand +5, ranged +2, armour +1; health capped at 10 × level; experience bar = experience × 100 / threshold. Equipment while playing: hand +15, armour +2 / +1 / +1, ranged +5. All match the notes. Start-up, before → after: Dead City level 1 [10, 10, 0, 0, 0] → level 8 [80, 60, 19, 11, 0]; Swamp → level 15 [150, 110, 38, 21, 0]; temple1 → level 43 [430, 340, 182, 67, 34970]; Daventry unchanged (level 1 [10, 10, 0, 0, 0]).
+**Still broken / not tested:** **Not looked at by eye.** `setLevel` only sets the level number (stand-in, Q149 a). temple1's quest items give built-in experience before `setLevel` (two extra level-ups, Q149 e). Not a bug, by the notes: after a level-up the experience bar is not redrawn when the experience number itself didn't change (`interface.md` rule 22), so it can show the old level's percent until the next change.
+**Next:** L-2, the level-up flame; L-3, the level-up sound.
+
 ## 2026-10-21 Quieter terminal: the movements' "frame steps" lines go to viewer.log only
 
 **Changed:** Viewer `load.rs` (`connor_set`): the "connor: <movement>: can be cut short …; frame steps …" line is written with `detail` (file only) instead of `summary` (terminal and file).

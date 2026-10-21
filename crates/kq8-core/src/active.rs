@@ -1272,6 +1272,31 @@ impl WorldState {
         }
     }
 
+    /// `KQConner::setLevel <n>` (every world's `conStart.cs`). STAND-IN
+    /// (Q149 a): only the level number is set; the stats event that
+    /// follows it in every script brings health and the rest. The meters
+    /// are sent again (ours).
+    fn set_level(&mut self, words: &[String], at: &str) -> String {
+        let level = words.get(1).filter(|w| looks_like_number(w)).map(|v| number_value(v) as i64).filter(|l| *l >= 1);
+        match (level, self.connor_stats.as_mut()) {
+            (Some(l), Some(c)) => {
+                let (was, stats) = (c.level, c.stats.0);
+                c.level = l;
+                self.connor_stats_events += 1;
+                self.note(format!("{at}: setLevel {l}: Connor's level {was} -> {l}; stats unchanged {stats:?} (Q149 a stand-in)"));
+                "0".into()
+            }
+            (Some(_), None) => {
+                self.note(format!("{at}: setLevel: Connor's stats unknown (no Connor.kq); nothing"));
+                "1".into()
+            }
+            (None, _) => {
+                self.note(format!("{at}: usage: KQConner::setLevel <level from 1>: '{}'", words.join(" ")));
+                "1".into()
+            }
+        }
+    }
+
     /// `KQCamera::setRange <min> <max>`: refused unless min < max
     /// (camera.md "Distance" rule 2).
     fn set_range(&mut self, words: &[String], at: &str) -> String {
@@ -2706,6 +2731,7 @@ impl ScriptHost for WorldState {
             "KQObject::collisionType" => Some(self.collision_type(words, at)),
             "KQObject::collision" => Some(self.collision_mask(words, at)),
             "KQConner::setRun" => Some(self.set_run(words, at)),
+            "KQConner::setLevel" => Some(self.set_level(words, at)),
             c if c.starts_with("KQConner::setRope") => self.rope_command(words, at),
             "KQConner::getDoMode" => {
                 // pushing.md "Words used here": the hand mode, sword 0, bow
