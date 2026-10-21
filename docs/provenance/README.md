@@ -2812,3 +2812,23 @@ executable looked at.
 | A fall past the death limit (`connor-physics.md`, 3,840) is a safe landing | Ours | Unit test; viewer: a 7,100 fall kills him without it, a safe landing with it |
 | F3 flips it, `--god` starts with it on; a line under the AI line shows it (yellow when on) | Ours | The user's check (2026-10-20) |
 
+### 5e-1, thrown items: the arc and what stops it — `crates/kq8-core/src/item.rs` (`Flight`, `FlightStep`, `ITEM_OBSTACLE_BITS`), `fight.rs` (`toss`, `flights_step`), `active.rs` (no longer flies them in the update); viewer `door_view.rs` (`character_gravity` flies them)
+
+Replaces 5c-8's stand-in flight. The tumble stays fix 7's stand-in until 5e-3.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Launch: heading 0–6.28 rad, 75°–85°, 5,000–6,500 units/s; launch point kept, clock from 0 | `thrown-items.md` rule 3 | Unit test |
+| Each update (1/15 s) the wanted position is the exact arc from the launch point: height = vz·t − ½·8,085·t² | Rules 4, 5 | Unit test (on the arc within 0.5 until the first touch) |
+| The 25-unit first step | Rule 6 | — (never reached at these speeds) |
+| "Coming down" once the wanted height is below the height at the start of the update | Rule 8 | `items.log` |
+| The move is the characters' mover (three passes, the slide of an animated object, 3 retries, never head-on), with the item's `BOUNDS.KQ` box, type 0x220, mask 0x809, steps 0, gravity off in the arc, the floor grid in the passes, the raise onto the floor grid after each move | Rules 7, 11, 12.1, 15; `items.md` rule 4 | Unit tests (wall, building floor) |
+| Up-pass hits stop and don't slide (the mover's rule for everyone); the note's 12.1 says a non-upward surface in the up/down part slides | **Ours**: kept the mover's `connor-physics.md` rule; the arc ends at that touch anyway, so it only changes where gravity takes over within one update | — |
+| What it meets: the floor grid, every building, objects whose type has bit 0x1 or 0x100; not characters, Connor or other items | Rule 11 | Viewer: crystals touch `Pub` and `terrain` only |
+| The land sound at the first touch of anything, once | Rule 12.2 | Unit test; `items.log` (`potnland.aud`) |
+| Every touch ends the arc (marked landed and coming down, ordinary gravity on); scripted / animated objects throw it again in 5e-2 | Rule 12.3 ("anything else"); **5e-1 only** for scripted objects | Viewer: NoName25 hits the pub at z 9,817 and drops straight down to 8,160 |
+| The thrower's own check: coming down with the wanted height below the floor grid ends the arc | Rule 14 | Unit test (no-box item); viewer |
+| After the arc: wanted = where it is, the movers' ordinary gravity | Rule 15 | Viewer: drops 36, 108, 180, … per update |
+| The flight ends at the start of an update when coming down and unchanged in whole units since the last, or after 10 s; "whole units" cut toward zero | Rule 16; the rounding is **ours** (the note doesn't say) | Unit tests; viewer: ends one update after it is held |
+| No `BOUNDS.KQ` box: nothing tested on the way (not even the floor grid in the passes) | "Edge cases" | Unit test |
+| Flights run after the characters' movers, with the same buildings and objects | Ours (the note gives no order) | Viewer |

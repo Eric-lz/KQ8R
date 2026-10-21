@@ -489,6 +489,10 @@ miss, roll, flinch, death, drop and shot is in
 - **Dying:** its die movement; its drops fling up and land with their
   sound; when the death ends Connor gets its experience, a body stays
   where it fell, and it is removed.
+- **Thrown items (M5 5e):** drops and barrel items fly in the traced arc;
+  walls, roofs, floors and objects stop them (at a wall they drop to its
+  foot); the land sound plays at the first touch. Characters are flown
+  through.
 - **Bow spriggans:** they never move, and shoot a bolt every swing plus
   delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor (the
   bolt's flight is a stand-in: straight, no gravity).
@@ -675,8 +679,7 @@ message that shows the usage.
   the dragon fire (they come with fighting), the teleport pad's look.
 - **Sound:** music doesn't pause (no pause yet); monsters have no
   footsteps (there are no monsters yet); scenery
-  animations (signs, the mill wheel's own movement) make no sound;
-  nothing is thrown, so there is no landing sound.
+  animations (signs, the mill wheel's own movement) make no sound.
 - **Clicking:** doors, chests, items, scripted objects, buildings and the
   characters with a script react; nothing else does.
 - **Animated objects:** scripts switch them (M3 step 3i), but most

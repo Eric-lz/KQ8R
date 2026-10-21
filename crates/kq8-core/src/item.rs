@@ -322,41 +322,102 @@ impl Items {
 
 /// `items.md` rule 12 (`KQObject::tossItems`; `fighting.md` rule 31 for
 /// drops, M5 5c-8): a thrown item's launch: a random heading all round,
-/// 75°–85° above the horizontal, 5,000–6,500 units per second.
+/// 75°–85° above the horizontal, 5,000–6,500 units per second
+/// (`thrown-items.md` rule 3).
 pub const TOSS_ELEVATION: (f32, f32) = (75.0, 85.0);
 pub const TOSS_SPEED: (f32, f32) = (5000.0, 6500.0);
-/// The item mover's gravity, units/s² (`items.md`: "looks like 8,085";
-/// how time steps through the flight was not traced: **stand-in**, plain
-/// motion per update).
+/// The arc's own gravity, units/s² (`thrown-items.md` rule 5).
 pub const TOSS_GRAVITY: f32 = 8085.0;
+/// The first step must leave the launch point by this much (rule 6).
+pub const FIRST_STEP: f32 = 25.0;
+/// The longest flight since the last throw, seconds (rule 16).
+pub const LONGEST_FLIGHT: f32 = 10.0;
+/// The object type bits that stop a thrown item (`thrown-items.md` rule
+/// 11): the default type 1 and 0x100 (the barrels' 0x141).
+pub const ITEM_OBSTACLE_BITS: u32 = 0x101;
 
-/// A thrown item in the air (M5 5c-8).
-#[derive(Debug, Clone, PartialEq)]
+/// A thrown item in the air: its thrower (`thrown-items.md`; M5 5e-1).
+#[derive(Debug, Clone)]
 pub struct Flight {
     /// The item object's name.
     pub item: String,
-    pub velocity: [f32; 3],
-    /// Updates flown, and where it started (for the log).
-    pub updates: u32,
+    /// The launch point and speeds (rule 3): x, y per second along the
+    /// heading, and the upward speed.
     pub from: [f32; 3],
+    pub velocity: [f32; 3],
+    /// The flight clock, seconds since the last throw (rule 3).
+    pub clock: f32,
+    /// Updates flown (for the log).
+    pub updates: u32,
+    /// Rule 8: the wanted height went below the height it had.
+    pub coming_down: bool,
+    /// Rule 12.3: the arc has ended; it only settles now (rule 15).
+    pub arc_over: bool,
+    /// Rule 12.2: it has touched something (the land sound played).
+    pub touched: bool,
+    /// Rule 16: its position at the start of the last update, in whole
+    /// units (cut toward zero: ours, the note says only "whole units").
+    held: Option<[i32; 3]>,
+    /// Its mover (rule 7): the item's box, type 0x220, mask 0x809, steps
+    /// 0, gravity off during the arc.
+    pub mover: Box<crate::connor_mover::Mover>,
+    /// Its type's shape has a `BOUNDS.KQ` box ("Edge cases": without one
+    /// it tests nothing on the way).
+    pub shaped: bool,
     /// Its tumble while it flies, radians per second about x, y, z (M5 5c
-    /// fix 7, **stand-in**: the user saw a slow tumble in the original;
-    /// the rates are ours, Q137 e). It lands in its resting pose.
+    /// fix 7, **stand-in** until 5e-3). It lands in its resting pose.
     pub spin: [f32; 3],
 }
 
 /// The tumble's rate per axis (ours, Q137 e): 90-180 degrees per second.
 pub const TUMBLE_RATE: (f32, f32) = (90.0, 180.0);
 
+/// What one update of a flight did, for the log.
+#[derive(Debug, Clone, Default)]
+pub struct FlightStep {
+    /// Where the arc wanted it (`None` once it only settles).
+    pub wanted: Option<[f32; 3]>,
+    /// Where it is after the move.
+    pub position: [f32; 3],
+    /// What it touched this update: pass and name (`terrain` for the
+    /// floor grid).
+    pub touches: Vec<String>,
+    /// The first touch of the whole flight (rule 12.2: the land sound).
+    pub first_touch: Option<String>,
+    /// The arc ended this update, and why (rules 12.3, 14).
+    pub arc_ended: Option<String>,
+    /// The flight ended at the start of this update (rule 16): `held` or
+    /// `10 s`. Nothing moved then.
+    pub ended: Option<&'static str>,
+}
+
 impl Flight {
     /// The launch from three random numbers in [0, 1): heading,
-    /// elevation, speed.
-    pub fn launch(item: &str, from: [f32; 3], r: [f32; 3]) -> Self {
+    /// elevation, speed (rule 3). `shape`: the item's `BOUNDS.KQ` box.
+    pub fn launch(item: &str, from: [f32; 3], r: [f32; 3], shape: Option<([f32; 3], [f32; 3])>) -> Self {
         let heading = r[0] * std::f32::consts::TAU;
         let up = (TOSS_ELEVATION.0 + r[1] * (TOSS_ELEVATION.1 - TOSS_ELEVATION.0)).to_radians();
         let speed = TOSS_SPEED.0 + r[2] * (TOSS_SPEED.1 - TOSS_SPEED.0);
         let flat = speed * up.cos();
-        Flight { item: item.to_string(), velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()], updates: 0, from, spin: [0.0; 3] }
+        let (min, max) = shape.unwrap_or(([-1.0; 3], [1.0; 3]));
+        let mut mover = crate::connor_mover::Mover::character(from, false, min, max, (ITEM_TYPE, ITEM_MASK), (0.0, 0.0), -1);
+        // "Edge cases": no box, no collision shape: not even the floor grid
+        // in the passes (the raise of rule 15 still applies).
+        mover.terrain_in_passes = shape.is_some();
+        Flight {
+            item: item.to_string(),
+            velocity: [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()],
+            from,
+            clock: 0.0,
+            updates: 0,
+            coming_down: false,
+            arc_over: false,
+            touched: false,
+            held: None,
+            mover: Box::new(mover),
+            shaped: shape.is_some(),
+            spin: [0.0; 3],
+        }
     }
 
     /// The tumble from three random numbers in [0, 1): per axis a rate of
@@ -379,19 +440,80 @@ impl Flight {
         std::array::from_fn(|k| rest[k] + self.spin[k] * t)
     }
 
-    /// One update of `dt` s from `at`: the new position, and whether it
-    /// landed (came down to `ground`, where it stays).
-    pub fn step(&mut self, at: [f32; 3], dt: f32, ground: Option<f32>) -> ([f32; 3], bool) {
-        self.updates += 1;
-        let mut p: [f32; 3] = std::array::from_fn(|k| at[k] + self.velocity[k] * dt);
-        self.velocity[2] -= TOSS_GRAVITY * dt;
-        match ground {
-            Some(g) if p[2] <= g && self.velocity[2] < 0.0 => {
-                p[2] = g;
-                (p, true)
-            }
-            _ => (p, false),
+    /// Rule 5: where the arc puts it `t` seconds after the throw.
+    pub fn arc_at(&self, t: f32) -> [f32; 3] {
+        let [vx, vy, vz] = self.velocity;
+        [self.from[0] + vx * t, self.from[1] + vy * t, self.from[2] + vz * t - 0.5 * TOSS_GRAVITY * t * t]
+    }
+
+    /// Rule 12.3, "anything else": the arc ends here; it is landed and
+    /// coming down, and ordinary gravity is on (rule 15).
+    fn end_arc(&mut self) {
+        self.arc_over = true;
+        self.coming_down = true;
+        self.mover.use_gravity = true;
+    }
+
+    /// One update of `dt` s (rule 4) from `at` (the item's place now) in
+    /// `world`: the end test (rule 16), the arc's wanted position (rules
+    /// 5, 6, 8, 14) or where it is (rule 15), the move through its mover
+    /// (rule 7) and what its touches do (rule 12).
+    pub fn update(&mut self, at: [f32; 3], dt: f32, world: &dyn crate::connor_mover::MoverWorld) -> FlightStep {
+        let mut step = FlightStep { position: at, ..Default::default() };
+        // Rule 16, at the start of the update.
+        let whole = at.map(|v| v as i32);
+        if self.coming_down && self.held == Some(whole) {
+            step.ended = Some("held");
+            return step;
         }
+        if self.clock > LONGEST_FLIGHT {
+            step.ended = Some("10 s");
+            return step;
+        }
+        self.held = Some(whole);
+        self.updates += 1;
+        self.clock += dt;
+        self.mover.position = at;
+        let wanted = if self.arc_over {
+            at
+        } else {
+            // Rule 6 (never in practice: the first step is 300+).
+            let mut w = self.arc_at(self.clock);
+            for _ in 0..1000 {
+                let d = (0..3).map(|k| (w[k] - self.from[k]).powi(2)).sum::<f32>().sqrt();
+                if d >= FIRST_STEP {
+                    break;
+                }
+                self.clock += dt;
+                w = self.arc_at(self.clock);
+            }
+            if w[2] < at[2] {
+                self.coming_down = true;
+            }
+            // Rule 14: the thrower's own floor-grid check.
+            if self.coming_down && world.ground(w[0], w[1]).is_some_and(|(g, _)| w[2] < g) {
+                self.end_arc();
+                step.arc_ended = Some("its wanted height is below the floor grid (rule 14)".into());
+            }
+            step.wanted = Some(w);
+            w
+        };
+        let report = self.mover.update(std::array::from_fn(|k| wanted[k] - at[k]), world);
+        step.position = self.mover.position;
+        step.touches = report.hits.iter().map(|h| format!("{} {} ({})", h.pass, h.hit.what, h.result)).collect();
+        if let Some(h) = report.hits.first() {
+            if !self.touched {
+                self.touched = true;
+                step.first_touch = Some(h.hit.what.clone());
+            }
+            if !self.arc_over {
+                // 5e-1: every touch ends the arc (5e-2: thrown again off
+                // scripted or animated objects).
+                self.end_arc();
+                step.arc_ended = Some(format!("touched {} (rule 12)", h.hit.what));
+            }
+        }
+        step
     }
 }
 
@@ -401,7 +523,7 @@ pub(crate) mod tests {
 
     #[test]
     fn a_thrown_item_tumbles_slowly_and_lands_in_its_resting_pose() {
-        let mut f = Flight::launch("x", [0.0; 3], [0.0; 3]).with_tumble([0.0, 0.75, 0.25]);
+        let mut f = Flight::launch("x", [0.0; 3], [0.0; 3], None).with_tumble([0.0, 0.75, 0.25]);
         let deg: Vec<f32> = f.spin.iter().map(|s| s.to_degrees()).collect();
         assert!((deg[0] + 90.0).abs() < 1e-3 && (deg[1] - 135.0).abs() < 1e-3 && (deg[2] + 135.0).abs() < 1e-3, "{deg:?}");
         f.updates = 15;
@@ -410,29 +532,101 @@ pub(crate) mod tests {
         assert_eq!(f.angles([0.0, 0.0, 1.0], 1.0 / 15.0, true), [0.0, 0.0, 1.0]);
     }
 
+    const DT: f32 = 1.0 / 15.0;
+    const PEBBLE: Option<([f32; 3], [f32; 3])> = Some(([-50.0, -50.0, 0.0], [50.0, 50.0, 100.0]));
+
+    /// Flies until the flight ends (at most 200 updates): every step.
+    fn fly(f: &mut Flight, world: &dyn crate::connor_mover::MoverWorld) -> Vec<FlightStep> {
+        let mut at = f.from;
+        let mut steps = Vec::new();
+        for _ in 0..200 {
+            let s = f.update(at, DT, world);
+            at = s.position;
+            let done = s.ended.is_some();
+            steps.push(s);
+            if done {
+                break;
+            }
+        }
+        steps
+    }
+
     #[test]
-    fn a_thrown_item_goes_up_steeply_and_lands_on_the_ground() {
-        // items.md rule 12 (M5 5c-8): 75-85 degrees, 5,000-6,500 units/s.
-        let low = Flight::launch("x", [0.0; 3], [0.0, 0.0, 0.0]);
+    fn a_thrown_item_follows_the_exact_arc_and_lands_on_the_floor_grid() {
+        // thrown-items.md rules 3-5, 12, 16 (M5 5e-1).
+        let low = Flight::launch("x", [0.0; 3], [0.0, 0.0, 0.0], PEBBLE);
         let v = low.velocity;
         assert!((v[2] / (v[0] * v[0] + v[1] * v[1]).sqrt() - 75f32.to_radians().tan()).abs() < 1e-3);
         assert!(((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt() - 5000.0).abs() < 0.5);
-        let mut f = Flight::launch("x", [0.0, 0.0, 100.0], [0.25, 1.0, 1.0]);
-        let mut at = [0.0, 0.0, 100.0];
-        let mut n = 0;
-        loop {
-            let (p, landed) = f.step(at, 1.0 / 15.0, Some(100.0));
-            at = p;
-            n += 1;
-            if landed {
-                break;
-            }
-            assert!(n < 100);
+        let ground = crate::connor_mover::tests::Flat(100.0);
+        let mut f = Flight::launch("x", [0.0, 0.0, 100.0], [0.25, 1.0, 1.0], PEBBLE);
+        let steps = fly(&mut f, &ground);
+        // On the arc, exactly, until the first touch.
+        for (n, s) in steps.iter().take(20).enumerate() {
+            let want = f.arc_at((n + 1) as f32 * DT);
+            assert!((0..3).all(|k| (s.position[k] - want[k]).abs() < 0.5), "update {}: {:?} vs {want:?}", n + 1, s.position);
         }
+        let touch = steps.iter().position(|s| s.first_touch.is_some()).expect("a touch");
         // About 2 x 6,475 / 8,085 = 1.6 s up and down.
-        assert!((23..=26).contains(&n), "{n}");
-        assert_eq!(at[2], 100.0);
-        assert!(at[0] > 0.0 && at[1].abs() < 1.0, "heading 90 degrees is +x: {at:?}");
+        assert!((22..=25).contains(&touch), "{touch}");
+        assert_eq!(steps[touch].first_touch.as_deref(), Some("terrain"));
+        assert!(steps[touch].arc_ended.is_some());
+        assert_eq!(steps.iter().filter(|s| s.first_touch.is_some()).count(), 1, "the land sound once");
+        let last = steps.last().unwrap();
+        assert_eq!(last.ended, Some("held"));
+        assert_eq!(last.position[2], 100.0);
+        assert!((900.0..1000.0).contains(&last.position[0]) && last.position[1].abs() < 1.0, "85 degrees, 6,500: 566 per s for 1.67 s; heading 90 degrees is +x: {:?}", last.position);
+    }
+
+    #[test]
+    fn a_thrown_item_drops_at_the_foot_of_a_wall() {
+        // Rules 12, 15 (Q137 c1): it hits the wall, the arc ends, it falls
+        // straight down beside it; never through.
+        use crate::connor_mover::tests::{building, node, Flat};
+        use kq8_data::building::BspChild::Leaf;
+        let b = [building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 1.0, 0.0], 0.0)])];
+        let ground = Flat(0.0);
+        let scene = crate::connor_mover::Scene::new(&ground, &b, &[]);
+        // Heading 0: toward -y, the wall's face is y = 0.
+        let mut f = Flight::launch("x", [0.0, 300.0, 0.0], [0.0, 0.0, 0.0], PEBBLE);
+        let steps = fly(&mut f, &scene);
+        assert!(steps.iter().all(|s| s.position[1] > 0.0), "never through the wall");
+        let touch = steps.iter().find(|s| s.first_touch.is_some()).expect("a touch");
+        assert_eq!(touch.first_touch.as_deref(), Some("test"));
+        assert!(touch.position[2] > 300.0, "hit high up: {:?}", touch.position);
+        let last = steps.last().unwrap();
+        assert_eq!(last.ended, Some("held"));
+        assert_eq!(last.position[2], 0.0, "down at the foot");
+        assert!(last.position[1] < 300.0, "beside the wall: {:?}", last.position);
+    }
+
+    #[test]
+    fn a_thrown_item_stays_on_a_building_floor_above_the_terrain() {
+        // Rule 13 (Q137 c2): a building floor at z 500 over terrain at 0.
+        use crate::connor_mover::tests::{building, node, Flat};
+        use kq8_data::building::BspChild::Leaf;
+        let b = [building(vec![node(0, Leaf(0), Leaf(1))], vec![false, true], vec![([0.0, 0.0, 1.0], -500.0)])];
+        let ground = Flat(0.0);
+        let scene = crate::connor_mover::Scene::new(&ground, &b, &[]);
+        let mut f = Flight::launch("x", [0.0, 0.0, 600.0], [0.4, 0.5, 0.5], PEBBLE);
+        let steps = fly(&mut f, &scene);
+        let last = steps.last().unwrap();
+        assert_eq!(last.ended, Some("held"));
+        assert!(last.position[2] >= 499.0 && last.position[2] < 600.0, "on the floor: {:?}", last.position);
+        assert_eq!(steps.iter().find_map(|s| s.first_touch.clone()).as_deref(), Some("test"));
+    }
+
+    #[test]
+    fn a_thrown_item_without_a_box_still_ends_on_the_floor_grid() {
+        // "Edge cases": no shape, nothing tested on the way; rule 14 ends
+        // the arc and rule 15's raise puts it on the floor grid.
+        let ground = crate::connor_mover::tests::Flat(0.0);
+        let mut f = Flight::launch("x", [0.0; 3], [0.0, 0.0, 0.0], None);
+        let steps = fly(&mut f, &ground);
+        assert!(steps.iter().any(|s| s.arc_ended.as_deref().is_some_and(|w| w.contains("rule 14"))));
+        assert!(steps.iter().all(|s| s.first_touch.is_none()), "no touches");
+        let last = steps.last().unwrap();
+        assert_eq!((last.ended, last.position[2]), (Some("held"), 0.0));
     }
 
     /// A two-type list in the file's layout (made-up values).

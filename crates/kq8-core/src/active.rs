@@ -3906,8 +3906,8 @@ impl Active {
                 self.world.fight_note(&name, format!("no script: Die {kind} not called (rule 32)"));
             }
         }
-        // items.md rule 12 (M5 5c-8): thrown items fly.
-        self.world.flights_step(dt);
+        // Thrown items fly after the characters' movers (M5 5e-1:
+        // `World::flights_step`, called with the buildings and objects).
         // Q119: nothing sent with delay 0 waits for the next update.
         let late = self.handle_due(now);
         if late > 0 {

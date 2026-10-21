@@ -1418,6 +1418,42 @@ Steps (one commit each; each logged in `viewer.log` / the script logs):
 Not in 5d: replacing the dormant copies, saving `NoName` (M6), a
 template's sound objects and emitters (none in the barrels' files).
 
+#### 5e — Thrown items as traced (planned 2026-10-20)
+
+Why: 5c-8's flight and fix 7's tumble were stand-ins. Items fly through
+walls and roofs and can land under the pub's floor (the user's check).
+Source: `thrown-items.md` (Q137, answered by A 2026-10-20).
+
+How: each thrown item gets its own **mover**, the same one the
+characters use (the code that moves a shape and stops it at the floor
+grid, buildings and objects). It has the item's `BOUNDS.KQ` box, type
+0x220, mask 0x809, steps 0 and gravity off. Each update the thrower works
+out where the arc says the item should be and asks the mover to go
+there. The flights move with the characters' movers (the viewer's
+`character_gravity`), so they can see the buildings and objects.
+
+Steps (one commit each; logged in `items.log`):
+
+1. **5e-1, the arc and what stops it** (**done** 2026-10-20; barrel.12:
+   two crystals hit the pub and drop at its wall) (rules 4–8, 11, 12.1–12.2, 13–16,
+   the "anything else" case of 12.3). The exact arc from the launch
+   point (8,085 units/s², 15 updates/s, the 25-unit first step); the move
+   through the mover against the floor grid, the buildings, and the
+   objects with type bit 0x1 or 0x100; at the first touch the land sound,
+   and the arc ends (every touch ends it in this step, barrels too); then
+   ordinary gravity until it is held for one update (or 10 s); the
+   thrower's own floor-grid check; the raise onto the floor grid.
+   Tumble and resting pose as before. **Test:** viewer, `--swing
+   barrel.12`: crystals that hit the pub drop at its wall; every flight
+   logs its touches and its end.
+2. **5e-2, thrown again** (rule 12.3): a touch on an object with a script
+   or an animated object throws it again (fresh launch, clock 0).
+   **Test:** an item hitting a barrel flies up again (`items.log`).
+3. **5e-3, the tumble** (rules 9–10): one axis (its own x), −0.5 to +0.5
+   rad per update, kept for the flight; turn 0, 0, 0 at the end.
+   **Test:** by eye against the original (`thrown-items.md` open
+   question 2).
+
 ### M6 — The whole game
 
 Save/load, moving between worlds, all 12 worlds, cutscene videos, music,

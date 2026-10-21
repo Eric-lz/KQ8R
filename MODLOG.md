@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5e-1: thrown items fly the traced arc and are stopped by walls, roofs and objects
+
+**Changed:** The thrower in `item.rs` (`Flight::update`) replaces 5c-8's stand-in. Each update it works out the exact arc from the launch point and moves the item there with the characters' mover. The mover uses the item's `BOUNDS.KQ` box, type 0x220, mask 0x809 and steps 0, and meets the floor grid, the buildings and the objects with type bit 0x1 or 0x100. At the first touch the land sound plays and the arc ends; then the item falls under ordinary gravity until it is held for one update (or 10 s). Flights now run in the viewer's `character_gravity` (`World::flights_step` gets the ground, buildings and objects), not in core's update. Plan 5e in `docs/DESIGN.md`; provenance; FEATURES.
+**Why:** `thrown-items.md` (Q137). Items flew through the pub's walls and landed under its floor (the user's check).
+**Tested how:** `cargo test --workspace` (445 core tests, 4 new: the exact arc and landing, the drop at a wall's foot, staying on a building floor, an item with no box), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 188861,270713,0 --key left:IDCTL_INVBAR_SHORT,40 --swing barrel.12,60 --frames 1000`, and goblin22's drops (`--at 289284,190300,0 --key left:IDCTL_INVBAR_SHORT,40 --swing goblin22,60 --swing goblin22,90 --frames 1500`); `items.log`.
+**Result:** barrel.12's four crystals: NoName25 hits the pub at z 9,817 (update 71), falls straight down beside it (x, y unchanged; drops 36, 108, 180, …) to the floor grid at 8,160 and ends at update 80. NoName24 glances off the pub's wall low down and ends at update 91. NoName23 and 26 land on the open ground (rule 14, then the terrain touch). Each plays `potnland.aud` once, at its first touch. goblin22's mushrooms: one lands 1,491 away; the other comes down on a steep slope and slides down it (rule 17) to rest 510 away, `mushland.aud` once each.
+**Still broken / not tested:** Not looked at by eye. Barrels stop items instead of throwing them again (5e-2). The tumble is still the stand-in (5e-3). Up-pass hits don't slide (the mover's rule; the note's rule 12.1 says they do for non-upward surfaces; it changes nothing visible). Gravity after the arc assumed as Connor's (`thrown-items.md` open question 3).
+**Next:** 5e-2 (thrown again off barrels and animated objects).
+
 ## 2026-10-20 A: Connor's ranged weapons and the bolt's flight
 
 **Changed:** New `docs/behaviour/ranged-weapons.md` (readying, Delete / Alt / slot clicks, the weapon swap's movements, the three pointers and Ctrl, the shot click, standing and moving shots, the start point, aim, flight and hit of bolts, and the swing click's target). `fighting.md` rules 36 and 39 and open questions 1–2 point there; QUESTIONS Q138 mostly answered, Q139 answered (except how objects take damage). Scratch notes in `re/notes.md`.

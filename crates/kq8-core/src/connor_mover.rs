@@ -1500,12 +1500,12 @@ fn down_slope(normal: [f32; 3]) -> [f32; 3] {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::collide::BoxCollider;
 
     /// Flat ground at a fixed height everywhere.
-    struct Flat(f32);
+    pub(crate) struct Flat(pub f32);
     impl GroundLookup for Flat {
         fn ground(&self, _: f32, _: f32) -> Option<(f32, [f32; 3])> {
             Some((self.0, [0.0, 0.0, 1.0]))
@@ -1831,12 +1831,12 @@ mod tests {
     use crate::collide::{BuildingCollider, Placement};
     use kq8_data::building::{BspChild::Leaf, BspChild::Node, BspNode};
 
-    fn node(plane: u16, front: kq8_data::building::BspChild, back: kq8_data::building::BspChild) -> BspNode {
+    pub(crate) fn node(plane: u16, front: kq8_data::building::BspChild, back: kq8_data::building::BspChild) -> BspNode {
         BspNode { plane, front, back }
     }
 
     /// A made-up building from its tree.
-    fn building(nodes: Vec<BspNode>, solid: Vec<bool>, planes: Vec<([f32; 3], f32)>) -> BuildingCollider {
+    pub(crate) fn building(nodes: Vec<BspNode>, solid: Vec<bool>, planes: Vec<([f32; 3], f32)>) -> BuildingCollider {
         BuildingCollider::from_parts("test", nodes, solid, planes, ([-1e5; 3], [1e5; 3]), Placement::at([0.0; 3]))
     }
 
