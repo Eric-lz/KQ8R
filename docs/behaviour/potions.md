@@ -387,9 +387,12 @@ red.
    Strength does).
 2. **Strength's end clears Invisible's drawing switch** when both run:
    the end of Strength resets a switch that Invisible set, so Connor may
-   be drawn wrongly for the rest of the invisibility [traced the reset;
-   the visible result not seen]. Do instead: each potion switches only
-   its own things.
+   be drawn wrongly for the rest of the invisibility [traced the reset].
+   **The user's check in the original (2026-10-20): no visible effect.**
+   Strength, then Invisible: iron look with the mesh; Strength ends: the
+   normal look, still with the mesh; Invisible ends: the normal look. So
+   the reset changes nothing you can see. Do instead: each potion
+   switches only its own things (the result must look as described).
 3. **Missing face combinations** (Edge cases): do instead: when the
    exact combination is missing, use the entry with the most of the
    wanted bits (e.g. helmet + Strength → `cironf`).
@@ -444,9 +447,7 @@ running when the window loses focus; only Esc stops it.
 4. What the game draws for a missing face combination (Edge cases):
    needs a late-game save (helmet worn + Strength); low priority, our
    fallback ("Do not reproduce" 3) is fine either way.
-5. Whether the drawing switch Invisible sets (and Strength's end clears)
-   changes how Connor is drawn beyond the textures (Do not reproduce 2).
-   A check: drink Strength, wait about 10 s, drink Invisible; 10 s later
-   Strength ends while Invisible still has about 5 s left. Does Connor's
-   see-through look change at that moment? Low priority.
+5. ~~Strength ending during Invisible~~: answered by the user, nothing
+   visible goes wrong (Do not reproduce 2): the mesh stays over whichever
+   skin he has, iron or normal (rules 25, 29).
 6. ~~The window losing focus~~: the clock keeps running (rule 34).

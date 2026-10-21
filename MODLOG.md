@@ -9,7 +9,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** The user tried the note's "How to check" list in the original.
 **Tested how:** The user's check in the original game (Daventry).
 **Result:** Checks 2–6 correct. The church candle raises the experience bar a little and it never drops. The timer icon is cut away from the top down, the used part showing a black background and gold outline. Only the red number is seen. The timer keeps running when the window loses focus (the note had guessed it stops); only Esc stops it.
-**Still broken / not tested:** Missing face combinations (needs a late-game save); Strength ending during Invisible (open question 5); the help pop-ups (not this topic).
+**Still broken / not tested:** Missing face combinations (needs a late-game save); the help pop-ups (not this topic). Strength ending during Invisible, checked after: the mesh stays and the iron look goes, nothing wrong visible (open question 5 closed).
 **Next:** B: build `potions.md`.
 
 ## 2026-10-20 A: health items and potions
