@@ -1622,7 +1622,7 @@ Steps (one commit each):
    left, next tick, the remembered raises) is one record Connor keeps,
    so a save can store it later. **Test:** unit test; `items.log` shows
    20, 19, ... 1 then the end 20 s (300 updates) after the start.
-3. **5g-3, the timer icons and the red numbers** (rules 35, 37–39). A
+3. **5g-3, the timer icons and the red numbers** (**done** 2026-10-21; Strength in `_1`, the shield in `_2`, the mask in the next free place; Q143 asked, not blocking) (rules 35, 37–39). A
    potion's picture goes to the first free place of `IDCTL_TIMER_1`–`_7`
    (`_1` is the right-most in the layout) and is freed at the end. It
    is drawn in two parts split at the height of the percent left

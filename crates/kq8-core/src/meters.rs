@@ -88,6 +88,9 @@ pub struct Sent {
     /// `None`: the experience didn't change, so nothing was sent.
     pub experience_percent: Option<i64>,
     pub level: i64,
+    /// The red switches sent with the numbers (`interface.md` rule 32,
+    /// `potions.md` rules 37–38), in [`Slot::ALL`] order.
+    pub red: [bool; 3],
 }
 
 /// What the bottom bar last showed.
@@ -97,13 +100,16 @@ pub struct Meters {
     pub health_percent: i64,
     pub experience_percent: i64,
     pub level: i64,
+    /// The numbers shown red (`potions.md` rule 37).
+    pub red: [bool; 3],
     /// The experience the last percent was worked out from.
     last_experience: Option<i64>,
 }
 
 impl Meters {
-    /// Rule 24: sends Connor's values; remembers them for drawing.
-    pub fn send(&mut self, c: &ConnorStats, dead: bool) -> Sent {
+    /// Rule 24: sends Connor's values and the red switches (rule 32);
+    /// remembers them for drawing.
+    pub fn send(&mut self, c: &ConnorStats, dead: bool, red: [bool; 3]) -> Sent {
         let numbers = Slot::ALL.map(|s| c.stats.0[s.stat()]);
         let flashes = match self.numbers {
             Some(old) => Slot::ALL.iter().zip(old.iter().zip(numbers)).filter(|(_, (o, n))| **o != *n).map(|(s, _)| *s).collect(),
@@ -118,7 +124,8 @@ impl Meters {
             self.last_experience = Some(c.stats.0[4]);
         }
         self.level = c.level;
-        Sent { numbers, flashes, health_percent: health, experience_percent: experience, level: c.level }
+        self.red = red;
+        Sent { numbers, flashes, health_percent: health, experience_percent: experience, level: c.level, red }
     }
 }
 
@@ -150,15 +157,15 @@ mod tests {
     fn every_sending_has_health_experience_only_when_changed_and_flashes_changed_numbers() {
         let mut m = Meters::default();
         let mut c = ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 };
-        let first = m.send(&c, false);
+        let first = m.send(&c, false, [false; 3]);
         assert_eq!((first.numbers, first.flashes.clone(), first.health_percent, first.experience_percent, first.level), ([0, 10, 0], vec![], 100, Some(0), 1));
         // A fish: health only; the experience isn't sent again.
         c.stats.0[0] = 8;
-        let fish = m.send(&c, false);
+        let fish = m.send(&c, false, [false; 3]);
         assert_eq!((fish.health_percent, fish.experience_percent, fish.flashes.clone()), (80, None, vec![]));
         // The bricks: level 2, all three numbers change and flash.
         c = ConnorStats { stats: Stats([20, 15, 2, 1, 40]), level: 2 };
-        let up = m.send(&c, false);
+        let up = m.send(&c, false, [false; 3]);
         assert_eq!((up.numbers, up.flashes, up.experience_percent, up.level), ([1, 15, 2], vec![Slot::Armour, Slot::Hand, Slot::Ranged], Some(200), 2));
         assert_eq!((m.health_percent, m.experience_percent, m.level), (100, 200, 2));
     }

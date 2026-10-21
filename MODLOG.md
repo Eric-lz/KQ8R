@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-3: potion timer icons and red numbers
+
+**Changed:** `potions.rs`: the 7 status icon places (`take_place`, `free_place`), the red switches (`red_numbers`). `connor_inventory.rs`: a potion takes the first free place at its start and frees it at its end. `meters.rs`: the red switches are sent with the numbers. `gui_draw.rs`: `Piece::Lower` (only a picture's lowest rows). Viewer `gui_view.rs`: the status icons drawn as one 336 × 57 picture at the screen's right, standing on the bottom bar; a potion's part left from its `.pba` frame 1, the part used from frame 0 (black square, gold outline); the spinning mask takes a place too and plays at 10 frames a second (was 15); the red number replaces the white one. QUESTIONS Q143. DESIGN, provenance. 2 new unit tests.
+**Why:** Step 3 of `potions.md` (rules 35, 37–39).
+**Tested how:** `cargo test -p kq8-core` (all pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 3000 --command "give Strength 1,10" --command "give Invulnerable 1,10" --key 6,30 --key 5,40`; and with `--command "handsOff 1,40"` / `"handsOff 0,80"`; `gui.log`.
+**Result:** Strength in `IDCTL_TIMER_1` at update 30, the shield in `_2` at 40; each drops 5 % a second (lowest 45, 43, 40 ... 2 rows of 48 from frame 1); `_1` empty at 331, `_2` at 341. Stats events: "red armour false, hand true", then both true, then each back to false at its end. The mask took `_2` beside a running Strength and left it at handsOff 0.
+**Still broken / not tested:** **Not looked at by eye** (where the icons stand, how the red number looks). Which frame is which, and the mask's place, are our reading (Q143). Potions still have no effect (steps 4–7).
+**Next:** 5g-4, the shield.
+
 ## 2026-10-21 M5 5g-2: the potions' whole-second timer
 
 **Changed:** New `crates/kq8-core/src/potions.rs` (`Running`: item, effect, `Dur`, seconds left, next tick; `Effect` by item type). `active.rs`: `item_timers` replaced by `potions`. `connor_inventory.rs`: applying an item with a duration starts its record; `timers` takes one second off per 15 updates and un-applies it when it would drop below 1, logging each second. DESIGN, provenance. 1 new unit test, 1 updated.

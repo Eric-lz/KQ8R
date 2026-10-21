@@ -629,6 +629,8 @@ pub struct WorldState {
     /// Applied items with a duration: the running potions and their
     /// whole-second timers (M5 5g-2, `potions.md` rules 33–34).
     pub potions: Vec<crate::potions::Running>,
+    /// The status icon places (M5 5g-3, `potions.md` rule 35).
+    pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
     pub item_voices: Vec<crate::connor_inventory::ItemVoice>,
     /// The item Connor holds as the pointer (M4 4c-4, `inventory.md`
@@ -2674,6 +2676,7 @@ impl Active {
                 connor_stats_events: 0,
                 gui_orders: Vec::new(),
                 potions: Vec::new(),
+                status_icons: Default::default(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,

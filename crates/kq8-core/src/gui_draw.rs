@@ -50,6 +50,9 @@ pub enum Piece<'a> {
     /// A picture filling its rectangle; `cut`: only this many screen
     /// pixels of its width, from the left (a meter, rule 20).
     Picture { rect: [i32; 4], pic: Pic<'a>, cut: Option<u32> },
+    /// A picture filling its rectangle, only its lowest `rows` screen
+    /// rows (a potion's timer icon, the part left: `potions.md` rule 35).
+    Lower { rect: [i32; 4], pic: Pic<'a>, rows: u32 },
     /// A text in a font with a justification.
     Text { rect: [i32; 4], font: &'a Font, justification: u32, text: String },
     /// A rectangle of one colour (4c-8: the black behind the meters'
@@ -142,6 +145,19 @@ impl Canvas {
         }
     }
 
+    /// Draws `pic` as [`Canvas::picture`], only its lowest `rows` screen
+    /// rows (the rows above are left as they are).
+    pub fn picture_lower(&mut self, rect: [i32; 4], pic: Pic, rows: u32, scale: f32, palette: &[Rgb; 256]) {
+        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+        for y in (b - rows as i32).max(t)..b {
+            for x in l..r {
+                let sx = ((x - l) as f32 / scale) as u32 % pic.width;
+                let sy = ((y - t) as f32 / scale) as u32 % pic.height;
+                self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], pic.see_through, palette);
+            }
+        }
+    }
+
     /// Fills the layout rectangle `rect` with one colour.
     pub fn fill(&mut self, rect: [i32; 4], rgb: [u8; 3], scale: f32) {
         let [l, t, r, b] = rect.map(|v| scaled(v, scale));
@@ -190,6 +206,7 @@ pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], pale
     for piece in pieces.iter().rev() {
         match piece {
             Piece::Picture { rect, pic, cut } => c.picture(at(rect), *pic, *cut, scale, palette),
+            Piece::Lower { rect, pic, rows } => c.picture_lower(at(rect), *pic, *rows, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
             Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
         }
@@ -214,6 +231,22 @@ mod tests {
         assert_eq!(text_origin([0, 0, 50, 20], 0x9, 10, 10, 1.0), (0, 5));
         // Scaled by 1.25: the anchor moves, the text keeps its size.
         assert_eq!(text_origin([56, 5, 26, 4], 0x12, 10, 15, 1.25), (60, 6));
+    }
+
+    #[test]
+    fn a_lower_part_keeps_its_own_rows() {
+        let pal = [[0u8; 3]; 256].map(|_| [0, 0, 0]);
+        let mut pal = pal;
+        pal[1] = [10, 0, 0];
+        pal[2] = [20, 0, 0];
+        let empty = [1u8; 4];
+        let full = [2u8; 4];
+        // 2 x 2: the lower row from `full`, the upper from `empty`.
+        let c = draw([0, 0], [2, 2], 1.0, &[
+            Piece::Lower { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &full, see_through: true }, rows: 1 },
+            Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &empty, see_through: true }, cut: None },
+        ], &pal);
+        assert_eq!((c.at(0, 0)[0], c.at(1, 1)[0]), (10, 20));
     }
 
     #[test]

@@ -114,11 +114,32 @@ const DRAWN: [Drawn; 6] = [Drawn::Panel(Panel::Top), Drawn::Panel(Panel::BottomL
 const SLOT_PICTURES: [&str; 3] = ["IDCTL_INVBAR_ARMOR", "IDCTL_INVBAR_SHORT", "IDCTL_INVBAR_LONG"];
 const SLOT_NUMBERS: [&str; 3] = ["IDCTL_INVBAR_ARMORTEXT", "IDCTL_INVBAR_SHORTTEXT", "IDCTL_INVBAR_LONGTEXT"];
 const SLOT_FLASHES: [&str; 3] = ["IDCTL_INVBAR_ARMOR_FX", "IDCTL_INVBAR_SHORT_FX", "IDCTL_INVBAR_LONG_FX"];
+/// Their red numbers (`interface.md` rule 32, `potions.md` rule 37).
+const SLOT_RED_NUMBERS: [&str; 3] = ["IDCTL_INVBAR_ARMOR_ALTTXT", "IDCTL_INVBAR_SHORT_ALTTXT", "IDCTL_INVBAR_LONG_ALTTXT"];
+
+/// The spinning mask's speed (`potions.md` rule 35: an icon with several
+/// frames and no duration plays at 10 frames a second).
+const MASK_FPS: f64 = 10.0;
+
+/// The status icons' picture (M5 5g-3): the layout's 336 wide, and tall
+/// enough for the spinning mask's own 57 rows (4c-8); every icon stands
+/// on its bottom.
+const STATUS_SIZE: [i32; 2] = [336, 57];
+
+/// What a status icon place shows (M5 5g-3, `potions.md` rule 35).
+#[derive(Debug, Clone, PartialEq)]
+enum StatusShown {
+    Mask,
+    /// A potion: its picture file (`extraData`) and the percent left.
+    Potion { item: String, file: Option<String>, percent: i64 },
+}
 
 /// One thing to draw, before its pictures and fonts are looked up.
 #[derive(Debug, Clone, PartialEq)]
 enum Spec {
     Pic { rect: [i32; 4], file: String, frame: usize, cut: Option<u32> },
+    /// Only the lowest `rows` rows of a picture (a potion's part left).
+    Lower { rect: [i32; 4], file: String, frame: usize, rows: u32 },
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
     Fill { rect: [i32; 4], rgb: [u8; 3] },
 }
@@ -169,6 +190,8 @@ pub struct Gui {
     /// Connor's stats events already sent (rule 24).
     stats_events: Option<u64>,
     hands_off: bool,
+    /// The status icon places (M5 5g-3), `IDCTL_TIMER_1` first.
+    status: [Option<StatusShown>; kq8_core::potions::ICON_PLACES],
     /// What each drawn picture was last made from.
     last: HashMap<&'static str, Vec<Spec>>,
     log: Option<Log>,
@@ -312,6 +335,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         corners: false,
         stats_events: None,
         hands_off: false,
+        status: Default::default(),
         last: HashMap::new(),
         log,
     })
@@ -450,6 +474,9 @@ impl Gui {
     /// What drawn picture `d` is made of now (its layout size and the
     /// pieces), or `None` if its block is missing.
     fn specs(&self, d: Drawn) -> Option<([i32; 2], Vec<Spec>)> {
+        if d == Drawn::Status {
+            return self.status_specs();
+        }
         let dialog = self.control(d.layout_id())?;
         let [l, t, r, b] = dialog.rect;
         let now = self.panels.now_ms;
@@ -524,7 +551,14 @@ impl Gui {
                     // Counts of 0 are not written (stand-in, Q109).
                     let count = |c: Option<i64>| c.filter(|n| *n > 0).map(|n| n.to_string());
                     let value = match (slot(&SLOT_NUMBERS), name.as_str()) {
+                        // potions.md rule 37: the red number replaces the
+                        // white one while it is on.
+                        (Some(k), _) if self.meters.red[k] => None,
                         (Some(k), _) => self.meters.numbers.map(|n| n[k].to_string()),
+                        (None, n) if slot(&SLOT_RED_NUMBERS).is_some() => {
+                            let k = SLOT_RED_NUMBERS.iter().position(|x| *x == n).expect("listed");
+                            self.meters.numbers.filter(|_| self.meters.red[k]).map(|n| n[k].to_string())
+                        }
                         (None, "IDCTL_METERS_LEVEL") => Some(self.meters.level.to_string()),
                         (None, "IDCTL_INVBAR_GOLDTEXT") => count(self.inv.gold.as_ref().map(|(_, c, _)| *c)),
                         (None, "IDCTL_INVBAR_ROCKSTEXT") => count(self.inv.rocks.as_ref().map(|(_, c, _)| *c)),
@@ -544,13 +578,6 @@ impl Gui {
                         if let (Some(start), Some(at)) = (self.flashes[k], self.control(SLOT_PICTURES[k])) {
                             out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
                         }
-                    } else if name == "IDCTL_TIMER_7" && self.panels.mask_icon {
-                        // Rule 15: the spinning mask, looping. 4c-8: at
-                        // its pictures' own size (57 x 57, larger than
-                        // its 48 x 48 box), the user's check (Q111 b).
-                        let size = self.mask_size().unwrap_or([rect[2] - rect[0], rect[3] - rect[1]]);
-                        out.push(Spec::Pic { rect: [0, 0, size[0], size[1]], file, frame: (now / frame_ms) as usize, cut: None });
-                        return Some((size, out));
                     }
                 }
                 _ => {}
@@ -580,7 +607,7 @@ impl Gui {
     fn draw(&mut self, origin: [i32; 2], size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
         for s in specs {
             match s {
-                Spec::Pic { file, .. } => self.load_file(file),
+                Spec::Pic { file, .. } | Spec::Lower { file, .. } => self.load_file(file),
                 Spec::Text { font, .. } => self.load_font(font),
                 Spec::Fill { .. } => {}
             }
@@ -593,6 +620,11 @@ impl Gui {
                     let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
                     pieces.push(Piece::Picture { rect: *rect, pic, cut: *cut });
                 }
+                Spec::Lower { rect, file, frame, rows } => {
+                    let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
+                    let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
+                    pieces.push(Piece::Lower { rect: *rect, pic, rows: *rows });
+                }
                 Spec::Text { rect, font, justification, text } => {
                     let Some(Some(f)) = self.fonts.get(&font.to_ascii_lowercase()) else { continue };
                     pieces.push(Piece::Text { rect: *rect, font: f, justification: *justification, text: text.clone() });
@@ -601,6 +633,41 @@ impl Gui {
             }
         }
         gui_draw::draw(origin, size, scale, &pieces, &self.palette)
+    }
+
+    /// M5 5g-3 (`potions.md` rule 35): the status icons, each at its
+    /// layout place standing on the picture's bottom. A potion: the lower
+    /// part (the time left) from its picture's frame 1, the part used
+    /// from frame 0 (each potion `.pba` has two frames: 0 is a black
+    /// square with the gold outline, 1 the picture; the user saw a black
+    /// background and a gold outline where it is used). The spinning mask
+    /// at its own size (4c-8), its bottom-right at its place's, at 10
+    /// frames a second.
+    fn status_specs(&self) -> Option<([i32; 2], Vec<Spec>)> {
+        let [w, h] = STATUS_SIZE;
+        let mut out = Vec::new();
+        for (k, shown) in self.status.iter().enumerate() {
+            let Some(shown) = shown else { continue };
+            let Some(c) = self.control(&format!("IDCTL_TIMER_{}", k + 1)) else { continue };
+            let [l, t, r, b] = c.rect;
+            let tall = b - t;
+            match shown {
+                StatusShown::Mask => {
+                    let Some(file) = self.mask_file() else { continue };
+                    let [mw, mh] = self.mask_size().unwrap_or([r - l, tall]);
+                    let frame = (self.panels.now_ms / (1000.0 / MASK_FPS)) as usize;
+                    out.push(Spec::Pic { rect: [r - mw, h - mh, r, h], file, frame, cut: None });
+                }
+                StatusShown::Potion { file: Some(file), percent, .. } => {
+                    let rect = [l, h - tall, r, h];
+                    let rows = (tall as i64 * percent / 100).clamp(0, tall as i64) as u32;
+                    out.push(Spec::Lower { rect, file: file.clone(), frame: 1, rows });
+                    out.push(Spec::Pic { rect, file: file.clone(), frame: 0, cut: None });
+                }
+                StatusShown::Potion { file: None, .. } => {}
+            }
+        }
+        Some(([w, h], out))
     }
 
     /// The spinning mask's file (`IDCTL_TIMER_7`).
@@ -776,6 +843,45 @@ pub fn gui_step(
         gui.hands_off = hands_off;
         gui.panels.hands_off(hands_off);
     }
+    // M5 5g-3 (potions.md rule 35): the spinning mask takes a status icon
+    // place like a potion (STAND-IN, Q143: first free).
+    {
+        use kq8_core::potions::{free_place, take_place, StatusIcon};
+        let places = &mut sim.active.world.status_icons;
+        let has = places.contains(&Some(StatusIcon::Mask));
+        let change = match (gui.panels.mask_icon, has) {
+            (true, false) => take_place(places, StatusIcon::Mask).map(|k| format!("the spinning mask takes IDCTL_TIMER_{}", k + 1)),
+            (false, true) => free_place(places, &StatusIcon::Mask).map(|k| format!("the spinning mask leaves IDCTL_TIMER_{}", k + 1)),
+            _ => None,
+        };
+        if let Some(line) = change {
+            gui.note(format!("update {updates}: {line} (potions.md rule 35; first free: stand-in, Q143)"));
+        }
+    }
+    let status: [Option<StatusShown>; kq8_core::potions::ICON_PLACES] = sim.active.world.status_icons.clone().map(|p| {
+        p.map(|icon| match icon {
+            kq8_core::potions::StatusIcon::Mask => StatusShown::Mask,
+            kq8_core::potions::StatusIcon::Potion(item) => {
+                let w = &sim.active.world;
+                let running = w.potions.iter().find(|r| r.item == item);
+                let file = running.and_then(|r| w.items.kind(&r.kind)).and_then(|t| t.extra.clone()).and_then(|tag| gui.file_of(&tag));
+                StatusShown::Potion { item, file, percent: running.map_or(0, |r| r.percent()) }
+            }
+        })
+    });
+    if status != gui.status {
+        for (k, (old, new)) in gui.status.clone().iter().zip(&status).enumerate() {
+            if old != new {
+                let what = match new {
+                    None => "empty".to_string(),
+                    Some(StatusShown::Mask) => "the spinning mask".to_string(),
+                    Some(StatusShown::Potion { item, file, percent }) => format!("{item} {} at {percent} % (its lowest {} of 48 rows from frame 1, the rest frame 0)", file.as_deref().unwrap_or("no picture"), 48 * percent / 100),
+                };
+                gui.note(format!("update {updates}: IDCTL_TIMER_{}: {what} (potions.md rule 35)", k + 1));
+            }
+        }
+        gui.status = status;
+    }
     // Rule 15: the script commands.
     for order in std::mem::take(&mut sim.active.world.gui_orders) {
         match order {
@@ -881,7 +987,8 @@ pub fn gui_step(
     let first = gui.stats_events.is_none();
     gui.stats_events = Some(events);
     // Dying states are M5: never dead yet.
-    let sent = gui.meters.send(&stats, false);
+    let red = kq8_core::potions::red_numbers(&sim.active.world.potions);
+    let sent = gui.meters.send(&stats, false, red);
     let width = |name: &str| {
         gui.control(name).map_or(0, |c| (gui_draw::scaled(c.rect[2], gui.scale) - gui_draw::scaled(c.rect[0], gui.scale)).max(0) as u32)
     };
@@ -891,7 +998,7 @@ pub fn gui_step(
         None => "not sent (unchanged, rule 22)".into(),
     };
     let line = format!(
-        "update {updates}: {}: Connor {:?} level {}: sent armour {}, hand {}, ranged {}, health {} % (bar {} of {hw} px), experience {exp}, level {}; flashes {:?} (interface.md rules 20-24, 33)",
+        "update {updates}: {}: Connor {:?} level {}: sent armour {}, hand {}, ranged {}, health {} % (bar {} of {hw} px), experience {exp}, level {}; flashes {:?}; red armour {}, hand {}, ranged {} (interface.md rules 20-24, 32-33, potions.md rule 37)",
         if first { "the screen opens".to_string() } else { format!("stats event #{events}") },
         stats.stats.0,
         stats.level,
@@ -901,7 +1008,10 @@ pub fn gui_step(
         sent.health_percent,
         meters::bar_width(hw, sent.health_percent),
         sent.level,
-        sent.flashes.iter().map(|s| s.name()).collect::<Vec<_>>()
+        sent.flashes.iter().map(|s| s.name()).collect::<Vec<_>>(),
+        sent.red[0],
+        sent.red[1],
+        sent.red[2]
     );
     gui.note(&line);
     shared.log.lock().unwrap().detail(format!("gui: {line}"));
@@ -1006,7 +1116,7 @@ pub fn gui_draw(
         let Some(rect) = gui.rect(d) else { continue };
         let (away, panel) = match d {
             Drawn::Panel(p) => (gui.panels.away(p), Some(p)),
-            Drawn::Status => (if gui.panels.mask_icon { 0.0 } else { 1.0 }, None),
+            Drawn::Status => (if gui.status.iter().any(Option::is_some) { 0.0 } else { 1.0 }, None),
         };
         // 4c-7 (the user's check in the original, Q111): the status
         // icons at their own size (not scaled with the screen), the
@@ -1017,12 +1127,15 @@ pub fn gui_draw(
                 gui.frames(&f);
             }
         }
-        let ((mut left, top), (w, h)) = match (panel, gui.mask_size()) {
-            (Some(p), _) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
+        let ((mut left, top), (w, h)) = match panel {
+            Some(p) => (kq8_core::panels::place(p, rect, [sw, sh], away), (rect[2] - rect[0], rect[3] - rect[1])),
             // 4c-9 (the user's check): it rises and falls with the
-            // bottom bar, on top of it.
-            (None, Some([mw, mh])) => ((sw - mw as f32, bar_top - mh as f32), (mw as f32, mh as f32)),
-            (None, None) => ((rect[0], rect[1]), (rect[2] - rect[0], rect[3] - rect[1])),
+            // bottom bar, on top of it. 5g-3: the status icons' picture,
+            // its right edge at the screen's.
+            None => {
+                let [w, h] = STATUS_SIZE.map(|v| v as f32);
+                ((sw - w, bar_top - h), (w, h))
+            }
         };
         // 4c-11: with the corner panels on, the bottom bar's left panel at
         // the window's left edge, its right panel and the spinning mask
@@ -1045,7 +1158,7 @@ pub fn gui_draw(
             let at = [left, top, left + w, top + h].map(|v| v.round() as i32);
             if *status_at != Some(at) {
                 *status_at = Some(at);
-                let line = format!("spinning mask at {at:?} of {sw}x{sh} (its own size, whole; at the right, on the bottom bar (not on the meters alone) or the screen's bottom: the user's checks, 4c-7 to 4c-10, Q111)");
+                let line = format!("status icons at {at:?} of {sw}x{sh} (own size; at the right, on the bottom bar (not on the meters alone) or the screen's bottom: the user's checks, 4c-7 to 4c-10, Q111; 5g-3)");
                 gui.note(line);
             }
         }

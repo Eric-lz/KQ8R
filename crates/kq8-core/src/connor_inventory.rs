@@ -219,8 +219,14 @@ pub fn apply(w: &mut WorldState, name: &str, why: &str) -> String {
     let mut line = format!("apply {name} ({}, {why}): x{} -> x{}; {stats}", o.kind, o.quantity, w.items.objects[i].quantity);
     if t.duration > 0.0 {
         // potions.md rule 33: whole seconds, counted from this update.
-        let r = crate::potions::Running::new(name, &o.kind, t.duration.round() as i64, w.updates);
+        let mut r = crate::potions::Running::new(name, &o.kind, t.duration.round() as i64, w.updates);
         line.push_str(&format!("; Dur {} s: the timer starts at {} s left (game time {:.3}), the next second off at update {} (potions.md rule 33)", t.duration, r.left, w.now(), r.next_tick));
+        // Rule 35: its icon in the first free place.
+        r.place = crate::potions::take_place(&mut w.status_icons, crate::potions::StatusIcon::Potion(name.to_string()));
+        line.push_str(&match r.place {
+            Some(k) => format!("; icon {} in IDCTL_TIMER_{}, 100 % (potions.md rule 35)", t.extra.as_deref().unwrap_or("none"), k + 1),
+            None => "; all 7 icon places taken: no icon (potions.md rule 35)".into(),
+        });
         w.potions.push(r);
     } else if t.duration < 0.0 {
         // Dur -1: un-applied at once, the numbers kept.
@@ -255,9 +261,11 @@ pub fn unapply(w: &mut WorldState, name: &str, why: &str) -> String {
     let Some(t) = w.items.kind(&o.kind).cloned() else { return String::new() };
     w.items.objects[i].third = -1;
     w.potions.retain(|r| r.item != name);
+    let icon = crate::potions::free_place(&mut w.status_icons, &crate::potions::StatusIcon::Potion(name.to_string()));
     let back = Stats(t.stats.map(|v| -v));
     let stats = connor_add(w, back, &format!("{name} un-applied ({why}): its numbers taken back"));
-    format!("; {stats}{} (inventory.md rule 15)", remove_if_empty(w, name))
+    let icon = icon.map_or(String::new(), |k| format!("; icon place IDCTL_TIMER_{} freed (potions.md rule 35)", k + 1));
+    format!("; {stats}{icon}{} (inventory.md rule 15)", remove_if_empty(w, name))
 }
 
 /// The potions' timers (`potions.md` rule 33): one second off each
