@@ -150,6 +150,8 @@ pub fn decide(ask: &Ask, ready: WeaponMode, real_ranged: bool, last_away_ranged:
 pub const TALK_PICK: u32 = 0x40 | 0x20 | 0x08;
 /// Rule 16: the aim pick's types (bits 0x40, 0x08).
 pub const AIM_PICK: u32 = 0x40 | 0x08;
+/// Rule 32: the swing pick's types (bits 0x40, 0x20).
+pub const SWING_PICK: u32 = 0x40 | 0x20;
 /// Rule 15: a character whose type has this bit gets the plain click.
 pub const PLAIN_CLICK_BIT: u32 = 0x8000;
 /// Rule 15: an object of this name gets the plain click.

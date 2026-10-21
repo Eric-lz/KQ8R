@@ -2958,3 +2958,18 @@ Replaces 5c fixes 2–3 and 5d fixes 9–10's stand-ins (Q138) where the note di
 | A moving shot while running switches the run off (he walks); it comes back on 1 s after the last moving shot | Rule 20; the simpler way allowed by "Do not reproduce" | Viewer: walk at update 72, run on again at 87 |
 | The end of a standing `attack` sets the next moving shot 0.5 s later | Rule 20 | — |
 | Our clock for the delay: his updates ÷ 15 | Ours | — |
+
+### 5f-7, the swing click's target — `crates/kq8-core/src/weapons.rs` (`SWING_PICK`, `mask_pick`), viewer `door_view.rs` (the swing click, `SwingClick`, `--swing`), `connor_view.rs` (`swing_click`, `swing_step`, `melee_target`, `SWING_TURN_UPDATES`)
+
+Replaces 5c fixes 3–5's stand-ins (Q139): the fighters' boxes on the line, "a character that doesn't fight gets the plain click", "behind (90°) waits for the whole turn".
+
+| What | Source | Check |
+| --- | --- | --- |
+| The click line against characters, objects and buildings whose type has bit 0x40 or 0x20 (characters 0x42, plain objects 0x41, barrels 0x141, clickables 0x21, the clickable buildings 0x28, not 0x88) | Rule 32 | Viewer: goblin22, barrel.12 |
+| A character with bit 0x8000 (Wizard, Knight) or `icewater`: the plain click | Rules 15, 32 | — (as 5f-5's talk pick) |
+| Nothing or a building: he turns toward the click point and swings at once, no new target | Rule 32 | Viewer: update 90, "nothing or a building picked: his target stays goblin22" |
+| Where "the click point" is when the line meets nothing: where it meets the level of his feet | **Stand-in** (kept from 5c-5; the note doesn't say) | — |
+| Anything else: its position within his `attackDist` (2,350, straight 3D distance between the two positions) → his target; he turns toward its position; more than 45° off: the swing waits until the turn has 8 updates or fewer to go (≈ 1.87 rad), else it starts at once | Rule 32 | Viewer: 130° off, the swing starts with 1.80 rad left |
+| The target stays until another pick within reach replaces it; the hit test at `Do` is `fighting.md` rule 41's with it | Rule 32 | Viewer: the second swing hits goblin22 |
+| Objects get the hit only through the barrel stand-in (objects with a script) | Q139 e (not traced) | Viewer: barrel.12 bursts |
+| An item on the pointer wins over the swing click | Rule 13 (5f-5) | — |

@@ -253,9 +253,10 @@ pub struct ShotClick {
 }
 
 pub struct SwingClick {
-    /// The character clicked, if any: his target.
-    target: Option<String>,
-    /// Where the click points (x, y).
+    /// What the click line met (`ranged-weapons.md` rule 32: types with
+    /// bit 0x40 or 0x20, not a building) and its position.
+    picked: Option<(String, [f32; 3])>,
+    /// Where he turns (x, y).
     point: [f32; 2],
     /// Shift held: the big swing.
     big: bool,
@@ -1439,12 +1440,6 @@ pub fn door_click_input(
     let walls = ClickBuildings { buildings: buildings.as_deref().map_or(&[][..], |b| &b.0[..]), active: &sim.active };
     let pick = sim.active.pick_line(origin, dir, &walls);
     let from = format!("update {updates}: {how}: line from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
-    // M5 5c fix 4 (stand-in, Q139): a fighting character's box on the
-    // line, unless a building is nearer.
-    let fighter = sim.active.pick_attack(origin, dir).filter(|(_, t)| {
-        let to: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * t);
-        kq8_core::active::ClickWalls::first_hit(&walls, origin, to).is_none()
-    });
     let (line, picked) = match pick {
         Pick::Seen { name, t } => (format!("{from} hits {name} first, at {t:.0} units (box)"), Some(name)),
         Pick::Building { name, t, behind } => {
@@ -1494,38 +1489,50 @@ pub fn door_click_input(
             return;
         }
     }
-    // A character that doesn't fight (the wizard) gets the plain click
-    // (the user's check in the original, 2026-10-20: fix 3).
-    let peaceful = picked.as_deref().and_then(|n| sim.active.world.character_index(n)).is_some_and(|j| sim.active.world.anims[j].character.as_ref().is_some_and(|c| c.fight.is_none()));
-    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Hand && !ctrl && !peaceful && !held {
-        let target = match &fighter {
-            Some((n, _)) => Some(n.clone()),
-            None => picked.clone().filter(|n| sim.active.world.character_index(n).is_some()),
-        };
-        let line = match &fighter {
-            Some((n, t)) => format!("{line}; the line meets {n}'s box at {t:.0} (attack target, stand-in, Q139)"),
-            None => line,
-        };
-        let point = match target.as_deref().and_then(|n| sim.active.world.character_index(n)) {
-            Some(j) => {
-                let p = sim.active.world.anims[j].player.base.position;
-                [p[0], p[1]]
-            }
-            // **Stand-in**: the click line meets the level of his feet
-            // (the ground is not tested); straight ahead along it if it
-            // never comes down.
-            None => {
-                let z = sim.active.world.connor_at.map_or(origin[2], |c| c[2]);
-                let t = if dir[2] < -1e-4 { (z - origin[2]) / dir[2] } else { 10_000.0 };
-                [origin[0] + dir[0] * t, origin[1] + dir[1] * t]
-            }
-        };
-        let big = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
-        let line = format!("{line}; a hand weapon is ready: a swing toward ({:.0}, {:.0}), target {}{}", point[0], point[1], target.as_deref().unwrap_or("none"), if big { ", Shift" } else { "" });
-        sim.swing_clicks.push(SwingClick { target, point, big, how: how.clone() });
-        shared.log.lock().unwrap().summary(&line);
-        sim.log.detail(line);
-        return;
+    // ranged-weapons.md rule 32 (M5 5f-7): the swing click. The click line
+    // against types with bit 0x40 or 0x20 (characters, plain objects,
+    // barrels, clickables, the clickable buildings); a character with bit
+    // 0x8000 (or `icewater`) gets the plain click (rule 15).
+    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Hand && !ctrl && !held {
+        use kq8_core::weapons::{ICEWATER, PLAIN_CLICK_BIT, SWING_PICK};
+        let w = &sim.active.world;
+        let objs = objects.as_deref().map_or(&[][..], |o| &o.0[..]);
+        let blds = buildings.as_deref().map_or(&[][..], |b| &b.0[..]);
+        let hit = w.mask_pick(origin, dir, SWING_PICK, objs, blds);
+        let plain = hit.as_ref().is_some_and(|h| (h.character.is_some() && h.collision_type & PLAIN_CLICK_BIT != 0) || h.name.eq_ignore_ascii_case(ICEWATER));
+        if !plain {
+            // Its position (a character's feet, an object's place); nothing
+            // or a building: no pick, he turns toward the click point.
+            let picked = hit.as_ref().filter(|h| !h.building).map(|h| {
+                let at = match h.character {
+                    Some(j) => w.anims[j].player.base.position,
+                    None => objs.iter().find(|o| o.name == h.name).map_or(h.point, |o| o.placement.position),
+                };
+                (h.name.clone(), at)
+            });
+            let point = match (&picked, &hit) {
+                (Some((_, at)), _) => [at[0], at[1]],
+                (None, Some(h)) => [h.point[0], h.point[1]],
+                // **Stand-in** (the note gives no click point when the line
+                // meets nothing): where it meets the level of his feet;
+                // straight ahead along it if it never comes down.
+                (None, None) => {
+                    let z = w.connor_at.map_or(origin[2], |c| c[2]);
+                    let t = if dir[2] < -1e-4 { (z - origin[2]) / dir[2] } else { 10_000.0 };
+                    [origin[0] + dir[0] * t, origin[1] + dir[1] * t]
+                }
+            };
+            let met = match &hit {
+                Some(h) => format!("{} {} (type 0x{:X})", if h.building { "building" } else if h.character.is_some() { "character" } else { "object" }, h.name, h.collision_type),
+                None => "nothing".into(),
+            };
+            let big = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+            let line = format!("{line}; a hand weapon is ready: the swing pick meets {met}: a swing toward ({:.0}, {:.0}){} (ranged-weapons.md rule 32)", point[0], point[1], if big { ", Shift" } else { "" });
+            sim.swing_clicks.push(SwingClick { picked, point, big, how: how.clone() });
+            shared.log.lock().unwrap().summary(&line);
+            sim.log.detail(line);
+            return;
+        }
     }
     if let Some(name) = picked {
         sim.pending.push((name, "mouse".into()));
@@ -1617,11 +1624,13 @@ pub fn door_step(
             };
             w.fight_note("Connor", format!("test --swing: {line}"));
         }
+        // As a click that picks NAME (rule 32): its position (a
+        // character's feet; an object's place, else the middle of its box).
         let at = w.character_index(&name).map(|j| w.anims[j].player.base.position);
-        // M5 5d-5: or an object (a barrel), by the middle of its box.
+        let at = at.or_else(|| colliders.as_ref().and_then(|c| c.0.iter().find(|o| o.name.eq_ignore_ascii_case(&name)).map(|o| o.placement.position)));
         let at = at.or_else(|| sim.active.target_point(&name));
         match at {
-            Some(p) => sim.swing_clicks.push(SwingClick { target: Some(name.clone()), point: [p[0], p[1]], big, how: format!("test --swing {name}") }),
+            Some(p) => sim.swing_clicks.push(SwingClick { picked: Some((name.clone(), p)), point: [p[0], p[1]], big, how: format!("test --swing {name}") }),
             None => sim.log.detail(format!("update {updates}: test --swing {name}: no such character or object")),
         }
     }
@@ -1669,7 +1678,7 @@ pub fn door_step(
             let line = match list {
                 Some(list) => {
                     let coin = w.fight_rng.fraction();
-                    c.swing_click(&list, s.target, s.point, s.big, coin)
+                    c.swing_click(&list, s.picked, s.point, s.big, coin, sim.attack_dist)
                 }
                 None => format!("no movement list for {:?} in Connor.kq's ShortAnimList: no swing", w.weapon_ready),
             };

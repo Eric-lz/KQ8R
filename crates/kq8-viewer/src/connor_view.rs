@@ -171,6 +171,9 @@ pub struct ConnorSim {
     pub do_cues: Vec<String>,
     /// The shot asked or playing (`ranged-weapons.md` rule 20; M5 5f-5).
     pub shot: Option<Shot>,
+    /// His swing's target, kept until another pick within reach replaces
+    /// it (`ranged-weapons.md` rule 32; M5 5f-7).
+    pub melee_target: Option<String>,
     /// His shot's `do` cue passed this update, or a moving shot left
     /// (movement, the phase of the frame, moving): taken by `door_view`.
     pub shot_cues: Vec<(&'static str, f32, bool)>,
@@ -227,13 +230,19 @@ pub struct Shot {
 pub struct Swing {
     /// The movement as loaded (`confists.anm/attack`).
     pub movement: &'static str,
-    /// The character clicked (his target), if any.
+    /// His target at the swing (`ranged-weapons.md` rule 32: kept from
+    /// the last pick within reach), if any.
     pub target: Option<String>,
     pub big: bool,
-    /// It waits for his turn toward the click to end (the click was
-    /// behind him).
+    /// It waits until his turn toward `point` has 8 updates or fewer to
+    /// go (rule 32: the picked thing was more than 45° off).
     pub waiting: bool,
+    pub point: [f32; 2],
 }
+
+/// `ranged-weapons.md` rule 32: a waiting swing starts when the turn has
+/// this many updates or fewer to go.
+pub const SWING_TURN_UPDATES: f32 = 8.0;
 
 /// Q98 (M3 3n-5, logs only): from the update a scripted walk ends until
 /// its stop transition has ended, what he did.
@@ -551,6 +560,7 @@ pub fn spawn_connor(
         swing: None,
         do_cues: Vec::new(),
         shot: None,
+        melee_target: None,
         shot_cues: Vec::new(),
         next_moving_shot: 0.0,
         run_back_at: None,
@@ -924,15 +934,22 @@ impl ConnorSim {
         self.movement_loop(w.movement).is_none_or(|l| kq8_core::fight::cut_short_at(l.cut_short, &l.cues, w.phase))
     }
 
-    /// `fighting.md` rules 39-40 (M5 5c-5; the input side is a **stand-in**
-    /// from the manual): a click with a hand weapon ready. Nothing while a
-    /// swing plays or his movement can't be cut short. He turns toward the
-    /// click (the automatic turn); if it was behind him (more than 90
-    /// degrees off) the swing waits for the turn, otherwise it starts at
-    /// once and he turns during it. `Attack` / `AttackB` 50/50, Shift
+    /// `ranged-weapons.md` rule 32 (M5 5f-7; `fighting.md` rules 39-40): a
+    /// click with a hand weapon ready. `picked`: what the click line met
+    /// (types with bit 0x40 or 0x20) and its position, `None` for nothing
+    /// or a building; `point`: where he turns (the picked thing's
+    /// position, else the click point); `reach`: his `attackDist`.
+    /// Nothing while a swing plays or his movement can't be cut short.
+    /// A picked thing within reach (straight 3D distance between the two
+    /// positions) becomes his target, which stays until another pick
+    /// replaces it. He turns toward the point (the automatic turn); for a
+    /// picked thing more than 45° off his facing the swing waits until
+    /// the turn has 8 updates or fewer to go; otherwise it starts at once
+    /// and he turns during it. `Attack` / `AttackB` 50/50, Shift
     /// `Attack2`, from the weapon's list (`list`). Returns the line for
     /// `fight.log`.
-    pub fn swing_click(&mut self, list: &str, target: Option<String>, point: [f32; 2], big: bool, coin: f32) -> String {
+    #[allow(clippy::too_many_arguments)]
+    pub fn swing_click(&mut self, list: &str, picked: Option<(String, [f32; 3])>, point: [f32; 2], big: bool, coin: f32, reach: f32) -> String {
         use kq8_core::connor_auto::{heading_towards, wrap, AutoKind, AutoMove};
         if self.swing.is_some() {
             return "a swing is already playing or waiting: nothing (rule 40)".into();
@@ -945,20 +962,32 @@ impl ConnorSim {
         let Some(movement) = self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name) else {
             return format!("no {wanted} loaded: no swing");
         };
-        let off = wrap(heading_towards(self.mover.position, point) - self.walker.heading);
-        let behind = off.abs() > std::f32::consts::FRAC_PI_2;
+        let feet = self.mover.position;
+        let pick = match &picked {
+            Some((name, at)) => {
+                let d = (0..3).map(|k| (at[k] - feet[k]).powi(2)).sum::<f32>().sqrt();
+                if d <= reach {
+                    self.melee_target = Some(name.clone());
+                    format!("{name} picked, {d:.0} away: within {reach:.0}, his target now")
+                } else {
+                    format!("{name} picked, {d:.0} away: beyond {reach:.0}, his target stays {:?}", self.melee_target)
+                }
+            }
+            None => format!("nothing or a building picked: his target stays {:?}", self.melee_target),
+        };
+        let off = wrap(heading_towards(feet, point) - self.walker.heading);
+        let waits = picked.is_some() && off.abs() > kq8_core::weapons::SHOT_WAIT_ANGLE;
         let turn = self.walker.start_auto(AutoMove::new(AutoKind::Point, point, None));
-        self.swing = Some(Swing { movement, target: target.clone(), big, waiting: behind });
-        let start = if behind {
-            "the click is behind him: the swing waits for the turn (stand-in)".to_string()
+        self.swing = Some(Swing { movement, target: self.melee_target.clone(), big, waiting: waits, point });
+        let start = if waits {
+            "more than 45 deg off: the swing waits until 8 updates of turn are left".to_string()
         } else {
             self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(movement, word.into())]);
-            format!("'{movement}' starts at once, he turns during it (stand-in)")
+            format!("'{movement}' starts at once, he turns during it")
         };
         let line = format!(
-            "swing ({}): {start}; target {}; click point ({:.0}, {:.0}), {:.0} deg off his heading; {turn}",
+            "swing ({}): {pick} (rule 32); {start}; turn toward ({:.0}, {:.0}), {:.0} deg off his heading; {turn}",
             if big { "Shift: Attack2" } else { "Attack or AttackB, 50/50" },
-            target.as_deref().unwrap_or("none"),
             point[0],
             point[1],
             off.to_degrees()
@@ -1260,13 +1289,17 @@ impl ConnorSim {
     pub fn swing_step(&mut self) -> Option<String> {
         let s = self.swing.as_mut()?;
         if s.waiting {
-            if self.walker.auto.is_some() {
+            // Rule 32: when the turn has 8 updates or fewer to go (or is
+            // over).
+            let left = kq8_core::connor_auto::wrap(kq8_core::connor_auto::heading_towards(self.mover.position, s.point) - self.walker.heading);
+            let per_update = kq8_core::connor_auto::AUTO_TURN_RATE / kq8_core::UPDATES_PER_SECOND as f32;
+            if self.walker.auto.is_some() && left.abs() > SWING_TURN_UPDATES * per_update + 1e-4 {
                 return None;
             }
             s.waiting = false;
             let m = s.movement;
             self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(m, kq8_core::connor::plain_movement_name(m).to_string())]);
-            return Some(format!("his turn is over: '{m}' starts"));
+            return Some(format!("{:.2} rad of turn left (8 updates or fewer): '{m}' starts (rule 32)", left.abs()));
         }
         if self.walker.mode != Mode::Special || self.walker.movement != s.movement {
             let m = s.movement;

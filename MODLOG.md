@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-20 M5 5f-7: the swing click picks its target as traced
+
+**Changed:** With a hand weapon ready, the click line is tested against the characters, objects and buildings whose type has bit 0x40 or 0x20 (`weapons.rs`: `SWING_PICK`). The Wizard and the Knight (type bit 0x8000) get the plain click. Nothing or a building: he turns to the click point and swings at once. Anything else within his reach (2,350, 3D between the positions) becomes his target, and the target stays for later swings; more than 45° off, the swing waits until 8 updates of turn are left. `--swing NAME,N` clicks NAME the same way. FEATURES, provenance, DESIGN.
+**Why:** `ranged-weapons.md` rule 32 (Q139 a–d) replaces 5c fixes 3–5's stand-ins.
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer: `cargo play --world Daventry --sound off --at 289284,190300,0 --god --key left:IDCTL_INVBAR_SHORT,40 --swing goblin22,60 --aim-point 289284,190100,14100,90 --frames 1500`; barrel.12 again (`--at 188861,270713,0 --key left:IDCTL_INVBAR_SHORT,40 --swing barrel.12,60 --frames 1000`, `fight-5f7-barrel.log`); `fight.log`, `items.log`.
+**Result:** goblin22, 1,154 away and 130° off: his target; the swing waits and starts with 1.80 rad of turn left; it hits. The ground click at update 90 picks nothing: his target stays goblin22, `attackb` starts at once and hits goblin22 (40° off at `Do`). barrel.12 (1,522 away) is his target, bursts, and its four crystals fly.
+**Still broken / not tested:** Not looked at by eye. The click point when the line meets nothing is still where it meets the level of his feet (the note doesn't say). How objects take damage is still the stand-in (Q139 e).
+**Next:** The user's check of 5f (the note's "How to check").
+
 ## 2026-10-20 M5 5f-6: the moving shot
 
 **Changed:** `connor_view.rs`: a shot asked while Connor walks or runs plays no `attack`: if 0.5 s (his `attackDelay`) have passed since the last shot, the bolt leaves at once from the `arrow` part in the frame playing; otherwise nothing. A moving shot while running switches the run off; it comes back 1 s after the last moving shot. The end of a standing `attack` sets the next moving shot 0.5 s later. `door_view.rs`: the item's use sound (`crossbow.aud`) plays flat. FEATURES, provenance, DESIGN.

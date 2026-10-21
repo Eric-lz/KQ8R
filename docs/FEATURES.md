@@ -492,10 +492,12 @@ miss, roll, flinch, death, drop and shot is in
   at most twice a second, and a run slows to a walk until a second after
   the last shot (M5 5f-6). Test options `--aim NAME,N`,
   `--aim-point X,Y,Z,N`.
-- **Connor hits back (stand-in click):** with his fists ready a left
-  click on a creature turns him toward it and swings (`attack` /
-  `attackb`; Shift: `attack2`, × 0.75–4 damage; Ctrl: the normal click).
-  Test option `--swing NAME,N[,big]`.
+- **Connor hits back (M5 5f-7):** with his fists ready a left click
+  swings (`attack` / `attackb`; Shift: `attack2`, × 0.75–4 damage; Ctrl:
+  the normal click). A creature or object clicked within his reach
+  becomes his target and stays it, so a click on the ground still swings
+  at it; far behind him he turns first. The Wizard and the Knight get
+  the normal click. Test option `--swing NAME,N[,big]`.
 - **Hit creatures:** they flinch (`react`, never twice within 2 s of the
   last) or say ouch, run after him from then on, and alarm everyone who
   sees him; hit unseen, a lone one runs about beside him until it finds

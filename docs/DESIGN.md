@@ -1562,7 +1562,9 @@ Steps (one commit each):
    back to running 1 s after the last moving shot. The end of `attack`
    also sets the next moving shot 0.5 s later. **Test:** walk and shoot
    with `--key` and `--shoot`: at most two shots a second.
-7. **5f-7, the swing click's target** (rule 32; Q139). The click line
+7. **5f-7, the swing click's target** (**done** 2026-10-20; a ground
+   click after punching goblin22 still swings at it; barrel.12 still
+   bursts) (rule 32; Q139). The click line
    meets types 0x40 / 0x20 (characters, plain objects, barrels,
    clickables, clickable buildings); nothing or a building → turn to the
    click point and swing, target kept; a character with bit 0x8000 →
