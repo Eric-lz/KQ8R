@@ -23,6 +23,7 @@
 //! (safe). `--at X,Y,H` starts him somewhere else. The camera that follows
 //! him is in `game_camera.rs`.
 
+use kq8_core::weapons::WeaponMode;
 use bevy::prelude::*;
 use kq8_data::objects::Placement;
 use kq8_core::connor::{Intent, Mode, MoveKey, MovementLoop, Walker};
@@ -49,6 +50,11 @@ pub struct Controls {
     right: Option<KeyCode>,
     run: Option<KeyCode>,
     jump: Option<KeyCode>,
+    /// `Draw` (Delete), `Away` (Alt), `ModifyDn` (Shift)
+    /// (`ranged-weapons.md` rule 1; M5 5f-3).
+    draw: Option<KeyCode>,
+    away: Option<KeyCode>,
+    shift: Option<KeyCode>,
     held: Vec<KeyCode>,
 }
 
@@ -170,8 +176,18 @@ pub struct ConnorSim {
     /// put-away is playing (no slot clicks meanwhile: the user's check,
     /// 5d fix 10).
     pub weapon_target: Option<String>,
-    pending_set: Option<(Option<String>, usize)>,
+    pending_set: Option<(Option<String>, WeaponMode, usize)>,
     readying: bool,
+    /// The mode and item of `weapon_target`, and the mode of `weapon_set`,
+    /// for the pointer (`ranged-weapons.md` rules 6, 11; M5 5f-3).
+    target_mode: WeaponMode,
+    ready_item: Option<String>,
+    pub set_mode: WeaponMode,
+    /// Delete / Alt pressed since the last update: taken by `door_view`
+    /// (rule 1).
+    pub weapon_keys: Vec<(kq8_core::weapons::Ask, String)>,
+    /// The big-swing key (Shift) is held (rule 6's `away2`).
+    pub shift_held: bool,
 }
 
 /// One of Connor's swings (M5 5c-5).
@@ -423,11 +439,14 @@ pub fn spawn_connor(
         right: key("RotateZ", -1.0),
         run: key("Run", 0.0),
         jump: key("Jump", 0.0),
+        draw: key("Draw", 0.0),
+        away: key("Away", 0.0),
+        shift: key("ModifyDn", 0.0),
         held: Vec::new(),
     };
     main_log.summary(format!(
-        "connor: keys from Connor.sae: forward {:?}, back {:?}, turn left {:?}, turn right {:?}, run on/off {:?}, jump {:?}",
-        controls.forward, controls.back, controls.left, controls.right, controls.run, controls.jump
+        "connor: keys from Connor.sae: forward {:?}, back {:?}, turn left {:?}, turn right {:?}, run on/off {:?}, jump {:?}, draw {:?}, away {:?}, modifier {:?}",
+        controls.forward, controls.back, controls.left, controls.right, controls.run, controls.jump, controls.draw, controls.away, controls.shift
     ));
 
     let mut mover = Mover::new(placement.position, true);
@@ -500,6 +519,11 @@ pub fn spawn_connor(
         weapon_target: None,
         pending_set: None,
         readying: false,
+        target_mode: WeaponMode::None,
+        ready_item: None,
+        set_mode: WeaponMode::None,
+        weapon_keys: Vec::new(),
+        shift_held: false,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -630,6 +654,17 @@ pub fn connor_keys(
     for (dir, down) in turn_events {
         let what = if down { "key" } else { "key released" };
         turn_key_event(&mut sim, dir, down, what, &shared);
+    }
+    // ranged-weapons.md rule 1 (M5 5f-3): Delete and Alt ask for a mode;
+    // Shift held for rule 6's `away2`.
+    let c = &sim.controls;
+    let (draw, away) = (c.draw.is_some_and(|k| keys.just_pressed(k)), c.away.is_some_and(|k| keys.just_pressed(k)));
+    sim.shift_held = c.shift.is_some_and(|k| keys.pressed(k)) || keys.pressed(KeyCode::ShiftRight);
+    if draw {
+        sim.weapon_keys.push((kq8_core::weapons::Ask::Draw, "Delete (Draw) pressed".into()));
+    }
+    if away {
+        sim.weapon_keys.push((kq8_core::weapons::Ask::Away, "Alt (Away) pressed".into()));
     }
     let c = &sim.controls;
     let forward = c.axis(c.forward, c.back);
@@ -892,26 +927,38 @@ impl ConnorSim {
         line
     }
 
-    /// A hand weapon readied or put away (M5 5c fix, **stand-in**, Q138;
-    /// `inventory.md` rule 9 says the weapon is readied, not what that
-    /// plays): readying switches his movements to the weapon's list
-    /// (`list`, e.g. `confists.anm`: its `stop` is the fists-up stance)
-    /// and plays its `draw`; putting it away plays the list's `undraw` and
-    /// switches back to his own. Either plays only while he stands or
-    /// walks (Wait, Move: our Free mode); otherwise only the set switches. Returns the
-    /// line for `fight.log`.
-    pub fn ready_set(&mut self, list: Option<String>, at_once: bool) -> String {
+    /// The weapon swap (`ranged-weapons.md` rule 6; M5 5f-3), or a weapon
+    /// readied or put away outside a request (`at_once`: picked up while
+    /// another is ready, 5d fix 11: straight into its stance). `list`: the
+    /// new mode's movement list (`None`: his own); `mode`, `item`: the new
+    /// mode and item; `shift`: the big-swing key held; `script`: asked by
+    /// `KQConner::setDoMode` (rule 9: he is put into standing first). In
+    /// rule 6's order:
+    /// 1. none → the Fists: the list switches first, then `draw`;
+    /// 2. the Fists → none: `undraw`, the switch back when it ends;
+    /// 3. from a hand weapon with Shift: `away2` (else `away`), then as 4;
+    /// 4. otherwise `away` in the list in use now; when it ends, the switch
+    ///    (the mode, the list, the pointer), and `out` from the new list.
+    ///
+    /// Then standing. The movement playing is asked again by name in the
+    /// new list (rule 8): our movements are looked up by name in the set
+    /// in use. Plays only while he stands or moves (or for a script);
+    /// otherwise the set switches at once. Returns the line for `fight.log`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ready_set(&mut self, list: Option<String>, mode: WeaponMode, item: Option<String>, at_once: bool, shift: bool, script: bool) -> String {
         use kq8_core::connor::SpecialStep;
         let old = self.weapon_target.clone();
-        if old == list {
+        let old_mode = self.target_mode;
+        let old_item = self.ready_item.clone();
+        if old == list && old_mode == mode && old_item == item {
             return "no change".into();
         }
         self.weapon_target = list.clone();
-        // 5d fix 11 (the user's check): a weapon picked up while another
-        // is ready: straight into its stance, nothing plays.
+        self.target_mode = mode;
+        self.ready_item = item.clone();
         if at_once {
             self.pending_set = None;
-            self.switch_set(list.clone());
+            self.switch_set(list.clone(), mode);
             return format!("picked up while another was ready: {list:?} at once, nothing plays (the user's check)");
         }
         let named = |file: &str, w: &str| {
@@ -919,42 +966,37 @@ impl ConnorSim {
             self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&wanted)).map(|m| m.name)
         };
         let own = |w: &str| self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(w)).map(|m| m.name);
-        // 5d fix 10 (stand-in, Q138 a): the fists draw with `draw` and
-        // put away with `undraw` (the user's check); the other weapons as
-        // `conversation.md` rule 7 puts one away: the weapon's `away`, bare
-        // hands, his own `out` (`c_shth` backwards: the hand back from the
-        // sheath); and draw the other way round: his own `away` (`c_shth`:
-        // the hand to the sheath), then the weapon's `out` (`cd_draw`).
-        let mut steps: Vec<(&'static str, &str)> = Vec::new();
-        let old_undraws = old.as_deref().and_then(|f| named(f, "undraw"));
-        let new_draws = list.as_deref().and_then(|f| named(f, "draw"));
-        match &old {
-            Some(f) => {
-                if let Some(m) = old_undraws.or_else(|| named(f, "away")) {
-                    steps.push((m, if old_undraws.is_some() { "undraw" } else { "away" }));
-                }
+        // A movement of a list (`None`: his own).
+        let of = |l: &Option<String>, w: &str| match l {
+            Some(f) => named(f, w),
+            None => own(w),
+        };
+        let fists = |i: &Option<String>| i.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(kq8_core::weapons::FISTS));
+        let mut steps: Vec<(&'static str, String)> = Vec::new();
+        let switch_at;
+        let case;
+        if old_mode == WeaponMode::None && mode == WeaponMode::Hand && fists(&item) {
+            case = "1: none to the Fists, the list first, then draw";
+            switch_at = 0;
+            if let Some(m) = of(&list, "draw") {
+                steps.push((m, "draw".into()));
             }
-            None => {
-                if new_draws.is_none() {
-                    if let Some(m) = own("away") {
-                        steps.push((m, "away (his own)"));
-                    }
-                }
+        } else if old_mode == WeaponMode::Hand && fists(&old_item) && mode == WeaponMode::None {
+            case = "2: the Fists to none, undraw, then the list";
+            if let Some(m) = of(&old, "undraw") {
+                steps.push((m, "undraw".into()));
             }
-        }
-        let switch_at = steps.len();
-        match &list {
-            Some(f) => {
-                if let Some(m) = new_draws.or_else(|| named(f, "out")) {
-                    steps.push((m, if new_draws.is_some() { "draw" } else { "out" }));
-                }
+            switch_at = steps.len();
+        } else {
+            let big = old_mode == WeaponMode::Hand && shift;
+            case = if big { "3: from a hand weapon with Shift: away2, the list, out" } else { "4: away, the list, out" };
+            let away = if big { of(&old, "away2").map(|m| (m, "away2")).or_else(|| of(&old, "away").map(|m| (m, "away"))) } else { of(&old, "away").map(|m| (m, "away")) };
+            if let Some((m, w)) = away {
+                steps.push((m, format!("{w} ({})", old.as_deref().unwrap_or("his own"))));
             }
-            None => {
-                if old_undraws.is_none() {
-                    if let Some(m) = own("out") {
-                        steps.push((m, "out (his own)"));
-                    }
-                }
+            switch_at = steps.len();
+            if let Some(m) = of(&list, "out") {
+                steps.push((m, format!("out ({})", list.as_deref().unwrap_or("his own"))));
             }
         }
         let set = match &list {
@@ -962,41 +1004,46 @@ impl ConnorSim {
             None => "his own movements again (Conner.anm)".into(),
         };
         let played: Vec<&str> = steps.iter().map(|(m, _)| *m).collect();
-        if self.walker.mode != Mode::Free || steps.is_empty() {
-            self.switch_set(list);
-            return format!("{set} at once; mode {}: {played:?} not played (stand-in)", self.walker.mode.name());
+        let plays = self.walker.mode == Mode::Free || (script && matches!(self.walker.mode, Mode::Special | Mode::Push | Mode::Talk));
+        if !plays || steps.is_empty() {
+            self.pending_set = None;
+            self.switch_set(list, mode);
+            return format!("rule 6 case {case}; {set} at once; mode {}: {played:?} not played", self.walker.mode.name());
         }
         if switch_at == 0 {
-            self.switch_set(list);
+            self.pending_set = None;
+            self.switch_set(list, mode);
         } else {
-            self.pending_set = Some((list, switch_at));
+            self.pending_set = Some((list, mode, switch_at));
         }
         self.walker.auto = None;
         self.readying = true;
-        let notes = self.walker.start_special(steps.iter().map(|(m, w)| SpecialStep::Play(m, w.to_string())).collect());
-        let line = format!("plays {played:?}; {set} from item {switch_at} ({})", notes.join("; "));
+        let notes = self.walker.start_special(steps.iter().map(|(m, w)| SpecialStep::Play(m, w.clone())).collect());
+        let line = format!("rule 6 case {case}: plays {played:?}; {set} from item {switch_at} ({})", notes.join("; "));
         self.log.detail(format!("connor update {}: weapon: {line}", self.updates));
         line
     }
 
-    /// The movement set switches (5d fix 10), with his hand mode
-    /// (`pushing.md`: sword 0, empty hands 4; `conversation.md` rule 7,
-    /// gestures, pushing).
-    fn switch_set(&mut self, list: Option<String>) {
-        self.walker.hand_mode = if list.is_some() { kq8_core::connor::SWORD_MODE } else { kq8_core::connor::EMPTY_HANDS };
+    /// The movement set switches (5d fix 10; `ranged-weapons.md` rule 8),
+    /// with his hand mode (`pushing.md`: sword 0, bow 1, empty hands 4;
+    /// `conversation.md` rule 7, gestures, pushing) and the pointer's mode
+    /// (rule 11).
+    fn switch_set(&mut self, list: Option<String>, mode: WeaponMode) {
+        self.walker.hand_mode = if mode == WeaponMode::None { kq8_core::connor::EMPTY_HANDS } else { mode.number() };
         self.weapon_set = list;
+        self.set_mode = mode;
     }
 
     /// After his own update: the waiting set switch when its list item
-    /// starts (or the list ended or was replaced); the draw or put-away is
-    /// over when the Special state is.
+    /// starts (or the list ended or was replaced); the swap is over when
+    /// the Special state is.
     fn weapon_step(&mut self) {
-        if let Some((set, at)) = self.pending_set.clone() {
+        if let Some((set, mode, at)) = self.pending_set.clone() {
             if self.walker.mode != Mode::Special || self.walker.special_at >= at {
                 self.pending_set = None;
-                self.switch_set(set);
+                self.switch_set(set, mode);
                 let n = self.updates;
-                self.log.detail(format!("connor update {n}: weapon: the set switches now ({:?})", self.weapon_set));
+                self.log.detail(format!("connor update {n}: weapon: the set switches now ({:?}, {})", self.weapon_set, mode.name()));
             }
         }
         if self.readying && self.walker.mode != Mode::Special {
@@ -1004,17 +1051,16 @@ impl ConnorSim {
         }
     }
 
-    /// Whether a weapon may be readied or put away now: not during a jump,
-    /// its landing (`jumpend`, and `jumprun` / `jumpstop`, which play
-    /// with the keys choosing again) or a stumble (`crash`) (the user's
-    /// checks in the original, 2026-10-20: fixes 2 and 3); not while
-    /// falling or dying (ours). `Err`: why not.
+    /// `ranged-weapons.md` rule 5 (M5 5f-3): a request is taken only while
+    /// he stands or moves (our Free mode), not while a swap plays; the
+    /// landings `jumprun` / `jumpstop` play in Free mode but are the
+    /// landing (the user's checks, 5c fixes 2, 3). `Err`: why not.
     pub fn may_ready(&self) -> Result<(), String> {
         let w = &self.walker;
         if self.readying {
-            return Err("a draw or put-away plays".into());
+            return Err("a weapon swap plays".into());
         }
-        if matches!(w.mode, Mode::Jump | Mode::Fall | Mode::Land | Mode::Crash | Mode::Dying | Mode::Dead) {
+        if w.mode != Mode::Free {
             return Err(format!("mode {}", w.mode.name()));
         }
         let landing = |n: &str| n.eq_ignore_ascii_case("jumprun") || n.eq_ignore_ascii_case("jumpstop");

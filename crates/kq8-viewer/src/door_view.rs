@@ -1439,7 +1439,7 @@ pub fn door_click_input(
     // A character that doesn't fight (the wizard) gets the plain click
     // (the user's check in the original, 2026-10-20: fix 3).
     let peaceful = picked.as_deref().and_then(|n| sim.active.world.character_index(n)).is_some_and(|j| sim.active.world.anims[j].character.as_ref().is_some_and(|c| c.fight.is_none()));
-    if sim.active.world.weapon_ready.is_some() && !ctrl && !peaceful {
+    if sim.active.world.weapon_mode == kq8_core::weapons::WeaponMode::Hand && !ctrl && !peaceful {
         let target = match &fighter {
             Some((n, _)) => Some(n.clone()),
             None => picked.clone().filter(|n| sim.active.world.character_index(n).is_some()),
@@ -1476,12 +1476,20 @@ pub fn door_click_input(
     sim.log.detail(line);
 }
 
-/// The ready hand weapon's movement list (`Connor.kq`'s `ShortAnimList`,
-/// `fighting.md` rule 40): `confists.anm` for `INVITEM_Fists`.
+/// The ready weapon's movement list (`ranged-weapons.md` rule 10): a hand
+/// weapon's from `Connor.kq`'s `ShortAnimList` (`fighting.md` rule 40:
+/// `confists.anm` for `INVITEM_Fists`); a ranged one's from
+/// `LongAnimList` (M5 5f-4); none: his own (`None`).
 fn weapon_list(w: &kq8_core::active::WorldState) -> Option<String> {
     let ready = w.weapon_ready.as_deref()?;
     let short = ready.strip_prefix(kq8_data::items::PREFIX).unwrap_or(ready);
-    w.connor_fight.as_ref()?.short_lists.iter().find(|(n, _)| n.eq_ignore_ascii_case(short)).map(|(_, f)| f.clone())
+    let f = w.connor_fight.as_ref()?;
+    let lists = match w.weapon_mode {
+        kq8_core::weapons::WeaponMode::Hand => &f.short_lists,
+        kq8_core::weapons::WeaponMode::Ranged => &f.long_lists,
+        kq8_core::weapons::WeaponMode::None => return None,
+    };
+    lists.iter().find(|(n, _)| n.eq_ignore_ascii_case(short)).map(|(_, f)| f.clone())
 }
 
 /// One update of the doors (15 per second), before Connor's: clicks,
@@ -1562,26 +1570,40 @@ pub fn door_step(
     // fighting.md rules 39-41 (M5 5c-5): swings asked for, the swing that
     // waited for his turn, and his `Do` cues.
     if let Some(c) = connor.as_mut() {
-        // M5 5c fix (stand-in, Q138): the weapon readied or put away
-        // switches his movement set (draw / undraw).
-        let list = weapon_list(&sim.active.world);
-        if list != c.weapon_target {
-            let w = &mut sim.active.world;
-            if let Err(why) = c.may_ready() {
-                // The user's checks in the original (2026-10-20): no
-                // readying or putting away during a jump, its landing or a
-                // stumble; the click is undone (fixes 2, 3).
-                let kept = c.weapon_target.as_ref().and_then(|f| {
-                    w.connor_fight.as_ref()?.short_lists.iter().find(|(_, file)| file.eq_ignore_ascii_case(f)).map(|(n, _)| format!("{}{n}", kq8_data::items::PREFIX))
-                });
-                let line = format!("weapon {:?} asked ({why}): refused, stays {kept:?} (no readying during a jump, its landing, a stumble or another draw)", w.weapon_ready);
-                w.weapon_ready = kept;
-                w.fight_note("Connor", line);
-            } else {
-                let at_once = std::mem::take(&mut w.weapon_swapped);
-                let line = c.ready_set(list, at_once);
-                w.fight_note("Connor", format!("weapon {:?}: {line}", w.weapon_ready));
+        // ranged-weapons.md rules 1-9 (M5 5f-3): Delete, Alt, slot clicks
+        // and setDoMode ask for a mode; taken only while he stands or
+        // moves (rule 5), then the swap (rule 6).
+        let w = &mut sim.active.world;
+        for (ask, how) in std::mem::take(&mut c.weapon_keys) {
+            w.ask_weapon(ask, &format!("update {updates}: {how}"));
+        }
+        let mut later = Vec::new();
+        for r in std::mem::take(&mut w.weapon_requests) {
+            // Open question 1 (a request during a swing: cut or wait; not
+            // traced): ours waits until the swing is over.
+            if c.swing.is_some() && !matches!(r.ask, kq8_core::weapons::Ask::Script(_)) {
+                if !r.how.ends_with(" (waits for the swing)") {
+                    w.fight_note("Connor", format!("weapon request ({}): a swing plays: it waits for its end (open question 1: not traced; ours)", r.how));
+                }
+                later.push(kq8_core::weapons::Request { how: if r.how.ends_with(" (waits for the swing)") { r.how } else { format!("{} (waits for the swing)", r.how) }, ..r });
+                continue;
             }
+            if let Some(ch) = w.take_weapon_request(&r, c.may_ready(), c.hands_off) {
+                let list = weapon_list(w);
+                let shift = c.shift_held;
+                let line = c.ready_set(list, ch.to, ch.to_item.clone(), false, shift, ch.script);
+                w.fight_note("Connor", format!("swap ({} -> {}): {line}", ch.from.name(), ch.to.name()));
+            }
+        }
+        w.weapon_requests.splice(0..0, later);
+        // Readied or put away another way (picked up while one is ready,
+        // 5d fix 11; a conversation's put-away, `conversation.md` rule 7;
+        // the `--swing` test): the set follows.
+        let list = weapon_list(w);
+        if list != c.weapon_target || w.weapon_ready.is_none() != c.weapon_target.is_none() {
+            let at_once = std::mem::take(&mut w.weapon_swapped);
+            let line = c.ready_set(list, w.weapon_mode, w.weapon_ready.clone(), at_once, false, false);
+            w.fight_note("Connor", format!("weapon {:?}: {line}", w.weapon_ready));
         }
         for s in std::mem::take(&mut sim.swing_clicks) {
             let w = &mut sim.active.world;

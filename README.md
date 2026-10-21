@@ -141,8 +141,9 @@ Follows original game's default keybindings, plus extra debugging keys.
 | F4 | Test: creatures' AI off / on (they don't notice or attack Connor) |
 
 Fighting (first version): click the hand-weapon slot in the bottom bar
-to ready Connor's fists, then left-click a creature to swing (Shift:
-the big swing, Ctrl: a normal click).
+(or press Delete) to ready Connor's fists, then left-click a creature to
+swing (Shift: the big swing, Ctrl: a normal click). Delete swaps between
+the hand and the ranged weapon, Alt puts the weapon away.
 
 ## How the work is done
 

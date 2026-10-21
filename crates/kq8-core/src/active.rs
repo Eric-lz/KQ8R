@@ -692,9 +692,18 @@ pub struct WorldState {
     pub connor_tips: [bool; 2],
     /// The fight's random draws (the rolls, M5 5c).
     pub fight_rng: crate::emitter::Rng,
-    /// The hand weapon Connor has ready (its type name; `inventory.md`
-    /// rule 9, `fighting.md` rule 39; M5 5c-5), `None` = none drawn.
+    /// The weapon Connor has ready (its type name; `inventory.md` rule 9,
+    /// `fighting.md` rule 39; M5 5c-5), `None` = none drawn; since M5 5f-3
+    /// the hand or the ranged one, as `weapon_mode` says.
     pub weapon_ready: Option<String>,
+    /// What is ready: hand, ranged or none (`ranged-weapons.md` rule 1;
+    /// M5 5f-3).
+    pub weapon_mode: crate::weapons::WeaponMode,
+    /// The last weapon put away was the ranged one (rule 2's Delete).
+    pub last_away_ranged: bool,
+    /// Requests for a new mode, taken by the viewer, which knows his
+    /// state (rules 1, 5, 9).
+    pub weapon_requests: Vec<crate::weapons::Request>,
     /// The ready weapon was swapped by picking up another (5d fix 11):
     /// Connor takes its stance at once, nothing plays. Taken by the viewer.
     pub weapon_swapped: bool,
@@ -2511,13 +2520,25 @@ impl ScriptHost for WorldState {
             "KQConner::setRun" => Some(self.set_run(words, at)),
             "KQConner::getDoMode" => {
                 // pushing.md "Words used here": the hand mode, sword 0, bow
-                // 1, empty hands 4 (the game's help text). A ready hand
-                // weapon is sword mode (inventory.md rule 9: `SwordMode`,
-                // the fists too; M5 5c fix 3); `KQConner::setDoMode` is a
-                // stub.
-                let mode = if self.weapon_ready.is_some() { crate::connor::SWORD_MODE } else { crate::connor::EMPTY_HANDS };
+                // 1, empty hands 4 (the game's help text); ranged-weapons.md
+                // rule 1 (M5 5f-3).
+                let mode = self.weapon_mode.number();
                 self.note(format!("{at}: KQConner::getDoMode: {mode} ({:?} ready)", self.weapon_ready));
                 Some(mode.to_string())
+            }
+            "KQConner::setDoMode" => {
+                // ranged-weapons.md rule 9 (M5 5f-3): the request waits for
+                // the viewer, which puts him into standing and plays the swap.
+                // The optional movement word is not used (no Daventry script
+                // gives one).
+                let Some(mode) = words.get(1).and_then(|w| w.parse::<i64>().ok()).and_then(crate::weapons::WeaponMode::from_number) else {
+                    self.note(format!("{at}: usage: KQConner::setDoMode 0|1|4 [movement]; nothing"));
+                    return Some("1".into());
+                };
+                let extra = words.get(2).map_or(String::new(), |m| format!(" (movement {m} not used)"));
+                self.note(format!("{at}: KQConner::setDoMode {}: asks for {}{extra} (ranged-weapons.md rule 9)", mode.number(), mode.name()));
+                self.ask_weapon(crate::weapons::Ask::Script(mode), &format!("{at}: setDoMode {}", mode.number()));
+                Some("0".into())
             }
             "KQConner::JumpDir" => Some(self.jump_dir(at)),
             "KQConner::endJump" => Some(self.end_jump(at)),
@@ -2671,6 +2692,9 @@ impl Active {
                 connor_tips: [false; 2],
                 fight_rng: crate::emitter::Rng::new(0x5EED_F1647),
                 weapon_ready: None,
+                weapon_mode: crate::weapons::WeaponMode::None,
+                last_away_ranged: false,
+                weapon_requests: Vec::new(),
                 weapon_swapped: false,
                 combat_level: 1.0,
                 ai_off: false,
@@ -5476,7 +5500,7 @@ mod tests {
         // fighting.md rules 39-41, 16 (M5 5c-5).
         let mut a = fighter();
         a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
-        a.world.connor_fight = Some(crate::fight::ConnorFight { ouch_sound: "conrow3.aud".into(), min_damage_factor: 0.75, max_damage_factor: 4.0, short_lists: vec![] });
+        a.world.connor_fight = Some(crate::fight::ConnorFight { ouch_sound: "conrow3.aud".into(), min_damage_factor: 0.75, max_damage_factor: 4.0, short_lists: vec![], long_lists: vec![] });
         // The goblin at (0, 0, 100); Connor 2,000 south of it, facing it
         // (heading pi faces +y).
         let from = [0.0, -2000.0, 100.0];
@@ -5622,6 +5646,32 @@ mod tests {
         assert_eq!(a.world.weapon_ready.as_deref(), Some("INVITEM_Fists"));
         assert!(crate::connor_inventory::ready_hand_weapon(&mut a.world, "INVITEM_Fists").starts_with("puts INVITEM_Fists away"));
         assert_eq!(a.world.weapon_ready, None);
+    }
+
+    #[test]
+    fn weapon_requests_are_taken_standing_or_moving_and_scripts_ask_too() {
+        // ranged-weapons.md rules 1-5, 9 (M5 5f-3).
+        use crate::weapons::{Ask, Request, WeaponMode};
+        let mut a = with_object("x\n", "x");
+        let r = |ask: Ask| Request { ask, how: "t".into() };
+        // Delete at the start: his fists (no hand weapon carried here).
+        let ch = a.world.take_weapon_request(&r(Ask::Draw), Ok(()), false).unwrap();
+        assert_eq!((ch.from, ch.to, ch.to_item.as_deref()), (WeaponMode::None, WeaponMode::Hand, Some("INVITEM_Fists")));
+        assert_eq!((a.world.weapon_mode, a.world.weapon_ready.as_deref()), (WeaponMode::Hand, Some("INVITEM_Fists")));
+        // Delete again: no real ranged weapon: nothing.
+        assert!(a.world.take_weapon_request(&r(Ask::Draw), Ok(()), false).is_none());
+        // Alt while jumping: dropped, not kept (rule 5).
+        assert!(a.world.take_weapon_request(&r(Ask::Away), Err("mode Jump".into()), false).is_none());
+        assert_eq!(a.world.weapon_mode, WeaponMode::Hand);
+        assert!(a.world.fight_log.join("\n").contains("dropped, he is not standing or moving (mode Jump) (rule 5)"));
+        // handsOff: ignored.
+        assert!(a.world.take_weapon_request(&r(Ask::Away), Ok(()), true).is_none());
+        // A script: setDoMode 4 asks, whatever his state.
+        assert_eq!(a.test_command("KQConner::setDoMode 4", "t").as_deref(), Some("0"));
+        let req = a.world.weapon_requests.remove(0);
+        let ch = a.world.take_weapon_request(&req, Err("mode Special".into()), false).unwrap();
+        assert!(ch.script && ch.to == WeaponMode::None && a.world.weapon_ready.is_none());
+        assert_eq!(a.test_command("KQConner::getDoMode", "t").as_deref(), Some("4"));
     }
 
     #[test]

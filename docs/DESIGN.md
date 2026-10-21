@@ -1514,7 +1514,10 @@ Steps (one commit each):
    its `shootOffsets` (none in Daventry: 0, 0, 0). Start = position +
    its turn × offset. **Test:** `sprigwnd1`'s offset ≈ (−55, −1,367,
    954) in `fight.log`, the start point in front of it at that height.
-3. **5f-3, weapon modes and the swap** (rules 1–9, 12; Q138). Core keeps
+3. **5f-3, weapon modes and the swap** (**done** 2026-10-20; Delete,
+   Alt, slot clicks and `setDoMode` logged as the note says; a request
+   during a swing waits for its end, open question 1, ours; the pointer
+   by mode, rule 11, moved here from 5f-4) (rules 1–9, 11, 12; Q138). Core keeps
    the mode (hand / ranged / none) and the last one put away. Requests:
    a slot click (`SwordMode` hand, `BowMode` ranged, `HandMode` none,
    `NoModeChange` nothing), Delete (`Draw`), Alt (`Away`),

@@ -2895,3 +2895,24 @@ Replaces 5f-1's stand-in start (3/4 of its eye height).
 | Found once, kept for every later shot; not found: its own `shootOffsets` (not read: none in Daventry), 0, 0, 0, and looked for again at the next shot | Rule 24, "Do not reproduce" (keep it); looking again until found is **our reading** of "0, 0, 0 until the first shot finds the part" | Unit test |
 | Start = its position + the offset turned by its rotation (row vector, our usual) | Rule 23 | Unit test (gob facing −y: start (−55, −1,367, 1,054)) |
 | A start inside an object's box is a hit at once (the first shot from `sprigwnd1`, still turning, starts inside the fence `Rfence`) | 5f-1's rule | `fight.log` |
+
+### 5f-3, weapon modes and the swap — new `crates/kq8-core/src/weapons.rs` (`WeaponMode`, `Ask`, `decide`, `take_weapon_request`, `set_weapon`, `ranged_weapon`), `active.rs` (`weapon_mode`, `last_away_ranged`, `weapon_requests`, `KQConner::setDoMode` / `getDoMode`), `connor_inventory.rs` (`bar_click`), `conversation.rs`, `script.rs` (no longer a stub); viewer `connor_view.rs` (`Controls`, `ready_set`, `switch_set`, `may_ready`), `door_view.rs` (`weapon_list`, the requests), `gui_view.rs` (the pointer, `--key delete` / `alt`)
+
+Replaces 5c fixes 2–3 and 5d fixes 9–10's stand-ins (Q138) where the note differs.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Three modes, hand 0, ranged 1, none 4; start none | Rule 1, "Words used here" | Unit tests |
+| A weapon slot asks for its item's mode column (`SwordMode` hand, `BowMode` ranged, `HandMode` none, `NoModeChange` nothing); Delete = `Draw`, Alt = `Away` (keys from `Connor.sae`); all ignored under `handsOff` | Rule 1 | Unit tests; viewer `--key delete,N`, `--key alt,N`, `--key left:IDCTL_INVBAR_SHORT,N` |
+| Delete: hand → ranged only with a real ranged weapon; ranged → hand; none → the one put away last (hand at the start) | Rule 2 | Unit tests; viewer: update 60, "nothing" |
+| Alt: put away, remembering if it was the ranged one; nothing ready: nothing. Any change to none remembers the same | Rule 3; "rule 6's putting away" in rule 2 | Unit tests |
+| The mode already ready asked again → none | Rule 4 | Unit test (slots) |
+| A request for ranged without a real ranged item asks for the hand weapon instead (not the original's `NoRanged` counting) | Rule 4, "Do not reproduce" (the Do instead) | Unit tests |
+| Taken only in Wait / Move (our Free mode, not during the landings `jumprun` / `jumpstop` nor while a swap plays); otherwise dropped, not kept | Rule 5; the landings: the user's checks (5c fixes 2–3) | Unit test; viewer: Alt during a jump "dropped (mode jump)" |
+| A request while a swing plays waits for the swing's end | **Ours**: open question 1 (cut or wait: not traced); our swings play in the Special state, the original's in Wait / Move | — |
+| The swap: none → Fists: list first, then `draw`; Fists → none: `undraw`, then the list; from a hand weapon with Shift: `away2` (else `away`); otherwise `away` in the list in use, the switch, `out` from the new list; then standing | Rule 6 (replaces 5d fix 10's "draw / undraw whenever the list has them") | Viewer: case 1 and case 2 logged; cases 3–4 in 5f-4 |
+| The movement playing is asked again by name in the new list (our movements are looked up by name in the set in use) | Rule 8 | — |
+| The pointer by the mode at the switch: hand `IDBMA_CURS03`, ranged `IDBMA_CURS05`, none `IDBMA_CURS04`; Ctrl with a weapon ready: the play pointer; an item on the pointer: its own | Rules 11, 12 (the names from their order: open question 4) | — |
+| `KQConner::setDoMode 0|1|4`: a request that needs no state (he is put into the swap from Special, Push or Talk too); the optional movement word is logged, not used; `getDoMode` gives the mode's number | Rule 9 (no Daventry script gives the word) | Unit test; viewer `--command "KQConner::setDoMode 4",150` |
+| A jump under way is not ended by `setDoMode` (the set switches at once instead) | **Ours** (rule 9 says the jump is ended: not built) | — |
+| A conversation's put-away, a weapon picked up while one is ready, the `--swing` test: the mode follows the item, the set follows (5d fix 11: at once) | `conversation.md` rule 7; the user's check (5d fix 11) | Viewer: `--swing goblin22` run |

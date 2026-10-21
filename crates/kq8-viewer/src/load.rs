@@ -2087,6 +2087,7 @@ impl Placer<'_> {
                 min_damage_factor: num("minDamageFactor", 1.0),
                 max_damage_factor: num("maxDamageFactor", 1.0),
                 short_lists,
+                long_lists: Vec::new(),
             });
             self.connor_inventory = connor_inventory(&file, section);
             let (terrain, [x, y, _]) = (&self.terrain, p.position);

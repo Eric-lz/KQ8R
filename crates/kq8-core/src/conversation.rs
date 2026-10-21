@@ -421,7 +421,8 @@ impl Active {
             c.approach_updates = 0;
             walker.hand_mode = EMPTY_HANDS;
             walker.talk_play = Some(WEAPON_OUT);
-            let was = self.world.weapon_ready.take();
+            let was = self.world.weapon_ready.clone();
+            self.world.set_weapon(crate::weapons::WeaponMode::None, None);
             self.world.conversation_note(format!("{why}: bare-hand mode ({was:?} no longer ready); plays {WEAPON_OUT} (rule 7)"));
         } else {
             walker.talk_play = None;

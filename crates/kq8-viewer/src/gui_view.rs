@@ -45,6 +45,9 @@ const PLAY_POINTER: &str = "IDBMA_CURS04";
 /// the attack cursors of `interface.md` rule 12 (seen in its picture; M5
 /// 5c fix, Q138).
 const SWORD_POINTER: &str = "IDBMA_CURS03";
+/// The ranged weapon's pointer (`ranged-weapons.md` rule 11; the name from
+/// the pointers' order, open question 4).
+const BOW_POINTER: &str = "IDBMA_CURS05";
 
 /// Rule 44: a blink changes the picture every 0.25 s, 5 times.
 const BLINK_MS: f64 = 250.0;
@@ -701,6 +704,9 @@ pub fn gui_step(
             "space" => gui.panels.toggle_bottom(&how),
             "f4" => crate::door_view::flip_ai(&mut sim, &how),
             "f3" => crate::door_view::flip_god(&mut sim, &how),
+            // ranged-weapons.md rule 1 (M5 5f-3): Delete (Draw), Alt (Away).
+            "delete" => sim.active.world.ask_weapon(kq8_core::weapons::Ask::Draw, &format!("update {updates}: {how} (Draw)")),
+            "alt" => sim.active.world.ask_weapon(kq8_core::weapons::Ask::Away, &format!("update {updates}: {how} (Away)")),
             k if k.len() == 1 && ("1"..="8").contains(&k) => actions.0.push(BarAction::Key { slot: k.parse::<usize>().unwrap_or(1) - 1, how }),
             // A click on a control of the bars: left:NAME / right:NAME.
             k if k.starts_with("left:") || k.starts_with("right:") => {
@@ -795,12 +801,19 @@ pub fn gui_step(
     // fighting.md rule 39 (manual): with a hand weapon ready the pointer
     // is the sword; Ctrl held gives the play pointer.
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-    // Readied as Connor took it (a click during a jump is undone: fix 2).
-    let ready = connor.as_ref().map_or(sim.active.world.weapon_ready.is_some(), |c| c.weapon_target.is_some());
-    let pointer = hand
-        .as_ref()
-        .and_then(|(_, kind)| sim.active.world.items.kind(kind).and_then(|t| t.cursor.clone()))
-        .unwrap_or_else(|| if ready && !ctrl { SWORD_POINTER } else { PLAY_POINTER }.to_string());
+    // ranged-weapons.md rules 11, 12 (M5 5f-3): by the mode at the list
+    // switch: hand the sword, ranged the bow, none the play pointer; Ctrl
+    // with a weapon ready: the play pointer.
+    let mode = connor.as_ref().map_or(sim.active.world.weapon_mode, |c| c.set_mode);
+    let pointer = hand.as_ref().and_then(|(_, kind)| sim.active.world.items.kind(kind).and_then(|t| t.cursor.clone())).unwrap_or_else(|| {
+        match mode {
+            _ if ctrl => PLAY_POINTER,
+            kq8_core::weapons::WeaponMode::Hand => SWORD_POINTER,
+            kq8_core::weapons::WeaponMode::Ranged => BOW_POINTER,
+            kq8_core::weapons::WeaponMode::None => PLAY_POINTER,
+        }
+        .to_string()
+    });
     let hand = hand.map(|(n, _)| n);
     if hand != gui.hand || pointer != gui.pointer {
         let line = format!("update {updates}: the item in hand {:?} -> {hand:?}; the pointer {pointer} (inventory.md rules 7, 9, 12)", gui.hand);

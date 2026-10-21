@@ -177,7 +177,7 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
         w.item_note(on);
         // The user's check in the original (5d fix 10): a hand weapon taken
         // while one is ready is readied in its place.
-        if t.category == "ShortWeapon" && w.weapon_ready.is_some() {
+        if t.category == "ShortWeapon" && w.weapon_mode == crate::weapons::WeaponMode::Hand {
             let was = w.weapon_ready.replace(o.kind.clone());
             w.weapon_swapped = true;
             w.item_note(format!("{}: a hand weapon was ready ({was:?}): {} is ready now (the user's check)", o.name, o.kind));
@@ -331,9 +331,13 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
                 (None, false) => "; no use sound".into(),
                 (_, true) => "; already applied: no use sound".into(),
             };
-            let ready = match (t.category.as_str(), t.mode.as_str()) {
-                ("ShortWeapon", m) => format!("; {} ({m})", ready_hand_weapon(w, &o.kind)),
-                ("LongWeapon", "BowMode") => "; readies the bow (BowMode; M5, not done)".into(),
+            // ranged-weapons.md rule 1 (M5 5f-3): a weapon slot asks for
+            // its mode column's mode; the viewer takes it (rule 5).
+            let ready = match t.category.as_str() {
+                "ShortWeapon" | "LongWeapon" => {
+                    w.ask_weapon(crate::weapons::Ask::Slot { item: o.kind.clone(), column: t.mode.clone() }, how);
+                    format!("; asks for its mode ({})", t.mode)
+                }
                 _ => String::new(),
             };
             w.item_note(format!("{head}: {line}{sound}{ready} (inventory.md rule 9)"));
@@ -349,10 +353,10 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
 /// text.
 pub fn ready_hand_weapon(w: &mut WorldState, kind: &str) -> String {
     if w.weapon_ready.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(kind)) {
-        w.weapon_ready = None;
+        w.set_weapon(crate::weapons::WeaponMode::None, None);
         return format!("puts {kind} away (stand-in: a second click on a ready weapon)");
     }
-    w.weapon_ready = Some(kind.to_string());
+    w.set_weapon(crate::weapons::WeaponMode::Hand, Some(kind.to_string()));
     format!("readies {kind}: a left click in the world now swings (fighting.md rule 39; the input side is a stand-in)")
 }
 
