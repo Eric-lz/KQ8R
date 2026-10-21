@@ -2110,6 +2110,9 @@ Steps:
    question 3): shown and played once from its first frame when Connor
    goes up a level, at 15 frames per second (Q108 d), then hidden again;
    the meters pop up as for any change.
+   **Done** 2026-10-21 (`gui_view.rs`: `level_flame`): 17 frames, 1.14 s;
+   not at the start of a world (the first sending); checked in the logs
+   only.
 3. **L-3: the level-up sound.** Stand-in (Q149 c): `GAME/SOUND/LEVEL.AUD`,
    the only sound with a level name; no data file names it. The user
    compares it by ear with the original.

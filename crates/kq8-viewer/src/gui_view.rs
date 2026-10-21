@@ -116,6 +116,8 @@ const SLOT_NUMBERS: [&str; 3] = ["IDCTL_INVBAR_ARMORTEXT", "IDCTL_INVBAR_SHORTTE
 const SLOT_FLASHES: [&str; 3] = ["IDCTL_INVBAR_ARMOR_FX", "IDCTL_INVBAR_SHORT_FX", "IDCTL_INVBAR_LONG_FX"];
 /// Their red numbers (`interface.md` rule 32, `potions.md` rule 37).
 const SLOT_RED_NUMBERS: [&str; 3] = ["IDCTL_INVBAR_ARMOR_ALTTXT", "IDCTL_INVBAR_SHORT_ALTTXT", "IDCTL_INVBAR_LONG_ALTTXT"];
+/// The level-up flame over the level number (`interface.md` rule 26).
+const LEVEL_FLAME: &str = "IDCTL_METERS_LEVELUP";
 
 /// The spinning mask's speed (`potions.md` rule 35: an icon with several
 /// frames and no duration plays at 10 frames a second).
@@ -184,6 +186,9 @@ pub struct Gui {
     pointer: String,
     /// Each slot number's flash: when it started (real ms; rule 33).
     flashes: [Option<f64>; 3],
+    /// The level-up flame: when it started (real ms; DESIGN L-2, stand-in
+    /// Q149 b).
+    level_flame: Option<f64>,
     /// The bottom-bar key (`movekeys.kq` row 12, rule 10).
     space_key: Option<KeyCode>,
     /// 4c-11 (not in the original, the user's idea): the bottom bar's
@@ -334,6 +339,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         hand: None,
         pointer: PLAY_POINTER.into(),
         flashes: [None; 3],
+        level_flame: None,
         space_key,
         corners: false,
         stats_events: None,
@@ -581,6 +587,12 @@ impl Gui {
                         if let (Some(start), Some(at)) = (self.flashes[k], self.control(SLOT_PICTURES[k])) {
                             out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
                         }
+                    } else if name == LEVEL_FLAME {
+                        // DESIGN L-2 (stand-in Q149 b): over the level
+                        // number, in its own layout place.
+                        if let Some(start) = self.level_flame {
+                            out.push(Spec::Pic { rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
+                        }
                     }
                 }
                 _ => {}
@@ -699,6 +711,14 @@ impl Gui {
     fn frames(&mut self, file: &str) -> usize {
         self.load_file(file);
         self.files.get(&file.to_ascii_lowercase()).and_then(|f| f.as_ref()).map_or(0, Vec::len)
+    }
+
+    /// The level-up flame's picture file (`flame14.pba`, from the layout).
+    fn flame_file(&self) -> Option<String> {
+        self.control(LEVEL_FLAME).and_then(|c| match &c.kind {
+            Kind::Text { pictures: Some(p), .. } => self.tags.string(p.bitmap).map(str::to_string),
+            _ => None,
+        })
     }
 
     /// The shown rectangle of a drawn picture on the screen, pixels.
@@ -1005,6 +1025,7 @@ pub fn gui_step(
     gui.stats_events = Some(events);
     // Dying states are M5: never dead yet.
     let red = kq8_core::potions::red_numbers(&sim.active.world.potions);
+    let old_level = gui.meters.level;
     let sent = gui.meters.send(&stats, false, red);
     let width = |name: &str| {
         gui.control(name).map_or(0, |c| (gui_draw::scaled(c.rect[2], gui.scale) - gui_draw::scaled(c.rect[0], gui.scale)).max(0) as u32)
@@ -1036,6 +1057,14 @@ pub fn gui_step(
     for s in &sent.flashes {
         let k = Slot::ALL.iter().position(|x| x == s).expect("listed");
         gui.flashes[k] = Some(now);
+    }
+    // DESIGN L-2 (stand-in Q149 b): a higher level starts the flame.
+    if !first && sent.level > old_level {
+        gui.level_flame = Some(now);
+        let frames = gui.flame_file().map_or(0, |f| gui.frames(&f));
+        let line = format!("update {updates}: level {old_level} -> {}: the level-up flame starts ({frames} frames at {ANIMATION_FPS} per second, once; stand-in Q149 b)", sent.level);
+        gui.note(&line);
+        shared.log.lock().unwrap().detail(format!("gui: {line}"));
     }
     if !first {
         gui.panels.meters_sent(&format!("stats event #{events}"));
@@ -1098,6 +1127,11 @@ pub fn gui_draw(
     // Blinks that have played out (rule 44).
     let now = gui.panels.now_ms;
     gui.blinks.retain(|_, start| now - *start < BLINK_MS * BLINKS as f64);
+    let flame_frames = gui.flame_file().map_or(0, |f| gui.frames(&f)) as f64;
+    if let Some(start) = gui.level_flame.filter(|start| (now - start) / (1000.0 / ANIMATION_FPS) >= flame_frames) {
+        gui.level_flame = None;
+        gui.note(format!("the level-up flame played out after {:.0} ms ({flame_frames} frames at {ANIMATION_FPS} per second, stand-in Q149 b)", now - start));
+    }
     for k in 0..3 {
         if gui.flashes[k].is_some_and(|start| (gui.panels.now_ms - start) / (1000.0 / ANIMATION_FPS) >= frames) {
             gui.flashes[k] = None;

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 L-2: the level-up flame over the level number
+
+**Changed:** Viewer `gui_view.rs`: `level_flame` (start time), `LEVEL_FLAME`, `flame_file`; the meters' sending starts it when the level sent is higher than the last one (not the first sending when a world opens); it is drawn in its layout place (`IDCTL_METERS_LEVELUP`, (113, 0)-(143, 14) of the meters, over the level number) frame by frame and hidden when it has played out. DESIGN, provenance.
+**Why:** The user: on a level-up the original plays a flame on the level number. `interface.md` rule 26 names the picture (`flame14.pba`) but not when or how it plays (open question 3, Q149 b).
+**Tested how:** `cargo test --workspace` (638 pass), clippy clean. Daventry with `--command "sendEvent 0 Connor KQStatsChangeRequestEvent 0 0 0 0 11,20"` (and +5 at 60, +30 at 70); Dead City started plainly; `gui.log`.
+**Result:** "level 1 -> 2: the level-up flame starts (17 frames at 15 per second, once)" at update 21, "played out after 1142 ms"; no flame for the +5 (no level-up); again for level 2 → 3. Dead City's start at level 8: no flame.
+**Still broken / not tested:** **Not looked at by eye**: whether it sits right over the number, its colours and see-through parts. Speed (15 per second), once, and hidden after: stand-ins (Q149 b, Q108 d).
+**Next:** L-3, the level-up sound.
+
 ## 2026-10-21 Levels checked; L-1: a world's start-up script gives Connor his level, stats and equipment
 
 **Changed:** `kq8-data/world_script.rs`: `KQConner::setLevel` and `sendEvent` go to the host (`connor_line`) instead of only being counted. New `kq8-core/connor_start.rs` (`StartLine`, `run`, unit test). `active.rs`: the `KQConner::setLevel` command (`set_level`). Viewer `load.rs`: the items made for Connor, `setLevel` and stats events to Connor are kept in script order (`connor_start`); `door_view.rs` does them when play starts. DESIGN plan "Connor's levels checked", Q149, provenance.
