@@ -3,6 +3,22 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 A command console in the terminal
+
+**Changed:** New `crates/kq8-viewer/src/console.rs`, wired in `main.rs`: lines typed in the terminal that started the game run as script commands at the next update (the same runner as `--command`), with `help` and `where` added. The terminal shows each line, the log lines it wrote and its result; also `kq8-artifacts/logs/console.log`. DESIGN (plan, done), README, FEATURES, provenance.
+**Why:** The user asked for a console to type commands like `give templesword` or `move`.
+**Tested how:** clippy clean. `printf "help
+where
+give SmCrossbow
+give templesword
+move Connor 3 0 0 2000
+where
+frobnicate 1 2
+" | cargo play --world Daventry --sound off --frames 300`; `console.log`, `connor.log`.
+**Result:** All lines ran at update 0. `give templesword`: INVITEM_TempleSword carried, result 0. `move Connor 3 0 0 2000`: `connor.log` "moved Connor from (277744, 199295, 13633) ... to (277744, 199295, 15633)", then he falls. `frobnicate`: "unknown command". The game's own terminal output kept printing.
+**Still broken / not tested:** Not typed by hand (input was piped in); not looked at by eye. `where` right after a `move` in the same update still shows the old place (the move is applied later in the update). No in-game text box.
+**Next:** The user: try it by typing in the terminal.
+
 ## 2026-10-20 A: the user checks potions in the original
 
 **Changed:** `potions.md`: rules 34, 35, 37, "How to check" and open questions updated from the user's check.

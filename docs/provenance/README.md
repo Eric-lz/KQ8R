@@ -2981,3 +2981,13 @@ Replaces 5c fixes 3–5's stand-ins (Q139): the fighters' boxes on the line, "a 
 | A trap prepared for a script's `loadKQ` is built at load as any trap (box, mask, script), switched off; the `loadKQ` switches it on; its `Init` comes at the `loadKQ`, not at the start | `objects.md` rule 6 (a runtime `loadKQ` does the same as at the start); `traps.md` rules 1, 2, 13 | Unit test; viewer: `Henchtp: On Connor` at update 41 |
 | A script's weapon request while a scripted walk runs: the swap plays and the walk waits; it starts when the swap is over | Q141, answered by the user's check in the original (2026-10-21: "he should stop, draw the axe and then walk outside"); fits `ranged-weapons.md` rule 7 (the swap can't be left until it ends) | Viewer: draw at 42–58, the walk 58–84, the cutscene to its end |
 | A flight's last update adds its step like the others (exactly on the spot when undisturbed; within half a unit taken as the spot); after a `move KQCamera` during the flight it ends away from the spot | `camera.md` rules 4, 6 (replaces our snap to the spot on the last update) | Unit test; viewer: the axe cutscene's flight ends at (137350, 249919, 16445) |
+
+## The command console — `crates/kq8-viewer/src/console.rs`
+
+Our own developer tool (the user's request, 2026-10-21); not from the
+original game and from no behaviour note. It only hands typed lines to
+the script commands already built (each keeps its own source above:
+`give` from `items.md` rule 9, `move` from `objects.md` "(d)"
+and `anim-scripts.md`, and so on). The results shown are
+`$Console::Return` as those commands already set it (`doors.md` "Q45"
+(e)). `help` and `where` are ours.

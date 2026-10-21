@@ -1629,3 +1629,34 @@ One step:
    **Done** as planned (`crates/kq8-viewer/src/renderer.rs`); all values
    tested from the log, Daventry runs on both APIs; checked by the user
    2026-10-16. Not tested on Linux or another graphics card.
+
+### Outside the milestones: the command console (planned 2026-10-21, done 2026-10-21)
+
+Not from the original game: a developer tool asked for by the user, so
+commands like `give SmCrossbow` or `move Connor 0 x y z` can be typed
+while playing. It reuses the script commands we already run (the same
+ones `--command "WORDS",N` runs); it adds no new game rules.
+
+One step:
+
+1. **Typed in the terminal.** The viewer reads lines from the terminal
+   that started it (`cargo play`) on a side thread, so the game never
+   waits for typing. Each line runs at the start of the next update (15
+   per second), before the doors, as if a script had run it. The
+   terminal shows the line, its `$Console::Return` result and the log
+   lines the command wrote; a `move` of Connor or the camera is applied
+   later in the same update (the trap step), so its "applied" line is
+   only in `doors.log`. Everything the game already prints keeps
+   printing. Console-only words: `help` (the list) and `where`
+   (Connor's position and turn, the numbers `move Connor 0` takes).
+   Every console line also goes to `kq8-artifacts/logs/console.log`.
+   No in-game text box (it would need keyboard focus rules that fight
+   the game's own keys); can come later.
+   **Test:** `cargo play --world Daventry`, click in the terminal, type
+   `give SmCrossbow`, Enter: the terminal prints the result `0` and the
+   item line; the crossbow is in the bottom bar. `where`, then
+   `move Connor 3 0 0 2000`: Connor drops from 2,000 higher (flags 3 add
+   to his place and turn; 1 alone would set his turn to the number
+   given, 0).
+   **Done** as planned (`crates/kq8-viewer/src/console.rs`); tested with
+   commands piped in (not typed by hand), checked in the logs only.
