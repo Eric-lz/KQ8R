@@ -22,7 +22,7 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   Candle +25 at pickup and the other built-in pickup experience. New
   questions **Q143** (the mask's icon place), **Q144** (`dither`), **Q145**
   (three shield orbits, not one: the user's check, fixed). The user
-  checked Invisible and Clarity by eye.
+  checked Invisible, Clarity and the shield's orbits by eye.
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until

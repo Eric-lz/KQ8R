@@ -590,7 +590,7 @@ not looked at by eye yet.
   from the top, the used part black with a gold outline; the spinning
   mask shares the places. The last dose's slot looks empty while it runs.
 - **Shield:** armour → itself + half, at least 50, at most 100, shown in
-  red; a see-through shape circles Connor. At the end only what it added
+  red; three see-through shields circle Connor (checked by the user). At the end only what it added
   is taken off, so armour put on meanwhile is kept (the original loses
   it). In the last temple it gives half per hit (`setConnorFlag
   InTemple4`).

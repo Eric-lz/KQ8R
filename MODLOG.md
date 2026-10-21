@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 The user's check of the shield's orbits
+
+**Changed:** This entry; STATUS, FEATURES, provenance.
+**Why:** The user looked at the 5g-4 fix in our viewer.
+**Tested how:** The user's check by eye.
+**Result:** "Now it's correct": three semi-transparent shields circling Connor, facing as in the original.
+**Still broken / not tested:** The shield's and Strength's numbers (armour, hand) not yet checked by the user.
+**Next:** —
+
 ## 2026-10-21 M5 5g-4 fix: three shields, facing out
 
 **Changed:** Viewer `load.rs` loads `orbit1.kq`, `orbit2.kq` and `orbit3.kq` (all in `GAME/Kq`); `potion_view.rs` draws one shield per file and turns each a quarter turn more than its orbit angle. QUESTIONS Q145 (the note says orbit2 and orbit3 don't exist). Provenance.
