@@ -246,8 +246,8 @@ pub fn combat_factor(level: i64) -> Option<f32> {
     }
 }
 
-/// A bolt in the air (rule 36; M5 5c-9; its flight is a **stand-in**:
-/// open question 2).
+/// A bolt in the air (`fighting.md` rule 36, M5 5c-9; its flight as
+/// `ranged-weapons.md` rules 26–31, M5 5f-1).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bolt {
     /// `bolt<n>`, for the log and the viewer.
@@ -255,19 +255,72 @@ pub struct Bolt {
     pub shooter: String,
     pub shape: Option<String>,
     pub position: [f32; 3],
-    pub velocity: [f32; 3],
+    /// Rule 27: the way it points, set once when it enters the world
+    /// (unit length), and that as heading (our usual: 0 = −y) and pitch.
+    pub direction: [f32; 3],
+    pub heading: f32,
+    pub pitch: f32,
+    /// `velocity`, units per second.
+    pub speed: f32,
     /// How far it has gone, and how far it may go (`maxDistance`).
     pub travelled: f32,
     pub max: f32,
-    /// The shooter's ranged damage.
+    /// The shooter's ranged damage at the shot (rule 22).
     pub damage: i64,
+    /// `Projectile`, or `Fire` / `Ice` by `weaponType` (rule 30).
+    pub kind: HitKind,
+    /// `colliderMask` (rule 29).
+    pub mask: u32,
+    /// Its own shape: its `BOUNDS.KQ` box as a ball stack (rule 29;
+    /// `connor-collision.md` rule 18; Q140 a); `None` without a box: a
+    /// point.
+    pub balls: Option<crate::collide::BallStack>,
+    /// Updates flown, for the log.
+    pub updates: u32,
 }
 
-/// **Stand-in** (rule 36: "not sure"): a bolt leaves its shooter at this
-/// share of its box height, and is aimed at this share of Connor's.
+impl Bolt {
+    /// Rule 27: its model turned to its direction (its model's front is
+    /// +y, the game's heading 0 faces −y: turned half round), pitch first.
+    pub fn rotation(&self) -> [[f32; 3]; 3] {
+        kq8_data::objects::rotation([self.pitch, 0.0, self.heading + std::f32::consts::PI])
+    }
+}
+
+/// Rule 30: the hit's kind by the bolt file's `weaponType`.
+pub fn bolt_kind(weapon_type: Option<i64>) -> HitKind {
+    match weapon_type {
+        Some(2) => HitKind::Fire,
+        Some(3) => HitKind::Ice,
+        _ => HitKind::Projectile,
+    }
+}
+
+/// Rule 27: heading (0 = −y, as everywhere in ours) and pitch (asin of the
+/// height difference over the straight distance) from `from` to `to`, and
+/// the unit direction. `None` when the two points are the same.
+pub fn aim_direction(from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], f32, f32)> {
+    let d: [f32; 3] = std::array::from_fn(|k| to[k] - from[k]);
+    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+    if len < 1e-3 {
+        return None;
+    }
+    let pitch = (d[2] / len).clamp(-1.0, 1.0).asin();
+    let heading = d[0].atan2(-d[1]);
+    let flat = pitch.cos();
+    Some(([flat * heading.sin(), -flat * heading.cos(), pitch.sin()], heading, pitch))
+}
+
+/// **Stand-in** until M5 5f-2 (rule 24): a character's bolt leaves at
+/// this share of its eye height.
 pub const SHOT_HEIGHT: f32 = 0.75;
-/// Connor's height for the aim (his box, `connor_mover::CONNOR_BOX`).
-pub const CONNOR_HEIGHT: f32 = 1300.0;
+/// Rule 25: a character aims at its target raised by this share of the
+/// top of the target's collision box (Connor: his `BOUNDS.KQ` box, top
+/// 1,300 → 975; the note says 1,600 → 1,200: Q140 b).
+pub const AIM_SHARE: f32 = 0.75;
+/// Rule 30: a victim whose collision type has this bit gets 0 damage and
+/// `ProjImmune`.
+pub const IMMUNE_TO_PROJECTILES: u32 = 0x4000;
 
 /// Rule 36: where to aim so that a bolt of speed `speed` from `from`
 /// meets a target at `at` moving at `v`: the first time t > 0 with
@@ -507,6 +560,16 @@ impl crate::active::WorldState {
             _ => hand,
         };
         let kind = if self.weapon_ready.as_deref().is_some_and(|w| w.eq_ignore_ascii_case(FLAME_SWORD)) { HitKind::Fire } else { HitKind::Normal };
+        let line = self.object_takes(name, d, kind);
+        self.fight_note("Connor", format!("Do ({movement}): hits object {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; {line}", t.distance, t.reach, t.angle));
+    }
+
+    /// A hit of damage `d` on object `name` (M5 5c fix 5, **stand-in**,
+    /// Q139 e; a bolt's hit too, M5 5f-1): `doors.md` rules 19-20 on its
+    /// stats (`stats=`, all 0 without one), the damage rolled as on a
+    /// character (75-125 %, its protection the 4th stat); below 0 its
+    /// script gets `Die <kind>`. Returns the log text.
+    fn object_takes(&mut self, name: &str, d: i64, kind: HitKind) -> String {
         let key = name.to_ascii_lowercase();
         let known = self.stats.contains_key(&key);
         let s = *self.stats.entry(key.clone()).or_default();
@@ -516,14 +579,11 @@ impl crate::active::WorldState {
         after.0[0] -= dmg.loss;
         self.stats.insert(key, after);
         let start = if known { "" } else { " (no stats= line: all 0)" };
-        self.fight_note(
-            "Connor",
-            format!("Do ({movement}): hits object {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; {} (75-125 %, stand-in); health {} -> {}{start} (doors.md rule 19)", t.distance, t.reach, t.angle, dmg.describe(), s.0[0], after.0[0]),
-        );
         if after.0[0] < 0 {
             self.fight_note(name, format!("health below 0: its script gets Die {} (doors.md rule 20)", kind.name()));
             self.die_calls.push((name.to_string(), kind.name()));
         }
+        format!("{} (75-125 %, stand-in); health {} -> {}{start} (doors.md rule 19)", dmg.describe(), s.0[0], after.0[0])
     }
 
     /// Rules 16–18, 20–28 on a character (M5 5c-6), in rule 22's order:
@@ -966,11 +1026,12 @@ impl crate::active::WorldState {
 }
 
 impl crate::active::WorldState {
-    /// Rule 36 (M5 5c-9): a ranged character's `Do`: it shoots its
-    /// weapon's projectile at its target (Connor, when alarmed), aimed
-    /// ahead of him by his speed; no reach or front test. **Stand-ins**:
-    /// it leaves at 3/4 of the shooter's height (its default offset is not
-    /// known) and aims at 3/4 of his.
+    /// `fighting.md` rule 36 (M5 5c-9): a ranged character's `Do`: it
+    /// shoots its weapon's projectile at its target (Connor, when
+    /// alarmed); no reach or front test. `ranged-weapons.md` rule 25 (M5
+    /// 5f-1): aimed at his feet raised by 0.75 × the top of his box, led
+    /// for his movement. **Stand-in** until 5f-2: it leaves at 3/4 of the
+    /// shooter's eye height.
     fn shoot(&mut self, i: usize, movement: &str) {
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         let a = &self.anims[i];
@@ -989,99 +1050,215 @@ impl crate::active::WorldState {
         let eye = c.ai.as_ref().map_or(1000.0, |ai| ai.eye);
         let pos = a.player.base.position;
         let from = [pos[0], pos[1], pos[2] + SHOT_HEIGHT * eye];
-        let at = [target[0], target[1], target[2] + SHOT_HEIGHT * CONNOR_HEIGHT];
+        let raise = AIM_SHARE * crate::connor_mover::CONNOR_BOX.1[2];
+        let at = [target[0], target[1], target[2] + raise];
         let v = self.connor_was.map_or([0.0; 3], |w| std::array::from_fn(|k| (target[k] - w[k]) / dt));
         let (aim, t) = lead(from, at, v, p.speed);
-        let d: [f32; 3] = std::array::from_fn(|k| aim[k] - from[k]);
-        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
+        let lead_text = match t {
+            Some(t) => format!("led for his speed ({:.0}, {:.0}, {:.0}): meeting in {t:.2} s", v[0], v[1], v[2]),
+            None => "straight at him (no meeting point)".to_string(),
+        };
+        let damage = f.stats.0[2];
+        let why = format!(
+            "Do ({movement}): from 3/4 of its eye height (stand-in until 5f-2); aim: Connor + {raise:.0} (0.75 x his box top, rule 25), {lead_text}; ranged damage {damage} (rule 22)"
+        );
+        self.launch_bolt(&name, &file, &p, from, aim, damage, &why);
+    }
+
+    /// `ranged-weapons.md` rules 26, 27 (M5 5f-1): a bolt of projectile
+    /// file `file` enters the world at `from`, turned once to point at
+    /// `aim` (heading and pitch, no roll), carrying `damage`. `why`: the
+    /// start of the log line.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn launch_bolt(&mut self, shooter: &str, file: &str, p: &kq8_data::characters::ProjectileKeys, from: [f32; 3], aim: [f32; 3], damage: i64, why: &str) {
+        let Some((direction, heading, pitch)) = aim_direction(from, aim) else {
+            self.fight_note(shooter, format!("{why}; the aim point is the start point: no shot"));
+            return;
+        };
         self.bolts_shot += 1;
+        let balls = p.bounds.map(|(min, max)| crate::collide::BallStack::from_box(min, max));
         let bolt = Bolt {
             name: format!("bolt{}", self.bolts_shot),
-            shooter: name.clone(),
+            shooter: shooter.to_string(),
             shape: p.shape.clone(),
             position: from,
-            velocity: d.map(|x| x / len * p.speed),
+            direction,
+            heading,
+            pitch,
+            speed: p.speed,
             travelled: 0.0,
             max: p.max_distance,
-            damage: f.stats.0[2],
+            damage,
+            kind: bolt_kind(p.weapon_type),
+            mask: p.collider_mask,
+            balls,
+            updates: 0,
         };
-        let lead_text = match t {
-            Some(t) => format!("aimed ahead of him: his speed ({:.0}, {:.0}, {:.0}), meeting in {t:.2} s at ({:.0}, {:.0}, {:.0})", v[0], v[1], v[2], aim[0], aim[1], aim[2]),
-            None => "aimed straight at him (no meeting point)".to_string(),
+        let shape = match &bolt.balls {
+            Some(b) => format!("box {:?} as {} ball(s) of radius {:.0} at {:?} above it (Q140 a)", p.bounds.unwrap_or_default(), b.heights.len(), b.radius, b.heights),
+            None => "no box: a point".into(),
         };
-        self.fight_note(&name, format!("Do ({movement}): shoots {} ({file}, speed {}, range {}) from ({:.0}, {:.0}, {:.0}), {lead_text}; ranged damage {} (rule 36; the flight is a stand-in)", bolt.name, p.speed, p.max_distance, from[0], from[1], from[2], bolt.damage));
+        self.fight_note(
+            shooter,
+            format!(
+                "{why}; shoots {} ({file}, {} units/s = {:.0} per update, range {}, mask 0x{:X}, {}) from ({:.0}, {:.0}, {:.0}) at ({:.0}, {:.0}, {:.0}): heading {:.1} deg, pitch {:.1} deg; {shape} (ranged-weapons.md rules 26, 27)",
+                bolt.name,
+                p.speed,
+                p.speed / crate::UPDATES_PER_SECOND as f32,
+                p.max_distance,
+                bolt.mask,
+                bolt.kind.name(),
+                from[0],
+                from[1],
+                from[2],
+                aim[0],
+                aim[1],
+                aim[2],
+                heading.to_degrees(),
+                pitch.to_degrees()
+            ),
+        );
         self.bolts.push(bolt);
     }
 
-    /// Rule 36 (M5 5c-9, **stand-in** flight: open question 2): each
-    /// update a bolt flies straight on (no gravity) and hits the first of:
-    /// a character (not its shooter, solid, not dying), Connor, a building
-    /// or plain object or the drawn ground (`scene`); after `maxDistance`
-    /// it is gone. Its hit is `Projectile`, its damage the shooter's ranged
-    /// damage.
-    pub(crate) fn bolts_step(&mut self, scene: &dyn crate::connor_mover::MoverWorld) {
+    /// `ranged-weapons.md` rules 28–30 (M5 5f-1): each update every bolt
+    /// moves speed / 15 straight along its direction (no gravity). Its
+    /// move is swept with its ball stack against what its mask covers:
+    /// the buildings (bit 0x8), the objects and characters whose type
+    /// shares a bit with it, Connor (type 4); never its shooter; a start
+    /// inside counts as a hit (`connor-collision.md` rule 19). At the
+    /// first touch it hits (rule 30) and is removed; otherwise, at or below
+    /// the floor grid it is removed, and past `maxDistance` too.
+    pub(crate) fn bolts_step(&mut self, ground: &dyn crate::connor_mover::GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) {
+        use crate::collide::{BallStack, CylinderCollider, ObjectHit};
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         let bolts = std::mem::take(&mut self.bolts);
         let mut kept = Vec::new();
         for mut b in bolts {
-            let speed = (b.velocity[0].powi(2) + b.velocity[1].powi(2) + b.velocity[2].powi(2)).sqrt();
-            let step = (speed * dt).min(b.max - b.travelled).max(0.0);
-            let k = if speed > 0.0 { step / (speed * dt) } else { 0.0 };
             let from = b.position;
-            let to: [f32; 3] = std::array::from_fn(|i| from[i] + b.velocity[i] * dt * k);
+            let step = b.speed * dt;
+            let to: [f32; 3] = std::array::from_fn(|k| from[k] + b.direction[k] * step);
+            let point = BallStack { radius: 0.0, heights: vec![0.0] };
+            let balls = b.balls.as_ref().unwrap_or(&point);
             let dist = |p: [f32; 3]| ((p[0] - from[0]).powi(2) + (p[1] - from[1]).powi(2) + (p[2] - from[2]).powi(2)).sqrt();
-            // Who it meets first: (distance, Some(character index) / None = Connor, point).
-            let mut best: Option<(f32, Option<usize>, [f32; 3])> = None;
+            let skip = |n: &str| n.eq_ignore_ascii_case(&b.shooter);
+            // What it touches first: (distance, what, touch point).
+            let mut best: Option<(f32, Touched, [f32; 3])> = None;
+            let mut keep = |p: [f32; 3], what: Touched| {
+                let d = dist(p);
+                if best.as_ref().is_none_or(|(bd, _, _)| d < *bd) {
+                    best = Some((d, what, p));
+                }
+            };
+            if b.mask & 0x8 != 0 {
+                for w in buildings.iter().filter(|w| !self.is_switched_off(&w.name)) {
+                    if let Some(c) = w.sweep(balls, from, to) {
+                        keep(c.touch, Touched::Building(w.name.clone()));
+                    }
+                }
+            }
+            for o in objects.iter().filter(|o| o.kind.collision_type & b.mask != 0 && !skip(&o.name) && !self.is_switched_off(&o.name)) {
+                match o.sweep(balls, from, to) {
+                    Some(ObjectHit::Contact(c)) => keep(c.touch, Touched::Object(o.name.clone(), o.kind.collision_type)),
+                    // connor-collision.md rule 19: projectiles count a start inside as a hit.
+                    Some(ObjectHit::StartedInside { .. }) => keep(from, Touched::Object(o.name.clone(), o.kind.collision_type)),
+                    None => {}
+                }
+            }
             for (j, a) in self.anims.iter().enumerate() {
                 let Some(c) = a.character.as_deref() else { continue };
-                if a.gone || c.unborn || c.collision_type == 0 || a.player.name.eq_ignore_ascii_case(&b.shooter) || c.fight.as_ref().is_some_and(|f| f.dying.is_some()) {
+                if a.gone || c.unborn || c.collision_type & b.mask == 0 || skip(&a.player.name) || !self.characters_solid.contains(&a.player.name.to_ascii_lowercase()) {
                     continue;
                 }
                 let Some((min, max)) = c.bounds else { continue };
-                let cyl = crate::collide::CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, c.collision_type, c.collision_mask);
-                if let Some(p) = cyl.line_hit(from, to) {
-                    if best.as_ref().is_none_or(|(d, _, _)| dist(p) < *d) {
-                        best = Some((dist(p), Some(j), p));
-                    }
+                let cyl = CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, c.collision_type, c.collision_mask);
+                let s = cyl.sweep(balls, from, to);
+                if !s.inside.is_empty() {
+                    keep(from, Touched::Character(j));
+                } else if let Some(k) = s.contact {
+                    keep(k.touch, Touched::Character(j));
                 }
             }
-            if let Some(at) = self.connor_at.filter(|_| !self.connor_dying) {
+            if let (true, Some(at)) = (b.mask & crate::collide::CONNOR_TYPE != 0 && !skip("Connor"), self.connor_at) {
                 let (min, max) = crate::connor_mover::CONNOR_BOX;
-                let cyl = crate::collide::CylinderCollider::from_box("Connor", at, min, max, crate::collide::CONNOR_TYPE, 0);
-                if let Some(p) = cyl.line_hit(from, to) {
-                    if best.as_ref().is_none_or(|(d, _, _)| dist(p) < *d) {
-                        best = Some((dist(p), None, p));
-                    }
+                let cyl = CylinderCollider::from_box("Connor", at, min, max, crate::collide::CONNOR_TYPE, 0);
+                let s = cyl.sweep(balls, from, to);
+                if !s.inside.is_empty() {
+                    keep(from, Touched::Connor);
+                } else if let Some(k) = s.contact {
+                    keep(k.touch, Touched::Connor);
                 }
             }
-            let wall = scene.line_hit(from, to, 0x1 | 0x8, &b.shooter).filter(|(p, _)| best.as_ref().is_none_or(|(d, _, _)| dist(*p) < *d));
-            b.travelled += step;
-            if let Some((p, what)) = wall {
-                self.fight_note(&b.shooter, format!("{} hits {what} at ({:.0}, {:.0}, {:.0}) after {:.0}: gone (stand-in)", b.name, p[0], p[1], p[2], b.travelled));
-                continue;
-            }
-            match best {
-                Some((_, Some(j), p)) => {
-                    let who = self.anims[j].player.name.clone();
-                    self.fight_note(&b.shooter, format!("{} hits {who} at ({:.0}, {:.0}, {:.0}) after {:.0} (rule 36)", b.name, p[0], p[1], p[2], b.travelled));
-                    self.hit_character(j, &b.shooter, b.damage, HitKind::Projectile);
-                }
-                Some((_, None, p)) => {
-                    self.fight_note(&b.shooter, format!("{} hits Connor at ({:.0}, {:.0}, {:.0}) after {:.0} (rule 36)", b.name, p[0], p[1], p[2], b.travelled));
-                    let shooter = b.shooter.clone();
-                    self.hit_connor(&shooter, b.damage, HitKind::Projectile);
-                }
-                None if b.travelled + 0.5 >= b.max => {
-                    self.fight_note(&b.shooter, format!("{} has gone its range {:.0}: gone", b.name, b.max));
-                }
-                None => {
-                    b.position = to;
+            b.updates += 1;
+            let Some((d, what, p)) = best else {
+                b.travelled += step;
+                b.position = to;
+                let floor = ground.ground(to[0], to[1]).map(|(h, _)| h);
+                let line = format!("{} update {}: at ({:.0}, {:.0}, {:.0}), {:.0} travelled", b.name, b.updates, to[0], to[1], to[2], b.travelled);
+                if let Some(h) = floor.filter(|h| to[2] <= *h) {
+                    self.fight_note(&b.shooter, format!("{line}; at or below the floor grid ({h:.0}): removed, no damage (rule 29)"));
+                } else if b.travelled > b.max {
+                    self.fight_note(&b.shooter, format!("{line}; more than its range {:.0}: removed (rule 28)", b.max));
+                } else {
+                    self.fight_note(&b.shooter, line);
                     kept.push(b);
                 }
-            }
+                continue;
+            };
+            b.travelled += d;
+            b.position = p;
+            let at = format!("{} update {}: touches {{}} at ({:.0}, {:.0}, {:.0}), {:.0} travelled; removed there (rule 30)", b.name, b.updates, p[0], p[1], p[2], b.travelled);
+            self.bolt_hits(&b, what, &at);
         }
         self.bolts.extend(kept);
     }
+
+    /// Rule 30: what a bolt's touch does. `at`: the log line, with `{}`
+    /// for what it touched.
+    fn bolt_hits(&mut self, b: &Bolt, what: Touched, at: &str) {
+        let shooter = b.shooter.clone();
+        match what {
+            Touched::Building(n) => self.fight_note(&shooter, at.replace("{}", &format!("building {n}")) + ": no damage"),
+            Touched::Connor => {
+                self.fight_note(&shooter, at.replace("{}", "Connor") + &format!(": a hit of {}, {} (fighting.md rule 29)", b.damage, b.kind.name()));
+                self.hit_connor(&shooter, b.damage, b.kind);
+            }
+            Touched::Character(j) => {
+                let who = self.anims[j].player.name.clone();
+                let t = self.anims[j].character.as_deref().map_or(0, |c| c.collision_type);
+                if t & IMMUNE_TO_PROJECTILES != 0 {
+                    self.fight_note(&shooter, at.replace("{}", &who) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"));
+                    self.hit_character(j, &shooter, 0, b.kind);
+                    self.immune_calls.push(who);
+                } else {
+                    self.fight_note(&shooter, at.replace("{}", &who) + &format!(": a hit of {}, {} (fighting.md rules 16-33)", b.damage, b.kind.name()));
+                    self.hit_character(j, &shooter, b.damage, b.kind);
+                }
+            }
+            Touched::Object(n, t) => {
+                if t & IMMUNE_TO_PROJECTILES != 0 {
+                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"));
+                    self.immune_calls.push(n);
+                } else if self.object_at(&n).is_some() {
+                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + &format!(": a hit of {}, {}", b.damage, b.kind.name()));
+                    let line = self.object_takes(&n, b.damage, b.kind);
+                    self.fight_note(&shooter, format!("{}: {line}", b.name));
+                } else {
+                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + ": no script: nothing (how objects take damage: Q139 e)");
+                }
+            }
+        }
+    }
+}
+
+/// What a bolt touched (rule 30).
+#[derive(Debug, Clone, PartialEq)]
+enum Touched {
+    Building(String),
+    /// Name and collision type.
+    Object(String, u32),
+    Character(usize),
+    Connor,
 }
 
 impl Fight {

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 M5 5f-1: the bolt's flight as traced (the bow spriggans)
+
+**Changed:** Plan 5f (ranged weapons, 7 steps) in `docs/DESIGN.md`. `fight.rs`: a bolt is turned once toward its aim (heading and pitch) and moves 533 units per update (8,000 / 15), no gravity. Its move is swept with its `BOUNDS.KQ` box's ball stack against the buildings, the objects and characters its mask (0x1F) covers and Connor; never its shooter. At the first touch it hits and is removed; otherwise it is removed at or below the floor grid, or past `maxDistance`. Immune bit 0x4000: a hit of 0 and `ProjImmune` to the script. Objects get 5c fix 5's barrel stand-in. A character aims at Connor + 0.75 × his box top (975), led as before. `ProjectileKeys` reads `colliderMask`, `weaponType`, `meshName` and the note's defaults; the loader adds the bolt's box. The viewer draws the bolt pitched, its model's front along the flight. Q140 asked. Provenance, FEATURES.
+**Why:** `ranged-weapons.md` rules 25–31 replace 5c-9's stand-in flight.
+**Tested how:** `cargo test --workspace` (449 core tests, 3 new: straight flight and the first character hit, floor grid / range / shooter spared, the immune bit), clippy clean. Viewer at the windmill: `cargo play --world Daventry --sound off --at 146500,248928,1.5708 --god --frames 900` (Connor stands) and `--at 146500,248928,0 --hold 1,0,1,60 --god --frames 1200` (he runs); `fight.log`.
+**Result:** Standing: `sprigwnd1` shoots at update 31, then every 26 updates (1.73 s); each bolt is pitched −3.8°, moves 533 per update and touches Connor at update 5, 2,615 from its start (11 damage, ignored by god mode). Running: bolt1 touches the windmill's wall after 3,112, the others Connor after 3,300.
+**Still broken / not tested:** Not looked at by eye. The bolt still leaves from 3/4 of the shooter's eye height (5f-2 next). The bolt's own shape (one ball of radius 235) and the aim height (975 vs the note's 1,200) are open: Q140. Fire / ice bolts' sparks (`emitter`) not drawn (none in Daventry). No character in Daventry with the immune bit is a fighter; `ProjImmune` reaches the Wizard's / Knight's script only if they are hit (not run).
+**Next:** 5f-2, the bolt starts at the shooter's `arrow` part.
+
 ## 2026-10-20 A: the user checks Azriel's Hammer in the original
 
 **Changed:** `azriel-hammer.md`: rules 2 and 5, "How to check", Do not reproduce and open questions updated from the user's check.

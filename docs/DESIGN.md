@@ -1456,6 +1456,111 @@ Steps (one commit each; logged in `items.log`):
    **Test:** by eye against the original (`thrown-items.md` open
    question 2).
 
+#### 5f — Ranged weapons (planned 2026-10-20)
+
+Why: Connor can't use the Small Crossbow `sprgnbow` drops, and the bow
+spriggans' bolt is a stand-in (5c-9). Source: `ranged-weapons.md` (A,
+2026-10-20, checked by the user in the original), with `fighting.md`,
+`connor-collision.md` rules 18–19, `inventory.md` rule 9. Replaces the
+stand-ins of 5c-9 (the bolt), 5c fixes 4–5 (the attack click's target,
+Q139) and 5d fixes 9–11 (readying and putting away, Q138) where the note
+differs; where it confirms what is built, provenance says so. Not in
+5f: rocks and the Azriel Hammer, how objects such as barrels take damage
+(Q139 e: the stand-in of 5c fix 5 stays, a bolt uses it too), the
+note's open questions 1–5 (a swap during a swing, the right-button
+click point, `collisionDetail`, the pointer names, rocks).
+
+Words: **bolt** = any arrow or crossbow bolt; **weapon mode** = hand,
+ranged or none (what is ready); **swap** = the movements played when
+the mode changes; **aim point** = where Connor's bolt is aimed.
+
+Everything logs to `fight.log` (the bolts: start offset, start point,
+aim point, heading and pitch, damage; every update its position and
+distance; its end: what it touched, damage sent, or floor grid / range;
+Connor's requests: key or slot, state, taken or dropped, the swap's
+movements, the list, the pointer; the shot click: the picks, the aim
+point before and after the steepness limit, the angle off his facing,
+waiting for the turn, standing or moving, the delay test).
+
+Steps (one commit each):
+
+1. **5f-1, the bolt's flight** (**done** 2026-10-20; `sprigwnd1`'s
+   bolts hit Connor after 5 updates, the windmill's wall when he runs;
+   Q140 asked, not blocking) (rules 25–31; the spriggans already
+   shoot). The projectile file's keys with their defaults (`velocity`
+   2,000, `maxDistance` 8,000, `colliderMask` 0x1F, `weaponType`, type
+   1). Aim at the target + 0.75 × the top of its collision box, led as
+   now. The bolt turned to the aim point once (heading, pitch) and moved
+   speed / 15 per update, no gravity. Its shape: its `BOUNDS.KQ` box as a
+   ball stack (the movers' rule, `connor-collision.md` rule 18; Q140 a
+   asks A to confirm). Its sweep meets the buildings (mask bit 0x8),
+   objects and characters whose type shares a bit with its mask, and
+   Connor (type 4); never its shooter; a start inside a cylinder is a
+   hit. After the move: at or below the floor grid → removed; more than
+   `maxDistance` travelled → removed. A hit on a character: type bit
+   0x4000 → 0 damage, else its damage, kind `Projectile` / `Fire` / `Ice`
+   (`weaponType`); on Connor `fighting.md` rule 29; on an object the
+   barrel stand-in. Removed at the touch point; no stick, no sound. The
+   start stays the 5c-9 stand-in (3/4 of the shooter's height) until
+   5f-2. Drawn turned by heading and pitch, its model's front +y.
+   **Test:** `sprigwnd1` shoots about every 1.7 s; `fight.log` shows each
+   bolt's heading, pitch, 533 units per update, its end.
+2. **5f-2, where the bolt starts** (rule 24). The loader records, per
+   frame of each movement, the place of each named model part. At a
+   character's first shot the part `arrow` (the bolt file's
+   `meshName`) in the frame playing gives its offset (kept); fallback
+   its `shootOffsets` (none in Daventry: 0, 0, 0). Start = position +
+   its turn × offset. **Test:** `sprigwnd1`'s offset ≈ (−55, −1,367,
+   954) in `fight.log`, the start point in front of it at that height.
+3. **5f-3, weapon modes and the swap** (rules 1–9, 12; Q138). Core keeps
+   the mode (hand / ranged / none) and the last one put away. Requests:
+   a slot click (`SwordMode` hand, `BowMode` ranged, `HandMode` none,
+   `NoModeChange` nothing), Delete (`Draw`), Alt (`Away`),
+   `KQConner::setDoMode 0|1|4`; ignored while `handsOff`; same mode →
+   none; ranged needs a real ranged item (the Do instead, else hand).
+   Taken only while he stands or moves (our Free mode), otherwise
+   dropped. The swap as rule 6: Fists from / to none `draw` / `undraw`;
+   Shift held `away2`; otherwise `away` in the current list, the switch,
+   `out` from the new list; then standing. The switch asks the playing
+   movement again by name (rule 8). Ctrl's plain click with any weapon
+   ready (rule 12). **Test:** `--key delete,N`, `--key alt,N`:
+   `fight.log` shows each request, taken or dropped, the movements.
+4. **5f-4, the crossbow readied** (rules 10, 11, 21). A `LongWeapon`
+   picked up becomes the ranged slot item: its projectile file and
+   shoot offset (`Connor.kq`'s `shootOffsets`, any capitals). The
+   ranged mode's list from `LongAnimList` (`conscbow.anm`), the bow
+   pointer `IDBMA_CURS05`. Picking up a new one while ranged is ready
+   refreshes the list at once. **Test:** take the crossbow from
+   `sprgnbow`'s drop, ready it by its slot and with Delete; the log shows
+   `away` then `out` from `conscbow.anm` and the pointer.
+5. **5f-5, the standing shot** (rules 13–18, 20, 22–25). The click with
+   the ranged mode ready: an item on the pointer wins; Ctrl → plain
+   click; the talk pick (types 0x40 / 0x20 / 0x08, a character with bit
+   0x8000 → plain click); the aim pick (types 0x40 / 0x08, else the
+   drawn ground, else the line's end; a character → its x, y); the
+   steepness limit (1 rad from the vertical). He turns to it (third
+   person); more than 45° off → the shot waits until 3 updates of turn
+   are left. `attack` only when his movement can be cut short; the bolt
+   at its `do` cue from the `arrow` part of the frame playing (fallback
+   the shoot offset), aimed at the aim point, his ranged damage. A test
+   option `--shoot NAME|x,y,z,N`. **Test:** shoot `goblin22`: the bolt
+   leaves ~832 ahead, 1,065 up, flies to it, damage 5 at level 1.
+6. **5f-6, the moving shot** (rule 20, "Moving"). In Move: no `attack`;
+   if 0.5 s have passed since the last shot the bolt leaves at once from
+   the frame playing, the item's use sound plays; a run becomes a walk,
+   back to running 1 s after the last moving shot. The end of `attack`
+   also sets the next moving shot 0.5 s later. **Test:** walk and shoot
+   with `--key` and `--shoot`: at most two shots a second.
+7. **5f-7, the swing click's target** (rule 32; Q139). The click line
+   meets types 0x40 / 0x20 (characters, plain objects, barrels,
+   clickables, clickable buildings); nothing or a building → turn to the
+   click point and swing, target kept; a character with bit 0x8000 →
+   plain click; anything else → its target if within 2,350 (3D), turn
+   to its position, more than 45° off → the swing waits until 8 updates
+   of turn are left. Replaces 5c fixes 4–5's box test and "behind 90°".
+   **Test:** `--swing goblin22` then a ground click: the second swing
+   still has goblin22 as target.
+
 ### M6 — The whole game
 
 Save/load, moving between worlds, all 12 worlds, cutscene videos, music,

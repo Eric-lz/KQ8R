@@ -2854,3 +2854,31 @@ Replaces 5c fix 7's stand-in (three axes, 90–180° per second, back to the tur
 | Each update until the flight ends, also after the first touch, it turns by the tumble about its own x axis (angle 0 of `[x, y, z]`; with y and z 0 that is a turn about the model's own x axis) | Rule 9; the angle order is `kq8_data::objects::rotation` | Unit test; `items.log` ("turned … rad") |
 | In an update with a throw again, the turn uses the new tumble | **Ours** (the note gives no order within the update) | — |
 | When the flight ends: angles 0, 0, 0 | Rule 10 | Unit test |
+
+## Ranged weapons (M5 5f) — `docs/behaviour/ranged-weapons.md`
+
+Plan in `docs/DESIGN.md` "5f". Written from the note (A, 2026-10-20,
+checked by the user in the original), `connor-collision.md` rules 18–19,
+`connor-physics.md` and the data; no executable looked at.
+
+### 5f-1, the bolt's flight — `crates/kq8-core/src/fight.rs` (`Bolt`, `aim_direction`, `bolt_kind`, `shoot`, `launch_bolt`, `bolts_step`, `bolt_hits`, `object_takes`), `active.rs` (`immune_calls`), `character_ai.rs`, `crates/kq8-data/src/characters.rs` (`ProjectileKeys`), viewer `load.rs` (`load_projectile`), `item_view.rs` (`bolt_draw`)
+
+Replaces 5c-9's stand-in flight. 5c-9's rows for the shot itself (doMode 1, 1.25 × reach, no reach or front test, the lead) are confirmed by rule 25 ("led for Connor's movement").
+
+| What | Source | Check |
+| --- | --- | --- |
+| A projectile file's keys: `velocity` (default 2,000), `maxDistance` (8,000), `colliderMask` (0x1F), `weaponType` (2 Fire, 3 Ice, else `Projectile`), `meshName`; its own type 1 | Rules 26, 30 | Unit test; `characters.log` at load (`Prscbolt.kq`: 8,000, 18,000, 0x1F, part `arrow`) |
+| A character aims at its target + 0.75 × the top of the target's box: Connor's `BOUNDS.KQ` box top 1,300 → 975 | Rule 25 (the formula); the note's example says 1,600 → 1,200, the data says 1,300: **Q140 b** | `fight.log`: "Connor + 975" |
+| The bolt is turned once to the aim point: heading from the level direction, pitch = asin(height difference ÷ straight distance), no roll; kept for good | Rule 27 | Unit test (pitch −11.31° for 1,000 down over 5,000); viewer: −3.8° at the windmill |
+| Each update it moves speed ÷ 15 along it (8,000 → 533), no gravity | Rule 28 | Unit test; `fight.log` |
+| Its own shape: its `BOUNDS.KQ` box as a ball stack (`scbolt.kqs` → one ball, radius 235, 235 above it); no box: a point | Rule 29 ("its model's `BOUNDS.KQ` box", "an ordinary collision move"); `connor-collision.md` rule 18 (the movers' balls); **our reading: Q140 a** | Unit test; `fight.log` at each shot |
+| It meets the buildings (mask bit 0x8, by their `.dig` solids), the objects and characters whose type shares a bit with its mask (boxes, cylinders), Connor (type 4); never its shooter; switched-off objects and characters whose collider is off are not met | Rule 29; the switched-off / collider-off part is **ours** (as for the other movers) | Unit tests; viewer: the windmill's wall, Connor |
+| A start inside a character's cylinder (or Connor's) is a hit; a start inside an object's box too | Rule 29; `connor-collision.md` rule 19 ("Projectiles always count a start inside"); `connor-physics.md` (a box: "counts as a hit") | — |
+| The nearest touch along the move counts; the bolt is put at the touch point (before the 25 pull-back) and removed | Rule 30 | Unit test (touches gob at y −1,035) |
+| After a free move: at or below the floor grid → removed, no damage; then more than `maxDistance` travelled → removed (after 34 updates for 18,000) | Rules 28, 29 | Unit tests |
+| A character or object with type bit 0x4000: a hit of 0 and `ProjImmune` to its script; otherwise a character gets a hit of the bolt's damage and kind (`fighting.md` rules 16–33), Connor rule 29 | Rule 30 | Unit test (0xC021) |
+| An object without the immune bit: the barrel stand-in of 5c fix 5 with the bolt's damage, only for objects with a script; others: nothing | Rule 30 (it gets the hit); how objects take damage: **stand-in, Q139 e** | — |
+| No stick, no bounce, no sound from the bolt | Rule 30 | — |
+| A bolt's damage is the shooter's ranged damage at the shot | Rule 22 | `fight.log` (`sprigwnd1` 11) |
+| Drawn turned by pitch then heading, its model's front (+y) along the flight | Rule 27 (the model's front +y inferred by A from `BOUNDS.KQ`) | — (not looked at) |
+| It still leaves from 3/4 of the shooter's eye height | **Stand-in** until 5f-2 | — |

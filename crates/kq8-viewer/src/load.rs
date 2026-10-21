@@ -2015,6 +2015,32 @@ fn connor_inventory(file: &[kq8_data::kq_text::Section], connor: &kq8_data::kq_t
 }
 
 impl Placer<'_> {
+    /// A projectile file (`fighting.md` rule 36; `ranged-weapons.md` rules
+    /// 26, 29), read once: its keys, and its shape's `BOUNDS.KQ` box.
+    /// Returns its shape's name. `who`: for the log.
+    fn load_projectile(&mut self, file: &str, who: &str) -> Option<String> {
+        let key = file.to_ascii_lowercase();
+        if !self.projectiles.contains_key(&key) {
+            let keys = match self.world.load(file) {
+                Some(Ok((_, b))) => kq8_data::kq_text::parse(&b).first().and_then(kq8_data::characters::ProjectileKeys::from_section),
+                _ => None,
+            };
+            match keys {
+                Some(mut k) => {
+                    let table = self.game.find("GAME/patch/BOUNDS.KQ").and_then(|p| std::fs::read(p).ok()).map(|b| kq8_data::bounds::BoundingBoxes::parse(&b).0);
+                    k.bounds = k.shape.as_ref().and_then(|s| table.as_ref()?.lookup(&s.to_ascii_lowercase())).map(|e| (e.min, e.max));
+                    self.character_lines.push(format!(
+                        "[{who}]: shoots {file}: shape {:?} (box {:?}), speed {}, range {}, mask 0x{:X}, weaponType {:?}, part {:?} (ranged-weapons.md rule 26)",
+                        k.shape, k.bounds, k.speed, k.max_distance, k.collider_mask, k.weapon_type, k.mesh_name
+                    ));
+                    self.projectiles.insert(key.clone(), k);
+                }
+                None => self.character_lines.push(format!("[{who}]: projectile file {file} not found or not a KQProjectile")),
+            }
+        }
+        self.projectiles.get(&key).and_then(|k| k.shape.clone())
+    }
+
     /// Connor (M2 steps 2a, 2b; docs/DESIGN.md): the world script loads
     /// `connor.kq`, which is not in the world archives but in
     /// `GAME/Kq/Connor.kq` (connor-physics.md "Data used"). Placed by the
@@ -2352,24 +2378,7 @@ impl Placer<'_> {
         if let Some(f) = character.as_ref().and_then(|c| c.fight.clone()) {
             self.drop_kinds.extend(f.drops.iter().map(|d| d.name.clone()));
             // fighting.md rule 36 (M5 5c-9): the projectile it shoots.
-            let mut bolt_shape = None;
-            if let Some(file) = f.projectile.clone() {
-                let key = file.to_ascii_lowercase();
-                if !self.projectiles.contains_key(&key) {
-                    let keys = match self.world.load(&file) {
-                        Some(Ok((_, b))) => kq8_data::kq_text::parse(&b).first().and_then(kq8_data::characters::ProjectileKeys::from_section),
-                        _ => None,
-                    };
-                    match keys {
-                        Some(k) => {
-                            self.character_lines.push(format!("[{}]: shoots {file}: shape {:?}, speed {}, range {} (fighting.md rule 36)", p.name, k.shape, k.speed, k.max_distance));
-                            self.projectiles.insert(key.clone(), k);
-                        }
-                        None => self.character_lines.push(format!("[{}]: projectile file {file} not found or not a KQProjectile", p.name)),
-                    }
-                }
-                bolt_shape = self.projectiles.get(&key).and_then(|k| k.shape.clone());
-            }
+            let bolt_shape = f.projectile.clone().and_then(|file| self.load_projectile(&file, &p.name));
             for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs, bolt_shape].into_iter().flatten() {
                 let key = shape.to_ascii_lowercase();
                 if self.corpse_shapes.contains_key(&key) {

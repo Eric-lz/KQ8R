@@ -712,6 +712,9 @@ pub struct WorldState {
     /// Scripts of the dead to call with `Die <kind>` (rule 32.3), taken
     /// by `Active::update`.
     pub die_calls: Vec<(String, &'static str)>,
+    /// Scripts to call with `ProjImmune`: a bolt hit them and their type
+    /// has bit 0x4000 (`ranged-weapons.md` rule 30; M5 5f-1).
+    pub immune_calls: Vec<String>,
     /// The first-kill tip was sent (rule 33; logged only).
     pub kill_tip: bool,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
@@ -2674,6 +2677,7 @@ impl Active {
                 god_mode: false,
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
+                immune_calls: Vec::new(),
                 kill_tip: false,
                 flights: Vec::new(),
                 projectiles: Default::default(),
@@ -3901,6 +3905,11 @@ impl Active {
         for (name, kind) in std::mem::take(&mut self.world.die_calls) {
             if !self.call_named(&name, &["Die", kind]) {
                 self.world.fight_note(&name, format!("no script: Die {kind} not called (rule 32)"));
+            }
+        }
+        for name in std::mem::take(&mut self.world.immune_calls) {
+            if !self.call_named(&name, &["ProjImmune"]) {
+                self.world.fight_note(&name, "no script: ProjImmune not called (ranged-weapons.md rule 30)");
             }
         }
         // Thrown items fly after the characters' movers (M5 5e-1:
@@ -5999,6 +6008,90 @@ endif
         let mut a = Active::new(v, vec![], vec![fish], ["Connor".to_string()], sources);
         a.start();
         a
+    }
+
+    /// `prscbolt.kq` with `scbolt.kqs`'s `BOUNDS.KQ` box (data).
+    fn scbolt() -> kq8_data::characters::ProjectileKeys {
+        let mut p = kq8_data::characters::ProjectileKeys::from_section(&kq8_data::kq_text::parse(b"[Arrow]\nclassType=KQProjectile\nshapeName=scbolt.kqs\nvelocity=8000\nmaxDistance=18000\nmeshName=arrow\n")[0]).unwrap();
+        p.bounds = Some(([-50.0, 0.0, 0.0], [50.0, 470.0, 50.0]));
+        p
+    }
+
+    /// One bolt update, with the flat ground at 100.
+    fn fly(a: &mut Active) {
+        a.world.bolts_step(&FlatGround, &[], &[]);
+    }
+
+    #[test]
+    fn a_bolt_flies_straight_and_hits_the_first_character() {
+        // ranged-weapons.md rules 26-30 (M5 5f-1).
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().collision_type = 0x42;
+        a.world.characters_solid.insert("gob".into());
+        a.world.connor_at = Some([0.0, 50_000.0, 100.0]);
+        // From 5,000 south of gob (at 0, 0, 100) at 1,000 up, aimed level at it.
+        a.world.launch_bolt("shooter", "prscbolt.kq", &scbolt(), [0.0, -5000.0, 1000.0], [0.0, 0.0, 1000.0], 5, "test");
+        let b = a.world.bolts[0].clone();
+        assert!((b.heading - std::f32::consts::PI).abs() < 1e-4 && b.pitch.abs() < 1e-6, "{b:?}");
+        let balls = b.balls.clone().unwrap();
+        assert_eq!((balls.radius, balls.heights.clone()), (235.0, vec![235.0]), "one ball of 235 (Q140 a)");
+        fly(&mut a);
+        let y = a.world.bolts[0].position[1];
+        assert!((y + 5000.0 - 8000.0 / 15.0).abs() < 0.1, "533 per update: {y}");
+        for _ in 0..10 {
+            fly(&mut a);
+        }
+        assert!(a.world.bolts.is_empty());
+        let log = a.world.fight_log.join("\n");
+        // Gob's cylinder: radius 800 (+235), so the ball touches it at y −1,035.
+        assert!(log.contains("bolt1 update 8: touches gob at (") && log.contains(", -1035, 1000), 3965 travelled") && log.contains("a hit of 5, Projectile"), "{log}");
+        assert!(log.contains("gob: hit by shooter, Projectile"), "{log}");
+        // Pitched: aimed 1,000 down over 5,000, asin(1000 / 5099).
+        a.world.launch_bolt("shooter", "prscbolt.kq", &scbolt(), [0.0, -5000.0, 2000.0], [0.0, 0.0, 1000.0], 5, "test");
+        let p = a.world.bolts[0].pitch.to_degrees();
+        assert!((p + 11.31).abs() < 0.01, "{p}");
+    }
+
+    #[test]
+    fn a_bolt_ends_at_the_floor_grid_or_its_range_and_spares_its_shooter() {
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().collision_type = 0x42;
+        a.world.characters_solid.insert("gob".into());
+        a.world.connor_at = None;
+        // Shot by gob itself from inside its own cylinder: not hit (rule 29);
+        // level at 1,000 up, away from anything: gone after 34 updates (18,133 > 18,000).
+        a.world.launch_bolt("gob", "prscbolt.kq", &scbolt(), [0.0, 0.0, 1000.0], [0.0, -5000.0, 1000.0], 5, "test");
+        for _ in 0..33 {
+            fly(&mut a);
+        }
+        assert_eq!(a.world.bolts.len(), 1);
+        fly(&mut a);
+        assert!(a.world.bolts.is_empty());
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("bolt1 update 34: at (0, -18133, 1000), 18133 travelled; more than its range 18000: removed"), "{log}");
+        // Aimed down at the ground: removed below the floor grid (100).
+        a.world.launch_bolt("shooter", "prscbolt.kq", &scbolt(), [0.0, -20_000.0, 600.0], [0.0, -19_000.0, 0.0], 5, "test");
+        fly(&mut a);
+        fly(&mut a);
+        assert!(a.world.bolts.is_empty());
+        assert!(a.world.fight_log.join("\n").contains("at or below the floor grid (100): removed, no damage"));
+    }
+
+    #[test]
+    fn a_bolt_on_an_immune_character_does_no_damage_and_tells_its_script() {
+        // Rule 30: type bit 0x4000 (the Wizard and the Knight, 0xC021).
+        let mut a = fighter();
+        a.world.anims[0].character.as_mut().unwrap().collision_type = 0xC021;
+        a.world.characters_solid.insert("gob".into());
+        a.world.connor_at = None;
+        a.world.launch_bolt("shooter", "prscbolt.kq", &scbolt(), [0.0, -3000.0, 1000.0], [0.0, 0.0, 1000.0], 5, "test");
+        for _ in 0..6 {
+            fly(&mut a);
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"), "{log}");
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().fight.as_ref().unwrap().stats.0[0], 15);
+        assert_eq!(a.world.immune_calls, vec!["gob".to_string()]);
     }
 
     #[test]

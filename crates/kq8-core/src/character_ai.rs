@@ -261,10 +261,10 @@ impl WorldState {
             self.idle(i, now);
             self.wander(i, now);
         }
-        // fighting.md rule 36 (M5 5c-9): the bolts fly; Connor's place is
-        // kept for the next shot's aim.
-        let walls = Scene::new(ground, buildings, objects);
-        self.bolts_step(&walls);
+        // fighting.md rule 36 (M5 5c-9), ranged-weapons.md rules 28-30 (M5
+        // 5f-1): the bolts fly; Connor's place is kept for the next shot's
+        // aim.
+        self.bolts_step(ground, buildings, objects);
         self.connor_was = self.connor_at;
     }
 

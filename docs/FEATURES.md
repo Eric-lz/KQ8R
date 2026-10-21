@@ -496,8 +496,10 @@ miss, roll, flinch, death, drop and shot is in
   plays at the first touch. Characters are flown
   through.
 - **Bow spriggans:** they never move, and shoot a bolt every swing plus
-  delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor (the
-  bolt's flight is a stand-in: straight, no gravity).
+  delay (`sprigwnd1`: 1.7 s), aimed ahead of a running Connor; the
+  bolt flies straight and tilted toward its aim, no gravity, and stops
+  at the first building, object, character or Connor, the ground or
+  after its range (M5 5f-1).
 - **Combat level:** `--combat-level 1|2|3` (0.66 / 1.0 / 1.5 × the
   creatures' health and damage; stand-in for the menu).
 - Not built: Connor's bows and other weapons' full movement sets, game
@@ -673,7 +675,7 @@ message that shows the usage.
   travel between worlds; the story's scenes run only as far as the
   built parts allow.
 - **Characters:** the fight is a first version (M5 5c): Connor's
-  controls, the bolt's flight and the drops' flight are stand-ins; not
+  controls are partly stand-ins; not
   compared with the original by eye. Their shadows on buildings
   follow the traced rule (Q135, 4d-7b-5), without the original's cut
   shadows (the user's decision); checked by the user.

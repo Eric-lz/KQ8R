@@ -990,15 +990,31 @@ impl FightSettings {
 }
 
 /// A projectile file (`classType=KQProjectile`, e.g. `Prscbolt.kq`;
-/// `fighting.md` rule 36, M5 5c-9): its shape, speed and range.
+/// `fighting.md` rule 36, M5 5c-9; `ranged-weapons.md` rule 26, M5 5f-1):
+/// its shape, speed, range, mask and kind.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectileKeys {
     pub shape: Option<String>,
-    /// `velocity`, units per second.
+    /// `velocity`, units per second (default 2,000).
     pub speed: f32,
-    /// `maxDistance`, units.
+    /// `maxDistance`, units (default 8,000).
     pub max_distance: f32,
+    /// `meshName`: the model part the shooter's bolt starts at (rule 24).
+    pub mesh_name: Option<String>,
+    /// `colliderMask` (default 0x1F, rule 26).
+    pub collider_mask: u32,
+    /// `weaponType`: 2 Fire, 3 Ice, otherwise the hit is `Projectile`.
+    pub weapon_type: Option<i64>,
+    /// Its shape's `BOUNDS.KQ` box, filled in by the loader (rule 29).
+    pub bounds: Option<([f32; 3], [f32; 3])>,
 }
+
+/// `ranged-weapons.md` rule 26: the defaults of a projectile file's keys.
+pub const PROJECTILE_SPEED: f32 = 2000.0;
+pub const PROJECTILE_RANGE: f32 = 8000.0;
+pub const PROJECTILE_MASK: u32 = 0x1F;
+/// A projectile's own collision type (rule 26).
+pub const PROJECTILE_TYPE: u32 = 1;
 
 impl ProjectileKeys {
     /// `None` when the section is not a `KQProjectile`.
@@ -1006,11 +1022,15 @@ impl ProjectileKeys {
         if !s.get("classType")?.trim().eq_ignore_ascii_case("KQProjectile") {
             return None;
         }
-        let number = |k: &str| s.number(k).and_then(Result::ok).map(|v| v as f32);
+        let number = |k: &str| s.number(k).and_then(Result::ok);
         Some(ProjectileKeys {
             shape: s.get("shapeName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
-            speed: number("velocity").unwrap_or(0.0),
-            max_distance: number("maxDistance").unwrap_or(0.0),
+            speed: number("velocity").map_or(PROJECTILE_SPEED, |v| v as f32),
+            max_distance: number("maxDistance").map_or(PROJECTILE_RANGE, |v| v as f32),
+            mesh_name: s.get("meshName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            collider_mask: number("colliderMask").map_or(PROJECTILE_MASK, |v| v as u32),
+            weapon_type: number("weaponType").map(|v| v as i64),
+            bounds: None,
         })
     }
 }
@@ -1095,6 +1115,12 @@ item0=\tKQInventoryItemType\tINVITEM_SmCrossbow\t1130\t0\t0\t5\t0\t0\t0\tLongWea
     fn a_projectile_file_gives_shape_speed_and_range() {
         let p = ProjectileKeys::from_section(&kq_text::parse(b"[Arrow]\nclassType=KQProjectile\nshapeName=scbolt.kqs\nvelocity=8000\nmaxDistance=18000\n")[0]).unwrap();
         assert_eq!((p.shape.as_deref(), p.speed, p.max_distance), (Some("scbolt.kqs"), 8000.0, 18000.0));
+        // ranged-weapons.md rule 26: the defaults, and the keys when given.
+        assert_eq!((p.collider_mask, p.weapon_type, p.mesh_name.as_deref()), (0x1F, None, None));
+        let bare = ProjectileKeys::from_section(&kq_text::parse(b"[A]\nclassType=KQProjectile\n")[0]).unwrap();
+        assert_eq!((bare.speed, bare.max_distance), (2000.0, 8000.0));
+        let m = ProjectileKeys::from_section(&kq_text::parse(b"[A]\nclassType=KQProjectile\ncolliderMask=13\nweaponType=3\nmeshName=arrow\n")[0]).unwrap();
+        assert_eq!((m.collider_mask, m.weapon_type, m.mesh_name.as_deref()), (13, Some(3), Some("arrow")));
         assert!(ProjectileKeys::from_section(&kq_text::parse(b"[X]\nclassType=KQMonster\n")[0]).is_none());
     }
 
