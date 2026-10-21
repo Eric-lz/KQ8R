@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a, A's answer to Q147 (f): the rope model's place and the throw camera
+
+**Changed:** `rope.rs`: `ROPE_MODEL_OFFSET` (2,000 along the rope's +y), `THROW_CAM` = 2,250 behind, 350 up, tilt 1.27, heading the rope's + 3.14 (`THROW_CAM_TURN`, the original's own number); the unit test is now A's measured church case. Viewer `connor_view.rs`: the rope model's frame drawn 2,000 behind Connor. The `--rope-cam` test option is removed (the values are known). FEATURES.
+**Why:** `ropeandhook.md` rule 15 as answered by A (Q147 f, traced and measured in the original). The rope model was drawn at Connor's own place, inside the wall: why the user saw no rope flying up.
+**Tested how:** `cargo test -p kq8-core rope` (14 pass; the measured case: camera (206337, 188623, 8654), looking (0, −0.296, 0.955)), clippy clean. The foot climb run; `rope.log`.
+**Result:** At 142 the camera goes to (149896, 207588, 8150) = the rope's place + 2,250 behind, + 350 up, tilt 1.270, looking along (−0.296, 0, 0.955), in the same update as his placing.
+**Still broken / not tested:** **Not looked at by eye** (the rope flying up, from the new place). The grab still takes the − spot on an exact tie (next step).
+**Next:** the grab's tie, the traps at a placing, the top camera's flag.
+
 ## 2026-10-21 A: Q147 answered (rope: icon place, handsOff, top camera, taway, traps, the throw camera)
 
 **Changed:** `docs/behaviour/ropeandhook.md` rules 7, 9, 13, 15, 18, 23, 24, numbers, "How to check", open questions (2 answered, 7 new); QUESTIONS Q147 answered; STATUS. No code.

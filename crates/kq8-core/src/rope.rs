@@ -313,24 +313,28 @@ pub enum Stage {
 /// frame (x his left, y his back, z up).
 pub const FOOT_DROP: [f32; 3] = [0.0, 1000.0, -4900.0];
 
-/// Open question 2 (the camera at the end of `btoss`), STAND-IN (Q147 f)
-/// from the user's check in the original ("close to Connor's eye level,
-/// looking straight up, seeing the rope fly up") and the note's partly
-/// read numbers: [how far behind him, how high above his feet, the tilt
-/// up]: 2,000 behind (the note's 2,000; 250 was too close to the wall,
-/// the user's look), 1,400 up (ours: the height our camera treats as his
-/// chest, `camera.md`), tilted up 1.27 rad, turned half round from the
-/// rope's heading (a camera's heading looks the opposite way to
-/// Connor's, so this looks the way he faces). The viewer's `--rope-cam`
-/// changes it, to find the original's by eye.
-pub const THROW_CAM: [f32; 3] = [2000.0, 1400.0, 1.27];
+/// Rule 15 (Q147 f, traced and measured): the separate rope model's place
+/// in the rope's frame (= Connor's, at the rope's place and direction):
+/// 2,000 along its +y (his back's side, away from the wall).
+pub const ROPE_MODEL_OFFSET: [f32; 3] = [0.0, 2000.0, 0.0];
+
+/// Rule 15 (Q147 f, traced and measured): the camera at the end of
+/// `btoss`: [how far behind him (the rope's +y), how high above his feet,
+/// the tilt up]: the rope model's 2,000 plus (0, 250, 350), tilted up 1.27
+/// rad, no roll.
+pub const THROW_CAM: [f32; 3] = [2250.0, 350.0, 1.27];
+/// Its heading: the rope's + 3.14 (the original's number, not exactly
+/// π; a camera's heading looks the opposite way to Connor's, so it looks
+/// the way he faces).
+#[allow(clippy::approx_constant)] // the original's own 3.14 (Q147 f), on purpose
+pub const THROW_CAM_TURN: f32 = 3.14;
 
 /// The camera's spot and a point it looks at, for the throw from below;
 /// `cam` as [`THROW_CAM`].
 pub fn throw_camera(place: [f32; 3], dir: [f32; 3], cam: [f32; 3]) -> ([f32; 3], [f32; 3]) {
     let [back, height, tilt] = cam;
     let spot = add(place, turned(dir, [0.0, back, height]));
-    let look = crate::camera::view_direction(tilt, dir[2] + std::f32::consts::PI);
+    let look = crate::camera::view_direction(tilt, dir[2] + THROW_CAM_TURN);
     (spot, std::array::from_fn(|k| spot[k] + look[k] * 1000.0))
 }
 
@@ -474,8 +478,6 @@ pub struct Climb {
     pub saved_steps: Option<(f32, f32)>,
     /// The rope state is over (rule 26).
     pub done: bool,
-    /// The camera after the throw from below ([`THROW_CAM`]).
-    pub throw_cam: [f32; 3],
 }
 
 /// Rule 22: how fast the camera's height and the aim point move while
@@ -532,7 +534,6 @@ impl Climb {
             range: (0.0, 0.0),
             saved_steps: None,
             done: false,
-            throw_cam: THROW_CAM,
         };
         host.camera_stay();
         host.turn_to([r.place[0], r.place[1]]);
@@ -620,18 +621,19 @@ impl Climb {
                 host.set_step_heights(0.0, 0.0);
                 host.place(self.place, self.dir[2]);
                 let model = if host.start_rope_model() { "the rope model starts (rope, Conrope.anm)" } else { "the rope model could not start" };
-                // Open question 2 (STAND-IN, Q147 f): close behind him at
-                // eye level, looking straight up the rope.
-                let (spot, aim) = throw_camera(self.place, self.dir, self.throw_cam);
+                // Rule 15 (Q147 f): behind him, looking steeply up the wall
+                // where the hook flies; set in the same update as his
+                // placing (the original hides the jump that way).
+                let (spot, aim) = throw_camera(self.place, self.dir, THROW_CAM);
                 host.camera_to(spot, aim);
                 host.note(format!(
-                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera {:.0} behind him and {:.0} up at {}, tilted up {} rad, looking the way he faces (open question 2: stand-in from the user's check, Q147 f); Connor told to stand still (rule 15)",
+                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera {:.0} behind him and {:.0} up at {}, tilted up {} rad, looking the way he faces (rule 15, Q147 f); Connor told to stand still (rule 15)",
                     fmt3(self.place),
                     self.dir[2],
-                    self.throw_cam[0],
-                    self.throw_cam[1],
+                    THROW_CAM[0],
+                    THROW_CAM[1],
                     fmt3(spot),
-                    self.throw_cam[2]
+                    THROW_CAM[2]
                 ));
                 self.stage = Stage::RopeModel;
                 if !host.play(Anim::Own("stop")) {
@@ -936,13 +938,14 @@ mod tests {
     }
 
     #[test]
-    fn the_throw_camera_looks_up_the_way_he_faces() {
-        // He faces -x (heading -pi/2): the camera 250 behind (+x), looking
-        // toward -x and up.
-        let (spot, aim) = throw_camera([0.0; 3], [0.0, 0.0, -std::f32::consts::FRAC_PI_2], [250.0, 1400.0, 1.27]);
-        assert!((spot[0] - 250.0).abs() < 0.01 && spot[1].abs() < 0.01 && spot[2] == 1400.0, "{spot:?}");
-        let d: [f32; 3] = std::array::from_fn(|k| aim[k] - spot[k]);
-        assert!(d[0] < 0.0 && d[1].abs() < 0.01 && d[2] > 900.0, "{d:?}");
+    fn the_throw_camera_as_measured_at_the_church_foot() {
+        // Q147 f, measured in the original: rope place (206337, 186373,
+        // 8304), heading 0: camera at (206337, 188623, 8654), looking along
+        // (0, -0.296, 0.955).
+        let (spot, aim) = throw_camera([206337.0, 186373.0, 8304.0], [0.0; 3], THROW_CAM);
+        assert!((spot[0] - 206337.0).abs() < 0.5 && (spot[1] - 188623.0).abs() < 0.5 && (spot[2] - 8654.0).abs() < 0.5, "{spot:?}");
+        let d: [f32; 3] = std::array::from_fn(|k| (aim[k] - spot[k]) / 1000.0);
+        assert!(d[0].abs() < 0.01 && (d[1] + 0.296).abs() < 0.001 && (d[2] - 0.955).abs() < 0.001, "{d:?}");
     }
 
     #[test]

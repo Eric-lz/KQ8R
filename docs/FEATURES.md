@@ -703,9 +703,6 @@ repeated and checked in the logs. They do not change the game's rules.
   one was used (`renderer: asked ... got ...`).
 - `--game <folder>`: where the game's files are (default `MASK`). The
   environment variable `KQ8_GAME_DIR` sets the same folder.
-- `--rope-cam BACK,HEIGHT,TILT`: where the camera goes after the rope is
-  thrown from below: how far behind Connor, how high above his feet, how
-  far it tilts up (radians). Default `2000,1400,1.27` (a stand-in).
 - `--frames <number>`: close the window by itself after that many frames,
   and write the result line in the log. Useful for tests.
 

@@ -2020,6 +2020,7 @@ pub fn connor_draw(
     fixed: Res<Time<Fixed>>,
     mut body: Query<&mut Transform, (With<ConnorBody>, Without<Camera3d>)>,
     mut visibility: Query<&mut Visibility>,
+    mut frames: Query<&mut Transform, (Without<ConnorBody>, Without<Camera3d>)>,
 ) {
     let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
@@ -2059,8 +2060,9 @@ pub fn connor_draw(
         }
         sim.shown = frame;
     }
-    // M6 6a-3 (ropeandhook.md rule 15): the separate rope model, at his
-    // place (he stands at the rope's place while it plays).
+    // M6 6a-3 (ropeandhook.md rule 15, Q147 f): the separate rope model,
+    // 2,000 along the rope's +y from his place (he stands at the rope's
+    // place and direction while it plays, so that is his own +y, his back).
     let rope = sim.rope_model.and_then(|(name, p0, p1)| {
         let m = sim.movements.iter().find(|m| m.name == name)?;
         let n = m.frames.len();
@@ -2075,6 +2077,9 @@ pub fn connor_draw(
         if let Some(new) = rope {
             if let Ok(mut v) = visibility.get_mut(new) {
                 *v = Visibility::Inherited;
+            }
+            if let Ok(mut t) = frames.get_mut(new) {
+                t.translation = Vec3::from(crate::to_bevy(kq8_core::rope::ROPE_MODEL_OFFSET, [0.0; 3]));
             }
         }
         sim.rope_shown = rope;
