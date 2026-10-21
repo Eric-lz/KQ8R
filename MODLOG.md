@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-4 fix: three shields, facing out
+
+**Changed:** Viewer `load.rs` loads `orbit1.kq`, `orbit2.kq` and `orbit3.kq` (all in `GAME/Kq`); `potion_view.rs` draws one shield per file and turns each a quarter turn more than its orbit angle. QUESTIONS Q145 (the note says orbit2 and orbit3 don't exist). Provenance.
+**Why:** The user's check: the original shows three semi-transparent shields spinning round Connor; ours showed one, turned 90°.
+**Tested how:** `kq8-viewer --world Daventry --sound off --frames 600 --command "give Invulnerable 1,10" --key 5,30`; `items.log`.
+**Result:** "the shield's orbits appear: 3"; at update 30 orbit1 at angle 0, orbit2 at 2.09, orbit3 at −2.09, each 500 from his `body` part. The model is wide along x and thin along y: before, its wide side lay along the radius (edge-on from Connor); now its flat side faces out.
+**Still broken / not tested:** **Not looked at by eye** after the fix. Which side of the shield (its bulge) faces out is our choice (Q145 b). The user checked Invisible's and Clarity's effects; the shield's and Strength's numbers are checked in the logs only.
+**Next:** The user: look at the shields again; check the armour and hand numbers.
+
 ## 2026-10-21 M5 5g-8: experience when some items are added
 
 **Changed:** `potions.rs`: the list of items with built-in experience (rules 40–41). `connor_inventory.rs`: every add gives it (0.3 s later through a small queue in `timers`, or at once) and logs the help pop-ups 0x83 / 0x84 / 0x80 (not studied: logged only). `active.rs`: the queue and the pop-ups asked. DESIGN (5g done), provenance. 1 new unit test.

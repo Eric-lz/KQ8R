@@ -3027,7 +3027,9 @@ the user in the original), with `inventory.md` rules 8–18 and
 | 5g-4: `setConnorFlag InTemple4 1`; then each hit on Connor with the shield uses old + ⌊added/2⌋, at most 85; the shown number unchanged | Rule 19 | Unit test (60 used as 50) |
 | 5g-4 (viewer `potion_view.rs`): `orbit1.kq` (`KQOrbitObj`: `shapeName`, `orbitRadius`, `orbitStartAng*`, `orbitStepAng*`, `orbitZoffset`, `translucency`) | Rule 20; keys observed in `GAME/Kq/orbit1.kq` (parser `OrbitKeys`, unit test) | — |
 | 5g-4: the orbit at Connor's `body` part − 820 + 500, radius 500, +0.2 rad per update from 0, removed at the end; see-through 165/255 as other objects | Rule 20 | Viewer: 301 places logged, updates 30–330 |
-| 5g-4: angle 0 points along +x; the shape turns with its angle; no `body` part → his feet | **Ours** (the note gives neither) | — |
+| 5g-4: angle 0 points along +x; no `body` part → his feet | **Ours** (the note gives neither) | — |
+| 5g-4 fix: three orbits, `orbit1.kq`–`orbit3.kq` (start angles 0, 2.09, −2.09) | The user's check in the original (three shields); files observed in `GAME/Kq` (the note says they don't exist: Q145) | Viewer: 3 orbits, 120° apart |
+| 5g-4 fix: each shape turned by its orbit angle + ¼ turn, its flat side (the model's −y) facing out | The user's check (ours was 90° off); the model's shape observed (`invulnfx.kqs`: 404 wide, 57 thin, 657 tall); which side faces out: ours (Q145 b) | Not looked at again by eye |
 | 5g-5: Strength: hand number + ⌊hand/2⌋, the half remembered and taken off at the end; ranged unchanged | Rules 21–22 | Viewer: 10 → 15 → 10 |
 | 5g-5 (kq8-data `SkinList`): `KQSkinList` sections, `skinN=<file> <bits>`, `invItemN`; item N is bit 2^N | Rules 25, 30 name the bits (Strength 2048, Clarity 4, Strength 8); **item N = bit 2^N is our reading of `Connor.kq`**, which fits all four | Unit test |
 | 5g-5: a list's bits = the items of its `invItem` lines Connor has applied (worn, or a potion running) | Rules 25, 30 (potions are applied while they run, `inventory.md` rule 14); generalised from the note's examples | Viewer: bits 0, 8, 12, 4 |
