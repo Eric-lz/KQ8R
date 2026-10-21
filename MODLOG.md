@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 The user's check of ranged weapons (5f); the axe can be taken from the floor (Q142)
+
+**Changed:** QUESTIONS: new Q142 (`checkDistance`). STATUS, FEATURES: 5f checked by the user. This entry.
+**Why:** The user checked the crossbow against the original, and reported that Connor takes the windmill's axe from the floor, where the original says he can't reach it (the hay bale must be pushed under it and climbed).
+**Tested how:** The user's check by eye. The axe: `cargo play --world Daventry --sound off --at 145910,249400,0 --no-ai --god --click ax,40 --frames 600`; `doors.log` (copy `doors-q142-axe.log`).
+**Result:** Crossbow: "just like the original". Axe: `ax.cs` line 4 runs `checkDistance Connor ax 1700`, which we don't have ("ERROR unknown command"); an unknown command leaves 1 in `$Console::Return`, which the script reads as "close enough", so the axe is given and the cutscene starts. No behaviour note describes `checkDistance` (what distance, between what, which result), so it is asked as Q142 instead of guessed.
+**Still broken / not tested:** The axe puzzle until Q142 is answered and built. The axe cutscene itself (Q141) not run by the user yet.
+**Next:** A: Q142 (and Q140, Q141). B: build `checkDistance` from the answer, then test pushing the bale under the axe and taking it from the bale.
+
 ## 2026-10-20 M5 5f: end of the ranged-weapons session (B)
 
 **Changed:** STATUS.md ("Where we are", the 5c and 5f stand-ins, the next step, the open questions), QUESTIONS (Q138, Q139 marked built), DESIGN (5f done).

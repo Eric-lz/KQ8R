@@ -42,8 +42,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   turn and its wait; the Wizard / Knight get the plain click. The swing
   click picks its target as traced (within 2,350, kept). Q140 (the
   bolt's shape; aim height 975 vs 1,200; which frame at the cue) and
-  Q141 (a script's walk during the swap) asked, not blocking. **Not
-  looked at by eye; not compared with the original.**
+  Q141 (a script's walk during the swap) asked, not blocking. **Checked
+  by the user against the original (2026-10-21): "just like the
+  original".** Found then: the windmill's axe can be taken from the floor
+  because `checkDistance` is not built (an unknown command leaves 1):
+  **Q142**, for A.
 
 - **2026-10-20 (A): Q137 answered**, `docs/behaviour/thrown-items.md`
   (`items.md` rule 12 points there): a thrown item follows the exact arc
@@ -614,6 +617,10 @@ characters and conversations done; the menus postponed) and **M5**
 - `conversation.md` open question 3 (states that delay the talk
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
+- For A (asked 2026-10-21 by B, the user's check): **Q142**
+  (`checkDistance`: what distance, between what, which result; it
+  decides the axe puzzle: from the floor Connor must not reach the axe,
+  from the hay bale he must).
 - For A (asked 2026-10-20 by B, M5 5f, not blocking): **Q140** (a: the
   bolt's own shape, the ball stack of its box or something else, with
   `collisionDetail`; b: Connor's aim height, 0.75 × 1,300 = 975 from

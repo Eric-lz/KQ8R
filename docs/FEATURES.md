@@ -490,7 +490,8 @@ miss, roll, flinch, death, drop and shot is in
   the spot and on. No ammunition. A click on the Wizard or the Knight
   talks instead. Walking or running he shoots at once without stopping,
   at most twice a second, and a run slows to a walk until a second after
-  the last shot (M5 5f-6). Test options `--aim NAME,N`,
+  the last shot (M5 5f-6). Checked by the user against the original
+  (2026-10-21). Test options `--aim NAME,N`,
   `--aim-point X,Y,Z,N`.
 - **Connor hits back (M5 5f-7):** with his fists ready a left click
   swings (`attack` / `attackb`; Shift: `attack2`, × 0.75–4 damage; Ctrl:
