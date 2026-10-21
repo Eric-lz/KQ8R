@@ -5666,6 +5666,19 @@ mod tests {
     }
 
     #[test]
+    fn the_console_kill_dies_as_from_a_hit_once() {
+        // The viewer console's `kill` (ours): rule 30's death, no alarm.
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        assert_eq!(a.world.console_kill("GOB"), Ok("gob".to_string()));
+        let c = a.world.anims[0].character.as_ref().unwrap();
+        assert_eq!(c.state, crate::character::State::Die);
+        assert_eq!(c.fight.as_ref().unwrap().last_kind, Some(crate::fight::HitKind::Normal));
+        assert!(a.world.console_kill("gob").unwrap_err().contains("already dying"));
+        assert!(a.world.console_kill("nobody").unwrap_err().contains("no character"));
+    }
+
+    #[test]
     fn die_now_skips_the_movement_and_fire_leaves_no_corpse() {
         // Rules 30, 32: `setState <name> Die now`; a Fire kill burns away.
         let mut a = fighter();

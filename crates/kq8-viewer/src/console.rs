@@ -17,19 +17,6 @@ use crate::log::Log;
 
 pub use screen::close as close_screen;
 
-const HELP: &str = "\
-console: type a command and press Enter (the game window keeps running).
-  give <item> [count]              e.g. give SmCrossbow; give gold 50
-  move Connor <flags> x y z 0 0 t  flags 0 set place and turn, 1 add place,
-                                   2 add turn, 3 add both; t = turn (radians)
-                                   e.g. move Connor 3 0 0 2000 (2,000 higher)
-  move KQCamera <flags> x y z ...  the same for the camera
-  where                            Connor's place and turn (for move)
-  help                             this list
-  Any other script command works too (sendEvent, deleteObject, KQSound::play,
-  setCombatLevel, handsOff, ...): it runs as if a script ran it.
-  The result is $Console::Return: 0 usually means done, 1 failed or unknown.";
-
 /// The lines typed so far, and `console.log`.
 #[derive(Resource)]
 pub struct Console {
@@ -112,34 +99,15 @@ pub fn console_step(console: Option<ResMut<Console>>, sim: Option<ResMut<DoorSim
         }
         let updates = sim.as_ref().map_or(0, |s| s.active.world.updates);
         console.say(format!("> {line}  (update {updates})"));
-        let first = line.split_whitespace().next().unwrap_or("");
-        if first.eq_ignore_ascii_case("help") {
-            console.say(HELP);
-            continue;
-        }
-        if first.eq_ignore_ascii_case("where") {
-            let said = match connor.as_ref() {
-                Some(c) => {
-                    let p = c.mover.position;
-                    format!("Connor is at {:.0} {:.0} {:.0}, turn {:.4} (move Connor 0 {:.0} {:.0} {:.0} 0 0 {:.4} puts him back here)", p[0], p[1], p[2], c.walker.heading, p[0], p[1], p[2], c.walker.heading)
-                }
-                None => "no Connor in this view".to_string(),
-            };
-            console.say(said);
-            continue;
-        }
         let Some(sim) = sim.as_mut() else { continue };
-        // The log lines the command writes are shown here too (they also
-        // go to doors.log as usual).
-        let before = sim.active.world.log.len();
-        let result = sim.active.test_command(line, "console");
-        let wrote: Vec<String> = sim.active.world.log.get(before..).unwrap_or_default().to_vec();
-        for w in wrote {
-            console.say(format!("  {w}"));
-        }
-        match result {
-            Some(r) => console.say(format!("  result {r}")),
-            None => console.say(format!("  unknown command '{first}' ('help' for the list)")),
+        // Our own words first, else a script command; the log lines it
+        // writes are shown here too (they also go to doors.log as usual).
+        let said = match crate::console_words::run(line, sim, connor.as_deref()) {
+            Some(said) => said,
+            None => crate::console_words::script(sim, line),
+        };
+        for s in said {
+            console.say(s);
         }
     }
     // After the lines, so lines typed just before the end still run.

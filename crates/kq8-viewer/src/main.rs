@@ -46,6 +46,7 @@ mod anim_view;
 mod building_light;
 mod connor_view;
 mod console;
+mod console_words;
 mod copies_view;
 mod door_view;
 mod draw_distance;

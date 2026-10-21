@@ -127,7 +127,8 @@ cargo play --help
 
 While the game runs, click in the terminal you started it from, type a
 command on its bottom line and press Enter (Up/Down: earlier commands), e.g. `give TempleSword`, `where`,
-`move Connor 3 0 0 2000` (2,000 units higher). `help` lists them.
+`move Connor 3 0 0 2000` (2,000 units higher). `help` lists them all
+(`list weapons`, `list creatures`, `goto`, `heal`, `kill`, `spawn`, ...).
 
 ### Key bindings
 

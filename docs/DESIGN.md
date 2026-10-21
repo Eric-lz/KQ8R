@@ -1671,3 +1671,26 @@ One step:
    With piped input (our tests) it reads plain lines as in step 1.
    **Test:** `cargo play --world Daventry`; the bottom line shows `> `,
    the game's lines appear above the divider while you type.
+3. **More console words** (the user's request: a fuller `help`, `list`,
+   more useful or fun commands). All ours, none change the game's rules;
+   where one acts on the game it goes through a rule already built:
+   - `help` grouped by use; `list` (the kinds), `list items|weapons|armor|
+     potions|quest [word]` (the item list, `Invinfo.itl`, by category),
+     `list creatures|doors|chests|objects [word]` (this world, with the
+     distance from Connor), `find <word>` (any named thing).
+   - `inv` (what Connor carries), `stats` (his five stats, level, god
+     mode, AI, weapon).
+   - `heal`, `xp <n>`: a `KQStatsChangeRequestEvent` to Connor
+     (`anim-scripts.md` rule 19), as a script would send.
+   - `god`, `ai`: the F3 / F4 test switches.
+   - `goto <name>`: `move Connor 0` to 1,000 units from it on his side,
+     500 higher, turned toward it (he falls onto the ground; he can land
+     in a wall or a roof: it is a jump, not a walk).
+   - `spawn <item> [count]`: `KQMonster::inventory world` 600 units in
+     front of him (`items.md` rule 9).
+   - `kill <name>` / `kill near [distance]`: the creature dies as from a
+     hit (`fighting.md` rule 30 death, its drop, its body), without the
+     hit's alarm to the others. A small core function, `console_kill`.
+   **Test:** piped commands, `console.log`, `fight.log`.
+   **Done** 2026-10-21 (`console_words.rs`; `fight.rs` `console_kill`
+   with a unit test); tested with piped commands and the logs only.

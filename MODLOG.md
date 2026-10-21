@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Console: list, goto, heal, kill and a fuller help
+
+**Changed:** New `crates/kq8-viewer/src/console_words.rs`: `help` grouped by use, `list` (item types by category; creatures, doors, chests, objects of this world, nearest first), `find`, `inv`, `stats`, `heal`, `xp`, `god`, `ai`, `goto`, `spawn`, `kill <name>` / `kill near [distance]`, `where`. `fight.rs`: `console_kill` (the death of a hit, no alarm), 1 unit test. `console.rs` uses them. DESIGN (step 3), README, FEATURES, provenance.
+**Why:** The user asked for a more complete help and commands like `list items`, `list weapons`, `list creatures`.
+**Tested how:** `cargo test` (new test `the_console_kill_dies_as_from_a_hit_once`), clippy clean. Piped into `cargo play --world Daventry --sound off --frames 200` / `900`: the commands above; `console.log`, `fight.log`, `doors.log`, `connor.log`.
+**Result:** `list weapons` 33 types with their damage; `list creatures` 57 with health and distance; `find wiz` 5 things. `xp 100`: level 1 → 2. `kill goblin22`: dies at once, drops a mushroom, at update 31 its body and 3 experience to Connor. `kill near 30000`: 4 creatures. `kill Wizard`: refused (never fights). `goto Wizard`: Connor moved 1,000 from him, turned to face him (heading −1.559). `spawn Crystal 3`: lying 600 in front of him. Help examples run: `sendEvent 0 Wizdoor KQDoorEvent 1` opens the door, `setCombatLevel 3`, `KQSound::play eat.aud` result 0.
+**Still broken / not tested:** Not looked at by eye. `goto` can drop Connor into a wall or onto a roof (it is a jump, not a walk). Items of later worlds may have no model in Daventry. `list` also shows the game's placeholder types (`Fists`, `NoRanged`, `Lava`, ...).
+**Next:** The user: try the commands while playing.
+
 ## 2026-10-21 Console: a typing line at the bottom of the terminal
 
 **Changed:** `console.rs` (`screen`): in a real terminal the last line is the typing line, a divider above it, and the game's output scrolls only above (scrolling region); keys read one at a time with `crossterm` (new dependency, MIT; `Cargo.toml`, CREDITS), Enter / Backspace / Esc / Up / Down / Ctrl+C. `main.rs` gives the terminal back when the window closes; a panic does too. Piped input still reads plain lines. DESIGN (step 2), README, FEATURES, provenance.

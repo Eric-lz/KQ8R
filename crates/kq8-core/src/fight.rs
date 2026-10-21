@@ -840,6 +840,24 @@ impl crate::active::WorldState {
         }
     }
 
+    /// The viewer console's `kill` (ours, not in the original): the
+    /// character dies as from a normal hit (rule 30), without the hit's
+    /// alarm to the others. `Err` with the reason when it can't.
+    pub fn console_kill(&mut self, name: &str) -> Result<String, String> {
+        let j = self.character_index(name).ok_or_else(|| format!("no character '{name}'"))?;
+        let a = &self.anims[j];
+        let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) else {
+            return Err(format!("{} never fights (no monster-list line): it can't die", a.player.name));
+        };
+        if f.dying.is_some() {
+            return Err(format!("{} is already dying or dead", a.player.name));
+        }
+        let name = a.player.name.clone();
+        self.fight_note(&name, "console kill: dies as from a normal hit (ours)");
+        self.character_dies(j, HitKind::Normal, false);
+        Ok(name)
+    }
+
     /// Rule 31 (M5 5c-8): its drops, when the dying starts: the line's
     /// `invDrop`, then the type's; each a new item at its feet (offset 0
     /// in Daventry), thrown as `KQObject::tossItems` (`items.md` rule 12).

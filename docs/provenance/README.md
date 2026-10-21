@@ -2993,3 +2993,13 @@ and `anim-scripts.md`, and so on). The results shown are
 (e)). `help` and `where` are ours. The typing line uses the `crossterm`
 library (MIT) and standard terminal control codes (scrolling region,
 save / restore cursor).
+
+| Console word (`console_words.rs`) | Goes through | Source of that rule |
+| --- | --- | --- |
+| `list items` / `weapons` / ... | The item list's `category` column | `Invinfo.itl` (observed), `items.md` |
+| `heal`, `xp <n>` | `sendEvent 0 Connor KQStatsChangeRequestEvent` | `anim-scripts.md` rule 19 (level-ups: the stats rules already built) |
+| `god`, `ai` | The F3 / F4 test switches | Ours |
+| `goto <name>` | `move Connor 0`, 1,000 away, 500 up, turned toward it | `objects.md` "(d)"; heading as `connor_auto.rs` |
+| `spawn <item>` | `KQMonster::inventory world` | `items.md` rule 9 |
+| `kill` (`fight.rs` `console_kill`) | The death of a hit (die movement, drop, body, experience), without the hit's alarm | `fighting.md` rules 30–32 |
+| `help` examples: `KQDoorEvent 1`/`2`, `setCombatLevel 1|2|3` | Existing commands | `doors.md` rules 2–3, `fighting.md` rule 3 |
