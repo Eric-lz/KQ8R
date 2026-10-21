@@ -3080,3 +3080,16 @@ in `_6`), Daventry's `ropetrp1–4.cs` and `.kq`. No other source.
 | 6a fix: a movement the rope state starts after his update is drawn from its start at once (was its last frame for one update) | Ours (the user's check: snaps at each switch) | Viewer: `rope.log` "drawn: … from phase 0.000 (was drawing phase 1.000 …)" at each switch |
 | 6a fix: the camera at the end of `btoss`: 250 behind him, 1,400 above his feet, tilted up 1.27 rad, looking the way he faces | Open question 2: the user's check in the original (close, eye level, looking straight up at the rope) and the note's 250 and 1.27 rad and half turn; the 1,400 and the combination are **ours, Q147 f** | Unit test `the_throw_camera_looks_up_the_way_he_faces`; viewer: camera at (147896, 207586, 9200), tilt 1.270 |
 | 6a, Q147 answered by A: the hook icon in the first free place (a); the rope's handsOff a plain `handsOff 1` (b); the top camera skips Connor's first move, the first-person lock goes then (c); `taway`'s 405 step moves him (d); a placing runs only the traps' stay test (e); the rope model 2,000 along the rope's +y, the throw camera at the place + (0, 2,250, 350), tilt 1.27, heading + 3.14, the grab's tie the + spot (f) | `ropeandhook.md` rules 7, 9, 13, 15, 18, 24 (traced; c–f measured in the original by A); the tie's 0.5 tolerance ours | Unit tests with A's church numbers; viewer runs (MODLOG 2026-10-21) |
+
+## M6 6b: Azriel's Hammer — `crates/kq8-data/src/characters.rs` (`ProjectileKeys`); viewer `door_view.rs`, `load.rs`
+
+Source: `docs/behaviour/azriel-hammer.md` (A, 2026-10-20; checked by the
+user in the original), with `ranged-weapons.md` rules 17, 21, 26. Data:
+`<world>/kq/prhammer.kq`, `Invinfo.itl` (`INVITEM_AzrielHammer`'s last
+column), `Connor.kq` (`shootOffsets1`), Swamp's `constart.cs`. No other
+source.
+
+| What | Source | Check |
+| --- | --- | --- |
+| 6b-1: a `KQHammer` file is read like a `KQProjectile` (same keys and defaults), plus `modifier`, `minDamage`, `maxDamage` (default 0) and its own default mask 0x221F | Rule 6 | Unit test `a_hammer_file_gives_its_damage_keys` (Daventry's file, Barren's defaults); viewer, Swamp: `characters.log` speed 30,000, range 20,000, mask 0x221F, 30 / 0 / 300 |
+| 6b-1: Connor's fight is set up after the items the start-up scripts gave him, so a ranged weapon given at load (Swamp's hammer) gives his bolt file and shoot offset | `ranged-weapons.md` rules 17, 21 (a carried `LongWeapon` gives both); the order was our bug | Viewer, Swamp: `fight.log` "carried at the start: INVITEM_AzrielHammer: shoots Prhammer.kq; shoot offset (-41, -605, 1226)" (before: `PRarrow.kq`, (-300, -502, 1032)) |

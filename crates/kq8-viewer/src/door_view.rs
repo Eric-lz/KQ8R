@@ -818,9 +818,6 @@ pub fn spawn_doors(
             f.short_lists.iter().map(|(w, a)| format!("{w} {a}")).collect::<Vec<_>>().join(", ")
         ));
     }
-    active.world.set_connor_fight(objects.connor_fight.clone());
-    // fighting.md rule 36 (M5 5c-9): the projectiles the fighters shoot.
-    active.world.projectiles = std::mem::take(&mut objects.projectiles);
     // potions.md rule 31 (M5 5g-7): the objects Clarity reveals.
     active.world.reveal_objects = std::mem::take(&mut objects.reveal_objects);
     main_log.summary(format!("clarity: objects with groupsAlways bit 2048: {:?} (potions.md rule 31)", active.world.reveal_objects));
@@ -881,6 +878,12 @@ pub fn spawn_doors(
     for o in &active.world.items.objects {
         active.world.known.insert(o.name.to_ascii_lowercase());
     }
+    // fighting.md (M5 5c-4), ranged-weapons.md rules 17, 21: Connor's
+    // fight, after the items the start-up scripts gave him (Swamp's
+    // `constart.cs` gives Azriel's Hammer; M6 6b-1), so a ranged weapon he
+    // carries gives his bolt file and shoot offset.
+    active.world.projectiles = std::mem::take(&mut objects.projectiles);
+    active.world.set_connor_fight(objects.connor_fight.clone());
     // character-movement.md rule 20 (M5 5a-4).
     if let Some(n) = objects.max_monsters {
         active.world.max_monsters = n;

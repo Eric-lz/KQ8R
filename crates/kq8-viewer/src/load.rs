@@ -2109,12 +2109,19 @@ impl Placer<'_> {
                     let table = self.game.find("GAME/patch/BOUNDS.KQ").and_then(|p| std::fs::read(p).ok()).map(|b| kq8_data::bounds::BoundingBoxes::parse(&b).0);
                     k.bounds = k.shape.as_ref().and_then(|s| table.as_ref()?.lookup(&s.to_ascii_lowercase())).map(|e| (e.min, e.max));
                     self.character_lines.push(format!(
-                        "[{who}]: shoots {file}: shape {:?} (box {:?}), speed {}, range {}, mask 0x{:X}, weaponType {:?}, part {:?} (ranged-weapons.md rule 26)",
-                        k.shape, k.bounds, k.speed, k.max_distance, k.collider_mask, k.weapon_type, k.mesh_name
+                        "[{who}]: shoots {file}: shape {:?} (box {:?}), speed {}, range {}, mask 0x{:X}, weaponType {:?}, part {:?} (ranged-weapons.md rule 26){}",
+                        k.shape,
+                        k.bounds,
+                        k.speed,
+                        k.max_distance,
+                        k.collider_mask,
+                        k.weapon_type,
+                        k.mesh_name,
+                        if k.hammer { format!("; KQHammer: modifier {}, minDamage {}, maxDamage {} (azriel-hammer.md rule 6)", k.modifier, k.min_damage, k.max_damage) } else { String::new() }
                     ));
                     self.projectiles.insert(key.clone(), k);
                 }
-                None => self.character_lines.push(format!("[{who}]: projectile file {file} not found or not a KQProjectile")),
+                None => self.character_lines.push(format!("[{who}]: projectile file {file} not found or not a KQProjectile / KQHammer")),
             }
         }
         self.projectiles.get(&key).and_then(|k| k.shape.clone())

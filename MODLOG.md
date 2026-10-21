@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6b-1: Azriel's Hammer: its file is read, and Connor takes it at the start
+
+**Changed:** `kq8-data/characters.rs`: `ProjectileKeys` also reads `classType=KQHammer` (flag `hammer`, `modifier`, `minDamage`, `maxDamage`, default mask 0x221F). Viewer `door_view.rs`: Connor's fight (`set_connor_fight`) and the projectile files are set up after the items the start-up scripts made, not before. `load.rs`: the log line shows the hammer's keys. Plan "6b" in `docs/DESIGN.md`; provenance.
+**Why:** The user threw the hammer in Swamp and got an arrow. Two causes: `prhammer.kq` is a `KQHammer`, which our reader turned away, and Connor's ranged weapon was looked for before `constart.cs`'s items reached core, so he kept `PRarrow.kq` and its offset. Source: `azriel-hammer.md` rules 5, 6; `ranged-weapons.md` rules 17, 21.
+**Tested how:** `cargo test --workspace` (631 pass, 1 new), clippy clean; `kq8-viewer --world Swamp --sound off --frames 60`, read `fight.log` and `characters.log`.
+**Result:** `fight.log`: "carried at the start: INVITEM_AzrielHammer: shoots Prhammer.kq; shoot offset (-41, -605, 1226)". `characters.log`: speed 30,000, range 20,000, mask 0x221F, modifier 30, 0–300 (as the note's table for Swamp).
+**Still broken / not tested:** Nothing of the throw yet: a click would now launch the hammer as a plain bolt (one way, removed at the first touch); 6b-2 and 6b-3 build the return and the throw state. Found on the way, **not fixed** (separate step): the start-up scripts' items don't go through Connor's inventory rules at all (`receive`), so the chain mail, boots and gloves `constart.cs` gives are not put on (protection 0 in Swamp).
+**Next:** 6b-2, the hammer's flight out and back (core).
+
 ## 2026-10-21 The user's check of the Rope and Hook
 
 **Changed:** This entry; STATUS, FEATURES, README.

@@ -1842,6 +1842,77 @@ Steps (one commit each):
    it up. **Test:** a goblin chasing him gives up; `--command "sendEvent
    ..."` hit / `setState` refused in `rope.log`.
 
+#### 6b — Azriel's Hammer (planned 2026-10-21)
+
+Why: the user threw the hammer in Swamp (where `constart.cs` gives it)
+and saw an arrow. Nothing of the hammer was built: `prhammer.kq` is
+`classType=KQHammer`, our projectile reader takes only `KQProjectile`
+(`characters.log`: "Prhammer.kq not found or not a KQProjectile"), so
+Connor kept his start bolt `PRarrow.kq` and its offset and shot an arrow
+at `conhamr.anm/attack`'s `do` cue. Source: `azriel-hammer.md` (A,
+2026-10-20, checked by the user in the original), with
+`ranged-weapons.md` (readying, the click, the bolt's move) and
+`fighting.md` rules 16–33 (the victim). Readying, putting away and the
+pointer are already built (5f-3, 5f-4) and work for it (rule 1).
+
+Words: **way out** / **way back** = the hammer's two flights; **throw
+state** = Connor's state from `attack` to the end of `catch`.
+
+Where things go:
+
+- `kq8-data/characters.rs`: `ProjectileKeys` also reads `KQHammer`
+  files, with `modifier`, `minDamage`, `maxDamage` (default 0) and a
+  "hammer" flag.
+- `kq8-core/fight.rs`: a bolt gets an optional hammer part (way out or
+  back, the way-back range, the start point); `bolts_step` turns it back
+  instead of removing it, and on the way back sees only Connor; the
+  hammer's damage and the `lever1` / `tmblrcyl` case; "came back" is
+  reported once for the viewer. Unit tests.
+- Viewer `connor_view.rs`: the throw state (a new walker mode like the
+  rope's: `attack`, then `wait` repeating, then `catch` when told);
+  `door_view.rs`: the click, handsOff on and off, the launch at the `do`
+  cue, the catch.
+- Everything logs to `fight.log` (the note's "How to check" list).
+
+Steps (one commit each):
+
+1. **6b-1, reading the hammer's file, and the right projectile** (**done**
+   2026-10-21; the cause: Connor's fight was set up before the start-up
+   scripts' items reached core) (rules 5, 6). `KQHammer` files read with their keys; `characters.log` shows
+   Daventry's 24,000 / 15,000 / 30 / 0 / 300. Find and fix why Connor
+   kept `PRarrow.kq` although the hammer was carried at the start (the
+   `shootOffsets` line `INVITEM_AzrielHammer -41 -605 1226` must be his
+   offset too). **Test:** `--world Swamp`: `fight.log` names
+   `Prhammer.kq` and offset (−41, −605, 1,226).
+2. **6b-2, the flight** (rules 6–9; core, unit tests). Way out: as a
+   bolt (speed / 15 per update, its box as a ball stack, mask 0x221F,
+   never Connor). Turns back at the first touch, past `maxDistance`, or
+   at / below the floor grid: put back at its last position before the
+   touch, direction reversed, distance 0, range = way out − speed / 15,
+   mask Connor only. A touch on the way out: `lever1` or `tmblrcyl` →
+   `lever1.cs` with `lever1 ConnorAction`, no damage; type bit 0x4000 →
+   a hit of 0 (no `ProjImmune`); other objects and characters → min(
+   `modifier` + ranged damage, `maxDamage`), then at least `minDamage`,
+   kind `Projectile`; buildings nothing. Way back ends touching Connor,
+   past its range or at the floor grid: removed, "came back".
+3. **6b-3, the throw state** (rules 2–4; viewer). A click with the
+   hammer ready (after the click rules 13–18 already built): turn toward
+   the aim point with no waiting; refused unless standing or moving (not
+   kept); handsOff on; `attack`; at its `do` cue the hammer leaves from
+   his position + his turn × (−41, −605, 1,226) (rule 5: the fallback,
+   from the user's check), aimed at the aim point, no lead; `attack`
+   ends → `wait` repeating; "came back" → `catch`; its end → handsOff
+   off, standing. Hits on him still count. No moving throw.
+4. **6b-4, runs** in Daventry (`give AzrielHammer`) and Swamp: at a
+   creature, at nothing, at the ground near him; the time from throw to
+   catch (1.0 s of flight at Daventry's range 15,000 → 1.25 s).
+
+Not in 6b: first person (not built); Dead City (not loaded yet, so the
+lever is unit-tested only); the M7 base damage idea. How the hammer model
+is turned in flight is not in the note: drawn like a bolt (pointing along
+its flight, so it turns round for the way back), asked as a question if
+it looks wrong.
+
 ### M7 — Match the original, then improve
 
 Play the original next to ours, list differences, fix them. After that,

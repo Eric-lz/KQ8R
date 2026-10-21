@@ -1007,30 +1007,49 @@ pub struct ProjectileKeys {
     pub weapon_type: Option<i64>,
     /// Its shape's `BOUNDS.KQ` box, filled in by the loader (rule 29).
     pub bounds: Option<([f32; 3], [f32; 3])>,
+    /// `classType=KQHammer` (`azriel-hammer.md` rule 6): Azriel's Hammer,
+    /// which flies back; then `modifier`, `minDamage`, `maxDamage` (default
+    /// 0) give its damage (rule 8).
+    pub hammer: bool,
+    pub modifier: i64,
+    pub min_damage: i64,
+    pub max_damage: i64,
 }
 
 /// `ranged-weapons.md` rule 26: the defaults of a projectile file's keys.
 pub const PROJECTILE_SPEED: f32 = 2000.0;
 pub const PROJECTILE_RANGE: f32 = 8000.0;
 pub const PROJECTILE_MASK: u32 = 0x1F;
+/// `azriel-hammer.md` rule 6: the hammer's mask on its way out (a bolt's
+/// 0x1F plus 0x200 and 0x2000).
+pub const HAMMER_MASK: u32 = 0x221F;
 /// A projectile's own collision type (rule 26).
 pub const PROJECTILE_TYPE: u32 = 1;
 
 impl ProjectileKeys {
-    /// `None` when the section is not a `KQProjectile`.
+    /// `None` when the section is not a `KQProjectile` or a `KQHammer`
+    /// (`azriel-hammer.md` rule 6: the same keys and defaults, plus its
+    /// damage keys).
     pub fn from_section(s: &Section) -> Option<Self> {
-        if !s.get("classType")?.trim().eq_ignore_ascii_case("KQProjectile") {
+        let class = s.get("classType")?.trim();
+        let hammer = class.eq_ignore_ascii_case("KQHammer");
+        if !hammer && !class.eq_ignore_ascii_case("KQProjectile") {
             return None;
         }
         let number = |k: &str| s.number(k).and_then(Result::ok);
+        let whole = |k: &str| number(k).map_or(0, |v| v as i64);
         Some(ProjectileKeys {
             shape: s.get("shapeName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
             speed: number("velocity").map_or(PROJECTILE_SPEED, |v| v as f32),
             max_distance: number("maxDistance").map_or(PROJECTILE_RANGE, |v| v as f32),
             mesh_name: s.get("meshName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
-            collider_mask: number("colliderMask").map_or(PROJECTILE_MASK, |v| v as u32),
+            collider_mask: number("colliderMask").map_or(if hammer { HAMMER_MASK } else { PROJECTILE_MASK }, |v| v as u32),
             weapon_type: number("weaponType").map(|v| v as i64),
             bounds: None,
+            hammer,
+            modifier: if hammer { whole("modifier") } else { 0 },
+            min_damage: if hammer { whole("minDamage") } else { 0 },
+            max_damage: if hammer { whole("maxDamage") } else { 0 },
         })
     }
 }
@@ -1248,6 +1267,19 @@ item0=\tKQInventoryItemType\tINVITEM_SmCrossbow\t1130\t0\t0\t5\t0\t0\t0\tLongWea
         let m = ProjectileKeys::from_section(&kq_text::parse(b"[A]\nclassType=KQProjectile\ncolliderMask=13\nweaponType=3\nmeshName=arrow\n")[0]).unwrap();
         assert_eq!((m.collider_mask, m.weapon_type, m.mesh_name.as_deref()), (13, Some(3), Some("arrow")));
         assert!(ProjectileKeys::from_section(&kq_text::parse(b"[X]\nclassType=KQMonster\n")[0]).is_none());
+        assert!(!p.hammer && p.modifier == 0);
+    }
+
+    #[test]
+    fn a_hammer_file_gives_its_damage_keys() {
+        // azriel-hammer.md rule 6: Daventry's prhammer.kq (data).
+        let h = ProjectileKeys::from_section(&kq_text::parse(b"[Hammer]\nclassType=KQHammer\ncollisionDetail=1\n\nshapeName=hammer.kqs\nvelocity=24000\nmaxDistance=15000\nmeshName=hammer\nshadowMask=0\nmodifier=30\nminDamage=0\nmaxDamage=300\n")[0]).unwrap();
+        assert!(h.hammer);
+        assert_eq!((h.speed, h.max_distance, h.collider_mask, h.mesh_name.as_deref()), (24000.0, 15000.0, 0x221F, Some("hammer")));
+        assert_eq!((h.modifier, h.min_damage, h.max_damage), (30, 0, 300));
+        // Barren's: no damage keys, the defaults 0.
+        let b = ProjectileKeys::from_section(&kq_text::parse(b"[Hammer]\nclassType=KQHammer\nvelocity=24000\n")[0]).unwrap();
+        assert_eq!((b.modifier, b.min_damage, b.max_damage, b.max_distance), (0, 0, 0, 8000.0));
     }
 
     #[test]
