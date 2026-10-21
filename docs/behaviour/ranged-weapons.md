@@ -200,8 +200,8 @@ Words used here:
     distance **1.557 × *h***. So he never shoots more steeply than about
     33°: a click on the ground at his feet sends the bolt down at 33°,
     not straight down.
-19. **The Azriel Hammer** as ranged item goes into its own state
-    instead (not covered; not in Daventry).
+19. **The Azriel Hammer** as ranged item goes into its own throw state
+    instead: see `azriel-hammer.md`.
 20. **Turning and shooting** (traced; turning: 3.5 rad/s,
     `connor-movement.md`):
     - in third person he **turns toward the aim point** (on the spot);
@@ -540,5 +540,5 @@ pretty much as described.
 4. The number-to-name step for the pointers (rule 11) is inferred from
    their order; the three-way choice is traced.
 5. Rocks (`prrock.kq`: the same class with `parabola=1`,
-   `peakHeightOffset`, `upVelocity`, a script) and the Azriel Hammer are
-   not covered (not needed for Daventry's crossbow).
+   `peakHeightOffset`, `upVelocity`, a script) are not covered; the
+   Azriel Hammer is in `azriel-hammer.md`.

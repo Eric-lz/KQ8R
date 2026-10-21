@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: Azriel's Hammer
+
+**Changed:** New `docs/behaviour/azriel-hammer.md`; `ranged-weapons.md` rule 19 and open question 5 point there. Scratch notes in `re/notes.md`.
+**Why:** The user asked for the study of Azriel's Hammer.
+**Tested how:** Traced in `Mask.exe` with Ghidra; checked against the data (`prhammer.kq` in all 12 worlds, `Conhamr.anm`, `Ch_atack.kqs`, Dead City `lever1.cs`). Not checked in the original game.
+**Result:** A click throws (no moving throw, no waiting for the turn): `handsOff`, `attack`, hammer at its `do` cue, `wait`, `catch`. The hammer flies straight, hits one thing (damage = `modifier` + ranged damage, capped to `minDamage`–`maxDamage`; `lever1` / `tmblrcyl` run `lever1.cs`), turns back at that touch, its range or the ground, flies back along the same line touching only Connor, and is always caught. Found: 9 worlds' `prhammer.kq` lack the damage keys, so by the defaults the hammer does 0 damage there.
+**Still broken / not tested:** The start frame at the `do` cue; whether the throw is refused during a jump; the 0-damage worlds need the user's check / decision.
+**Next:** The user: check in the original (note's "How to check"), decide on the 0-damage worlds. B: build it when Dead City is reached.
+
 ## 2026-10-20 A: the user checks ranged weapons in the original
 
 **Changed:** `ranged-weapons.md` "How to check": the user's check recorded.

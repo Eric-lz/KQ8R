@@ -7,6 +7,12 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
+  (not needed in Daventry): thrown from standing with `handsOff` until
+  caught; hits one thing, flies back along its line, always caught. For
+  the user: 9 worlds' `prhammer.kq` have no damage keys, so the hammer
+  does 0 damage there (keep or fix?).
+
 - **2026-10-20 (A): Connor's ranged weapons**,
   `docs/behaviour/ranged-weapons.md`: readying / swapping (Delete, Alt,
   slot; only from standing or moving; `away` → `out`), the bow pointer
