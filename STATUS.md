@@ -7,6 +7,16 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-20)
 
+- **2026-10-20 (A): Connor's ranged weapons**,
+  `docs/behaviour/ranged-weapons.md`: readying / swapping (Delete, Alt,
+  slot; only from standing or moving; `away` → `out`), the bow pointer
+  `IDBMA_CURS05`, the shot (standing: `attack`, bolt at `do`; moving: at
+  once, ≥ 0.5 s apart), aim and the 33° limit, and the bolt's real flight
+  (from the model's `arrow` part, straight and pitched, no gravity,
+  removed at the first touch, the floor grid or `maxDistance`) for
+  Connor and the spriggans. Q138 mostly, Q139 answered. For B: build it
+  and replace the 5c bolt stand-in.
+
 - **2026-10-20 (A): Q137 answered**, `docs/behaviour/thrown-items.md`
   (`items.md` rule 12 points there): a thrown item follows the exact arc
   (8,085 units/s²) from its launch point, 15 updates a second; it is
@@ -574,10 +584,11 @@ characters and conversations done; the menus postponed) and **M5**
   state): small, not blocking (1 and 2 answered); B's stand-in: an
   unfinished jump.
 - For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
-  (`reactPause`: is it the flinch's 2 s pause?), **Q138** (what readying a hand
-  weapon does: the movement set, `draw` / `undraw`, the pointer). `fighting.md` open questions 1–3
-  (Connor's input side, the bolt's flight, which menu sets the combat
-  level) are built as stand-ins.
+  (`reactPause`: is it the flinch's 2 s pause?); **Q138** mostly
+  answered 2026-10-20 in `ranged-weapons.md` (left: (e), and whether a
+  swap cuts a swing); **Q139** answered there (rule 32) except how
+  objects take damage. `fighting.md` open question 3 (which menu sets
+  the combat level) is still open.
 - For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
   the stay test; Jump and push while talking), **Q126** (where the
   conversation camera aims and what the right-button swing centres on).
@@ -590,9 +601,9 @@ characters and conversations done; the menus postponed) and **M5**
   whose own open questions are now: 1 water for walking characters
   (small), 3 the stuck line's exact ground test at foot height (not
   worth copying); 2 (the fight) answered 2026-10-20 in `fighting.md`.
-- `fighting.md` open questions (not blocking the Daventry fight): the
-  input side of Connor's attack, the bolt's flight and aim height, which
-  menu sets the combat level, whether drops spread, Connor's death.
+- `fighting.md` open questions (not blocking the Daventry fight): which
+  menu sets the combat level, Connor's death (the input side and the
+  bolt's flight answered 2026-10-20 in `ranged-weapons.md`).
 - Q131–Q134: answered by A and built 2026-10-20 (M5 5b).
 - Q106 (partly) and Q107 (mostly) answered 2026-10-18 in
   `interface.md` and built (4c-1); still open: index 0 in fonts, font

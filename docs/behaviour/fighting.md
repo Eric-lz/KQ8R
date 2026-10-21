@@ -465,7 +465,12 @@ Words used here:
     `projdie` if it dies of it). A target whose collision has the
     "immune to projectiles" flag takes 0 and its script gets
     `ProjImmune`. The bolt's flight itself (gravity, lifetime) was not
-    traced.
+    traced. **Traced 2026-10-20 in `ranged-weapons.md` rules 21–31**:
+    it starts at the `arrow` part of the shooter's model (found at its
+    first shot), aims 0.75 × the target's box top above its feet
+    (Connor: 1,200), flies straight and pitched at its file's speed with
+    no gravity, and is removed at the first object, character, Connor or
+    building it touches, below the floor grid, or past `maxDistance`.
 37. **Fleeing / keeping distance** (traced): only for a ranged character
     with a **chase radius above 0** (and not tied to another object, as
     rule 28):
@@ -502,7 +507,10 @@ Words used here:
     switches between hand and ranged weapon. With a ranged weapon each
     left click shoots toward the click. **Ctrl** held gives the plain
     pointer for a moment. The clicked character becomes his target
-    (`clicking.md`).
+    (`clicking.md`). **Traced 2026-10-20**: readying, Delete, Alt, the
+    pointers and Ctrl in `ranged-weapons.md` rules 1–12; the ranged
+    click and shot in rules 13–25; how a swing click picks its target in
+    rule 32.
 40. **Which swing** (traced): a plain click plays **`Attack` or
     `AttackB`**, 50/50 (in some case always `Attack`: not traced which); a
     click while a swing is already playing does nothing; Shift plays
@@ -667,14 +675,12 @@ experience sent, corpse shape, the `Die` line to the script.
 
 ## Open questions
 
-1. The input side of Connor's attack (rule 39): how a click turns into a
-   target, the turn toward the click and the swing (manual only). For the
-   Connor-controls study.
-2. The bolt's flight (gravity, `maxDistance`, what it does on the ground)
-   and exactly how the ranged damage gets onto it (rule 36); the aiming
-   height. Only matters for the bow spriggans in Daventry. (Checked
-   2026-10-20: the bolt is moved by the projectile's own code, not by the
-   thrower of `thrown-items.md`; still open.)
+1. ~~The input side of Connor's attack (rule 39)~~: answered
+   2026-10-20 in `ranged-weapons.md` (rules 1–20 and 32).
+2. ~~The bolt's flight~~: answered 2026-10-20 in `ranged-weapons.md`
+   rules 21–31 (the shooter's ranged damage at the shot; no gravity;
+   removed on the first touch, below the floor grid or past
+   `maxDistance`; aim 0.75 × the target's box top).
 3. Which menu sets the combat level, and whether a character added by
    the `KQMonster::add` command gets the combat factor twice (once when
    added, once when it enters the world) (rule 3). Daventry's monsters all

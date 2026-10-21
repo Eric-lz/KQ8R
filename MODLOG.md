@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: Connor's ranged weapons and the bolt's flight
+
+**Changed:** New `docs/behaviour/ranged-weapons.md` (readying, Delete / Alt / slot clicks, the weapon swap's movements, the three pointers and Ctrl, the shot click, standing and moving shots, the start point, aim, flight and hit of bolts, and the swing click's target). `fighting.md` rules 36 and 39 and open questions 1–2 point there; QUESTIONS Q138 mostly answered, Q139 answered (except how objects take damage). Scratch notes in `re/notes.md`.
+**Why:** The user asked for the study of Connor's ranged weapons, so B can give him the Small Crossbow and replace the spriggans' stand-in bolt.
+**Tested how:** Traced in `Mask.exe` with Ghidra; checked against the data (`Connor.kq`, `Connor.sae`, `Invinfo.itl`, `conscbow.anm` and the other lists, `pr*.kq`, `BOUNDS.KQ`, the `arrow` part in `Scbatak.kqs`, `scbwalk.KQS`, `spbattck.KQS`). Not checked in the original game.
+**Result:** Requests only in standing / moving (dropped otherwise); a swap plays `away` → list switch → `out` (Fists: `draw` / `undraw`); standing shot plays `attack`, bolt at its `do` cue, no extra delay, no ammunition; moving shot fires at once every ≥ 0.5 s and slows a run to a walk; aim at the clicked thing / ground, at most ~33° up or down; bolt starts at the model's `arrow` part (crossbow ≈ 832 ahead, 1,065 up), flies straight and pitched at 8,000 with no gravity, removed at the first object / character / Connor / building, below the floor grid or after 18,000; characters aim 1,200 above Connor's feet.
+**Still broken / not tested:** Whether a swap cuts a swing under way; where the right-button click point lies; `collisionDetail=1`; pointer names inferred from order. Rocks and the Azriel Hammer not covered. Nothing checked in the original yet ("How to check" in the note).
+**Next:** B: build `ranged-weapons.md` (Connor's crossbow; the bolt's real flight for the spriggans too).
+
 ## 2026-10-20 Test switch: god mode (F3, `--god`)
 
 **Changed:** A core switch `god_mode`: every hit on Connor (swings and bolts all go through `hit_connor`) does nothing, so no health lost, no flinch, no death; his mover's new `no_fall_death` makes a fall past the death limit a safe landing (the viewer copies the switch into it every frame). F3 flips it, `--god` starts with it on, `--key f3,N` presses it in a test; an on-screen line under the AI line shows it. README key list updated.
