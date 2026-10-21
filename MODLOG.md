@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a, A's answer to Q147 (c): the top camera's one-time flag
+
+**Changed:** Viewer `game_camera.rs`: `skip_next_move` / `move_skipped`: after the rope is taken at the top, Connor's first move is not followed (once); cleared when the rope state moves the camera. `door_view.rs` sets it with the rope camera; `rope_view.rs` releases the rope's first-person lock at that move. `active.rs` comment.
+**Why:** `ropeandhook.md` rule 9 as answered by A (Q147 c, traced): the camera keeps following, but a flag makes it skip his first move, and the first-person lock is released then; the rope stays on the pointer.
+**Tested how:** Release build. `kq8-viewer --world Daventry --sound off --frames 2500 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --command "move Connor 0 147200 207586 13300 0 0 1.57,10" --key left:IDCTL_INVBAR_ROPE,60 --hold 0,1,0,90,93 --hold 0,1,0,110,113`; `rope.log`, `camera.log`, `gui.log`.
+**Result:** 61: the camera at the `setRopeCam2` spot (151584, 210996, 8520). Tick 91 (his first turn): "not followed, the camera stays; the flag is cleared"; 92: the lock released, the rope still in hand (no hand change in `gui.log`). Tick 92 on: followed as usual (pulled onto the 5,000 range at (149960, 209733, 10623)).
+**Still broken / not tested:** **Not looked at by eye.** First person doesn't exist, so "back to first person" is only the lock.
+**Next:** the docs for Q147 (a), (b), (d) (already as built).
+
 ## 2026-10-21 M6 6a, A's answer to Q147 (e): the traps when the rope places Connor
 
 **Changed:** Viewer `door_view.rs` `connor_placed_by_rope`: only the stay test (as a script's `move`, `traps.md` rule 5); the enter test at the new place is gone, so the other end's `On` comes at his next move. `rope_view.rs` log text.

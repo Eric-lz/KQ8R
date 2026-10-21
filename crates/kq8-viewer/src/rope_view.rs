@@ -228,6 +228,12 @@ pub fn rope_step(
     let (c, d) = (&mut *connor, &mut *sim);
     let mut camera = camera;
     let asked = d.rope_asked.take();
+    // ropeandhook.md rule 9 (Q147 c): his first move after the rope was
+    // taken at the top: the first-person lock goes (the rope stays held).
+    if camera.as_mut().is_some_and(|c| std::mem::take(&mut c.move_skipped)) {
+        let lock = kq8_core::connor_inventory::rope_lock(&mut d.active.world, false, "his first move since the rope was taken at the top");
+        d.active.world.rope_note(format!("camera: his first move since the rope was taken at the top was not followed{lock}; the rope stays in hand (rule 9)"));
+    }
     // The separate rope model's own update (rule 15): its phase, its
     // sounds, its end.
     let mut model_ended = false;

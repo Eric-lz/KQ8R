@@ -145,7 +145,7 @@ pub enum Request {
     CameraAround { point: Option<[f32; 3]>, at: String },
     /// `ropeandhook.md` rule 9 (M6 6a-2): the camera goes to `spot` and
     /// looks at `aim` (no roll), as a `move KQCamera` does while it
-    /// follows (STAND-IN, Q147 c).
+    /// follows; Connor's first move after is not followed (Q147 c).
     RopeCamera { spot: [f32; 3], aim: [f32; 3], at: String },
     /// `handsOff 1|0` (Q89 a stand-in): the player's movement keys, Jump
     /// and clicks are ignored while on.

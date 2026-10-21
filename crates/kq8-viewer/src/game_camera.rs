@@ -172,6 +172,11 @@ pub struct GameCam {
     /// the camera swings and zooms around this point instead of Connor;
     /// Connor's moves don't move it.
     around: Option<[f32; 3]>,
+    /// `ropeandhook.md` rule 9 (Q147 c): after the rope is taken at the
+    /// top, Connor's first move is not followed (once); `move_skipped`
+    /// tells `rope_view` it happened (the first-person lock goes then).
+    pub skip_next_move: bool,
+    pub move_skipped: bool,
 }
 
 impl GameCam {
@@ -241,6 +246,7 @@ impl GameCam {
     /// `ropeandhook.md` rules 18, 20 (M6 6a-3): the camera stops following
     /// and goes to `spot`, looking straight at `aim` (no roll).
     pub fn look_from(&mut self, spot: [f32; 3], aim: [f32; 3]) -> String {
+        self.skip_next_move = false;
         if self.following {
             self.follow(false, aim);
         }
@@ -532,6 +538,8 @@ pub fn make(
         pending: vec!["start (stand-in)"],
         script_moves: Vec::new(),
         around: None,
+        skip_next_move: false,
+        move_skipped: false,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
@@ -608,8 +616,15 @@ pub fn camera_step(
     // causes comes after a trap's `move KQCamera` (the note's queue).
     let now = (sim.mover.position, sim.walker.heading);
     // M4 4e-5: around a conversation partner, Connor's moves don't count.
-    let moved = g.last_connor.is_some_and(|l| connor_moved(l, now)) && g.around.is_none();
+    let mut moved = g.last_connor.is_some_and(|l| connor_moved(l, now)) && g.around.is_none();
     g.last_connor = Some(now);
+    // ropeandhook.md rule 9 (Q147 c): the first move after the rope was
+    // taken at the top is not followed; the flag goes.
+    if moved && g.following && std::mem::take(&mut g.skip_next_move) {
+        moved = false;
+        g.move_skipped = true;
+        g.log.detail(format!("camera tick {}: Connor's first move since the rope was taken at the top: not followed, the camera stays (ropeandhook.md rule 9); the flag is cleared", g.updates));
+    }
     let script_moves = std::mem::take(&mut g.script_moves);
     // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
     // unless a flight is under way (M3 3m-4).

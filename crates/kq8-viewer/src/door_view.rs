@@ -1218,7 +1218,10 @@ pub fn trap_step(
             Request::RopeCamera { spot, aim, at } => match camera.as_mut() {
                 Some(c) => {
                     let (tilt, heading) = kq8_core::camera::view_angles(std::array::from_fn(|k| aim[k] - spot[k]));
-                    let line = format!("{at}: applied: rope camera looking at ({:.0}, {:.0}, {:.0}): {}", aim[0], aim[1], aim[2], c.move_to(0, spot, [tilt, 0.0, heading]));
+                    // Q147 c: it keeps following, but Connor's first move is
+                    // not followed.
+                    c.skip_next_move = true;
+                    let line = format!("{at}: applied: rope camera looking at ({:.0}, {:.0}, {:.0}): {}; his first move will not be followed (rule 9)", aim[0], aim[1], aim[2], c.move_to(0, spot, [tilt, 0.0, heading]));
                     sim.active.world.rope_note(line.clone());
                     line
                 }
