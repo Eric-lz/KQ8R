@@ -583,8 +583,10 @@ uses whatever the window holds [traced].
    width 400 is inferred.
 2. ~~Whether the world clock stops behind the main menu.~~ It does
    (the user's check; rule 14).
-3. When the level-up flame plays (rule 26); what the status icons'
-   hook-up / hook-down mean exactly (rope places; M5/M6).
+3. When the level-up flame plays (rule 26). (~~What the status icons'
+   hook-up / hook-down mean~~: answered in `ropeandhook.md` rule 7:
+   `HookUp` at the foot of a rope, `HookDown` at the top, only with the
+   rope carried and not while on the rope.)
 4. The rocks picture steps, and the minimap icon (rule 45).
 5. Font flag bit 6 (0x41) and the `sl`, `black`, `shdw`, `gshdw`, `red`
    font variants beyond their use in the layouts (Q106): not traced.

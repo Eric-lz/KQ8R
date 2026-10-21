@@ -179,7 +179,8 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
      falls and landings as "switch off" (he straightens at the normal
      0.03 per update), which is B's stand-in, checked by the user against the original; other states as the code says. Four of Connor's special
      states (not identified by name; the ones that handle the jump key
-     their own way, such as ropes) switch leaning off while they are
+     their own way; **not** the rope, corrected 2026-10-21: on the rope
+     turning itself is off, `ropeandhook.md` rule 22) switch leaning off while they are
      active and back on when they end. It is also forced
      off in the first-person view, and when Connor's `allowLeaning` flag
      is 0 (it is 1 from the start; nothing in the data changes it; code

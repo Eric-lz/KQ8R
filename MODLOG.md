@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Study: the Rope and Hook (A)
+
+**Changed:** New `docs/behaviour/ropeandhook.md`. Small corrections in `inventory.md` rule 9 (the rope is held at a rope place, not thrown at once; the rock's three refusing states are not the rope), `talking.md` (weapon remark not on the rope), `connor-movement.md` "Turning" (the rope is not one of the four no-lean states), `interface.md` open question 3 (hook icons answered). `QUESTIONS.md` Q110 partly answered; STATUS. Scratch notes with addresses only in `re/` (not committed).
+**Why:** The user asked for the study of the Rope and Hook.
+**Tested how:** Study only (Ghidra on `Mask.exe`; data: `Conrope.anm`, `Invinfo.itl`, `0.MSG`, every world's rope scripts). No code written, nothing run.
+**Result:** 27 rope places (54 trap scripts in 7 worlds), each top 4,840–5,032 above its foot. Traced: the six `KQConner::setRope*` commands, the hook icons, the inventory click, the click in the world, the whole rope state (12 animations in order, camera spots and height range, the 5,000 lift, the 50-per-update climb camera, getting off at either end, weapon back), no damage and no state change while roping. Found an ineffective camera-angle test (every click starts the climb) and a Daventry script that sets its top camera only on the first visit.
+**Still broken / not tested:** Nothing checked in the original. Partly traced: the camera placement during the throw from below (open question 2), what "last put away" weapon is drawn at the end (4), mid-climb saves (5), clicks and rocks while hanging (3).
+**Next:** B can implement it (M6); the user could check open question 4 in the original (put the sword away, climb, see if he draws it at the top).
+
 ## 2026-10-21 M5 5g-9: characters lose Connor during cutscenes
 
 **Changed:** `active.rs`: `connor_hands_off` (set by the viewer each update, `door_view.rs`), `connor_hidden_why` (Invisible or a cutscene), the reported place uses it, each change logged once in `characters.log`. `potions.rs`: Invisible's own lines shortened (the change is logged by the new check). QUESTIONS Q146 (talk; which handsOff), Q145 (b) answered by the user, Q143 marked low priority. DESIGN, provenance. 1 unit test extended.

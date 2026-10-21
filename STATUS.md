@@ -25,6 +25,20 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   checked Invisible, Clarity and the shield's orbits by eye. **5g-9:**
   characters also lose Connor during cutscenes (handsOff). Q146 asked.
 
+- **2026-10-21 (A): the Rope and Hook**, `docs/behaviour/ropeandhook.md`
+  (27 rope places in 7 worlds; Daventry has 4). A pair of trap boxes
+  sets "rope at the foot / at the top" (only if Connor carries the rope;
+  `HookUp` / `HookDown` icon). The rope from the inventory goes on the
+  pointer; any click in the world starts a fixed sequence (weapon away,
+  rope out, throw, grab), then forward / back scrub the 78-frame climb
+  up or down, the camera rising or falling 50 per update; off at
+  either end, weapon back out. No damage and monsters lose him the
+  whole time. Q110 (b) and the rope part of (a) answered; corrections
+  in `inventory.md` rule 9, `talking.md`, `connor-movement.md`,
+  `interface.md`. Ready for B (an M6 item); 6 small open questions in
+  the note (the camera during the throw from below, the "last put
+  away" weapon at the end).
+
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
   caught; hits one thing, flies back along its line, always caught. Checked
@@ -552,10 +566,10 @@ characters and conversations done; the menus postponed) and **M5**
   their box; the panels' animation speed), **Q109** (counts of 0 for
   gold and rocks, the rocks picture, the blink's order, a `give`'s
   pushed-out piece, the top bar in a window; (d) the potions' clock and
-  (a) the slots' count 0 answered in `potions.md` and built in M5 5g), **Q110** (the remark
-  numbers in `inventory.md` rule 9: our reading names the right lines;
-  the rope held or not; the pointer's click point; the gold button
-  while the coins are held), **Q111** (answered by the user's checks
+  (a) the slots' count 0 answered in `potions.md` and built in M5 5g), **Q110** (the scroll's and rock's remark
+  numbers in `inventory.md` rule 9; the pointer's click point; the gold
+  button while the coins are held; the rope's numbers and "held or not"
+  answered 2026-10-21 in `ropeandhook.md`), **Q111** (answered by the user's checks
   and built; the exact rules are worth tracing), **Q112** (what the
   back flip at a wall really tests).
 - `interface.md` open questions 1–6 and `inventory.md` open questions

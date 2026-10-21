@@ -288,7 +288,7 @@ script changes it.
     | Using an item on something that doesn't take it (`clicking.md` rule 12) | 0 0 0 4 1 | This will not work. |
     | A chest's `Take…`/`Empty…` remark (`chests.md` rules 8–9; Connor turns to the chest first unless it has `doNotPointAt`, then 0.5 s) | the chest's `Msg Noun Verb Case Seq End` | e.g. `smlchst3`: 0 109 14 33 1 "'Tis empty." |
     | Daventry only, the first time a monster other than a chicken dies (once per game; not in the demo) | 1000 0 0 62 1 | Whence came these foul creatures? This is madness! |
-    | Drawing a weapon in some special states (ropes, puzzles; M5) | 0 0 37 23 1 | A weapon will not help me here. |
+    | Drawing a weapon in some special states (puzzles; **not** the rope, where weapon keys are silent, `ropeandhook.md` rule 30) | 0 0 37 23 1 | A weapon will not help me here. |
     | Inventory screen: certain items and the rope (M4) | file 0: 0/92/14/0/1 (at most every 3 s), 0/0/0/0/3, 0/0/58/37/1, 0/0/58/36/1 | (see `0.MSG`) |
 
     Monsters also have stored remarks of their own (alarm lines and

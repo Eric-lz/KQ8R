@@ -118,11 +118,14 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
        a type with cursor `none` (`INVITEM_AntiPoisonFlower`) does
        nothing.
    - **Rock**: held like a quest item, except in three special states
-     (rope climbing and two puzzle states), where Connor says "I have no
+     (puzzle states; **not** the rope, corrected 2026-10-21,
+     `ropeandhook.md` rule 38), where Connor says "I have no
      time to trifle with that." (`0.MSG` 0, 0, 0, 0, seq 3).
-   - **Rope**: held like a quest item; if Connor isn't at a rope place,
-     he says `0.MSG` (0, 0, 58, 37) "can't use the rope here"; at a rope
-     place he throws the rope at once (rope climbing, M6).
+   - **Rope**: if Connor isn't at a rope place, he says `0.MSG` file 0,
+     noun 0, verb 58, case 37 "I am not near anything to climb." and the
+     rope is **not** held; at a rope place it is held like a quest item and
+     the next click in the world starts the climb (**corrected
+     2026-10-21**: not "thrown at once"; see `ropeandhook.md` rules 8–12).
    - **Everything else** (weapons, armour, health items, potions, mask
      piece, map): **used at once**, nothing is held: the item is
      "applied" (rules 13–16) and the type's `useSnd` plays if it wasn't
