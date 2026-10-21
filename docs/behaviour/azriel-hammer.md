@@ -221,6 +221,7 @@ stumbling, not queued (rule 2); the hammer leaves from in front of him
 2. ~~Refused states~~: settled by the user's check (rule 2).
 3. ~~The worlds without the damage keys~~: not reachable in normal play
    (Do not reproduce).
-4. The user's round-trip estimate (about 1.5 s) is longer than the
-   files give (1.0 s Dead City, 1.33 s Swamp). Not enough to act on;
-   B's log of the time from throw to catch can be compared by eye.
+4. ~~The round-trip time~~: the user timed it **in Swamp** by hand with
+   a stopwatch (about 1.5 s, a couple of hundred ms either way); the
+   files give 1.33 s there (20,000 out and back at 30,000), which is
+   within that error. Settled: use the files.

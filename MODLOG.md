@@ -9,7 +9,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** The user tried the "How to check" list in the original.
 **Tested how:** The user's check in the original game.
 **Result:** Checks 1–5 as described. No throw while jumping, falling, landing or stumbling, not queued. The hammer leaves from in front of Connor, so the start is the fallback offset (−41, −605, 1,226), not the model part. The 0-damage worlds can't be reached with the hammer in normal play (it is traded away in Swamp); a default base damage for every weapon is an M7 idea (cheats).
-**Still broken / not tested:** The user's round-trip estimate (~1.5 s) is longer than the files give (1.0 s Dead City, 1.33 s Swamp); left as open question 4.
+**Still broken / not tested:** — (the round trip: the user timed ~1.5 s in Swamp by hand, ± a couple of hundred ms; the files give 1.33 s there, within that error; open question 4 closed).
 **Next:** B: build it when Dead City is reached.
 
 ## 2026-10-20 A: Azriel's Hammer
