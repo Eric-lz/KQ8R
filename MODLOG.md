@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a fix: rope animation snaps and the camera after the throw
+
+**Changed:** Viewer `connor_view.rs`: `redraw_from_walker`, `phase_step_now`, `drawn_phase`; `rope_view.rs`: when the rope state starts a movement after his own update, the drawing starts from that movement's phase at once (logged). `rope.rs`: `throw_camera` (the camera at the end of `btoss`), 1 unit test. QUESTIONS Q147 (f), DESIGN, STATUS, provenance.
+**Why:** The user's look: Connor's animation snapped (the last frame first) when taking the rope out, throwing, grabbing, getting control back, getting off and putting the rope away; and after the throw the camera should be close to his eye level looking straight up at the rope flying up (open question 2, the user's check in the original).
+**Tested how:** `cargo test` (619 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 6000 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80 --aim-point 150000,207968,30000,90 --hold 1,0,0,200,300`; `rope.log`.
+**Result:** The cause, from the log: every movement the rope state started was drawn for one update at the phase the old one ended on (1.000, i.e. the new one's last frame). Now `away`, `draw`, `btoss`, `stop`, `bon`, `climb`, `toff`, `taway`, `stop` each "drawn ... from phase 0.000". At 142 the camera goes to (147896, 207586, 9200) (250 behind him, 1,400 up), tilt 1.270, looking along (−0.296, 0, 0.955): toward the wall and up; at 162 the grab moves it to spot 2 as before.
+**Still broken / not tested:** **Not looked at by eye.** The throw camera's exact placement is our stand-in (Q147 f). Connor still jumps to the rope's place at the end of `btoss` (rule 15, traced); whether the original hides that is asked (Q147 f).
+**Next:** The user: look at the climb again.
+
 ## 2026-10-21 M6 6a-6: while Connor is on the rope
 
 **Changed:** `fight.rs`: hits on Connor ignored in the rope state. `weapons.rs`: weapon requests ignored there (keys, slots, scripts; no remark). `active.rs`: characters are told Connor is 100,000 below for "the rope state" (`potions.md` rule 26's code). Viewer: `connor_view.rs` `roping`, every state request refused; `door_view.rs` drops it (not tried again). 1 new unit test. `potions.rs` comment. DESIGN (6a done), provenance, STATUS, FEATURES (a rope section), README.

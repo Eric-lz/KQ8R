@@ -260,6 +260,7 @@ pub fn rope_step(
     }
     let ended = std::mem::take(&mut c.rope_ended);
     let mut climb = c.rope.take();
+    let drawn_before = (c.walker.movement, c.walker.phase, c.walker.mode);
     let placed = {
         let mut host = Host {
             c: &mut *c,
@@ -304,6 +305,15 @@ pub fn rope_step(
         }
         host.placed
     };
+    // M6 6a fix (the user's check: snaps): a movement started here is
+    // drawn from its own start at once.
+    if (c.walker.movement, c.walker.phase, c.walker.mode) != drawn_before {
+        let was = c.drawn_phase();
+        c.redraw_from_walker();
+        let line = format!("drawn: {} from phase {:.3} (was drawing phase {was:.3}: the old movement's end)", c.walker.movement, c.walker.phase);
+        c.log.detail(format!("connor update {}: {line}", c.updates));
+        d.active.world.rope_note(line);
+    }
     if placed {
         let p = c.mover.position;
         let name = c.placement.name.clone();

@@ -313,6 +313,25 @@ pub enum Stage {
 /// frame (x his left, y his back, z up).
 pub const FOOT_DROP: [f32; 3] = [0.0, 1000.0, -4900.0];
 
+/// Open question 2 (the camera at the end of `btoss`), STAND-IN (Q147 f)
+/// from the user's check in the original ("close to Connor's eye level,
+/// looking straight up, seeing the rope fly up") and the note's partly
+/// read numbers: 250 behind him (the note's (0, 250, …)), at
+/// `THROW_CAM_HEIGHT` (ours: the height our camera treats as his chest,
+/// `camera.md`), tilted up 1.27 rad, turned half round from the rope's
+/// heading (a camera's heading looks the opposite way to Connor's, so
+/// this looks the way he faces).
+pub const THROW_CAM_BACK: f32 = 250.0;
+pub const THROW_CAM_HEIGHT: f32 = 1400.0;
+pub const THROW_CAM_TILT: f32 = 1.27;
+
+/// The camera's spot and a point it looks at, for the throw from below.
+pub fn throw_camera(place: [f32; 3], dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
+    let spot = add(place, turned(dir, [0.0, THROW_CAM_BACK, THROW_CAM_HEIGHT]));
+    let look = crate::camera::view_direction(THROW_CAM_TILT, dir[2] + std::f32::consts::PI);
+    (spot, std::array::from_fn(|k| spot[k] + look[k] * 1000.0))
+}
+
 /// Rule 18: the lift when he grabs the rope from below.
 pub const GRAB_LIFT: f32 = 5000.0;
 /// Rules 19, 21: the camera's height range for the climb, and what is
@@ -596,10 +615,15 @@ impl Climb {
                 host.set_step_heights(0.0, 0.0);
                 host.place(self.place, self.dir[2]);
                 let model = if host.start_rope_model() { "the rope model starts (rope, Conrope.anm)" } else { "the rope model could not start" };
+                // Open question 2 (STAND-IN, Q147 f): close behind him at
+                // eye level, looking straight up the rope.
+                let (spot, aim) = throw_camera(self.place, self.dir);
+                host.camera_to(spot, aim);
                 host.note(format!(
-                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera stays (open question 2: the note's stand-in); Connor told to stand still (rule 15)",
+                    "rope state: step heights saved (up {up:.0}, down {down:.0}) and set to 0; placed at the rope's place {} heading {:.3}; {model}; the camera close to him at {}, tilted up {THROW_CAM_TILT} rad, looking the way he faces (open question 2: stand-in from the user's check, Q147 f); Connor told to stand still (rule 15)",
                     fmt3(self.place),
-                    self.dir[2]
+                    self.dir[2],
+                    fmt3(spot)
                 ));
                 self.stage = Stage::RopeModel;
                 if !host.play(Anim::Own("stop")) {
@@ -901,6 +925,16 @@ mod tests {
         // Equally near: spot 2.
         let (_, why) = camera_spot([Some([1.0, 0.0, 1.0]), Some([-1.0, 0.0, 1.0])], [0.0; 3], d, FOOT_SPOT, [0.0; 3]);
         assert!(why.contains("spot 2"), "{why}");
+    }
+
+    #[test]
+    fn the_throw_camera_looks_up_the_way_he_faces() {
+        // He faces -x (heading -pi/2): the camera 250 behind (+x), looking
+        // toward -x and up.
+        let (spot, aim) = throw_camera([0.0; 3], [0.0, 0.0, -std::f32::consts::FRAC_PI_2]);
+        assert!((spot[0] - 250.0).abs() < 0.01 && spot[1].abs() < 0.01 && spot[2] == 1400.0, "{spot:?}");
+        let d: [f32; 3] = std::array::from_fn(|k| aim[k] - spot[k]);
+        assert!(d[0] < 0.0 && d[1].abs() < 0.01 && d[2] > 900.0, "{d:?}");
     }
 
     #[test]

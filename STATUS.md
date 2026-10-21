@@ -494,8 +494,8 @@ M6 has started with the Rope and Hook (6a).
   pointer (b); taking the rope at the top moves the camera as a `move
   KQCamera` while following (c); `taway`'s own 405 forward step moves him
   (d); each placing by the rope state is a script `move` for the traps,
-  then an enter test (e). The camera during `btoss` stays (open question
-  2's stand-in). Not built: first person (only logged), saved games (none
+  then an enter test (e); the camera after `btoss`: close behind him at
+  eye level looking up, from the user's check and the note's numbers (f). Not built: first person (only logged), saved games (none
   yet), rock throws (none yet: "ignored on the rope" by construction).
   Not run: a ranged weapon held at the start, the cave rope
   (`ropetrp3/4`), other worlds' ropes, a chaser losing him on the rope

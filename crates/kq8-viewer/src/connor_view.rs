@@ -1466,6 +1466,38 @@ impl ConnorSim {
         line
     }
 
+    /// The share of the movement playing now that one update plays, for
+    /// blending the drawn frame between updates.
+    fn phase_step_now(&self) -> f32 {
+        self.movement_loop(self.walker.movement).map_or(0.0, |l| {
+            let time = l.play_time();
+            // A one-shot's phase always grows, even played backwards
+            // (`undraw`; `frame_at` shows those last frame first): blend
+            // forward too (M5 5c fix 2: the put-away jittered).
+            let speed = if l.repeat { l.speed } else { l.speed.abs() };
+            // Hanging on the rope: the climb is moved by the keys, not
+            // blended (rule 22).
+            let hanging = self.walker.mode == Mode::Rope && self.walker.rope_hang;
+            if time > 0.0 && self.walker.mode != Mode::Dead && !hanging { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * speed / time } else { 0.0 }
+        })
+    }
+
+    /// The movement was switched after his own update (the rope state,
+    /// M6 6a fix): what is drawn starts from the walker's movement and
+    /// phase now, not from where the old movement ended (which drew the
+    /// new one's last frame for one update: the user's check, a snap).
+    /// The phase the drawing uses now.
+    pub fn drawn_phase(&self) -> f32 {
+        self.current.2
+    }
+
+    pub fn redraw_from_walker(&mut self) {
+        let p = self.walker.phase;
+        self.current.2 = p;
+        self.previous.2 = p;
+        self.phase_step = self.phase_step_now();
+    }
+
     /// He is in the rope state (`ropeandhook.md` rules 13–26).
     pub fn roping(&self) -> bool {
         self.rope.is_some()
@@ -1743,17 +1775,7 @@ pub fn connor_step(
             sim.rope_ended.push(e);
         }
     }
-    sim.phase_step = sim.movement_loop(sim.walker.movement).map_or(0.0, |l| {
-        let time = l.play_time();
-        // A one-shot's phase always grows, even played backwards (`undraw`;
-        // `frame_at` shows those last frame first): blend forward too (M5
-        // 5c fix 2: the put-away jittered).
-        let speed = if l.repeat { l.speed } else { l.speed.abs() };
-        // Hanging on the rope: the climb is moved by the keys, not blended
-        // (rule 22).
-        let hanging = sim.walker.mode == Mode::Rope && sim.walker.rope_hang;
-        if time > 0.0 && sim.walker.mode != Mode::Dead && !hanging { (1.0 / kq8_core::UPDATES_PER_SECOND) as f32 * speed / time } else { 0.0 }
-    });
+    sim.phase_step = sim.phase_step_now();
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
     sim.updates += 1;
     sim.previous = sim.current;
