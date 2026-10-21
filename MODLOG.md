@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 The user's check: the axe cutscene looks just like the original
+
+**Changed:** This entry; Q141 marked checked.
+**Why:** The user played the axe cutscene after the Q141 fix.
+**Tested how:** The user's check by eye.
+**Result:** "Now it looks just like the original": he stops, draws the axe, walks out, and the cutscene and the camera play as in the original.
+**Still broken / not tested:** The axe is still taken from the windmill floor (Q142, `checkDistance`).
+**Next:** A: Q142 (and Q140).
+
 ## 2026-10-21 Axe cutscene: Connor draws the axe, then walks out (Q141, the user's check)
 
 **Changed:** `connor_view.rs` (`ready_set`, `weapon_step`, `held_walk`): a script's walk asked while a script's weapon swap starts (`ax.cs`: `setDoMode 0`, then `walkTo` in the same event) waits until the swap is over, then starts. Replaces the stand-in of earlier today (the set switched at once, no draw). QUESTIONS (Q141 answered by the user's check, built), provenance.
