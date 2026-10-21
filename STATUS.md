@@ -35,9 +35,12 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   either end, weapon back out. No damage and monsters lose him the
   whole time. Q110 (b) and the rope part of (a) answered; corrections
   in `inventory.md` rule 9, `talking.md`, `connor-movement.md`,
-  `interface.md`. Ready for B (an M6 item); 6 small open questions in
-  the note (the camera during the throw from below, the "last put
-  away" weapon at the end).
+  `interface.md`. **Checked by the user in the original** (2026-10-21):
+  all matches; the weapon is drawn at the end only if he held one; only
+  forward / back climb; clicks pick items up; rock throws on the rope
+  are ignored (the original is buggy there); mid-climb saves load fine.
+  Ready for B (an M6 item); one open question left (the camera during
+  the throw from below).
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until

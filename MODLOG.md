@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 The user's check of the Rope and Hook study
+
+**Changed:** `ropeandhook.md` rules 9, 22, 25, 30, 32, "Do not reproduce", "How to check", open questions; STATUS.
+**Why:** The user checked the study in the original and answered open questions 1, 3–6.
+**Tested how:** The user's check in the original game.
+**Result:** Everything matches except the weapon at the end: it is drawn only if Connor held one when the climb started (my reading of the code had suggested a weapon put away earlier could be drawn too). Only forward climbs up, only back climbs down, other movement keys do nothing (the code had read as "any movement but back climbs up"). Putting the rope back at the top leaves the camera where it is. Clicking an item while hanging picks it up. Rock throws on the rope are buggy in the original: we ignore them. Mid-climb saves load fine.
+**Still broken / not tested:** Open question 2 (the camera during the throw from below) is still only partly traced.
+**Next:** B can implement the rope (M6).
+
 ## 2026-10-21 Study: the Rope and Hook (A)
 
 **Changed:** New `docs/behaviour/ropeandhook.md`. Small corrections in `inventory.md` rule 9 (the rope is held at a rope place, not thrown at once; the rock's three refusing states are not the rope), `talking.md` (weapon remark not on the rope), `connor-movement.md` "Turning" (the rope is not one of the four no-lean states), `interface.md` open question 3 (hook icons answered). `QUESTIONS.md` Q110 partly answered; STATUS. Scratch notes with addresses only in `re/` (not committed).

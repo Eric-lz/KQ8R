@@ -117,8 +117,8 @@ lose him.
    it; no roll). The camera also gets a flag that keeps it there
    [inferred; what the flag does exactly was not traced]. Putting the rope
    back (rule 8, second case) releases the first-person lock and returns
-   to first person if it was forced; the camera is not moved back
-   [inferred: nothing moves it].
+   to first person if it was forced; **the camera stays where it is**
+   (the user's check in the original, 2026-10-21).
 ### Starting the climb: the click in the world
 
 10. With the rope on the pointer, **a left click anywhere in the world**
@@ -247,9 +247,14 @@ lose him.
       animation plays **backwards** (down the rope); the camera's height
       goes **down 50** (not below the lowest of rules 19/21) and the aim
       point goes down 50 (no limit);
-    - **any other movement held** (forward, walking or running): the
-      animation plays **forwards** (up the rope); camera height **up 50**
-      (not above the highest) and the aim point up 50;
+    - **forward held**: the animation plays **forwards** (up the rope);
+      camera height **up 50** (not above the highest) and the aim point
+      up 50;
+    - **any other movement key** (left, right, sidesteps …) **does
+      nothing**: he hangs still as with no key (the user's check in the
+      original, 2026-10-21; the code reads as if any movement other than
+      `Back` climbs up, but the original doesn't do that: follow the
+      check);
     - the camera keeps its x and y and is re-aimed at the aim point.
     - Turning is switched off for the whole climb (left/right do nothing;
       this also means no leaning, `connor-movement.md` "Turning"); the jump
@@ -281,19 +286,14 @@ lose him.
 25. `taway` or `baway` ends [traced]: gravity on; the step heights saved
     in rule 15 are put back (only at the foot side: the top side never
     saved them, see "Edge cases"); the camera follows Connor. Then his
-    **hand mode goes back** [traced]:
-    - if he had **empty hands** before (rule 13) and no weapon is
-      remembered as "last put away" (the one Delete would draw again,
-      `ranged-weapons.md`), `out` is skipped and rule 26 follows at once;
-    - otherwise the hand mode becomes the one remembered in rule 13, but
-      if a "last put away" mode is remembered and it is the hand weapon,
-      empty hands, or the ranged weapon while he still carries a long
-      weapon, that one is used instead; then he plays **`out`** (taking
-      the weapon out) from the new mode's list. So normally he draws the
-      weapon he had before the rope; a player who had put his sword away
-      before climbing may get it drawn again [traced; what exactly the
-      "last put away" value holds is inferred from
-      `ranged-weapons.md`].
+    **hand mode goes back** to the one remembered in rule 13:
+    - if he was **holding a weapon** (hand or ranged) when the climb
+      started, he plays **`out`** (taking that weapon out) from its list;
+    - if his weapon was **put away** (empty hands), nothing is drawn: `out`
+      is skipped and rule 26 follows at once.
+    This holds for a climb up and a climb down (the user's check in the
+    original, 2026-10-21). (Reading of the code had suggested a weapon
+    "last put away" might be drawn too; the original doesn't do that.)
 26. `out` ends (the end of the rope state) [traced]: `handsOff` off; the
     first-person key is allowed again; the rope animation list is let go;
     Connor goes to **standing** (`Wait`); if rule 13 switched him out of
@@ -323,8 +323,11 @@ lose him.
     - during the throws, grabs and getting-off (`handsOff` on) movement
       keys and world clicks are ignored as for any `handsOff`
       (`clicking.md`); while he hangs on the rope they are not, but
-      movement keys only climb (rule 22). What a world click or a rock
-      held on the pointer does while he hangs was **not traced**.
+      movement keys only climb (rule 22);
+    - a **click on an item** in the world while he hangs **picks the item
+      up** as usual (the user's check in the original, 2026-10-21);
+    - a **rock throw** while he is in the rope state is **ignored** (see
+      "Do not reproduce": the original does something odd).
 31. **Gravity is off** from the end of `draw`/`drawdown` until he gets off
     (rule 23 bottom end, or rule 25) [traced].
 32. The rope state is kept in **saved games** (with Connor's data): the
@@ -333,7 +336,8 @@ lose him.
     own progress (which step, whether first person must come back, the
     hand mode before, the camera's old place, the aim point, the camera's
     height range, the saved step heights) [traced: the keys are listed in
-    "Data used"; restoring mid-climb was not traced].
+    "Data used"]. Loading a game saved mid-climb works normally, with
+    no ill effects (the user's check in the original, 2026-10-21).
 
 ### The rope and hook item
 
@@ -369,7 +373,7 @@ lose him.
     states (ropes, puzzles)"), `connor-movement.md` "Turning" ("four …
     special states … such as ropes"): the rope state is **not** one of
     those four states. On the rope a rock can be put on the pointer as
-    anywhere (what a click then does: not traced), weapon keys are silent
+    anywhere (throwing it is ignored, rule 30), weapon keys are silent
     (rule 30), and leaning can't happen because turning is off (rule 22).
 
 ## Numbers and units
@@ -463,6 +467,9 @@ lose him.
 - The briefly restored first person on the click at a top place (rule 12,
   forced off again a moment later by rule 13): a flicker in the original;
   better not to switch views twice.
+- **Throwing a rock while on the rope**: the original does something
+  odd with it (the user's check, 2026-10-21; probably a bug). Ignore rock
+  throws for the whole rope state instead.
 - Unused: the game time noted on each status change (rule 5); the
   `RopeMode` text in the program (nothing uses it).
 
@@ -478,7 +485,8 @@ lose him.
   Connor puts his weapon away, takes the rope out, throws, the rope
   model swings up, he climbs on. Hold forward: he climbs, the camera rises;
   let go: he hangs still; hold back: he climbs down. At the top he gets
-  off and draws his weapon again. Away from a rope place, clicking the
+  off and draws his weapon again if he was holding one (checked by the
+  user in the original, 2026-10-21: all of this matches). Away from a rope place, clicking the
   rope button only gives "I am not near anything to climb." and the
   pointer stays normal.
 - **Ours (to log)**: status changes with their trap name, the icon shown,
@@ -489,22 +497,20 @@ lose him.
 
 ## Open questions
 
-1. What the camera flag set at the top when the rope is taken (rule 9)
-   does, and whether the camera stays put if the rope is put back.
+1. ~~What the camera does if the rope is put back at the top~~: it stays
+   where it is (the user's check, rule 9). What the camera flag set then
+   does inside the game was not traced; nothing visible depends on it.
 2. The camera placement at the end of `btoss` (rule 15): it is built from
    Connor's frame with the numbers 2,000, (0, 250, 350), (0, −500, 2,000),
    a tilt of 1.27 rad and a half turn added to the rope's heading, but the
    way they are combined was not read reliably. Stand-in until answered:
    leave the camera where it is until rule 18 moves it. Not checked in the
    original.
-3. What a world click or a held rock does while Connor hangs on the rope
+3. ~~Clicks and rocks while hanging~~: answered by the user's check
    (rule 30).
-4. What exactly the "last put away" hand mode of rule 25 holds and when it
-   changes (so whether a player who climbs with empty hands gets a weapon
-   drawn at the end). Worth a check in the original: put the sword away,
-   climb a rope, see whether he draws it at the other end.
-5. Loading a game saved mid-climb (rule 32): not traced.
-6. Whether `Back` is the only movement that climbs down (e.g. what a turn
-   key alone does: nothing is turned, but does it count as "a movement
-   held" and climb up?). The rule as traced: any movement other than
-   `Back` climbs up.
+4. ~~Which weapon is drawn at the end~~: answered by the user's check
+   (rule 25).
+5. ~~Loading a game saved mid-climb~~: works normally (the user's check,
+   rule 32).
+6. ~~Which movement keys climb~~: only forward (up) and back (down); the
+   others do nothing (the user's check, rule 22).
