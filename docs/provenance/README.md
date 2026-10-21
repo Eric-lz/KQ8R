@@ -2804,3 +2804,11 @@ executable looked at.
 | F4 flips it; `--no-ai` starts with it on | Ours | Viewer |
 | An on-screen line under the F8 line: "AI: on (F4)" in white, "AI: off, creatures ignore Connor (F4)" in yellow | Ours | The user's check (2026-10-20) |
 
+### Test switch: god mode — `crates/kq8-core/src/fight.rs` (`hit_connor`), `connor_mover.rs` (`no_fall_death`), `active.rs` (`god_mode`); viewer `door_view.rs` (`GodStart`, `toggle_god`, `flip_god`, the on-screen line), `gui_view.rs` (`--key f3`), `main.rs` (`--god`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| With it on, a hit on Connor (a swing or a bolt) does nothing: no health lost, no flinch, no death | Ours (a test switch, not in the original) | Viewer: goblin22's 4 hits logged as "nothing, god mode is on" |
+| A fall past the death limit (`connor-physics.md`, 3,840) is a safe landing | Ours | Unit test; viewer: a 7,100 fall kills him without it, a safe landing with it |
+| F3 flips it, `--god` starts with it on; a line under the AI line shows it (yellow when on) | Ours | Viewer (the line not looked at) |
+

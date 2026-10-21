@@ -375,6 +375,10 @@ impl crate::active::WorldState {
 
     /// Rules 16–18, 29: a hit of damage `d` on Connor from `from`.
     pub(crate) fn hit_connor(&mut self, from: &str, d: i64, kind: HitKind) {
+        if self.god_mode {
+            self.fight_note("Connor", format!("hit by {from}, {}, damage {d}: nothing, god mode is on (test switch, ours)", kind.name()));
+            return;
+        }
         if self.connor_dying {
             self.fight_note("Connor", format!("hit by {from}: ignored, he is dying (rule 29)"));
             return;

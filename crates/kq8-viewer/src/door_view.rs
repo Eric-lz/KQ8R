@@ -307,6 +307,76 @@ pub fn toggle_ai(keys: Res<ButtonInput<KeyCode>>, mut start: ResMut<AiOff>, sim:
     }
 }
 
+/// God mode, the test switch (ours, not in the original): `--god` at the
+/// start, F3 while playing. Hits on Connor do nothing and a long fall
+/// doesn't kill him.
+#[derive(Resource)]
+pub struct GodStart(pub bool);
+
+/// The on-screen line of god mode.
+#[derive(Component)]
+pub struct GodLabel;
+
+fn god_label(on: bool) -> (String, Color) {
+    if on {
+        ("God mode: on, Connor can't be hurt (F3)".into(), Color::srgb(1.0, 0.8, 0.2))
+    } else {
+        ("God mode: off (F3)".into(), Color::WHITE)
+    }
+}
+
+/// The on-screen line under the AI line.
+pub fn setup_god_label(mut commands: Commands, start: Res<GodStart>) {
+    let (text, color) = god_label(start.0);
+    commands.spawn((
+        Text::new(text),
+        TextFont { font_size: FontSize::Px(16.0), ..default() },
+        TextColor(color),
+        Node { position_type: PositionType::Absolute, top: Val::Px(118.0), left: Val::Px(10.0), ..default() },
+        GodLabel,
+    ));
+}
+
+/// `--god` at the start, then F3; Connor's mover and the on-screen line
+/// follow core's switch every frame (also `--key f3,N`).
+pub fn toggle_god(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut start: ResMut<GodStart>,
+    sim: Option<ResMut<DoorSim>>,
+    connor: Option<ResMut<crate::connor_view::ConnorSim>>,
+    mut label: Query<(&mut Text, &mut TextColor), With<GodLabel>>,
+) {
+    let Some(mut sim) = sim else { return };
+    if std::mem::take(&mut start.0) {
+        flip_god(&mut sim, "--god");
+    }
+    if keys.just_pressed(KeyCode::F3) {
+        flip_god(&mut sim, "key F3");
+    }
+    let on = sim.active.world.god_mode;
+    if let Some(mut c) = connor {
+        if c.mover.no_fall_death != on {
+            c.mover.no_fall_death = on;
+        }
+    }
+    let (text, color) = god_label(on);
+    for (mut t, mut c) in &mut label {
+        if t.0 != text {
+            t.0 = text.clone();
+            c.0 = color;
+        }
+    }
+}
+
+/// Flips god mode (F3, `--god`, `--key f3,N`).
+pub fn flip_god(sim: &mut DoorSim, how: &str) {
+    let w = &mut sim.active.world;
+    w.god_mode = !w.god_mode;
+    let state = if w.god_mode { "on: hits on Connor do nothing, a long fall doesn't kill him" } else { "off" };
+    let line = format!("update {}: {how}: god mode is {state} (test switch, ours)", w.updates);
+    sim.log.summary(line);
+}
+
 /// Flips the AI test switch (F4, `--no-ai`, `--key f4,N`).
 pub fn flip_ai(sim: &mut DoorSim, how: &str) {
     let w = &mut sim.active.world;

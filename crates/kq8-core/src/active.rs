@@ -703,6 +703,10 @@ pub struct WorldState {
     /// Test switch (ours, not in the original): no character is alarmed,
     /// so none chases or attacks Connor; the alarmed ones give up.
     pub ai_off: bool,
+    /// Test switch (ours, not in the original): god mode. Hits on Connor
+    /// do nothing (no health lost, no flinch, no death); the viewer also
+    /// switches off his fall death (`Mover::no_fall_death`).
+    pub god_mode: bool,
     /// Bodies left by the dead (`fighting.md` rule 32; M5 5c-7).
     pub corpses: Vec<crate::fight::Corpse>,
     /// Scripts of the dead to call with `Die <kind>` (rule 32.3), taken
@@ -2669,6 +2673,7 @@ impl Active {
                 weapon_swapped: false,
                 combat_level: 1.0,
                 ai_off: false,
+                god_mode: false,
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
                 flight_rest: BTreeMap::new(),

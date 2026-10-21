@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Test switch: god mode (F3, `--god`)
+
+**Changed:** A core switch `god_mode`: every hit on Connor (swings and bolts all go through `hit_connor`) does nothing, so no health lost, no flinch, no death; his mover's new `no_fall_death` makes a fall past the death limit a safe landing (the viewer copies the switch into it every frame). F3 flips it, `--god` starts with it on, `--key f3,N` presses it in a test; an on-screen line under the AI line shows it. README key list updated.
+**Why:** The user asked for god mode for testing.
+**Tested how:** `cargo test --workspace` (442 core tests, 1 new), clippy clean. Viewer: `--at 289284,190300,0 --god --frames 1500` (goblin22); `--at 150552,269500,0 --no-ai --lift 8000 --frames 900` without and with `--god`; `fight.log`, `connor.log`.
+**Result:** goblin22's 4 hits logged as "nothing, god mode is on", health unchanged. The 7,100 fall: "Connor dies" without, "safe landing" with god mode.
+**Still broken / not tested:** Not looked at (the on-screen line, the real F3 key). Nothing else hurts him yet (no poison, drowning or traps that damage), so those aren't covered.
+**Next:** —
+
 ## 2026-10-20 Test switch: on-screen line for the AI switch
 
 **Changed:** A line under the haze line (top left) shows the AI switch: "AI: on (F4)" in white, or "AI: off, creatures ignore Connor (F4)" in yellow. It follows core's switch every frame, so F4, `--no-ai` and `--key f4` all update it.

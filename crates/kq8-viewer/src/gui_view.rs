@@ -700,6 +700,7 @@ pub fn gui_step(
         match name.to_ascii_lowercase().as_str() {
             "space" => gui.panels.toggle_bottom(&how),
             "f4" => crate::door_view::flip_ai(&mut sim, &how),
+            "f3" => crate::door_view::flip_god(&mut sim, &how),
             k if k.len() == 1 && ("1"..="8").contains(&k) => actions.0.push(BarAction::Key { slot: k.parse::<usize>().unwrap_or(1) - 1, how }),
             // A click on a control of the bars: left:NAME / right:NAME.
             k if k.starts_with("left:") || k.starts_with("right:") => {

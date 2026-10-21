@@ -677,6 +677,9 @@ pub struct Mover {
     /// hit and 3 retries, then it stays at the contact), never head-on, no
     /// push checks. Connor: off.
     pub object_slide: bool,
+    /// Test switch (ours, god mode): a fall past the death limit is a
+    /// safe landing.
+    pub no_fall_death: bool,
 }
 
 /// What the down pass ended on.
@@ -785,6 +788,7 @@ impl Mover {
             terrain_in_passes: true,
             keep_on_surface: false,
             object_slide: false,
+            no_fall_death: false,
         }
     }
 
@@ -1062,7 +1066,13 @@ impl Mover {
             match ended {
                 Some(why) => {
                     let fallen = start_z - z;
-                    if fallen > DEATH_DROP {
+                    if fallen > DEATH_DROP && self.no_fall_death {
+                        self.state = State::Normal;
+                        report.fall = Some(FallEvent::Landed(fallen));
+                        report.events.push(format!(
+                            "fall ends ({why}) {fallen:.0} below the death limit's start z={start_z:.0}: more than {DEATH_DROP}, but god mode is on (test switch, ours): safe landing"
+                        ));
+                    } else if fallen > DEATH_DROP {
                         self.state = State::Dead;
                         report.fall = Some(FallEvent::Died(fallen));
                         report.events.push(format!(
@@ -1595,6 +1605,16 @@ mod tests {
         }
         // Up 325 and down 325 cancel: only gravity moves him.
         assert!((m.position[2] - (100_000.0 - 324.0)).abs() < 0.1);
+    }
+
+    #[test]
+    fn god_mode_makes_a_long_fall_safe() {
+        let mut m = Mover::new([0.0, 0.0, 0.0], true);
+        m.no_fall_death = true;
+        m.lift(5000.0);
+        let (_, events) = run(&mut m, &Flat(0.0), 200);
+        assert_eq!(m.state, State::Normal, "{events:?}");
+        assert!(events.iter().any(|e| e.contains("god mode is on")), "{events:?}");
     }
 
     #[test]
