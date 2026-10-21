@@ -2842,3 +2842,15 @@ Replaces 5c-8's stand-in flight. The tumble stays fix 7's stand-in until 5e-3.
 | Touches in one update are handled in the order the mover found them; a later touch in the same update can end the new arc | Rule 12 ("at a touch"); the order within one update is **ours** (the note's edge case says the rest of the move still runs) | — |
 | The land sound stays once per flight (not again after a re-throw) | Rule 12.2 ("only the first time ... in its whole flight") | Unit test |
 | The new tumble is fix 7's stand-in until 5e-3 | Ours (stand-in) | — |
+
+### 5e-3, the tumble — `crates/kq8-core/src/item.rs` (`TUMBLE`, `Flight::spin`, `turn`, `FlightStep::angles`), `fight.rs` (`flights_step`, `toss`), `active.rs` (`flight_rest` gone)
+
+Replaces 5c fix 7's stand-in (three axes, 90–180° per second, back to the turn it had before).
+
+| What | Source | Check |
+| --- | --- | --- |
+| A thrown item starts with no turn at all (0, 0, 0) | `thrown-items.md` rule 2 | Unit test |
+| The tumble is one random number, −0.5 to +0.5 rad **per update** (not scaled by time), drawn at each throw and each throw again | Rules 3, 9, 12.3 | Unit test |
+| Each update until the flight ends, also after the first touch, it turns by the tumble about its own x axis (angle 0 of `[x, y, z]`; with y and z 0 that is a turn about the model's own x axis) | Rule 9; the angle order is `kq8_data::objects::rotation` | Unit test; `items.log` ("turned … rad") |
+| In an update with a throw again, the turn uses the new tumble | **Ours** (the note gives no order within the update) | — |
+| When the flight ends: angles 0, 0, 0 | Rule 10 | Unit test |

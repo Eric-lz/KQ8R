@@ -364,13 +364,15 @@ pub struct Flight {
     /// Its type's shape has a `BOUNDS.KQ` box ("Edge cases": without one
     /// it tests nothing on the way).
     pub shaped: bool,
-    /// Its tumble while it flies, radians per second about x, y, z (M5 5c
-    /// fix 7, **stand-in** until 5e-3). It lands in its resting pose.
-    pub spin: [f32; 3],
+    /// Its tumble (rule 9): radians **per update** about its own x axis,
+    /// the same every update until a new throw.
+    pub spin: f32,
+    /// Its turn about its own x axis so far (rule 2: 0 at the throw).
+    pub turn: f32,
 }
 
-/// The tumble's rate per axis (ours, Q137 e): 90-180 degrees per second.
-pub const TUMBLE_RATE: (f32, f32) = (90.0, 180.0);
+/// The tumble's range, radians per update (`thrown-items.md` rule 3).
+pub const TUMBLE: (f32, f32) = (-0.5, 0.5);
 
 /// What one update of a flight did, for the log.
 #[derive(Debug, Clone, Default)]
@@ -392,6 +394,9 @@ pub struct FlightStep {
     /// The flight ended at the start of this update (rule 16): `held` or
     /// `10 s`. Nothing moved then.
     pub ended: Option<&'static str>,
+    /// Its angles now (rules 9, 10): the tumble about its own x axis, all
+    /// 0 once the flight has ended.
+    pub angles: [f32; 3],
 }
 
 /// Rule 3: the launch speeds from three random numbers in [0, 1):
@@ -404,13 +409,9 @@ fn launch_velocity(r: [f32; 3]) -> [f32; 3] {
     [flat * heading.sin(), -flat * heading.cos(), speed * up.sin()]
 }
 
-/// The tumble's rates from three random numbers in [0, 1) (fix 7's
-/// stand-in): per axis [`TUMBLE_RATE`], one way below 0.5, the other above.
-fn tumble_rates(r: [f32; 3]) -> [f32; 3] {
-    r.map(|v| {
-        let rate = (TUMBLE_RATE.0 + (v * 2.0).fract() * (TUMBLE_RATE.1 - TUMBLE_RATE.0)).to_radians();
-        if v < 0.5 { -rate } else { rate }
-    })
+/// Rule 3: the tumble from a random number in [0, 1).
+fn tumble_of(r: f32) -> f32 {
+    TUMBLE.0 + r * (TUMBLE.1 - TUMBLE.0)
 }
 
 impl Flight {
@@ -434,32 +435,22 @@ impl Flight {
             held: None,
             mover: Box::new(mover),
             shaped: shape.is_some(),
-            spin: [0.0; 3],
+            spin: 0.0,
+            turn: 0.0,
         }
     }
 
-    /// The tumble from three random numbers in [0, 1): per axis a rate of
-    /// [`TUMBLE_RATE`], turning one way below 0.5, the other above.
-    pub fn with_tumble(mut self, r: [f32; 3]) -> Self {
-        self.spin = tumble_rates(r);
+    /// The tumble from a random number in [0, 1) (rule 3).
+    pub fn with_tumble(mut self, r: f32) -> Self {
+        self.spin = tumble_of(r);
         self
-    }
-
-    /// Its angles after `updates` updates of `dt` s, from its resting
-    /// angles `rest` (the tumble; the resting pose once landed).
-    pub fn angles(&self, rest: [f32; 3], dt: f32, landed: bool) -> [f32; 3] {
-        if landed {
-            return rest;
-        }
-        let t = self.updates as f32 * dt;
-        std::array::from_fn(|k| rest[k] + self.spin[k] * t)
     }
 
     /// Rule 12.3: thrown again from `from` with fresh random launch values
     /// `r` and tumble `spin`: clock back to 0, not coming down, landed
     /// flag cleared, the arc's own gravity again (ordinary gravity off).
     /// The land sound stays played (once per flight).
-    pub fn throw_again(&mut self, from: [f32; 3], r: [f32; 3], spin: [f32; 3]) {
+    pub fn throw_again(&mut self, from: [f32; 3], r: [f32; 3], spin: f32) {
         self.from = from;
         self.velocity = launch_velocity(r);
         self.clock = 0.0;
@@ -467,7 +458,7 @@ impl Flight {
         self.arc_over = false;
         self.mover.use_gravity = false;
         self.mover.fall_timer = 0.0;
-        self.spin = tumble_rates(spin);
+        self.spin = tumble_of(spin);
     }
 
     /// Rule 5: where the arc puts it `t` seconds after the throw.
@@ -493,7 +484,7 @@ impl Flight {
     /// animated (rule 12.3); `random`: fractions in [0, 1) for a new throw.
     pub fn update(&mut self, at: [f32; 3], dt: f32, world: &dyn crate::connor_mover::MoverWorld, throws_again: &dyn Fn(&str) -> bool, random: &mut dyn FnMut() -> f32) -> FlightStep {
         let mut step = FlightStep { position: at, ..Default::default() };
-        // Rule 16, at the start of the update.
+        // Rule 16, at the start of the update; rule 10: no turn at all.
         let whole = at.map(|v| v as i32);
         if self.coming_down && self.held == Some(whole) {
             step.ended = Some("held");
@@ -542,7 +533,7 @@ impl Flight {
             }
             if h.hit.what != "terrain" && throws_again(&h.hit.what) {
                 let r = [random(), random(), random()];
-                let spin = [random(), random(), random()];
+                let spin = random();
                 self.throw_again(h.hit.position, r, spin);
                 let v = self.velocity;
                 step.arc_ended = None;
@@ -555,6 +546,11 @@ impl Flight {
                 step.arc_ended = Some(format!("touched {} (rule 12)", h.hit.what));
             }
         }
+        // Rule 9: every update until the flight ends, also after a touch
+        // (with the new tumble after a throw again: ours, the note gives
+        // no order within the update).
+        self.turn += self.spin;
+        step.angles = [self.turn, 0.0, 0.0];
         step
     }
 }
@@ -564,14 +560,20 @@ pub(crate) mod tests {
     use super::*;
 
     #[test]
-    fn a_thrown_item_tumbles_slowly_and_lands_in_its_resting_pose() {
-        let mut f = Flight::launch("x", [0.0; 3], [0.0; 3], None).with_tumble([0.0, 0.75, 0.25]);
-        let deg: Vec<f32> = f.spin.iter().map(|s| s.to_degrees()).collect();
-        assert!((deg[0] + 90.0).abs() < 1e-3 && (deg[1] - 135.0).abs() < 1e-3 && (deg[2] + 135.0).abs() < 1e-3, "{deg:?}");
-        f.updates = 15;
-        let a = f.angles([0.0, 0.0, 1.0], 1.0 / 15.0, false);
-        assert!((a[1] - 135f32.to_radians()).abs() < 1e-4 && (a[2] - (1.0 - 135f32.to_radians())).abs() < 1e-4, "{a:?}");
-        assert_eq!(f.angles([0.0, 0.0, 1.0], 1.0 / 15.0, true), [0.0, 0.0, 1.0]);
+    fn a_thrown_item_tumbles_about_one_axis_and_ends_with_no_turn() {
+        // thrown-items.md rules 2, 3, 9, 10 (M5 5e-3).
+        assert_eq!(Flight::launch("x", [0.0; 3], [0.0; 3], None).with_tumble(0.0).spin, -0.5);
+        assert_eq!(Flight::launch("x", [0.0; 3], [0.0; 3], None).with_tumble(0.75).spin, 0.25);
+        let ground = crate::connor_mover::tests::Flat(0.0);
+        let mut f = Flight::launch("x", [0.0; 3], [0.0, 0.0, 0.0], PEBBLE).with_tumble(0.6);
+        let steps = fly(&mut f, &ground);
+        let (last, flying) = steps.split_last().unwrap();
+        for (n, s) in flying.iter().enumerate() {
+            // The same step every update, per update, also after the touch.
+            assert!((s.angles[0] - 0.1 * (n + 1) as f32).abs() < 1e-4 && s.angles[1] == 0.0 && s.angles[2] == 0.0, "{n}: {:?}", s.angles);
+        }
+        assert!(flying.iter().position(|s| s.first_touch.is_some()).unwrap() < flying.len() - 1, "turning after the touch too");
+        assert_eq!((last.ended, last.angles), (Some("held"), [0.0; 3]));
     }
 
     const DT: f32 = 1.0 / 15.0;

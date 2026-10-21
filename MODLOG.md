@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** The note's open questions 1–5 are unchanged.
 **Next:** B: build `ranged-weapons.md`.
 
+## 2026-10-20 M5 5e-3: thrown items tumble about one axis, as traced
+
+**Changed:** `item.rs`: a thrown item's tumble is one random number from −0.5 to +0.5 rad **per update**, drawn at each throw (and each throw again). It turns about its own x axis by that much every update until the flight ends, also after it touches something. At the end its angles are 0, 0, 0. The stand-in (three axes, 90–180° per second, back to its old turn) is gone, with `flight_rest`. `items.log` shows the turn each update. Provenance, DESIGN (5e done).
+**Why:** `thrown-items.md` rules 2, 3, 9, 10 (Q137 e).
+**Tested how:** `cargo test --workspace` (446 core tests; the old tumble test replaced), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 188861,270713,0 --key left:IDCTL_INVBAR_SHORT,40 --swing barrel.12,60 --frames 1000`; `items.log`.
+**Result:** The four crystals turn 0.15, 0.19, 0.44 and −0.21 rad per update (about 130°, 163°, 378° and −180° per second), the same step every update, and end flat with no turn. The throws differ from 5e-1/5e-2 because one random number is drawn for the tumble instead of three (NoName26 now hits the pub's wall, at update 71).
+**Still broken / not tested:** Not looked at by eye. The user saw a "slow" tumble in the original; the traced rate is up to 430° per second (`thrown-items.md` open question 2): needs a look side by side.
+**Next:** The user's check of thrown items against the original (`thrown-items.md` "How to check").
+
 ## 2026-10-20 M5 5e-2: thrown items bounce up again off barrels and other scripted or animated objects
 
 **Changed:** `Flight::update` (`item.rs`) handles each touch in order: a touch on something with a script, or on an animated object, throws the item again from the touch point with fresh random launch values and tumble (`throw_again`). Anything else still ends the arc. `World::flights_step` (`fight.rs`) builds the list of what throws again: doors, chests, the animated objects (not characters), and clickables and buildings with a script. Provenance, DESIGN (5e-2 done), FEATURES.

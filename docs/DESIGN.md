@@ -1450,7 +1450,8 @@ Steps (one commit each; logged in `items.log`):
    barrel.13 fly up again) (rule 12.3): a touch on an object with a script
    or an animated object throws it again (fresh launch, clock 0).
    **Test:** an item hitting a barrel flies up again (`items.log`).
-3. **5e-3, the tumble** (rules 9–10): one axis (its own x), −0.5 to +0.5
+3. **5e-3, the tumble** (**done** 2026-10-20; barrel.12's crystals turn
+   0.15–0.44 rad per update) (rules 9–10): one axis (its own x), −0.5 to +0.5
    rad per update, kept for the flight; turn 0, 0, 0 at the end.
    **Test:** by eye against the original (`thrown-items.md` open
    question 2).

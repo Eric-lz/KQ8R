@@ -791,7 +791,8 @@ impl crate::active::WorldState {
     }
 
     /// `items.md` rule 12: makes one item of `kind` x `quantity` at `at`
-    /// and throws it (5c-8's launch, fix 7's tumble). Returns the log text.
+    /// and throws it (`thrown-items.md` rules 2, 3: no turn, then the
+    /// launch and the tumble). Returns the log text.
     pub(crate) fn toss(&mut self, kind: &str, quantity: i64, at: [f32; 3]) -> String {
         let made = self.items.make(kind, quantity, crate::item::Place::World { position: at, angles: [0.0; 3] }).map(|o| o.name.clone());
         match made {
@@ -799,7 +800,7 @@ impl crate::active::WorldState {
                 self.known.insert(item.to_ascii_lowercase());
                 let rng = &mut self.fight_rng;
                 let r = [rng.fraction(), rng.fraction(), rng.fraction()];
-                let spin = [rng.fraction(), rng.fraction(), rng.fraction()];
+                let spin = rng.fraction();
                 let shape = self.items.get(&item).and_then(|o| self.items.click_box(o));
                 let fl = crate::item::Flight::launch(&item, at, r, shape).with_tumble(spin);
                 let v = fl.velocity;
@@ -849,7 +850,7 @@ impl crate::active::WorldState {
         let mut flights = std::mem::take(&mut self.flights);
         flights.retain_mut(|f| {
             let Some(i) = self.items.index(&f.item) else { return false };
-            let crate::item::Place::World { position, angles } = self.items.objects[i].place.clone() else {
+            let crate::item::Place::World { position, .. } = self.items.objects[i].place.clone() else {
                 self.item_log.push(format!("update {}: {}: no longer in the world: its flight ends", self.updates, f.item));
                 return false;
             };
@@ -880,14 +881,13 @@ impl crate::active::WorldState {
             if let Some(why) = &s.arc_ended {
                 line += &format!("; the arc ends: {why}, ordinary gravity on");
             }
-            // Fix 7 (stand-in until 5e-3): the tumble; its resting angles
-            // kept aside.
-            let rest = *self.flight_rest.entry(f.item.clone()).or_insert(angles);
-            let ended = s.ended.is_some();
-            let shown = f.angles(rest, dt, ended);
-            self.items.objects[i].place = crate::item::Place::World { position: p, angles: shown };
+            // Rules 9, 10: the tumble about its own x axis; no turn once
+            // the flight has ended.
+            if s.ended.is_none() {
+                line += &format!(", turned {:.2} rad", s.angles[0]);
+            }
+            self.items.objects[i].place = crate::item::Place::World { position: p, angles: s.angles };
             if let Some(why) = s.ended {
-                self.flight_rest.remove(&f.item);
                 let flat = ((p[0] - f.from[0]).powi(2) + (p[1] - f.from[1]).powi(2)).sqrt();
                 let line = format!(
                     "update {}: {} ({kind}) flight ends ({why}, rule 16) at ({:.0}, {:.0}, {:.0}) after {} updates, {flat:.0} from where it was last thrown",
