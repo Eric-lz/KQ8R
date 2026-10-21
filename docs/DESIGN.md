@@ -1802,7 +1802,8 @@ Steps (one commit each):
    frame (rule 21). **Test:** `--aim-point` (a sky click) at the foot
    and at the top; `rope.log`: each animation's start and end, the spot
    and why, his place at the grab, the range.
-4. **6a-4, climbing** (rules 22–23). Forward: `climb` forwards, back:
+4. **6a-4, climbing** (**done** 2026-10-21; test option `--hold
+   F,T,R,FROM,N`, repeatable) (rules 22–23). Forward: `climb` forwards, back:
    backwards, any other key or none: frozen. The camera's height and the
    aim point move 750 per second (50 per update) with the movement,
    the height kept in its range; x, y kept, re-aimed every update. The

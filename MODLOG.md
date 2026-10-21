@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a-4: climbing the rope
+
+**Changed:** `connor.rs`: the climb update (forward up, back down, anything else frozen; ends at the end it plays toward), 1 unit test. `rope.rs`: `climb_camera` (750 a second, the height in its range), 1 unit test; the climb's end is logged (getting off is step 5). Viewer `rope_view.rs`: each update while he hangs, the camera and aim point follow and every climbing update is logged (key, direction, frame, phase, camera height, range, aim). Test option `--hold F,T,R,FROM,N` (held from update FROM to N), repeatable (`main.rs`, `connor_view.rs`, FEATURES). DESIGN, provenance.
+**Why:** Step 4 of `ropeandhook.md` (rules 22–23).
+**Tested how:** `cargo test -p kq8-core` (479 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 5000 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80 --aim-point 150000,207968,30000,90 --hold 1,0,0,200,230 --hold 0,1,0,230,245 --hold -1,0,0,260,275`; `rope.log`, `connor.log`.
+**Result:** Hanging from 193. Forward 201–230: frame 1 → 30 (phase +0.013 an update, 78 frames in 5.13 s), camera z 12,650 → 14,100 (+50 an update), aim z 7,850 → 9,300. Turn key 231–245: "frozen at frame 30: no forward or back key", heading −1.570 and place unchanged. Back 261–275: frame 29 → 15, camera 14,050 → 13,350. Then "frozen: no key". His place stays (147646, 207586, 12800) throughout.
+**Still broken / not tested:** **Not looked at by eye.** Reaching either end only logs (getting off is step 5). The climb's sound cues fire in both directions (the note doesn't say). The camera's top limit was not reached in this run (unit test only).
+**Next:** 6a-5, getting off.
+
 ## 2026-10-21 M6 6a-3: the click with the rope and the sequence to hanging
 
 **Changed:** `rope.rs`: the rope state (`Climb`, its stages, the camera spots, the height ranges, a `RopeHost` interface; 4 new unit tests with a pretend game). `connor.rs`: walker mode `Rope` (`rope_play`, `rope_hang_at`, `rope_leave`; the climb frozen for now). `connor_update.rs`: no fall, landing, death or push state change in the Rope mode. Viewer: new `rope_view.rs` (`rope_step` after Connor's update: the sequence on Connor, the camera, the rope model's phase and sounds, the traps after a placing); `connor_view.rs` (rope fields, `put`, `rope_movement`, the rope model drawn at his place); `door_view.rs` (a world click with the rope in hand, `connor_placed_by_rope`); `game_camera.rs` `look_from`; `load.rs` loads `Conrope.anm`'s 12 movements in worlds with rope scripts. QUESTIONS Q147 (d) narrowed, (e) added. DESIGN, provenance.

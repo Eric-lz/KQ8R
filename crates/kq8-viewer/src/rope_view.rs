@@ -144,6 +144,44 @@ impl RopeHost for Host<'_> {
     fn on_rope(&mut self, on: bool) {
         self.w.connor_on_rope = on;
     }
+
+    fn climbed_to_top(&self) -> bool {
+        self.c.walker.climb_dir > 0
+    }
+}
+
+/// `ropeandhook.md` rule 22 (M6 6a-4): while he hangs, the camera's
+/// height and the aim point follow the climb's direction this update; the
+/// camera keeps its x and y and looks at the aim point. Logged every
+/// update he climbs, and when he stops.
+fn climb_step(cl: &mut Climb, host: &mut Host) {
+    let dir = host.c.walker.climb_dir;
+    let (forward, turn) = (host.c.intent.forward, host.c.intent.turn);
+    let frame = host.c.loop_of(host.c.walker.movement).map_or(0, |l| l.frame_at(host.c.walker.phase));
+    if dir == 0 {
+        if host.c.rope_was_climbing {
+            host.c.rope_was_climbing = false;
+            host.note(format!("climb: frozen at frame {frame} (phase {:.3}): {} (rule 22)", host.c.walker.phase, if forward == 0 && turn == 0 { "no key" } else { "no forward or back key" }));
+        }
+        return;
+    }
+    host.c.rope_was_climbing = true;
+    let dt = (1.0 / kq8_core::UPDATES_PER_SECOND) as f32;
+    let (camera, aim) = kq8_core::rope::climb_camera(host.camera_at(), cl.aim, cl.range, dir, dt);
+    cl.aim = aim;
+    if let Some(c) = host.cam.as_mut() {
+        c.look_from(camera, aim);
+    }
+    host.w.rope_note(format!(
+        "climb: {} held: {}, frame {frame} (phase {:.3}); camera z {:.0} (range {:.0}..{:.0}), aim z {:.0} (rule 22)",
+        if forward > 0 { "forward" } else { "back" },
+        if dir > 0 { "up (forwards)" } else { "down (backwards)" },
+        host.c.walker.phase,
+        camera[2],
+        cl.range.0,
+        cl.range.1,
+        aim[2]
+    ));
 }
 
 /// One update of the rope state, after Connor's own update.
@@ -220,10 +258,13 @@ pub fn rope_step(
             }
         }
         if let Some(cl) = climb.as_mut() {
+            if cl.stage == Stage::Hanging {
+                climb_step(cl, &mut host);
+            }
             for _ in ended {
                 // His own `stop` while the rope model plays never ends
                 // (a loop); anything else that ends is the stage's movement.
-                if cl.stage == Stage::RopeModel || cl.stage == Stage::Hanging {
+                if cl.stage == Stage::RopeModel {
                     continue;
                 }
                 cl.ended(&mut host);

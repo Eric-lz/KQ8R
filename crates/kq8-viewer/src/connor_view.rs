@@ -114,8 +114,8 @@ pub struct ConnorSim {
     /// The turn keys as events (M4 4a-7, `kq8_core::turn_keys`): the
     /// turn direction changes only on a key going down or up.
     pub turn_keys: kq8_core::turn_keys::TurnKeys,
-    /// `--hold`'s turn key has been pressed (and not yet let go).
-    hold_turn_down: bool,
+    /// `--hold`'s turn key held now: its direction, 0 for none.
+    hold_turn_down: i8,
     /// `--hold`'s run switch has been set (once, at the start).
     hold_run_set: bool,
     /// Keyboard auto-repeat: the movement key pressed last, while it is
@@ -220,6 +220,8 @@ pub struct ConnorSim {
     rope_shown: Option<Entity>,
     /// His rope-state movements that ended this update, for `rope_step`.
     pub rope_ended: Vec<&'static str>,
+    /// He climbed last update (for the log's "frozen" line, rule 22).
+    pub rope_was_climbing: bool,
 }
 
 /// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
@@ -314,7 +316,7 @@ pub struct StartLift(pub Option<f32>);
 /// 0/1) instead of the keys; with N, only for the first N updates, then
 /// forward and turn are let go (run stays as it was).
 #[derive(Resource)]
-pub struct HoldIntent(pub Option<([i8; 3], Option<u64>)>);
+pub struct HoldIntent(pub Vec<([i8; 3], u64, Option<u64>)>);
 
 /// `--jump N` (repeatable): a test that presses Jump once, before update
 /// N + 1, for each N given.
@@ -560,7 +562,7 @@ pub fn spawn_connor(
         mouth: 0,
         jump_start_z: None,
         turn_keys: Default::default(),
-        hold_turn_down: false,
+        hold_turn_down: 0,
         hold_run_set: false,
         repeat: None,
         log,
@@ -602,6 +604,7 @@ pub fn spawn_connor(
         rope_model: None,
         rope_shown: None,
         rope_ended: Vec::new(),
+        rope_was_climbing: false,
     };
     sim.log.detail(
         "update time_s x y z on_ground gravity fall_timer air_updates state drop ground_z ground_normal_z began_on_ground up_contact_nz down contact_nx contact_ny contact_nz push check pull_z forward turn run mode movement heading phase wanted_x wanted_y across hits down_what touch_gap blocked played played_from played_to wanted_movement step_left step_forward above_jump_start submerged surface_z bank",
@@ -765,13 +768,21 @@ pub fn connor_keys(
         sim.log.detail(line);
     }
     sim.intent.forward = forward;
-    if let Some(([f, t, r], until)) = hold.0 {
-        let held = until.is_none_or(|n| sim.updates < n);
-        sim.intent.forward = if held { f } else { 0 };
+    if let Some(&([_, _, r], _, _)) = hold.0.first() {
+        // The hold whose updates these are (M6 6a-4: several, each from
+        // its own start), if any.
+        let now = hold.0.iter().find(|(_, from, until)| sim.updates >= *from && until.is_none_or(|n| sim.updates < n)).map(|(k, _, _)| *k);
+        let [f, t, _] = now.unwrap_or([0; 3]);
+        sim.intent.forward = f;
         // The held turn: pressed at the start, let go at the end (events).
-        if t != 0 && held != sim.hold_turn_down {
-            sim.hold_turn_down = held;
-            turn_key_event(&mut sim, t, held, "test --hold", &shared);
+        if t != sim.hold_turn_down {
+            let was = std::mem::replace(&mut sim.hold_turn_down, t);
+            if was != 0 {
+                turn_key_event(&mut sim, was, false, "test --hold", &shared);
+            }
+            if t != 0 {
+                turn_key_event(&mut sim, t, true, "test --hold", &shared);
+            }
         }
         // The run switch only at the start, so scripts can change it
         // (`KQConner::setRun`, M3 step 3d-3).

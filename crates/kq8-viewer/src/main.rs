@@ -3,7 +3,7 @@
 //!
 //! Usage (`--help` prints the full list of options; `--world` with no
 //! name lists the worlds):
-//!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N]] [--jump N] [--turn N[,1|-1]]
+//!   kq8-viewer [--world <World>] [--game DIR] [--frames N] [--lift N] [--hold F,T,R[,N|,FROM,N]] [--jump N] [--turn N[,1|-1]]
 //!              [--at X,Y,H] [--light x1|x2|off] [--renderer auto|vulkan|dx12]
 //!   kq8-viewer --model <model.kqs> [--world <World>] [--palette <file>]
 //!              [--game DIR] [--frames N]
@@ -109,7 +109,7 @@ struct Args {
     lift: Option<f32>,
     /// Test: hold this intent (forward,turn,run e.g. `1,0,0`) for Connor,
     /// optionally only for the first N updates (`1,0,0,30`).
-    hold: Option<([i8; 3], Option<u64>)>,
+    hold: Vec<([i8; 3], u64, Option<u64>)>,
     /// Test: press Jump once, before update N + 1.
     jump: Vec<u64>,
     /// Test: press a turn key before update N + 1 and hold it (`N` or
@@ -175,7 +175,7 @@ fn parse_args() -> Result<Args, String> {
         game: std::env::var_os("KQ8_GAME_DIR").map(PathBuf::from).unwrap_or_else(|| "MASK".into()),
         frames: None,
         lift: None,
-        hold: None,
+        hold: Vec::new(),
         jump: Vec::new(),
         turn: None,
         at: None,
@@ -211,13 +211,15 @@ fn parse_args() -> Result<Args, String> {
             "--hold" => {
                 let v = value()?;
                 let n: Vec<i64> = v.split(',').map(|x| x.trim().parse::<i64>()).collect::<Result<_, _>>().map_err(|_| "--hold needs forward,turn,run[,updates] e.g. 1,0,0".to_string())?;
-                // Optional 4th number: let go after that many updates.
-                let (keys, until) = match n[..] {
-                    [f, t, r] => ([f, t, r], None),
-                    [f, t, r, u] if u >= 0 => ([f, t, r], Some(u as u64)),
-                    _ => return Err("--hold needs three or four numbers, e.g. 1,0,0 or 1,0,0,30".into()),
+                // Optional 4th number: let go after that many updates; with
+                // five, the 4th is when to press (M6 6a-4; repeatable).
+                let (keys, from, until) = match n[..] {
+                    [f, t, r] => ([f, t, r], 0, None),
+                    [f, t, r, u] if u >= 0 => ([f, t, r], 0, Some(u as u64)),
+                    [f, t, r, s, u] if s >= 0 && u >= s => ([f, t, r], s as u64, Some(u as u64)),
+                    _ => return Err("--hold needs three, four or five numbers, e.g. 1,0,0 or 1,0,0,30 or 1,0,0,200,230".into()),
                 };
-                a.hold = Some((keys.map(|k| k.clamp(-1, 1) as i8), until));
+                a.hold.push((keys.map(|k| k.clamp(-1, 1) as i8), from, until));
             }
             "--at" => {
                 let v = value()?;
@@ -404,7 +406,8 @@ N is an update number (15 updates per second):
   --at X,Y,H                 start Connor at X, Y facing heading H (radians)
   --lift <number>            lift him that high once at the start, then let him fall
   --hold F,T,R[,N]           hold forward (1 / -1 back), turn (1 left / -1 right),
-                             run (1 / 0); let go of forward and turn after N updates
+                             run (1 / 0); let go of forward and turn after N updates;
+                             F,T,R,FROM,N: held from update FROM to N (repeatable)
   --turn N[,1|-1]            press a turn key before update N + 1 and keep it pressed
   --jump N                   press Jump before update N + 1 (repeatable)
   --click NAME,N             click object NAME before update N + 1 (repeatable;

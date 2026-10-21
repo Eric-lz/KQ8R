@@ -694,7 +694,8 @@ repeated and checked in the logs. They do not change the game's rules.
 - `--hold F,T,R[,N]`: hold forward (1 forward, -1 back), turn (1 left,
   -1 right) and run (1 on, 0 off) instead of the keys. With the fourth
   number N, forward and turn are let go after N updates. The turn key
-  counts as pressed once at the start and let go at N.
+  counts as pressed once at the start and let go at N. `F,T,R,FROM,N`
+  holds them from update FROM to N; repeatable.
 - `--turn N[,1|-1]`: press a turn key before update N + 1 and keep it
   pressed (1 left by default, -1 right). It is one press: after an
   automatic turn it does not turn him again (as a held key in the

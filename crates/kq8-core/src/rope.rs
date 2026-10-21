@@ -411,6 +411,8 @@ pub trait RopeHost {
     fn empty_hands(&mut self);
     /// He hangs on the rope (no hook icon, rule 7).
     fn on_rope(&mut self, on: bool);
+    /// The climb that just ended was playing forwards (up) (rule 23).
+    fn climbed_to_top(&self) -> bool;
 }
 
 /// The rope state (rules 12–26): what was copied at its start, and its
@@ -437,6 +439,25 @@ pub struct Climb {
     pub range: (f32, f32),
     /// The step heights saved at the foot (rule 15).
     pub saved_steps: Option<(f32, f32)>,
+}
+
+/// Rule 22: how fast the camera's height and the aim point move while
+/// he climbs: the original's 50 per update made per second at 15 updates
+/// a second ("Do not reproduce").
+pub const CLIMB_CAMERA_SPEED: f32 = 750.0;
+
+/// Rule 22: one update of the climb's camera: `dir` +1 up, −1 down, 0
+/// still; the camera's height moves within `range`, the aim point's
+/// without limit; x and y stay. Returns the camera's new place and the
+/// new aim point.
+pub fn climb_camera(camera: [f32; 3], aim: [f32; 3], range: (f32, f32), dir: i8, dt: f32) -> ([f32; 3], [f32; 3]) {
+    let dz = CLIMB_CAMERA_SPEED * dt * f32::from(dir);
+    let z = match dir {
+        1 => (camera[2] + dz).min(range.1).max(camera[2].min(range.1)),
+        -1 => (camera[2] + dz).max(range.0).min(camera[2].max(range.0)),
+        _ => camera[2],
+    };
+    ([camera[0], camera[1], z], [aim[0], aim[1], aim[2] + dz])
 }
 
 fn solid_text(solid: &Option<(f32, String)>) -> String {
@@ -630,7 +651,12 @@ impl Climb {
                 ));
                 self.stage = Stage::Hanging;
             }
-            Stage::Hanging | Stage::Toff | Stage::Taway | Stage::Boff | Stage::Baway | Stage::Out => {
+            Stage::Hanging => {
+                // Rule 23: the climb reached an end (M6 6a-5 gets him off).
+                let top = host.climbed_to_top();
+                host.note(format!("climb: reached the {} end: getting off is not built yet (M6 6a-5): he stays hanging", if top { "top" } else { "bottom" }));
+            }
+            Stage::Toff | Stage::Taway | Stage::Boff | Stage::Baway | Stage::Out => {
                 host.note(format!("rope state: {:?} ended: getting off is not built yet (M6 6a-5)", self.stage));
             }
         }
@@ -770,6 +796,9 @@ mod tests {
         fn on_rope(&mut self, on: bool) {
             self.on_rope = on;
         }
+        fn climbed_to_top(&self) -> bool {
+            self.hung == Some(1.0)
+        }
     }
 
     fn place(status: Status) -> Rope {
@@ -840,6 +869,21 @@ mod tests {
         assert_eq!(h.hung, Some(1.0));
         assert_eq!(h.camera_aim, Some([1000.0, 2000.0, 300.0]), "aimed at the rope's place");
         assert_eq!(c.range.1, h.camera[2]);
+    }
+
+    #[test]
+    fn the_climb_camera_moves_750_a_second_within_its_range() {
+        let dt = 1.0 / 15.0;
+        let (c, a) = climb_camera([1.0, 2.0, 1000.0], [0.0, 0.0, 300.0], (1000.0, 1100.0), 1, dt);
+        assert!((c[2] - 1050.0).abs() < 1e-3 && (a[2] - 350.0).abs() < 1e-3, "50 an update at 15 a second");
+        let (c, a) = climb_camera(c, a, (1000.0, 1100.0), 1, dt);
+        let (c, a) = climb_camera(c, a, (1000.0, 1100.0), 1, dt);
+        assert_eq!(c[2], 1100.0, "not above the highest");
+        assert!((a[2] - 450.0).abs() < 1e-3, "the aim point has no limit");
+        let (c2, _) = climb_camera(c, a, (1000.0, 1100.0), 0, dt);
+        assert_eq!(c2, c, "no key: still");
+        let (c3, _) = climb_camera([1.0, 2.0, 1010.0], a, (1000.0, 1100.0), -1, dt);
+        assert_eq!((c3[0], c3[1], c3[2]), (1.0, 2.0, 1000.0), "not below the lowest; x, y kept");
     }
 
     #[test]

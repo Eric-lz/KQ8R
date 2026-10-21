@@ -1022,9 +1022,22 @@ impl Walker {
         Some((from, "stop"))
     }
 
-    /// Rule 22 (M6 6a-3: frozen; 6a-4 moves it): one update of the climb.
-    fn climb_update<'a>(&mut self, _intent: Intent, _loops: &dyn Fn(&str) -> Option<&'a MovementLoop>, step: &mut Step) {
-        self.climb_dir = 0;
+    /// `ropeandhook.md` rules 22–23 (M6 6a-4): one update of the climb.
+    /// Forward plays it forwards (up), back backwards (down), any other key
+    /// or none leaves it frozen (the user's check: only forward and back).
+    /// His position never changes. It ends when it reaches the end it is
+    /// playing toward (`step.ended`, `climb_dir` tells which).
+    fn climb_update<'a>(&mut self, intent: Intent, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>, step: &mut Step) {
+        self.climb_dir = intent.forward.signum();
+        let time = loops(self.movement).map_or(0.0, |l| l.play_time() / l.speed.abs().max(1e-6));
+        if self.climb_dir != 0 && time > 0.0 {
+            let share = (1.0 / UPDATES_PER_SECOND) as f32 / time;
+            self.phase = (self.phase + share * f32::from(self.climb_dir)).clamp(0.0, 1.0);
+            if (self.climb_dir > 0 && self.phase > 1.0 - 1e-4) || (self.climb_dir < 0 && self.phase < 1e-4) {
+                self.phase = if self.climb_dir > 0 { 1.0 } else { 0.0 };
+                step.ended = Some(self.movement);
+            }
+        }
         step.played_to = self.phase;
     }
 
@@ -1258,6 +1271,26 @@ mod tests {
 
     fn intent(forward: i8, turn: i8, run: bool) -> Intent {
         Intent { forward, turn, run }
+    }
+
+    #[test]
+    fn the_climb_moves_only_with_forward_and_back() {
+        // ropeandhook.md rules 22-23: 78 frames in 5.2 s (78 updates).
+        let list = [("climb", MovementLoop { duration: 5.2, speed: 1.0, frames: 78, ..Default::default() })];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.rope_hang_at("climb", 0.0);
+        let s = w.update(intent(0, 1, false), &loops);
+        assert_eq!((w.phase, w.climb_dir, w.heading), (0.0, 0, 0.0), "a turn key: frozen, no turn");
+        assert!(s.ended.is_none());
+        w.update(intent(1, 0, false), &loops);
+        assert!((w.phase - 1.0 / 78.0).abs() < 1e-5 && w.climb_dir == 1, "forward: up, {}", w.phase);
+        let s = w.update(intent(-1, 0, false), &loops);
+        assert_eq!(w.phase, 0.0);
+        assert_eq!(s.ended, Some("climb"), "back to the foot: the climb ends there");
+        assert_eq!(w.mode, Mode::Rope);
+        w.rope_hang_at("climb", 1.0);
+        assert_eq!(w.update(intent(1, 0, false), &loops).ended, Some("climb"), "forward at the top: ends at once");
     }
 
     #[test]
