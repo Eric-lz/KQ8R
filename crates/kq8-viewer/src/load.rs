@@ -343,6 +343,9 @@ pub struct Animation {
     /// The ball stored in its `.kqs` file (radius, centre in its own
     /// space; `characters.md` rule 37 (2), Q135).
     pub ball: (f32, [f32; 3]),
+    /// Each frame's named model parts and their own places
+    /// (`ranged-weapons.md` rule 24; M5 5f-2).
+    pub frame_parts: Vec<Vec<(String, [f32; 3])>>,
 }
 
 /// Loads all frames of loop `loop_name` of `model`. Frame transforms are
@@ -394,6 +397,7 @@ pub fn load_animation_skinned(
     let mut frame_steps = Vec::with_capacity(count);
     let mut frame_transforms = Vec::with_capacity(count);
     let mut frame_lights = Vec::with_capacity(count);
+    let mut frame_parts = Vec::with_capacity(count);
     let mut turning = 0;
     for seq in first..first + count {
         let s = shape.sequences.get(seq).ok_or(format!("{label}: loop '{loop_name}' runs past the sequences"))?;
@@ -406,6 +410,7 @@ pub fn load_animation_skinned(
         frame_steps.push(s.transform.p);
         frame_transforms.push(s.transform);
         frame_lights.push(shape.sequence_lights(seq));
+        frame_parts.push(shape.part_places(seq));
         let geometry = shape.geometry(seq);
         for p in &geometry.problems {
             log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
@@ -449,7 +454,7 @@ pub fn load_animation_skinned(
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() },
         if lit > 0 { format!("; carries lights in {lit} frame(s) (rule 26b)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center) })
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center), frame_parts })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and

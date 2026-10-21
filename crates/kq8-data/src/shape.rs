@@ -459,6 +459,24 @@ impl Shape {
 
     /// The sequence the model shows when it is not animating: the first
     /// sequence of the first loop (or sequence 0 if there are no loops).
+    /// The named model parts shown in `sequence` (its mesh nodes with a
+    /// name) and each one's own place in that frame: the node's
+    /// translation, before any frame step (`ranged-weapons.md` rule 24:
+    /// the `arrow` part a bolt starts at).
+    pub fn part_places(&self, sequence: usize) -> Vec<(String, [f32; 3])> {
+        let Some(sub) = self.sequences.get(sequence).and_then(|s| usize::try_from(s.mesh_subsequence).ok()).and_then(|k| self.subsequences.get(k)) else {
+            return Vec::new();
+        };
+        let first = sub.first_node.max(0) as usize;
+        self.nodes
+            .iter()
+            .skip(first)
+            .take(sub.node_count.max(0) as usize)
+            .filter_map(|n| Some((self.names.get(usize::try_from(n.name).ok()?)?.clone(), n.transform.p)))
+            .filter(|(name, _)| !name.is_empty())
+            .collect()
+    }
+
     pub fn rest_sequence(&self) -> usize {
         self.loops
             .first()

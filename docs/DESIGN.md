@@ -1505,7 +1505,9 @@ Steps (one commit each):
    5f-2. Drawn turned by heading and pitch, its model's front +y.
    **Test:** `sprigwnd1` shoots about every 1.7 s; `fight.log` shows each
    bolt's heading, pitch, 533 units per update, its end.
-2. **5f-2, where the bolt starts** (rule 24). The loader records, per
+2. **5f-2, where the bolt starts** (**done** 2026-10-20; `sprigwnd1`:
+   (−55, −1,367, 954) from `spbattck` frame 2, the frame at the cue's
+   phase, Q140 c) (rule 24). The loader records, per
    frame of each movement, the place of each named model part. At a
    character's first shot the part `arrow` (the bolt file's
    `meshName`) in the frame playing gives its offset (kept); fallback

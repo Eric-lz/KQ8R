@@ -505,7 +505,7 @@ pub(crate) mod tests {
     /// A movement of 16 frames over 1 s (made-up numbers in the style of
     /// the chests and baskets).
     pub fn movement(name: &str, start: f32, speed: f32, repeat: bool, cut_short: bool, cues: Vec<Cue>) -> DoorMovement {
-        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], cues, transitions: Vec::new() }
+        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], frame_parts: Vec::new(), cues, transitions: Vec::new() }
     }
 
     /// `stop` still at 0, then `open` 0 -> 1 over 1 s with a cue at 0, 16

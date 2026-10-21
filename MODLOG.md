@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-20 M5 5f-2: a character's bolt starts at its `arrow` model part
+
+**Changed:** The loader keeps, for each frame of each character movement, the named model parts and their places (`Shape::part_places`, `DoorMovement::frame_parts`). At a ranged character's shot, the bolt file's part (`meshName=arrow`) in the frame at the `do` cue gives the start offset; it is kept for later shots (fallback 0, 0, 0). The start is the character's position + the offset turned with it. `anim.log` lists the `arrow` part per frame of each movement that has one. Q140 (c) asked. Provenance, DESIGN.
+**Why:** `ranged-weapons.md` rule 24 replaces the 3/4-of-its-height stand-in.
+**Tested how:** `cargo test --workspace` (450 core tests, 1 new: the part at the cue's frame, then kept), clippy clean. Viewer: `cargo play --world Daventry --sound off --at 146500,248928,1.5708 --god --frames 400`; `fight.log` (copy in `fight-5f2-windmill.log`), `anim.log`.
+**Result:** `sprigwnd1`'s offset is (−55, −1,367, 954), from `spbattck` frame 2 of 19: the note's number. The frame one update later (the one shown when the cue is noticed) would give (176, −1,468, 1,098); which one the game uses is Q140 (c). Its first shot, made while it is still turning toward Connor, starts inside the fence `Rfence` and hits it at once (a start inside counts); the next one hits Connor after 1,245.
+**Still broken / not tested:** Not looked at by eye. Characters' own `shootOffsets` are not read (none in Daventry). The frame choice (Q140 c).
+**Next:** 5f-3, weapon modes and the swap.
+
 ## 2026-10-20 M5 5f-1: the bolt's flight as traced (the bow spriggans)
 
 **Changed:** Plan 5f (ranged weapons, 7 steps) in `docs/DESIGN.md`. `fight.rs`: a bolt is turned once toward its aim (heading and pitch) and moves 533 units per update (8,000 / 15), no gravity. Its move is swept with its `BOUNDS.KQ` box's ball stack against the buildings, the objects and characters its mask (0x1F) covers and Connor; never its shooter. At the first touch it hits and is removed; otherwise it is removed at or below the floor grid, or past `maxDistance`. Immune bit 0x4000: a hit of 0 and `ProjImmune` to the script. Objects get 5c fix 5's barrel stand-in. A character aims at Connor + 0.75 × his box top (975), led as before. `ProjectileKeys` reads `colliderMask`, `weaponType`, `meshName` and the note's defaults; the loader adds the bolt's box. The viewer draws the bolt pitched, its model's front along the flight. Q140 asked. Provenance, FEATURES.

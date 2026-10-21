@@ -2882,3 +2882,16 @@ Replaces 5c-9's stand-in flight. 5c-9's rows for the shot itself (doMode 1, 1.25
 | A bolt's damage is the shooter's ranged damage at the shot | Rule 22 | `fight.log` (`sprigwnd1` 11) |
 | Drawn turned by pitch then heading, its model's front (+y) along the flight | Rule 27 (the model's front +y inferred by A from `BOUNDS.KQ`) | — (not looked at) |
 | It still leaves from 3/4 of the shooter's eye height | **Stand-in** until 5f-2 | — |
+
+### 5f-2, where a character's bolt starts — `crates/kq8-data/src/shape.rs` (`Shape::part_places`), `crates/kq8-core/src/door.rs` (`DoorMovement::frame_parts`), `fight.rs` (`Fight::shoot_offset`, `shoot`), viewer `load.rs` (`Animation::frame_parts`), `anim_view.rs`
+
+Replaces 5f-1's stand-in start (3/4 of its eye height).
+
+| What | Source | Check |
+| --- | --- | --- |
+| A model part is a mesh node with a name; its place in a frame is the node's translation in that sequence (before any frame step) | Rule 24 ("the part's translation in the `.kqs` frame, before any frame step"); the node / name layout from the `.kqs` format notes (models provenance above) | `anim.log`: `sprgnbow` `attack` frame 2 = (−55, −1,367, 954), the note's number |
+| The part looked for is the bolt file's `meshName` (`arrow`), any capitals | Rule 24 | — |
+| The frame used is the one at the `do` cue's own phase (`spbattck`: 0.125 × 18 → frame 2), not the frame shown one update later (frame 3) | Rule 24's example value; **our reading, Q140 c** | Unit test; `fight.log`: "frame 2 of 'Attack'" |
+| Found once, kept for every later shot; not found: its own `shootOffsets` (not read: none in Daventry), 0, 0, 0, and looked for again at the next shot | Rule 24, "Do not reproduce" (keep it); looking again until found is **our reading** of "0, 0, 0 until the first shot finds the part" | Unit test |
+| Start = its position + the offset turned by its rotation (row vector, our usual) | Rule 23 | Unit test (gob facing −y: start (−55, −1,367, 1,054)) |
+| A start inside an object's box is a hit at once (the first shot from `sprigwnd1`, still turning, starts inside the fence `Rfence`) | 5f-1's rule | `fight.log` |

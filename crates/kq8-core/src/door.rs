@@ -71,6 +71,10 @@ pub struct DoorMovement {
     pub play_time: f32,
     /// Each frame's own step (frame 0 first; frame 0's is zero).
     pub frame_steps: Vec<Transform>,
+    /// Each frame's named model parts and their own places (the `arrow`
+    /// part a bolt starts at, `ranged-weapons.md` rule 24; M5 5f-2);
+    /// empty where not needed.
+    pub frame_parts: Vec<Vec<(String, [f32; 3])>>,
     pub cues: Vec<Cue>,
     /// Its `transitionN` lines (`connor-movement.md` "Starting and
     /// stopping"; played for characters from M4 4d-11).
@@ -341,6 +345,7 @@ pub(crate) mod tests {
             cut_short: true,
             play_time: 1.0,
             frame_steps: steps.clone(),
+            frame_parts: Vec::new(),
             cues,
             transitions: Vec::new(),
         };
@@ -385,6 +390,7 @@ pub(crate) mod tests {
             cut_short: true,
             play_time: 1.0,
             frame_steps: vec![identity(); 16],
+            frame_parts: Vec::new(),
             cues: vec![Cue { phase: 1.0, action: "one".into() }, Cue { phase: 0.0, action: "zero".into() }, Cue { phase: 0.5, action: "half".into() }],
             transitions: Vec::new(),
         };

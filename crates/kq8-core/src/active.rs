@@ -6078,6 +6078,38 @@ endif
     }
 
     #[test]
+    fn a_character_s_bolt_starts_at_its_arrow_part_found_once() {
+        // ranged-weapons.md rule 24 (M5 5f-2): spbattck's `arrow` at its
+        // `do` frame, about (−55, −1,367, 954); gob faces −y (heading 0).
+        let mut a = fighter();
+        {
+            let o = &mut a.world.anims[0];
+            let attack = o.player.movements.iter_mut().find(|m| m.name == "attack").unwrap();
+            attack.frame_parts = (0..16).map(|k| if k == 8 { vec![("arrow".to_string(), [-55.0, -1367.0, 954.0])] } else { vec![] }).collect();
+            o.player.start("attack");
+            // One update past its `do` cue (0.5, frame 8): the frame at the
+            // cue counts (Q140 c), not frame 9 shown now.
+            o.player.phase = 0.6;
+            let c = o.character.as_mut().unwrap();
+            let f = c.fight.as_mut().unwrap();
+            f.settings.ranged_weapon = Some("INVITEM_SmCrossbow".into());
+            f.settings.projectile = Some("Prscbolt.kq".into());
+            c.ai.as_mut().unwrap().alarmed = true;
+        }
+        a.world.projectiles.insert("prscbolt.kq".into(), scbolt());
+        a.world.connor_at = Some([0.0, -8000.0, 100.0]);
+        a.world.character_do(0);
+        let b = a.world.bolts[0].clone();
+        assert_eq!(b.position.map(f32::round), [-55.0, -1367.0, 1054.0], "gob at (0, 0, 100) + the part");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("start offset (-55, -1367, 954): its part 'arrow' in frame 8 of 'attack' (kept from now on)"), "{log}");
+        // Kept: a later shot from another frame starts at the same offset.
+        a.world.anims[0].player.phase = 0.0;
+        a.world.character_do(0);
+        assert!(a.world.fight_log.join("\n").contains("start offset (-55, -1367, 954): kept from an earlier shot"));
+    }
+
+    #[test]
     fn a_bolt_on_an_immune_character_does_no_damage_and_tells_its_script() {
         // Rule 30: type bit 0x4000 (the Wizard and the Knight, 0xC021).
         let mut a = fighter();

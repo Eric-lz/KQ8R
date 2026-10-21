@@ -258,6 +258,8 @@ pub fn spawn_animated(
         textures: Vec<(i32, Option<String>)>,
         /// Its `.kqs` ball (rule 37 (2), M4 4d-7b-5b).
         ball: crate::shadow_view::ModelBall,
+        /// Each frame's named parts (`ranged-weapons.md` rule 24, M5 5f-2).
+        parts: Vec<Vec<(String, [f32; 3])>>,
     }
     let built: Vec<Built> = animations
         .into_iter()
@@ -287,7 +289,7 @@ pub fn spawn_animated(
                 .collect();
             let moves = a.frame_transforms.iter().skip(1).any(|t| !is_still(t));
             let ball = crate::shadow_view::ModelBall::of(a.ball);
-            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures, ball }
+            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures, ball, parts: a.frame_parts }
         })
         .collect();
     let mut rng = Rng::new(SEED);
@@ -317,11 +319,25 @@ pub fn spawn_animated(
                 cut_short: l.unknown != 0,
                 play_time: built[*i].duration,
                 frame_steps: built[*i].steps.clone(),
+                frame_parts: built[*i].parts.clone(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
                 // characters.md rule 20 (M4 4d-11).
                 transitions: l.transitions.clone(),
             })
             .collect();
+        // ranged-weapons.md rule 24 (M5 5f-2): where a bolt would start, per
+        // frame of each movement that has an `arrow` part (for the checks).
+        for m in &movements {
+            let arrow: Vec<String> = m
+                .frame_parts
+                .iter()
+                .enumerate()
+                .filter_map(|(k, parts)| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case("arrow")).map(|(_, q)| format!("{k}: ({:.0}, {:.0}, {:.0})", q[0], q[1], q[2])))
+                .collect();
+            if !arrow.is_empty() {
+                log.detail(format!("[{}] '{}' ({} frames) part arrow by frame: {}", p.name, m.name, m.frames(), arrow.join(", ")));
+            }
+        }
         let names = (a.anim_names.0.as_deref(), a.anim_names.1.as_deref());
         // anim-scripts.md rule 3 as corrected 2026-10-19 (M4 4d-8): both
         // names start as `Stop`, the keys replace them.

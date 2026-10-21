@@ -234,6 +234,9 @@ pub struct Fight {
     /// health and damage get the combat level's factor when it enters the
     /// world (M5 5c-10), set by the loader.
     pub combat_scaled: bool,
+    /// Where its bolts start, in its own space: the bolt's model part found
+    /// at a shot, then kept (`ranged-weapons.md` rule 24; M5 5f-2).
+    pub shoot_offset: Option<[f32; 3]>,
 }
 
 /// `setCombatLevel 1|2|3` (rule 3): the factor.
@@ -311,9 +314,6 @@ pub fn aim_direction(from: [f32; 3], to: [f32; 3]) -> Option<([f32; 3], f32, f32
     Some(([flat * heading.sin(), -flat * heading.cos(), pitch.sin()], heading, pitch))
 }
 
-/// **Stand-in** until M5 5f-2 (rule 24): a character's bolt leaves at
-/// this share of its eye height.
-pub const SHOT_HEIGHT: f32 = 0.75;
 /// Rule 25: a character aims at its target raised by this share of the
 /// top of the target's collision box (Connor: his `BOUNDS.KQ` box, top
 /// 1,300 → 975; the note says 1,600 → 1,200: Q140 b).
@@ -367,7 +367,7 @@ impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
         let must_flee = settings.must_flee;
-        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false }
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false, shoot_offset: None }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -1028,10 +1028,12 @@ impl crate::active::WorldState {
 impl crate::active::WorldState {
     /// `fighting.md` rule 36 (M5 5c-9): a ranged character's `Do`: it
     /// shoots its weapon's projectile at its target (Connor, when
-    /// alarmed); no reach or front test. `ranged-weapons.md` rule 25 (M5
-    /// 5f-1): aimed at his feet raised by 0.75 × the top of his box, led
-    /// for his movement. **Stand-in** until 5f-2: it leaves at 3/4 of the
-    /// shooter's eye height.
+    /// alarmed); no reach or front test. `ranged-weapons.md` (M5 5f-1,
+    /// 5f-2): it leaves from the bolt's model part (`meshName`) in the
+    /// frame playing, found at a shot and then kept (rule 24; fallback its
+    /// `shootOffsets`: none in Daventry, 0, 0, 0), turned with it; aimed
+    /// at his feet raised by 0.75 × the top of his box, led for his
+    /// movement (rule 25).
     fn shoot(&mut self, i: usize, movement: &str) {
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         let a = &self.anims[i];
@@ -1047,9 +1049,26 @@ impl crate::active::WorldState {
             self.fight_note(&name, format!("Do ({movement}): projectile file {file} not read: no shot"));
             return;
         };
-        let eye = c.ai.as_ref().map_or(1000.0, |ai| ai.eye);
+        let part = p.mesh_name.clone().unwrap_or_default();
+        let (offset, found, how) = match f.shoot_offset {
+            Some(o) => (o, None, "kept from an earlier shot".to_string()),
+            None => {
+                // The frame at the `do` cue's own phase (the note's example:
+                // `spbattck` frame 2 of 19 at 0.125; Q140 c), not the frame
+                // one update later, where the phase is now.
+                let phase = a.player.phase;
+                let cue = a.player.movement().and_then(|m| m.cues.iter().filter(|c| c.action.trim().eq_ignore_ascii_case("do") && c.phase <= phase + 1e-4).map(|c| c.phase).reduce(f32::max));
+                let frame = a.player.movement().map_or(0, |m| m.frame_at(cue.unwrap_or(phase)));
+                let place = a.player.movement().and_then(|m| m.frame_parts.get(frame)).and_then(|parts| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part))).map(|(_, p)| *p);
+                match place {
+                    Some(o) => (o, Some(o), format!("its part '{part}' in frame {frame} of '{}' (kept from now on)", a.player.movement_name())),
+                    None => ([0.0; 3], None, format!("no part '{part}' in frame {frame} of '{}': its shootOffsets (none read, none in Daventry: 0, 0, 0)", a.player.movement_name())),
+                }
+            }
+        };
         let pos = a.player.base.position;
-        let from = [pos[0], pos[1], pos[2] + SHOT_HEIGHT * eye];
+        let r = a.player.base.rotation;
+        let from: [f32; 3] = std::array::from_fn(|k| pos[k] + offset[0] * r[0][k] + offset[1] * r[1][k] + offset[2] * r[2][k]);
         let raise = AIM_SHARE * crate::connor_mover::CONNOR_BOX.1[2];
         let at = [target[0], target[1], target[2] + raise];
         let v = self.connor_was.map_or([0.0; 3], |w| std::array::from_fn(|k| (target[k] - w[k]) / dt));
@@ -1059,8 +1078,14 @@ impl crate::active::WorldState {
             None => "straight at him (no meeting point)".to_string(),
         };
         let damage = f.stats.0[2];
+        if let Some(o) = found {
+            if let Some(f) = self.anims[i].character.as_deref_mut().and_then(|c| c.fight.as_mut()) {
+                f.shoot_offset = Some(o);
+            }
+        }
         let why = format!(
-            "Do ({movement}): from 3/4 of its eye height (stand-in until 5f-2); aim: Connor + {raise:.0} (0.75 x his box top, rule 25), {lead_text}; ranged damage {damage} (rule 22)"
+            "Do ({movement}): start offset ({:.0}, {:.0}, {:.0}): {how} (rule 24); aim: Connor + {raise:.0} (0.75 x his box top, rule 25), {lead_text}; ranged damage {damage} (rule 22)",
+            offset[0], offset[1], offset[2]
         );
         self.launch_bolt(&name, &file, &p, from, aim, damage, &why);
     }
