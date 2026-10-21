@@ -2118,5 +2118,6 @@ Steps:
    compares it by ear with the original.
    **Done** 2026-10-21 (`stats::LEVEL_UP_SOUND`, `level_up_sound`, at the
    three places his level can go up: a stats event, an item applied, a
-   kill's experience); a plain one-shot in the effects group; checked in
-   `sound.log` only.
+   kill's experience); a plain one-shot in the effects group. **The
+   user's check in the original (2026-10-21):** the right sound; the
+   flame plays; the experience per level matches.

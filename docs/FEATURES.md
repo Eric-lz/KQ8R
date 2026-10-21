@@ -537,7 +537,7 @@ miss, roll, flinch, death, drop and shot is in
   back in a fifth of a second. A change of health or experience while
   the bar is away pops the meters up alone for 1.5 s. A changed number
   flashes its slot. A level-up plays the flame over the level number
-  and a sound (both stand-ins, Q149). Cutscenes (`handsOff`) slide the bar away and show
+  and a sound (checked by the user against the original). Cutscenes (`handsOff`) slide the bar away and show
   the spinning mask; afterwards it comes back only if it was shown.
   The caption sits on top of the bar. Clicks on the bar don't reach the
   world. Logged in `gui.log`. Checked by the user 2026-10-18.

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Levels: the user's check in the original
+
+**Changed:** Docs only: Q149 marked partly answered; provenance, DESIGN, STATUS.
+**Why:** The user compared our levels, the flame and the sound with the original.
+**Tested how:** The user, by eye and ear, in the original and in our build.
+**Result:** The experience needed per level (10, doubling to level 14, then 150,000) and the level-ups match the original. The level-up sound is `LEVEL.AUD` (Q149 c answered; no longer a stand-in). The flame plays on a level-up.
+**Still broken / not tested:** The flame's speed, playing once and hiding were not compared (Q149 b). Q149 a, d, e still open.
+**Next:** —
+
 ## 2026-10-21 L-3: the level-up sound
 
 **Changed:** `kq8-core`: `stats::LEVEL_UP_SOUND` (`LEVEL.AUD`), `WorldState::level_up_sound`, called where Connor's level goes up (`active.rs` stats event, `connor_inventory.rs` an item applied, `fight.rs` a kill's experience); the unit test `stats_events_add_and_an_object_below_0_gets_die` checks it plays once. DESIGN, provenance.

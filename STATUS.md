@@ -15,8 +15,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   gets its `conStart.cs` level and stats (Dead City level 8, health 80,
   hand 60, ranged 19, armour 11; was level 1 with 10 / 10 / 0 / 0). New:
   the level-up flame (`flame14.pba`) over the level number and the
-  level-up sound (`LEVEL.AUD`), both stand-ins. New **Q149** (a–e, not
-  blocking).
+  level-up sound (`LEVEL.AUD`). **The user checked in the original:**
+  the experience per level, the sound and the flame are right (the
+  flame's speed not compared). **Q149** a, b (speed), d, e still open.
 
 - **2026-10-21 (B, M6 6b-1 to 6b-3): Azriel's Hammer built** from
   `azriel-hammer.md` (plan in `docs/DESIGN.md` "6b", one commit per step;
@@ -597,9 +598,9 @@ M6 has started with the Rope and Hook (6a).
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
 - For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
-  `KQConner::setLevel` does; b: when and how the level-up flame plays;
-  c: which sound plays on a level-up; d: `lvlup.pba`; e: built-in pickup
-  experience of start-up items).
+  `KQConner::setLevel` does; b: the level-up flame's speed and length;
+  d: `lvlup.pba`; e: built-in pickup experience of start-up items; c
+  answered by the user: `LEVEL.AUD`).
 
 - For A (asked 2026-10-21 by B, M6 6b, not blocking): **Q148** (a: where
   the hammer turns back at its range or the ground; b: how its model
