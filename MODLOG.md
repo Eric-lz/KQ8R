@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a, A's measurement: the grab's camera spot on a tie
+
+**Changed:** `rope.rs` `camera_spot`: of the game's own two spots, the + one when equally near (within 0.5, ours); `setRopeCam` spots keep "2 when equal". Unit test with A's church numbers.
+**Why:** `ropeandhook.md` rule 18 (measured by A, Q147 f): from the throw camera straight behind him both spots are equally near and the original takes the + one; ours took the other.
+**Tested how:** `cargo test -p kq8-core rope` (14 pass: church foot → (208837, 188873, 13104) as measured), clippy clean. The foot climb run; `rope.log`.
+**Result:** Update 162: both spots 5,110.3 from the camera; spot 1 (150148, 205088, 12600) taken.
+**Still broken / not tested:** **Not looked at by eye.** The 0.5 tolerance is ours.
+**Next:** the traps at a placing (Q147 e), the top camera's flag (Q147 c).
+
 ## 2026-10-21 A: Q142 and Q141 answered (`checkDistance`, the walk after the axe swap)
 
 **Changed:** `docs/behaviour/anim-scripts.md` rules 31 (`checkDistance`) and 32 (a script's walk during a weapon swap), numbers, "How to check"; QUESTIONS Q141, Q142 answered; STATUS. No code.

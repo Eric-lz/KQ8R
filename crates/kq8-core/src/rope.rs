@@ -369,21 +369,29 @@ fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
 /// Rules 18, 20: the camera spot for the climb: with the place's
 /// `setRopeCam` spot 1 set, the nearer to `camera` of spots 1 and 2 (2
 /// when equally near; spot 1 alone if 2 is not set); otherwise the nearer
-/// of the two the game makes from `offset` (x taken + and −). Returns the
-/// spot and why.
+/// of the two the game makes from `offset` (x taken + and −; the + one
+/// when equally near: measured by A, Q147 f; "equal" within
+/// [`TIE`], ours, so float rounding doesn't decide it). Returns the spot
+/// and why.
 pub fn camera_spot(set: [Option<[f32; 3]>; 2], place: [f32; 3], dir: [f32; 3], offset: [f32; 3], camera: [f32; 3]) -> ([f32; 3], String) {
-    let (a, b, whose) = match set {
-        [Some(a), Some(b)] => (a, b, "the place's setRopeCam spots"),
+    let (a, b, whose, made) = match set {
+        [Some(a), Some(b)] => (a, b, "the place's setRopeCam spots", false),
         [Some(a), None] => return (a, format!("the place's setRopeCam spot 1 {} (spot 2 not set)", fmt3(a))),
         _ => {
             let [x, y, z] = offset;
-            (add(place, turned(dir, [x, y, z])), add(place, turned(dir, [-x, y, z])), "the game's own spots")
+            (add(place, turned(dir, [x, y, z])), add(place, turned(dir, [-x, y, z])), "the game's own spots", true)
         }
     };
     let (da, db) = (dist(a, camera), dist(b, camera));
-    let (spot, which) = if da < db { (a, 1) } else { (b, 2) };
-    (spot, format!("{whose}: 1 {} at {da:.0}, 2 {} at {db:.0} from the camera {}: spot {which}, the nearer (2 when equal)", fmt3(a), fmt3(b), fmt3(camera)))
+    let first = if made { da <= db + TIE } else { da < db };
+    let (spot, which) = if first { (a, 1) } else { (b, 2) };
+    let tie = if made { "the + one (1) when equal" } else { "2 when equal" };
+    (spot, format!("{whose}: 1 {} at {da:.1}, 2 {} at {db:.1} from the camera {}: spot {which}, the nearer ({tie})", fmt3(a), fmt3(b), fmt3(camera)))
 }
+
+/// Two of the game's own spots this close in distance count as equally
+/// near (ours).
+pub const TIE: f32 = 0.5;
 
 /// Rule 19 (from the foot): the camera's height range: lowest its height
 /// now; highest 5,000 above, or the height of something solid straight
@@ -932,9 +940,15 @@ mod tests {
         let (spot, why) = camera_spot([None, None], [0.0; 3], d, FOOT_SPOT, [2500.0, -2500.0, 0.0]);
         assert!(why.contains("spot 1"), "{why}");
         assert!((spot[0] - 2500.0).abs() < 0.01 && (spot[1] + 2500.0).abs() < 0.01 && spot[2] == 4800.0, "{spot:?}");
-        // Equally near: spot 2.
+        // Equally near: spot 2 of the setRopeCam spots, the + one of the
+        // game's own (measured at the church foot, Q147 f: the camera
+        // straight behind, both 2,512 away, the + one taken).
         let (_, why) = camera_spot([Some([1.0, 0.0, 1.0]), Some([-1.0, 0.0, 1.0])], [0.0; 3], d, FOOT_SPOT, [0.0; 3]);
         assert!(why.contains("spot 2"), "{why}");
+        let place = [206337.0, 186373.0, 8304.0];
+        let (cam, _) = throw_camera(place, [0.0; 3], THROW_CAM);
+        let (spot, why) = camera_spot([None, None], place, [0.0; 3], FOOT_SPOT, cam);
+        assert_eq!(spot, [208837.0, 188873.0, 13104.0], "{why}");
     }
 
     #[test]
