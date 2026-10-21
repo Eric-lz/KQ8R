@@ -30,6 +30,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** The note's open questions 1–5 are unchanged.
 **Next:** B: build `ranged-weapons.md`.
 
+## 2026-10-20 The user's check of thrown items (5e): matches the original
+
+**Changed:** QUESTIONS Q137 marked built, with the user's check; this entry.
+**Why:** The user compared the barrel's crystals with the original.
+**Tested how:** The user's check by eye, in our build and the original.
+**Result:** "Pretty much exactly like the original", the tumble included (so `thrown-items.md` open question 2, the "slow" tumble, is settled by eye; for A to close in the note).
+**Still broken / not tested:** Items bouncing off doors or chests not run (no throw reaches one in Daventry).
+**Next:** —
+
 ## 2026-10-20 M5 5e-3: thrown items tumble about one axis, as traced
 
 **Changed:** `item.rs`: a thrown item's tumble is one random number from −0.5 to +0.5 rad **per update**, drawn at each throw (and each throw again). It turns about its own x axis by that much every update until the flight ends, also after it touches something. At the end its angles are 0, 0, 0. The stand-in (three axes, 90–180° per second, back to its old turn) is gone, with `flight_rest`. `items.log` shows the turn each update. Provenance, DESIGN (5e done).
