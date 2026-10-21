@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: the user checks potions in the original
+
+**Changed:** `potions.md`: rules 34, 35, 37, "How to check" and open questions updated from the user's check.
+**Why:** The user tried the note's "How to check" list in the original.
+**Tested how:** The user's check in the original game (Daventry).
+**Result:** Checks 2–6 correct. The church candle raises the experience bar a little and it never drops. The timer icon is cut away from the top down, the used part showing a black background and gold outline. Only the red number is seen. The timer keeps running when the window loses focus (the note had guessed it stops); only Esc stops it.
+**Still broken / not tested:** Missing face combinations (needs a late-game save); Strength ending during Invisible (open question 5); the help pop-ups (not this topic).
+**Next:** B: build `potions.md`.
+
 ## 2026-10-20 A: health items and potions
 
 **Changed:** New `docs/behaviour/potions.md`. `inventory.md` rules 16, 18 and open question 2, `interface.md` rule 32 point there (the candle's rule corrected). QUESTIONS Q109 partly answered. STATUS. Scratch notes in `re/notes.md`.

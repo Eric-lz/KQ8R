@@ -230,8 +230,10 @@ red.
     - It **stops while the main menu is open** (the game is paused) and
       does not catch up afterwards.
     - It **does not stop** for `handsOff`, cutscenes or conversations.
-    - It also stands still while the game window is not active [inferred
-      from the frame code; not checked].
+    - It **keeps running when the game window loses focus** (the user's
+      check in the original, 2026-10-20). Only the main menu (Esc) stops
+      it. (A frame check in the program looked like it could stop the
+      game when the window is inactive; in practice it doesn't.)
     - Potions **survive a world change and a saved game**: Connor's
       potion switches and the remembered raises are saved
       (`claritySpell`, `strengthSpell`, `invulnerabilitySpell`,
@@ -247,9 +249,12 @@ red.
     `_7`, laid out in the GUI file [data]).
     - It shows the part left: percent = seconds left × 100 / `Dur`
       (whole-number division); the picture is drawn in two parts split
-      at that height, the lower part being the time left [traced]. How
-      the upper (used) part looks different was not found [not traced];
-      the user can tell by eye.
+      at that height, the lower part being the time left [traced].
+      **Seen by the user in the original:** the icon appears whole, then
+      is cut away **from the top down**; the used part shows only a
+      **black background and a gold outline**. So the used part is the
+      icon place's own background and frame, and only the lower part
+      shows the picture.
     - It is redrawn only when the percent changes [traced].
     - When the percent drops below 1 (at the end) the place is freed
       and the icon disappears [traced].
@@ -268,7 +273,9 @@ red.
     **Invulnerable** runs, the armour number is (`..._ARMOR_ALTTXT`)
     [traced]. The number is Connor's current (raised) stat, the same
     number as the white one [traced: the same value is written to
-    both]. Whether the white one is hidden behind it was not traced.
+    both]. **The user sees only the red number** in the original, so
+    the red text replaces the white one while it is on (whether the
+    white one is hidden or just covered makes no visible difference).
 38. They turn red with the stats refresh right after the start and back
     to white with the one right after the end (rule 13) [traced]. The
     number's change also plays the slot's flash (`interface.md`
@@ -394,6 +401,12 @@ red.
 
 ## How to check
 
+**Checks 2–6 were done by the user in the original on 2026-10-20: all
+correct.** Check 7 (the candle in Daventry's church, `candle.kq` /
+`candle.cs`): the experience bar rises a little on pickup and does not
+drop (the exact +25 can't be read from the bar). The timer keeps
+running when the window loses focus; only Esc stops it.
+
 1. **Our logs (B)**: per use: slot, item, count before/after, refused
    (why), sound; per potion start/end: game time, stats before/after
    (protection, hand), seconds left each tick, icon place and percent;
@@ -422,13 +435,18 @@ red.
 
 ## Open questions
 
-1. How the used part of a timer icon is drawn (rule 35): same picture,
-   both parts drawn, the difference was not found. User's eye.
-2. Whether the white slot number is hidden while the red one shows
-   (rule 37).
-3. The help pop-ups 0x80, 0x83, 0x84 (rule 41): which text, not studied.
-4. What the game draws for a missing face combination (Edge cases).
+1. ~~How the used part of a timer icon is drawn~~: answered by the
+   user (rule 35).
+2. ~~Whether the white number shows under the red one~~: only red is
+   seen (rule 37).
+3. The help pop-ups 0x80, 0x83, 0x84 (rule 41): which text box each is;
+   belongs to a future study of the help pop-ups, not to potions.
+4. What the game draws for a missing face combination (Edge cases):
+   needs a late-game save (helmet worn + Strength); low priority, our
+   fallback ("Do not reproduce" 3) is fine either way.
 5. Whether the drawing switch Invisible sets (and Strength's end clears)
    changes how Connor is drawn beyond the textures (Do not reproduce 2).
-6. The game window losing focus stopping the clock (rule 34): not
-   checked.
+   A check: drink Strength, wait about 10 s, drink Invisible; 10 s later
+   Strength ends while Invisible still has about 5 s left. Does Connor's
+   see-through look change at that moment? Low priority.
+6. ~~The window losing focus~~: the clock keeps running (rule 34).
