@@ -643,6 +643,11 @@ pub struct WorldState {
     /// `KQObject::dither <name> 1` (lower case), for the viewer (M5 5g-7;
     /// STAND-IN, Q144).
     pub dithered: BTreeSet<String>,
+    /// Connor's handsOff is on (a cutscene), set by the caller before each
+    /// update (M5 5g-9, `potions.md` rule 26).
+    pub connor_hands_off: bool,
+    /// The reason last logged by [`WorldState::note_connor_report`].
+    connor_hidden_logged: Option<&'static str>,
     /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
     pub connor_in_temple4: bool,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
@@ -792,11 +797,40 @@ impl WorldState {
         self.updates as f64 / crate::UPDATES_PER_SECOND
     }
 
-    /// `potions.md` rule 26 (M5 5g-6): where the characters are told
-    /// Connor is: 100,000 below his place while Invisible runs.
+    /// `potions.md` rule 26 (M5 5g-6, 5g-9): where the characters are
+    /// told Connor is: 100,000 below his place while Invisible runs or a
+    /// cutscene has handsOff on.
     pub fn connor_reported(&self) -> Option<[f32; 3]> {
         let p = self.connor_at?;
-        Some(if self.connor_invisible() { [p[0], p[1], p[2] - crate::potions::HIDDEN_DROP] } else { p })
+        Some(if self.connor_hidden_why().is_some() { [p[0], p[1], p[2] - crate::potions::HIDDEN_DROP] } else { p })
+    }
+
+    /// Why the characters are told Connor is far below (rule 26), if they
+    /// are.
+    pub fn connor_hidden_why(&self) -> Option<&'static str> {
+        if self.connor_invisible() {
+            Some("the Invisible potion")
+        } else if self.connor_hands_off {
+            Some("a cutscene (handsOff)")
+        } else {
+            None
+        }
+    }
+
+    /// Rule 26: logs each change of what the characters are told
+    /// (`characters.log`), once per update.
+    pub(crate) fn note_connor_report(&mut self) {
+        let why = self.connor_hidden_why();
+        if why == self.connor_hidden_logged {
+            return;
+        }
+        self.connor_hidden_logged = why;
+        let line = match why {
+            Some(w) => format!("characters are told Connor is 100,000 below where he is: {w} (potions.md rule 26)"),
+            None => "characters are told where Connor really is again (potions.md rule 26)".to_string(),
+        };
+        self.character_log.push(format!("update {}: Connor: {line}", self.updates));
+        self.note(line);
     }
 
     /// The Invisible potion runs (rule 28: `KQConner::checkInvisible`).
@@ -2753,6 +2787,8 @@ impl Active {
                 potions: Vec::new(),
                 status_icons: Default::default(),
                 connor_in_temple4: false,
+                connor_hands_off: false,
+                connor_hidden_logged: None,
                 reveal_objects: Vec::new(),
                 pickup_experience: Vec::new(),
                 helps_asked: BTreeSet::new(),
@@ -3838,6 +3874,8 @@ impl Active {
         self.talk_step(now);
         // M5 5g-2: the potions' whole seconds (potions.md rule 33).
         crate::connor_inventory::timers(&mut self.world);
+        // M5 5g-9: what the characters are told (potions.md rule 26).
+        self.world.note_connor_report();
         // M5 5g-7: Clarity's Reveal calls (potions.md rule 31).
         for (name, on) in std::mem::take(&mut self.world.reveal_calls) {
             let word = if on { "True" } else { "False" };

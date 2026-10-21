@@ -1662,10 +1662,7 @@ Steps (one commit each):
    or face changes; restored at the end. The hurt line (rule 27) is not
    built (which characters use it is not traced). **Test:** a goblin
    chasing him gives up within ~3 s (`characters.log`).
-   **Not built, a possible later step (6b):** rule 26 says the same
-   lowering already happens during cutscenes (handsOff with the pointer
-   hidden), while Connor talks and on the rope; that changes characters
-   outside potions, so it waits for the user's go-ahead.
+   Rule 26's other cases (cutscenes, talk, rope): step 5g-9.
 7. **5g-7, clarity** (**done** 2026-10-21; keepwall dithered 30–930, `wizchest1` shown, drawn and opened; `dither`: stand-in, Q144) (rules 30–32). At the start every object whose
    `groupsAlways` has bit 2048 gets its script with `Reveal True`, at
    the end `Reveal False` (Daventry: `keepwall`, `wizchest1`). Face bit
@@ -1678,6 +1675,18 @@ Steps (one commit each):
    +25,000, ladle +50,000 at once; every time added. The help pop-ups
    are logged only. **Test:** `give Candle`: experience +25 at the
    fifth update after.
+9. **5g-9, characters ignore Connor during cutscenes** (planned
+   2026-10-21, the user's go-ahead; **done** 2026-10-21: goblin22 gives
+   up 3 s into a cutscene, sees him again after it) (rule 26: the same lowering by
+   100,000 "during cutscenes (handsOff with the pointer hidden)"). The
+   viewer tells the rules each update whether handsOff is on (a script's
+   `handsOff 1` or a `walkTo`); while it is, characters are told Connor
+   is 100,000 below, as with Invisible. Every change logged in
+   `characters.log`. Not in this step: "while Connor talks" (a remark,
+   or only his conversation state? asked, Q146) and the rope (not built,
+   M6). `checkInvisible` stays Invisible only. **Test:** a goblin chasing
+   Connor, then `handsOff 1`: it gives up within ~3 s; `handsOff 0`: it
+   can see him again.
 
 ### M6 — The whole game
 

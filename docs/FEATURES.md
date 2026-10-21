@@ -599,6 +599,8 @@ not looked at by eye yet.
 - **Invisible:** characters lose him (a chasing goblin gives up within
   3 s and walks home); Connor is drawn as a see-through mesh (the game's
   `I_` pictures for weapons and items).
+- **Cutscenes:** characters lose Connor during cutscenes too, the same
+  way (a chasing goblin gives up and goes home).
 - **Clarity:** the clarity face; hidden things show for 60 s (Daventry:
   the keep wall turns see-through, the wizard's hidden chest appears and
   can be opened).

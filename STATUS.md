@@ -22,7 +22,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   Candle +25 at pickup and the other built-in pickup experience. New
   questions **Q143** (the mask's icon place), **Q144** (`dither`), **Q145**
   (three shield orbits, not one: the user's check, fixed). The user
-  checked Invisible, Clarity and the shield's orbits by eye.
+  checked Invisible, Clarity and the shield's orbits by eye. **5g-9:**
+  characters also lose Connor during cutscenes (handsOff). Q146 asked.
 
 - **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
   (not needed in Daventry): thrown from standing with `handsOff` until
@@ -403,8 +404,8 @@ characters and conversations done; the menus postponed) and **M5**
   see-through, `dithered=1` ignored (Q144); the orbit's angle 0 along +x
   and the shape turning with it (ours). Not built: the hurt line while
   invisible (rule 27), the same lowering of Connor's reported place
-  during cutscenes, talk and the rope (rule 26; waits for the user's
-  go-ahead, it changes characters outside potions), first-person arms,
+  while he talks (Q146 a) and on the rope (no rope yet; cutscenes done
+  in 5g-9: every handsOff, Q146 b), first-person arms,
   armour skins (the temple armour's `con65`), the help pop-ups (logged).
   The helmet's face set `chf` exists in no world, so his face stays.
   Potions are not kept across saves or worlds (we have neither yet).

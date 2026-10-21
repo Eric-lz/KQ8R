@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-9: characters lose Connor during cutscenes
+
+**Changed:** `active.rs`: `connor_hands_off` (set by the viewer each update, `door_view.rs`), `connor_hidden_why` (Invisible or a cutscene), the reported place uses it, each change logged once in `characters.log`. `potions.rs`: Invisible's own lines shortened (the change is logged by the new check). QUESTIONS Q146 (talk; which handsOff), Q145 (b) answered by the user, Q143 marked low priority. DESIGN, provenance. 1 unit test extended.
+**Why:** `potions.md` rule 26: the same lowering "during cutscenes"; the user said go ahead.
+**Tested how:** `cargo test` (core 468 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 3000 --at 286784,192527,1.5708 --key f3,1 --command "handsOff 1,150" --command "handsOff 0,300"`; `characters.log`.
+**Result:** goblin22 chases and attacks; update 151 "told Connor is 100,000 below: a cutscene (handsOff)"; 165 can't see him; 209 gives up, home at 237; 301 "told where Connor really is again"; 315 sees him and is alarmed again.
+**Still broken / not tested:** "While Connor talks" not built (Q146 a); the rope doesn't exist yet. Not run through a real Daventry cutscene with a chaser (only the `handsOff` command). Not looked at by eye.
+**Next:** A: Q144, Q146.
+
 ## 2026-10-21 The user's check of the shield's orbits
 
 **Changed:** This entry; STATUS, FEATURES, provenance.

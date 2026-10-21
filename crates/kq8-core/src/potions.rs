@@ -36,8 +36,8 @@
 //!   true place stays for hits and for standing on a rising character.
 //!   `KQConner::checkInvisible` gives 1 while it runs. The look is the
 //!   viewer's. Not built: the hurt line of rule 27 (which characters use
-//!   it is not traced), and the same lowering during cutscenes, talk and
-//!   the rope (rule 26's other cases; a later step).
+//!   it is not traced). M5 5g-9: the same lowering during a cutscene
+//!   (handsOff on); not yet while Connor talks (Q146) or on the rope (M6).
 //!
 //! - Clarity (rules 30–32): at its start every object whose
 //!   `groupsAlways` has bit 2048 (the list the loader gives,
@@ -189,11 +189,7 @@ pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, Str
             w.reveal_calls.extend(names.iter().map(|n| (n.clone(), true)));
             (0, format!("clarity: Reveal True queued for {} objects with groupsAlways bit 2048: {names:?} (potions.md rule 31)", names.len()))
         }
-        Effect::Invisible => {
-            let line = "invisible: characters are told Connor is 100,000 below where he is (potions.md rule 26)";
-            w.character_log.push(format!("update {}: Connor: {line}", w.updates));
-            (0, line.to_string())
-        }
+        Effect::Invisible => (0, "invisible: characters are told Connor is 100,000 below where he is (potions.md rule 26)".to_string()),
         _ => (0, String::new()),
     }
 }
@@ -217,11 +213,7 @@ pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
             w.reveal_calls.extend(names.iter().map(|n| (n.clone(), false)));
             format!("clarity ends: Reveal False queued for {} objects (potions.md rule 31)", names.len())
         }
-        Effect::Invisible => {
-            let line = "invisible ends: characters are told where Connor really is (potions.md rule 26)";
-            w.character_log.push(format!("update {}: Connor: {line}", w.updates));
-            line.to_string()
-        }
+        Effect::Invisible => "invisible ends (potions.md rule 26)".to_string(),
         _ => String::new(),
     }
 }

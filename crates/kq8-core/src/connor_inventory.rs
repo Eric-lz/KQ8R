@@ -684,6 +684,10 @@ mod tests {
         a.world.updates = 15 * 15;
         timers(&mut a.world);
         assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0]));
+        // M5 5g-9: a cutscene does the same, but checkInvisible stays 0.
+        a.world.connor_hands_off = true;
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0 - 100_000.0]));
+        assert!(!a.world.connor_invisible());
     }
 
     #[test]
