@@ -2946,3 +2946,15 @@ Replaces 5c fixes 2–3 and 5d fixes 9–10's stand-ins (Q138) where the note di
 | Aimed at the aim point, no lead; his ranged damage at the shot (5 with the Small Crossbow at level 1); the bolt is his (`Connor`): never hits him | Rules 22, 25, 29 | Unit test; viewer: goblin22 15 → 11 → 7 |
 | The crossbow's sound is its `attack`'s own `playsound Crossbow.aud` cue | Rule 20 (data) | — |
 | `--aim-point X,Y,Z,N`: a click along the camera's line to a point | Ours (a test option) | — |
+
+### 5f-6, the moving shot — viewer `connor_view.rs` (`ask_shot`'s moving branch, `MOVING_SHOT_DELAY`, `next_moving_shot`, `run_back_step`, `moving_aim`), `door_view.rs` (the use sound, the moving shot's bolt)
+
+| What | Source | Check |
+| --- | --- | --- |
+| Moving = in our Free mode with a forward / back key (the original's Move state: walking or running with the keys) | Rule 20 "Moving" | Viewer `--hold` |
+| No `attack`; the shot's turn and its wait (more than 45°) as standing | Rule 20 (the turning part comes before "Standing" / "Moving") | Viewer: the shot at update 63 after a turn |
+| If his `attackDelay` (0.5 s, the default; `Connor.kq` has none) has passed since the last shot, the bolt leaves at once from the part in the frame playing now (`walk` frame 4: (−135, −588, 868)); the next moving shot 0.5 s later; otherwise nothing | Rule 20; data (`scbwalk.KQS`'s part) | Viewer: update 70 "less than 0.5 s ago: nothing"; the offset within the note's range |
+| The ranged item's use sound (`crossbow.aud`, the item list's second sound column) as a flat one-shot | Rule 20 | `sound.log`: "Connor's moving shot", plain |
+| A moving shot while running switches the run off (he walks); it comes back on 1 s after the last moving shot | Rule 20; the simpler way allowed by "Do not reproduce" | Viewer: walk at update 72, run on again at 87 |
+| The end of a standing `attack` sets the next moving shot 0.5 s later | Rule 20 | — |
+| Our clock for the delay: his updates ÷ 15 | Ours | — |

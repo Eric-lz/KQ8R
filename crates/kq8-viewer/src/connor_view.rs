@@ -171,9 +171,16 @@ pub struct ConnorSim {
     pub do_cues: Vec<String>,
     /// The shot asked or playing (`ranged-weapons.md` rule 20; M5 5f-5).
     pub shot: Option<Shot>,
-    /// His shot's `do` cue passed this update (movement, the cue's
-    /// phase): taken by `door_view`.
-    pub shot_cues: Vec<(&'static str, f32)>,
+    /// His shot's `do` cue passed this update, or a moving shot left
+    /// (movement, the phase of the frame, moving): taken by `door_view`.
+    pub shot_cues: Vec<(&'static str, f32, bool)>,
+    /// `ranged-weapons.md` rule 20 (M5 5f-6): when the next moving shot
+    /// may leave (seconds of his updates), and when the run comes back on
+    /// after a moving shot made him walk.
+    next_moving_shot: f64,
+    run_back_at: Option<f64>,
+    /// A moving shot's aim point, for `door_view`.
+    pub moving_aim: Option<[f32; 3]>,
     /// The hand weapon's movement list in use (`confists.anm`), while one
     /// is ready (M5 5c fix, **stand-in**, Q138): his movements come from
     /// it where it has them.
@@ -197,6 +204,10 @@ pub struct ConnorSim {
     /// The big-swing key (Shift) is held (rule 6's `away2`).
     pub shift_held: bool,
 }
+
+/// Connor's `attackDelay` (`ranged-weapons.md` rule 20: the default 0.5 s;
+/// `Connor.kq` gives none): moving shots at most this often, seconds.
+pub const MOVING_SHOT_DELAY: f64 = 0.5;
 
 /// Connor's shot (`ranged-weapons.md` rule 20; M5 5f-5).
 #[derive(Debug, Clone)]
@@ -541,6 +552,9 @@ pub fn spawn_connor(
         do_cues: Vec::new(),
         shot: None,
         shot_cues: Vec::new(),
+        next_moving_shot: 0.0,
+        run_back_at: None,
+        moving_aim: None,
         weapon_set: None,
         weapon_target: None,
         pending_set: None,
@@ -1141,14 +1155,41 @@ impl ConnorSim {
         format!("{:.0} deg off his facing; {turn}; {line}", off.to_degrees())
     }
 
+    /// Rule 20 (M5 5f-6): his updates as seconds.
+    fn clock(&self) -> f64 {
+        self.updates as f64 / kq8_core::UPDATES_PER_SECOND
+    }
+
     /// Rule 20: the shot is asked. Standing (our Free mode, no movement
     /// key): `attack` only if his movement can be cut short (a click
-    /// during `attack` does nothing). Moving: 5f-6 (not built yet).
+    /// during `attack` does nothing). Moving (M5 5f-6): no `attack`; if
+    /// his `attackDelay` (0.5 s) has passed since the last shot the bolt
+    /// leaves at once from the frame playing, and a run becomes a walk
+    /// for 1 s.
     fn ask_shot(&mut self, movement: &'static str, aim: [f32; 3]) -> String {
         use kq8_core::connor::SpecialStep;
         if self.intent.forward != 0 && self.walker.mode == Mode::Free {
             self.shot = None;
-            return "he is moving: the moving shot is M5 5f-6 (not built): nothing".into();
+            let now = self.clock();
+            if now + 1e-6 < self.next_moving_shot {
+                return format!("moving: the last shot was less than 0.5 s ago (next at {:.2} s, now {now:.2} s): nothing (rule 20)", self.next_moving_shot);
+            }
+            self.next_moving_shot = now + MOVING_SHOT_DELAY;
+            let run = if self.intent.run {
+                self.intent.run = false;
+                self.run_back_at = Some(now + 2.0 * MOVING_SHOT_DELAY);
+                "; he was running: he walks, the run comes back 1 s after the last moving shot".to_string()
+            } else if self.run_back_at.is_some() {
+                self.run_back_at = Some(now + 2.0 * MOVING_SHOT_DELAY);
+                "; the run comes back 1 s from now".to_string()
+            } else {
+                String::new()
+            };
+            self.shot_cues.push((self.walker.movement, self.walker.phase, true));
+            self.moving_aim = Some(aim);
+            let line = format!("moving ('{}' at {:.4}): the bolt leaves at once, no attack; the next moving shot at {:.2} s{run} (rule 20)", self.walker.movement, self.walker.phase, self.next_moving_shot);
+            self.log.detail(format!("connor update {}: shot: {line}", self.updates));
+            return line;
         }
         let can = {
             let w = &self.walker;
@@ -1193,9 +1234,24 @@ impl ConnorSim {
         }
         if s.started && (self.walker.mode != Mode::Special || self.walker.movement != s.movement) {
             self.shot = None;
-            return Some(format!("'{}' is over: the next shot can start (no extra delay, rule 20)", s.movement));
+            // Rule 20: the end of a standing `attack` also sets the next
+            // moving shot.
+            self.next_moving_shot = self.clock() + MOVING_SHOT_DELAY;
+            return Some(format!("'{}' is over: the next shot can start (no extra delay); the next moving shot at {:.2} s (rule 20)", s.movement, self.next_moving_shot));
         }
         None
+    }
+
+    /// Rule 20, "Do not reproduce" (the simpler way): the run comes back
+    /// 1 s after the last moving shot.
+    pub fn run_back_step(&mut self) -> Option<String> {
+        let at = self.run_back_at?;
+        if self.clock() + 1e-6 < at {
+            return None;
+        }
+        self.run_back_at = None;
+        self.intent.run = true;
+        Some(format!("1 s after the last moving shot: the run is switched on again (rule 20, the simpler way of Do not reproduce) at {:.2} s", self.clock()))
     }
 
     /// Each update after his own (M5 5c-5): a swing that waited for his
@@ -1743,7 +1799,7 @@ pub fn connor_step(
                 // ranged-weapons.md rule 20 (M5 5f-5): the bolt leaves.
                 "do" if sim.shot.as_ref().is_some_and(|w| w.started && w.movement == s.played) => {
                     let phase = sim.movement_loop(s.played).and_then(|l| l.cues.iter().find(|(p, a)| a.trim().eq_ignore_ascii_case("do") && *p >= s.played_from.min(s.played_to) - 1e-4).map(|(p, _)| *p)).unwrap_or(s.played_to);
-                    sim.shot_cues.push((s.played, phase));
+                    sim.shot_cues.push((s.played, phase, false));
                     "his bolt leaves (ranged-weapons.md rule 23)".to_string()
                 }
                 "interruptable" => "can be cut short or not from here (anim-scripts.md rule 7)".to_string(),

@@ -1694,12 +1694,25 @@ pub fn door_step(
         if let Some(line) = c.shot_step() {
             sim.active.world.fight_note("Connor", line);
         }
-        for (m, phase) in std::mem::take(&mut c.shot_cues) {
+        if let Some(line) = c.run_back_step() {
+            sim.active.world.fight_note("Connor", line);
+        }
+        let aim_now = c.shot.as_ref().map(|s| s.aim);
+        for (m, phase, moving) in std::mem::take(&mut c.shot_cues) {
             let w = &mut sim.active.world;
             let mesh = w.connor_projectile.as_ref().and_then(|f| w.projectiles.get(&f.to_ascii_lowercase())).and_then(|p| p.mesh_name.clone()).unwrap_or_default();
             let part = c.part_at(m, phase, &mesh);
-            let aim = c.shot.as_ref().map_or(c.mover.position, |s| s.aim);
-            w.connor_shoot(c.mover.position, c.turn_matrix(), part, aim, &format!("{m} at the cue's phase {phase:.4}"));
+            let (aim, what) = if moving {
+                // Rule 20: a moving shot: the item's use sound, flat.
+                let sound = w.weapon_ready.as_deref().and_then(|k| w.items.kind(k)).and_then(|t| t.use_sound.clone());
+                if let Some(snd) = &sound {
+                    w.sounds.push(kq8_core::sound::Start::plain_one_shot(snd, "Connor's moving shot (ranged-weapons.md rule 20)".into()));
+                }
+                (c.moving_aim.take().unwrap_or(c.mover.position), format!("{m} at {phase:.4}, a moving shot (use sound {})", sound.as_deref().unwrap_or("none")))
+            } else {
+                (aim_now.unwrap_or(c.mover.position), format!("{m} at the cue's phase {phase:.4}"))
+            };
+            w.connor_shoot(c.mover.position, c.turn_matrix(), part, aim, &what);
         }
         for m in std::mem::take(&mut c.do_cues) {
             let (target, big) = c.swing.as_ref().map_or((None, false), |s| (s.target.clone(), s.big));

@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-20 M5 5f-6: the moving shot
+
+**Changed:** `connor_view.rs`: a shot asked while Connor walks or runs plays no `attack`: if 0.5 s (his `attackDelay`) have passed since the last shot, the bolt leaves at once from the `arrow` part in the frame playing; otherwise nothing. A moving shot while running switches the run off; it comes back 1 s after the last moving shot. The end of a standing `attack` sets the next moving shot 0.5 s later. `door_view.rs`: the item's use sound (`crossbow.aud`) plays flat. FEATURES, provenance, DESIGN.
+**Why:** `ranged-weapons.md` rule 20, "Moving".
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer: `cargo play --world Daventry --sound off --at 146500,248928,0 --no-ai --god --command "give SmCrossbow",20 --key left:IDCTL_INVBAR_LONG,30 --hold 1,0,1,140 --aim-point 146500,236000,15500,60 --aim-point 146500,236000,15500,63 --aim-point 146500,236000,15500,70 --aim-point 146500,236000,15500,72 --frames 1800`; `fight.log` (copy `fight-5f6-moving.log`), `sound.log`.
+**Result:** Update 60: 79° off, waits for the turn. 63: a new click (39° off) replaces it; running: the bolt leaves at once from `stoprun`'s part (−187, −351, 744), `crossbow.aud` plays, he walks. 70: "less than 0.5 s ago: nothing". 72: walking, the bolt leaves from `walk` frame 4 (−135, −588, 868; the note's range). 87: the run is on again (1 s after 72). (The camera's line to the test point met the windmill, so the bolts aimed at its wall.)
+**Still broken / not tested:** Not looked at by eye. The run restored the simpler way (1 s after the last moving shot), as "Do not reproduce" allows; the original also restores it at a click while standing (not built). No unit test for the moving shot (it lives in the viewer's Connor).
+**Next:** 5f-7, the swing click's target.
+
 ## 2026-10-20 M5 5f-5: Connor shoots the crossbow (standing)
 
 **Changed:** With the ranged weapon ready a left click is a shot click (`weapons.rs`: `mask_pick`, `steepness_limit`, `connor_shoot`; viewer: the click, `ShotClick`, `Shot`). An item on the pointer wins, also over the swing click; Ctrl gives the plain click. The talk pick sends a click on the Wizard or the Knight (type bit 0x8000) to the plain click. The aim pick finds the creature, object, building, drawn ground or the line's far end; the aim is never steeper than 1 rad from the vertical. Connor turns to it; more than 45° off, the shot is asked when 3 updates of turn are left. Standing, `attack` plays if his movement can be cut short; at its `do` cue the bolt leaves from the `arrow` part of the frame at the cue (kept as his shoot offset), aimed at the aim point, with his ranged damage. New test option `--aim-point X,Y,Z,N`. README, FEATURES, provenance, DESIGN.

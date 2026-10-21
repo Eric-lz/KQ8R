@@ -488,7 +488,9 @@ miss, roll, flinch, death, drop and shot is in
   it (far behind him he shoots near the end of the turn), plays his
   shot and the bolt leaves from the crossbow's tip, flies straight to
   the spot and on. No ammunition. A click on the Wizard or the Knight
-  talks instead. Standing only so far. Test options `--aim NAME,N`,
+  talks instead. Walking or running he shoots at once without stopping,
+  at most twice a second, and a run slows to a walk until a second after
+  the last shot (M5 5f-6). Test options `--aim NAME,N`,
   `--aim-point X,Y,Z,N`.
 - **Connor hits back (stand-in click):** with his fists ready a left
   click on a creature turns him toward it and swings (`attack` /

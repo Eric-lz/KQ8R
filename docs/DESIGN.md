@@ -1554,7 +1554,9 @@ Steps (one commit each):
    the shoot offset), aimed at the aim point, his ranged damage. A test
    option `--shoot NAME|x,y,z,N`. **Test:** shoot `goblin22`: the bolt
    leaves ~832 ahead, 1,065 up, flies to it, damage 5 at level 1.
-6. **5f-6, the moving shot** (rule 20, "Moving"). In Move: no `attack`;
+6. **5f-6, the moving shot** (**done** 2026-10-20; a running Connor's
+   shots at updates 63 and 72, the one at 70 refused; run back at 87)
+   (rule 20, "Moving"). In Move: no `attack`;
    if 0.5 s have passed since the last shot the bolt leaves at once from
    the frame playing, the item's use sound plays; a run becomes a walk,
    back to running 1 s after the last moving shot. The end of `attack`
