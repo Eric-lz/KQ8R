@@ -700,6 +700,9 @@ pub struct WorldState {
     pub weapon_swapped: bool,
     /// The combat level's factor (`fighting.md` rule 3): 1.0 by default.
     pub combat_level: f32,
+    /// Test switch (ours, not in the original): no character is alarmed,
+    /// so none chases or attacks Connor; the alarmed ones give up.
+    pub ai_off: bool,
     /// Bodies left by the dead (`fighting.md` rule 32; M5 5c-7).
     pub corpses: Vec<crate::fight::Corpse>,
     /// Scripts of the dead to call with `Die <kind>` (rule 32.3), taken
@@ -2665,6 +2668,7 @@ impl Active {
                 weapon_ready: None,
                 weapon_swapped: false,
                 combat_level: 1.0,
+                ai_off: false,
                 corpses: Vec::new(),
                 die_calls: Vec::new(),
                 flight_rest: BTreeMap::new(),

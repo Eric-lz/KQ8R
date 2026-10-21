@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 Test switch: creatures' AI off (F4, `--no-ai`)
+
+**Changed:** A core switch `ai_off`: no character gets alarmed, so none chases, attacks or shoots at Connor; alarmed or hunting ones give up and go home (rule 28's give-up). F4 flips it while playing, `--no-ai` starts with it on, `--key f4,N` presses it in a test. README key list updated.
+**Why:** The user asked for a way to play without creatures attacking (testing).
+**Tested how:** `cargo test --workspace`, clippy clean. Viewer at `--at 289284,190300,0` (goblin22): without the switch, `--frames 1200`; with `--no-ai`; with `--key f4,100 --frames 3000`; `fight.log`, `characters.log`, `viewer.log`.
+**Result:** Without: goblin22 alarmed at update 15, 9 hits on Connor. `--no-ai`: no alarm, 0 hits. `--key f4,100`: hits at 48 and 78, the switch at 100, goblin22 gives up at 101, no hits to update 759.
+**Still broken / not tested:** Not looked at. Pressing the real F4 key not tested (the same function as `--key f4`). Hitting a creature with the AI off not tested (the test punch missed: too far). Bolts already flying when it is switched off still fly and can hit. Switching back on: creatures notice him again by the usual rules (not run).
+**Next:** —
+
 ## 2026-10-20 A: thrown items' flight studied (Q137)
 
 **Changed:** New note `docs/behaviour/thrown-items.md`; `items.md` rule 12 (and its table and open question 3) and `fighting.md` rule 31 point to it; `fighting.md` open question 2 notes that the bolt uses other code. QUESTIONS (Q137 answered), STATUS. Scratch notes with addresses in `re/notes.md` (not committed).

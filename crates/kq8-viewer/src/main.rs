@@ -125,6 +125,8 @@ struct Args {
     /// `--combat-level 1|2|3`: the combat level before the world's
     /// characters enter it (M5 5c-10; stand-in for the menu).
     combat_level: Option<i64>,
+    /// `--no-ai`: start with the AI test switch on (F4 flips it).
+    no_ai: bool,
     /// `--special ITEMS,N`: before update N + 1, Connor gets
     /// `KQMonster::setState Connor special ITEMS` as if from a script
     /// (M3 3i-7 test; ITEMS uses `;` between items, e.g.
@@ -175,6 +177,7 @@ fn parse_args() -> Result<Args, String> {
         aim: Vec::new(),
         swing: Vec::new(),
         combat_level: None,
+        no_ai: false,
         special: None,
         command: Vec::new(),
         right: None,
@@ -226,6 +229,7 @@ fn parse_args() -> Result<Args, String> {
                 let n = v.trim().parse::<i64>().ok().filter(|n| (1..=3).contains(n)).ok_or("--combat-level needs 1, 2 or 3".to_string())?;
                 a.combat_level = Some(n);
             }
+            "--no-ai" => a.no_ai = true,
             "--swing" => {
                 let v = value()?;
                 let usage = "--swing needs NAME,UPDATE[,big] e.g. goblin22,60".to_string();
@@ -391,8 +395,9 @@ N is an update number (15 updates per second):
                              (big: the Shift swing)
   --combat-level 1|2|3       the combat level (0.66 / 1.0 / 1.5) before the
                              characters enter the world
+  --no-ai                    creatures never notice or attack Connor (F4 flips it)
   --item TYPE                give Connor an item of that type and hold it
-  --key NAME,N               press space or 1-8, or click a bar control
+  --key NAME,N               press space, f4 or 1-8, or click a bar control
                              (left:NAME / right:NAME), before update N + 1 (repeatable)
   --special ITEMS,N          play Connor's special movements (separated by ;)
   --command \"WORDS\",N      run one script command at update N (repeatable)
@@ -558,6 +563,7 @@ fn main() -> ExitCode {
                 .init_resource::<door_view::CharacterColliders>()
                 .init_resource::<talk_view::Speech>()
                 .insert_resource(door_view::HeldItem(args.item, args.combat_level))
+                .insert_resource(door_view::AiOff(args.no_ai))
                 .insert_resource(gui_view::KeyAt(args.key))
                 .init_resource::<gui_view::GuiCover>()
                 .init_resource::<gui_view::ScreenFrame>()
@@ -571,7 +577,7 @@ fn main() -> ExitCode {
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (draw_distance::apply_collider_switches, door_view::door_step, door_view::character_gravity, connor_view::connor_step, connor_view::push_apply, door_view::trap_step, talk_view::talk_step, door_view::apply_loads, copies_view::spawn_copies, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
                 .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, terrain_view::toggle_markers, terrain_view::toggle_floor, light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, (terrain_view::toggle_markers, terrain_view::toggle_floor, door_view::toggle_ai), light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).
                 .add_systems(
                     Update,

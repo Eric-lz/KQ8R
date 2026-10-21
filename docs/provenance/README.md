@@ -2796,3 +2796,10 @@ executable looked at.
 | No slot click while a draw or put-away plays (undone like one during a jump) | The user's check in the original | `fight.log`: update 215 refused |
 | The sword pointer follows the weapon asked for (at the click) | Ours | — |
 
+### Test switch: AI off — `crates/kq8-core/src/character_ai.rs` (`alarm_rules`, `alarm`), `fight.rs` (`hit_unalarmed`), `active.rs` (`ai_off`); viewer `door_view.rs` (`AiOff`, `toggle_ai`, `flip_ai`), `gui_view.rs` (`--key f4`), `main.rs` (`--no-ai`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| With the switch on no character is alarmed (seeing Connor, being told, being hit); an alarmed or hunting one gives up as rule 28 has it (home, or back into the ground) | Ours (a test switch, not in the original); giving up: `fighting.md` rule 28 | Viewer: goblin22 hits Connor 9 times with it off, 0 with `--no-ai`; `--key f4,100`: it gives up at update 101, no hits to update 759 |
+| F4 flips it; `--no-ai` starts with it on | Ours | Viewer |
+

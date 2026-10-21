@@ -679,6 +679,11 @@ impl crate::active::WorldState {
     /// radius above 0: it starts moving at `run` with no target (the hunt,
     /// `character_ai`). Otherwise: alarmed at once, no reaction delay.
     fn hit_unalarmed(&mut self, j: usize, now: f64) {
+        if self.ai_off {
+            let name = self.anims[j].player.name.clone();
+            self.fight_note(&name, "hit while not alarmed: no hunt, no alarm: the AI is switched off (test switch, ours)");
+            return;
+        }
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };

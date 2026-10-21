@@ -571,6 +571,19 @@ impl WorldState {
         if state == State::Birth {
             return;
         }
+        if self.ai_off {
+            // The test switch (ours): an alarmed or hunting character
+            // gives up; none is alarmed.
+            if ai.alarmed || ai.hunting {
+                if let Some(ai) = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+                    ai.hunting = false;
+                }
+                self.give_up(i, "the AI is switched off (test switch, ours)", now);
+            } else if ai.on_way_home {
+                self.way_home(i, now);
+            }
+            return;
+        }
         if !ai.alarmed && ai.hunting {
             self.hunt(i, d, home_d, now);
             return;
@@ -743,6 +756,11 @@ impl WorldState {
 
     /// Rule 23: alarmed (`told`: by another, rule 24, no distance test).
     fn alarm(&mut self, i: usize, why: &str, told: bool, now: f64) {
+        if self.ai_off {
+            let name = self.anims[i].player.name.clone();
+            self.character_note(&name, format!("not alarmed ({why}): the AI is switched off (test switch, ours)"));
+            return;
+        }
         let connor = self.connor_at;
         let a = &mut self.anims[i];
         let name = a.player.name.clone();

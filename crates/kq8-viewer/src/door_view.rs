@@ -257,6 +257,33 @@ pub struct SwingClick {
 #[derive(Resource)]
 pub struct HeldItem(pub Option<String>, pub Option<i64>);
 
+/// The AI test switch (ours, not in the original): `--no-ai` switches
+/// it on at the start (taken once the world is loaded), F4 flips it while
+/// playing. With it on no character is alarmed, so none chases or
+/// attacks Connor.
+#[derive(Resource)]
+pub struct AiOff(pub bool);
+
+/// `--no-ai` at the start, then F4.
+pub fn toggle_ai(keys: Res<ButtonInput<KeyCode>>, mut start: ResMut<AiOff>, sim: Option<ResMut<DoorSim>>) {
+    let Some(mut sim) = sim else { return };
+    if std::mem::take(&mut start.0) {
+        flip_ai(&mut sim, "--no-ai");
+    }
+    if keys.just_pressed(KeyCode::F4) {
+        flip_ai(&mut sim, "key F4");
+    }
+}
+
+/// Flips the AI test switch (F4, `--no-ai`, `--key f4,N`).
+pub fn flip_ai(sim: &mut DoorSim, how: &str) {
+    let w = &mut sim.active.world;
+    w.ai_off = !w.ai_off;
+    let state = if w.ai_off { "off: no character is alarmed, the alarmed ones give up" } else { "on again" };
+    let line = format!("update {}: {how}: the AI is {state} (test switch, ours)", w.updates);
+    sim.log.summary(line);
+}
+
 /// A body entity at `placement` with, per movement (index into `built`),
 /// one hidden entity per frame. `haze`: the object's `b_hazeSolid` and
 /// `hazeMultiplier` (object-lighting.md rules 21, 22). `test`: its draw
