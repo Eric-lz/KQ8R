@@ -3026,6 +3026,14 @@ impl Placer<'_> {
         // weapon's list (Connor.kq's ShortAnimList); **stand-in**: only
         // these come from the weapon's list, the rest stays Conner.anm.
         if let Some(f) = &self.connor_fight {
+            // 5d fix 10 (the user's check: the dagger's draw and sheath were
+            // cut short): drawing starts with his own `away` (the hand to
+            // the holster) and putting away ends with his own `out`, from
+            // Conner.anm, in every world, not only where a script names them
+            // (Swamp's sword and hammer had neither: the user's check).
+            for m in ["away", "out"] {
+                wanted.insert((None, m.to_string()));
+            }
             for (_, file) in &f.short_lists {
                 for m in kq8_core::fight::SWINGS {
                     wanted.insert((Some(file.clone()), m.to_string()));

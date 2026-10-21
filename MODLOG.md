@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Fix: every weapon's draw and put-away has both parts in every world
+
+**Changed:** Viewer `load.rs`: Connor's own `away` and `out` (`Conner.anm`) are always loaded with the weapon lists. Provenance (5d fix 10's table).
+**Why:** The user's check in Swamp: drawing the sword or the hammer started with his hand already at the holster, and putting them away ended abruptly (as the dagger before 5d fix 10). The two-part swap of 5d fix 10 was right, but its first part (drawing) and last part (putting away) are his own `away` / `out`, which were loaded only in worlds whose scripts name them (Daventry's `urn1.cs`, `wheeltp1.cs`); elsewhere the swap skipped them silently.
+**Tested how:** `cargo test --workspace` (637 pass), clippy clean. `kq8-viewer --world Swamp --sound off --frames 3000 --no-ai --key left:IDCTL_INVBAR_SHORT,20 --key left:IDCTL_INVBAR_SHORT,90 --key left:IDCTL_INVBAR_LONG,160 --key left:IDCTL_INVBAR_LONG,230`; `fight.log`, `connor.log`.
+**Result:** Before: `["conkng.anm/out"]`, `["conkng.anm/away"]`, `["conhamr.anm/out"]`, `["conhamr.anm/away"]`. After: `["away", "conkng.anm/out"]` (20–37), `["conkng.anm/away", "out"]` (90–105), `["away", "conhamr.anm/out"]` (160–179), `["conhamr.anm/away", "out"]` (230–247).
+**Still broken / not tested:** **Not looked at by eye.** Only Swamp run; the other worlds load the same way.
+**Next:** The user: the sword and hammer draw by eye in Swamp.
+
 ## 2026-10-21 M6 6b fix: the hammer's return cuts the throw short
 
 **Changed:** Viewer `connor_view.rs`: `throw_caught` starts `catch` at once also while `attack` plays (it waited for `attack`'s end); `throw_step` doesn't start `catch` again when `attack` was already cut; each throw movement is drawn from its start at once (`redraw_from_walker`, as the rope's 6a fix). Q148 (c) marked answered; provenance, DESIGN, STATUS.

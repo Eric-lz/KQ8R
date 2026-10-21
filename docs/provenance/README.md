@@ -2792,6 +2792,7 @@ executable looked at.
 | --- | --- | --- |
 | A weapon other than the fists is put away with its `away`, then his own `out`; drawn with his own `away`, then its `out`; from one weapon to another: the old one's put-away part, then the new one's draw part; the movement set switches when the second part starts | `conversation.md` rule 7 (`away`, bare hands, `out`), data (`c_shth` forwards / backwards in `conner.anm`); **stand-in** (Q138 a); the user's check (the dagger's draw and sheath were cut short) | `connor.log`: put away 150–174, drawn 210–232 |
 | The fists keep `draw` / `undraw` | The user's check (fix 1) | — |
+| His own `away` and `out` (`Conner.anm`) are loaded in every world (they were loaded only where a script named them: Daventry's `urn1.cs`, `wheeltp1.cs`), so every weapon's draw and put-away has both parts | The user's check (2026-10-21: Swamp's sword and hammer started with the hand at the holster) | Viewer, Swamp: `fight.log` `["away", "conkng.anm/out"]`, `["conkng.anm/away", "out"]`, the same for `conhamr.anm` |
 | A hand weapon picked up while one is ready becomes the ready one (it replaces the old one in its slot, rule 8), straight into its stance: nothing plays (fix 11) | The user's checks in the original | `items.log`: "INVITEM_Dagger is ready now"; `fight.log`: "at once, nothing plays" |
 | No slot click while a draw or put-away plays (undone like one during a jump) | The user's check in the original | `fight.log`: update 215 refused |
 | The sword pointer follows the weapon asked for (at the click) | Ours | — |
