@@ -1699,6 +1699,129 @@ damage needs M5), Gnome's pushable `boulder` (`KQBoulder`, not
 studied), the other pushable classes (`pushing.md` open question 1),
 damaging water (poison, lava, swamp).
 
+#### 6a — The Rope and Hook (planned 2026-10-21)
+
+Why: the rope places' trap scripts only log `setRope` (stubs since M3
+3d-3), and clicking the rope gives a remark and holds it anyway (Q110
+stand-in). Source: `ropeandhook.md` (A, 2026-10-21; checked by the user
+in the original, "all matches"); the user's checks there win over what
+the note says the code suggests. Not in 6a: saved games (we have none
+yet: the rope's settings and the climb are kept as plain records a save
+can store later, noted in STATUS); first person (not built: every
+"switch to third person / back" is only logged, the first-person lock
+is the one `setThirdPerson` already keeps); rock throws (not built, so
+"ignored on the rope" is true by construction, noted); open question 2
+(the camera during the throw from below): the note's stand-in, the
+camera stays where it is until Connor grabs the rope.
+
+Words: **rope place** = a pair of rope trap boxes (foot and top);
+**rope status** = none / at the foot (`Bottom`) / at the top (`Top`);
+**hook icon** = `HookUp` / `HookDown` in the status icons; **rope state**
+= Connor's special state from `away` to `out`; **hanging** = the part
+of it where the keys climb; **aim point** = where the camera looks
+during the climb.
+
+Where things go:
+
+- `kq8-core/src/rope.rs` (new): the status and the place's settings
+  (one record of Connor's), the six commands, the hook icon wanted, and
+  the rope state's own rules as plain functions: the camera spot chosen
+  (rules 18, 20), the camera height range (rules 19, 21), one climb
+  update of the camera (rule 22), what each animation's end leads to
+  (rules 13–26). Unit tests for each.
+- Connor's walker gets a **Rope** mode (like Special: keys don't choose
+  the movement, no turning); while hanging, forward plays `climb`
+  forwards, back backwards, nothing else moves it (rule 22, the user's
+  check). Fall, landing, push and wall events don't change the mode.
+- Viewer `rope_view.rs` (new): runs the sequence on Connor (gravity,
+  step heights, placing, the 5,000 lift, the drop), the camera spots,
+  and the separate rope model (`conrope.anm/rope`, drawn at Connor's
+  place while it plays, its two sounds).
+- Everything logs to a new `kq8-artifacts/logs/rope.log` (and
+  `items.log` / `gui.log` / `camera.log` / `connor.log` as usual).
+
+Stand-ins (asked as **Q147**, not blocking): (a) the hook icon takes the
+first free status place, like the potions and the spinning mask (Q143);
+the layout puts `hookup.pba` in `IDCTL_TIMER_5`, `hookdown.pba` in `_6`;
+(b) the rope state's "handsOff with the pointer kept" does what a
+script's `handsOff 1` does (bottom bar away, spinning mask, keys and
+world clicks ignored) except the pointer stays; (c) taking the rope at
+the top moves the camera to the `setRopeCam2` spot as a `move KQCamera`
+would while it follows (it stays there until its next update; the
+"flag that keeps it there" is not known), so putting the rope back
+leaves it where it is (the user's check); (d) the rope animations'
+own steps: `climb` never moves him (rule 23); the others move him by
+their steps as any one-shot does (logged at load; if they are large,
+that's a question).
+
+Steps (one commit each):
+
+1. **6a-1, the commands, the rope status and the hook icons** (**done**
+   2026-10-21; `ropetrp1` on at update 31 with the rope, refused
+   without it) (rules
+   1–7). `KQConner::setRope None|Top|Bottom [x y z [rx ry rz]]` (any
+   case; 1, 4 or 7 words; else the usage line), accepted only if Connor
+   carries an item of category `Rope` (rule 4; otherwise nothing changes,
+   both icons hidden); place and direction stored only when accepted;
+   the two `setRopeCam` spots cleared every time. `setRopeCam` (a spot
+   counts only with no 0 coordinate), `setRopeCam2`, `setRopeCamAngle`
+   (kept, unused: "Do not reproduce"), `setRopeCamTopLimit` /
+   `BottomLimit` (0 = none); `setRope None` clears both limits and puts
+   a held rope back (rule 6). The hook icon: `HookUp` for Bottom,
+   `HookDown` for Top, none for None or while on the rope (rule 7),
+   drawn from `INVITEM_HookUp` / `HookDown`'s picture. **Test:** `give
+   RopeAndHook`, walk into `ropetrp1`: `rope.log` "status none ->
+   bottom", the icon place; walk out: "-> none", gone. Without the rope:
+   "refused: no rope carried".
+2. **6a-2, the rope button** (rule 8, 9). In the rope state: ignored.
+   Rope already held: put back (first-person lock released). None: the
+   remark `0.MSG` 0/0/58/37 only, **not held** (replaces the Q110
+   stand-in). Bottom: held (`IDBMA_CURS06`). Top: third person forced
+   (logged), the first-person key locked, the camera to the
+   `setRopeCam2` spot looking at 1,000 above Connor, then held. Put back
+   at the top: the camera stays. **Test:** `--key left:IDCTL_INVBAR_ROPE,N`
+   at each status; `items.log`, `camera.log`.
+3. **6a-3, the click and the sequence to hanging** (rules 10–21, 31).
+   With the rope held, any world click (whatever it meets, the sky too)
+   empties the hand and asks for the rope state (no angle test: "Do
+   not reproduce"); refused in handsOff, while dead or dying. Entering:
+   the camera stops following, he turns to the rope's place (the
+   `walkTo` turn), handsOff on (pointer kept), the hand mode
+   remembered, `away` from the list in use. Then empty hands; the foot:
+   `draw`, gravity off, `btoss`, step heights saved and 0, placed at the
+   rope's place and turn, the rope model, `Stop`; the model's end: the
+   aim point, the camera spot (nearer of the two, rule 18), the 5,000
+   lift, `bon`. The top: `drawdown`, placed, the camera spot (rule 20),
+   gravity off, `ttoss`, `ton`. Both end hanging, frozen, with handsOff
+   off: at the foot the camera's height range up (rule 19), the climb's
+   first frame; at the top the range down, the half turn, the last
+   frame (rule 21). **Test:** `--aim-point` (a sky click) at the foot
+   and at the top; `rope.log`: each animation's start and end, the spot
+   and why, his place at the grab, the range.
+4. **6a-4, climbing** (rules 22–23). Forward: `climb` forwards, back:
+   backwards, any other key or none: frozen. The camera's height and the
+   aim point move 750 per second (50 per update) with the movement,
+   the height kept in its range; x, y kept, re-aimed every update. The
+   climb ends at whichever end it reaches in the direction it plays.
+   **Test:** `--hold 1,0,0,N` / `--hold -1,...`; `rope.log` per update:
+   key, direction, frame, camera height.
+5. **6a-5, getting off** (rules 23–26). Top end: icons may show,
+   turning on, handsOff on, `toff`, the camera follows again, `taway`.
+   Foot end: moved 1,000 toward his back and 4,900 down, gravity on,
+   `boff`, `baway`, the camera follows. Then gravity on, step heights back
+   (only if saved and not 0), the weapon: `out` from its list only if he
+   held one (the user's check), else none; then standing, handsOff off,
+   the first-person key free. **Test:** a full climb up and a full climb
+   down; his place at the end, the mode back to Wait, the weapon.
+6. **6a-6, while on the rope** (rules 27–30). Hits ignored (no damage,
+   sound or flinch: `fight.log`); every state request refused and
+   dropped (special, walks, dying); characters told he is 100,000
+   below (`potions.md` rule 26's code, a third reason "the rope"); the
+   weapon keys and slots do nothing, no remark; the first-person key
+   locked; the rope button ignored; an item click while hanging picks
+   it up. **Test:** a goblin chasing him gives up; `--command "sendEvent
+   ..."` hit / `setState` refused in `rope.log`.
+
 ### M7 — Match the original, then improve
 
 Play the original next to ours, list differences, fix them. After that,

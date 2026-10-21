@@ -650,6 +650,14 @@ pub struct WorldState {
     connor_hidden_logged: Option<&'static str>,
     /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
     pub connor_in_temple4: bool,
+    /// Connor's rope settings and status (M6 6a-1, `ropeandhook.md`
+    /// rules 1–6).
+    pub rope: crate::rope::Rope,
+    /// Connor hangs on the rope (rule 7: no hook icon), set by the caller
+    /// (M6 6a-3).
+    pub connor_on_rope: bool,
+    /// Lines for `rope.log` (M6 6a), taken by the caller.
+    pub rope_log: Vec<String>,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
     pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
@@ -1007,6 +1015,47 @@ impl WorldState {
     }
 
     /// A line about items: `items.log` and the current log.
+    /// A line about the rope (M6 6a): `rope.log` and the current log.
+    pub fn rope_note(&mut self, line: impl AsRef<str>) {
+        self.rope_log.push(format!("update {}: {}", self.updates, line.as_ref()));
+        self.note(line);
+    }
+
+    /// Connor carries an item of category `Rope` (`ropeandhook.md` rule
+    /// 4): its object's name.
+    pub fn connor_rope(&self) -> Option<String> {
+        self.items.objects.iter().filter(|o| o.carried_by(CONNOR)).find(|o| self.items.kind(&o.kind).is_some_and(|t| t.category == crate::rope::ROPE_CATEGORY)).map(|o| o.name.clone())
+    }
+
+    /// The six `KQConner::setRope*` commands (M6 6a-1, rules 2–6).
+    fn rope_command(&mut self, words: &[String], at: &str) -> Option<String> {
+        let carries = self.connor_rope().is_some();
+        let now = self.now();
+        let d = self.rope.command(words, carries, now)?;
+        let mut line = format!("{at}: {}", d.line);
+        if d.put_back {
+            // Rule 6: a held rope goes back.
+            let held = self.hand.as_ref().filter(|h| self.items.get(h).and_then(|o| self.items.kind(&o.kind)).is_some_and(|t| t.category == crate::rope::ROPE_CATEGORY)).cloned();
+            if let Some(h) = held {
+                self.hand = None;
+                line += &format!("; {h} was in hand: put back, the play pointer again (rule 6)");
+                self.item_note(format!("{h}: put back by setRope None (ropeandhook.md rule 6)"));
+            }
+        }
+        self.rope_note(line);
+        self.rope_icon_step();
+        Some(d.result.to_string())
+    }
+
+    /// Rule 7: the hook icon for the status now (and rule 4: none without
+    /// the rope; none while on the rope), each change logged.
+    pub fn rope_icon_step(&mut self) {
+        let wanted = self.rope.icon(self.connor_rope().is_some(), self.connor_on_rope);
+        for line in crate::rope::sync_icon(&mut self.status_icons, wanted) {
+            self.rope_note(format!("hook icon: {line}"));
+        }
+    }
+
     pub(crate) fn item_note(&mut self, line: impl AsRef<str>) {
         self.item_log.push(format!("update {}: {}", self.updates, line.as_ref()));
         self.note(line);
@@ -2636,6 +2685,7 @@ impl ScriptHost for WorldState {
             "KQObject::collisionType" => Some(self.collision_type(words, at)),
             "KQObject::collision" => Some(self.collision_mask(words, at)),
             "KQConner::setRun" => Some(self.set_run(words, at)),
+            c if c.starts_with("KQConner::setRope") => self.rope_command(words, at),
             "KQConner::getDoMode" => {
                 // pushing.md "Words used here": the hand mode, sword 0, bow
                 // 1, empty hands 4 (the game's help text); ranged-weapons.md
@@ -2786,6 +2836,9 @@ impl Active {
                 gui_orders: Vec::new(),
                 potions: Vec::new(),
                 status_icons: Default::default(),
+                rope: Default::default(),
+                connor_on_rope: false,
+                rope_log: Vec::new(),
                 connor_in_temple4: false,
                 connor_hands_off: false,
                 connor_hidden_logged: None,
@@ -3876,6 +3929,8 @@ impl Active {
         crate::connor_inventory::timers(&mut self.world);
         // M5 5g-9: what the characters are told (potions.md rule 26).
         self.world.note_connor_report();
+        // M6 6a-1: the hook icon (ropeandhook.md rule 7).
+        self.world.rope_icon_step();
         // M5 5g-7: Clarity's Reveal calls (potions.md rule 31).
         for (name, on) in std::mem::take(&mut self.world.reveal_calls) {
             let word = if on { "True" } else { "False" };

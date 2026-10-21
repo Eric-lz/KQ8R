@@ -97,6 +97,8 @@ pub struct DoorSim {
     connor_checked_at: Option<[f32; 3]>,
     /// `items.log`; `None` if it could not be made.
     item_log: Option<Log>,
+    /// `rope.log` (M6 6a).
+    rope_log: Option<Log>,
     /// `talk.log` (M4 4a-2); `None` if it could not be made.
     talk_log: Option<Log>,
     /// `conversation.log` (M4 4e-3); `None` if it could not be made.
@@ -108,6 +110,21 @@ impl DoorSim {
     /// items made also to the main log. Returns the lines, so the door
     /// lines (which hold a copy of each) don't put them on the terminal
     /// a second time.
+    /// Writes the rope lines gathered since the last call (M6 6a) to
+    /// `rope.log`; status changes also to the main log.
+    pub fn flush_rope(&mut self, shared: &Shared) {
+        let lines = std::mem::take(&mut self.active.world.rope_log);
+        let mut main = shared.log.lock().unwrap();
+        for line in lines {
+            if line.contains("status ") || line.contains(" state: ") {
+                main.summary(format!("rope: {line}"));
+            }
+            if let Some(log) = &mut self.rope_log {
+                log.detail(line);
+            }
+        }
+    }
+
     fn flush_items(&mut self, shared: &Shared) -> Vec<String> {
         let lines = self.active.take_item_log();
         if lines.is_empty() {
@@ -904,7 +921,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider };
+    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok() };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1063,6 +1080,7 @@ pub fn trap_step(
     let inside = inside_from + retried..sim.active.world.requests.len() + retried;
     sim.flush_traps(&shared);
     sim.flush_items(&shared);
+    sim.flush_rope(&shared);
     sim.flush_talk(&shared);
     let mut camera = camera;
     let requests: Vec<Request> = std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).collect();
@@ -1806,6 +1824,7 @@ pub fn door_step(
     sim.flush_talk(&shared);
     sim.flush_conversation(&shared);
     let item_lines = sim.flush_items(&shared);
+    sim.flush_rope(&shared);
     let lines = sim.active.take_log();
     if !lines.is_empty() {
         let mut main = shared.log.lock().unwrap();

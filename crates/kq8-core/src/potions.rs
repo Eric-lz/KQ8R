@@ -85,6 +85,8 @@ pub enum StatusIcon {
     Potion(String),
     /// The spinning mask (handsOff, `interface.md` rule 15).
     Mask,
+    /// A hook icon (`ropeandhook.md` rule 7; M6 6a-1).
+    Hook(crate::rope::Hook),
 }
 
 /// Rule 35: `icon` takes the first free place; `None` when all 7 are

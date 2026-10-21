@@ -57,18 +57,14 @@ use kq8_data::world_script::Vars;
 /// world handles them now. Commands that answer a question (`getloc`,
 /// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
 /// unknown (error line, result 1) until they are studied.
-pub const STUBS: [&str; 15] = [
+pub const STUBS: [&str; 11] = [
     "doPopup",
     "addMapIcon",
     "earnTeleport",
     "teleportersEarned",
     "preloadShape",
     // Daventry's trap scripts (3d-3). `KQMusic::push` / `pop` were here
-    // until M3 3h-5.
-    "KQConner::setRope",
-    "KQConner::setRopeCam",
-    "KQConner::setRopeCam2",
-    "KQConner::setRopeCamAngle",
+    // until M3 3h-5, the `KQConner::setRope*` commands until M6 6a-1.
     "KQGame::letCatchUp",
     "onTeleport",
     "offTeleport",

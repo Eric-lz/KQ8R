@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a-1: the rope commands, the rope status and the hook icons
+
+**Changed:** New `crates/kq8-core/src/rope.rs` (the status, the rope place's settings, the six `KQConner::setRope*` commands, the hook icon wanted, 4 unit tests). `active.rs`: the commands go there (no longer stubs), `connor_rope`, `rope_icon_step` each update, `rope_note` for the new `rope.log`. `potions.rs`: `StatusIcon::Hook`. Viewer: `gui_view.rs` draws the hook icon in its status place; `door_view.rs` writes `rope.log`. DESIGN (the 6a plan, 6 steps), QUESTIONS Q147, provenance.
+**Why:** Step 1 of `ropeandhook.md` (rules 1–7).
+**Tested how:** `cargo test -p kq8-core` (472 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 2500 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --hold 1,0,0,60 --command "move Connor 0 153000 207968 8000 0 0 0,150"`; the same without the `give`; `rope.log`, `gui.log`, `traps.log`.
+**Result:** With the rope: update 31 `ropetrp1.cs`: "status none -> bottom ... place (147646, 207586, 7800), direction (0, 0, -1.570)", "HookUp shown in IDCTL_TIMER_1" (`hookup.pba`, 1 frame); `useropeh.cs` asks for pop-up 145 (still a stub). Update 151 (moved out): "bottom -> none", "HookUp hidden". Without the rope: "setRope bottom: refused: Connor carries no rope (rule 4); status stays none", no icon.
+**Still broken / not tested:** **Not looked at by eye** (the icon's place). The icon's place is a stand-in (first free, Q147 a). Top places and `setRopeCam` not run in the viewer (unit tests only). The rope button is still the old stand-in (step 2).
+**Next:** 6a-2, the rope button.
+
 ## 2026-10-21 The user's check of the Rope and Hook study
 
 **Changed:** `ropeandhook.md` rules 9, 22, 25, 30, 32, "Do not reproduce", "How to check", open questions; STATUS.

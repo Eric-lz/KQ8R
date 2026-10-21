@@ -3049,3 +3049,18 @@ the user in the original), with `inventory.md` rules 8–18 and
 | 5g-8: help pop-ups 0x83 (first health item or potion, 3 s), 0x84 (first quest item), 0x80 (rope and hook, 4.5 s): logged only | Rule 41 (the pop-ups are not studied: open question 3) | Viewer: `items.log` |
 | 5g-9: while Connor's handsOff is on (any `handsOff 1`, also `walkTo`'s), characters are told he is 100,000 below; each change logged | Rule 26 ("during cutscenes (handsOff with the pointer hidden)"); every handsOff counted: **our reading, Q146 b**; the user's go-ahead | Unit test; viewer: goblin22 gives up at 209, sees him again at 315 |
 | 5g-2: game time = our updates; they go on when the window loses focus (Bevy's default keeps an unfocused window updating at up to 60 frames a second) | Rule 34 (the user's check in the original); the Bevy part is ours | Not tested by switching windows |
+
+## M6 6a: the Rope and Hook — `crates/kq8-core/src/rope.rs`; `active.rs`; viewer `gui_view.rs`, `door_view.rs`
+
+Source: `docs/behaviour/ropeandhook.md` (A, 2026-10-21; checked by the
+user in the original, whose checks win over the note's reading of the
+code), with `potions.md` rule 35 (status icon places) and `interface.md`
+rule 15. Data: `Invinfo.itl` (the hook item types and their pictures),
+`Gplayscr.gui` (observed: `hookup.pba` in `IDCTL_TIMER_5`, `hookdown.pba`
+in `_6`), Daventry's `ropetrp1–4.cs` and `.kq`. No other source.
+
+| What | Source | Check |
+| --- | --- | --- |
+| 6a-1: `KQConner::setRope None\|Top\|Bottom` (any case; 1, 4 or 7 words, else the usage line); accepted only if Connor carries an item of category `Rope`; place and direction stored only when accepted; the `setRopeCam` spots cleared on every `setRope`; the game time noted (logged only) | Rules 2, 4, 5 | Unit tests `set_rope_needs_the_rope_…`, `set_rope_takes_one_four_or_seven_words`; viewer: `ropetrp1` On/Off with and without the rope (`rope.log`) |
+| 6a-1: `setRopeCam` (a spot set only with no 0 coordinate), `setRopeCam2`, `setRopeCamAngle` (kept, unused), `setRopeCamTopLimit` / `BottomLimit` (0 = none); an accepted `setRope None` clears both limits and puts a held rope back | Rules 3, 6; "Do not reproduce" (the angle test) | Unit test `camera_spots_limits_and_their_clearing` |
+| 6a-1: `HookUp` at the foot, `HookDown` at the top, none for None, without the rope or on the rope; the picture is the hook item type's `extraData`, drawn whole; a picture of several frames would animate at 10 a second | Rule 7; potions.md rule 35 (last point); **the first free place: stand-in, Q147 a** | Unit test `the_hook_icon_follows_the_status`; viewer: `gui.log` "IDCTL_TIMER_1: the hook icon HookUp, hookup.pba" (1 frame) |

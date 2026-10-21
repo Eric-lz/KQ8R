@@ -132,6 +132,9 @@ enum StatusShown {
     Mask,
     /// A potion: its picture file (`extraData`) and the percent left.
     Potion { item: String, file: Option<String>, percent: i64 },
+    /// A hook icon (`ropeandhook.md` rule 7; M6 6a-1): its picture file
+    /// (the hook item type's `extraData`).
+    Hook { name: &'static str, file: Option<String> },
 }
 
 /// One thing to draw, before its pictures and fonts are looked up.
@@ -665,6 +668,14 @@ impl Gui {
                     out.push(Spec::Pic { rect, file: file.clone(), frame: 0, cut: None });
                 }
                 StatusShown::Potion { file: None, .. } => {}
+                // M6 6a-1: drawn whole at its place; a picture of several
+                // frames animates at 10 a second like the mask (potions.md
+                // rule 35, last point: no duration).
+                StatusShown::Hook { file: Some(file), .. } => {
+                    let frame = (self.panels.now_ms / (1000.0 / MASK_FPS)) as usize;
+                    out.push(Spec::Pic { rect: [l, h - tall, r, h], file: file.clone(), frame, cut: None });
+                }
+                StatusShown::Hook { file: None, .. } => {}
             }
         }
         Some(([w, h], out))
@@ -861,6 +872,10 @@ pub fn gui_step(
     let status: [Option<StatusShown>; kq8_core::potions::ICON_PLACES] = sim.active.world.status_icons.clone().map(|p| {
         p.map(|icon| match icon {
             kq8_core::potions::StatusIcon::Mask => StatusShown::Mask,
+            kq8_core::potions::StatusIcon::Hook(hook) => {
+                let file = sim.active.world.items.kind(hook.item_type()).and_then(|t| t.extra.clone()).and_then(|tag| gui.file_of(&tag));
+                StatusShown::Hook { name: hook.name(), file }
+            }
             kq8_core::potions::StatusIcon::Potion(item) => {
                 let w = &sim.active.world;
                 let running = w.potions.iter().find(|r| r.item == item);
@@ -875,6 +890,7 @@ pub fn gui_step(
                 let what = match new {
                     None => "empty".to_string(),
                     Some(StatusShown::Mask) => "the spinning mask".to_string(),
+                    Some(StatusShown::Hook { name, file }) => format!("the hook icon {name}, {} (ropeandhook.md rule 7)", file.as_deref().unwrap_or("no picture")),
                     Some(StatusShown::Potion { item, file, percent }) => format!("{item} {} at {percent} % (its lowest {} of 48 rows from frame 1, the rest frame 0)", file.as_deref().unwrap_or("no picture"), 48 * percent / 100),
                 };
                 gui.note(format!("update {updates}: IDCTL_TIMER_{}: {what} (potions.md rule 35)", k + 1));
