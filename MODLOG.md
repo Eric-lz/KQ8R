@@ -21,6 +21,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** How the used part of a timer icon looks; whether the white number hides under the red one; missing face combinations (helmet + Strength); the help pop-ups. None checked in the original (note's "How to check").
 **Next:** The user: optional checks in the original (note's "How to check" 2–7). B: build `potions.md`.
 
+## 2026-10-21 The user's check of the axe cutscene: works
+
+**Changed:** This entry; Q141 notes the user's check.
+**Why:** The user played the axe cutscene and the fight after it, after the trap and camera fixes.
+**Tested how:** The user's check by eye.
+**Result:** "Working correctly now." The cutscene and the fight after it work almost perfectly; the camera's jump back up during `cdhm2` is gone (before the fix it jumped up, looked down, flew down a little, then changed back).
+**Still broken / not tested:** The axe is still taken from the windmill floor (Q142, `checkDistance`). The axe appears with no draw animation and the walk out stops at `Winddoor` (stand-ins, Q141).
+**Next:** A: Q142, Q141, Q140.
+
 ## 2026-10-21 The camera no longer jumps back up during the axe cutscene
 
 **Changed:** `camera_flight.rs`: a flight's last update adds its step like every other update (exactly on the spot when nothing moved the camera), instead of snapping to the spot. So when `move KQCamera` places the camera during a flight, the remaining steps go on from there and the flight ends away from its spot. Before, the last update snapped back to the spot. 1 new test; the log wording in `game_camera.rs`; provenance.
