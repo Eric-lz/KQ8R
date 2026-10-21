@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-5: the strength potion and Connor's potion faces
+
+**Changed:** `potions.rs`: Strength's +half to the hand number and its end; `list_bits` (a skin list's bits from the items applied). kq8-data `characters.rs`: `SkinList` (`KQSkinList`: entries, items, exact and best match). Viewer `load.rs`: Connor's skin and face lists, `coniron.bmp` and the face sets loaded at start; `connor_view.rs`: every material of his model kept with its texture name; `potion_view.rs` `look_step`: the iron skin while Strength runs, the face set from the face list each update. DESIGN, provenance. 1 new unit test; test item list fixed (potions' numbers are all 0).
+**Why:** Step 5 of `potions.md` (rules 21–25, 30, "Do not reproduce" 3).
+**Tested how:** `cargo test` (core 465, data 131 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 3000 --command "give Strength 1,10" --command "give Clarity 1,10" --key 6,30 --key 7,60`; `items.log`, `viewer.log`.
+**Result:** Hand 10 → 15 at update 30, back to 10 at 330 (red as in 5g-3). "his skin con0.bmp drawn as coniron.bmp on 448 materials", back at 331. Faces: `cf` at start, `cironf` (bits 8), `cclif` with Clarity (12), `cclf` after Strength (4). Face sets found in Daventry: `chf` and `cclhf` have no pictures in any world.
+**Still broken / not tested:** **Not looked at by eye.** First-person arms (`armconfx.bmp`) not done (no first person); the temple armour's skin and armour skins in general not built. Clarity's face now shows, its reveal is step 7. The helmet's face set `chf` doesn't exist in the data: with the helmet our face stays `cf` (logged).
+**Next:** 5g-6, invisible.
+
 ## 2026-10-21 M5 5g-4: the shield potion
 
 **Changed:** `potions.rs`: the shield's raise (p + ⌊p/2⌋, 50–100), effect on/off, the Temple 4 hit rule, the orbit's place. `connor_inventory.rs`: a potion's effect switches on before the count drops and off after the end's stats event; the record remembers what it added. `active.rs`: `setConnorFlag InTemple4 0|1`. `fight.rs`: hits on Connor use the Temple 4 rule. kq8-data `characters.rs`: `OrbitKeys` (`orbit1.kq`). Viewer: new `potion_view.rs` (the orbit drawn and moved every update), `load.rs` loads `orbit1.kq` and `invulnfx.kqs`, `connor_view.rs` `part_now`. DESIGN, provenance. 3 new unit tests (+ the clippy note of 5g-3's test fixed).

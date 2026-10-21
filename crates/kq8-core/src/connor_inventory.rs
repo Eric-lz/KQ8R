@@ -512,7 +512,7 @@ mod tests {
         let rows: [Row; 9] = [
             ("INVITEM_Invulnerable", [0; 5], 1, "HealthItem", 20, "invuln.aud"),
             ("INVITEM_Mushroom", [5, 0, 0, 0, 0], 1, "HealthItem", -1, "healing.aud"),
-            ("INVITEM_Strength", [0, 5, 0, 0, 0], 1, "HealthItem", 20, "none"),
+            ("INVITEM_Strength", [0; 5], 1, "HealthItem", 20, "none"),
             ("INVITEM_Fists", [0; 5], 0, "ShortWeapon", 0, "none"),
             ("INVITEM_Dagger", [0, 5, 0, 0, 0], 0, "ShortWeapon", 0, "unsheath.aud"),
             ("INVITEM_LeatherGloves", [0, 0, 0, 1, 0], 0, "Gloves", 0, "none"),

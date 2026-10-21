@@ -85,6 +85,8 @@ pub struct ConnorSim {
     /// 0-7 (`None`: not found, the face stays).
     pub face: Vec<Handle<ObjectMaterial>>,
     pub lip_images: Vec<Option<Handle<Image>>>,
+    /// What the potions change on him (M5 5g-5).
+    pub looks: crate::potion_view::ConnorLooks,
     /// The mouth shape shown now (0 = rest).
     pub mouth: u16,
     /// Presses that cut his line short (`talking.md` rule 16, M4 4a-5):
@@ -378,6 +380,9 @@ pub fn spawn_connor(
         })
         .unwrap_or_default();
     let mut face = Vec::new();
+    // M5 5g-5: every material with its texture file and own picture.
+    let mut all_materials = Vec::new();
+    let potion_looks = std::mem::take(&mut assets.potion_looks);
     // Each animation's loop data; the movements add speed, flags and
     // transitions.
     let loops: Vec<MovementLoop> = assets
@@ -406,7 +411,12 @@ pub fn spawn_connor(
                 // The look's name is where it was found (`vol:…/CF0.BMP`).
                 let file = |name: &str| name.rsplit(['/', '\\']).next().unwrap_or(name).to_string();
                 let is_face = matches!(&look, crate::load::Look::Texture { name, .. } if lip_base.as_ref().is_some_and(|b| b.eq_ignore_ascii_case(&file(name))));
+                let texture = match &look {
+                    crate::load::Look::Texture { name, .. } => file(name).to_ascii_lowercase(),
+                    _ => String::new(),
+                };
                 let handle = materials.add(object_material(look, l, light, images));
+                all_materials.push((handle.clone(), texture, materials.get(&handle).and_then(|m| m.texture.clone())));
                 if is_face {
                     face.push(handle.clone());
                 }
@@ -537,6 +547,7 @@ pub fn spawn_connor(
         cut_presses: Vec::new(),
         face,
         lip_images,
+        looks: crate::potion_view::ConnorLooks::new(potion_looks, all_materials, images),
         mouth: 0,
         jump_start_z: None,
         turn_keys: Default::default(),

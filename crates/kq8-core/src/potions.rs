@@ -26,6 +26,10 @@
 //!   at most 85; the number shown stays. The orbit `orbit1.kq` is drawn
 //!   by the viewer from [`orbit_place`].
 //!
+//! - Strength (rules 21–25): the hand number + ⌊hand/2⌋, that half
+//!   remembered and taken off at the end; ranged unchanged. The look
+//!   (iron skin, face) is the viewer's, from [`list_bits`].
+//!
 //! Each running potion is one record ([`Running`]) Connor keeps, holding
 //! everything a saved game needs (rule 34: the potions survive a save);
 //! there are no saves yet.
@@ -131,6 +135,12 @@ pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, Str
             c.stats.0[3] = raised;
             (raised - p, format!("the shield: protection {p} -> {raised} (p + p/2, 50 to 100; potions.md rule 17)"))
         }
+        Effect::Strength => {
+            let h = c.stats.0[1];
+            let half = h.div_euclid(2);
+            c.stats.0[1] = h + half;
+            (half, format!("strength: hand number {h} -> {} (+ half, remembered; ranged unchanged; potions.md rule 21)", c.stats.0[1]))
+        }
         _ => (0, String::new()),
     }
 }
@@ -144,8 +154,24 @@ pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
             c.stats.0[3] = (p - r.added).clamp(0, crate::stats::FOURTH_CAP);
             format!("the shield ends: protection {p} -> {} (the {} it added taken off: potions.md 'Do not reproduce' 1)", c.stats.0[3], r.added)
         }
+        Effect::Strength => {
+            let h = c.stats.0[1];
+            c.stats.0[1] = h - r.added;
+            format!("strength ends: hand number {h} -> {} (the remembered {} taken off; potions.md rule 22)", c.stats.0[1], r.added)
+        }
         _ => String::new(),
     }
+}
+
+/// The bits of a `KQSkinList` (`kq8_data::characters::SkinList`) for
+/// Connor now: item N's bit (2^N) is set while he has an item of that
+/// type applied (worn, or a potion running; `potions.md` rules 25, 30).
+pub fn list_bits(w: &crate::active::WorldState, items: &[String]) -> u32 {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, kind)| w.items.objects.iter().any(|o| o.carried_by(crate::talk::CONNOR) && o.third != -1 && o.kind.eq_ignore_ascii_case(kind)))
+        .fold(0, |bits, (n, _)| bits | (1 << n))
 }
 
 /// A potion running on Connor.

@@ -1035,6 +1035,54 @@ impl ProjectileKeys {
     }
 }
 
+/// A `KQSkinList` section (`Connor.kq`: `ConnerSkinList`,
+/// `ConnerFpSkinList`, `ConnerLipsList`; `potions.md` rules 25, 30):
+/// `skinN=<file> <bits>` and `invItemN=<item type>`. Our reading of the
+/// data: item N stands for bit 2^N (it fits the note: Strength, item 11,
+/// is bit 2048 in the skin lists; Clarity, item 2, bit 4 in the face list).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SkinList {
+    pub entries: Vec<(String, u32)>,
+    pub items: Vec<String>,
+}
+
+impl SkinList {
+    pub fn from_section(s: &Section) -> Option<Self> {
+        if !s.get("classType")?.trim().eq_ignore_ascii_case("KQSkinList") {
+            return None;
+        }
+        let count = |k: &str| s.number(k).and_then(Result::ok).unwrap_or(0.0).max(0.0) as usize;
+        let entries = (0..count("nSkin"))
+            .filter_map(|n| {
+                let v = s.get(&format!("skin{n}"))?;
+                let words: Vec<&str> = v.split_whitespace().collect();
+                Some((words.first()?.to_string(), words.get(1).and_then(|b| b.parse().ok()).unwrap_or(0)))
+            })
+            .collect();
+        let items = (0..count("nInvItems")).filter_map(|n| s.get(&format!("invItem{n}")).map(|v| v.trim().to_string())).collect();
+        Some(SkinList { entries, items })
+    }
+
+    /// The bit of item type `kind` (any case, with or without `INVITEM_`).
+    pub fn bit_of(&self, kind: &str) -> Option<u32> {
+        let full = crate::items::full_name(kind);
+        self.items.iter().position(|i| i.eq_ignore_ascii_case(&full)).map(|n| 1 << n)
+    }
+
+    /// The entry for exactly `bits`.
+    pub fn exact(&self, bits: u32) -> Option<&str> {
+        self.entries.iter().find(|(_, b)| *b == bits).map(|(f, _)| f.as_str())
+    }
+
+    /// The entry for `bits`; when that combination is missing, the entry
+    /// with the most of the wanted bits and no other (`potions.md` "Do not
+    /// reproduce" 3; on a tie the higher value: helmet + Strength → the
+    /// Strength entry, as the note's example).
+    pub fn best(&self, bits: u32) -> Option<&str> {
+        self.exact(bits).or_else(|| self.entries.iter().filter(|(_, b)| b & !bits == 0).max_by_key(|(_, b)| (b.count_ones(), *b)).map(|(f, _)| f.as_str()))
+    }
+}
+
 /// A `KQOrbitObj` file (`GAME/Kq/orbit1.kq`: the shape that circles
 /// Connor while the shield potion runs; `potions.md` rule 20). Missing
 /// numbers are 0.
@@ -1072,6 +1120,35 @@ impl OrbitKeys {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skin_lists() {
+        let text = b"[ConnerLipsList]
+classType=KQSkinList
+nSkin=5
+skin0=cf	0
+skin1=chf	1
+skin2=cclf	4
+skin3=cironf	8
+skin4=cclif	12
+nInvItems=4
+invItem0=INVITEM_Helmet
+invItem1=INVITEM_TempleArmor
+invItem2=INVITEM_Clarity
+invItem3=INVITEM_Strength
+";
+        let l = SkinList::from_section(&crate::kq_text::parse(text)[0]).unwrap();
+        assert_eq!((l.bit_of("Clarity"), l.bit_of("INVITEM_Strength"), l.bit_of("Dagger")), (Some(4), Some(8), None));
+        assert_eq!((l.best(0), l.best(12), l.best(4)), (Some("cf"), Some("cclif"), Some("cclf")));
+        assert_eq!(l.best(9), Some("cironf"), "helmet + Strength is missing: the Strength face");
+        let skins = b"[S]
+classType=KQSkinList
+nSkin=2
+skin0=con0.bmp	0
+skin1=conude.bmp		4096
+";
+        assert_eq!(SkinList::from_section(&crate::kq_text::parse(skins)[0]).unwrap().exact(4096), Some("conude.bmp"));
+    }
 
     #[test]
     fn orbit_keys() {

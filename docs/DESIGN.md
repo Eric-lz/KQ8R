@@ -1645,7 +1645,7 @@ Steps (one commit each):
    part − 820 + 500, radius 500, turned 0.2 rad every update, removed
    at the end. **Test:** `fight.log`/`items.log`: protection 0 → 50 →
    0; the orbit's place logged every update.
-5. **5g-5, strength** (rules 21–25). Hand number + ⌊hand/2⌋ (ranged
+5. **5g-5, strength** (**done** 2026-10-21; hand 10 → 15 → 10, `coniron.bmp` on 448 materials, faces `cironf`, `cclif`) (rules 21–25). Hand number + ⌊hand/2⌋ (ranged
    unchanged), the half remembered and taken off at the end. Body skin:
    `ConnerSkinList` bit 2048 (`coniron.bmp`; first person
    `armconfx.bmp`, not drawn: no first person yet). Face: Connor's face

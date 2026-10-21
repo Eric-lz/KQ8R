@@ -320,6 +320,22 @@ pub struct ConnorAssets {
     /// `baseLip=` and the looks of `lip0`..`lip7` of his `lips=` list
     /// (`None` where missing); `None` without them.
     pub lips: Option<(String, Vec<Option<Look>>)>,
+    /// What the potions change on him (M5 5g-5, `potions.md` rules 25,
+    /// 30).
+    pub potion_looks: PotionLooks,
+}
+
+/// Connor's skin and face lists and the pictures the potions need (M5
+/// 5g-5): his `skinList` and `lipsList`, his body skin's texture (the
+/// skin list's entry for no bits, `curSkin=0`), the Strength entry's
+/// texture, and every face set of the face list (`<name>0`..`<name>7`).
+#[derive(Default)]
+pub struct PotionLooks {
+    pub skins: kq8_data::characters::SkinList,
+    pub faces: kq8_data::characters::SkinList,
+    pub body_skin: Option<String>,
+    pub iron: Option<(String, Look)>,
+    pub face_sets: Vec<(String, Vec<Option<Look>>)>,
 }
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
@@ -2198,8 +2214,38 @@ impl Placer<'_> {
             if lips.is_none() {
                 self.log.summary("connor: Connor.kq gives no baseLip / lips: his mouth won't move");
             }
+            // potions.md rules 25, 30 (M5 5g-5): his skin and face lists.
+            let list_of = |key: &str| section.get(key).and_then(|n| file.iter().find(|s| s.name.eq_ignore_ascii_case(n.trim()))).and_then(kq8_data::characters::SkinList::from_section).unwrap_or_default();
+            let mut potion_looks = PotionLooks { skins: list_of("skinList"), faces: list_of("lipsList"), ..Default::default() };
+            self.log.quiet = true;
+            potion_looks.body_skin = potion_looks.skins.exact(0).map(str::to_string);
+            if let Some(iron) = potion_looks.skins.bit_of("INVITEM_Strength").and_then(|b| potion_looks.skins.exact(b)).map(str::to_string) {
+                let look = load_texture(self.world, self.game, &iron, &palette, self.log);
+                potion_looks.iron = Some((iron, look));
+            }
+            let mut names: Vec<String> = potion_looks.faces.entries.iter().map(|(n, _)| n.to_ascii_lowercase()).collect();
+            names.sort();
+            names.dedup();
+            for name in names {
+                // Only this world's pictures (some sets exist in no world).
+                let set = (0..8)
+                    .map(|n| format!("{name}{n}.bmp"))
+                    .map(|f| self.world.load(&f).is_some().then(|| load_texture(self.world, self.game, &f, &palette, self.log)).filter(|l| matches!(l, Look::Texture { .. })))
+                    .collect();
+                potion_looks.face_sets.push((name, set));
+            }
+            self.log.quiet = false;
+            self.log.summary(format!(
+                "connor: skin list {} entries, body skin {:?}, Strength skin {:?}; face list {} entries, face sets {:?} (pictures found: {:?}) (potions.md rules 25, 30)",
+                potion_looks.skins.entries.len(),
+                potion_looks.body_skin,
+                potion_looks.iron.as_ref().map(|(n, l)| (n.clone(), matches!(l, Look::Texture { .. }))),
+                potion_looks.faces.entries.len(),
+                potion_looks.face_sets.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(),
+                potion_looks.face_sets.iter().map(|(_, s)| s.iter().filter(|l| l.is_some()).count()).collect::<Vec<_>>()
+            ));
             let mut assets =
-                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips };
+                ConnorAssets { movements: Vec::new(), animations: Vec::new(), keys, camera_keys, collision_box, lips, potion_looks };
             let mut index_of: BTreeMap<String, usize> = BTreeMap::new();
             // His own set (Conner.anm), then each hand weapon's (M5 5c fix:
             // **stand-in**, see `weapon_sets`), loaded as `<file>/<name>`.
