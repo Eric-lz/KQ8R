@@ -319,7 +319,7 @@ pub fn rope_step(
         let name = c.placement.name.clone();
         let calls = d.connor_placed_by_rope(&name, p, &c.mover.balls, &shared);
         let calls = if calls.is_empty() { "no trap call".to_string() } else { calls.join("; ") };
-        d.active.world.rope_note(format!("placed at ({:.0}, {:.0}, {:.0}): the traps' stay test, then the enter test there (stand-in, Q147 e): {calls}", p[0], p[1], p[2]));
+        d.active.world.rope_note(format!("placed at ({:.0}, {:.0}, {:.0}): the traps' stay test as for a script's move; the other end's On waits for his next move (Q147 e): {calls}", p[0], p[1], p[2]));
     }
     c.rope = climb.filter(|cl| !cl.done);
     d.active.world.connor_roping = c.rope.is_some();

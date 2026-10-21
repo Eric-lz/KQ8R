@@ -115,16 +115,15 @@ impl DoorSim {
     /// lines (which hold a copy of each) don't put them on the terminal
     /// a second time.
     /// The rope state put Connor somewhere at once (`ropeandhook.md` rules
-    /// 15, 16, 18, 23; M6 6a-3): STAND-IN (Q147 e): as a script's `move`
-    /// (traps.md rule 5: every trap he is in runs its stay test now, so the
-    /// end he left gets `Off`), then the enter test at the new place (a
-    /// ball that starts inside counts, rule 6), so the other end's trap
-    /// gets `On` after it. Returns the trap calls.
+    /// 15, 16, 18, 23; M6 6a-3; Q147 e, measured by A): as a script's
+    /// `move` (traps.md rule 5): every trap he is in runs its stay test
+    /// now, so the end he left gets `Off` at once; no trap is entered now,
+    /// the other end's `On` comes at his next move (the sweep starts from
+    /// here). Returns the trap calls.
     pub fn connor_placed_by_rope(&mut self, name: &str, position: [f32; 3], balls: &kq8_core::collide::BallStack, shared: &Shared) -> Vec<String> {
         let (min, max) = kq8_core::connor_mover::CONNOR_BOX;
         let v = Visitor { name, collision_type: kq8_core::collide::CONNOR_TYPE, from: position, position, min, max, balls };
-        let mut calls = self.active.connor_placed(&v);
-        calls.extend(self.active.connor_moved(&v));
+        let calls = self.active.connor_placed(&v);
         self.connor_checked_at = Some(position);
         self.flush_traps(shared);
         calls

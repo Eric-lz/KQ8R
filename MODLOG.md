@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M6 6a, A's answer to Q147 (e): the traps when the rope places Connor
+
+**Changed:** Viewer `door_view.rs` `connor_placed_by_rope`: only the stay test (as a script's `move`, `traps.md` rule 5); the enter test at the new place is gone, so the other end's `On` comes at his next move. `rope_view.rs` log text.
+**Why:** `ropeandhook.md` rule 18 as measured by A (Q147 e): the end he left gets `Off` at once, the other end's `On` later.
+**Tested how:** Release build, the foot climb up (`--at 152500,207968,-1.5708 ... --hold 1,0,0,200,300`); `rope.log`.
+**Result:** 162 (the lift): "ropetrap Off Connor", status bottom → none. 277 top end; 323 (during `taway`, his first move): `ropetrp2` On, status none → top, `HookDown` shown.
+**Still broken / not tested:** In the original the top's `On` came during the climb (5.5 s after the lift, the cause not found: the note's open question 7); ours comes at his first move, in `taway`. Only the climb up run in the viewer.
+**Next:** the top camera's flag (Q147 c).
+
 ## 2026-10-21 M6 6a, A's measurement: the grab's camera spot on a tie
 
 **Changed:** `rope.rs` `camera_spot`: of the game's own two spots, the + one when equally near (within 0.5, ours); `setRopeCam` spots keep "2 when equal". Unit test with A's church numbers.
