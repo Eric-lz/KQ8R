@@ -704,6 +704,12 @@ pub struct WorldState {
     /// Requests for a new mode, taken by the viewer, which knows his
     /// state (rules 1, 5, 9).
     pub weapon_requests: Vec<crate::weapons::Request>,
+    /// The bolt file Connor shoots and his shoot offset (own space): the
+    /// start values of `Connor.kq`, then the last ranged item's
+    /// (`ranged-weapons.md` rules 17, 21; M5 5f-4), set by
+    /// [`WorldState::set_connor_fight`].
+    pub connor_projectile: Option<String>,
+    pub connor_shoot_offset: [f32; 3],
     /// The ready weapon was swapped by picking up another (5d fix 11):
     /// Connor takes its stance at once, nothing plays. Taken by the viewer.
     pub weapon_swapped: bool,
@@ -2695,6 +2701,8 @@ impl Active {
                 weapon_mode: crate::weapons::WeaponMode::None,
                 last_away_ranged: false,
                 weapon_requests: Vec::new(),
+                connor_projectile: None,
+                connor_shoot_offset: [0.0; 3],
                 weapon_swapped: false,
                 combat_level: 1.0,
                 ai_off: false,
@@ -5500,7 +5508,7 @@ mod tests {
         // fighting.md rules 39-41, 16 (M5 5c-5).
         let mut a = fighter();
         a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
-        a.world.connor_fight = Some(crate::fight::ConnorFight { ouch_sound: "conrow3.aud".into(), min_damage_factor: 0.75, max_damage_factor: 4.0, short_lists: vec![], long_lists: vec![] });
+        a.world.connor_fight = Some(crate::fight::ConnorFight { ouch_sound: "conrow3.aud".into(), min_damage_factor: 0.75, max_damage_factor: 4.0, short_lists: vec![], long_lists: vec![], shoot_offsets: vec![], start_projectile: None, start_offset: [0.0; 3] });
         // The goblin at (0, 0, 100); Connor 2,000 south of it, facing it
         // (heading pi faces +y).
         let from = [0.0, -2000.0, 100.0];

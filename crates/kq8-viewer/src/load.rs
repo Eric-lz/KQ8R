@@ -2020,6 +2020,29 @@ fn connor_inventory(file: &[kq8_data::kq_text::Section], connor: &kq8_data::kq_t
 }
 
 impl Placer<'_> {
+    /// A shape drawn where the game puts it (a corpse, a bolt; `fighting.md`
+    /// rules 32, 36), loaded once into `corpse_shapes`.
+    fn load_corpse_shape(&mut self, shape: &str, who: &str) {
+        let key = shape.to_ascii_lowercase();
+        if self.corpse_shapes.contains_key(&key) {
+            return;
+        }
+        let slot = match self.index_of.get(&key) {
+            Some(slot) => *slot,
+            None => {
+                let slot = self.load_shape(shape, None, None);
+                self.index_of.insert(key.clone(), slot);
+                slot
+            }
+        };
+        match slot {
+            Some(i) => {
+                self.corpse_shapes.insert(key, i);
+            }
+            None => self.character_lines.push(format!("[{who}]: shape {shape} could not be loaded")),
+        }
+    }
+
     /// A projectile file (`fighting.md` rule 36; `ranged-weapons.md` rules
     /// 26, 29), read once: its keys, and its shape's `BOUNDS.KQ` box.
     /// Returns its shape's name. `who`: for the log.
@@ -2068,26 +2091,53 @@ impl Placer<'_> {
             // fighting.md rules 24, 39-41 (M5 5c-4): his ouch sound, the big
             // swing's factors, the hand weapons' movement lists.
             let num = |k: &str, d: f32| section.number(k).and_then(Result::ok).map_or(d, |v| v as f32);
-            let short_lists = section
-                .get("ShortAnimList")
-                .and_then(|n| file.iter().find(|s| s.name.eq_ignore_ascii_case(n.trim())))
-                .map(|s| {
-                    s.entries
-                        .iter()
-                        .filter(|(k, _)| k.to_ascii_lowercase().starts_with("animlist") && k.len() > "animlist".len())
-                        .filter_map(|(_, v)| {
-                            let mut w = v.split_whitespace();
-                            Some((w.next()?.to_string(), w.next()?.to_string()))
-                        })
-                        .collect()
+            let lists = |key: &str| -> Vec<(String, String)> {
+                section
+                    .get(key)
+                    .and_then(|n| file.iter().find(|s| s.name.eq_ignore_ascii_case(n.trim())))
+                    .map(|s| {
+                        s.entries
+                            .iter()
+                            .filter(|(k, _)| k.to_ascii_lowercase().starts_with("animlist") && k.len() > "animlist".len())
+                            .filter_map(|(_, v)| {
+                                let mut w = v.split_whitespace();
+                                Some((w.next()?.to_string(), w.next()?.to_string()))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            let short_lists = lists("ShortAnimList");
+            // ranged-weapons.md rules 10, 17, 21 (M5 5f-4): the ranged
+            // weapons' lists, the shoot offsets by item, the start values.
+            let long_lists = lists("LongAnimList");
+            let shoot_offsets: Vec<(String, [f32; 3])> = section
+                .entries
+                .iter()
+                .filter(|(k, _)| k.to_ascii_lowercase().starts_with("shootoffsets"))
+                .filter_map(|(_, v)| {
+                    let w: Vec<&str> = v.split_whitespace().collect();
+                    let n = |k: usize| w.get(k).and_then(|x| x.parse::<f32>().ok());
+                    Some((w.first()?.to_string(), [n(1)?, n(2)?, n(3)?]))
                 })
-                .unwrap_or_default();
+                .collect();
+            let start_offset = [num("shootOffsetX", 0.0), num("shootOffsetY", 0.0), num("shootOffsetZ", 0.0)];
+            let start_projectile = section.get("projectileFile").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+            self.log.summary(format!(
+                "connor: ranged (ranged-weapons.md rules 10, 17, 21): {} lists ({}); {} shoot offsets; start projectile {start_projectile:?}, offset {start_offset:?}",
+                long_lists.len(),
+                long_lists.iter().map(|(w, a)| format!("{w} {a}")).collect::<Vec<_>>().join(", "),
+                shoot_offsets.len()
+            ));
             self.connor_fight = Some(kq8_core::fight::ConnorFight {
                 ouch_sound: section.get("ouchSound").map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |s| s.trim().to_string()),
                 min_damage_factor: num("minDamageFactor", 1.0),
                 max_damage_factor: num("maxDamageFactor", 1.0),
                 short_lists,
-                long_lists: Vec::new(),
+                long_lists,
+                shoot_offsets,
+                start_projectile,
+                start_offset,
             });
             self.connor_inventory = connor_inventory(&file, section);
             let (terrain, [x, y, _]) = (&self.terrain, p.position);
@@ -2386,24 +2436,7 @@ impl Placer<'_> {
             // fighting.md rule 36 (M5 5c-9): the projectile it shoots.
             let bolt_shape = f.projectile.clone().and_then(|file| self.load_projectile(&file, &p.name));
             for shape in [f.dead_dts, f.ided_kqs, f.projd_kqs, bolt_shape].into_iter().flatten() {
-                let key = shape.to_ascii_lowercase();
-                if self.corpse_shapes.contains_key(&key) {
-                    continue;
-                }
-                let slot = match self.index_of.get(&key) {
-                    Some(slot) => *slot,
-                    None => {
-                        let slot = self.load_shape(&shape, None, None);
-                        self.index_of.insert(key.clone(), slot);
-                        slot
-                    }
-                };
-                match slot {
-                    Some(i) => {
-                        self.corpse_shapes.insert(key, i);
-                    }
-                    None => self.character_lines.push(format!("[{}]: corpse shape {shape} could not be loaded", p.name)),
-                }
+                self.load_corpse_shape(&shape, &p.name);
             }
         }
         // Missing locX/locY/locZ are 0 (objects.md Q19); only the file's
@@ -2798,15 +2831,30 @@ impl Placer<'_> {
     fn weapon_sets(&mut self) -> Vec<(Vec<kq8_data::kq_text::Section>, String, Option<String>)> {
         let Some(f) = &self.connor_fight else { return Vec::new() };
         let kinds: Vec<String> = self.items.objects.iter().map(|o| o.kind.to_ascii_lowercase()).collect();
+        // ranged-weapons.md rule 10 (M5 5f-4): the ranged weapons' lists
+        // too, for those this world's object files name (a monster's drop:
+        // `sprgnbow`'s Small Crossbow in `MONSTERS.KQ`); `NoRanged` is his
+        // own list.
+        let mut kq_text = String::new();
+        for (_, _, bytes) in self.world.entries_ending(".kq") {
+            if let Ok(b) = bytes {
+                kq_text.push_str(&String::from_utf8_lossy(&b).to_ascii_lowercase());
+            }
+        }
         let mut sets = Vec::new();
-        for (weapon, file) in f.short_lists.clone() {
+        let all: Vec<(String, String, bool)> = f.short_lists.iter().map(|(w, a)| (w.clone(), a.clone(), false)).chain(f.long_lists.iter().map(|(w, a)| (w.clone(), a.clone(), true))).collect();
+        for (weapon, file, ranged) in all {
+            if ranged && weapon.eq_ignore_ascii_case("NoRanged") {
+                continue;
+            }
             let kind = format!("{}{weapon}", kq8_data::items::PREFIX).to_ascii_lowercase();
             // Also a weapon a world script names (made or given after
             // Connor is loaded: `WorldInv.cs`'s dagger and small axe; the
             // user's check, 5d fix 9).
             let w = weapon.to_ascii_lowercase();
             let named = self.all_scripts.iter().find(|(_, t)| t.to_ascii_lowercase().contains(&w)).map(|(n, _)| n.clone());
-            if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) && named.is_none() {
+            let in_files = ranged && kq_text.contains(&kind);
+            if !weapon.eq_ignore_ascii_case("Fists") && !kinds.contains(&kind) && named.is_none() && !in_files {
                 continue;
             }
             if let Some(n) = &named {
@@ -2867,9 +2915,19 @@ impl Placer<'_> {
                 for m in kq8_core::fight::SWINGS {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
-                // Readying and putting away (M5 5c fix, stand-in, Q138);
-                // `away` before a conversation (conversation.md rule 7).
-                for m in ["draw", "undraw", "away", "out"] {
+                // The swap (ranged-weapons.md rule 6, M5 5f-3); `away`
+                // before a conversation (conversation.md rule 7).
+                for m in ["draw", "undraw", "away", "away2", "out"] {
+                    wanted.insert((Some(file.clone()), m.to_string()));
+                }
+            }
+            // ranged-weapons.md rules 6, 20 (M5 5f-4): the ranged lists'
+            // swap and shot.
+            for (w, file) in &f.long_lists {
+                if w.eq_ignore_ascii_case("NoRanged") {
+                    continue;
+                }
+                for m in ["attack", "away", "away2", "out"] {
                     wanted.insert((Some(file.clone()), m.to_string()));
                 }
             }
@@ -3535,6 +3593,19 @@ impl Placer<'_> {
             let Ok(bytes) = bytes else { continue };
             for s in kq8_data::kq_text::parse(&bytes) {
                 named.extend(s.get("invItemTypeName").map(str::to_string));
+            }
+        }
+        // ranged-weapons.md rule 21 (M5 5f-4): the bolt files of the ranged
+        // weapons that can appear here, and their shapes.
+        let ranged: Vec<(String, String)> = named
+            .iter()
+            .filter_map(|n| self.items.kind(n.strip_prefix("invitem_").unwrap_or(n)))
+            .filter(|t| t.category == "LongWeapon")
+            .filter_map(|t| Some((t.name.clone(), t.extra.clone()?)))
+            .collect();
+        for (kind, file) in ranged {
+            if let Some(shape) = self.load_projectile(&file, &format!("Connor's {kind}")) {
+                self.load_corpse_shape(&shape, &kind);
             }
         }
         let mut shapes = BTreeMap::new();

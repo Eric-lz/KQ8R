@@ -206,8 +206,14 @@ pub struct ConnorFight {
     /// `ShortAnimList`: (weapon name without `INVITEM_`, `.anm` file).
     pub short_lists: Vec<(String, String)>,
     /// `LongAnimList`, the same for the ranged weapons
-    /// (`ranged-weapons.md` rule 10; read from M5 5f-4).
+    /// (`ranged-weapons.md` rule 10; M5 5f-4).
     pub long_lists: Vec<(String, String)>,
+    /// `shootOffsets`: (item type, offset in his own space) (rule 17).
+    pub shoot_offsets: Vec<(String, [f32; 3])>,
+    /// `projectileFile` and `shootOffsetX/Y/Z`: start values the first
+    /// ranged item replaces (rule 21).
+    pub start_projectile: Option<String>,
+    pub start_offset: [f32; 3],
 }
 
 /// A character's part in the fight (M5 5c).

@@ -2916,3 +2916,16 @@ Replaces 5c fixes 2–3 and 5d fixes 9–10's stand-ins (Q138) where the note di
 | `KQConner::setDoMode 0|1|4`: a request that needs no state (he is put into the swap from Special, Push or Talk too); the optional movement word is logged, not used; `getDoMode` gives the mode's number | Rule 9 (no Daventry script gives the word) | Unit test; viewer `--command "KQConner::setDoMode 4",150` |
 | A jump under way is not ended by `setDoMode` (the set switches at once instead) | **Ours** (rule 9 says the jump is ended: not built) | — |
 | A conversation's put-away, a weapon picked up while one is ready, the `--swing` test: the mode follows the item, the set follows (5d fix 11: at once) | `conversation.md` rule 7; the user's check (5d fix 11) | Viewer: `--swing goblin22` run |
+
+### 5f-4, the crossbow readied — `crates/kq8-core/src/weapons.rs` (`set_connor_fight`, `take_ranged_item`), `fight.rs` (`ConnorFight::long_lists`, `shoot_offsets`, `start_projectile`, `start_offset`), `active.rs` (`connor_projectile`, `connor_shoot_offset`), `connor_inventory.rs` (`receive`); viewer `load.rs` (`Connor.kq`'s keys, `weapon_sets`, `special_movements`, `load_corpse_shape`, `item_models`), `door_view.rs` (`weapon_list`)
+
+| What | Source | Check |
+| --- | --- | --- |
+| With the ranged mode ready his movement list is the ranged item's from `Connor.kq`'s `LongAnimList` by its name (`SmCrossBow` → `conscbow.anm`); a movement the list lacks still falls back to his own (as for the hand weapons, 5d fix 9) | Rule 10 ("the whole list is replaced"); the fallback is **ours** (kept from 5c / 5d for movements like `push` and the gestures, which the weapon lists don't have) | `viewer.log`: `conscbow.anm/stop` and the rest loaded |
+| The list is loaded when the world's files name the item (`MONSTERS.KQ`'s drop), a script names it, or it is placed; `NoRanged`'s list is his own | Ours (what to load ahead) | `viewer.log`: "weapon set conscbow.anm (SmCrossBow)" |
+| The swap's movements from that list: `away`, `away2`, `out`; its `attack` for 5f-5 | Rules 6, 20; data (`conscbow.anm`) | `fight.log`: `conscbow.anm/away`, `conscbow.anm/out` |
+| A `LongWeapon` going into his inventory: its projectile file (the item list's last column) becomes his; its `shootOffsets` line (any capitals) his offset; no line: kept; `NoRanged`: no bolt, `INVITEM_All` (no line) | Rules 17, 21 | `fight.log`: Small Crossbow → `Prscbolt.kq`, (−315, −327, 1,027) |
+| His start values: `projectileFile`, `shootOffsetX/Y/Z`; `shootDamage` not read | Rule 21, "Do not reproduce" | `viewer.log` |
+| Picked up while the ranged mode is ready: the new item is ready, its list at once, no swap | "Edge cases" | — (not run) |
+| The bolt files and shapes of every ranged weapon that can appear in the world are read at load | Ours (as for the characters' bolts) | `characters.log`: "[Connor's INVITEM_SmCrossbow]: shoots Prscbolt.kq" |
+| Bow pointer `IDBMA_CURS05` with the ranged mode ready | Rule 11 (5f-3) | `gui.log`: CURS05 at update 37 |

@@ -472,13 +472,20 @@ miss, roll, flinch, death, drop and shot is in
   back gives 1.25 × reach) and in front of it; damage rolled 25–100 %,
   then his protection; he flinches now and then (`react`) or says ouch;
   below 0 health he dies and stays dead (game over is not built).
-- **Connor hits back (stand-in controls):** click the hand-weapon slot
-  to ready his fists (again to put them away): he raises them (`draw`,
-  then the fists' own stand and walk) and the pointer turns into the
-  sword (Ctrl held: the golden pointer); then a left click on a
-  creature turns him toward it and swings (`attack` / `attackb`; Shift:
-  `attack2`, × 0.75–4 damage; Ctrl: the normal click). Test option
-  `--swing NAME,N[,big]`.
+- **Readying weapons (M5 5f-3, 5f-4):** a weapon slot readies that
+  weapon (again: puts it away); Delete swaps between the hand and the
+  ranged weapon (with nothing ready: the one put away last), Alt puts it
+  away; only while Connor stands or walks. The fists come up with
+  `draw` and go down with `undraw`; every other change puts the old
+  weapon away and takes the new one out, and his whole set of
+  movements becomes the weapon's. The pointer: sword, crossbow arrow or
+  the golden one (Ctrl held with a weapon ready: the golden one). The
+  Small Crossbow (`sprgnbow`'s drop) can be readied; it doesn't shoot
+  yet. `KQConner::setDoMode` / `getDoMode` work.
+- **Connor hits back (stand-in click):** with his fists ready a left
+  click on a creature turns him toward it and swings (`attack` /
+  `attackb`; Shift: `attack2`, × 0.75–4 damage; Ctrl: the normal click).
+  Test option `--swing NAME,N[,big]`.
 - **Hit creatures:** they flinch (`react`, never twice within 2 s of the
   last) or say ouch, run after him from then on, and alarm everyone who
   sees him; hit unseen, a lone one runs about beside him until it finds

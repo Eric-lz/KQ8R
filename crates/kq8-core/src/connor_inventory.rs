@@ -181,8 +181,19 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
             let was = w.weapon_ready.replace(o.kind.clone());
             w.weapon_swapped = true;
             w.item_note(format!("{}: a hand weapon was ready ({was:?}): {} is ready now (the user's check)", o.name, o.kind));
-        } else if t.category == "LongWeapon" || t.category == "ShortWeapon" {
-            w.item_note(format!("{}: ranged weapon modes are not built; a hand weapon is readied from its slot", o.name));
+        }
+        if t.category == "LongWeapon" {
+            // ranged-weapons.md rules 17, 21 (M5 5f-4).
+            let line = w.take_ranged_item(&o.kind);
+            w.item_note(format!("{}: {line}", o.name));
+            w.fight_note("Connor", format!("{} goes into his inventory: {line}", o.name));
+            // "Edge cases": picked up with the ranged mode ready: the new
+            // list at once, no swap.
+            if w.weapon_mode == crate::weapons::WeaponMode::Ranged && !o.kind.eq_ignore_ascii_case(crate::weapons::NO_RANGED) {
+                let was = w.weapon_ready.replace(o.kind.clone());
+                w.weapon_swapped = true;
+                w.fight_note("Connor", format!("the ranged mode was ready ({was:?}): {} is ready now, its list at once, no swap (ranged-weapons.md, Edge cases)", o.kind));
+            }
         }
         if o.kind.eq_ignore_ascii_case("INVITEM_TempleArmor") {
             w.item_note("INVITEM_TempleArmor: Connor's animation set would change (contpsd2.anm, conicbw2.anm); not done");

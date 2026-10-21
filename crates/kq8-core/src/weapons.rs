@@ -219,6 +219,43 @@ impl WorldState {
         Some(Change { from: ready, to, from_item, to_item, script })
     }
 
+    /// `Connor.kq`'s fight settings (M5 5c-4); his projectile and shoot
+    /// offset start as its `projectileFile` and `shootOffsetX/Y/Z`, then
+    /// a ranged item he already carries replaces them (rule 21).
+    pub fn set_connor_fight(&mut self, f: Option<crate::fight::ConnorFight>) {
+        self.connor_projectile = f.as_ref().and_then(|f| f.start_projectile.clone());
+        self.connor_shoot_offset = f.as_ref().map_or([0.0; 3], |f| f.start_offset);
+        self.connor_fight = f;
+        if let Some(kind) = self.ranged_weapon() {
+            let line = self.take_ranged_item(&kind);
+            self.fight_note("Connor", format!("carried at the start: {line}"));
+        }
+    }
+
+    /// Rules 17, 21 (M5 5f-4): a `LongWeapon` goes into his inventory: its
+    /// projectile file (the item list's last column; `NoRanged` has none:
+    /// no bolt) becomes his, and its line of `Connor.kq`'s `shootOffsets`
+    /// (any capitals; `NoRanged` looks for `INVITEM_All`, which has none)
+    /// his shoot offset; no line: the offset stays. Returns the log text.
+    pub fn take_ranged_item(&mut self, kind: &str) -> String {
+        let real = !kind.eq_ignore_ascii_case(NO_RANGED);
+        self.connor_projectile = if real { self.items.kind(kind).and_then(|t| t.extra.clone()) } else { None };
+        let name = if real { kind } else { "INVITEM_All" };
+        let found = self.connor_fight.as_ref().and_then(|f| f.shoot_offsets.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, o)| *o));
+        if let Some(o) = found {
+            self.connor_shoot_offset = o;
+        }
+        let o = self.connor_shoot_offset;
+        format!(
+            "{kind}: shoots {:?}; shoot offset ({:.0}, {:.0}, {:.0}){} (ranged-weapons.md rules 17, 21)",
+            self.connor_projectile,
+            o[0],
+            o[1],
+            o[2],
+            if found.is_some() { format!(" from its shootOffsets line ({name})") } else { format!(" kept (no shootOffsets line for {name})") }
+        )
+    }
+
     /// A weapon readied or put away outside a request (the `--swing` test,
     /// a conversation's put-away): the mode follows the item.
     pub fn set_weapon(&mut self, mode: WeaponMode, item: Option<String>) {

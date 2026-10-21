@@ -1530,7 +1530,9 @@ Steps (one commit each):
    movement again by name (rule 8). Ctrl's plain click with any weapon
    ready (rule 12). **Test:** `--key delete,N`, `--key alt,N`:
    `fight.log` shows each request, taken or dropped, the movements.
-4. **5f-4, the crossbow readied** (rules 10, 11, 21). A `LongWeapon`
+4. **5f-4, the crossbow readied** (**done** 2026-10-20; slot, Delete,
+   Alt with the Small Crossbow as the note's "How to check" 1–2)
+   (rules 10, 11, 21). A `LongWeapon`
    picked up becomes the ranged slot item: its projectile file and
    shoot offset (`Connor.kq`'s `shootOffsets`, any capitals). The
    ranged mode's list from `LongAnimList` (`conscbow.anm`), the bow

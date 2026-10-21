@@ -763,7 +763,7 @@ pub fn spawn_doors(
             f.short_lists.iter().map(|(w, a)| format!("{w} {a}")).collect::<Vec<_>>().join(", ")
         ));
     }
-    active.world.connor_fight = objects.connor_fight.clone();
+    active.world.set_connor_fight(objects.connor_fight.clone());
     // fighting.md rule 36 (M5 5c-9): the projectiles the fighters shoot.
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
     match &objects.connor_stats {
