@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-20 A: the user checks ranged weapons in the original
+
+**Changed:** `ranged-weapons.md` "How to check": the user's check recorded.
+**Why:** The user compared the note with the original game.
+**Tested how:** The user's check in the original (Daventry).
+**Result:** Everything works pretty much as the note describes.
+**Still broken / not tested:** The note's open questions 1–5 are unchanged.
+**Next:** B: build `ranged-weapons.md`.
+
 ## 2026-10-20 M5 5e-1: thrown items fly the traced arc and are stopped by walls, roofs and objects
 
 **Changed:** The thrower in `item.rs` (`Flight::update`) replaces 5c-8's stand-in. Each update it works out the exact arc from the launch point and moves the item there with the characters' mover. The mover uses the item's `BOUNDS.KQ` box, type 0x220, mask 0x809 and steps 0, and meets the floor grid, the buildings and the objects with type bit 0x1 or 0x100. At the first touch the land sound plays and the arc ends; then the item falls under ordinary gravity until it is held for one update (or 10 s). Flights now run in the viewer's `character_gravity` (`World::flights_step` gets the ground, buildings and objects), not in core's update. Plan 5e in `docs/DESIGN.md`; provenance; FEATURES.

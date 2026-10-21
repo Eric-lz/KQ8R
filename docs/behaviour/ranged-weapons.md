@@ -493,6 +493,9 @@ floor grid / range.
 **In the original (user, by eye), Daventry** (take the Small Crossbow
 from `sprgnbow`, `fighting.md` rule 31):
 
+**Checked by the user in the original (2026-10-20):** everything works
+pretty much as described.
+
 1. **Readying**: click the crossbow's slot while standing: his hand goes
    back, then the crossbow comes out with a whip sound; the pointer is
    an arrow. Click the slot again: the crossbow goes away and his empty
