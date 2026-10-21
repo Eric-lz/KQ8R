@@ -30,6 +30,15 @@
 //!   remembered and taken off at the end; ranged unchanged. The look
 //!   (iron skin, face) is the viewer's, from [`list_bits`].
 //!
+//! - Invisible (rules 26–29): characters are told Connor is 100,000
+//!   below where he is ([`crate::active::WorldState::connor_reported`]):
+//!   sight, alarm, chase, leash and "how far away" use that place; his
+//!   true place stays for hits and for standing on a rising character.
+//!   `KQConner::checkInvisible` gives 1 while it runs. The look is the
+//!   viewer's. Not built: the hurt line of rule 27 (which characters use
+//!   it is not traced), and the same lowering during cutscenes, talk and
+//!   the rope (rule 26's other cases; a later step).
+//!
 //! Each running potion is one record ([`Running`]) Connor keeps, holding
 //! everything a saved game needs (rule 34: the potions survive a save);
 //! there are no saves yet.
@@ -95,6 +104,10 @@ pub fn red_numbers(running: &[Running]) -> [bool; 3] {
     [on(Effect::Shield), on(Effect::Strength), false]
 }
 
+/// Rule 26: how far below his real place characters are told Connor is
+/// while Invisible runs.
+pub const HIDDEN_DROP: f32 = 100_000.0;
+
 /// Rule 17: the shield's lowest and highest protection.
 pub const SHIELD_MIN: i64 = 50;
 pub const SHIELD_MAX: i64 = 100;
@@ -141,6 +154,11 @@ pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, Str
             c.stats.0[1] = h + half;
             (half, format!("strength: hand number {h} -> {} (+ half, remembered; ranged unchanged; potions.md rule 21)", c.stats.0[1]))
         }
+        Effect::Invisible => {
+            let line = "invisible: characters are told Connor is 100,000 below where he is (potions.md rule 26)";
+            w.character_log.push(format!("update {}: Connor: {line}", w.updates));
+            (0, line.to_string())
+        }
         _ => (0, String::new()),
     }
 }
@@ -158,6 +176,11 @@ pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
             let h = c.stats.0[1];
             c.stats.0[1] = h - r.added;
             format!("strength ends: hand number {h} -> {} (the remembered {} taken off; potions.md rule 22)", c.stats.0[1], r.added)
+        }
+        Effect::Invisible => {
+            let line = "invisible ends: characters are told where Connor really is (potions.md rule 26)";
+            w.character_log.push(format!("update {}: Connor: {line}", w.updates));
+            line.to_string()
         }
         _ => String::new(),
     }

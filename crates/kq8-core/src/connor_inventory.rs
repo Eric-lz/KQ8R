@@ -509,7 +509,8 @@ mod tests {
     type Row = (&'static str, [i64; 5], u8, &'static str, i32, &'static str);
 
     fn types() -> ItemTypes {
-        let rows: [Row; 9] = [
+        let rows: [Row; 10] = [
+            ("INVITEM_Invisible", [0; 5], 1, "HealthItem", 15, "invisibl.aud"),
             ("INVITEM_Invulnerable", [0; 5], 1, "HealthItem", 20, "invuln.aud"),
             ("INVITEM_Mushroom", [5, 0, 0, 0, 0], 1, "HealthItem", -1, "healing.aud"),
             ("INVITEM_Strength", [0; 5], 1, "HealthItem", 20, "none"),
@@ -631,6 +632,20 @@ mod tests {
         timers(&mut a.world);
         assert_eq!(stats(&a)[3], 41);
         assert!(a.world.status_icons.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn invisible_reports_him_100000_below() {
+        let mut a = active();
+        let p = carry(&mut a, "Invisible", 1);
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0]));
+        bar_click(&mut a.world, &p, true, false, "key 8");
+        assert!(a.world.connor_invisible());
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0 - 100_000.0]));
+        assert_eq!(a.world.connor_at, Some([1.0, 2.0, 3.0]), "his true place is kept");
+        a.world.updates = 15 * 15;
+        timers(&mut a.world);
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0]));
     }
 
     #[test]

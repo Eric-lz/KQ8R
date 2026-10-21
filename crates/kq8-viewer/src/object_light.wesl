@@ -64,6 +64,8 @@ struct Settings {
     // Particles (rule 30): w = 1: the haze is measured from xyz (their
     // emitter's location, Bevy world space), not from the part's position.
     haze_from: vec4<f32>,
+    // 1 = texture pixels with alpha below one half are holes (Invisible).
+    cutout: u32,
 };
 
 // One light of the scene (`scene_lights.rs`): position (world space; w = 1
@@ -215,6 +217,9 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
     var colour = settings.base_colour;
     if settings.textured == 1u {
         colour = colour * textureSample(colour_texture, colour_sampler, in.uv);
+        if settings.cutout == 1u && colour.a < 0.5 {
+            discard; // potions.md rule 29: the mesh's holes
+        }
     }
     // STAND-IN (as the ground, M1 4c): the multiply is meant on the colour
     // as shown on screen, so the light goes through the sRGB curve before

@@ -336,6 +336,9 @@ pub struct PotionLooks {
     pub body_skin: Option<String>,
     pub iron: Option<(String, Look)>,
     pub face_sets: Vec<(String, Vec<Option<Look>>)>,
+    /// M5 5g-6: his textures' `I_` versions in this world (his texture's
+    /// name, lower case; the `I_` picture with entry 0 see-through).
+    pub ghosts: Vec<(String, Look)>,
 }
 
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
@@ -674,6 +677,22 @@ fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256],
         edge.map_or("-".into(), |n| n.to_string())
     ));
     Look::Texture { name: label, width: bmp.width, height: bmp.height, rgba }
+}
+
+/// `potions.md` rule 29 (M5 5g-6): an `I_` texture from this world only,
+/// its entry-0 pixels see-through (alpha 0: the holes of its mesh).
+fn load_ghost_texture(world: &World, name: &str, palette: &[Rgb; 256]) -> Option<Look> {
+    let (label, bytes) = world.load(name)?.ok()?;
+    let bmp = Bitmap::parse(&bytes).ok()?;
+    let mut rgba = to_rgba(&bmp, palette);
+    if bmp.bit_count == 8 {
+        for (px, &i) in rgba.chunks_mut(4).zip(&bmp.pixels) {
+            if i == 0 {
+                px[3] = 0;
+            }
+        }
+    }
+    Some(Look::Texture { name: label, width: bmp.width, height: bmp.height, rgba })
 }
 
 /// Level 0 as RGBA, top row first. 8-bit images use the given palette
@@ -2334,6 +2353,21 @@ impl Placer<'_> {
             }
             }
             self.special_movements(&anm, &list, &palette, &mut assets, &mut index_of);
+            // potions.md rule 29 (M5 5g-6): the `I_` versions of his
+            // textures that this world has (the first two letters replaced).
+            let mut names: Vec<String> = assets.animations.iter().flat_map(|a| a.looks.iter()).filter_map(|(_, l, _)| match l {
+                Look::Texture { name, .. } => Some(name.rsplit(['/', '\\']).next().unwrap_or(name).to_ascii_lowercase()),
+                _ => None,
+            }).collect();
+            names.sort();
+            names.dedup();
+            for name in names {
+                let Some(ghost) = name.get(2..).map(|rest| format!("i_{rest}")) else { continue };
+                if let Some(look) = load_ghost_texture(self.world, &ghost, &palette) {
+                    assets.potion_looks.ghosts.push((name, look));
+                }
+            }
+            self.log.summary(format!("connor: I_ textures for Invisible: {:?} (potions.md rule 29)", assets.potion_looks.ghosts.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>()));
             self.log.summary(format!("connor: palette {palette_name}; {} key bindings from Connor.sae", assets.keys.len()));
             Ok((p, assets))
         })();

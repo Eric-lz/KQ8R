@@ -1653,7 +1653,7 @@ Steps (one commit each):
    armour 2, Clarity 4, Strength 8; a missing combination → the entry
    with most of the wanted bits, Do not reproduce 3). **Test:** hand 10
    → 15 → 10; `connor.log` names the skin and face set.
-6. **5g-6, invisible** (rules 26–29). The reported position: characters
+6. **5g-6, invisible** (**done** 2026-10-21; a chasing goblin gives up 3 s after, goes home; 445 materials with `I_` pictures, 585 meshed) (rules 26–29). The reported position: characters
    are told Connor is 100,000 below where he is while it runs (sight,
    alarm, chase and leash use it). `KQConner::checkInvisible`. His
    textures: an `I_` version if the world has one (first two letters
@@ -1662,6 +1662,10 @@ Steps (one commit each):
    or face changes; restored at the end. The hurt line (rule 27) is not
    built (which characters use it is not traced). **Test:** a goblin
    chasing him gives up within ~3 s (`characters.log`).
+   **Not built, a possible later step (6b):** rule 26 says the same
+   lowering already happens during cutscenes (handsOff with the pointer
+   hidden), while Connor talks and on the rope; that changes characters
+   outside potions, so it waits for the user's go-ahead.
 7. **5g-7, clarity** (rules 30–32). At the start every object whose
    `groupsAlways` has bit 2048 gets its script with `Reveal True`, at
    the end `Reveal False` (Daventry: `keepwall`, `wizchest1`). Face bit

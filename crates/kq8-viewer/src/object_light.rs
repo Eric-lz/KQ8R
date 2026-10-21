@@ -100,6 +100,9 @@ pub struct Settings {
     /// space, w = 1: the haze is measured from there instead of from the
     /// drawn part's own position (w = 0).
     pub haze_from: Vec4,
+    /// 1 = texture pixels with alpha below one half are holes (Connor
+    /// while Invisible runs, `potions.md` rule 29; M5 5g-6).
+    pub cutout: u32,
 }
 
 /// Each corner's model part ball (rule 24): centre in model space (Bevy
@@ -233,6 +236,7 @@ impl ObjectLight {
             haze_multiplier: 1.0,
             game_units: UNITS_PER_METRE,
             haze_from: Vec4::ZERO,
+            cutout: 0,
         }
     }
 

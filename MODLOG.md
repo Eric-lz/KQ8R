@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 M5 5g-6: the invisible potion
+
+**Changed:** `active.rs`: `connor_reported` (100,000 below while Invisible runs), `connor_invisible`, `KQConner::checkInvisible`. `character_ai.rs`: sight, alarm, chase, leash and leaving the active list use the reported place. `potions.rs`: start/end lines in `characters.log`. Viewer: `load.rs` loads the `I_` versions of his textures (entry 0 see-through); `object_light.rs` / `.wesl`: a `cutout` switch (holes where alpha < ½); `potion_view.rs`: the look is worked out from Strength, the face set and Invisible together, with mesh copies (1 pixel in 4) where there is no `I_` picture. DESIGN, provenance. 1 new unit test.
+**Why:** Step 6 of `potions.md` (rules 26–29).
+**Tested how:** `cargo test` (core 466 pass), clippy clean. `kq8-viewer --world Daventry --sound off --frames 4000 --at 286784,192527,1.5708 --key f3,1 --command "give Invisible 1,10" --key 8,150`; `characters.log`, `items.log`.
+**Result:** goblin22 sees Connor 2,500 away at update 15 and attacks. Invisible at 150: at 165 "can't see Connor (blocked by the ground)", "Connor 100005 away"; at 209 "gives up: has not seen Connor for 45 updates (rule 26); on its way home"; home at 236. Look: "445 materials with an I_ picture, 585 with a mesh copy"; ended at 375 (15 s).
+**Still broken / not tested:** **Not looked at by eye** (how the mesh looks; linear texture filtering may soften the dots). The hurt line while invisible (rule 27) not built. The same lowering during cutscenes, talk and the rope (rule 26) not built: waits for the user (DESIGN 5g-6). Dead City's `checkInvisible` not run.
+**Next:** 5g-7, clarity.
+
 ## 2026-10-21 M5 5g-5: the strength potion and Connor's potion faces
 
 **Changed:** `potions.rs`: Strength's +half to the hand number and its end; `list_bits` (a skin list's bits from the items applied). kq8-data `characters.rs`: `SkinList` (`KQSkinList`: entries, items, exact and best match). Viewer `load.rs`: Connor's skin and face lists, `coniron.bmp` and the face sets loaded at start; `connor_view.rs`: every material of his model kept with its texture name; `potion_view.rs` `look_step`: the iron skin while Strength runs, the face set from the face list each update. DESIGN, provenance. 1 new unit test; test item list fixed (potions' numbers are all 0).

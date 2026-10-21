@@ -188,7 +188,8 @@ impl WorldState {
         // Rule 20: what blocks the sight line (characters never do).
         let sight_objects: Vec<crate::collide::BoxCollider> = objects.iter().filter(|o| o.kind.collision_type & SIGHT_MASK != 0).cloned().collect();
         let scene = Scene::new(ground, buildings, &sight_objects);
-        let connor = self.connor_at;
+        // potions.md rule 26: the place they are told (M5 5g-6).
+        let connor = self.connor_reported();
         let check = update.is_multiple_of(SIGHT_EVERY);
         for i in 0..self.anims.len() {
             let a = &self.anims[i];
@@ -423,7 +424,7 @@ impl WorldState {
     /// on its home point at once if it was on its way home or Connor is
     /// more than twice its alarm radius away.
     pub(crate) fn lose_active(&mut self, i: usize, why: &str, now: f64) {
-        let connor = self.connor_at;
+        let connor = self.connor_reported();
         let heights = self.heights.as_ref();
         let a = &mut self.anims[i];
         let name = a.player.name.clone();
@@ -553,7 +554,7 @@ impl WorldState {
     /// giving up and the way home.
     fn alarm_rules(&mut self, i: usize, now: f64) {
         use crate::character::State;
-        let Some(connor) = self.connor_at else { return };
+        let Some(connor) = self.connor_reported() else { return };
         let a = &self.anims[i];
         let Some(c) = a.character.as_deref() else { return };
         let Some(ai) = c.ai.as_ref() else { return };
@@ -761,7 +762,7 @@ impl WorldState {
             self.character_note(&name, format!("not alarmed ({why}): the AI is switched off (test switch, ours)"));
             return;
         }
-        let connor = self.connor_at;
+        let connor = self.connor_reported();
         let a = &mut self.anims[i];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
@@ -1069,7 +1070,7 @@ impl WorldState {
     /// point at his distance, 0.52 rad anticlockwise off the line to him
     /// (the Do instead).
     fn hunt(&mut self, i: usize, d: f32, home_d: f32, now: f64) {
-        let Some(connor) = self.connor_at else { return };
+        let Some(connor) = self.connor_reported() else { return };
         let a = &mut self.anims[i];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };

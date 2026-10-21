@@ -778,6 +778,18 @@ impl WorldState {
         self.updates as f64 / crate::UPDATES_PER_SECOND
     }
 
+    /// `potions.md` rule 26 (M5 5g-6): where the characters are told
+    /// Connor is: 100,000 below his place while Invisible runs.
+    pub fn connor_reported(&self) -> Option<[f32; 3]> {
+        let p = self.connor_at?;
+        Some(if self.connor_invisible() { [p[0], p[1], p[2] - crate::potions::HIDDEN_DROP] } else { p })
+    }
+
+    /// The Invisible potion runs (rule 28: `KQConner::checkInvisible`).
+    pub fn connor_invisible(&self) -> bool {
+        self.potions.iter().any(|r| r.effect == crate::potions::Effect::Invisible)
+    }
+
     /// A line about the fight (M5 5c): `fight.log`, `characters.log` and
     /// the current log.
     pub fn fight_note(&mut self, who: &str, line: impl AsRef<str>) {
@@ -2599,6 +2611,11 @@ impl ScriptHost for WorldState {
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
+            "KQConner::checkInvisible" => {
+                let v = u8::from(self.connor_invisible());
+                self.note(format!("{at}: KQConner::checkInvisible: {v} (potions.md rule 28)"));
+                Some(v.to_string())
+            }
             "setThirdPerson" => Some(self.set_third_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
