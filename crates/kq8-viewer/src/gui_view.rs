@@ -1287,8 +1287,12 @@ pub fn gui_draw(
     mut caption: ResMut<CaptionPlace>,
     frame: Res<ScreenFrame>,
     mut status_at: Local<Option<[i32; 4]>>,
-    mut drag: ResMut<MapDrag>,
+    (mut drag, change, mut seen): (ResMut<MapDrag>, Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    // A new world's panels (M6 6e-2): the status icons are placed again.
+    if crate::world_build::new_world(&change, &mut seen) {
+        *status_at = None;
+    }
     let Some(mut gui) = gui else { return };
     let gui = &mut *gui;
     if gui.space_key.is_some_and(|k| keys.just_pressed(k)) {
@@ -1665,7 +1669,11 @@ pub fn gui_layout_log(
     nodes: Query<(&GuiPicture, &bevy::ui::ComputedNode, &bevy::ui::UiGlobalTransform, &ImageNode, &Visibility)>,
     images: Res<Assets<Image>>,
     mut last: Local<HashMap<&'static str, [i32; 6]>>,
+    (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    if crate::world_build::new_world(&change, &mut seen) {
+        last.clear();
+    }
     let Some(mut gui) = gui else { return };
     for (picture, computed, at, image, vis) in &nodes {
         let d = DRAWN[picture.0];

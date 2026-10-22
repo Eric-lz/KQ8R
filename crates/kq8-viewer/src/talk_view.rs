@@ -352,7 +352,12 @@ pub fn caption_picture_draw(
     mut last_place: Local<Option<(i32, i32)>>,
     shared: Res<crate::Shared>,
     frame: Res<crate::gui_view::ScreenFrame>,
+    (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    // A new world's caption picture is drawn again (M6 6e-2).
+    if crate::world_build::new_world(&change, &mut seen) {
+        (*last, *rows_shown, *last_place) = (None, 0, None);
+    }
     use bevy::asset::RenderAssetUsages;
     use bevy::image::ImageSampler;
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};

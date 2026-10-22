@@ -320,8 +320,12 @@ pub fn update_activity(
     sim: Option<Res<crate::door_view::DoorSim>>,
     mut lights_group: ResMut<crate::scene_lights::LightsGroup>,
     shared: Res<Shared>,
-    (mut characters, mut solid_characters): (ResMut<CharactersInRange>, ResMut<CharactersSolid>),
+    (mut characters, mut solid_characters, change, mut seen): (ResMut<CharactersInRange>, ResMut<CharactersSolid>, Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    // A new world's objects (M6 6e-2).
+    if crate::world_build::new_world(&change, &mut seen) {
+        solid.clear();
+    }
     lights_group.0.clear();
     characters.0.clear();
     solid_characters.0.clear();

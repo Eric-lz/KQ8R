@@ -892,14 +892,22 @@ pub fn shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
-    (buildings, activity, mut spent, balls): (
+    (buildings, activity, mut spent, balls, change, mut seen): (
         Option<Res<crate::shadow_view::BuildingShadows>>,
         Option<Res<crate::draw_distance::ObjectActivity>>,
         Local<std::time::Duration>,
         Query<(&GlobalTransform, &crate::shadow_view::ModelBall)>,
+        Res<crate::world_build::WorldChange>,
+        Local<u64>,
     ),
 ) {
     use kq8_core::shadow;
+    // A new world (M6 6e-2): Connor's shadow is made again.
+    if crate::world_build::new_world(&change, &mut seen) {
+        *connor_shadow = None;
+        *frames = 0;
+        *spent = std::time::Duration::ZERO;
+    }
     let (Some(mut sim), Some(ground)) = (sim, ground) else { return };
     let started = std::time::Instant::now();
     let sim = &mut *sim;

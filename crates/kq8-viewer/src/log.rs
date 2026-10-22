@@ -31,6 +31,19 @@ impl Log {
         Ok(Log { file, path, quiet: false })
     }
 
+    /// Adds `line` to every log opened in this run except `skip` (M6
+    /// 6e-2: the world change line). Only for logs whose writer is closed
+    /// (another open writer would write over it); `skip` the others.
+    pub fn mark_all(line: &str, skip: &[&str]) {
+        let names: Vec<String> = OPENED.lock().map(|o| o.iter().cloned().collect()).unwrap_or_default();
+        for name in names.iter().filter(|n| !skip.contains(&n.as_str())) {
+            let path = Path::new("kq8-artifacts").join("logs").join(format!("{name}.log"));
+            if let Ok(mut f) = OpenOptions::new().append(true).open(&path) {
+                let _ = writeln!(f, "{line}");
+            }
+        }
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }

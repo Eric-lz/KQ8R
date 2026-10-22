@@ -306,7 +306,12 @@ pub fn dither_step(
     mut materials: ResMut<Assets<ObjectMaterial>>,
     mut state: Local<Dithered>,
     shared: Res<crate::Shared>,
+    (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    // A new world's objects have their own materials (M6 6e-2).
+    if crate::world_build::new_world(&change, &mut seen) {
+        *state = Dithered::default();
+    }
     let Some(sim) = sim else { return };
     let wanted = &sim.active.world.dithered;
     if *wanted == state.names {

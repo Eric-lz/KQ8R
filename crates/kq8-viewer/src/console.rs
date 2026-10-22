@@ -69,16 +69,27 @@ impl Console {
     }
 }
 
+/// `--console "WORDS",N` (M6 6e-2 test): a console line typed before
+/// update N + 1 of the world shown then; used once.
+#[derive(Resource, Default)]
+pub struct ConsoleAt(pub Vec<(String, u64)>);
+
 /// Runs every line typed since the last update.
-pub fn console_step(console: Option<ResMut<Console>>, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>) {
+pub fn console_step(
+    console: Option<ResMut<Console>>,
+    sim: Option<ResMut<DoorSim>>,
+    connor: Option<Res<ConnorSim>>,
+    (mut at, mut change): (ResMut<ConsoleAt>, ResMut<crate::world_build::WorldChange>),
+) {
     let Some(mut console) = console else { return };
     // Lines typed while the world loads wait in the channel until it runs.
-    if console.closed || sim.is_none() {
+    if sim.is_none() {
         return;
     }
     let mut typed = Vec::new();
     let mut ended = false;
-    {
+    // Once the terminal is closed only `--console` lines come.
+    if !console.closed {
         let lines = console.lines.lock().unwrap();
         loop {
             match lines.try_recv() {
@@ -91,6 +102,11 @@ pub fn console_step(console: Option<ResMut<Console>>, sim: Option<ResMut<DoorSim
             }
         }
     }
+    // `--console`: the lines due now, after the typed ones.
+    let now = sim.as_ref().map_or(0, |s| s.active.world.updates);
+    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut at.0).into_iter().partition(|(_, n)| now >= *n);
+    at.0 = later;
+    typed.extend(due.into_iter().map(|(line, _)| line));
     let mut sim = sim;
     for line in typed {
         let line = line.trim();
@@ -100,6 +116,12 @@ pub fn console_step(console: Option<ResMut<Console>>, sim: Option<ResMut<DoorSim
         let updates = sim.as_ref().map_or(0, |s| s.active.world.updates);
         console.say(format!("> {line}  (update {updates})"));
         let Some(sim) = sim.as_mut() else { continue };
+        // A world change (M6 6e-2) is asked for here; it happens at the end
+        // of the frame (`world_build::world_change_step`).
+        if let Some(said) = world_word(line, &mut change, connor.as_deref()) {
+            console.say(said);
+            continue;
+        }
         // Our own words first, else a script command; the log lines it
         // writes are shown here too (they also go to doors.log as usual).
         let said = match crate::console_words::run(line, sim, connor.as_deref()) {
@@ -115,6 +137,22 @@ pub fn console_step(console: Option<ResMut<Console>>, sim: Option<ResMut<DoorSim
         console.closed = true;
         console.say("console: the terminal input was closed; no more commands");
     }
+}
+
+/// `reload`: take this world down and build it again, Connor where he
+/// stands (M6 6e-2). `None`: not a world word.
+fn world_word(line: &str, change: &mut crate::world_build::WorldChange, connor: Option<&ConnorSim>) -> Option<String> {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    if !words.first()?.eq_ignore_ascii_case("reload") {
+        return None;
+    }
+    let at = connor.map(|c| [c.mover.position[0], c.mover.position[1], c.walker.heading]);
+    let world = change.current.clone();
+    change.asked = Some(crate::world_build::Request { world: world.clone(), at, why: "console reload".into() });
+    Some(match at {
+        Some([x, y, h]) => format!("reload: {world} is taken down and built again at the end of this frame; Connor back at {x:.0} {y:.0}, turn {h:.4}"),
+        None => format!("reload: {world} is taken down and built again at the end of this frame"),
+    })
 }
 
 /// The typing line: the terminal's last line is ours, the line above it

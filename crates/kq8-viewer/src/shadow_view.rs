@@ -254,8 +254,19 @@ pub fn object_shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut shadows: Local<HashMap<Entity, ObjectShadow>>,
     mut log: Local<ShadowLog>,
-    (buildings, activity, balls): (Option<Res<BuildingShadows>>, Option<Res<ObjectActivity>>, Query<(&GlobalTransform, &ModelBall)>),
+    (buildings, activity, balls, change, mut seen): (
+        Option<Res<BuildingShadows>>,
+        Option<Res<ObjectActivity>>,
+        Query<(&GlobalTransform, &ModelBall)>,
+        Res<crate::world_build::WorldChange>,
+        Local<u64>,
+    ),
 ) {
+    // A new world (M6 6e-2): the old objects' shadows are dropped.
+    if crate::world_build::new_world(&change, &mut seen) {
+        shadows.clear();
+        *log = ShadowLog::default();
+    }
     let (Some(world), Some(ground)) = (world, ground) else { return };
     let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
     let active_ids: Vec<u32> = active.iter().map(|(id, _)| *id).collect();

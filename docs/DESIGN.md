@@ -2293,7 +2293,11 @@ Steps (one commit each; each ends with a test and a log check):
    their lines (opened once). **Test:** `cargo play --world Daventry`
    and `--world Swamp`: the logs' summary lines the same as before,
    entity and asset counts logged, load time ±10 %.
-2. **6e-2, taking a world down.** Removes the marked entities, the
+2. **6e-2, taking a world down** (**done** 2026-10-22; reading gets
+   slower with each reload, 3.5 → 4.6 → 5.6 → 5.8 s for Daventry: the
+   Windows memory allocator, not our code; with the `mimalloc` allocator
+   it stays at 3.1 s but holds about 1 GB more; not changed, for the
+   user to decide). Removes the marked entities, the
    listed resources and the assets only they used. Dev console word
    `reload` (ours): takes the world down and builds the same world again
    at Connor's place. **Test:** `reload` three times: entity, mesh,

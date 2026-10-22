@@ -32,6 +32,8 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
                               flags 0 set place and turn, 1 add to the place,
                               2 add to the turn, 3 both; t = turn in radians
                               e.g. move Connor 3 0 0 2000 (2,000 higher)
+ World
+  reload                      take this world down and build it again, Connor where he stands
  Creatures
   ai                          creatures' AI off/on (F4)
   kill <name>                 it dies (and drops what it carries)

@@ -11,11 +11,16 @@
 //! - Every entity spawned with a `Transform` or a `Node` gets
 //!   [`WorldEntity`], unless it is [`Persistent`], so taking a world down
 //!   (6e-2) removes exactly the world's entities.
+//! - [`world_change_step`] (6e-2) takes the world down when a change is
+//!   asked for ([`WorldChange::asked`]), waits two frames so Bevy frees
+//!   the assets only the old world used, then reads and builds the next
+//!   one. While it runs, the game's systems don't ([`playing`]).
 //!
 //! Ours: the original builds a world from its scripts in the same program
 //! too (`world-change.md` rules 7–8), but how our viewer is split into
 //! resources and systems is our own.
 
+use std::path::PathBuf;
 use std::time::Instant;
 
 use bevy::ecs::schedule::ScheduleLabel;
@@ -41,6 +46,7 @@ pub struct Persistent;
 /// What the launch options say about building any world.
 #[derive(Clone)]
 pub struct Options {
+    pub game: PathBuf,
     pub light: light_view::LightMode,
     pub haze: bool,
     pub corners: bool,
@@ -68,18 +74,83 @@ pub struct WorldRead {
 #[derive(Resource, Default)]
 pub struct PendingWorld(pub Option<(WorldRead, Options)>);
 
+/// A world change asked for: `reload` (6e-2), later `goworld` and the
+/// portals.
+#[derive(Debug, Clone)]
+pub struct Request {
+    pub world: String,
+    /// Connor's place on arrival: x, y on the ground, heading (as
+    /// `--at`); `None`: where the world's own start puts him.
+    pub at: Option<[f32; 3]>,
+    /// For the logs.
+    pub why: String,
+}
+
+/// Where a world change is (6e-2).
+#[derive(Default)]
+enum Step {
+    #[default]
+    Playing,
+    /// Taken down; `frames` more frames to wait before building.
+    Down { request: Request, frames: u32, from: String },
+}
+
+/// The world shown now and the change under way, if any.
+#[derive(Resource, Default)]
+pub struct WorldChange {
+    /// Set by whoever asks for a change; taken at the end of the frame.
+    pub asked: Option<Request>,
+    step: Step,
+    /// The world built last (its name as asked for).
+    pub current: String,
+    /// How many worlds were built in this run: systems that keep values
+    /// between frames reset them when it changes ([`new_world`]).
+    pub generation: u64,
+    /// The launch options, for building the next world.
+    options: Option<Options>,
+}
+
+/// The run condition of the game's systems: a world is in (6e-2).
+pub fn playing(change: Res<WorldChange>) -> bool {
+    matches!(change.step, Step::Playing)
+}
+
+/// For systems that keep values from frame to frame (`Local`): true the
+/// first time it is asked after each new world, so they start again
+/// (6e-2). `seen` is the system's own `Local<u64>`.
+pub fn new_world(change: &WorldChange, seen: &mut u64) -> bool {
+    let fresh = *seen != change.generation;
+    *seen = change.generation;
+    fresh
+}
+
+/// Frames to wait between taking a world down and building the next, so
+/// the assets only the old world used are freed first (Bevy frees an
+/// asset in a later frame, once nothing holds it). A world takes about
+/// 3.4 GB (6e-1), so the two must not be in memory together.
+const FREE_FRAMES: u32 = 2;
+
 /// Reads world `name` (as `main` did before 6e-1).
 pub fn read_world(game: &GameDir, name: &str, opts: &Options, log: &mut Log) -> Result<WorldRead, String> {
     let started = Instant::now();
     let world = load::World::open(game, name)?;
     log.summary(format!("world: {}", world.name));
     // M1 step 5b: the lights for models; step 6: the haze.
+    let mut parts = Vec::new();
+    let mut part = |what: &str, since: &mut Instant| {
+        parts.push(format!("{what} {} ms", since.elapsed().as_millis()));
+        *since = Instant::now();
+    };
+    let mut since = Instant::now();
     let lights = load::load_object_lights(game, &world, log);
     let mut ground = load::load_ground(game, &world, log)?;
     let haze = load::load_haze(game, &world, Some(&ground.terrain.settings), log);
+    part("ground", &mut since);
     let mut objects = load::load_objects(game, &world, &ground.terrain, log);
+    part("objects", &mut since);
     let animators = std::mem::take(&mut objects.animators);
     let animation = load::prepare_ground_animation(game, &world, &mut ground, animators, log);
+    part("ground animation", &mut since);
     // Remarks and speech (M4 4a-2).
     objects.talk = Some(talk_view::load_talk(game, name, log));
     // The caption as the original's (M4 4b-3).
@@ -94,6 +165,8 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, log: &mut Log) -> 
     let audibles = std::mem::take(&mut objects.audibles);
     let music = objects.music.take();
     let sound = sound_view::SoundSim::new(game, name, opts.sound, audibles, music);
+    part("speech, panels, map, sound", &mut since);
+    log.summary(format!("world read: {name}: {}", parts.join(", ")));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
 }
 
@@ -101,6 +174,11 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, log: &mut Log) -> 
 /// before its plugins are added (`object_light::add`).
 pub fn object_light(read: &WorldRead, opts: &Options) -> object_light::ObjectLight {
     object_light::ObjectLight::new(read.lights.clone(), opts.light, read.haze, opts.haze)
+}
+
+/// Remembers the launch options for later worlds (main, at launch).
+pub fn remember_options(world: &mut World, opts: &Options) {
+    world.resource_mut::<WorldChange>().options = Some(opts.clone());
 }
 
 /// Puts a read world's resources in. `ObjectLight` is put in by the
@@ -137,6 +215,18 @@ pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
     world.init_resource::<gui_view::CaptionPlace>();
     world.init_resource::<object_light::HazeCheck>();
     world.insert_resource(crate::game_camera::CameraChoice { game: false });
+    // Empty at the start; `draw_distance::add` and `object_light::add` put
+    // them in at launch, a world change takes them out (6e-2).
+    world.init_resource::<crate::draw_distance::ActivePoint>();
+    world.init_resource::<crate::draw_distance::ActivityLog>();
+    world.init_resource::<crate::draw_distance::ObjectActivity>();
+    world.init_resource::<crate::draw_distance::CharactersInRange>();
+    world.init_resource::<crate::draw_distance::CharactersSolid>();
+    world.init_resource::<crate::draw_distance::ActiveRules>();
+    world.init_resource::<crate::draw_distance::ColliderSwitches>();
+    world.init_resource::<crate::draw_distance::SwitchedOut>();
+    world.init_resource::<crate::scene_lights::LightsGroup>();
+    world.init_resource::<crate::scene_lights::GroundLights>();
 }
 
 /// Startup (and later on request): puts the pending world in and spawns
@@ -147,15 +237,120 @@ pub fn build_pending(world: &mut World) {
     let (name, read_ms) = (read.name.clone(), read.took_ms);
     insert_world(world, read, &opts);
     world.run_schedule(BuildWorld);
+    {
+        let mut change = world.resource_mut::<WorldChange>();
+        change.current = name.clone();
+        change.generation += 1;
+    }
     let counts = Counts::of(world);
     let log = world.resource::<Shared>().log.clone();
     let mut log = log.lock().unwrap();
-    log.summary(format!("world built: {name}: read {read_ms} ms, spawned in {} ms; {}", started.elapsed().as_millis(), counts.line()));
+    log.summary(format!("world built: {name}: read {read_ms} ms, spawned in {} ms; {}; {}", started.elapsed().as_millis(), counts.line(), crate::memory::line()));
+}
+
+/// The end of every frame (6e-2): a change asked for takes the world
+/// down; [`FREE_FRAMES`] frames later the next world is read and built.
+pub fn world_change_step(world: &mut World) {
+    let step = std::mem::take(&mut world.resource_mut::<WorldChange>().step);
+    let log = world.resource::<Shared>().log.clone();
+    match step {
+        Step::Playing => {
+            let Some(request) = world.resource_mut::<WorldChange>().asked.take() else { return };
+            let from = world.resource::<WorldChange>().current.clone();
+            let before = Counts::of(world);
+            let (despawned, removed) = take_down(world);
+            // Every log gets the line, after the old world's logs were
+            // closed, so it comes before the new world's lines.
+            let marker = format!("== world change: {from} -> {} ({}) ==", request.world, request.why);
+            Log::mark_all(&marker, &["viewer", "console"]);
+            let mut log = log.lock().unwrap();
+            log.summary(&marker);
+            log.summary(format!("world change: before taking {from} down: {}; {}", before.line(), crate::memory::line()));
+            log.summary(format!("world change: {from} taken down: {despawned} entities despawned, {removed} per-world resources removed"));
+            drop(log);
+            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: FREE_FRAMES, from };
+        }
+        Step::Down { request, frames, from } if frames > 0 => {
+            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: frames - 1, from };
+        }
+        Step::Down { request, from, .. } => {
+            let after = Counts::of(world);
+            log.lock().unwrap().summary(format!("world change: {FREE_FRAMES} frames after taking {from} down: {}; {}", after.line(), crate::memory::line()));
+            list_unmarked(world, &mut log.lock().unwrap());
+            let Some(opts) = world.resource::<WorldChange>().options.clone() else {
+                log.lock().unwrap().summary("world change: no launch options kept; nothing built");
+                return;
+            };
+            let read = GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &request.world, &opts, &mut log.lock().unwrap()));
+            let read = match read {
+                Ok(r) => r,
+                Err(e) if request.world != from => {
+                    // Back to the world we came from (still no world in,
+                    // so the game's systems keep waiting).
+                    log.lock().unwrap().summary(format!("world change: {} could not be read ({e}); back to {from}", request.world));
+                    let back = Request { world: from.clone(), at: request.at, why: "the asked world could not be read".into() };
+                    world.resource_mut::<WorldChange>().step = Step::Down { request: back, frames: 0, from };
+                    return;
+                }
+                Err(e) => {
+                    log.lock().unwrap().summary(format!("world change: {} could not be read again ({e}); closing", request.world));
+                    world.write_message(AppExit::error());
+                    world.resource_mut::<WorldChange>().step = Step::Down { request, frames: u32::MAX, from };
+                    return;
+                }
+            };
+            let mut light = object_light(&read, &opts);
+            light.scene_lights = world.resource::<crate::scene_lights::SceneLights>().buffer.clone();
+            world.insert_resource(light);
+            if let Some(at) = request.at {
+                world.resource_mut::<connor_view::StartAt>().0 = Some(at);
+            }
+            world.resource_mut::<PendingWorld>().0 = Some((read, opts));
+            build_pending(world);
+        }
+    }
+}
+
+/// Takes the world down: despawns every [`WorldEntity`] and removes the
+/// per-world resources (their logs close with them). Returns how many of
+/// each.
+fn take_down(world: &mut World) -> (usize, usize) {
+    let marked: Vec<Entity> = world.query_filtered::<Entity, With<WorldEntity>>().iter(world).collect();
+    let mut despawned = 0;
+    for e in marked {
+        // Children go with their parent; they may be gone already.
+        despawned += usize::from(world.try_despawn(e).is_ok());
+    }
+    (despawned, remove_world_resources(world))
+}
+
+/// The entities left that are not the world's, by their components, for
+/// `viewer.log` (Bevy's own: the window, observers, ...).
+fn list_unmarked(world: &mut World, log: &mut Log) {
+    let left: Vec<Entity> = world.query_filtered::<Entity, Without<WorldEntity>>().iter(world).collect();
+    let mut kinds: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for e in left {
+        let names: Vec<String> = world.inspect_entity(e).map(|infos| infos.map(|(_, i)| short_name(&i.name().to_string())).collect()).unwrap_or_default();
+        *kinds.entry(if names.is_empty() { "(no components)".into() } else { names.join(" + ") }).or_default() += 1;
+    }
+    log.detail(format!("world change: {} kinds of entities stay:", kinds.len()));
+    for (k, n) in kinds {
+        log.detail(format!("  {n} x {k}"));
+    }
+}
+
+/// `bevy_ecs::observer::Observer` → `Observer`.
+fn short_name(full: &str) -> String {
+    full.split('<').next().unwrap_or(full).rsplit("::").next().unwrap_or(full).to_string()
 }
 
 /// Adds the marking of world entities to the app.
 pub fn add(app: &mut App) {
-    app.init_resource::<PendingWorld>().init_schedule(BuildWorld).add_observer(mark_world_entity);
+    app.init_resource::<PendingWorld>()
+        .init_resource::<WorldChange>()
+        .init_schedule(BuildWorld)
+        .add_observer(mark_world_entity)
+        .add_systems(Last, world_change_step);
 }
 
 /// Every entity spawned with a `Transform` (drawn things, lights, the
@@ -181,6 +376,15 @@ macro_rules! per_world {
                 present += usize::from(world.contains_resource::<$t>());
             )*
             (present, total)
+        }
+
+        /// Removes the per-world resources; returns how many there were.
+        fn remove_world_resources(world: &mut World) -> usize {
+            let mut removed = 0;
+            $(
+                removed += usize::from(world.remove_resource::<$t>().is_some());
+            )*
+            removed
         }
     };
 }

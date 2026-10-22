@@ -711,7 +711,9 @@ Checked by the user by eye (2026-10-21: "works as expected"); logged in
   (Up/Down: earlier commands); the game's output scrolls above it.
   Own words: `list items|weapons|armor|potions|quest|creatures|doors|
   chests|objects [word]`, `find`, `inv`, `stats`, `heal`, `xp`, `god`,
-  `ai`, `goto <name>`, `spawn <item>`, `kill <name>` / `kill near`. Also in `kq8-artifacts/logs/console.log`.
+  `ai`, `goto <name>`, `spawn <item>`, `kill <name>` / `kill near`,
+  `reload` (takes the world down and builds it again, Connor where he
+  stands; entity, asset and memory counts in `viewer.log`). Also in `kq8-artifacts/logs/console.log`.
 - **Graphics API** (`--renderer`): draw with Vulkan or DirectX 12 instead
   of letting the graphics library choose; `viewer.log` says which one
   ran. Checked by the user 2026-10-16 on Windows with one NVIDIA card;
@@ -803,6 +805,10 @@ repeated and checked in the logs. They do not change the game's rules.
   as if a script did (words split at spaces; no variables). For example
   `--command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` makes
   the Wizard say a line. Can be given more than once.
+- `--console "WORDS",N`: type one console line before update N + 1 of
+  the world shown then, e.g. `--console reload,40`. Each is used once;
+  after a world change the updates count from 0 again, so for three
+  reloads use rising numbers (`reload,40`, `reload,80`, `reload,120`).
 - `--right N`: the right (camera-move) button counts as held from update
   N on, for a conversation: the camera stops cutting between the
   conversation cameras and turns around the person Connor talks to.

@@ -682,7 +682,12 @@ pub fn toggle_markers(
     mut shown: Local<bool>,
     mut markers: Query<&mut Visibility, With<ShownWithH>>,
     mut label: Query<&mut Text, With<HLabel>>,
+    (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
+    // A new world starts with its markers hidden (M6 6e-2).
+    if crate::world_build::new_world(&change, &mut seen) {
+        *shown = false;
+    }
     if !keys.just_pressed(KeyCode::KeyH) {
         return;
     }
