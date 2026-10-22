@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 STATUS: Swamp's start-up equipment checked (stale line removed)
+
+**Changed:** Docs only: STATUS ("Found in 6b, not fixed" removed).
+**Why:** The line said Swamp's `conStart.cs` chain mail, boots and gloves were carried but not put on; L-1 (the start scripts' items given by the rule of a `give`) should have fixed it.
+**Tested how:** `cargo play --world Swamp --frames 400 --sound off`; `items.log`, `gui.log`.
+**Result:** Fixed since L-1: "apply NoName52 (INVITEM_ChainMailShirt, put on) … [0, 0, 0, 3, 0] added", boots +1, gloves +1 (armour 5 before the stats event); the screen opens with armour 21 (16 from the level-15 event + 5), the armour slot shows the chain shirt (`2armr2.pbm`).
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-21 Plan 6e: moving between worlds
 
 **Changed:** Docs only: `docs/DESIGN.md` "6e" (plan), STATUS.

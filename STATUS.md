@@ -505,10 +505,6 @@ M6 has started with the Rope and Hook (6a).
   shipped map file; the mini-map's view taken from Connor's when the
   map is set up.
 
-- **Found in 6b, not fixed:** the items the start-up scripts give
-  (Swamp's `constart.cs`) don't go through Connor's inventory rules: the
-  chain mail, boots and gloves are carried but not put on (protection 0
-  in Swamp). Only the ranged weapon's bolt file is now taken (6b-1).
 - **Stand-ins of 6b (Q148):** where the hammer turns back without a touch;
   the model drawn pointing along its flight; requests during the throw wait for the catch; the
   throw leaves the panels as they are. Not run: a throw from a real walk,
