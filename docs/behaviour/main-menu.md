@@ -48,10 +48,12 @@ back to the game. While it is open the game is paused.
      (rule 23) and no "corrupt saved game" question is waiting.
    - Save, Back to Game: only while a game is running.
    - Replay Intro: always (except in the demo version).
-   An item that can't be chosen is **not shown** [inferred: the same
-   switch is used to take the popup lines off the screen; the user's
-   check, "How to check" 2, will settle it]. Up/Down skip it, a click on
-   it does nothing.
+   An item that can't be chosen is **drawn greyed**: its text is
+   see-through / dithered, the same look as the Invisibility potion's
+   dither on Connor (`potions.md`) [the user's check in the original,
+   2026-10-21]. A plain grey or half-transparent text is an acceptable
+   stand-in until dithering exists. Up/Down skip it, a click on it does
+   nothing [traced; Up/Down also checked by the user].
 4. **Title** [traced, data]: the two lines at the top (`IDCTL_MAINMENU_TITLE1`
    y 20–50, `TITLE2` y 66–96, font `45.pft`, with the line picture
    `45-line.pbm` between them) are the **first two lines of
@@ -83,8 +85,9 @@ back to the game. While it is open the game is paused.
 8. **Each time the menu screen is shown** (not when it comes back from
    Load, Save or Options, rule 11) [traced]:
    - the game's sounds are paused and **`theme.aud` starts** in the
-     menu-theme group (music slider) [traced]; that it loops is
-     [inferred];
+     menu-theme group (music slider) [traced], at full loudness with
+     **no fade-in**, as soon as the menu shows [the user's check,
+     2026-10-21]; that it loops is [inferred];
    - the chosen item is **Back to Game** if a game is running, else
      **New**, and the mask cursor goes there;
    - the save folder is scanned (rule 23) and Load is switched on or off;
