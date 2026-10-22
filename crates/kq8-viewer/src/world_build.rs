@@ -326,6 +326,7 @@ pub fn build_pending(world: &mut World) {
     let log = world.resource::<Shared>().log.clone();
     let mut log = log.lock().unwrap();
     log.summary(format!("world built: {name}: read {read_ms} ms, spawned in {} ms; {}; {}", started.elapsed().as_millis(), counts.line(), crate::memory::line()));
+    log.summary(crate::memory::allocator_line());
 }
 
 /// The end of every frame (6e-2): a change asked for takes the world

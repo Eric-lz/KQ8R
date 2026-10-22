@@ -21,6 +21,10 @@ cpal = "0.18.2"
 # Only the 3D parts; no audio.
 # The viewer's command console: single keys and the terminal's layout.
 crossterm = { version = "0.29.0", default-features = false, features = ["events", "windows"] }
+# The memory allocator (chosen by the user 2026-10-22 from the measured
+# tour of all worlds: the Windows one slowed reading 3.5 -> 14.6 s).
+mimalloc = { version = "0.1.52", features = ["extended"] }
+libmimalloc-sys = { version = "0.1.49", features = ["extended"] }
 bevy = { version = "0.20.0", default-features = false, features = ["3d", "bevy_ui", "bevy_ui_render"] }
 
 # Decompressing 133 MB byte-by-byte is slow in debug builds; optimise

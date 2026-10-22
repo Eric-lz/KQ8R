@@ -542,27 +542,20 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
-- **Allocator (measured 2026-10-22, decision postponed by the user):**
-  a tour through all 10 worlds, then Daventry ↔ Castle twice
+- **Allocator: `mimalloc`, purge delay 0 (chosen by the user
+  2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice
   (`--world Daventry --frames 30000 --sound off` with one
-  `--console "goworld <World>",30` per world: DeadCity, Swamp, Gnome,
-  Barren, IceWorld, Temple1–4, Daventry, CastleD, Daventry, CastleD,
-  Daventry; about 9 minutes; numbers in `world.log` / `viewer.log`).
-  Default Windows allocator: Daventry read 3.4 s fresh, 9.4 s after the
-  tour, 9.8 s by the third return; working set 1.8 GB fresh, 3.0–3.1 GB
-  after (private 4.6–4.9 GB), creeping ~40 MB per return; largest world
-  Barren 2.8 GB. Planned comparison (one run each, ~30 minutes, nothing
-  else heavy on the computer): current, `mimalloc`, `mimalloc` set to
-  give memory back sooner. The user wants Linux later: `mimalloc` is
-  cross-platform; Windows' Segment Heap is not (dropped). `memory.rs`
+  `--console "goworld <World>",30` per world; ~4.5 minutes; summary in
+  `kq8-artifacts/logs/bench-allocators.txt`). Daventry's read, fresh →
+  3rd return: Windows 3.5 → 14.6 s; `mimalloc` 3.1 → 3.5 s; with purge
+  delay 0, 3.2 → 3.7 s. Memory at the end (working set / private):
+  3.3 / 5.4 GB, 3.5 / 5.4 GB, 3.0 / 5.1 GB. One run each. `memory.rs`
   is Windows-only (Linux needs `/proc/self/status`). The bigger saving
   is ours: share identical meshes (Daventry has ~58,000).
-
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
   changes, the frozen world clock): with saved games. Reading slows down
-  with each change (allocator; the user runs the comparison later, see
-  "Allocator" below). Building after the read
+  with each change: fixed with `mimalloc` (see "Allocator" above). Building after the read
   still stops the window 0.5–0.9 s. The full-armour arrival list (rule
   5.2); Escape on the popup doesn't open the main menu (not built); a
   Clarity potion running on arrival doesn't reveal the new world's

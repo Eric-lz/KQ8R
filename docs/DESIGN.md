@@ -2297,7 +2297,10 @@ Steps (one commit each; each ends with a test and a log check):
    slower with each reload, 3.5 → 4.6 → 5.6 → 5.8 s for Daventry: the
    Windows memory allocator, not our code; with the `mimalloc` allocator
    it stays at 3.1 s but holds about 1 GB more; not changed, for the
-   user to decide). Removes the marked entities, the
+   user to decide. **Decided 2026-10-22:** a tour of all worlds measured
+   Daventry 3.5 → 14.6 s with the Windows allocator, 3.1–3.7 s with
+   `mimalloc` and no more memory; the viewer uses `mimalloc` with purge
+   delay 0, set in `memory.rs`). Removes the marked entities, the
    listed resources and the assets only they used. Dev console word
    `reload` (ours): takes the world down and builds the same world again
    at Connor's place. **Test:** `reload` three times: entity, mesh,

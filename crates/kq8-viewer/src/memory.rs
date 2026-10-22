@@ -1,6 +1,35 @@
 //! How much memory the program uses, for the logs (M6 6e-2: a world
 //! change must not leave the old world behind). Windows only; elsewhere
 //! the line says it is not known.
+//!
+//! The allocator is `mimalloc` (chosen by the user 2026-10-22: with the
+//! Windows one, reading a world slowed with every world change, Daventry
+//! 3.5 s fresh, 14.6 s after a tour of all worlds; with `mimalloc`
+//! 3.1-3.7 s throughout). Its purge delay is 0: memory it no longer uses
+//! goes back to the system at once instead of after 1 s (the tour's end
+//! in Daventry: 3.0 GB working set, 5.1 GB private, against 3.5 and 5.4).
+
+/// `mi_option_purge_delay` in `mimalloc.h` (v3; the Rust bindings don't
+/// name it).
+const PURGE_DELAY: libmimalloc_sys::mi_option_t = 15;
+/// `mi_option_purge_decommits` (1, its default: give the pages back, not
+/// only mark them unused).
+const PURGE_DECOMMITS: libmimalloc_sys::mi_option_t = 5;
+
+/// Sets the allocator's options; first thing in `main`.
+pub fn set_allocator() {
+    // SAFETY: plain setters of mimalloc's global options.
+    unsafe { libmimalloc_sys::mi_option_set(PURGE_DELAY, 0) };
+}
+
+/// "allocator: mimalloc 3.3.2, purge delay 0 ms, purge decommits 1".
+pub fn allocator_line() -> String {
+    // SAFETY: plain getters of mimalloc's version and global options.
+    let (v, delay, decommits) = unsafe {
+        (libmimalloc_sys::mi_version(), libmimalloc_sys::mi_option_get(PURGE_DELAY), libmimalloc_sys::mi_option_get(PURGE_DECOMMITS))
+    };
+    format!("allocator: mimalloc {}.{}.{}, purge delay {delay} ms, purge decommits {decommits}", v / 10000, v / 100 % 100, v % 100)
+}
 
 /// "memory: working set N MB, private N MB" (or "not known").
 pub fn line() -> String {

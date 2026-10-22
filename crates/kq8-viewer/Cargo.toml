@@ -15,3 +15,5 @@ kq8-core.workspace = true
 kq8-audio.workspace = true
 bevy.workspace = true
 crossterm.workspace = true
+mimalloc.workspace = true
+libmimalloc-sys.workspace = true

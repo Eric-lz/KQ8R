@@ -42,6 +42,10 @@
 //! no animation in the model view. Back faces are hidden as in the original
 //! (docs/behaviour/models-and-textures.md, Q2).
 
+// The memory allocator: `mimalloc`, see `memory.rs`.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod anim_view;
 mod building_light;
 mod connor_view;
@@ -467,6 +471,7 @@ docs/FEATURES.md (\"Launch options\").
 ";
 
 fn main() -> ExitCode {
+    memory::set_allocator();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     if raw.iter().any(|a| a == "--help" || a == "-h") {
         print!("{HELP}");

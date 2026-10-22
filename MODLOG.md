@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 The viewer uses the mimalloc allocator (purge delay 0)
+
+**Changed:** Workspace and viewer `Cargo.toml`: `mimalloc` 0.1.52 and `libmimalloc-sys` 0.1.49 (mimalloc 3.3.2, feature `extended`). `main.rs`: mimalloc as the global allocator; `memory.rs`: `set_allocator` (purge delay 0, first thing in `main`) and `allocator_line` (logged after each world is built). DESIGN, STATUS.
+**Why:** The user's choice after the comparison: with the Windows allocator reading a world slowed with every world change.
+**Tested how:** The tour (`--world Daventry --frames 30000 --sound off`, `--console "goworld <World>",30` for all 10 worlds, then Daventry ↔ CastleD twice) once each with the Windows allocator, mimalloc, and mimalloc with `MIMALLOC_PURGE_DELAY=0`; `bench-allocators.txt`, `bench-*-viewer.log`, `bench-*-world.log`. Then the built-in setting: `--world CastleD --frames 60 --sound off`, `viewer.log`. clippy clean.
+**Result:** Daventry read fresh → 3rd return: Windows 3.5 → 14.6 s, mimalloc 3.1 → 3.5 s, purge delay 0 3.2 → 3.7 s (one slow 7.3 s read on the 1st return). Memory at the end: 3.3 / 5.4 GB, 3.5 / 5.4 GB, 3.0 / 5.1 GB (working set / private). `viewer.log`: "allocator: mimalloc 3.3.2, purge delay 0 ms, purge decommits 1".
+**Still broken / not tested:** One run per setup. The tour wasn't rerun with the setting built in (it is the same value, read back in the log). The earlier "1 GB more" with mimalloc didn't show this time.
+**Next:** Sharing identical meshes, when the user wants optimisation.
+
 ## 2026-10-22 Measurement: memory and read times over all worlds (no code change)
 
 **Changed:** Docs only: STATUS ("Allocator": the numbers and the planned comparison).
