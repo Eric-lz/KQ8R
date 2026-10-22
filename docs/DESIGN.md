@@ -2081,7 +2081,7 @@ Steps (one commit each):
 5. **6d-5, the mini-map** (**done** 2026-10-21) (rule 27). The bottom-right slot draws the
    current map at its own view's size, Connor's pixel at its middle,
    with his arrow; `2mapblnk.pbm` while not active. **Test:** `gui.log`.
-6. **6d-6, other worlds' maps** (rules 32–34). The page arrows step
+6. **6d-6, other worlds' maps** (**done** 2026-10-21) (rules 32–34). The page arrows step
    through the 16 map indexes to the next visited one; another world's
    map is shown with its fog (or full picture), its colours matched to
    this world's palette (nearest RGB of 256), this world's icons for

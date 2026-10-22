@@ -129,7 +129,14 @@ struct MapShown {
     /// `magic-map.md` rule 2.
     active: bool,
     version: Option<u64>,
+    /// The picture the big map shows (rule 34: another world's, or this
+    /// world's) and this world's own (the mini-map, rule 27).
     pixels: Vec<u8>,
+    own: Vec<u8>,
+    /// Rule 34: another world's map is shown (no arrow).
+    other: bool,
+    /// Rule 8: the shown map's `mapName` number.
+    name_number: Option<u32>,
     /// Rule 22 (layout pixels from the area's centre).
     view: [f64; 4],
     /// Rule 27: the mini-map's own view (its size is used).
@@ -181,8 +188,9 @@ enum Spec {
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
     Fill { rect: [i32; 4], rgb: [u8; 3] },
     /// The magic map (M6 6d-3): the picture's version, the view, the
-    /// arrow (file, frame, top-left from the area's centre).
-    Map { rect: [i32; 4], version: u64, view: [f64; 4], arrow: Option<(String, usize, [f64; 2])> },
+    /// arrow (file, frame, top-left from the area's centre); `own`: this
+    /// world's map (the mini-map), else the one shown (6d-6).
+    Map { rect: [i32; 4], version: u64, view: [f64; 4], arrow: Option<(String, usize, [f64; 2])>, own: bool },
 }
 
 /// The panels and what they show.
@@ -609,7 +617,7 @@ impl Gui {
                             let (left, top) = (-(p.0 as f64) * w / kq8_data::magic_map::MAP_SIZE as f64, -(p.1 as f64) * h / kq8_data::magic_map::MAP_SIZE as f64);
                             let view = kq8_core::magic_map::View { left, top, right: left + w, bottom: top + h };
                             let (ax, ay) = view.arrow_at(p);
-                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: view.as_array(), arrow: Some((m.arrow_file.clone(), m.frame, [ax, ay])) });
+                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: view.as_array(), arrow: Some((m.arrow_file.clone(), m.frame, [ax, ay])), own: true });
                         }
                     }
                     // M6 6d-3 (magic-map.md rules 6, 18): the map over the
@@ -617,11 +625,12 @@ impl Gui {
                     if name == MAP_AREA {
                         if let Some(m) = self.map.as_ref().filter(|m| m.version.is_some()) {
                             let view = kq8_core::magic_map::View { left: m.view[0], top: m.view[1], right: m.view[2], bottom: m.view[3] };
-                            let arrow = m.pixel.map(|p| {
+                            // Rule 34: no arrow on another world's map.
+                            let arrow = m.pixel.filter(|_| !m.other).map(|p| {
                                 let (x, y) = view.arrow_at(p);
                                 (m.arrow_file.clone(), m.frame, [x, y])
                             });
-                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: m.view, arrow });
+                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: m.view, arrow, own: false });
                         }
                     }
                     if let Some(file) = file {
@@ -736,13 +745,14 @@ impl Gui {
                     pieces.push(Piece::Text { rect: *rect, font: f, justification: *justification, text: text.clone() });
                 }
                 Spec::Fill { rect, rgb } => pieces.push(Piece::Fill { rect: *rect, rgb: *rgb }),
-                Spec::Map { rect, view, arrow, .. } => {
+                Spec::Map { rect, view, arrow, own, .. } => {
                     let Some(m) = &self.map else { continue };
+                    let pixels = if *own { &m.own } else { &m.pixels };
                     let arrow = arrow.as_ref().and_then(|(file, frame, at)| {
                         let frames = self.files.get(&file.to_ascii_lowercase())?.as_ref()?;
                         frames.get(*frame % frames.len().max(1)).and_then(Pic::of).map(|p| (p, *at))
                     });
-                    pieces.push(Piece::Map { rect: *rect, pixels: &m.pixels, view: *view, arrow });
+                    pieces.push(Piece::Map { rect: *rect, pixels, view: *view, arrow });
                 }
             }
         }
@@ -951,6 +961,9 @@ pub fn gui_step(
                     ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
                     ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
                     (MINIMAP, _) if left => gui.toggle_map(&how),
+                    // magic-map.md rule 32 (M6 6d-6): the page arrows.
+                    ("IDCTL_MAPWIN_LEFT", _) if left => sim.active.world.map_page(-1, &format!("update {updates}: {how}")),
+                    ("IDCTL_MAPWIN_RIGHT", _) if left => sim.active.world.map_page(1, &format!("update {updates}: {how}")),
                     (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
                     _ => {
                         let line = format!("update {updates}: {how}: nothing there; nothing (inventory.md rule 10)");
@@ -1077,9 +1090,11 @@ pub fn gui_step(
     if let Some(m) = &sim.active.world.map {
         let shown = gui.map.get_or_insert_with(MapShown::default);
         if shown.version != Some(m.version) {
-            shown.pixels.clone_from(&m.picture);
+            shown.pixels = m.shown_picture().to_vec();
+            shown.own.clone_from(&m.picture);
             shown.version = Some(m.version);
         }
+        shown.other = m.other.is_some();
         let was_active = shown.active;
         shown.active = m.active;
         shown.view = m.view.as_array();
@@ -1087,9 +1102,11 @@ pub fn gui_step(
         shown.pixel = m.last_pixel;
         shown.frame = m.frame;
         shown.arrow_file.clone_from(&m.keys.arrow_pba);
-        if shown.name.is_empty() {
+        let number = m.other.as_ref().map_or(m.keys.map_name, |o| o.keys.map_name);
+        if shown.name_number != number || shown.name.is_empty() {
+            shown.name_number = number;
             // Rule 8: 500.MSG noun 0 verb 0 case n; a line break gives two lines.
-            let n = m.keys.map_name.unwrap_or(0);
+            let n = number.unwrap_or(0);
             let text = sim.active.world.talk.book.files.get(&500).and_then(|(_, f)| f.lines.iter().find(|l| l.tuple.noun == 0 && l.tuple.verb == 0 && l.tuple.case as u32 == n)).map(|l| l.raw.clone());
             shown.name = text.as_deref().unwrap_or("").split('\n').map(|l| l.trim_end_matches('\r').to_string()).filter(|l| !l.is_empty()).take(2).collect();
             let line = format!("update {updates}: the map's name plate: 500.MSG 0 0 {n}: {:?} ({} line(s); magic-map.md rule 8)", shown.name, shown.name.len());
@@ -1425,7 +1442,7 @@ pub fn gui_draw(
         // M6 6d-3: each redraw of the map with its view and arrow.
         for s in &specs {
             if let Spec::Map { version, view, arrow, .. } = s {
-                let arrow = arrow.as_ref().map_or("no arrow (Connor's pixel not known yet)".to_string(), |(_, frame, at)| format!("arrow frame {frame}, top-left ({:.1}, {:.1}) from the area's centre", at[0], at[1]));
+                let arrow = arrow.as_ref().map_or("no arrow (another world's map, or Connor's pixel not known yet)".to_string(), |(_, frame, at)| format!("arrow frame {frame}, top-left ({:.1}, {:.1}) from the area's centre", at[0], at[1]));
                 let line = format!("{} drawn at {:.0} ms: picture version {version}, view ({:.2}, {:.2})-({:.2}, {:.2}) from the area's centre, shown {:.1} x {:.1} layout px; {arrow} (magic-map.md rules 6, 18, 22)", d.layout_id(), gui.panels.now_ms, view[0], view[1], view[2], view[3], view[2] - view[0], view[3] - view[1]);
                 gui.note(line);
             }
@@ -1468,6 +1485,13 @@ pub fn gui_draw(
                 ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
                 ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
                 (MINIMAP, _) if left => gui.toggle_map(&how),
+                // magic-map.md rule 32 (M6 6d-6): the page arrows.
+                ("IDCTL_MAPWIN_LEFT" | "IDCTL_MAPWIN_RIGHT", _) if left => {
+                    if let Some(sim) = sim.as_mut() {
+                        let at = format!("update {}: {how}", sim.active.world.updates);
+                        sim.active.world.map_page(if control == "IDCTL_MAPWIN_LEFT" { -1 } else { 1 }, &at);
+                    }
+                }
                 (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
                 _ => {
                     let line = format!("{how}: nothing there; nothing (inventory.md rule 10)");

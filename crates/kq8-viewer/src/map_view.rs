@@ -4,10 +4,15 @@
 //! (`kq8_core::magic_map`), and fed Connor's place every update.
 //! Everything goes to `kq8-artifacts/logs/map.log`.
 //!
-//! 6d-2: no drawing yet.
+//! 6d-6: other worlds' maps: the palettes by map index, the shipped map
+//! files (`GAME/Kq`) as a STAND-IN for a world never left (open question
+//! 5), and `--kept-maps SAVE` (a test option of ours): the maps an
+//! original saved game kept for the worlds Connor left, read only, marked
+//! visited.
 
 use bevy::prelude::*;
-use kq8_core::magic_map::{IconReader, IndexPic, MapState};
+use kq8_core::magic_map::{Colours, IconReader, IndexPic, MapState, PALETTES, UNUSED_MAPS};
+use kq8_data::magic_map::MapKeys;
 use kq8_data::{Bitmap, GameDir};
 
 use crate::connor_view::ConnorSim;
@@ -36,12 +41,80 @@ fn read_picture(game: &GameDir, name: &str) -> Result<IndexPic, String> {
 #[derive(Resource)]
 pub struct MapSim {
     pending: Option<MapState>,
+    /// Other worlds' maps by index (file, keys, source) and the indexes to
+    /// mark visited (`--kept-maps`), for the rules once they exist.
+    others: Vec<(usize, String, MapKeys, String)>,
+    visited: Vec<usize>,
     log: Option<Log>,
+}
+
+/// Rule 34: the 16 palettes, by map index.
+fn read_palettes(game: &GameDir, note: &mut impl FnMut(String) -> String) -> Vec<Option<Colours>> {
+    PALETTES
+        .iter()
+        .map(|name| {
+            let rel = format!("{PICTURE_FOLDER}/{name}");
+            match game.find(&rel).ok_or("not found".to_string()).and_then(|p| std::fs::read(p).map_err(|e| e.to_string())).and_then(|b| kq8_data::Palette::parse(&b)) {
+                Ok(p) => Some(p.colors),
+                Err(e) => {
+                    note(format!("palette {rel}: {e}; that world's map keeps its colours"));
+                    None
+                }
+            }
+        })
+        .collect()
+}
+
+/// The shipped map files of `GAME/Kq` by index, but the unused ones
+/// ("Do not reproduce" 6).
+fn shipped_maps(game: &GameDir) -> Vec<(usize, String, MapKeys)> {
+    let Some(dir) = game.find("GAME/Kq") else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut names: Vec<_> = std::fs::read_dir(dir).map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect()).unwrap_or_default();
+    names.sort();
+    for path in names {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()).map(str::to_string) else { continue };
+        let lower = name.to_ascii_lowercase();
+        if !lower.ends_with("map.kq") || UNUSED_MAPS.contains(&lower.as_str()) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        let file = kq8_data::kq_text::parse(&bytes);
+        if let Some(Ok(keys)) = file.first().and_then(MapKeys::from_section) {
+            if let Some(i) = keys.index() {
+                out.push((i, name, keys));
+            }
+        }
+    }
+    out
+}
+
+/// `--kept-maps SAVE`: the maps an original saved game kept for the worlds
+/// Connor left (text form; read only).
+fn kept_maps(path: &str) -> Result<Vec<(usize, String, MapKeys)>, String> {
+    let archive = kq8_data::pvol::Pvol::parse(std::fs::read(path).map_err(|e| format!("{path}: {e}"))?)?;
+    let mut out = Vec::new();
+    for e in &archive.entries {
+        if !e.name.to_ascii_lowercase().ends_with("map.kq") {
+            continue;
+        }
+        let Ok(data) = archive.data(e) else { continue };
+        if data.starts_with(b"PERS") {
+            continue;
+        }
+        let file = kq8_data::kq_text::parse(data);
+        if let Some(Ok(keys)) = file.first().and_then(MapKeys::from_section) {
+            if let Some(i) = keys.index() {
+                out.push((i, e.name.clone(), keys));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Reads the world's map pictures (rule 7) and makes its state; `None`
 /// when the world loads no map.
-pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, main: &mut Log) -> MapSim {
+pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, kept: Option<&str>, main: &mut Log) -> MapSim {
     let mut log = match Log::create("map") {
         Ok(l) => Some(l),
         Err(e) => {
@@ -57,7 +130,7 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, main: &mut L
     };
     let Some(file) = file else {
         main.summary(note(format!("map: {world} loads no map file (magic-map.md rule 3)")));
-        return MapSim { pending: None, log };
+        return MapSim { pending: None, others: Vec::new(), visited: Vec::new(), log };
     };
     let mut pic = |name: &str| match read_picture(game, name) {
         Ok(p) => {
@@ -72,9 +145,10 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, main: &mut L
     let blank = pic(&file.keys.blank_map);
     let full = pic(&file.keys.full_map);
     let g = game.clone();
-    let reader: IconReader = Box::new(move |name: &str| read_picture(&g, name));
+    let reader: IconReader = std::sync::Arc::new(move |name: &str| read_picture(&g, name));
     let base = file.label.rsplit('/').next().unwrap_or(&file.label).to_string();
-    let map = MapState::new(&base, file.keys, blank, full, file.haze, Some(reader));
+    let mut map = MapState::new(&base, file.keys, blank, full, file.haze, Some(reader));
+    map.palettes = read_palettes(game, &mut note);
     let (radius, units, from) = kq8_core::magic_map::fog_radius(&map.keys, file.haze);
     main.summary(note(format!(
         "map: {} [{}]: index {:?}, box west {} east {} south {} north {} ({:.1} units per map pixel), fog radius {radius} map pixels ({units} from {from}), {} out of the fog, {} icons, active {} (magic-map.md rules 3, 4, 13, 16)",
@@ -90,7 +164,31 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, main: &mut L
         map.icons.len(),
         map.active
     )));
-    MapSim { pending: Some(map), log }
+    // Rule 34: other worlds' maps; the shipped files first, then kept
+    // ones over them.
+    let mut others: Vec<(usize, String, MapKeys, String)> = shipped_maps(game)
+        .into_iter()
+        .filter(|(i, ..)| Some(*i) != map.index)
+        .map(|(i, f, k)| (i, f, k, "the shipped file, no fog revealed (stand-in: open question 5)".to_string()))
+        .collect();
+    let mut visited = Vec::new();
+    if let Some(path) = kept {
+        match kept_maps(path) {
+            Ok(list) => {
+                for (i, f, k) in list.into_iter().filter(|(i, ..)| Some(*i) != map.index) {
+                    let revealed = kq8_data::magic_map::revealed_count(&kq8_data::magic_map::fog_from_runs(&k.runs).0);
+                    main.summary(note(format!("map: --kept-maps {path}: {f} (index {i}), {revealed} pixels out of the fog, {} icons: kept, marked visited (a test option of ours)", k.icons.len())));
+                    others.retain(|(j, ..)| *j != i);
+                    others.push((i, f, k, format!("kept in {path}")));
+                    visited.push(i);
+                }
+            }
+            Err(e) => {
+                main.summary(note(format!("map: --kept-maps {path}: {e}; none")));
+            }
+        }
+    }
+    MapSim { pending: Some(map), others, visited, log }
 }
 
 /// One game update, after Connor's movement and the scripts' moves (the
@@ -103,6 +201,12 @@ pub fn map_step(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>, conno
         m.set_views(world.map_view);
         world.map_log.push(format!("update {}: the map is set up; views from Connor's {:?} (rules 22, 27)", world.updates, world.map_view.as_array()));
         world.map = Some(m);
+        for (i, f, k, source) in std::mem::take(&mut map.others) {
+            world.other_maps.insert(i, (f, k, source));
+        }
+        for i in std::mem::take(&mut map.visited) {
+            world.map_marks.visited[i] = true;
+        }
     }
     if let Some(c) = connor {
         world.map_step(c.mover.position, c.walker.heading);

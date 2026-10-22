@@ -147,6 +147,9 @@ struct Args {
     right: Option<u64>,
     /// Test: Connor holds an item of this type.
     item: Option<String>,
+    /// `--kept-maps SAVE` (M6 6d-6 test): other worlds' maps from an
+    /// original saved game (read only), marked visited.
+    kept_maps: Option<String>,
     /// `--key NAME,N`: a panel key pressed before update N + 1 (M4 4c-2;
     /// `space`).
     key: Vec<(String, u64)>,
@@ -190,6 +193,7 @@ fn parse_args() -> Result<Args, String> {
         command: Vec::new(),
         right: None,
         item: None,
+        kept_maps: None,
         key: Vec::new(),
         light: light_view::LightMode::X1,
         haze: true,
@@ -284,6 +288,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--right" => a.right = Some(value()?.trim().parse::<u64>().map_err(|_| "--right needs an update number, e.g. 60".to_string())?),
             "--item" => a.item = Some(value()?),
+            "--kept-maps" => a.kept_maps = Some(value()?),
             "--key" => {
                 let v = value()?;
                 let (name, n) = v.rsplit_once(',').ok_or("--key needs NAME,UPDATE e.g. space,30".to_string())?;
@@ -423,8 +428,10 @@ N is an update number (15 updates per second):
   --no-ai                    creatures never notice or attack Connor (F4 flips it)
   --god                      god mode: Connor can't be hurt or die from a fall (F3 flips it)
   --item TYPE                give Connor an item of that type and hold it
-  --key NAME,N               press space, f3, f4 or 1-8, or click a bar control
-                             (left:NAME / right:NAME), before update N + 1 (repeatable)
+  --key NAME,N               press space, tab, f3, f4 or 1-8, or click a bar control
+                             (left:NAME / right:NAME), before update N + 1 (repeatable);
+                             mappan:DX:DY / mapzoom:DX drag the magic map (layout pixels)
+  --kept-maps SAVE           other worlds' maps from an original saved game (read only)
   --special ITEMS,N          play Connor's special movements (separated by ;)
   --command \"WORDS\",N      run one script command at update N (repeatable)
   --right N                the right (camera-move) button counts as held from update N on (conversations)
@@ -561,7 +568,7 @@ fn main() -> ExitCode {
                     app.insert_resource(gui);
                 }
                 // The magic map (M6 6d-2).
-                app.insert_resource(map_view::load_map(&g, &args.world, objects.map.take(), &mut shared.log.lock().unwrap()));
+                app.insert_resource(map_view::load_map(&g, &args.world, objects.map.take(), args.kept_maps.as_deref(), &mut shared.log.lock().unwrap()));
             }
             let music = objects.music.take();
             app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));

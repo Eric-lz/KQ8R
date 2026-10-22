@@ -60,9 +60,74 @@ pub struct IndexPic {
     pub pixels: Vec<u8>,
 }
 
-/// Reads an icon file (`dv_tree2.bmp`) for [`MapState`]; the caller
-/// knows where the files are.
-pub type IconReader = Box<dyn Fn(&str) -> Result<IndexPic, String> + Send + Sync>;
+/// Reads a picture file (an icon `dv_tree2.bmp`, another world's map
+/// picture) for [`MapState`]; the caller knows where the files are.
+pub type IconReader = std::sync::Arc<dyn Fn(&str) -> Result<IndexPic, String> + Send + Sync>;
+
+/// An RGB palette of 256 entries (rule 34: `GAME/Resource/<name>.ppl`).
+pub type Colours = [[u8; 3]; 256];
+
+/// Rule 34: the palette files by map index.
+pub const PALETTES: [&str; MAP_COUNT] = [
+    "daventry.ppl",
+    "newdead.ppl",
+    "swamp.ppl",
+    "gnome.ppl",
+    "barren.ppl",
+    "dwarf.ppl",
+    "ice.ppl",
+    "temple01.ppl",
+    "temple02.ppl",
+    "temple03.ppl",
+    "temple04.ppl",
+    "icelord.ppl",
+    "icelord.ppl",
+    "icelord.ppl",
+    "castle.ppl",
+    "exit.ppl",
+];
+
+/// "Do not reproduce" 6: the maps no script loads; never shown, their
+/// indexes kept.
+pub const UNUSED_MAPS: [&str; 4] = ["dwrfmap.kq", "ice1map.kq", "ice2map.kq", "ice3map.kq"];
+
+/// Rule 34: each entry of `from` replaced by the entry of `to` with the
+/// smallest squared RGB difference (any of the 256; the first on a tie).
+pub fn match_palette(from: &Colours, to: &Colours) -> [u8; 256] {
+    let mut out = [0u8; 256];
+    for (k, c) in from.iter().enumerate() {
+        let d = |t: &[u8; 3]| (0..3).map(|i| (c[i] as i32 - t[i] as i32).pow(2)).sum::<i32>();
+        out[k] = (0..256).min_by_key(|&i| d(&to[i])).unwrap_or(0) as u8;
+    }
+    out
+}
+
+/// Rule 19: an icon on a picture, top-left at (x, y), index 0 see-through.
+fn stamp_on(picture: &mut [u8], pic: &IndexPic, x0: i32, y0: i32) {
+    for y in 0..pic.height {
+        for x in 0..pic.width {
+            let v = pic.pixels[y * pic.width + x];
+            let (mx, my) = (x0 + x as i32, y0 + y as i32);
+            if v == 0 || mx < 0 || my < 0 || mx >= MAP_SIZE as i32 || my >= MAP_SIZE as i32 {
+                continue;
+            }
+            picture[my as usize * MAP_SIZE + mx as usize] = v;
+        }
+    }
+}
+
+/// Another world's map in the window (rule 34).
+#[derive(Debug, Clone)]
+pub struct OtherMap {
+    pub index: usize,
+    /// Its file (`davMap.kq`) and where its keys came from (kept or the
+    /// shipped file).
+    pub file: String,
+    pub source: String,
+    pub keys: MapKeys,
+    /// Its picture in the current world's colours.
+    pub picture: Vec<u8>,
+}
 
 /// Rule 4: world (x, y) → map pixel; `None` when the box has no width or
 /// height (the map then does nothing).
@@ -312,6 +377,10 @@ pub struct MapState {
     /// view stored on Connor when the map is set up ([`MapState::set_views`]).
     pub view: View,
     pub mini_view: View,
+    /// Rule 34: another world's map shown now (`None`: this world's).
+    pub other: Option<OtherMap>,
+    /// Rule 34: the palettes by map index (set by the caller).
+    pub palettes: Vec<Option<Colours>>,
     /// Lines for `map.log`, taken by the caller.
     pub log: Vec<String>,
 }
@@ -355,6 +424,8 @@ impl MapState {
             follow: false,
             view: START_VIEW,
             mini_view: START_VIEW,
+            other: None,
+            palettes: Vec::new(),
             log: Vec::new(),
             keys,
         };
@@ -367,9 +438,87 @@ impl MapState {
     }
 
     /// The picture's name icons are kept under when it is shown (rule 20:
-    /// the saved icons name the full picture).
+    /// the saved icons name the full picture): another world's when it is
+    /// shown (rule 34).
     pub fn shown_name(&self) -> &str {
-        &self.keys.full_map
+        self.other.as_ref().map_or(&self.keys.full_map, |o| &o.keys.full_map)
+    }
+
+    /// The map index shown now (rule 32).
+    pub fn shown_index(&self) -> Option<usize> {
+        self.other.as_ref().map(|o| o.index).or(self.index)
+    }
+
+    /// The picture the big map shows now.
+    pub fn shown_picture(&self) -> &[u8] {
+        self.other.as_ref().map_or(&self.picture, |o| &o.picture)
+    }
+
+    /// Rule 34: another world's map shown: its own picture (with its fog if
+    /// its `useFog` is on, else its full picture; its own icons), this
+    /// world's icons kept for that picture, then its colours matched to
+    /// this world's palette.
+    pub fn show_other(&mut self, index: usize, file: &str, source: &str, keys: MapKeys) {
+        let mut read = |name: &str| -> Option<Vec<u8>> {
+            match self.reader.as_ref().map(|r| r(name)) {
+                Some(Ok(p)) => map_sized(Some(p)),
+                Some(Err(e)) => {
+                    self.log.push(format!("map picture {name}: {e}; drawn black"));
+                    None
+                }
+                None => None,
+            }
+        };
+        let full = read(&keys.full_map);
+        let blank = if keys.use_fog { read(&keys.blank_map) } else { None };
+        let mut picture = match (&full, keys.use_fog) {
+            (Some(f), false) => f.clone(),
+            _ => {
+                let (fog, _) = fog_from_runs(&keys.runs);
+                let mut p = blank.unwrap_or_else(|| vec![0; MAP_SIZE * MAP_SIZE]);
+                if let Some(f) = &full {
+                    for (k, out) in fog.iter().enumerate() {
+                        if *out {
+                            p[k] = f[k];
+                        }
+                    }
+                }
+                p
+            }
+        };
+        let own: Vec<MapIcon> = keys.icons.iter().filter(|i| i.picture.eq_ignore_ascii_case(&keys.full_map)).cloned().collect();
+        let here: Vec<MapIcon> = self.icons.iter().filter(|i| i.picture.eq_ignore_ascii_case(&keys.full_map)).cloned().collect();
+        for i in own.iter().chain(&here) {
+            if let Some(pic) = self.icon_pic(&i.file) {
+                stamp_on(&mut picture, &pic, i.x, i.y);
+            }
+        }
+        let pal = |k: Option<usize>| k.and_then(|k| self.palettes.get(k).copied().flatten());
+        let colours = match (pal(Some(index)), pal(self.index)) {
+            (Some(from), Some(to)) => {
+                let table = match_palette(&from, &to);
+                picture.iter_mut().for_each(|v| *v = table[*v as usize]);
+                let changed = (0..256).filter(|&k| table[k] as usize != k).count();
+                format!("colours matched to this world's palette ({changed} of 256 entries moved)")
+            }
+            _ => "a palette is missing: colours as they are".to_string(),
+        };
+        self.log.push(format!(
+            "shows map index {index} ({file}, {source}): {}, its {} icons and {} of this world's for {}; {colours} (rule 34)",
+            if keys.use_fog { "its fog" } else { "its full picture" },
+            own.len(),
+            here.len(),
+            keys.full_map
+        ));
+        self.other = Some(OtherMap { index, file: file.to_string(), source: source.to_string(), keys, picture });
+        self.version += 1;
+    }
+
+    /// This world's map shown again (rules 9, 32, 34).
+    pub fn show_own(&mut self) {
+        if self.other.take().is_some() {
+            self.version += 1;
+        }
     }
 
     /// Rule 7: blank, then full where out of the fog (rule 14: all of it
@@ -415,21 +564,12 @@ impl MapState {
     /// Rule 19: one icon on the map's own picture, index 0 see-through.
     fn stamp(&mut self, icon: &MapIcon) {
         let Some(pic) = self.icon_pic(&icon.file) else { return };
-        for y in 0..pic.height {
-            for x in 0..pic.width {
-                let v = pic.pixels[y * pic.width + x];
-                let (mx, my) = (icon.x + x as i32, icon.y + y as i32);
-                if v == 0 || mx < 0 || my < 0 || mx >= MAP_SIZE as i32 || my >= MAP_SIZE as i32 {
-                    continue;
-                }
-                self.picture[my as usize * MAP_SIZE + mx as usize] = v;
-            }
-        }
+        stamp_on(&mut self.picture, &pic, icon.x, icon.y);
     }
 
-    /// Rule 9: the icons of the shown picture drawn again.
+    /// Rule 9: the icons of this world's picture drawn again.
     pub fn draw_icons(&mut self) {
-        let shown = self.shown_name().to_string();
+        let shown = self.keys.full_map.clone();
         let icons: Vec<MapIcon> = self.icons.iter().filter(|i| i.picture.eq_ignore_ascii_case(&shown)).cloned().collect();
         for i in &icons {
             self.stamp(i);
@@ -474,6 +614,11 @@ impl MapState {
         if let Some(p) = pixel.filter(|p| Some(*p) != self.last_pixel) {
             self.last_pixel = Some(p);
             step.moved = true;
+            // Rule 9: another world's map shown snaps back.
+            if let Some(o) = self.other.as_ref().map(|o| o.index) {
+                self.show_own();
+                self.log.push(format!("Connor's map pixel changed while map index {o} was shown: back to this world's map (rules 9, 34)"));
+            }
             step.revealed = self.reveal(p.0, p.1);
             self.draw_icons();
             self.follow = true;
@@ -543,10 +688,17 @@ impl MapState {
             return false;
         }
         let shown_now = icon.picture.eq_ignore_ascii_case(self.shown_name());
+        let own = icon.picture.eq_ignore_ascii_case(&self.keys.full_map);
         self.icons.push(icon.clone());
-        if shown_now {
+        if own {
             self.stamp(&icon);
             self.version += 1;
+        } else if shown_now {
+            if let (Some(pic), Some(o)) = (self.icon_pic(&icon.file), self.other.as_mut()) {
+                // Drawn in the shown map's colours like the rest of it.
+                stamp_on(&mut o.picture, &pic, icon.x, icon.y);
+                self.version += 1;
+            }
         }
         true
     }
@@ -558,6 +710,11 @@ impl MapState {
         let shown = self.shown_name().to_string();
         let k = self.icons.iter().position(|i| i.x == x && i.y == y && i.picture.eq_ignore_ascii_case(&shown))?;
         let icon = self.icons.remove(k);
+        if let Some(o) = self.other.take() {
+            // Another world's map shown: made again without the icon.
+            self.show_other(o.index, &o.file, &o.source, o.keys);
+            return Some(icon);
+        }
         if let Some(pic) = self.icon_pic(&icon.file) {
             for py in y.max(0)..(y + pic.height as i32).min(MAP_SIZE as i32) {
                 for px in x.max(0)..(x + pic.width as i32).min(MAP_SIZE as i32) {
@@ -669,6 +826,40 @@ impl crate::active::WorldState {
         "0".into()
     }
 
+    /// Rule 32: the page arrows (`dir` −1 previous, +1 next) step through
+    /// the 16 map indexes from the one shown, wrapping, to the first marked
+    /// visited on Connor (this world's counts); none in 16 steps: no
+    /// change. Another world's map comes from [`WorldState::other_maps`].
+    pub fn map_page(&mut self, dir: i32, how: &str) {
+        let Some(map) = self.map.as_mut() else {
+            self.map_log.push(format!("{how}: no map; nothing"));
+            return;
+        };
+        let Some(from) = map.shown_index() else {
+            self.map_log.push(format!("{how}: this map has no index; nothing (rule 3)"));
+            return;
+        };
+        let marks = &self.map_marks;
+        let target = (1..=MAP_COUNT as i32).map(|k| (from as i32 + dir * k).rem_euclid(MAP_COUNT as i32) as usize).find(|i| marks.visited[*i]);
+        let line = match target {
+            None => format!("{how}: page {dir:+} from index {from}: no visited map in 16 steps; nothing (rule 32)"),
+            Some(i) if Some(i) == map.index => {
+                map.show_own();
+                format!("{how}: page {dir:+} from index {from}: index {i}, this world's map (rule 32)")
+            }
+            Some(i) => match self.other_maps.get(&i) {
+                Some((file, keys, source)) => {
+                    map.show_other(i, file, source, keys.clone());
+                    format!("{how}: page {dir:+} from index {from}: index {i} ({file}, name #{}; rule 32)", keys.map_name.unwrap_or(0))
+                }
+                None => format!("{how}: page {dir:+} from index {from}: index {i} is visited but no map for it is known; nothing"),
+            },
+        };
+        let mut lines = std::mem::take(&mut map.log);
+        lines.push(line);
+        self.map_log.extend(lines);
+    }
+
     /// One update (rule 9): the `MagicMap` item arriving or leaving
     /// switches the map (rule 2); then Connor at `at` facing `heading`.
     pub fn map_step(&mut self, at: [f32; 3], heading: f32) {
@@ -734,6 +925,10 @@ mod tests {
             icons: Vec::new(),
             runs: Vec::new(),
         }
+    }
+
+    fn pics_pair() -> (Option<IndexPic>, Option<IndexPic>) {
+        pics()
     }
 
     fn pics() -> (Option<IndexPic>, Option<IndexPic>) {
@@ -853,6 +1048,69 @@ mod tests {
     }
 
     #[test]
+    fn palettes_match_to_the_nearest_colour() {
+        let mut from = [[0u8; 3]; 256];
+        let mut to = [[0u8; 3]; 256];
+        for k in 0..256 {
+            to[k] = [k as u8, 0, 0];
+        }
+        from[1] = [10, 0, 0];
+        from[2] = [255, 255, 255];
+        from[3] = [100, 3, 0];
+        let t = match_palette(&from, &to);
+        assert_eq!((t[0], t[1], t[2], t[3]), (0, 10, 255, 100));
+        // A tie: the first.
+        let mut to2 = [[50u8, 50, 50]; 256];
+        to2[7] = [0, 0, 0];
+        to2[9] = [0, 0, 0];
+        assert_eq!(match_palette(&from, &to2)[0], 7);
+    }
+
+    #[test]
+    fn paging_to_visited_maps_and_back() {
+        use crate::active::Active;
+        let mut a = Active::new(Default::default(), vec![], vec![], ["Connor".to_string()], Vec::<(String, Vec<u8>)>::new());
+        let pics = |v: u8| IndexPic { width: MAP_SIZE, height: MAP_SIZE, pixels: vec![v; MAP_SIZE * MAP_SIZE] };
+        let reader: IconReader = std::sync::Arc::new(move |name: &str| Ok(if name.contains('0') { pics(5) } else { pics(6) }));
+        let (b, f) = pics_pair();
+        let mut m = MapState::new("Davmap.kq", keys(), b, f, None, Some(reader));
+        let mut pal_a = [[0u8; 3]; 256];
+        let mut pal_b = [[0u8; 3]; 256];
+        pal_a[6] = [200, 0, 0];
+        pal_b[9] = [199, 0, 0];
+        pal_a[5] = [0, 0, 90];
+        pal_b[4] = [0, 0, 90];
+        m.palettes = vec![None; MAP_COUNT];
+        m.palettes[0] = Some(pal_b);
+        m.palettes[3] = Some(pal_a);
+        a.world.map = Some(m);
+        a.world.map.as_mut().unwrap().set_active(true, "t");
+        a.world.map_marks.visited[0] = true;
+        a.world.map_page(1, "t");
+        assert!(a.world.map.as_ref().unwrap().other.is_none(), "only this world visited: stays");
+        // Gnome (index 3) kept, revealed in its first row only.
+        let gnome = MapKeys { name: "gnomMap".into(), map_name: Some(41), full_map: "gnomap.pbm".into(), blank_map: "gnomap0.pbm".into(), runs: vec![0, 460], ..keys() };
+        a.world.other_maps.insert(3, ("gnomMap.kq".into(), gnome, "kept".into()));
+        a.world.map_marks.visited[3] = true;
+        a.world.map.as_mut().unwrap().add_icon("x.bmp", 0, 100, Some("gnomap.pbm"));
+        a.world.map_page(-1, "t");
+        let m = a.world.map.as_ref().unwrap();
+        assert_eq!(m.shown_index(), Some(3), "-1 from 0 wraps to 15 … 3");
+        // Row 0 revealed: full (6 → 9 by colour); the rest blank (5 → 4);
+        // this world's icon for gnomap.pbm drawn (6 → 9).
+        let p = m.shown_picture();
+        assert_eq!((p[0], p[MAP_SIZE], p[100 * MAP_SIZE]), (9, 4, 9));
+        a.world.map_page(1, "t");
+        assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(0), "+1 from 3 wraps round to 0");
+        a.world.map_page(1, "t");
+        assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(3));
+        // Connor's pixel changes: snaps back.
+        a.world.map_step([200000.0, 250000.0, 0.0], 0.0);
+        assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(0));
+        assert!(a.world.map_log.iter().any(|l| l.contains("back to this world's map")), "{:?}", a.world.map_log);
+    }
+
+    #[test]
     fn arrow_frames() {
         use std::f64::consts::PI;
         assert_eq!(arrow_frame(PI), 0, "facing north: up");
@@ -885,7 +1143,7 @@ mod tests {
     fn icons_over_the_fog_and_removed() {
         let (b, f) = pics();
         let icon = IndexPic { width: 2, height: 2, pixels: vec![7, 0, 7, 7] };
-        let reader: IconReader = Box::new(move |_| Ok(icon.clone()));
+        let reader: IconReader = std::sync::Arc::new(move |_| Ok(icon.clone()));
         let mut m = MapState::new("davmap.kq", keys(), b, f, None, Some(reader));
         assert!(m.add_icon("dv_telep.bmp", 250, 98, None));
         assert!(!m.add_icon("DV_TELEP.BMP", 250, 98, Some("davmap.pbm")), "not twice");

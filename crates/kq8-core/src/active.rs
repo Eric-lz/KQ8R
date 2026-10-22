@@ -677,6 +677,9 @@ pub struct WorldState {
     /// The map's view stored on Connor (rule 22), carried into the next
     /// world.
     pub map_view: crate::magic_map::View,
+    /// Other worlds' maps by map index (rule 34): file, keys, where they
+    /// came from (kept when Connor left the world, or the shipped file).
+    pub other_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
     /// Whether Connor carried the `MagicMap` item at the last update
     /// (rule 2: arriving and leaving switch the map).
     pub map_item: Option<bool>,
@@ -2954,6 +2957,7 @@ impl Active {
                 map: None,
                 map_marks: Default::default(),
                 map_view: Default::default(),
+                other_maps: BTreeMap::new(),
                 map_item: None,
                 map_log: Vec::new(),
                 connor_in_temple4: false,

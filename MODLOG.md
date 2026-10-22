@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-6: other worlds' maps (the page arrows)
+
+**Changed:** `kq8-core` `magic_map.rs` (`match_palette`, the palettes by index, `OtherMap`, `show_other` / `show_own`, the snap-back, `WorldState::map_page`; the picture reader shared, `Arc`), `active.rs` (`other_maps`); viewer `map_view.rs` (the 16 palettes, the shipped map files, `--kept-maps SAVE`), `gui_view.rs` (the big map shows the shown picture, the mini-map this world's; the plate follows; no arrow on another world's map; the page arrows' clicks), `main.rs` (option, help).
+**Why:** M6 6d step 6 (`magic-map.md` rules 9, 32–34).
+**Tested how:** `cargo test -p kq8-core` (506 pass), clippy clean. `cargo play --world Daventry --at 193000,193000,3.1416 --kept-maps MASK/save/save18.vol --command "give MagicMap",5 --key tab,10 --key left:IDCTL_MAPWIN_RIGHT,20 --key left:IDCTL_MAPWIN_RIGHT,30 --key left:IDCTL_MAPWIN_RIGHT,40 --key left:IDCTL_MAPWIN_LEFT,50 --hold 1,0,0,60,90 --frames 800 --sound off`; `map.log`, `gui.log`.
+**Result:** From save18: Dead City (53,055 pixels revealed, 24 icons) and Castle Daventry kept, marked visited. Right: Daventry → "Dimension of Death" (237 of 256 colours moved) → "Castle Daventry" → "Kingdom of Daventry"; left from Daventry → Castle. No arrow on the other maps. Walking: snapped back to Daventry at update 72.
+**Still broken / not tested:** **Not looked at** (whether the matched colours look right). Kept maps come only from `--kept-maps` until moving between worlds exists. The page arrows' second frame (pressed?) is not used.
+**Next:** 6d-7, teleporting up to the world change.
+
 ## 2026-10-21 6d-5: the mini-map in the bottom-right slot
 
 **Changed:** Viewer `gui_view.rs`: the `IDCTL_INVBAR_MINIMAP` slot draws the live map (its own view's size, Connor's pixel at the middle, the arrow) while the map is active; the item's blink shows the empty picture; `gui.log` lines for each redraw with the real time.
