@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: the popup's text and buttons
+
+**Changed:** Viewer `gui_view.rs`: the question's lines are centred across and down in the area above the buttons, 24 layout pixels apart (no longer in the layout's top slots); both buttons use `yesbtn.pba` (frame 0 plain, frame 1 highlighted); the lines' places logged in `gui.log`. QUESTIONS Q151 (d).
+**Why:** The user's look: the text should be centred both ways with a bit more space between the lines; the highlighted button's picture was shorter than the button and drew wrapped. `gui.log`: `buyhibtn.pba` (the layout's BTN1 picture) is 88 × 25, `yesbtn.pba` 88 × 36 with 2 frames.
+**Tested how:** `kq8-viewer --world Daventry --frames 900 --sound off --command "KQMonster::setState Connor Portal portal1 portaltp",30`; `gui.log`.
+**Result:** "text placed …: [(42, 54, 276), (45, 78, 269)]": both lines centred on x 180 of the 360-wide background, the block centred in rows 0–148.
+**Still broken / not tested:** Not looked at. The line pitch, the area and the highlighted frame are stand-ins (Q151 d).
+**Next:** The user's look at the popup.
+
 ## 2026-10-22 Fix: a key let go during the popup stayed held
 
 **Changed:** Viewer `connor_view.rs` (`connor_keys`): a movement key that is held in Connor's list but not down any more is dropped (and its repeat ends), logged in `connor.log`.

@@ -123,8 +123,8 @@ const DRAWN: [Drawn; 8] = [
     Drawn::Panel(Panel::Popup),
 ];
 
-/// The popup's buttons in the layout: the first is the highlighted look
-/// (`buyhibtn.pba`), the second the plain one (`yesbtn.pba`).
+/// The popup's buttons in the layout (their places and pictures are not
+/// used: see `POPUP_YES`, `POPUP_BUTTON_PICTURE`).
 const POPUP_BUTTONS: [&str; 3] = ["IDCTL_POPUP_BTN1", "IDCTL_POPUP_BTN2", "IDCTL_POPUP_BTN3"];
 
 /// `world-change.md` rule 26: Yes left, No right, 88 wide, centred at a
@@ -133,6 +133,20 @@ const POPUP_BUTTONS: [&str; 3] = ["IDCTL_POPUP_BTN1", "IDCTL_POPUP_BTN2", "IDCTL
 /// height. Panel coordinates: left, top, right, bottom.
 const POPUP_YES: [i32; 4] = [76, 148, 164, 183];
 const POPUP_NO: [i32; 4] = [196, 148, 284, 183];
+
+/// The question's lines (the user's look, 2026-10-22: centred across and
+/// down, a little apart): STAND-IN numbers (Q151 d): the block of lines
+/// centred in the background above the buttons (rows 0-148, 360 wide),
+/// 24 layout pixels from one line to the next (the layout's text slots
+/// are 18 apart and start at the top).
+const POPUP_TEXT_AREA: [i32; 4] = [0, 0, 360, 148];
+const POPUP_LINE_PITCH: i32 = 24;
+
+/// The popup's buttons' picture (the user's look, 2026-10-22: the
+/// layout's `buyhibtn.pba` is 88 x 25, shorter than the 35-high buttons,
+/// and drew wrapped): `yesbtn.pba` (88 x 36, 2 frames) for both, frame 0
+/// plain, frame 1 highlighted (our reading; Q151 d).
+const POPUP_BUTTON_PICTURE: &str = "yesbtn.pba";
 
 /// The question shown in the popup (M6 6e-6).
 #[derive(Debug, Clone, PartialEq)]
@@ -595,15 +609,13 @@ impl Gui {
         let frame_ms = 1000.0 / ANIMATION_FPS;
         let strip = self.strip();
         let mut out = Vec::new();
-        // The popup's button looks and font (6e-6): the highlighted one,
-        // the plain one.
-        let mut popup_looks: [Option<String>; 2] = [None, None];
+        // The popup's buttons' font (6e-6).
         let mut popup_font = None;
+        let mut popup_text_font: Option<String> = None;
         for (c, rect) in self.controls(dialog) {
             let name = self.name_of(c);
-            if let (Some(k), Kind::Text { text, pictures: Some(p) }) = (POPUP_BUTTONS.iter().position(|b| *b == name), &c.kind) {
-                if k < 2 {
-                    popup_looks[k] = self.tags.string(p.bitmap).map(str::to_string);
+            if let (Some(k), Kind::Text { text, .. }) = (POPUP_BUTTONS.iter().position(|b| *b == name), &c.kind) {
+                if k == 0 {
                     popup_font = self.tags.string(text.font).map(str::to_string);
                 }
                 continue;
@@ -715,10 +727,13 @@ impl Gui {
                             self.meters.numbers.filter(|_| self.meters.red[k]).map(|n| n[k].to_string())
                         }
                         (None, "IDCTL_METERS_LEVEL") => Some(self.meters.level.to_string()),
-                        // world-change.md rule 26: the question's lines.
+                        // world-change.md rule 26: the question's lines are
+                        // placed below (6e fix), not in the layout's slots.
                         (None, n) if n.starts_with("IDCTL_POPUP_TEXT") => {
-                            let k = n.trim_start_matches("IDCTL_POPUP_TEXT").parse::<usize>().unwrap_or(0);
-                            self.popup.as_ref().and_then(|p| p.lines.get(k.wrapping_sub(1)).cloned())
+                            if n == "IDCTL_POPUP_TEXT1" {
+                                popup_text_font = self.tags.string(text.font).map(str::to_string);
+                            }
+                            None
                         }
                         // magic-map.md rule 8: one line in TEXT1, two in
                         // TEXT2 and TEXT3.
@@ -776,15 +791,49 @@ impl Gui {
                     if let Some(font) = &popup_font {
                         buttons.push(Spec::Text { rect, font: font.clone(), justification: 0xC, text: label.clone() });
                     }
-                    let look = if p.highlight == k { &popup_looks[0] } else { &popup_looks[1] };
-                    if let Some(file) = look {
-                        buttons.push(Spec::Pic { rect, file: file.clone(), frame: 0, cut: None });
+                    buttons.push(Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: usize::from(p.highlight == k), cut: None });
+                }
+                // The lines, centred across and down (stand-in, Q151 d).
+                if let Some(font) = popup_text_font.clone().or_else(|| popup_font.clone()) {
+                    let [al, at, ar, ab] = POPUP_TEXT_AREA;
+                    let n = p.lines.len() as i32;
+                    let top = at + (ab - at - n * POPUP_LINE_PITCH) / 2;
+                    for (k, line) in p.lines.iter().enumerate() {
+                        let y = top + k as i32 * POPUP_LINE_PITCH;
+                        buttons.push(Spec::Text { rect: [al, y, ar, y + POPUP_LINE_PITCH], font: font.clone(), justification: 0xC, text: line.clone() });
                     }
                 }
                 out.splice(0..0, buttons);
             }
         }
         Some(([r - l, b - t], out))
+    }
+
+    /// Where the question's lines land (left, top, width) in layout pixels,
+    /// for the log.
+    fn popup_text_places(&mut self) -> Vec<(i32, i32, i32)> {
+        let Some(p) = self.popup.clone() else { return Vec::new() };
+        let Some(dialog) = self.control(Panel::Popup.layout_id()) else { return Vec::new() };
+        let font = self.controls(dialog).into_iter().find_map(|(c, _)| match &c.kind {
+            Kind::Text { text, pictures: None } if self.name_of(c) == "IDCTL_POPUP_TEXT1" => self.tags.string(text.font).map(str::to_string),
+            _ => None,
+        });
+        let Some(font) = font else { return Vec::new() };
+        self.load_font(&font);
+        let Some(Some(f)) = self.fonts.get(&font.to_ascii_lowercase()) else { return Vec::new() };
+        let [al, at, ar, ab] = POPUP_TEXT_AREA;
+        let n = p.lines.len() as i32;
+        let top = at + (ab - at - n * POPUP_LINE_PITCH) / 2;
+        p.lines
+            .iter()
+            .enumerate()
+            .map(|(k, line)| {
+                let y = top + k as i32 * POPUP_LINE_PITCH;
+                let w = gui_draw::text_width(f, line);
+                let (x, ty) = gui_draw::text_origin([al, y, ar, y + POPUP_LINE_PITCH], 0xC, w, f.char_height, 1.0);
+                (x, ty, w)
+            })
+            .collect()
     }
 
     /// The popup's button under window point `at` (6e-6): 0 Yes, 1 No.
@@ -1837,6 +1886,8 @@ pub fn popup_step(
         gui.popup = Some(shown);
         gui.panels.set(kq8_core::panels::Group::Popup, true, "the Portal state's question");
         gui.note(&line);
+        let places = gui.popup_text_places();
+        gui.note(format!("popup: text placed (layout px in the 360 x 148 area above the buttons): {places:?}"));
         shared.log.lock().unwrap().summary(line);
     }
     let updates = sim.active.world.updates;
