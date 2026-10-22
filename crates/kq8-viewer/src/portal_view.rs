@@ -81,11 +81,17 @@ pub fn read_portal(game: &GameDir, world: &str, file: &str) -> Result<(PortalKey
     };
     let sections = kq8_data::kq_text::parse(&bytes);
     let keys = sections.iter().find_map(PortalKeys::from_section).ok_or(format!("{file}: no KQPortal section"))?;
-    let target = keys.world.clone().ok_or(format!("{file}: no world"))?;
+    let to = world_of(&keys).map_err(|e| format!("{file}: {e}"))?;
+    Ok((keys, to))
+}
+
+/// The world a portal leads to: its `world` file name (`Castled.kq`) as
+/// one of our world names (`CastleD`).
+pub fn world_of(keys: &PortalKeys) -> Result<String, String> {
+    let target = keys.world.clone().ok_or("no world")?;
     let stem = target.rsplit(['/', '\\']).next().unwrap_or(&target);
-    let stem = stem.strip_suffix(".kq").or_else(|| stem.strip_suffix(".KQ")).unwrap_or(stem);
-    let to = kq8_data::game_dir::WORLDS.iter().find(|w| w.eq_ignore_ascii_case(stem)).ok_or(format!("{file}: world {target} is not one we know"))?;
-    Ok((keys, to.to_string()))
+    let stem = stem.get(..stem.len().saturating_sub(3)).filter(|_| stem.to_ascii_lowercase().ends_with(".kq")).unwrap_or(stem);
+    kq8_data::game_dir::WORLDS.iter().find(|w| w.eq_ignore_ascii_case(stem)).map(|w| w.to_string()).ok_or(format!("world {target} is not one we know"))
 }
 
 /// The arrival under way in the world just built.
@@ -155,5 +161,49 @@ pub fn arrival_step(mut commands: Commands, now: Option<ResMut<ArrivalNow>>, sim
     let mut log = shared.log.lock().unwrap();
     for l in lines {
         log.summary(format!("portal arrival: {l}"));
+    }
+}
+
+/// Every update (6e-6b, `world-change.md` rules 4-6): after Yes, the
+/// `enterAnim` plays; when it ends (or at once without one) the portal
+/// hands over: the world change is asked for with the portal's places.
+/// `waited`: updates since Yes and whether Connor was seen in his Special
+/// state (the movement started).
+pub fn leave_step(sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, mut change: ResMut<crate::world_build::WorldChange>, mut waited: Local<(u32, bool)>, shared: Res<Shared>) {
+    use kq8_core::portal::Phase;
+    let (Some(mut sim), Some(connor)) = (sim, connor) else { return };
+    let phase = sim.active.world.connor_portal.as_ref().map(|p| p.phase);
+    match phase {
+        Some(Phase::Entering) => {
+            let special = connor.walker.mode == kq8_core::connor::Mode::Special;
+            waited.0 += 1;
+            waited.1 |= special;
+            // Ended: seen playing and now not; or never started (the
+            // movement not loaded) after two updates.
+            if !special && (waited.1 || waited.0 > 2) {
+                sim.active.portal_entered();
+            }
+        }
+        Some(Phase::Leaving) => {
+            *waited = (0, false);
+            let Some(state) = sim.active.world.connor_portal.take() else { return };
+            let mut log = shared.log.lock().unwrap();
+            match world_of(&state.keys) {
+                Ok(to) => {
+                    let arrival = PortalArrival::from_keys(&state.keys);
+                    log.summary(format!(
+                        "portal {} (trap {:?}): the hand-over: to {to}, ConLoc {:?}, CamLoc {:?} (world-change.md rules 5-6); Connor taken off the trap without Off (rule 5.3: the old world is taken down)",
+                        state.portal, state.trap, arrival.con_loc, arrival.cam_loc
+                    ));
+                    change.asked = Some(crate::world_build::Request { world: to, at: None, why: format!("portal {}", state.portal), portal: Some(Box::new(arrival)) });
+                }
+                Err(e) => {
+                    log.summary(format!("portal {}: {e}; no world change; handsOff 0", state.portal));
+                    drop(log);
+                    sim.active.test_command("handsOff 0", "portal");
+                }
+            }
+        }
+        _ => *waited = (0, false),
     }
 }

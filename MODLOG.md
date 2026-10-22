@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-6b: Yes leads to the world change
+
+**Changed:** Viewer `portal_view.rs`: `leave_step` (after Yes: waits for the `enterAnim` to end, then asks for the world change with the portal's places), `world_of` (a portal's `world` file to our world name). `main.rs`: the system. DESIGN, provenance.
+**Why:** M6 6e step 6, second part (`world-change.md` rules 4–6).
+**Tested how:** clippy clean. `kq8-viewer --world Daventry --frames 3000 --sound off --command "KQMonster::setState Connor Portal davgate4 sdwtrap1",30 --key popup:yes,31`; the same with `portal1 portaltp` and `--key popup:left,31 --key popup:enter,31` (and once with only `popup:enter`). `viewer.log`, `doors.log`, `connor.log`.
+**Result:** davgate4: Yes → `Accept` → `handsOff 1` → Connor plays `portal` → "the hand-over: to DeadCity" → loading screen → Dead City, `portalx`, `shadbat.cs davgate4 Exit`, `handsOff 0`. portal1: Enter with No highlighted answers No (`Decline`, `noLoc`); Left then Enter answers Yes → Castle Daventry at once (no `enterAnim`), Connor at (9,000, 111,805), `out`, control back at update 8.
+**Still broken / not tested:** Not looked at. The full-armour list swap (rule 5.2) not built. Test keys after the answering one in the same update are dropped.
+**Next:** 6e-6c, the teleport scripts' portal files (`loadKQ … @` of a `GAME/Kq` file while playing).
+
 ## 2026-10-22 6e-6a: the Portal state's question (popup, pause, No)
 
 **Changed:** New `kq8-core` `portal.rs` (`PortalState`, the start of the state, `portal_answer`, `portal_entered`, `popup_lines`; 3 unit tests); `active.rs`: `KQMonster::setState Connor Portal` now starts it, the world's portals' keys (`portals`). Viewer: the loader collects every placed `KQPortal`'s keys; `gui_view.rs`: the popup panel drawn (eighth drawn picture), `popup_step` (opens it, keys, clicks, `--key popup:…` test keys); `world_build::running` (the game's updates and the world's drawing stop while it is open; the panels and sound go on). An old map test updated (its "not built" line). QUESTIONS Q151 (c). DESIGN (6e-6 in three commits), provenance.

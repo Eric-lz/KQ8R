@@ -633,6 +633,8 @@ fn main() -> ExitCode {
                 // Arriving through a portal (M6 6e-4b), before the doors'
                 // update takes the requests.
                 .add_systems(FixedUpdate, portal_view::arrival_step.after(console::console_step).before(door_view::door_step).run_if(world_build::running))
+                // The Portal state's hand-over after Yes (M6 6e-6b).
+                .add_systems(FixedUpdate, portal_view::leave_step.after(door_view::door_step).before(door_view::trap_step).run_if(world_build::running))
                 // world.cs Begin on a new world's first update (M6 6e-5).
                 .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::running))
