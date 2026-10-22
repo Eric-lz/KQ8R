@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 world-change.md: the user's check in the original
+
+**Changed:** Docs only: `docs/behaviour/world-change.md` (rules 19, 23, 25, 26, Edge cases, Do not reproduce 2, a "user's check" section, open questions), STATUS.
+**Why:** The user ran "How to check" 1–10 in the original (patched GOG install).
+**Tested how:** The user, by eye. For which loading picture is which: the `GAME/8Gui` pictures compared byte by byte (the `<5 letters>2.pbm` set differ from each other in 15–22 % of pixels, the `<world>.pbm` set in 45–68 %).
+**Result:** All as described except **Yes is left, No right** (the first version had the button places the wrong way round). The popup's keys: Left/Right move the highlight, Enter chooses, Escape = No + main menu, Space still toggles the bottom bar. Loading has two phases: CD copy (`loading2.pbm`, the universe overview with the world highlighted, green meter; very short with the patch), then the world (`loading.pbm`, red meter); keys do nothing. Everything in a world is kept (broken barrels, bodies on the ground, dropped items, doors, levers, rocks, puzzles). Health, level, items, weapon and armour, the weapon in hand and running potions with their timers carry over.
+**Still broken / not tested:** The popup's first highlighted button; the frozen world clock (no timed event found to compare).
+**Next:** B: 6e from `world-change.md`.
+
 ## 2026-10-21 Study 6e-0: the world change and loading (session A)
 
 **Changed:** Docs only: new `docs/behaviour/world-change.md`; `magic-map.md` (rule 34's kept-map lookup now traced, rule 40 step 4 corrected and step 5 traced, open questions 4 and 5 answered); STATUS. Scratch notes (addresses) in `re/notes.md`, not committed.

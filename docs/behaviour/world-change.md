@@ -247,10 +247,12 @@ himself goes across as his own saved file.
 18. **`GameState.kq`** [traced] also crosses: the counter used to name
     unnamed objects (`NoName<n>`, so new names never repeat a kept
     world's) and the combat difficulty (0.66 / 1.0 / 1.5).
-19. **Not traced in detail**: which fields of Connor's saved form hold
-    the potions' running timers and the rope's state. `potions.md` says
-    potions survive a world change; the rope cannot be in use during the
-    Portal state (Connor is standing on a trap or a pad).
+19. **Checked by the user (2026-10-22)**: health, level, items and their
+    counts, weapon and armour values, the weapon in hand (if any), and
+    **running potion effects with their remaining time** all carry over.
+    Not traced: which fields of Connor's saved form hold them, and the
+    rope's state (the rope cannot be in use during the Portal state:
+    Connor is standing on a trap or a pad).
 
 ### The arrival (unknown 1)
 
@@ -311,9 +313,21 @@ himself goes across as his own saved file.
     (0, 415)–(640, 445) in `consolel.pft`, centred, a black bar
     (0, 462)–(640, 480) (`4black.pbm`) and three meters of 630 × 8 at
     (5, 468) in red, green and blue (`4red.pbm`, `4green.pbm`,
-    `4blue.pbm`). Which of the two pictures shows at which moment was
-    not settled [traced that one of them is moved on and off screen
-    during the hand-over].
+    `4blue.pbm`). **Two phases** (the user's check, 2026-10-22; which
+    file is which from the data):
+    1. **copying the world's files from the CD**: `loading2.pbm`, an
+       overview of the whole game's universe with the loading world
+       highlighted in colour, and a **green** meter. [Data: the
+       `<5 letters>2.pbm` pictures differ from each other in only 15–22 %
+       of their pixels (one shared overview, a different highlight),
+       while the `<world>.pbm` pictures differ by 45–68 % (each its own
+       picture).] With the user's patched install this phase is very
+       short and the meter is not seen;
+    2. **loading the world**: `loading.pbm`, a picture of that world, and
+       a **red** meter.
+    [Traced that one of the pictures is moved on and off screen during
+    the hand-over and that the meter has three colour phases; the blue
+    one was not seen.]
 24. **The meter** [traced]: one colour shows at a time; it fills from
     left to right as the scripts' `setLoadProgress <percent>` lines are
     reached (with no number it moves on by one step). It is redrawn in
@@ -322,7 +336,8 @@ himself goes across as his own saved file.
     moves; no input is handled during the load [inferred: the game is
     paused and only these redraws run].
 25. **How long**: as long as the loading takes; no fixed time [traced:
-    no timer]. The game play screen comes back with `selectScreen 1` in
+    no timer]. Pressing keys does nothing during either phase (the
+    user's check). The game play screen comes back with `selectScreen 1` in
     `world.cs Load` (rule 8.3), and the world appears on the first drawn
     frame (rule 9).
 
@@ -337,16 +352,22 @@ himself goes across as his own saved file.
     - The text is cut into lines of up to **38 characters** at a space
       (and at line breaks), at most **7 lines**, the unused lines empty
       [traced].
-    - **No is the left button, Yes the right** [traced from the button
-      places: with two buttons, the first sits at a third of the panel's
-      width, the second at two thirds, each 88 wide].
+    - **Yes is the left button, No the right** (the user's check,
+      2026-10-22; corrects the first version of this note, which had
+      read the button places the other way round). Each is 88 wide, at a
+      third and two thirds of the panel's width [traced].
     - **The game is paused while it is open** [traced]: the game's pause
       is set in a mode that, unlike the Pause key and the menu, does
       **not** pause the sounds, so music and looping sounds go on.
     - A **click** on a button closes the popup, unpauses the game, and
-      sends the answer to Connor's Portal state [traced]. Keys: not
-      traced for this popup (`interface.md` rule 14 says Enter closes
-      the help popup); see "How to check" 5.
+      sends the answer to Connor's Portal state [traced].
+    - **Keys** (the user's check, 2026-10-22): one button is
+      highlighted; **Left / Right** move the highlight between Yes and
+      No; **Enter** chooses the highlighted one; **Escape** does what No
+      does **and** opens the main menu (which pauses the game as usual);
+      **Space** still shows / hides the bottom bar as in play; other keys
+      do nothing. Which button is highlighted when the popup opens was
+      not noted.
     - The popup is not shown (the answer is Yes at once) in the
       developer demo mode `KQGame::Demo` [traced]; not part of a normal
       game.
@@ -360,7 +381,7 @@ himself goes across as his own saved file.
 | `noLoc` meaning "don't move" | (−1, −1, −1) | traced |
 | Longest time step during the Portal state | 2 frame periods; back to 1 s on arrival | traced (`magic-map.md` rule 40) |
 | Popup text | ≤ 38 characters per line, ≤ 7 lines | traced |
-| Popup buttons | 88 wide, at 1/3 and 2/3 of the panel width | traced |
+| Popup buttons | Yes left, No right; 88 wide, at 1/3 and 2/3 of the panel width | user's check, traced |
 | Loading meter | 630 × 8 at (5, 468), redrawn every 1 % | data, traced |
 | Kept newWorld.cs progress | about 61 → 100 over the kept objects | traced, data |
 | World clock on return | as when left (`setCurrentTime`) | traced, data |
@@ -391,10 +412,13 @@ himself goes across as his own saved file.
   the `loadKQ connor.kq` line (or his saved file) puts him [traced].
 - **Two Connor loads in one build**: only the first uses `ConLoc`
   (it is emptied) [traced].
-- **Returning to a world**: everything in rule 12 comes back as it was,
-  creatures included (a creature killed and deleted stays gone; one
-  still alive is where it was, with its health). Buildings and other
-  permanent objects are fresh copies, but they don't change in play.
+- **Returning to a world**: everything in rule 12 comes back as it was
+  (the user's check, 2026-10-22: broken barrels stay broken, slain
+  enemies stay dead **on the ground**, items dropped by enemies, chests
+  or barrels stay where they fell, doors, levers, pushed rocks and
+  puzzles stay as left). A creature still alive is where it was, with
+  its health. Buildings and other permanent objects are fresh copies,
+  but they don't change in play.
 - **Leaving a world twice**: the kept world is overwritten with the
   newer state [traced].
 - **Temple 1**: all kept worlds are deleted on the way in (rule 8.1);
@@ -421,7 +445,9 @@ himself goes across as his own saved file.
    by the rule of rule 22; never write to the game folder (AGENTS rule 4).
 2. **The free disk space check** before restoring a world (110 MB
    minus the sizes of the files it needs, else a warning about the CD /
-   disk) and the "play from CD" copying: leave out.
+   disk) and the "play from CD" copying: leave out. The copy phase's
+   screen (rule 23.1) then has nothing to show; ours goes straight to
+   the loading phase (showing the overview briefly first is optional).
 3. **The `cur` folder on disk** for kept worlds and the hand-over:
    ours may keep them in memory (the planned "journey" record and kept
    worlds), as long as the content and the rules (rule 8.1's Temple 1
@@ -441,7 +467,7 @@ In the original game (the user), in this order:
 1. **Popup and pause**: walk into the Daventry → Castle exit (the cave
    mouth north of the waterfall). The question appears; Connor stands
    still; creatures and the water stop moving, but the music and the
-   waterfall's sound go on. **No is on the left, Yes on the right.**
+   waterfall's sound go on. **Yes is on the left, No on the right.**
 2. **No**: click No: Connor is put back a step (south of the exit),
    the popup closes, play goes on. Walk out and back in: the question
    comes again.
@@ -487,16 +513,34 @@ In the data (B, any time):
 12. A round trip in our build: the left world's object count and each
     object's saved values the same after coming back (log both).
 
+## The user's check in the original (2026-10-22)
+
+"How to check" 1–10, in the user's patched GOG install:
+
+- 1: right, except **Yes is on the left and No on the right** (rule 26
+  corrected).
+- 2, 4, 9, 10: as described.
+- 3: two loading phases (rule 23): the universe overview with a green
+  meter while files are copied from the CD (very short with the patch),
+  then the world's own picture with a red meter. Keys do nothing.
+- 5: the keys of rule 26.
+- 6: everything is kept (Edge cases, "Returning to a world").
+- 7: the journey of rule 19.
+- 8: no timed event in a world was found to compare; potion timers on
+  Connor carry over (rule 19). The frozen world clock (rule 14) stays
+  traced only.
+
 ## Open questions
 
-1. Which of the two loading pictures shows when, and the meter's colour
-   phases (rule 23, 24): "How to check" 3.
-2. The popup's keys (rule 26): "How to check" 5.
+1. ~~Which loading picture shows when, the meter's colours~~: answered
+   by the user's check and the data (rule 23).
+2. ~~The popup's keys~~: answered by the user's check (rule 26). Still
+   open, small: which button is highlighted when it opens.
 3. Whether the left world's script variables are removed from memory
    (rule 13); no shipped script reads another world's names, so it
    doesn't change play.
-4. Where in Connor's saved form the potion timers and the rope state
-   live (rule 19), and whether the normal movement list comes back
+4. Where in Connor's saved form the rope state lives (rule 19), and
+   whether the normal movement list comes back
    after an arrival with its own list (rule 20.4).
 5. What `worldState.kq`'s events are (always 0 in the user's saves).
 6. `magic-map.md` open question 3 (does the mini-map take the big map's
