@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: a turn key let go during the popup no longer sticks
+
+**Changed:** Viewer `connor_view.rs`: a Left or Right key let go while the game was paused is also released in the turn keys' own record (direction back to 0). Provenance row.
+**Why:** The user: walking into a portal trap holding Left, then No: he was put back but kept turning left until Left was pressed again. The earlier fix (Forward) dropped missed keys from the movement keys only; the turn keys keep their own record, which never got the release.
+**Tested how:** Build only.
+**Result:** —
+**Still broken / not tested:** **Not tested**: needs real keys (the test keys and `--hold` don't go through the keyboard).
+**Next:** The user's check.
+
 ## 2026-10-22 End of session (B): STATUS and FEATURES brought up to date
 
 **Changed:** Docs only: STATUS ("Where we are": today's fixes; open questions Q153 blocking, Q151, Q152), FEATURES (the popup's buttons, parent worlds' voices, the portrait).

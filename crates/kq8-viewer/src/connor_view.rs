@@ -815,6 +815,13 @@ pub fn connor_keys(
         }
         let line = format!("connor update {}: keys {missed:?} were let go while the game was paused: no longer held", sim.updates);
         sim.log.detail(&line);
+        // The turn keys keep their own record: they get the release too
+        // (the user's check: he kept turning after No).
+        let c = &sim.controls;
+        let turns: Vec<i8> = [(c.left, 1i8), (c.right, -1i8)].into_iter().filter(|(k, _)| k.is_some_and(|k| missed.contains(&k))).map(|(_, d)| d).collect();
+        for dir in turns {
+            turn_key_event(&mut sim, dir, false, "key let go while paused", &shared);
+        }
     }
     // Movement key events clear wall blocks (connor-physics.md "Walk held
     // against a wall").
