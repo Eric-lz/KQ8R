@@ -12,8 +12,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   wrap, Enter, Escape = Back to Game, Left/Right in popups), the popups
   (new game, quit, corrupt save, Combat difficulty Easy 0.66 / Normal
   1.0 / Hard 1.5), the pause and theme music, the save thumbnail, and
-  Connor's death opening the menu with Save and Back off. Still open:
-  hover with the mouse, hidden or greyed items (user's check).
+  Connor's death opening the menu with Save and Back off. **The user
+  checked all 7 points in the original (2026-10-21):** right; items that
+  are off are greyed (dithered); hover doesn't move the mask; the theme
+  starts without a fade. Still open: combat level in saves, the
+  `handsOff` seconds after Connor's death.
 
 - **2026-10-21 (B): Connor's levels checked; level-up flame and sound**
   (DESIGN "Connor's levels checked", steps L-1 to L-3, one commit each;

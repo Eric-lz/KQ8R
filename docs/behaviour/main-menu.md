@@ -182,9 +182,9 @@ back to the game. While it is open the game is paused.
     next action needs the key let go [traced].
 21. **Mouse**: a left click on an item's text chooses it and picks it at
     once (no move sound). Back to Game only reacts while a game is
-    running. Moving the mouse moves the pointer; nothing was found that
-    moves the mask cursor when the pointer only hovers over an item
-    (not sure; "Open questions" 1).
+    running. Moving the mouse moves only the pointer: **hovering over an
+    item does not move the mask cursor** [traced; confirmed by the user,
+    2026-10-21].
 
 ### Data the menu writes or reads
 
@@ -210,7 +210,9 @@ back to the game. While it is open the game is paused.
     **main menu opens**. With the mark set, Save and Back to Game are
     off and New is chosen, so the player must Load, start New, or quit.
     (What happens before that, the death itself, is `fighting.md` rule
-    29.)
+    29.) **The user's check in the original (2026-10-21):** after Connor
+    dies the game is in `handsOff` for a couple of seconds, then the
+    menu simply appears (no fade or transition seen).
 
 ## Numbers and units
 
@@ -290,8 +292,8 @@ In the original (GOG 1.03):
    **New**. Press Down repeatedly: the mask visits New, Load (only if
    there are saves), Options, Replay Intro, Quit and wraps back to New;
    Save and Back to Game are skipped.
-2. Are Save and Back to Game **hidden** or **greyed** at start-up?
-   (Rule 3; not settled.)
+2. Save and Back to Game are **greyed** (dithered) at start-up
+   (rule 3).
 3. New → the "Combat difficulty" popup with Normal highlighted; Left
    moves the highlight to Easy, Right twice to Hard; each press clicks.
    Escape closes it. Pick Normal: Daventry starts; the menu music fades
@@ -314,14 +316,14 @@ picked, combat level set, pause on/off, theme start/fade) to a
 
 ## Open questions
 
-1. Whether hovering the mouse over an item moves the mask cursor (rule
-   21): only the click path was found in the menu's own code. The
-   user's check would settle it.
-2. Whether an item that is off is hidden or drawn greyed (rule 3).
-3. Whether the theme fades **in** when the menu opens, and what it does
-   while the intro film plays (`sound.md` open question 5: the sound
-   system is shut down during a video).
+1. ~~Hover moves the mask cursor?~~ No (the user, 2026-10-21; rule 21).
+2. ~~Hidden or greyed?~~ Greyed / dithered (the user, 2026-10-21;
+   rule 3).
+3. ~~Theme fade-in?~~ None: it starts at once (the user, 2026-10-21;
+   rule 8). Still open: what the theme does while the intro film plays
+   (`sound.md` open question 5); later.
 4. Whether the combat level chosen is kept in saved games (not traced;
-   the Load screen is another study).
-5. The death path: what the player sees between Connor's death and the
-   menu (`fighting.md` open question 5).
+   the user is not sure either; for the Load/Save study).
+5. The death path: what happens during the couple of seconds of
+   `handsOff` between Connor's death and the menu (the user saw only
+   that it happens; `fighting.md` open question 5, rule 29).

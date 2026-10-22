@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Main menu: the user's check in the original
+
+**Changed:** Docs only: `main-menu.md` rules 3, 8, 21, 25, "How to check" 2, open questions 1–3 answered; STATUS.
+**Why:** The user ran `main-menu.md` "How to check" 1–7 in the original.
+**Tested how:** The user, by eye and ear, in the original (GOG 1.03).
+**Result:** All 7 points as described. Items that are off are drawn greyed (dithered, like the Invisibility potion; plain grey is fine as a stand-in). Hovering doesn't move the mask cursor. The theme starts at once with no fade. After Connor dies: a couple of seconds of `handsOff`, then the menu appears.
+**Still broken / not tested:** Whether saved games keep the combat level; what happens during the death `handsOff`; the theme during the intro film (later).
+**Next:** B can build the menu from `main-menu.md` when the user wants it.
+
 ## 2026-10-21 Study (A): the main menu
 
 **Changed:** New behaviour note `docs/behaviour/main-menu.md`. Small updates: `fighting.md` open question 3 (combat level menu answered), `interface.md` rule 14 and `sound.md` rule 54 (the menu's pause now traced), STATUS. Scratch addresses in `re/notes.md` (not committed).
