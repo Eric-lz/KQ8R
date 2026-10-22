@@ -693,6 +693,8 @@ pub struct WorldState {
     pub portals: BTreeMap<String, kq8_data::magic_map::PortalKeys>,
     /// Connor's Portal state (`world-change.md` rules 2-5), if he is in it.
     pub connor_portal: Option<crate::portal::PortalState>,
+    /// Portal files a script may `loadKQ` while playing (M6 6e-6c).
+    portal_files: BTreeMap<String, kq8_data::magic_map::PortalKeys>,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
     pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
@@ -1741,6 +1743,10 @@ impl WorldState {
                 return self.load_copy(&key, t, words, at);
             }
         }
+        // M6 6e-6c: a portal file (the teleporters' `GAME/Kq/*tele.kq`).
+        if let Some(keys) = self.portal_files.get(&key).cloned() {
+            return self.load_portal(&key, keys, words, at);
+        }
         if words.len() > 2 {
             self.note(format!("{at}: loadKQ {}: a name or position while playing, and no template of {file}: not done", words[1..].join(" ")));
             return "0".into();
@@ -1772,6 +1778,38 @@ impl WorldState {
             self.calls_out.push((script, vec![name, "Init".into()]));
         }
         "0".into()
+    }
+
+    /// `loadKQ <portal file> [name ...]` while playing (M6 6e-6c,
+    /// `magic-map.md` rule 39: the teleport scripts load the shown world's
+    /// `TeleportPortalKQ` at their pad, then start the Portal state with
+    /// `$ObjectName`): the portal is known by its new name (`@`: the next
+    /// `NoName<n>`); `$ObjectName` is set. It is not drawn (its model is a
+    /// marker, `clicker.kqs`) and has no collider (`colliderType=0`).
+    fn load_portal(&mut self, key: &str, mut keys: kq8_data::magic_map::PortalKeys, words: &[String], at: &str) -> String {
+        let name = match words.get(2).map(String::as_str) {
+            None | Some("same") => keys.name.clone(),
+            Some("@") => self.items.next_name(),
+            Some(n) => n.to_string(),
+        };
+        let lower = name.to_ascii_lowercase();
+        if self.known.contains(&lower) && !self.deleted.contains(&lower) {
+            self.note(format!("{at}: ERROR loadKQ {key}: a live object already has that name ({name}): load refused"));
+            return "1".into();
+        }
+        self.deleted.remove(&lower);
+        self.known.insert(lower.clone());
+        keys.name = name.clone();
+        self.note(format!("{at}: loadKQ {key}: the portal {name} to {:?} (magic-map.md rule 39); $ObjectName = {name}", keys.world));
+        self.portals.insert(lower, keys);
+        self.vars_out.push(("ObjectName".into(), name));
+        "0".into()
+    }
+
+    /// The portal files a script may load while playing, by lower-case
+    /// file name (M6 6e-6c), from the viewer at the start.
+    pub fn set_portal_files(&mut self, files: impl IntoIterator<Item = (String, kq8_data::magic_map::PortalKeys)>) {
+        self.portal_files.extend(files.into_iter().map(|(f, k)| (f.to_ascii_lowercase(), k)));
     }
 
     /// The template files (M5 5d-2), from the viewer at the start.
@@ -2992,6 +3030,7 @@ impl Active {
                 map_log: Vec::new(),
                 portals: BTreeMap::new(),
                 connor_portal: None,
+                portal_files: BTreeMap::new(),
                 connor_in_temple4: false,
                 connor_flags: BTreeMap::new(),
                 connor_hands_off: false,

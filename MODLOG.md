@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-6c: teleporting works end to end
+
+**Changed:** `kq8-core` `active.rs`: `loadKQ` of a `GAME/Kq` portal file while playing (`load_portal`, `set_portal_files`). Viewer `load.rs`: the `KQPortal` files of `GAME/Kq` read at the start; `door_view.rs` hands them to the rules; `gui_view.rs`: `gui_step` leaves `popup:` test keys to the popup step (it dropped them). DESIGN, provenance.
+**Why:** M6 6e step 6, third part (`magic-map.md` rule 39): the teleport scripts load the shown world's portal file at their pad before the Portal state.
+**Tested how:** clippy clean, core 512 tests. `kq8-viewer --world Daventry --at 217338,283698,3.1416 --kept-maps MASK/save/save18.vol --frames 4000 --sound off --command "give MagicMap",5 --command "earnTeleport barrMap.kq",8 --key tab,10 --key left:IDCTL_MAPWIN_RIGHT,20 --key left:IDCTL_MAPWIN_RIGHT,30 --key left:IDCTL_MAPWIN_TELEPORT,40 --key popup:yes,40 --console where,80`.
+**Result:** "portal files in GAME/Kq: Davtele, Deadtele, Icetele, Swamtele, bartele, gnomtele". Go → `Davtele.cs` → "loadKQ bartele.kq: the portal NoName23 to Barren.kq" → the question → Yes → `teleportdown` → hand-over → Barren: Connor at (183,000, 95,500) heading −2.0, camera at (182,700, 90,500, 3,400) → `teleportup` → control back at update 23. Found on the way: `--key popup:yes` at update 41 never fired (the game paused at 40), and at 40 the panels' step had eaten it.
+**Still broken / not tested:** Not looked at. Connor arrives at z 2,000 and drops to 1,277 (the portal's z is above the ground there; not compared with the original).
+**Next:** 6e-7, walking exits.
+
 ## 2026-10-22 6e-6b: Yes leads to the world change
 
 **Changed:** Viewer `portal_view.rs`: `leave_step` (after Yes: waits for the `enterAnim` to end, then asks for the world change with the portal's places), `world_of` (a portal's `world` file to our world name). `main.rs`: the system. DESIGN, provenance.

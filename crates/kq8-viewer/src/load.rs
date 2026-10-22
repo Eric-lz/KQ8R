@@ -1462,6 +1462,9 @@ pub struct Objects {
     pub reveal_objects: Vec<String>,
     /// The world's placed portals' keys (M6 6e-6).
     pub portals: Vec<kq8_data::magic_map::PortalKeys>,
+    /// The `KQPortal` files in `GAME/Kq` (the teleporters'), by file name
+    /// (M6 6e-6c).
+    pub portal_files: Vec<(String, kq8_data::magic_map::PortalKeys)>,
     /// The shield's orbits (`orbit1.kq`–`orbit3.kq`, M5 5g-4) and their
     /// model slots.
     pub orbit: Vec<(kq8_data::characters::OrbitKeys, Option<usize>)>,
@@ -1757,6 +1760,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         orbit: Vec::new(),
         reveal_objects: Vec::new(),
         portals: Vec::new(),
+        portal_files: Vec::new(),
         drop_kinds: Vec::new(),
         projectiles: BTreeMap::new(),
         combat_apply: false,
@@ -1768,6 +1772,18 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         shadow_world_mask: None,
     };
 
+    // M6 6e-6c: the portal files in GAME/Kq, for a script's loadKQ.
+    if let Some(dir) = game.find("GAME/Kq") {
+        let mut paths: Vec<_> = std::fs::read_dir(dir).map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect()).unwrap_or_default();
+        paths.sort();
+        for path in paths {
+            let Some(name) = path.file_name().and_then(|n| n.to_str()).filter(|n| n.to_ascii_lowercase().ends_with(".kq")).map(str::to_string) else { continue };
+            let Ok(bytes) = std::fs::read(&path) else { continue };
+            if let Some(k) = kq8_data::kq_text::parse(&bytes).iter().find_map(kq8_data::magic_map::PortalKeys::from_section) {
+                placer.portal_files.push((name, k));
+            }
+        }
+    }
     // Only what the world's start-up scripts load is in the world
     // (objects.md "Where a world's objects come from", Q16), placed while
     // the scripts run so `getLoc` and `move` see them (Q20).
@@ -1991,6 +2007,8 @@ struct Placer<'a> {
     reveal_objects: Vec<String>,
     /// The world's portals (M6 6e-6).
     portals: Vec<kq8_data::magic_map::PortalKeys>,
+    /// The portal files in GAME/Kq (M6 6e-6c).
+    portal_files: Vec<(String, kq8_data::magic_map::PortalKeys)>,
     /// The shield's orbits (M5 5g-4).
     orbit: Vec<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// The item types the fighters drop (M5 5c-8).
@@ -4268,6 +4286,7 @@ impl Placer<'_> {
             orbit: self.orbit,
             reveal_objects: self.reveal_objects,
             portals: self.portals,
+            portal_files: self.portal_files,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

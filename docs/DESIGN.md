@@ -2336,7 +2336,7 @@ Steps (one commit each; each ends with a test and a log check):
 6. **6e-6, the popup and the Portal state**, as three commits: **6e-6a**
    the state, the popup, its keys and pause, No (**done** 2026-10-22,
    `kq8-core` `portal.rs`, viewer `gui_view.rs` `popup_step`); **6e-6b**
-   Yes to the world change (**done** 2026-10-22, `portal_view::leave_step`); **6e-6c** the teleport scripts' portal files
+   Yes to the world change (**done** 2026-10-22, `portal_view::leave_step`); **6e-6c** the teleport scripts' portal files (**done** 2026-10-22)
    (rules 2–5, 26,
    `magic-map.md` rule 40). The popup panel, its keys and pause; No /
    Yes as above; `enterAnim`; the teleport scripts' `loadKQ <portal> @

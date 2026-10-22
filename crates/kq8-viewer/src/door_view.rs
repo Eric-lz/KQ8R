@@ -820,6 +820,11 @@ pub fn spawn_doors(
     }
     // potions.md rule 31 (M5 5g-7): the objects Clarity reveals.
     active.world.reveal_objects = std::mem::take(&mut objects.reveal_objects);
+    // M6 6e-6c: the teleporters' portal files in GAME/Kq, which the
+    // teleport scripts load while playing (magic-map.md rule 39).
+    let files = std::mem::take(&mut objects.portal_files);
+    main_log.summary(format!("portal files in GAME/Kq: {:?} (magic-map.md rule 39)", files.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>()));
+    active.world.set_portal_files(files);
     // M6 6e-6: the portals, for the Portal state.
     for p in std::mem::take(&mut objects.portals) {
         main_log.summary(format!("portal [{}]: to {:?}, enterAnim {:?}, exitAnim {:?}, noLoc {:?}, script {:?} (world-change.md rule 1)", p.name, p.world, p.enter_anim, p.exit_anim, p.no_loc, p.exit_script));
