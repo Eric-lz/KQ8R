@@ -1652,7 +1652,9 @@ pub struct Arrival {
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
 /// 21: only a developer start sets `$Testing`; Connor brings his own
 /// things), and the `NoName` counter goes on from the carried one.
-pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log, arrival: Option<Arrival>) -> Objects {
+/// `progress`: the scripts' `setLoadProgress` percent, for the loading
+/// screen (M6 6e-4a, `world-change.md` rule 24).
+pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log, arrival: Option<Arrival>, progress: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>) -> Objects {
     use kq8_data::world_script::{LoadKq, LoadName};
 
     let palette_name = world_palette_name(world, "objectPalette").unwrap_or_else(|| {
@@ -1682,6 +1684,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     }
     let mut placer = Placer {
         skip_con_start: arrival.is_some(),
+        progress,
         map: None,
         load_targets,
         dormant: Vec::new(),
@@ -1900,6 +1903,8 @@ struct Located {
 struct Placer<'a> {
     /// A world change (M6 6e-3): `conStart.cs` is not run.
     skip_con_start: bool,
+    /// The loading meter's percent (M6 6e-4a).
+    progress: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>,
     game: &'a GameDir,
     world: &'a World,
     terrain: &'a kq8_data::Terrain,
@@ -2049,6 +2054,16 @@ pub struct CharacterAssets {
 }
 
 impl kq8_data::world_script::Host for Placer<'_> {
+    fn load_progress(&mut self, percent: Option<f32>) {
+        use std::sync::atomic::Ordering;
+        if let Some(p) = &self.progress {
+            // No number: one step on (rule 24).
+            let now = p.load(Ordering::Relaxed);
+            let next = percent.map_or(now + 1, |v| v.clamp(0.0, 100.0) as u32).min(100);
+            p.store(next, Ordering::Relaxed);
+        }
+    }
+
     fn apply_combat_level(&mut self, on: bool, at: &str) {
         self.combat_apply = on;
         self.log.summary(format!("fight: {at}: applyCombatLevel {}: characters loaded from here on get the combat level (fighting.md rule 3)", u8::from(on)));

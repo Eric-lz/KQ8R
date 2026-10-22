@@ -60,6 +60,7 @@ mod gui_view;
 mod item_view;
 mod light_view;
 mod load;
+mod loading_screen;
 mod log;
 mod memory;
 mod object_light;
@@ -512,7 +513,7 @@ fn main() -> ExitCode {
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
         .and_then(|game| match &args.model {
             // The world is read the way every world is (6e-1).
-            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, None, &mut log)?)),
+            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, None, None, &mut log)?)),
             Some(name) => {
                 let world = World::open(&game, &args.world)?;
                 log.summary(format!("world: {}", world.name));
@@ -841,15 +842,16 @@ fn frame_stats(
     }
     if settings.last_report.elapsed().as_secs_f32() >= 2.0 {
         settings.last_report = Instant::now();
-        shared.log.lock().unwrap().detail(format!(
-            "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2}{}",
-            s.frames,
-            s.worst_frame_ms,
-            orbit.map_or(String::new(), |o| format!(
-                " camera yaw={:.2} pitch={:.2} distance={:.2}",
-                o.yaw, o.pitch, o.distance
-            ))
-        ));
+        // try_lock: while a world is read on its thread (6e-4a) the
+        // reader holds the log; this line is skipped then.
+        if let Ok(mut log) = shared.log.try_lock() {
+            log.detail(format!(
+                "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2}{}",
+                s.frames,
+                s.worst_frame_ms,
+                orbit.map_or(String::new(), |o| format!(" camera yaw={:.2} pitch={:.2} distance={:.2}", o.yaw, o.pitch, o.distance))
+            ));
+        }
     }
     if settings.frame_limit.is_some_and(|n| s.frames >= n) {
         commands.write_message(AppExit::Success);

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-4a: the loading screen, the world read on another thread
+
+**Changed:** New viewer `loading_screen.rs` (the world's loading picture in its `L<7 letters>.ppl` palette, the black bar, the red meter; opened at the take-down, closed when the world is built). `world_build.rs`: the next world is read on a thread (`Step::Loading`), the meter fed from the scripts' `setLoadProgress`, frame times logged; the sound system is made on the main thread. `kq8-data` `world_script.rs`: `Host::load_progress`. `load.rs`: the progress counter. `main.rs`: `frame_stats` skips its log line while the reading thread holds the log. DESIGN (6e-4 split in 4a / 4b), provenance.
+**Why:** M6 6e step 4, first half (`world-change.md` rules 7.2, 22–25).
+**Tested how:** clippy clean; viewer 12 tests (new `file_names_follow_rule_22`), data 138. `kq8-viewer --world Daventry --frames 4000 --sound off --console "goworld Swamp",40 --console "goworld Daventry",60`; `viewer.log`.
+**Result:** Swamp: "loading screen: GAME/8Gui/Swamp.pbm in GAME/8Gui/lSwamp.ppl …", 558 frames in 3,100 ms, longest frame 7.9 ms (the window no longer freezes while reading); meter 0 → 20 → 60 → 100 %. Back to Daventry: 1,167 frames in 6,484 ms, longest 8.1 ms; meter 13 % at once, then 18 … 100 % with the object scripts. Counts after the rebuild as before (132,897 entities).
+**Still broken / not tested:** **Not looked at** (the picture's look and the meter's place are from the layout numbers only). Building the world after the read still stops the window for 0.5–0.9 s (spawning). The text line of `Loading.gui` is not drawn. Reading is slower on the thread while the window draws (Daventry 6.5 s here).
+**Next:** 6e-4b, the arrival (portal places, `exitAnim`, `exitScript Exit`).
+
 ## 2026-10-22 6e-3: the journey (`goworld`)
 
 **Changed:** New `kq8-core` `journey.rs` (`Journey::take` / `give` / `describe`, `connor_summary`; 2 unit tests). `active.rs`: every `setConnorFlag` flag kept (`connor_flags`). `item.rs`: the `NoName` counter can be read and moved on. `kq8-data` `Vars::iter`. Viewer: `load_objects` / `read_world` take an `Arrival` (counter carried, `conStart.cs` not run); `world_build.rs` takes the journey before the take-down and gives it after the build, `--item` only in the first world, the combat level before the characters enter; new `kq8-artifacts/logs/world.log`; console word `goworld <World> [x y heading]`. FEATURES, DESIGN, provenance.

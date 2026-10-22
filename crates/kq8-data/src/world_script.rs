@@ -147,6 +147,9 @@ pub trait Host {
     /// on characters entering the world get the combat level's factor.
     /// By default nothing is done.
     fn apply_combat_level(&mut self, _on: bool, _at: &str) {}
+    /// `setLoadProgress <percent>` (no number: one step on;
+    /// `world-change.md` rule 24). By default nothing is done.
+    fn load_progress(&mut self, _percent: Option<f32>) {}
     /// `KQConner::setLevel` and `sendEvent` with their words expanded:
     /// lines for Connor that are done when play starts (DESIGN "Connor's
     /// levels checked", L-1). Returns false when not kept (then counted
@@ -284,6 +287,11 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
             c if c.ends_with(".cs") => {}
             // Not run: counted without looking at its variables.
             _ => {
+                // `setLoadProgress [percent]` (M6 6e-4a, `world-change.md`
+                // rule 24): also told to the host, for the loading meter.
+                if command == "setloadprogress" {
+                    host.load_progress(raw_words.get(1).and_then(|w| w.0.parse::<f32>().ok()));
+                }
                 *out.other_commands.entry(command).or_default() += 1;
                 continue;
             }

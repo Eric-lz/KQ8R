@@ -21,6 +21,9 @@
 //! resources and systems is our own.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Instant;
 
 use bevy::ecs::schedule::ScheduleLabel;
@@ -66,7 +69,9 @@ pub struct WorldRead {
     caption: Option<talk_view::CaptionStyle>,
     gui: Option<gui_view::Gui>,
     map: Option<map_view::MapSim>,
-    sound: Option<sound_view::SoundSim>,
+    /// The sound objects and the music, for the sound system made on the
+    /// main thread (the sound card's stream stays on one thread).
+    sound: (Vec<kq8_core::sound::Audible>, Option<kq8_core::music::Music>),
     /// How long the reading took.
     pub took_ms: u128,
 }
@@ -95,6 +100,22 @@ enum Step {
     /// Taken down; `frames` more frames to wait before building. The
     /// journey taken from the old world (6e-3), if it had one.
     Down { request: Request, frames: u32, from: String, journey: Option<Box<Journey>> },
+    /// The next world is being read on another thread (6e-4a) while the
+    /// loading screen is drawn.
+    Loading { request: Request, from: String, journey: Option<Box<Journey>>, read: JoinHandle<Result<WorldRead, String>>, meter: Meter },
+}
+
+/// The loading meter while a world is read (6e-4a, `world-change.md`
+/// rule 24): the percent the scripts' `setLoadProgress` reached, and what
+/// was drawn, for the log.
+struct Meter {
+    percent: Arc<AtomicU32>,
+    started: Instant,
+    last_frame: Instant,
+    frames: u64,
+    longest_frame_ms: f32,
+    /// (ms since the start, percent) at each change.
+    steps: Vec<(u128, u32)>,
 }
 
 /// The world shown now and the change under way, if any.
@@ -110,6 +131,13 @@ pub struct WorldChange {
     pub generation: u64,
     /// The launch options, for building the next world.
     options: Option<Options>,
+}
+
+impl WorldChange {
+    /// The game folder, once the launch options are kept.
+    pub fn game(&self) -> Option<&PathBuf> {
+        self.options.as_ref().map(|o| &o.game)
+    }
 }
 
 /// The run condition of the game's systems: a world is in (6e-2).
@@ -134,7 +162,8 @@ const FREE_FRAMES: u32 = 2;
 
 /// Reads world `name` (as `main` did before 6e-1).
 /// `arrival`: a world change (6e-3), see `load::load_objects`.
-pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<load::Arrival>, log: &mut Log) -> Result<WorldRead, String> {
+/// `progress`: the loading meter's percent (6e-4a).
+pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<load::Arrival>, progress: Option<Arc<AtomicU32>>, log: &mut Log) -> Result<WorldRead, String> {
     let started = Instant::now();
     let world = load::World::open(game, name)?;
     log.summary(format!("world: {}", world.name));
@@ -149,7 +178,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let mut ground = load::load_ground(game, &world, log)?;
     let haze = load::load_haze(game, &world, Some(&ground.terrain.settings), log);
     part("ground", &mut since);
-    let mut objects = load::load_objects(game, &world, &ground.terrain, log, arrival);
+    let mut objects = load::load_objects(game, &world, &ground.terrain, log, arrival, progress);
     part("objects", &mut since);
     let animators = std::mem::take(&mut objects.animators);
     let animation = load::prepare_ground_animation(game, &world, &mut ground, animators, log);
@@ -167,8 +196,8 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let map = Some(map_view::load_map(game, name, objects.map.take(), opts.kept_maps.as_deref(), log));
     let audibles = std::mem::take(&mut objects.audibles);
     let music = objects.music.take();
-    let sound = sound_view::SoundSim::new(game, name, opts.sound, audibles, music);
-    part("speech, panels, map, sound", &mut since);
+    let sound = (audibles, music);
+    part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
 }
@@ -187,7 +216,7 @@ pub fn remember_options(world: &mut World, opts: &Options) {
 /// Puts a read world's resources in. `ObjectLight` is put in by the
 /// caller (see [`object_light`]).
 pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
-    let WorldRead { ground, mut objects, animation, caption, gui, map, sound, .. } = read;
+    let WorldRead { name, ground, mut objects, animation, caption, gui, map, sound: (audibles, music), .. } = read;
     if let Some(style) = caption {
         world.insert_resource(style);
     }
@@ -198,7 +227,9 @@ pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
         world.insert_resource(map);
     }
     world.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
-    if let Some(sound) = sound {
+    // The sound system starts again with each world (world-change.md
+    // rule 7.4: every playing sound stops).
+    if let Some(sound) = GameDir::open(&opts.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &name, opts.sound, audibles, music)) {
         world.insert_resource(sound);
     }
     world.insert_resource(light_view::GroundLight::new(ground.light.clone(), ground.other_light.clone(), opts.light, ground.dynamic));
@@ -292,6 +323,8 @@ pub fn world_change_step(world: &mut World) {
                 }
             }
             let journey = journey.map(|(j, _)| j);
+            let shared_log = world.resource::<Shared>().log.clone();
+            crate::loading_screen::open(world, &request.world, &shared_log);
             world.resource_mut::<WorldChange>().step = Step::Down { request, frames: FREE_FRAMES, from, journey };
         }
         Step::Down { request, frames, from, journey } if frames > 0 => {
@@ -305,8 +338,56 @@ pub fn world_change_step(world: &mut World) {
                 log.lock().unwrap().summary("world change: no launch options kept; nothing built");
                 return;
             };
+            // Read on another thread (6e-4a); the window keeps drawing the
+            // loading screen. The thread holds `viewer.log` meanwhile.
             let arrival = journey.as_ref().map(|j| load::Arrival { no_name_from: j.next_no_name });
-            let read = GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &request.world, &opts, arrival, &mut log.lock().unwrap()));
+            let percent = Arc::new(AtomicU32::new(0));
+            let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
+            let read = std::thread::Builder::new().name("world read".into()).spawn(move || {
+                let mut log = shared_log.lock().unwrap();
+                GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &name, &opts, arrival, Some(thread_percent), &mut log))
+            });
+            let read = match read {
+                Ok(handle) => handle,
+                Err(e) => {
+                    log.lock().unwrap().summary(format!("world change: the reading thread could not start ({e}); closing"));
+                    world.write_message(AppExit::error());
+                    return;
+                }
+            };
+            let now = Instant::now();
+            let meter = Meter { percent, started: now, last_frame: now, frames: 0, longest_frame_ms: 0.0, steps: vec![(0, 0)] };
+            world.resource_mut::<WorldChange>().step = Step::Loading { request, from, journey, read, meter };
+        }
+        Step::Loading { request, from, journey, read, mut meter } => {
+            // One frame of the loading screen.
+            let now = Instant::now();
+            meter.frames += 1;
+            meter.longest_frame_ms = meter.longest_frame_ms.max((now - meter.last_frame).as_secs_f32() * 1000.0);
+            meter.last_frame = now;
+            let p = meter.percent.load(Ordering::Relaxed);
+            if meter.steps.last().is_some_and(|(_, q)| *q != p) {
+                meter.steps.push((meter.started.elapsed().as_millis(), p));
+            }
+            crate::loading_screen::set_meter(world, p);
+            if !read.is_finished() {
+                world.resource_mut::<WorldChange>().step = Step::Loading { request, from, journey, read, meter };
+                return;
+            }
+            let read = read.join().unwrap_or_else(|_| Err("the reading thread stopped with a panic".into()));
+            {
+                let steps: Vec<String> = meter.steps.iter().map(|(ms, p)| format!("{p} % at {ms} ms")).collect();
+                let mut log = log.lock().unwrap();
+                log.summary(format!(
+                    "world change: loading screen: {} frames in {} ms, longest frame {:.1} ms; meter: {}",
+                    meter.frames,
+                    meter.started.elapsed().as_millis(),
+                    meter.longest_frame_ms,
+                    steps.join(", ")
+                ));
+            }
+            crate::loading_screen::close(world);
+            let Some(opts) = world.resource::<WorldChange>().options.clone() else { return };
             let read = match read {
                 Ok(r) => r,
                 Err(e) if request.world != from => {
@@ -315,6 +396,7 @@ pub fn world_change_step(world: &mut World) {
                     log.lock().unwrap().summary(format!("world change: {} could not be read ({e}); back to {from}", request.world));
                     let back = Request { world: from.clone(), at: request.at, why: "the asked world could not be read".into() };
                     world.resource_mut::<WorldChange>().step = Step::Down { request: back, frames: 0, from, journey };
+                    crate::loading_screen::open(world, &request.world, &log);
                     return;
                 }
                 Err(e) => {

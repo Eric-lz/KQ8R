@@ -2314,7 +2314,10 @@ Steps (one commit each; each ends with a test and a log check):
    MagicMap`, a potion running, walk, `goworld Swamp`: `world.log`
    journey the same on both sides; Swamp's map active; potion time
    left carried.
-4. **6e-4, the loading screen and the arrival** (rules 6–9, 20, 22–25).
+4. **6e-4, the loading screen and the arrival** (rules 6–9, 20, 22–25);
+   built as two commits: **6e-4a** the background reading and the
+   loading screen (**done** 2026-10-22, `loading_screen.rs`), **6e-4b**
+   the arrival.
    Loading on a background thread with the screen drawn meanwhile; the
    sounds of rules 7.1 and 9; Connor and the camera at the portal's
    `ConLoc` / `CamLoc`; the Portal state's arrival half (`exitAnim`,
