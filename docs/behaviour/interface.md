@@ -309,7 +309,8 @@ uses whatever the window holds [traced].
 22. **Experience percent** = experience × 100 / the current level's
     threshold (10 × 2^(level − 1), 150,000 from level 15; rule 26),
     whole-number division. It is only sent when the experience number
-    changed [traced].
+    changed [traced], and always when Connor is added to a world
+    (rule 26a).
 23. **Level** is written as a whole number in `IDCTL_METERS_LEVEL`
     (font `14shdw.pft`, centred) [traced, data].
 24. **When they update**: after every stats change on Connor (anything
@@ -325,7 +326,50 @@ uses whatever the window holds [traced].
     complete" [manual] is this rule seen from outside: every hit changes
     health and renews the 1.5 s [inferred].
 26. **Level-up flame** `IDCTL_METERS_LEVELUP` (`flame14.pba`) starts
-    hidden; when it plays was not traced (likely on a level-up).
+    hidden. **It plays, with `LEVEL.AUD`, whenever the level number the
+    meters show changes** (traced 2026-10-22, Q149): each time the five
+    values are sent (rule 24) the panel compares the new level with the
+    one it shows; if they differ, the flame is shown and started again
+    from its first frame (timed on the real-time clock), and the panel's
+    own sound plays (`LEVEL.AUD`, the user's check). The same number
+    again does nothing. So it plays on a level-up (rule 30), and also
+    after `KQConner::setLevel` at the **next** stats change (rule 30a).
+    The values are also sent when Connor arrives in a world; whether the
+    panel's shown level is then still the old one (no flame) or empty
+    (flame and sound at every world start or load) was not traced
+    (check in the original: is `LEVEL.AUD` heard when a game starts or
+    a saved game loads?). How fast the flame plays, whether it repeats
+    and when it is hidden again: not traced. If the meters are hidden,
+    the level change makes them pop up as in rule 25 (traced).
+
+26a. **The experience sound `STATS.AUD`** (traced 2026-10-22, Q159;
+    the file confirmed by the user's check). It plays when the
+    experience percent is set (rule 22) and the new percent (0–100) is
+    **not 0** and **at least the last percent shown**. That "last
+    percent" starts at 0 when the program starts and is never reset,
+    not even by a world change or a load.
+    - **When the percent is set:** after a stats change in which the
+      experience number changed (any source: the stats event, a kill,
+      an item's built-in experience), and **every time Connor is added
+      to a world** (game start, arriving from another world, loading a
+      saved game: all five values are sent then, without the "only if
+      changed" test of rule 22).
+    - So: a gain that raises the percent plays it; a gain too small to
+      change the whole-number percent plays it too (equal counts), but
+      not while it is still 0 % (e.g. 20 experience at level 14,
+      threshold 81,920). A loss that lowers the percent is silent.
+      Health and the other stats alone never play it.
+    - **With a level-up** in the same change: the experience left over
+      is measured against the new, doubled threshold, so the percent
+      usually drops and only `LEVEL.AUD` plays. If the new percent is
+      still at least the old one, both play, `STATS.AUD` first.
+    - **Inferred, not checked in the original:** arriving in a world
+      (or loading) with experience above 0 % plays `STATS.AUD` once.
+    - **How:** the interface sound group (as `LEVEL.AUD` and the other
+      interface sounds), no position, volume 1.0; each play is a new
+      sound, so two can overlap [inferred]. Nothing checks `handsOff`, a
+      conversation or whether the meters are hidden. The meters pop up
+      (rule 25).
 
 ## Connor's stats as the panel shows them
 
@@ -351,6 +395,26 @@ uses whatever the window holds [traced].
     sends Connor a help event (the Daventry help popup about levels;
     not traced further) [traced]. The manual's "the experience points
     required are doubled until level 15, then fixed" matches [manual].
+    At most **one** level-up per stats change, even if the experience
+    is more than two thresholds (traced again 2026-10-22, Q149 e): the
+    extra stays as experience and the next stats change levels him up
+    again. Each item's built-in experience is its own stats change, so
+    temple 1's start-up items (`HearingHorn` +10,000, then
+    `DecipheringAmulet` +25,000) give two level-ups (1 → 2 → 3) with
+    their +5 / +2 / +1 each, before `setLevel 43` (B's reading is right).
+30a. **`KQConner::setLevel <n>`** (traced 2026-10-22, Q149 a) sets **only
+    the level number**. Health is not changed (maximum health is not
+    stored: it is always 10 × level), the other stats and the experience are not
+    touched; nothing is sent to the meters, no flame, no sound, no help.
+    The new level counts from the next stats change: health is capped at
+    10 × the new level, the threshold is the new level's (150,000 from
+    level 15 up), and the meters show the new number, which plays the
+    flame and `LEVEL.AUD` (rule 26). In every `conStart.cs` the
+    `KQStatsChangeRequestEvent` right after `setLevel` is that change.
+    The level-2 help comes only from a real level-up to 2 (rule 30).
+    With a wrong number of words it writes its usage line and does
+    nothing. Whether `$Testing` is true when a game starts on another
+    world: not traced.
 31. Equipment adds to stats 2–4 while worn (`inventory.md` rules 13–15);
     so the numbers on the slots are Connor's own stats, not the item's
     numbers.
@@ -587,7 +651,9 @@ uses whatever the window holds [traced].
    width 400 is inferred.
 2. ~~Whether the world clock stops behind the main menu.~~ It does
    (the user's check; rule 14).
-3. When the level-up flame plays (rule 26). (~~What the status icons'
+3. ~~When the level-up flame plays (rule 26)~~: answered 2026-10-22
+   (whenever the shown level changes); still open: its speed, repeats,
+   when it hides, and whether it plays at a world start or load. (~~What the status icons'
    hook-up / hook-down mean~~: answered in `ropeandhook.md` rule 7:
    `HookUp` at the foot of a rope, `HookDown` at the top, only with the
    rope carried and not while on the rope.)

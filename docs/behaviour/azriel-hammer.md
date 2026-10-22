@@ -60,6 +60,23 @@ slot item, bolt).
    - when `catch` ends: `handsOff` off, back to standing.
    - The state can't be left before `catch` has ended (then only to
      standing, moving, a Special list or dying).
+   - **The throw's `handsOff` keeps the panels and the pointer** (traced,
+     2026-10-22, Q148 e): it is the "pointer kept" form, which skips
+     everything a script's `handsOff 1` does to the screen: the bottom
+     bar stays, no spinning mask, the pointer is not hidden (so
+     characters still see him, `potions.md` rule 26). It only blocks
+     keys and clicks. When it is switched off after `catch`, the keys
+     still held are sent again (holding forward walks him off at once)
+     and the traps get a "moved" check, as at the end of any `handsOff`.
+   - **Requests refused during the throw** (traced, 2026-10-22, Q148 d):
+     Connor keeps **one** waiting request; each refused request replaces
+     the one before (the last one wins). When `catch` ends, the throw
+     asks for standing; the waiting request is applied **first**, in
+     place of standing, if the throw may go to it (standing, moving, a
+     Special list, dying). So a hit that takes him below 0 during the
+     throw makes him die right after the catch, and a script's Special
+     list plays then. The general rule for the waiting request is in
+     "Connor's waiting request" below.
 4. Only one hammer is in the air at a time (follows from rule 3: he
    can't click again until he has caught it).
 
@@ -100,7 +117,10 @@ slot item, bolt).
    first of:
    - **touching anything** its mask meets (objects, characters,
      buildings, …; Connor himself is ignored on the way out);
-   - **its distance passing `maxDistance`**;
+   - **its distance passing `maxDistance`**: the distance is counted
+     **before** the update's move; when the count passes `maxDistance`
+     the hammer turns back **without making that move** (it stays where
+     it was at the start of the update);
    - **reaching the floor grid** (at or below it after a move).
 8. **What a touch does on the way out** (traced), before it turns back:
    - the Dead City objects **`lever1`** and **`tmblrcyl`** (the lever and
@@ -118,19 +138,38 @@ slot item, bolt).
    - a building or other surface: no hit.
    It hits **one thing only**: the first touch turns it back.
 9. **Turning back and the way home** (traced): the hammer is put back at
-   its last position before the touch, its direction is **reversed**
+   its position **at the start of that update** (for all three causes:
+   a touch, the range, the floor grid), its direction is **reversed**
    (it flies back along the line it came, it does **not** home in on
    Connor), its counted distance restarts at 0 and its range for the way
-   back becomes **the distance it had flown out minus one update's
-   step** (speed ÷ 15). On the way back **only Connor** can stop it (its
+   back becomes **the distance it had counted minus one update's step**
+   (speed ÷ 15). Because the count already includes the step of the
+   turn-back update, this is exactly the distance from its start to the
+   point where it was put back (corrected 2026-10-22, Q148 a). On the way back **only Connor** can stop it (its
    mask becomes Connor's type alone). The way back ends at the first of:
    - **touching Connor**;
-   - its distance passing that range (so it stops about one step short
-     of where it started, near his hand);
+   - its distance passing that range (counted the same way, before the
+     move): it flies back **to its start point** and is caught in the
+     update after it gets there (corrected 2026-10-22: not one step
+     short). With rounding in the sums it may be caught one update
+     earlier, one step short; either is fine;
    - reaching the floor grid.
    At that moment the hammer is **removed** and Connor is told it has
    come back: he plays `catch` (rule 3). So he always gets it back, even
    if it never reaches him.
+   **Worked example** (Daventry: speed 24,000, `maxDistance` 15,000, one
+   step 1,600 at 15 updates per second): the count passes 15,000 in the
+   10th update (16,000), so it turns back after 9 moves at **14,400**;
+   range back **14,400**; 9 moves back to the start, caught in the 10th:
+   **20 updates, 1.33 s** from leaving the hand to the catch. Dead City
+   (12,000): turns at 11,200, 16 updates, 1.07 s. Swamp (30,000 /
+   20,000, step 2,000): turns at 20,000, **22 updates, 1.47 s**, which
+   fits the user's stopwatch (about 1.5 s) better than the old 1.33 s.
+9a. **How the model is turned** (traced, data; Q148 b): `hammer.kqs`
+   has two identical still frames and no movement, and the flight adds
+   no spin. The model is turned to point **along its flight** when it
+   leaves (as a bolt), and turned to point along the reversed direction
+   at the turn-back, so it simply flips round once.
 10. Daventry has `prhammer.kq` too (data), so the hammer works there if
     a script gives it (none does).
 
@@ -146,8 +185,32 @@ slot item, bolt).
 | Dead City | speed 24,000, range 12,000, +30, 0–300 | data |
 | collision | type 1, mask 0x221F out; Connor only back | traced |
 | turns back at | first touch, `maxDistance`, floor grid | traced |
-| way back | reversed line, range = way out − speed/15 | traced |
-| caught | touching Connor, end of the way back, or floor grid | traced |
+| way back | reversed line, range = count − speed/15 = distance to the turn-back point | traced |
+| caught | touching Connor, end of the way back (at its start point), or floor grid | traced |
+| round trip | Daventry 20 updates (1.33 s), Dead City 16 (1.07 s), Swamp 22 (1.47 s) | traced, data |
+| model | no spin; points along its flight, flipped at the turn-back | traced, data |
+
+## Connor's waiting request (traced, 2026-10-22)
+
+Applies to every state of Connor, not only the throw; written here
+because Q148 needed it.
+
+- When a state change is asked for and the current state refuses it,
+  it is kept as Connor's **waiting request** (one slot, with its
+  movement-list name if any). A later refused request **replaces** it,
+  except as below.
+- When a new request comes while one is waiting, the waiting one is
+  tried **first**: if the current state may go to it, it is applied and
+  the new one becomes the waiting one. This is skipped (the waiting one
+  is dropped and the new one taken instead) when the new one is one of
+  the "strong" states and the waiting one is not. Strong states:
+  weapon swap, Special list, talk, rock throw, hammer throw.
+- A waiting request is also tried again whenever a movement ends while
+  Connor is standing (and in one other place not identified). Nothing
+  else retries it, so in
+  the hammer throw it is applied at the catch's end (rule 3).
+- A Choice state set by a script overrides all of this (Q155,
+  `characters.md`).
 
 ## Data used
 
@@ -197,9 +260,8 @@ Connor, range, floor grid) and the time from throw to catch.
 **Checked by the user in the original (2026-10-20):** 1, 3, 4 and 5 as
 described; 2 as described (the distance can't be judged by eye; the
 round trip seemed to take about **1.5 s** after the hammer leaves his
-hand, "with a grain of salt": by the files it is 1.0 s in Dead City
-(12,000 out and back at 24,000) and 1.33 s in Swamp (20,000 at
-30,000)). Also: no throwing while jumping, falling, landing or
+hand, "with a grain of salt": by the files it is 1.07 s in Dead City
+and 1.47 s in Swamp, rule 9's worked example). Also: no throwing while jumping, falling, landing or
 stumbling, not queued (rule 2); the hammer leaves from in front of him
 (rule 5). 6: see Do not reproduce (not reachable in normal play).
 
@@ -223,5 +285,8 @@ stumbling, not queued (rule 2); the hammer leaves from in front of him
    (Do not reproduce).
 4. ~~The round-trip time~~: the user timed it **in Swamp** by hand with
    a stopwatch (about 1.5 s, a couple of hundred ms either way); the
-   files give 1.33 s there (20,000 out and back at 30,000), which is
-   within that error. Settled: use the files.
+   files give 1.47 s there (rule 9's worked example; first written as
+   1.33 s, 20,000 out and back at 30,000), which is within that error.
+   Settled: use the files.
+5. ~~Q148 (a), (b), (d), (e)~~: answered 2026-10-22 (rules 3, 7, 9,
+   9a; "Connor's waiting request"). (c) was settled by the user's check.

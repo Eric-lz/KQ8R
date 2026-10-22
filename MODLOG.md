@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Study (A): the blocking questions Q153–Q159, plus Q146, Q148, Q149
+
+**Changed:** Docs only. `docs/behaviour/objects.md` ("Loops" rules 2, 4; "Loops that move the whole object" rule 6: which frame a phase shows, the 0.0 cue), `anim-scripts.md` (new rules 33–37: `KQObject::setScript`, `loadObject`, `sendEvent @` in cues, `random`, the ravens), `characters.md` (new sections: Connor's Choice state, `StateChange` messages; a Do-not-reproduce item), `interface.md` (rules 22, 26, 26a, 30, 30a: the level-up flame and `LEVEL.AUD`, `STATS.AUD`, `setLevel`), `azriel-hammer.md` (rules 3, 7, 9, 9a, "Connor's waiting request"), `potions.md` rule 26, short pointers in `traps.md` rule 15 and `talking.md` rule 13. `QUESTIONS.md`: Q146, Q148, Q149, Q153–Q159 marked answered.
+**Why:** Session B's questions were blocking the Castle's key puzzle (Q153), the roof jump scene (Q155–Q157), the tomb spriggan (Q154), the ravens' caw (Q158) and the experience sound (Q159).
+**Tested how:** Traced in `Mask.exe` with Ghidra (three parallel study forks plus this session); addresses and scratch notes in `re/` (untracked). Checked against the data files (frame counts, scripts).
+**Result:** Main answers: the frame for phase p is floor(p × frames + 0.001), so the King's portrait at 0.99 shows its last (pushed) frame, as the user saw (our round() rule was wrong for every repeating object). Choice: forward/back picks the point nearest to a probe 200 ahead/behind him, `DoChoice` gets the triple's number. `StateChange` `$4` = old state, `$5` = new; 32 = weapon swap ended. `setScript` calls the new script's `Init` at once. `STATS.AUD` plays when the experience percent is set, not 0 and not lower than the last shown. `setLevel` sets only the number. The hammer's range back is the full way out (Swamp round trip 1.47 s, fits the user's 1.5 s).
+**Still broken / not tested:** Nothing checked in the running original this time. Marked "inferred" in the notes: corpses from `loadObject` not solid; `STATS.AUD` once at every world arrival / load; a death lost in a Choice. Not traced: the level-up flame's speed and length, whether it plays at a world start, `$Testing`.
+**Next:** B: build Q153 (frame rule), Q155–Q157 (roof scene), Q154, Q158, Q159. A: the remaining non-blocking questions (Q112, Q125, Q126, Q136, Q140, Q143–Q145, Q150–Q152), under way.
+
 ## 2026-10-22 Q159 (a): the user confirms STATS.AUD is the experience sound
 
 **Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q159 marked partly answered.

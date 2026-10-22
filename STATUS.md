@@ -727,10 +727,16 @@ M6 has started with the Rope and Hook (6a).
 - Inside `world-change.md`: three small points (not blocking):
   left-world variables in memory, the rope / movement list after
   arrival, `worldState.kq`'s events.
-- For A (asked 2026-10-22 by B, **blocking the Castle's key puzzle**):
-  **Q153** (which frame a repeating loop shows at phase p: the King's
-  portrait `stop2` at 0.99 shows frame 0 by our rule; the user sees it
-  stay pushed in the original).
+- **For B (answered by A 2026-10-22, not built yet):** Q153 (frame =
+  floor(p × frames + 0.001): the King's portrait stays pushed;
+  `objects.md`), Q154 (`setScript` calls `Init`), Q155 (Choice state)
+  and Q156 (`StateChange`) in `characters.md`, Q157 (`loadObject`),
+  Q158 (`sendEvent @`, `random`, the ravens) in `anim-scripts.md` rules
+  33–37, Q159 (`STATS.AUD`, `interface.md` rule 26a), Q149
+  (`setLevel`, the level-up flame and `LEVEL.AUD`, `interface.md` rules
+  26, 30a), Q148 (the hammer's turn-back, `azriel-hammer.md`), Q146
+  (`potions.md` rule 26). Small parts still open: the flame's speed and
+  length; whether `LEVEL.AUD` / `STATS.AUD` play at a world start.
 - For A (asked 2026-10-22 by B, 6e, not blocking): **Q151** (the popup's
   first highlighted button; Enter repeating; c: the buttons' places; d, e:
   the text placement and the buttons' looks, the user's looks at the
@@ -740,16 +746,6 @@ M6 has started with the Rope and Hook (6a).
   Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
   marks unused column 460; c: icons before or after the colour match;
   d: what the mini-map slot blinks).
-
-- For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
-  `KQConner::setLevel` does; b: the level-up flame's speed and length;
-  d: `lvlup.pba`; e: built-in pickup experience of start-up items; c
-  answered by the user: `LEVEL.AUD`).
-
-- For A (asked 2026-10-21 by B, M6 6b, not blocking): **Q148** (a: where
-  the hammer turns back at its range or the ground; b: how its model
-  turns in flight; c: answered by the user's check and built; d: requests during the
-  throw; e: whether the throw's handsOff moves the panels).
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only
   the flames' 12,100 (traced and built) vs the user's ~11,000 (open

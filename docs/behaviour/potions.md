@@ -168,6 +168,18 @@ red.
     The same lowering already happens **during cutscenes** (`handsOff`
     with the pointer hidden), **while Connor talks**, and **while he is on
     the rope** [traced]; Invisible adds a fourth case.
+    Exactly (traced 2026-10-22, Q146): the lowering is applied while
+    **any** of these holds: the Invisible potion runs; `handsOff` is on
+    **with the pointer hidden**; Connor is in his **talk state** (a
+    conversation with a partner, `conversation.md`); Connor is in his
+    **rope state**. "While Connor talks" means only the talk state:
+    his remarks and spoken lines outside a conversation (`talking.md`)
+    don't change his state and don't hide him. "`handsOff` with the
+    pointer hidden": a script's `handsOff 1` (with or without its second
+    number) always hides the pointer, and so do `walkTo` / `runTo`'s own
+    `handsOff`; so all of them hide him. The hammer throw's `handsOff`
+    keeps the pointer (`azriel-hammer.md` rule 3) and does **not** hide
+    him. Other built-in `handsOff` uses were not all checked one by one.
 27. Attacking does **not** end it [traced: rule 15]. A character he hits
     is alarmed by the hit (`fighting.md`), but then looks for him at the
     false place [inferred from rule 26]. A character in its "hit" state

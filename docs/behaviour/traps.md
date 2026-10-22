@@ -154,7 +154,9 @@ never blocks anything.
     this: it sends itself `Cue 10` to switch running back on.
 15. Traps also pass on `TalkComplete` (when a conversation they started
     ends) and `StateChange` (a monster's state change they asked to hear
-    about) to their script. Those belong to M4/M5.
+    about) to their script. Those belong to M4/M5. `StateChange`'s
+    arguments (`$4` old state, `$5` new state) and the state numbers:
+    `characters.md` rules 14–17.
 16. Scripts commonly turn a trap off for good with
     `KQObject::collision <trap> -4` (removes bit 4 from its mask, so
     Connor no longer counts; `clifTrap.cs` does it on its first `On`).

@@ -796,6 +796,112 @@ Words used here:
       `lightTerrain`). The shipped maps already contain them. **In play it
       does nothing**: it has nothing to do with the live shadows above.
 
+### Connor's Choice state (traced 2026-10-22, Q155)
+
+Used by Daventry's roof jump (`rooftrap.cs` with `sprgnbow`), Barren's
+basilisk (`bastrap.cs`, `bastrap1.cs`) and Ice World's orcs
+(`killorc.cs`, `choice.cs`). The player picks one of two or three
+directions by pressing forward or back while facing one of them.
+
+1. **The command:** `KQMonster::setState Connor Choice <list>` must be
+   exactly four words, so the list has no spaces (commas only). Other
+   word counts write "Choice requires string argument" and do nothing.
+   Only Connor has this state.
+2. **The list:** a script name, then triples `<number>,<x>,<y>`
+   (Daventry: `rooftrap.cs,0,220000,183200,1,230000,183200`).
+3. **Entering is forced.** The Choice state is remembered as a
+   "forced" state and entered **at once, whatever state he is in** (an
+   unfinished jump is ended first). Until a choice is made, any other
+   state request while he is not in Choice sends him back into Choice
+   instead (the request is kept as his waiting request,
+   `azriel-hammer.md` "Connor's waiting request").
+4. **On entering:** his held movement, turn and camera keys are
+   cleared (the same reset `handsOff 1` does); `Stop` plays at once;
+   then the script is called **at once** (not queued) with `$1` =
+   `Connor`, `$2` = **`StartChoice`**.
+5. **Only after that script has run** are the points measured, from
+   where Connor now stands. So `move Connor 2 x y z 0 0 0` in
+   `StartChoice` first puts him on his spot. (Flags 2: the position is
+   absolute, the turn is **added**; with 0 0 0 he keeps his heading.)
+6. **The points:** the level distance from Connor to the **first**
+   point is the radius R. Every other point is moved along its own
+   direction from Connor until it is also R away, so all points lie on
+   one circle round him. Daventry: R = 8,239; point 1 becomes about
+   (236,478, 183,277).
+7. **Choosing:** in each update, a **forward or back key press** makes
+   the choice. A probe point is taken 200 units ahead of Connor
+   (forward) or behind him (back), and **the point nearest to the probe**
+   is chosen (on a tie, the earlier one in the list). As all points are
+   on one circle, this is the point whose direction is closest to the
+   way he faces (forward) or faces away from (back). Daventry, facing
+   −1.57 after `StartChoice`: forward chooses 0 (west, toward the
+   spriggan), back chooses 1 (east, the way down).
+8. **Meanwhile:** the turn keys turn him on the spot (the `Left` /
+   `Right` pivots); with no key he plays `Stop`. He never walks in this
+   state. **Nothing is drawn**: no arrows, no pointer change, no
+   caption; the camera is whatever the script sets.
+9. **`StartChoice` again:** each time one of his movements ends while
+   in Choice (his pivots and `Stop` repeat, so this is rare), without
+   measuring the points again; and each time he re-enters Choice, which
+   does measure them again.
+10. **`DoChoice`:** just before it, the forced state is cleared, his
+    waiting request is **thrown away**, and the choice is marked made.
+    Then the script is called at once with `$1` = `Connor`, `$2` =
+    **`DoChoice`**, `$3` = **the number from the chosen triple** (not
+    its place in the list).
+11. **Requests before the choice:** the state accepts only a weapon
+    swap, a rock throw and the hammer throw. Everything else (a script's
+    walk, a jump, talk, dying) is refused, kept as the waiting request
+    and then thrown away at `DoChoice` (that a death is really lost
+    there is inferred). A swap during Choice ends by asking for
+    standing, which sends him back into a fresh Choice (`StartChoice`
+    again, points measured again). Slot clicks and the Delete / Alt keys
+    can start such a swap, as when standing [inferred from the shared
+    handling, not tested in the running game].
+12. **After the choice** any request is accepted. **The state does not
+    end by itself:** the script must change his state (`walkTo`,
+    `setDoMode`, a Special list…). Daventry: 1 → `walkTo 230000 183200`;
+    0 → Cue 10 to `sprgnbow`, whose `setDoMode` starts the swap (rule 17
+    below).
+13. Escape and the main menu are not affected by this state [inferred].
+    `rooftrap.cs` runs `handsOff 0` right after entering, which sends
+    the keys still held again, so a key held from before can make the
+    choice at once [inferred].
+
+### `StateChange` messages (traced 2026-10-22, Q156)
+
+14. **`KQMonster::stateChangeNotify <recipient> <character>`** (exactly
+    three words; the watched one, the second, must be a character,
+    Connor included; `talking.md` rule 13) registers the recipient
+    (`stateChangeNotify sprgnbow Connor`: `sprgnbow` hears Connor's
+    changes). The recipient can be any object with a
+    script (characters, traps, the character itself: `bossprig`
+    registers for itself). `KQMonster::clearStateChangeNotify` removes
+    it.
+15. **On every state change** of a watched character, each recipient's
+    script gets `$1` = the recipient's own name, `$2` = **`StateChange`**,
+    `$3` = the changing character's name, **`$4` = the old state**,
+    **`$5` = the new state**, as whole numbers. It is sent after the new
+    state's start has run, **through the event queue with no delay**
+    (handled in the same pass, `anim-scripts.md` rule 8), not at once.
+16. **The state numbers:** Unborn (Birth) 1, Wait 2, Move 4, **Die 8**,
+    **SwapWeapons 32**, Jump 64, Push 128, Special 256, ThrowRock 512,
+    Talk 1,024, Tile 2,048, rope 4,096, hammer throw 8,192, Portal
+    32,768, Choice 524,288. So `$4 == 32` means **a weapon swap just
+    ended** (the data's own comments say "finished swapping weapons";
+    the comment "starting special state" next to it is wrong), `$5 == 8`
+    means "started dying", `$4 == 256` (19 scripts) a Special list ended,
+    `$4 == 1` Birth ended, `$4 == 4096` the rope climb ended.
+17. **The roof scene with the axe** (Daventry `sprgnbow.cs`): after
+    `DoChoice 0`, Cue 10 registers `sprgnbow` for Connor and runs
+    `setDoMode 0`, which asks for standing (accepted: the choice is
+    made). Choice → Wait sends `$4` = 524,288 (ignored), Wait → swap
+    sends `$4` = 2 (ignored); when the swap's last movement ends, swap →
+    Wait sends **`$4` = 32**: the script clears the notify and sends
+    itself Cue 15, the kill cutscene. So the cutscene starts **when the
+    swap ends**. If the mode is already right, the script's own call
+    `StateChange 0 32` fakes the same message.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -866,6 +972,11 @@ Words used here:
   during a line: the next lip-sync code replaces that movement at once.
 
 ## Do not reproduce
+
+- **`DoChoice` fired every update** (Q155): after the choice is made and
+  until the script changes his state, a held forward or back key calls
+  `DoChoice` again in every update in the original, with no guard. Call
+  it once per Choice.
 
 - **Unknown states for a character** (`setState <monster> Jump`, `Push`,
   …): the original replaces its state by an empty one and the character

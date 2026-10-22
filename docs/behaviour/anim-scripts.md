@@ -726,6 +726,97 @@ duration 0 the same way (B's model reader has the duration).
     - If the walk's request is replaced by another request before the
       swap ends (only the latest pending request is kept), the walk is
       lost and its cue never comes (rule 26) [inferred].
+33. **`KQObject::setScript <name> <script.cs | none>`** (traced
+    2026-10-22, Q154). Works on **any object with a script slot**:
+    plain objects, characters, doors, animated objects, items,
+    clickables. The object is found by name (or by number id) like the
+    other object commands.
+    - The new script is called **at once**, inside the command, with
+      `$1` = the object's name and `$2` = **`Init`**, the same call an
+      object gets when it is added to the world.
+    - The old script is told nothing. It already had its own `Init` at
+      load, and nothing undoes what that did.
+    - `none` removes the script, with no call.
+    - An unknown name does nothing and writes nothing; a wrong number
+      of words writes the usage line.
+    - An object with no name first gets an automatic one
+      (`NoName<n>`).
+    - The script name is kept as the object's ordinary `script` key, so
+      it is saved with the object wherever the object's state is saved
+      (whether a left world keeps its objects is `world-change.md`'s
+      question).
+    - Daventry (`newWorld.cs`): `sprigan` and `bossprig` get their own
+      scripts right after `loadKQ monsters.kq`. So each gets **two**
+      `Init`s: first its type's script's (`sprgnbow.cs`), then the new
+      one's. Ours must call the new script's `Init` too.
+34. **`loadObject <name> <file> [x y z [rx ry rz]]`** (traced
+    2026-10-22, Q157) makes a new object in the world.
+    - **The words after the file:** up to six numbers: the position,
+      then three turn angles; missing numbers count as 0. Fewer than two
+      words (a name and a file) writes the usage line.
+    - **`$KQObject::loc`** (from `KQObject::getLoc`) holds all six
+      numbers: the position and the object's three turn angles.
+      `$KQObject::locOnly` holds only x y z. So `loadObject deadsprg
+      sp_cadth.kqs $KQObject::loc` puts the corpse where Connor stands,
+      **turned the way he faced** at that moment (in `sprgnbow.cs` he is
+      turned 1.57 rad on the next line, after the corpse is placed).
+    - **Heights** (inferred, not checked): a z of exactly −1 or −2 is
+      replaced by a ground height, as in other placings.
+    - **What kind of object:** picked by the file's extension.
+      `.kqs` or `.dts`: a **plain object** with no animation player.
+      `.dig`: a building (not studied further). Anything else: the line
+      "unknown object '<extension>'" and nothing is made.
+    - **The frame drawn:** every shape that the shipped scripts load
+      this way (`sp_cadth`, `sp_dgdth`, `ap_mtrps`, `c_kodeth`,
+      `grateded`) has a single pose [data], so it is drawn still.
+    - **The name:** used as given. A name starting with `@` gets an
+      automatic name (`NoName<n>`). Nothing checks for a duplicate name.
+    - **Collision:** type 0x41, but no collision shape is built (no
+      collider setting) [inferred from the defaults], so it is **not
+      solid and can't be clicked** in practice. The same as the corpses
+      of `fighting.md` rule 32, which are made the same way.
+    - **No script**, so no `Init`; no sound.
+    - **Saving:** an ordinary world object, very likely saved like the
+      others [not traced].
+
+35. **`sendEvent` in a movement's cue, and `@`** (traced 2026-10-22,
+    Q158 a). A cue's text is `sendEvent <target> <Event> <numbers…>`:
+    **no delay word** (unlike the script command); the event is queued
+    for the current time, so it is handled right after the update
+    (rule 8). If the text contains `@`, everything before the `@` is
+    dropped and the `@` is replaced by **the name of the object playing
+    the movement**; the rest is read the same way. So `cue0=0.000000
+    sendEvent @ KQCueEvent 10 0` in `raven.anm` sends `Cue 10 0` to the
+    raven itself, and `sendEvent @ KQMoveEvent 3 …` moves the object
+    playing it. The target is looked up by name, so with two objects of
+    the same name the first one found gets it [inferred].
+36. **`random [min] [max]`** (traced 2026-10-22, Q158 b) puts a whole
+    number in `$Console::Return` (as other commands' results):
+    - `random` alone: 0 to 100; `random <max>`: 0 to max; `random <min>
+      <max>`: min to max. Four or more words write the usage lines (the
+      result is then 0, inferred).
+    - The numbers are read as whole numbers (anything after a decimal
+      point is ignored).
+    - Result = min + **round**(u × (max − min)), u even between 0 and 1.
+      So both ends are possible but come up **half as often** as each
+      value between: `random 0 5` gives 0 and 5 about 10 % each, 1 to 4
+      about 20 % each.
+37. **Daventry's ravens** (data with rules 35, 36 and `objects.md`
+    "Loops" rule 4; traced 2026-10-22, Q158 c). `raven.anm` `stop`
+    (`Ravnstp`, 46 frames over 3.0 s, repeating, can be cut short) has a
+    cue at 0.0 that sends the raven `Cue 10 0`; `ravensrh.cs` /
+    `ravencnr.cs` then run `random 0 $Daventry::Raven::cawInterval` (5)
+    and, if the result is 1 (about 20 %), `KQMonster::setState $1
+    Special caw`.
+    - The cue fires once per pass, one update after the wrap (a pass:
+      46 updates, about 3.07 s at speed 1).
+    - Their `stop` usually does not start at 0: characters start
+      `Stop` at a random frame with speed 0.9–1.1 (`characters.md`,
+      character flags 0x10 by default). So the first roll comes at the
+      first wrap (or at once if the random frame is 0). After `caw`
+      ends, standing starts `Stop` at a random frame again.
+    - On average a raven caws about every 15 s plus the caw's own length
+      [inferred from these numbers].
 
 ## Numbers and units
 

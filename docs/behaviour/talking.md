@@ -185,7 +185,8 @@ Words used here:
     - every object registered with **`KQMonster::stateChangeNotify
       <recipient> <issuer>`** (the recipient's script, a moment later:
       the message is queued, not run at once). Traps can be recipients
-      too (`traps.md` rule 15). `KQMonster::clearStateChangeNotify
+      too (`traps.md` rule 15); its arguments and the state numbers:
+      `characters.md` rules 14–17. `KQMonster::clearStateChangeNotify
       <recipient> <issuer>` removes it. That the group passes the message
       to each member is inferred from the data (`wizbook.cs` registers
       for Connor and reacts to his line 1000/63/0/0/1), not traced in the

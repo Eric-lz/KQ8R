@@ -57,7 +57,9 @@ All traced in `Mask.exe` unless marked otherwise.
 2. **`loop=<model> <sequence> <a> <b> <c> <d>`** is read as two words, two
    decimal numbers and two whole numbers:
    - `a` = **start position**, a fraction of the sequence from 0 to 1.
-     Frame shown = `round(a × frameCount)`. For a sequence that does not
+     Used exactly as written. Frame shown = **floor(a × frameCount +
+     0.001)** (cut down, not rounded; corrected 2026-10-22, Q153: the
+     same rule as during play, rule 6). For a sequence that does not
      repeat, anything at or past the end shows the last frame (so 1.0 =
      last frame).
    - `b` = **playing speed**: 1 = forward at normal speed, −1 = backwards,
@@ -148,6 +150,13 @@ All traced in `Mask.exe` unless marked otherwise.
    a cue at 1.0 fires too (it lies in the second range). Without a wrap,
    backwards or forwards, the range is from the smaller phase to the
    larger one.
+   **A cue at exactly 0.0 on a forward repeating loop** (traced
+   2026-10-22, Q158 c): a forward wrap sets the phase to exactly 0
+   (rule 6), so that update's second range is from 0 to 0 and holds
+   nothing. The cue at 0.0 fires in the **next** update (its range starts
+   at 0): once per pass, one update (1/15 s) after the wrap. A movement
+   that starts at phase 0 fires its 0.0 cue in its first update. A
+   movement with speed 0 never fires a cue at 0.0 (its range is empty).
    **One difference (forward wraps only):** if a transition is waiting
    for a phase that lies inside either part of the wrap, **no cues fire
    in that update**; the transition is taken instead. A backward wrap
@@ -158,8 +167,27 @@ All traced in `Mask.exe` unless marked otherwise.
    follows the object** (it is the object's box at its current
    placement); Q33 a's "boxes are fixed" means the box's size and shape
    never change, not its place.
-6. Frame shown during a repeating loop: not traced separately; keep B's
-   rule (round(phase × frames) mod frames).
+6. **The frame shown for a phase p** (traced 2026-10-22, Q153; replaces
+   the earlier "keep B's rule", which was wrong): for a sequence of N
+   frames, **frame = floor(p × N + 0.001)**: cut down, with a tiny
+   allowance of a thousandth of a frame, never rounded to the nearest.
+   The same for repeating and play-once loops, forwards or backwards,
+   at the start and during play. No blending between frames: the frame
+   drawn is the loop's first sequence + that whole number.
+   - **At or past the end:** repeating: when the frame would reach N it
+     becomes 0 and the phase is set to **exactly 0**; what went past 1
+     is thrown away, not carried into the next cycle. Play-once: frame
+     N − 1, phase held at 1.
+   - **Below 0** (backwards): repeating: last frame, phase (N − 1)/N;
+     play-once: frame 0, phase 0.
+   - **Speed:** play-once moves 1/duration per second; repeating moves
+     (N − 1)/(N × duration) per second, so one cycle takes
+     N × duration/(N − 1). Duration 0: the phase never moves.
+   - **Example, the King's portrait** (Castle, `kingart.cs` `stop2` =
+     `kingart .99 0.0 1 1` on the 46-frame `kingart.kqs`): floor(45.54 +
+     0.001) = **frame 45, the last (pushed) frame**, held there (speed
+     0). Matches the user's check.
+   - `checkedRoundingBug=1` in `.anm` files is never read by the game.
 7. **User's check (2026-10-13):** our viewer already shows the three
    rolling rocks correctly. B's way (steps chained from the phase, jump
    back at the wrap) and the game's way (steps added up, reset to the
