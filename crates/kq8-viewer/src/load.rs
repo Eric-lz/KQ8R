@@ -2247,6 +2247,9 @@ impl kq8_data::world_script::Host for Placer<'_> {
             return None;
         };
         let Some(i) = self.items.index(name) else {
+            if command == "kqobject::setscript" {
+                return self.set_character_script(name, value, words, at);
+            }
             self.item_lines.push(format!("{at}: {}: not an item; not run at load", words.join(" ")));
             return None;
         };
@@ -2368,6 +2371,28 @@ fn connor_inventory(file: &[kq8_data::kq_text::Section], connor: &kq8_data::kq_t
 }
 
 impl Placer<'_> {
+    /// `KQObject::setScript <character> <file>` in a start-up script
+    /// (Daventry's `newWorld.cs`: "sprigan by knights tomb is in
+    /// monsters.kq but needs a special cs file"): the character placed
+    /// so far under that name runs `<file>` from now on (`none` removes
+    /// it). **From the data**, no behaviour note (Q154).
+    fn set_character_script(&mut self, name: &str, value: &str, words: &[String], at: &str) -> Option<String> {
+        let script = (!value.eq_ignore_ascii_case("none")).then(|| value.to_string());
+        let mut found = false;
+        for m in self.monsters.iter_mut().filter(|m| m.name.eq_ignore_ascii_case(name)) {
+            m.script = script.clone();
+            found = true;
+        }
+        for a in self.animated.iter_mut().filter(|a| self.placed[a.placed].0.name.eq_ignore_ascii_case(name)) {
+            a.script = script.clone();
+            found = true;
+        }
+        let line = if found { format!("{at}: {}: character script now {script:?}", words.join(" ")) } else { format!("{at}: {}: not an item or a character; not run at load", words.join(" ")) };
+        self.item_lines.push(line.clone());
+        self.character_lines.push(line);
+        None
+    }
+
     /// A shape drawn where the game puts it (a corpse, a bolt; `fighting.md`
     /// rules 32, 36), loaded once into `corpse_shapes`.
     fn load_corpse_shape(&mut self, shape: &str, who: &str) {

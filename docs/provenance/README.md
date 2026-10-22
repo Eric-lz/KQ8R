@@ -803,6 +803,7 @@ Replaces the stand-ins in the 2i table above (which movements lean, the end valu
 | --- | --- | --- |
 | The start-up scripts run `KQMonster::inventory`, `give`, `KQObject::setScript`, `setDontLook` (and `setHidden` on items); `$NewInvItem` set after a make | `items.md` rule 9; `objects.md` "Where a world's objects come from" (the start-up scripts run line by line) | Unit test; Daventry: 35 item lines, 22 items (21 from `WorldInv.cs`, `BirthdaySuit` hidden from `newWorld.cs`) |
 | One reader for `KQMonster::inventory` / `give` lines, used at load and while playing | Our code structure | Unit tests (3e-2) |
+| Fix 2026-10-22: a start-up `KQObject::setScript <character> <file\|none>` replaces the script of the character placed under that name (`Placer::set_character_script`) | **From the data** (Daventry `newWorld.cs` line 166's comment: the tomb's spriggan "needs a special cs file"); no behaviour note, **Q154** | Viewer: `items.log` "character script now Some("sprigan2.cs")"; killing `sprigan` runs `sprigan2.cs`, then `knight.cs` Cue 10 → `birthx` → speech → `TalkComplete` |
 | Lines inside `if` blocks at load are run anyway (the start-up runner does not evaluate `if`) | Same as `loadKQ` (M1 3c) | Daventry, Swamp, Gnome, DeadCity: 0 such item lines |
 | z −1 / −2 at load → floor / surface height | `objects.md` Q17 rule 2 | Daventry: 8 mushrooms at −1 → 7,650 and 13,770 |
 | Drawn with the type's shape at its place and turn; nothing else moves it | `items.md` rules 1, 5 | Not checked by eye yet |

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: the ghost knight appears when the tomb's spriggan dies
+
+**Changed:** Viewer `load.rs` (`Placer::set_character_script`): a start-up `KQObject::setScript <name> <file>` on a character (not only an item) replaces its script. QUESTIONS **Q154** (built from the data, no note). Provenance row.
+**Why:** The user: killing the bow spriggan in front of the hero's tomb never started the knight's scene. `newWorld.cs` gives that spriggan `sprigan2.cs` (and `bossprig` `bossprig.cs`) right after `loadKQ monsters.kq`; we only did this for items, so it ran its type's `sprgnbow.cs` and never sent the knight his cue.
+**Tested how:** `kq8-viewer --world Daventry --frames 3000 --sound off --command "move Connor 0 226146 306500 -1 0 0 3.1416",5 --console "kill sprigan",30`; `items.log`, `doors.log`, `talk.log`.
+**Result:** Load: "character script now Some("sprigan2.cs")" (and `bossprig.cs`). Update 123: `sprigan2.cs sprigan Die Normal` (map icon, +75 experience, handsOff); update 153: `knight.cs Knight Cue 10` (camera placed, `checkDistance tombdor2 … 3460 <= 3500: 1`, Connor placed at the tomb, `birthx` with `Herobrth.aud`); update 182: the knight's line (A0RS0700.061, 13.7 s, "Hark, fellow Champion…"); update 397: `TalkComplete` → `Hero::Met 1`, the camera follows Connor, handsOff 0.
+**Still broken / not tested:** Not looked at or listened to. Killed with the console, not in a real fight (the same death path). The knight's status lines say "Connor 100027 away" (not looked into). `setScript` on a character while playing is still "not tracked".
+**Next:** The user's check; A: Q154.
+
 ## 2026-10-22 Fix: the axe can break the hero's tomb door
 
 **Changed:** `kq8-core` `fight.rs` (`object_at`): doors with a script are also found when Connor's swing (or a bolt) hits its target. Unit test `connor_s_hit_on_a_door_runs_die_below_0` (active.rs). Provenance row.
