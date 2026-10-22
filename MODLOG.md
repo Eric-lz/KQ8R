@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 The roof jump on the bow spriggan: Q155–Q157 (not fixed)
+
+**Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q155 (Connor's `Choice` state), Q156 (`StateChange` messages and their state numbers), Q157 (`loadObject`).
+**Why:** The user: the graveyard cutscene where Connor jumps from the roof onto the bow spriggan doesn't work. No behaviour note covers what it needs, so it is not built from guesses.
+**Tested how:** `kq8-viewer --world Daventry --frames 2000 --sound off --no-ai --command "move Connor 0 228300 183200 12500 0 0 -1.57",5`; `traps.log`.
+**Result:** Update 7: `roofTrap` fires, `rooftrap.cs On` runs (Connor and the camera placed, `walkstopright`). Update 30: Cue 1 reaches `KQMonster::setState Connor Choice rooftrap.cs,0,220000,183200,1,230000,183200`, which is a **stub** (nothing done), then `handsOff 0`: Connor just stands on the roof with control back; no `StartChoice` / `DoChoice` ever comes. After the choice, `sprgnbow.cs` also needs `StateChange … 32` from Connor (our notify relays only `TalkComplete`) and `loadObject` (not built).
+**Still broken / not tested:** The roof scene (and Barren's basilisk, Ice World's orcs, which use the same state).
+**Next:** A: Q155, Q156, Q157; then B builds the Choice state.
+
 ## 2026-10-22 Fix: the ghost knight appears when the tomb's spriggan dies
 
 **Changed:** Viewer `load.rs` (`Placer::set_character_script`): a start-up `KQObject::setScript <name> <file>` on a character (not only an item) replaces its script. QUESTIONS **Q154** (built from the data, no note). Provenance row.
