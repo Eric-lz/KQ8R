@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Measurement: memory and read times over all worlds (no code change)
+
+**Changed:** Docs only: STATUS ("Allocator": the numbers and the planned comparison).
+**Why:** The user asked how much memory we use, whether it grows as the game goes on, and about allocators (wants Linux later).
+**Tested how:** `kq8-viewer --world Daventry --frames 30000 --sound off` with `--console "goworld <World>",30` for DeadCity, Swamp, Gnome, Barren, IceWorld, Temple1–4, Daventry, CastleD, Daventry, CastleD, Daventry (8.5 minutes); `world.log`, `viewer.log`.
+**Result:** Working set 1.8 GB fresh in Daventry, 2.0–2.8 GB in the other worlds, 3.0–3.1 GB in Daventry after the tour (private 4.6–4.9 GB), then ~40 MB more per return. Daventry's read: 3.4 s fresh, 9.4–9.8 s after the tour. What crosses worlds (journey, kept variables, gone lists, maps) is kilobytes.
+**Still broken / not tested:** Long play inside one world not measured. The allocator comparison not run (the user, later).
+**Next:** The allocator comparison when the user asks.
+
 ## 2026-10-22 Fix: a turn key let go during the popup no longer sticks
 
 **Changed:** Viewer `connor_view.rs`: a Left or Right key let go while the game was paused is also released in the turn keys' own record (direction back to 0). Provenance row.
