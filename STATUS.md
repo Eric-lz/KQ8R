@@ -7,6 +7,21 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (A): the magic map studied** (`docs/behaviour/magic-map.md`,
+  ready for B; **not checked in the original yet**). The Wizard's
+  `MagicMap` switches the world's map on; world x/y → 460 × 460 map
+  pixel (north up); a disc of `fogRadius` (Daventry 24 map pixels) is
+  revealed each time Connor moves to a new map pixel, saved per world as
+  run lengths (`rle0`…, hidden first, ends with −1); a 16-frame arrow;
+  icons from `addMapIcon`; left-drag pans, right-drag sideways zooms
+  (×2 per 64 px, ×¼ to ×8); the bottom-right slot is a live mini-map
+  (answers `interface.md` open question 4); the page arrows show other
+  visited worlds' maps; on a pad, the lit "Go" button runs the world's
+  teleport script → the Portal state's "load a new region?" question →
+  `teleportdown`, world change, `teleportup`. Tab has no handsOff check.
+  Open: the follow margins' coordinates, the mini-map's zoom, the
+  arrival side of a world change.
+
 - **2026-10-21 (A): the main menu studied** (`docs/behaviour/main-menu.md`,
   ready for B). The items and when each can be chosen, the keys (Up/Down
   wrap, Enter, Escape = Back to Game, Left/Right in popups), the popups
@@ -613,6 +628,11 @@ M6 has started with the Rope and Hook (6a).
   rocks hurting Connor, Gnome's pushable boulder, damaging water.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
+
+- Inside `magic-map.md` (not in QUESTIONS.md, for the user's check
+  first): open questions 2 (follow margins, "How to check" 7) and 3
+  (mini-map zoom, "How to check" 6); 4 (arrival after a world change)
+  belongs to a later loading study.
 
 - For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
   `KQConner::setLevel` does; b: the level-up flame's speed and length;

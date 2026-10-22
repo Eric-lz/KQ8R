@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Study (A): the magic map
+
+**Changed:** New behaviour note `docs/behaviour/magic-map.md`. Small updates: `interface.md` rule 11 (the map key checks only that the map is active), rule 45 and open question 4 (the map slot is a live mini-map), QUESTIONS Q108 (b, partly), STATUS. Scratch addresses in `re/notes.md` (not committed).
+**Why:** The magic map and teleporting are M6 work; B needs a note to build them from.
+**Tested how:** Traced in `Mask.exe` with Ghidra; data from `GAME/Kq/*map.kq`, `*tele.kq/.cs`, the world scripts, `Gplayscr.gui` (from `gui-verify` logs), `500.MSG`, `Invinfo.itl`; the 16 `maparrow.pba` frames dumped and looked at; all 28 map pictures measured (460 × 460); the user's saved games read (not changed) to see the saved map format. Nothing run in the original.
+**Result:** Map pixel = (x − west) ÷ (east − west) × 460 across, (1 − (y − south) ÷ (north − south)) × 460 down (north up). Fog radius in pixels = 460 × `fogRadius` ÷ (east − west) (Daventry 24; missing → `hazeDistance`, Snow exit 131), revealed only when Connor reaches a new map pixel; saved as `rle0`… over 464-place rows, hidden run first, `-1` at the end (save 10's Daventry: `rle0=18768` … `rle705=-1`). Arrow frame = round((π − heading) × 16 ÷ 2π) mod 16, frame 0 up, clockwise. Start view fits the whole map (× 0.648); zoom ×2 per 64 px of right-drag, limits ×¼–×8; left-drag pans with the centre kept on the map. Page arrows step through visited worlds' maps (colours matched to the current palette). "Go" lights on a pad when the shown world's teleporter is earned; it runs `<world>tele.cs`, which starts the Portal state ("You are about to load a new region…", Yes → `teleportdown`, world change, `teleportup`; the map ends closed). Bugs not to copy: "Go" stays lit after a snap-back; one extra revealed pixel per row after reload; `useFog 0` lost on reload.
+**Still broken / not tested:** **Not checked in the original.** Not settled: which coordinates the follow margins (20–280, 20–340) are in; whether the mini-map's zoom follows the big map's at once; the arrival side of a world change (not followed); how another world's kept map is found (inferred from the saves).
+**Next:** The user: `magic-map.md` "How to check" 1–11 in the original (7 and 6 matter most). B: build the map (M6) from the note.
+
 ## 2026-10-21 Main menu: the user's check in the original
 
 **Changed:** Docs only: `main-menu.md` rules 3, 8, 21, 25, "How to check" 2, open questions 1–3 answered; STATUS.

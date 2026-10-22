@@ -236,6 +236,8 @@ uses whatever the window holds [traced].
     bottom bar, Tab for the map [manual].
 11. **Map key** (default **Tab**): toggles the map window, **only if
     Connor carries the magic map** [traced]. Not needed in early Daventry.
+    (Exactly: only if the current map is active; nothing else is
+    checked, not even `handsOff`: `magic-map.md` rules 2, 30.)
 12. **The top bar follows the mouse** [traced]:
     - It slides down when the pointer reaches the **very top row** of
       the screen (y = 0).
@@ -420,9 +422,10 @@ uses whatever the window holds [traced].
 
 45. `IDCTL_INVBAR_ROPE` (rope and hook, `2rope0` empty / `2rope1`
     carried), `IDCTL_INVBAR_ROCKS` (`2rocks0` … `3`) with the rock count,
-    `IDCTL_INVBAR_MINIMAP` (`2mapblnk.pbm`, the map icon; it changes when
-    the magic map is carried) [traced which item goes where; the rocks
-    picture levels were not traced].
+    `IDCTL_INVBAR_MINIMAP` (`2mapblnk.pbm` while the map is not active;
+    once it is, the slot shows a live mini-map centred on Connor with his
+    arrow: `magic-map.md` rule 27) [traced which item goes where; the
+    rocks picture levels were not traced].
 
 ## The caption strip (answers `talking.md` open question 4 and Q107 a)
 
@@ -588,7 +591,8 @@ uses whatever the window holds [traced].
    hook-up / hook-down mean~~: answered in `ropeandhook.md` rule 7:
    `HookUp` at the foot of a rope, `HookDown` at the top, only with the
    rope carried and not while on the rope.)
-4. The rocks picture steps, and the minimap icon (rule 45).
+4. The rocks picture steps (rule 45). (~~The minimap icon~~: a live
+   mini-map, `magic-map.md` rule 27.)
 5. Font flag bit 6 (0x41) and the `sl`, `black`, `shdw`, `gshdw`, `red`
    font variants beyond their use in the layouts (Q106): not traced.
    From the layouts: `14shdw` for normal slot numbers, `14red` for the
