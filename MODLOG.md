@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: the raven by Sarah's house can be clicked
+
+**Changed:** Viewer `load.rs` (`object_colliders`): a character prepared for a script's `loadKQ` gets its click box at the start, switched off. `kq8-core` `active.rs`: `loadKQ` switches it on; the start's `Init` skips switched-off boxes. Unit test `a_character_loaded_while_playing_gets_init_then_and_can_be_clicked`. Provenance row.
+**Why:** The user: with `--begin` the raven appears next to Connor but can't be clicked; in the original clicking it plays a short scene (it flies off, Connor: "Begone, raven"). The raven (`Ravens`, `ravensrh.kq`) is loaded by `stngrl.cs` during the opening, and characters loaded that way had no click box.
+**Tested how:** core tests (515 pass). `kq8-viewer --world Daventry --begin --frames 5000 --sound off --no-ai --click Ravens,400`; also `--console "goto Condoor",5 --click Condoor,30 --click Ravenc,200` (the raven at Connor's house); `doors.log`, `talk.log`.
+**Result:** Update 256: `loadKQ ravensrh.kq`: "Ravens can be clicked now", its `Init` then (not at the start). Update 400: the click runs `ravensrh.cs ConnorAction do`: handsOff, Connor "Begone, raven! Leave her be!" (+5 experience), turns to it, `raven.snd`, the camera placed, the raven plays `fromsarah`; update 463: Connor "Hmmm...whither does it fly?", the camera follows him, handsOff 0, the raven deleted. `Ravenc` (Connor's house) also clickable once his door loads it (that run: too far away, the "too far" remark).
+**Still broken / not tested:** Not looked at or listened to. The ravens' caw cue (`sendEvent @ KQCueEvent 10 0` in their movement) is still "cue action not done", so they never caw. `Ravenc`'s own scene not run to the end.
+**Next:** The user's check.
+
 ## 2026-10-22 The roof jump on the bow spriggan: Q155–Q157 (not fixed)
 
 **Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q155 (Connor's `Choice` state), Q156 (`StateChange` messages and their state numbers), Q157 (`loadObject`).

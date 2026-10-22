@@ -1807,6 +1807,12 @@ impl WorldState {
             self.note(format!("{at}: loadKQ {file}: {} is a character: it can speak now (talking.md rule 6)", m.name));
             self.monsters.push(m);
         }
+        // Its click box, made at the start and off until now (as a
+        // character placed at the start: doors.md rule 10, clicking.md).
+        if let Some(c) = self.clickables.iter_mut().find(|c| c.gone && c.name.eq_ignore_ascii_case(&name)) {
+            c.gone = false;
+            self.note(format!("{at}: loadKQ {file}: {name} can be clicked now (its box from the start)"));
+        }
         self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
         if let Some(script) = script {
             self.calls_out.push((script, vec![name, "Init".into()]));
@@ -3531,7 +3537,8 @@ impl Active {
         }
         // Other scripted clickables (3f, Q64 c stand-in).
         for i in 0..self.world.clickables.len() {
-            if self.world.clickables[i].script.is_some() {
+            // A character a script loads later gets its Init then (loadKQ).
+            if self.world.clickables[i].script.is_some() && !self.world.clickables[i].gone {
                 self.call_clickable(i, &["Init"]);
             }
         }
@@ -6506,6 +6513,29 @@ endif
         assert!(a.world.known.contains("waterfall2"));
         let log = a.take_log().join("\n");
         assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
+    }
+
+    #[test]
+    fn a_character_loaded_while_playing_gets_init_then_and_can_be_clicked() {
+        // Daventry's raven `Ravens` (`stngrl.cs`: loadKQ ravensrh.kq): its
+        // click box is made at the start, off: no Init at the start, no
+        // click; the load switches it on.
+        let mut a = with_object("if test $2 == ConnorAction\n loadKQ rav.kq\nendif\n", "x");
+        a.world.sources.insert("rav.cs".into(), b"if test $2 == Init\n set R::init $1\nelse if test $2 == ConnorAction\n set R::clicked $1\nendif\nendif\n".to_vec());
+        let mut rav = Clickable::plain("Ravens", "KQMonster", [-100.0; 3], [100.0; 3], Placement::at([0.0, 500.0, 0.0]), 0xC022);
+        rav.script = Some("rav.cs".into());
+        rav.gone = true;
+        a.world.clickables.push(rav);
+        a.set_dormant([("rav.kq".to_string(), "Ravens".to_string(), Some("rav.cs".to_string()))]);
+        a.start();
+        assert_eq!(a.scripts.vars.get("R::init"), None, "no Init before the load");
+        a.click("Ravens", [0.0, 0.0, 0.0], 2350.0, None);
+        assert_eq!(a.scripts.vars.get("R::clicked"), None, "not clickable before the load");
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        a.update();
+        assert_eq!(a.scripts.vars.get("R::init"), Some("Ravens"));
+        a.click("Ravens", [0.0, 0.0, 0.0], 2350.0, None);
+        assert_eq!(a.scripts.vars.get("R::clicked"), Some("Ravens"));
     }
 
     #[test]

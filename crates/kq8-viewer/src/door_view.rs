@@ -246,7 +246,7 @@ pub fn apply_loads(
         }
         let sounding = sound.as_mut().is_some_and(|s| s.wake(&name));
         let line = format!(
-            "update {}: loadKQ: {name} came in: {shown} drawn part(s) shown{}{} (not clickable, no collider: prepared copies have none; not done)",
+            "update {}: loadKQ: {name} came in: {shown} drawn part(s) shown{}{} (a character: clickable from now on; other prepared copies: not clickable, no collider, not done)",
             sim.active.world.updates,
             if animated { ", animation played by the world's rules" } else { "" },
             if sounding { ", sound object on" } else { "" }

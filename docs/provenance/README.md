@@ -1332,6 +1332,7 @@ All from `docs/behaviour/anim-scripts.md` (session A, traced unless the note say
 | Prepared at the start: files a script names in `loadKQ <file>` that no start-up script loads, with a place of their own | **Our method** (they were already loaded as H-key copies, M1) | `viewer.log`: 17 dormant copies |
 | A deleted sound object stops at once; the new one starts | `sound.md` rule 48; stand-in above | `sound.log` frame 665 |
 | A copy that comes in has no collider and isn't clickable | **Not done** (the H-key copies have none) | — |
+| Fix 2026-10-22: a prepared **character** gets its click box at the start, switched off (no `Init` at the start, not clickable); the `loadKQ` switches it on, then its `Init` runs as before | `objects.md` "Where a world's objects come from" rule 6 (comes in as at the start: a character placed at the start is clickable, `doors.md` rule 10); the same as prepared traps (`traps.md` rules 1, 2, 13) | Unit test `a_character_loaded_while_playing_gets_init_then_and_can_be_clicked`; viewer `--begin`: click `Ravens` → `ravensrh.cs ConnorAction`, "Begone, raven! Leave her be!", `fromsarah`, deleted |
 
 ## The answers to Q84–Q93 (M3 step 3l)
 
