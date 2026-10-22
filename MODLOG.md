@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Plan 6e updated from world-change.md
+
+**Changed:** Docs only: `docs/DESIGN.md` "6e" (rewritten against `world-change.md`), `docs/behaviour/QUESTIONS.md` (new Q151).
+**Why:** The 6e plan was written before the study; session B checks it against the note before building.
+**Tested how:** Read `world-change.md`, `magic-map.md` rule 40, the viewer's start-up and `WorldState`; the portal files (`Davtele.kq`, Daventry `portal1.kq`, `portaltp.cs`), Daventry `world.cs` and the `Init` parts of its scripts (data, read only). Measured one world's memory: `target\release\kq8-viewer.exe --world Daventry --frames 400 --sound off`, polled from PowerShell.
+**Result:** The plan's architecture stays (same program, marked world entities, one build function, the journey record, kept worlds in stages). Daventry takes **3.4 GB** peak working set (6.1 GB private), so keeping left worlds alive in memory (about 25 GB for 8) is out; full kept worlds stay with saved games. The first stage now keeps more than the maps: the world's **variables** (rule 13; Daventry's `Begin` would otherwise replay the opening scene, and `bricks.cs`, `milltree.cs`, `urn1.cs` set themselves up from them) and a **"gone" list** (taken or deleted objects not loaded again). New step `world.cs Begin` (our build never ran it; at launch only with `--begin`). No `conStart.cs` on a world change (rule 21). Steps are now 6e-1 to 6e-8. Q151: the popup's first highlighted button (stand-in No).
+**Still broken / not tested:** Nothing built.
+**Next:** 6e-1, one way to build a world.
+
 ## 2026-10-22 world-change.md: the user's check in the original
 
 **Changed:** Docs only: `docs/behaviour/world-change.md` (rules 19, 23, 25, 26, Edge cases, Do not reproduce 2, a "user's check" section, open questions), STATUS.
