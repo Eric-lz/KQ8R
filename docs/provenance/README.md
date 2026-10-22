@@ -740,7 +740,7 @@ unchanged. Checked by eye by the user on 2026-10-13 ("looks great").
 | Any number but 0 counts as on | **Our reading** (the data only uses 0 and 1) | — |
 | `KQCamera::setRange <min> <max>`, refused unless min < max | `camera.md` "Distance" rule 2 | Unit test; same run: range (1,000, 2,500) in the house, (1,500, 5,000) outside |
 | Applied after the traps' check, before the camera's update in the same tick | **Our stand-in** (order not traced) | — |
-| Action-only commands of Daventry's trap scripts are stubs (one log line, result 0); question commands (`getloc`, `checkDistance`, `exist`, `checkSave`, `getConInventory`, `getEndLoop`, `KQConner::getDoMode`) stay unknown (result 1) | **Our choice** until they are studied | Log |
+| Action-only commands of Daventry's trap scripts are stubs (one log line, result 0); question commands (`getloc`, `checkDistance` (built since, see below), `exist`, `checkSave`, `getConInventory`, `getEndLoop`, `KQConner::getDoMode`) stay unknown (result 1) | **Our choice** until they are studied | Log |
 | `--hold F,T,R`: the run switch only at the start | Our test helper (so scripts can change it) | Same run |
 
 ## Trap corrections after Q57/Q58 (M3 step 3d-4) — `crates/kq8-core/src/{trap,active}.rs`, `crates/kq8-viewer/src/door_view.rs`
@@ -3134,3 +3134,12 @@ data: every world's `conStart.cs` (`KQConner::setLevel N`, then
 | L-1: built-in pickup experience of items given by a start-up script counts (temple 1: two level-ups before `setLevel 43`) | `potions.md` rule 41 as written; **Q149 e** | Viewer: temple1 `items.log` |
 | L-2: the level-up flame (`IDCTL_METERS_LEVELUP`, `flame14.pba`, layout place) starts when the level sent to the meters goes up, plays once at 15 frames per second, then is hidden; not at a world's first sending | `interface.md` rules 23, 26 (picture, place); **the user's check** (it plays on a level-up); speed, once, hidden: **stand-ins, Q149 b / Q108 d** | Viewer: Daventry `gui.log` (start at update 21, played out after 1,142 ms); Dead City: none |
 | L-3: on a level-up `GAME/SOUND/LEVEL.AUD` plays once, plain, in the effects group | **The user's check in the original** (2026-10-21): the sound is `LEVEL.AUD` (Q149 c answered; was a stand-in) | Unit test (stats event); viewer `sound.log` (Daventry, level 1 → 2) |
+
+## `checkDistance` (Q142) — `crates/kq8-core/src/active.rs` (`check_distance`)
+
+Source: `anim-scripts.md` rule 31 (Q142 answered). No other source.
+
+| What | Source | Check |
+| --- | --- | --- |
+| Three forms by word count (object–object, object–point, point–point); straight 3D distance between positions (Connor's feet, an object's current place, found as `getLoc` finds it); 1 if at most the max, else 0; unknown name or wrong word count: an error line and 0 | `anim-scripts.md` rule 31 | Unit test `check_distance_is_straight_3d_and_inclusive`; viewer: `wiztrap.cs` at (193000, 193000) 5,839 > 5,000 → the Wizard says "Come closer, lad!" (`1000 4 0 119`), at (192500, 196500) 2,452 → silent; the axe from the windmill floor 2,388 > 1,700 → the Henchman's line, no axe |
+| The distance is written to the log (the original prints it to its console) | `anim-scripts.md` rule 31 | `traps.log`, `doors.log` |

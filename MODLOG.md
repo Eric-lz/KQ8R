@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Fix: the Wizard's "Come closer, lad!" (`checkDistance` built, Q142)
+
+**Changed:** `kq8-core` `active.rs`: the `checkDistance` command (`check_distance`), unit test `check_distance_is_straight_3d_and_inclusive`; `script.rs` comment. Provenance, STATUS, QUESTIONS (Q142 built).
+**Why:** The user: the Wizard never calls Connor over from a distance. `wiztrap.cs` (a 16,000 × 16,000 trap around the Wizard) runs `checkDistance Wizard Connor 5000` on entry, at 6 s and every 8 s after, and speaks `1000 4 0 119` when the answer is 0 (farther). We didn't have the command: unknown commands leave 1, so he never spoke. Built from `anim-scripts.md` rule 31 (Q142's answer, waiting to be built).
+**Tested how:** `cargo test -p kq8-core` (490 pass), clippy clean. `cargo play --world Daventry --at 193000,193000,3.1416 --frames 600 --sound off`; `--at 192500,196500,3.1416 --frames 200`; the axe: `--sound off --at 145910,249400,0 --no-ai --god --click ax,40 --frames 300`; `traps.log`, `talk.log`, `doors.log`.
+**Result:** Far: "checkDistance Wizard (190807, 198274, 6630) to Connor (193000, 193000, 7844): 5839 > 5000: 0", the Wizard says "Come closer, lad!" (`a0rs0400.3b1`, 1.645 s) at update 1 and again at the cue at update 91 (6 s), next cue at 14 s. Close: 2452 <= 5000: 1, silent. The axe from the windmill floor: 2388 > 1700: 0, the Henchman's line `1000 9 14 18`, no axe (before: always given).
+**Still broken / not tested:** **Not heard by the user.** The axe from the hay bale (should work within about 830 sideways) was not run. Other worlds' 27 `checkDistance` scripts were not run.
+**Next:** The user: walk toward the Wizard from the south-east and listen.
+
 ## 2026-10-21 Levels: the user's check in the original
 
 **Changed:** Docs only: Q149 marked partly answered; provenance, DESIGN, STATUS.

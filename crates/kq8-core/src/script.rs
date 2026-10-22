@@ -54,9 +54,10 @@ use kq8_data::world_script::Vars;
 /// `dropItem` is only used by `rockHit.cs`, M5). Each only writes a log
 /// line and leaves 0 in `$Console::Return`. `KQMonster::checkInventory`,
 /// `deleteObject` and `KQObject::setHidden` were stubs until 3e-2; the
-/// world handles them now. Commands that answer a question (`getloc`,
-/// `checkDistance`, `exist`, `checkSave`, ...) are not stubs: they stay
-/// unknown (error line, result 1) until they are studied.
+/// world handles them now. Commands that answer a question (`exist`,
+/// `checkSave`, ...) are not stubs: they stay unknown (error line,
+/// result 1) until they are studied; `getloc` and `checkDistance` are
+/// handled by the world.
 pub const STUBS: [&str; 11] = [
     "doPopup",
     "addMapIcon",

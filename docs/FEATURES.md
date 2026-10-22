@@ -388,6 +388,10 @@ by eye**.
   partner the talk starts; behind the wizard's back he says "Come around,
   lad..."; farther away "Hello, there, sir wizard!" (`kq8 conv-verify`
   checks the areas and cameras of all 17 partners in the data).
+- **Called over:** when Connor is in the wizard's area but more than
+  5,000 away, the wizard says "Come closer, lad!" (then every 8 s until
+  clicked); scripts' distance checks (`checkDistance`) work, so the
+  windmill's axe can't be taken from the floor.
 - **Getting to his spot:** close by, Connor is put on his talking spot;
   from farther inside the room he turns, starts walking and is brought
   to the spot by his walk-stop movement, then turns to the partner.

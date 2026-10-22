@@ -1944,6 +1944,47 @@ impl WorldState {
         "0".into()
     }
 
+    /// `checkDistance` (`anim-scripts.md` rule 31): `<obj1> <obj2> <max>`,
+    /// `<obj1> <x> <y> <z> <max>` or `<x> <y> <z> <x2> <y2> <z2> <max>`.
+    /// Straight 3D distance between the positions (Connor: his feet; an
+    /// object: where it stands now); 1 when at most `max`, else 0. An
+    /// unknown name or a wrong number of words: an error line and 0.
+    fn check_distance(&mut self, words: &[String], at: &str) -> String {
+        let point = |a: &Self, w: &[String]| -> Result<[f32; 3], String> {
+            match w {
+                [name] => a.place_of(name).map(|b| b.position).ok_or_else(|| format!("can't find '{name}'")),
+                [x, y, z] => Ok([x, y, z].map(|v| number_value(v) as f32)),
+                _ => unreachable!(),
+            }
+        };
+        let args = &words[1..];
+        let (one, two, max) = match args.len() {
+            3 => (&args[0..1], &args[1..2], &args[2]),
+            5 => (&args[0..1], &args[1..4], &args[4]),
+            7 => (&args[0..3], &args[3..6], &args[6]),
+            _ => {
+                self.note(format!("{at}: ERROR usage: checkDistance <obj1> <obj2> <maxDist> | <obj1> <x> <y> <z> <maxDist> | <x> <y> <z> <x2> <y2> <z2> <maxDist>: '{}'; 0 (anim-scripts.md rule 31)", words.join(" ")));
+                return "0".into();
+            }
+        };
+        let (a, b) = match (point(self, one), point(self, two)) {
+            (Ok(a), Ok(b)) => (a, b),
+            (Err(e), _) | (_, Err(e)) => {
+                self.note(format!("{at}: ERROR checkDistance: {e}; 0 (anim-scripts.md rule 31)"));
+                return "0".into();
+            }
+        };
+        let max = number_value(max) as f32;
+        let d = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
+        let within = d <= max;
+        self.note(format!(
+            "{at}: checkDistance {} ({:.0}, {:.0}, {:.0}) to {} ({:.0}, {:.0}, {:.0}): {d:.0} {} {max:.0}: {} (anim-scripts.md rule 31)",
+            one.join(" "), a[0], a[1], a[2], two.join(" "), b[0], b[1], b[2],
+            if within { "<=" } else { ">" }, u8::from(within)
+        ));
+        u8::from(within).to_string()
+    }
+
     /// `KQObject::tossItems <object> <offsetZ> <type1,type2,...>`
     /// (`items.md` rule 12; M5 5d-5): one item (quantity 1) per listed type
     /// (`INVITEM_` optional), thrown from the object's place raised by
@@ -2776,6 +2817,7 @@ impl ScriptHost for WorldState {
             "KQMonster::setHome" => Some(self.set_home(words, at)),
             "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
             "KQObject::tossItems" => Some(self.toss_items(words, at)),
+            "checkDistance" => Some(self.check_distance(words, at)),
             "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
             "makeTranslucent" => Some(self.make_translucent(words, at)),
             "KQObject::setUseGravity" | "KQMonster::setMonUseGravity" | "KQMonster::setCanTurn" | "KQMonster::changeAnmFile" => {
@@ -6035,6 +6077,21 @@ mod tests {
             assert!((got - want).abs() < 1e-5, "{loc:?}");
         }
         assert_eq!(a.test_command("getLoc nobody", "t").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn check_distance_is_straight_3d_and_inclusive() {
+        // anim-scripts.md rule 31; gob stands at (0, 0, 100).
+        let mut a = wanderer(kq8_data::characters::Wander::None);
+        a.world.connor_at = Some([300.0, 0.0, 500.0]);
+        // 3D distance 500 (300 sideways, 400 up): equal counts as within.
+        assert_eq!(a.test_command("checkDistance gob Connor 500", "t").as_deref(), Some("1"));
+        assert_eq!(a.test_command("checkDistance Connor gob 499", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("checkDistance gob 0 0 5100 5000", "t").as_deref(), Some("1"));
+        assert_eq!(a.test_command("checkDistance 0 0 0 0 0 5001 5000", "t").as_deref(), Some("0"));
+        // Errors leave 0.
+        assert_eq!(a.test_command("checkDistance nobody Connor 99999", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("checkDistance gob 99999", "t").as_deref(), Some("0"));
     }
 
     #[test]
