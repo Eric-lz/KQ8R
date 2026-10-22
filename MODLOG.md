@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-1: the magic map's files read (map, portal, saved fog)
+
+**Changed:** New `kq8-data` `magic_map.rs` (`KQMap` and `KQPortal` keys, the fog's run lengths both ways) and `pvol.rs` (saved-game archive, read only); new `kq8 map-verify` (`kq8-cli` `map_verify.rs`). Plan "6d" in DESIGN; provenance.
+**Why:** M6 6d, step 1 of building the magic map from `magic-map.md`.
+**Tested how:** `cargo test -p kq8-data` (138 pass), clippy clean; `cargo run -- map-verify` (log `kq8-artifacts/logs/map-verify.log`).
+**Result:** All 16 map files and 6 portal files read. Units per map pixel and fog radii match the note (Daventry 409.6 / 24 px, Snow exit 131 from `hazeDistance` 18,000). All 22 saves read (the index is padded to an even offset, not 4: save2), 29 saved maps: save10's Daventry 108,474 pixels revealed (51.3 %), Dead City (save18) 53,055, Castle 53,546. Daventry and Dead City run lists written back identical. The Castle's saved map has column 460 (an unused place) marked revealed in rows 194–256: the note's "Do not reproduce" 2 (one pixel past the copy) at the right edge; ignored on reading as the note says, so its written-back list differs but gives the same fog.
+**Still broken / not tested:** The current world's map in a save is a binary form: not read. Nothing in the game uses these readers yet.
+**Next:** 6d-2, the map state (no drawing).
+
 ## 2026-10-21 Magic map: the user's check in the original
 
 **Changed:** Docs only: `magic-map.md` rules 25 and 27, edge cases, "Do not reproduce" 4, "How to check", open questions 2 and 3; STATUS.

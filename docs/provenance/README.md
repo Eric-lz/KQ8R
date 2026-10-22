@@ -3143,3 +3143,19 @@ Source: `anim-scripts.md` rule 31 (Q142 answered). No other source.
 | --- | --- | --- |
 | Three forms by word count (object–object, object–point, point–point); straight 3D distance between positions (Connor's feet, an object's current place, found as `getLoc` finds it); 1 if at most the max, else 0; unknown name or wrong word count: an error line and 0 | `anim-scripts.md` rule 31 | Unit test `check_distance_is_straight_3d_and_inclusive`; viewer: `wiztrap.cs` at (193000, 193000) 5,839 > 5,000 → the Wizard says "Come closer, lad!" (`1000 4 0 119`), at (192500, 196500) 2,452 → silent; the axe from the windmill floor 2,388 > 1,700 → the Henchman's line, no axe |
 | The distance is written to the log (the original prints it to its console) | `anim-scripts.md` rule 31 | `traps.log`, `doors.log` |
+
+## M6 6d: the magic map — `crates/kq8-data/src/{magic_map,pvol}.rs`, `crates/kq8-cli/src/map_verify.rs`
+
+Source: `docs/behaviour/magic-map.md` (A, 2026-10-21; "How to check"
+1–11 run by the user in the original, all as described), with
+`interface.md` rules 8–11, 15, 19, 44, 45 and `inventory.md`. The data:
+`GAME/Kq/*map.kq`, `*tele.kq`, the user's saved games (read only).
+
+| What | Source | Check |
+| --- | --- | --- |
+| 6d-1: a `KQMap` file's keys (box, `useFog`, `fogRadius`, `holdMapLoc`, `isActive`, pictures, `mapName`, `earnedTeleport`, teleport script and portal, icons, `rle<n>`); map index = `mapName` − 38 | `magic-map.md` "Data used", rules 3, 21 | `kq8 map-verify`: all 16 map files; Daventry index 0, 409.6 units per pixel |
+| 6d-1: a `KQPortal` file's keys (`world`, enter / exit animations and files, `exitScript`, `destConnorLoc/Dir`, `destCamLoc/Dir`, `noLoc`) | `magic-map.md` "Data used", rule 40 | `kq8 map-verify`: the six `*tele.kq` |
+| 6d-1: fog radius in map pixels = 460 × `fogRadius` ÷ (east − west), whole number; missing → the terrain's `hazeDistance`, else 20,000 | Rule 13 | `kq8 map-verify`: Daventry 24, Dead City 15, Swamp 24, Gnome 14, Barren 20, Ice 19, Castle 41, temples 16 / 18 / 17 / 31, Snow exit 131 (`hazeDistance` 18,000): all as the note's list |
+| 6d-1: the fog's run lengths: 460 rows of 464 places, hidden run first, alternating, −1 ends; unused places ignored on reading, written as fog; nothing revealed = no runs (`rle0=-1`) | Rule 16, "Do not reproduce" 7 | Unit tests; `kq8 map-verify`: 29 saved maps in 22 saves: Daventry and Dead City runs written back identical; Castle 705 runs with 63 unused places revealed (column 460, rows 194–256, the note's "Do not reproduce" 2 at the right edge), written back as fog, the same fog |
+| 6d-1: the saved-game archive `PVOL`: `vols` name table, `voli` index of 17-byte entries (name offset, `VBLK` offset, size, compression), each file in a `VBLK`; the index follows the table at the next even offset | Observed (the user's saves; the layout matches what the Tribes community describes for `PVOL`, docs/RESEARCH.md "Engine lineage") | Unit test; `kq8 map-verify` reads all 22 saves (save2's table ends at an odd offset) |
+| 6d-1: the current world's map is stored in a binary `PERS` form in a save | Observed | Listed, not read (no note describes it) |

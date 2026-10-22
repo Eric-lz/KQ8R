@@ -1956,6 +1956,149 @@ Steps (one commit each; logged in `viewer.log` and `connor.log`):
    LakeSword`, ready it: `connor.log` draws `conSword.anm/stop`;
    `viewer.log` the load time (~0.1 s expected).
 
+#### 6d — The magic map (planned 2026-10-21)
+
+Why: the Wizard's `MagicMap` does nothing yet (`davmap.kq` is skipped
+as "not found": map files live in `GAME/Kq`, not in the world's
+archives; `addMapIcon`, `earnTeleport`, `onTeleport` … are stubs).
+Source: `magic-map.md` (A, 2026-10-21; "How to check" 1–11 run by the
+user in the original, all as described), with `interface.md` rules
+8–11, 15, 19, 44, 45 and `inventory.md` (the `MagicMap` item). Every
+number goes to a new `kq8-artifacts/logs/map.log`.
+
+Words: **map picture** = a world's 460 × 460 picture; **fog** = which
+of its pixels are still blank; **view** = where and how big the map
+picture is drawn in the map area (a rectangle measured from the area's
+centre, in 640 × 480 layout pixels); **kept maps** = the maps of worlds
+Connor has left, with their fog and icons.
+
+What does not exist yet and limits this work:
+
+- **Saved games** (none yet): the fog is written and read as the
+  original's `rle` run lengths (rule 16) and checked against the user's
+  saves, but nothing saves it yet; the map state is a plain record a
+  save can store later (as the rope's).
+- **Moving between worlds** (none yet: one world per run). Paging other
+  worlds' maps (rules 32–34) needs kept maps, and the teleport's world
+  change (rule 40 steps 3–5) needs the world change itself. Step 6d-6
+  gets kept maps from an original saved game for testing only; step
+  6d-7 builds the teleport up to the moment the world would change.
+  The Portal state's question and the world change wait for "moving
+  between worlds" (to be planned with the user: it changes how the
+  viewer loads a world).
+- **Help popups** (`doPopup` is a stub): the "Go" button's help (151) is
+  logged only, as the potions' help popups are.
+
+Where things go:
+
+- `kq8-data/src/magic_map.rs` (new): a `KQMap` file's keys, a
+  `KQPortal` file's keys, the fog's run lengths read and written (464
+  places per row, hidden first, −1 at the end).
+- `kq8-data/src/pvol.rs` (new): the saved-game archive (`PVOL`, the
+  layout the Tribes community notes describe and the files show: a
+  name table `vols`, an index `voli` of 17-byte entries, each file in a
+  `VBLK` block). Read only, for checks.
+- `kq8-core/src/magic_map.rs` (new): the map state and its rules as
+  plain functions with unit tests (map pixel, fog radius, the reveal
+  disc, the arrow frame, icons, view pan / zoom / follow, paging,
+  the "Go" button), held on `WorldState`; the script commands go
+  through `active.rs` as the others do.
+- Viewer `map_view.rs` (new): loads the map's pictures, palettes and
+  icons, feeds Connor's position to the map each update, draws the map
+  window and the mini-map through `gui_view.rs` (new pieces in
+  `gui_draw.rs`), and the mouse on the map.
+
+Stand-ins (from the task, marked in code and provenance):
+
+- The follow margin (rule 25, open question 2): the arrow's top-left
+  corner is kept at least 20 pixels inside the visible map area on all
+  four sides (x and y between 20 and 276 of the 296 area), with the
+  note's step ((distance past) ÷ 10 + 1 pixels, up to 6 per drawn
+  frame).
+- 800 × 600 (open question 6, Q108): the view and the margins are in
+  640 × 480 layout pixels, scaled with the screen like every panel;
+  mouse movement is turned into layout pixels before panning / zooming.
+- The mini-map's zoom (open question 3): it keeps its own copy of the
+  view, taken from the one stored on Connor when the map is set up.
+- The update timing (rule 9): the original reacts to every change of
+  Connor's position; we look once per update (15 a second), after his
+  movement and the scripts' moves. Within one update only his last
+  position counts (two map pixels crossed in one update reveal once).
+- Arrival after a world change (rule 40 step 5, open question 4): when
+  built, Connor and the camera go to `destConnorLoc/Dir` and
+  `destCamLoc/Dir`, then `exitAnim` plays.
+
+Not copied ("Do not reproduce"): the "Go" button is updated whenever the
+shown map changes (1); a reveal marks the same columns it copies (2);
+`useFog 0` marks the pixels it shows (3); the debug teleport click is
+left out (5); the four unused maps are never loaded, their indexes kept
+(6); our fog is one yes/no per pixel, written as 464-place rows only
+when read or written in the original's form (7).
+
+Steps (one commit each):
+
+1. **6d-1, reading the files** (rules 3, 13, 16; data only). `KQMap`
+   keys (all of the note's "Data used"), `KQPortal` keys, the fog's run
+   lengths both ways, the `PVOL` archive. `kq8 map-verify`: every
+   `GAME/Kq/*map.kq` and `*tele.kq` with its numbers (map index, name
+   text, world units per map pixel, fog radius in map pixels, with the
+   terrain's `hazeDistance` where `fogRadius` is missing), and every
+   saved map in `MASK/save` (read only): revealed pixel count, the
+   unused places' count (expected 0), the run list written back equal
+   to the one read. Log `kq8-artifacts/logs/map-verify.log`.
+   **Test:** `cargo run -- map-verify`; Daventry 409.6 units per pixel,
+   fog 24; Snow exit 131; each saved map round-trips.
+2. **6d-2, the map state, no drawing** (rules 2, 4, 9–15, 17, 19–21,
+   33). The world's `<x>map.kq` (from `GAME/Kq`) becomes the current
+   map; its pictures (blank, full, the icons) are read; the map's own
+   picture is made (blank, then full where out of the fog, then the
+   icons). Active: when `MagicMap` arrives in Connor's inventory (and
+   off when it leaves), or by `KQMap::activate` / `deactivate`. Each
+   update with the map active: Connor's map pixel; when it changed,
+   the fog disc, "visited", icons again; always the arrow frame.
+   `KQMap::stopLoc`, `useFog`, `setFogRadius`, `addMapIcon`,
+   `removeMapIcon`. Per-map flags on Connor (visited, teleporter
+   earned). **Test:** `--world Daventry --command "give MagicMap",5`
+   walking (`--hold`): `map.log` per update pixel, pixels revealed,
+   arrow frame; `KQMap::stopLoc 1` stops the reveal.
+3. **6d-3, the window** (rules 5–8, 18, 29–31). Drawn from the layout:
+   borders, the black area with the map picture at the view, the arrow
+   (clipped to the area), the name plate (`500.MSG` 38 + index, one or
+   two lines), the page arrows, the "Go" button (off). The map key
+   (`movekeys.kq` row 8, Tab) and a left click on the mini-map slot
+   toggle it when the map is active, also during handsOff and
+   conversations; `handsOff 1` hides it (built in 4c-2). **Test:**
+   `--key tab,N`; `gui.log` "map shown", `map.log` the view.
+4. **6d-4, the mouse on the map** (rules 22–25). Left drag pans (the
+   area's centre kept on the picture), right drag sideways zooms (×2
+   per 64 pixels, shown width 115 to 3,680), the view follows Connor
+   when his pixel changes (stand-in margins above). The view is stored
+   on Connor. World clicks and the camera's right drag are not taken
+   over the map. **Test:** test options for a drag (`--drag`), `map.log`
+   views.
+5. **6d-5, the mini-map** (rule 27). The bottom-right slot draws the
+   current map at its own view's size, Connor's pixel at its middle,
+   with his arrow; `2mapblnk.pbm` while not active. **Test:** `gui.log`.
+6. **6d-6, other worlds' maps** (rules 32–34). The page arrows step
+   through the 16 map indexes to the next visited one; another world's
+   map is shown with its fog (or full picture), its colours matched to
+   this world's palette (nearest RGB of 256), this world's icons for
+   that picture, its name, no arrow; Connor's pixel changing snaps back.
+   Kept maps: test option `--kept-maps SAVE` reads the other worlds'
+   maps from an original saved game (read only) and marks them visited.
+   **Test:** `--kept-maps MASK/save/save10.vol`, `--key
+   left:IDCTL_MAPWIN_RIGHT,N`; `map.log`.
+7. **6d-7, teleporting up to the world change** (rules 35–39).
+   `onTeleport` / `offTeleport`, `earnTeleport [file]`,
+   `teleportersEarned`; the "Go" button lit when another world's map is
+   shown, Connor is on the pad and that world's teleporter is earned;
+   lit: the current world's `TeleportScript` runs with `$1` = the shown
+   world's `TeleportPortalKQ`; unlit: help 151 (logged). The script's
+   `loadKQ` of the portal and `setState Connor Portal`: logged as
+   far as they go. The Portal state itself (rule 40) waits for moving
+   between worlds. **Test:** Daventry on the keep's pad with
+   `--kept-maps`; `map.log`, `doors.log`.
+
 ### M7 — Match the original, then improve
 
 Play the original next to ours, list differences, fix them. After that,
