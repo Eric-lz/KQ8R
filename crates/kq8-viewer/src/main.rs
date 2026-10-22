@@ -512,7 +512,7 @@ fn main() -> ExitCode {
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
         .and_then(|game| match &args.model {
             // The world is read the way every world is (6e-1).
-            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, &mut log)?)),
+            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, None, &mut log)?)),
             Some(name) => {
                 let world = World::open(&game, &args.world)?;
                 log.summary(format!("world: {}", world.name));

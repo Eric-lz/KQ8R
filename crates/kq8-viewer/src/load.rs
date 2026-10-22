@@ -1640,7 +1640,19 @@ pub struct Marker {
 /// and loads the models they name (rules: docs/behaviour/objects.md).
 /// `terrain` gives the ground rules and, for the log, how far each placed
 /// model's lowest point is from the ground under it.
-pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log) -> Objects {
+/// A world Connor arrives in through a world change (M6 6e-3,
+/// `world-change.md` rules 18, 21).
+#[derive(Debug, Clone, Copy)]
+pub struct Arrival {
+    /// The game-wide `NoName<n>` counter carried over (rule 18): the new
+    /// world's start names nothing below it.
+    pub no_name_from: usize,
+}
+
+/// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
+/// 21: only a developer start sets `$Testing`; Connor brings his own
+/// things), and the `NoName` counter goes on from the carried one.
+pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log, arrival: Option<Arrival>) -> Objects {
     use kq8_data::world_script::{LoadKq, LoadName};
 
     let palette_name = world_palette_name(world, "objectPalette").unwrap_or_else(|| {
@@ -1663,8 +1675,13 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
             (w.next() == Some("loadkq")).then(|| w.next()).flatten().map(|f| f.rsplit(['/', '\\']).next().unwrap_or(f).to_string())
         })
         .collect();
-    let items = item_types(game, log);
+    let mut items = item_types(game, log);
+    if let Some(a) = arrival {
+        items.start_no_names_at(a.no_name_from);
+        log.summary(format!("world change: NoName counter from {} (world-change.md rule 18); conStart.cs not run (rule 21)", a.no_name_from));
+    }
     let mut placer = Placer {
+        skip_con_start: arrival.is_some(),
         map: None,
         load_targets,
         dormant: Vec::new(),
@@ -1881,6 +1898,8 @@ struct Located {
 /// Places objects one by one as the scripts load them, and keeps the
 /// numbers for the log.
 struct Placer<'a> {
+    /// A world change (M6 6e-3): `conStart.cs` is not run.
+    skip_con_start: bool,
     game: &'a GameDir,
     world: &'a World,
     terrain: &'a kq8_data::Terrain,
@@ -2046,6 +2065,9 @@ impl kq8_data::world_script::Host for Placer<'_> {
 
     fn read(&self, name: &str) -> Option<Vec<u8>> {
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        if self.skip_con_start && base.eq_ignore_ascii_case("conStart.cs") {
+            return None;
+        }
         self.world.load(base).and_then(Result::ok).map(|(_, b)| b)
     }
 

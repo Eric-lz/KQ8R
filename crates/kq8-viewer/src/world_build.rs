@@ -28,6 +28,7 @@ use bevy::prelude::*;
 use kq8_data::GameDir;
 
 use crate::log::Log;
+use kq8_core::journey::{connor_summary, Journey};
 use crate::{connor_view, gui_view, light_view, load, map_view, object_light, sound_view, talk_view, terrain_view, Shared};
 
 /// The start-up systems that spawn a world (were `Startup` until 6e-1).
@@ -91,8 +92,9 @@ pub struct Request {
 enum Step {
     #[default]
     Playing,
-    /// Taken down; `frames` more frames to wait before building.
-    Down { request: Request, frames: u32, from: String },
+    /// Taken down; `frames` more frames to wait before building. The
+    /// journey taken from the old world (6e-3), if it had one.
+    Down { request: Request, frames: u32, from: String, journey: Option<Box<Journey>> },
 }
 
 /// The world shown now and the change under way, if any.
@@ -131,7 +133,8 @@ pub fn new_world(change: &WorldChange, seen: &mut u64) -> bool {
 const FREE_FRAMES: u32 = 2;
 
 /// Reads world `name` (as `main` did before 6e-1).
-pub fn read_world(game: &GameDir, name: &str, opts: &Options, log: &mut Log) -> Result<WorldRead, String> {
+/// `arrival`: a world change (6e-3), see `load::load_objects`.
+pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<load::Arrival>, log: &mut Log) -> Result<WorldRead, String> {
     let started = Instant::now();
     let world = load::World::open(game, name)?;
     log.summary(format!("world: {}", world.name));
@@ -146,7 +149,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, log: &mut Log) -> 
     let mut ground = load::load_ground(game, &world, log)?;
     let haze = load::load_haze(game, &world, Some(&ground.terrain.settings), log);
     part("ground", &mut since);
-    let mut objects = load::load_objects(game, &world, &ground.terrain, log);
+    let mut objects = load::load_objects(game, &world, &ground.terrain, log, arrival);
     part("objects", &mut since);
     let animators = std::mem::take(&mut objects.animators);
     let animation = load::prepare_ground_animation(game, &world, &mut ground, animators, log);
@@ -258,7 +261,13 @@ pub fn world_change_step(world: &mut World) {
             let Some(request) = world.resource_mut::<WorldChange>().asked.take() else { return };
             let from = world.resource::<WorldChange>().current.clone();
             let before = Counts::of(world);
-            let (despawned, removed) = take_down(world);
+            // The journey (6e-3, world-change.md rules 17-19), before the
+            // world's resources go.
+            let journey = world.get_resource::<crate::door_view::DoorSim>().map(|sim| {
+                let j = Journey::take(&sim.active.world, &sim.active.scripts.vars, &from);
+                (Box::new(j), connor_summary(&sim.active.world))
+            });
+            let (_, removed) = take_down(world);
             // Every log gets the line, after the old world's logs were
             // closed, so it comes before the new world's lines.
             let marker = format!("== world change: {from} -> {} ({}) ==", request.world, request.why);
@@ -266,14 +275,29 @@ pub fn world_change_step(world: &mut World) {
             let mut log = log.lock().unwrap();
             log.summary(&marker);
             log.summary(format!("world change: before taking {from} down: {}; {}", before.line(), crate::memory::line()));
-            log.summary(format!("world change: {from} taken down: {despawned} entities despawned, {removed} per-world resources removed"));
+            log.summary(format!("world change: {from} taken down: {} world entities despawned, {removed} per-world resources removed", before.world_entities));
             drop(log);
-            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: FREE_FRAMES, from };
+            let mut wlog = Log::create("world").ok();
+            if let Some(wl) = wlog.as_mut() {
+                wl.detail(&marker);
+                wl.detail(format!("before taking {from} down: {}; {}", before.line(), crate::memory::line()));
+                match &journey {
+                    Some((j, connor)) => {
+                        for line in j.describe() {
+                            wl.detail(line);
+                        }
+                        wl.detail(format!("Connor leaving {from}: {connor}"));
+                    }
+                    None => wl.detail("no rules running in the old world: no journey"),
+                }
+            }
+            let journey = journey.map(|(j, _)| j);
+            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: FREE_FRAMES, from, journey };
         }
-        Step::Down { request, frames, from } if frames > 0 => {
-            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: frames - 1, from };
+        Step::Down { request, frames, from, journey } if frames > 0 => {
+            world.resource_mut::<WorldChange>().step = Step::Down { request, frames: frames - 1, from, journey };
         }
-        Step::Down { request, from, .. } => {
+        Step::Down { request, from, journey, .. } => {
             let after = Counts::of(world);
             log.lock().unwrap().summary(format!("world change: {FREE_FRAMES} frames after taking {from} down: {}; {}", after.line(), crate::memory::line()));
             list_unmarked(world, &mut log.lock().unwrap());
@@ -281,7 +305,8 @@ pub fn world_change_step(world: &mut World) {
                 log.lock().unwrap().summary("world change: no launch options kept; nothing built");
                 return;
             };
-            let read = GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &request.world, &opts, &mut log.lock().unwrap()));
+            let arrival = journey.as_ref().map(|j| load::Arrival { no_name_from: j.next_no_name });
+            let read = GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &request.world, &opts, arrival, &mut log.lock().unwrap()));
             let read = match read {
                 Ok(r) => r,
                 Err(e) if request.world != from => {
@@ -289,13 +314,13 @@ pub fn world_change_step(world: &mut World) {
                     // so the game's systems keep waiting).
                     log.lock().unwrap().summary(format!("world change: {} could not be read ({e}); back to {from}", request.world));
                     let back = Request { world: from.clone(), at: request.at, why: "the asked world could not be read".into() };
-                    world.resource_mut::<WorldChange>().step = Step::Down { request: back, frames: 0, from };
+                    world.resource_mut::<WorldChange>().step = Step::Down { request: back, frames: 0, from, journey };
                     return;
                 }
                 Err(e) => {
                     log.lock().unwrap().summary(format!("world change: {} could not be read again ({e}); closing", request.world));
                     world.write_message(AppExit::error());
-                    world.resource_mut::<WorldChange>().step = Step::Down { request, frames: u32::MAX, from };
+                    world.resource_mut::<WorldChange>().step = Step::Down { request, frames: u32::MAX, from, journey };
                     return;
                 }
             };
@@ -305,9 +330,50 @@ pub fn world_change_step(world: &mut World) {
             if let Some(at) = request.at {
                 world.resource_mut::<connor_view::StartAt>().0 = Some(at);
             }
+            {
+                let mut held = world.resource_mut::<crate::door_view::HeldItem>();
+                // `--item` gives its item in the first world only.
+                held.0 = None;
+                // The combat level before the characters enter (rule 18;
+                // fighting.md rule 3).
+                if let Some(j) = &journey {
+                    held.1 = combat_level_number(j.combat_level);
+                }
+            }
             world.resource_mut::<PendingWorld>().0 = Some((read, opts));
             build_pending(world);
+            give_journey(world, journey.as_deref(), &request.world, &log);
         }
+    }
+}
+
+/// `setCombatLevel`'s number for a factor (`fighting.md` rule 3).
+fn combat_level_number(factor: f32) -> Option<i64> {
+    [(1, 0.66), (2, 1.0), (3, 1.5)].iter().find(|(_, f)| (factor - f).abs() < 0.01).map(|(n, _)| *n)
+}
+
+/// Gives the journey to the world just built (6e-3) and logs Connor's
+/// things on arrival (`world.log`): the same as on leaving.
+fn give_journey(world: &mut World, journey: Option<&Journey>, to: &str, log: &std::sync::Arc<std::sync::Mutex<Log>>) {
+    let Some(j) = journey else { return };
+    let Some(mut sim) = world.get_resource_mut::<crate::door_view::DoorSim>() else {
+        log.lock().unwrap().summary("world change: no rules running in the new world: the journey is lost");
+        return;
+    };
+    let active = &mut sim.active;
+    let lines = j.give(&mut active.world, &mut active.scripts.vars);
+    let arrived = connor_summary(&active.world);
+    let after = Counts::of(world);
+    let mut log = log.lock().unwrap();
+    for line in &lines {
+        log.summary(format!("world change: {line}"));
+    }
+    if let Ok(mut wl) = Log::create("world") {
+        for line in &lines {
+            wl.detail(line);
+        }
+        wl.detail(format!("Connor arriving in {to}: {arrived}"));
+        wl.detail(format!("after building {to}: {}; {}", after.line(), crate::memory::line()));
     }
 }
 

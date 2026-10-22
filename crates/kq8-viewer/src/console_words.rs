@@ -34,6 +34,7 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
                               e.g. move Connor 3 0 0 2000 (2,000 higher)
  World
   reload                      take this world down and build it again, Connor where he stands
+  goworld <world> [x y turn]  to another world (Connor's things go along), e.g. goworld Swamp
  Creatures
   ai                          creatures' AI off/on (F4)
   kill <name>                 it dies (and drops what it carries)

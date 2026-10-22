@@ -654,6 +654,9 @@ pub struct WorldState {
     connor_hidden_logged: Option<&'static str>,
     /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
     pub connor_in_temple4: bool,
+    /// Every `setConnorFlag` flag (M6 6e-3, `world-change.md` rule 17:
+    /// they go with Connor from world to world).
+    pub connor_flags: BTreeMap<String, bool>,
     /// Connor's rope settings and status (M6 6a-1, `ropeandhook.md`
     /// rules 1–6).
     pub rope: crate::rope::Rope,
@@ -1862,16 +1865,18 @@ impl WorldState {
         "0".into()
     }
 
-    /// `setConnorFlag <flag> 0|1` (`potions.md` rule 19): only `InTemple4`
-    /// is known (`temple4/kq/archon.cs`).
+    /// `setConnorFlag <flag> 0|1`: every flag is kept on Connor
+    /// (`world-change.md` rule 17); only `InTemple4` changes a rule
+    /// (`potions.md` rule 19, `temple4/kq/archon.cs`).
     fn set_connor_flag(&mut self, words: &[String], at: &str) -> String {
         let (Some(flag), Some(v)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
             self.note(format!("{at}: usage: setConnorFlag <flag> 0|1; nothing"));
             return "1".into();
         };
+        self.connor_flags.insert(flag.clone(), number_value(v) != 0.0);
         if !flag.eq_ignore_ascii_case("InTemple4") {
-            self.note(format!("{at}: setConnorFlag {flag}: not a flag we know (only InTemple4, potions.md rule 19); nothing"));
-            return "1".into();
+            self.note(format!("{at}: setConnorFlag {flag} {v}: kept on Connor (world-change.md rule 17)"));
+            return "0".into();
         }
         self.connor_in_temple4 = number_value(v) != 0.0;
         self.item_note(format!("{at}: setConnorFlag InTemple4 {}: the shield gives half its raise per hit, at most 85 (potions.md rule 19)", u8::from(self.connor_in_temple4)));
@@ -2970,6 +2975,7 @@ impl Active {
                 map_item: None,
                 map_log: Vec::new(),
                 connor_in_temple4: false,
+                connor_flags: BTreeMap::new(),
                 connor_hands_off: false,
                 connor_hidden_logged: None,
                 reveal_objects: Vec::new(),

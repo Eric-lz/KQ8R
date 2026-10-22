@@ -2303,7 +2303,8 @@ Steps (one commit each; each ends with a test and a log check):
    at Connor's place. **Test:** `reload` three times: entity, mesh,
    image and material counts and the process's memory in `viewer.log`
    the same after each.
-3. **6e-3, the journey.** The carried record in `kq8-core` with unit
+3. **6e-3, the journey** (**done** 2026-10-22; `kq8-core`
+   `journey.rs`). The carried record in `kq8-core` with unit
    tests (taken and given back unchanged): rules 17–19 and the
    `GameState` counter and combat level. `reload` keeps it. Dev console
    word `goworld <World> [x y heading]` (ours, like the original's

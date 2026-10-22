@@ -140,19 +140,41 @@ pub fn console_step(
 }
 
 /// `reload`: take this world down and build it again, Connor where he
-/// stands (M6 6e-2). `None`: not a world word.
+/// stands (M6 6e-2). `goworld <World> [x y heading]`: to that world,
+/// Connor on the ground at x, y, or where its own start puts him (6e-3).
+/// Connor's things go along (the journey). `None`: not a world word.
 fn world_word(line: &str, change: &mut crate::world_build::WorldChange, connor: Option<&ConnorSim>) -> Option<String> {
+    use crate::world_build::Request;
     let words: Vec<&str> = line.split_whitespace().collect();
-    if !words.first()?.eq_ignore_ascii_case("reload") {
-        return None;
+    let first = words.first()?.to_ascii_lowercase();
+    match first.as_str() {
+        "reload" => {
+            let at = connor.map(|c| [c.mover.position[0], c.mover.position[1], c.walker.heading]);
+            let world = change.current.clone();
+            change.asked = Some(Request { world: world.clone(), at, why: "console reload".into() });
+            Some(match at {
+                Some([x, y, h]) => format!("reload: {world} is taken down and built again at the end of this frame; Connor back at {x:.0} {y:.0}, turn {h:.4}"),
+                None => format!("reload: {world} is taken down and built again at the end of this frame"),
+            })
+        }
+        "goworld" => {
+            let usage = format!("usage: goworld <world> [x y heading]; worlds: {}", kq8_data::game_dir::WORLDS.join(", "));
+            let Some(world) = words.get(1).and_then(|w| kq8_data::game_dir::WORLDS.iter().find(|n| n.eq_ignore_ascii_case(w))) else { return Some(usage) };
+            let numbers: Vec<f32> = words[2..].iter().filter_map(|w| w.parse::<f32>().ok()).collect();
+            let at = match numbers[..] {
+                [] => None,
+                [x, y] => Some([x, y, 0.0]),
+                [x, y, h] => Some([x, y, h]),
+                _ => return Some(usage),
+            };
+            change.asked = Some(Request { world: world.to_string(), at, why: "console goworld".into() });
+            Some(match at {
+                Some([x, y, h]) => format!("goworld: to {world} at the end of this frame, Connor at {x:.0} {y:.0}, turn {h:.4}"),
+                None => format!("goworld: to {world} at the end of this frame, Connor where its start puts him"),
+            })
+        }
+        _ => None,
     }
-    let at = connor.map(|c| [c.mover.position[0], c.mover.position[1], c.walker.heading]);
-    let world = change.current.clone();
-    change.asked = Some(crate::world_build::Request { world: world.clone(), at, why: "console reload".into() });
-    Some(match at {
-        Some([x, y, h]) => format!("reload: {world} is taken down and built again at the end of this frame; Connor back at {x:.0} {y:.0}, turn {h:.4}"),
-        None => format!("reload: {world} is taken down and built again at the end of this frame"),
-    })
 }
 
 /// The typing line: the terminal's last line is ours, the line above it

@@ -113,6 +113,11 @@ impl Vars {
         self.values.len()
     }
 
+    /// Every variable, by name (M6 6e-3: what goes with Connor).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.values.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }

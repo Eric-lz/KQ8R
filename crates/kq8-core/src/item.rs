@@ -250,6 +250,17 @@ impl Items {
         self.index(name).map(|i| &self.objects[i])
     }
 
+    /// The next `NoName<n>` number (M6 6e-3: it goes to the next world,
+    /// `world-change.md` rule 18).
+    pub fn no_name_counter(&self) -> usize {
+        self.next_no_name
+    }
+
+    /// Numbers below `n` are not used again (`world-change.md` rule 18).
+    pub fn start_no_names_at(&mut self, n: usize) {
+        self.next_no_name = self.next_no_name.max(n);
+    }
+
     /// The next `NoName<n>` name of the game-wide counter (rule 9; also
     /// `loadKQ … @`, `anim-scripts.md` rule 12, M5 5d-2).
     pub fn next_name(&mut self) -> String {

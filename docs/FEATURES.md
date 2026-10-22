@@ -713,7 +713,10 @@ Checked by the user by eye (2026-10-21: "works as expected"); logged in
   chests|objects [word]`, `find`, `inv`, `stats`, `heal`, `xp`, `god`,
   `ai`, `goto <name>`, `spawn <item>`, `kill <name>` / `kill near`,
   `reload` (takes the world down and builds it again, Connor where he
-  stands; entity, asset and memory counts in `viewer.log`). Also in `kq8-artifacts/logs/console.log`.
+  stands; entity, asset and memory counts in `viewer.log`), `goworld
+  <world> [x y turn]` (to another world; Connor's stats, items, ready
+  weapon, running potions, flags and map marks go along; each change in
+  `kq8-artifacts/logs/world.log`). Also in `kq8-artifacts/logs/console.log`.
 - **Graphics API** (`--renderer`): draw with Vulkan or DirectX 12 instead
   of letting the graphics library choose; `viewer.log` says which one
   ran. Checked by the user 2026-10-16 on Windows with one NVIDIA card;
