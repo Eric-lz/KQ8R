@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-1: one way to build a world (no behaviour change)
+
+**Changed:** New viewer `world_build.rs` (`read_world`: every file a world needs, as `main` read it; `insert_world`: its resources; the `BuildWorld` schedule: the start-up systems that were `Startup`; `WorldEntity` put on every entity spawned with a `Transform` or `Node`; the 50 per-world resources listed; entity and asset counts). `main.rs` uses it; `log.rs`: a log is emptied on its first open in a run, added to after that. DESIGN, provenance.
+**Why:** M6 6e step 1: building a world must be something the running program can do again (world changes, 6e-2 on).
+**Tested how:** `cargo clippy --release -p kq8-viewer` clean, `cargo test --release -p kq8-viewer` (11 pass). The previous commit and this one, each `kq8-viewer --world Daventry --frames 300 --sound off` and `--world Swamp`; every log's common part compared, and the new build run twice to see what changes between runs anyway.
+**Result:** All logs the same except lines tied to real time (sound times, the river animation's timing, shadow cost per frame), which differ just as much between two runs of the same build. `viewer.log` has the same lines; the panel, map and sound reading now come before "loading took" (it includes them), and a new line: "world built: Daventry: read 3492 ms, spawned in 637 ms; entities 132882 (132449 marked WorldEntity); meshes 57640, images 3005, materials: object 4281, standard 3, ground 206, building 376; per-world resources 50 of 50" (same counts in a second run). Load 3,444 → 3,493 ms (+1.4 %).
+**Mistake:** To get clean logs for the comparison I deleted every `kq8-artifacts/logs/*.log`, which also removed about 100 older named logs from earlier steps (e.g. `camera-3m4-watermill.log`, `map-verify.log`). They were test output (not in git) and can be made again, but I should have looked first. The `run-*.txt` files are still there.
+**Still broken / not tested:** Not looked at (no visible change intended). 433 entities are not marked (Bevy's own, e.g. the window and observers; not checked one by one: 6e-2 lists them). Nothing builds a second world yet.
+**Next:** 6e-2, taking a world down (`reload`).
+
 ## 2026-10-22 Plan 6e updated from world-change.md
 
 **Changed:** Docs only: `docs/DESIGN.md` "6e" (rewritten against `world-change.md`), `docs/behaviour/QUESTIONS.md` (new Q151).

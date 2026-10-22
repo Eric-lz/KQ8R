@@ -3,9 +3,11 @@
 //! terminal. Lines are flushed at once so the log is complete even if the
 //! window is closed abruptly.
 
-use std::fs::{self, File};
+use std::collections::BTreeSet;
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 pub struct Log {
     file: File,
@@ -15,12 +17,18 @@ pub struct Log {
     pub quiet: bool,
 }
 
+/// The logs opened in this run (M6 6e-1): the first open of a name
+/// empties its file, later ones (a world built again) add to it.
+static OPENED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
 impl Log {
     pub fn create(name: &str) -> io::Result<Self> {
         let dir = Path::new("kq8-artifacts").join("logs");
         fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{name}.log"));
-        Ok(Log { file: File::create(&path)?, path, quiet: false })
+        let first = OPENED.lock().map(|mut o| o.insert(name.to_string())).unwrap_or(true);
+        let file = if first { File::create(&path)? } else { OpenOptions::new().append(true).create(true).open(&path)? };
+        Ok(Log { file, path, quiet: false })
     }
 
     pub fn path(&self) -> &Path {

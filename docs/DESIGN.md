@@ -2285,7 +2285,8 @@ Steps (one commit each; each ends with a test and a log check):
 
 0. **6e-0 (A): study** (**done** 2026-10-21, `world-change.md`; the
    user's check 2026-10-22).
-1. **6e-1, one way to build a world (no behaviour change).** The loading
+1. **6e-1, one way to build a world (no behaviour change)** (**done**
+   2026-10-22; `world_build.rs`). The loading
    and spawning that `main()` and the start-up systems do now becomes a
    function run on a request; the launch uses it. Every spawned entity
    gets `WorldEntity`; the per-world resources are listed; logs keep

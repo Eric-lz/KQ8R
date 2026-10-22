@@ -3195,3 +3195,14 @@ Source: `docs/behaviour/magic-map.md` (A, 2026-10-21; "How to check"
 | 6d-7: a click on the unlit button: help 151 | Rule 38; help popups are not built: **logged only** | Viewer `map.log` |
 | 6d-7: a click on the lit button runs the current world's `TeleportScript` with `$1` = the shown world's `TeleportPortalKQ` | Rule 39 | Viewer: "runs Davtele.cs with $1 = bartele.kq"; the script's `loadKQ … @` (no template while playing) and `setState Connor Portal` are logged as not done |
 | 6d-7: the world's map is handed to the rules first in each update (before scripts and traps) | The original loads it in `newWorld.cs` (rule 3); found by the keep pad's trap saying `onTeleport` at update 1 | Viewer: "onTeleport: Connor is on the pad" (before: "KQMap not loaded") |
+
+## M6 6e: moving between worlds — viewer `world_build.rs`, `log.rs`, `main.rs`
+
+Source: `docs/behaviour/world-change.md` (A, 2026-10-21; the user's check
+in the original 2026-10-22). Plan: `docs/DESIGN.md` "6e".
+
+| Fact / rule | Source | Checked how |
+| --- | --- | --- |
+| 6e-1: a world is read, its resources put in and its start-up systems run as one path (`read_world`, `insert_world`, the `BuildWorld` schedule), used by the launch | **Ours** (how our viewer is split up); the original also builds each world inside the running program (rules 7–8) | `cargo play --world Daventry` / `Swamp`, 300 frames, before and after: every log's common part the same apart from lines tied to real time (the same between two runs of one build) |
+| 6e-1: every entity spawned with a `Transform` or a `Node` is marked as the world's (`WorldEntity`), unless marked `Persistent`; the per-world resources are listed in one place | **Ours** | Viewer: "world built: Daventry: … entities 132882 (132449 marked WorldEntity) … per-world resources 50 of 50", the same in two runs |
+| 6e-1: each log is emptied the first time it is opened in a run and added to after that | **Ours** (DESIGN "6e": logs keep their lines across worlds) | Each log name is opened once at launch today, so no change yet |

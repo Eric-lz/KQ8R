@@ -70,6 +70,7 @@ mod sound_view;
 mod talk_view;
 mod terrain_view;
 mod wall_lights;
+mod world_build;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -84,6 +85,7 @@ use kq8_data::shape::Triangle;
 use kq8_data::{GameDir, Lighting};
 
 use load::{Model, World};
+use world_build::WorldRead;
 use log::Log;
 
 /// Game units per viewer unit. Models are a few hundred game units
@@ -481,33 +483,34 @@ fn main() -> ExitCode {
     // kinds does not matter.
     #[allow(clippy::large_enum_variant)]
     enum Scene {
-        Model(Model),
-        Ground(load::Ground, load::Objects, load::GroundAnimAssets),
+        Model(Model, Option<object_light::ObjectLight>),
+        Ground(WorldRead),
     }
+    // How any world is built (M6 6e-1).
+    let opts = world_build::Options {
+        light: args.light,
+        haze: args.haze,
+        corners: args.corners,
+        sound: args.sound,
+        kept_maps: args.kept_maps.clone(),
+    };
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
-        .and_then(|game| {
-            let world = World::open(&game, &args.world)?;
-            log.summary(format!("world: {}", world.name));
-            // M1 step 5b: the lights for models, in both views; step 6: the
-            // haze (no terrain in the model view: the note's defaults).
-            let lights = load::load_object_lights(&game, &world, &mut log);
-            let mut haze = None;
-            let scene = match &args.model {
-                None => {
-                    let mut ground = load::load_ground(&game, &world, &mut log)?;
-                    haze = Some(load::load_haze(&game, &world, Some(&ground.terrain.settings), &mut log));
-                    let mut objects = load::load_objects(&game, &world, &ground.terrain, &mut log);
-                    let animators = std::mem::take(&mut objects.animators);
-                    let animation = load::prepare_ground_animation(&game, &world, &mut ground, animators, &mut log);
-                    Scene::Ground(ground, objects, animation)
-                }
-                Some(name) => Scene::Model(load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log)?),
-            };
-            let haze = haze.unwrap_or_else(|| load::load_haze(&game, &world, None, &mut log));
-            Ok((scene, lights, haze))
+        .and_then(|game| match &args.model {
+            // The world is read the way every world is (6e-1).
+            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, &mut log)?)),
+            Some(name) => {
+                let world = World::open(&game, &args.world)?;
+                log.summary(format!("world: {}", world.name));
+                // M1 step 5b: the lights for models; step 6: the haze (no
+                // terrain in the model view: the note's defaults).
+                let lights = load::load_object_lights(&game, &world, &mut log);
+                let model = load::load_model(&game, &world, name, args.palette.as_deref(), None, &mut log)?;
+                let haze = load::load_haze(&game, &world, None, &mut log);
+                Ok(Scene::Model(model, Some(object_light::ObjectLight::new(lights, args.light, haze, args.haze))))
+            }
         });
-    let (scene, lights, haze) = match loaded {
+    let mut scene = match loaded {
         Ok(s) => s,
         Err(e) => {
             log.summary(format!("error: {e}"));
@@ -522,7 +525,7 @@ fn main() -> ExitCode {
 
     let shared = Shared { log: Arc::new(Mutex::new(log)), stats: Arc::new(Mutex::new(Stats::default())) };
     let title = match &scene {
-        Scene::Model(m) => format!("KQ8 viewer - {}", m.label),
+        Scene::Model(m, _) => format!("KQ8 viewer - {}", m.label),
         Scene::Ground(..) => format!("KQ8 viewer - {} ground", args.world),
     };
     let mut app = App::new();
@@ -538,13 +541,16 @@ fn main() -> ExitCode {
     .add_systems(Update, renderer::report_renderer)
     .insert_resource(ClearColor(Color::srgb(0.18, 0.2, 0.24)))
     .insert_resource(shared.clone())
-    .insert_resource(object_light::ObjectLight::new(lights, args.light, haze, args.haze));
+    .insert_resource(match &mut scene {
+        Scene::Model(_, light) => light.take().expect("the model's light is put in once"),
+        Scene::Ground(read) => world_build::object_light(read, &opts),
+    });
     object_light::add(&mut app);
     building_light::add(&mut app);
     ground_haze::add(&mut app);
     draw_distance::add(&mut app);
     match scene {
-        Scene::Model(model) => {
+        Scene::Model(model, _) => {
             let size: [f32; 3] = std::array::from_fn(|i| model.max[i] - model.min[i]);
             let radius = 0.5 * (size[0] * size[0] + size[1] * size[1] + size[2] * size[2]).sqrt() / UNITS_PER_METRE;
             app.insert_resource(Loaded(Some(model)))
@@ -553,35 +559,12 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (setup, object_light::report_lights).chain())
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
-        Scene::Ground(ground, mut objects, animation) => {
-            let audibles = std::mem::take(&mut objects.audibles);
-            // Remarks and speech (M4 4a-2).
-            if let Ok(g) = GameDir::open(&args.game) {
-                objects.talk = Some(talk_view::load_talk(&g, &args.world, &mut shared.log.lock().unwrap()));
-                // The caption as the original's (M4 4b-3).
-                if let Some(style) = talk_view::load_caption(&g, &args.world, &mut shared.log.lock().unwrap()) {
-                    app.insert_resource(style);
-                }
-                // The panels (M4 4c-2).
-                if let Some(mut gui) = gui_view::load_gui(&g, &args.world, &mut shared.log.lock().unwrap()) {
-                    gui.corners = args.corners;
-                    app.insert_resource(gui);
-                }
-                // The magic map (M6 6d-2).
-                app.insert_resource(map_view::load_map(&g, &args.world, objects.map.take(), args.kept_maps.as_deref(), &mut shared.log.lock().unwrap()));
-            }
-            let music = objects.music.take();
-            app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
-            if let Some(sound) = GameDir::open(&args.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &args.world, args.sound, audibles, music)) {
-                app.insert_resource(sound);
-            }
-            app.insert_resource(light_view::GroundLight::new(ground.light.clone(), ground.other_light.clone(), args.light, ground.dynamic))
-                .insert_resource(terrain_view::LoadedGround(Some(ground)))
-                .insert_resource(ground_anim_view::LoadedGroundAnim(Some(animation)))
-                .insert_resource(terrain_view::FloorView(0))
-                .insert_resource(terrain_view::LoadedObjects(Some(objects)))
-                .insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
-                .insert_resource(terrain_view::Fly::new())
+        Scene::Ground(read) => {
+            // The world's resources and start-up systems (6e-1): put in
+            // and run by `world_build::build_pending` at Startup.
+            world_build::add(&mut app);
+            app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
+            app.insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
                 .insert_resource(connor_view::JumpAt(args.jump.clone()))
@@ -592,29 +575,20 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::CommandAt(args.command))
                 .insert_resource(console::Console::start())
                 .insert_resource(door_view::RightAt(args.right))
-                .insert_resource(door_view::LoadQueue::default())
                 .insert_resource(door_view::AimAt(args.aim))
                 .insert_resource(door_view::SwingAt(args.swing))
-                .init_resource::<door_view::Deleted>()
-                .init_resource::<door_view::CharacterColliders>()
-                .init_resource::<talk_view::Speech>()
                 .insert_resource(door_view::HeldItem(args.item, args.combat_level))
                 .insert_resource(door_view::AiOff(args.no_ai))
                 .insert_resource(door_view::GodStart(args.god))
                 .insert_resource(gui_view::KeyAt(args.key))
-                .init_resource::<gui_view::GuiCover>()
-                .init_resource::<gui_view::MapDrag>()
-                .init_resource::<gui_view::ScreenFrame>()
-                .init_resource::<gui_view::BarActions>()
-                .init_resource::<gui_view::CaptionPlace>()
                 // Game logic at the original's 15 updates per second
                 // (docs/DESIGN.md, M2 "Physics rate").
                 .insert_resource(Time::<Fixed>::from_hz(kq8_core::UPDATES_PER_SECOND))
-                .insert_resource(game_camera::CameraChoice { game: false })
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (console::console_step, draw_distance::apply_collider_switches, door_view::door_step, connor_view::late_set_step, door_view::character_gravity, connor_view::connor_step, connor_view::push_apply, rope_view::rope_step, door_view::trap_step, talk_view::talk_step, door_view::apply_loads, copies_view::spawn_copies, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain())
-                .add_systems(Startup, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
+                .add_systems(Startup, world_build::build_pending)
+                .add_systems(world_build::BuildWorld, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, (terrain_view::toggle_markers, terrain_view::toggle_floor, door_view::toggle_ai, door_view::toggle_god), light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera, frame_stats).chain())
                 // F7 also switches the models' light (M1 5b).
                 .add_systems(
@@ -622,10 +596,9 @@ fn main() -> ExitCode {
                     (object_light::follow_ground_mode, building_light::follow_mode).chain().after(light_view::toggle_light),
                 )
                 // Haze (M1 step 6): F8, its on-screen line, the log.
-                .init_resource::<object_light::HazeCheck>()
-                .add_systems(Startup, (object_light::setup_haze_label, door_view::setup_ai_label, door_view::setup_god_label))
+                .add_systems(world_build::BuildWorld, (object_light::setup_haze_label, door_view::setup_ai_label, door_view::setup_god_label))
                 // Captions (M4 4a-4).
-                .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
+                .add_systems(world_build::BuildWorld, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
                 .add_systems(FixedUpdate, map_view::map_install.before(console::console_step))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step))
