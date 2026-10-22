@@ -7,6 +7,18 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-22)
 
+- **2026-10-22 (B): fixes after the user's look at 6e** (one commit
+  each). The popup: text centred with more line space; buttons plain /
+  gold-highlighted / held down, answering when the mouse button or Enter
+  is let go (the user: "good enough", exact look for A: Q151 d, e).
+  After No: a key let go during the question no longer sticks; Connor
+  stands at once. Worlds with a parent (Castle Daventry, Snow exit,
+  Temples 2–4) take voices and sounds from it (the user: Castle voices
+  work). Characters loaded by a script can speak (the Castle's mirror
+  scene with Lucreto works, user-checked). **Not fixed, blocking the
+  Castle's key puzzle: Q153** (the King's portrait snaps back: the frame
+  rule for a still pose near the end of a repeating loop).
+
 - **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
   `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
   **the loading screen checked by the user by eye, the rest in the logs
@@ -698,10 +710,15 @@ M6 has started with the Rope and Hook (6a).
 - Inside `world-change.md`: three small points (not blocking):
   left-world variables in memory, the rope / movement list after
   arrival, `worldState.kq`'s events.
+- For A (asked 2026-10-22 by B, **blocking the Castle's key puzzle**):
+  **Q153** (which frame a repeating loop shows at phase p: the King's
+  portrait `stop2` at 0.99 shows frame 0 by our rule; the user sees it
+  stay pushed in the original).
 - For A (asked 2026-10-22 by B, 6e, not blocking): **Q151** (the popup's
-  first highlighted button; Enter repeating; c: the buttons' places) and
-  **Q152** (when the loading screen's black bar shows; meters stretched
-  or tiled).
+  first highlighted button; Enter repeating; c: the buttons' places; d, e:
+  the text placement and the buttons' looks, the user's looks at the
+  original) and **Q152** (when the loading screen's black bar shows;
+  meters stretched or tiled).
 - For A (asked 2026-10-21 by B, magic map, not blocking): **Q150** (a:
   Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
   marks unused column 460; c: icons before or after the colour match;

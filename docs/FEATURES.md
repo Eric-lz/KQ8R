@@ -692,8 +692,10 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
   or using a teleporter opens the question "You are about to load a new
   region. Are you sure you want to do that?" with Yes (left) and No
   (right). The game pauses meanwhile; music and sounds go on.
-  Left / Right move the highlight, Enter chooses, Escape is No, or click
-  a button. No puts Connor a step back; walking in again asks again.
+  Left / Right move the highlight (gold outline); a button goes down
+  while the mouse button or Enter is held and answers when let go;
+  Escape is No. No puts Connor a step back, standing; walking in again
+  asks again.
 - **Yes:** Connor plays the exit's movement (`portal`, `teleportdown`,
   the elevator's, …), then the loading screen: the world's picture with
   the red meter growing in its frame, kept at 4:3. The window keeps
@@ -710,8 +712,11 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
   or killed there stay gone. Other things (positions, opened chests
   without a variable, items dropped there, bodies) start fresh for now:
   full kept worlds come with saved games. Temple 1 drops kept worlds.
+- **Worlds with a parent** (Castle Daventry, Snow exit, Temples 2–4)
+  use its voices and sounds (Castle checked by ear by the user).
 - **Not yet:** the full-armour movement list on arrival; the main menu
-  from Escape on the question.
+  from Escape on the question; the Castle's King portrait snaps back
+  after the push (Q153), so its key can't be taken.
 
 ## Viewer helpers (not in the original)
 

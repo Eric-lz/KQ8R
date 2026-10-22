@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 End of session (B): STATUS and FEATURES brought up to date
+
+**Changed:** Docs only: STATUS ("Where we are": today's fixes; open questions Q153 blocking, Q151, Q152), FEATURES (the popup's buttons, parent worlds' voices, the portrait).
+**Why:** The user ends the session ("the highlighted buttons are good enough; a study session can answer the rest").
+**Tested how:** The user, by eye and ear: the popup's buttons acceptable; Castle voices and the mirror scene work.
+**Result:** —
+**Still broken / not tested:** Q153 (the King's portrait) blocks the Castle's key puzzle. The allocator choice (reading slows with each world change) is still the user's to make.
+**Next:** A: Q153, Q151, Q152. B: after Q153, the portrait; then saved games (kept worlds in full).
+
 ## 2026-10-22 Fix: the popup's buttons (highlight, held down, answer on release)
 
 **Changed:** `kq8-core` `gui_draw.rs`: a stretched picture piece (`Piece::Stretched`, `Canvas::picture_stretched`; unit test `a_stretched_picture_is_not_repeated`). Viewer `gui_view.rs`: the popup's buttons have three looks (plain `yesbtn.pba` frame 0; highlighted `buyhibtn.pba`, the gold outline, stretched to the button; held down `yesbtn.pba` frame 1 with the label moved 1 right, 1 down) and answer when the mouse button or Enter is let go (the mouse: on the button it went down on). QUESTIONS Q151 (e).
