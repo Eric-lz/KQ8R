@@ -134,7 +134,9 @@ impl crate::active::Active {
                 lines.push("No: noLoc (-1, -1, -1): Connor stays".into());
             }
             self.world.connor_portal = None;
-            lines.push("No: Connor stands and waits (back to Wait); the game goes on".into());
+            // The user's check: straight to standing, not a walk's stop.
+            self.world.requests.push(crate::active::Request::ConnorStandNow { at: "portal No".into() });
+            lines.push("No: Connor stands at once (back to Wait, no stop transition); the game goes on".into());
         } else {
             // Rule 4.
             let accepted = self.call_named(&portal, &["Accept"]);

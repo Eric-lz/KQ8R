@@ -1177,6 +1177,11 @@ pub fn trap_step(
                 format!("{at}: applied: Connor {line}")
             }
             Request::EndJump { at } => format!("{at}: applied: {}", connor.end_jump(&at)),
+            Request::ConnorStandNow { at } => {
+                connor.walker.stand_now();
+                connor.intent = Default::default();
+                format!("{at}: applied: Connor straight to standing (stop from its start)")
+            }
             Request::SetRun { run, at } => {
                 connor.set_run(run, &at);
                 format!("{at}: applied: Connor's run switch {}", if run { "on" } else { "off" })

@@ -124,6 +124,9 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// Connor straight to standing (M6 6e: after No to the Portal state's
+    /// question).
+    ConnorStandNow { at: String },
     /// A hit took health from Connor and he lives (`fighting.md` rule 29;
     /// M5 5c-4): he flinches if `roll_over` (*R* > 0.9 *D*), his movement
     /// can be cut short and his last flinch ended over 2 s ago, else his

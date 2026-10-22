@@ -732,6 +732,25 @@ impl Walker {
         })
     }
 
+    /// Straight to standing, its `stop` movement from the start: no stop
+    /// transition, nothing waiting, no Special list (M6 6e fix, the user's
+    /// check 2026-10-22: after No at a walking exit he must not finish a
+    /// walk's stop and step back into the trap).
+    pub fn stand_now(&mut self) {
+        self.mode = Mode::Free;
+        self.movement = "stop";
+        self.phase = 0.0;
+        self.wanted = None;
+        self.waiting = None;
+        self.playing = None;
+        self.choice = "stop";
+        self.special.clear();
+        self.special_at = 0;
+        self.blocked_forward = false;
+        self.blocked_back = false;
+        self.bank = 0.0;
+    }
+
     /// Rule 2.6 failed: the standing state (Wait). Only the state: the
     /// animation goes on (a stop transition already asked for still
     /// plays); the keys ask again next update.

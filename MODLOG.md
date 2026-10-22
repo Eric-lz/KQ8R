@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: after No, Connor stands at once
+
+**Changed:** `kq8-core` `connor.rs` (`Walker::stand_now`), `active.rs` (`Request::ConnorStandNow`), `portal.rs` (No asks for it); viewer `door_view.rs` applies it (and clears his intent).
+**Why:** The user's look: after No he was put back, the key no longer stuck, but he still played the walk's stopping movement as if Forward had just been let go; he must go straight to standing so he doesn't walk into the trap again.
+**Tested how:** core 512 tests. `kq8-viewer --world Daventry --frames 2000 --sound off --command "move Connor 0 158510 307740 9925 0 0 3.1416",2 --hold 1,0,0,5,22 --key popup:no,22`; `connor.log`, `traps.log`.
+**Result:** Update 23: "Connor straight to standing (stop from its start)"; update 24: at `noLoc`, movement `stop` from phase 0 (before: `walk`, then the stop transition); the trap fired once.
+**Still broken / not tested:** Not looked at. With a real key (not `--hold`) not tried.
+**Next:** The popup's buttons (press and release).
+
 ## 2026-10-22 King's portrait snaps back: Q153 (not fixed)
 
 **Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q153.
