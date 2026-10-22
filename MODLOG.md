@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Plan 6e: moving between worlds
+
+**Changed:** Docs only: `docs/DESIGN.md` "6e" (plan), STATUS.
+**Why:** The user: the teleport needs a different world loaded while the game runs; plan it for a new session B.
+**Tested how:** Not applicable (a plan). Read the viewer's start-up (`main.rs`: one world read before the window opens, ~60 resources, 4 groups of start-up systems, 18 logs emptied when opened), the notes that touch a world change (`magic-map.md` rule 40, `interface.md` rules 1, 1d, 19, `sound.md` 55, 57j, `potions.md`, `objects.md` 1, 5), and the data (21 walking-exit portals in 11 worlds, e.g. Daventry `portal1.kq` to Castle Daventry).
+**Result:** Plan: in the same program (not a restart); world entities marked and taken down; one function builds a world (launch included), loading on a background thread behind the loading screen; Connor's "journey" as one record (also for saved games later); kept worlds first only their maps, in full later with saved games. Steps 6e-0 (A: study the world change, six unknowns) and 6e-1 to 6e-7 (B), each with a test.
+**Still broken / not tested:** Nothing built.
+**Next:** A: 6e-0. B: 6e-1 to 6e-3 (they don't need 6e-0).
+
 ## 2026-10-21 Magic map: the user's check in our build
 
 **Changed:** Docs only: FEATURES, STATUS.

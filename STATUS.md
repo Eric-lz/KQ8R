@@ -495,8 +495,10 @@ M6 has started with the Rope and Hook (6a).
   the world change, `destConnorLoc` / `destCamLoc`, `exitAnim`) and
   walking exits need the viewer to unload one world and load another,
   with each left world's state kept (the maps' fog among it). That is a
-  larger change of how the viewer starts a world: to be planned with the
-  user. Help popups (`doPopup`, the "Go" help 151) are logged only.
+  larger change of how the viewer starts a world: **planned 2026-10-21,
+  `docs/DESIGN.md` "6e"** (the user agreed it is needed): A studies the
+  world change first (6e-0); B can start 6e-1 to 6e-3 meanwhile. Help
+  popups (`doPopup`, the "Go" help 151) are logged only.
 - **Stand-ins of 6d:** the follow margin (20 px inside every edge);
   layout pixels at 800 × 600 for the view and the mouse; Connor's place
   given to the map once per update; a world never left shown from its

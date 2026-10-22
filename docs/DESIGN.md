@@ -2102,6 +2102,161 @@ Steps (one commit each):
    between worlds. **Test:** Daventry on the keep's pad with
    `--kept-maps`; `map.log`, `doors.log`.
 
+#### 6e — Moving between worlds (planned 2026-10-21)
+
+Why: the magic map's teleporter stops at the world change (6d-7), and
+walking exits (Daventry's `portal1.kq` to Castle Daventry,
+`davgate4.kq` to Dead City, 21 such portals in 11 worlds) do nothing.
+Today the viewer loads **one** world, before its window opens
+(`main.rs`: ground, objects, panels, sound, map are read, then about 60
+resources are inserted and 4 groups of start-up systems spawn
+everything once). Changing worlds means taking one world down and
+building another while the program keeps running. The user agreed
+(2026-10-21) that this must be built; this section is the plan, to be
+built by a new session B.
+
+Words: **world change** = leaving one world and arriving in another;
+**journey** = what goes with Connor from world to world (his items,
+stats, potions, map marks, …); **kept world** = what the game remembers
+of a world Connor left, for when he comes back; **portal** = a
+`KQPortal` object (a walking exit or a teleporter's) whose `world`,
+`destConnorLoc/Dir`, `destCamLoc/Dir`, `enterAnim`, `exitAnim`,
+`noLoc`, `exitScript` drive the change (`magic-map.md` rule 40).
+
+What the notes already say:
+
+- `magic-map.md` rule 40: the Portal state up to the change (Yes/No
+  question 114, `Decline` / `Accept`, `noLoc`, `handsOff 1`, first person
+  off, `enterAnim` from `conner.anm` or `conner2.anm`, the destination
+  handed over); the arrival is open question 4 (not traced).
+- `interface.md` rules 1, 1d, 19: a loading screen with `loading.ppl`
+  (copied from `GAME/8Gui/L<world>.ppl`) and a loading picture; the new
+  world's palette from its first frame; the saved panel set shown when
+  the screen opens.
+- `sound.md` rules 55, 57j: effects and speech silent while loading, the
+  music's own rule.
+- `potions.md`: potions survive a world change. `objects.md` rules 1, 5:
+  a world starts by `world.cs` (`Init`, `Load`, `Begin`), `newWorld.cs`;
+  a saved world is a script of `loadKQ` lines.
+- The user's saves show what the original keeps: each left world as its
+  own archive inside the save (`Daventry.vol`, `CastleD.vol`) and its
+  map as text (`davMap.kq`), plus `WorldVar.cs` (6d-1).
+
+What is **not** known (needs session A first, step 6e-0):
+
+1. The arrival: in what order the new world is built, where Connor and
+   the camera go (`destConnorLoc` with z −1?), when `exitAnim` and
+   `exitScript` run, what `world.cs` / `newWorld.cs` / `conStart.cs` do
+   on arrival versus at a new game.
+2. What a left world keeps and how it comes back: objects moved,
+   deleted, opened (doors, chests), items taken or dropped, dead
+   creatures, traps, script variables (`WorldVar.cs`: per world or
+   global?), the map (rule 34: kept, inferred).
+3. The journey: which of Connor's things go with him (inventory, held
+   item, stats, level, potions, weapon ready or not, rope status,
+   `setConnorFlag` flags, combat level) and what is reset.
+4. The loading screen: the picture, how long, input during it, what the
+   panels do (the map closes: rule 40).
+5. Walking exits: how the portal objects and their traps
+   (`portaltp.kq` + `portal1.kq`) start the Portal state, whether every
+   one asks the Yes/No question, the `noLoc` move on No.
+6. The Yes/No popup itself (`IDCTL_POPUP`): its look, keys, and whether
+   the game pauses meanwhile (help popups are not built either).
+
+How it will work (B's design, for the user to approve):
+
+- **In the same program, not a restart.** The window, the sound card,
+  the console and the logs stay; one world is taken down and the next
+  built. (Rejected: closing the viewer and starting it again with the
+  journey in a hand-over file: simple, but a black window for seconds,
+  the console lost, and no way to show a loading screen.)
+- **Every entity a world spawns gets a `WorldEntity` mark** and every
+  per-world resource is listed in one place, so leaving a world removes
+  exactly those (checked by counting entities and assets before and
+  after: a round trip must leave the same counts).
+- **Building a world becomes one function** run on request (today it is
+  `main()` plus the start-up systems): read the files on a background
+  thread (3–5 s now) while the window keeps drawing the loading screen,
+  then insert the resources and spawn as the start-up systems do now.
+  The first world at launch goes the same way, so there is one path.
+  Bevy's app states (`Loading`, `Playing`) choose which systems run: the
+  game's update systems don't run while loading.
+- **The journey is one record** (`kq8-core`), taken from the world when
+  it is left and given to the next one: Connor's items, stats and level,
+  potions, weapon, map marks and view (`map_view`, `map_marks`), the
+  other worlds' maps (`other_maps`), and whatever 6e-0 adds. Saved games
+  will store the same record.
+- **Kept worlds**, in two stages:
+  1. first version: only the left world's **map** is kept (its fog,
+     icons, `earnedTeleport` go into `other_maps`; paging and the "Go"
+     button then work for real). Everything else of a world starts fresh
+     when Connor comes back: a known gap, logged at each arrival.
+  2. later, with saved games: a world's full state (from 6e-0's answer)
+     kept in memory when left and restored on return; saved games write
+     the same thing to disk. That is a milestone of its own.
+- **Logs**: they are opened once per run and keep their lines across
+  worlds; each world change writes a `== world change: A -> B ==` line
+  to every log (today each log is emptied when it is opened).
+
+Steps (one commit each; each ends with a test and a log check):
+
+0. **6e-0 (session A): study "world change and loading"**, answering
+   the six unknowns above, as `docs/behaviour/world-change.md`, then the
+   user's check in the original (teleport, walk through the Daventry –
+   Castle exit, come back, see what is kept). B starts 6e-1 to 6e-3
+   meanwhile (they don't depend on it).
+1. **6e-1, one way to build a world (no behaviour change).** The loading
+   and spawning that `main()` and the start-up systems do now becomes a
+   function run on a request; the launch uses it. Every spawned entity
+   gets `WorldEntity`; the per-world resources are listed. **Test:**
+   `cargo play --world Daventry` and `--world Swamp`: every log the same
+   as before the change (line counts and the summary lines in
+   `viewer.log`), same load time ±10 %.
+2. **6e-2, taking a world down.** Removes the marked entities and the
+   listed resources, and the assets only they used. Dev console word
+   `reload` (ours): takes the world down and builds the same world again
+   at the same place. **Test:** `reload` three times: entity, mesh,
+   texture and material counts in `viewer.log` the same after each;
+   memory (logged) not growing; Connor at the same place.
+3. **6e-3, the journey.** The carried record in `kq8-core` with unit
+   tests (taken and given back unchanged); `reload` keeps Connor's
+   items, stats, potions and map marks. Dev console word `goworld
+   <World> [x y heading]` (ours, like the original's debug aliases):
+   to any world, Connor placed there. Stand-ins for what 6e-0 hasn't
+   answered, each marked. **Test:** Daventry, `give MagicMap`, walk,
+   `goworld Swamp`: `stats`, `inv` the same; Swamp's map active; page
+   back to Daventry's map with its fog.
+4. **6e-4, the loading screen and the arrival** (from 6e-0). Loading on
+   a background thread with the screen drawn meanwhile; sounds as
+   `sound.md` rule 55; Connor and the camera at the portal's
+   `destConnorLoc/Dir`, `destCamLoc/Dir`; `exitAnim`; `exitScript`
+   `Exit`; `handsOff 0`. **Test:** `goworld` with a portal file
+   (`goworld portal Davtele.kq`): `connor.log` place and heading,
+   `anim.log` `teleportup`, frame times during the load.
+5. **6e-5, the Yes/No popup and the Portal state** (`magic-map.md` rule
+   40, 6e-0 item 6). The popup panel (`IDCTL_POPUP`) with text 114, Yes
+   29, No 14; No: `Decline`, the `noLoc` move; Yes: `Accept`, handsOff,
+   first person off, `enterAnim`, then the world change of 6e-4. The
+   teleport scripts' `loadKQ <portal> @ x y z` of a `GAME/Kq` file while
+   playing (today refused: no template). **Test:** Daventry's keep pad,
+   page to Barren (`earnTeleport barrMap.kq`), Go, Yes: `map.log`,
+   `connor.log`; arrives on Barren's pad; No: stays, map open.
+6. **6e-6, walking exits.** The portal traps start the Portal state as
+   6e-0 describes. **Test:** walk from Daventry to Castle Daventry and
+   back; through the gate to Dead City.
+7. **6e-7, kept maps for real.** Leaving a world puts its map into
+   `other_maps`; `--kept-maps` stays only as a test option. **Test:**
+   Daventry → Castle → Daventry: Castle's fog on its page; Daventry's
+   own fog as left.
+
+Later, its own milestone with saved games: kept worlds in full (stage 2
+above).
+
+Risks: start-up systems and `Local` values that assume they run once
+(each must be found in 6e-1 and reset on a new world); assets leaking
+across worlds (counted in 6e-2); the 3–5 s load (the loading screen
+hides it; making it faster is separate work).
+
 ### M7 — Match the original, then improve
 
 Play the original next to ours, list differences, fix them. After that,
