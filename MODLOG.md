@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 King's portrait snaps back: Q153 (not fixed)
+
+**Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q153.
+**Why:** The user: in Castle Daventry the King's portrait, once pushed, snaps back, so the key behind it can't be taken.
+**Tested how:** `kq8-viewer --world CastleD --frames 5000 --sound off --command "move Connor 0 15390 90700 -1 0 0 0",5 --hold 1,0,0,10,60`; `doors.log`.
+**Result:** The push works as scripted (update 29: `Push`, `keys.kq` loaded, `push`, Connor's `c_pshpic`; update 74: `stop2` at phase 0.99, speed 0). `stop2` is a repeating loop of 46 frames, and both the start-frame rule (`objects.md` rule 2: round(0.99 × 46) = 46) and our play rule (rule 6, round(phase × frames) mod frames) give frame 0: the unpushed pose. The user sees it stay pushed in the original, so the notes' rule is off here; the frame rule for repeating loops was never traced. Not changed: a guess would move every repeating object's frames by half a frame.
+**Still broken / not tested:** The portrait snaps back; the Castle key puzzle is blocked until Q153 is answered.
+**Next:** A: Q153.
+
 ## 2026-10-22 Fix: the popup's text and buttons
 
 **Changed:** Viewer `gui_view.rs`: the question's lines are centred across and down in the area above the buttons, 24 layout pixels apart (no longer in the layout's top slots); both buttons use `yesbtn.pba` (frame 0 plain, frame 1 highlighted); the lines' places logged in `gui.log`. QUESTIONS Q151 (d).
