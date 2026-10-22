@@ -70,6 +70,8 @@ struct InvView {
     rope: Option<String>,
     /// The rocks: name, count, picture file (rule 45).
     rocks: Option<(String, i64, Option<String>)>,
+    /// The magic map's item (`magic-map.md` rule 1; M6 6d-5).
+    map_item: Option<String>,
     /// Every carried item's count and category (for blinking and news).
     counts: std::collections::BTreeMap<String, (i64, String)>,
 }
@@ -130,6 +132,8 @@ struct MapShown {
     pixels: Vec<u8>,
     /// Rule 22 (layout pixels from the area's centre).
     view: [f64; 4],
+    /// Rule 27: the mini-map's own view (its size is used).
+    mini_view: [f64; 4],
     /// Rule 11: Connor's last map pixel; rule 17: the arrow frame.
     pixel: Option<(i32, i32)>,
     frame: usize,
@@ -593,6 +597,21 @@ impl Gui {
                         "IDCTL_METERS_EXP" => Some(meters::bar_width(full, self.meters.experience_percent)),
                         _ => None,
                     };
+                    // M6 6d-5 (magic-map.md rule 27): while the map is active
+                    // the slot draws it at the mini-map's own size, Connor's
+                    // pixel at its middle, with his arrow; over the empty
+                    // picture, which shows while the item blinks (rule 2,
+                    // interface.md rule 44).
+                    if name == MINIMAP {
+                        let blinking = self.inv.map_item.as_ref().is_some_and(|n| self.blank(n));
+                        if let Some((m, p)) = self.map.as_ref().filter(|m| m.active && m.version.is_some() && !blinking).and_then(|m| m.pixel.map(|p| (m, p))) {
+                            let (w, h) = (m.mini_view[2] - m.mini_view[0], m.mini_view[3] - m.mini_view[1]);
+                            let (left, top) = (-(p.0 as f64) * w / kq8_data::magic_map::MAP_SIZE as f64, -(p.1 as f64) * h / kq8_data::magic_map::MAP_SIZE as f64);
+                            let view = kq8_core::magic_map::View { left, top, right: left + w, bottom: top + h };
+                            let (ax, ay) = view.arrow_at(p);
+                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: view.as_array(), arrow: Some((m.arrow_file.clone(), m.frame, [ax, ay])) });
+                        }
+                    }
                     // M6 6d-3 (magic-map.md rules 6, 18): the map over the
                     // black area, the arrow when Connor's pixel is known.
                     if name == MAP_AREA {
@@ -834,6 +853,7 @@ fn inventory_view(gui: &Gui, items: &kq8_core::item::Items) -> InvView {
             "Money" => v.gold = Some((o.name.clone(), o.quantity, file)),
             "Rope" => v.rope = Some(o.name.clone()),
             "Rock" => v.rocks = Some((o.name.clone(), o.quantity, file)),
+            kq8_core::magic_map::MAP_CATEGORY => v.map_item = Some(o.name.clone()),
             "HealthItem" => {
                 if let Some(k) = kq8_core::connor_inventory::SLOT_TYPES.iter().position(|s| s.eq_ignore_ascii_case(&o.kind)) {
                     v.slots[k] = Some((o.name.clone(), o.quantity, file));
@@ -1063,6 +1083,7 @@ pub fn gui_step(
         let was_active = shown.active;
         shown.active = m.active;
         shown.view = m.view.as_array();
+        shown.mini_view = m.mini_view.as_array();
         shown.pixel = m.last_pixel;
         shown.frame = m.frame;
         shown.arrow_file.clone_from(&m.keys.arrow_pba);
@@ -1128,7 +1149,7 @@ pub fn gui_step(
             }
         }
         let line = format!(
-            "update {updates}: the bars show: quest strip {:?} (first shown {}), mask {:?}, gold {:?}, slots {:?}, rope {:?}, rocks {:?}; blinking {:?}",
+            "update {updates}: the bars show: quest strip {:?} (first shown {}), mask {:?}, gold {:?}, slots {:?}, rope {:?}, rocks {:?}, map {:?}; blinking {:?}",
             inv.quest.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
             gui.quest_first,
             inv.mask.as_ref().map(|(n, _)| n),
@@ -1136,6 +1157,7 @@ pub fn gui_step(
             inv.slots.iter().map(|s| s.as_ref().map(|(_, c, _)| *c).unwrap_or(0)).collect::<Vec<_>>(),
             inv.rope,
             inv.rocks.as_ref().map(|(n, c, _)| (n, c)),
+            inv.map_item,
             gui.blinks.keys().collect::<Vec<_>>()
         );
         gui.note(line);
@@ -1394,11 +1416,17 @@ pub fn gui_draw(
         if let Some(mut slot) = images.get_mut(&image.image) {
             *slot = picture;
         }
+        // M6 6d-5: the mini-map slot showing its empty picture while the
+        // map is active (the item's blink, or no pixel yet).
+        if d == Drawn::Panel(Panel::BottomRight) && gui.map.as_ref().is_some_and(|m| m.active) && !specs.iter().any(|s| matches!(s, Spec::Map { .. })) {
+            let line = format!("{} drawn: the mini-map slot shows its empty picture (the item blinking, or Connor's pixel not known; magic-map.md rule 27, interface.md rule 44) at {:.0} ms", d.layout_id(), gui.panels.now_ms);
+            gui.note(line);
+        }
         // M6 6d-3: each redraw of the map with its view and arrow.
         for s in &specs {
             if let Spec::Map { version, view, arrow, .. } = s {
                 let arrow = arrow.as_ref().map_or("no arrow (Connor's pixel not known yet)".to_string(), |(_, frame, at)| format!("arrow frame {frame}, top-left ({:.1}, {:.1}) from the area's centre", at[0], at[1]));
-                let line = format!("{} drawn: picture version {version}, view ({:.2}, {:.2})-({:.2}, {:.2}) from the area's centre, shown {:.1} x {:.1} layout px; {arrow} (magic-map.md rules 6, 18, 22)", d.layout_id(), view[0], view[1], view[2], view[3], view[2] - view[0], view[3] - view[1]);
+                let line = format!("{} drawn at {:.0} ms: picture version {version}, view ({:.2}, {:.2})-({:.2}, {:.2}) from the area's centre, shown {:.1} x {:.1} layout px; {arrow} (magic-map.md rules 6, 18, 22)", d.layout_id(), gui.panels.now_ms, view[0], view[1], view[2], view[3], view[2] - view[0], view[3] - view[1]);
                 gui.note(line);
             }
         }

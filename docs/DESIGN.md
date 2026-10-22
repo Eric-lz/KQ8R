@@ -2078,7 +2078,7 @@ Steps (one commit each):
    on Connor. World clicks and the camera's right drag are not taken
    over the map. **Test:** test options for a drag (`--drag`), `map.log`
    views.
-5. **6d-5, the mini-map** (rule 27). The bottom-right slot draws the
+5. **6d-5, the mini-map** (**done** 2026-10-21) (rule 27). The bottom-right slot draws the
    current map at its own view's size, Connor's pixel at its middle,
    with his arrow; `2mapblnk.pbm` while not active. **Test:** `gui.log`.
 6. **6d-6, other worlds' maps** (rules 32–34). The page arrows step

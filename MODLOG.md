@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-5: the mini-map in the bottom-right slot
+
+**Changed:** Viewer `gui_view.rs`: the `IDCTL_INVBAR_MINIMAP` slot draws the live map (its own view's size, Connor's pixel at the middle, the arrow) while the map is active; the item's blink shows the empty picture; `gui.log` lines for each redraw with the real time.
+**Why:** M6 6d step 5 (`magic-map.md` rule 27, `interface.md` rules 44, 45).
+**Tested how:** `cargo play --world Daventry --at 193000,193000,3.1416 --command "give MagicMap",5 --key mapzoom:64,40 --hold 1,0,0,10,60 --frames 500 --sound off`, and the map given at update 60 (`--frames 700`) for the blink; `gui.log`.
+**Result:** The slot shows the map at 298.3 × 298.3 (the start view's size) with the arrow's top-left at (−5, −5) from the slot's centre, scrolling with Connor; a big-map zoom to 596.5 leaves it at 298.3. Blink: map, empty, map, empty, map at 0.25 s steps. Found on the way: with the map given at update 5 the whole blink falls in the start-up stall (frames 1.5 s apart), so it isn't seen; not a bug of the blink.
+**Still broken / not tested:** **Not looked at.** Whether the original blinks the live map or the item's picture (`todo.pbm`) is not in the note; we blink the live map.
+**Next:** 6d-6, other worlds' maps.
+
 ## 2026-10-21 6d-4: pan, zoom and follow on the magic map
 
 **Changed:** `kq8-core` `magic_map.rs` (`View::pan`, `zoom`, `follow_once`, `MapState::follow_step`, the follow mark); viewer `gui_view.rs` (`MapDrag`: a left or right drag that starts on the map area; the follow at each draw of the shown window; test keys `--key mappan:DX:DY,N` and `--key mapzoom:DX,N` in layout pixels), `game_camera.rs` (no camera swing during a map drag), `main.rs`.
