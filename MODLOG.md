@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: the axe can break the hero's tomb door
+
+**Changed:** `kq8-core` `fight.rs` (`object_at`): doors with a script are also found when Connor's swing (or a bolt) hits its target. Unit test `connor_s_hit_on_a_door_runs_die_below_0` (active.rs). Provenance row.
+**Why:** The user: swinging the axe at the bolted iron door never hit it. The click made the door his target, but at the hit only characters, clickables and animated objects were looked at, so it was "dead air".
+**Tested how:** core tests (514 pass). `kq8-viewer --world Daventry --frames 1500 --sound off --command "move Connor 0 226146 307900 -1 0 0 3.1416",5 --console "kill sprigan",6 --command "give SmallAx",7 --swing tombdor2,60 --aim tombdor2,120`; `fight.log`, `doors.log`.
+**Result:** Update 120: the click line meets `tombdor2` (type 0x5021), 2,166 away, his target; update 127: "hits object tombdor2 … health 1 -> -24"; `tombdor2.cs` gets `Die Normal`: map icon, `open` plays (sound at its start, turns to 90°), +20 experience, `HeroDoor::Locked 0`, not clickable any more. House doors keep 10,000 health, so a swing doesn't open them.
+**Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
+**Next:** The user's check.
+
 ## 2026-10-22 Measurement: memory and read times over all worlds (no code change)
 
 **Changed:** Docs only: STATUS ("Allocator": the numbers and the planned comparison).

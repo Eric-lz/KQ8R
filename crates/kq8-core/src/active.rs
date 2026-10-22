@@ -6829,6 +6829,27 @@ endif
     }
 
     #[test]
+    fn connor_s_hit_on_a_door_runs_die_below_0() {
+        // doors.md rules 18-20 (Daventry's Tombdor2, stats=1 0 0 0 0): the
+        // swing's target is the door (ranged-weapons.md rule 32); a door
+        // without a stats= line keeps its 10,000.
+        let script = "if test $2 == Die\n set D::died $1 $3\nendif\n";
+        let mut a = super::tests::active(script, &[]);
+        a.start();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.set_stats("Condoor", Stats([crate::stats::DOOR_HEALTH, 0, 0, 0, 0]));
+        a.world.connor_do([0.0, -1500.0, 0.0], std::f32::consts::PI, 2350.0, Some("Condoor"), false, "attack");
+        a.update();
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("hits object Condoor") && !log.contains("Die Normal"), "{log}");
+        assert_eq!(a.scripts.vars.get("D::died"), None, "10,000 health: still above 0");
+        a.set_stats("Condoor", Stats([1, 0, 0, 0, 0]));
+        a.world.connor_do([0.0, -1500.0, 0.0], std::f32::consts::PI, 2350.0, Some("Condoor"), false, "attack");
+        a.update();
+        assert_eq!(a.scripts.vars.get("D::died"), Some("Condoor Normal"));
+    }
+
+    #[test]
     fn a_scripted_clickable_eats_itself_once() {
         let mut a = with_clickables(Some("fish.cs"));
         assert_eq!(a.scripts.vars.get("F::init"), Some("fishies.01"), "Init (Q64 c stand-in)");

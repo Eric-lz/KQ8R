@@ -2706,6 +2706,7 @@ did not show his fists-up stance nor the sword pointer.
 | Connor's swing on an object: rule 13's reach and front test; damage = his hand damage (× the big swing's factor), rolled 75–125 % with its 4th stat as protection, at least 1 | `fighting.md` rules 13, 41; the roll is a **stand-in** (`doors.md` rule 19: "random, at least 1") | Unit test |
 | Taken off its health (`stats=`, all 0 without one); below 0 its script gets `Die <kind>` (again on every hit while below 0) | `doors.md` rules 19–20, `anim-scripts.md` rules 19–20 | Unit test; viewer: barrel.07 0 → −9, `barelup.cs` gets `Die Normal` |
 | `KQObject::getLoc` also finds those box objects | `objects.md` "Script variables, getLoc and move" (any object) | Viewer: `getLoc barrel.07: 199536 262152 8185` |
+| Fix 2026-10-22: a door with a script is also a target for the swing's hit (and a bolt's), at its position; same damage and `Die` as above, doors without `stats=` at 10,000 | `doors.md` rules 18–20; `ranged-weapons.md` rule 32 (doors, type bit 0x20, become the target) | Unit test `connor_s_hit_on_a_door_runs_die_below_0`; viewer: Daventry `tombdor2` health 1 → −24, `tombdor2.cs` opens it |
 
 ### 5c fix 6, a thrown item drawn where it landed — viewer `item_view.rs` (`item_draw`)
 

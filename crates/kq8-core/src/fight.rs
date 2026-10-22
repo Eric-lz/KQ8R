@@ -577,11 +577,15 @@ impl crate::active::WorldState {
         self.hit_character(j, "Connor", d, kind);
     }
 
-    /// Where an object with a script stands (a box object or an animated
-    /// one), for Connor's hit on it (M5 5c fix 5).
+    /// Where an object with a script stands (a box object, a door or an
+    /// animated one), for Connor's hit on it (M5 5c fix 5; doors:
+    /// `doors.md` rules 18-20, `ranged-weapons.md` rule 32).
     fn object_at(&self, name: &str) -> Option<[f32; 3]> {
         if let Some(c) = self.clickables.iter().find(|c| !c.gone && c.script.is_some() && c.name.eq_ignore_ascii_case(name)) {
             return Some(c.placement.position);
+        }
+        if let Some(d) = self.doors.iter().find(|d| !d.gone && d.script.is_some() && d.door.name.eq_ignore_ascii_case(name)) {
+            return Some(d.door.player.placement().position);
         }
         self.objects.iter().find(|o| !o.gone && o.script.is_some() && o.name().eq_ignore_ascii_case(name)).map(|o| o.player.placement().position)
     }
