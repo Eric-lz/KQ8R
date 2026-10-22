@@ -549,7 +549,10 @@ M6 has started with the Rope and Hook (6a).
   `kq8-artifacts/logs/bench-allocators.txt`). Daventry's read, fresh →
   3rd return: Windows 3.5 → 14.6 s; `mimalloc` 3.1 → 3.5 s; with purge
   delay 0, 3.2 → 3.7 s. Memory at the end (working set / private):
-  3.3 / 5.4 GB, 3.5 / 5.4 GB, 3.0 / 5.1 GB. One run each. `memory.rs`
+  3.3 / 5.4 GB, 3.5 / 5.4 GB, 3.0 / 5.1 GB. Purge delay 0 against
+  1000 ms, 3 tours each (`bench-purge.txt`): same read times, ~350 MB
+  less working set on average, ~550 MB less at the highest. To turn it
+  off for one run: `$env:MIMALLOC_PURGE_DELAY = "1000"`. `memory.rs`
   is Windows-only (Linux needs `/proc/self/status`). The bigger saving
   is ours: share identical meshes (Daventry has ~58,000).
 - **Moving between worlds, what is missing (6e):** worlds kept in full

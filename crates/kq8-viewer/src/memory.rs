@@ -16,8 +16,13 @@ const PURGE_DELAY: libmimalloc_sys::mi_option_t = 15;
 /// only mark them unused).
 const PURGE_DECOMMITS: libmimalloc_sys::mi_option_t = 5;
 
-/// Sets the allocator's options; first thing in `main`.
+/// Sets the allocator's options; first thing in `main`. A
+/// `MIMALLOC_PURGE_DELAY` set outside wins (mimalloc reads it itself), to
+/// compare without rebuilding.
 pub fn set_allocator() {
+    if std::env::var_os("MIMALLOC_PURGE_DELAY").is_some() {
+        return;
+    }
     // SAFETY: plain setters of mimalloc's global options.
     unsafe { libmimalloc_sys::mi_option_set(PURGE_DELAY, 0) };
 }

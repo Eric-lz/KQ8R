@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Purge delay on/off measured 3 times each; MIMALLOC_PURGE_DELAY respected
+
+**Changed:** Viewer `memory.rs`: `set_allocator` leaves the purge delay alone when `MIMALLOC_PURGE_DELAY` is set (mimalloc reads it itself), so the setting can be switched without rebuilding. STATUS.
+**Why:** The user asked for more consistent data comparing purge delay 0 (ours) and 1000 ms (mimalloc's default), and how to turn the setting off.
+**Tested how:** `MIMALLOC_PURGE_DELAY=1000` then unset, `--world CastleD --frames 60`: `viewer.log` "purge delay 1000 ms" / "0 ms". The tour (as in the allocator comparison) 6 times, alternating off/on (`bench-purge.txt`, `bench-off-N-*.log`, `bench-on-N-*.log`).
+**Result:** Read time for all 15 worlds: off 38.4 / 37.1 / 37.1 s, on 35.1 / 37.8 / 35.7 s (no real difference). Daventry on the 3rd return: off 3.2 / 3.5 / 3.5 s, on 3.4 / 3.7 / 3.3 s. Working set, average after each world built: off 2.79 / 2.69 / 2.68 GB, on 2.36 / 2.38 / 2.38 GB; highest: off 3.72 / 3.41 / 3.76 GB, on 3.11 / 3.13 / 3.11 GB. Private, average: off 4.44 / 4.49 / 4.55 GB, on 4.13 / 4.33 / 4.34 GB; highest about 5.8-6.0 GB both. The earlier one-off 7.3 s read did not come back.
+**Still broken / not tested:** —
+**Next:** —
+
 ## 2026-10-22 The viewer uses the mimalloc allocator (purge delay 0)
 
 **Changed:** Workspace and viewer `Cargo.toml`: `mimalloc` 0.1.52 and `libmimalloc-sys` 0.1.49 (mimalloc 3.3.2, feature `extended`). `main.rs`: mimalloc as the global allocator; `memory.rs`: `set_allocator` (purge delay 0, first thing in `main`) and `allocator_line` (logged after each world is built). DESIGN, STATUS.
