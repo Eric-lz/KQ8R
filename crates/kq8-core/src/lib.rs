@@ -29,6 +29,7 @@ pub mod ground_anim;
 pub mod gui_draw;
 pub mod inventory;
 pub mod item;
+pub mod magic_map;
 pub mod meters;
 pub mod music;
 pub mod named_anim;

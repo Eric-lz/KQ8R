@@ -1325,6 +1325,14 @@ pub fn screen_palette_paths(game: &GameDir, world: &str) -> (Vec<String>, String
 
 /// Daventry's (or any world's) placed objects: each different model once,
 /// plus where each copy goes.
+/// A world's map file (M6 6d-2, `magic-map.md` rule 3): where it was
+/// read, its keys, and the terrain's `hazeDistance` (rule 13).
+pub struct MapFile {
+    pub label: String,
+    pub keys: kq8_data::magic_map::MapKeys,
+    pub haze: Option<f64>,
+}
+
 pub struct Objects {
     /// The world's shadow mask (`setShadowMask` in `Options.cs`, else the
     /// built-in 1; `characters.md` rule 36).
@@ -1448,6 +1456,9 @@ pub struct Objects {
     pub orbit: Vec<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// Lines about items at load, for `items.log`.
     pub item_lines: Vec<String>,
+    /// The world's magic map (M6 6d-2): the last `<x>map.kq` a start-up
+    /// script loads (`magic-map.md` rule 3).
+    pub map: Option<MapFile>,
     /// Lines about characters at load, for `characters.log` (M4 4d-2).
     pub character_lines: Vec<String>,
     /// The ground, for z -1 / -2 of items made while playing.
@@ -1654,6 +1665,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .collect();
     let items = item_types(game, log);
     let mut placer = Placer {
+        map: None,
         load_targets,
         dormant: Vec::new(),
         dormant_traps: Vec::new(),
@@ -1872,6 +1884,8 @@ struct Placer<'a> {
     game: &'a GameDir,
     world: &'a World,
     terrain: &'a kq8_data::Terrain,
+    /// The world's map file (M6 6d-2).
+    map: Option<MapFile>,
     log: &'a mut Log,
     palette_name: String,
     /// Every script of the world (lower case), to tell which name a file.
@@ -2492,6 +2506,39 @@ impl Placer<'_> {
         self.log.detail(format!("setHidden {name} {} ({at}): {what}", u8::from(hidden)));
     }
 
+    /// M6 6d-2 (`magic-map.md` rule 3): a `loadKQ` of a map file, which is
+    /// in `GAME/Kq`, not in the world's archives: it becomes the world's
+    /// map (one at a time; a later one replaces it). `false` if the file is
+    /// not there or not a `KQMap`.
+    fn take_map(&mut self, load: &kq8_data::world_script::LoadKq, base: &str) -> bool {
+        let rel = format!("GAME/Kq/{base}");
+        let Some(bytes) = self.game.find(&rel).and_then(|p| std::fs::read(p).ok()) else { return false };
+        let file = kq8_data::kq_text::parse(&bytes);
+        match file.first().and_then(kq8_data::magic_map::MapKeys::from_section) {
+            Some(Ok(keys)) => {
+                let haze = self.terrain.settings.haze_distance.map(f64::from);
+                self.log.summary(format!(
+                    "map: {} line {}: {rel} [{}] is the world's map (magic-map.md rule 3): index {:?}, pictures {} / {}, fogRadius {:?}, hazeDistance {haze:?}{}",
+                    load.from,
+                    load.line,
+                    keys.name,
+                    keys.index(),
+                    keys.blank_map,
+                    keys.full_map,
+                    keys.fog_radius,
+                    if self.map.is_some() { "; replaces the one loaded before" } else { "" }
+                ));
+                self.map = Some(MapFile { label: rel, keys, haze });
+                true
+            }
+            Some(Err(e)) => {
+                self.log.summary(format!("map: {rel}: {e}; no map"));
+                true
+            }
+            None => false,
+        }
+    }
+
     /// One object from a `loadKQ` line (or an unused `.kq` file).
     fn place(
         &mut self,
@@ -2519,6 +2566,9 @@ impl Placer<'_> {
         let (label, bytes) = match preloaded.map(Ok).or_else(|| self.world.load(base)).or_else(loose) {
             Some(Ok(x)) => x,
             _ => {
+                if !unused && self.take_map(load, base) {
+                    return;
+                }
                 self.log.detail(format!("skip {} line {}: {} not found", load.from, load.line, load.file));
                 *self.skipped_map(unused).entry("loaded file not found".into()).or_default() += 1;
                 return;
@@ -4108,6 +4158,7 @@ impl Placer<'_> {
             self.game.find("Options.cs").and_then(|p| std::fs::read(p).ok()).and_then(|b| kq8_data::characters::shadow_mask_setting(&b)).unwrap_or(kq8_data::characters::BUILT_IN_SHADOW_MASK)
         });
         Objects {
+            map: self.map,
             shadow_world_mask,
             shapes: self.shapes,
             placed: self.placed,

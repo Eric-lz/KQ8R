@@ -58,9 +58,9 @@ use kq8_data::world_script::Vars;
 /// `checkSave`, ...) are not stubs: they stay unknown (error line,
 /// result 1) until they are studied; `getloc` and `checkDistance` are
 /// handled by the world.
-pub const STUBS: [&str; 11] = [
+pub const STUBS: [&str; 10] = [
     "doPopup",
-    "addMapIcon",
+    // `addMapIcon` was here until M6 6d-2.
     "earnTeleport",
     "teleportersEarned",
     "preloadShape",

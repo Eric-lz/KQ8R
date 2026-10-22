@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-2: the magic map's state (no drawing)
+
+**Changed:** New `kq8-core` `magic_map.rs` (map pixel, fog radius, the reveal disc, arrow frame, icons, the map's own picture, saved keys; `KQMap::activate` / `deactivate` / `stopLoc` / `useFog` / `setFogRadius`, `addMapIcon` (no longer a stub), `removeMapIcon`; Connor's visited marks), fields on `WorldState`; viewer `load.rs` takes the world's `<x>map.kq` from `GAME/Kq`; new viewer `map_view.rs` (pictures, icons, the update after the trap step); new `kq8-artifacts/logs/map.log`.
+**Why:** M6 6d step 2 (`magic-map.md` rules 2–4, 7, 9–17, 19–21, 33).
+**Tested how:** `cargo test -p kq8-core` (499 pass), clippy clean. `cargo play --world Daventry --at 193000,193000,3.1416 --command "give MagicMap",5 --command "KQMap::stopLoc 1",60 --command "KQMap::stopLoc 0",80 --hold 1,0,1,10,100 --turn 120,-1 --frames 900 --sound off`; `map.log`.
+**Result:** "update 6: the MagicMap item arrives: the map davmap.kq is active"; (193000, 193000) → map pixel (191, 368), 1,696 pixels revealed; running north one map pixel per ~410 units, 46 new pixels each (the 2 × 23 band); nothing between stopLoc 1 and 0, then 368 at once (eight rows); turning right: arrow frames 0, 1, 2 … 11 (clockwise). Map index 0 marked visited.
+**Still broken / not tested:** Nothing drawn yet. Icons not run in the viewer (Daventry adds them later in the story; unit-tested). The map's state isn't saved (no saves yet).
+**Next:** 6d-3, the map window.
+
 ## 2026-10-21 6d-1: the magic map's files read (map, portal, saved fog)
 
 **Changed:** New `kq8-data` `magic_map.rs` (`KQMap` and `KQPortal` keys, the fog's run lengths both ways) and `pvol.rs` (saved-game archive, read only); new `kq8 map-verify` (`kq8-cli` `map_verify.rs`). Plan "6d" in DESIGN; provenance.

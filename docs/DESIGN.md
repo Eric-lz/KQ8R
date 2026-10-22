@@ -2037,7 +2037,8 @@ when read or written in the original's form (7).
 
 Steps (one commit each):
 
-1. **6d-1, reading the files** (rules 3, 13, 16; data only). `KQMap`
+1. **6d-1, reading the files** (**done** 2026-10-21; 29 saved maps in 22
+   saves read, every fog written back the same) (rules 3, 13, 16; data only). `KQMap`
    keys (all of the note's "Data used"), `KQPortal` keys, the fog's run
    lengths both ways, the `PVOL` archive. `kq8 map-verify`: every
    `GAME/Kq/*map.kq` and `*tele.kq` with its numbers (map index, name
@@ -2048,8 +2049,8 @@ Steps (one commit each):
    to the one read. Log `kq8-artifacts/logs/map-verify.log`.
    **Test:** `cargo run -- map-verify`; Daventry 409.6 units per pixel,
    fog 24; Snow exit 131; each saved map round-trips.
-2. **6d-2, the map state, no drawing** (rules 2, 4, 9–15, 17, 19–21,
-   33). The world's `<x>map.kq` (from `GAME/Kq`) becomes the current
+2. **6d-2, the map state, no drawing** (**done** 2026-10-21) (rules 2,
+   4, 9–15, 17, 19–21, 33). The world's `<x>map.kq` (from `GAME/Kq`) becomes the current
    map; its pictures (blank, full, the icons) are read; the map's own
    picture is made (blank, then full where out of the fog, then the
    icons). Active: when `MagicMap` arrives in Connor's inventory (and

@@ -47,6 +47,7 @@ mod building_light;
 mod connor_view;
 mod console;
 mod console_words;
+mod map_view;
 mod rope_view;
 mod copies_view;
 mod door_view;
@@ -559,6 +560,8 @@ fn main() -> ExitCode {
                     gui.corners = args.corners;
                     app.insert_resource(gui);
                 }
+                // The magic map (M6 6d-2).
+                app.insert_resource(map_view::load_map(&g, &args.world, objects.map.take(), &mut shared.log.lock().unwrap()));
             }
             let music = objects.music.take();
             app.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
@@ -616,6 +619,7 @@ fn main() -> ExitCode {
                 // Captions (M4 4a-4).
                 .add_systems(Startup, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
+                .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step))
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step))
                 .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.

@@ -669,6 +669,16 @@ pub struct WorldState {
     pub rope_first_person_lock: bool,
     /// Lines for `rope.log` (M6 6a), taken by the caller.
     pub rope_log: Vec<String>,
+    /// The current world's magic map (M6 6d, `magic-map.md` rule 3), set
+    /// by the caller once loaded.
+    pub map: Option<crate::magic_map::MapState>,
+    /// Connor's per-map marks (rules 33, 37).
+    pub map_marks: crate::magic_map::ConnorMapMarks,
+    /// Whether Connor carried the `MagicMap` item at the last update
+    /// (rule 2: arriving and leaving switch the map).
+    pub map_item: Option<bool>,
+    /// Lines for `map.log` (M6 6d), taken by the caller.
+    pub map_log: Vec<String>,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
     pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
@@ -2827,6 +2837,7 @@ impl ScriptHost for WorldState {
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
+            "KQMap::activate" | "KQMap::deactivate" | "KQMap::stopLoc" | "KQMap::useFog" | "KQMap::setFogRadius" | "addMapIcon" | "removeMapIcon" => Some(self.map_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
             "KQObject::dither" => Some(self.dither(words, at)),
@@ -2937,6 +2948,10 @@ impl Active {
                 connor_roping: false,
                 rope_first_person_lock: false,
                 rope_log: Vec::new(),
+                map: None,
+                map_marks: Default::default(),
+                map_item: None,
+                map_log: Vec::new(),
                 connor_in_temple4: false,
                 connor_hands_off: false,
                 connor_hidden_logged: None,
