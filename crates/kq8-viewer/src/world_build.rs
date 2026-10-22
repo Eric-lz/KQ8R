@@ -327,6 +327,83 @@ pub fn build_pending(world: &mut World) {
     let mut log = log.lock().unwrap();
     log.summary(format!("world built: {name}: read {read_ms} ms, spawned in {} ms; {}; {}", started.elapsed().as_millis(), counts.line(), crate::memory::line()));
     log.summary(crate::memory::allocator_line());
+    drop(log);
+    let parts = breakdown(world);
+    if let Ok(mut wl) = Log::create("world") {
+        wl.detail(format!("memory by kind in {name}: {parts}"));
+    }
+}
+
+/// Where the meshes and textures go, for the log (the user's question,
+/// 2026-10-22: why 2.6 GB for Daventry). Each mesh is counted once, under
+/// the first kind of entity found using it: the ground, buildings, still
+/// objects (a part with its own ball), animation frames (a part whose
+/// parent frame has the ball; every frame of every movement is an
+/// entity, one per object shown at a time), anything else
+/// (Connor, items, effects, shadows), and meshes no entity uses (the
+/// templates' frames). Sizes are the data kept in normal memory (vertex
+/// and index bytes, texture bytes); the graphics card holds its own copy.
+fn breakdown(world: &mut World) -> String {
+    use crate::shadow_view::ModelBall;
+    use std::collections::{HashMap, HashSet};
+    const KINDS: [&str; 6] = ["ground", "buildings", "still objects", "animation frames", "other", "no entity"];
+    let balls: HashSet<Entity> = world.query_filtered::<Entity, With<ModelBall>>().iter(world).collect();
+    let mut kind_of: HashMap<AssetId<Mesh>, usize> = HashMap::new();
+    let mut entities = [0usize; 6];
+    let mut q = world.query::<(
+        Entity,
+        &Mesh3d,
+        Option<&ChildOf>,
+        Has<MeshMaterial3d<crate::ground_haze::GroundMaterial>>,
+        Has<MeshMaterial3d<crate::building_light::BuildingMaterial>>,
+    )>();
+    for (e, mesh, parent, ground, building) in q.iter(world) {
+        let parent = parent.map(|p| p.parent());
+        let kind = if ground {
+            0
+        } else if building {
+            1
+        } else if balls.contains(&e) {
+            2
+        } else if parent.is_some_and(|p| balls.contains(&p)) {
+            3
+        } else {
+            4
+        };
+        entities[kind] += 1;
+        kind_of.entry(mesh.id()).or_insert(kind);
+    }
+    let mut meshes = [0usize; 6];
+    let mut bytes = [0usize; 6];
+    let mut not_known = 0;
+    for (id, mesh) in world.resource::<Assets<Mesh>>().iter() {
+        let kind = kind_of.get(&id).copied().unwrap_or(5);
+        meshes[kind] += 1;
+        if !mesh.asset_usage.contains(bevy::asset::RenderAssetUsages::MAIN_WORLD) {
+            not_known += 1;
+            continue;
+        }
+        let index_bytes = mesh.indices().map_or(0, |i| match i {
+            bevy::mesh::Indices::U16(v) => v.len() * 2,
+            bevy::mesh::Indices::U32(v) => v.len() * 4,
+        });
+        bytes[kind] += mesh.get_vertex_buffer_size() + index_bytes;
+    }
+    let images = world.resource::<Assets<Image>>();
+    let image_bytes: usize = images.iter().map(|(_, i)| i.data.as_ref().map_or(0, Vec::len)).sum();
+    let mb = |b: usize| b as f64 / (1 << 20) as f64;
+    let line: Vec<String> = KINDS
+        .iter()
+        .enumerate()
+        .map(|(k, name)| format!("{name}: {} meshes {:.0} MB, {} entities", meshes[k], mb(bytes[k]), entities[k]))
+        .collect();
+    format!(
+        "{}; meshes in all {:.0} MB ({not_known} only on the graphics card, size not known); textures {} {:.0} MB",
+        line.join("; "),
+        mb(bytes.iter().sum()),
+        images.len(),
+        mb(image_bytes)
+    )
 }
 
 /// The end of every frame (6e-2): a change asked for takes the world

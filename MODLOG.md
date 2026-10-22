@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Memory by kind in the log
+
+**Changed:** Viewer `world_build.rs`: after each world is built, `world.log` gets "memory by kind": meshes (count, MB, entities) for the ground, buildings, still objects, animation frames, other (Connor, items, effects, shadows) and meshes no entity uses; meshes in all; textures (count, MB). Sizes are the copies in normal memory (the graphics card holds its own). STATUS.
+**Why:** The user asked why Daventry takes ~2.6 GB, and asked to measure before choosing an optimisation.
+**Tested how:** `kq8-viewer --world Daventry --frames 60 --sound off`, the same with `--world CastleD`; `world.log`, `viewer.log`. clippy clean.
+**Result:** Daventry (working set 2.0 GB at this point): **animation frames 56,468 meshes, 955 MB, 95,441 entities**; ground 58 meshes 95 MB; buildings 176 meshes 8 MB; still objects 147 meshes 1 MB; other 5 meshes; no entity 1,005 meshes 4 MB; meshes in all 1,063 MB; textures 3,020, 233 MB. Castle Daventry (0.6 GB): animation frames 9,990 meshes 218 MB, 10,658 entities; meshes in all 226 MB; textures 84 MB. Identical copies were already shared (each model and animation file read once); the size is every frame of every movement stored as a whole mesh, and each placed animated object spawning an entity per frame.
+**Still broken / not tested:** The ~0.7 GB not in meshes or textures (engine, entities, collision, sounds) is not broken down.
+**Next:** The user chooses: animation frames built when first played, or animating by moving parts.
+
 ## 2026-10-22 Purge delay on/off measured 3 times each; MIMALLOC_PURGE_DELAY respected
 
 **Changed:** Viewer `memory.rs`: `set_allocator` leaves the purge delay alone when `MIMALLOC_PURGE_DELAY` is set (mimalloc reads it itself), so the setting can be switched without rebuilding. STATUS.
