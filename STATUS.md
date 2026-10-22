@@ -8,7 +8,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 ## Where we are (2026-10-21)
 
 - **2026-10-21 (A): the magic map studied** (`docs/behaviour/magic-map.md`,
-  ready for B; **not checked in the original yet**). The Wizard's
+  ready for B; **the user checked "How to check" 1–11 in the original,
+  2026-10-21: all right**). The Wizard's
   `MagicMap` switches the world's map on; world x/y → 460 × 460 map
   pixel (north up); a disc of `fogRadius` (Daventry 24 map pixels) is
   revealed each time Connor moves to a new map pixel, saved per world as
@@ -19,8 +20,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   visited worlds' maps; on a pad, the lit "Go" button runs the world's
   teleport script → the Portal state's "load a new region?" question →
   `teleportdown`, world change, `teleportup`. Tab has no handsOff check.
-  Open: the follow margins' coordinates, the mini-map's zoom, the
-  arrival side of a world change.
+  The user's check: the view follows the arrow at all four edges; the
+  mini-map keeps its own zoom; Tab works in conversations and scenes.
+  Open: the arrival side of a world change (later loading study).
 
 - **2026-10-21 (A): the main menu studied** (`docs/behaviour/main-menu.md`,
   ready for B). The items and when each can be chosen, the keys (Up/Down
@@ -629,10 +631,9 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- Inside `magic-map.md` (not in QUESTIONS.md, for the user's check
-  first): open questions 2 (follow margins, "How to check" 7) and 3
-  (mini-map zoom, "How to check" 6); 4 (arrival after a world change)
-  belongs to a later loading study.
+- Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
+  user's check (2026-10-21); 4 (arrival after a world change) belongs to
+  a later loading study.
 
 - For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
   `KQConner::setLevel` does; b: the level-up flame's speed and length;

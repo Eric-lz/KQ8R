@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Magic map: the user's check in the original
+
+**Changed:** Docs only: `magic-map.md` rules 25 and 27, edge cases, "Do not reproduce" 4, "How to check", open questions 2 and 3; STATUS.
+**Why:** The user ran `magic-map.md` "How to check" 1–11 in the original.
+**Tested how:** The user, by eye, in the original (GOG 1.03).
+**Result:** All 11 points as described. The big map first shows all of Daventry; the mini-map shows only the part around Connor and does not change size when the big map is zoomed (it keeps its own zoom). The view scrolls to keep the arrow in at all four edges once Connor moves (margin not measurable by eye; build rule: 20 pixels inside the visible area). The map opens during conversations and scripted scenes.
+**Still broken / not tested:** Whether the mini-map picks up the big map's zoom after a world change; the arrival side of a world change (not traced).
+**Next:** B: build the map from the note (the session B prompt's mini-map stand-in is now wrong: the mini-map keeps its own zoom).
+
 ## 2026-10-21 Study (A): the magic map
 
 **Changed:** New behaviour note `docs/behaviour/magic-map.md`. Small updates: `interface.md` rule 11 (the map key checks only that the map is active), rule 45 and open question 4 (the map slot is a live mini-map), QUESTIONS Q108 (b, partly), STATUS. Scratch addresses in `re/notes.md` (not committed).

@@ -303,11 +303,13 @@ of the map, centred on Connor, sits in the bottom-right panel.
     with 20 and 340 (whole-number divisions), repeated up to 6 times in
     one draw. When the arrow is inside, the mark is cleared. So after
     the player drags the map away, it stays put until Connor moves to
-    another map pixel. Which coordinates these limits are in (the
-    window's, the map area's or the screen's) is **not settled** (open
-    question 2): read as screen coordinates of the 640 × 480 layout the
-    top limit (20) would be above the map area (which starts at 76), so
-    the arrow could leave the top of the map before the view moves.
+    another map pixel. Which coordinates these limits are in was not
+    traced. **The user's check in the original (2026-10-21):** once
+    Connor moves, the map scrolls to keep the arrow in view **at all four
+    edges** (so the top limit does work); the exact margin could not be
+    measured by eye. Build it as: keep the arrow's top-left corner at
+    least 20 pixels inside the visible map area on every side, with the
+    step above (open question 2).
 26. The pointer over the map is the normal play pointer [inferred:
     nothing in the map changes it].
 
@@ -320,9 +322,12 @@ of the map, centred on Connor, sits in the bottom-right panel.
     Connor's map pixel is at the middle of the slot, with his arrow
     there, at the same size (zoom) as the big map's view rectangle
     [traced]. The item's own picture (`todo.pbm`) is not used there
-    [traced: the slot draws the map instead]. Whether the slot's zoom
-    follows each zoom of the big map at once or only after the next world
-    change is not settled (open question 3).
+    [traced: the slot draws the map instead]. **The slot keeps its own
+    zoom**: it starts from the view stored on Connor when the map is set
+    up and does **not** change when the big map is zoomed (the user's
+    check, 2026-10-21; traced that each view keeps its own copy). At the
+    start view (× 0.648) the 56 × 56 slot shows only the part of the map
+    around Connor, not the whole world (the user saw this too).
 28. With the map not active, the slot's `2mapblnk.pbm` is 52 × 52 in
     the 56 × 56 box; how it fills the box is `QUESTIONS.md` Q108 (b),
     not traced here.
@@ -515,7 +520,8 @@ of the map, centred on Connor, sits in the bottom-right panel.
   fight**: it opens and closes the map whenever the map is active; the
   game checks nothing else (rule 30) [traced]. In a cutscene the map is
   hidden when `handsOff 1` starts, but Tab can open it again during the
-  cutscene [traced that nothing stops it; not checked in play].
+  cutscene [traced; **the user's check, 2026-10-21:** the map opens
+  during conversations and scripted scenes].
 - **Dying with the map open**: Connor's dying state itself doesn't touch
   the map [traced]; the `handsOff` of the death path (`main-menu.md`
   open question 5) would hide it [inferred].
@@ -557,10 +563,9 @@ of the map, centred on Connor, sits in the bottom-right panel.
 3. **`useFog 0` is lost on reload** [traced]: the full picture is copied
    in without marking the fog, so a reloaded game shows only the fog
    again. Only the debug alias uses it; if we keep it, mark the pixels.
-4. **Follow margins** (rule 25): if they turn out to be in screen
-   coordinates, the top margin is useless. Keep the arrow at least 20
-   pixels inside the visible map area on all four sides (or
-   whatever the user's check shows).
+4. **Follow margins** (rule 25): their coordinates were not traced; the
+   user saw them work on all four edges. Keep the arrow at least 20
+   pixels inside the visible map area on all four sides.
 5. **The debug teleport** (rule 41) and `KQMap::teleport`: leave it out
    of normal play (a developer key at most).
 6. **The unused maps** (`dwrfMap`, `ice1map`–`ice3map`; `ice2`/`ice3`
@@ -573,7 +578,12 @@ of the map, centred on Connor, sits in the bottom-right panel.
 ## How to check
 
 In the original (GOG 1.03). Start a new game, talk to the Wizard until
-he gives the map.
+he gives the map. **The user ran 1–11 on 2026-10-21: all as described.**
+Details from that check: 2, the whole of Daventry fits the big map at
+first, but not the mini-map (expected, rule 27); 6, the mini-map does not
+change size when zooming; 7, the view follows the arrow at every edge
+once Connor moves, margin not measurable by eye; 8, the map opens during
+conversations and scripted scenes.
 
 1. **Getting it**: when the scene ends, the bottom-right slot blinks and
    then shows a tiny live map with the arrow in the middle; the help
@@ -628,12 +638,13 @@ revealed pixels.
 ## Open questions
 
 1. The last-pixel start value (rule 11): not traced; assume "unset".
-2. Which coordinates the follow margins (rule 25) are in, and so whether
-   the top margin works; the user's check 7 settles what to build.
-3. Whether the bottom-right mini-map's zoom follows the big map's zoom
-   at once or only after a world change (rule 27): each view keeps its
-   own copy and picks up the one stored on Connor when the map is set
-   up [traced]; when else it is refreshed was not found.
+2. ~~Whether the follow margins work on every edge~~: they do (the
+   user, 2026-10-21; rule 25). Their exact size in the original is still
+   not known; 20 pixels inside the visible area is the build rule.
+3. ~~Whether the mini-map follows the big map's zoom~~: it doesn't (the
+   user, 2026-10-21; rule 27). Still open, small: whether it picks up the
+   big map's zoom after a world change (each view reloads the stored
+   view when the map is set up [traced]; not checked).
 4. The arrival side of a world change (rule 40 step 5: how the new world
    applies `KQPortal::ConLoc`, `CamLoc`, `ConAnim`) was not followed;
    it belongs to a "world change / loading" study.
