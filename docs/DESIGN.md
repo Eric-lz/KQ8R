@@ -2102,7 +2102,7 @@ Steps (one commit each):
    between worlds. **Test:** Daventry on the keep's pad with
    `--kept-maps`; `map.log`, `doors.log`.
 
-#### 6e — Moving between worlds (planned 2026-10-21; updated 2026-10-22 from `world-change.md`)
+#### 6e — Moving between worlds (planned 2026-10-21; updated 2026-10-22 from `world-change.md`; done 2026-10-22, steps 6e-1 to 6e-8; the loading screen checked by the user, the rest in the logs only)
 
 Why: the magic map's teleporter stops at the world change (6d-7), and
 walking exits (Daventry's `portal1.kq` to Castle Daventry,
@@ -2352,7 +2352,7 @@ Steps (one commit each; each ends with a test and a log check):
    leaves). **Test:** walk from Daventry into the Castle exit: No, walk
    out and in again, Yes; arrive in Castle Daventry (`out`); back
    through `portal2`.
-8. **6e-8, kept worlds, first stage** (rules 8.1, 12 (gone objects),
+8. **6e-8, kept worlds, first stage** (**done** 2026-10-22) (rules 8.1, 12 (gone objects),
    13, 16). Leaving a world keeps its map, variables and "gone" list;
    arriving uses them; Temple 1 drops all but the maps; `--kept-maps`
    stays only as a test option. **Test:** Daventry → Castle → Daventry:

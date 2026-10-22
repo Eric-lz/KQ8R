@@ -60,7 +60,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them.
 - **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground. They fight: they swing at Connor, he can punch back, they flinch, die, drop items and leave bodies; the bow spriggans shoot (first version, checked in the logs only). Health items and the four potions work, with their timer icons (checked in the logs only).
-- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only). The magic map: fog, arrow, zoom and pan, the mini-map, other worlds' maps and the teleporter button, up to the world change (checked in the logs only).
+- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only). The magic map: fog, arrow, zoom and pan, the mini-map, other worlds' maps and the teleporter button (checked in the logs only). Moving between worlds: walking exits and teleporters ask "load a new region?", show the loading screen and arrive with Connor's things; a world you come back to keeps its map, its story progress and what was taken from it (loading screen checked by eye, the rest in the logs only).
 
 ### Next
 
@@ -72,7 +72,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   which keeps testing quick).
 
 - **M5 – Fighting.** Connor's other weapons and bows, game over.
-- **M6 – The whole game.** Saving and loading, travelling between worlds,
+- **M6 – The whole game.** Saving and loading (with worlds kept in full),
   all 12 worlds playable, the cutscene videos, the options screen.
 - **M7 – Match the original, then improve.** Play the original side by
   side with ours and fix every difference. After that, the improvements

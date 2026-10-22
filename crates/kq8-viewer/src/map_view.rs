@@ -114,7 +114,10 @@ fn kept_maps(path: &str) -> Result<Vec<(usize, String, MapKeys)>, String> {
 
 /// Reads the world's map pictures (rule 7) and makes its state; `None`
 /// when the world loads no map.
-pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, kept: Option<&str>, main: &mut Log) -> MapSim {
+/// `own_kept` (M6 6e-8, `world-change.md` rule 16): the maps kept when
+/// Connor left worlds; this world's own one, if there, is used instead of
+/// its shipped file (its fog, icons and teleporter as left).
+pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, kept: Option<&str>, own_kept: Option<&std::collections::BTreeMap<usize, (String, MapKeys, String)>>, main: &mut Log) -> MapSim {
     let mut log = match Log::create("map") {
         Ok(l) => Some(l),
         Err(e) => {
@@ -147,7 +150,12 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, kept: Option
     let g = game.clone();
     let reader: IconReader = std::sync::Arc::new(move |name: &str| read_picture(&g, name));
     let base = file.label.rsplit('/').next().unwrap_or(&file.label).to_string();
-    let mut map = MapState::new(&base, file.keys, blank, full, file.haze, Some(reader));
+    let mut keys = file.keys;
+    if let Some((f, k, source)) = keys.index().and_then(|i| own_kept.and_then(|m| m.get(&i))).filter(|(_, _, s)| s.starts_with("kept when Connor left")) {
+        main.summary(note(format!("map: {f}: the map {source} (its fog, icons and teleporter as left; world-change.md rule 16)")));
+        keys = k.clone();
+    }
+    let mut map = MapState::new(&base, keys, blank, full, file.haze, Some(reader));
     map.palettes = read_palettes(game, &mut note);
     let (radius, units, from) = kq8_core::magic_map::fog_radius(&map.keys, file.haze);
     main.summary(note(format!(
@@ -202,7 +210,12 @@ pub fn map_install(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>) {
         m.set_views(world.map_view);
         world.map_log.push(format!("update {}: the map is set up; views from Connor's {:?} (rules 22, 27)", world.updates, world.map_view.as_array()));
         world.map = Some(m);
+        // M6 6e-8: a map kept when Connor left its world (the journey's)
+        // stays; the shipped files and `--kept-maps` fill the others.
         for (i, f, k, source) in std::mem::take(&mut map.others) {
+            if world.other_maps.get(&i).is_some_and(|(_, _, s)| s.starts_with("kept when Connor left")) {
+                continue;
+            }
             world.other_maps.insert(i, (f, k, source));
         }
         for i in std::mem::take(&mut map.visited) {

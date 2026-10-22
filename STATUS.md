@@ -5,7 +5,29 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-21)
+## Where we are (2026-10-22)
+
+- **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
+  `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
+  **the loading screen checked by the user by eye, the rest in the logs
+  only**). One world is taken down and the next built in the same
+  program (`world_build.rs`; entity, asset and memory counts logged; a
+  world takes about 3.4 GB, so left worlds are not kept alive). The next
+  world is read on a thread behind the loading screen (picture, red
+  meter in the picture's own frame, 4:3). Connor's journey (stats,
+  items, potions with their time, flags, map marks) goes along. The
+  Portal state: the "load a new region?" popup (game paused, keys,
+  clicks), No (`noLoc`), Yes (`enterAnim`, hand-over), the arrival
+  (places, `exitAnim`, `exitScript Exit`); walking exits and teleporters
+  both work (Daventry ↔ Castle Daventry, the gate to Dead City, Barren's
+  elevator, the keep's pad to Barren). `world.cs Begin` runs on every
+  arrival (at launch with `--begin`). Kept worlds, first stage: the map,
+  the world's variables and the objects that left it. Console words
+  `reload`, `goworld <World> [x y turn]`, `goworld portal <file>`; test
+  option `--console "WORDS",N`. New **Q151**, **Q152** (not blocking).
+  A decision for the user: reading a world gets slower with each change
+  (the Windows allocator; `mimalloc` keeps it steady but holds ~1 GB
+  more).
 
 - **2026-10-21 (A, 6e-0): the world change and loading studied**
   (`docs/behaviour/world-change.md`, ready for B; **the user checked
@@ -508,19 +530,18 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
-- **Moving between worlds (needed next for the magic map):** the
-  teleporter's lit "Go" button runs the world's teleport script, but its
-  `loadKQ` of the portal (a file of `GAME/Kq`, at a position, while
-  playing) and `setState Connor Portal` stop there. The Portal state
-  (`magic-map.md` rule 40: "load a new region?" Yes/No, `teleportdown`,
-  the world change, `destConnorLoc` / `destCamLoc`, `exitAnim`) and
-  walking exits need the viewer to unload one world and load another,
-  with each left world's state kept (the maps' fog among it). That is a
-  larger change of how the viewer starts a world: **planned 2026-10-21,
-  `docs/DESIGN.md` "6e"** (the user agreed it is needed): A's study
-  (6e-0) is done (`world-change.md`, checked by the user 2026-10-22); B can start
-  6e-1 to 6e-3, then build 6e-4 to 6e-7 from the note. Help
+- **Moving between worlds, what is missing (6e):** worlds kept in full
+  (positions, chests without a variable, items dropped, bodies, terrain
+  changes, the frozen world clock): with saved games. Reading slows down
+  with each change (allocator; user's decision). Building after the read
+  still stops the window 0.5–0.9 s. The full-armour arrival list (rule
+  5.2); Escape on the popup doesn't open the main menu (not built); a
+  Clarity potion running on arrival doesn't reveal the new world's
+  objects. Not yet looked at by eye: the popup, the arrivals. Help
   popups (`doPopup`, the "Go" help 151) are logged only.
+- **Suggested next:** the user plays a few world changes by eye
+  (Daventry ↔ Castle through the cave, the keep's teleporter with
+  `--kept-maps`); then saved games (the same kept-world record).
 - **Stand-ins of 6d:** the follow margin (20 px inside every edge);
   layout pixels at 800 × 600 for the view and the mouse; Connor's place
   given to the map once per update; a world never left shown from its
@@ -674,9 +695,13 @@ M6 has started with the Rope and Hook (6a).
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
   (2026-10-21); 6 (800 × 600) built with a stand-in.
-- Inside `world-change.md`: four small points (not blocking): the
-  popup's first highlighted button, left-world variables in memory, the
-  rope / movement list after arrival, `worldState.kq`'s events.
+- Inside `world-change.md`: three small points (not blocking):
+  left-world variables in memory, the rope / movement list after
+  arrival, `worldState.kq`'s events.
+- For A (asked 2026-10-22 by B, 6e, not blocking): **Q151** (the popup's
+  first highlighted button; Enter repeating; c: the buttons' places) and
+  **Q152** (when the loading screen's black bar shows; meters stretched
+  or tiled).
 - For A (asked 2026-10-21 by B, magic map, not blocking): **Q150** (a:
   Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
   marks unused column 460; c: icons before or after the colour match;

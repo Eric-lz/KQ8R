@@ -133,6 +133,18 @@ pub struct WorldChange {
     pub generation: u64,
     /// The launch options, for building the next world.
     options: Option<Options>,
+    /// Kept worlds, first stage (6e-8): by lower-case world name.
+    kept: std::collections::BTreeMap<String, KeptWorld>,
+}
+
+/// What is kept of a world Connor left (6e-8, `world-change.md` rules
+/// 12-13; the map goes with the journey's other maps, rule 16).
+#[derive(Debug, Clone, Default)]
+pub struct KeptWorld {
+    /// Variables named after the world or `KQWorld` (rule 13).
+    pub vars: Vec<(String, String)>,
+    /// Objects that left it (rule 12), lower case.
+    pub gone: std::collections::BTreeSet<String>,
 }
 
 impl WorldChange {
@@ -175,6 +187,7 @@ const FREE_FRAMES: u32 = 2;
 /// `progress`: the loading meter's percent (6e-4a).
 pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<load::Arrival>, progress: Option<Arc<AtomicU32>>, log: &mut Log) -> Result<WorldRead, String> {
     let started = Instant::now();
+    let arrival_maps = arrival.as_ref().map(|a| a.kept_maps.clone());
     let world = load::World::open(game, name)?;
     log.summary(format!("world: {}", world.name));
     // M1 step 5b: the lights for models; step 6: the haze.
@@ -203,7 +216,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
         gui
     });
     // The magic map (M6 6d-2).
-    let map = Some(map_view::load_map(game, name, objects.map.take(), opts.kept_maps.as_deref(), log));
+    let map = Some(map_view::load_map(game, name, objects.map.take(), opts.kept_maps.as_deref(), arrival_maps.as_ref(), log));
     let audibles = std::mem::take(&mut objects.audibles);
     let music = objects.music.take();
     let sound = (audibles, music);
@@ -305,9 +318,25 @@ pub fn world_change_step(world: &mut World) {
             // The journey (6e-3, world-change.md rules 17-19), before the
             // world's resources go.
             let journey = world.get_resource::<crate::door_view::DoorSim>().map(|sim| {
-                let j = Journey::take(&sim.active.world, &sim.active.scripts.vars, &from);
-                (Box::new(j), connor_summary(&sim.active.world))
+                let w = &sim.active.world;
+                let mut j = Journey::take(w, &sim.active.scripts.vars, &from);
+                // Rule 16: the world's map kept as it is now.
+                if let Some(m) = &w.map {
+                    if let Some(i) = m.index {
+                        j.other_maps.insert(i, (m.file.clone(), m.saved_keys(), format!("kept when Connor left {from}")));
+                    }
+                }
+                (Box::new(j), connor_summary(w))
             });
+            // Rules 12-13 (6e-8): the world's variables and what left it.
+            let kept = world.get_resource::<crate::door_view::DoorSim>().map(|sim| KeptWorld {
+                vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
+                gone: sim.active.world.gone_names().into_iter().collect(),
+            });
+            if let Some(k) = kept {
+                log.lock().unwrap().summary(format!("world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), its map (rule 16)", k.vars.len(), k.gone.len()));
+                world.resource_mut::<WorldChange>().kept.insert(from.to_ascii_lowercase(), k);
+            }
             let (_, removed) = take_down(world);
             // Every log gets the line, after the old world's logs were
             // closed, so it comes before the new world's lines.
@@ -351,7 +380,20 @@ pub fn world_change_step(world: &mut World) {
             // Read on another thread (6e-4a); the window keeps drawing the
             // loading screen. The thread holds `viewer.log` meanwhile.
             let exit_movement = request.portal.as_ref().and_then(|p| Some((p.exit_list.clone()?, p.exit_anim.clone()?)));
-            let arrival = journey.as_ref().map(|j| load::Arrival { no_name_from: j.next_no_name, exit_movement });
+            // Rule 8.1: arriving in Temple 1 drops every kept world (the
+            // maps stay).
+            if request.world.eq_ignore_ascii_case("temple1") {
+                let n = std::mem::take(&mut world.resource_mut::<WorldChange>().kept).len();
+                log.lock().unwrap().summary(format!("world change: to Temple 1: {n} kept worlds dropped, the maps kept (world-change.md rule 8.1)"));
+            }
+            let kept = world.resource::<WorldChange>().kept.get(&request.world.to_ascii_lowercase()).cloned().unwrap_or_default();
+            let arrival = journey.as_ref().map(|j| load::Arrival {
+                no_name_from: j.next_no_name,
+                exit_movement,
+                kept_vars: kept.vars.clone(),
+                gone: kept.gone.clone(),
+                kept_maps: j.other_maps.clone(),
+            });
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
             let read = std::thread::Builder::new().name("world read".into()).spawn(move || {

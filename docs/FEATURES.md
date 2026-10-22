@@ -674,13 +674,44 @@ Checked by the user by eye (2026-10-21: "works as expected"); logged in
   64 pixels, ×¼ to ×8); the view follows Connor when he moves (20 pixels
   inside the edges: a stand-in). The mini-map keeps its own size.
 - **Other worlds:** the page arrows show the maps of other visited
-  worlds in this world's colours; walking snaps back. Until travel
-  between worlds exists they come from an original saved game
-  (`--kept-maps`).
+  worlds in this world's colours (as you left them); walking snaps back.
+  `--kept-maps` can still add maps from an original saved game.
 - **Teleporters:** on a pad with another earned world's map shown, the
-  "Go" button lights and runs the world's teleport script.
-- **Not yet:** the Portal state (the "load a new region?" question, the
-  teleport animation and the world change), help popups, saving the map.
+  "Go" button lights; it asks "load a new region?" and teleports
+  (`teleportdown`, the loading screen, `teleportup` on the other pad).
+- **Not yet:** help popups, saving the map.
+
+## Moving between worlds (milestone M6, step 6e, 2026-10-22)
+
+The loading screen checked by the user by eye (2026-10-22); the rest
+checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
+`traps.log`). Built from `world-change.md`.
+
+- **Walking exits and teleporters:** walking into an exit (Daventry's
+  cave to Castle Daventry and back, the gate to Dead City, elevators, …)
+  or using a teleporter opens the question "You are about to load a new
+  region. Are you sure you want to do that?" with Yes (left) and No
+  (right). The game pauses meanwhile; music and sounds go on.
+  Left / Right move the highlight, Enter chooses, Escape is No, or click
+  a button. No puts Connor a step back; walking in again asks again.
+- **Yes:** Connor plays the exit's movement (`portal`, `teleportdown`,
+  the elevator's, …), then the loading screen: the world's picture with
+  the red meter growing in its frame, kept at 4:3. The window keeps
+  drawing while the world is read.
+- **Arriving:** Connor and the camera at the exit's places, his arrival
+  movement (`out`, `portalx`, `teleportup`, …), then the exit's own
+  script; then control comes back. The world's `Begin` script runs on
+  every arrival.
+- **What Connor brings:** his stats, level, items (with what is worn
+  and readied), running potions with their time left, flags and the
+  map's marks.
+- **A world you come back to:** its map with its fog, its story's
+  variables (scenes that played don't play again) and the objects taken
+  or killed there stay gone. Other things (positions, opened chests
+  without a variable, items dropped there, bodies) start fresh for now:
+  full kept worlds come with saved games. Temple 1 drops kept worlds.
+- **Not yet:** the full-armour movement list on arrival; the main menu
+  from Escape on the question.
 
 ## Viewer helpers (not in the original)
 

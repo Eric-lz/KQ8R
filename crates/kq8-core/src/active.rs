@@ -844,6 +844,26 @@ pub struct Monster {
 }
 
 impl WorldState {
+    /// The objects that have left this world (M6 6e-8, `world-change.md`
+    /// rule 12: deleted objects are not in the kept world): deleted ones,
+    /// items carried by Connor or used up, characters dead or gone. Lower
+    /// case. On a return they are not loaded again.
+    pub fn gone_names(&self) -> Vec<String> {
+        let mut out: BTreeSet<String> = self.deleted.clone();
+        for o in &self.items.objects {
+            if o.carried_by(crate::talk::CONNOR) || matches!(o.place, crate::item::Place::Gone) {
+                out.insert(o.name.to_ascii_lowercase());
+            }
+        }
+        for a in &self.anims {
+            let dead = a.character.as_deref().and_then(|c| c.fight.as_ref()).is_some_and(|f| f.dying.is_some());
+            if a.gone || dead {
+                out.insert(a.player.name.to_ascii_lowercase());
+            }
+        }
+        out.into_iter().collect()
+    }
+
     pub fn now(&self) -> f64 {
         self.updates as f64 / crate::UPDATES_PER_SECOND
     }

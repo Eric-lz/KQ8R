@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-8: kept worlds, first stage (6e done)
+
+**Changed:** `kq8-core` `active.rs`: `gone_names` (deleted objects, items Connor carries or used up, dead or gone characters). Viewer `world_build.rs`: `KeptWorld` (the world's variables, its gone names) kept when Connor leaves, its map's saved keys put in the journey's other maps; arriving there again hands them to the reading (`load::Arrival`); Temple 1 drops the kept worlds. `load.rs`: kept variables set over the start values; gone objects not placed. `map_view.rs`: a world's own kept map replaces its shipped file; kept maps are not overwritten by shipped ones. README, FEATURES (new section), STATUS, DESIGN (6e done), provenance.
+**Why:** M6 6e step 8 (`world-change.md` rules 8.1, 12, 13, 14, 16), the last step of 6e.
+**Tested how:** clippy clean; core 512, data 138 tests. `kq8-viewer --world Daventry --begin --frames 5000 --sound off --command "give MagicMap",5 --command "deleteObject wizbook",45 --console "goworld CastleD",50 --console "goworld Daventry",60`; the same without `--begin`; `--world Daventry --command "give MagicMap",5 --console "goworld temple1",30`. `viewer.log`, `doors.log`, `map.log`.
+**Result:** Leaving Daventry: "91 variables, 7 objects gone, its map". Back: "91 variables set over the start values; 1 objects that left it not loaded again: [wizbook]"; "davmap.kq: the map kept when Connor left Daventry"; `Begin`: first visit `FirstTime == 1` (the opening scene), return `FirstTime == 0` (no scene). Daventry's fog 1,696 pixels out on leaving, 2,078 on return (1,696 + 382 new). Without `--begin` the return still had `FirstTime == 1`: the scene had never played, so that is right. To Temple 1: "1 kept worlds dropped, the maps kept".
+**Still broken / not tested:** Not looked at. What a kept world does not keep yet (positions, chests opened without a variable, items dropped there, bodies, terrain changes, the clock) comes with saved games. Items made by start scripts (`NoName`) that Connor took come back under a new name.
+**Next:** The user plays world changes by eye; decides on the allocator; then saved games.
+
 ## 2026-10-22 6e-7: walking exits
 
 **Changed:** `kq8-core` `portal.rs`: Connor's `stop` is no longer asked for as a Special movement (start of the state and after No). Viewer `load.rs`: the movements of portals' own lists are loaded (this world's portals' `enterAnmFile`/`enterAnim`; the arriving portal's `exitAnmFile`/`exitAnim`, handed over in `Arrival`); `world_build.rs` passes it. DESIGN, provenance.

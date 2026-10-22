@@ -1664,6 +1664,14 @@ pub struct Arrival {
     /// The arriving portal's own list and movement (`exitAnmFile`,
     /// `exitAnim`; M6 6e-7), loaded for the Special state.
     pub exit_movement: Option<(String, String)>,
+    /// A kept world (M6 6e-8): its variables (rule 13, set after the
+    /// world's own start values) and the objects that left it (rule 12,
+    /// not loaded again), lower case.
+    pub kept_vars: Vec<(String, String)>,
+    pub gone: std::collections::BTreeSet<String>,
+    /// The kept maps by map index (rule 16): this world's own, when it was
+    /// visited before, replaces its shipped file.
+    pub kept_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -1720,6 +1728,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         log.summary(format!("world change: NoName counter from {} (world-change.md rule 18); conStart.cs not run (rule 21)", a.no_name_from));
     }
     let mut placer = Placer {
+        gone: arrival.as_ref().map(|a| a.gone.clone()).unwrap_or_default(),
+        gone_skipped: Vec::new(),
         portal_movements,
         skip_con_start: arrival.is_some(),
         progress,
@@ -1890,9 +1900,25 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     placer.log.summary(format!("scripts for play: {} from the world, {shared} game-wide (GAME/patch, GAME/Kq)", scripts.len() - shared));
     let (item_shapes, item_lines) = placer.item_models(&script);
     let items = std::mem::take(&mut placer.items);
+    let gone_skipped = std::mem::take(&mut placer.gone_skipped);
+    if let Some(a) = arrival.as_ref().filter(|a| !a.kept_vars.is_empty() || !a.gone.is_empty()) {
+        placer.log.summary(format!(
+            "world change: kept world: {} variables set over the start values (rules 13-14); {} objects that left it not loaded again: {:?} (rule 12)",
+            a.kept_vars.len(),
+            gone_skipped.len(),
+            gone_skipped
+        ));
+    }
     let mut objects = placer.finish();
     objects.scripts = scripts;
     objects.vars = script.vars;
+    // M6 6e-8 (world-change.md rules 13, 14): a kept world's variables over
+    // its own start values, before its objects' Init.
+    if let Some(a) = &arrival {
+        for (n, v) in &a.kept_vars {
+            objects.vars.set(n, v.clone());
+        }
+    }
     objects.items = items;
     objects.item_shapes = item_shapes;
     objects.item_lines = item_lines;
@@ -1953,6 +1979,10 @@ struct Located {
 /// Places objects one by one as the scripts load them, and keeps the
 /// numbers for the log.
 struct Placer<'a> {
+    /// Objects that left this world on an earlier visit (M6 6e-8), lower
+    /// case, and those skipped.
+    gone: std::collections::BTreeSet<String>,
+    gone_skipped: Vec<String>,
     /// Portals' own lists' movements for the Special state (M6 6e-7).
     portal_movements: Vec<(String, String)>,
     /// A world change (M6 6e-3): `conStart.cs` is not run.
@@ -2729,6 +2759,12 @@ impl Placer<'_> {
             p.angles[2] = l.line.heading;
             p.z_on_ground = (l.line.position[2] == -1.0).then_some(kq8_data::terrain::Level::Floor);
             p.missing_loc = [false; 3];
+        }
+        // M6 6e-8 (world-change.md rule 12): it left this world on an
+        // earlier visit (deleted, taken, dead): not loaded again.
+        if !unused && self.gone.contains(&p.name.to_ascii_lowercase()) {
+            self.gone_skipped.push(p.name.clone());
+            return;
         }
         let mut character = character_keys.zip(character_list).map(|(keys, list)| {
             let lips = match kq8_data::characters::Lips::of(&file, &keys) {
