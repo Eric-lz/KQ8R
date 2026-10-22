@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-4: pan, zoom and follow on the magic map
+
+**Changed:** `kq8-core` `magic_map.rs` (`View::pan`, `zoom`, `follow_once`, `MapState::follow_step`, the follow mark); viewer `gui_view.rs` (`MapDrag`: a left or right drag that starts on the map area; the follow at each draw of the shown window; test keys `--key mappan:DX:DY,N` and `--key mapzoom:DX,N` in layout pixels), `game_camera.rs` (no camera swing during a map drag), `main.rs`.
+**Why:** M6 6d step 4 (`magic-map.md` rules 22–25).
+**Tested how:** `cargo test -p kq8-core` (unit tests for pan limit, zoom ×2 per 64 and limits 115–3,680, follow steps), clippy clean. `cargo play --world Daventry --at 193000,193000,3.1416 --command "give MagicMap",5 --key tab,10 --key mapzoom:192,15 --key mappan:5000:0,20 --hold 1,0,0,25,80 --frames 700 --sound off`; `map.log`.
+**Result:** Zoom 192 px: 298.3 → 2,386.2 wide (× 8). Pan 5,000 right: stops with the picture's left edge on the area's centre (left 0.00). Once Connor moves to a new pixel, the follow brings the arrow's top-left from far outside to (275.8, 275.9) of the 296 area in 8 draws of 6 steps, then stops until his next pixel.
+**Still broken / not tested:** **The real mouse drags are not tested** (the test keys use the same rules but skip the mouse); the camera not swinging during a right drag on the map is not tested. The follow margin is the stand-in (20 inside on all sides).
+**Next:** 6d-5, the mini-map.
+
 ## 2026-10-21 6d-3: the magic map's window
 
 **Changed:** `kq8-core` `magic_map.rs` (`View`, the start view, the arrow's place; views set up from the one stored on Connor), `panels.rs` (`toggle_map`), `gui_draw.rs` (`Piece::Map`: the map at its view with the arrow, cut to the area); viewer `gui_view.rs` (the map window as a panel: borders, area, name plate, page arrows, "Go" off; the map key from `movekeys.kq` row 8; a left click on the mini-map slot; `--key tab,N`), `map_view.rs`.

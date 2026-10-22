@@ -2070,7 +2070,8 @@ Steps (one commit each):
    toggle it when the map is active, also during handsOff and
    conversations; `handsOff 1` hides it (built in 4c-2). **Test:**
    `--key tab,N`; `gui.log` "map shown", `map.log` the view.
-4. **6d-4, the mouse on the map** (rules 22–25). Left drag pans (the
+4. **6d-4, the mouse on the map** (**done** 2026-10-21; test keys
+   `mappan:DX:DY` and `mapzoom:DX` instead of `--drag`) (rules 22–25). Left drag pans (the
    area's centre kept on the picture), right drag sideways zooms (×2
    per 64 pixels, shown width 115 to 3,680), the view follows Connor
    when his pixel changes (stand-in margins above). The view is stored

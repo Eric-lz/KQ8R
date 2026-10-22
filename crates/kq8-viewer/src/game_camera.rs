@@ -560,6 +560,7 @@ pub fn camera_input(
     camera: Query<&Transform, With<Camera3d>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     shared: Res<Shared>,
+    map_drag: Res<crate::gui_view::MapDrag>,
 ) {
     let Some(mut game) = game else { return };
     if keys.just_pressed(KeyCode::KeyF) {
@@ -579,7 +580,8 @@ pub fn camera_input(
     }
     // The mouse's own movement (not the cursor's place, so a drag doesn't
     // stop at the window's edge: our method) as a share of the window.
-    if let (true, Ok(w)) = (game.keys.mouse.is_some_and(|b| buttons.pressed(b)), windows.single()) {
+    // M6 6d-4: not while a drag that started on the magic map runs.
+    if let (true, Ok(w)) = (game.keys.mouse.is_some_and(|b| buttons.pressed(b)) && map_drag.0.is_none(), windows.single()) {
         if w.width() > 0.0 && w.height() > 0.0 {
             game.mouse += motion.delta / Vec2::new(w.width(), w.height());
         }

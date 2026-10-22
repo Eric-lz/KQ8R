@@ -596,6 +596,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::GodStart(args.god))
                 .insert_resource(gui_view::KeyAt(args.key))
                 .init_resource::<gui_view::GuiCover>()
+                .init_resource::<gui_view::MapDrag>()
                 .init_resource::<gui_view::ScreenFrame>()
                 .init_resource::<gui_view::BarActions>()
                 .init_resource::<gui_view::CaptionPlace>()

@@ -140,6 +140,21 @@ pub struct View {
 pub const START_VIEW: View = View { left: -152.83, top: -152.11, right: 145.44, bottom: 146.16 };
 /// Rule 18: the arrow's size; its centre is on Connor.
 pub const ARROW_HALF: f64 = 5.0;
+/// Rule 5: the map area, 296 × 296 layout pixels.
+pub const AREA_SIZE: f64 = 296.0;
+/// Rule 24: sideways mouse movement that doubles the size.
+pub const ZOOM_DOUBLING: f64 = 64.0;
+/// Rule 24: the shown width's limits, × 0.25 and × 8 of the picture.
+pub const ZOOM_MIN: f64 = MAP_SIZE as f64 / 4.0;
+pub const ZOOM_MAX: f64 = MAP_SIZE as f64 * 8.0;
+/// Rule 25, STAND-IN (open question 2, DESIGN 6d): the arrow's top-left
+/// corner is kept at least this far inside the visible map area on all
+/// four sides.
+pub const FOLLOW_MARGIN: f64 = 20.0;
+/// Rule 25: the step is (distance past the margin) ÷ this + 1 pixels.
+pub const FOLLOW_DIVISOR: f64 = 10.0;
+/// Rule 25: steps at most per draw.
+pub const FOLLOW_STEPS: usize = 6;
 
 impl View {
     pub fn width(&self) -> f64 {
@@ -165,6 +180,61 @@ impl View {
 
     pub fn as_array(&self) -> [f64; 4] {
         [self.left, self.top, self.right, self.bottom]
+    }
+
+    /// Rule 23: the picture moved by (`dx`, `dy`) layout pixels, kept so
+    /// that the area's centre stays on it (its left edge not right of the
+    /// centre, its right edge not left of it; the same up and down).
+    pub fn pan(&mut self, dx: f64, dy: f64) {
+        let dx = dx.min(-self.left).max(-self.right);
+        let dy = dy.min(-self.top).max(-self.bottom);
+        self.left += dx;
+        self.right += dx;
+        self.top += dy;
+        self.bottom += dy;
+    }
+
+    /// Rule 24: a sideways movement of `dx` layout pixels multiplies the
+    /// size by 2^(dx ÷ 64) about the area's centre, the shown width kept
+    /// between 115 and 3,680.
+    pub fn zoom(&mut self, dx: f64) {
+        let w = self.width();
+        if w <= 0.0 {
+            return;
+        }
+        let wanted = (w * (dx / ZOOM_DOUBLING).exp2()).clamp(ZOOM_MIN, ZOOM_MAX);
+        let f = wanted / w;
+        self.left *= f;
+        self.right *= f;
+        self.top *= f;
+        self.bottom *= f;
+    }
+
+    /// Rule 25 (stand-in margins): one follow step for the arrow at map
+    /// pixel `p`; `false` when its top-left corner is already inside.
+    pub fn follow_once(&mut self, p: (i32, i32)) -> bool {
+        let (x, y) = self.arrow_at(p);
+        let half = AREA_SIZE / 2.0;
+        let (lo, hi) = (FOLLOW_MARGIN, AREA_SIZE - FOLLOW_MARGIN);
+        let step = |v: f64| {
+            let v = v + half;
+            if v < lo {
+                ((lo - v) / FOLLOW_DIVISOR).trunc() + 1.0
+            } else if v > hi {
+                -(((v - hi) / FOLLOW_DIVISOR).trunc() + 1.0)
+            } else {
+                0.0
+            }
+        };
+        let (dx, dy) = (step(x), step(y));
+        if dx == 0.0 && dy == 0.0 {
+            return false;
+        }
+        self.left += dx;
+        self.right += dx;
+        self.top += dy;
+        self.bottom += dy;
+        true
     }
 }
 
@@ -234,6 +304,9 @@ pub struct MapState {
     pub earned_teleport: bool,
     /// Counts every change of [`MapState::picture`], for redrawing.
     pub version: u64,
+    /// Rule 25: Connor's pixel changed since the view last had the arrow
+    /// inside its margins.
+    pub follow: bool,
     /// Rule 22: the big map's view (its changes are stored on Connor by
     /// the caller); rule 27: the mini-map's own copy. Both taken from the
     /// view stored on Connor when the map is set up ([`MapState::set_views`]).
@@ -279,6 +352,7 @@ impl MapState {
             frame: 0,
             earned_teleport: keys.earned_teleport,
             version: 0,
+            follow: false,
             view: START_VIEW,
             mini_view: START_VIEW,
             log: Vec::new(),
@@ -402,6 +476,7 @@ impl MapState {
             step.moved = true;
             step.revealed = self.reveal(p.0, p.1);
             self.draw_icons();
+            self.follow = true;
         }
         Some(step)
     }
@@ -412,6 +487,22 @@ impl MapState {
     pub fn set_views(&mut self, stored: View) {
         self.view = stored;
         self.mini_view = stored;
+    }
+
+    /// Rule 25, at each draw of the big map: while marked, up to 6 steps
+    /// toward bringing the arrow inside; inside clears the mark. Returns
+    /// the steps made.
+    pub fn follow_step(&mut self) -> usize {
+        let Some(p) = self.last_pixel.filter(|_| self.follow) else { return 0 };
+        let mut steps = 0;
+        while steps < FOLLOW_STEPS {
+            if !self.view.follow_once(p) {
+                self.follow = false;
+                break;
+            }
+            steps += 1;
+        }
+        steps
     }
 
     /// Rule 2.
@@ -709,6 +800,56 @@ mod tests {
         assert!((x - (-152.83 + 230.0 * v.width() / 460.0 - 5.0)).abs() < 1e-9 && (y + 5.0 - (-152.11 + 0.5 * v.height())).abs() < 1e-9);
         let (mx, my) = v.map_point(-152.83, 146.16);
         assert!((mx - 0.0).abs() < 1e-9 && (my - 460.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn pan_keeps_the_centre_on_the_picture() {
+        let mut v = START_VIEW;
+        v.pan(10.0, -5.0);
+        assert_eq!(v.as_array(), [-142.83, -157.11, 155.44, 141.16]);
+        // Far right: the left edge stops at the centre.
+        v.pan(1000.0, 0.0);
+        assert_eq!((v.left, v.right), (0.0, 298.27));
+        v.pan(-5000.0, 5000.0);
+        assert!((v.right - 0.0).abs() < 1e-9 && (v.top - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zoom_doubles_per_64_and_stops_at_the_limits() {
+        let mut v = View { left: -100.0, top: -50.0, right: 100.0, bottom: 150.0 };
+        v.zoom(64.0);
+        assert_eq!(v.as_array(), [-200.0, -100.0, 200.0, 300.0], "about the area's centre");
+        v.zoom(-128.0);
+        assert!((v.width() - 115.0).abs() < 1e-9, "x 0.25 of 460 at most out");
+        v.zoom(10000.0);
+        assert!((v.width() - 3680.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn follow_brings_the_arrow_inside_the_margins() {
+        // A view at x 1 (460 layout px for 460 map pixels): pixel (0, 230)
+        // puts the arrow's top-left at the picture's left - 5.
+        let mut m = {
+            let (b, f) = pics();
+            MapState::new("davmap.kq", keys(), b, f, None, None)
+        };
+        m.view = View { left: 0.0, top: -230.0, right: 460.0, bottom: 230.0 };
+        m.last_pixel = Some((0, 230));
+        assert_eq!(m.follow_step(), 0, "not marked: stays put");
+        m.follow = true;
+        // Top-left x = -5 from the centre = 143 in the area: inside.
+        assert_eq!(m.follow_step(), 0);
+        assert!(!m.follow);
+        // Far right: x = 455 - 5 + 148 = 598 > 276: 33 px per step.
+        m.last_pixel = Some((455, 230));
+        m.follow = true;
+        assert_eq!(m.follow_step(), 6, "at most 6 steps a draw");
+        assert!(m.follow);
+        let x = |m: &MapState| m.view.arrow_at(m.last_pixel.unwrap()).0 + 148.0;
+        // Steps of 33, 29, 27, 24, 21, 19 (each from the new distance).
+        assert!((x(&m) - 445.0).abs() < 1e-9, "{}", x(&m));
+        while m.follow_step() > 0 {}
+        assert!(x(&m) <= 276.0 && x(&m) > 266.0 && !m.follow);
     }
 
     #[test]

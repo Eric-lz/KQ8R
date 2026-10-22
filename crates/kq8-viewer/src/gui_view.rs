@@ -246,6 +246,13 @@ pub struct Gui {
 #[derive(Resource, Default)]
 pub struct GuiCover(pub Vec<(&'static str, [f32; 4])>);
 
+/// M6 6d-4 (`magic-map.md` rules 23, 24): a drag that started on the map
+/// area: left (pan) or right (zoom), the pointer's last place (screen
+/// pixels), and the movements so far. The camera leaves the mouse alone
+/// while one runs.
+#[derive(Resource, Default)]
+pub struct MapDrag(pub Option<(bool, [f32; 2], u32)>);
+
 /// 4c-6: the game's 4:3 screen in the window (left, top, width, height,
 /// window pixels), from `kq8_core::panels::screen_frame`.
 #[derive(Resource, Default, Clone, Copy)]
@@ -886,6 +893,29 @@ pub fn gui_step(
         match name.to_ascii_lowercase().as_str() {
             "space" => gui.panels.toggle_bottom(&how),
             "tab" => gui.toggle_map(&how),
+            // M6 6d-4 test keys: a pan or zoom drag of so many layout
+            // pixels on the map, through the same rules as the mouse.
+            k if k.starts_with("mappan:") || k.starts_with("mapzoom:") => {
+                let n: Vec<f64> = k.split(':').skip(1).filter_map(|v| v.parse().ok()).collect();
+                let w = &mut sim.active.world;
+                let line = match (w.map.as_mut(), k.starts_with("mappan:"), n.as_slice()) {
+                    (Some(m), true, [dx, dy]) => {
+                        m.view.pan(*dx, *dy);
+                        Some(m.view)
+                    }
+                    (Some(m), false, [dx]) => {
+                        m.view.zoom(*dx);
+                        Some(m.view)
+                    }
+                    _ => None,
+                }
+                .map(|v| {
+                    w.map_view = v;
+                    format!("update {updates}: {how}: view ({:.2}, {:.2})-({:.2}, {:.2}), shown {:.1} x {:.1} layout px (magic-map.md rules 22-24)", v.left, v.top, v.right, v.bottom, v.width(), v.height())
+                })
+                .unwrap_or_else(|| format!("update {updates}: {how}: no map, or not mappan:DX:DY / mapzoom:DX; nothing"));
+                w.map_log.push(line);
+            }
             "f4" => crate::door_view::flip_ai(&mut sim, &how),
             "f3" => crate::door_view::flip_god(&mut sim, &how),
             // ranged-weapons.md rule 1 (M5 5f-3): Delete (Draw), Alt (Away).
@@ -1190,7 +1220,7 @@ pub fn gui_step(
 #[allow(clippy::too_many_arguments)]
 pub fn gui_draw(
     gui: Option<ResMut<Gui>>,
-    sim: Option<ResMut<DoorSim>>,
+    mut sim: Option<ResMut<DoorSim>>,
     time: Res<Time<Real>>,
     keys: Res<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -1202,6 +1232,7 @@ pub fn gui_draw(
     mut caption: ResMut<CaptionPlace>,
     frame: Res<ScreenFrame>,
     mut status_at: Local<Option<[i32; 4]>>,
+    mut drag: ResMut<MapDrag>,
 ) {
     let Some(mut gui) = gui else { return };
     let gui = &mut *gui;
@@ -1396,6 +1427,15 @@ pub fn gui_draw(
             let Some((d, l, t, ..)) = hit else { continue };
             let Some(control) = gui.control_at(d, l, t, x, y) else { continue };
             let how = format!("{} click on {control}", if left { "left" } else { "right" });
+            // M6 6d-4: a press on the map area starts a drag (below).
+            if control == MAP_AREA {
+                if drag.0.is_none() {
+                    drag.0 = Some((left, [x, y], 0));
+                    let line = format!("{how}: {} drag starts (magic-map.md rule {})", if left { "pan" } else { "zoom" }, if left { 23 } else { 24 });
+                    gui.note(line);
+                }
+                continue;
+            }
             match (control.as_str(), gui.item_at(&control)) {
                 ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
                 ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
@@ -1408,10 +1448,74 @@ pub fn gui_draw(
             }
         }
     }
+    // M6 6d-4 (magic-map.md rules 23-25): the drag, then the follow at this
+    // draw; the view is stored on Connor after each change (rule 22).
+    if let Some((left, last, moves)) = drag.0 {
+        let button = if left { MouseButton::Left } else { MouseButton::Right };
+        let at = pointer.map(|c| [(c.x - fl) / k, (c.y - ft) / k]);
+        let map = sim.as_mut().and_then(|s| s.active.world.map.as_mut());
+        match (map, at) {
+            (Some(m), Some(at)) if buttons.pressed(button) => {
+                // STAND-IN (open question 6): screen pixels to layout pixels.
+                let (dx, dy) = (((at[0] - last[0]) / gui.scale) as f64, ((at[1] - last[1]) / gui.scale) as f64);
+                let moved = dx != 0.0 || dy != 0.0;
+                if moved {
+                    if left {
+                        m.view.pan(dx, dy);
+                    } else {
+                        m.view.zoom(dx);
+                    }
+                }
+                drag.0 = Some((left, at, moves + u32::from(moved)));
+            }
+            _ => {
+                drag.0 = None;
+                if let Some(s) = sim.as_mut() {
+                    let w = &mut s.active.world;
+                    if let Some(view) = w.map.as_ref().map(|m| m.view) {
+                        w.map_view = view;
+                        let v = view.as_array();
+                        w.map_log.push(format!(
+                            "{} drag ends after {moves} movements: view ({:.2}, {:.2})-({:.2}, {:.2}), shown {:.1} x {:.1} layout px (magic-map.md rules 22-24)",
+                            if left { "pan" } else { "zoom" },
+                            v[0],
+                            v[1],
+                            v[2],
+                            v[3],
+                            view.width(),
+                            view.height()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    if gui.panels.away(Panel::Map) < 1.0 {
+        if let Some(w) = sim.as_mut().map(|s| &mut s.active.world) {
+            if let Some(m) = w.map.as_mut() {
+                let steps = m.follow_step();
+                if steps > 0 {
+                    let v = m.view;
+                    w.map_view = v;
+                    let (ax, ay) = m.last_pixel.map_or((0.0, 0.0), |p| v.arrow_at(p));
+                    w.map_log.push(format!(
+                        "follow: {steps} step(s); view ({:.2}, {:.2})-({:.2}, {:.2}); the arrow's top-left at ({:.1}, {:.1}) in the area{} (rule 25; margin 20: stand-in)",
+                        v.left,
+                        v.top,
+                        v.right,
+                        v.bottom,
+                        ax + kq8_core::magic_map::AREA_SIZE / 2.0,
+                        ay + kq8_core::magic_map::AREA_SIZE / 2.0,
+                        if m.follow { ", still outside" } else { "" }
+                    ));
+                }
+            }
+        }
+    }
     *caption = CaptionPlace { bottom: Some(bottom), map_right: Some(kq8_core::caption::map_away_right(sw)) };
     // The panels' sounds (rule 9): plain one-shots in group 0.
     let sounds = std::mem::take(&mut gui.panels.sounds);
-    if let Some(mut sim) = sim {
+    if let Some(sim) = sim.as_mut() {
         for s in sounds {
             sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(&s, "a panel starts to slide (interface.md rule 9)".into()));
         }
