@@ -21,10 +21,16 @@
 //!   don't run, `world_build::playing`).
 //!
 //! Ours: the 640 × 480 layout is stretched over the whole window.
-//! `4black.pbm` and `4red.pbm` are 6 × 6 swatches of one colour each; the
-//! bar and the meter are drawn as rectangles of their colour (the first
-//! pixel's), not as stretched pictures (the user saw the stretched red
-//! picture drawn as a small square, 2026-10-22).
+//! `4red.pbm` is a 6 × 6 picture (rows of entries 222–224), stretched over
+//! the meter's place (the original's stretch or tiling is not traced; the
+//! two look alike at 8 pixels high).
+//!
+//! **Not drawn: the black bar** `4black.pbm` at (0, 462)–(640, 480). The
+//! loading pictures have the meter's frame painted in (rows 464–479: a
+//! light border round a dark slot at x 5–635, rows 468–475, the meter's
+//! place), and the user sees that frame in the original (2026-10-22), so
+//! the bar does not cover it there. When the original shows the bar is
+//! not in the note: Q152.
 
 use std::sync::{Arc, Mutex};
 
@@ -43,22 +49,12 @@ pub struct LoadingScreen;
 pub struct LoadingMeter;
 
 /// Layout in 640 × 480 pixels (rule 23).
-const BAR: [f32; 4] = [0.0, 462.0, 640.0, 18.0];
 const METER: [f32; 4] = [5.0, 468.0, 630.0, 8.0];
 
 /// The picture's and the palette's file names for `world` (rule 22).
 pub fn files(world: &str) -> (String, String) {
     let short: String = world.chars().take(7).collect();
     (format!("GAME/8Gui/{world}.pbm"), format!("GAME/8Gui/l{short}.ppl"))
-}
-
-/// The colour of a swatch picture's first pixel, in `palette`'s colours.
-fn swatch(game: &GameDir, file: &str, palette: &[kq8_data::palette::Rgb; 256]) -> Result<Color, String> {
-    let path = game.find(file).ok_or("not found")?;
-    let bmp = kq8_data::Bitmap::parse(&std::fs::read(path).map_err(|e| e.to_string())?)?;
-    let i = *bmp.pixels.first().ok_or("no pixels")?;
-    let [r, g, b] = palette[i as usize];
-    Ok(Color::srgb_u8(r, g, b))
 }
 
 /// A picture as an image, in `palette`'s colours.
@@ -87,26 +83,26 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
         .and_then(|b| kq8_data::Palette::parse(&b))
         .map(|p| kq8_data::palette::as_shown(p.colors));
     let mut notes = Vec::new();
-    let (mut image, mut bar, mut red) = (None, Color::BLACK, Color::srgb(0.8, 0.0, 0.0));
+    let (mut image, mut red) = (None, None);
     match palette {
-        Err(e) => notes.push(format!("palette {pal_file}: {e}; no picture")),
+        Err(e) => notes.push(format!("palette {pal_file}: {e}; no pictures")),
         Ok(palette) => {
             match picture(&game, &pic_file, &palette) {
                 Ok(i) => image = Some(i),
                 Err(e) => notes.push(format!("{pic_file}: {e}")),
             }
-            match swatch(&game, "GAME/8Gui/4black.pbm", &palette) {
-                Ok(c) => bar = c,
-                Err(e) => notes.push(format!("4black.pbm: {e}")),
-            }
-            match swatch(&game, "GAME/8Gui/4red.pbm", &palette) {
-                Ok(c) => red = c,
-                Err(e) => notes.push(format!("4red.pbm: {e}")),
+            match picture(&game, "GAME/8Gui/4red.pbm", &palette) {
+                Ok(i) => {
+                    notes.push(format!("meter 4red.pbm {}x{} stretched to 630x8", i.width(), i.height()));
+                    red = Some(i);
+                }
+                Err(e) => notes.push(format!("4red.pbm: {e}; a plain red meter")),
             }
         }
     }
-    let handle = image.map(|i| world.resource_mut::<Assets<Image>>().add(i));
-    notes.push(format!("bar {:?}, meter {:?}", bar.to_srgba().to_u8_array(), red.to_srgba().to_u8_array()));
+    let mut assets = world.resource_mut::<Assets<Image>>();
+    let (handle, red) = (image.map(|i| assets.add(i)), red.map(|i| assets.add(i)));
+    notes.push("no black bar (Q152)".into());
     let at = |r: [f32; 4]| Node {
         position_type: PositionType::Absolute,
         left: Val::Percent(r[0] / 6.4),
@@ -119,16 +115,22 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
     world.spawn((Camera2d, Persistent, LoadingScreen));
     let mut root = world.spawn((Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() }, BackgroundColor(Color::BLACK), Persistent, LoadingScreen));
     root.with_children(|p| {
+        // `Stretch`: the picture fills its place whatever its own size
+        // (the default keeps the picture's size: the meter showed as a
+        // small square, the user's first look).
+        let stretched = |h: &Handle<Image>| ImageNode { image: h.clone(), image_mode: NodeImageMode::Stretch, ..default() };
         if let Some(h) = &handle {
-            p.spawn((ImageNode::new(h.clone()), at([0.0, 0.0, 640.0, 480.0]), Persistent, LoadingScreen));
+            p.spawn((stretched(h), at([0.0, 0.0, 640.0, 480.0]), Persistent, LoadingScreen));
         }
-        p.spawn((BackgroundColor(bar), at(BAR), Persistent, LoadingScreen));
         let mut meter = at(METER);
         meter.width = Val::Percent(0.0);
-        p.spawn((BackgroundColor(red), meter, Persistent, LoadingScreen, LoadingMeter));
+        match &red {
+            Some(h) => p.spawn((stretched(h), meter, Persistent, LoadingScreen, LoadingMeter)),
+            None => p.spawn((BackgroundColor(Color::srgb(0.8, 0.0, 0.0)), meter, Persistent, LoadingScreen, LoadingMeter)),
+        };
     });
     let mut log = log.lock().unwrap();
-    log.summary(format!("loading screen: {pic_file} in {pal_file}, the black bar and the red meter (world-change.md rules 22-24); {}", notes.join("; ")));
+    log.summary(format!("loading screen: {pic_file} in {pal_file}, the red meter (world-change.md rules 22-24); {}", notes.join("; ")));
 }
 
 /// The meter at `percent` of its 630 pixels (rule 24).

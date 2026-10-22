@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix 6e-4a again: the meter's frame is in the picture; no black bar
+
+**Changed:** Viewer `loading_screen.rs`: the black bar is no longer drawn; the meter is `4red.pbm` stretched over (5, 468)–(635, 476) (`NodeImageMode::Stretch`). `QUESTIONS.md` Q152.
+**Why:** The user's second look: the red rectangle had no background; in the original the red texture grows inside a meter frame.
+**Tested how:** Measured the loading pictures (`daventry.pbm` in `ldaventr.ppl`, row by row): rows 464–479 are a light border round a dark slot exactly at the meter's place (x 5–635, rows 468–475); `Swamp`, `castleD`, `deadcity`, `temple1`, `barren` the same. `Loading.gui` (from `kq8 gui-verify`) has no frame picture of its own. One run `--world Daventry --console "goworld Swamp",50`.
+**Result:** The frame the user saw in the first build was the picture's own: my 640 × 18 black bar covers it (in the first build the bar showed as a small square for the same reason as the meter: Bevy kept the 6 × 6 pictures at their own size; the default `Auto` image mode). Now "meter 4red.pbm 6x6 stretched to 630x8; no black bar (Q152)".
+**Mistake:** In the first fix I read "the bar background is correctly drawn" as my black bar and drew it bigger, which hid the real frame. I should have measured the picture first.
+**Still broken / not tested:** Not looked at. When the original shows the black bar, and stretch or tile for the meter: Q152.
+**Next:** The user's look; then 6e-4b.
+
 ## 2026-10-22 Fix 6e-4a: the loading meter; `--console` lines after a world change
 
 **Changed:** Viewer `loading_screen.rs`: the black bar and the red meter are rectangles in the colour of `4black.pbm` / `4red.pbm` (6 × 6 swatches), not stretched pictures. `console.rs`: once a line asks for a world change, the lines after it (typed or `--console`) wait for the next world. Provenance unchanged (same rules).
