@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 QUESTIONS table repaired; the ravens' caw: Q158 (not fixed)
+
+**Changed:** Docs only: `docs/behaviour/QUESTIONS.md`: every line up to Q131 was followed by an extra empty line (since commit `7d6c385`, 2026-10-20, which rewrote the file with doubled line breaks), so the table broke after its first row; the 140 extra lines removed. Q89 (`handsOff 1|0`) and Q144 (`dither <name> 0|1`) had a bare `|` inside code that split their row; escaped. New **Q158**.
+**Why:** The user: the table no longer shows correctly; the ravens should caw now and then and never do.
+**Tested how:** Every table row now has 5 cells (checked by script), no empty line inside the table; the diff is only the removed lines and the two rows. The caw: `doors.log` of the `--begin` run: "object Ravens: cue 'sendEvent @ KQCueEvent 10 0' fires (cue action not done)" about every 3 s; the script command `random` is not built.
+**Result:** —
+**Still broken / not tested:** The table not looked at in a Markdown viewer. The ravens don't caw until Q158 is answered.
+**Next:** A: Q158 (with Q155–Q157).
+
 ## 2026-10-22 Fix: the raven by Sarah's house can be clicked
 
 **Changed:** Viewer `load.rs` (`object_colliders`): a character prepared for a script's `loadKQ` gets its click box at the start, switched off. `kq8-core` `active.rs`: `loadKQ` switches it on; the start's `Init` skips switched-off boxes. Unit test `a_character_loaded_while_playing_gets_init_then_and_can_be_clicked`. Provenance row.
