@@ -430,6 +430,8 @@ pub fn world_change_step(world: &mut World) {
             world.resource_mut::<PendingWorld>().0 = Some((read, opts));
             build_pending(world);
             give_journey(world, journey.as_deref(), &request.world, &log);
+            // Rule 9: `Begin` on every arrival.
+            world.insert_resource(BeginNow(request.world.clone()));
             if let Some(p) = request.portal {
                 log.lock().unwrap().summary(format!("world change: arriving through {}: ConLoc {:?}, CamLoc {:?}, exitAnim {:?} ({:?}), exitScript {:?} (world-change.md rules 6, 20)", p.portal, p.con_loc, p.cam_loc, p.exit_anim, p.exit_list, p.exit_script));
                 world.insert_resource(crate::portal_view::ArrivalNow::new(*p));
@@ -466,6 +468,26 @@ fn give_journey(world: &mut World, journey: Option<&Journey>, to: &str, log: &st
         wl.detail(format!("Connor arriving in {to}: {arrived}"));
         wl.detail(format!("after building {to}: {}; {}", after.line(), crate::memory::line()));
     }
+}
+
+/// `world.cs <World> Begin` waiting for the world's first update (M6
+/// 6e-5, `world-change.md` rule 9: on every arrival, first visit or not;
+/// at launch only with `--begin`, ours).
+#[derive(Resource)]
+pub struct BeginNow(pub String);
+
+/// The first update of a new world, before the portal arrival and the
+/// doors: runs `world.cs <World> Begin` once (rule 9).
+pub fn begin_step(mut commands: Commands, begin: Option<Res<BeginNow>>, sim: Option<ResMut<crate::door_view::DoorSim>>, shared: Res<Shared>) {
+    let (Some(begin), Some(mut sim)) = (begin, sim) else { return };
+    let updates = sim.active.world.updates;
+    let ran = sim.active.run_script("world.cs", &[begin.0.clone(), "Begin".into()]);
+    shared.log.lock().unwrap().summary(format!(
+        "update {updates}: world.cs {} Begin (world-change.md rule 9): {}",
+        begin.0,
+        if ran { "run" } else { "no world.cs in this world" }
+    ));
+    commands.remove_resource::<BeginNow>();
 }
 
 /// Takes the world down: despawns every [`WorldEntity`] and removes the
@@ -600,6 +622,7 @@ per_world!(
     crate::scene_lights::LightsGroup,
     crate::scene_lights::GroundLights,
     crate::portal_view::ArrivalNow,
+    BeginNow,
 );
 
 /// Entity and asset counts, for the logs (a round trip must give the

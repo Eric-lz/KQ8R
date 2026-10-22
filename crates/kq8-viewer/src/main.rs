@@ -150,6 +150,10 @@ struct Args {
     /// `--console "WORDS",N`: before update N + 1, a line typed in the
     /// console (M6 6e-2 test; repeatable, e.g. `reload`).
     console: Vec<(String, u64)>,
+    /// `--begin`: run `world.cs <World> Begin` at launch too (M6 6e-5;
+    /// `world-change.md` rule 9 runs it on every arrival; at launch it is
+    /// off by default because Daventry's plays the opening scene).
+    begin: bool,
     /// `--right N`: the camera-move (right) button counts as held from
     /// update N on, for a conversation's stay test (M4 4e-5 test).
     right: Option<u64>,
@@ -200,6 +204,7 @@ fn parse_args() -> Result<Args, String> {
         special: None,
         command: Vec::new(),
         console: Vec::new(),
+        begin: false,
         right: None,
         item: None,
         kept_maps: None,
@@ -295,6 +300,7 @@ fn parse_args() -> Result<Args, String> {
                 let n = n.trim().parse::<u64>().map_err(|_| usage)?;
                 a.command.push((words.trim().to_string(), n));
             }
+            "--begin" => a.begin = true,
             "--console" => {
                 let v = value()?;
                 let usage = "--console needs \"WORDS\",UPDATE e.g. reload,60".to_string();
@@ -451,6 +457,7 @@ N is an update number (15 updates per second):
   --special ITEMS,N          play Connor's special movements (separated by ;)
   --command \"WORDS\",N      run one script command at update N (repeatable)
   --console \"WORDS\",N      type one console line at update N (repeatable; e.g. reload)
+  --begin                    run the world's world.cs Begin at launch too (Daventry: the opening scene)
   --right N                the right (camera-move) button counts as held from update N on (conversations)
 
   -h, --help                 show this list
@@ -580,6 +587,9 @@ fn main() -> ExitCode {
             // and run by `world_build::build_pending` at Startup.
             world_build::add(&mut app);
             world_build::remember_options(app.world_mut(), &opts);
+            if args.begin {
+                app.insert_resource(world_build::BeginNow(args.world.clone()));
+            }
             app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
             app.insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(connor_view::StartLift(args.lift))
@@ -623,6 +633,8 @@ fn main() -> ExitCode {
                 // Arriving through a portal (M6 6e-4b), before the doors'
                 // update takes the requests.
                 .add_systems(FixedUpdate, portal_view::arrival_step.after(console::console_step).before(door_view::door_step).run_if(world_build::playing))
+                // world.cs Begin on a new world's first update (M6 6e-5).
+                .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step).run_if(world_build::playing))

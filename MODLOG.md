@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-5: `world.cs Begin` on every arrival
+
+**Changed:** Viewer `world_build.rs` (`BeginNow`, `begin_step`: `world.cs <World> Begin` once on a new world's first update, before the portal arrival), `main.rs` (launch option `--begin`). FEATURES, DESIGN, provenance.
+**Why:** M6 6e step 5 (`world-change.md` rule 9); our build never ran `Begin`.
+**Tested how:** clippy clean. `kq8-viewer --world Swamp --frames 6000 --sound off --console "goworld Daventry",30 --console "goworld Swamp",60 --console "goworld Daventry",60`; `kq8-viewer --world Daventry --begin --frames 900 --sound off`. `viewer.log`, `doors.log`.
+**Result:** "world.cs Daventry Begin … run" / "world.cs Swamp Begin … run" on each arrival. Daventry's `Begin` finds `Daventry::girlhut::FirstTime == 1` both times and plays the opening scene (`handsOff 1`, `move Connor 0 277744 199029 -1 0 0 1.57`, the camera move, the cue to `stngrl`): the expected gap until its variables are kept (6e-8). `--begin` starts the same scene at launch.
+**Still broken / not tested:** Not looked at; whether the opening scene runs to its end in our build not checked. Launch without `--begin` stays as before (no `Begin`).
+**Next:** 6e-6, the Yes/No popup and the Portal state.
+
 ## 2026-10-22 6e-4b: arriving through a portal
 
 **Changed:** New viewer `portal_view.rs` (`PortalArrival` from a `KQPortal` file, `read_portal`, `arrival_step`: places, `handsOff 1`, the `exitAnim`, then the `exitScript` with `<portal> Exit` and `handsOff 0`). `world_build.rs`: a change request can carry a portal; z −1 goes through the ground placement. `kq8-core` `Active::run_script`. `load.rs`: six portal movements added to Connor's loaded movements. Console word `goworld portal <file>`. FEATURES, DESIGN, provenance.

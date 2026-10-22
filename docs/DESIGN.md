@@ -2326,7 +2326,7 @@ Steps (one commit each; each ends with a test and a log check):
    Davtele.kq` from Swamp: `world.log` Connor's place and heading on
    arrival, `anim.log` `teleportup`, the meter's steps and frame times
    during the load.
-5. **6e-5 (new), `world.cs Begin`** on every arrival (rule 9). At launch
+5. **6e-5 (new), `world.cs Begin`** (**done** 2026-10-22) on every arrival (rule 9). At launch
    only with a new test option `--begin` (ours; launch has no main menu
    or new game yet, and Daventry's `Begin` plays the opening scene,
    which would move Connor away from `--at`). **Test:** `goworld

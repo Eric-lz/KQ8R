@@ -810,6 +810,8 @@ repeated and checked in the logs. They do not change the game's rules.
   as if a script did (words split at spaces; no variables). For example
   `--command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` makes
   the Wizard say a line. Can be given more than once.
+- `--begin`: run the world's `world.cs Begin` at launch too (it runs on
+  every world change anyway); Daventry's plays the opening scene.
 - `--console "WORDS",N`: type one console line before update N + 1 of
   the world shown then, e.g. `--console reload,40`. Each is used once;
   after a world change the updates count from 0 again, so for three
