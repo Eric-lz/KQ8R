@@ -71,7 +71,7 @@ pub struct WorldRead {
     map: Option<map_view::MapSim>,
     /// The sound objects and the music, for the sound system made on the
     /// main thread (the sound card's stream stays on one thread).
-    sound: (Vec<kq8_core::sound::Audible>, Option<kq8_core::music::Music>),
+    sound: (Vec<kq8_core::sound::Audible>, Option<kq8_core::music::Music>, String),
     /// How long the reading took.
     pub took_ms: u128,
 }
@@ -206,8 +206,15 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let animators = std::mem::take(&mut objects.animators);
     let animation = load::prepare_ground_animation(game, &world, &mut ground, animators, log);
     part("ground animation", &mut since);
+    // The world whose texts and sounds this one uses (`GAME/Kq/<World>.kq`
+    // `parentWorld`; mask.cs: `VolumeText`, `VolumeSound` = the parent's;
+    // world-change.md rule 7.5): Castle Daventry uses Daventry's.
+    let parent = parent_world(game, name);
+    if !parent.eq_ignore_ascii_case(name) {
+        log.summary(format!("world {name}: texts, voices and sounds from its parent world {parent} (parentWorld; world-change.md rule 7.5)"));
+    }
     // Remarks and speech (M4 4a-2).
-    objects.talk = Some(talk_view::load_talk(game, name, log));
+    objects.talk = Some(talk_view::load_talk(game, &parent, log));
     // The caption as the original's (M4 4b-3).
     let caption = talk_view::load_caption(game, name, log);
     // The panels (M4 4c-2).
@@ -219,10 +226,26 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let map = Some(map_view::load_map(game, name, objects.map.take(), opts.kept_maps.as_deref(), arrival_maps.as_ref(), log));
     let audibles = std::mem::take(&mut objects.audibles);
     let music = objects.music.take();
-    let sound = (audibles, music);
+    let sound = (audibles, music, parent);
     part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
+}
+
+/// The world whose texts and sounds `world` uses: `parentWorld` in
+/// `GAME/Kq/<world>.kq`, else itself (CastleD -> Daventry, Snowexit ->
+/// IceWorld, temple2-4 -> temple1).
+pub fn parent_world(game: &GameDir, world: &str) -> String {
+    let parent = game
+        .find(&format!("GAME/Kq/{world}.kq"))
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| kq8_data::kq_text::parse(&b).first().and_then(|s| s.get("parentWorld").map(|v| v.trim().to_string())))
+        .filter(|v| !v.is_empty());
+    match parent {
+        // Our world name in its spelling (`Temple1` -> `temple1`).
+        Some(p) => kq8_data::game_dir::WORLDS.iter().find(|w| w.eq_ignore_ascii_case(&p)).map_or(p, |w| w.to_string()),
+        None => world.to_string(),
+    }
 }
 
 /// The model lights and haze for `ObjectLight`, which the app needs
@@ -239,7 +262,7 @@ pub fn remember_options(world: &mut World, opts: &Options) {
 /// Puts a read world's resources in. `ObjectLight` is put in by the
 /// caller (see [`object_light`]).
 pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
-    let WorldRead { name, ground, mut objects, animation, caption, gui, map, sound: (audibles, music), .. } = read;
+    let WorldRead { ground, mut objects, animation, caption, gui, map, sound: (audibles, music, parent), .. } = read;
     if let Some(style) = caption {
         world.insert_resource(style);
     }
@@ -252,7 +275,7 @@ pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
     world.insert_resource(connor_view::FootSounds(std::mem::take(&mut objects.footsounds)));
     // The sound system starts again with each world (world-change.md
     // rule 7.4: every playing sound stops).
-    if let Some(sound) = GameDir::open(&opts.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &name, opts.sound, audibles, music)) {
+    if let Some(sound) = GameDir::open(&opts.game).ok().and_then(|g| sound_view::SoundSim::new(&g, &parent, opts.sound, audibles, music)) {
         world.insert_resource(sound);
     }
     world.insert_resource(light_view::GroundLight::new(ground.light.clone(), ground.other_light.clone(), opts.light, ground.dynamic));

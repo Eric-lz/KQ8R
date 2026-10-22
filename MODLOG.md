@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: worlds with a parent use its voices and sounds
+
+**Changed:** Viewer `world_build.rs`: `parent_world` (`parentWorld` in `GAME/Kq/<World>.kq`); message files, voices and sound effects are looked up in the parent world's folders (Castle Daventry → Daventry, Snow exit → Ice world, Temples 2–4 → Temple 1).
+**Why:** The user: in Castle Daventry most of Connor's lines showed their caption and ducked the music, but no voice was heard. Castle's own `English` folder holds only `1000.MSG` (the same file as Daventry's) and its `Sound` folder is empty; `mask.cs` takes `VolumeText` and `VolumeSound` from `$KQWorld::Parent` (`world-change.md` rule 7.5). Our build looked only in the world's own folder and `GAME`. An older gap: launching these worlds directly had it too.
+**Tested how:** `kq8-viewer --world CastleD --begin --frames 600 --sound off`; `viewer.log`, `talk.log`.
+**Result:** "world CastleD: texts, voices and sounds from its parent world Daventry"; Castle's `Begin` line 1000 79 0 10 plays with "voice daventry/English/A0RS2700.0A1 (4.302 s)" (before: no voice).
+**Still broken / not tested:** Not heard. Snow exit and Temples 2–4 not run. The folders are found by name through the game folder, which also matches the install script's unpacked copies (`MASK/daventry/…`); unchanged.
+**Next:** The user's listen in Castle Daventry.
+
 ## 2026-10-22 6e-8: kept worlds, first stage (6e done)
 
 **Changed:** `kq8-core` `active.rs`: `gone_names` (deleted objects, items Connor carries or used up, dead or gone characters). Viewer `world_build.rs`: `KeptWorld` (the world's variables, its gone names) kept when Connor leaves, its map's saved keys put in the journey's other maps; arriving there again hands them to the reading (`load::Arrival`); Temple 1 drops the kept worlds. `load.rs`: kept variables set over the start values; gone objects not placed. `map_view.rs`: a world's own kept map replaces its shipped file; kept maps are not overwritten by shipped ones. README, FEATURES (new section), STATUS, DESIGN (6e done), provenance.
