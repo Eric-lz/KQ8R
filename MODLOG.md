@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Magic map: the user's check in our build
+
+**Changed:** Docs only: FEATURES, STATUS.
+**Why:** The user played the magic map built in 6d-1 to 6d-7.
+**Tested how:** The user, by eye, in our build.
+**Result:** "The map works as expected"; no bugs noticed.
+**Still broken / not tested:** The Portal state and the world change (not built).
+**Next:** Plan moving between worlds (DESIGN "6e").
+
 ## 2026-10-21 6d-7: teleporting up to the world change
 
 **Changed:** `kq8-core` `magic_map.rs` (`onTeleport` / `offTeleport`, `earnTeleport [file]`, `teleportersEarned`, the "Go" button's lit test on every change, `Active::map_go`), `active.rs` (dispatch; `setState Connor Portal` logged as not built), `script.rs` (four stubs gone); viewer `gui_view.rs` (the lit picture, the button's click), `map_view.rs` / `main.rs` (the map handed to the rules first in each update).

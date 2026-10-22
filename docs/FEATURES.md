@@ -657,8 +657,8 @@ Checked in the logs only (`fight.log`), **not by eye**. Built from
 
 ## The magic map (milestone M6, step 6d, 2026-10-21)
 
-Checked in the logs only (`map.log`, `gui.log`), **not by eye**. Built
-from `magic-map.md`.
+Checked by the user by eye (2026-10-21: "works as expected"); logged in
+`map.log`, `gui.log`. Built from `magic-map.md`.
 
 - **Getting it:** the `MagicMap` item switches the map on (the Wizard's
   scene, or `give MagicMap`); the bottom-right slot blinks, then shows a

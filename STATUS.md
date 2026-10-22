@@ -10,7 +10,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 - **2026-10-21 (B, M6 6d-1 to 6d-7): the magic map built** from
   `magic-map.md` (A, checked by the user in the original; plan in
   `docs/DESIGN.md` "6d", one commit per step; **checked in the logs
-  only, not by eye**; `kq8-artifacts/logs/map.log`). `kq8 map-verify`
+  only by B; **the user checked it by eye, 2026-10-21: works as
+  expected**; `kq8-artifacts/logs/map.log`). `kq8 map-verify`
   reads every map and portal file and all 22 of the user's saves (29
   saved maps, every fog written back the same). The world's
   `<x>map.kq` comes from `GAME/Kq`; `MagicMap` arriving switches it on;
