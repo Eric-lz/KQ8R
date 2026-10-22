@@ -304,9 +304,11 @@ red.
         icons are added again in the order Invulnerable, Clarity,
         Strength, Invisible;
       - a picture is drawn in its place's rectangle and **clipped** to
-        it: the 57 x 57 mask cannot overlap the next place. Whether it
-        is shrunk to 48 x 48 or cut off (its right and bottom 9 pixels)
-        was not traced; the user could tell by eye;
+        it: the 57 x 57 mask cannot overlap the next place. It is
+        **shrunk to the place's size** (48 x 48): the user saw in the
+        original (2026-10-22) that its edges are not cut off, and with
+        the clipping traced, shrinking is the only way that fits (the
+        scaling itself not traced);
       - a potion icon: the used (upper) part is **frame 0** (the black
         square with the gold outline), the part left (lower) is **frame
         1** (the picture); the lower part's height = percent x place

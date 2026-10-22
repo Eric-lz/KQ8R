@@ -746,9 +746,9 @@ M6 has started with the Rope and Hook (6a).
   key), Q125 (turn keys during the approach), Q126 (camera round the
   half-way between the partner and Connor's talking spot, + 1,400), Q14 b
   (pad solid), Q42. See MODLOG.
-- **For the user (check in the original):** Q143 (is the spinning mask
-  shrunk or cut at its edges?). Q126, Q152 and Q14 b were settled by the
-  user's checks (2026-10-22): the camera swings round the point half-way
+- **For B:** Q143 (the spinning mask is shrunk to its 48 × 48 place, no
+  overlap into the next; the user thinks ours overlaps a little: check).
+  Q126, Q152 and Q14 b were settled by the user's checks (2026-10-22): the camera swings round the point half-way
   between the partner and Connor's talking spot; black only inside the
   meter's slot; the pad is solid.
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Q143 (c) settled: the spinning mask is shrunk to its place
+
+**Changed:** Docs only: `potions.md` rule 35 "Details", `QUESTIONS.md` Q143, `STATUS.md`.
+**Why:** The user checked the original: the mask's edges are not cut off. The code clips each status picture to its 48 × 48 place, so the 57 × 57 mask must be shrunk to fit.
+**Tested how:** The user, by eye in the original; the clipping was traced earlier today.
+**Result:** Shrunk to 48 × 48, no overlap into the next place. The scaling itself was not traced.
+**Still broken / not tested:** The user thinks ours overlaps the next icon a little; to be checked in session B.
+**Next:** B: draw the mask shrunk into its own place.
+
 ## 2026-10-22 Q126, Q152, Q14 (b) settled with the user's checks in the original
 
 **Changed:** Docs only: `conversation.md` rules 14, 15 (the camera's swing centre), `world-change.md` rule 23 (the loading meter's black), `objects.md` "See-through objects" rule 4 (the pad); `QUESTIONS.md` Q14, Q126, Q152.
