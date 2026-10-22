@@ -549,8 +549,26 @@ Consequences:
 
    Some puzzle states (tile and scale puzzles) handle the key their own way,
    which is not covered here.
-2. **Which jump:** `runJump` if his current movement is `Run`, `backJump`
-   if it is `Back`, otherwise `jump` (standing jump; it also covers walking).
+2. **Which jump:** picked from the movement **the keys ask for**, not the
+   one playing and not any wall block (corrected 2026-10-22, Q112,
+   traced). Connor keeps a forward/back value and a turn value, set by
+   the key presses and kept while the keys are held:
+   - forward value above 0 and running on: `runJump` (in water the
+     asked-for movement is `WaterRun`, which isn't `Run`, so `jump`);
+   - forward value above 0, running off: `jump`;
+   - forward value below 0 (the back key held): **`backJump`**, also in
+     water (there is no water form of the back pick);
+   - forward value 0 (a turn key only, or no key): `jump` (standing
+     jump; it also covers walking).
+   **At a wall:** with the back key held he stands still (the back block
+   only stops standing from switching to Move) but the back value is
+   still -1, so Jump gives the **back flip**, as the user saw. With
+   forward held at a wall: `jump`, or `runJump` with running on, even
+   though he stands still [inferred from the rule, not seen]. A turn key
+   held at a wall: `jump`; forward or back held as well wins. B's
+   stand-in (`stop` with the back block gives `backJump`) is right at a
+   wall but wrong with the back key held and no wall, or with a block
+   left over after the key was let go: use the held key's value.
 3. **During the jump animation, gravity is switched off and step up/down
    are 0.** The arc comes entirely from the animation's per-frame steps
    (the same mechanism as walking). Walls and ceilings still stop him.

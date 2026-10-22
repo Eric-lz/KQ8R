@@ -134,6 +134,19 @@ answered yet** (still being studied).
   checked, and the rule is assumed to hold for every world's palette.)
   Affected textures: Swamp's `WIRLPOOL.BMP` and `Teleport.BMP` (black,
   not blue, where they use entry 0).
+- **A texture's own colour table is ignored** (traced 2026-10-22, Q42).
+  Model textures in Windows BMP form are loaded with only their pixel
+  numbers (rows flipped as usual); their colour table is thrown away.
+  The Glide renderer draws every 8-bit texture through one shared table:
+  the world palette in use (the object palette while objects are
+  drawn). So index 0 is the world palette's entry 0 (black), and every
+  other index too comes from the world palette. Data check over all six
+  worlds' `telepad.bmp` / `teleport.bmp`: the two tables agree except
+  Swamp `teleport.bmp` index 0 (own blue, palette black) and Daventry
+  `telepad.bmp` index 17 (own (16, 16, 16), palette (4, 8, 12): the game
+  draws (4, 8, 12)). Not traced: the step that binds a texture name to a
+  model (Q4), two other picture loaders (picture arrays, a direct file
+  load), and 24-bit BMPs.
 
 ## Where texture names are looked up (Q4, partly)
 
@@ -223,7 +236,7 @@ ours. The flags word is split into parts:
 | `0x000F` | Kind of material. 3 = textured (the drawing code only sets up a texture for 3). 0 = nothing to draw (all 31 `0xF000` and 192 `0x0` materials) | traced for 3; 0 = "nothing" is likely, not traced |
 | `0x0F00` | Lighting: `0x100` = none (full brightness), `0x200` = flat (one light value per triangle, from its facing), `0x400` = smooth (light per corner) | traced |
 | `0x1000` | **Colour key on**: in the Glide renderer, texels whose final colour is pure black (0, 0, 0) are not drawn. Also **forces lighting to "none"**, so black stays exactly black | traced (Glide `grChromakeyMode(on)`, `grChromakeyValue(0)`); D3D path not checked |
-| `0x2000` | **Alpha blending from the texture's alpha** (Glide blend mode 3) and lighting "none" | traced; only appears inside `0xF000` materials, which have nothing to draw |
+| `0x2000` | **Alpha blending** (Glide blend mode 3) and lighting "none"; the alpha of each palette index comes from the **world palette file's `tpal` chunk** (corrected 2026-10-22: not the texture's own; `daventry.ppl` has no `tpal`, `swamp.ppl` has one) | traced; only appears inside `0xF000` materials, which have nothing to draw |
 | `0x10000` | **Halves the haze** (distance fog) on that material, so it stays clearer far away. Not see-through. (Corrected 2026-10-11: the first version said "halves the opacity"; the value it halves is the haze amount, which grows with distance from the camera.) | traced |
 
 What the data says about `0x1000` (`0x1403`, 20 materials): the textures

@@ -220,6 +220,13 @@ of the map, centred on Connor, sits in the bottom-right panel.
     [data]. The four unused places per row are written as "in the fog"
     and are ignored on reading [traced; inferred that they are always in
     the fog].
+    **Corrected 2026-10-22 (Q150 b, traced):** revealing copies pixels up
+    to but not including the circle's right edge, but marks the edge
+    column as revealed too; the right end is clipped at the map width
+    (460), so when a circle reaches the right border **column 460 is
+    marked** (columns 461-463 never are). That is the Castle save's
+    column 460, the same bug as "Do not reproduce" 2. Reading still
+    ignores it. All icons are drawn again after every reveal.
 
 ### Connor's arrow
 
@@ -268,6 +275,19 @@ of the map, centred on Connor, sits in the bottom-right panel.
     save the icon list with the map (picture, icon file, x, y) [traced,
     data: a saved Daventry map has 6]; all shipped files have
     `cMapIcons=0`.
+    **Added 2026-10-22 (Q150 a, traced):** shipped scripts **do** use it:
+    Dead City, 30+ times (`aswitch1`-`4`, `cswitch1`-`4`, `sylftest`,
+    `triptrp2`-`5`; `kswitch`'s use is commented out). It removes only
+    the **first** icon with exactly that x, y whose picture is **the one
+    shown at that moment** (if the player has paged the map window to
+    another world's map, nothing matches and the icon stays, inferred).
+    The rectangle is repainted: the blank picture first, then the full
+    picture wherever the fog is cleared; the fog is tested in groups of
+    8 columns, so cleared pixels up to 7 columns either side of the
+    rectangle are repainted from the full picture too. **Other icons
+    under or next to it are not redrawn**, so an overlapping icon is cut
+    (Dead City's jail icons are 5-6 pixels apart). The icon's slot in
+    the list is emptied, not compacted.
 
 ### Mouse on the map
 
@@ -328,6 +348,13 @@ of the map, centred on Connor, sits in the bottom-right panel.
     check, 2026-10-21; traced that each view keeps its own copy). At the
     start view (× 0.648) the 56 × 56 slot shows only the part of the map
     around Connor, not the whole world (the user saw this too).
+    **Added 2026-10-22 (Q150 d, traced): the mini-map slot never
+    blinks.** Its own drawing replaces the normal slot drawing, which is
+    where the blink lives (the item still sets a blink count of 5,
+    unused). When the map arrives it is switched on at once and the slot
+    goes straight from the empty picture to the live map at its next
+    draw. While the map is not active the live-map drawing draws nothing
+    and the layout's `2mapblnk.pbm` stays.
 28. With the map not active, the slot's `2mapblnk.pbm` is 52 × 52 in
     the 56 × 56 box; how it fills the box is `QUESTIONS.md` Q108 (b),
     not traced here.
@@ -385,6 +412,11 @@ of the map, centred on Connor, sits in the bottom-right panel.
     Paging back to the current world's map shows it exactly as it was.
     If Connor's map pixel changes while another world's map is shown, the
     window **snaps back** to the current world's map (rule 9).
+    **Order (Q150 c, traced 2026-10-22):** the icons are drawn twice,
+    before the colour match and again after it with their own palette
+    indexes (index 0 see-through; the icon `.bmp` is never remapped).
+    The second drawing covers the same pixels, so the result is **icons
+    drawn after the match, indexes as they are**, not colour-matched.
 
 ### Teleporting
 

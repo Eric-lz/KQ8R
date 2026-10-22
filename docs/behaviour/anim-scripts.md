@@ -163,6 +163,15 @@ Words used here:
      speed (1, −1 or 0), repeat, can be cut short. So `close` on a door
      starts at 0.93 playing backwards. (A start phase given by other code
      overrides the line's; `KQAnimPlayEvent` never gives one.)
+     **The same for Connor** (traced 2026-10-22, Q138 e): every
+     animated object, Connor included, starts a movement at its `loop=`
+     start and speed (transitions and `nextAnimStartTime` override it as
+     described elsewhere). Example: the fists' `undraw` (`cf_draw`
+     0.888889 −1.0; 8 frames, 0.4667 s) starts at frame floor(0.888889 ×
+     8 + 0.001) = **7, the last** (`objects.md` "Loops that move the
+     whole object" rule 6), plays backwards and ends when the phase
+     reaches 0, after 0.888889 × 0.4667 ≈ **0.41 s**. A walker that starts
+     every movement at 0 is wrong for such movements.
    - It starts **afresh even if it is the movement already playing**
      (same as Connor's rule 4).
    - The drawn model switches to that movement's model at once.

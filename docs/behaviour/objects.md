@@ -213,12 +213,67 @@ All traced in `Mask.exe` unless marked otherwise.
    this fade instead of being tinted by the fog.
 3. Material flag `0x10000` is **not** transparency (corrected in
    `models-and-textures.md`: it halves the fog on that material).
-4. **(b) Teleport pad: open.** `telepad1.kq` has no `translucency`, its
-   materials are plain `0x403`, and `telepad.cs` only has Connor's lines.
-   I did not find another source of see-through drawing. Draw it solid for
-   now. Not checked: whether the 8-bit palettes' extra tables (`.ppl`)
-   make some colours see-through.
+4. **(b) Teleport pad: drawn solid** (traced 2026-10-22). In the Glide
+   model drawing a part can be see-through or cut out in only four ways:
+   the object's translucency (rule 1, `makeTranslucent`); material flag
+   `0x1000` (black texels not drawn); material flag `0x2000` (alpha per
+   palette index from the world palette's `tpal` chunk, only on `0xF000`
+   materials, which draw nothing); and the per-object flag set by
+   `dither` ("Dithered objects" below). The pad uses none of them:
+   `telepad1.kq` has no `translucency`, both materials of `telepad.kqs`
+   (`telepad.BMP`, `Teleport.BMP`) are plain `0x403`, the scripts
+   (`telepad.cs`, `teletrap.cs`'s `onTeleport` / `offTeleport`) do
+   nothing visual. **Draw it solid**, with the world palette's colours.
+   What the user remembers may be `Teleport.BMP`'s ring with a **pure
+   black centre** (it looks like a hole or a portal) and the pad's
+   swirling 16-frame movement (1 s, repeating); also `tooFar=0.4` with
+   `groupsActive3DFar=0` makes the pad vanish beyond 0.4 ×
+   `visibleDistance` from Connor (it pops out, it doesn't fade)
+   [inferred, not checked by eye; a screenshot of the original would
+   settle it].
 
+### Dithered objects (traced 2026-10-22, Q144)
+
+1. **`KQObject::dither <name> <mode>`**: the game's own usage text gives
+   `0` none, `1` dithered, `2` "justTrans"; `3` is also stored but
+   changes no materials (the Invisible potion puts Connor in mode 3; his
+   look then is drawn by other code). A missing or extra word writes the
+   usage line; an unknown name writes "KQObject::dither cannot find
+   '<name>'".
+2. It changes **every material of the object's model** whose kind is not
+   "nothing" (`models-and-textures.md` "Material flags").
+3. **`1`, dithered:** the material's colour key is switched on (flag
+   0x1000: pure-black texels are not drawn, lighting forced to none, so
+   full brightness), and **the texture itself is rewritten** so that
+   about **3 of every 4 texels** become colour 0 (black, so see-through):
+   each texture row keeps every 4th texel and the next row's kept texels
+   are shifted by 2 (when the width is a multiple of 4; the rewrite also
+   blanks 2 extra texels per row). A screen-door pattern about 25 %
+   solid, laid on the **texture** (it scales with the texture on screen,
+   not with screen pixels).
+4. **`2`, justTrans:** colour key only, texture untouched: only texels
+   already pure black become see-through.
+5. **`0`:** the colour key is removed from all those materials and the
+   texture is loaded again from its file. Side effect: materials whose
+   file already had the colour key (0x1403) lose it too; harmless with
+   the shipped data (those textures have no black).
+6. The rewrite is made in the loaded texture itself, so other objects
+   using the same texture very likely show the holes too until `dither
+   0` reloads it [inferred].
+7. **Clicks and collisions don't change**: only the drawing does.
+8. **`dithered=<mode>` in an object file** is read into the same stored
+   value. Animated objects (`KQChest`, `KQAnimObject`) apply it every
+   time a movement starts (before each new movement the old model is
+   un-dithered, unless the mode is 3), so `wizchest1` is drawn
+   screen-doored once shown. Whether a plain object applies it at load
+   was not traced.
+9. Data: `dithered=1` on Daventry `arroswt1`-`3`, `wizchest`; Dead City
+   `altar_a1`; Gnome `hector`, `irnlck`, `irnlckx`, `lucreto`; Ice World
+   `chainpc`. Script uses: Daventry `keepwall` (a plain object; Clarity,
+   `potions.md` rule 31) and Dead City `fakedr1a`-`d`, always `1` then
+   `0`.
+10. B's stand-in (opacity 0.5 for every part) is the wrong look: use the
+    texel pattern with the colour key.
 ## Where a world's objects come from (Q16)
 
 All traced in `Mask.exe` unless marked "scripts" (read in the world's

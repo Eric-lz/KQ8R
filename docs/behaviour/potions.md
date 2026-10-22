@@ -120,9 +120,27 @@ red.
       **every update** (15 a second: 3 rad, about 172°, a second) [traced
       the step per update; the update rate inferred from the other
       objects];
-    - the game also tries `orbit2.kq` and `orbit3.kq`; no such files
-      exist, so there is one [traced, data];
-    - it removes itself when the shield ends.
+    - the game also loads `orbit2.kq` and `orbit3.kq` (by name, through
+      the normal file search); **both exist** in `GAME/Kq` (start angle z
+      2.09 and -2.09), so there are **three shields**, a third of a turn
+      apart (corrected 2026-10-22, Q145 a: the earlier "no such files"
+      was a search mistake; the user sees three in the original);
+    - each removes itself when the shield ends.
+    - **How an orbit moves** (traced 2026-10-22, Q145 c): the start
+      angles x, y, z turn the starting offset (0, `orbitRadius`, 0); each
+      update the object reads back its own facing, adds the step angles
+      and a half turn (3.14) to the heading, and turns (0, radius, 0) by
+      the result to get the new offset. The shape is then turned to face
+      along that offset with its heading + 3.14 (like a bolt flying from
+      the shield toward Connor's centre; B's "+ a quarter turn" looked
+      right to the user, so check the axis conventions against ours).
+      So the x / y angles act on the **path**; the shape's turn always
+      follows the path. The path is in **world** axes, not Connor's
+      facing: start angle 0 = world +y from the centre. An x step would
+      tilt the orbit, a y step seems to do nothing [inferred]; every
+      shipped orbit file has x / y = 0. If Connor's `body` part is
+      missing the shield sits at (0, 0, 0). (`orbit4`-`orbit12` are
+      named by other code, not traced.)
     At the end, protection goes back to **the value it had just before
     the potion** (cut to 100) [traced], see "Do not reproduce" 1.
 
@@ -273,6 +291,30 @@ red.
     - An icon place with a picture of several frames and no duration
       (the spinning mask) animates at 10 frames a second instead; potion
       icons do not animate [traced].
+    - **Details** (traced 2026-10-22, Q143):
+      - the potions, the spinning mask and the hook icons all take the
+        **first free place** in the order `IDCTL_TIMER_1` to `_7`; the
+        layout's own pictures in `_5`-`_7` don't decide anything. All 7
+        full: the new icon is not shown. The mask is not added twice;
+      - removing an icon frees only its own place: **the others don't
+        move** to close the gap, and the next icon takes the lowest free
+        place. A potion running when a cutscene starts: potion in `_1`,
+        mask in `_2`; when the potion ends `_1` stays empty and the mask
+        stays in `_2`. After a world change or load the running potions'
+        icons are added again in the order Invulnerable, Clarity,
+        Strength, Invisible;
+      - a picture is drawn in its place's rectangle and **clipped** to
+        it: the 57 x 57 mask cannot overlap the next place. Whether it
+        is shrunk to 48 x 48 or cut off (its right and bottom 9 pixels)
+        was not traced; the user could tell by eye;
+      - a potion icon: the used (upper) part is **frame 0** (the black
+        square with the gold outline), the part left (lower) is **frame
+        1** (the picture); the lower part's height = percent x place
+        height / 100 (B's build is right). An icon with no duration and
+        one frame is drawn whole; several frames animate at frame =
+        (real-time milliseconds / 100) mod the frame count;
+      - an icon whose duration reads above 500 or below 0 is cleared as
+        bad data.
 36. **At the end**: the use sound does **not** play again; there is no
     remark and no sound of its own [traced: nothing is played on the
     way]. The effect switches off (rules 20, 22, 25, 29, 30, 31), the

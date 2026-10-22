@@ -481,6 +481,8 @@ uses whatever the window holds [traced].
 44. A slot whose item is new, or whose count went **up**, **blinks**:
     it switches between the item picture and the empty picture every
     0.25 s (real time), 5 times [traced].
+    **Except the mini-map slot** (Q150 d, traced 2026-10-22): it never
+    blinks; it goes straight to the live map (`magic-map.md` rule 27).
 
 ## The bottom-right panel
 

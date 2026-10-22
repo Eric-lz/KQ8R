@@ -737,15 +737,19 @@ M6 has started with the Rope and Hook (6a).
   26, 30a), Q148 (the hammer's turn-back, `azriel-hammer.md`), Q146
   (`potions.md` rule 26). Small parts still open: the flame's speed and
   length; whether `LEVEL.AUD` / `STATS.AUD` play at a world start.
-- For A (asked 2026-10-22 by B, 6e, not blocking): **Q151** (the popup's
-  first highlighted button; Enter repeating; c: the buttons' places; d, e:
-  the text placement and the buttons' looks, the user's looks at the
-  original) and **Q152** (when the loading screen's black bar shows;
-  meters stretched or tiled).
-- For A (asked 2026-10-21 by B, magic map, not blocking): **Q150** (a:
-  Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
-  marks unused column 460; c: icons before or after the colour match;
-  d: what the mini-map slot blinks).
+- **For B (answered by A 2026-10-22, not built yet), the rest:** Q150
+  (map icons after the colour match, the mini-map slot never blinks),
+  Q151 (the popup opens with Yes highlighted), Q152 (meters stretched,
+  black remainder), Q143 (icons clipped to their place), Q144 (dither =
+  screen-door texture pattern), Q145 (orbits), Q140 (the `do` frame after
+  the step), Q138 e (`loop=` start phase), Q136, Q112 (jump from the held
+  key), Q125 (turn keys during the approach), Q126 (camera round the
+  partner's feet + 1,400), Q14 b (pad solid), Q42. See MODLOG.
+- **For the user (checks in the original):** Q126 (the conversation
+  camera with Connor far from the partner), Q152 (the bottom strip
+  during a load: painted frame or black strip?), Q14 b (is the teleport
+  pad really see-through? a screenshot), Q143 (is the spinning mask
+  shrunk or cut at its edges?).
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only
   the flames' 12,100 (traced and built) vs the user's ~11,000 (open
@@ -761,30 +765,6 @@ M6 has started with the Rope and Hook (6a).
 - **Q147** answered by A and built by B (2026-10-21). Left open, small:
   `ropeandhook.md` open question 7 (what sets off the top trap
   mid-climb).
-- For A (asked 2026-10-21 by B, M5 5g, not blocking): **Q143** (the
-  spinning mask and potion icons sharing the 7 status places; which
-  frame is the icon's used part), **Q144** (`KQObject::dither` and
-  `dithered=1`: how a dithered object is drawn). `potions.md` open
-  questions 3 (help pop-ups) and 4 (missing face combinations) remain.
-- For A (asked 2026-10-20 by B, M5 5f, not blocking): **Q140** (a: the
-  bolt's own shape, the ball stack of its box or something else, with
-  `collisionDetail`; b: Connor's aim height, 0.75 × 1,300 = 975 from
-  `BOUNDS.KQ` vs the note's 1,600 → 1,200; c: which frame gives the
-  `arrow` part at the `do` cue); **Q141** (what a script's `walkTo` does
-  while the weapon swap plays: `ax.cs`). `ranged-weapons.md` open
-  questions 1–5 (a swap during a swing, the right-button click point,
-  `collisionDetail`, the pointer names, rocks) are still open.
-- For A (asked 2026-10-20 by B, M5 5c, not blocking): **Q136**
-  (`reactPause`: is it the flinch's 2 s pause?); **Q138** answered in
-  `ranged-weapons.md` and built in M5 5f-3 / 5f-4 (left: (e), and
-  whether a swap cuts a swing); **Q139** answered there (rule 32) and
-  built in M5 5f-7, except how objects take damage (e).
-- For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
-  the stay test; Jump and push while talking), **Q126** (where the
-  conversation camera aims and what the right-button swing centres on).
-  Not a question, for A's notes: the data has **17** `KQConvInfo`
-  objects, not 16 (Barren's `AlthillmanInfo` and `FrghillmanInfo` besides
-  the Witch Doctor's).
 - `characters.md` open questions 1, 2 and 4 (`flags` bit 0x20, how the
   renderer blends shadows, `changeBmp` / `changeAnmFile`): not blocking;
   question 3 (the AI) answered 2026-10-19 in `character-movement.md`,
@@ -808,8 +788,7 @@ M6 has started with the Rope and Hook (6a).
   numbers in `inventory.md` rule 9; the pointer's click point; the gold
   button while the coins are held; the rope's numbers and "held or not"
   answered 2026-10-21 in `ropeandhook.md`), **Q111** (answered by the user's checks
-  and built; the exact rules are worth tracing), **Q112** (what the
-  back flip at a wall really tests).
+  and built; the exact rules are worth tracing).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
   1–4 (level-up flame, rocks picture, held item on world
   change, applied quest items).
@@ -832,10 +811,6 @@ M6 has started with the Rope and Hook (6a).
   answered).
 - Q30 (b): what keeps Connor on a slope going downhill; "likely answered"
   by the stronger gravity, but the re-check A asked for was not recorded.
-- Q41 is listed above; Q14 (b) below.
-- Q42: entry 0 in textures' own colour tables (stand-in black; no visible
-  difference).
-- Q14b: the teleport pad's see-through look.
 - All others are answered or closed (Q27, Q53, Q100, Q102 built
   2026-10-19 (3o), Q128 and Q129 built 2026-10-20 (M5 5a-3, 5a-9), Q101 and Q48 closed; Q105 answered and built
   2026-10-18 (4c-5); Q103–Q104 answered, built and

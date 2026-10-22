@@ -328,6 +328,24 @@ himself goes across as his own saved file.
     [Traced that one of the pictures is moved on and off screen during
     the hand-over and that the meter has three colour phases; the blue
     one was not seen.]
+    **The meters and the black bar** (traced 2026-10-22, Q152): every
+    picture on the loading screen is handled as a meter (the black bar
+    and the full-screen pictures too). A meter's filled part is its own
+    picture **stretched** to (630 x percent / 100, cut to whole pixels,
+    at least 1 if the percent isn't 0) x 8; the unfilled rest is
+    `4black.pbm`, stretched. Only the active colour's meter is on the
+    screen (the other two are moved off). `IDCTL_LOADING_BLKBAR` is a
+    meter fixed at 100 % of `4black.pbm` (palette index 10 all over),
+    repainted with the meter and the text at **every meter step**, in
+    both phases. So by the code rows 462-480 are a black strip covering
+    the frame painted into the picture, with the coloured meter over it.
+    **This conflicts with the user's memory** (the painted frame is
+    seen); the paint order within one redraw and any other compositing
+    were not traced. A second look at the bottom strip during a load
+    would settle it. The three meter phases are red, green, blue in that
+    order by the code; the user saw green during the CD copy and red
+    while loading, so which phase number each loading phase uses is
+    worth a later look.
 24. **The meter** [traced]: one colour shows at a time; it fills from
     left to right as the scripts' `setLoadProgress <percent>` lines are
     reached (with no number it moves on by one step). It is redrawn in
@@ -371,6 +389,55 @@ himself goes across as his own saved file.
     - The popup is not shown (the answer is Yes at once) in the
       developer demo mode `KQGame::Demo` [traced]; not part of a normal
       game.
+    **Details** (traced 2026-10-22, Q151):
+    - **Yes is highlighted when the popup opens.** No highlight moves:
+      the first button control (the layout's BTN1, picture
+      `buyhibtn.pba`) *is* the highlight and starts holding Yes. Left /
+      Right **swap** the two buttons' places, labels and answers, so the
+      gold outline seems to move; each swap plays a click sound; Left
+      works only if there is a button on that side. Yes is on the left,
+      No on the right.
+    - **Enter** (or F1) pressed: the pointer position is remembered, the
+      pointer jumps to the highlighted button's centre (16 pixels
+      lower), the button shows pressed and a "pressed" flag is set.
+      **Released**: answers, only if that flag is set; the pointer goes
+      back and the flag clears. Opening or closing a popup clears the
+      flag, so an Enter held from before can't answer it and a held
+      Enter never answers the next popup: one answer per press.
+      (Auto-repeat saves the pointer again on every repeat, so after a
+      long hold the pointer is put back on the button.)
+    - **Escape**: in `handsOff`, nothing at all. Otherwise it answers
+      with **the button that is not highlighted**, then opens the main
+      menu. From the start that is No (the user's check); after Right
+      has moved the highlight to No, Escape answers **Yes** (traced from
+      the swap, not checked in the game; see "Do not reproduce").
+    - **Button places:** with W the popup's width (inferred: the 370-wide
+      dialog), the two buttons' left edges are at W/3 - 44 and 2W/3 - 44,
+      each 88 wide (centres at a third and two thirds): Yes 79-167, No
+      202-290 from the dialog's left edge. Vertically at 640 x 480: the
+      highlighted button (BTN1) rows 145-183 (38 high), the other
+      146-182 (36 high); heights stay with the control when they swap.
+      With the "turn off help" box shown, BTN1 is at 142, 25 high.
+      800 x 600: 44 lower. Three buttons: W/4, 2W/4, 3W/4, minus 44.
+    - **The text:** text 114 has its own line break; explicit breaks are
+      used only if one comes before the 39th character, otherwise the
+      38-character wrap applies (here: 2 lines). 7 line boxes, each 360
+      wide, centred. Line k of n: top = base + k x pitch + T[n][k],
+      height = pitch; 640 x 480: base 12, pitch 18; 800 x 600: base 36,
+      pitch 22. T (rows n = 1-7, then line 0, 1, ...): 1: 52; 2: 36, 44;
+      3: 20, 28, 36; 4: 4, 12, 20, 28; 5: 4, 8, 12, 16, 20; 6: 2, 4, 6,
+      8, 10, 12; 7: all 0. The portal text at 640 x 480: line 1 rows
+      48-66, line 2 rows 74-92 (centres 57 and 83: **26 apart**). The
+      first line keeps its trailing CR (probably draws nothing, not
+      traced).
+    - **The looks:** every button picture is **stretched to the button's
+      box** (so `buyhibtn.pba`, 88 x 25, is stretched to 88 x 38). Normal:
+      frame 0; pressed (mouse button or Enter held): **frame 1** of
+      whichever picture that button has, so with Enter the highlighted
+      button shows `buyhibtn.pba` frame 1; a mouse press on the other
+      shows `yesbtn.pba` frame 1. Hover would ask for frame 2, which
+      neither picture has (what is drawn then: not traced). The label
+      moves **1 right and 1 down** while pressed.
 
 ## Numbers and units
 
@@ -438,6 +505,10 @@ himself goes across as his own saved file.
   [inferred].
 
 ## Do not reproduce
+
+- **Escape answering the popup's other button** (Q151): after Left /
+  Right has moved the highlight to No, Escape answers Yes in the
+  original. Make Escape always mean No.
 
 1. **Copying the loading pictures over files in the install**
    (`GAME/8Gui/loading.pbm`, `loading2.pbm`, `loading.ppl`, and making

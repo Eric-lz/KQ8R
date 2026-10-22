@@ -107,7 +107,7 @@ all three channels anyway.
     draw at full brightness. It is off by default and is **not** a key in any
     object file (the object reader doesn't read it). **Nothing in the game
     turns it on** (2026-10-17): no file key, no script command (`dither`
-    changes the drawing style, `lightOnFire` sets group bit 0x1000; neither
+    changes the drawing style, `objects.md` "Dithered objects", `lightOnFire` sets group bit 0x1000; neither
     touches it), and a scan of the program for code that stores 1 into it
     found only unrelated objects. Treat it as always off.
 11. **Haze on models**, see rules 19–23.

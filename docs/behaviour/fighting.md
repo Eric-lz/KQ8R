@@ -302,7 +302,20 @@ Words used here:
     - the running movement can be cut short (so not during another
       `react`, not after an attack's `interruptable 0`, not during
       `birth` or `hide`);
-    - its last flinch **ended more than 2 s ago**.
+    - its last flinch **ended more than 2 s ago** (fixed for every
+      ordinary character; no key changes it, traced 2026-10-22, Q136).
+      `reactPause` and `stunPause` are read only by two special classes
+      (none in Daventry): the Dead City tower skeleton
+      (`KQTowerSkeleton`, `skeltowr.kq`: defaults 2 s and 3 s, file 1.2
+      and 1.5) and Temple 4's Lucreto (`KQLucreto`, `lucend.kq`). The
+      skeleton: when its `reactback` ends while **moving**, the gap
+      before its next flinch is `reactPause`; while **standing**, the
+      fixed 2 s; either way it is then stunned for `stunPause`, its chase
+      timer is set to 5 s, and the ground 400 ahead of it is probed:
+      nothing under that point and it **dies** (that is how it falls off
+      the tower), otherwise it goes back to standing. Lucreto: after its
+      `reactback` it stands for a random `reactPause` − 1 to `reactPause`
+      seconds (1 to 2 s) before moving again.
     A **special** flinch replaces it when the character's
     `specialReactAnim` is set and *R* is more than `specialReactPercent` ×
     *D* (no Daventry file has them). `KQMonster::setReactPercent` and

@@ -178,7 +178,26 @@ Words used here:
     - `speak` for Connor or for the partner is ignored while either is
       in its talk state (`talking.md` rule 8).
 13. **The player can still move Connor** (the movement keys are not
-    blocked by the talk state, only by `handsOff`). While the stay-area
+    blocked by the talk state, only by `handsOff`; a key press does not
+    cut a conversation line short). **Before the stay-area test runs**
+    (the approach: `away` / `out`, `stopwalk`, `walkstopright`, the
+    automatic turns; traced 2026-10-22, Q125 a):
+    - **forward / back** presses are stored but do nothing: he does not
+      walk and no movement is cut short. If forward is **still held**
+      when the stay-area test starts, he walks from that update on
+      (which can carry him out of the stay area and end the
+      conversation);
+    - **turn keys turn him** at the normal rate whatever movement is
+      playing, and a turn press **cancels the automatic turn** (toward
+      the spot or the partner; nothing waits for that turn's end, so
+      nothing else is lost). The end of `stopwalk` sets his facing
+      exactly toward the spot, wiping out any turn made before it;
+      turning while `walkstopright` plays curves the rest of it (its
+      steps follow his facing).
+    - In the talk state, walking into a wall only stops or slides him:
+      no head-on `Stop` with a block, no running crash (those belong to
+      the Move and Jump states).
+    While the stay-area
     test runs (from rule 8, 9 or the end of `walkstopright` in rule 10):
     - when Connor moves, his walking movement plays; when he stops
       again, `Stop`;
@@ -207,12 +226,28 @@ Words used here:
     user's check in the original): the first update the player holds
     the **right mouse button** (the camera-move button, `camera.md`)
     while Connor's stay-area test runs, the camera is placed **once** at
-    `cam0`'s position, **aimed at the partner** (its position from rule
-    2), and stops following anyone; from then on, for the rest of this
+    `cam0`'s position (not its angles), **aimed at the partner**, and
+    stops following anyone (traced 2026-10-22, Q126: the point is the
+    partner's **feet**, its position taken once when the conversation
+    starts, never updated; the heading is set toward it); from then on, for the rest of this
     conversation, **camera numbers are ignored** (no cuts, and Connor no
     longer turns to the partner on them). The player swings and zooms
     the camera with the mouse as usual (`camera.md` "Swinging and
-    zooming"), around the partner. At the end the camera follows Connor
+    zooming"), around the partner: the swing centre is **the partner's
+    feet + 1,400 straight up** (the usual aim height), with all the
+    usual rules around it: the current range kept within 1,500-5,000
+    (pulled in to max - 1, pushed out to min + 1), the height rule and
+    the obstacle check (sight line from the centre to the camera); they
+    apply at once, so `cam0`'s spot itself can be moved when the camera
+    is placed. It follows nothing, so it doesn't move when Connor walks;
+    only the mouse moves it. **Not half-way between the two** (B's
+    stand-in has no support in the program). The user's "pivots between
+    the Wizard and Connor" may come from Connor standing only about
+    1,100 from the Wizard (a swing round the Wizard at 1,500-5,000 then
+    looks like a swing round both), or from the slow heading turn
+    (`camera.md` "Turning the view toward Connor") lagging behind the
+    swing [not traced]. A re-check in the original with Connor far from
+    the partner would tell. At the end the camera follows Connor
     again (rule 15). **Checked by the user in the original
     (2026-10-19):** moving the camera cancels the cuts and lets it
     rotate freely around the two talking.
@@ -226,10 +261,18 @@ Words used here:
     - on a click with an item on the partner (rule 19).
     He goes to **Move** if he is moving, else plays `Stop` and goes to
     **Wait**. The talk state can only be left this way (to Wait, Move,
-    Special, or dying); other state requests wait until then. On
+    Special, or dying); other state requests wait until then, but only
+    one waiting request is kept, and it is tried first when the talk
+    state asks for standing or moving at its end: a **Jump** pressed
+    while talking (kept as the waiting request) is refused there too and
+    replaced, so it is **dropped**; a **push** (walking into a pushable
+    during the stay-area test) is refused, the touch is an ordinary wall
+    hit (`pushing.md` rule 3) and the push is dropped the same way
+    (traced 2026-10-22, Q125 b, c). On
     leaving:
     - the camera is first put at `cam0`'s **position looking at the
-      partner**, then **follows Connor again** (`KQCamera::follow
+      partner** (exactly the placement above: the partner's feet from
+      the start of the conversation, Q126), then **follows Connor again** (`KQCamera::follow
       Connor`, `camera.md`), so it swings in from there;
     - first person is allowed again, and if he was in first person
       before the conversation he goes back to it;

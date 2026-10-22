@@ -271,19 +271,31 @@ Words used here:
       −385, 857).
     The part is gone in the frames after the shot (`Scbatak` frames 3–6
     have none), so the timing matters little in practice.
+    **Which frame exactly** (traced 2026-10-22, Q140 c): the `do` cue is
+    a queued event, handled after all objects have updated, and the part
+    is read from the frame the movement is on **at that moment**: the
+    frame after that update's step (the one drawn in that update), not
+    the frame at the cue's own phase. Example: `spbattck` (19 frames,
+    `do` at 0.125) is at phase 0.1667 then, **frame 3**, part at (176,
+    −1,468, 1,098).
     For **characters** the same, with two differences: the part is
     looked up **only at their first shot with a weapon** (then kept), and
     their fallback is their own `shootOffsets` (none in Daventry, so
     0, 0, 0 until the first shot finds the part; `spbattck.KQS` has an
-    `arrow` part, about (−55, −1,367, 954) at its `do` frame) (traced
-    and data).
+    `arrow` part, at (176, −1,468, 1,098) in the frame read at its `do`
+    cue, frame 3; (−55, −1,367, 954) is frame 2, the cue's own phase,
+    not used) (traced and data).
 25. **Where it aims** (traced):
     - **Connor's bolt**: at the aim point of rules 16 and 18. **No lead**
       for a moving target.
     - **A character's bolt**: at its target's position (for Connor: its
       record of where he is), raised by **0.75 × the top of the target's
-      collision box** (Connor's box top 1,600 → **1,200 above his
-      feet**), then **led** for Connor's movement (`fighting.md` rule
+      box in `BOUNDS.KQ`**, found by the target's name (Connor's active
+      line `item0=Connor -200 -200 0 200 200 1300`: top 1,300 → **975
+      above his feet**; corrected 2026-10-22, Q140 b: the 1,600 came
+      from `Connor.kq`'s `[ConnerCollider]` `boxfMaxZ=1600` and the
+      commented-out `BOUNDS.KQ` line, and the program never reads
+      either), then **led** for Connor's movement (`fighting.md` rule
       36). So B's "3/4 of Connor's height" is right; the start (B: 3/4 of
       the shooter's height) is rule 24's part instead.
     - In a rock-throw (not covered) the bolt's kind becomes 4.
@@ -327,9 +339,22 @@ Words used here:
       shape is tested by its own kind (boxes, character cylinders,
       buildings' `.dig` solids). A bolt that **starts inside** a
       character's cylinder hits it (the start-inside rule of
-      `connor-collision.md` counts for bolts). Its own shape is its
-      model's `BOUNDS.KQ` box (`scbolt.kqs`: about 100 × 470 × 50);
-      what `collisionDetail=1` changes was not traced;
+      `connor-collision.md` counts for bolts). Its own shape is a
+      **ball stack built from its model's `BOUNDS.KQ` box** by the usual
+      rule (radius = half the larger of the box's x and y sizes; balls at
+      the bolt's own x, y, from box bottom + radius, one every 2 ×
+      radius): `scbolt.kqs` (about 100 × 470 × 50) gives **one ball of
+      radius 235**, centred 235 above the bolt's position (traced
+      2026-10-22, Q140 a; B's build is right). Whether the ball's offset
+      turns with the bolt's pitch was not traced (most likely not:
+      always straight above);
+    - **`collisionDetail`** (traced 2026-10-22, Q140 a) is a contact
+      level, 1, 2 or 4 (`Connor.kq`'s comment: 1 alarm, 2 low, 4 high);
+      default 2, Connor 4. **Two objects that both have level 1 never
+      touch.** Every projectile file (`pr*.kq`, the hammer too) has
+      `collisionDetail=1`, so **projectiles pass through each other**.
+      Against level 2 or 4 the test is as usual (one branch for level 1
+      against a moving object was not read to the end);
     - **the ground**: after each move, if the bolt is **at or below the
       floor grid** height (`terrh2`, the same height the thrown items
       use, `thrown-items.md`), it is removed;
@@ -354,7 +379,7 @@ Words used here:
 31. **Characters' bolts are the same** (rules 23–30 except the start
     offset and aim of rules 24–25). So the spriggans' bolt (`Prscbolt.kq`)
     flies at 8,000 straight from the arrow part at the time of its `do`
-    cue toward 1,200 above Connor's (led) feet, pitched, no gravity, and
+    cue toward 975 above Connor's (led) feet, pitched, no gravity, and
     is stopped by objects, other characters, Connor and buildings, or the
     floor grid, or after 18,000. A spriggan's bolt can hit another
     character in the way (and hurt it).
@@ -403,7 +428,7 @@ Words used here:
 | damage | shooter's ranged damage (Connor with Small Crossbow, level 1: 5) | traced, data |
 | start | position + turn × the `arrow` part's place (fallback `shootOffsets`) | traced |
 | `Scbatak` arrow part at `do` | ≈ (−231, −832, 1,067) | data |
-| character's aim | target + 0.75 × its box top (Connor: +1,200), led | traced |
+| character's aim | target + 0.75 × its `BOUNDS.KQ` box top (Connor: 1,300 → +975), led | traced |
 | bolt speed / range (`Prscbolt.kq`) | 8,000 units/s, 18,000 (2.25 s) | data |
 | bolt defaults | 2,000 / 8,000, kind Projectile, type 1, mask 0x1F | traced |
 | flight | straight line, pitched to the aim, no gravity | traced |
@@ -523,7 +548,7 @@ pretty much as described.
    after about 18,000 units (2.25 s) if it hits nothing, never falls,
    never sticks in a wall or the ground.
 8. **Spriggan bolts**: `sprigwnd1` at the windmill: its bolt starts at
-   its crossbow, flies at Connor's chest height (1,200 up), tilted when
+   its crossbow, flies at Connor's chest height (975 up), tilted when
    he stands higher or lower, and a goblin standing in the way would be
    hit instead.
 9. **Talking with a weapon ready**: a click on the Wizard with the
@@ -531,12 +556,18 @@ pretty much as described.
 
 ## Open questions
 
-1. Whether a swap request during a standing swing or shot cuts it or is
-   refused (rule 5: depends on when the standing state lets the swap
-   in; not traced to the end).
+1. ~~A swap request during a swing~~ (answered 2026-10-22, traced):
+   **standing** accepts a state change only while its movement is
+   `Stop`, so during a swing (or a gesture, an idle movement) the swap
+   is refused, kept as the waiting request and **starts when the swing
+   ends** (as ours). Standing refuses **every** request while a
+   non-`Stop` movement plays. **Moving** accepts the swap at once, and
+   starting the swap makes the current movement cuttable, so `away` /
+   `out` **cuts a moving swing short** (before the `do` cue: no hit).
 2. Where the camera's kept point for clicks with the right button held
    lies (rule 16; most likely the view's centre).
-3. What `collisionDetail=1` changes for the bolt's own shape (rule 29).
+3. ~~What `collisionDetail=1` changes~~: answered 2026-10-22 (rule 29:
+   projectiles never touch each other).
 4. The number-to-name step for the pointers (rule 11) is inferred from
    their order; the three-way choice is traced.
 5. Rocks (`prrock.kq`: the same class with `parabola=1`,
