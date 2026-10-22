@@ -7,22 +7,25 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
-- **2026-10-21 (A): the magic map studied** (`docs/behaviour/magic-map.md`,
-  ready for B; **the user checked "How to check" 1–11 in the original,
-  2026-10-21: all right**). The Wizard's
-  `MagicMap` switches the world's map on; world x/y → 460 × 460 map
-  pixel (north up); a disc of `fogRadius` (Daventry 24 map pixels) is
-  revealed each time Connor moves to a new map pixel, saved per world as
-  run lengths (`rle0`…, hidden first, ends with −1); a 16-frame arrow;
-  icons from `addMapIcon`; left-drag pans, right-drag sideways zooms
-  (×2 per 64 px, ×¼ to ×8); the bottom-right slot is a live mini-map
-  (answers `interface.md` open question 4); the page arrows show other
-  visited worlds' maps; on a pad, the lit "Go" button runs the world's
-  teleport script → the Portal state's "load a new region?" question →
-  `teleportdown`, world change, `teleportup`. Tab has no handsOff check.
-  The user's check: the view follows the arrow at all four edges; the
-  mini-map keeps its own zoom; Tab works in conversations and scenes.
-  Open: the arrival side of a world change (later loading study).
+- **2026-10-21 (B, M6 6d-1 to 6d-7): the magic map built** from
+  `magic-map.md` (A, checked by the user in the original; plan in
+  `docs/DESIGN.md` "6d", one commit per step; **checked in the logs
+  only, not by eye**; `kq8-artifacts/logs/map.log`). `kq8 map-verify`
+  reads every map and portal file and all 22 of the user's saves (29
+  saved maps, every fog written back the same). The world's
+  `<x>map.kq` comes from `GAME/Kq`; `MagicMap` arriving switches it on;
+  each new map pixel reveals the fog disc (Daventry 24 px, 46 new pixels
+  per row walking); the 16-frame arrow; icons and the `KQMap::` commands.
+  The window: Tab / a mini-map click (also during handsOff), the name
+  plate, left-drag pan, right-drag zoom, the follow (stand-in: 20 px
+  inside every edge). The bottom-right slot is the live mini-map (own
+  size, blinks on arrival). The page arrows show other visited worlds'
+  maps with matched colours and snap back when Connor moves; for now
+  other worlds' maps come only from an original save (`--kept-maps`).
+  On a pad with an earned world shown the "Go" button lights and runs
+  the teleport script. **Not built:** the Portal state (the question,
+  `teleportdown`, the world change): it needs moving between worlds.
+  New **Q150** (not blocking).
 
 - **2026-10-21 (A): the main menu studied** (`docs/behaviour/main-menu.md`,
   ready for B). The items and when each can be chosen, the keys (Up/Down
@@ -483,6 +486,22 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
+- **Moving between worlds (needed next for the magic map):** the
+  teleporter's lit "Go" button runs the world's teleport script, but its
+  `loadKQ` of the portal (a file of `GAME/Kq`, at a position, while
+  playing) and `setState Connor Portal` stop there. The Portal state
+  (`magic-map.md` rule 40: "load a new region?" Yes/No, `teleportdown`,
+  the world change, `destConnorLoc` / `destCamLoc`, `exitAnim`) and
+  walking exits need the viewer to unload one world and load another,
+  with each left world's state kept (the maps' fog among it). That is a
+  larger change of how the viewer starts a world: to be planned with the
+  user. Help popups (`doPopup`, the "Go" help 151) are logged only.
+- **Stand-ins of 6d:** the follow margin (20 px inside every edge);
+  layout pixels at 800 × 600 for the view and the mouse; Connor's place
+  given to the map once per update; a world never left shown from its
+  shipped map file; the mini-map's view taken from Connor's when the
+  map is set up.
+
 - **Found in 6b, not fixed:** the items the start-up scripts give
   (Swamp's `constart.cs`) don't go through Connor's inventory rules: the
   chain mail, boots and gloves are carried but not put on (protection 0
@@ -633,7 +652,12 @@ M6 has started with the Rope and Hook (6a).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 (arrival after a world change) belongs to
-  a later loading study.
+  a later loading study; 5 (how another world's kept map is found) and
+  6 (800 × 600) built with stand-ins.
+- For A (asked 2026-10-21 by B, magic map, not blocking): **Q150** (a:
+  Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
+  marks unused column 460; c: icons before or after the colour match;
+  d: what the mini-map slot blinks).
 
 - For A (asked 2026-10-21 by B, levels, not blocking): **Q149** (a: what
   `KQConner::setLevel` does; b: the level-up flame's speed and length;

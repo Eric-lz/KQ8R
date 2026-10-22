@@ -655,6 +655,33 @@ Checked in the logs only (`fight.log`), **not by eye**. Built from
   `give AzrielHammer`. Dead City's lever by hammer is built but not run
   (no Dead City yet).
 
+## The magic map (milestone M6, step 6d, 2026-10-21)
+
+Checked in the logs only (`map.log`, `gui.log`), **not by eye**. Built
+from `magic-map.md`.
+
+- **Getting it:** the `MagicMap` item switches the map on (the Wizard's
+  scene, or `give MagicMap`); the bottom-right slot blinks, then shows a
+  live mini-map centred on Connor with his arrow.
+- **The window:** Tab (or a left click on the mini-map) slides the map in
+  and out from the left, also during cutscenes and conversations; a
+  cutscene's start hides it. Borders, the world's name on the plate, the
+  page arrows and the "Go" button.
+- **Fog and arrow:** places Connor walks near are drawn in (a disc about
+  10,000 units wide in Daventry), the rest stays blank; north is up; the
+  arrow turns in 16 steps. Scripts' icons and `KQMap::` commands work.
+- **Mouse:** left drag moves the map, right drag sideways zooms (×2 per
+  64 pixels, ×¼ to ×8); the view follows Connor when he moves (20 pixels
+  inside the edges: a stand-in). The mini-map keeps its own size.
+- **Other worlds:** the page arrows show the maps of other visited
+  worlds in this world's colours; walking snaps back. Until travel
+  between worlds exists they come from an original saved game
+  (`--kept-maps`).
+- **Teleporters:** on a pad with another earned world's map shown, the
+  "Go" button lights and runs the world's teleport script.
+- **Not yet:** the Portal state (the "load a new region?" question, the
+  teleport animation and the world change), help popups, saving the map.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,
@@ -764,9 +791,14 @@ repeated and checked in the logs. They do not change the game's rules.
   and put it in his hand, for example the key that opens the castle
   keep's doors.
 - `--key NAME,N`: press a panel key before update N + 1 (`space`: put the
-  bottom bar away or bring it back; `1`–`8`: use a slot), or click a
-  control of the bars (`left:IDCTL_INVBAR_GOLD`, `right:IDCTL_HEALTHBAR_1`,
-  names as in `Gplayscr.gui`). Can be given more than once.
+  bottom bar away or bring it back; `tab`: the map; `1`–`8`: use a slot),
+  or click a control of the bars or the map (`left:IDCTL_INVBAR_GOLD`,
+  `right:IDCTL_HEALTHBAR_1`, `left:IDCTL_MAPWIN_RIGHT`, names as in
+  `Gplayscr.gui`); `mappan:DX:DY` / `mapzoom:DX` drag the magic map by so
+  many layout pixels. Can be given more than once.
+- `--kept-maps SAVE`: other worlds' maps from an original saved game
+  (`MASK/save/save18.vol`, read only), marked visited, for the map's page
+  arrows.
 - `--command "WORDS",N`: run one script command before update N + 1,
   as if a script did (words split at spaces; no variables). For example
   `--command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30` makes
@@ -782,7 +814,8 @@ message that shows the usage.
 ## What doesn't work yet
 
 - **Not playable:** there is no inventory screen, saving, game over, or
-  travel between worlds; the story's scenes run only as far as the
+  travel between worlds (so no teleporting: the magic map's "Go" stops
+  before the world change); the story's scenes run only as far as the
   built parts allow.
 - **Characters:** the fight is a first version (M5 5c): Connor's
   controls are partly stand-ins; not

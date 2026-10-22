@@ -60,7 +60,7 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them.
 - **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground. They fight: they swing at Connor, he can punch back, they flinch, die, drop items and leave bodies; the bow spriggans shoot (first version, checked in the logs only). Health items and the four potions work, with their timer icons (checked in the logs only).
-- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only).
+- **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only). The magic map: fog, arrow, zoom and pan, the mini-map, other worlds' maps and the teleporter button, up to the world change (checked in the logs only).
 
 ### Next
 
@@ -213,6 +213,7 @@ cargo run --release -- item-verify
 cargo run --release -- aud-verify
 cargo run --release -- msg-verify
 cargo run --release -- character-verify
+cargo run --release -- map-verify
 ```
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the
