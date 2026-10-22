@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Study 6e-0: the world change and loading (session A)
+
+**Changed:** Docs only: new `docs/behaviour/world-change.md`; `magic-map.md` (rule 34's kept-map lookup now traced, rule 40 step 4 corrected and step 5 traced, open questions 4 and 5 answered); STATUS. Scratch notes (addresses) in `re/notes.md`, not committed.
+**Why:** DESIGN "6e" step 0: the six unknowns (arrival, kept worlds, the journey, the loading screen, walking exits, the Yes/No popup) and `magic-map.md` open questions 4–5, before B builds moving between worlds.
+**Tested how:** Ghidra on `Mask.exe` (the portal hand-over, the Portal state's answer and animation-end handling, the world save / unload / restore, the variables written per world, the generated start script, the loading screen meter, the popup) and the data: all 27 portal files, every script with `setState Connor Portal`, `MASK/mask.cs`, the worlds' `world.cs` / `newworld.cs` / `permwrld.cs`, and the user's `MASK/cur/` and `MASK/save/save10.vol` read with a scratch script (read only).
+**Result:** A world change saves the left world like a saved game (`cur/<World>.vol`: objects, `WorldVar.cs` with only that world's and `KQWorld` variables, a `newWorld.cs` beginning `setCurrentTime`), saves Connor whole to `cur/Connor.kq` (stats, items, flags, map marks, his Portal state) plus `GameState.kq` (unnamed-object counter, difficulty) and the map to `cur/<map>.kq`, then loads the new world with `cur` first in the file search. `KQPortal::ConLoc` / `CamLoc` replace the place on the first load of Connor and the camera. Every walking exit is started by a script. Arriving in Temple 1 deletes all kept worlds. Popup: 38-character lines, No left / Yes right, game paused but sounds go on.
+**Still broken / not tested:** Not checked in the original by the user yet ("How to check" 1–10). Not settled: which loading picture shows when and the meter's colours, the popup's keys, where potion timers and the rope state sit in Connor's saved form, whether left-world variables are cleared from memory.
+**Next:** The user's check in the original; B: 6e-1 to 6e-7 from `world-change.md`.
+
 ## 2026-10-21 STATUS: Swamp's start-up equipment checked (stale line removed)
 
 **Changed:** Docs only: STATUS ("Found in 6b, not fixed" removed).

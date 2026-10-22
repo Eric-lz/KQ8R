@@ -365,9 +365,9 @@ of the map, centred on Connor, sits in the bottom-right panel.
 34. **Showing another world's map** [traced]:
     - that world's map is read from the state the game kept when Connor
       left that world (so with its own fog and icons) [traced that it is
-      looked up by file name through the game's resource search; that the
-      search finds the kept world state first is inferred from the saved
-      games holding each visited world's map];
+      looked up by file name through the game's resource search, which
+      looks in the `cur` folder first, where each left world's map is
+      kept as `<map>.kq`: `world-change.md` rule 16, traced 2026-10-21];
     - drawn as that map's own picture with its fog if its `useFog` is on,
       else its full picture;
     - its colours are matched to the **current** world's palette: each
@@ -445,17 +445,22 @@ of the map, centred on Connor, sits in the bottom-right panel.
        target is cleared; the longest time step per frame is set to two
        frame periods (as a `handsOff` with a number does);
     4. if the portal has an `enterAnim` (`teleportdown` in all but the
-       Swamp's), Connor plays it (from his `conner.anm`, or `conner2.anm`
-       when he wears the full armour); when it ends, or at once if there
-       is none, the world change starts: Connor's arrival position and
+       Swamp's), Connor plays it (from the portal's `enterAnmFile` if it
+       names one, else from his current list; **corrected 2026-10-21**:
+       the `conner.anm` → `conner2.anm` swap for the full armour applies
+       to the arrival's `exitAnmFile`, see `world-change.md` rule 5);
+       when it ends, or at once if there is none, the world change
+       starts: Connor's arrival position and
        direction (`destConnorLoc` / `Dir`) and the camera's (`destCamLoc`
        / `Dir`) are handed to the next world, which is the portal's
        `world`;
     5. in the new world Connor is placed there, the camera too, and he
        plays the `exitAnim` (`teleportup`; the Swamp's portal has `out`)
-       [traced that the places are handed over; the arrival animation is
-       inferred from the field names and `KQPortal::ConAnim`, not
-       followed]. When it ends: first person allowed again, the portal's
+       [traced 2026-10-21 in `world-change.md` rules 6, 20: the places go
+       over as `KQPortal::ConLoc` / `CamLoc` and are used by the new
+       world's first load of Connor and of the camera; Connor arrives in
+       the Portal state with his next movement set to `exitAnim`;
+       `KQPortal::ConAnim` is read but not used]. When it ends: first person allowed again, the portal's
        `exitScript` gets `Exit`, the time step limit goes back to 1 s,
        `handsOff 0`, Connor waits.
     The map stays closed on arrival (hidden by `handsOff 1`, not brought
@@ -645,10 +650,10 @@ revealed pixels.
    user, 2026-10-21; rule 27). Still open, small: whether it picks up the
    big map's zoom after a world change (each view reloads the stored
    view when the map is set up [traced]; not checked).
-4. The arrival side of a world change (rule 40 step 5: how the new world
-   applies `KQPortal::ConLoc`, `CamLoc`, `ConAnim`) was not followed;
-   it belongs to a "world change / loading" study.
-5. How the game finds another world's kept map (rule 34): inferred from
-   the saved games, not traced to the file it opens.
+4. ~~The arrival side of a world change~~: answered 2026-10-21 in
+   `world-change.md` rules 6 and 20.
+5. ~~How the game finds another world's kept map~~: answered 2026-10-21
+   in `world-change.md` rule 16: each left world's map is saved as
+   `cur/<map>.kq` and the file search looks in `cur` first.
 6. How 800 × 600 scales the window, the map area and the margins
    (`interface.md` open question 1).

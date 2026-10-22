@@ -7,6 +7,25 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (A, 6e-0): the world change and loading studied**
+  (`docs/behaviour/world-change.md`, ready for B; the user's check in
+  the original still to do, its "How to check" 1–10). The original saves
+  the world it leaves exactly like a saved game (`MASK/cur/<World>.vol`:
+  every object with its state, `WorldVar.cs` with the variables named
+  after that world, a generated `newWorld.cs` that also puts the world's
+  clock back) and loads the next as if loading a save; Connor crosses as
+  his whole saved object (`cur/Connor.kq`: stats, items, flags, map
+  marks, his Portal state), with the counter for unnamed objects and
+  the difficulty. Arrival: `KQPortal::ConLoc` / `CamLoc` replace the
+  place on the new world's first load of Connor and the camera; he plays
+  `exitAnim`, then `exitScript Exit`, `handsOff 0`. Walking exits are
+  all started by scripts (traps or the portal's `ConnorCollision`). The
+  loading screen: the world's picture and a 3-colour meter driven by
+  `setLoadProgress`. The Yes/No popup pauses the game but not the
+  sounds; No left, Yes right. Arriving in Temple 1 deletes every kept
+  world. Answers `magic-map.md` open questions 4 and 5; corrects its
+  rule 40 step 4 (the full-armour list swap is for the arrival).
+
 - **2026-10-21 (B, M6 6d-1 to 6d-7): the magic map built** from
   `magic-map.md` (A, checked by the user in the original; plan in
   `docs/DESIGN.md` "6d", one commit per step; **checked in the logs
@@ -496,8 +515,9 @@ M6 has started with the Rope and Hook (6a).
   walking exits need the viewer to unload one world and load another,
   with each left world's state kept (the maps' fog among it). That is a
   larger change of how the viewer starts a world: **planned 2026-10-21,
-  `docs/DESIGN.md` "6e"** (the user agreed it is needed): A studies the
-  world change first (6e-0); B can start 6e-1 to 6e-3 meanwhile. Help
+  `docs/DESIGN.md` "6e"** (the user agreed it is needed): A's study
+  (6e-0) is done (`world-change.md`, user's check pending); B can start
+  6e-1 to 6e-3, then build 6e-4 to 6e-7 from the note. Help
   popups (`doPopup`, the "Go" help 151) are logged only.
 - **Stand-ins of 6d:** the follow margin (20 px inside every edge);
   layout pixels at 800 × 600 for the view and the mouse; Connor's place
@@ -650,9 +670,11 @@ M6 has started with the Rope and Hook (6a).
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
-  user's check (2026-10-21); 4 (arrival after a world change) belongs to
-  a later loading study; 5 (how another world's kept map is found) and
-  6 (800 × 600) built with stand-ins.
+  user's check (2026-10-21); 4 and 5 answered in `world-change.md`
+  (2026-10-21); 6 (800 × 600) built with a stand-in.
+- Inside `world-change.md`: the loading pictures' order and the meter's
+  colours, the popup's keys (both for the user's check), and three small
+  points (not blocking).
 - For A (asked 2026-10-21 by B, magic map, not blocking): **Q150** (a:
   Dead City's scripts do use `removeMapIcon`; b: the Castle's saved fog
   marks unused column 460; c: icons before or after the colour match;
