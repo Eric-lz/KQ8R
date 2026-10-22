@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Q159 (a): the user confirms STATS.AUD is the experience sound
+
+**Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q159 marked partly answered.
+**Why:** The user listened to `kq8-artifacts/wav/STATS.wav` (from `kq8 aud-verify --wav GAME/SOUND/STATS.AUD`): it is the sound the original plays when Connor gains experience.
+**Tested how:** The user, by ear.
+**Result:** Which file: settled. When it plays, with a level-up, and how: still open.
+**Still broken / not tested:** No experience sound yet.
+**Next:** A: Q159 (b)–(d); then B builds it.
+
 ## 2026-10-22 The experience sound: Q159 (not fixed)
 
 **Changed:** Docs only: `docs/behaviour/QUESTIONS.md` Q159.
