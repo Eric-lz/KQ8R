@@ -726,6 +726,9 @@ pub struct WorldState {
     pub connor_at: Option<[f32; 3]>,
     /// The world's `KQMonster` objects (`talking.md` rule 6).
     pub monsters: Vec<Monster>,
+    /// Characters prepared for a script's `loadKQ`: they join `monsters`
+    /// when loaded (2026-10-22, the Castle's Lucreto).
+    pub dormant_monsters: Vec<Monster>,
     /// Characters near or far now (lower case), set by the caller before
     /// each update (`characters.md` rule 11).
     pub characters_in_range: BTreeSet<String>,
@@ -1793,6 +1796,14 @@ impl WorldState {
             None => "",
         };
         self.note(format!("{at}: loadKQ {file}: {name} comes into the world (as at the start){}{trap}", if script.is_some() { "; its script gets Init now" } else { "; no script" }));
+        // A character brought in by a script can speak, as the ones placed
+        // at the start (`talking.md` rule 6; found 2026-10-22: Castle
+        // Daventry's `mirror.cs` loads `lucreto.kq`, then has him speak).
+        if let Some(k) = self.dormant_monsters.iter().position(|m| m.name.eq_ignore_ascii_case(&name)) {
+            let m = self.dormant_monsters.remove(k);
+            self.note(format!("{at}: loadKQ {file}: {} is a character: it can speak now (talking.md rule 6)", m.name));
+            self.monsters.push(m);
+        }
         self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
         if let Some(script) = script {
             self.calls_out.push((script, vec![name, "Init".into()]));
@@ -3078,6 +3089,7 @@ impl Active {
                 connor_can_turn: false,
                 connor_at: None,
                 monsters: Vec::new(),
+                dormant_monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
                 characters_solid: BTreeSet::new(),
                 character_colliders: Vec::new(),

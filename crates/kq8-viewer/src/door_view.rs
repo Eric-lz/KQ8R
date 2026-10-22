@@ -954,6 +954,7 @@ pub fn spawn_doors(
         }
     }
     active.world.monsters = std::mem::take(&mut objects.monsters);
+    active.world.dormant_monsters = std::mem::take(&mut objects.dormant_monsters);
     let monsters: Vec<String> = active.world.monsters.iter().map(|m| format!("{} ({})", m.name, m.script.as_deref().unwrap_or("no script"))).collect();
     main_log.summary(format!("talk: {} KQMonsters: {}; captions {:?}", monsters.len(), monsters.join(", "), active.scripts.vars.get("Options::Captions")));
     // M4 4e-3: the conversation info objects (conversation.md rule 3).

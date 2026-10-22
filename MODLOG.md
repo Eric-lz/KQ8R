@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: a character loaded by a script can speak (the Castle's mirror)
+
+**Changed:** `kq8-core` `active.rs`: characters prepared for a script's `loadKQ` (`dormant_monsters`) become speakers when loaded. Viewer `load.rs`, `door_view.rs`: such characters are noted at the start.
+**Why:** The user: Castle Daventry's magic mirror scene never went on; Lucreto never spoke. `mirror.cs` loads `lucreto.kq` and at once has him speak (1000 33 14 52); our speech rules knew only the characters placed at the start, so the line was refused ("'Lucreto' is not KQMonster") and the scene waited for its end forever. An older gap (`talking.md` rule 6 applied to start-up objects only).
+**Tested how:** core 512 tests, clippy clean. `kq8-viewer --world CastleD --frames 9000 --sound off --command "move Connor 0 43178 103481 130 0 0 3.1416",5 --click mirror1,280`; `doors.log`, `talk.log`.
+**Result:** "Lucreto is a character: it can speak now"; his three lines play (mouth shapes), `TalkComplete … 3` → "Die Luke Die!!!!!", Lucreto deleted, +25 experience (level 2), the mirror's `transback`.
+**Still broken / not tested:** Not looked at or heard. Lucreto's goodbye / welcome-back lines (conversations) not needed here.
+**Next:** The other points of the user's list.
+
 ## 2026-10-22 Fix: worlds with a parent use its voices and sounds
 
 **Changed:** Viewer `world_build.rs`: `parent_world` (`parentWorld` in `GAME/Kq/<World>.kq`); message files, voices and sound effects are looked up in the parent world's folders (Castle Daventry → Daventry, Snow exit → Ice world, Temples 2–4 → Temple 1).

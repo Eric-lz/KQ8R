@@ -1406,6 +1406,9 @@ pub struct Objects {
     /// The placed `KQMonster`s (M4 4a-2, `talking.md` rule 6): name,
     /// place after `move`, script.
     pub monsters: Vec<kq8_core::active::Monster>,
+    /// Characters prepared for a script's loadKQ: they can speak once
+    /// loaded (2026-10-22).
+    pub dormant_monsters: Vec<kq8_core::active::Monster>,
     /// The message files and voice lookup, and `Options.cs`'s `set`
     /// lines (M4 4a-2), filled in by `main.rs`.
     pub talk: Option<(kq8_core::talk::Talk, Vec<(String, String)>)>,
@@ -1758,6 +1761,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         connor_start: Vec::new(),
         object_stats: Vec::new(),
         monsters: Vec::new(),
+        dormant_monsters: Vec::new(),
         doors: Vec::new(),
         door_animations: Vec::new(),
         door_animation_index: BTreeMap::new(),
@@ -2014,6 +2018,8 @@ struct Placer<'a> {
     connor_start: Vec<kq8_core::connor_start::StartLine>,
     object_stats: Vec<(String, String)>,
     monsters: Vec<kq8_core::active::Monster>,
+    /// Characters prepared for a script's loadKQ (2026-10-22).
+    dormant_monsters: Vec<kq8_core::active::Monster>,
     doors: Vec<DoorAssets>,
     door_animations: Vec<Animation>,
     door_animation_index: BTreeMap<String, usize>,
@@ -2947,6 +2953,14 @@ impl Placer<'_> {
         let key = p.name.to_ascii_lowercase();
         if let Some(v) = s.get("stats").filter(|_| !unused) {
             self.object_stats.push((p.name.clone(), v.to_string()));
+        }
+        // A character prepared for a script's loadKQ (not placed now): it
+        // joins the speakers when loaded (2026-10-22, the Castle's Lucreto).
+        if unused && self.load_targets.contains(&base.to_ascii_lowercase()) && p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
+            let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+            let keys = kq8_data::characters::CharacterKeys::from_section(s);
+            let (goodbye, welcome_back) = keys.map_or((None, None), |k| (k.goodbye, k.welcome_back));
+            self.dormant_monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script, goodbye, welcome_back });
         }
         if !unused {
             self.located.insert(key.clone(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
@@ -4328,6 +4342,7 @@ impl Placer<'_> {
             connor_start: self.connor_start,
             object_stats: self.object_stats,
             monsters,
+            dormant_monsters: self.dormant_monsters,
             talk: None,
             game_bounds: match self.game.find("GAME/patch/BOUNDS.KQ").map(std::fs::read) {
                 Some(Ok(bytes)) => Some(kq8_data::bounds::BoundingBoxes::parse(&bytes).0),
