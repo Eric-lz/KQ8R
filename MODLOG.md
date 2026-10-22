@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix 6e-4a: the loading meter; `--console` lines after a world change
+
+**Changed:** Viewer `loading_screen.rs`: the black bar and the red meter are rectangles in the colour of `4black.pbm` / `4red.pbm` (6 × 6 swatches), not stretched pictures. `console.rs`: once a line asks for a world change, the lines after it (typed or `--console`) wait for the next world. Provenance unchanged (same rules).
+**Why:** The user's look: (1) with `--console "goworld Swamp",100 --console "goworld Daventry",100` Swamp never loaded (both lines ran in the same update; the second replaced the first — my test command, though I had noted the pitfall); (2) the red meter showed as a small square moving from outside the bar to the middle of the screen, with a black box there that the original doesn't have; the bar itself was right.
+**Tested how:** The same command again, 4,000 frames; `viewer.log`.
+**Result:** Daventry → Swamp at update 100, then Swamp → Daventry at Swamp's update 100. "bar [0, 0, 0, 255], meter [208, 0, 0, 255]"; meter steps as before.
+**Mistake:** I gave the user a test command with two world changes at the same update.
+**Still broken / not tested:** The new meter is **not looked at**. Why the stretched picture drew as a moving square was not worked out (no longer used).
+**Next:** The user's look at the meter; then 6e-4b.
+
 ## 2026-10-22 6e-4a: the loading screen, the world read on another thread
 
 **Changed:** New viewer `loading_screen.rs` (the world's loading picture in its `L<7 letters>.ppl` palette, the black bar, the red meter; opened at the take-down, closed when the world is built). `world_build.rs`: the next world is read on a thread (`Step::Loading`), the meter fed from the scripts' `setLoadProgress`, frame times logged; the sound system is made on the main thread. `kq8-data` `world_script.rs`: `Host::load_progress`. `load.rs`: the progress counter. `main.rs`: `frame_stats` skips its log line while the reading thread holds the log. DESIGN (6e-4 split in 4a / 4b), provenance.

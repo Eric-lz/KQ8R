@@ -21,6 +21,9 @@ pub use screen::close as close_screen;
 #[derive(Resource)]
 pub struct Console {
     lines: Mutex<Receiver<String>>,
+    /// Typed lines held back because a world change was asked before
+    /// them (M6 6e-3 fix): they run in the next world.
+    waiting: Vec<String>,
     log: Option<Log>,
     /// The terminal was closed or can't be read: nothing more will come.
     closed: bool,
@@ -58,7 +61,7 @@ impl Console {
         if let Some(log) = log.as_mut() {
             log.detail(first);
         }
-        Console { lines: Mutex::new(lines), log, closed: false }
+        Console { lines: Mutex::new(lines), waiting: Vec::new(), log, closed: false }
     }
 
     fn say(&mut self, line: impl AsRef<str>) {
@@ -86,7 +89,7 @@ pub fn console_step(
     if sim.is_none() {
         return;
     }
-    let mut typed = Vec::new();
+    let mut typed = std::mem::take(&mut console.waiting);
     let mut ended = false;
     // Once the terminal is closed only `--console` lines come.
     if !console.closed {
@@ -106,9 +109,13 @@ pub fn console_step(
     let now = sim.as_ref().map_or(0, |s| s.active.world.updates);
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut at.0).into_iter().partition(|(_, n)| now >= *n);
     at.0 = later;
-    typed.extend(due.into_iter().map(|(line, _)| line));
+    // Typed lines first, then the `--console` ones (with their update, to
+    // hold them back if a world change comes first).
+    let mut lines: Vec<(String, Option<u64>)> = typed.into_iter().map(|l| (l, None)).collect();
+    lines.extend(due.into_iter().map(|(line, n)| (line, Some(n))));
     let mut sim = sim;
-    for line in typed {
+    let mut lines = lines.into_iter();
+    while let Some((line, _)) = lines.next() {
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -120,6 +127,16 @@ pub fn console_step(
         // of the frame (`world_build::world_change_step`).
         if let Some(said) = world_word(line, &mut change, connor.as_deref()) {
             console.say(said);
+            if change.asked.is_some() {
+                // The lines after it wait for the next world (a
+                // `--console` line counts its update there again).
+                for (rest, n) in lines.by_ref() {
+                    match n {
+                        Some(n) => at.0.push((rest, n)),
+                        None => console.waiting.push(rest),
+                    }
+                }
+            }
             continue;
         }
         // Our own words first, else a script command; the log lines it
