@@ -804,6 +804,18 @@ pub fn connor_keys(
             sim.controls.held.retain(|h| h != k);
         }
     }
+    // A key let go while this didn't run (the game paused by the Portal
+    // state's question, or a world being loaded; M6 6e fix, the user's
+    // check: Connor walked on after No) is no longer held.
+    let missed: Vec<KeyCode> = sim.controls.held.iter().copied().filter(|k| !keys.pressed(*k)).collect();
+    if !missed.is_empty() {
+        sim.controls.held.retain(|k| keys.pressed(*k));
+        if sim.repeat.is_some_and(|(k, _)| k.is_some_and(|k| missed.contains(&k))) {
+            sim.repeat = None;
+        }
+        let line = format!("connor update {}: keys {missed:?} were let go while the game was paused: no longer held", sim.updates);
+        sim.log.detail(&line);
+    }
     // Movement key events clear wall blocks (connor-physics.md "Walk held
     // against a wall").
     let c = &sim.controls;

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: a key let go during the popup stayed held
+
+**Changed:** Viewer `connor_view.rs` (`connor_keys`): a movement key that is held in Connor's list but not down any more is dropped (and its repeat ends), logged in `connor.log`.
+**Why:** The user: after No at a walking exit Connor was put back but kept walking forward into the trap again, even with Forward let go. While the question is open the game's systems (also the keys') don't run, so the key's release was never seen.
+**Tested how:** Built only. The test options (`--hold`) don't use the keyboard, so this needs a real key: **not tested**.
+**Result:** —
+**Still broken / not tested:** Not tested. The camera keys (`Camera.sae`) may have the same problem after a pause (not checked).
+**Next:** The user tries a walking exit, No, with the key let go during the question.
+
 ## 2026-10-22 Fix: a character loaded by a script can speak (the Castle's mirror)
 
 **Changed:** `kq8-core` `active.rs`: characters prepared for a script's `loadKQ` (`dormant_monsters`) become speakers when loaded. Viewer `load.rs`, `door_view.rs`: such characters are noted at the start.
