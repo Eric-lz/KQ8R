@@ -744,12 +744,13 @@ M6 has started with the Rope and Hook (6a).
   screen-door texture pattern), Q145 (orbits), Q140 (the `do` frame after
   the step), Q138 e (`loop=` start phase), Q136, Q112 (jump from the held
   key), Q125 (turn keys during the approach), Q126 (camera round the
-  partner's feet + 1,400), Q14 b (pad solid), Q42. See MODLOG.
-- **For the user (checks in the original):** Q126 (the conversation
-  camera with Connor far from the partner), Q152 (the bottom strip
-  during a load: painted frame or black strip?), Q14 b (is the teleport
-  pad really see-through? a screenshot), Q143 (is the spinning mask
-  shrunk or cut at its edges?).
+  half-way between the partner and Connor's talking spot, + 1,400), Q14 b
+  (pad solid), Q42. See MODLOG.
+- **For the user (check in the original):** Q143 (is the spinning mask
+  shrunk or cut at its edges?). Q126, Q152 and Q14 b were settled by the
+  user's checks (2026-10-22): the camera swings round the point half-way
+  between the partner and Connor's talking spot; black only inside the
+  meter's slot; the pad is solid.
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only
   the flames' 12,100 (traced and built) vs the user's ~11,000 (open

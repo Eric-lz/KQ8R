@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Q126, Q152, Q14 (b) settled with the user's checks in the original
+
+**Changed:** Docs only: `conversation.md` rules 14, 15 (the camera's swing centre), `world-change.md` rule 23 (the loading meter's black), `objects.md` "See-through objects" rule 4 (the pad); `QUESTIONS.md` Q14, Q126, Q152.
+**Why:** The user checked the three answers that disagreed with their memory: the conversation camera swings round a point a bit in front of the partner, between them and Connor (Wizard and Uglybeast); the loading meter's painted frame stays, black only inside it; a screenshot shows the teleport pad solid.
+**Tested how:** Q126 re-traced in `Mask.exe`: the factor the study fork read as 0 is an 8-byte 0.5 (it had been read as a 4-byte number), and the other end is Connor's talking spot from the partner's info file.
+**Result:** Q126: the centre is half-way between the partner's feet and Connor's talking spot, + 1,400; matches the user. Q152: the code's full-width black bar doesn't show in the original; build black over the meter slot's unfilled part only. Q14 (b): solid, as traced.
+**Still broken / not tested:** Why the loading black bar doesn't show was not traced. Q126's other conclusions (range, height rule, obstacle check, end placement) are unchanged.
+**Next:** B builds Q126 (talking spot instead of Connor's position) and Q152 (black in the slot).
+
 ## 2026-10-22 Study (A): the non-blocking questions Q14, Q42, Q112, Q125, Q126, Q136, Q138, Q140, Q143–Q145, Q150–Q152
 
 **Changed:** Docs only. `connor-physics.md` "Jumping" rule 2 (the jump is picked from the held keys); `conversation.md` rules 13–15 (keys during the approach, Jump/push dropped, the camera's swing centre); `fighting.md` rule 23 (`reactPause` is for two special classes only); `ranged-weapons.md` rules 24, 25, 29 and open questions 1, 3 (the `do` frame, aim 975 not 1,200, the bolt's ball, `collisionDetail`, a swap during a swing); `anim-scripts.md` rule 5 (Connor's movements start at their `loop=` phase); `objects.md` (new "Dithered objects"; the teleport pad drawn solid); `potions.md` rules 20, 35 (three shields, how orbits move; status icon places and frames); `models-and-textures.md` (a texture's own colour table is ignored; flag 0x2000's alpha from the palette's `tpal`); `magic-map.md` rules 16, 21, 27, 34 and `interface.md` rule 44; `world-change.md` rules 23, 26 and a Do-not-reproduce item. `QUESTIONS.md`: those 15 marked answered (Q138's earlier history kept).

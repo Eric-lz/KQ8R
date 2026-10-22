@@ -339,10 +339,14 @@ himself goes across as his own saved file.
     repainted with the meter and the text at **every meter step**, in
     both phases. So by the code rows 462-480 are a black strip covering
     the frame painted into the picture, with the coloured meter over it.
-    **This conflicts with the user's memory** (the painted frame is
-    seen); the paint order within one redraw and any other compositing
-    were not traced. A second look at the bottom strip during a load
-    would settle it. The three meter phases are red, green, blue in that
+    **The user's check in the original (2026-10-22) says otherwise:** the
+    meter's frame painted into the picture stays visible; black is drawn
+    only **inside** it, where the meter grows (the slot), leaving the
+    frame's bright outline. So build: the picture with its frame, the
+    coloured part over the slot, and **black over the rest of the slot**
+    (the meter's unfilled part, as above); do not draw the full-width
+    black bar over the frame. Why the bar control doesn't show (paint
+    order, or it isn't drawn) was not traced. The three meter phases are red, green, blue in that
     order by the code; the user saw green during the CD copy and red
     while loading, so which phase number each loading phase uses is
     worth a later look.

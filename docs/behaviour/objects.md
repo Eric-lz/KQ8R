@@ -229,8 +229,9 @@ All traced in `Mask.exe` unless marked otherwise.
    swirling 16-frame movement (1 s, repeating); also `tooFar=0.4` with
    `groupsActive3DFar=0` makes the pad vanish beyond 0.4 ×
    `visibleDistance` from Connor (it pops out, it doesn't fade)
-   [inferred, not checked by eye; a screenshot of the original would
-   settle it].
+   [inferred]. **Confirmed by the user's screenshot of the original
+   (2026-10-22):** the pad is solid; the stone ring with signs and the
+   red-orange swirl with a black centre, nothing behind shows through.
 
 ### Dithered objects (traced 2026-10-22, Q144)
 

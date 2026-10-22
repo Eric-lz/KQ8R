@@ -227,27 +227,28 @@ Words used here:
     the **right mouse button** (the camera-move button, `camera.md`)
     while Connor's stay-area test runs, the camera is placed **once** at
     `cam0`'s position (not its angles), **aimed at the partner**, and
-    stops following anyone (traced 2026-10-22, Q126: the point is the
-    partner's **feet**, its position taken once when the conversation
-    starts, never updated; the heading is set toward it); from then on, for the rest of this
+    stops following anyone (traced 2026-10-22, Q126, corrected the same
+    day after the user's check: the point looked at is **half-way
+    between the partner's feet and Connor's talking spot**
+    (`convLocX/Y/Z`), the partner's position taken once when the
+    conversation starts, never updated; the heading is set toward it); from then on, for the rest of this
     conversation, **camera numbers are ignored** (no cuts, and Connor no
     longer turns to the partner on them). The player swings and zooms
     the camera with the mouse as usual (`camera.md` "Swinging and
-    zooming"), around the partner: the swing centre is **the partner's
-    feet + 1,400 straight up** (the usual aim height), with all the
+    zooming"), around the partner: the swing centre is **that half-way
+    point + 1,400 straight up** (the usual aim height), with all the
     usual rules around it: the current range kept within 1,500-5,000
     (pulled in to max - 1, pushed out to min + 1), the height rule and
     the obstacle check (sight line from the centre to the camera); they
     apply at once, so `cam0`'s spot itself can be moved when the camera
     is placed. It follows nothing, so it doesn't move when Connor walks;
-    only the mouse moves it. **Not half-way between the two** (B's
-    stand-in has no support in the program). The user's "pivots between
-    the Wizard and Connor" may come from Connor standing only about
-    1,100 from the Wizard (a swing round the Wizard at 1,500-5,000 then
-    looks like a swing round both), or from the slow heading turn
-    (`camera.md` "Turning the view toward Connor") lagging behind the
-    swing [not traced]. A re-check in the original with Connor far from
-    the partner would tell. At the end the camera follows Connor
+    only the mouse moves it. The half-way point uses Connor's **talking
+    spot**, not where he actually stands, so it doesn't change if he
+    walks within the stay area. The same for every partner (the user saw
+    it with the Wizard and the Uglybeast: "a point a bit in front of the
+    partner, between them and Connor"). (The first reading of this rule
+    said "the partner's feet": a constant 0.5 had been read as 0.) At
+    the end the camera follows Connor
     again (rule 15). **Checked by the user in the original
     (2026-10-19):** moving the camera cancels the cuts and lets it
     rotate freely around the two talking.
@@ -271,8 +272,8 @@ Words used here:
     (traced 2026-10-22, Q125 b, c). On
     leaving:
     - the camera is first put at `cam0`'s **position looking at the
-      partner** (exactly the placement above: the partner's feet from
-      the start of the conversation, Q126), then **follows Connor again** (`KQCamera::follow
+      partner** (exactly the placement above: the half-way point between
+      the partner's feet and the talking spot, Q126), then **follows Connor again** (`KQCamera::follow
       Connor`, `camera.md`), so it swings in from there;
     - first person is allowed again, and if he was in first person
       before the conversation he goes back to it;
