@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Fix: the popup's buttons (highlight, held down, answer on release)
+
+**Changed:** `kq8-core` `gui_draw.rs`: a stretched picture piece (`Piece::Stretched`, `Canvas::picture_stretched`; unit test `a_stretched_picture_is_not_repeated`). Viewer `gui_view.rs`: the popup's buttons have three looks (plain `yesbtn.pba` frame 0; highlighted `buyhibtn.pba`, the gold outline, stretched to the button; held down `yesbtn.pba` frame 1 with the label moved 1 right, 1 down) and answer when the mouse button or Enter is let go (the mouse: on the button it went down on). QUESTIONS Q151 (e).
+**Why:** The user's look: the gold outline was gone; the frame shown was the held-down one; in the original a button goes down while the mouse button or Enter is held and acts when let go, its label moving a little.
+**Tested how:** core tests (gui_draw 6 pass); `kq8-viewer --world Daventry --frames 900 --sound off --command "KQMonster::setState Connor Portal portal1 portaltp",30`; `gui.log`.
+**Result:** The popup draws with `buyhibtn.pba` (88 × 25, now stretched, not repeated) and `yesbtn.pba`. 
+**Still broken / not tested:** **Press and release not tested** (real mouse and keyboard only; the test keys answer at once). The stretch and the label's 1-pixel move are stand-ins (Q151 e). Not looked at.
+**Next:** The user's look.
+
 ## 2026-10-22 Fix: after No, Connor stands at once
 
 **Changed:** `kq8-core` `connor.rs` (`Walker::stand_now`), `active.rs` (`Request::ConnorStandNow`), `portal.rs` (No asks for it); viewer `door_view.rs` applies it (and clears his intent).

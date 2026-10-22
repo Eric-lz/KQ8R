@@ -50,6 +50,10 @@ pub enum Piece<'a> {
     /// A picture filling its rectangle; `cut`: only this many screen
     /// pixels of its width, from the left (a meter, rule 20).
     Picture { rect: [i32; 4], pic: Pic<'a>, cut: Option<u32> },
+    /// A picture stretched to its rectangle (nearest pixel), not repeated
+    /// (M6 6e fix: the popup's highlighted button, 88 x 25 on a 35-high
+    /// button).
+    Stretched { rect: [i32; 4], pic: Pic<'a> },
     /// A picture filling its rectangle, only its lowest `rows` screen
     /// rows (a potion's timer icon, the part left: `potions.md` rule 35).
     Lower { rect: [i32; 4], pic: Pic<'a>, rows: u32 },
@@ -145,6 +149,20 @@ impl Canvas {
             for x in l..right {
                 let sx = ((x - l) as f32 / scale) as u32 % pic.width;
                 let sy = ((y - t) as f32 / scale) as u32 % pic.height;
+                self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], pic.see_through, palette);
+            }
+        }
+    }
+
+    /// Draws `pic` stretched over the layout rectangle `rect` (nearest
+    /// pixel).
+    pub fn picture_stretched(&mut self, rect: [i32; 4], pic: Pic, scale: f32, palette: &[Rgb; 256]) {
+        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+        let (w, h) = ((r - l).max(1) as f32, (b - t).max(1) as f32);
+        for y in t..b {
+            for x in l..r {
+                let sx = (((x - l) as f32 / w * pic.width as f32) as u32).min(pic.width - 1);
+                let sy = (((y - t) as f32 / h * pic.height as f32) as u32).min(pic.height - 1);
                 self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], pic.see_through, palette);
             }
         }
@@ -250,6 +268,7 @@ pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], pale
         match piece {
             Piece::Picture { rect, pic, cut } => c.picture(at(rect), *pic, *cut, scale, palette),
             Piece::Lower { rect, pic, rows } => c.picture_lower(at(rect), *pic, *rows, scale, palette),
+            Piece::Stretched { rect, pic } => c.picture_stretched(at(rect), *pic, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
             Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
             Piece::Map { rect, pixels, view, arrow } => c.map(at(rect), pixels, *view, *arrow, scale, palette),
@@ -291,6 +310,17 @@ mod tests {
             Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &empty, see_through: true }, cut: None },
         ], &pal);
         assert_eq!((c.at(0, 0)[0], c.at(1, 1)[0]), (10, 20));
+    }
+
+    #[test]
+    fn a_stretched_picture_is_not_repeated() {
+        let mut pal = [[0u8; 3]; 256];
+        pal[1] = [255, 0, 0];
+        pal[2] = [0, 255, 0];
+        // 1 x 2: red on top, green below; stretched over 1 x 4.
+        let pixels = [1u8, 2];
+        let c = draw([0, 0], [1, 4], 1.0, &[Piece::Stretched { rect: [0, 0, 1, 4], pic: Pic { width: 1, height: 2, pixels: &pixels, see_through: false } }], &pal);
+        assert_eq!([c.at(0, 0)[0], c.at(0, 1)[0], c.at(0, 2)[1], c.at(0, 3)[1]], [255, 255, 255, 255], "top half red, bottom half green");
     }
 
     #[test]

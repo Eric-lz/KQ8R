@@ -142,11 +142,15 @@ const POPUP_NO: [i32; 4] = [196, 148, 284, 183];
 const POPUP_TEXT_AREA: [i32; 4] = [0, 0, 360, 148];
 const POPUP_LINE_PITCH: i32 = 24;
 
-/// The popup's buttons' picture (the user's look, 2026-10-22: the
-/// layout's `buyhibtn.pba` is 88 x 25, shorter than the 35-high buttons,
-/// and drew wrapped): `yesbtn.pba` (88 x 36, 2 frames) for both, frame 0
-/// plain, frame 1 highlighted (our reading; Q151 d).
+/// The popup's buttons' looks (the user's looks at the original,
+/// 2026-10-22): plain `yesbtn.pba` frame 0; highlighted `buyhibtn.pba`
+/// (the layout's BTN1 picture, the gold outline; 88 x 25) stretched to the
+/// button (our reading: it was drawn repeated, wrapped); held down (mouse
+/// button or Enter, until let go) `yesbtn.pba` frame 1 with the label
+/// moved by `POPUP_PRESSED_SHIFT` (STAND-IN amount; Q151 d).
 const POPUP_BUTTON_PICTURE: &str = "yesbtn.pba";
+const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
+const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
 
 /// The question shown in the popup (M6 6e-6).
 #[derive(Debug, Clone, PartialEq)]
@@ -157,6 +161,8 @@ pub struct PopupShown {
     pub no: String,
     /// 0 = Yes, 1 = No.
     pub highlight: usize,
+    /// The button held down (mouse or Enter), answered when let go.
+    pub pressed: Option<usize>,
 }
 
 /// The map window's parts (`magic-map.md` rule 5).
@@ -236,6 +242,9 @@ enum StatusShown {
 #[derive(Debug, Clone, PartialEq)]
 enum Spec {
     Pic { rect: [i32; 4], file: String, frame: usize, cut: Option<u32> },
+    /// A picture stretched to its rectangle (the popup's highlighted
+    /// button).
+    Stretch { rect: [i32; 4], file: String, frame: usize },
     /// Only the lowest `rows` rows of a picture (a potion's part left).
     Lower { rect: [i32; 4], file: String, frame: usize, rows: u32 },
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
@@ -788,10 +797,19 @@ impl Gui {
             if let Some(p) = &self.popup {
                 let mut buttons = Vec::new();
                 for (k, (rect, label)) in [(POPUP_YES, &p.yes), (POPUP_NO, &p.no)].into_iter().enumerate() {
+                    let down = p.pressed == Some(k);
                     if let Some(font) = &popup_font {
-                        buttons.push(Spec::Text { rect, font: font.clone(), justification: 0xC, text: label.clone() });
+                        let [dx, dy] = if down { POPUP_PRESSED_SHIFT } else { [0, 0] };
+                        let at = [rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy];
+                        buttons.push(Spec::Text { rect: at, font: font.clone(), justification: 0xC, text: label.clone() });
                     }
-                    buttons.push(Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: usize::from(p.highlight == k), cut: None });
+                    buttons.push(if down {
+                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 1, cut: None }
+                    } else if p.highlight == k {
+                        Spec::Stretch { rect, file: POPUP_HIGHLIGHT_PICTURE.to_string(), frame: 0 }
+                    } else {
+                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 0, cut: None }
+                    });
                 }
                 // The lines, centred across and down (stand-in, Q151 d).
                 if let Some(font) = popup_text_font.clone().or_else(|| popup_font.clone()) {
@@ -868,7 +886,7 @@ impl Gui {
     fn draw(&mut self, origin: [i32; 2], size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
         for s in specs {
             match s {
-                Spec::Pic { file, .. } | Spec::Lower { file, .. } | Spec::Map { arrow: Some((file, ..)), .. } => self.load_file(file),
+                Spec::Pic { file, .. } | Spec::Stretch { file, .. } | Spec::Lower { file, .. } | Spec::Map { arrow: Some((file, ..)), .. } => self.load_file(file),
                 Spec::Text { font, .. } => self.load_font(font),
                 Spec::Fill { .. } | Spec::Map { .. } => {}
             }
@@ -880,6 +898,11 @@ impl Gui {
                     let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
                     let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
                     pieces.push(Piece::Picture { rect: *rect, pic, cut: *cut });
+                }
+                Spec::Stretch { rect, file, frame } => {
+                    let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
+                    let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
+                    pieces.push(Piece::Stretched { rect: *rect, pic });
                 }
                 Spec::Lower { rect, file, frame, rows } => {
                     let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
@@ -1881,6 +1904,7 @@ pub fn popup_step(
             no: message_500(&sim, 14).unwrap_or_else(|| "No".into()),
             // STAND-IN (Q151): No highlighted when it opens.
             highlight: 1,
+            pressed: None,
         };
         let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (stand-in Q151); the game pauses, the sounds go on (world-change.md rule 26)", shown.lines, shown.yes, shown.no, if shown.highlight == 0 { &shown.yes } else { &shown.no });
         gui.popup = Some(shown);
@@ -1903,18 +1927,38 @@ pub fn popup_step(
     for w in &test_words {
         pressed.push((w.as_str(), format!("test --key popup:{w}")));
     }
-    for (key, what) in [(KeyCode::ArrowLeft, "left"), (KeyCode::ArrowRight, "right"), (KeyCode::Enter, "enter"), (KeyCode::NumpadEnter, "enter"), (KeyCode::Escape, "escape")] {
+    for (key, what) in [(KeyCode::ArrowLeft, "left"), (KeyCode::ArrowRight, "right"), (KeyCode::Escape, "escape")] {
         if keys.just_pressed(key) {
             pressed.push((what, format!("{what} key")));
         }
     }
-    if buttons.just_pressed(MouseButton::Left) {
-        if let Some(at) = window.single().ok().and_then(|w| w.cursor_position()) {
-            match gui.popup_button_at(frame.0, at) {
-                Some(0) => pressed.push(("yes", "click on Yes".into())),
-                Some(_) => pressed.push(("no", "click on No".into())),
-                None => {}
+    // The user's look at the original: a button goes down while the mouse
+    // button or Enter is held, and answers when let go (Enter: on the
+    // highlighted one; the mouse: if still on the same button).
+    let cursor = window.single().ok().and_then(|w| w.cursor_position());
+    let over = cursor.and_then(|at| gui.popup_button_at(frame.0, at));
+    if let Some(p) = gui.popup.as_mut() {
+        let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
+        if keys.any_just_pressed(enter) {
+            p.pressed = Some(p.highlight);
+        }
+        if buttons.just_pressed(MouseButton::Left) {
+            if let Some(k) = over {
+                p.pressed = Some(k);
+                p.highlight = k;
             }
+        }
+        if keys.any_just_released(enter) {
+            if p.pressed == Some(p.highlight) {
+                pressed.push(if p.highlight == 0 { ("yes", "Enter let go on Yes".into()) } else { ("no", "Enter let go on No".into()) });
+            }
+            p.pressed = None;
+        }
+        if buttons.just_released(MouseButton::Left) {
+            if let Some(k) = p.pressed.filter(|k| over == Some(*k)) {
+                pressed.push(if k == 0 { ("yes", "click on Yes (let go)".into()) } else { ("no", "click on No (let go)".into()) });
+            }
+            p.pressed = None;
         }
     }
     for (what, how) in pressed {
