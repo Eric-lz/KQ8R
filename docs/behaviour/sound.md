@@ -409,7 +409,8 @@ world (Daventry's waterfall, mill, windmill and fountain).
     `talking.md` rules 10–11.)
 54. **Pause:** when the game pauses, groups 0, 2, 3 and 5 are paused (each
     sound keeps its place) and resume afterwards; groups 1 and 4 keep
-    playing. (Which screens pause the game was not traced.)
+    playing. (Which screens pause the game: the main menu, `main-menu.md` rule 7,
+    traced 2026-10-21.)
 55. **World change:** while a new world loads, the slider values of groups
     0, 1, 2 (effects) and 3 (speech) are set to 0 and restored on the new world's first frame;
     the music slider is left alone (what happens to the tunes

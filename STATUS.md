@@ -7,6 +7,14 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-21)
 
+- **2026-10-21 (A): the main menu studied** (`docs/behaviour/main-menu.md`,
+  ready for B). The items and when each can be chosen, the keys (Up/Down
+  wrap, Enter, Escape = Back to Game, Left/Right in popups), the popups
+  (new game, quit, corrupt save, Combat difficulty Easy 0.66 / Normal
+  1.0 / Hard 1.5), the pause and theme music, the save thumbnail, and
+  Connor's death opening the menu with Save and Back off. Still open:
+  hover with the mouse, hidden or greyed items (user's check).
+
 - **2026-10-21 (B): Connor's levels checked; level-up flame and sound**
   (DESIGN "Connor's levels checked", steps L-1 to L-3, one commit each;
   **checked in the logs only, not by eye or ear**). Experience
@@ -645,8 +653,6 @@ M6 has started with the Rope and Hook (6a).
   `ranged-weapons.md` and built in M5 5f-3 / 5f-4 (left: (e), and
   whether a swap cuts a swing); **Q139** answered there (rule 32) and
   built in M5 5f-7, except how objects take damage (e).
-  `fighting.md` open question 3 (which menu sets the combat level) is
-  still open.
 - For A (asked 2026-10-19 by B, M4 4e): **Q125** (Connor's keys before
   the stay test; Jump and push while talking), **Q126** (where the
   conversation camera aims and what the right-button swing centres on).
@@ -659,8 +665,8 @@ M6 has started with the Rope and Hook (6a).
   whose own open questions are now: 1 water for walking characters
   (small), 3 the stuck line's exact ground test at foot height (not
   worth copying); 2 (the fight) answered 2026-10-20 in `fighting.md`.
-- `fighting.md` open questions (not blocking the Daventry fight): which
-  menu sets the combat level, Connor's death (the input side and the
+- `fighting.md` open questions (not blocking the Daventry fight):
+  Connor's death (the input side and the
   bolt's flight answered 2026-10-20 in `ranged-weapons.md`, built in M5
   5f).
 - Q131–Q134: answered by A and built 2026-10-20 (M5 5b).
@@ -679,7 +685,7 @@ M6 has started with the Rope and Hook (6a).
   and built; the exact rules are worth tracing), **Q112** (what the
   back flip at a wall really tests).
 - `interface.md` open questions 1–6 and `inventory.md` open questions
-  1–4 (menu pause, level-up flame, rocks picture, held item on world
+  1–4 (level-up flame, rocks picture, held item on world
   change, applied quest items).
 - For A (asked 2026-10-19 by B, M3 3o; small, not blocking): **Q113**
   a–c (the view heading's state around cutscene cameras: rule 1 from

@@ -261,7 +261,8 @@ uses whatever the window holds [traced].
     (2026-10-18):** showing the top or bottom bar does not interrupt
     play; only Escape (the main menu) takes the player out of the game
     screen, and **the game stops running while the main menu is open**
-    (the user's check, 2026-10-18; not traced). The bars never pause.
+    (the user's check, 2026-10-18; traced 2026-10-21, `main-menu.md`
+    rules 7–9). The bars never pause.
     (Our build quits on Escape as a stand-in.)
 15. **handsOff and cutscenes** (`anim-scripts.md` rule 21; STATUS.md
     "GUI panels to hide") [traced]:

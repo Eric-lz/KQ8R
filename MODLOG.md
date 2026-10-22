@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 Study (A): the main menu
+
+**Changed:** New behaviour note `docs/behaviour/main-menu.md`. Small updates: `fighting.md` open question 3 (combat level menu answered), `interface.md` rule 14 and `sound.md` rule 54 (the menu's pause now traced), STATUS. Scratch addresses in `re/notes.md` (not committed).
+**Why:** The main menu was postponed (2026-10-20); this gives session B a note to build it from when its turn comes.
+**Tested how:** Traced in `Mask.exe` with Ghidra; layouts from `kq8-artifacts/logs/gui-verify.log`; texts read from `GAME/ENGLISH/500.MSG` (noun 0, verb 0, case = the `#n` number); `MASK/current.bin` is 19,204 bytes, which fits the thumbnail format. Nothing run in the original.
+**Result:** Items New / Load / Save / Options / Replay Intro / Quit / Back to Game, and when each is on (Save and Back only while a game runs; Load only with saves). Keys: Up/Down wrap and skip items that are off, Enter, Escape = Back to Game, Left/Right only in popups, one action per press, input ignored 0.2 s after the menu opens. Popups: new game while one runs, quit, corrupt save, Combat difficulty (Easy 0.66, Normal 1.0, Hard 1.5, Normal first). Opening pauses the game (all sounds but the menu's) and starts `theme.aud`; Back fades it out over 1 s. Connor's death opens the menu with Save and Back off. Found a bug in the original not to copy: a mouse click on Yes in the corrupt-save question does nothing.
+**Still broken / not tested:** **Not checked in the original.** Not settled: whether hovering the mouse over an item moves the mask cursor, whether items that are off are hidden or greyed, whether the theme fades in, and whether the combat level is kept in saved games.
+**Next:** The user: `main-menu.md` "How to check" 1–7 in the original. B: build the menu when the user wants it (with a launch option that skips it, as asked 2026-10-20).
+
 ## 2026-10-21 Fix: the Wizard's "Come closer, lad!" (`checkDistance` built, Q142)
 
 **Changed:** `kq8-core` `active.rs`: the `checkDistance` command (`check_distance`), unit test `check_distance_is_straight_3d_and_inclusive`; `script.rs` comment. Provenance, STATUS, QUESTIONS (Q142 built).

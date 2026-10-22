@@ -681,7 +681,9 @@ experience sent, corpse shape, the `Die` line to the script.
    rules 21–31 (the shooter's ranged damage at the shot; no gravity;
    removed on the first touch, below the floor grid or past
    `maxDistance`; aim 0.75 × the target's box top).
-3. Which menu sets the combat level, and whether a character added by
+3. ~~Which menu sets the combat level~~: answered 2026-10-21 in
+   `main-menu.md` rule 10 (New → "Combat difficulty": Easy 0.66,
+   Normal 1.0, Hard 1.5). Still open: whether a character added by
    the `KQMonster::add` command gets the combat factor twice (once when
    added, once when it enters the world) (rule 3). Daventry's monsters all
    come from `monsters.kq` (once).
