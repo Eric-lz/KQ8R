@@ -386,7 +386,8 @@ pub fn world_change_step(world: &mut World) {
                     steps.join(", ")
                 ));
             }
-            crate::loading_screen::close(world);
+            let sizes = crate::loading_screen::close(world);
+            log.lock().unwrap().summary(format!("world change: loading screen closed: {sizes}"));
             let Some(opts) = world.resource::<WorldChange>().options.clone() else { return };
             let read = match read {
                 Ok(r) => r,

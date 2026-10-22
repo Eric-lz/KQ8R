@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 Loading screen kept at 4:3
+
+**Changed:** Viewer `loading_screen.rs`: the 640 × 480 layout sits in the largest 4:3 box that fits the window, centred, black around it; the box's size is logged when the screen closes (`world_build.rs`).
+**Why:** The user: the meter now works like the original, but the pictures were stretched to the 16:9 window.
+**Tested how:** `kq8-viewer --world Daventry --frames 2500 --sound off --console "goworld Swamp",50`; `viewer.log`.
+**Result:** "loading screen closed: layout box Some(Vec2(960.0, 720.0)) in window Some((1280, 720))": 4:3, 160 pixels black on each side.
+**Still broken / not tested:** Not looked at. A window narrower than 4:3 (taller than wide) not tried.
+**Next:** The user's look; then 6e-4b.
+
 ## 2026-10-22 Fix 6e-4a again: the meter's frame is in the picture; no black bar
 
 **Changed:** Viewer `loading_screen.rs`: the black bar is no longer drawn; the meter is `4red.pbm` stretched over (5, 468)–(635, 476) (`NodeImageMode::Stretch`). `QUESTIONS.md` Q152.

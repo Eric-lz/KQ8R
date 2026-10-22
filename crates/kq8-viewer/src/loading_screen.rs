@@ -20,7 +20,9 @@
 //! - Rule 25: keys and clicks do nothing meanwhile (the game's systems
 //!   don't run, `world_build::playing`).
 //!
-//! Ours: the 640 × 480 layout is stretched over the whole window.
+//! Ours: the 640 × 480 layout is drawn in the largest 4:3 box that fits
+//! the window, centred, black around it (the user, 2026-10-22: not
+//! stretched to 16:9).
 //! `4red.pbm` is a 6 × 6 picture (rows of entries 222–224), stretched over
 //! the meter's place (the original's stretch or tiling is not traced; the
 //! two look alike at 8 pixels high).
@@ -43,6 +45,10 @@ use crate::world_build::{Persistent, WorldChange};
 /// Everything the loading screen spawned.
 #[derive(Component)]
 pub struct LoadingScreen;
+
+/// The 4:3 box that holds the layout.
+#[derive(Component)]
+pub struct LoadingBox;
 
 /// The meter's node.
 #[derive(Component)]
@@ -113,8 +119,19 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
     };
     // The world's camera is gone: the panels need one of their own.
     world.spawn((Camera2d, Persistent, LoadingScreen));
-    let mut root = world.spawn((Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() }, BackgroundColor(Color::BLACK), Persistent, LoadingScreen));
-    root.with_children(|p| {
+    // The whole window black; in its middle a 4:3 box that holds the
+    // 640 x 480 layout.
+    let root = world
+        .spawn((
+            Node { width: Val::Percent(100.0), height: Val::Percent(100.0), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
+            BackgroundColor(Color::BLACK),
+            Persistent,
+            LoadingScreen,
+        ))
+        .id();
+    let four_three = Node { height: Val::Percent(100.0), max_width: Val::Percent(100.0), aspect_ratio: Some(4.0 / 3.0), ..default() };
+    let mut screen = world.spawn((four_three, Persistent, LoadingScreen, LoadingBox, ChildOf(root)));
+    screen.with_children(|p| {
         // `Stretch`: the picture fills its place whatever its own size
         // (the default keeps the picture's size: the meter showed as a
         // small square, the user's first look).
@@ -144,12 +161,17 @@ pub fn set_meter(world: &mut World, percent: u32) {
     }
 }
 
-/// Closes the loading screen (the world is built).
-pub fn close(world: &mut World) {
+/// Closes the loading screen (the world is built); returns the 4:3 box's
+/// and the window's sizes in pixels, for the log.
+pub fn close(world: &mut World) -> String {
+    let boxed = world.query_filtered::<&bevy::ui::ComputedNode, With<LoadingBox>>().iter(world).next().map(|c| c.size);
+    let window = world.query::<&Window>().iter(world).next().map(|w| (w.physical_width(), w.physical_height()));
+    let sizes = format!("layout box {boxed:?} in window {window:?}");
     let all: Vec<Entity> = world.query_filtered::<Entity, With<LoadingScreen>>().iter(world).collect();
     for e in all {
         let _ = world.try_despawn(e);
     }
+    sizes
 }
 
 #[cfg(test)]
