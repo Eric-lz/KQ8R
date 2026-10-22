@@ -2104,6 +2104,14 @@ impl WorldState {
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
             }
+            [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Portal") => {
+                // magic-map.md rule 40 (M6 6d-7): the Portal state (the
+                // question, the animations, the world change) waits for
+                // moving between worlds.
+                let line = format!("{at}: KQMonster::setState Connor Portal {}: the Portal state (magic-map.md rule 40) is not built (it needs moving between worlds); nothing", rest.join(" "));
+                self.note(&line);
+                self.map_log.push(line);
+            }
             [_, who, state, rest @ ..] if state.eq_ignore_ascii_case("Die") && self.character_index(who).is_some_and(|i| self.anims[i].character.as_deref().is_some_and(|c| c.fight.is_some())) => {
                 // fighting.md rule 30 (M5 5c-7): `Die now` skips the movement.
                 let i = self.character_index(who).unwrap();
@@ -2844,6 +2852,7 @@ impl ScriptHost for WorldState {
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
             "KQMap::activate" | "KQMap::deactivate" | "KQMap::stopLoc" | "KQMap::useFog" | "KQMap::setFogRadius" | "addMapIcon" | "removeMapIcon" => Some(self.map_command(words, at)),
+            "onTeleport" | "offTeleport" | "earnTeleport" | "teleportersEarned" => Some(self.teleport_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
             "KQObject::dither" => Some(self.dither(words, at)),

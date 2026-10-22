@@ -191,9 +191,10 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, kept: Option
     MapSim { pending: Some(map), others, visited, log }
 }
 
-/// One game update, after Connor's movement and the scripts' moves (the
-/// trap step): the map gets his place (rule 9).
-pub fn map_step(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>) {
+/// First in each update: the map made at start-up is handed to the rules
+/// (once), before any script or trap runs (the original loads it in
+/// `newWorld.cs`; the keep's pad trap says `onTeleport` at update 1).
+pub fn map_install(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>) {
     let (Some(mut map), Some(mut sim)) = (map, sim) else { return };
     let world = &mut sim.active.world;
     if let Some(mut m) = map.pending.take() {
@@ -208,6 +209,13 @@ pub fn map_step(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>, conno
             world.map_marks.visited[i] = true;
         }
     }
+}
+
+/// One game update, after Connor's movement and the scripts' moves (the
+/// trap step): the map gets his place (rule 9).
+pub fn map_step(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>) {
+    let (Some(mut map), Some(mut sim)) = (map, sim) else { return };
+    let world = &mut sim.active.world;
     if let Some(c) = connor {
         world.map_step(c.mover.position, c.walker.heading);
     }

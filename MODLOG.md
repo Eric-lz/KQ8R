@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-7: teleporting up to the world change
+
+**Changed:** `kq8-core` `magic_map.rs` (`onTeleport` / `offTeleport`, `earnTeleport [file]`, `teleportersEarned`, the "Go" button's lit test on every change, `Active::map_go`), `active.rs` (dispatch; `setState Connor Portal` logged as not built), `script.rs` (four stubs gone); viewer `gui_view.rs` (the lit picture, the button's click), `map_view.rs` / `main.rs` (the map handed to the rules first in each update).
+**Why:** M6 6d step 7 (`magic-map.md` rules 35–39).
+**Tested how:** `cargo test --workspace` (core 507 pass), clippy clean. `cargo play --world Daventry --at 217338,283698,3.1416 --kept-maps MASK/save/save18.vol --command "give MagicMap",5 --command "earnTeleport barrMap.kq",8 --key tab,10 --key left:IDCTL_MAPWIN_TELEPORT,15 --key left:IDCTL_MAPWIN_RIGHT,20 --key left:IDCTL_MAPWIN_RIGHT,30 --key left:IDCTL_MAPWIN_TELEPORT,40 --frames 600 --sound off`; `map.log`, `doors.log`.
+**Result:** Standing on the keep's pad, its trap's `onTeleport` sets "on the pad" (first run: "KQMap not loaded", because the map was handed over after the traps; fixed by handing it over first). Unlit click: help 151 (logged). Dead City shown: unlit (not earned in save18). Barren shown (the Sage's mark): "the Go button lights". Click: `Davtele.cs` runs with `$1 = bartele.kq`; its `loadKQ bartele.kq @ …` is not done (no template while playing) and `setState Connor Portal` is logged as not built.
+**Still broken / not tested:** **The Portal state (the Yes/No question, `teleportdown`, the world change, arrival) is not built:** it needs moving between worlds, which doesn't exist. Help popups are logged only. Not looked at.
+**Next:** The user decides how moving between worlds should be built (it changes how the viewer loads a world); then the Portal state.
+
 ## 2026-10-21 6d-6: other worlds' maps (the page arrows)
 
 **Changed:** `kq8-core` `magic_map.rs` (`match_palette`, the palettes by index, `OtherMap`, `show_other` / `show_own`, the snap-back, `WorldState::map_page`; the picture reader shared, `Arc`), `active.rs` (`other_maps`); viewer `map_view.rs` (the 16 palettes, the shipped map files, `--kept-maps SAVE`), `gui_view.rs` (the big map shows the shown picture, the mini-map this world's; the plate follows; no arrow on another world's map; the page arrows' clicks), `main.rs` (option, help).

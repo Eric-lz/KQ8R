@@ -1956,7 +1956,7 @@ Steps (one commit each; logged in `viewer.log` and `connor.log`):
    LakeSword`, ready it: `connor.log` draws `conSword.anm/stop`;
    `viewer.log` the load time (~0.1 s expected).
 
-#### 6d — The magic map (planned 2026-10-21)
+#### 6d — The magic map (planned 2026-10-21; done 2026-10-21, steps 6d-1 to 6d-7, checked in the logs only; the Portal state waits for moving between worlds)
 
 Why: the Wizard's `MagicMap` does nothing yet (`davmap.kq` is skipped
 as "not found": map files live in `GAME/Kq`, not in the world's
@@ -2090,7 +2090,8 @@ Steps (one commit each):
    maps from an original saved game (read only) and marks them visited.
    **Test:** `--kept-maps MASK/save/save10.vol`, `--key
    left:IDCTL_MAPWIN_RIGHT,N`; `map.log`.
-7. **6d-7, teleporting up to the world change** (rules 35–39).
+7. **6d-7, teleporting up to the world change** (**done** 2026-10-21;
+   the Portal state not built) (rules 35–39).
    `onTeleport` / `offTeleport`, `earnTeleport [file]`,
    `teleportersEarned`; the "Go" button lit when another world's map is
    shown, Connor is on the pad and that world's teleporter is earned;

@@ -119,6 +119,10 @@ const MAP_NAME_ONE: &str = "IDCTL_MAPWIN_NAME_TEXT1";
 const MAP_NAME_TWO: [&str; 2] = ["IDCTL_MAPWIN_NAME_TEXT2", "IDCTL_MAPWIN_NAME_TEXT3"];
 /// The page arrows and the "Go" button (unlit; rules 32, 38).
 const MAP_BUTTONS: [&str; 3] = ["IDCTL_MAPWIN_LEFT", "IDCTL_MAPWIN_RIGHT", "IDCTL_MAPWIN_TELEPORT"];
+/// The "Go" button and its lit picture's control, parked off screen
+/// (`magic-map.md` rules 5, 38).
+const MAP_GO: &str = "IDCTL_MAPWIN_TELEPORT";
+const MAP_GO_ON: &str = "IDCTL_MAPWIN_TELEPORT_ON";
 /// The bottom-right map slot (`interface.md` rule 45).
 const MINIMAP: &str = "IDCTL_INVBAR_MINIMAP";
 
@@ -137,6 +141,8 @@ struct MapShown {
     other: bool,
     /// Rule 8: the shown map's `mapName` number.
     name_number: Option<u32>,
+    /// Rule 38: the "Go" button is lit.
+    go_lit: bool,
     /// Rule 22 (layout pixels from the area's centre).
     view: [f64; 4],
     /// Rule 27: the mini-map's own view (its size is used).
@@ -684,8 +690,15 @@ impl Gui {
                             out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
                         }
                     } else if MAP_BUTTONS.contains(&name.as_str()) {
-                        // magic-map.md rule 5: the page arrows and the unlit
-                        // "Go" button, their first frames.
+                        // magic-map.md rule 5: the page arrows and the "Go"
+                        // button, their first frames; rule 38 (M6 6d-7): lit,
+                        // the "on" picture over it.
+                        let lit = name == MAP_GO && self.map.as_ref().is_some_and(|m| m.go_lit);
+                        let on = self.control(MAP_GO_ON).and_then(|c| match &c.kind {
+                            Kind::Text { pictures: Some(p), .. } => self.tags.string(p.bitmap).map(str::to_string),
+                            _ => None,
+                        });
+                        let file = on.filter(|_| lit).unwrap_or(file);
                         out.push(Spec::Pic { rect, file, frame: 0, cut: None });
                     } else if name == LEVEL_FLAME {
                         // DESIGN L-2 (stand-in Q149 b): over the level
@@ -964,6 +977,8 @@ pub fn gui_step(
                     // magic-map.md rule 32 (M6 6d-6): the page arrows.
                     ("IDCTL_MAPWIN_LEFT", _) if left => sim.active.world.map_page(-1, &format!("update {updates}: {how}")),
                     ("IDCTL_MAPWIN_RIGHT", _) if left => sim.active.world.map_page(1, &format!("update {updates}: {how}")),
+                    // Rules 38, 39 (M6 6d-7): the "Go" button.
+                    (MAP_GO, _) if left => sim.active.map_go(&format!("update {updates}: {how}")),
                     (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
                     _ => {
                         let line = format!("update {updates}: {how}: nothing there; nothing (inventory.md rule 10)");
@@ -1095,6 +1110,7 @@ pub fn gui_step(
             shown.version = Some(m.version);
         }
         shown.other = m.other.is_some();
+        shown.go_lit = m.go_lit;
         let was_active = shown.active;
         shown.active = m.active;
         shown.view = m.view.as_array();
@@ -1490,6 +1506,13 @@ pub fn gui_draw(
                     if let Some(sim) = sim.as_mut() {
                         let at = format!("update {}: {how}", sim.active.world.updates);
                         sim.active.world.map_page(if control == "IDCTL_MAPWIN_LEFT" { -1 } else { 1 }, &at);
+                    }
+                }
+                // Rules 38, 39 (M6 6d-7): the "Go" button.
+                (MAP_GO, _) if left => {
+                    if let Some(sim) = sim.as_mut() {
+                        let at = format!("update {}: {how}", sim.active.world.updates);
+                        sim.active.map_go(&at);
                     }
                 }
                 (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),

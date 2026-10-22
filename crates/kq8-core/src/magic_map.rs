@@ -51,6 +51,10 @@ pub const ARROW_FRAMES: i64 = 16;
 /// Rule 37: worlds with a "teleporter earned" mark on Connor (map indexes
 /// 0–7).
 pub const TELEPORT_MARKS: usize = 8;
+/// Rule 37: the Sage Gnome's `earnTeleport <file>` marks Barren.
+pub const BARREN: usize = 4;
+/// Rule 38: the unlit "Go" button's help (`500.MSG` 0 0 151).
+pub const GO_HELP: u32 = 151;
 
 /// An 8-bit picture: palette indices, top row first.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -379,6 +383,10 @@ pub struct MapState {
     pub mini_view: View,
     /// Rule 34: another world's map shown now (`None`: this world's).
     pub other: Option<OtherMap>,
+    /// Rule 36: Connor is on the teleporter pad (not saved).
+    pub on_pad: bool,
+    /// Rule 38: the "Go" button is lit.
+    pub go_lit: bool,
     /// Rule 34: the palettes by map index (set by the caller).
     pub palettes: Vec<Option<Colours>>,
     /// Lines for `map.log`, taken by the caller.
@@ -425,6 +433,8 @@ impl MapState {
             view: START_VIEW,
             mini_view: START_VIEW,
             other: None,
+            on_pad: false,
+            go_lit: false,
             palettes: Vec::new(),
             log: Vec::new(),
             keys,
@@ -858,6 +868,64 @@ impl crate::active::WorldState {
         let mut lines = std::mem::take(&mut map.log);
         lines.push(line);
         self.map_log.extend(lines);
+        self.map_go_refresh(how);
+    }
+
+    /// Rule 38: the "Go" button lit only when another world's map is shown,
+    /// Connor is on the pad and that world's teleporter is earned (its map's
+    /// `earnedTeleport`, or for Barren the Sage Gnome's mark). Worked out
+    /// again whenever the shown map or the pad changes ("Do not reproduce"
+    /// 1: also on a snap-back).
+    pub fn map_go_refresh(&mut self, why: &str) {
+        let sage = self.map_marks.sage_gnome;
+        let Some(map) = self.map.as_mut() else { return };
+        let lit = map.on_pad && map.other.as_ref().is_some_and(|o| o.keys.earned_teleport || (o.index == BARREN && sage));
+        if lit != map.go_lit {
+            map.go_lit = lit;
+            let shown = map.shown_index();
+            self.map_log.push(format!("{why}: the Go button {} (map index {shown:?} shown, on the pad {}; rule 38)", if lit { "lights" } else { "goes out" }, map.on_pad));
+        }
+    }
+
+    /// `onTeleport`, `offTeleport` (rule 36), `earnTeleport [file]` (rule
+    /// 37), `teleportersEarned` (rule 37: the count in `$Console::Return`).
+    pub(crate) fn teleport_command(&mut self, words: &[String], at: &str) -> String {
+        let all = words.join(" ");
+        let marks = &mut self.map_marks;
+        let (line, result) = match words[0].as_str() {
+            "teleportersEarned" => {
+                let n = marks.teleport_earned.iter().filter(|v| **v).count();
+                (format!("{at}: {all}: {n} worlds with the teleporter earned (rule 37)"), n.to_string())
+            }
+            "earnTeleport" if words.len() > 1 => {
+                // Rule 37: the argument's text is not looked at.
+                marks.sage_gnome = true;
+                marks.visited[BARREN] = true;
+                marks.teleport_earned[BARREN] = true;
+                (format!("{at}: {all}: Barren (index {BARREN}) marked visited and its teleporter earned, SageGnomeEarnedTeleport set (rule 37)"), "0".into())
+            }
+            "earnTeleport" => match self.map.as_mut() {
+                Some(map) => {
+                    map.earned_teleport = true;
+                    let mark = map.index.filter(|i| *i < TELEPORT_MARKS);
+                    if let Some(i) = mark {
+                        marks.teleport_earned[i] = true;
+                    }
+                    (format!("{at}: {all}: {} earnedTeleport=1{} (rule 37)", map.file, mark.map_or(" (index 8 or more: no mark on Connor)".to_string(), |i| format!(", map index {i} marked on Connor"))), "0".into())
+                }
+                None => (format!("{at}: {all}: KQMap not loaded; nothing"), "1".into()),
+            },
+            on_off => match self.map.as_mut() {
+                Some(map) => {
+                    map.on_pad = on_off == "onTeleport";
+                    (format!("{at}: {all}: Connor {} the pad (rule 36)", if map.on_pad { "is on" } else { "leaves" }), "0".into())
+                }
+                None => (format!("{at}: {all}: KQMap not loaded; nothing"), "1".into()),
+            },
+        };
+        self.map_note(line);
+        self.map_go_refresh(at);
+        result
     }
 
     /// One update (rule 9): the `MagicMap` item arriving or leaving
@@ -897,6 +965,34 @@ impl crate::active::WorldState {
             }
         }
         self.map_log.extend(lines);
+        self.map_go_refresh(&format!("update {updates}"));
+    }
+}
+
+impl crate::active::Active {
+    /// Rules 38, 39: a click on the "Go" button. Unlit: the teleporting
+    /// help (popup 151; help popups are not built: logged). Lit: the
+    /// current world's `TeleportScript` runs with `$1` = the shown world's
+    /// `TeleportPortalKQ`.
+    pub fn map_go(&mut self, how: &str) {
+        let w = &mut self.world;
+        let Some(map) = w.map.as_ref() else { return };
+        if !map.go_lit {
+            w.map_log.push(format!("{how}: the Go button is not lit: help popup {GO_HELP} (\"TELEPORTING: ...\"; rule 38; help popups are not built: logged only)"));
+            return;
+        }
+        let script = map.keys.teleport_script.clone();
+        let portal = map.other.as_ref().and_then(|o| o.keys.teleport_portal.clone());
+        match (script, portal) {
+            (Some(script), Some(portal)) => {
+                w.map_log.push(format!("{how}: the Go button: runs {script} with $1 = {portal} (rule 39)"));
+                let found = self.scripts.call(&script, &[portal], &mut self.world);
+                if !found {
+                    self.world.map_log.push(format!("{how}: {script} not found"));
+                }
+            }
+            (s, p) => w.map_log.push(format!("{how}: the Go button: no TeleportScript ({s:?}) or no TeleportPortalKQ ({p:?}); nothing")),
+        }
     }
 }
 
@@ -1108,6 +1204,42 @@ mod tests {
         a.world.map_step([200000.0, 250000.0, 0.0], 0.0);
         assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(0));
         assert!(a.world.map_log.iter().any(|l| l.contains("back to this world's map")), "{:?}", a.world.map_log);
+    }
+
+    #[test]
+    fn teleport_marks_and_the_go_button() {
+        use crate::active::Active;
+        let sources = vec![("davtele.cs".to_string(), b"set Ran $1\nKQMonster::setState Connor Portal Fred\n".to_vec())];
+        let mut a = Active::new(Default::default(), vec![], vec![], ["Connor".to_string()], sources);
+        let (b, f) = pics();
+        a.world.map = Some(MapState::new("Davmap.kq", MapKeys { teleport_script: Some("Davtele.cs".into()), ..keys() }, b, f, None, None));
+        assert_eq!(a.test_command("teleportersEarned", "t").as_deref(), Some("0"));
+        a.test_command("earnTeleport", "t");
+        assert!(a.world.map.as_ref().unwrap().earned_teleport && a.world.map_marks.teleport_earned[0]);
+        a.test_command("earnTeleport barrMap.kq", "t");
+        assert!(a.world.map_marks.sage_gnome && a.world.map_marks.visited[BARREN]);
+        assert_eq!(a.test_command("teleportersEarned", "t").as_deref(), Some("2"));
+        // Barren shown (the Sage's mark is enough), not on the pad: unlit.
+        a.world.map_marks.visited[0] = true;
+        let barren = MapKeys { name: "barrMap".into(), map_name: Some(42), teleport_portal: Some("bartele.kq".into()), ..keys() };
+        a.world.other_maps.insert(BARREN, ("barrMap.kq".into(), barren, "shipped".into()));
+        a.world.map_page(1, "t");
+        assert!(!a.world.map.as_ref().unwrap().go_lit);
+        a.map_go("t");
+        assert!(a.world.map_log.iter().any(|l| l.contains("help popup 151")));
+        a.test_command("onTeleport", "t");
+        assert!(a.world.map.as_ref().unwrap().go_lit, "on the pad: lit");
+        a.map_go("t");
+        assert_eq!(a.scripts.vars.get("Ran"), Some("bartele.kq"), "$1 = the shown world's portal");
+        assert!(a.world.map_log.iter().any(|l| l.contains("Portal state")), "{:?}", a.world.map_log);
+        // Back to this world's map: the button goes out (Do not reproduce 1).
+        a.world.map_step([200000.0, 250000.0, 0.0], 0.0);
+        a.world.map.as_mut().unwrap().set_active(true, "t");
+        a.world.map_step([200000.0, 250000.0, 0.0], 0.0);
+        assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(0));
+        assert!(!a.world.map.as_ref().unwrap().go_lit);
+        a.test_command("offTeleport", "t");
+        assert!(!a.world.map.as_ref().unwrap().on_pad);
     }
 
     #[test]
