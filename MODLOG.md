@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-4b: arriving through a portal
+
+**Changed:** New viewer `portal_view.rs` (`PortalArrival` from a `KQPortal` file, `read_portal`, `arrival_step`: places, `handsOff 1`, the `exitAnim`, then the `exitScript` with `<portal> Exit` and `handsOff 0`). `world_build.rs`: a change request can carry a portal; z −1 goes through the ground placement. `kq8-core` `Active::run_script`. `load.rs`: six portal movements added to Connor's loaded movements. Console word `goworld portal <file>`. FEATURES, DESIGN, provenance.
+**Why:** M6 6e step 4, second half (`world-change.md` rules 6, 20).
+**Tested how:** clippy clean; core 509, viewer 12 tests. `kq8-viewer --world Swamp --frames 3000 --sound off --console "goworld portal Davtele.kq",30 --console where,120`; `kq8-viewer --world Daventry --frames 3500 --sound off --console "goworld portal davgate4.kq",30 --console where,150`. `viewer.log`, `doors.log`, `connor.log`.
+**Result:** Davtele: Connor at (217,338, 283,698, 18,931) on the keep's pad, the camera at (217,713, 279,768, 20,330) tilted −0.2; `teleportup` plays (22 frames, `poofup.aud` cue); at update 23 control comes back. First run found `teleportup` "not loaded from his own list": our list of Connor's movements didn't have the portal ones; added. davgate4: Dead City, on the ground at (182,262, 45,000, 864) heading 3.14; `portalx` 32 updates; `shadbat.cs davgate4 Exit` runs (it starts the shadow-bat scene; `ShadBat` itself is not built yet).
+**Still broken / not tested:** **Not looked at.** The elevator, pool and snail portals' movements (`Elevator.anm`, `elevat2.anm`, `Snail.anm`, …) are not loaded: those arrivals play nothing yet (6e-7). The full-armour list swap (rule 5.2) is not built. The arrival's camera then follows Connor as usual (not checked against the original).
+**Next:** 6e-5, `world.cs Begin`.
+
 ## 2026-10-22 Loading screen kept at 4:3
 
 **Changed:** Viewer `loading_screen.rs`: the 640 × 480 layout sits in the largest 4:3 box that fits the window, centred, black around it; the box's size is logged when the screen closes (`world_build.rs`).

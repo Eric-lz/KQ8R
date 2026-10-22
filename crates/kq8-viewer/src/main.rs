@@ -64,6 +64,7 @@ mod loading_screen;
 mod log;
 mod memory;
 mod object_light;
+mod portal_view;
 mod potion_view;
 mod renderer;
 mod scene_lights;
@@ -619,6 +620,9 @@ fn main() -> ExitCode {
                 .add_systems(world_build::BuildWorld, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
                 .add_systems(FixedUpdate, map_view::map_install.before(console::console_step).run_if(world_build::playing))
+                // Arriving through a portal (M6 6e-4b), before the doors'
+                // update takes the requests.
+                .add_systems(FixedUpdate, portal_view::arrival_step.after(console::console_step).before(door_view::door_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::playing))
                 .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step).run_if(world_build::playing))

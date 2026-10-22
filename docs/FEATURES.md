@@ -714,6 +714,8 @@ Checked by the user by eye (2026-10-21: "works as expected"); logged in
   `ai`, `goto <name>`, `spawn <item>`, `kill <name>` / `kill near`,
   `reload` (takes the world down and builds it again, Connor where he
   stands; entity, asset and memory counts in `viewer.log`), `goworld
+  portal <file>` (through a portal file: Connor and the camera at its
+  places, its arrival movement, then its exit script), `goworld
   <world> [x y turn]` (to another world; Connor's stats, items, ready
   weapon, running potions, flags and map marks go along; each change in
   `kq8-artifacts/logs/world.log`). Also in `kq8-artifacts/logs/console.log`.

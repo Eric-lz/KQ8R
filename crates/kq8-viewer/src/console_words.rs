@@ -35,6 +35,7 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
  World
   reload                      take this world down and build it again, Connor where he stands
   goworld <world> [x y turn]  to another world (Connor's things go along), e.g. goworld Swamp
+  goworld portal <file>       through a portal file, e.g. goworld portal Davtele.kq
  Creatures
   ai                          creatures' AI off/on (F4)
   kill <name>                 it dies (and drops what it carries)

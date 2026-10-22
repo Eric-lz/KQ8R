@@ -234,7 +234,7 @@ pub fn load_model(
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped. M4 4e-7
 /// adds his gestures; M5 5c-4 his flinch and deaths from a hit.
-pub const CONNOR_MOVEMENTS: [&str; 50] = [
+pub const CONNOR_MOVEMENTS: [&str; 56] = [
     "stop",
     "walk",
     "run",
@@ -288,6 +288,15 @@ pub const CONNOR_MOVEMENTS: [&str; 50] = [
     "dropweapon",
     "firedie",
     "icedie",
+    // Leaving and arriving through portals (M6 6e-4b, world-change.md
+    // rules 4, 20; the portal files' enterAnim / exitAnim from his own
+    // list).
+    "teleportdown",
+    "teleportup",
+    "out",
+    "portal",
+    "portalx",
+    "walkend",
 ];
 
 /// One of Connor's movements: its animation and playback speed.

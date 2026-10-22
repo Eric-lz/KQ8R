@@ -90,6 +90,8 @@ pub struct Request {
     pub at: Option<[f32; 3]>,
     /// For the logs.
     pub why: String,
+    /// Arriving through a portal (6e-4b): its places, movement, script.
+    pub portal: Option<Box<crate::portal_view::PortalArrival>>,
 }
 
 /// Where a world change is (6e-2).
@@ -395,7 +397,7 @@ pub fn world_change_step(world: &mut World) {
                     // Back to the world we came from (still no world in,
                     // so the game's systems keep waiting).
                     log.lock().unwrap().summary(format!("world change: {} could not be read ({e}); back to {from}", request.world));
-                    let back = Request { world: from.clone(), at: request.at, why: "the asked world could not be read".into() };
+                    let back = Request { world: from.clone(), at: request.at, why: "the asked world could not be read".into(), portal: None };
                     world.resource_mut::<WorldChange>().step = Step::Down { request: back, frames: 0, from, journey };
                     crate::loading_screen::open(world, &request.world, &log);
                     return;
@@ -410,7 +412,9 @@ pub fn world_change_step(world: &mut World) {
             let mut light = object_light(&read, &opts);
             light.scene_lights = world.resource::<crate::scene_lights::SceneLights>().buffer.clone();
             world.insert_resource(light);
-            if let Some(at) = request.at {
+            // The portal's place on the ground (z -1, rule 20.1), else
+            // the asked one.
+            if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {
                 world.resource_mut::<connor_view::StartAt>().0 = Some(at);
             }
             {
@@ -426,6 +430,10 @@ pub fn world_change_step(world: &mut World) {
             world.resource_mut::<PendingWorld>().0 = Some((read, opts));
             build_pending(world);
             give_journey(world, journey.as_deref(), &request.world, &log);
+            if let Some(p) = request.portal {
+                log.lock().unwrap().summary(format!("world change: arriving through {}: ConLoc {:?}, CamLoc {:?}, exitAnim {:?} ({:?}), exitScript {:?} (world-change.md rules 6, 20)", p.portal, p.con_loc, p.cam_loc, p.exit_anim, p.exit_list, p.exit_script));
+                world.insert_resource(crate::portal_view::ArrivalNow::new(*p));
+            }
         }
     }
 }
@@ -591,6 +599,7 @@ per_world!(
     crate::draw_distance::SwitchedOut,
     crate::scene_lights::LightsGroup,
     crate::scene_lights::GroundLights,
+    crate::portal_view::ArrivalNow,
 );
 
 /// Entity and asset counts, for the logs (a round trip must give the

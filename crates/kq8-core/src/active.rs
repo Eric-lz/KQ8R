@@ -2783,6 +2783,21 @@ impl WorldState {
 }
 
 impl Active {
+    /// Runs `script` with `args` (`$1`, `$2`, ...) at once, as a script
+    /// line naming it would (M6 6e-4b: a portal's `exitScript` with its
+    /// name and `Exit`, `world-change.md` rule 20.4). False if the world
+    /// has no such script.
+    pub fn run_script(&mut self, script: &str, args: &[String]) -> bool {
+        let file = if script.contains('.') { script.to_string() } else { format!("{script}.cs") };
+        if ScriptHost::read(&self.world, &file).is_none() {
+            self.world.note(format!("script {file} {}: no such script in this world; nothing", args.join(" ")));
+            return false;
+        }
+        self.world.note(format!("script {file} {}", args.join(" ")));
+        self.scripts.call(&file, args, &mut self.world);
+        true
+    }
+
     /// A test option (`--command`, viewer): one script command, its words
     /// split at spaces (no variables, no quotes), run as if a script did.
     /// Returns its result, or `None` for a command the world doesn't know.

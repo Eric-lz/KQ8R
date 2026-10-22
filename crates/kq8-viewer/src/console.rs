@@ -168,10 +168,25 @@ fn world_word(line: &str, change: &mut crate::world_build::WorldChange, connor: 
         "reload" => {
             let at = connor.map(|c| [c.mover.position[0], c.mover.position[1], c.walker.heading]);
             let world = change.current.clone();
-            change.asked = Some(Request { world: world.clone(), at, why: "console reload".into() });
+            change.asked = Some(Request { world: world.clone(), at, why: "console reload".into(), portal: None });
             Some(match at {
                 Some([x, y, h]) => format!("reload: {world} is taken down and built again at the end of this frame; Connor back at {x:.0} {y:.0}, turn {h:.4}"),
                 None => format!("reload: {world} is taken down and built again at the end of this frame"),
+            })
+        }
+        "goworld" if words.get(1).is_some_and(|w| w.eq_ignore_ascii_case("portal")) => {
+            // `goworld portal <file>` (6e-4b): through that portal file, as
+            // a portal's hand-over would (world-change.md rule 6).
+            let Some(file) = words.get(2) else { return Some("usage: goworld portal <file.kq>, e.g. goworld portal Davtele.kq".into()) };
+            let read = change.game().ok_or("no game folder known".to_string()).and_then(|g| kq8_data::GameDir::open(g).map_err(|e| e.to_string())).and_then(|g| crate::portal_view::read_portal(&g, &change.current, file));
+            Some(match read {
+                Ok((keys, to)) => {
+                    let arrival = crate::portal_view::PortalArrival::from_keys(&keys);
+                    let line = format!("goworld portal {file}: [{}] to {to} at the end of this frame; Connor at {:?}", keys.name, arrival.con_loc);
+                    change.asked = Some(Request { world: to, at: None, why: format!("console goworld portal {file}"), portal: Some(Box::new(arrival)) });
+                    line
+                }
+                Err(e) => format!("goworld portal {file}: {e}"),
             })
         }
         "goworld" => {
@@ -184,7 +199,7 @@ fn world_word(line: &str, change: &mut crate::world_build::WorldChange, connor: 
                 [x, y, h] => Some([x, y, h]),
                 _ => return Some(usage),
             };
-            change.asked = Some(Request { world: world.to_string(), at, why: "console goworld".into() });
+            change.asked = Some(Request { world: world.to_string(), at, why: "console goworld".into(), portal: None });
             Some(match at {
                 Some([x, y, h]) => format!("goworld: to {world} at the end of this frame, Connor at {x:.0} {y:.0}, turn {h:.4}"),
                 None => format!("goworld: to {world} at the end of this frame, Connor where its start puts him"),
