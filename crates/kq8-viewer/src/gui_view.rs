@@ -110,7 +110,40 @@ impl Drawn {
 
 /// The pictures drawn (4c-2; the top bar since 4c-3; the map window since
 /// M6 6d-3).
-const DRAWN: [Drawn; 7] = [Drawn::Panel(Panel::Top), Drawn::Panel(Panel::BottomLeft), Drawn::Panel(Panel::Slots), Drawn::Panel(Panel::Meters), Drawn::Panel(Panel::BottomRight), Drawn::Panel(Panel::Map), Drawn::Status];
+/// M6 6e-6: the popup (the Portal state's question), drawn last so it is
+/// on top.
+const DRAWN: [Drawn; 8] = [
+    Drawn::Panel(Panel::Top),
+    Drawn::Panel(Panel::BottomLeft),
+    Drawn::Panel(Panel::Slots),
+    Drawn::Panel(Panel::Meters),
+    Drawn::Panel(Panel::BottomRight),
+    Drawn::Panel(Panel::Map),
+    Drawn::Status,
+    Drawn::Panel(Panel::Popup),
+];
+
+/// The popup's buttons in the layout: the first is the highlighted look
+/// (`buyhibtn.pba`), the second the plain one (`yesbtn.pba`).
+const POPUP_BUTTONS: [&str; 3] = ["IDCTL_POPUP_BTN1", "IDCTL_POPUP_BTN2", "IDCTL_POPUP_BTN3"];
+
+/// `world-change.md` rule 26: Yes left, No right, 88 wide, centred at a
+/// third and two thirds of the panel's width (ours: of the 360-wide
+/// background, so they stand even on it; Q151), at the layout buttons'
+/// height. Panel coordinates: left, top, right, bottom.
+const POPUP_YES: [i32; 4] = [76, 148, 164, 183];
+const POPUP_NO: [i32; 4] = [196, 148, 284, 183];
+
+/// The question shown in the popup (M6 6e-6).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PopupShown {
+    /// Up to 7 lines (rule 26).
+    pub lines: Vec<String>,
+    pub yes: String,
+    pub no: String,
+    /// 0 = Yes, 1 = No.
+    pub highlight: usize,
+}
 
 /// The map window's parts (`magic-map.md` rule 5).
 const MAP_AREA: &str = "IDCTL_MAPWIN_MAP";
@@ -214,6 +247,8 @@ pub struct Gui {
     files: HashMap<String, Option<Vec<Bitmap>>>,
     fonts: HashMap<String, Option<Font>>,
     pub panels: Panels,
+    /// The Portal state's question, while open (M6 6e-6).
+    pub popup: Option<PopupShown>,
     meters: Meters,
     /// The armour, hand and ranged slots' item types (rule 34).
     slot_types: [Option<String>; 3],
@@ -382,6 +417,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
     // the original; rule 19).
     let panels = Panels::new(&[Panel::BottomLeft, Panel::Slots, Panel::Meters, Panel::BottomRight]);
     Some(Gui {
+        popup: None,
         game: game.clone(),
         world: world.to_string(),
         tags,
@@ -559,8 +595,23 @@ impl Gui {
         let frame_ms = 1000.0 / ANIMATION_FPS;
         let strip = self.strip();
         let mut out = Vec::new();
+        // The popup's button looks and font (6e-6): the highlighted one,
+        // the plain one.
+        let mut popup_looks: [Option<String>; 2] = [None, None];
+        let mut popup_font = None;
         for (c, rect) in self.controls(dialog) {
             let name = self.name_of(c);
+            if let (Some(k), Kind::Text { text, pictures: Some(p) }) = (POPUP_BUTTONS.iter().position(|b| *b == name), &c.kind) {
+                if k < 2 {
+                    popup_looks[k] = self.tags.string(p.bitmap).map(str::to_string);
+                    popup_font = self.tags.string(text.font).map(str::to_string);
+                }
+                continue;
+            }
+            // Rule 26: the "turn off help" box is hidden.
+            if name.starts_with("IDCTL_POPUP_CHECKBOX") {
+                continue;
+            }
             let slot = |list: &[&str; 3]| list.iter().position(|n| *n == name);
             let numbered = |prefix: &str| name.strip_prefix(prefix).and_then(|k| k.parse::<usize>().ok());
             match &c.kind {
@@ -664,6 +715,11 @@ impl Gui {
                             self.meters.numbers.filter(|_| self.meters.red[k]).map(|n| n[k].to_string())
                         }
                         (None, "IDCTL_METERS_LEVEL") => Some(self.meters.level.to_string()),
+                        // world-change.md rule 26: the question's lines.
+                        (None, n) if n.starts_with("IDCTL_POPUP_TEXT") => {
+                            let k = n.trim_start_matches("IDCTL_POPUP_TEXT").parse::<usize>().unwrap_or(0);
+                            self.popup.as_ref().and_then(|p| p.lines.get(k.wrapping_sub(1)).cloned())
+                        }
                         // magic-map.md rule 8: one line in TEXT1, two in
                         // TEXT2 and TEXT3.
                         (None, MAP_NAME_ONE) => self.map.as_ref().filter(|m| m.name.len() == 1).map(|m| m.name[0].clone()),
@@ -711,7 +767,35 @@ impl Gui {
                 _ => {}
             }
         }
+        // 6e-6, rule 26: Yes left, No right, the highlighted one in its
+        // look; on top of everything else (first in the list).
+        if d == Drawn::Panel(Panel::Popup) {
+            if let Some(p) = &self.popup {
+                let mut buttons = Vec::new();
+                for (k, (rect, label)) in [(POPUP_YES, &p.yes), (POPUP_NO, &p.no)].into_iter().enumerate() {
+                    if let Some(font) = &popup_font {
+                        buttons.push(Spec::Text { rect, font: font.clone(), justification: 0xC, text: label.clone() });
+                    }
+                    let look = if p.highlight == k { &popup_looks[0] } else { &popup_looks[1] };
+                    if let Some(file) = look {
+                        buttons.push(Spec::Pic { rect, file: file.clone(), frame: 0, cut: None });
+                    }
+                }
+                out.splice(0..0, buttons);
+            }
+        }
         Some(([r - l, b - t], out))
+    }
+
+    /// The popup's button under window point `at` (6e-6): 0 Yes, 1 No.
+    fn popup_button_at(&self, frame: [f32; 4], at: Vec2) -> Option<usize> {
+        let dialog = self.control(Panel::Popup.layout_id())?;
+        let [fl, ft, fw, _] = frame;
+        let k = fw / self.screen[0] as f32;
+        // Window pixels -> layout pixels from the panel's top-left.
+        let x = ((at.x - fl) / k) / self.scale - dialog.rect[0] as f32;
+        let y = ((at.y - ft) / k) / self.scale - dialog.rect[1] as f32;
+        [POPUP_YES, POPUP_NO].iter().position(|r| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32)
     }
 
     /// The control under screen point (`x`, `y`) of drawn picture `d`
@@ -1704,5 +1788,112 @@ pub fn gui_layout_log(
             texture[1]
         );
         gui.note(line);
+    }
+}
+
+/// `500.MSG` noun 0 verb 0 case `n` (the popup's texts), if read.
+fn message_500(sim: &DoorSim, n: u32) -> Option<String> {
+    sim.active.world.talk.book.files.get(&500).and_then(|(_, f)| f.lines.iter().find(|l| l.tuple.noun == 0 && l.tuple.verb == 0 && l.tuple.case as u32 == n)).map(|l| l.raw.clone())
+}
+
+/// Every frame, also while the game is paused (M6 6e-6,
+/// `world-change.md` rules 2, 26): the Portal state's question. Opens the
+/// popup when Connor enters the Portal state; Left / Right move the
+/// highlight, Enter chooses it, Escape is No (and would open the main
+/// menu: not built, logged), a click on a button chooses it; other keys
+/// do nothing (Space still moves the bottom bar: `gui_draw`). Test keys
+/// `--key popup:yes|no|left|right|enter|escape,N`.
+#[allow(clippy::too_many_arguments)]
+pub fn popup_step(
+    gui: Option<ResMut<Gui>>,
+    sim: Option<ResMut<DoorSim>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    frame: Res<ScreenFrame>,
+    mut key_at: ResMut<KeyAt>,
+    shared: Res<Shared>,
+) {
+    let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
+    let gui = &mut *gui;
+    let asking = sim.active.world.portal_asking();
+    if !asking {
+        if gui.popup.take().is_some() {
+            gui.panels.set(kq8_core::panels::Group::Popup, false, "the question is answered");
+        }
+        return;
+    }
+    if gui.popup.is_none() {
+        let text = message_500(&sim, 114).unwrap_or_else(|| "You are about to load a new region. Are you sure you want to do that?".into());
+        let shown = PopupShown {
+            lines: kq8_core::portal::popup_lines(&text),
+            yes: message_500(&sim, 29).unwrap_or_else(|| "Yes".into()),
+            no: message_500(&sim, 14).unwrap_or_else(|| "No".into()),
+            // STAND-IN (Q151): No highlighted when it opens.
+            highlight: 1,
+        };
+        let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (stand-in Q151); the game pauses, the sounds go on (world-change.md rule 26)", shown.lines, shown.yes, shown.no, if shown.highlight == 0 { &shown.yes } else { &shown.no });
+        gui.popup = Some(shown);
+        gui.panels.set(kq8_core::panels::Group::Popup, true, "the Portal state's question");
+        gui.note(&line);
+        shared.log.lock().unwrap().summary(line);
+    }
+    let updates = sim.active.world.updates;
+    // What was pressed: (what, how).
+    let mut pressed: Vec<(&str, String)> = Vec::new();
+    // `--key popup:...` (the updates don't move while paused).
+    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0).into_iter().partition(|(name, n)| name.starts_with("popup:") && updates >= *n);
+    key_at.0 = later;
+    let mut test_words: Vec<String> = Vec::new();
+    for (name, _) in due {
+        test_words.push(name.trim_start_matches("popup:").to_ascii_lowercase());
+    }
+    for w in &test_words {
+        pressed.push((w.as_str(), format!("test --key popup:{w}")));
+    }
+    for (key, what) in [(KeyCode::ArrowLeft, "left"), (KeyCode::ArrowRight, "right"), (KeyCode::Enter, "enter"), (KeyCode::NumpadEnter, "enter"), (KeyCode::Escape, "escape")] {
+        if keys.just_pressed(key) {
+            pressed.push((what, format!("{what} key")));
+        }
+    }
+    if buttons.just_pressed(MouseButton::Left) {
+        if let Some(at) = window.single().ok().and_then(|w| w.cursor_position()) {
+            match gui.popup_button_at(frame.0, at) {
+                Some(0) => pressed.push(("yes", "click on Yes".into())),
+                Some(_) => pressed.push(("no", "click on No".into())),
+                None => {}
+            }
+        }
+    }
+    for (what, how) in pressed {
+        let Some(p) = gui.popup.as_mut() else { break };
+        let answer = match what {
+            "left" | "right" => {
+                // Two buttons: either key moves to the other one.
+                p.highlight = if what == "left" { 0 } else { 1 };
+                let line = format!("popup: {how}: {} highlighted", if p.highlight == 0 { &p.yes } else { &p.no });
+                gui.note(&line);
+                None
+            }
+            "enter" => Some(p.highlight == 0),
+            "yes" => Some(true),
+            "no" => Some(false),
+            "escape" => {
+                gui.note("popup: Escape: No, and the main menu (not built yet: not opened) (rule 26)");
+                Some(false)
+            }
+            _ => None,
+        };
+        if let Some(yes) = answer {
+            let lines = sim.active.portal_answer(yes, &how);
+            let mut log = shared.log.lock().unwrap();
+            for l in lines {
+                log.summary(format!("popup: {l}"));
+            }
+            drop(log);
+            gui.popup = None;
+            gui.panels.set(kq8_core::panels::Group::Popup, false, "answered");
+            break;
+        }
     }
 }

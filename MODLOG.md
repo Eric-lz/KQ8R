@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-6a: the Portal state's question (popup, pause, No)
+
+**Changed:** New `kq8-core` `portal.rs` (`PortalState`, the start of the state, `portal_answer`, `portal_entered`, `popup_lines`; 3 unit tests); `active.rs`: `KQMonster::setState Connor Portal` now starts it, the world's portals' keys (`portals`). Viewer: the loader collects every placed `KQPortal`'s keys; `gui_view.rs`: the popup panel drawn (eighth drawn picture), `popup_step` (opens it, keys, clicks, `--key popup:…` test keys); `world_build::running` (the game's updates and the world's drawing stop while it is open; the panels and sound go on). An old map test updated (its "not built" line). QUESTIONS Q151 (c). DESIGN (6e-6 in three commits), provenance.
+**Why:** M6 6e step 6, first part (`world-change.md` rules 1–3, 26; `magic-map.md` rule 40).
+**Tested how:** core 512 tests, clippy clean. `kq8-viewer --world Daventry --frames 900 --sound off --command "KQMonster::setState Connor Portal portal1 portaltp",30 --key popup:left,31 --key popup:no,31 --console where,40`; and the same without answering, 700 frames. `viewer.log`, `gui.log`, `connor.log`.
+**Result:** "the Portal state's question opens: [\"You are about to load a new region.\", \"Are you sure you want to do that?\"], buttons \"Yes\" (left) and \"No\" (right)". Unanswered for 700 frames: the game stayed at update 31; the popup slid in in 0.2 s, drawn 463 × 250. No: `portal1` gets `Decline` (its script ran), Connor moved to `noLoc` (158,510, 307,740), play goes on.
+**Still broken / not tested:** **Not looked at** (the popup's look, the buttons' places, the highlight). Yes leaves Connor waiting for the hand-over (6e-6b). A click on the bottom bar while the popup is open is queued for after it. Real keys and mouse clicks not tried (only test keys).
+**Next:** 6e-6b, Yes: the enter movement and the world change.
+
 ## 2026-10-22 6e-5: `world.cs Begin` on every arrival
 
 **Changed:** Viewer `world_build.rs` (`BeginNow`, `begin_step`: `world.cs <World> Begin` once on a new world's first update, before the portal arrival), `main.rs` (launch option `--begin`). FEATURES, DESIGN, provenance.

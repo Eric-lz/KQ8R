@@ -820,6 +820,11 @@ pub fn spawn_doors(
     }
     // potions.md rule 31 (M5 5g-7): the objects Clarity reveals.
     active.world.reveal_objects = std::mem::take(&mut objects.reveal_objects);
+    // M6 6e-6: the portals, for the Portal state.
+    for p in std::mem::take(&mut objects.portals) {
+        main_log.summary(format!("portal [{}]: to {:?}, enterAnim {:?}, exitAnim {:?}, noLoc {:?}, script {:?} (world-change.md rule 1)", p.name, p.world, p.enter_anim, p.exit_anim, p.no_loc, p.exit_script));
+        active.world.portals.insert(p.name.to_ascii_lowercase(), p);
+    }
     main_log.summary(format!("clarity: objects with groupsAlways bit 2048: {:?} (potions.md rule 31)", active.world.reveal_objects));
     match &objects.connor_stats {
         Some((line, level)) => {

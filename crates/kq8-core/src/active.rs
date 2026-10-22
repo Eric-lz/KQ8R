@@ -688,6 +688,11 @@ pub struct WorldState {
     pub map_item: Option<bool>,
     /// Lines for `map.log` (M6 6d), taken by the caller.
     pub map_log: Vec<String>,
+    /// The world's portals by lower-case object name (M6 6e-6): their
+    /// files' keys, set by the loader and by a `loadKQ` of a portal file.
+    pub portals: BTreeMap<String, kq8_data::magic_map::PortalKeys>,
+    /// Connor's Portal state (`world-change.md` rules 2-5), if he is in it.
+    pub connor_portal: Option<crate::portal::PortalState>,
     /// The status icon places (M5 5g-3, `potions.md` rule 35).
     pub status_icons: [Option<crate::potions::StatusIcon>; crate::potions::ICON_PLACES],
     /// Item descriptions to play (M4 4c-3, `talking.md` rule 20).
@@ -2110,12 +2115,8 @@ impl WorldState {
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
             }
             [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Portal") => {
-                // magic-map.md rule 40 (M6 6d-7): the Portal state (the
-                // question, the animations, the world change) waits for
-                // moving between worlds.
-                let line = format!("{at}: KQMonster::setState Connor Portal {}: the Portal state (magic-map.md rule 40) is not built (it needs moving between worlds); nothing", rest.join(" "));
-                self.note(&line);
-                self.map_log.push(line);
+                // world-change.md rules 1-2, magic-map.md rule 40 (M6 6e-6).
+                return self.start_portal(rest, at);
             }
             [_, who, state, rest @ ..] if state.eq_ignore_ascii_case("Die") && self.character_index(who).is_some_and(|i| self.anims[i].character.as_deref().is_some_and(|c| c.fight.is_some())) => {
                 // fighting.md rule 30 (M5 5c-7): `Die now` skips the movement.
@@ -2989,6 +2990,8 @@ impl Active {
                 other_maps: BTreeMap::new(),
                 map_item: None,
                 map_log: Vec::new(),
+                portals: BTreeMap::new(),
+                connor_portal: None,
                 connor_in_temple4: false,
                 connor_flags: BTreeMap::new(),
                 connor_hands_off: false,

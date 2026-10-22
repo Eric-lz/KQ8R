@@ -614,36 +614,36 @@ fn main() -> ExitCode {
                 .insert_resource(Time::<Fixed>::from_hz(kq8_core::UPDATES_PER_SECOND))
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
-                .add_systems(FixedUpdate, (console::console_step, draw_distance::apply_collider_switches, door_view::door_step, connor_view::late_set_step, door_view::character_gravity, connor_view::connor_step, connor_view::push_apply, rope_view::rope_step, door_view::trap_step, talk_view::talk_step, door_view::apply_loads, copies_view::spawn_copies, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain().run_if(world_build::playing))
+                .add_systems(FixedUpdate, (console::console_step, draw_distance::apply_collider_switches, door_view::door_step, connor_view::late_set_step, door_view::character_gravity, connor_view::connor_step, connor_view::push_apply, rope_view::rope_step, door_view::trap_step, talk_view::talk_step, door_view::apply_loads, copies_view::spawn_copies, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain().run_if(world_build::running))
                 .add_systems(Startup, world_build::build_pending)
                 .add_systems(world_build::BuildWorld, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
-                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, (terrain_view::toggle_markers, terrain_view::toggle_floor, door_view::toggle_ai, door_view::toggle_god), light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera).chain().run_if(world_build::playing))
+                .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, anim_view::anim_draw, game_camera::camera_draw, (terrain_view::toggle_markers, terrain_view::toggle_floor, door_view::toggle_ai, door_view::toggle_god), light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera).chain().run_if(world_build::running))
                 .add_systems(Update, frame_stats.after(terrain_view::report_camera))
                 // F7 also switches the models' light (M1 5b).
                 .add_systems(
                     Update,
-                    (object_light::follow_ground_mode, building_light::follow_mode).chain().after(light_view::toggle_light).run_if(world_build::playing),
+                    (object_light::follow_ground_mode, building_light::follow_mode).chain().after(light_view::toggle_light).run_if(world_build::running),
                 )
                 // Haze (M1 step 6): F8, its on-screen line, the log.
                 .add_systems(world_build::BuildWorld, (object_light::setup_haze_label, door_view::setup_ai_label, door_view::setup_god_label))
                 // Captions (M4 4a-4).
                 .add_systems(world_build::BuildWorld, (talk_view::setup_caption, talk_view::setup_caption_picture, gui_view::setup_gui))
                 // The panels (M4 4c-2), before the caption is placed on them.
-                .add_systems(FixedUpdate, map_view::map_install.before(console::console_step).run_if(world_build::playing))
+                .add_systems(FixedUpdate, map_view::map_install.before(console::console_step).run_if(world_build::running))
                 // Arriving through a portal (M6 6e-4b), before the doors'
                 // update takes the requests.
-                .add_systems(FixedUpdate, portal_view::arrival_step.after(console::console_step).before(door_view::door_step).run_if(world_build::playing))
+                .add_systems(FixedUpdate, portal_view::arrival_step.after(console::console_step).before(door_view::door_step).run_if(world_build::running))
                 // world.cs Begin on a new world's first update (M6 6e-5).
-                .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::playing))
-                .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::playing))
-                .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::playing))
-                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step).run_if(world_build::playing))
+                .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::running))
+                .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::running))
+                .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::running))
+                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::dither_step).after(gui_view::gui_step).run_if(world_build::running))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
-                .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate).run_if(world_build::playing))
-                .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().run_if(world_build::playing))
+                .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate).run_if(world_build::running))
+                .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().run_if(world_build::playing))
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw).run_if(world_build::playing))
-                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::playing));
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::running));
         }
     }
     app.run();

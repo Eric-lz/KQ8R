@@ -147,6 +147,14 @@ pub fn playing(change: Res<WorldChange>) -> bool {
     matches!(change.step, Step::Playing)
 }
 
+/// The run condition of the game's updates and of the drawing that
+/// follows them (M6 6e-6): a world is in and the Portal state's question
+/// is not open (`world-change.md` rule 26: the game pauses; the panels
+/// and the sounds go on).
+pub fn running(change: Res<WorldChange>, sim: Option<Res<crate::door_view::DoorSim>>) -> bool {
+    matches!(change.step, Step::Playing) && !sim.is_some_and(|s| s.active.world.portal_asking())
+}
+
 /// For systems that keep values from frame to frame (`Local`): true the
 /// first time it is asked after each new world, so they start again
 /// (6e-2). `seen` is the system's own `Local<u64>`.

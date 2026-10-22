@@ -35,6 +35,7 @@ pub mod meters;
 pub mod music;
 pub mod named_anim;
 pub mod panels;
+pub mod portal;
 pub mod potions;
 pub mod rope;
 pub mod script;

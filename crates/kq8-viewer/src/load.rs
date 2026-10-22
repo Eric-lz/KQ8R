@@ -1460,6 +1460,8 @@ pub struct Objects {
     pub projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
     /// The objects whose `groupsAlways` has bit 2048 (M5 5g-7).
     pub reveal_objects: Vec<String>,
+    /// The world's placed portals' keys (M6 6e-6).
+    pub portals: Vec<kq8_data::magic_map::PortalKeys>,
     /// The shield's orbits (`orbit1.kq`–`orbit3.kq`, M5 5g-4) and their
     /// model slots.
     pub orbit: Vec<(kq8_data::characters::OrbitKeys, Option<usize>)>,
@@ -1754,6 +1756,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         corpse_shapes: BTreeMap::new(),
         orbit: Vec::new(),
         reveal_objects: Vec::new(),
+        portals: Vec::new(),
         drop_kinds: Vec::new(),
         projectiles: BTreeMap::new(),
         combat_apply: false,
@@ -1986,6 +1989,8 @@ struct Placer<'a> {
     corpse_shapes: BTreeMap<String, usize>,
     /// The objects Clarity reveals (M5 5g-7).
     reveal_objects: Vec<String>,
+    /// The world's portals (M6 6e-6).
+    portals: Vec<kq8_data::magic_map::PortalKeys>,
     /// The shield's orbits (M5 5g-4).
     orbit: Vec<(kq8_data::characters::OrbitKeys, Option<usize>)>,
     /// The item types the fighters drop (M5 5c-8).
@@ -2936,6 +2941,14 @@ impl Placer<'_> {
         // potions.md rule 31 (M5 5g-7): an object Clarity reveals.
         if !unused && p.groups_always & kq8_core::potions::REVEAL_BIT != 0 && !self.reveal_objects.iter().any(|n| n.eq_ignore_ascii_case(&p.name)) {
             self.reveal_objects.push(p.name.clone());
+        }
+        // M6 6e-6: a portal's keys, under its placed name, for the Portal
+        // state (world-change.md rules 1-6).
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQPortal")) {
+            if let Some(mut keys) = kq8_data::magic_map::PortalKeys::from_section(s) {
+                keys.name = p.name.clone();
+                self.portals.push(keys);
+            }
         }
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQParticleCatcher")) {
             self.catchers.push((p.name.clone(), kq8_data::effects::CatcherSettings::from_section(s)));
@@ -4254,6 +4267,7 @@ impl Placer<'_> {
             projectiles: self.projectiles,
             orbit: self.orbit,
             reveal_objects: self.reveal_objects,
+            portals: self.portals,
             item_lines: Vec::new(),
             character_lines: self.character_lines,
             ground: None,

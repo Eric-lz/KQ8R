@@ -1231,7 +1231,8 @@ mod tests {
         assert!(a.world.map.as_ref().unwrap().go_lit, "on the pad: lit");
         a.map_go("t");
         assert_eq!(a.scripts.vars.get("Ran"), Some("bartele.kq"), "$1 = the shown world's portal");
-        assert!(a.world.map_log.iter().any(|l| l.contains("Portal state")), "{:?}", a.world.map_log);
+        // M6 6e-6: the Portal state is asked for (no portal file loaded here).
+        assert!(a.world.map_log.iter().any(|l| l.contains("setState Connor Portal")), "{:?}", a.world.map_log);
         // Back to this world's map: the button goes out (Do not reproduce 1).
         a.world.map_step([200000.0, 250000.0, 0.0], 0.0);
         a.world.map.as_mut().unwrap().set_active(true, "t");

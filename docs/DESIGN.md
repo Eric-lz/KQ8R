@@ -2333,7 +2333,11 @@ Steps (one commit each; each ends with a test and a log check):
    Daventry` twice with the kept variables of step 8 not yet built: the
    opening scene's `move Connor 0 277744 199029` logged each time (the
    gap step 8 closes).
-6. **6e-6, the popup and the Portal state** (rules 2–5, 26,
+6. **6e-6, the popup and the Portal state**, as three commits: **6e-6a**
+   the state, the popup, its keys and pause, No (**done** 2026-10-22,
+   `kq8-core` `portal.rs`, viewer `gui_view.rs` `popup_step`); **6e-6b**
+   Yes to the world change; **6e-6c** the teleport scripts' portal files
+   (rules 2–5, 26,
    `magic-map.md` rule 40). The popup panel, its keys and pause; No /
    Yes as above; `enterAnim`; the teleport scripts' `loadKQ <portal> @
    x y z` of a `GAME/Kq` file while playing (today refused: no
