@@ -20,7 +20,10 @@
 //! - Rule 26: the popup: text 114, Yes (29) left, No (14) right; the game
 //!   is paused while it is open, the sounds go on.
 //!
-//! Ours: the portal's keys come from its file (placed objects, or a
+//! Ours: Connor's `stop` (rules 2, 3) is not played as a scripted
+//! movement: the game is paused while the question is open, and after No
+//! he is simply back in Wait (the user's walking test: a `stop` played in
+//! the Special state never ends). The portal's keys come from its file (placed objects, or a
 //! `GAME/Kq` portal file loaded while playing); first person and the time
 //! step are logged only (we have neither).
 
@@ -91,13 +94,15 @@ impl crate::active::WorldState {
             return "0".into();
         }
         let line = format!(
-            "{at}: KQMonster::setState Connor Portal {portal} {}: Connor stops (stop); the question opens: text 114, Yes / No; the game pauses (world-change.md rules 2, 26); portal to {:?}",
+            "{at}: KQMonster::setState Connor Portal {portal} {}: Connor stands still (the game pauses; his stop is not played as a movement); the question opens: text 114, Yes / No; the game pauses (world-change.md rules 2, 26); portal to {:?}",
             trap.as_deref().unwrap_or(""),
             keys.world
         );
         self.note(&line);
         self.map_log.push(line);
-        self.requests.push(crate::active::Request::ConnorSpecial { items: "stop".into(), at: at.to_string() });
+        // Ours: he stands still because the game pauses; his `stop` is not
+        // played as a Special movement (it repeats, so the Special state
+        // would never end and he could not walk after No).
         self.connor_portal = Some(PortalState { portal: portal.clone(), trap, keys, phase: Phase::Asking });
         "0".into()
     }
@@ -128,9 +133,8 @@ impl crate::active::Active {
             } else {
                 lines.push("No: noLoc (-1, -1, -1): Connor stays".into());
             }
-            self.world.requests.push(crate::active::Request::ConnorSpecial { items: "stop".into(), at: "portal No".into() });
             self.world.connor_portal = None;
-            lines.push("No: Connor plays stop and waits; the game goes on".into());
+            lines.push("No: Connor stands and waits (back to Wait); the game goes on".into());
         } else {
             // Rule 4.
             let accepted = self.call_named(&portal, &["Accept"]);

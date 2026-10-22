@@ -1656,11 +1656,14 @@ pub struct Marker {
 /// model's lowest point is from the ground under it.
 /// A world Connor arrives in through a world change (M6 6e-3,
 /// `world-change.md` rules 18, 21).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Arrival {
     /// The game-wide `NoName<n>` counter carried over (rule 18): the new
     /// world's start names nothing below it.
     pub no_name_from: usize,
+    /// The arriving portal's own list and movement (`exitAnmFile`,
+    /// `exitAnim`; M6 6e-7), loaded for the Special state.
+    pub exit_movement: Option<(String, String)>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -1692,11 +1695,32 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         })
         .collect();
     let mut items = item_types(game, log);
-    if let Some(a) = arrival {
+    // M6 6e-7: the movements of portals' own lists: this world's portals'
+    // enterAnmFile / enterAnim (leaving), the arriving portal's exitAnmFile
+    // / exitAnim (world-change.md rules 4, 5.2, 20.3).
+    let mut portal_movements: Vec<(String, String)> = Vec::new();
+    for (name, _, bytes) in world.entries_ending(".kq") {
+        let Ok(bytes) = bytes else { continue };
+        // Only files that say they are portals are parsed.
+        if !bytes.windows(8).any(|w| w.eq_ignore_ascii_case(b"KQPortal")) {
+            continue;
+        }
+        if let Some(k) = kq8_data::kq_text::parse(&bytes).iter().find_map(kq8_data::magic_map::PortalKeys::from_section) {
+            if let (Some(file), Some(anim)) = (k.enter_anm_file.clone(), k.enter_anim.clone()) {
+                log.detail(format!("portal file {name}: enter movement {anim} from {file}"));
+                portal_movements.push((file, anim));
+            }
+        }
+    }
+    if let Some((file, anim)) = arrival.as_ref().and_then(|a| a.exit_movement.clone()) {
+        portal_movements.push((file, anim));
+    }
+    if let Some(a) = &arrival {
         items.start_no_names_at(a.no_name_from);
         log.summary(format!("world change: NoName counter from {} (world-change.md rule 18); conStart.cs not run (rule 21)", a.no_name_from));
     }
     let mut placer = Placer {
+        portal_movements,
         skip_con_start: arrival.is_some(),
         progress,
         map: None,
@@ -1929,6 +1953,8 @@ struct Located {
 /// Places objects one by one as the scripts load them, and keeps the
 /// numbers for the log.
 struct Placer<'a> {
+    /// Portals' own lists' movements for the Special state (M6 6e-7).
+    portal_movements: Vec<(String, String)>,
     /// A world change (M6 6e-3): `conStart.cs` is not run.
     skip_con_start: bool,
     /// The loading meter's percent (M6 6e-4a).
@@ -3265,6 +3291,12 @@ impl Placer<'_> {
                         wanted.insert((Some(file.clone()), m.to_string()));
                     }
                 }
+            }
+        }
+        // M6 6e-7: the portals' own lists (world-change.md rules 4, 20.3).
+        for (file, anim) in &self.portal_movements {
+            if !file.eq_ignore_ascii_case("conner.anm") {
+                wanted.insert((Some(file.clone()), anim.clone()));
             }
         }
         // ropeandhook.md rule 13 (M6 6a-3): the rope list, in worlds whose

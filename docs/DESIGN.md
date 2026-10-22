@@ -2345,7 +2345,7 @@ Steps (one commit each; each ends with a test and a log check):
    (`earnTeleport barrMap.kq`), Go: popup in `gui.log`, updates
    paused; No: stays; Go, Yes: `teleportdown`, arrives on Barren's pad
    with `teleportup`.
-7. **6e-7, walking exits** (rule 1's table). The trap and collision
+7. **6e-7, walking exits** (**done** 2026-10-22) (rule 1's table). The trap and collision
    scripts already run: check each starter reaches the Portal state,
    with `$1` = the trap; Connor taken off the trap without `Off` on
    Yes (rule 5.3); after No he stays inside it (no new `On` until he

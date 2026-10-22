@@ -350,7 +350,8 @@ pub fn world_change_step(world: &mut World) {
             };
             // Read on another thread (6e-4a); the window keeps drawing the
             // loading screen. The thread holds `viewer.log` meanwhile.
-            let arrival = journey.as_ref().map(|j| load::Arrival { no_name_from: j.next_no_name });
+            let exit_movement = request.portal.as_ref().and_then(|p| Some((p.exit_list.clone()?, p.exit_anim.clone()?)));
+            let arrival = journey.as_ref().map(|j| load::Arrival { no_name_from: j.next_no_name, exit_movement });
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
             let read = std::thread::Builder::new().name("world read".into()).spawn(move || {

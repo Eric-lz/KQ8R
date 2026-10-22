@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-22 6e-7: walking exits
+
+**Changed:** `kq8-core` `portal.rs`: Connor's `stop` is no longer asked for as a Special movement (start of the state and after No). Viewer `load.rs`: the movements of portals' own lists are loaded (this world's portals' `enterAnmFile`/`enterAnim`; the arriving portal's `exitAnmFile`/`exitAnim`, handed over in `Arrival`); `world_build.rs` passes it. DESIGN, provenance.
+**Why:** M6 6e step 7 (`world-change.md` rule 1's table, rules 3, 4, 20.3).
+**Tested how:** clippy clean, core 512 tests. Daventry: `--command "move Connor 0 158510 307740 9925 0 0 3.1416",2 --hold 1,0,0,5,30` (walk north into `portaltp`) with `--key popup:no,22 --hold 1,0,0,40,90`; then with `--key popup:yes,22 --console "move Connor 3 0 0 0 0 0 -1.5708",30 --hold 1,0,0,40,140 --key popup:yes,40` (to Castle and back). Barren: `--command "KQMonster::setState Connor Portal portal6",30 --key popup:yes,30`. `traps.log`, `viewer.log`.
+**Result:** Walking in: `portaltp` On at update 22 → `portaltp.cs` → the question. No: `noLoc`, Off at 23; walking again: On at 31, the question again. First try he could not walk after No: his `stop` was played as a Special movement, which repeats and never ends (fixed). Yes: Castle Daventry; walking west into `portalt2` (On at Castle update 80) → Yes → Daventry. Barren elevator: `elevator.anm/c_goup`, Ice world `elevat2.anm/c_comnup`, `eleport.cs portal6 Exit`. A first `--at` placed Connor under the cave (the ground, not the path's floor): placed by `move` instead.
+**Still broken / not tested:** Not looked at. Back in Daventry the opening scene replays (`Begin` with `FirstTime` 1) and moves Connor away from the portal's place: 6e-8. Dead City, Swamp, Gnome, Snow exit and temple exits not walked (same rules). The Gnome pool and the snail not run.
+**Next:** 6e-8, kept worlds (first stage).
+
 ## 2026-10-22 6e-6c: teleporting works end to end
 
 **Changed:** `kq8-core` `active.rs`: `loadKQ` of a `GAME/Kq` portal file while playing (`load_portal`, `set_portal_files`). Viewer `load.rs`: the `KQPortal` files of `GAME/Kq` read at the start; `door_view.rs` hands them to the rules; `gui_view.rs`: `gui_step` leaves `popup:` test keys to the popup step (it dropped them). DESIGN, provenance.
