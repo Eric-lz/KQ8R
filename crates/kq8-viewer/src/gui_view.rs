@@ -106,8 +106,37 @@ impl Drawn {
     }
 }
 
-/// The pictures drawn (4c-2; the top bar since 4c-3).
-const DRAWN: [Drawn; 6] = [Drawn::Panel(Panel::Top), Drawn::Panel(Panel::BottomLeft), Drawn::Panel(Panel::Slots), Drawn::Panel(Panel::Meters), Drawn::Panel(Panel::BottomRight), Drawn::Status];
+/// The pictures drawn (4c-2; the top bar since 4c-3; the map window since
+/// M6 6d-3).
+const DRAWN: [Drawn; 7] = [Drawn::Panel(Panel::Top), Drawn::Panel(Panel::BottomLeft), Drawn::Panel(Panel::Slots), Drawn::Panel(Panel::Meters), Drawn::Panel(Panel::BottomRight), Drawn::Panel(Panel::Map), Drawn::Status];
+
+/// The map window's parts (`magic-map.md` rule 5).
+const MAP_AREA: &str = "IDCTL_MAPWIN_MAP";
+/// Rule 8: one line, or two.
+const MAP_NAME_ONE: &str = "IDCTL_MAPWIN_NAME_TEXT1";
+const MAP_NAME_TWO: [&str; 2] = ["IDCTL_MAPWIN_NAME_TEXT2", "IDCTL_MAPWIN_NAME_TEXT3"];
+/// The page arrows and the "Go" button (unlit; rules 32, 38).
+const MAP_BUTTONS: [&str; 3] = ["IDCTL_MAPWIN_LEFT", "IDCTL_MAPWIN_RIGHT", "IDCTL_MAPWIN_TELEPORT"];
+/// The bottom-right map slot (`interface.md` rule 45).
+const MINIMAP: &str = "IDCTL_INVBAR_MINIMAP";
+
+/// The magic map as the panels show it (M6 6d-3), copied from the rules
+/// each update (the picture only when it changed).
+#[derive(Debug, Clone, Default)]
+struct MapShown {
+    /// `magic-map.md` rule 2.
+    active: bool,
+    version: Option<u64>,
+    pixels: Vec<u8>,
+    /// Rule 22 (layout pixels from the area's centre).
+    view: [f64; 4],
+    /// Rule 11: Connor's last map pixel; rule 17: the arrow frame.
+    pixel: Option<(i32, i32)>,
+    frame: usize,
+    arrow_file: String,
+    /// Rule 8: the name (`500.MSG` 0 0 38 + index), its lines.
+    name: Vec<String>,
+}
 
 /// The armour, hand and ranged slot pictures, their numbers and their
 /// flashes, by layout name (rules 33, 34, 36), in [`Slot::ALL`] order.
@@ -147,6 +176,9 @@ enum Spec {
     Lower { rect: [i32; 4], file: String, frame: usize, rows: u32 },
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
     Fill { rect: [i32; 4], rgb: [u8; 3] },
+    /// The magic map (M6 6d-3): the picture's version, the view, the
+    /// arrow (file, frame, top-left from the area's centre).
+    Map { rect: [i32; 4], version: u64, view: [f64; 4], arrow: Option<(String, usize, [f64; 2])> },
 }
 
 /// The panels and what they show.
@@ -191,6 +223,10 @@ pub struct Gui {
     level_flame: Option<f64>,
     /// The bottom-bar key (`movekeys.kq` row 12, rule 10).
     space_key: Option<KeyCode>,
+    /// The map key (`movekeys.kq` row 8, rule 10; `magic-map.md` rule 30).
+    map_key: Option<KeyCode>,
+    /// The magic map (M6 6d-3); `None` while the world has none.
+    map: Option<MapShown>,
     /// 4c-11 (not in the original, the user's idea): the bottom bar's
     /// left and right panels at the window's edges instead of the 4:3
     /// screen's; `--corners on|off`, F6.
@@ -286,17 +322,21 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
     let wide = crate::talk_view::set800mode(game);
     let screen = kq8_core::caption::screen(wide);
     let scale = kq8_core::caption::scale(screen);
-    // Rule 10: the bottom-bar key is row 12 of movekeys.kq.
-    let (space_key, key_line) = match first_found(game, &["movekeys.kq".into()]).map(|(_, b)| kq8_data::kq_text::parse(&b)) {
+    // Rule 10: the bottom-bar key is row 12 of movekeys.kq, the map key
+    // row 8 (M6 6d-3).
+    let keys_file = first_found(game, &["movekeys.kq".into()]).map(|(_, b)| kq8_data::kq_text::parse(&b));
+    let row = |n: u32, default: KeyCode, manual: &str| match &keys_file {
         Some(file) => {
             let s = file.first();
-            let char12 = s.and_then(|s| s.number("KeyChar12")).and_then(Result::ok).map(|v| v as i64);
-            let word12 = s.and_then(|s| s.get("KeyWord12")).unwrap_or("?").to_string();
-            let key = char12.and_then(virtual_key);
-            (key, format!("movekeys.kq row 12: KeyChar12={char12:?} KeyWord12={word12} -> {key:?}"))
+            let char_n = s.and_then(|s| s.number(&format!("KeyChar{n}"))).and_then(Result::ok).map(|v| v as i64);
+            let word_n = s.and_then(|s| s.get(&format!("KeyWord{n}"))).unwrap_or("?").to_string();
+            let key = char_n.and_then(virtual_key);
+            (key, format!("movekeys.kq row {n}: KeyChar{n}={char_n:?} KeyWord{n}={word_n} -> {key:?}"))
         }
-        None => (Some(KeyCode::Space), "no movekeys.kq: Space (the manual's default)".to_string()),
+        None => (Some(default), format!("no movekeys.kq: {manual} (the manual's default)")),
     };
+    let (space_key, key_line) = row(12, KeyCode::Space, "Space");
+    let (map_key, map_key_line) = row(8, KeyCode::Tab, "Tab");
     let mut log = match Log::create("gui") {
         Ok(l) => Some(l),
         Err(e) => {
@@ -305,7 +345,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         }
     };
     let head = format!(
-        "gui: Gplayscr.gui read; screen {}x{} (set800mode {wide}, layout x {scale}; stand-in Q108); palette {pal_path} (world.cs: {pal_note}; interface.md rule 1c); the bottom-bar key: {key_line} (interface.md rule 10)",
+        "gui: Gplayscr.gui read; screen {}x{} (set800mode {wide}, layout x {scale}; stand-in Q108); palette {pal_path} (world.cs: {pal_note}; interface.md rule 1c); the bottom-bar key: {key_line}; the map key: {map_key_line} (interface.md rule 10)",
         screen[0], screen[1]
     );
     main.summary(&head);
@@ -341,6 +381,8 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         flashes: [None; 3],
         level_flame: None,
         space_key,
+        map_key,
+        map: None,
         corners: false,
         stats_events: None,
         hands_off: false,
@@ -544,6 +586,18 @@ impl Gui {
                         "IDCTL_METERS_EXP" => Some(meters::bar_width(full, self.meters.experience_percent)),
                         _ => None,
                     };
+                    // M6 6d-3 (magic-map.md rules 6, 18): the map over the
+                    // black area, the arrow when Connor's pixel is known.
+                    if name == MAP_AREA {
+                        if let Some(m) = self.map.as_ref().filter(|m| m.version.is_some()) {
+                            let view = kq8_core::magic_map::View { left: m.view[0], top: m.view[1], right: m.view[2], bottom: m.view[3] };
+                            let arrow = m.pixel.map(|p| {
+                                let (x, y) = view.arrow_at(p);
+                                (m.arrow_file.clone(), m.frame, [x, y])
+                            });
+                            out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: m.view, arrow });
+                        }
+                    }
                     if let Some(file) = file {
                         out.push(Spec::Pic { rect, file, frame: 0, cut });
                     }
@@ -569,6 +623,13 @@ impl Gui {
                             self.meters.numbers.filter(|_| self.meters.red[k]).map(|n| n[k].to_string())
                         }
                         (None, "IDCTL_METERS_LEVEL") => Some(self.meters.level.to_string()),
+                        // magic-map.md rule 8: one line in TEXT1, two in
+                        // TEXT2 and TEXT3.
+                        (None, MAP_NAME_ONE) => self.map.as_ref().filter(|m| m.name.len() == 1).map(|m| m.name[0].clone()),
+                        (None, n) if MAP_NAME_TWO.contains(&n) => {
+                            let k = MAP_NAME_TWO.iter().position(|x| *x == n).expect("listed");
+                            self.map.as_ref().filter(|m| m.name.len() >= 2).map(|m| m.name[k].clone())
+                        }
                         (None, "IDCTL_INVBAR_GOLDTEXT") => count(self.inv.gold.as_ref().map(|(_, c, _)| *c)),
                         (None, "IDCTL_INVBAR_ROCKSTEXT") => count(self.inv.rocks.as_ref().map(|(_, c, _)| *c)),
                         (None, n) => match n.strip_prefix("IDCTL_HEALTHBAR_").and_then(|k| k.strip_suffix("TEXT")).and_then(|k| k.parse::<usize>().ok()) {
@@ -587,6 +648,10 @@ impl Gui {
                         if let (Some(start), Some(at)) = (self.flashes[k], self.control(SLOT_PICTURES[k])) {
                             out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
                         }
+                    } else if MAP_BUTTONS.contains(&name.as_str()) {
+                        // magic-map.md rule 5: the page arrows and the unlit
+                        // "Go" button, their first frames.
+                        out.push(Spec::Pic { rect, file, frame: 0, cut: None });
                     } else if name == LEVEL_FLAME {
                         // DESIGN L-2 (stand-in Q149 b): over the level
                         // number, in its own layout place.
@@ -622,9 +687,9 @@ impl Gui {
     fn draw(&mut self, origin: [i32; 2], size: [i32; 2], specs: &[Spec], scale: f32) -> gui_draw::Canvas {
         for s in specs {
             match s {
-                Spec::Pic { file, .. } | Spec::Lower { file, .. } => self.load_file(file),
+                Spec::Pic { file, .. } | Spec::Lower { file, .. } | Spec::Map { arrow: Some((file, ..)), .. } => self.load_file(file),
                 Spec::Text { font, .. } => self.load_font(font),
-                Spec::Fill { .. } => {}
+                Spec::Fill { .. } | Spec::Map { .. } => {}
             }
         }
         let mut pieces = Vec::new();
@@ -645,6 +710,14 @@ impl Gui {
                     pieces.push(Piece::Text { rect: *rect, font: f, justification: *justification, text: text.clone() });
                 }
                 Spec::Fill { rect, rgb } => pieces.push(Piece::Fill { rect: *rect, rgb: *rgb }),
+                Spec::Map { rect, view, arrow, .. } => {
+                    let Some(m) = &self.map else { continue };
+                    let arrow = arrow.as_ref().and_then(|(file, frame, at)| {
+                        let frames = self.files.get(&file.to_ascii_lowercase())?.as_ref()?;
+                        frames.get(*frame % frames.len().max(1)).and_then(Pic::of).map(|p| (p, *at))
+                    });
+                    pieces.push(Piece::Map { rect: *rect, pixels: &m.pixels, view: *view, arrow });
+                }
             }
         }
         gui_draw::draw(origin, size, scale, &pieces, &self.palette)
@@ -719,6 +792,18 @@ impl Gui {
             Kind::Text { pictures: Some(p), .. } => self.tags.string(p.bitmap).map(str::to_string),
             _ => None,
         })
+    }
+
+    /// `magic-map.md` rule 30 (M6 6d-3): the map key or a left click on
+    /// the mini-map toggles the window, only if the map is active; nothing
+    /// else is checked (not handsOff, not a conversation).
+    fn toggle_map(&mut self, how: &str) {
+        if self.map.as_ref().is_some_and(|m| m.active) {
+            self.panels.toggle_map(&format!("{how} (magic-map.md rule 30)"));
+        } else {
+            let line = format!("{how}: the map is not active (or this world has none); nothing (magic-map.md rule 30)");
+            self.note(line);
+        }
     }
 
     /// The shown rectangle of a drawn picture on the screen, pixels.
@@ -800,6 +885,7 @@ pub fn gui_step(
         let how = format!("test --key {name} before update {updates}");
         match name.to_ascii_lowercase().as_str() {
             "space" => gui.panels.toggle_bottom(&how),
+            "tab" => gui.toggle_map(&how),
             "f4" => crate::door_view::flip_ai(&mut sim, &how),
             "f3" => crate::door_view::flip_god(&mut sim, &how),
             // ranged-weapons.md rule 1 (M5 5f-3): Delete (Draw), Alt (Away).
@@ -814,6 +900,7 @@ pub fn gui_step(
                 match (control.as_str(), gui.item_at(&control)) {
                     ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
                     ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
+                    (MINIMAP, _) if left => gui.toggle_map(&how),
                     (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
                     _ => {
                         let line = format!("update {updates}: {how}: nothing there; nothing (inventory.md rule 10)");
@@ -934,6 +1021,32 @@ pub fn gui_step(
                 gui.note(format!("update {updates}: {at}"));
                 gui.panels.conversation(start);
             }
+        }
+    }
+    // M6 6d-3: the magic map as the panels show it.
+    if let Some(m) = &sim.active.world.map {
+        let shown = gui.map.get_or_insert_with(MapShown::default);
+        if shown.version != Some(m.version) {
+            shown.pixels.clone_from(&m.picture);
+            shown.version = Some(m.version);
+        }
+        let was_active = shown.active;
+        shown.active = m.active;
+        shown.view = m.view.as_array();
+        shown.pixel = m.last_pixel;
+        shown.frame = m.frame;
+        shown.arrow_file.clone_from(&m.keys.arrow_pba);
+        if shown.name.is_empty() {
+            // Rule 8: 500.MSG noun 0 verb 0 case n; a line break gives two lines.
+            let n = m.keys.map_name.unwrap_or(0);
+            let text = sim.active.world.talk.book.files.get(&500).and_then(|(_, f)| f.lines.iter().find(|l| l.tuple.noun == 0 && l.tuple.verb == 0 && l.tuple.case as u32 == n)).map(|l| l.raw.clone());
+            shown.name = text.as_deref().unwrap_or("").split('\n').map(|l| l.trim_end_matches('\r').to_string()).filter(|l| !l.is_empty()).take(2).collect();
+            let line = format!("update {updates}: the map's name plate: 500.MSG 0 0 {n}: {:?} ({} line(s); magic-map.md rule 8)", shown.name, shown.name.len());
+            gui.note(line);
+        }
+        if was_active != m.active {
+            let line = format!("update {updates}: the map is {} (magic-map.md rule 2): the map key and the mini-map slot {}", if m.active { "active" } else { "not active" }, if m.active { "work" } else { "do nothing" });
+            gui.note(line);
         }
     }
     // Rules 34-35: the slot pictures follow what Connor wears.
@@ -1095,6 +1208,10 @@ pub fn gui_draw(
     if gui.space_key.is_some_and(|k| keys.just_pressed(k)) {
         gui.panels.toggle_bottom("Space key");
     }
+    // magic-map.md rule 30 (M6 6d-3): the map key, also in handsOff.
+    if gui.map_key.is_some_and(|k| keys.just_pressed(k)) {
+        gui.toggle_map("the map key");
+    }
     // 4c-11: F6, the corner panels on or off.
     if keys.just_pressed(KeyCode::F6) {
         gui.corners = !gui.corners;
@@ -1246,6 +1363,14 @@ pub fn gui_draw(
         if let Some(mut slot) = images.get_mut(&image.image) {
             *slot = picture;
         }
+        // M6 6d-3: each redraw of the map with its view and arrow.
+        for s in &specs {
+            if let Spec::Map { version, view, arrow, .. } = s {
+                let arrow = arrow.as_ref().map_or("no arrow (Connor's pixel not known yet)".to_string(), |(_, frame, at)| format!("arrow frame {frame}, top-left ({:.1}, {:.1}) from the area's centre", at[0], at[1]));
+                let line = format!("{} drawn: picture version {version}, view ({:.2}, {:.2})-({:.2}, {:.2}) from the area's centre, shown {:.1} x {:.1} layout px; {arrow} (magic-map.md rules 6, 18, 22)", d.layout_id(), view[0], view[1], view[2], view[3], view[2] - view[0], view[3] - view[1]);
+                gui.note(line);
+            }
+        }
         gui.last.insert(d.layout_id(), specs);
     }
     cover.0 = covered;
@@ -1274,6 +1399,7 @@ pub fn gui_draw(
             match (control.as_str(), gui.item_at(&control)) {
                 ("IDCTL_INVBAR_QUESTL", _) if left => actions.0.push(BarAction::Scroll { by: -1, how }),
                 ("IDCTL_INVBAR_QUESTR", _) if left => actions.0.push(BarAction::Scroll { by: 1, how }),
+                (MINIMAP, _) if left => gui.toggle_map(&how),
                 (_, Some(item)) => actions.0.push(BarAction::Item { item, left, how }),
                 _ => {
                     let line = format!("{how}: nothing there; nothing (inventory.md rule 10)");

@@ -58,6 +58,11 @@ pub enum Piece<'a> {
     /// A rectangle of one colour (4c-8: the black behind the meters'
     /// bars, the user's check).
     Fill { rect: [i32; 4], rgb: [u8; 3] },
+    /// The magic map (M6 6d-3, `magic-map.md` rules 6, 18): a 460 × 460
+    /// picture drawn at `view` (left, top, right, bottom in layout pixels
+    /// from the centre of `rect`), nearest pixel, cut to `rect`; the arrow
+    /// on top with its top-left at `arrow.1` (from the centre), cut too.
+    Map { rect: [i32; 4], pixels: &'a [u8], view: [f64; 4], arrow: Option<(Pic<'a>, [f64; 2])> },
 }
 
 /// Layout pixels → screen pixels, rounded.
@@ -170,6 +175,44 @@ impl Canvas {
         }
     }
 
+    /// Draws the magic map (see [`Piece::Map`]); `rect` in layout pixels
+    /// where the panel stands.
+    pub fn map(&mut self, rect: [i32; 4], pixels: &[u8], view: [f64; 4], arrow: Option<(Pic, [f64; 2])>, scale: f32, palette: &[Rgb; 256]) {
+        let size = kq8_data::magic_map::MAP_SIZE;
+        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+        let s = scale as f64;
+        let (cx, cy) = ((rect[0] + rect[2]) as f64 / 2.0, (rect[1] + rect[3]) as f64 / 2.0);
+        let (w, h) = (view[2] - view[0], view[3] - view[1]);
+        if pixels.len() == size * size && w > 0.0 && h > 0.0 {
+            for y in t..b {
+                let uy = (y as f64 + 0.5) / s - cy;
+                let my = ((uy - view[1]) / h * size as f64).floor();
+                if my < 0.0 || my >= size as f64 {
+                    continue;
+                }
+                for x in l..r {
+                    let ux = (x as f64 + 0.5) / s - cx;
+                    let mx = ((ux - view[0]) / w * size as f64).floor();
+                    if mx < 0.0 || mx >= size as f64 {
+                        continue;
+                    }
+                    self.put(x, y, pixels[my as usize * size + mx as usize], false, palette);
+                }
+            }
+        }
+        if let Some((pic, at)) = arrow {
+            let (ax, ay) = (((cx + at[0]) * s).round() as i32, ((cy + at[1]) * s).round() as i32);
+            let (aw, ah) = ((pic.width as f64 * s).round() as i32, (pic.height as f64 * s).round() as i32);
+            for y in ay.max(t)..(ay + ah).min(b) {
+                for x in ax.max(l)..(ax + aw).min(r) {
+                    let sx = (((x - ax) as f64 / s) as u32).min(pic.width - 1);
+                    let sy = (((y - ay) as f64 / s) as u32).min(pic.height - 1);
+                    self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], true, palette);
+                }
+            }
+        }
+    }
+
     /// Draws `text` in `font`, placed by `rect` and `justification`
     /// (rules 5–6); letters at the font's own size, index 0 see-through.
     pub fn text(&mut self, rect: [i32; 4], font: &Font, justification: u32, text: &str, scale: f32, palette: &[Rgb; 256]) {
@@ -209,6 +252,7 @@ pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], pale
             Piece::Lower { rect, pic, rows } => c.picture_lower(at(rect), *pic, *rows, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
             Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
+            Piece::Map { rect, pixels, view, arrow } => c.map(at(rect), pixels, *view, *arrow, scale, palette),
         }
     }
     c
@@ -285,6 +329,32 @@ mod tests {
         assert_eq!(screen_size([192, 466], [256, 14], 1.25), [320, 17]);
         let full = draw([192, 466], [2, 14], 1.25, &[Piece::Fill { rect: [0, 0, 2, 14], rgb: [9, 9, 9] }], &pal);
         assert_eq!((full.height, full.at(0, 0), full.at(1, 16)), (17, [9, 9, 9, 255], [9, 9, 9, 255]));
+    }
+
+    #[test]
+    fn the_map_at_its_view_with_the_arrow_cut_to_the_area() {
+        let size = kq8_data::magic_map::MAP_SIZE;
+        let mut pal = [[0u8; 3]; 256];
+        pal[1] = [10, 0, 0];
+        pal[2] = [20, 0, 0];
+        pal[3] = [30, 0, 0];
+        let mut pixels = vec![1u8; size * size];
+        // The top-left 10 x 10 map pixels (one layout pixel at this view).
+        for y in 0..10 {
+            pixels[y * size..y * size + 10].fill(2);
+        }
+        // Area 10 x 10 at (0, 0); the view puts the picture's top-left at
+        // the area's centre, 460 map pixels over 46 layout pixels.
+        let arrow = [3u8; 4];
+        let pic = Pic { width: 2, height: 2, pixels: &arrow, see_through: true };
+        let c = draw([0, 0], [10, 10], 1.0, &[Piece::Map { rect: [0, 0, 10, 10], pixels: &pixels, view: [0.0, 0.0, 46.0, 46.0], arrow: Some((pic, [3.0, 3.0])) }], &pal);
+        assert_eq!(c.at(4, 4), [0, 0, 0, 0], "left of and above the picture: nothing");
+        assert_eq!(c.at(5, 5), [20, 0, 0, 255], "the picture's first pixel at the centre");
+        assert_eq!(c.at(6, 6), [10, 0, 0, 255]);
+        assert_eq!((c.at(8, 8), c.at(9, 9)), ([30, 0, 0, 255], [30, 0, 0, 255]), "the arrow at centre + 3");
+        // Cut at the area's edge: the arrow's second column would be x 10.
+        let c = draw([0, 0], [11, 10], 1.0, &[Piece::Map { rect: [0, 0, 10, 10], pixels: &pixels, view: [0.0, 0.0, 46.0, 46.0], arrow: Some((pic, [4.0, 0.0])) }], &pal);
+        assert_eq!((c.at(9, 5), c.at(10, 5)), ([30, 0, 0, 255], [0, 0, 0, 0]));
     }
 
     #[test]

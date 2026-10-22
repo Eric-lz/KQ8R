@@ -98,7 +98,10 @@ pub fn load_map(game: &GameDir, world: &str, file: Option<MapFile>, main: &mut L
 pub fn map_step(map: Option<ResMut<MapSim>>, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>) {
     let (Some(mut map), Some(mut sim)) = (map, sim) else { return };
     let world = &mut sim.active.world;
-    if let Some(m) = map.pending.take() {
+    if let Some(mut m) = map.pending.take() {
+        // Rules 22, 27: both views from the one stored on Connor.
+        m.set_views(world.map_view);
+        world.map_log.push(format!("update {}: the map is set up; views from Connor's {:?} (rules 22, 27)", world.updates, world.map_view.as_array()));
         world.map = Some(m);
     }
     if let Some(c) = connor {

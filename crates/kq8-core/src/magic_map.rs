@@ -124,6 +124,56 @@ pub fn arrow_frame(heading: f64) -> usize {
     f.rem_euclid(ARROW_FRAMES) as usize
 }
 
+/// Rule 22: where the map picture is drawn in the map area: a rectangle
+/// in 640 × 480 layout pixels measured from the area's centre (STAND-IN
+/// at 800 × 600, open question 6: scaled with the screen like the
+/// panels).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct View {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+/// Rule 22: a new game's view (the whole picture at about × 0.648).
+pub const START_VIEW: View = View { left: -152.83, top: -152.11, right: 145.44, bottom: 146.16 };
+/// Rule 18: the arrow's size; its centre is on Connor.
+pub const ARROW_HALF: f64 = 5.0;
+
+impl View {
+    pub fn width(&self) -> f64 {
+        self.right - self.left
+    }
+
+    pub fn height(&self) -> f64 {
+        self.bottom - self.top
+    }
+
+    /// Rule 18: the arrow's top-left corner for map pixel `p`, from the
+    /// area's centre: the pixel scaled by the shown size, plus the
+    /// picture's top-left, minus half the arrow.
+    pub fn arrow_at(&self, p: (i32, i32)) -> (f64, f64) {
+        (self.left + p.0 as f64 * self.width() / MAP_SIZE as f64 - ARROW_HALF, self.top + p.1 as f64 * self.height() / MAP_SIZE as f64 - ARROW_HALF)
+    }
+
+    /// The map pixel under point (`x`, `y`) from the area's centre
+    /// (fractions kept).
+    pub fn map_point(&self, x: f64, y: f64) -> (f64, f64) {
+        ((x - self.left) / self.width() * MAP_SIZE as f64, (y - self.top) / self.height() * MAP_SIZE as f64)
+    }
+
+    pub fn as_array(&self) -> [f64; 4] {
+        [self.left, self.top, self.right, self.bottom]
+    }
+}
+
+impl Default for View {
+    fn default() -> Self {
+        START_VIEW
+    }
+}
+
 /// What one update did (rule 9), for the log.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Step {
@@ -184,6 +234,11 @@ pub struct MapState {
     pub earned_teleport: bool,
     /// Counts every change of [`MapState::picture`], for redrawing.
     pub version: u64,
+    /// Rule 22: the big map's view (its changes are stored on Connor by
+    /// the caller); rule 27: the mini-map's own copy. Both taken from the
+    /// view stored on Connor when the map is set up ([`MapState::set_views`]).
+    pub view: View,
+    pub mini_view: View,
     /// Lines for `map.log`, taken by the caller.
     pub log: Vec<String>,
 }
@@ -224,6 +279,8 @@ impl MapState {
             frame: 0,
             earned_teleport: keys.earned_teleport,
             version: 0,
+            view: START_VIEW,
+            mini_view: START_VIEW,
             log: Vec::new(),
             keys,
         };
@@ -347,6 +404,14 @@ impl MapState {
             self.draw_icons();
         }
         Some(step)
+    }
+
+    /// Rules 22, 27: the views when the map is set up, from the one
+    /// stored on Connor (STAND-IN, open question 3: also after a world
+    /// change).
+    pub fn set_views(&mut self, stored: View) {
+        self.view = stored;
+        self.mini_view = stored;
     }
 
     /// Rule 2.
@@ -632,6 +697,18 @@ mod tests {
         assert_eq!(m.reveal(100, 100), 0);
         // Rows 0-3 (d 0, 1, 2 have w 2; d 3 has 0): columns 0-1 each.
         assert_eq!(m.reveal(0, 0), 6);
+    }
+
+    #[test]
+    fn the_start_view_and_the_arrow() {
+        let v = START_VIEW;
+        assert!((v.width() / MAP_SIZE as f64 - 0.648).abs() < 0.001);
+        // Pixel (0, 0): the picture's corner less half the arrow.
+        assert_eq!(v.arrow_at((0, 0)), (-152.83 - 5.0, -152.11 - 5.0));
+        let (x, y) = v.arrow_at((230, 230));
+        assert!((x - (-152.83 + 230.0 * v.width() / 460.0 - 5.0)).abs() < 1e-9 && (y + 5.0 - (-152.11 + 0.5 * v.height())).abs() < 1e-9);
+        let (mx, my) = v.map_point(-152.83, 146.16);
+        assert!((mx - 0.0).abs() < 1e-9 && (my - 460.0).abs() < 1e-9);
     }
 
     #[test]

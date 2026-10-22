@@ -2062,7 +2062,7 @@ Steps (one commit each):
    earned). **Test:** `--world Daventry --command "give MagicMap",5`
    walking (`--hold`): `map.log` per update pixel, pixels revealed,
    arrow frame; `KQMap::stopLoc 1` stops the reveal.
-3. **6d-3, the window** (rules 5–8, 18, 29–31). Drawn from the layout:
+3. **6d-3, the window** (**done** 2026-10-21) (rules 5–8, 18, 29–31). Drawn from the layout:
    borders, the black area with the map picture at the view, the arrow
    (clipped to the area), the name plate (`500.MSG` 38 + index, one or
    two lines), the page arrows, the "Go" button (off). The map key

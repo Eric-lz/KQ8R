@@ -674,6 +674,9 @@ pub struct WorldState {
     pub map: Option<crate::magic_map::MapState>,
     /// Connor's per-map marks (rules 33, 37).
     pub map_marks: crate::magic_map::ConnorMapMarks,
+    /// The map's view stored on Connor (rule 22), carried into the next
+    /// world.
+    pub map_view: crate::magic_map::View,
     /// Whether Connor carried the `MagicMap` item at the last update
     /// (rule 2: arriving and leaving switch the map).
     pub map_item: Option<bool>,
@@ -2950,6 +2953,7 @@ impl Active {
                 rope_log: Vec::new(),
                 map: None,
                 map_marks: Default::default(),
+                map_view: Default::default(),
                 map_item: None,
                 map_log: Vec::new(),
                 connor_in_temple4: false,

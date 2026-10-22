@@ -261,6 +261,14 @@ impl Panels {
         }
     }
 
+    /// `magic-map.md` rule 30 (M6 6d-3): the map key or a click on the
+    /// mini-map toggles the map window (the caller checks that the map is
+    /// active; nothing else is checked).
+    pub fn toggle_map(&mut self, why: &str) {
+        let on = !self.shown(Panel::Map);
+        self.set(Group::Map, on, why);
+    }
+
     /// Rule 15: `handsOff` going on or off.
     pub fn hands_off(&mut self, on: bool) {
         if on == self.hands_off {

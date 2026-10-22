@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-21 6d-3: the magic map's window
+
+**Changed:** `kq8-core` `magic_map.rs` (`View`, the start view, the arrow's place; views set up from the one stored on Connor), `panels.rs` (`toggle_map`), `gui_draw.rs` (`Piece::Map`: the map at its view with the arrow, cut to the area); viewer `gui_view.rs` (the map window as a panel: borders, area, name plate, page arrows, "Go" off; the map key from `movekeys.kq` row 8; a left click on the mini-map slot; `--key tab,N`), `map_view.rs`.
+**Why:** M6 6d step 3 (`magic-map.md` rules 5–8, 18, 22, 29–31).
+**Tested how:** `cargo test -p kq8-core` (501 pass), clippy clean. `cargo play --world Daventry --at 193000,193000,3.1416 --key tab,3 --command "give MagicMap",5 --key tab,30 --command "handsOff 1",60 --key tab,70 --command "handsOff 0",90 --key tab,120 --hold 1,0,0,10,100 --frames 800 --sound off`, and one with `--key left:IDCTL_INVBAR_MINIMAP,60` and `,70`; `gui.log`.
+**Result:** Tab before the map: "not active; nothing". After it: the map slides in (0.2 s, `map.aud`); `handsOff 1` slides it out; Tab during handsOff brings it in; `handsOff 0` leaves it as it is; Tab closes it; the slot click closes and opens it. Name plate "Kingdom of Daventry" (one line). Drawn at the start view (298.3 × 298.3 layout px); the arrow's top-left (−34.0, 81.5) from the area's centre for pixel (191, 368), moving up 0.65 per map row walking north.
+**Still broken / not tested:** **Not looked at** (no screenshot; checked in the logs only). Mouse on the map comes in 6d-4; clicks on it are ignored for now.
+**Next:** 6d-4, pan, zoom and follow.
+
 ## 2026-10-21 6d-2: the magic map's state (no drawing)
 
 **Changed:** New `kq8-core` `magic_map.rs` (map pixel, fog radius, the reveal disc, arrow frame, icons, the map's own picture, saved keys; `KQMap::activate` / `deactivate` / `stopLoc` / `useFog` / `setFogRadius`, `addMapIcon` (no longer a stub), `removeMapIcon`; Connor's visited marks), fields on `WorldState`; viewer `load.rs` takes the world's `<x>map.kq` from `GAME/Kq`; new viewer `map_view.rs` (pictures, icons, the update after the trap step); new `kq8-artifacts/logs/map.log`.
