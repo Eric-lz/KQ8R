@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 The packing's check is a test option (`--check-pack`)
+
+**Changed:** `kq8-data` `anim_pack.rs`: `Pack::add` checks only when asked. Viewer: `--check-pack` (`main.rs`, `world_build::Options`), passed to the world's packing and to weapon sets packed later (`AnimGpu`); the "animation pack" line says "not checked" without it (the "as finished meshes" size, which came from the check, left out). DESIGN.
+**Why:** The user chose to get some reading time back: every world passed the check.
+**Tested how:** clippy clean, `cargo test --workspace`. Daventry `--frames 60 --sound off`, twice without and twice with `--check-pack`; `viewer.log`.
+**Result:** Read 3,478 / 3,468 ms without the check, 3,699 / 3,715 ms with (0.24 s saved, not the 0.4 s estimated); packing 1.2 s without, 1.44 s with; with the check, the same differences as before (position 0.0080, normal 0.000026).
+**Still broken / not tested:** Reading Daventry is still about 0.1-0.3 s slower than before step 4 (3.2-3.4 s): the packing builds each frame's shape once for its normals.
+**Next:** Back to the game (saved games, or Q153 once answered).
+
 ## 2026-10-23 Animation memory 4g: the old drawing removed, measured
 
 **Changed:** Viewer: `load.rs`: `Animation::frame_count` replaces the frames' triangles (not built any more; the materials used come from the meshes' faces). anim_view, door_view, connor_view: no frame entities or meshes; movements keep their frame counts; `connor_view::animation_materials` (was `spawn_frames`; the first frame's normals for the light log from the model); Connor's and characters' face and potion-look lists hold only the drawn (animated) materials. `anim_gpu.rs`: `Slots` without old root and mode (`root`); `DrawMode`, F5 and `--anim-draw` removed (README). `shadow_view.rs`: `FrameSources` keeps only the parts' points (the step-1 mesh path gone); a mesh on the graphics card only gives no shadow points. `main.rs`: the 2-second frame line also gives that window's slowest frame. DESIGN, STATUS.

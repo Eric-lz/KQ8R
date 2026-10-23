@@ -11,8 +11,10 @@
 //! [`Topology`]: its corners (point, normal's point, texture place) and
 //! the triangles over them.
 //!
-//! [`Pack::add`] also unpacks what it packed exactly as the shader will
-//! and compares it with [`Shape::geometry`]'s triangles ([`Check`]).
+//! With `check`, [`Pack::add`] also unpacks what it packed exactly as the
+//! shader will and compares it with [`Shape::geometry`]'s triangles
+//! ([`Check`]); every world passed it (2026-10-23), so it is a test
+//! option now (it costs about 0.4 s of Daventry's read).
 
 use std::collections::HashMap;
 
@@ -129,8 +131,9 @@ fn distance(a: &[f32], b: &[f32]) -> f32 {
 impl Pack {
     /// Packs the `count` frames from sequence `first` of `shape` (`id`:
     /// the same number for the same parsed file); `flat`: is a material
-    /// flat-lit. Returns what each frame shows and the check.
-    pub fn add(&mut self, shape: &Shape, id: usize, first: usize, count: usize, flat: &dyn Fn(i32) -> bool) -> (Vec<Vec<Part>>, Check) {
+    /// flat-lit; `check`: compare what was packed (see the module notes).
+    /// Returns what each frame shows and the check (empty without).
+    pub fn add(&mut self, shape: &Shape, id: usize, first: usize, count: usize, flat: &dyn Fn(i32) -> bool, check_it: bool) -> (Vec<Vec<Part>>, Check) {
         let mut frames = Vec::with_capacity(count);
         let mut check = Check::default();
         for seq in first..first + count {
@@ -215,7 +218,9 @@ impl Pack {
                         }
                     };
                     let part = Part { topology, node_frame: nf_index, material: m, node: node_index as u32 };
-                    check.add(&self.check(&part, triangles, is_flat));
+                    if check_it {
+                        check.add(&self.check(&part, triangles, is_flat));
+                    }
                     parts.push(part);
                 }
             }

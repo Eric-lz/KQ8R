@@ -2747,10 +2747,12 @@ exactly as before):**
      3.7 s (packing, with its check, replaces building the frames);
      spawned in 0.4 s (was 0.8); average frame 6.71 ms (7.33 before).
      Left: the pack is kept in normal memory too (`AnimGpu::pack`, about
-     70 MB in Daventry, for bounds, slots and weapon sets); the packing's
-     check runs on every read (could be dropped to read faster); "memory
+     70 MB in Daventry, for bounds, slots and weapon sets); "memory
      by kind" counts the slots under "no entity" (their meshes are given
-     after the count).
+     after the count). The packing's check is a test option since
+     2026-10-23 (`--check-pack`): Daventry reads in 3.47 s without it
+     (3.70 s with). The packing itself takes 1.2 s of that (each frame's
+     shape built once, for its normals): could be made faster.
 
    **Risks.** Lighting must match: normals at 16 bits, flat corners as
    now, the same light code; checked by the user with the test key at

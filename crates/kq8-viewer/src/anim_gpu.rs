@@ -54,6 +54,8 @@ pub struct WorldPack {
     pub objects: Vec<Option<Vec<Vec<Part>>>>,
     pub doors: Vec<Option<Vec<Vec<Part>>>>,
     pub connor: Vec<Option<Vec<Vec<Part>>>>,
+    /// `--check-pack` was given (weapon sets added later are checked too).
+    pub check: bool,
 }
 
 /// The current world's animations on the graphics card.
@@ -68,13 +70,15 @@ pub struct AnimGpu {
     /// Kept for bounds and shadows: the node-frames (model space) and the
     /// topologies' corners.
     pub pack: Pack,
+    /// `--check-pack`.
+    check: bool,
 }
 
 impl AnimGpu {
     /// Sends `world` to the graphics card: the buffers' contents and one
     /// mesh per topology. Returns it and a line for the log.
     pub fn install(world: WorldPack, buffers: &AnimBuffers, assets: &mut Assets<ShaderBuffer>, meshes: &mut Assets<Mesh>) -> (AnimGpu, String) {
-        let mut gpu = AnimGpu { topologies: Vec::new(), objects: world.objects, doors: world.doors, connor: world.connor, pack: world.pack };
+        let mut gpu = AnimGpu { topologies: Vec::new(), objects: world.objects, doors: world.doors, connor: world.connor, pack: world.pack, check: world.check };
         gpu.add_topologies(meshes);
         let line = gpu.upload(buffers, assets);
         (gpu, line)
@@ -105,7 +109,7 @@ impl AnimGpu {
                 let source = a.source.as_ref()?;
                 let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
                 let id = std::sync::Arc::as_ptr(&source.shape) as usize;
-                let (packed, c) = self.pack.add(&source.shape, id, source.first, a.frame_count, &flat);
+                let (packed, c) = self.pack.add(&source.shape, id, source.first, a.frame_count, &flat, self.check);
                 check.add(&c);
                 self.connor.push(Some(packed));
                 Some(self.connor.len() - 1)

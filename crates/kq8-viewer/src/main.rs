@@ -159,6 +159,8 @@ struct Args {
     /// `world-change.md` rule 9 runs it on every arrival; at launch it is
     /// off by default because Daventry's plays the opening scene).
     begin: bool,
+    /// `--check-pack`: compare the packed animations with their models.
+    check_pack: bool,
     /// `--right N`: the camera-move (right) button counts as held from
     /// update N on, for a conversation's stay test (M4 4e-5 test).
     right: Option<u64>,
@@ -210,6 +212,7 @@ fn parse_args() -> Result<Args, String> {
         command: Vec::new(),
         console: Vec::new(),
         begin: false,
+        check_pack: false,
         right: None,
         item: None,
         kept_maps: None,
@@ -306,6 +309,7 @@ fn parse_args() -> Result<Args, String> {
                 a.command.push((words.trim().to_string(), n));
             }
             "--begin" => a.begin = true,
+            "--check-pack" => a.check_pack = true,
             "--console" => {
                 let v = value()?;
                 let usage = "--console needs \"WORDS\",UPDATE e.g. reload,60".to_string();
@@ -466,6 +470,7 @@ N is an update number (15 updates per second):
   --command \"WORDS\",N      run one script command at update N (repeatable)
   --console \"WORDS\",N      type one console line at update N (repeatable; e.g. reload)
   --begin                    run the world's world.cs Begin at launch too (Daventry: the opening scene)
+  --check-pack               test: compare the animations packed for the graphics card with their models (logged)
   --right N                the right (camera-move) button counts as held from update N on (conversations)
 
   -h, --help                 show this list
@@ -525,6 +530,7 @@ fn main() -> ExitCode {
         corners: args.corners,
         sound: args.sound,
         kept_maps: args.kept_maps.clone(),
+        check_pack: args.check_pack,
     };
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))

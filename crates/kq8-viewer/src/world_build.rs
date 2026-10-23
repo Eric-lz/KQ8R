@@ -56,6 +56,9 @@ pub struct Options {
     pub corners: bool,
     pub sound: bool,
     pub kept_maps: Option<String>,
+    /// `--check-pack`: compare the packed animations with their models
+    /// (Animation memory 4a's check, a test now).
+    pub check_pack: bool,
 }
 
 /// Everything read from a world's files.
@@ -230,7 +233,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
     log.summary(part_stats_line(&objects));
-    let (line, pack) = pack_world(&objects);
+    let (line, pack) = pack_world(&objects, opts.check_pack);
     log.summary(line);
     objects.pack = Some(pack);
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
@@ -271,7 +274,7 @@ fn part_stats_line(objects: &load::Objects) -> String {
 
 /// "Animation memory" step 4a: the world's animations packed for the
 /// graphics card and checked against today's triangles (not drawn yet).
-fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
+fn pack_world(objects: &load::Objects, check_it: bool) -> (String, crate::anim_gpu::WorldPack) {
     let started = Instant::now();
     let mut pack = kq8_data::anim_pack::Pack::default();
     let mut check = kq8_data::anim_pack::Check::default();
@@ -286,7 +289,7 @@ fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
             };
             let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
             let id = Arc::as_ptr(&source.shape) as usize;
-            let (packed, c) = pack.add(&source.shape, id, source.first, a.frame_count, &flat);
+            let (packed, c) = pack.add(&source.shape, id, source.first, a.frame_count, &flat, check_it);
             check.add(&c);
             animations += 1;
             frames += packed.len();
@@ -297,7 +300,7 @@ fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
     let [points, normals, node_frames, topologies] = pack.sizes();
     let mb = |b: usize| b as f64 / (1 << 20) as f64;
     let line = format!(
-        "animation pack (step 4a): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB, today's meshes {:.1} MB (48 bytes a corner); check over {} corners, largest differences: position {:.4}, normal {:.6}, texture place {:.6}, part ball {:.4}; {} ms",
+        "animation pack (step 4a): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
         mb(points),
         mb(normals),
         mb(node_frames),
@@ -305,16 +308,18 @@ fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
         mb(topologies),
         pack.topologies.len(),
         mb(points + normals + node_frames + topologies),
-        mb(check.corners * 48),
-        check.corners,
-        check.position,
-        check.normal,
-        check.uv,
-        check.ball,
+        if check_it {
+            format!(
+                "check over {} corners, largest differences: position {:.4}, normal {:.6}, texture place {:.6}, part ball {:.4}",
+                check.corners, check.position, check.normal, check.uv, check.ball
+            )
+        } else {
+            "not checked (--check-pack checks)".to_string()
+        },
         started.elapsed().as_millis()
     );
     let [objects, doors, connor] = lists;
-    (line, crate::anim_gpu::WorldPack { pack, objects, doors, connor })
+    (line, crate::anim_gpu::WorldPack { pack, objects, doors, connor, check: check_it })
 }
 
 /// The world whose texts and sounds `world` uses: `parentWorld` in
