@@ -104,7 +104,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 
 ## 2026-10-23 Faster loading 4: `play.cmd` starts the viewer without cargo
 
-**Changed:** New `play.cmd` (repository root; whitelisted in `.gitignore`): starts `targetelease\kq8-viewer.exe` with the given options from the repository folder; says to run `cargo play` first if it isn't built; never builds. README (one line), DESIGN ("Outside the milestones: loading time").
+**Changed:** New `play.cmd` (repository root; whitelisted in `.gitignore`): starts `target\release\kq8-viewer.exe` with the given options from the repository folder; says to run `cargo play` first if it isn't built; never builds. README (one line), DESIGN ("Outside the milestones: loading time").
 **Why:** The user's list (item 4): `cargo play` spends about 0.7 s on cargo's own checks before the viewer starts.
 **Tested how:** From PowerShell, three times each: `.\play.cmd --help` against `cargo run --release -q -p kq8-viewer -- --help`; `.\play.cmd --world CastleD --frames 60 --sound off` (exit code, `viewer.log`). (A first timing from Git Bash measured `cmd` failing to find the script; not used.)
 **Result:** 34-72 ms through `play.cmd`, 702-768 ms through cargo; the Castle ran (exit 0; read in 450 ms).
