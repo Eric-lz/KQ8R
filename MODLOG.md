@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 `play.cmd` kept out of the repository
+
+**Changed:** `play.cmd` no longer tracked (`git rm --cached`; the file stays on the user's machine) and its `.gitignore` whitelist line removed, so it is ignored; README line removed; DESIGN and STATUS say it is local.
+**Why:** The user: don't commit the script to GitHub. (The user's check: under 3.4 s from running it to playable.)
+**Tested how:** `git status` (the file no longer listed); `play.cmd` still on disk.
+**Result:** —
+**Still broken / not tested:** It is still in the earlier local commit 769e161 (not pushed); removed from history only if the user asks.
+**Next:** —
+
 ## 2026-10-23 Faster loading 4: `play.cmd` starts the viewer without cargo
 
 **Changed:** New `play.cmd` (repository root; whitelisted in `.gitignore`): starts `target\release\kq8-viewer.exe` with the given options from the repository folder; says to run `cargo play` first if it isn't built; never builds. README (one line), DESIGN ("Outside the milestones: loading time").

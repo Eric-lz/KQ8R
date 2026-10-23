@@ -2782,7 +2782,8 @@ different files were behind them). What was done, one commit each:
    0.19 s), grouped by model file so points stay shared.
 3. Each model file read and parsed once (974 -> 863; the pack 71.3 ->
    67.9 MB).
-4. `play.cmd`: the built viewer without cargo's checks (0.7 s).
+4. A local launcher (`play.cmd`, kept out of the repository at the
+   user's wish): the built viewer without cargo's checks (0.7 s).
 
 Daventry: reading 3.47 -> 1.28 s; everything drawn (no render pipeline
 waiting) 5.18 -> about 2.8 s after the start; plus cargo's 0.7 s unless

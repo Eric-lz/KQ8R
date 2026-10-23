@@ -573,7 +573,7 @@ M6 has started with the Rope and Hook (6a).
   (was 133,200).** Drawing work is open again.**
 - **Loading time (2026-10-23, DESIGN "loading time"):** Daventry reads in
   1.3 s (was 3.5 s), everything drawn about 2.8 s after the start;
-  `play.cmd` skips cargo's 0.7 s. The timeline is in `viewer.log`. Smooth
+  a local `play.cmd` (not in the repository) skips cargo's 0.7 s. The timeline is in `viewer.log`. Smooth
   animation after M7. Other drawing work waits until step 4 is done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
