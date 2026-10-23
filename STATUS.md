@@ -561,10 +561,10 @@ M6 has started with the Rope and Hook (6a).
   "parts count": 85-91 % of the triangles stay, over half the parts
   change form every frame). **Plan chosen (DESIGN "Animation memory"):
   step 1 (no normal-memory copy of animation meshes; **done 2026-10-22**,
-  Daventry in play 2.64 → 1.51 GB, checked by the user), then step 3 (one
-  entity per drawn part); step 4 (frames on the graphics card) after
-  M7, with smooth animation. Other drawing work waits until 1 and 3 are
-  done.**
+  Daventry in play 2.64 → 1.51 GB, checked by the user). **2026-10-23:
+  step 3 skipped, step 4 (frames on the graphics card) now, in sub-steps
+  4a-4g (DESIGN); waiting for the user's go on the plan.** Smooth
+  animation after M7. Other drawing work waits until step 4 is done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
   changes, the frozen world clock): with saved games. Reading slows down

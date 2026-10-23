@@ -2561,9 +2561,9 @@ Steps:
 ### Outside the milestones: animation memory (planned 2026-10-22)
 
 Not from the original game: how we keep animations in memory. The
-user's choice: make the game fully playable and faithful first, so only
-the steps that keep the drawing identical now (1 and 3); the bigger
-change (4) later, with smooth animation, after M7.
+user's first choice (2026-10-22): steps 1 and 3 now, 4 after M7. **Changed
+2026-10-23 (the user): step 3 skipped, step 4 now** (it needs step 3's
+restructuring anyway; smooth animation stays after M7).
 
 **Measured (2026-10-22).** `world.log` "memory by kind" and `viewer.log`
 "parts count" (both logged on every world):
@@ -2613,23 +2613,86 @@ exactly as before):**
    meshes go to the graphics card on the next frame).
 2. ~~Shared corners~~: **skipped** (the user, 2026-10-22): step 4 would
    replace it.
-3. **One entity per drawn part, its mesh swapped each frame.** Instead
-   of an entity per frame per part, hidden but one, each placed
-   animated object gets one entity per part of the frame shown, and the
-   frame's meshes are put on them when the frame changes. Everything
-   that reads the shown frame (shadows, clicks, part places for weapons,
-   lights carried by frames, faces, see-through, copies made by
-   scripts) follows. Done one kind at a time, the old way kept until
-   all have moved: still-standing animated objects, doors, characters,
-   items and effects, Connor. **Test per kind:** entity counts in
-   "memory by kind"; the kind's own log lines unchanged; the user's
-   look.
-4. **Later (after M7): frames on the graphics card in compact form.**
-   Each animation's points kept as in the file (or close), the drawing
-   code on the graphics card picks the frame; with smooth animation on,
-   it blends two. A new shader for animated models; the biggest saving
-   and the base for smooth animation. Planned in full when it starts.
+3. ~~One entity per drawn part, its mesh swapped each frame~~:
+   **skipped** (the user, 2026-10-23): its restructuring is step 4's
+   first half; its mesh swapping would be thrown away.
+4. **Frames on the graphics card in compact form (now, 2026-10-23).**
 
-**While steps 1 and 3 are under way:** no other work on drawing,
-characters, objects, animations or saved games (the same files);
-study sessions (A) go on.
+   **How the data is today.** A model file (`.kqs`) has meshes; each mesh
+   has its faces once and its points once per *vertex frame* (4 bytes a
+   point: x, y, z as 0-254 and a normal index; each vertex frame has its
+   own scale and origin, `Mesh::position`). A frame of an animation is a
+   list of *nodes*: mesh, vertex frame, texture frame and a 3 x 3 + move
+   matrix (`Shape::geometry`). The loader turns every frame into
+   finished triangles; corner normals (`object-lighting.md` rule 8) are
+   the sums of the node's face normals at each point after the matrix,
+   made length 1; flat-lit materials give all three corners the first
+   corner's normal; each triangle carries its node's ball for point
+   lights (rule 24).
+
+   **What the graphics card gets instead (per world):**
+   - one **points buffer**: every vertex frame's points as in the file
+     (4 bytes each);
+   - one **normals buffer**: each node-frame's corner normals, one per
+     point (8 bytes, 16-bit numbers: exact to 0.00002; the matrix can
+     stretch unevenly, so normals can't be made once per mesh and
+     turned);
+   - one **node-frame table**: per node per frame its full place (the
+     vertex frame's scale and origin folded into the node's matrix),
+     its ball, and where its points and normals start;
+   - per (mesh, texture frame, material) one small **topology mesh**:
+     each corner's point number, its normal's point number (its own, or
+     the triangle's first corner for flat-lit materials) and its texture
+     place; corners shared where all three match.
+   - The object shader (`object_light.wesl`) gets an animated variant:
+     the vertex step reads the node-frame named by the entity's
+     `MeshTag` (a number Bevy hands the shader per entity), fetches the
+     point and normal, places them, then lights them exactly as now.
+   - Each placed animated object gets one entity per (part, material)
+     of its largest frame; showing a frame sets their topology meshes
+     and tags; parts a frame lacks are hidden. Their bounds (`Aabb`) are
+     set once to cover every frame of the object's movements.
+   - Everything that reads "the shown frame" today reads the object's
+     current (movement, frame) instead: shadows (built from the model as
+     in step 1), the model ball, part places (weapons), lights carried
+     by frames, talking faces, see-through, script copies.
+
+   **Sub-steps (one commit each; the old way stays for the kinds not
+   moved yet, so the game stays playable):**
+   - **4a. The compact data, checked on the processor.** Build the
+     buffers for every world; decode them on the processor exactly as
+     the shader will, and compare with today's triangles for every
+     frame of every animation: positions, normals, texture places,
+     balls (largest difference logged; must be at rounding level).
+     Log the buffers' sizes against today's 955 MB (Daventry). No
+     drawing change. **Test:** all 11 worlds; unit tests on a small
+     made-up model.
+   - **4b. The shader and still animated objects** (windmill, wheels,
+     flags, chains: anim_view's objects that aren't characters). A
+     test key switches those objects between the old and the new
+     drawing in place, for the user to compare by eye. **Test:**
+     entity counts, the shader's numbers; the user's look with the
+     key.
+   - **4c. Doors and chests** (door_view).
+   - **4d. Characters** (anim_view): talking faces, weapons' part
+     places, shadows, see-through, script copies (`spawn_copy`), the
+     unused templates.
+   - **4e. Items, bodies, effects, potions' orbits.**
+   - **4f. Connor** (connor_view): late movement sets, weapon swaps, the
+     hammer throw.
+   - **4g. The old way removed**: frame entities, `FrameSources`'s mesh
+     path, the test key. **Test:** the tour of all worlds: working set,
+     frame time, buffer sizes; `cargo test`.
+
+   **Risks.** Lighting must match: normals at 16 bits, flat corners as
+   now, the same light code; checked by the user with the test key at
+   each sub-step. Storage buffers in the vertex step: fine on Vulkan
+   and DX12 (our only renderers). Bevy batching with per-entity tags:
+   expected fine; frame time logged.
+
+   **Later, after M7: smooth animation** on top of this: the tag names a
+   pair of node-frames and a blend amount (DESIGN M7 note).
+
+**While step 4 is under way:** no other work on drawing, characters,
+objects, animations or saved games (the same files); study sessions (A)
+go on.

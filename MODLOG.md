@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Plan: animation memory step 4 now (step 3 skipped)
+
+**Changed:** Docs only: DESIGN "Animation memory" (step 3 skipped; step 4 planned in full: the compact data, the shader, sub-steps 4a-4g, risks), STATUS.
+**Why:** The user chose to go straight to step 4 (step 3's restructuring is part of it).
+**Tested how:** — (checked that Bevy 0.20 has `MeshTag` for per-entity numbers in the shader; our shaders already use storage buffers.)
+**Result:** —
+**Still broken / not tested:** —
+**Next:** The user's go on the plan; then 4a.
+
 ## 2026-10-22 Animation memory step 1: animation frames only on the graphics card
 
 **Changed:** Viewer `load.rs`: `FrameShape` (the parsed model and the loop's first sequence) on each `Animation`. `shadow_view.rs`: `FrameSources` (per frame mesh: its model, sequence, material; the mesh made graphics-card-only; a frame's points built again from the model with `Shape::geometry` for shadows, ~4,000 recent frames kept; counts and time logged); `mesh_triangles` / `frame_triangles` use it. `anim_view.rs`, `door_view.rs`, `connor_view.rs` (also late sets) register their frames; `terrain_view.rs` passes it; `world_build.rs`: a fresh one per world (per-world list), a line in `world.log`. DESIGN.
