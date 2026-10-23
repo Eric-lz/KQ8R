@@ -99,25 +99,7 @@ struct Playing {
     birth_shown: Option<bool>,
     /// Drawn the new way too (Animation memory step 4b: still animated
     /// objects); `None` for the other kinds.
-    new_draw: Option<NewDraw>,
-}
-
-/// An object drawn from the animation buffers (step 4): its parts
-/// ("slots", one per part of its largest frame) under `new_root`, its old
-/// frames under `old_root`; the draw mode shows one root.
-struct NewDraw {
-    old_root: Entity,
-    new_root: Entity,
-    slots: Vec<Entity>,
-    /// Per movement: its animation's index (`AnimGpu::objects`), model
-    /// and ball.
-    movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
-    /// Animated material per (animation, material index).
-    materials: std::collections::HashMap<(usize, i32), Handle<ObjectMaterial>>,
-    /// (movement, frame) its slots show.
-    shown: Option<(usize, usize)>,
-    /// The draw mode shown.
-    mode: Option<crate::anim_gpu::DrawMode>,
+    new_draw: Option<crate::anim_gpu::Slots>,
 }
 
 /// What a new copy of an unused object needs (M5 5d-4): each movement's
@@ -524,12 +506,19 @@ pub fn spawn_animated(
         let mut parts = Vec::new();
         let mut recipe = Vec::new();
         // Step 4b: still animated objects are drawn the new way too.
-        let new_way = a.character.is_none() && !*unused && a.movements.iter().all(|(_, _, i)| gpu.objects.get(*i).is_some_and(Option::is_some));
-        let old_root = new_way.then(|| {
-            let r = commands.spawn((Transform::default(), Visibility::Inherited)).id();
-            commands.entity(body).add_child(r);
-            r
-        });
+        let new_draw = if a.character.is_none() && !*unused {
+            let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = a
+                .movements
+                .iter()
+                .flat_map(|(_, _, i)| built[*i].materials.iter().map(move |(m, h)| ((*i, *m), h.clone())))
+                .map(|(k, h)| (k, crate::object_light::for_object(materials, &h, opacity, p.haze_solid, p.haze_multiplier)))
+                .collect();
+            let movements = a.movements.iter().map(|(_, _, i)| (*i, built[*i].source.clone(), built[*i].ball)).collect();
+            crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, movements, own, materials)
+        } else {
+            None
+        };
+        let old_root = new_draw.as_ref().map(|s| s.old_root);
         for (_, _, i) in &a.movements {
             let b = &built[*i];
             let mut frames = Vec::with_capacity(b.frames.len());
@@ -562,47 +551,6 @@ pub fn spawn_animated(
             recipe.push((recipe_frames, if b.moves { b.steps.clone() } else { Vec::new() }, b.ball));
             drawn.push(DrawnMovement { frames, steps: if b.moves { b.steps.clone() } else { Vec::new() } });
         }
-        let new_draw = old_root.map(|old_root| {
-            let frames = a.movements.iter().filter_map(|(_, _, i)| gpu.objects[*i].as_ref());
-            let count = a.movements.iter().filter_map(|(_, _, i)| gpu.objects[*i].as_ref()).flatten().map(Vec::len).max().unwrap_or(0);
-            // One box over every frame of every movement (the topology
-            // meshes have no points of their own to measure).
-            let aabb = gpu.bounds(frames).map(|(lo, hi)| {
-                let (a, b) = (Vec3::from(crate::to_bevy(lo, [0.0; 3])), Vec3::from(crate::to_bevy(hi, [0.0; 3])));
-                bevy::camera::primitives::Aabb::from_min_max(a.min(b), a.max(b))
-            });
-            let new_root = commands.spawn((Transform::default(), Visibility::Hidden, built[a.movements[0].2].ball)).id();
-            commands.entity(body).add_child(new_root);
-            let slots = (0..count)
-                .map(|_| {
-                    let mut e = commands.spawn((Transform::default(), Visibility::Hidden, bevy::mesh::MeshTag::new(0)));
-                    if let Some(aabb) = aabb {
-                        e.insert(aabb);
-                    }
-                    let e = e.id();
-                    commands.entity(new_root).add_child(e);
-                    e
-                })
-                .collect();
-            let mut own_materials = std::collections::HashMap::new();
-            for (_, _, i) in &a.movements {
-                for (m, material) in &built[*i].materials {
-                    let material = crate::object_light::for_object(materials, material, opacity, p.haze_solid, p.haze_multiplier);
-                    if let Some(copy) = materials.get(&material).map(crate::object_light::animated) {
-                        own_materials.insert((*i, *m), materials.add(copy));
-                    }
-                }
-            }
-            NewDraw {
-                old_root,
-                new_root,
-                slots,
-                movements: a.movements.iter().map(|(_, _, i)| (*i, built[*i].source.clone(), built[*i].ball)).collect(),
-                materials: own_materials,
-                shown: None,
-                mode: None,
-            }
-        });
         if *unused && a.character.is_none() {
             recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone() });
         }
@@ -689,7 +637,7 @@ pub fn spawn_animated(
         });
     }
     let new_way = playing.iter().filter(|p| p.new_draw.is_some()).count();
-    let slots: usize = playing.iter().filter_map(|p| p.new_draw.as_ref()).map(|n| n.slots.len()).sum();
+    let slots: usize = playing.iter().filter_map(|p| p.new_draw.as_ref()).map(|n| n.len()).sum();
     main_log.summary(format!("animated objects drawn the new way too (Animation memory step 4b): {new_way} still animated objects, {slots} part entities (F5 or --anim-draw switches old/new)"));
     main_log.summary(format!(
         "animated objects: {} playing ({} run by the world's scripts, {} with more than one movement, {} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
@@ -831,15 +779,8 @@ pub fn anim_draw(
     let mode = mode.map_or(crate::anim_gpu::DrawMode::New, |m| *m);
     for p in &mut sim.playing {
         // Step 4: which drawing is shown (F5).
-        if let Some(nd) = p.new_draw.as_mut().filter(|nd| nd.mode != Some(mode)) {
-            let new = mode == crate::anim_gpu::DrawMode::New;
-            if let Ok(mut v) = visibility.get_mut(nd.new_root) {
-                *v = if new { Visibility::Inherited } else { Visibility::Hidden };
-            }
-            if let Ok(mut v) = visibility.get_mut(nd.old_root) {
-                *v = if new { Visibility::Hidden } else { Visibility::Inherited };
-            }
-            nd.mode = Some(mode);
+        if let Some(nd) = p.new_draw.as_mut() {
+            nd.set_mode(mode, &mut visibility);
         }
         // makeTranslucent (characters.md rule 22, M4): every material of
         // every part at n / 255, at once (objects.md "See-through
@@ -884,7 +825,7 @@ pub fn anim_draw(
                         p.own.insert(copy.id(), (copy.clone(), full));
                         *h = copy;
                     }
-                    nd.shown = None;
+                    nd.forget_shown();
                 }
                 for (h, full) in p.own.values() {
                     if let Some(mut m) = materials.get_mut(h) {
@@ -948,7 +889,7 @@ pub fn anim_draw(
         if moved {
             (p.rotation, p.position) = (base.rotation, base.position);
         }
-        if p.shown == Some((movement, frame)) && !moved && p.new_draw.as_ref().is_none_or(|nd| nd.shown.is_some()) {
+        if p.shown == Some((movement, frame)) && !moved && p.new_draw.as_ref().is_none_or(|nd| !nd.stale(movement, frame)) {
             continue;
         }
         if let Ok(mut c) = carried.get_mut(p.body) {
@@ -962,7 +903,7 @@ pub fn anim_draw(
         }
         p.shown = Some((movement, frame));
         if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
-            show_slots(&mut commands, nd, gpu, movement, frame, &mut visibility);
+            nd.show(&mut commands, gpu, movement, frame, &mut visibility);
         }
         let mut pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
         if loop_moves_base {
@@ -976,40 +917,6 @@ pub fn anim_draw(
             }
         }
     }
-}
-
-/// Step 4: the slots show `frame` of `movement`: each part's topology
-/// mesh, its animated material and its node-frame tag; slots beyond the
-/// frame's parts are hidden.
-fn show_slots(commands: &mut Commands, nd: &mut NewDraw, gpu: &crate::anim_gpu::AnimGpu, movement: usize, frame: usize, visibility: &mut Query<&mut Visibility>) {
-    let Some((anim, source, ball)) = nd.movements.get(movement).cloned() else { return };
-    let parts = gpu.objects.get(anim).and_then(Option::as_ref).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice);
-    let sequence = source.as_ref().map_or(0, |s| s.first + frame);
-    for (k, &slot) in nd.slots.iter().enumerate() {
-        match parts.get(k) {
-            Some(part) => {
-                let mut e = commands.entity(slot);
-                e.insert((
-                    Mesh3d(gpu.topologies[part.topology as usize].clone()),
-                    bevy::mesh::MeshTag::new(part.node_frame),
-                    crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material },
-                ));
-                if let Some(m) = nd.materials.get(&(anim, part.material)) {
-                    e.insert(MeshMaterial3d(m.clone()));
-                }
-                if let Ok(mut v) = visibility.get_mut(slot) {
-                    *v = Visibility::Inherited;
-                }
-            }
-            None => {
-                if let Ok(mut v) = visibility.get_mut(slot) {
-                    *v = Visibility::Hidden;
-                }
-            }
-        }
-    }
-    commands.entity(nd.new_root).insert(ball);
-    nd.shown = Some((movement, frame));
 }
 
 /// `characters.md` rules 36, 37 (M4 4d-7b-2): each character that casts a

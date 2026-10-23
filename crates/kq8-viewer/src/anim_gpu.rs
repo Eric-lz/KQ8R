@@ -182,3 +182,149 @@ pub fn toggle_draw(keys: Res<ButtonInput<KeyCode>>, mut mode: ResMut<DrawMode>, 
     *mode = if *mode == DrawMode::New { DrawMode::Old } else { DrawMode::New };
     shared.log.lock().unwrap().summary(format!("key F5: animated objects drawn the {} way (Animation memory step 4)", if *mode == DrawMode::New { "new" } else { "old" }));
 }
+
+/// Which list of `AnimGpu` an object's animations index.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum List {
+    Objects,
+    Doors,
+}
+
+impl AnimGpu {
+    /// The packed frames of animation `anim` of `list`.
+    pub fn frames(&self, list: List, anim: usize) -> Option<&Vec<Vec<Part>>> {
+        match list {
+            List::Objects => self.objects.get(anim),
+            List::Doors => self.doors.get(anim),
+        }
+        .and_then(Option::as_ref)
+    }
+}
+
+/// An object drawn from the animation buffers: its parts ("slots", one
+/// per part of its largest frame) under `new_root`, its old frames under
+/// `old_root`; the draw mode shows one of the two (4b-4f).
+pub struct Slots {
+    pub old_root: Entity,
+    new_root: Entity,
+    slots: Vec<Entity>,
+    list: List,
+    /// Per movement: its animation's index in `list`, model and ball.
+    movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
+    /// Animated material per (animation, material index).
+    pub materials: std::collections::HashMap<(usize, i32), Handle<crate::object_light::ObjectMaterial>>,
+    /// (movement, frame) the slots show.
+    shown: Option<(usize, usize)>,
+    /// The draw mode shown.
+    mode: Option<DrawMode>,
+}
+
+impl Slots {
+    /// The roots under `body` and the slots, if every movement is packed;
+    /// `materials`: (animation, material index) -> the object's material
+    /// (an animated copy is made of each).
+    pub fn spawn(
+        commands: &mut Commands,
+        body: Entity,
+        gpu: &AnimGpu,
+        list: List,
+        movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
+        materials: impl IntoIterator<Item = ((usize, i32), Handle<crate::object_light::ObjectMaterial>)>,
+        assets: &mut Assets<crate::object_light::ObjectMaterial>,
+    ) -> Option<Slots> {
+        if movements.is_empty() || movements.iter().any(|(a, _, _)| gpu.frames(list, *a).is_none()) {
+            return None;
+        }
+        let frames: Vec<&Vec<Vec<Part>>> = movements.iter().filter_map(|(a, _, _)| gpu.frames(list, *a)).collect();
+        let count = frames.iter().flat_map(|f| f.iter()).map(Vec::len).max().unwrap_or(0);
+        // One box over every frame of every movement (the topology meshes
+        // have no points of their own to measure).
+        let aabb = gpu.bounds(frames.iter().copied()).map(|(lo, hi)| {
+            let (a, b) = (Vec3::from(crate::to_bevy(lo, [0.0; 3])), Vec3::from(crate::to_bevy(hi, [0.0; 3])));
+            bevy::camera::primitives::Aabb::from_min_max(a.min(b), a.max(b))
+        });
+        let old_root = commands.spawn((Transform::default(), Visibility::Inherited)).id();
+        let new_root = commands.spawn((Transform::default(), Visibility::Hidden, movements[0].2)).id();
+        commands.entity(body).add_children(&[old_root, new_root]);
+        let slots = (0..count)
+            .map(|_| {
+                let mut e = commands.spawn((Transform::default(), Visibility::Hidden, bevy::mesh::MeshTag::new(0)));
+                if let Some(aabb) = aabb {
+                    e.insert(aabb);
+                }
+                let e = e.id();
+                commands.entity(new_root).add_child(e);
+                e
+            })
+            .collect();
+        let materials = materials
+            .into_iter()
+            .filter_map(|(k, m)| assets.get(&m).map(crate::object_light::animated).map(|copy| (k, assets.add(copy))))
+            .collect();
+        Some(Slots { old_root, new_root, slots, list, movements, materials, shown: None, mode: None })
+    }
+
+    /// Part entities.
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    /// Shows the old or the new drawing.
+    pub fn set_mode(&mut self, mode: DrawMode, visibility: &mut Query<&mut Visibility>) {
+        if self.mode == Some(mode) {
+            return;
+        }
+        let new = mode == DrawMode::New;
+        if let Ok(mut v) = visibility.get_mut(self.new_root) {
+            *v = if new { Visibility::Inherited } else { Visibility::Hidden };
+        }
+        if let Ok(mut v) = visibility.get_mut(self.old_root) {
+            *v = if new { Visibility::Hidden } else { Visibility::Inherited };
+        }
+        self.mode = Some(mode);
+    }
+
+    /// Whether the slots must be set again (never set, or forgotten).
+    pub fn stale(&self, movement: usize, frame: usize) -> bool {
+        self.shown != Some((movement, frame))
+    }
+
+    /// The materials changed (see-through copies): set the slots again.
+    pub fn forget_shown(&mut self) {
+        self.shown = None;
+    }
+
+    /// The slots show `frame` of `movement`: each part's topology mesh,
+    /// its animated material and its node-frame tag; slots beyond the
+    /// frame's parts are hidden.
+    pub fn show(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, visibility: &mut Query<&mut Visibility>) {
+        let Some((anim, source, ball)) = self.movements.get(movement).cloned() else { return };
+        let parts = gpu.frames(self.list, anim).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice);
+        let sequence = source.as_ref().map_or(0, |s| s.first + frame);
+        for (k, &slot) in self.slots.iter().enumerate() {
+            match parts.get(k) {
+                Some(part) => {
+                    let mut e = commands.entity(slot);
+                    e.insert((
+                        Mesh3d(gpu.topologies[part.topology as usize].clone()),
+                        bevy::mesh::MeshTag::new(part.node_frame),
+                        crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material },
+                    ));
+                    if let Some(m) = self.materials.get(&(anim, part.material)) {
+                        e.insert(MeshMaterial3d(m.clone()));
+                    }
+                    if let Ok(mut v) = visibility.get_mut(slot) {
+                        *v = Visibility::Inherited;
+                    }
+                }
+                None => {
+                    if let Ok(mut v) = visibility.get_mut(slot) {
+                        *v = Visibility::Hidden;
+                    }
+                }
+            }
+        }
+        commands.entity(self.new_root).insert(ball);
+        self.shown = Some((movement, frame));
+    }
+}

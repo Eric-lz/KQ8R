@@ -2692,7 +2692,13 @@ exactly as before):**
      objects, 332 part entities; the buffers 71 MB. Old and new give the
      same shadow reports over 1,200 frames; no graphics errors. Both
      drawings exist until 4g, so no memory saved yet.
-   - **4c. Doors and chests** (door_view).
+   - **4c. Doors and chests** (door_view). **Built** 2026-10-23,
+     waiting for the user's look: 4b's drawing moved into
+     `anim_gpu::Slots` (shared); door_view's `spawn_body` gives doors,
+     chests and scripted objects slots, `show_frame` sets them. Daventry
+     34 of 34 (141 part entities), Castle 5 of 5; shadow reports the same
+     both ways; no graphics errors. 4b checked by the user (the water
+     mill, the windmill's sails: no change with F5).
    - **4d. Characters** (anim_view): talking faces, weapons' part
      places, shadows, see-through, script copies (`spawn_copy`), the
      unused templates.

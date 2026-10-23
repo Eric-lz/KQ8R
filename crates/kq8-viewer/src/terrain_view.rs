@@ -312,8 +312,8 @@ pub fn setup_objects(
         &mut sources,
         &gpu,
     );
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log, &mut sources, &gpu);
     commands.insert_resource(gpu);
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log, &mut sources);
     // 3l-4: doors, chests and scripted objects were added after the
     // plain objects; the sweep tests them all in load order.
     let load_index = |name: &str| objects.placed.iter().position(|(p, _, _)| p.name.eq_ignore_ascii_case(name)).unwrap_or(usize::MAX);
