@@ -102,14 +102,23 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Fix (4d): a see-through figure's parts keep their drawing order
+
+**Changed:** `kq8-data` `anim_pack.rs`: each packed frame's parts are put in material order, then node order (the old drawing's order: one mesh per material).
+**Why:** The user's look: the keep's see-through ghost knight's staff flickered where his body was behind it, new drawing only. Our reading: see-through parts are drawn back to front without the depth test; the staff and the body are at the same distance (the knight's centre), so the order of the slots decides, and slots were filled in node order, which changes from frame to frame.
+**Tested how:** `cargo test -p kq8-data`; Daventry 300 frames: the pack's check unchanged (20,851,803 corners, position 0.0080, normal 0.000026), no graphics errors.
+**Result:** —
+**Still broken / not tested:** **Not looked at.** Not sure Bevy settles equal distances by entity order every time; if the flicker stays, the next idea is to give each part its own distance (its node's centre), which the old drawing didn't have either.
+**Next:** The user's look at the ghost knight with F5.
+
 ## 2026-10-23 Animation memory 4d: characters drawn the new way (F5 compares)
 
 **Changed:** Viewer anim_view: characters (and those prepared for a script's loadKQ) get `Slots` like still objects (only the unused non-characters, the copy templates, stay old: 4e); the animated copies of face materials join `face`, so mouth shapes reach both drawings; a see-through copy keeps a face material itself; character shadows read the slots while the new drawing is shown. `anim_gpu.rs`: `Slots::drawn_root`; hidden slots lose `AnimSlot` (no shadow from parts a frame lacks). DESIGN.
 **Why:** DESIGN "Animation memory" 4d.
 **Tested how:** `cargo test --workspace`, clippy clean. Daventry and Castle Daventry `--frames 1300 --sound off --anim-draw old|new`: `viewer.log`, `characters.log` shadow lines. The Wizard speaking (`--at 189300,198274,0 --command "KQMonster::speak Wizard Connor 1000 4 0 8 1 1",30`) both ways. The mirror scene (`--world CastleD --frames 9000 --command "move Connor 0 43178 103481 130 0 0 3.1416",5 --click mirror1,280`).
 **Result:** Daventry: 134 of 143 animated objects drawn the new way (63 characters), 1,222 part entities; the Castle 9 of 9. No graphics errors. Character shadows from the slots: the goblin 224 model triangles and 43 building surfaces, Connor 384, as with the old frames. The Wizard's mouth: the same codes both ways, each on 34 face materials (old and new). Lucreto loaded by the mirror script, his mouth on 6 face materials, deleted at update 507, as before.
-**Still broken / not tested:** **Not looked at**: characters walking, fighting, talking, see-through, rising from the ground, with F5. No memory saved yet (until 4g).
-**Next:** The user's look; then 4e (items, bodies, effects, potions' orbits, script copies).
+**Still broken / not tested:** No memory saved yet (until 4g). **The user's look (2026-10-23): all as before, except the keep's see-through ghost knight: his staff flickers where his body is behind it** (fixed below, not yet looked at).
+**Next:** 4e (items, bodies, effects, potions' orbits, script copies).
 
 ## 2026-10-23 Animation memory 4c: doors, chests and scripted objects drawn the new way (F5 compares)
 

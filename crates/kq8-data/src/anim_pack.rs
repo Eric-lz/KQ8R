@@ -219,6 +219,12 @@ impl Pack {
                     parts.push(part);
                 }
             }
+            // Material first, then node: the order the old drawing had
+            // (one mesh per material), so parts at the same distance (a
+            // see-through figure and what it holds) keep the same drawing
+            // order every frame (the user's look, 2026-10-23: the ghost
+            // knight's staff flickered).
+            parts.sort_by_key(|p| (p.material, p.node));
             frames.push(parts);
         }
         (frames, check)
