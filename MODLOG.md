@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-23 Q153 built: frames are cut down, the King's portrait stays pushed
+
+**Changed:** `kq8-data` `shape.rs`: new `frame_at_phase` (frame = floor(phase × frames + 0.001); past the end: repeating → 0, play-once → last; below 0 the other way), used for start frames; `kq8-core` `anim.rs` and `door.rs` (doors, chests, scripted objects) use it too; `named_anim.rs`: the "movement starts" log line shows the frame. Docs: provenance, QUESTIONS Q153, STATUS, FEATURES.
+**Why:** Session A traced Q153 (`objects.md` "Loops" rule 6): the game cuts down, never rounds. Our round() turned the portrait's `stop2` (0.99 of 46 frames) into frame 0, the unpushed pose.
+**Tested how:** `cargo test --workspace` (all pass; new `frame_at_phase_cuts_down`). `kq8-viewer --world CastleD --frames 5000 --sound off --command "move Connor 0 15390 90700 -1 0 0 0",5 --hold 1,0,0,10,60`; `doors.log`.
+**Result:** Update 74: "'stop2' at phase 0.9900 (frame 45) speed 0", the last (pushed) frame, held. Other objects' start frames move down by at most one (`telepad1` 5 → 4).
+**Still broken / not tested:** Not looked at by eye; taking the key behind the portrait not tried. Connor's own frames (`connor.rs` `frame_at`) still use the old rule. Also from the same answer, not built: a repeating wrap sets the phase to exactly 0, and repeating loops play at (N − 1)/(N × duration) per second.
+**Next:** The user's look at the portrait and the key; then those three as separate steps.
+
 ## 2026-10-22 Q143 (c) settled: the spinning mask is shrunk to its place
 
 **Changed:** Docs only: `potions.md` rule 35 "Details", `QUESTIONS.md` Q143, `STATUS.md`.

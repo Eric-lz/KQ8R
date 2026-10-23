@@ -87,17 +87,11 @@ impl DoorMovement {
         self.frame_steps.len().max(1)
     }
 
-    /// The frame shown at `phase`: round(phase × (frames − 1)) for a
-    /// one-shot, as for Connor's one-shots (`connor::MovementLoop::frame_at`);
-    /// round(phase × frames), wrapping to 0, for a repeating loop
-    /// (`objects.md` rule 2, as `crate::anim` since 3c).
+    /// The frame shown at `phase`: floor(phase × frames + 0.001), repeating
+    /// or not ([`kq8_data::shape::frame_at_phase`], `objects.md` "Loops"
+    /// rule 6, Q153).
     pub fn frame_at(&self, phase: f32) -> usize {
-        let n = self.frames();
-        if self.repeat {
-            (phase.rem_euclid(1.0) * n as f32).round() as usize % n
-        } else {
-            (phase.clamp(0.0, 1.0) * (n - 1) as f32).round() as usize
-        }
+        kq8_data::shape::frame_at_phase(phase, self.frames(), self.repeat)
     }
 
     /// One update of `dt` seconds from `phase` at the movement's own speed.
@@ -408,8 +402,9 @@ pub(crate) mod tests {
         let mut still = mv(1.0);
         still.play_time = 0.0;
         assert!(!still.step(0.3, 0.1).done);
-        assert_eq!(mv(1.0).frame_at(0.99), 0);
-        assert_eq!(mv(1.0).frame_at(0.3), 5);
+        assert_eq!(mv(1.0).frame_at(0.99), 15);
+        assert_eq!(mv(1.0).frame_at(0.3), 4);
+        assert_eq!(mv(1.0).frame_at(1.0), 0);
     }
 
     #[test]

@@ -15,9 +15,12 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   stands at once. Worlds with a parent (Castle Daventry, Snow exit,
   Temples 2–4) take voices and sounds from it (the user: Castle voices
   work). Characters loaded by a script can speak (the Castle's mirror
-  scene with Lucreto works, user-checked). **Not fixed, blocking the
-  Castle's key puzzle: Q153** (the King's portrait snaps back: the frame
-  rule for a still pose near the end of a repeating loop).
+  scene with Lucreto works, user-checked).
+- **2026-10-23 (B): Q153 built**: the frame for a phase is cut down
+  (floor(p × frames + 0.001)), not rounded, for objects, doors, chests
+  and start frames. The King's portrait now holds its pushed frame (45)
+  in the log; not checked by eye, and taking the key is not tested.
+  Connor's own frames still use the old rule (next step).
 
 - **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
   `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
@@ -743,9 +746,10 @@ M6 has started with the Rope and Hook (6a).
 - Inside `world-change.md`: three small points (not blocking):
   left-world variables in memory, the rope / movement list after
   arrival, `worldState.kq`'s events.
-- **For B (answered by A 2026-10-22, not built yet):** Q153 (frame =
-  floor(p × frames + 0.001): the King's portrait stays pushed;
-  `objects.md`), Q154 (`setScript` calls `Init`), Q155 (Choice state)
+- **For B (answered by A 2026-10-22, not built yet):** from Q153's
+  answer (`objects.md` "Loops" rule 6), still to build: Connor's frames
+  by the same rule; a repeating loop's wrap sets the phase to exactly 0;
+  repeating speed (N − 1)/(N × duration). Q154 (`setScript` calls `Init`), Q155 (Choice state)
   and Q156 (`StateChange`) in `characters.md`, Q157 (`loadObject`),
   Q158 (`sendEvent @`, `random`, the ravens) in `anim-scripts.md` rules
   33–37, Q159 (`STATS.AUD`, `interface.md` rule 26a), Q149

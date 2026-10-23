@@ -67,17 +67,10 @@ impl LoopPlayer {
         }
     }
 
-    /// The frame shown: a repeating loop runs through all frames per cycle,
-    /// round(phase × frames) as the start frame (rule 2), wrapping to 0; a
-    /// one-shot goes from the first to the last frame,
-    /// round(phase × (frames − 1)).
+    /// The frame shown: floor(phase × frames + 0.001)
+    /// ([`kq8_data::shape::frame_at_phase`], Q153).
     pub fn frame(&self) -> usize {
-        let n = self.frames;
-        if self.repeat {
-            (self.phase * n as f32).round() as usize % n
-        } else {
-            ((self.phase * (n - 1) as f32).round() as usize).min(n - 1)
-        }
+        kq8_data::shape::frame_at_phase(self.phase, self.frames, self.repeat)
     }
 }
 
@@ -115,8 +108,11 @@ mod tests {
 
     #[test]
     fn the_start_frame_is_the_still_models() {
-        // telepad1: start 0.3 of 16 frames -> frame 5 (round, rule 2).
-        assert_eq!(LoopPlayer::new(0.3, 1.0, true, 16, 1.0, None).frame(), 5);
+        // telepad1: start 0.3 of 16 frames -> frame 4 (cut down, Q153).
+        assert_eq!(LoopPlayer::new(0.3, 1.0, true, 16, 1.0, None).frame(), 4);
+        // The King's portrait's `stop2`: 0.99 of 46, still -> frame 45, the
+        // pushed pose (not 0, which round() gave).
+        assert_eq!(LoopPlayer::new(0.99, 0.0, true, 46, 1.0, None).frame(), 45);
         // A one-shot at 1.0 shows its last frame.
         assert_eq!(LoopPlayer::new(1.0, 0.0, false, 16, 1.0, None).frame(), 15);
     }

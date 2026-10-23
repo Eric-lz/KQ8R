@@ -488,9 +488,8 @@ impl Shape {
     }
 
     /// The sequence an animation starts on (objects.md "Animated objects at
-    /// load" rule 2): in the loop called `name`, frame
-    /// `round(start × frame count)`; a repeating loop wraps round, one
-    /// that plays once stops at its last frame. If no loop has that name,
+    /// load" rule 2): in the loop called `name`, the frame
+    /// [`frame_at_phase`] gives for `start`. If no loop has that name,
     /// the first loop is used and `fell_back` is true.
     pub fn start_sequence(&self, name: &str, start: f32, repeat: bool) -> Option<StartFrame> {
         let named = self
@@ -506,8 +505,7 @@ impl Shape {
         if count == 0 {
             return None;
         }
-        let raw = (start * count as f32).round().max(0.0) as usize;
-        let frame = if repeat { raw % count } else { raw.min(count - 1) };
+        let frame = frame_at_phase(start, count, repeat);
         let sequence = l.first_sequence.max(0) as usize + frame;
         (sequence < self.sequences.len()).then_some(StartFrame { sequence, frame, frames: count, fell_back })
     }
@@ -597,6 +595,23 @@ impl Shape {
             }
         }
         g
+    }
+}
+
+/// The frame a loop of `frames` frames shows at `phase` (`objects.md`
+/// "Loops that move the whole object" rule 6, traced, Q153): floor(phase
+/// × frames + 0.001), cut down, never rounded; the same at the start and
+/// while playing. At or past the end a repeating loop shows frame 0, one
+/// that plays once its last frame; below 0 the other way round.
+pub fn frame_at_phase(phase: f32, frames: usize, repeat: bool) -> usize {
+    let n = frames.max(1);
+    let f = (phase * n as f32 + 0.001).floor();
+    if f >= n as f32 {
+        if repeat { 0 } else { n - 1 }
+    } else if f < 0.0 {
+        if repeat { n - 1 } else { 0 }
+    } else {
+        f as usize
     }
 }
 
@@ -896,6 +911,18 @@ mod tests {
         assert!(close(g.triangles[1].normals[2], [0.0, 1.0, 0.0]));
         // A degenerate triangle has no normal.
         assert_eq!(front_normal(&[[1.0, 2.0, 3.0]; 3]), [0.0; 3]);
+    }
+
+    #[test]
+    fn frame_at_phase_cuts_down() {
+        // objects.md "Loops" rule 6: the King's portrait, 0.99 of 46.
+        assert_eq!(frame_at_phase(0.99, 46, true), 45);
+        // The thousandth of a frame allowance: 0.5 of 6 in f32 is 3.
+        assert_eq!(frame_at_phase(0.5, 6, false), 3);
+        assert_eq!(frame_at_phase(1.0 / 3.0, 3, true), 1);
+        // Past the end and below 0.
+        assert_eq!((frame_at_phase(1.0, 46, true), frame_at_phase(1.0, 46, false)), (0, 45));
+        assert_eq!((frame_at_phase(-0.01, 46, true), frame_at_phase(-0.01, 46, false)), (45, 0));
     }
 
     #[test]

@@ -113,7 +113,8 @@ impl Started {
     pub fn describe(&self, movements: &[DoorMovement]) -> String {
         let shown = movements.get(self.index).map_or("none", |m| m.name.as_str());
         let unknown = if self.unknown { format!(" (unknown name: movement 0 '{shown}' plays)") } else { String::new() };
-        format!("'{}'{unknown} at phase {:.4} speed {}", self.name, self.start, self.speed)
+        let frame = movements.get(self.index).map_or(0, |m| m.frame_at(self.start));
+        format!("'{}'{unknown} at phase {:.4} (frame {frame}) speed {}", self.name, self.start, self.speed)
     }
 }
 

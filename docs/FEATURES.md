@@ -715,8 +715,7 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
 - **Worlds with a parent** (Castle Daventry, Snow exit, Temples 2–4)
   use its voices and sounds (Castle checked by ear by the user).
 - **Not yet:** the full-armour movement list on arrival; the main menu
-  from Escape on the question; the Castle's King portrait snaps back
-  after the push (Q153), so its key can't be taken.
+  from Escape on the question.
 
 ## Viewer helpers (not in the original)
 
