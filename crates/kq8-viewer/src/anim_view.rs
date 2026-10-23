@@ -109,8 +109,11 @@ struct Recipe {
     script: Option<String>,
     /// What `Slots::spawn` needs for a copy drawn the new way (step 4e):
     /// per movement its animation, model and ball; its materials.
-    slots: (Vec<SlotMovement>, Vec<((usize, i32), Handle<ObjectMaterial>)>),
+    slots: (Vec<SlotMovement>, SlotMaterials),
 }
+
+/// A copy's materials for `Slots::spawn`: (animation, material index).
+type SlotMaterials = Vec<((usize, i32), Handle<ObjectMaterial>)>;
 
 /// A movement for `Slots::spawn`: its animation's index, model and ball.
 type SlotMovement = (usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall);
@@ -531,7 +534,7 @@ pub fn spawn_animated(
         // Steps 4b, 4d, 4e: every animated object is drawn the new way
         // too (the unused ones, copy templates, only with H; their copies
         // from the recipe).
-        let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = a
+        let own: SlotMaterials = a
             .movements
             .iter()
             .flat_map(|(_, _, i)| built[*i].materials.iter().map(move |(m, h)| ((*i, *m), h.clone())))

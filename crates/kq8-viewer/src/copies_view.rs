@@ -53,6 +53,7 @@ pub fn keep_templates(commands: &mut Commands, templates: &[crate::load::Templat
 /// Each update, after the scripts: the copies asked for are drawn; a
 /// still one whose box and type collide with Connor (the pair rule) gets
 /// a collider, tested after all the others (it was loaded last).
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_copies(
     mut commands: Commands,
     sim: Option<ResMut<DoorSim>>,
