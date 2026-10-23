@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Faster loading 3: each model file read and parsed once
+
+**Changed:** Viewer `load.rs`: `World` keeps the model files it parsed (`model_shape`: found once, parsed once, shared as `Arc<Shape>`); `load_model` and `load_animation_skinned` use it; an animation's `FrameShape` is the shared parse.
+**Why:** The user asked for faster loading (item 3 of the list); 974 model reads were 863 files in Daventry, and one parse lets the packer store a file's points once.
+**Tested how:** clippy clean, `cargo test --workspace`. Daventry `--frames 300 --sound off`, with and without `--check-pack`; `viewer.log`.
+**Result:** Model parses 974 -> 863; unpacks 3,878 -> 3,769; reading Daventry 2.93 -> 2.77 s; the pack 71.3 -> 67.9 MB (points 17.5 -> 14.9, topologies 13.9 -> 13.0); the check unchanged (position 0.0080, normal 0.000026).
+**Still broken / not tested:** 3,769 unpacks are still 1,419 entries: other repeated reads (not yet found).
+**Next:** Find the other repeats; the packing across cores; a launcher without cargo.
+
 ## 2026-10-23 Faster loading 1: each texture read and made into an image once
 
 **Changed:** Viewer `load.rs`: `World` keeps the textures it read and converted, by name and palette (`load_texture` = cache + `read_texture`; `Look` is `Clone`). `object_light.rs`: `ObjectLight` keeps one image per texture (name and size) for the world's object materials. `timeline.rs`: the totals also count different names ("N different").

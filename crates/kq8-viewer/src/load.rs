@@ -20,6 +20,10 @@ pub struct World {
     /// loads were 264 textures in Daventry; the user asked for faster
     /// loading, 2026-10-23).
     textures: std::sync::Mutex<std::collections::HashMap<(String, u64), Look>>,
+    /// Model files already read and parsed, by the name asked for, with
+    /// where they were found and their size (974 reads were 863 files in
+    /// Daventry; one parse also lets the packer share a file's points).
+    shapes: std::sync::Mutex<std::collections::HashMap<String, (String, std::sync::Arc<Shape>, usize)>>,
 }
 
 impl World {
@@ -35,7 +39,7 @@ impl World {
                 vols.push((v.to_string(), a));
             }
         }
-        Ok(World { name: canonical.to_string(), vols, textures: Default::default() })
+        Ok(World { name: canonical.to_string(), vols, textures: Default::default(), shapes: Default::default() })
     }
 
     /// Unpacks the first entry called `name` (any case) from any archive.
@@ -153,11 +157,8 @@ pub fn load_model(
 ) -> Result<Model, String> {
     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Model);
     crate::timeline::seen(crate::timeline::Counter::Parse, model);
-    let (label, bytes) = find_model(game, world, model)?;
-    log.summary(format!("model: {label} ({} bytes)", bytes.len()));
-    let parsing = Instant::now();
-    let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
-    crate::timeline::add(crate::timeline::Counter::Parse, parsing);
+    let (label, shape, size) = model_shape(game, world, model)?;
+    log.summary(format!("model: {label} ({size} bytes)"));
     let (rest, frame_note) = match start {
         None => (shape.rest_sequence(), "first frame".to_string()),
         Some((name, at, repeat)) => match shape.start_sequence(name, at, repeat) {
@@ -567,10 +568,7 @@ pub fn load_animation_skinned(
 ) -> Result<Animation, String> {
     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Animation);
     crate::timeline::seen(crate::timeline::Counter::Parse, model);
-    let (label, bytes) = find_model(game, world, model)?;
-    let parsing = Instant::now();
-    let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
-    crate::timeline::add(crate::timeline::Counter::Parse, parsing);
+    let (label, shape, _) = model_shape(game, world, model)?;
     let named = shape
         .loops
         .iter()
@@ -649,7 +647,7 @@ pub fn load_animation_skinned(
     ));
     let part_stats = kq8_data::shape::part_stats(&shape, first, count);
     let (duration, ball) = (l.duration, (shape.radius, shape.center));
-    let source = Some(FrameShape { shape: std::sync::Arc::new(shape), first });
+    let source = Some(FrameShape { shape: shape.clone(), first });
     Ok(Animation { source, looks, frame_count, duration, step_sum, frame_steps, frame_transforms, frame_lights, ball, frame_parts, part_stats })
 }
 
@@ -762,6 +760,21 @@ pub fn load_object_lights(game: &GameDir, world: &World, log: &mut Log) -> kq8_d
 
 /// A model name is looked up in the world's archives, then in
 /// `GAME/Common`; a path to a loose file also works.
+/// A model file found (`find_model`) and parsed, once per world read.
+fn model_shape(game: &GameDir, world: &World, model: &str) -> Result<(String, std::sync::Arc<Shape>, usize), String> {
+    let key = model.to_ascii_lowercase();
+    if let Some(found) = world.shapes.lock().unwrap().get(&key) {
+        return Ok(found.clone());
+    }
+    let (label, bytes) = find_model(game, world, model)?;
+    let parsing = Instant::now();
+    let shape = std::sync::Arc::new(Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?);
+    crate::timeline::add(crate::timeline::Counter::Parse, parsing);
+    let found = (label, shape, bytes.len());
+    world.shapes.lock().unwrap().insert(key, found.clone());
+    Ok(found)
+}
+
 fn find_model(game: &GameDir, world: &World, model: &str) -> Result<(String, Vec<u8>), String> {
     if let Some(found) = world.load(model) {
         return found;
