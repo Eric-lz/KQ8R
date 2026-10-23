@@ -269,6 +269,13 @@ impl Slots {
         self.slots.len()
     }
 
+    /// The entity whose children are the parts shown, while the new
+    /// drawing is shown (for shadows: its children carry `AnimSlot`, its
+    /// ball the movement's).
+    pub fn drawn_root(&self) -> Option<Entity> {
+        (self.mode == Some(DrawMode::New)).then_some(self.new_root)
+    }
+
     /// Shows the old or the new drawing.
     pub fn set_mode(&mut self, mode: DrawMode, visibility: &mut Query<&mut Visibility>) {
         if self.mode == Some(mode) {
@@ -321,6 +328,8 @@ impl Slots {
                     if let Ok(mut v) = visibility.get_mut(slot) {
                         *v = Visibility::Hidden;
                     }
+                    // Not part of this frame: no shadow from it.
+                    commands.entity(slot).remove::<crate::shadow_view::AnimSlot>();
                 }
             }
         }

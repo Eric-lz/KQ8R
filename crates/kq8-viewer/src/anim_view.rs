@@ -97,8 +97,8 @@ struct Playing {
     /// A character loaded underground: whether its body is shown now
     /// (`character-movement.md` rules 28, 30; M5 5a-8).
     birth_shown: Option<bool>,
-    /// Drawn the new way too (Animation memory step 4b: still animated
-    /// objects); `None` for the other kinds.
+    /// Drawn the new way too (Animation memory steps 4b, 4d: still
+    /// animated objects and characters); `None` for the other kinds.
     new_draw: Option<crate::anim_gpu::Slots>,
 }
 
@@ -310,6 +310,7 @@ pub fn spawn_animated(
     let mut own_players = Vec::new();
     let mut recipes = std::collections::BTreeMap::new();
     let mut moving = Vec::new();
+    let mut characters_new = 0;
     let (mut random, mut switchable) = (0, 0);
     let mut stop_starts: Vec<String> = Vec::new();
     for a in animated {
@@ -505,8 +506,10 @@ pub fn spawn_animated(
         let mut drawn = Vec::with_capacity(a.movements.len());
         let mut parts = Vec::new();
         let mut recipe = Vec::new();
-        // Step 4b: still animated objects are drawn the new way too.
-        let new_draw = if a.character.is_none() && !*unused {
+        // Steps 4b, 4d: still animated objects and characters (also those
+        // prepared for a script's loadKQ) are drawn the new way too; the
+        // unused objects' templates are 4e's.
+        let new_draw = if !(*unused && a.character.is_none()) {
             let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = a
                 .movements
                 .iter()
@@ -519,6 +522,17 @@ pub fn spawn_animated(
             None
         };
         let old_root = new_draw.as_ref().map(|s| s.old_root);
+        characters_new += usize::from(a.character.is_some() && new_draw.is_some());
+        // Step 4d: the new way's face materials take the mouth shapes too.
+        let new_faces: Vec<Handle<ObjectMaterial>> = match (&new_draw, &face_name) {
+            (Some(nd), Some(f)) => a
+                .movements
+                .iter()
+                .flat_map(|(_, _, i)| built[*i].textures.iter().filter(|(_, t)| t.as_ref().is_some_and(|t| t.eq_ignore_ascii_case(f))).map(move |(m, _)| (*i, *m)))
+                .filter_map(|k| nd.materials.get(&k).cloned())
+                .collect(),
+            _ => Vec::new(),
+        };
         for (_, _, i) in &a.movements {
             let b = &built[*i];
             let mut frames = Vec::with_capacity(b.frames.len());
@@ -624,7 +638,7 @@ pub fn spawn_animated(
             collider: None,
             character,
             test: prepared_test,
-            face: face_copies.into_values().collect(),
+            face: face_copies.into_values().chain(new_faces).collect(),
             lip_images,
             mouth_shown: 0,
             parts,
@@ -638,7 +652,10 @@ pub fn spawn_animated(
     }
     let new_way = playing.iter().filter(|p| p.new_draw.is_some()).count();
     let slots: usize = playing.iter().filter_map(|p| p.new_draw.as_ref()).map(|n| n.len()).sum();
-    main_log.summary(format!("animated objects drawn the new way too (Animation memory step 4b): {new_way} still animated objects, {slots} part entities (F5 or --anim-draw switches old/new)"));
+    main_log.summary(format!(
+        "animated objects drawn the new way too (Animation memory steps 4b, 4d): {new_way} of {} (characters among them: {characters_new}), {slots} part entities (F5 or --anim-draw switches old/new)",
+        playing.len()
+    ));
     main_log.summary(format!(
         "animated objects: {} playing ({} run by the world's scripts, {} with more than one movement, {} with a random start and speed, flags bit 8), {} different loops; whole-object steps in {} objects {moving:?}; log in {}",
         playing.len(),
@@ -821,6 +838,11 @@ pub fn anim_draw(
                         }
                         let Some(m) = materials.get(&*h).cloned() else { continue };
                         let full = if p.opacity_shown > 0.0 && m.alpha_mode == AlphaMode::Blend { m.settings.base_colour.w / p.opacity_shown } else { m.settings.base_colour.w };
+                        if p.face.iter().any(|f| f.id() == h.id()) {
+                            // Already its own (the mouth's, 4d).
+                            p.own.insert(h.id(), (h.clone(), full));
+                            continue;
+                        }
                         let copy = materials.add(m);
                         p.own.insert(copy.id(), (copy.clone(), full));
                         *h = copy;
@@ -1024,7 +1046,9 @@ pub fn shadow_draw(
         let Source::Core(i) = p.source else { continue };
         let Some(a) = world.anims.get(i) else { continue };
         let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);
-        let frame = p.shown.filter(|_| drawn).and_then(|(m, f)| p.movements.get(m).and_then(|d| d.frames.get(f)).copied());
+        // Step 4d: the new way's parts while they are shown.
+        let new_root = p.new_draw.as_ref().and_then(|nd| nd.drawn_root());
+        let frame = p.shown.filter(|_| drawn).and_then(|(m, f)| new_root.or_else(|| p.movements.get(m).and_then(|d| d.frames.get(f)).copied()));
         let model = match frame {
             Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
             None => Vec::new(),

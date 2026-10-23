@@ -2701,7 +2701,16 @@ exactly as before):**
      mill, the windmill's sails: no change with F5).
    - **4d. Characters** (anim_view): talking faces, weapons' part
      places, shadows, see-through, script copies (`spawn_copy`), the
-     unused templates.
+     unused templates. **Built** 2026-10-23, waiting for the user's look
+     (4c checked: "exactly as before"): characters, also those prepared
+     for a script's loadKQ, get slots; their face materials' animated
+     copies join the face list (mouth shapes reach both drawings); a
+     see-through copy keeps a face material itself; character shadows
+     read the slots while the new drawing is shown (`Slots::drawn_root`;
+     hidden slots lose `AnimSlot`). Weapons' part places and carried
+     lights come from data, not entities: unchanged. The unused objects'
+     templates and `spawn_copy` move to 4e (copies). Daventry: 134 of
+     143 animated objects (63 characters), 1,222 part entities.
    - **4e. Items, bodies, effects, potions' orbits.**
    - **4f. Connor** (connor_view): late movement sets, weapon swaps, the
      hammer throw.
