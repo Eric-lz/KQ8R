@@ -57,18 +57,34 @@ pub fn add(c: Counter, since: Instant) {
     COUNT[c as usize].fetch_add(1, Ordering::Relaxed);
 }
 
+/// Names seen per counter (how many different files were behind it).
+static SEEN: std::sync::Mutex<[Option<std::collections::HashSet<String>>; 6]> = std::sync::Mutex::new([None, None, None, None, None, None]);
+
+/// Notes that `c` was for `name` (for the "different" count).
+pub fn seen(c: Counter, name: &str) {
+    if let Ok(mut s) = SEEN.lock() {
+        s[c as usize].get_or_insert_with(Default::default).insert(name.to_ascii_lowercase());
+    }
+}
+
 /// Back to zero (before a world is read).
 pub fn reset() {
     for k in 0..NAMES.len() {
         NS[k].store(0, Ordering::Relaxed);
         COUNT[k].store(0, Ordering::Relaxed);
     }
+    if let Ok(mut s) = SEEN.lock() {
+        *s = Default::default();
+    }
 }
 
 /// "archive unpacking 812 ms (4,321), ..." since the last reset.
 pub fn counters_line() -> String {
     (0..NAMES.len())
-        .map(|k| format!("{} {} ms ({})", NAMES[k], NS[k].load(Ordering::Relaxed) / 1_000_000, COUNT[k].load(Ordering::Relaxed)))
+        .map(|k| {
+            let different = SEEN.lock().ok().and_then(|s| s[k].as_ref().map(|h| format!(", {} different", h.len()))).unwrap_or_default();
+            format!("{} {} ms ({}{different})", NAMES[k], NS[k].load(Ordering::Relaxed) / 1_000_000, COUNT[k].load(Ordering::Relaxed))
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }

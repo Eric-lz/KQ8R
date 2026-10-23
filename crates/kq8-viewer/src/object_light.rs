@@ -250,11 +250,14 @@ pub struct ObjectLight {
     pub scene_lights: Handle<ShaderBuffer>,
     /// The animation buffers (step 4), set by `add`.
     pub anim: Option<crate::anim_gpu::AnimBuffers>,
+    /// One image per texture (name and size) for this world's object
+    /// materials (Daventry: 264 textures, not 3,020 images; 2026-10-23).
+    images: std::sync::Mutex<std::collections::HashMap<(String, u32, u32), Handle<Image>>>,
 }
 
 impl ObjectLight {
     pub fn new(lights: Lights, mode: LightMode, haze: Haze, haze_on: bool) -> Self {
-        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default(), anim: None }
+        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default(), anim: None, images: Default::default() }
     }
 
     fn settings(&self, base_colour: Vec4, shading: Shading, textured: bool) -> Settings {
@@ -341,8 +344,14 @@ pub fn texture_image(width: u32, height: u32, rgba: Vec<u8>, address: ImageAddre
 /// never lit, so it stays visible).
 pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images: &mut Assets<Image>) -> ObjectMaterial {
     let (base, texture, shading) = match look {
-        Look::Texture { width, height, rgba, .. } => {
-            let image = images.add(texture_image(width, height, rgba, ImageAddressMode::Repeat));
+        Look::Texture { name, width, height, rgba } => {
+            let image = light
+                .images
+                .lock()
+                .unwrap()
+                .entry((name.to_ascii_lowercase(), width, height))
+                .or_insert_with(|| images.add(texture_image(width, height, rgba, ImageAddressMode::Repeat)))
+                .clone();
             (Vec4::ONE, Some(image), shading)
         }
         Look::Color([r, g, b]) => (LinearRgba::from(Color::srgb_u8(r, g, b)).to_vec4(), None, shading),

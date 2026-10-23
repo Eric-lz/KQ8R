@@ -16,6 +16,10 @@ use crate::log::Log;
 pub struct World {
     pub name: String,
     vols: Vec<(String, VolArchive)>,
+    /// Textures already read and converted, by name and palette (2,855
+    /// loads were 264 textures in Daventry; the user asked for faster
+    /// loading, 2026-10-23).
+    textures: std::sync::Mutex<std::collections::HashMap<(String, u64), Look>>,
 }
 
 impl World {
@@ -31,7 +35,7 @@ impl World {
                 vols.push((v.to_string(), a));
             }
         }
-        Ok(World { name: canonical.to_string(), vols })
+        Ok(World { name: canonical.to_string(), vols, textures: Default::default() })
     }
 
     /// Unpacks the first entry called `name` (any case) from any archive.
@@ -41,6 +45,7 @@ impl World {
             let e = a.find(name)?;
             let label = format!("vol:{}/{v}/{}", self.name, e.name);
             let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
+            crate::timeline::seen(crate::timeline::Counter::Unpack, &label);
             Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
         })
     }
@@ -55,6 +60,7 @@ impl World {
                 a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
                     let label = format!("vol:{}/{v}/{}", self.name, e.name);
                     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
+                    crate::timeline::seen(crate::timeline::Counter::Unpack, &label);
                     (e.name.clone(), label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
                 })
             })
@@ -129,6 +135,7 @@ pub fn material_shading(m: Option<&kq8_data::Material>) -> Shading {
 /// Which animation frame to draw: (sequence/loop name, start 0..1, repeats).
 pub type StartAt<'a> = Option<(&'a str, f32, bool)>;
 
+#[derive(Clone)]
 pub enum Look {
     Texture { name: String, width: u32, height: u32, rgba: Vec<u8> },
     Color([u8; 3]),
@@ -145,6 +152,7 @@ pub fn load_model(
     log: &mut Log,
 ) -> Result<Model, String> {
     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Model);
+    crate::timeline::seen(crate::timeline::Counter::Parse, model);
     let (label, bytes) = find_model(game, world, model)?;
     log.summary(format!("model: {label} ({} bytes)", bytes.len()));
     let parsing = Instant::now();
@@ -558,6 +566,7 @@ pub fn load_animation_skinned(
     log: &mut Log,
 ) -> Result<Animation, String> {
     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Animation);
+    crate::timeline::seen(crate::timeline::Counter::Parse, model);
     let (label, bytes) = find_model(game, world, model)?;
     let parsing = Instant::now();
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
@@ -796,6 +805,27 @@ fn load_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log
 /// world (models in GAME/Common have no textures next to them; Q4).
 fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256], log: &mut Log) -> Look {
     let _t = crate::timeline::Timer::new(crate::timeline::Counter::Texture);
+    crate::timeline::seen(crate::timeline::Counter::Texture, name);
+    // Read each texture once per palette.
+    let key = (name.to_ascii_lowercase(), palette_key(palette));
+    if let Some(look) = world.textures.lock().unwrap().get(&key) {
+        return look.clone();
+    }
+    let look = read_texture(world, game, name, palette, log);
+    world.textures.lock().unwrap().insert(key, look.clone());
+    look
+}
+
+/// A number that tells palettes apart (for the texture cache).
+fn palette_key(palette: &[Rgb; 256]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    palette.hash(&mut h);
+    h.finish()
+}
+
+/// `load_texture` without the cache.
+fn read_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256], log: &mut Log) -> Look {
     let mut found = world.load(name);
     if found.is_none() {
         for other in WORLDS.iter().filter(|w| **w != world.name) {

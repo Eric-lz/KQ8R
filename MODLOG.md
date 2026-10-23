@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Faster loading 1: each texture read and made into an image once
+
+**Changed:** Viewer `load.rs`: `World` keeps the textures it read and converted, by name and palette (`load_texture` = cache + `read_texture`; `Look` is `Clone`). `object_light.rs`: `ObjectLight` keeps one image per texture (name and size) for the world's object materials. `timeline.rs`: the totals also count different names ("N different").
+**Why:** The user asked for faster loading; the breakdown showed 2,855 texture loads for 264 textures and 6,470 unpacks for 1,420 entries in Daventry.
+**Tested how:** clippy clean, `cargo test --workspace`. `kq8-viewer --world Daventry --frames 900 --sound off`: `viewer.log` (timeline, breakdown), `world.log` (memory by kind), error output. Checked first that no object texture image is changed in place (only the panels', the ground light's and the walls' images are).
+**Result:** Textures 637 -> 81 ms; unpacks 6,470 -> 3,878; reading Daventry 3.47 -> 2.93 s; everything ready 5.18 -> 4.46 s after the start. Images 3,020 -> 580, textures 233 -> 37 MB; working set after building 693 MB. No graphics errors.
+**Still broken / not tested:** **Not looked at.** Shared images: if anything ever changes an object texture's image in place, every object using that texture changes.
+**Next:** Model files parsed once (item 3), the packing across cores (2), a launcher without cargo (4).
+
 ## 2026-10-23 Launch timeline and loading breakdown in the log
 
 **Changed:** New viewer `timeline.rs`: one clock from the program's start; "timeline: +N ms" marks in `viewer.log` (the program runs, reading a world starts and ends, the app's first systems, the world put in the scene, the window made, the first frame, render pipelines being prepared and none waiting any more, via a render-world system); running totals of the loader's busy parts (archive unpacking, other worlds' archives opened, model files parsed, animations, still models, textures). `load.rs`: the totals, and a line "objects read, by phase". `main.rs`, `world_build.rs`: the marks.
