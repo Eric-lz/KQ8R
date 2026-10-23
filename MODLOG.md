@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Faster loading 1b: small archive entries and palettes read once
+
+**Changed:** Viewer `load.rs`: `World::unpack` (both `load` and `entries_ending` go through it) keeps entries up to 64 KB once unpacked (`KEEP_UNPACKED`); `load_palette` keeps each palette read (`read_palette` without the cache). `timeline.rs`: `most_repeated` (names behind a total read more than once), logged after the objects. `ParsedModel` type (clippy).
+**Why:** The faster-loading work: after textures and models, 3,769 unpacks were still 1,419 entries; the list of repeats showed the world's palette unpacked 235 times (once per still model; larger than 64 KB) and each object's `.kq` / `.anm` once per copy.
+**Tested how:** clippy clean, `cargo test --workspace`. Daventry `--frames 300 --sound off`, twice; `viewer.log`.
+**Result:** Every entry unpacked once (1,415); unpacking 805 -> 276-288 ms; still models 636 -> 109-114 ms; reading Daventry 2.74 -> 2.26-2.32 s; everything ready 4.35 -> 3.78-3.93 s after the start. No graphics errors.
+**Still broken / not tested:** Animations still take ~750 ms (741 of them) besides the packing (1.15 s): not broken down.
+**Next:** The packing across cores; a launcher without cargo.
+
 ## 2026-10-23 Faster loading 3: each model file read and parsed once
 
 **Changed:** Viewer `load.rs`: `World` keeps the model files it parsed (`model_shape`: found once, parsed once, shared as `Arc<Shape>`); `load_model` and `load_animation_skinned` use it; an animation's `FrameShape` is the shared parse.

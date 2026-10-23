@@ -58,12 +58,12 @@ pub fn add(c: Counter, since: Instant) {
 }
 
 /// Names seen per counter (how many different files were behind it).
-static SEEN: std::sync::Mutex<[Option<std::collections::HashSet<String>>; 6]> = std::sync::Mutex::new([None, None, None, None, None, None]);
+static SEEN: std::sync::Mutex<[Option<std::collections::HashMap<String, u32>>; 6]> = std::sync::Mutex::new([None, None, None, None, None, None]);
 
 /// Notes that `c` was for `name` (for the "different" count).
 pub fn seen(c: Counter, name: &str) {
     if let Ok(mut s) = SEEN.lock() {
-        s[c as usize].get_or_insert_with(Default::default).insert(name.to_ascii_lowercase());
+        *s[c as usize].get_or_insert_with(Default::default).entry(name.to_ascii_lowercase()).or_insert(0) += 1;
     }
 }
 
@@ -76,6 +76,15 @@ pub fn reset() {
     if let Ok(mut s) = SEEN.lock() {
         *s = Default::default();
     }
+}
+
+/// The names behind `c` read most often (name, times), most first.
+pub fn most_repeated(c: Counter, n: usize) -> Vec<(String, u32)> {
+    let Ok(s) = SEEN.lock() else { return Vec::new() };
+    let mut v: Vec<(String, u32)> = s[c as usize].as_ref().map(|h| h.iter().map(|(k, n)| (k.clone(), *n)).filter(|(_, n)| *n > 1).collect()).unwrap_or_default();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    v.truncate(n);
+    v
 }
 
 /// "archive unpacking 812 ms (4,321), ..." since the last reset.

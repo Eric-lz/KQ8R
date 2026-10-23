@@ -23,8 +23,22 @@ pub struct World {
     /// Model files already read and parsed, by the name asked for, with
     /// where they were found and their size (974 reads were 863 files in
     /// Daventry; one parse also lets the packer share a file's points).
-    shapes: std::sync::Mutex<std::collections::HashMap<String, (String, std::sync::Arc<Shape>, usize)>>,
+    shapes: std::sync::Mutex<std::collections::HashMap<String, ParsedModel>>,
+    /// Small entries already unpacked (under `KEEP_UNPACKED` bytes: the
+    /// palette was unpacked 235 times in Daventry, each object's `.kq` once
+    /// per copy), by their label.
+    unpacked: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    /// Palettes already read, by what was asked for (each still model read
+    /// the world's palette again: 235 times in Daventry).
+    palettes: std::sync::Mutex<std::collections::HashMap<Option<String>, [Rgb; 256]>>,
 }
+
+/// Entries up to this size are kept once unpacked (models and textures
+/// have their own caches).
+const KEEP_UNPACKED: usize = 64 * 1024;
+
+/// A model file parsed: where it was found, the parse, its size.
+type ParsedModel = (String, std::sync::Arc<Shape>, usize);
 
 impl World {
     pub fn open(game: &GameDir, name: &str) -> Result<Self, String> {
@@ -39,7 +53,7 @@ impl World {
                 vols.push((v.to_string(), a));
             }
         }
-        Ok(World { name: canonical.to_string(), vols, textures: Default::default(), shapes: Default::default() })
+        Ok(World { name: canonical.to_string(), vols, textures: Default::default(), shapes: Default::default(), unpacked: Default::default(), palettes: Default::default() })
     }
 
     /// Unpacks the first entry called `name` (any case) from any archive.
@@ -48,10 +62,22 @@ impl World {
         self.vols.iter().find_map(|(v, a)| {
             let e = a.find(name)?;
             let label = format!("vol:{}/{v}/{}", self.name, e.name);
-            let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
-            crate::timeline::seen(crate::timeline::Counter::Unpack, &label);
-            Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
+            Some(self.unpack(a, e, &label).map(|data| (label, data)))
         })
+    }
+
+    /// Unpacks entry `e` of archive `a`, small ones only once.
+    fn unpack(&self, a: &VolArchive, e: &kq8_data::vol::VolEntry, label: &str) -> Result<Vec<u8>, String> {
+        if let Some(data) = self.unpacked.lock().unwrap().get(label) {
+            return Ok(data.clone());
+        }
+        let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
+        crate::timeline::seen(crate::timeline::Counter::Unpack, label);
+        let data = a.unpack(e).map(|u| u.data).map_err(|e| e.to_string())?;
+        if data.len() <= KEEP_UNPACKED {
+            self.unpacked.lock().unwrap().insert(label.to_string(), data.clone());
+        }
+        Ok(data)
     }
 
     /// Every entry whose name ends with `ext` (any case), unpacked, with
@@ -63,9 +89,8 @@ impl World {
             .flat_map(|(v, a)| {
                 a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
                     let label = format!("vol:{}/{v}/{}", self.name, e.name);
-                    let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
-                    crate::timeline::seen(crate::timeline::Counter::Unpack, &label);
-                    (e.name.clone(), label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
+                    let data = self.unpack(a, e, &label);
+                    (e.name.clone(), label, data)
                 })
             })
             .collect()
@@ -795,6 +820,17 @@ fn find_model(game: &GameDir, world: &World, model: &str) -> Result<(String, Vec
 /// Default: `<world>.ppl` from the world's archives (measured best for
 /// Daventry; see docs/behaviour/QUESTIONS.md Q3).
 fn load_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log) -> Result<[Rgb; 256], String> {
+    let key = spec.map(str::to_ascii_lowercase);
+    if let Some(p) = world.palettes.lock().unwrap().get(&key) {
+        return Ok(*p);
+    }
+    let palette = read_palette(world, spec, game, log)?;
+    world.palettes.lock().unwrap().insert(key, palette);
+    Ok(palette)
+}
+
+/// `load_palette` without the cache.
+fn read_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log) -> Result<[Rgb; 256], String> {
     let (label, bytes) = match spec {
         Some(s) => match world.load(s) {
             Some(r) => r?,
@@ -2005,6 +2041,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         phases.iter().map(|(w, ms)| format!("{w} {ms} ms")).collect::<Vec<_>>().join(", "),
         crate::timeline::counters_line()
     ));
+    placer.log.detail(format!("archive entries unpacked more than once (most first): {:?}", crate::timeline::most_repeated(crate::timeline::Counter::Unpack, 25)));
     let mut objects = placer.finish();
     objects.scripts = scripts;
     objects.vars = script.vars;
