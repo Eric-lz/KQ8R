@@ -108,7 +108,7 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** The first fix (material order) didn't stop the ghost knight's staff flickering (the user's look). Found in Bevy 0.20's source (`bevy_pbr` `material.rs`, `bevy_render` `mesh/mod.rs`): see-through parts are sorted by the distance to their mesh's box centre, and a mesh with no points of its own (our topology meshes) has the centre (0, 0, 0), so every part of the knight tied at his origin and the order was left to chance. The old frames' meshes had real centres.
 **Tested how:** clippy clean. Daventry `--frames 1300 --sound off --anim-draw old|new`: error output, `characters.log` (the goblin's shadow), `shadows.log`.
 **Result:** No graphics errors; the goblin's shadow the same both ways (224 model triangles, 142-152 pieces, 87 building triangles); plain objects' shadows the same (9, 559 pieces). The material order (first fix) stays: harmless.
-**Still broken / not tested:** **Not looked at**: the ghost knight. Within one material the old drawing sorted the whole material's mesh by one centre; now each part by its own (closer to what is really in front): see-through figures could differ slightly from before in where their own parts overlap.
+**Still broken / not tested:** **The user's look (2026-10-23): the ghost knight is perfect now.** Within one material the old drawing sorted the whole material's mesh by one centre; now each part by its own (closer to what is really in front): see-through figures could differ slightly from before in where their own parts overlap.
 **Next:** The user's look at the ghost knight; if it still flickers, stop and write STATUS (two attempts).
 
 ## 2026-10-23 Fix (4d): a see-through figure's parts keep their drawing order
