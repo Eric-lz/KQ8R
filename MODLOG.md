@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Faster loading 2: the animations packed on every processor core
+
+**Changed:** `kq8-data` `anim_pack.rs`: `Pack::merge` (another pack put after this one; unit test `merging_moves_the_second_packs_numbers_along`). Viewer `world_build.rs`: `pack_world` groups the animations by their model file (so a file's points stay shared), splits the groups into one share per core with about the same number of frames, packs the shares side by side (`std::thread::scope`) and joins them in order; the line says how many threads.
+**Why:** The faster-loading work: the packing took 1.15 s on one core.
+**Tested how:** `cargo test --workspace`, clippy clean. Daventry `--frames 300 --sound off` with `--check-pack` once and without twice; Dead City and Ice World with `--check-pack`; `viewer.log`.
+**Result:** 16 threads; packing 1.15 s -> 0.19 s (Daventry), Dead City 118 ms, Ice World 197 ms; the pack exactly as before (Daventry 67.9 MB, 5,376 topologies, 71,238 node-frames; the check's differences unchanged). Reading Daventry 2.26 -> 1.28 s; everything ready about 2.8 s after the start. No graphics errors.
+**Still broken / not tested:** **Not looked at.** Weapon sets added while playing are still packed on one core (small).
+**Next:** A launcher without cargo (item 4).
+
 ## 2026-10-23 Faster loading 1b: small archive entries and palettes read once
 
 **Changed:** Viewer `load.rs`: `World::unpack` (both `load` and `entries_ending` go through it) keeps entries up to 64 KB once unpacked (`KEEP_UNPACKED`); `load_palette` keeps each palette read (`read_palette` without the cache). `timeline.rs`: `most_repeated` (names behind a total read more than once), logged after the objects. `ParsedModel` type (clippy).

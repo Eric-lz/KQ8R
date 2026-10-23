@@ -258,6 +258,25 @@ impl Pack {
         c
     }
 
+    /// Puts `other` after this pack (packs made side by side, one per
+    /// processor core). Returns what to add to `other`'s parts' topology
+    /// and node-frame numbers.
+    pub fn merge(&mut self, other: Pack) -> (u32, u32) {
+        let (points, normals) = (self.points.len() as u32, self.normals.len() as u32);
+        let (node_frames, topologies) = (self.node_frames.len() as u32, self.topologies.len() as u32);
+        self.points.extend(other.points);
+        self.normals.extend(other.normals);
+        self.node_frames.extend(other.node_frames.into_iter().map(|n| NodeFrame { points: n.points + points, normals: n.normals + normals, ..n }));
+        self.topologies.extend(other.topologies);
+        for (k, v) in other.mesh_points {
+            self.mesh_points.entry(k).or_insert(v + points);
+        }
+        for (k, v) in other.topology_index {
+            self.topology_index.entry(k).or_insert(v + topologies);
+        }
+        (topologies, node_frames)
+    }
+
     /// Bytes each buffer would take on the graphics card: points, normals,
     /// node-frames (72 bytes each), topologies (16 bytes a corner, 4 an
     /// index).
@@ -270,6 +289,20 @@ impl Pack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merging_moves_the_second_packs_numbers_along() {
+        let nf = |points, normals| NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points, normals };
+        let mut a = Pack { points: vec![[1, 2, 3, 0]; 4], normals: vec![[0; 4]; 4], node_frames: vec![nf(0, 0)], topologies: vec![Topology::default()], ..Default::default() };
+        let b = Pack { points: vec![[9, 9, 9, 0]; 3], normals: vec![[1; 4]; 3], node_frames: vec![nf(0, 0), nf(1, 2)], topologies: vec![Topology::default(); 2], ..Default::default() };
+        let (topology_add, node_frame_add) = a.merge(b);
+        assert_eq!((topology_add, node_frame_add), (1, 1));
+        assert_eq!(a.points.len(), 7);
+        assert_eq!(a.points[4], [9, 9, 9, 0]);
+        assert_eq!((a.node_frames[1].points, a.node_frames[1].normals), (4, 4));
+        assert_eq!((a.node_frames[2].points, a.node_frames[2].normals), (5, 6));
+        assert_eq!(a.topologies.len(), 3);
+    }
 
     #[test]
     fn normals_pack_to_within_a_hair() {

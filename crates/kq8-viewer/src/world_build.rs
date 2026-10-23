@@ -277,32 +277,85 @@ fn part_stats_line(objects: &load::Objects) -> String {
 /// "Animation memory" step 4a: the world's animations packed for the
 /// graphics card and checked against today's triangles (not drawn yet).
 fn pack_world(objects: &load::Objects, check_it: bool) -> (String, crate::anim_gpu::WorldPack) {
+    use kq8_data::anim_pack::{Check, Pack, Part};
     let started = Instant::now();
-    let mut pack = kq8_data::anim_pack::Pack::default();
-    let mut check = kq8_data::anim_pack::Check::default();
-    let (mut animations, mut frames, mut parts) = (0, 0, 0);
     let connor = objects.connor.as_ref().map(|(_, c)| c.animations.as_slice()).unwrap_or(&[]);
-    let mut lists: [Vec<Option<Vec<Vec<kq8_data::anim_pack::Part>>>>; 3] = Default::default();
-    for (list, anims) in [&objects.object_animations[..], &objects.door_animations[..], connor].into_iter().enumerate() {
-        for a in anims {
-            let Some(source) = &a.source else {
-                lists[list].push(None);
-                continue;
-            };
-            let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
-            let id = Arc::as_ptr(&source.shape) as usize;
-            let (packed, c) = pack.add(&source.shape, id, source.first, a.frame_count, &flat, check_it);
-            check.add(&c);
+    let all = [&objects.object_animations[..], &objects.door_animations[..], connor];
+    let mut lists: [Vec<Option<Vec<Vec<Part>>>>; 3] = all.map(|a| vec![None; a.len()]);
+    // The animations from the same model file stay together (their points
+    // are shared), in the order they come.
+    // (list, index in it, the animation).
+    type Group<'a> = Vec<(usize, usize, &'a load::Animation)>;
+    let mut groups: Vec<Group> = Vec::new();
+    let mut group_of: std::collections::HashMap<usize, usize> = Default::default();
+    for (list, anims) in all.into_iter().enumerate() {
+        for (k, a) in anims.iter().enumerate() {
+            let Some(source) = &a.source else { continue };
+            let g = *group_of.entry(Arc::as_ptr(&source.shape) as usize).or_insert_with(|| {
+                groups.push(Vec::new());
+                groups.len() - 1
+            });
+            groups[g].push((list, k, a));
+        }
+    }
+    // One share per processor core, about the same number of frames each
+    // (the user asked for faster loading, 2026-10-23); joined in order.
+    let cores = std::thread::available_parallelism().map_or(1, |n| n.get()).max(1);
+    let total: usize = groups.iter().flatten().map(|(_, _, a)| a.frame_count).sum();
+    let mut shares: Vec<Vec<&Group>> = vec![Vec::new()];
+    let mut filled = 0;
+    for g in &groups {
+        if filled * cores > total * shares.len() && shares.len() < cores {
+            shares.push(Vec::new());
+        }
+        filled += g.iter().map(|(_, _, a)| a.frame_count).sum::<usize>();
+        shares.last_mut().expect("one share at least").push(g);
+    }
+    type Packed = (Pack, Vec<(usize, usize, Vec<Vec<Part>>)>, Check);
+    let done: Vec<Packed> = std::thread::scope(|scope| {
+        let workers: Vec<_> = shares
+            .iter()
+            .map(|share| {
+                scope.spawn(move || {
+                    let mut pack = Pack::default();
+                    let mut check = Check::default();
+                    let mut out = Vec::new();
+                    for &(list, k, a) in share.iter().copied().flatten() {
+                        let source = a.source.as_ref().expect("grouped by their model");
+                        let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
+                        let id = Arc::as_ptr(&source.shape) as usize;
+                        let (packed, c) = pack.add(&source.shape, id, source.first, a.frame_count, &flat, check_it);
+                        check.add(&c);
+                        out.push((list, k, packed));
+                    }
+                    (pack, out, check)
+                })
+            })
+            .collect();
+        workers.into_iter().map(|w| w.join().expect("a packing thread failed")).collect()
+    });
+    let mut pack = Pack::default();
+    let mut check = Check::default();
+    let (mut animations, mut frames, mut parts) = (0, 0, 0);
+    for (share, out, c) in done {
+        let (topology_add, node_frame_add) = pack.merge(share);
+        check.add(&c);
+        for (list, k, mut packed) in out {
+            for part in packed.iter_mut().flatten() {
+                part.topology += topology_add;
+                part.node_frame += node_frame_add;
+            }
             animations += 1;
             frames += packed.len();
             parts += packed.iter().map(Vec::len).sum::<usize>();
-            lists[list].push(Some(packed));
+            lists[list][k] = Some(packed);
         }
     }
     let [points, normals, node_frames, topologies] = pack.sizes();
     let mb = |b: usize| b as f64 / (1 << 20) as f64;
     let line = format!(
-        "animation pack (step 4a): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
+        "animation pack (step 4a; {} threads): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
+        shares.len(),
         mb(points),
         mb(normals),
         mb(node_frames),
