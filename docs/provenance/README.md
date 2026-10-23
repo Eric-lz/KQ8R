@@ -3249,3 +3249,10 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | --- | --- | --- |
 | Frame = floor(phase × frames + 0.001), never rounded; the same for the start frame and while playing, repeating or not; at or past the end: repeating → 0, play-once → last; below 0: repeating → last, play-once → 0 | `objects.md` "Loops that move the whole object" rule 6 and "Animated objects at load" rule 2 (traced, Q153) | Unit tests `frame_at_phase_cuts_down`, `the_start_frame_is_the_still_models` (`telepad1` 0.3 × 16 → 4, was 5; King's portrait 0.99 × 46 → 45); viewer `doors.log`: `kingart` `stop2` "at phase 0.9900 (frame 45) speed 0" |
 | Connor's own frames (`connor::MovementLoop::frame_at`) not changed | — (a separate step) | — |
+
+## A plain object loaded by a script gets its click box — viewer `load.rs` (`object_colliders`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every object prepared for a script's `loadKQ` (not only characters) gets its `BOUNDS.KQ` click box at the start, switched off until the load (core switches it on, as for the ravens) | `objects.md` "Where a world's objects come from" rule 6 (traced: the same steps as at the start); `clicking.md` rules 2, 8 | Viewer, Castle Daventry: `--aim keepkeys` before the push "meets nothing clickable"; after it, the key is taken (`INVITEM_KeepKey` 0 → 1, `keepkeys` deleted, +30 experience). Daventry: `bell`, `clicker2`, `MillTre2`, `potion`, `waterfall2` prepared the same way |
+| Their solid box (Connor bumping into them) and view-blocking box are not made | **Stand-in** (not done yet) | — |

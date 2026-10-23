@@ -19,8 +19,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 - **2026-10-23 (B): Q153 built**: the frame for a phase is cut down
   (floor(p × frames + 0.001)), not rounded, for objects, doors, chests
   and start frames. The King's portrait now holds its pushed frame (45)
-  in the log; not checked by eye, and taking the key is not tested.
-  Connor's own frames still use the old rule (next step).
+  in the log (the user: it stays pushed). Connor's own frames still use
+  the old rule (next step).
+- **2026-10-23 (B): the key behind it can be taken**: objects a script
+  loads while playing now get their click box (before, only
+  characters). In the log only; not yet solid for Connor.
 
 - **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
   `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;

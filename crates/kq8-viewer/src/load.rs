@@ -4408,7 +4408,7 @@ impl Placer<'_> {
             building_types.push(info.collider_type);
         }
         log.summary(format!("collision: {} building colliders", buildings.len()));
-        let (objects, clickables, view_boxes) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, &self.dormant_monsters, log);
+        let (objects, clickables, view_boxes) = object_colliders(self.game, &self.shapes, &self.placed, &self.collision, &self.markers, (&self.dormant_monsters, &self.dormant), log);
         // M5 5d-3: the templates, with their boxes from BOUNDS.KQ.
         let table = self.game.find("GAME/patch/BOUNDS.KQ").and_then(|p| std::fs::read(p).ok()).map(|b| kq8_data::bounds::BoundingBoxes::parse(&b).0);
         let templates: Vec<TemplateAssets> = self
@@ -4550,7 +4550,7 @@ fn object_colliders(
     placed: &[(kq8_data::objects::Placement, usize, bool)],
     collision: &[CollisionInfo],
     markers: &[Marker],
-    dormant_monsters: &[kq8_core::active::Monster],
+    (dormant_monsters, dormant): (&[kq8_core::active::Monster], &[(String, String, Option<String>)]),
     log: &mut Log,
 ) -> (Vec<kq8_core::collide::BoxCollider>, Vec<kq8_core::active::Clickable>, Vec<kq8_core::collide::BoxCollider>) {
     use kq8_core::collide::{pair_collides, BoxCollider, ColliderKind, Placement, CONNOR_MASK, CONNOR_TYPE};
@@ -4579,11 +4579,18 @@ fn object_colliders(
     let mut lowered = 0;
     let mut fixed = Vec::new();
     for ((p, i, unused), info) in placed.iter().zip(collision) {
-        // A character prepared for a script's `loadKQ` (Daventry's raven
-        // `Ravens`, loaded by `stngrl.cs`): its click box is made now but
-        // switched off until the load brings it in (as its trap box for a
-        // trap, objects.md "Where a world's objects come from" rule 6).
-        let waiting = *unused && info.character_box.is_some() && dormant_monsters.iter().any(|m| m.name.eq_ignore_ascii_case(&p.name));
+        // An object prepared for a script's `loadKQ` (Daventry's raven
+        // `Ravens`, loaded by `stngrl.cs`; Castle Daventry's key
+        // `keepkeys`, loaded by `kingart.cs`): its click box is made now
+        // but switched off until the load brings it in (as its trap box for
+        // a trap, objects.md "Where a world's objects come from" rule 6:
+        // the same steps as at the start).
+        let waiting = *unused
+            && if info.character_box.is_some() {
+                dormant_monsters.iter().any(|m| m.name.eq_ignore_ascii_case(&p.name))
+            } else {
+                dormant.iter().any(|(_, n, _)| n.eq_ignore_ascii_case(&p.name))
+            };
         if (*unused && !waiting) || shapes[*i].0.to_ascii_lowercase().ends_with(".dig") {
             continue;
         }
@@ -4646,8 +4653,9 @@ fn object_colliders(
         // Clickable (doors.md rule 10): picked by its box, whatever it
         // collides with.
         // Blocks the camera's view (camera.md "Obstacles"), whatever it
-        // collides with.
-        if info.collider_type & VIEW_BLOCKING != 0 {
+        // collides with. (Not for one waiting for a `loadKQ`: only its
+        // click box is prepared, see below.)
+        if info.collider_type & VIEW_BLOCKING != 0 && !waiting {
             view_boxes.push(BoxCollider {
                 name: p.name.clone(),
                 min: entry.min,
@@ -4675,7 +4683,16 @@ fn object_colliders(
             c.accept_all_items = info.accept_all_items;
             c.too_far_away_action = info.too_far_away_action;
             c.do_not_point_at = info.do_not_point_at;
+            c.gone = waiting;
+            if waiting {
+                log.detail(format!("collision: {what}: clickable, box {} by {from}; off until a script's loadKQ brings it in (not solid yet)", entry.name));
+            }
             clickables.push(c);
+        }
+        if waiting {
+            // Its solid box is not prepared (stand-in): only the click.
+            *left_out.entry("waiting for a loadKQ (click box only)").or_default() += 1;
+            continue;
         }
         if !pair_collides(CONNOR_TYPE, CONNOR_MASK, info.collider_type, info.collider_mask) {
             *left_out.entry("type and mask: not tested against Connor").or_default() += 1;

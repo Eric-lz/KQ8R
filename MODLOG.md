@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-23 Fix: the key behind the King's portrait can be taken
+
+**Changed:** Viewer `load.rs` (`object_colliders`): a plain object waiting for a script's `loadKQ` now gets its click box at the start, switched off until the load (before, only characters did). `door_view.rs`: the "came in" log line says so. Provenance.
+**Why:** The user: clicking the key after the push only gave the portrait's line again. The key (`keepkeys`, loaded by `kingart.cs`) had no click box, so the click line went through it to the portrait. `objects.md` rule 6: an object loaded while playing goes through the same steps as at the start.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world CastleD --frames 3000 --sound off --command "move Connor 0 15390 90700 -1 0 0 0",5 --hold 1,0,0,10,60 --aim keepkeys,130`; `doors.log`. Same without the push, `--aim keepkeys,10`.
+**Result:** Before the push: "meets nothing clickable". After: "keepkeys can be clicked now"; the click runs `keepkeys.cs`: `INVITEM_KeepKey` 0 → 1, the key deleted, +30 experience (level 2). In Daventry, `bell`, `clicker2`, `MillTre2`, `potion` and `waterfall2` now get the same prepared click box.
+**Still broken / not tested:** Not tried with the real mouse. Objects loaded this way are still not solid for Connor and don't block the camera.
+**Next:** The user tries the key with the mouse.
+
 ## 2026-10-23 Q153 built: frames are cut down, the King's portrait stays pushed
 
 **Changed:** `kq8-data` `shape.rs`: new `frame_at_phase` (frame = floor(phase × frames + 0.001); past the end: repeating → 0, play-once → last; below 0 the other way), used for start frames; `kq8-core` `anim.rs` and `door.rs` (doors, chests, scripted objects) use it too; `named_anim.rs`: the "movement starts" log line shows the frame. Docs: provenance, QUESTIONS Q153, STATUS, FEATURES.
