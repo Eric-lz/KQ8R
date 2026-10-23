@@ -341,6 +341,7 @@ pub fn insert_world(world: &mut World, read: WorldRead, opts: &Options) {
     world.init_resource::<crate::draw_distance::SwitchedOut>();
     world.init_resource::<crate::scene_lights::LightsGroup>();
     world.init_resource::<crate::scene_lights::GroundLights>();
+    world.init_resource::<crate::shadow_view::FrameSources>();
 }
 
 /// Startup (and later on request): puts the pending world in and spawns
@@ -363,8 +364,10 @@ pub fn build_pending(world: &mut World) {
     log.summary(crate::memory::allocator_line());
     drop(log);
     let parts = breakdown(world);
+    let recorded = world.get_resource::<crate::shadow_view::FrameSources>().map_or(0, |s| s.len());
     if let Ok(mut wl) = Log::create("world") {
         wl.detail(format!("memory by kind in {name}: {parts}"));
+        wl.detail(format!("animation frames kept only on the graphics card (Animation memory step 1): {recorded} meshes, built again from their models for shadows"));
     }
 }
 
@@ -796,6 +799,7 @@ per_world!(
     terrain_view::ObjectColliders,
     terrain_view::Buildings,
     crate::shadow_view::BuildingShadows,
+    crate::shadow_view::FrameSources,
     // `draw_distance::add` and `object_light::add` (empty at the start).
     crate::draw_distance::ActivePoint,
     crate::draw_distance::ActivityLog,

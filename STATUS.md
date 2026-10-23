@@ -560,7 +560,8 @@ M6 has started with the Rope and Hook (6a).
   animate by moving parts: **measured, not worth it** (`viewer.log`
   "parts count": 85-91 % of the triangles stay, over half the parts
   change form every frame). **Plan chosen (DESIGN "Animation memory"):
-  step 1 (no normal-memory copy of animation meshes), then step 3 (one
+  step 1 (no normal-memory copy of animation meshes; **done 2026-10-22**,
+  Daventry in play 2.64 → 1.51 GB, waiting for the user's look), then step 3 (one
   entity per drawn part); step 4 (frames on the graphics card) after
   M7, with smooth animation. Other drawing work waits until 1 and 3 are
   done.**

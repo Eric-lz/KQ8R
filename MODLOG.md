@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Animation memory step 1: animation frames only on the graphics card
+
+**Changed:** Viewer `load.rs`: `FrameShape` (the parsed model and the loop's first sequence) on each `Animation`. `shadow_view.rs`: `FrameSources` (per frame mesh: its model, sequence, material; the mesh made graphics-card-only; a frame's points built again from the model with `Shape::geometry` for shadows, ~4,000 recent frames kept; counts and time logged); `mesh_triangles` / `frame_triangles` use it. `anim_view.rs`, `door_view.rs`, `connor_view.rs` (also late sets) register their frames; `terrain_view.rs` passes it; `world_build.rs`: a fresh one per world (per-world list), a line in `world.log`. DESIGN.
+**Why:** DESIGN "Animation memory" step 1, the user's go.
+**Tested how:** `cargo test --workspace` (all pass), clippy clean. The version before and after on the same route (`--world Daventry --frames 6000 --sound off --console "goworld CastleD",200 --console "goworld Daventry",200 ...`), `world.log`. Daventry 900 frames against a baseline: `characters.log`, `shadows.log`. All 11 worlds with 200 updates each: no panic.
+**Result:** Daventry in play: 2.64 GB → 1.51 GB working set (private 4.83 → 3.70 GB); Castle Daventry 1.37 → 1.11 GB. Worlds in play now 1.5-2.4 GB (Ice World the largest). Shadows: the same triangle counts and building surfaces as before; 100 frames' points built in 900 frames of Daventry, 0.054 ms each; character shadows still 1.55 ms a frame. Reading times unchanged. Right after building, the figure is briefly high (the meshes reach the graphics card on the next frame).
+**Still broken / not tested:** **Not looked at**: shadows and animations should look exactly as before. Graphics card memory not measured (unchanged by design).
+**Next:** The user's look; then step 3.
+
 ## 2026-10-22 Plan: shadows from the compact model (step 1); shadow map noted for M7
 
 **Changed:** Docs only: DESIGN "Animation memory" step 1 (shadows build the shown frame's triangles from the parsed model, not a positions copy) and M7 (the shadow map, which also fixes the double darkening).

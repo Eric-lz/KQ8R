@@ -420,6 +420,7 @@ fn spawn_frames(
     face: &mut Vec<Handle<ObjectMaterial>>,
     all_materials: &mut Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>,
     record: bool,
+    sources: &mut crate::shadow_view::FrameSources,
 ) -> (Vec<Entity>, Option<Vec<Vec3>>) {
     let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
         .looks
@@ -444,7 +445,7 @@ fn spawn_frames(
     let mut first = None;
     // Its `.kqs` ball, for shadows on buildings (rule 37 (2), M4 4d-7b-5b).
     let ball = crate::shadow_view::ModelBall::of(anim.ball);
-    for frame in anim.frames {
+    for (f, frame) in anim.frames.into_iter().enumerate() {
         let parent = commands.spawn((Transform::default(), Visibility::Hidden, ball)).id();
         commands.entity(body).add_child(parent);
         let record = record && first.is_none();
@@ -454,8 +455,8 @@ fn spawn_frames(
             if record {
                 normals.extend(crate::object_light::smooth_normals(&triangles, shading.lighting));
             }
-            let mesh = model_mesh(&triangles, shading.lighting, [0.0; 3]);
-            let part = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()))).id();
+            let mesh = sources.add(meshes, model_mesh(&triangles, shading.lighting, [0.0; 3]), anim.source.as_ref(), f, m);
+            let part = commands.spawn((Mesh3d(mesh), MeshMaterial3d(material.clone()))).id();
             commands.entity(parent).add_child(part);
         }
         entities.push(parent);
@@ -483,8 +484,9 @@ pub fn late_set_step(
     mut images: ResMut<Assets<Image>>,
     light: Option<Res<ObjectLight>>,
     shared: Res<Shared>,
+    sources: Option<ResMut<crate::shadow_view::FrameSources>>,
 ) {
-    let (Some(mut c), Some(sim), Some(light)) = (connor, sim, light) else { return };
+    let (Some(mut c), Some(sim), Some(light), Some(mut sources)) = (connor, sim, light, sources) else { return };
     let Ok(body) = body.single() else { return };
     let c = &mut *c;
     let carried: Vec<String> = sim.active.world.items.objects.iter().filter(|o| o.carried_by(kq8_core::talk::CONNOR)).map(|o| o.kind.to_ascii_lowercase()).collect();
@@ -523,7 +525,7 @@ pub fn late_set_step(
                 let mut added = Vec::new();
                 let frames: Vec<Vec<Entity>> = animations
                     .into_iter()
-                    .map(|a| spawn_frames(&mut commands, body, a, late.lip_base.as_deref(), &mut meshes, &mut materials, &light, &mut images, &mut c.face, &mut added, false).0)
+                    .map(|a| spawn_frames(&mut commands, body, a, late.lip_base.as_deref(), &mut meshes, &mut materials, &light, &mut images, &mut c.face, &mut added, false, &mut sources).0)
                     .collect();
                 let mut new = 0;
                 for m in &movements {
@@ -560,6 +562,7 @@ pub fn spawn_connor(
     light: &ObjectLight,
     images: &mut Assets<Image>,
     main_log: &mut Log,
+    sources: &mut crate::shadow_view::FrameSources,
 ) {
     let camera_keys = assets.camera_keys.clone();
     let connor_keys = assets.keys.clone();
@@ -597,7 +600,7 @@ pub fn spawn_connor(
     let frame_parts: Vec<_> = assets.animations.iter().map(|a| a.frame_parts.clone()).collect();
     for anim in assets.animations {
         let record = first_frame_normals.is_none();
-        let (entities, normals) = spawn_frames(commands, body, anim, lip_base.as_deref(), meshes, materials, light, images, &mut face, &mut all_materials, record);
+        let (entities, normals) = spawn_frames(commands, body, anim, lip_base.as_deref(), meshes, materials, light, images, &mut face, &mut all_materials, record, sources);
         if normals.is_some() {
             first_frame_normals = normals;
         }

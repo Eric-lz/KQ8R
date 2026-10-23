@@ -20,6 +20,8 @@
 //! the terrain's, for characters, Connor and plain objects alike.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use bevy::prelude::*;
 use bevy::camera::visibility::RenderLayers;
@@ -135,22 +137,98 @@ pub fn shadow_material(materials: &mut Assets<StandardMaterial>) -> Handle<Stand
 /// The triangles of a shown model frame (`frame`'s children), in the
 /// game's space and corner order (Bevy's run anticlockwise, the game's
 /// clockwise: (a, c, b)).
-pub fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>) -> Vec<[shadow::V3; 3]> {
+pub fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>, sources: &FrameSources) -> Vec<[shadow::V3; 3]> {
     let mut model = Vec::new();
     for part in children.get(frame).into_iter().flat_map(|c| c.iter()) {
-        mesh_triangles(part, parts, meshes, &mut model);
+        mesh_triangles(part, parts, meshes, sources, &mut model);
     }
     model
 }
 
+/// Animation frames' meshes kept only on the graphics card ("Animation
+/// memory" step 1, DESIGN): where each came from, so a shadow can build
+/// its points again from the parsed model: the same `Shape::geometry` the
+/// loader cut the frame from, the same corners in the same order. A few
+/// thousand recent frames' points are kept.
+#[derive(Resource, Default)]
+pub struct FrameSources {
+    /// Per mesh: its model, sequence and material.
+    sources: HashMap<AssetId<Mesh>, FrameSource>,
+    cache: Mutex<HashMap<AssetId<Mesh>, Points>>,
+    /// Frames' points built, and the time spent, for the log.
+    pub built: AtomicU64,
+    pub build_ns: AtomicU64,
+}
+
+type FrameSource = (crate::load::FrameShape, usize, i32);
+/// A frame's points in Bevy's space.
+type Points = Arc<Vec<[f32; 3]>>;
+
+/// Recent frames' points kept (each a few hundred triangles).
+const KEPT_FRAMES: usize = 4096;
+
+impl FrameSources {
+    /// Adds an animation frame's mesh: with its source, kept only on the
+    /// graphics card; without (not cut from a model), as before.
+    pub fn add(&mut self, meshes: &mut Assets<Mesh>, mut mesh: Mesh, source: Option<&crate::load::FrameShape>, frame: usize, material: i32) -> Handle<Mesh> {
+        let Some(source) = source else { return meshes.add(mesh) };
+        mesh.asset_usage = bevy::asset::RenderAssetUsages::RENDER_WORLD;
+        let handle = meshes.add(mesh);
+        self.sources.insert(handle.id(), (source.clone(), source.first + frame, material));
+        handle
+    }
+
+    /// Meshes recorded (for the log).
+    pub fn len(&self) -> usize {
+        self.sources.len()
+    }
+
+    /// The points of a recorded mesh, in Bevy's space and the mesh's
+    /// corner order (as `main.rs` `model_mesh` put them).
+    fn points(&self, id: AssetId<Mesh>) -> Option<Points> {
+        let (source, sequence, material) = self.sources.get(&id)?;
+        let mut cache = self.cache.lock().unwrap();
+        if let Some(p) = cache.get(&id) {
+            return Some(p.clone());
+        }
+        let started = std::time::Instant::now();
+        let geometry = source.shape.geometry(*sequence);
+        let points: Vec<[f32; 3]> = geometry.triangles.iter().filter(|t| t.material == *material).flat_map(|t| [0, 2, 1].map(|k| crate::to_bevy(t.positions[k], [0.0; 3]))).collect();
+        self.built.fetch_add(1, Ordering::Relaxed);
+        self.build_ns.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        if cache.len() >= KEPT_FRAMES {
+            cache.clear();
+        }
+        let points = Arc::new(points);
+        cache.insert(id, points.clone());
+        Some(points)
+    }
+
+    /// "N frames' points built for shadows, M ms in all".
+    pub fn line(&self) -> String {
+        let (n, ns) = (self.built.load(Ordering::Relaxed), self.build_ns.load(Ordering::Relaxed));
+        format!("{n} frames' points built for shadows from the models, {:.1} ms in all ({:.3} ms each)", ns as f64 / 1e6, if n == 0 { 0.0 } else { ns as f64 / 1e6 / n as f64 })
+    }
+}
+
 /// One mesh entity's triangles in the game's space and corner order.
-fn mesh_triangles(part: Entity, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>, model: &mut Vec<[shadow::V3; 3]>) {
-    let Ok((at, mesh)) = parts.get(part) else { return };
-    let Some(mesh) = meshes.get(&mesh.0) else { return };
-    let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { return };
+fn mesh_triangles(part: Entity, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>, sources: &FrameSources, model: &mut Vec<[shadow::V3; 3]>) {
+    let Ok((at, handle)) = parts.get(part) else { return };
+    let Some(mesh) = meshes.get(&handle.0) else { return };
+    // Step 1: an animation frame's points from its model; others' from
+    // the mesh.
+    let built;
+    let points: &[[f32; 3]] = if mesh.asset_usage.contains(bevy::asset::RenderAssetUsages::MAIN_WORLD) {
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { return };
+        points
+    } else {
+        let Some(p) = sources.points(handle.id()) else { return };
+        built = p;
+        &built
+    };
     // Bevy (x, y, z) = game (x, z, −y) / 100, so back: (x, −z, y) × 100.
     let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
-    let corners: Vec<usize> = match mesh.indices() {
+    let corners: Vec<usize> = match mesh.try_indices_option().ok().flatten() {
         Some(ix) => ix.iter().collect(),
         None => (0..game.len()).collect(),
     };
@@ -254,14 +332,17 @@ pub fn object_shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut shadows: Local<HashMap<Entity, ObjectShadow>>,
     mut log: Local<ShadowLog>,
-    (buildings, activity, balls, change, mut seen): (
+    (buildings, activity, balls, change, mut seen, sources): (
         Option<Res<BuildingShadows>>,
         Option<Res<ObjectActivity>>,
         Query<(&GlobalTransform, &ModelBall)>,
         Res<crate::world_build::WorldChange>,
         Local<u64>,
+        Option<Res<FrameSources>>,
     ),
 ) {
+    let no_sources = FrameSources::default();
+    let sources = sources.as_deref().unwrap_or(&no_sources);
     // A new world (M6 6e-2): the old objects' shadows are dropped.
     if crate::world_build::new_world(&change, &mut seen) {
         shadows.clear();
@@ -313,7 +394,7 @@ pub fn object_shadow_draw(
         if entry.key != key {
             let mut model = Vec::new();
             for &m in key.as_ref().map_or(&[][..], |k| &k.0[..]) {
-                mesh_triangles(m, &parts, &meshes, &mut model);
+                mesh_triangles(m, &parts, &meshes, sources, &mut model);
             }
             let position = [t.x * 100.0, -t.z * 100.0, t.y * 100.0];
             let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
@@ -340,14 +421,15 @@ pub fn object_shadow_draw(
     log.spent += started.elapsed();
     if log.frames % 600 == 1 {
         let line = format!(
-            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; {} of them reach building surfaces ({} surfaces; {} buildings active); {} without a stored model ball (fallback box); worked out {} times so far; {:.3} ms a frame on average in this system",
+            "frame {}: {shown} plain objects' shadows shown, {pieces} pieces; {} of them reach building surfaces ({} surfaces; {} buildings active); {} without a stored model ball (fallback box); worked out {} times so far; {:.3} ms a frame on average in this system; {}",
             log.frames,
             on_buildings.0,
             on_buildings.1,
             active.len(),
             fallbacks,
             log.worked_out,
-            log.spent.as_secs_f64() * 1000.0 / log.frames as f64
+            log.spent.as_secs_f64() * 1000.0 / log.frames as f64,
+            sources.line()
         );
         if let Some(l) = log.log.as_mut() {
             l.detail(line);

@@ -489,6 +489,7 @@ pub fn spawn_doors(
     images: &mut Assets<Image>,
     balls: &crate::draw_distance::ShapeBalls,
     main_log: &mut Log,
+    sources: &mut crate::shadow_view::FrameSources,
 ) {
     let log = match Log::create("doors") {
         Ok(l) => l,
@@ -514,12 +515,13 @@ pub fn spawn_doors(
             let frames = anim
                 .frames
                 .into_iter()
-                .map(|frame| {
+                .enumerate()
+                .map(|(f, frame)| {
                     frame
                         .into_iter()
                         .filter_map(|(m, triangles)| {
                             let (_, material, shading) = looks.iter().find(|(i, _, _)| *i == m)?;
-                            Some((meshes.add(model_mesh(&triangles, shading.lighting, [0.0; 3])), material.clone()))
+                            Some((sources.add(meshes, model_mesh(&triangles, shading.lighting, [0.0; 3]), anim.source.as_ref(), f, m), material.clone()))
                         })
                         .collect()
                 })

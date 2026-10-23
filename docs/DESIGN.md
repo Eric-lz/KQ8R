@@ -2601,6 +2601,16 @@ exactly as before):**
    in Daventry); the shadow triangles per character the same as before
    (count logged); the time to build a frame for a shadow logged;
    shadows unchanged by eye; `cargo test`.
+   **Done** 2026-10-22 (`shadow_view::FrameSources`: each frame mesh's
+   model, sequence and material; `load::FrameShape` on each animation;
+   anim_view, door_view and connor_view register their frames). Same
+   route with the version before and after (Daventry, Castle, 200
+   updates in each): Daventry in play 2.64 → 1.51 GB working set, the
+   Castle 1.37 → 1.11 GB; reading times unchanged. Shadows: the same
+   triangle counts (Connor 384, a goblin 224); a frame's points take
+   0.05-0.08 ms, the shadow cost per frame unchanged (1.55 ms). Right
+   after a world is built the figure is still high for a moment (the
+   meshes go to the graphics card on the next frame).
 2. ~~Shared corners~~: **skipped** (the user, 2026-10-22): step 4 would
    replace it.
 3. **One entity per drawn part, its mesh swapped each frame.** Instead

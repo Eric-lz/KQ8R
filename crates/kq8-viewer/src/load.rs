@@ -381,8 +381,19 @@ pub struct PotionLooks {
     pub ghosts: Vec<(String, Look)>,
 }
 
+/// The parsed model an animation was cut from and its loop's first
+/// sequence ("Animation memory" step 1): the frames' meshes live only on
+/// the graphics card, and shadows build a shown frame's points from this.
+#[derive(Clone)]
+pub struct FrameShape {
+    pub shape: std::sync::Arc<Shape>,
+    pub first: usize,
+}
+
 /// Every frame of one animation loop, for drawing it in turn (M2 step 2b).
 pub struct Animation {
+    /// Where its frames came from (step 1).
+    pub source: Option<FrameShape>,
     /// One look and shading per material index used by any frame.
     pub looks: Vec<(i32, Look, Shading)>,
     /// Per frame: triangles grouped by material index (model space).
@@ -619,7 +630,9 @@ pub fn load_animation_skinned(
         if lit > 0 { format!("; carries lights in {lit} frame(s) (rule 26b)") } else { String::new() }
     ));
     let part_stats = kq8_data::shape::part_stats(&shape, first, count);
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center), frame_parts, part_stats })
+    let (duration, ball) = (l.duration, (shape.radius, shape.center));
+    let source = Some(FrameShape { shape: std::sync::Arc::new(shape), first });
+    Ok(Animation { source, looks, frames, duration, step_sum, frame_steps, frame_transforms, frame_lights, ball, frame_parts, part_stats })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and

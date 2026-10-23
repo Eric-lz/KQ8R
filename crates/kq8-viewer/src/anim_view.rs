@@ -236,6 +236,7 @@ pub fn spawn_animated(
     balls: &crate::draw_distance::ShapeBalls,
     character_lines: &[String],
     main_log: &mut Log,
+    sources: &mut crate::shadow_view::FrameSources,
 ) -> (Vec<AnimObject>, Vec<NamedAnimPlayer>) {
     let mut log = match Log::create("anim") {
         Ok(l) => l,
@@ -277,12 +278,13 @@ pub fn spawn_animated(
             let frames = a
                 .frames
                 .into_iter()
-                .map(|frame| {
+                .enumerate()
+                .map(|(f, frame)| {
                     frame
                         .into_iter()
                         .map(|(m, triangles)| {
                             let l = shading.get(&m).map_or(kq8_data::Lighting::None, |s| s.lighting);
-                            (meshes.add(model_mesh(&triangles, l, [0.0; 3])), m)
+                            (sources.add(meshes, model_mesh(&triangles, l, [0.0; 3]), a.source.as_ref(), f, m), m)
                         })
                         .collect()
                 })
@@ -892,16 +894,19 @@ pub fn shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
-    (buildings, activity, mut spent, balls, change, mut seen): (
+    (buildings, activity, mut spent, balls, change, mut seen, sources): (
         Option<Res<crate::shadow_view::BuildingShadows>>,
         Option<Res<crate::draw_distance::ObjectActivity>>,
         Local<std::time::Duration>,
         Query<(&GlobalTransform, &crate::shadow_view::ModelBall)>,
         Res<crate::world_build::WorldChange>,
         Local<u64>,
+        Option<Res<crate::shadow_view::FrameSources>>,
     ),
 ) {
     use kq8_core::shadow;
+    let no_sources = crate::shadow_view::FrameSources::default();
+    let sources = sources.as_deref().unwrap_or(&no_sources);
     // A new world (M6 6e-2): Connor's shadow is made again.
     if crate::world_build::new_world(&change, &mut seen) {
         *connor_shadow = None;
@@ -946,7 +951,7 @@ pub fn shadow_draw(
         let body = connor_body.iter().next();
         let drawn = body.is_some_and(|(_, v)| *v != Visibility::Hidden);
         let model = match c.shown.filter(|_| drawn) {
-            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes),
+            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
             None => Vec::new(),
         };
         let at = body.map_or([0.0; 3], |(t, _)| {
@@ -970,7 +975,7 @@ pub fn shadow_draw(
         let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);
         let frame = p.shown.filter(|_| drawn).and_then(|(m, f)| p.movements.get(m).and_then(|d| d.frames.get(f)).copied());
         let model = match frame {
-            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes),
+            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
             None => Vec::new(),
         };
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
@@ -984,7 +989,7 @@ pub fn shadow_draw(
     }
     *spent += started.elapsed();
     if report {
-        lines.push(format!("update {}: shadows of Connor and the characters: {:.3} ms a frame on average (rule 37)", sim.updates, spent.as_secs_f64() * 1000.0 / *frames as f64));
+        lines.push(format!("update {}: shadows of Connor and the characters: {:.3} ms a frame on average (rule 37); {}", sim.updates, spent.as_secs_f64() * 1000.0 / *frames as f64, sources.line()));
     }
     if let Some(log) = sim.characters.as_mut() {
         for l in lines {
