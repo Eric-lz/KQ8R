@@ -287,6 +287,7 @@ impl Slots {
     /// The roots under `body` and the slots, if every movement is packed;
     /// `materials`: (animation, material index) -> the object's material
     /// (an animated copy is made of each).
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         commands: &mut Commands,
         body: Entity,
