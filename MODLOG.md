@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Plan: animation memory (DESIGN), blending counted
+
+**Changed:** DESIGN: new "Outside the milestones: animation memory" (measurements; steps 1 and 3 now, 2 skipped, 4 after M7) and an M7 note on smooth animation. `shape.rs` `PartStats`: parts that switch mesh, part steps from one frame to the next and those that jump; the "parts count" line shows them. STATUS.
+**Why:** The user chose the plan: faithful first (steps 1 and 3, drawing unchanged), frames on the graphics card later with smooth animation.
+**Tested how:** All 11 worlds, `--frames 20 --sound off`; `viewer.log` "parts count".
+**Result:** Parts that switch mesh at some point: 135-620 per world (about a quarter of the parts). Part steps that would jump (mesh switch or part count change, loop wrap included): 5.2-10.7 % (Daventry 8.2 %, Ice World 10.7 %); the rest can be blended. Found for step 1: shadows read the shown frame's points back from the meshes (`shadow_view::frame_triangles`).
+**Still broken / not tested:** The jump count matches parts by their order in the frame; where the order changes it overcounts.
+**Next:** Step 1 when the user says go.
+
 ## 2026-10-22 Parts count: moving parts would save only 12-15 %
 
 **Changed:** `kq8-data` `shape.rs`: `PartStats`, `part_stats` (per loop: frames, part-frames, triangles stored now and as distinct part shapes, parts changing form or texture, matrix kinds), `matrix_kind` (unit test `matrix_kinds`). Viewer `load.rs`: each `Animation` carries its `part_stats`; `world_build.rs`: a "parts count" line in `viewer.log` after each world is read (objects, doors, Connor). STATUS.

@@ -559,10 +559,11 @@ M6 has started with the Rope and Hook (6a).
   of 1,063 MB of meshes (textures 233 MB), 95,441 entities. Options:
   animate by moving parts: **measured, not worth it** (`viewer.log`
   "parts count": 85-91 % of the triangles stay, over half the parts
-  change form every frame). Open choices: no normal-memory copy of
-  animation meshes; one entity per drawn part, mesh swapped per frame;
-  shared corners; frames on the graphics card in the file's compact
-  form (4 bytes per vertex).
+  change form every frame). **Plan chosen (DESIGN "Animation memory"):
+  step 1 (no normal-memory copy of animation meshes), then step 3 (one
+  entity per drawn part); step 4 (frames on the graphics card) after
+  M7, with smooth animation. Other drawing work waits until 1 and 3 are
+  done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
   changes, the frozen world clock): with saved games. Reading slows down

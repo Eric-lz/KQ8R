@@ -630,6 +630,14 @@ pub struct PartStats {
     /// between frames (they change form, not only move).
     pub parts: usize,
     pub parts_changing_form: usize,
+    /// Of those, parts that switch to another mesh (can't be blended
+    /// from one frame to the next; the rest only move their points).
+    pub parts_changing_piece: usize,
+    /// Part steps from one frame to the next (the loop's last frame to
+    /// its first included), and those where the part switches mesh, or
+    /// the frames have different numbers of parts (a jump either way).
+    pub part_steps: usize,
+    pub part_steps_jumping: usize,
     /// Parts whose texture frame changes between frames.
     pub parts_changing_texture: usize,
     /// Animations whose frames don't all have the same number of parts.
@@ -651,6 +659,9 @@ impl PartStats {
         self.triangles_parts += o.triangles_parts;
         self.parts += o.parts;
         self.parts_changing_form += o.parts_changing_form;
+        self.parts_changing_piece += o.parts_changing_piece;
+        self.part_steps += o.part_steps;
+        self.part_steps_jumping += o.part_steps_jumping;
         self.parts_changing_texture += o.parts_changing_texture;
         self.animations_part_count_varies += o.animations_part_count_varies;
         self.matrices_even += o.matrices_even;
@@ -685,11 +696,14 @@ pub fn part_stats(shape: &Shape, first: usize, count: usize) -> PartStats {
     type Forms = (HashSet<(i16, i16)>, HashSet<i16>);
     let mut slots: Vec<Forms> = Vec::new();
     let mut counts = HashSet::new();
+    let mut meshes_per_frame: Vec<Vec<i16>> = Vec::new();
     for seq in shape.sequences.iter().skip(first).take(count) {
         let Some(sub) = usize::try_from(seq.mesh_subsequence).ok().and_then(|i| shape.subsequences.get(i)) else {
             counts.insert(0);
+            meshes_per_frame.push(Vec::new());
             continue;
         };
+        meshes_per_frame.push(shape.nodes.iter().skip(sub.first_node.max(0) as usize).take(sub.node_count.max(0) as usize).map(|n| n.mesh).collect());
         let start = sub.first_node.max(0) as usize;
         let n = sub.node_count.max(0) as usize;
         counts.insert(n);
@@ -715,8 +729,16 @@ pub fn part_stats(shape: &Shape, first: usize, count: usize) -> PartStats {
     s.distinct_shapes = distinct.len();
     s.parts = slots.len();
     s.parts_changing_form = slots.iter().filter(|(f, _)| f.len() > 1).count();
+    s.parts_changing_piece = slots.iter().filter(|(f, _)| f.iter().map(|(m, _)| m).collect::<HashSet<_>>().len() > 1).count();
     s.parts_changing_texture = slots.iter().filter(|(_, t)| t.len() > 1).count();
     s.animations_part_count_varies = usize::from(counts.len() > 1);
+    let n = meshes_per_frame.len();
+    for f in 0..n {
+        let (a, b) = (&meshes_per_frame[f], &meshes_per_frame[(f + 1) % n]);
+        let parts = a.len().max(b.len());
+        s.part_steps += parts;
+        s.part_steps_jumping += if a.len() != b.len() { parts } else { a.iter().zip(b).filter(|(x, y)| x != y).count() };
+    }
     s
 }
 

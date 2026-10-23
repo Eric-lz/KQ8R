@@ -2387,6 +2387,16 @@ Improvements already noted (original behaviour we copy until then):
 - Character shadows darken the ground twice where parts of the figure
   overlap (`characters.md` rule 36, the user's check 2026-10-19): draw
   each shadow as one even shape, after M7.
+- Smooth animation (the user's goal, 2026-10-22): the models are stored
+  at about 15 frames a second (Connor's walk: 20 frames over 1.27 s).
+  In-between poses can be blended: a part keeps its triangles in every
+  frame and only its points move, so each point can glide from one frame
+  to the next. Measured: 89-95 % of part steps from one frame to the
+  next can be blended; the rest switch mesh (or the part count changes)
+  and would still jump. What is drawn only; the rules, cues and hits
+  keep the original frames; switchable back to the original look. Needs
+  "Animation memory" step 4 below (frames on the graphics card); joins
+  between movements (walk to stop) are a separate, harder question.
 
 ### Outside the milestones: choosing the graphics API, `--renderer` (planned 2026-10-16, done 2026-10-16)
 
@@ -2539,3 +2549,62 @@ Steps:
    kill's experience); a plain one-shot in the effects group. **The
    user's check in the original (2026-10-21):** the right sound; the
    flame plays; the experience per level matches.
+
+### Outside the milestones: animation memory (planned 2026-10-22)
+
+Not from the original game: how we keep animations in memory. The
+user's choice: make the game fully playable and faithful first, so only
+the steps that keep the drawing identical now (1 and 3); the bigger
+change (4) later, with smooth animation, after M7.
+
+**Measured (2026-10-22).** `world.log` "memory by kind" and `viewer.log`
+"parts count" (both logged on every world):
+
+- Daventry right after it's built: animation frames 56,468 meshes,
+  955 MB of 1,063 MB of meshes, 95,441 entities (every frame of every
+  movement of every placed object is an entity, hidden but one); the
+  ground 95 MB, textures 233 MB. Identical copies are already shared
+  (each model and animation file is read once).
+- The files store each frame's points at 4 bytes each, shared by the
+  faces; our meshes store 48 bytes per triangle corner (position,
+  texture place, normal, part ball; `main.rs` `model_mesh`), corners not
+  shared: roughly 50-70x the file's size per frame.
+- Moving parts instead of whole frames would keep 85-91 % of the
+  triangles: over half the parts (51-64 %) change their points every
+  frame; a quarter switch mesh at some point. No slanted matrices.
+  **Not done** (not worth it).
+
+**Steps (one commit each; the user checks each by eye: it must look
+exactly as before):**
+
+1. **No normal-memory copy of animation meshes.** The animation frames'
+   meshes keep only the graphics card's copy (Bevy
+   `RenderAssetUsages::RENDER_WORLD`). Shadows read a shown frame's
+   points back from the meshes (`shadow_view::frame_triangles`): they
+   get their own positions-only copy (12 of the 48 bytes). Anything else
+   that reads animation meshes back is found first (`meshes.get`).
+   **Test:** Daventry and the tour of all worlds: "memory by kind" and
+   the working set before and after (expected: about 0.7 GB less in
+   Daventry); shadows unchanged by eye; `cargo test`.
+2. ~~Shared corners~~: **skipped** (the user, 2026-10-22): step 4 would
+   replace it.
+3. **One entity per drawn part, its mesh swapped each frame.** Instead
+   of an entity per frame per part, hidden but one, each placed
+   animated object gets one entity per part of the frame shown, and the
+   frame's meshes are put on them when the frame changes. Everything
+   that reads the shown frame (shadows, clicks, part places for weapons,
+   lights carried by frames, faces, see-through, copies made by
+   scripts) follows. Done one kind at a time, the old way kept until
+   all have moved: still-standing animated objects, doors, characters,
+   items and effects, Connor. **Test per kind:** entity counts in
+   "memory by kind"; the kind's own log lines unchanged; the user's
+   look.
+4. **Later (after M7): frames on the graphics card in compact form.**
+   Each animation's points kept as in the file (or close), the drawing
+   code on the graphics card picks the frame; with smooth animation on,
+   it blends two. A new shader for animated models; the biggest saving
+   and the base for smooth animation. Planned in full when it starts.
+
+**While steps 1 and 3 are under way:** no other work on drawing,
+characters, objects, animations or saved games (the same files);
+study sessions (A) go on.

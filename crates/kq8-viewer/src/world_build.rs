@@ -243,7 +243,7 @@ fn part_stats_line(objects: &load::Objects) -> String {
     }
     let percent = |a: usize, b: usize| if b == 0 { 0.0 } else { 100.0 * a as f64 / b as f64 };
     format!(
-        "parts count: {} animations, {} frames, {} part-frames; triangles stored now {}, as moving parts {} ({:.1} %); distinct part shapes {}; parts {}, changing form {} ({:.1} %), changing texture {}; animations whose part count varies {}; matrices: even {}, uneven size {}, slanted {}",
+        "parts count: {} animations, {} frames, {} part-frames; triangles stored now {}, as moving parts {} ({:.1} %); distinct part shapes {}; parts {}, changing form {} ({:.1} %), of which switching mesh {}, changing texture {}; part steps {}, jumping {} ({:.1} %); animations whose part count varies {}; matrices: even {}, uneven size {}, slanted {}",
         s.animations,
         s.frames,
         s.node_frames,
@@ -254,7 +254,11 @@ fn part_stats_line(objects: &load::Objects) -> String {
         s.parts,
         s.parts_changing_form,
         percent(s.parts_changing_form, s.parts),
+        s.parts_changing_piece,
         s.parts_changing_texture,
+        s.part_steps,
+        s.part_steps_jumping,
+        percent(s.part_steps_jumping, s.part_steps),
         s.animations_part_count_varies,
         s.matrices_even,
         s.matrices_uneven,
