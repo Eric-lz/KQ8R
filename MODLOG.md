@@ -108,8 +108,8 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Why:** DESIGN "Animation memory" step 1, the user's go.
 **Tested how:** `cargo test --workspace` (all pass), clippy clean. The version before and after on the same route (`--world Daventry --frames 6000 --sound off --console "goworld CastleD",200 --console "goworld Daventry",200 ...`), `world.log`. Daventry 900 frames against a baseline: `characters.log`, `shadows.log`. All 11 worlds with 200 updates each: no panic.
 **Result:** Daventry in play: 2.64 GB → 1.51 GB working set (private 4.83 → 3.70 GB); Castle Daventry 1.37 → 1.11 GB. Worlds in play now 1.5-2.4 GB (Ice World the largest). Shadows: the same triangle counts and building surfaces as before; 100 frames' points built in 900 frames of Daventry, 0.054 ms each; character shadows still 1.55 ms a frame. Reading times unchanged. Right after building, the figure is briefly high (the meshes reach the graphics card on the next frame).
-**Still broken / not tested:** **Not looked at**: shadows and animations should look exactly as before. Graphics card memory not measured (unchanged by design).
-**Next:** The user's look; then step 3.
+**Still broken / not tested:** Graphics card memory not measured (unchanged by design). **The user's look (2026-10-23): everything works just like before.**
+**Next:** Step 3.
 
 ## 2026-10-22 Plan: shadows from the compact model (step 1); shadow map noted for M7
 
