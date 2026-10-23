@@ -2386,7 +2386,15 @@ Improvements already noted (original behaviour we copy until then):
   check 2026-10-18): make walls stop them, after M7.
 - Character shadows darken the ground twice where parts of the figure
   overlap (`characters.md` rule 36, the user's check 2026-10-19): draw
-  each shadow as one even shape, after M7.
+  each shadow as one even shape, after M7. A way (2026-10-22): a
+  **shadow map** drawn by the graphics card (the characters seen from
+  the sun into a hidden depth picture; the ground and buildings check it
+  per point), so a spot is darkened once however many parts cover it,
+  with no copy of the model in normal memory (goes with "Animation
+  memory" step 4). The rules carry over (the sun's direction, strength
+  0.5, the ground only within 1,500 of the character, nearby
+  buildings); the edges depend on the picture's resolution, so not
+  pixel-identical to today's.
 - Smooth animation (the user's goal, 2026-10-22): the models are stored
   at about 15 frames a second (Connor's walk: 20 frames over 1.27 s).
   In-between poses can be blended: a part keeps its triangles in every
@@ -2580,12 +2588,19 @@ exactly as before):**
 1. **No normal-memory copy of animation meshes.** The animation frames'
    meshes keep only the graphics card's copy (Bevy
    `RenderAssetUsages::RENDER_WORLD`). Shadows read a shown frame's
-   points back from the meshes (`shadow_view::frame_triangles`): they
-   get their own positions-only copy (12 of the 48 bytes). Anything else
+   points back from the meshes (`shadow_view::frame_triangles`): instead
+   each animation keeps its model in the file's compact form (the parsed
+   `.kqs`: 4 bytes per point, faces shared), and the shadow code builds
+   the shown frame's triangles from it when it needs them (the same
+   `Shape::geometry` the loader uses, one frame, only for characters
+   casting a shadow). The same triangles reach the same shadow code, so
+   the look is identical (overlaps still darken twice). Anything else
    that reads animation meshes back is found first (`meshes.get`).
    **Test:** Daventry and the tour of all worlds: "memory by kind" and
-   the working set before and after (expected: about 0.7 GB less in
-   Daventry); shadows unchanged by eye; `cargo test`.
+   the working set before and after (expected: most of the 955 MB less
+   in Daventry); the shadow triangles per character the same as before
+   (count logged); the time to build a frame for a shadow logged;
+   shadows unchanged by eye; `cargo test`.
 2. ~~Shared corners~~: **skipped** (the user, 2026-10-22): step 4 would
    replace it.
 3. **One entity per drawn part, its mesh swapped each frame.** Instead

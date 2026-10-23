@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Plan: shadows from the compact model (step 1); shadow map noted for M7
+
+**Changed:** Docs only: DESIGN "Animation memory" step 1 (shadows build the shown frame's triangles from the parsed model, not a positions copy) and M7 (the shadow map, which also fixes the double darkening).
+**Why:** The user asked whether shadows could avoid the normal-memory copy, and about a more modern way.
+**Tested how:** —
+**Result:** —
+**Still broken / not tested:** —
+**Next:** Step 1 when the user says go.
+
 ## 2026-10-22 Plan: animation memory (DESIGN), blending counted
 
 **Changed:** DESIGN: new "Outside the milestones: animation memory" (measurements; steps 1 and 3 now, 2 skipped, 4 after M7) and an M7 note on smooth animation. `shape.rs` `PartStats`: parts that switch mesh, part steps from one frame to the next and those that jump; the "parts count" line shows them. STATUS.
