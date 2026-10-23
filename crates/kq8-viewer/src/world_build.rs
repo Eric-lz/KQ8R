@@ -230,7 +230,9 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
     log.summary(part_stats_line(&objects));
-    log.summary(pack_line(&objects));
+    let (line, pack) = pack_world(&objects);
+    log.summary(line);
+    objects.pack = Some(pack);
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
 }
 
@@ -269,26 +271,33 @@ fn part_stats_line(objects: &load::Objects) -> String {
 
 /// "Animation memory" step 4a: the world's animations packed for the
 /// graphics card and checked against today's triangles (not drawn yet).
-fn pack_line(objects: &load::Objects) -> String {
+fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
     let started = Instant::now();
     let mut pack = kq8_data::anim_pack::Pack::default();
     let mut check = kq8_data::anim_pack::Check::default();
     let (mut animations, mut frames, mut parts) = (0, 0, 0);
     let connor = objects.connor.as_ref().map(|(_, c)| c.animations.as_slice()).unwrap_or(&[]);
-    for a in objects.object_animations.iter().chain(&objects.door_animations).chain(connor) {
-        let Some(source) = &a.source else { continue };
-        let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
-        let id = Arc::as_ptr(&source.shape) as usize;
-        let (packed, c) = pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
-        check.add(&c);
-        animations += 1;
-        frames += packed.len();
-        parts += packed.iter().map(Vec::len).sum::<usize>();
+    let mut lists: [Vec<Option<Vec<Vec<kq8_data::anim_pack::Part>>>>; 3] = Default::default();
+    for (list, anims) in [&objects.object_animations[..], &objects.door_animations[..], connor].into_iter().enumerate() {
+        for a in anims {
+            let Some(source) = &a.source else {
+                lists[list].push(None);
+                continue;
+            };
+            let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
+            let id = Arc::as_ptr(&source.shape) as usize;
+            let (packed, c) = pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
+            check.add(&c);
+            animations += 1;
+            frames += packed.len();
+            parts += packed.iter().map(Vec::len).sum::<usize>();
+            lists[list].push(Some(packed));
+        }
     }
     let [points, normals, node_frames, topologies] = pack.sizes();
     let mb = |b: usize| b as f64 / (1 << 20) as f64;
-    format!(
-        "animation pack (step 4a, not drawn yet): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB, today's meshes {:.1} MB (48 bytes a corner); check over {} corners, largest differences: position {:.4}, normal {:.6}, texture place {:.6}, part ball {:.4}; {} ms",
+    let line = format!(
+        "animation pack (step 4a): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB, today's meshes {:.1} MB (48 bytes a corner); check over {} corners, largest differences: position {:.4}, normal {:.6}, texture place {:.6}, part ball {:.4}; {} ms",
         mb(points),
         mb(normals),
         mb(node_frames),
@@ -303,7 +312,9 @@ fn pack_line(objects: &load::Objects) -> String {
         check.uv,
         check.ball,
         started.elapsed().as_millis()
-    )
+    );
+    let [objects, doors, connor] = lists;
+    (line, crate::anim_gpu::WorldPack { pack, objects, doors, connor })
 }
 
 /// The world whose texts and sounds `world` uses: `parentWorld` in
@@ -640,6 +651,7 @@ pub fn world_change_step(world: &mut World) {
             };
             let mut light = object_light(&read, &opts);
             light.scene_lights = world.resource::<crate::scene_lights::SceneLights>().buffer.clone();
+            light.anim = world.get_resource::<crate::anim_gpu::AnimBuffers>().cloned();
             world.insert_resource(light);
             // The portal's place on the ground (z -1, rule 20.1), else
             // the asked one.
@@ -840,6 +852,7 @@ per_world!(
     terrain_view::Buildings,
     crate::shadow_view::BuildingShadows,
     crate::shadow_view::FrameSources,
+    crate::anim_gpu::AnimGpu,
     // `draw_distance::add` and `object_light::add` (empty at the start).
     crate::draw_distance::ActivePoint,
     crate::draw_distance::ActivityLog,

@@ -1359,6 +1359,9 @@ pub struct MapFile {
 }
 
 pub struct Objects {
+    /// The world's animations packed for the graphics card (step 4),
+    /// made after reading (`world_build::pack_world`).
+    pub pack: Option<crate::anim_gpu::WorldPack>,
     /// The world's shadow mask (`setShadowMask` in `Options.cs`, else the
     /// built-in 1; `characters.md` rule 36).
     pub shadow_world_mask: u32,
@@ -4403,6 +4406,7 @@ impl Placer<'_> {
             animators: self.animators,
             animated: self.animated,
             object_animations: self.object_animations,
+            pack: None,
             items: Default::default(),
             item_shapes: BTreeMap::new(),
             corpse_shapes: self.corpse_shapes,

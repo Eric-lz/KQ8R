@@ -46,6 +46,7 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+mod anim_gpu;
 mod anim_view;
 mod building_light;
 mod connor_view;
@@ -179,6 +180,9 @@ struct Args {
     corners: bool,
     /// `--renderer auto|vulkan|dx12`: the graphics API (default auto).
     renderer: renderer::Renderer,
+    /// `--anim-draw old|new`: how still animated objects are drawn at the
+    /// start (Animation memory step 4; F5 switches).
+    anim_draw: anim_gpu::DrawMode,
     /// `--dynamic on|off`: overrides `Options.cs`'s `useDynamicLighting`
     /// (M1 7d); `None` = as `Options.cs` says.
     dynamic: Option<bool>,
@@ -217,6 +221,7 @@ fn parse_args() -> Result<Args, String> {
         haze: true,
         corners: false,
         renderer: renderer::Renderer::Auto,
+        anim_draw: anim_gpu::DrawMode::New,
         dynamic: None,
         sound: true,
     };
@@ -337,6 +342,13 @@ fn parse_args() -> Result<Args, String> {
                 }
             }
             "--renderer" => a.renderer = renderer::Renderer::parse(&value()?)?,
+            "--anim-draw" => {
+                a.anim_draw = match value()?.to_ascii_lowercase().as_str() {
+                    "old" => anim_gpu::DrawMode::Old,
+                    "new" => anim_gpu::DrawMode::New,
+                    v => return Err(format!("--anim-draw takes old or new, not {v}")),
+                }
+            }
             "--sound" => {
                 a.sound = match value()?.as_str() {
                     "on" => true,
@@ -421,6 +433,7 @@ Showing things:
   --world <name>             world to load (default Daventry; no name: list the worlds)
   --at X,Y,H                 start Connor at X, Y facing heading H (radians)
   --renderer auto|vulkan|dx12  graphics API (default auto)
+  --anim-draw old|new        still animated objects drawn the old or new way at the start (F5 switches)
   --game <folder>            where the game is (default MASK; or KQ8_GAME_DIR)
   --sound on|off             play sound through the sound card (default on)
   --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
@@ -597,6 +610,7 @@ fn main() -> ExitCode {
             }
             app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
             app.insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
+                .insert_resource(args.anim_draw)
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
                 .insert_resource(connor_view::JumpAt(args.jump.clone()))
@@ -650,7 +664,7 @@ fn main() -> ExitCode {
                 .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().run_if(world_build::playing))
                 // Sound effects (M3 3h-2), once the camera is placed.
                 .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw).run_if(world_build::playing))
-                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::running));
+                .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, anim_gpu::toggle_draw, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::running));
         }
     }
     app.run();

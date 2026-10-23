@@ -2680,7 +2680,18 @@ exactly as before):**
      test key switches those objects between the old and the new
      drawing in place, for the user to compare by eye. **Test:**
      entity counts, the shader's numbers; the user's look with the
-     key.
+     key. **Built** 2026-10-23, waiting for the user's look:
+     `anim_gpu.rs` (the buffers, kept across worlds, their contents
+     per world; one topology mesh per topology; F5 and `--anim-draw
+     old|new`), `object_light.rs` (`ObjectKey`: the animated pipeline,
+     shader def `ANIMATED`, bindings 4-6), `object_light.wesl`
+     (`model_corner`), anim_view (`NewDraw`: old frames under one root,
+     the slots under another; `show_slots`; see-through copies),
+     shadow_view (`AnimSlot`: a slot's shadow built from its model; the
+     shadow key includes what slots show). Daventry: 71 still animated
+     objects, 332 part entities; the buffers 71 MB. Old and new give the
+     same shadow reports over 1,200 frames; no graphics errors. Both
+     drawings exist until 4g, so no memory saved yet.
    - **4c. Doors and chests** (door_view).
    - **4d. Characters** (anim_view): talking faces, weapons' part
      places, shadows, see-through, script copies (`spawn_copy`), the

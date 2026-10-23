@@ -59,6 +59,8 @@ pub struct Part {
     pub topology: u32,
     pub node_frame: u32,
     pub material: i32,
+    /// Its node in the model (`Triangle::node`).
+    pub node: u32,
 }
 
 /// The largest differences between the packed data unpacked and
@@ -212,7 +214,7 @@ impl Pack {
                             i
                         }
                     };
-                    let part = Part { topology, node_frame: nf_index, material: m };
+                    let part = Part { topology, node_frame: nf_index, material: m, node: node_index as u32 };
                     check.add(&self.check(&part, triangles, is_flat));
                     parts.push(part);
                 }

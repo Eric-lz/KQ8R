@@ -564,7 +564,8 @@ M6 has started with the Rope and Hook (6a).
   Daventry in play 2.64 → 1.51 GB, checked by the user). **2026-10-23:
   step 3 skipped, step 4 (frames on the graphics card) now, in sub-steps
   4a-4g (DESIGN). 4a done (the compact data checked in all worlds:
-  Daventry 71 MB instead of 955 MB); next 4b.** Smooth
+  Daventry 71 MB instead of 955 MB). 4b built (still animated objects
+  drawn the new way; F5 compares), waiting for the user's look.** Smooth
   animation after M7. Other drawing work waits until step 4 is done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain

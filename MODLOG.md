@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Animation memory 4b: the new drawing for still animated objects (F5 compares)
+
+**Changed:** New viewer `anim_gpu.rs` (`AnimBuffers`: points, normals, node-frames as storage buffers every object material binds; `AnimGpu::install` per world: buffer contents and one topology mesh per topology; `bounds`; `DrawMode`, F5, `--anim-draw old|new`). `object_light.rs`: `ObjectMaterial` binds the buffers (4-6), `animated` flag and `ObjectKey`: the animated pipeline takes texture places and point numbers (`ATTRIBUTE_ANIM_CORNER`), shader def `ANIMATED`. `object_light.wesl`: `model_corner` (animated: the `MeshTag`'s node-frame places the file's point, 16-bit normal, ball), the lighting unchanged. `anim_pack.rs`: `Part::node`. `load.rs` / `world_build.rs`: the pack kept with the objects (`pack_world`). anim_view: still animated objects (not characters, not unused) get `NewDraw`: the old frames under one root, part entities ("slots") under another; `show_slots` puts each part's topology mesh, animated material and tag; see-through copies for the new materials. shadow_view: `AnimSlot`, `PartQuery`; a slot's shadow from its model; the plain-object shadow key includes what slots show. README (F5), DESIGN.
+**Why:** DESIGN "Animation memory" 4b.
+**Tested how:** `cargo test --workspace`, clippy clean. `kq8-viewer --world Daventry --frames 1300 --sound off --anim-draw old` and `new`: error output, `viewer.log`, `shadows.log`. Castle 120 frames (the old path's shader unchanged).
+**Result:** No shader or graphics errors either way. Daventry: 71 still animated objects drawn the new way, 332 part entities; the buffers 71 MB (points 17.5, normals 35.1, node-frames 5.4, topologies 13.9). Plain objects' shadows the same in both modes at frames 1, 601, 1201 (9 shadows, 559 pieces, 31 building surfaces).
+**Still broken / not tested:** **Not looked at**: the new drawing must look exactly like the old (F5). No memory saved yet (both drawings exist until 4g).
+**Next:** The user's look with F5; then 4c (doors and chests).
+
 ## 2026-10-23 Animation memory 4a: the compact data, checked (not drawn yet)
 
 **Changed:** New `kq8-data` `anim_pack.rs` (`Pack::add`: points as in the file, per node-frame normals at 16 bits and the place with the vertex frame folded in, topologies per mesh/texture frame/material with shared corners; an unpack-and-compare check against `Shape::geometry`; unit tests `normals_pack_to_within_a_hair`, `folding_the_scale_and_origin_gives_the_same_point`). `shape.rs`: `Triangle::face`. Viewer `world_build.rs`: `pack_line` packs every animation of the world after reading and logs sizes and the check in `viewer.log`. DESIGN.

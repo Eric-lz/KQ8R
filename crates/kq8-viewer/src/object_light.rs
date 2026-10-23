@@ -48,7 +48,7 @@ use bevy::render::render_resource::{
 };
 use bevy::render::storage::ShaderBuffer;
 use bevy::asset::RenderAssetUsages;
-use bevy::shader::ShaderRef;
+use bevy::shader::{ShaderDefVal, ShaderRef};
 use std::time::Instant;
 
 use kq8_data::haze::{Haze, Hazed};
@@ -110,6 +110,7 @@ pub struct Settings {
 pub const ATTRIBUTE_PART_BALL: MeshVertexAttribute = MeshVertexAttribute::new("Part_Ball", 0x4B51_3807, VertexFormat::Float32x4);
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+#[bind_group_data(ObjectKey)]
 pub struct ObjectMaterial {
     #[uniform(0)]
     pub settings: Settings,
@@ -120,6 +121,34 @@ pub struct ObjectMaterial {
     #[storage(3, read_only)]
     pub scene_lights: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
+    /// The world's animations on the graphics card (`anim_gpu`, step 4),
+    /// shared by every material; read only by animated ones.
+    #[storage(4, read_only)]
+    pub anim_points: Handle<ShaderBuffer>,
+    #[storage(5, read_only)]
+    pub anim_normals: Handle<ShaderBuffer>,
+    #[storage(6, read_only)]
+    pub anim_nodes: Handle<ShaderBuffer>,
+    /// Drawn from the animation buffers (a topology mesh and a `MeshTag`)
+    /// instead of a finished mesh.
+    pub animated: bool,
+}
+
+/// What picks the pipeline: animated or not.
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+pub struct ObjectKey {
+    animated: bool,
+}
+
+impl From<&ObjectMaterial> for ObjectKey {
+    fn from(m: &ObjectMaterial) -> Self {
+        ObjectKey { animated: m.animated }
+    }
+}
+
+/// An animated copy of `material` (step 4).
+pub fn animated(material: &ObjectMaterial) -> ObjectMaterial {
+    ObjectMaterial { animated: true, ..material.clone() }
 }
 
 impl Material for ObjectMaterial {
@@ -143,20 +172,32 @@ impl Material for ObjectMaterial {
         false
     }
 
-    /// Position, normal, texture place and the part's ball (rule 24).
+    /// Position, normal, texture place and the part's ball (rule 24); an
+    /// animated material (step 4): texture place and the corner's point
+    /// numbers, the rest from the animation buffers.
     fn specialize(
         _pipeline: &MaterialPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayoutRef,
-        _key: MaterialPipelineKey<Self>,
+        key: MaterialPipelineKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.0.get_layout(&[
-            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-            Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
-            ATTRIBUTE_PART_BALL.at_shader_location(8),
-        ])?;
+        let animated = key.bind_group_data.animated;
+        let vertex_layout = if animated {
+            layout.0.get_layout(&[Mesh::ATTRIBUTE_UV_0.at_shader_location(2), crate::anim_gpu::ATTRIBUTE_ANIM_CORNER.at_shader_location(9)])?
+        } else {
+            layout.0.get_layout(&[
+                Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+                Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+                Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+                ATTRIBUTE_PART_BALL.at_shader_location(8),
+            ])?
+        };
         descriptor.vertex.buffers = vec![vertex_layout];
+        let def = ShaderDefVal::Bool("ANIMATED".into(), animated);
+        descriptor.vertex.shader_defs.push(def.clone());
+        if let Some(f) = descriptor.fragment.as_mut() {
+            f.shader_defs.push(def);
+        }
         Ok(())
     }
 }
@@ -168,6 +209,9 @@ pub fn add(app: &mut App) {
     app.add_plugins(MaterialPlugin::<ObjectMaterial>::default());
     let buffer = app.world_mut().resource_mut::<Assets<ShaderBuffer>>().add(crate::scene_lights::empty_buffer());
     app.world_mut().resource_mut::<ObjectLight>().scene_lights = buffer.clone();
+    let anim = crate::anim_gpu::AnimBuffers::new(&mut app.world_mut().resource_mut::<Assets<ShaderBuffer>>());
+    app.world_mut().resource_mut::<ObjectLight>().anim = Some(anim.clone());
+    app.insert_resource(anim);
     app.insert_resource(crate::scene_lights::SceneLights::new(buffer))
         .init_resource::<crate::scene_lights::LightsGroup>()
         .init_resource::<crate::scene_lights::GroundLights>();
@@ -204,11 +248,13 @@ pub struct ObjectLight {
     pub haze_on: bool,
     /// The scene's light list (M1 7c), set by `add`.
     pub scene_lights: Handle<ShaderBuffer>,
+    /// The animation buffers (step 4), set by `add`.
+    pub anim: Option<crate::anim_gpu::AnimBuffers>,
 }
 
 impl ObjectLight {
     pub fn new(lights: Lights, mode: LightMode, haze: Haze, haze_on: bool) -> Self {
-        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default() }
+        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default(), anim: None }
     }
 
     fn settings(&self, base_colour: Vec4, shading: Shading, textured: bool) -> Settings {
@@ -303,7 +349,17 @@ pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images
         Look::Missing(_) => (LinearRgba::from(Color::srgb(1.0, 0.0, 1.0)).to_vec4(), None, Shading { lighting: Lighting::None, ..shading }),
     };
     let textured = texture.is_some();
-    ObjectMaterial { settings: light.settings(base, shading, textured), texture, scene_lights: light.scene_lights.clone(), alpha_mode: AlphaMode::Opaque }
+    let anim = |f: fn(&crate::anim_gpu::AnimBuffers) -> &Handle<ShaderBuffer>| light.anim.as_ref().map_or(light.scene_lights.clone(), |a| f(a).clone());
+    ObjectMaterial {
+        settings: light.settings(base, shading, textured),
+        texture,
+        scene_lights: light.scene_lights.clone(),
+        alpha_mode: AlphaMode::Opaque,
+        anim_points: anim(|a| &a.points),
+        anim_normals: anim(|a| &a.normals),
+        anim_nodes: anim(|a| &a.nodes),
+        animated: false,
+    }
 }
 
 /// A copy of `material` drawn at `opacity` (0..1): an object's

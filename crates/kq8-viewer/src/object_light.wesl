@@ -88,14 +88,68 @@ struct SceneLights {
 @group(constants::MATERIAL_BIND_GROUP) @binding(2) var colour_sampler: sampler;
 @group(constants::MATERIAL_BIND_GROUP) @binding(3) var<storage, read> scene: SceneLights;
 
+// Animations on the graphics card (Animation memory step 4, `anim_gpu.rs`):
+// each point as in the model file (x, y, z 0..254 in its low three bytes),
+// each node-frame's normals (16-bit, two per u32), and per node-frame its
+// matrix rows (w: where its points and normals start), its move and its
+// part's ball, in game space.
+struct NodeFrame {
+    row0: vec4<f32>,
+    row1: vec4<f32>,
+    row2: vec4<f32>,
+    offset: vec4<f32>,
+    ball: vec4<f32>,
+};
+@group(constants::MATERIAL_BIND_GROUP) @binding(4) var<storage, read> anim_points: array<u32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(5) var<storage, read> anim_normals: array<vec2<u32>>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(6) var<storage, read> anim_nodes: array<NodeFrame>;
+
 struct ObjectIn {
     @builtin(instance_index) instance_index: u32,
+    @if(!ANIMATED)
     @location(0) position: vec3<f32>,
+    @if(!ANIMATED)
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     // The model part's ball: centre (model space), w = radius (game units).
+    @if(!ANIMATED)
     @location(8) part_ball: vec4<f32>,
+    // Animated: the corner's point and its normal's point.
+    @if(ANIMATED)
+    @location(9) corner: vec2<u32>,
 };
+
+// A corner in the model's own space (Bevy's): place, normal, part ball.
+struct Corner {
+    position: vec3<f32>,
+    normal: vec3<f32>,
+    part_ball: vec4<f32>,
+};
+
+// Game (x, y, z) -> Bevy (x, z, -y), as `main.rs` `to_bevy`.
+fn game_to_bevy(g: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(g.x, g.z, -g.y);
+}
+
+@if(!ANIMATED)
+fn model_corner(v: ObjectIn) -> Corner {
+    return Corner(v.position, v.normal, v.part_ball);
+}
+
+// Step 4: the node-frame the entity's tag names places the point read
+// from the file's numbers; the normal and ball as `model_mesh` would have
+// written them.
+@if(ANIMATED)
+fn model_corner(v: ObjectIn) -> Corner {
+    let node = anim_nodes[mesh_functions::get_tag(v.instance_index)];
+    let raw = anim_points[bitcast<u32>(node.row0.w) + v.corner.x];
+    let r = vec3<f32>(f32(raw & 255u), f32((raw >> 8u) & 255u), f32((raw >> 16u) & 255u));
+    let g = r.x * node.row0.xyz + r.y * node.row1.xyz + r.z * node.row2.xyz + node.offset.xyz;
+    let packed = anim_normals[bitcast<u32>(node.row1.w) + v.corner.y];
+    let n = vec3<f32>(unpack2x16snorm(packed.x), unpack2x16snorm(packed.y).x);
+    let units = settings.game_units;
+    return Corner(game_to_bevy(g) / units, game_to_bevy(n), vec4<f32>(game_to_bevy(node.ball.xyz) / units, node.ball.w));
+}
 
 struct LitVertex {
     @builtin(position) position: vec4<f32>,
@@ -152,21 +206,22 @@ fn corner_light(normal: vec3<f32>, at: vec3<f32>, centre: vec3<f32>, radius: f32
 
 @vertex
 fn vertex(v: ObjectIn) -> LitVertex {
+    let corner = model_corner(v);
     let world_from_local = mesh_functions::get_world_from_local(v.instance_index);
-    let world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.position, 1.0));
+    let world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(corner.position, 1.0));
     // Unit length; a zero normal (degenerate triangles) stays zero and
     // then gets the ambient light only.
-    let normal = mesh_functions::mesh_normal_local_to_world(v.normal, v.instance_index);
+    let normal = mesh_functions::mesh_normal_local_to_world(corner.normal, v.instance_index);
     // The part's ball in world space (rule 24).
-    let centre = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.part_ball.xyz, 1.0)).xyz;
+    let centre = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(corner.part_ball.xyz, 1.0)).xyz;
 
     var light = vec3<f32>(1.0);
     if settings.lighting == 1u {
         // Rule 7, flat: one grey from the first corner's light, capped at 1.
-        let c = corner_light(normal, world_position.xyz, centre, v.part_ball.w);
+        let c = corner_light(normal, world_position.xyz, centre, corner.part_ball.w);
         light = vec3<f32>(min(dot(c, vec3<f32>(0.299, 0.587, 0.114)), 1.0));
     } else if settings.lighting == 2u {
-        light = corner_light(normal, world_position.xyz, centre, v.part_ball.w);
+        light = corner_light(normal, world_position.xyz, centre, corner.part_ball.w);
     }
     if settings.mode == 1u {
         light = min(light * 2.0, vec3<f32>(1.0));

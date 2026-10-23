@@ -137,7 +137,7 @@ pub fn shadow_material(materials: &mut Assets<StandardMaterial>) -> Handle<Stand
 /// The triangles of a shown model frame (`frame`'s children), in the
 /// game's space and corner order (Bevy's run anticlockwise, the game's
 /// clockwise: (a, c, b)).
-pub fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>, sources: &FrameSources) -> Vec<[shadow::V3; 3]> {
+pub fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &PartQuery, meshes: &Assets<Mesh>, sources: &FrameSources) -> Vec<[shadow::V3; 3]> {
     let mut model = Vec::new();
     for part in children.get(frame).into_iter().flat_map(|c| c.iter()) {
         mesh_triangles(part, parts, meshes, sources, &mut model);
@@ -155,6 +155,8 @@ pub struct FrameSources {
     /// Per mesh: its model, sequence and material.
     sources: HashMap<AssetId<Mesh>, FrameSource>,
     cache: Mutex<HashMap<AssetId<Mesh>, Points>>,
+    /// Slots' points by (model, sequence, node, material).
+    slot_cache: Mutex<HashMap<(usize, usize, usize, i32), Points>>,
     /// Frames' points built, and the time spent, for the log.
     pub built: AtomicU64,
     pub build_ns: AtomicU64,
@@ -163,6 +165,20 @@ pub struct FrameSources {
 type FrameSource = (crate::load::FrameShape, usize, i32);
 /// A frame's points in Bevy's space.
 type Points = Arc<Vec<[f32; 3]>>;
+
+/// A part drawn the new way (step 4): what it shows now, so a shadow can
+/// build its points from the model (the node's triangles of the material,
+/// as `model_mesh` wrote them).
+#[derive(Component, Clone)]
+pub struct AnimSlot {
+    pub source: Option<crate::load::FrameShape>,
+    pub sequence: usize,
+    pub node: usize,
+    pub material: i32,
+}
+
+/// The query shadows read parts through.
+pub type PartQuery<'w, 's> = Query<'w, 's, (&'static GlobalTransform, &'static Mesh3d, Option<&'static AnimSlot>)>;
 
 /// Recent frames' points kept (each a few hundred triangles).
 const KEPT_FRAMES: usize = 4096;
@@ -204,6 +220,32 @@ impl FrameSources {
         Some(points)
     }
 
+    /// A slot's points (step 4), built as `points` builds a frame's.
+    fn slot_points(&self, slot: &AnimSlot) -> Option<Points> {
+        let source = slot.source.as_ref()?;
+        let key = (Arc::as_ptr(&source.shape) as usize, slot.sequence, slot.node, slot.material);
+        let mut cache = self.slot_cache.lock().unwrap();
+        if let Some(p) = cache.get(&key) {
+            return Some(p.clone());
+        }
+        let started = std::time::Instant::now();
+        let geometry = source.shape.geometry(slot.sequence);
+        let points: Vec<[f32; 3]> = geometry
+            .triangles
+            .iter()
+            .filter(|t| t.node == slot.node && t.material == slot.material)
+            .flat_map(|t| [0, 2, 1].map(|k| crate::to_bevy(t.positions[k], [0.0; 3])))
+            .collect();
+        self.built.fetch_add(1, Ordering::Relaxed);
+        self.build_ns.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        if cache.len() >= KEPT_FRAMES {
+            cache.clear();
+        }
+        let points = Arc::new(points);
+        cache.insert(key, points.clone());
+        Some(points)
+    }
+
     /// "N frames' points built for shadows, M ms in all".
     pub fn line(&self) -> String {
         let (n, ns) = (self.built.load(Ordering::Relaxed), self.build_ns.load(Ordering::Relaxed));
@@ -212,8 +254,15 @@ impl FrameSources {
 }
 
 /// One mesh entity's triangles in the game's space and corner order.
-fn mesh_triangles(part: Entity, parts: &Query<(&GlobalTransform, &Mesh3d)>, meshes: &Assets<Mesh>, sources: &FrameSources, model: &mut Vec<[shadow::V3; 3]>) {
-    let Ok((at, handle)) = parts.get(part) else { return };
+fn mesh_triangles(part: Entity, parts: &PartQuery, meshes: &Assets<Mesh>, sources: &FrameSources, model: &mut Vec<[shadow::V3; 3]>) {
+    let Ok((at, handle, slot)) = parts.get(part) else { return };
+    // Step 4: a part drawn the new way, from its model.
+    if let Some(slot) = slot {
+        let Some(points) = sources.slot_points(slot) else { return };
+        let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
+        model.extend(game.as_chunks::<3>().0.iter().map(|t| [t[0], t[2], t[1]]));
+        return;
+    }
     let Some(mesh) = meshes.get(&handle.0) else { return };
     // Step 1: an animation frame's points from its model; others' from
     // the mesh.
@@ -236,7 +285,7 @@ fn mesh_triangles(part: Entity, parts: &Query<(&GlobalTransform, &Mesh3d)>, mesh
 }
 
 /// The mesh entities shown under `root` (not under a hidden entity).
-fn shown_meshes(root: Entity, children: &Query<&Children>, visibility: &Query<&Visibility>, parts: &Query<(&GlobalTransform, &Mesh3d)>, out: &mut Vec<Entity>) {
+fn shown_meshes(root: Entity, children: &Query<&Children>, visibility: &Query<&Visibility>, parts: &PartQuery, out: &mut Vec<Entity>) {
     if visibility.get(root).is_ok_and(|v| *v == Visibility::Hidden) {
         return;
     }
@@ -290,11 +339,14 @@ pub fn show_shadow(cast: &[[shadow::V3; 3]], slot: &mut Option<ShadowSlot>, comm
     }
 }
 
+type ShadowKey = (Vec<Entity>, [u32; 7], Vec<u32>, Vec<(usize, usize)>);
+
 /// One plain object's shadow: what it was worked out from, and its slot.
 #[derive(Default)]
 pub struct ObjectShadow {
-    /// Its shown meshes, its place, and the active buildings' numbers.
-    key: Option<(Vec<Entity>, [u32; 7], Vec<u32>)>,
+    /// Its shown meshes, its place, the active buildings' numbers, and
+    /// what its new-way parts show (step 4).
+    key: Option<ShadowKey>,
     slot: Option<ShadowSlot>,
     pieces: usize,
     /// Building surfaces it lies on (4d-7b-3).
@@ -325,7 +377,7 @@ pub fn object_shadow_draw(
     ground: Option<Res<crate::terrain_view::GroundLookup>>,
     roots: Query<(Entity, &DistanceTest, &GlobalTransform, Has<bevy::app::Propagate<RenderLayers>>)>,
     children: Query<&Children>,
-    parts: Query<(&GlobalTransform, &Mesh3d)>,
+    parts: PartQuery,
     visibility: Query<&Visibility>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -390,7 +442,9 @@ pub fn object_shadow_draw(
         }
         let (r, t) = (at.rotation(), at.translation());
         let place = [r.x, r.y, r.z, r.w, t.x, t.y, t.z].map(f32::to_bits);
-        let key = Some((meshes_shown, place, active_ids.clone()));
+        // Step 4: a slot shows another frame with the same entity.
+        let slots: Vec<(usize, usize)> = meshes_shown.iter().filter_map(|e| parts.get(*e).ok().and_then(|(_, _, s)| s.map(|s| (s.sequence, s.node)))).collect();
+        let key = Some((meshes_shown, place, active_ids.clone(), slots));
         if entry.key != key {
             let mut model = Vec::new();
             for &m in key.as_ref().map_or(&[][..], |k| &k.0[..]) {

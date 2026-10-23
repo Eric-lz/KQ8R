@@ -257,8 +257,12 @@ pub fn setup_objects(
     held: Res<crate::door_view::HeldItem>,
     light: Res<ObjectLight>,
     mut sources: ResMut<crate::shadow_view::FrameSources>,
+    anim_buffers: Res<crate::anim_gpu::AnimBuffers>,
 ) {
     let Some(mut objects) = loaded.0.take() else { return };
+    // Step 4: the world's animations to the graphics card.
+    let (gpu, line) = crate::anim_gpu::AnimGpu::install(objects.pack.take().unwrap_or_default(), &anim_buffers, &mut buffers, &mut meshes);
+    shared.log.lock().unwrap().summary(line);
     let mut log = shared.log.lock().unwrap();
     let buildings = std::mem::take(&mut objects.buildings);
     commands.insert_resource(ViewBlockerSet {
@@ -306,7 +310,9 @@ pub fn setup_objects(
         &std::mem::take(&mut objects.character_lines),
         &mut log,
         &mut sources,
+        &gpu,
     );
+    commands.insert_resource(gpu);
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log, &mut sources);
     // 3l-4: doors, chests and scripted objects were added after the
     // plain objects; the sweep tests them all in load order.
