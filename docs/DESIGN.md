@@ -2766,3 +2766,27 @@ exactly as before):**
 **While step 4 is under way:** no other work on drawing, characters,
 objects, animations or saved games (the same files); study sessions (A)
 go on.
+
+### Outside the milestones: loading time (2026-10-23)
+
+Not from the original game. The user timed 6.3 s from `cargo play` to
+ready; `viewer.log` now has a timeline (`timeline.rs`: marks from the
+program's start, and totals of the loader's busy parts with how many
+different files were behind them). What was done, one commit each:
+
+1. Each texture read and made into an image once per world (2,855
+   loads were 264 textures; images 3,020 -> 580, 233 -> 37 MB); small
+   archive entries (up to 64 KB) and palettes read once (the palette
+   was unpacked 235 times, once per still model).
+2. The animations packed on every core (`Pack::merge`; 1.15 s ->
+   0.19 s), grouped by model file so points stay shared.
+3. Each model file read and parsed once (974 -> 863; the pack 71.3 ->
+   67.9 MB).
+4. `play.cmd`: the built viewer without cargo's checks (0.7 s).
+
+Daventry: reading 3.47 -> 1.28 s; everything drawn (no render pipeline
+waiting) 5.18 -> about 2.8 s after the start; plus cargo's 0.7 s unless
+`play.cmd` is used. Left: the engine's start (about 0.55 s) and the
+first shaders (about 0.4-0.7 s), Bevy's own; animations' other reading
+(about 0.75 s, not broken down); weapon sets added while playing packed
+on one core.

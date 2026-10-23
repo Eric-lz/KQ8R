@@ -124,6 +124,9 @@ or by running:
 cargo play --help
 ```
 
+`play.cmd` (Windows) starts the viewer built last without cargo, about 0.7 s sooner, with the same options
+(e.g. `.\play.cmd --world swamp`); after changing the code, run `cargo play` once to build it again.
+
 ### Command console
 
 While the game runs, you can go back to the terminal you started the game from

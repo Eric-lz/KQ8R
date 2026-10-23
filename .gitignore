@@ -23,6 +23,7 @@
 !/Cargo.lock
 !/rust-toolchain.toml
 !/.cargo/config.toml
+!/play.cmd
 
 # Documentation
 !/docs/*.md
