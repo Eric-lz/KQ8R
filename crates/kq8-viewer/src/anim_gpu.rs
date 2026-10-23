@@ -238,6 +238,31 @@ impl AnimGpu {
     }
 }
 
+/// Animated copies made so far, by the material they copy: the same
+/// material gets one copy (Connor's: his ~470 identical face materials,
+/// one per animation, became one; the user's check, 2026-10-23: changing
+/// hundreds of materials at each mouth shape stuttered).
+pub type Copies = std::collections::HashMap<AssetId<crate::object_light::ObjectMaterial>, Handle<crate::object_light::ObjectMaterial>>;
+
+/// Each key's animated copy, made once per material (`cache`).
+fn copies_of(
+    materials: impl IntoIterator<Item = ((usize, i32), Handle<crate::object_light::ObjectMaterial>)>,
+    assets: &mut Assets<crate::object_light::ObjectMaterial>,
+    cache: &mut Copies,
+) -> Vec<((usize, i32), Handle<crate::object_light::ObjectMaterial>)> {
+    materials
+        .into_iter()
+        .filter_map(|(k, m)| {
+            if let Some(copy) = cache.get(&m.id()) {
+                return Some((k, copy.clone()));
+            }
+            let copy = assets.add(assets.get(&m).map(crate::object_light::animated)?);
+            cache.insert(m.id(), copy.clone());
+            Some((k, copy))
+        })
+        .collect()
+}
+
 /// An object drawn from the animation buffers: its parts ("slots", one
 /// per part of its largest frame) under `new_root`, its old frames under
 /// `old_root`; the draw mode shows one of the two (4b-4f).
@@ -270,6 +295,7 @@ impl Slots {
         movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
         materials: impl IntoIterator<Item = ((usize, i32), Handle<crate::object_light::ObjectMaterial>)>,
         assets: &mut Assets<crate::object_light::ObjectMaterial>,
+        cache: &mut Copies,
     ) -> Option<Slots> {
         if movements.is_empty() || movements.iter().any(|(a, _, _)| gpu.frames(list, *a).is_none()) {
             return None;
@@ -296,10 +322,7 @@ impl Slots {
                 e
             })
             .collect();
-        let materials = materials
-            .into_iter()
-            .filter_map(|(k, m)| assets.get(&m).map(crate::object_light::animated).map(|copy| (k, assets.add(copy))))
-            .collect();
+        let materials = copies_of(materials, assets, cache).into_iter().collect();
         Some(Slots { old_root, new_root, slots, list, movements, materials, shown: None, mode: None, aabb })
     }
 
@@ -318,6 +341,7 @@ impl Slots {
         movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
         materials: impl IntoIterator<Item = ((usize, i32), Handle<crate::object_light::ObjectMaterial>)>,
         assets: &mut Assets<crate::object_light::ObjectMaterial>,
+        cache: &mut Copies,
     ) -> Vec<((usize, i32), Handle<crate::object_light::ObjectMaterial>)> {
         let frames: Vec<&Vec<Vec<Part>>> = movements.iter().filter_map(|(a, _, _)| gpu.frames(self.list, *a)).collect();
         let count = frames.iter().flat_map(|f| f.iter()).map(Vec::len).max().unwrap_or(0);
@@ -334,10 +358,7 @@ impl Slots {
             self.slots.push(e);
         }
         self.movements.extend(movements);
-        let added: Vec<_> = materials
-            .into_iter()
-            .filter_map(|(k, m)| assets.get(&m).map(crate::object_light::animated).map(|copy| (k, assets.add(copy))))
-            .collect();
+        let added = copies_of(materials, assets, cache);
         self.materials.extend(added.iter().cloned());
         self.shown = None;
         added

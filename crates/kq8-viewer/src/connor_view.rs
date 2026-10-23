@@ -139,6 +139,10 @@ pub struct ConnorSim {
     /// model.
     pub(crate) slots: Option<crate::anim_gpu::Slots>,
     rope_slots: Option<crate::anim_gpu::Slots>,
+    /// His materials' groups (the same texture and settings) and their
+    /// animated copies, shared by both slot sets and the weapon sets.
+    groups: std::collections::HashMap<String, Handle<ObjectMaterial>>,
+    copies: crate::anim_gpu::Copies,
     /// Sounds his cues started (M3 3h-4), taken by `sound_view`.
     pub sounds: Vec<kq8_core::sound::Start>,
     /// Picks the footstep file (`sound.md` rule 38).
@@ -488,13 +492,39 @@ fn share_copies(
 ) {
     for (key, copy) in copies {
         let Some((_, original)) = originals.iter().find(|(k, _)| k == key) else { continue };
-        if face.iter().any(|f| f.id() == original.id()) {
+        if face.iter().any(|f| f.id() == original.id()) && !face.iter().any(|f| f.id() == copy.id()) {
             face.push(copy.clone());
+        }
+        if all.iter().any(|(h, _, _)| h.id() == copy.id()) {
+            continue;
         }
         if let Some((_, texture, image)) = all.iter().find(|(h, _, _)| h.id() == original.id()).cloned() {
             all.push((copy.clone(), texture, image));
         }
     }
+}
+
+/// Step 4f: one material per group of the same look (texture file and
+/// settings) stands for all of them in the new drawing; `groups` keeps
+/// each group's first.
+#[allow(clippy::type_complexity)]
+fn group_materials(
+    by_index: &[((usize, i32), Handle<ObjectMaterial>)],
+    materials: &Assets<ObjectMaterial>,
+    all: &[(Handle<ObjectMaterial>, String, Option<Handle<Image>>)],
+    groups: &mut std::collections::HashMap<String, Handle<ObjectMaterial>>,
+) -> Vec<((usize, i32), Handle<ObjectMaterial>)> {
+    by_index
+        .iter()
+        .map(|(k, h)| {
+            let texture = all.iter().find(|(m, _, _)| m.id() == h.id()).map_or("", |(_, t, _)| t.as_str());
+            let group = match materials.get(h) {
+                Some(m) => format!("{texture}|{:?}|{}|{}|{}", m.settings.base_colour, m.settings.lighting, m.settings.haze_halved, m.settings.textured),
+                None => format!("{:?}", h.id()),
+            };
+            (*k, groups.entry(group).or_insert_with(|| h.clone()).clone())
+        })
+        .collect()
 }
 
 /// M6 6c-2 (DESIGN "6c"; not from a behaviour note): a weapon Connor
@@ -575,8 +605,9 @@ pub fn late_set_step(
                     })
                     .collect();
                 if let Some(g) = gpu.as_deref() {
+                    let grouped = group_materials(&by_index, &materials, &added, &mut c.groups);
                     for s in [c.slots.as_mut(), c.rope_slots.as_mut()].into_iter().flatten() {
-                        let copies = s.extend(&mut commands, g, slot_movements.clone(), by_index.clone(), &mut materials);
+                        let copies = s.extend(&mut commands, g, slot_movements.clone(), grouped.clone(), &mut materials, &mut c.copies);
                         share_copies(&copies, &by_index, &mut c.face, &mut added);
                     }
                 }
@@ -669,9 +700,13 @@ pub fn spawn_connor(
         by_index.extend(own.into_iter().map(|(m, h)| ((n, m), h)));
         frame_entities.push(entities);
     }
-    // His drawing and the rope model's, the new way too.
-    let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements.clone(), by_index.clone(), materials);
-    let rope_slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements, by_index.clone(), materials);
+    // His drawing and the rope model's, the new way too; one material per
+    // look, shared by both.
+    let mut groups = std::collections::HashMap::new();
+    let mut copies = crate::anim_gpu::Copies::default();
+    let grouped = group_materials(&by_index, materials, &all_materials, &mut groups);
+    let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements.clone(), grouped.clone(), materials, &mut copies);
+    let rope_slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements, grouped, materials, &mut copies);
     for s in [&slots, &rope_slots].into_iter().flatten() {
         let copies: Vec<_> = s.materials.iter().map(|(k, h)| (*k, h.clone())).collect();
         share_copies(&copies, &by_index, &mut face, &mut all_materials);
@@ -682,9 +717,11 @@ pub fn spawn_connor(
         commands.entity(s.old_root).add_children(&old);
     }
     main_log.summary(format!(
-        "connor: drawn the new way too (Animation memory 4f): {} part entities, rope model {} (F5 or --anim-draw switches old/new)",
+        "connor: drawn the new way too (Animation memory 4f): {} part entities, rope model {}; {} materials stand for {} (F5 or --anim-draw switches old/new)",
         slots.as_ref().map_or(0, |s| s.len()),
-        rope_slots.as_ref().map_or(0, |s| s.len())
+        rope_slots.as_ref().map_or(0, |s| s.len()),
+        copies.len(),
+        by_index.len()
     ));
     let rotation = bevy_transform(&placement).rotation;
     match first_frame_normals.as_deref().and_then(|n| crate::object_light::light_stats(light, n, rotation)) {
@@ -781,6 +818,8 @@ pub fn spawn_connor(
         shown: None,
         slots,
         rope_slots,
+        groups,
+        copies,
         sounds: Vec::new(),
         dice: Default::default(),
         step_ground: Default::default(),

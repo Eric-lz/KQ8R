@@ -176,7 +176,7 @@ impl AnimSim {
         };
         let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), crate::terrain_view::ObjectName(name.to_string()))).id();
         // Step 4e: drawn the new way too.
-        let new_draw = gpu.and_then(|gpu| crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, r.slots.0.clone(), r.slots.1.clone(), materials));
+        let new_draw = gpu.and_then(|gpu| crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, r.slots.0.clone(), r.slots.1.clone(), materials, &mut Default::default()));
         let frames_parent = new_draw.as_ref().map_or(body, |s| s.old_root);
         let mut movements = Vec::with_capacity(r.movements.len());
         let mut parts = Vec::new();
@@ -541,7 +541,7 @@ pub fn spawn_animated(
             .map(|(k, h)| (k, crate::object_light::for_object(materials, &h, opacity, p.haze_solid, p.haze_multiplier)))
             .collect();
         let slot_movements: Vec<SlotMovement> = a.movements.iter().map(|(_, _, i)| (*i, built[*i].source.clone(), built[*i].ball)).collect();
-        let new_draw = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, slot_movements.clone(), own.clone(), materials);
+        let new_draw = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, slot_movements.clone(), own.clone(), materials, &mut Default::default());
         let old_root = new_draw.as_ref().map(|s| s.old_root);
         characters_new += usize::from(a.character.is_some() && new_draw.is_some());
         // Step 4d: the new way's face materials take the mouth shapes too.

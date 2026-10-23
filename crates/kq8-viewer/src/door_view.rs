@@ -465,7 +465,7 @@ fn spawn_body(
         .map(|(k, h)| (k, crate::object_light::for_object(materials, &h, 1.0, haze.0, haze.1)))
         .collect();
     let movements = animations.iter().map(|a| (*a, built[*a].3.clone(), built[*a].0)).collect();
-    let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Doors, movements, own, materials);
+    let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Doors, movements, own, materials, &mut Default::default());
     let parent_of_frames = slots.as_ref().map_or(body, |s| s.old_root);
     // The lights it carries (M1 7c), by movement and frame.
     if let Some(c) = crate::scene_lights::CarriedLights::new(animations.iter().map(|a| lights[*a].clone()).collect(), transform, dyn_off) {

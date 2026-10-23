@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Fix (4f): Connor's new drawing shares one material per look (talking stuttered)
+
+**Changed:** Viewer `anim_gpu.rs`: `Copies` (animated copies by the material they copy, made once) passed to `Slots::spawn` / `extend`. connor_view: `group_materials` (his materials grouped by texture file and settings, one standing for each group); both slot sets and the weapon sets share the groups and copies (`ConnorSim::groups`, `copies`); `share_copies` adds each copy once.
+**Why:** The user: bad stutter while Connor talks, only him. Each mouth shape sets the texture on every face material and Bevy rebuilds each one's bind group; 4f had tripled his face materials (467 old, 467 for his new parts, 467 for the rope model: 1,401).
+**Tested how:** clippy clean, `cargo test --workspace`. His mouth (`--at 245000,255000,0 --click alcmsign,30 --frames 1500`), invisibility (`--at 286784,192527,1.5708 --key f3,1 --command "give Invisible 1,10" --key 8,150 --frames 2000`); `viewer.log`, `connor.log`.
+**Result:** "48 materials stand for 1547"; each mouth shape on 468 face materials (467 old + 1), the same 36 swaps; invisible: 477 + 650 materials (was 1,386 + 1,854).
+**Still broken / not tested:** **Not looked at**: the stutter. The old drawing's 467 remain until 4g removes them (then 1).
+**Next:** The user's look at Connor talking.
+
 ## 2026-10-23 Animation memory 4f: Connor drawn the new way (F5 compares)
 
 **Changed:** Viewer `anim_gpu.rs`: `List::Connor`; `AnimGpu::add_connor` (a weapon set loaded while playing: packed, new topology meshes, the buffers sent again; `install` split into `add_topologies` and `upload`); `Slots::extend`, `hide`, `set_offset`. connor_view: `DrawnMovement::anim`; `spawn_frames` also returns its materials by index; `spawn_connor` gives him two slot sets (him, the rope model) and moves his old frames under the old root; `share_copies` adds the new materials to his face and potion looks; `connor_draw` shows the slots (the rope model at its offset, hidden when not on the rope); `late_set_step` packs a weapon set, grows the slots and shares the copies. anim_view: his shadow reads the slots while the new drawing is shown. terrain_view: the GPU data handed over after Connor is made. DESIGN.
