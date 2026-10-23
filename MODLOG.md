@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Animation memory 4e: copy templates and script-made copies drawn the new way
+
+**Changed:** Viewer anim_view: every animated object gets `Slots` (also the unused copy templates, shown with H); a `Recipe` keeps the slots' inputs (`SlotMovement`s and materials) and `spawn_copy` gives a script's copy its own slots. `copies_view.rs` passes the GPU data and materials. DESIGN: items, bodies, bolts, effects, potions' orbits and still copies use still models (not animation frames), left as they are.
+**Why:** DESIGN "Animation memory" 4e.
+**Tested how:** `cargo test --workspace`, clippy clean. `kq8-viewer --world Daventry --sound off --at 198000,262152,1.5708 --key left:IDCTL_INVBAR_SHORT,40 --aim barrel.07,60 --frames 900` (a barrel bursts, its wreck is a copy): `viewer.log`, error output.
+**Result:** Daventry: 143 of 143 animated objects drawn the new way (1,296 part entities), 34 of 34 doors and chests. The wreck: "copy NoName22 of barrelsm: drawn, 1 movement(s), 24 part(s), 12 new-way part(s)". No graphics errors.
+**Still broken / not tested:** **Not looked at**: the barrel's wreck with F5; objects shown with H.
+**Next:** The user's look; then 4f (Connor).
+
 ## 2026-10-23 Fix (4d), second try: each part drawn at its own centre (see-through order)
 
 **Changed:** Viewer `anim_gpu.rs`: `Slots::show` puts each part entity at its part's ball centre (and moves its box the other way); `object_light.wesl`: the animated vertex step takes the point relative to that centre (the part's ball centre at 0); `shadow_view.rs`: `AnimSlot::offset`, a slot's shadow points taken back by it.

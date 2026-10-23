@@ -107,7 +107,13 @@ struct Playing {
 struct Recipe {
     movements: Vec<(Vec<crate::item_view::Parts>, Vec<GameTransform>, crate::shadow_view::ModelBall)>,
     script: Option<String>,
+    /// What `Slots::spawn` needs for a copy drawn the new way (step 4e):
+    /// per movement its animation, model and ball; its materials.
+    slots: (Vec<SlotMovement>, Vec<((usize, i32), Handle<ObjectMaterial>)>),
 }
+
+/// A movement for `Slots::spawn`: its animation's index, model and ball.
+type SlotMovement = (usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall);
 
 #[derive(Resource)]
 pub struct AnimSim {
@@ -153,18 +159,29 @@ impl AnimSim {
     /// A new copy of an unused object (M5 5d-4, a script's `loadKQ` while
     /// playing): its body and frames from the template's recipe, at its
     /// place, played by core's `anims[index]`. Returns the log line.
-    pub fn spawn_copy(&mut self, commands: &mut Commands, template: &str, name: &str, placement: Placement, index: usize) -> String {
+    pub fn spawn_copy(
+        &mut self,
+        commands: &mut Commands,
+        template: &str,
+        name: &str,
+        placement: Placement,
+        index: usize,
+        (gpu, materials): (Option<&crate::anim_gpu::AnimGpu>, &mut Assets<ObjectMaterial>),
+    ) -> String {
         let Some(r) = self.recipes.get(&template.to_ascii_lowercase()) else {
             return format!("copy {name}: no recipe for {template}; not drawn");
         };
         let body = commands.spawn((bevy_transform_from(placement.rotation, placement.position), Visibility::default(), crate::terrain_view::ObjectName(name.to_string()))).id();
+        // Step 4e: drawn the new way too.
+        let new_draw = gpu.and_then(|gpu| crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, r.slots.0.clone(), r.slots.1.clone(), materials));
+        let frames_parent = new_draw.as_ref().map_or(body, |s| s.old_root);
         let mut movements = Vec::with_capacity(r.movements.len());
         let mut parts = Vec::new();
         for (frames, steps, ball) in &r.movements {
             let mut drawn = Vec::with_capacity(frames.len());
             for frame in frames {
                 let parent = commands.spawn((Transform::default(), Visibility::Hidden, *ball)).id();
-                commands.entity(body).add_child(parent);
+                commands.entity(frames_parent).add_child(parent);
                 for (mesh, material) in frame {
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
                     commands.entity(parent).add_child(part);
@@ -174,7 +191,12 @@ impl AnimSim {
             }
             movements.push(DrawnMovement { frames: drawn, steps: steps.clone() });
         }
-        let line = format!("copy {name} of {template}: drawn, {} movement(s), {} part(s), played by the world's rules (M5 5d-4)", movements.len(), parts.len());
+        let line = format!(
+            "copy {name} of {template}: drawn, {} movement(s), {} part(s), {} new-way part(s), played by the world's rules (M5 5d-4)",
+            movements.len(),
+            parts.len(),
+            new_draw.as_ref().map_or(0, |s| s.len())
+        );
         self.playing.push(Playing {
             name: name.to_string(),
             source: Source::Core(index),
@@ -197,7 +219,7 @@ impl AnimSim {
             casts: false,
             shadow: None,
             birth_shown: None,
-            new_draw: None,
+            new_draw,
         });
         line
     }
@@ -506,21 +528,17 @@ pub fn spawn_animated(
         let mut drawn = Vec::with_capacity(a.movements.len());
         let mut parts = Vec::new();
         let mut recipe = Vec::new();
-        // Steps 4b, 4d: still animated objects and characters (also those
-        // prepared for a script's loadKQ) are drawn the new way too; the
-        // unused objects' templates are 4e's.
-        let new_draw = if !(*unused && a.character.is_none()) {
-            let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = a
-                .movements
-                .iter()
-                .flat_map(|(_, _, i)| built[*i].materials.iter().map(move |(m, h)| ((*i, *m), h.clone())))
-                .map(|(k, h)| (k, crate::object_light::for_object(materials, &h, opacity, p.haze_solid, p.haze_multiplier)))
-                .collect();
-            let movements = a.movements.iter().map(|(_, _, i)| (*i, built[*i].source.clone(), built[*i].ball)).collect();
-            crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, movements, own, materials)
-        } else {
-            None
-        };
+        // Steps 4b, 4d, 4e: every animated object is drawn the new way
+        // too (the unused ones, copy templates, only with H; their copies
+        // from the recipe).
+        let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = a
+            .movements
+            .iter()
+            .flat_map(|(_, _, i)| built[*i].materials.iter().map(move |(m, h)| ((*i, *m), h.clone())))
+            .map(|(k, h)| (k, crate::object_light::for_object(materials, &h, opacity, p.haze_solid, p.haze_multiplier)))
+            .collect();
+        let slot_movements: Vec<SlotMovement> = a.movements.iter().map(|(_, _, i)| (*i, built[*i].source.clone(), built[*i].ball)).collect();
+        let new_draw = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Objects, slot_movements.clone(), own.clone(), materials);
         let old_root = new_draw.as_ref().map(|s| s.old_root);
         characters_new += usize::from(a.character.is_some() && new_draw.is_some());
         // Step 4d: the new way's face materials take the mouth shapes too.
@@ -566,7 +584,7 @@ pub fn spawn_animated(
             drawn.push(DrawnMovement { frames, steps: if b.moves { b.steps.clone() } else { Vec::new() } });
         }
         if *unused && a.character.is_none() {
-            recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone() });
+            recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone(), slots: (slot_movements, own) });
         }
         // Whole-object steps of the movement shown at load: how far the
         // chained pose goes over the loop.
@@ -653,7 +671,7 @@ pub fn spawn_animated(
     let new_way = playing.iter().filter(|p| p.new_draw.is_some()).count();
     let slots: usize = playing.iter().filter_map(|p| p.new_draw.as_ref()).map(|n| n.len()).sum();
     main_log.summary(format!(
-        "animated objects drawn the new way too (Animation memory steps 4b, 4d): {new_way} of {} (characters among them: {characters_new}), {slots} part entities (F5 or --anim-draw switches old/new)",
+        "animated objects drawn the new way too (Animation memory steps 4b, 4d, 4e): {new_way} of {} (characters among them: {characters_new}), {slots} part entities (F5 or --anim-draw switches old/new)",
         playing.len()
     ));
     main_log.summary(format!(

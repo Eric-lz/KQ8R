@@ -61,6 +61,7 @@ pub fn spawn_copies(
     mut order: Option<ResMut<ColliderOrder>>,
     mut anim: Option<ResMut<crate::anim_view::AnimSim>>,
     shared: Res<Shared>,
+    (gpu, mut materials): (Option<Res<crate::anim_gpu::AnimGpu>>, ResMut<Assets<crate::object_light::ObjectMaterial>>),
 ) {
     use kq8_core::collide::{pair_collides, BoxCollider, ColliderKind, CONNOR_MASK, CONNOR_TYPE};
     let Some(mut sim) = sim else { return };
@@ -89,7 +90,7 @@ pub fn spawn_copies(
             None => match (draw.as_ref().and_then(|d| d.anims.get(&file)), anim.as_mut(), sim.active.world.anim_index(&name)) {
                 // 5d-4: an animated copy, played by core's object.
                 (Some(template), Some(a), Some(index)) => {
-                    let line = a.spawn_copy(&mut commands, template, &name, placement, index);
+                    let line = a.spawn_copy(&mut commands, template, &name, placement, index, (gpu.as_deref(), &mut materials));
                     format!("{line} at ({:.0}, {:.0}, {:.0})", p[0], p[1], p[2])
                 }
                 _ => format!("copy {name} of {file} at ({:.0}, {:.0}, {:.0}): no template drawn here; not drawn", p[0], p[1], p[2]),

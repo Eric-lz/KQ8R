@@ -2711,7 +2711,17 @@ exactly as before):**
      lights come from data, not entities: unchanged. The unused objects'
      templates and `spawn_copy` move to 4e (copies). Daventry: 134 of
      143 animated objects (63 characters), 1,222 part entities.
-   - **4e. Items, bodies, effects, potions' orbits.**
+   - **4e. Items, bodies, effects, potions' orbits.** **Built**
+     2026-10-23, waiting for the user's look (4d checked; the ghost
+     knight's flicker fixed: each part stands at its own centre, Bevy
+     sorts see-through parts by their mesh's centre and a topology mesh
+     has none). Items, bodies, bolts, effects, potions' orbits and still
+     copies use **still models** (Daventry 147 meshes, 1 MB), not
+     animation frames: left as they are. What 4e moved: the unused
+     animated objects (copy templates, shown with H) and their copies
+     made by scripts (`spawn_copy`; the recipe carries the slots'
+     inputs). Daventry: 143 of 143 animated objects; a burst barrel's
+     wreck: 12 new-way parts.
    - **4f. Connor** (connor_view): late movement sets, weapon swaps, the
      hammer throw.
    - **4g. The old way removed**: frame entities, `FrameSources`'s mesh

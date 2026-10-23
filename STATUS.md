@@ -566,8 +566,9 @@ M6 has started with the Rope and Hook (6a).
   4a-4g (DESIGN). 4a done (the compact data checked in all worlds:
   Daventry 71 MB instead of 955 MB). 4b built (still animated objects
   drawn the new way; F5 compares) and 4c (doors, chests, scripted
-  objects) checked by the user. 4d built (characters), waiting for the
-  user's look.** Smooth
+  objects) and 4d (characters) checked by the user. 4e built (copy
+  templates and script copies; items and effects are still models, left
+  as they are), waiting for the user's look.** Smooth
   animation after M7. Other drawing work waits until step 4 is done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
