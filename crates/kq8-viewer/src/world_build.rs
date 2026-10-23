@@ -286,7 +286,7 @@ fn pack_world(objects: &load::Objects) -> (String, crate::anim_gpu::WorldPack) {
             };
             let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
             let id = Arc::as_ptr(&source.shape) as usize;
-            let (packed, c) = pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
+            let (packed, c) = pack.add(&source.shape, id, source.first, a.frame_count, &flat);
             check.add(&c);
             animations += 1;
             frames += packed.len();
@@ -415,10 +415,8 @@ pub fn build_pending(world: &mut World) {
     log.summary(crate::memory::allocator_line());
     drop(log);
     let parts = breakdown(world);
-    let recorded = world.get_resource::<crate::shadow_view::FrameSources>().map_or(0, |s| s.len());
     if let Ok(mut wl) = Log::create("world") {
         wl.detail(format!("memory by kind in {name}: {parts}"));
-        wl.detail(format!("animation frames kept only on the graphics card (Animation memory step 1): {recorded} meshes, built again from their models for shadows"));
     }
 }
 

@@ -12,9 +12,8 @@
 //! node-frame to show. The vertex shader (`object_light.wesl`, ANIMATED)
 //! places and lights it.
 //!
-//! 4b: still animated objects (anim_view's objects that aren't
-//! characters) are drawn both ways; F5 (or `--anim-draw old|new`) picks
-//! which is shown, to compare by eye. The other kinds keep the old way.
+//! Every animated object, door, chest, character and Connor is drawn this
+//! way (4b-4f; the old finished frames were removed in 4g).
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, MeshVertexAttribute, PrimitiveTopology, VertexAttributeValues};
@@ -23,7 +22,6 @@ use bevy::render::render_resource::VertexFormat;
 use bevy::render::storage::ShaderBuffer;
 use kq8_data::anim_pack::{Pack, Part};
 
-use crate::Shared;
 
 /// Each corner's (point, normal's point) in its vertex frame.
 pub const ATTRIBUTE_ANIM_CORNER: MeshVertexAttribute = MeshVertexAttribute::new("Anim_Corner", 0x4B51_3809, VertexFormat::Uint32x2);
@@ -107,7 +105,7 @@ impl AnimGpu {
                 let source = a.source.as_ref()?;
                 let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
                 let id = std::sync::Arc::as_ptr(&source.shape) as usize;
-                let (packed, c) = self.pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
+                let (packed, c) = self.pack.add(&source.shape, id, source.first, a.frame_count, &flat);
                 check.add(&c);
                 self.connor.push(Some(packed));
                 Some(self.connor.len() - 1)
@@ -201,22 +199,6 @@ impl AnimGpu {
     }
 }
 
-/// Which drawing still animated objects show (4b-4f): new (the default)
-/// or the old frame entities, to compare. F5 switches.
-#[derive(Resource, Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DrawMode {
-    New,
-    Old,
-}
-
-/// F5: switch between the old and the new drawing (logged).
-pub fn toggle_draw(keys: Res<ButtonInput<KeyCode>>, mut mode: ResMut<DrawMode>, shared: Res<Shared>) {
-    if !keys.just_pressed(KeyCode::F5) {
-        return;
-    }
-    *mode = if *mode == DrawMode::New { DrawMode::Old } else { DrawMode::New };
-    shared.log.lock().unwrap().summary(format!("key F5: animated objects drawn the {} way (Animation memory step 4)", if *mode == DrawMode::New { "new" } else { "old" }));
-}
 
 /// Which list of `AnimGpu` an object's animations index.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -264,10 +246,8 @@ fn copies_of(
 }
 
 /// An object drawn from the animation buffers: its parts ("slots", one
-/// per part of its largest frame) under `new_root`, its old frames under
-/// `old_root`; the draw mode shows one of the two (4b-4f).
+/// per part of its largest frame) under `new_root`.
 pub struct Slots {
-    pub old_root: Entity,
     new_root: Entity,
     slots: Vec<Entity>,
     list: List,
@@ -277,8 +257,6 @@ pub struct Slots {
     pub materials: std::collections::HashMap<(usize, i32), Handle<crate::object_light::ObjectMaterial>>,
     /// (movement, frame) the slots show.
     shown: Option<(usize, usize)>,
-    /// The draw mode shown.
-    mode: Option<DrawMode>,
     /// The object's box over every frame (Bevy units, its own space).
     aabb: Option<(Vec3, Vec3)>,
 }
@@ -309,9 +287,8 @@ impl Slots {
             let (a, b) = (Vec3::from(crate::to_bevy(lo, [0.0; 3])), Vec3::from(crate::to_bevy(hi, [0.0; 3])));
             (a.min(b), a.max(b))
         });
-        let old_root = commands.spawn((Transform::default(), Visibility::Inherited)).id();
-        let new_root = commands.spawn((Transform::default(), Visibility::Hidden, movements[0].2)).id();
-        commands.entity(body).add_children(&[old_root, new_root]);
+        let new_root = commands.spawn((Transform::default(), Visibility::Inherited, movements[0].2)).id();
+        commands.entity(body).add_child(new_root);
         let slots = (0..count)
             .map(|_| {
                 let mut e = commands.spawn((Transform::default(), Visibility::Hidden, bevy::mesh::MeshTag::new(0)));
@@ -324,7 +301,7 @@ impl Slots {
             })
             .collect();
         let materials = copies_of(materials, assets, cache).into_iter().collect();
-        Some(Slots { old_root, new_root, slots, list, movements, materials, shown: None, mode: None, aabb })
+        Some(Slots { new_root, slots, list, movements, materials, shown: None, aabb })
     }
 
     /// Part entities.
@@ -385,26 +362,10 @@ impl Slots {
         }
     }
 
-    /// The entity whose children are the parts shown, while the new
-    /// drawing is shown (for shadows: its children carry `AnimSlot`, its
-    /// ball the movement's).
-    pub fn drawn_root(&self) -> Option<Entity> {
-        (self.mode == Some(DrawMode::New)).then_some(self.new_root)
-    }
-
-    /// Shows the old or the new drawing.
-    pub fn set_mode(&mut self, mode: DrawMode, visibility: &mut Query<&mut Visibility>) {
-        if self.mode == Some(mode) {
-            return;
-        }
-        let new = mode == DrawMode::New;
-        if let Ok(mut v) = visibility.get_mut(self.new_root) {
-            *v = if new { Visibility::Inherited } else { Visibility::Hidden };
-        }
-        if let Ok(mut v) = visibility.get_mut(self.old_root) {
-            *v = if new { Visibility::Hidden } else { Visibility::Inherited };
-        }
-        self.mode = Some(mode);
+    /// The entity whose children are the parts shown (for shadows: its
+    /// children carry `AnimSlot`, its ball the movement's).
+    pub fn root(&self) -> Entity {
+        self.new_root
     }
 
     /// Whether the slots must be set again (never set, or forgotten).

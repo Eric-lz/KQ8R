@@ -256,7 +256,6 @@ pub fn setup_objects(
     mut buffers: ResMut<Assets<bevy::render::storage::ShaderBuffer>>,
     held: Res<crate::door_view::HeldItem>,
     light: Res<ObjectLight>,
-    mut sources: ResMut<crate::shadow_view::FrameSources>,
     anim_buffers: Res<crate::anim_gpu::AnimBuffers>,
 ) {
     let Some(mut objects) = loaded.0.take() else { return };
@@ -302,17 +301,15 @@ pub fn setup_objects(
         std::mem::take(&mut objects.animated),
         std::mem::take(&mut objects.object_animations),
         &objects.placed,
-        &mut meshes,
         &mut object_materials,
         &light,
         &mut images,
         &balls,
         &std::mem::take(&mut objects.character_lines),
         &mut log,
-        &mut sources,
         &gpu,
     );
-    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log, &mut sources, &gpu);
+    crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut object_materials, &light, &mut images, &balls, &mut log, &gpu);
     // 3l-4: doors, chests and scripted objects were added after the
     // plain objects; the sweep tests them all in load order.
     let load_index = |name: &str| objects.placed.iter().position(|(p, _, _)| p.name.eq_ignore_ascii_case(name)).unwrap_or(usize::MAX);
@@ -345,7 +342,7 @@ pub fn setup_objects(
     };
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
-        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut object_materials, &light, &mut images, &mut log, &mut sources, &gpu);
+        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut object_materials, &light, &mut images, &mut log, &gpu);
     }
     commands.insert_resource(gpu);
     // One (mesh, material) list per model, shared by all its copies.

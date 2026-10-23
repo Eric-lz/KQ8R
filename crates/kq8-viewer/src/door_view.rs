@@ -45,29 +45,24 @@ use crate::load::Objects;
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform_from, Buildings, ObjectColliders, ViewBlockerSet};
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
-use crate::{model_mesh, Shared, UNITS_PER_METRE};
+use crate::{Shared, UNITS_PER_METRE};
 
 /// Connor's `attackDist` when `Connor.kq` gives none: the built-in
 /// default for characters (doors.md rule 11).
 const DEFAULT_ATTACK_DIST: f32 = 1250.0;
 
-/// One frame of an animation, ready to draw: (mesh, material) per
-/// material group.
-type BuiltFrame = Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>;
-
-/// One door's entities: the body (turned) and, per movement, one entity
-/// per frame (only the shown one visible).
+/// One door's entities: the body (turned) and its drawn parts.
 struct DrawnDoor {
     body: Entity,
-    frames: Vec<Vec<Entity>>,
-    shown: Option<Entity>,
-    /// Drawn the new way too (Animation memory step 4c).
+    /// Per movement, its number of frames.
+    frames: Vec<usize>,
+    /// Its drawing (Animation memory step 4).
     slots: Option<crate::anim_gpu::Slots>,
 }
 
-/// One door animation built: its ball, its frames' (mesh, material), its
-/// materials by index and its model (step 4c).
-type BuiltDoorAnim = (crate::shadow_view::ModelBall, Vec<BuiltFrame>, Vec<(i32, Handle<ObjectMaterial>)>, Option<crate::load::FrameShape>);
+/// One door animation built: its ball, its number of frames, its
+/// materials by index and its model (step 4).
+type BuiltDoorAnim = (crate::shadow_view::ModelBall, usize, Vec<(i32, Handle<ObjectMaterial>)>, Option<crate::load::FrameShape>);
 
 #[derive(Resource)]
 pub struct DoorSim {
@@ -466,28 +461,12 @@ fn spawn_body(
         .collect();
     let movements = animations.iter().map(|a| (*a, built[*a].3.clone(), built[*a].0)).collect();
     let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Doors, movements, own, materials, &mut Default::default());
-    let parent_of_frames = slots.as_ref().map_or(body, |s| s.old_root);
     // The lights it carries (M1 7c), by movement and frame.
     if let Some(c) = crate::scene_lights::CarriedLights::new(animations.iter().map(|a| lights[*a].clone()).collect(), transform, dyn_off) {
         commands.entity(body).insert(c);
     }
-    let mut frames = Vec::new();
-    for a in animations {
-        let mut entities = Vec::new();
-        let (ball, built_frames, _, _) = &built[*a];
-        for frame in built_frames {
-            let parent = commands.spawn((Transform::default(), Visibility::Hidden, *ball)).id();
-            commands.entity(parent_of_frames).add_child(parent);
-            for (mesh, material) in frame {
-                let material = crate::object_light::for_object(materials, material, 1.0, haze.0, haze.1);
-                let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
-                commands.entity(parent).add_child(part);
-            }
-            entities.push(parent);
-        }
-        frames.push(entities);
-    }
-    DrawnDoor { body, frames, shown: None, slots }
+    let frames = animations.iter().map(|a| built[*a].1).collect();
+    DrawnDoor { body, frames, slots }
 }
 
 /// Builds the doors from the loaded objects: their entities, their game
@@ -499,13 +478,11 @@ pub fn spawn_doors(
     colliders: &mut Vec<BoxCollider>,
     (item, combat): (Option<String>, Option<i64>),
     (anims, own_players): (Vec<kq8_core::active::AnimObject>, Vec<kq8_core::named_anim::NamedAnimPlayer>),
-    meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
     balls: &crate::draw_distance::ShapeBalls,
     main_log: &mut Log,
-    sources: &mut crate::shadow_view::FrameSources,
     gpu: &crate::anim_gpu::AnimGpu,
 ) {
     let log = match Log::create("doors") {
@@ -531,21 +508,7 @@ pub fn spawn_doors(
             let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> =
                 anim.looks.into_iter().map(|(m, look, l)| (m, materials.add(object_material(look, l, light, images)), l)).collect();
             let by_index: Vec<(i32, Handle<ObjectMaterial>)> = looks.iter().map(|(m, h, _)| (*m, h.clone())).collect();
-            let frames = anim
-                .frames
-                .into_iter()
-                .enumerate()
-                .map(|(f, frame)| {
-                    frame
-                        .into_iter()
-                        .filter_map(|(m, triangles)| {
-                            let (_, material, shading) = looks.iter().find(|(i, _, _)| *i == m)?;
-                            Some((sources.add(meshes, model_mesh(&triangles, shading.lighting, [0.0; 3]), anim.source.as_ref(), f, m), material.clone()))
-                        })
-                        .collect()
-                })
-                .collect();
-            (ball, frames, by_index, source)
+            (ball, anim.frame_count, by_index, source)
         })
         .collect();
     let attack_dist = objects.attack_dist.unwrap_or_else(|| {
@@ -663,7 +626,7 @@ pub fn spawn_doors(
         }
         let mut door = Door::new(&p.name, movements, d.current, base);
         door.player = door.player.with_names_at_load(names.0, names.1);
-        let DrawnDoor { body, frames, slots, .. } =
+        let DrawnDoor { body, frames, slots } =
             spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu);
         let active = ActiveDoor {
             door,
@@ -726,13 +689,13 @@ pub fn spawn_doors(
             main_log.summary(format!("doors: [{}] does not collide with Connor (no box, or type and mask)", p.name));
             None
         });
-        drawn.push(DrawnDoor { body, frames, shown: None, slots });
+        drawn.push(DrawnDoor { body, frames, slots });
         active_doors.push(active);
     }
     let test_item = item;
     let all = drawn.iter().chain(&object_drawn).chain(&chest_drawn);
     let (bodies, new_way, slots) = all.fold((0, 0, 0), |(b, n, s), d| (b + 1, n + usize::from(d.slots.is_some()), s + d.slots.as_ref().map_or(0, |x| x.len())));
-    main_log.summary(format!("doors, chests and scripted objects drawn the new way too (Animation memory step 4c): {new_way} of {bodies}, {slots} part entities (F5 or --anim-draw switches old/new)"));
+    main_log.summary(format!("doors, chests and scripted objects drawn from the compact data (Animation memory step 4): {new_way} of {bodies}, {slots} part entities"));
     main_log.summary(format!(
         "doors: {} doors; Connor's reach 2 x attackDist {attack_dist} = {}; {} other clickable objects; {} scripts; test --item: {:?}; log in {}",
         active_doors.len(),
@@ -2019,29 +1982,18 @@ fn show_frame(
     frame: usize,
     transforms: &mut Query<&mut Transform>,
     visibility: &mut Query<&mut Visibility>,
-    new_way: (&mut Commands, Option<&crate::anim_gpu::AnimGpu>, crate::anim_gpu::DrawMode),
+    (commands, gpu): (&mut Commands, Option<&crate::anim_gpu::AnimGpu>),
 ) {
     if let Ok(mut t) = transforms.get_mut(drawn.body) {
         *t = bevy_transform_from(placement.rotation, placement.position);
     }
-    // Step 4c: the new way (the old frames' last-frame fallback kept).
-    if let (Some(slots), (commands, Some(gpu), mode)) = (drawn.slots.as_mut(), new_way) {
-        slots.set_mode(mode, visibility);
-        let frames = drawn.frames.get(current).map_or(0, Vec::len);
+    // Step 4: past the last frame, the last one shows.
+    if let (Some(slots), Some(gpu)) = (drawn.slots.as_mut(), gpu) {
+        let frames = drawn.frames.get(current).copied().unwrap_or(0);
         let frame = frame.min(frames.saturating_sub(1));
         if slots.stale(current, frame) {
             slots.show(commands, gpu, current, frame, visibility);
         }
-    }
-    let entity = drawn.frames.get(current).and_then(|f| f.get(frame).or(f.last())).copied();
-    if entity != drawn.shown {
-        if let Some(mut old) = drawn.shown.and_then(|e| visibility.get_mut(e).ok()) {
-            *old = Visibility::Hidden;
-        }
-        if let Some(mut new) = entity.and_then(|e| visibility.get_mut(e).ok()) {
-            *new = Visibility::Inherited;
-        }
-        drawn.shown = entity;
     }
 }
 
@@ -2053,11 +2005,11 @@ pub fn door_draw(
     mut transforms: Query<&mut Transform>,
     mut visibility: Query<&mut Visibility>,
     mut carried: Query<&mut crate::scene_lights::CarriedLights>,
-    (gpu, mode): (Option<Res<crate::anim_gpu::AnimGpu>>, Option<Res<crate::anim_gpu::DrawMode>>),
+    gpu: Option<Res<crate::anim_gpu::AnimGpu>>,
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
-    let (gpu, mode) = (gpu.as_deref(), mode.map_or(crate::anim_gpu::DrawMode::New, |m| *m));
+    let gpu = gpu.as_deref();
     // The frame whose lights shine (M1 7c).
     let mut lit = |body: Entity, movement: usize, frame: usize| {
         if let Ok(mut c) = carried.get_mut(body) {
@@ -2069,7 +2021,7 @@ pub fn door_draw(
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
         lit(drawn.body, d.player.current, d.frame());
-        show_frame(drawn, &d.placement(), d.player.current, d.frame(), &mut transforms, &mut visibility, (&mut commands, gpu, mode));
+        show_frame(drawn, &d.placement(), d.player.current, d.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
         // Deleted (3g-5): not drawn.
         if door.gone {
             if let Ok(mut v) = visibility.get_mut(drawn.body) {
@@ -2082,7 +2034,7 @@ pub fn door_draw(
     for (object, drawn) in sim.active.world.objects.iter().zip(sim.object_drawn.iter_mut()) {
         let p = &object.player;
         lit(drawn.body, p.current, p.frame());
-        show_frame(drawn, &p.placement(), p.current, p.frame(), &mut transforms, &mut visibility, (&mut commands, gpu, mode));
+        show_frame(drawn, &p.placement(), p.current, p.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if object.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {
@@ -2093,7 +2045,7 @@ pub fn door_draw(
     for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
         let c = &chest.chest;
         lit(drawn.body, c.player.current, c.frame());
-        show_frame(drawn, &c.placement(), c.player.current, c.frame(), &mut transforms, &mut visibility, (&mut commands, gpu, mode));
+        show_frame(drawn, &c.placement(), c.player.current, c.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {

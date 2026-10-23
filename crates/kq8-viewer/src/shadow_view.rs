@@ -145,24 +145,20 @@ pub fn frame_triangles(frame: Entity, children: &Query<&Children>, parts: &PartQ
     model
 }
 
-/// Animation frames' meshes kept only on the graphics card ("Animation
-/// memory" step 1, DESIGN): where each came from, so a shadow can build
-/// its points again from the parsed model: the same `Shape::geometry` the
-/// loader cut the frame from, the same corners in the same order. A few
-/// thousand recent frames' points are kept.
+/// Animated parts' points for shadows ("Animation memory" steps 1 and 4,
+/// DESIGN): their meshes are on the graphics card only, so a shadow builds
+/// a shown part's points from the parsed model (the same
+/// `Shape::geometry`, the same corners in the same order). A few thousand
+/// recent parts' points are kept.
 #[derive(Resource, Default)]
 pub struct FrameSources {
-    /// Per mesh: its model, sequence and material.
-    sources: HashMap<AssetId<Mesh>, FrameSource>,
-    cache: Mutex<HashMap<AssetId<Mesh>, Points>>,
-    /// Slots' points by (model, sequence, node, material).
+    /// Parts' points by (model, sequence, node, material).
     slot_cache: Mutex<HashMap<(usize, usize, usize, i32), Points>>,
     /// Frames' points built, and the time spent, for the log.
     pub built: AtomicU64,
     pub build_ns: AtomicU64,
 }
 
-type FrameSource = (crate::load::FrameShape, usize, i32);
 /// A frame's points in Bevy's space.
 type Points = Arc<Vec<[f32; 3]>>;
 
@@ -187,43 +183,8 @@ pub type PartQuery<'w, 's> = Query<'w, 's, (&'static GlobalTransform, &'static M
 const KEPT_FRAMES: usize = 4096;
 
 impl FrameSources {
-    /// Adds an animation frame's mesh: with its source, kept only on the
-    /// graphics card; without (not cut from a model), as before.
-    pub fn add(&mut self, meshes: &mut Assets<Mesh>, mut mesh: Mesh, source: Option<&crate::load::FrameShape>, frame: usize, material: i32) -> Handle<Mesh> {
-        let Some(source) = source else { return meshes.add(mesh) };
-        mesh.asset_usage = bevy::asset::RenderAssetUsages::RENDER_WORLD;
-        let handle = meshes.add(mesh);
-        self.sources.insert(handle.id(), (source.clone(), source.first + frame, material));
-        handle
-    }
-
-    /// Meshes recorded (for the log).
-    pub fn len(&self) -> usize {
-        self.sources.len()
-    }
-
-    /// The points of a recorded mesh, in Bevy's space and the mesh's
-    /// corner order (as `main.rs` `model_mesh` put them).
-    fn points(&self, id: AssetId<Mesh>) -> Option<Points> {
-        let (source, sequence, material) = self.sources.get(&id)?;
-        let mut cache = self.cache.lock().unwrap();
-        if let Some(p) = cache.get(&id) {
-            return Some(p.clone());
-        }
-        let started = std::time::Instant::now();
-        let geometry = source.shape.geometry(*sequence);
-        let points: Vec<[f32; 3]> = geometry.triangles.iter().filter(|t| t.material == *material).flat_map(|t| [0, 2, 1].map(|k| crate::to_bevy(t.positions[k], [0.0; 3]))).collect();
-        self.built.fetch_add(1, Ordering::Relaxed);
-        self.build_ns.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        if cache.len() >= KEPT_FRAMES {
-            cache.clear();
-        }
-        let points = Arc::new(points);
-        cache.insert(id, points.clone());
-        Some(points)
-    }
-
-    /// A slot's points (step 4), built as `points` builds a frame's.
+    /// A part's points in Bevy's space, in the corner order `model_mesh`
+    /// writes.
     fn slot_points(&self, slot: &AnimSlot) -> Option<Points> {
         let source = slot.source.as_ref()?;
         let key = (Arc::as_ptr(&source.shape) as usize, slot.sequence, slot.node, slot.material);
@@ -266,18 +227,10 @@ fn mesh_triangles(part: Entity, parts: &PartQuery, meshes: &Assets<Mesh>, source
         model.extend(game.as_chunks::<3>().0.iter().map(|t| [t[0], t[2], t[1]]));
         return;
     }
-    let Some(mesh) = meshes.get(&handle.0) else { return };
-    // Step 1: an animation frame's points from its model; others' from
-    // the mesh.
-    let built;
-    let points: &[[f32; 3]] = if mesh.asset_usage.contains(bevy::asset::RenderAssetUsages::MAIN_WORLD) {
-        let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { return };
-        points
-    } else {
-        let Some(p) = sources.points(handle.id()) else { return };
-        built = p;
-        &built
-    };
+    // Other models (still objects): from the mesh; a mesh on the graphics
+    // card only has no points here.
+    let Some(mesh) = meshes.get(&handle.0).filter(|m| m.asset_usage.contains(bevy::asset::RenderAssetUsages::MAIN_WORLD)) else { return };
+    let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { return };
     // Bevy (x, y, z) = game (x, z, −y) / 100, so back: (x, −z, y) × 100.
     let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
     let corners: Vec<usize> = match mesh.try_indices_option().ok().flatten() {

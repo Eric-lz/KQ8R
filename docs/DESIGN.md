@@ -2734,7 +2734,23 @@ exactly as before):**
      reads the slots while the new drawing is shown.
    - **4g. The old way removed**: frame entities, `FrameSources`'s mesh
      path, the test key. **Test:** the tour of all worlds: working set,
-     frame time, buffer sizes; `cargo test`.
+     frame time, buffer sizes; `cargo test`. **Done** 2026-10-23 (4e, 4f
+     checked by the user; Connor's talking stutter fixed: one material
+     per look). The loader no longer builds frames' triangles
+     (`Animation::frame_count`; the materials used from the meshes'
+     faces); no frame entities or meshes; `Slots` has no old root or
+     mode; F5 and `--anim-draw` gone; Connor's and characters' face and
+     potion-look lists hold only the drawn materials (Connor: 1 face
+     material, was 467). The tour (`bench-4g-*.log`): Daventry in play
+     787 MB working set (step 1: 1.51 GB, before: 2.64 GB), every world
+     in play 0.77-1.0 GB; Daventry 3,565 entities (was 133,200); read
+     3.7 s (packing, with its check, replaces building the frames);
+     spawned in 0.4 s (was 0.8); average frame 6.71 ms (7.33 before).
+     Left: the pack is kept in normal memory too (`AnimGpu::pack`, about
+     70 MB in Daventry, for bounds, slots and weapon sets); the packing's
+     check runs on every read (could be dropped to read faster); "memory
+     by kind" counts the slots under "no entity" (their meshes are given
+     after the count).
 
    **Risks.** Lighting must match: normals at 16 bits, flat corners as
    now, the same light code; checked by the user with the test key at

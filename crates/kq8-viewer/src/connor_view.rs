@@ -33,13 +33,13 @@ use crate::load::ConnorAssets;
 use crate::log::Log;
 use crate::terrain_view::{bevy_transform, bevy_transform_from, Buildings, GroundLookup, ObjectColliders};
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
-use crate::{model_mesh, Shared};
+use crate::Shared;
 
-/// One drawable movement: its loop for the walker and one entity per frame.
+/// One drawable movement: its loop for the walker and its number of frames.
 pub struct DrawnMovement {
     pub name: &'static str,
     pub movement_loop: MovementLoop,
-    pub frames: Vec<Entity>,
+    pub frames: usize,
     /// Its animation's number for the new drawing (Animation memory 4f):
     /// the index in `AnimGpu::connor` and in his slots' movements.
     pub anim: usize,
@@ -228,7 +228,6 @@ pub struct ConnorSim {
     /// The separate rope model playing (rule 15): its movement and phase
     /// now and after the last update (for drawing), shown frame.
     pub rope_model: Option<(&'static str, f32, f32)>,
-    rope_shown: Option<Entity>,
     /// His rope-state movements that ended this update, for `rope_step`.
     pub rope_ended: Vec<&'static str>,
     /// He climbed last update (for the log's "frozen" line, rule 22).
@@ -393,12 +392,12 @@ pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
 
 /// An animation's loop data (the movements add speed, flags, transitions).
 fn animation_loop(a: &crate::load::Animation) -> MovementLoop {
-    MovementLoop { duration: a.duration, step_sum: a.step_sum, frames: a.frames.len(), frame_steps: a.frame_steps.clone(), ..Default::default() }
+    MovementLoop { duration: a.duration, step_sum: a.step_sum, frames: a.frame_count, frame_steps: a.frame_steps.clone(), ..Default::default() }
 }
 
 /// A movement drawn with its animation's loop, frames and parts.
 #[allow(clippy::type_complexity)]
-fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frames: &[Vec<Entity>], parts: &[Vec<Vec<(String, [f32; 3])>>], anims: &[usize]) -> DrawnMovement {
+fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frames: &[usize], parts: &[Vec<Vec<(String, [f32; 3])>>], anims: &[usize]) -> DrawnMovement {
     DrawnMovement {
         name: m.name,
         anim: anims.get(m.animation).copied().unwrap_or(usize::MAX),
@@ -410,30 +409,26 @@ fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frame
             cues: m.cues.clone(),
             ..loops[m.animation].clone()
         },
-        frames: frames[m.animation].clone(),
+        frames: frames[m.animation],
         parts: parts[m.animation].clone(),
     }
 }
 
-/// One animation drawn under his body: one material per look (its texture
-/// file and own picture go to `all_materials`, the face's to `face`), one
-/// hidden entity per frame. With `record`, also the first frame's smooth
-/// normals (for the light log, M1 5b).
+/// One animation's materials: one per look (its texture file and own
+/// picture go to `all_materials`, the face's to `face`; the drawing uses
+/// their animated copies, `share_copies`). With `record`, also the first
+/// frame's smooth normals (for the light log, M1 5b), built from its model.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-fn spawn_frames(
-    commands: &mut Commands,
-    body: Entity,
+fn animation_materials(
     anim: crate::load::Animation,
     lip_base: Option<&str>,
-    meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
     face: &mut Vec<Handle<ObjectMaterial>>,
     all_materials: &mut Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>,
     record: bool,
-    sources: &mut crate::shadow_view::FrameSources,
-) -> (Vec<Entity>, Option<Vec<Vec3>>, Vec<(i32, Handle<ObjectMaterial>)>) {
+) -> (Option<Vec<Vec3>>, Vec<(i32, Handle<ObjectMaterial>)>) {
     let looks: Vec<(i32, Handle<ObjectMaterial>, crate::load::Shading)> = anim
         .looks
         .into_iter()
@@ -453,52 +448,44 @@ fn spawn_frames(
             (m, handle, l)
         })
         .collect();
-    let mut entities = Vec::new();
-    let mut first = None;
-    // Its `.kqs` ball, for shadows on buildings (rule 37 (2), M4 4d-7b-5b).
-    let ball = crate::shadow_view::ModelBall::of(anim.ball);
-    for (f, frame) in anim.frames.into_iter().enumerate() {
-        let parent = commands.spawn((Transform::default(), Visibility::Hidden, ball)).id();
-        commands.entity(body).add_child(parent);
-        let record = record && first.is_none();
-        let mut normals = Vec::new();
-        for (m, triangles) in frame {
-            let Some((_, material, shading)) = looks.iter().find(|(i, _, _)| *i == m) else { continue };
-            if record {
-                normals.extend(crate::object_light::smooth_normals(&triangles, shading.lighting));
-            }
-            let mesh = sources.add(meshes, model_mesh(&triangles, shading.lighting, [0.0; 3]), anim.source.as_ref(), f, m);
-            let part = commands.spawn((Mesh3d(mesh), MeshMaterial3d(material.clone()))).id();
-            commands.entity(parent).add_child(part);
+    let first = record.then(|| {
+        let triangles = anim.source.as_ref().map(|s| s.shape.geometry(s.first).triangles).unwrap_or_default();
+        let mut by_material: std::collections::BTreeMap<i32, Vec<kq8_data::shape::Triangle>> = Default::default();
+        for t in triangles {
+            by_material.entry(t.material).or_default().push(t);
         }
-        entities.push(parent);
-        if record {
-            first = Some(normals);
-        }
-    }
+        by_material
+            .into_iter()
+            .filter_map(|(m, triangles)| looks.iter().find(|(i, _, _)| *i == m).map(|(_, _, shading)| crate::object_light::smooth_normals(&triangles, shading.lighting)))
+            .flatten()
+            .collect()
+    });
     let by_index = looks.iter().map(|(m, h, _)| (*m, h.clone())).collect();
-    (entities, first, by_index)
+    (first, by_index)
 }
 
 /// Step 4f: the new drawing's material copies join the face (mouth
 /// shapes) and the potion looks (textures, see-through), as their
 /// originals are.
+/// (`originals`: key -> its material; `original_face`, `original_all`:
+/// the lists the originals are in.)
 #[allow(clippy::type_complexity)]
 fn share_copies(
     copies: &[((usize, i32), Handle<ObjectMaterial>)],
     originals: &[((usize, i32), Handle<ObjectMaterial>)],
+    (original_face, original_all): (&[Handle<ObjectMaterial>], &[(Handle<ObjectMaterial>, String, Option<Handle<Image>>)]),
     face: &mut Vec<Handle<ObjectMaterial>>,
     all: &mut Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>,
 ) {
     for (key, copy) in copies {
         let Some((_, original)) = originals.iter().find(|(k, _)| k == key) else { continue };
-        if face.iter().any(|f| f.id() == original.id()) && !face.iter().any(|f| f.id() == copy.id()) {
+        if original_face.iter().any(|f| f.id() == original.id()) && !face.iter().any(|f| f.id() == copy.id()) {
             face.push(copy.clone());
         }
         if all.iter().any(|(h, _, _)| h.id() == copy.id()) {
             continue;
         }
-        if let Some((_, texture, image)) = all.iter().find(|(h, _, _)| h.id() == original.id()).cloned() {
+        if let Some((_, texture, image)) = original_all.iter().find(|(h, _, _)| h.id() == original.id()).cloned() {
             all.push((copy.clone(), texture, image));
         }
     }
@@ -538,17 +525,14 @@ pub fn late_set_step(
     mut commands: Commands,
     connor: Option<ResMut<ConnorSim>>,
     sim: Option<Res<crate::door_view::DoorSim>>,
-    body: Query<Entity, With<ConnorBody>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ObjectMaterial>>,
     mut images: ResMut<Assets<Image>>,
     light: Option<Res<ObjectLight>>,
     shared: Res<Shared>,
-    sources: Option<ResMut<crate::shadow_view::FrameSources>>,
     (mut gpu, anim_buffers, mut buffers): (Option<ResMut<crate::anim_gpu::AnimGpu>>, Option<Res<crate::anim_gpu::AnimBuffers>>, ResMut<Assets<bevy::render::storage::ShaderBuffer>>),
 ) {
-    let (Some(mut c), Some(sim), Some(light), Some(mut sources)) = (connor, sim, light, sources) else { return };
-    let Ok(body) = body.single() else { return };
+    let (Some(mut c), Some(sim), Some(light)) = (connor, sim, light) else { return };
     let c = &mut *c;
     let carried: Vec<String> = sim.active.world.items.objects.iter().filter(|o| o.carried_by(kq8_core::talk::CONNOR)).map(|o| o.kind.to_ascii_lowercase()).collect();
     let Some(mut late) = c.late.take_if(|l| l.sets.iter().any(|(k, _)| carried.contains(k))) else { return };
@@ -593,27 +577,25 @@ pub fn late_set_step(
                     }
                     _ => (vec![usize::MAX; animations.len()], Vec::new()),
                 };
-                let mut added = Vec::new();
+                let (mut original_face, mut original_all) = (Vec::new(), Vec::new());
                 let mut by_index = Vec::new();
-                let frames: Vec<Vec<Entity>> = animations
+                let frames: Vec<usize> = animations
                     .into_iter()
                     .enumerate()
                     .map(|(n, a)| {
-                        let (entities, _, own) = spawn_frames(&mut commands, body, a, late.lip_base.as_deref(), &mut meshes, &mut materials, &light, &mut images, &mut c.face, &mut added, false, &mut sources);
+                        let count = a.frame_count;
+                        let (_, own) = animation_materials(a, late.lip_base.as_deref(), &mut materials, &light, &mut images, &mut original_face, &mut original_all, false);
                         by_index.extend(own.into_iter().map(|(m, h)| ((anims[n], m), h)));
-                        entities
+                        count
                     })
                     .collect();
+                let mut added = Vec::new();
                 if let Some(g) = gpu.as_deref() {
-                    let grouped = group_materials(&by_index, &materials, &added, &mut c.groups);
+                    let grouped = group_materials(&by_index, &materials, &original_all, &mut c.groups);
                     for s in [c.slots.as_mut(), c.rope_slots.as_mut()].into_iter().flatten() {
                         let copies = s.extend(&mut commands, g, slot_movements.clone(), grouped.clone(), &mut materials, &mut c.copies);
-                        share_copies(&copies, &by_index, &mut c.face, &mut added);
+                        share_copies(&copies, &by_index, (&original_face, &original_all), &mut c.face, &mut added);
                     }
-                }
-                if let Some(s) = c.slots.as_ref() {
-                    let old: Vec<Entity> = frames.iter().flatten().copied().collect();
-                    commands.entity(s.old_root).add_children(&old);
                 }
                 let mut new = 0;
                 for m in &movements {
@@ -645,12 +627,10 @@ pub fn spawn_connor(
     commands: &mut Commands,
     (placement, mut assets): (Placement, ConnorAssets),
     camera_start: Option<[f32; 3]>,
-    meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
     main_log: &mut Log,
-    sources: &mut crate::shadow_view::FrameSources,
     gpu: &crate::anim_gpu::AnimGpu,
 ) {
     let camera_keys = assets.camera_keys.clone();
@@ -681,7 +661,7 @@ pub fn spawn_connor(
     // transitions.
     let loops: Vec<MovementLoop> = assets.animations.iter().map(animation_loop).collect();
     // Each animation: one material per look, one entity per frame.
-    let mut frame_entities: Vec<Vec<Entity>> = Vec::new();
+    let frame_counts: Vec<usize> = assets.animations.iter().map(|a| a.frame_count).collect();
     let body = commands.spawn((bevy_transform(&placement), Visibility::default(), ConnorBody)).id();
     // His first animation's first frame, for the light log (M1 5b).
     let mut first_frame_normals: Option<Vec<Vec3>> = None;
@@ -691,33 +671,28 @@ pub fn spawn_connor(
     let slot_movements: Vec<_> = assets.animations.iter().enumerate().map(|(n, a)| (n, a.source.clone(), crate::shadow_view::ModelBall::of(a.ball))).collect();
     let anims: Vec<usize> = (0..assets.animations.len()).collect();
     let mut by_index = Vec::new();
+    let (mut original_face, mut original_all) = (Vec::new(), Vec::new());
     for (n, anim) in assets.animations.into_iter().enumerate() {
         let record = first_frame_normals.is_none();
-        let (entities, normals, own) = spawn_frames(commands, body, anim, lip_base.as_deref(), meshes, materials, light, images, &mut face, &mut all_materials, record, sources);
+        let (normals, own) = animation_materials(anim, lip_base.as_deref(), materials, light, images, &mut original_face, &mut original_all, record);
         if normals.is_some() {
             first_frame_normals = normals;
         }
         by_index.extend(own.into_iter().map(|(m, h)| ((n, m), h)));
-        frame_entities.push(entities);
     }
-    // His drawing and the rope model's, the new way too; one material per
-    // look, shared by both.
+    // His drawing and the rope model's; one material per look, shared by
+    // both (Animation memory step 4).
     let mut groups = std::collections::HashMap::new();
     let mut copies = crate::anim_gpu::Copies::default();
-    let grouped = group_materials(&by_index, materials, &all_materials, &mut groups);
+    let grouped = group_materials(&by_index, materials, &original_all, &mut groups);
     let slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements.clone(), grouped.clone(), materials, &mut copies);
     let rope_slots = crate::anim_gpu::Slots::spawn(commands, body, gpu, crate::anim_gpu::List::Connor, slot_movements, grouped, materials, &mut copies);
     for s in [&slots, &rope_slots].into_iter().flatten() {
         let copies: Vec<_> = s.materials.iter().map(|(k, h)| (*k, h.clone())).collect();
-        share_copies(&copies, &by_index, &mut face, &mut all_materials);
-    }
-    // The old frames go under the old root, so the draw mode hides them.
-    if let Some(s) = slots.as_ref() {
-        let old: Vec<Entity> = frame_entities.iter().flatten().copied().collect();
-        commands.entity(s.old_root).add_children(&old);
+        share_copies(&copies, &by_index, (&original_face, &original_all), &mut face, &mut all_materials);
     }
     main_log.summary(format!(
-        "connor: drawn the new way too (Animation memory 4f): {} part entities, rope model {}; {} materials stand for {} (F5 or --anim-draw switches old/new)",
+        "connor: drawn from the compact data (Animation memory 4): {} part entities, rope model {}; {} materials stand for {}",
         slots.as_ref().map_or(0, |s| s.len()),
         rope_slots.as_ref().map_or(0, |s| s.len()),
         copies.len(),
@@ -728,13 +703,13 @@ pub fn spawn_connor(
         Some(stats) => main_log.summary(format!("object light: Connor at his start (first frame): {stats}")),
         None => main_log.summary("object light: Connor has no smooth corners in his first frame"),
     }
-    let movements: Vec<DrawnMovement> = assets.movements.iter().map(|m| drawn_movement(m, &loops, &frame_entities, &frame_parts, &anims)).collect();
+    let movements: Vec<DrawnMovement> = assets.movements.iter().map(|m| drawn_movement(m, &loops, &frame_counts, &frame_parts, &anims)).collect();
     for d in &movements {
         main_log.summary(format!(
             "connor: {} moves at {:.1} units/s ({} frames)",
             d.name,
             d.movement_loop.ground_speed(),
-            d.frames.len()
+            d.frames
         ));
     }
 
@@ -853,7 +828,6 @@ pub fn spawn_connor(
         held_walk: None,
         rope: None,
         rope_model: None,
-        rope_shown: None,
         rope_ended: Vec::new(),
         rope_was_climbing: false,
         throw: None,
@@ -2399,10 +2373,9 @@ pub fn connor_draw(
     mut body: Query<&mut Transform, (With<ConnorBody>, Without<Camera3d>)>,
     mut visibility: Query<&mut Visibility>,
     mut frames: Query<&mut Transform, (Without<ConnorBody>, Without<Camera3d>)>,
-    (gpu, mode): (Option<Res<crate::anim_gpu::AnimGpu>>, Option<Res<crate::anim_gpu::DrawMode>>),
+    gpu: Option<Res<crate::anim_gpu::AnimGpu>>,
 ) {
     let Some(mut sim) = sim else { return };
-    let mode = mode.map_or(crate::anim_gpu::DrawMode::New, |m| *m);
     let a = fixed.overstep_fraction();
     let (p0, h0, _, b0) = sim.previous;
     let (p1, h1, phase, b1) = sim.current;
@@ -2423,50 +2396,27 @@ pub fn connor_draw(
     }
     // The frame: loop position blended forward from the last update.
     let movement = sim.walker.movement;
-    let shown_at = sim.drawn(movement).and_then(|m| {
-        let n = m.frames.len();
-        (n > 0).then(|| (m.anim, m.movement_loop.frame_at(phase + sim.phase_step * a).min(n - 1), m.frames[m.movement_loop.frame_at(phase + sim.phase_step * a).min(n - 1)]))
-    });
-    let frame = shown_at.map(|(_, _, e)| e);
-    // Step 4f: the new drawing.
+    let shown_at = sim.drawn(movement).and_then(|m| (m.frames > 0).then(|| (m.anim, m.movement_loop.frame_at(phase + sim.phase_step * a).min(m.frames - 1))));
+    // Animation memory step 4: his parts show it.
     let sim = &mut *sim;
     if let (Some(slots), Some(gpu)) = (sim.slots.as_mut(), gpu.as_deref()) {
-        slots.set_mode(mode, &mut visibility);
         match shown_at {
-            Some((anim, k, _)) if slots.stale(anim, k) => slots.show(&mut commands, gpu, anim, k, &mut visibility),
+            Some((anim, k)) if slots.stale(anim, k) => slots.show(&mut commands, gpu, anim, k, &mut visibility),
             None => slots.hide(&mut visibility),
             _ => {}
         }
-    }
-    if frame != sim.shown {
-        if let Some(old) = sim.shown {
-            if let Ok(mut v) = visibility.get_mut(old) {
-                *v = Visibility::Hidden;
-            }
-        }
-        if let Some(new) = frame {
-            if let Ok(mut v) = visibility.get_mut(new) {
-                *v = Visibility::Inherited;
-            }
-        }
-        sim.shown = frame;
+        sim.shown = shown_at.map(|_| slots.root());
     }
     // M6 6a-3 (ropeandhook.md rule 15, Q147 f): the separate rope model,
     // 2,000 along the rope's +y from his place (he stands at the rope's
     // place and direction while it plays, so that is his own +y, his back).
     let rope_at = sim.rope_model.and_then(|(name, p0, p1)| {
         let m = sim.movements.iter().find(|m| m.name == name)?;
-        let n = m.frames.len();
-        (n > 0).then(|| {
-            let k = m.movement_loop.frame_at(p0 + (p1 - p0) * a).min(n - 1);
-            (m.anim, k, m.frames[k])
-        })
+        (m.frames > 0).then(|| (m.anim, m.movement_loop.frame_at(p0 + (p1 - p0) * a).min(m.frames - 1)))
     });
-    let rope = rope_at.map(|(_, _, e)| e);
     if let (Some(slots), Some(gpu)) = (sim.rope_slots.as_mut(), gpu.as_deref()) {
-        slots.set_mode(mode, &mut visibility);
         match rope_at {
-            Some((anim, k, _)) => {
+            Some((anim, k)) => {
                 if slots.stale(anim, k) {
                     slots.show(&mut commands, gpu, anim, k, &mut visibility);
                 }
@@ -2474,21 +2424,5 @@ pub fn connor_draw(
             }
             None => slots.hide(&mut visibility),
         }
-    }
-    if rope != sim.rope_shown {
-        if let Some(old) = sim.rope_shown {
-            if let Ok(mut v) = visibility.get_mut(old) {
-                *v = Visibility::Hidden;
-            }
-        }
-        if let Some(new) = rope {
-            if let Ok(mut v) = visibility.get_mut(new) {
-                *v = Visibility::Inherited;
-            }
-            if let Ok(mut t) = frames.get_mut(new) {
-                t.translation = Vec3::from(crate::to_bevy(kq8_core::rope::ROPE_MODEL_OFFSET, [0.0; 3]));
-            }
-        }
-        sim.rope_shown = rope;
     }
 }

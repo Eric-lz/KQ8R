@@ -396,8 +396,9 @@ pub struct Animation {
     pub source: Option<FrameShape>,
     /// One look and shading per material index used by any frame.
     pub looks: Vec<(i32, Look, Shading)>,
-    /// Per frame: triangles grouped by material index (model space).
-    pub frames: Vec<Vec<(i32, Vec<Triangle>)>>,
+    /// Its frames (drawn from `source` on the graphics card, Animation
+    /// memory step 4; their triangles are no longer built here).
+    pub frame_count: usize,
     /// Loop length in seconds.
     pub duration: f32,
     /// The frames' whole-body steps added up (model space).
@@ -476,7 +477,7 @@ pub fn connor_set(
         };
         log.summary(format!(
             "connor: movement {name} = movement {} loop={} {} speed {} repeat {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}) -> {speed_now:.1} units/s",
-            c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
+            c.movement, c.shape, c.sequence, c.speed, c.repeat, a.frame_count, a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2]
         ));
         // Transitions: only those whose movements are loaded
         // (connor-movement.md "Starting and stopping").
@@ -567,7 +568,6 @@ pub fn load_animation_skinned(
         }
     };
     let (first, count) = (l.first_sequence.max(0) as usize, l.sequence_count.max(0) as usize);
-    let mut frames = Vec::with_capacity(count);
     let mut step_sum = [0.0f32; 3];
     let mut frame_steps = Vec::with_capacity(count);
     let mut frame_transforms = Vec::with_capacity(count);
@@ -586,18 +586,18 @@ pub fn load_animation_skinned(
         frame_transforms.push(s.transform);
         frame_lights.push(shape.sequence_lights(seq));
         frame_parts.push(shape.part_places(seq));
-        let geometry = shape.geometry(seq);
-        for p in &geometry.problems {
-            log.detail(format!("  {label} frame {}: geometry problem: {p}", seq - first));
-        }
-        let mut by_material: BTreeMap<i32, Vec<Triangle>> = BTreeMap::new();
-        for t in geometry.triangles {
-            by_material.entry(t.material).or_default().push(t);
-        }
-        frames.push(by_material.into_iter().collect::<Vec<_>>());
     }
+    let frame_count = count;
     let list = shape.materials.as_ref().map(|m| m.materials.as_slice()).unwrap_or(&[]);
-    let used: std::collections::BTreeSet<i32> = frames.iter().flatten().map(|(m, _)| *m).collect();
+    // The materials any frame's faces use (step 4g: from the meshes, not
+    // from built triangles).
+    let used: std::collections::BTreeSet<i32> = (first..first + count)
+        .filter_map(|seq| shape.sequences.get(seq))
+        .filter_map(|s| usize::try_from(s.mesh_subsequence).ok().and_then(|i| shape.subsequences.get(i)))
+        .flat_map(|sub| shape.nodes.iter().skip(sub.first_node.max(0) as usize).take(sub.node_count.max(0) as usize))
+        .filter_map(|node| usize::try_from(node.mesh).ok().and_then(|m| shape.meshes.get(m)))
+        .flat_map(|mesh| mesh.faces.iter().map(|f| f.material))
+        .collect();
     let looks = used
         .into_iter()
         .map(|index| {
@@ -632,7 +632,7 @@ pub fn load_animation_skinned(
     let part_stats = kq8_data::shape::part_stats(&shape, first, count);
     let (duration, ball) = (l.duration, (shape.radius, shape.center));
     let source = Some(FrameShape { shape: std::sync::Arc::new(shape), first });
-    Ok(Animation { source, looks, frames, duration, step_sum, frame_steps, frame_transforms, frame_lights, ball, frame_parts, part_stats })
+    Ok(Animation { source, looks, frame_count, duration, step_sum, frame_steps, frame_transforms, frame_lights, ball, frame_parts, part_stats })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
@@ -3479,7 +3479,7 @@ impl Placer<'_> {
             let a = &assets.animations[animation];
             self.log.detail(format!(
                 "connor: special {name}: loop={} {} start {} speed {} repeat {} cut short {}: {} frames, {:.4} s, steps ({:.1}, {:.1}, {:.1}), cues {:?}",
-                c.shape, c.sequence, c.start, c.speed, c.repeat, c.unknown != 0, a.frames.len(), a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2], c.cues
+                c.shape, c.sequence, c.start, c.speed, c.repeat, c.unknown != 0, a.frame_count, a.duration, a.step_sum[0], a.step_sum[1], a.step_sum[2], c.cues
             ));
             assets.movements.push(ConnorMovement {
                 name: kq8_core::connor::intern(&name),
