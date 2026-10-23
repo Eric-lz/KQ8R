@@ -611,6 +611,113 @@ pub struct StartFrame {
     pub fell_back: bool,
 }
 
+/// How an animation's frames are made of parts (the user's question,
+/// 2026-10-22: can animations move parts instead of storing whole
+/// frames?). A part is the k-th mesh node of a frame's sub-sequence.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PartStats {
+    pub animations: usize,
+    pub frames: usize,
+    /// Mesh nodes over all frames (one per part per frame).
+    pub node_frames: usize,
+    /// Triangles over all frames: what whole frames store now.
+    pub triangles_now: usize,
+    /// Distinct (mesh, vertex frame, texture frame) per animation.
+    pub distinct_shapes: usize,
+    /// Their triangles: what moving parts would store.
+    pub triangles_parts: usize,
+    /// Parts (per animation), and those whose mesh or vertex frame changes
+    /// between frames (they change form, not only move).
+    pub parts: usize,
+    pub parts_changing_form: usize,
+    /// Parts whose texture frame changes between frames.
+    pub parts_changing_texture: usize,
+    /// Animations whose frames don't all have the same number of parts.
+    pub animations_part_count_varies: usize,
+    /// Node matrices: turn and even size; turn and uneven size along its
+    /// own axes; anything else (slanted).
+    pub matrices_even: usize,
+    pub matrices_uneven: usize,
+    pub matrices_slanted: usize,
+}
+
+impl PartStats {
+    pub fn add(&mut self, o: &PartStats) {
+        self.animations += o.animations;
+        self.frames += o.frames;
+        self.node_frames += o.node_frames;
+        self.triangles_now += o.triangles_now;
+        self.distinct_shapes += o.distinct_shapes;
+        self.triangles_parts += o.triangles_parts;
+        self.parts += o.parts;
+        self.parts_changing_form += o.parts_changing_form;
+        self.parts_changing_texture += o.parts_changing_texture;
+        self.animations_part_count_varies += o.animations_part_count_varies;
+        self.matrices_even += o.matrices_even;
+        self.matrices_uneven += o.matrices_uneven;
+        self.matrices_slanted += o.matrices_slanted;
+    }
+}
+
+/// The kind of a node matrix (rows applied as `v * m`): 0 turn and even
+/// size, 1 turn and uneven size along its own axes, 2 slanted. Rows at
+/// right angles make a turn and a size; equal lengths, an even size.
+pub fn matrix_kind(m: &[[f32; 3]; 3]) -> u8 {
+    let dot = |a: &[f32; 3], b: &[f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let len2: [f32; 3] = std::array::from_fn(|i| dot(&m[i], &m[i]));
+    let biggest = len2.iter().cloned().fold(0.0f32, f32::max).max(1e-12);
+    let square = (0..3).all(|i| (i + 1..3).all(|k| dot(&m[i], &m[k]).abs() <= 1e-3 * biggest));
+    if !square {
+        2
+    } else if len2.iter().all(|l| (l - len2[0]).abs() <= 1e-3 * biggest) {
+        0
+    } else {
+        1
+    }
+}
+
+/// [`PartStats`] of the `count` sequences from `first` (one loop).
+pub fn part_stats(shape: &Shape, first: usize, count: usize) -> PartStats {
+    use std::collections::HashSet;
+    let mut s = PartStats { animations: 1, frames: count, ..Default::default() };
+    let mut distinct = HashSet::new();
+    let mut slots: Vec<(HashSet<(i16, i16)>, HashSet<i16>)> = Vec::new();
+    let mut counts = HashSet::new();
+    for seq in shape.sequences.iter().skip(first).take(count) {
+        let Some(sub) = usize::try_from(seq.mesh_subsequence).ok().and_then(|i| shape.subsequences.get(i)) else {
+            counts.insert(0);
+            continue;
+        };
+        let start = sub.first_node.max(0) as usize;
+        let n = sub.node_count.max(0) as usize;
+        counts.insert(n);
+        for (k, node) in shape.nodes.iter().skip(start).take(n).enumerate() {
+            s.node_frames += 1;
+            let faces = usize::try_from(node.mesh).ok().and_then(|m| shape.meshes.get(m)).map_or(0, |m| m.faces.len());
+            s.triangles_now += faces;
+            if distinct.insert((node.mesh, node.vertex_frame, node.texture_frame)) {
+                s.triangles_parts += faces;
+            }
+            match matrix_kind(&node.transform.m) {
+                0 => s.matrices_even += 1,
+                1 => s.matrices_uneven += 1,
+                _ => s.matrices_slanted += 1,
+            }
+            if slots.len() <= k {
+                slots.resize_with(k + 1, Default::default);
+            }
+            slots[k].0.insert((node.mesh, node.vertex_frame));
+            slots[k].1.insert(node.texture_frame);
+        }
+    }
+    s.distinct_shapes = distinct.len();
+    s.parts = slots.len();
+    s.parts_changing_form = slots.iter().filter(|(f, _)| f.len() > 1).count();
+    s.parts_changing_texture = slots.iter().filter(|(_, t)| t.len() > 1).count();
+    s.animations_part_count_varies = usize::from(counts.len() > 1);
+    s
+}
+
 /// Smallest and largest corner of a set of triangles.
 pub fn bounds(triangles: &[Triangle]) -> Option<([f32; 3], [f32; 3])> {
     let mut it = triangles.iter().flat_map(|t| t.positions);
@@ -624,6 +731,15 @@ pub fn bounds(triangles: &[Triangle]) -> Option<([f32; 3], [f32; 3])> {
 mod tests {
     use super::*;
     use crate::pers::tests::block;
+
+    #[test]
+    fn matrix_kinds() {
+        let turn = [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+        assert_eq!(matrix_kind(&turn), 0);
+        assert_eq!(matrix_kind(&[[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]]), 0);
+        assert_eq!(matrix_kind(&[[0.0, 2.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]), 1);
+        assert_eq!(matrix_kind(&[[1.0, 0.5, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]), 2);
+    }
 
     fn i32s(v: &[i32]) -> Vec<u8> {
         v.iter().flat_map(|x| x.to_le_bytes()).collect()

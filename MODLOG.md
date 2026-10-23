@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-22 Parts count: moving parts would save only 12-15 %
+
+**Changed:** `kq8-data` `shape.rs`: `PartStats`, `part_stats` (per loop: frames, part-frames, triangles stored now and as distinct part shapes, parts changing form or texture, matrix kinds), `matrix_kind` (unit test `matrix_kinds`). Viewer `load.rs`: each `Animation` carries its `part_stats`; `world_build.rs`: a "parts count" line in `viewer.log` after each world is read (objects, doors, Connor). STATUS.
+**Why:** The user asked whether animations can move parts instead of storing whole frames; measured first.
+**Tested how:** `cargo test -p kq8-data matrix_kinds`; `kq8-viewer --world <W> --frames 20 --sound off` for all 11 worlds; `viewer.log`.
+**Result:** Moving parts would keep **85-91 %** of today's triangles (Daventry 6.95 M -> 5.98 M; Castle 1.59 M -> 1.44 M). Over half the parts (51-64 %) change form every frame: the big parts carry their own vertex positions per frame (the file stores them as 4 bytes per vertex, shared by the faces). No slanted matrices; a third or more have uneven sizes. Our meshes store 48 bytes per triangle corner (position, texture place, normal, part ball), corners not shared, so one stored vertex frame becomes roughly 50-70x larger in memory.
+**Still broken / not tested:** —
+**Next:** The plan changes: moving parts is not worth it. The user chooses among: no normal-memory copy of animation meshes, one entity per drawn part with the mesh swapped per frame, shared corners, or frames on the graphics card in the file's compact form.
+
 ## 2026-10-22 Memory by kind in the log
 
 **Changed:** Viewer `world_build.rs`: after each world is built, `world.log` gets "memory by kind": meshes (count, MB, entities) for the ground, buildings, still objects, animation frames, other (Connor, items, effects, shadows) and meshes no entity uses; meshes in all; textures (count, MB). Sizes are the copies in normal memory (the graphics card holds its own). STATUS.

@@ -557,8 +557,12 @@ M6 has started with the Rope and Hook (6a).
   is ours. Measured (`world.log` "memory by kind"): identical copies are
   already shared; Daventry's animation frames are 56,468 meshes, 955 MB
   of 1,063 MB of meshes (textures 233 MB), 95,441 entities. Options:
-  build frames when first played (medium), or animate by moving parts
-  (large; check the files allow it first).
+  animate by moving parts: **measured, not worth it** (`viewer.log`
+  "parts count": 85-91 % of the triangles stay, over half the parts
+  change form every frame). Open choices: no normal-memory copy of
+  animation meshes; one entity per drawn part, mesh swapped per frame;
+  shared corners; frames on the graphics card in the file's compact
+  form (4 bytes per vertex).
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain
   changes, the frozen world clock): with saved games. Reading slows down

@@ -229,7 +229,37 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let sound = (audibles, music, parent);
     part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
+    log.summary(part_stats_line(&objects));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
+}
+
+/// The parts count (2026-10-22): how the world's animations are made of
+/// parts, for choosing to draw them as moving parts.
+fn part_stats_line(objects: &load::Objects) -> String {
+    let mut s = kq8_data::shape::PartStats::default();
+    let connor = objects.connor.as_ref().map(|(_, c)| c.animations.as_slice()).unwrap_or(&[]);
+    for a in objects.object_animations.iter().chain(&objects.door_animations).chain(connor) {
+        s.add(&a.part_stats);
+    }
+    let percent = |a: usize, b: usize| if b == 0 { 0.0 } else { 100.0 * a as f64 / b as f64 };
+    format!(
+        "parts count: {} animations, {} frames, {} part-frames; triangles stored now {}, as moving parts {} ({:.1} %); distinct part shapes {}; parts {}, changing form {} ({:.1} %), changing texture {}; animations whose part count varies {}; matrices: even {}, uneven size {}, slanted {}",
+        s.animations,
+        s.frames,
+        s.node_frames,
+        s.triangles_now,
+        s.triangles_parts,
+        percent(s.triangles_parts, s.triangles_now),
+        s.distinct_shapes,
+        s.parts,
+        s.parts_changing_form,
+        percent(s.parts_changing_form, s.parts),
+        s.parts_changing_texture,
+        s.animations_part_count_varies,
+        s.matrices_even,
+        s.matrices_uneven,
+        s.matrices_slanted
+    )
 }
 
 /// The world whose texts and sounds `world` uses: `parentWorld` in

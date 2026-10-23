@@ -393,6 +393,8 @@ pub struct Animation {
     pub step_sum: [f32; 3],
     /// Each frame's own step (model space), frame 0 first.
     pub frame_steps: Vec<[f32; 3]>,
+    /// How its frames are made of parts (the parts count, 2026-10-22).
+    pub part_stats: kq8_data::shape::PartStats,
     /// Each frame's whole step, turn included (doors turn by these;
     /// doors.md rule 24).
     pub frame_transforms: Vec<kq8_data::shape::Transform>,
@@ -616,7 +618,8 @@ pub fn load_animation_skinned(
         if turning > 0 { format!("; {turning} frame steps also turn (not applied)") } else { String::new() },
         if lit > 0 { format!("; carries lights in {lit} frame(s) (rule 26b)") } else { String::new() }
     ));
-    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center), frame_parts })
+    let part_stats = kq8_data::shape::part_stats(&shape, first, count);
+    Ok(Animation { looks, frames, duration: l.duration, step_sum, frame_steps, frame_transforms, frame_lights, ball: (shape.radius, shape.center), frame_parts, part_stats })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and
