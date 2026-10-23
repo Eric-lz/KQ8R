@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Launch timeline and loading breakdown in the log
+
+**Changed:** New viewer `timeline.rs`: one clock from the program's start; "timeline: +N ms" marks in `viewer.log` (the program runs, reading a world starts and ends, the app's first systems, the world put in the scene, the window made, the first frame, render pipelines being prepared and none waiting any more, via a render-world system); running totals of the loader's busy parts (archive unpacking, other worlds' archives opened, model files parsed, animations, still models, textures). `load.rs`: the totals, and a line "objects read, by phase". `main.rs`, `world_build.rs`: the marks.
+**Why:** The user timed 6.3 s from `cargo play` to ready; the log's 3.5 s is only the world's reading.
+**Tested how:** clippy clean, `cargo test --workspace`. `kq8-viewer --world Daventry --frames 900 --sound off` (`viewer.log`); `kq8-viewer --help` directly and through `cargo run --release -q -p kq8-viewer -- --help`, three times each (shell clock).
+**Result:** Daventry: reading 0-3.47 s (objects 2.17 s: start-up scripts placing and loading objects 1.92 s; inside, archive unpacking 1.34 s for 6,470 entries, animations 1.26 s (741), still models 0.67 s (233), textures 0.63 s (2,855), model parsing 0.06 s (974); nested parts count in each; packing 1.22 s); the engine starts 3.47-4.02 s; the world put in the scene by 4.42 s; window 4.43 s; first frame 4.47 s; 37 render pipelines prepared, none waiting by 5.18 s. Cargo's own checks: about 0.7 s (714-808 ms through cargo, 47-53 ms directly). So `cargo play` to ready is about 5.9 s plus the window showing: the user's 6.3 s.
+**Still broken / not tested:** —
+**Next:** The user picks what to speed up.
+
 ## 2026-10-23 The packing's check is a test option (`--check-pack`)
 
 **Changed:** `kq8-data` `anim_pack.rs`: `Pack::add` checks only when asked. Viewer: `--check-pack` (`main.rs`, `world_build::Options`), passed to the world's packing and to weapon sets packed later (`AnimGpu`); the "animation pack" line says "not checked" without it (the "as finished meshes" size, which came from the check, left out). DESIGN.

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Instant;
 
 use kq8_data::game_dir::{VOLUMES, WORLDS};
 use kq8_data::palette::Rgb;
@@ -39,6 +40,7 @@ impl World {
         self.vols.iter().find_map(|(v, a)| {
             let e = a.find(name)?;
             let label = format!("vol:{}/{v}/{}", self.name, e.name);
+            let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
             Some(a.unpack(e).map(|u| (label, u.data)).map_err(|e| e.to_string()))
         })
     }
@@ -52,6 +54,7 @@ impl World {
             .flat_map(|(v, a)| {
                 a.entries().iter().filter(|e| e.name.to_ascii_lowercase().ends_with(&ext)).map(move |e| {
                     let label = format!("vol:{}/{v}/{}", self.name, e.name);
+                    let _t = crate::timeline::Timer::new(crate::timeline::Counter::Unpack);
                     (e.name.clone(), label, a.unpack(e).map(|u| u.data).map_err(|e| e.to_string()))
                 })
             })
@@ -141,9 +144,12 @@ pub fn load_model(
     start: StartAt,
     log: &mut Log,
 ) -> Result<Model, String> {
+    let _t = crate::timeline::Timer::new(crate::timeline::Counter::Model);
     let (label, bytes) = find_model(game, world, model)?;
     log.summary(format!("model: {label} ({} bytes)", bytes.len()));
+    let parsing = Instant::now();
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
+    crate::timeline::add(crate::timeline::Counter::Parse, parsing);
     let (rest, frame_note) = match start {
         None => (shape.rest_sequence(), "first frame".to_string()),
         Some((name, at, repeat)) => match shape.start_sequence(name, at, repeat) {
@@ -551,8 +557,11 @@ pub fn load_animation_skinned(
     skin: Option<&(String, String)>,
     log: &mut Log,
 ) -> Result<Animation, String> {
+    let _t = crate::timeline::Timer::new(crate::timeline::Counter::Animation);
     let (label, bytes) = find_model(game, world, model)?;
+    let parsing = Instant::now();
     let shape = Shape::parse(&bytes).map_err(|e| format!("{label}: {e}"))?;
+    crate::timeline::add(crate::timeline::Counter::Parse, parsing);
     let named = shape
         .loops
         .iter()
@@ -786,10 +795,14 @@ fn load_palette(world: &World, spec: Option<&str>, game: &GameDir, log: &mut Log
 /// Textures are looked up in the current world first, then in every other
 /// world (models in GAME/Common have no textures next to them; Q4).
 fn load_texture(world: &World, game: &GameDir, name: &str, palette: &[Rgb; 256], log: &mut Log) -> Look {
+    let _t = crate::timeline::Timer::new(crate::timeline::Counter::Texture);
     let mut found = world.load(name);
     if found.is_none() {
         for other in WORLDS.iter().filter(|w| **w != world.name) {
-            if let Ok(w) = World::open(game, other) {
+            let opening = Instant::now();
+            let opened = World::open(game, other);
+            crate::timeline::add(crate::timeline::Counter::OtherWorlds, opening);
+            if let Ok(w) = opened {
                 found = w.load(name);
                 if found.is_some() {
                     log.summary(format!("  texture {name}: not in {}, using {other}'s copy", world.name));
@@ -1703,6 +1716,14 @@ pub struct Arrival {
 /// screen (M6 6e-4a, `world-change.md` rule 24).
 pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, log: &mut Log, arrival: Option<Arrival>, progress: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>) -> Objects {
     use kq8_data::world_script::{LoadKq, LoadName};
+    // Where the time goes (the user's question, 2026-10-23).
+    crate::timeline::reset();
+    let mut phases: Vec<(&str, u128)> = Vec::new();
+    let mut since = Instant::now();
+    let mut phase = |what: &'static str, since: &mut Instant| {
+        phases.push((what, since.elapsed().as_millis()));
+        *since = Instant::now();
+    };
 
     let palette_name = world_palette_name(world, "objectPalette").unwrap_or_else(|| {
         let fallback = format!("{}.ppl", world.name);
@@ -1844,7 +1865,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     // Only what the world's start-up scripts load is in the world
     // (objects.md "Where a world's objects come from", Q16), placed while
     // the scripts run so `getLoc` and `move` see them (Q20).
+    phase("scripts scanned, portal files read", &mut since);
     let script = kq8_data::world_script::run("newWorld.cs", &mut placer);
+    phase("start-up scripts run (objects placed and loaded)", &mut since);
     let log = &mut *placer.log;
     log.summary(format!(
         "world scripts: ran {:?}; missing scripts {:?}; {} loadKQ lines ({} inside if-blocks); unreadable lines {}; other commands (not run): {:?}",
@@ -1898,6 +1921,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         placer.place(&load, Some((label, bytes)), true, &script.vars);
     }
     // The world's scripts, for running them while the game plays (M3).
+    phase("unused objects placed and loaded", &mut since);
     let mut scripts: Vec<(String, Vec<u8>)> = world.entries_ending(".cs").into_iter().filter_map(|(n, _, b)| b.ok().map(|b| (n, b))).collect();
     // Then the game-wide ones (`walk_la.cs`, ... in `GAME/Kq`, traps.md
     // "Data used"): searched after the world's folders, so a world's own
@@ -1932,6 +1956,12 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
             gone_skipped
         ));
     }
+    phase("scripts for play read, item models", &mut since);
+    placer.log.summary(format!(
+        "objects read, by phase: {}; inside them: {}",
+        phases.iter().map(|(w, ms)| format!("{w} {ms} ms")).collect::<Vec<_>>().join(", "),
+        crate::timeline::counters_line()
+    ));
     let mut objects = placer.finish();
     objects.scripts = scripts;
     objects.vars = script.vars;

@@ -77,6 +77,7 @@ mod shadow_view;
 mod sound_view;
 mod talk_view;
 mod terrain_view;
+mod timeline;
 mod wall_lights;
 mod world_build;
 
@@ -481,6 +482,7 @@ docs/FEATURES.md (\"Launch options\").
 
 fn main() -> ExitCode {
     memory::set_allocator();
+    timeline::start();
     let raw: Vec<String> = std::env::args().skip(1).collect();
     if raw.iter().any(|a| a == "--help" || a == "-h") {
         print!("{HELP}");
@@ -515,6 +517,7 @@ fn main() -> ExitCode {
     };
     let started = Instant::now();
     log.summary(format!("log file: {}", log.path().display()));
+    timeline::mark(&mut log, "the program runs, its log is open (cargo's own checks come before this)");
     // Made once at start-up, so the size difference between the two
     // kinds does not matter.
     #[allow(clippy::large_enum_variant)]
@@ -557,6 +560,7 @@ fn main() -> ExitCode {
         }
     };
     log.summary(format!("loading took {} ms", started.elapsed().as_millis()));
+    timeline::mark(&mut log, "the world is read; the app (engine, window, graphics card) starts");
     // Written before the window opens: if the API is missing, Bevy stops
     // with "Unable to find a GPU" and this is the last line.
     log.summary(format!("renderer: asking for {}", args.renderer.name()));
@@ -663,6 +667,7 @@ fn main() -> ExitCode {
                 .add_systems(Update, (object_light::toggle_haze, object_light::sync_background, ground_haze::follow_haze, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::running));
         }
     }
+    timeline::add_marks(&mut app);
     app.run();
     // The console's typing line gives the terminal back.
     console::close_screen();
@@ -868,6 +873,9 @@ fn frame_stats(
     let ms = time.delta_secs() * 1000.0;
     if s.frames == 1 {
         s.first_frame_after_ms = Some(settings.started.elapsed().as_millis());
+        if let Ok(mut log) = shared.log.try_lock() {
+            timeline::mark(&mut log, "the first frame is drawn");
+        }
     } else {
         // The first frame's time includes start-up, so it is left out.
         s.total_frame_ms += ms as f64;

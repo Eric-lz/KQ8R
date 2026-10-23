@@ -190,6 +190,7 @@ const FREE_FRAMES: u32 = 2;
 /// `progress`: the loading meter's percent (6e-4a).
 pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<load::Arrival>, progress: Option<Arc<AtomicU32>>, log: &mut Log) -> Result<WorldRead, String> {
     let started = Instant::now();
+    crate::timeline::mark(log, &format!("reading {name} starts"));
     let arrival_maps = arrival.as_ref().map(|a| a.kept_maps.clone());
     let world = load::World::open(game, name)?;
     log.summary(format!("world: {}", world.name));
@@ -236,6 +237,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     let (line, pack) = pack_world(&objects, opts.check_pack);
     log.summary(line);
     objects.pack = Some(pack);
+    crate::timeline::mark(log, &format!("reading {name} done (its animations packed)"));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
 }
 
@@ -417,6 +419,7 @@ pub fn build_pending(world: &mut World) {
     let log = world.resource::<Shared>().log.clone();
     let mut log = log.lock().unwrap();
     log.summary(format!("world built: {name}: read {read_ms} ms, spawned in {} ms; {}; {}", started.elapsed().as_millis(), counts.line(), crate::memory::line()));
+    crate::timeline::mark(&mut log, &format!("{name} is put in the scene (entities made)"));
     log.summary(crate::memory::allocator_line());
     drop(log);
     let parts = breakdown(world);
