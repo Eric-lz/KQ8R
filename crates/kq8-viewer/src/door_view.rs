@@ -1193,6 +1193,10 @@ pub fn trap_step(
                 let line = connor.start_special(&items, &at);
                 format!("{at}: applied{again}: Connor {line}")
             }
+            Request::ConnorAnim { movement, at } => {
+                let line = connor.script_anim(&movement, &at);
+                format!("{at}: applied: Connor {line}")
+            }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
                 // The scene his update used; the objects he pushed this
                 // update are still passed through (pushing.md rule 3).

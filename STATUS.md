@@ -23,7 +23,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   the old rule (next step).
 - **2026-10-23 (B): the key behind it can be taken**: objects a script
   loads while playing now get their click box (before, only
-  characters). In the log only; not yet solid for Connor.
+  characters). The user: works. Not yet solid for Connor.
+- **2026-10-23 (B): the Shadow scene at the Dead City portal plays**
+  (log only): scripts can now play a movement on Connor
+  (`KQAnimPlayEvent`) and cue a character. Still: entering with a
+  weapon out waits for `StateChange` (Q156, not built); Q160, Q161 new.
 
 - **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
   `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
@@ -742,6 +746,9 @@ M6 has started with the Rope and Hook (6a).
   rocks hurting Connor, Gnome's pushable boulder, damaging water.
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
+
+- **For A (2026-10-23, not blocking):** Q160 (`setState Connor Wait`
+  from a script), Q161 (`setHaze`), both from Daventry's Shadow scene.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

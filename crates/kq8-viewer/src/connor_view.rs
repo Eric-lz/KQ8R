@@ -1769,6 +1769,21 @@ impl ConnorSim {
         line
     }
 
+    /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
+    /// rules 4-5): his walker asks for it by name (capitals ignored). A
+    /// name not in his list: nothing (**stand-in**; rule 5 says movement 0
+    /// for objects, not checked for his list). Returns a line for the log.
+    pub fn script_anim(&mut self, name: &str, at: &str) -> String {
+        let movements = &self.movements;
+        let Some(wanted) = movements.iter().find(|m| m.name.eq_ignore_ascii_case(name)).map(|m| m.name) else {
+            return format!("KQAnimPlayEvent {name}: not in his movement list; nothing (stand-in)");
+        };
+        let loops = |n: &str| movements.iter().find(|m| m.name == n).map(|m| &m.movement_loop);
+        let notes = self.walker.script_request(wanted, &loops);
+        self.log.detail(format!("connor update {}: KQAnimPlayEvent {wanted} ({at}): {}", self.updates, notes.join("; ")));
+        format!("KQAnimPlayEvent {wanted}: {}; now '{}' phase {:.4}", notes.join("; "), self.walker.movement, self.walker.phase)
+    }
+
     /// `move Connor <flags> x y z rx ry rz` from a script (M3 3k-1,
     /// `objects.md` "(d)"): his position set or added, his heading (rz)
     /// set or added; no collision passes; the mover's state is kept. Then

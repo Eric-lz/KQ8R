@@ -3256,3 +3256,12 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | --- | --- | --- |
 | Every object prepared for a script's `loadKQ` (not only characters) gets its `BOUNDS.KQ` click box at the start, switched off until the load (core switches it on, as for the ravens) | `objects.md` "Where a world's objects come from" rule 6 (traced: the same steps as at the start); `clicking.md` rules 2, 8 | Viewer, Castle Daventry: `--aim keepkeys` before the push "meets nothing clickable"; after it, the key is taken (`INVITEM_KeepKey` 0 → 1, `keepkeys` deleted, +30 experience). Daventry: `bell`, `clicker2`, `MillTre2`, `potion`, `waterfall2` prepared the same way |
 | Their solid box (Connor bumping into them) and view-blocking box are not made | **Stand-in** (not done yet) | — |
+
+## Script events to Connor and to characters (the Shadow scene) — `crates/kq8-core/src/{active,connor}.rs`; viewer `connor_view.rs` (`script_anim`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQAnimPlayEvent <movement>` to Connor: asked of his walker as the keys ask (transition, cut short, else kept for the end), afresh even when already playing; the keys' choice is left alone, so they ask again only when it changes; only in his keys' states | `anim-scripts.md` rules 4-5 (every animated object, Connor included); `connor-movement.md` "Starting and stopping" rules 1, 4 | Unit test `a_script_request_plays_once_and_holds_while_the_keys_dont_change`; viewer `connor.log`: `portal` at update 25, `portalx` at 436 |
+| A name not in his list: nothing | **Stand-in** (rule 5 gives movement 0 for objects; not checked for his list) | — |
+| Outside his keys' states (Special, jumps, …): not done | **Stand-in** (not described) | Unit test |
+| `KQCueEvent` to a character (or animated object) with a script: its script gets `Cue …` | `anim-scripts.md` rule 37 (the ravens' `Cue 10`), as for objects (`clicking.md` rule 21) | Viewer `doors.log`: the Shadow gets Cue 10, 30, 32, 300 × 13, 20, 21, 25 |

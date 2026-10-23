@@ -973,6 +973,36 @@ impl Walker {
         }
     }
 
+    /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
+    /// rules 4-5: the same request as for any animated object, Connor
+    /// included): asked for as the keys ask (rule 4 here: transition, cut
+    /// short, else kept for the end), but it starts afresh even when it is
+    /// the movement already playing. The keys' choice is left as it was,
+    /// so they don't ask again until it changes (rule 1): with `handsOff`
+    /// a play-once movement holds its last frame. Only in the states where
+    /// the keys choose; elsewhere not done (not described). Returns the
+    /// log notes.
+    pub fn script_request<'a>(&mut self, wanted: &'static str, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>) -> Vec<String> {
+        let mut notes = Vec::new();
+        if !self.keys_choose() {
+            notes.push(format!("in {}: not done (a request outside his keys' states is not described)", self.mode.name()));
+            return notes;
+        }
+        if wanted == self.movement && self.playing.is_none() && self.waiting.is_none() {
+            if loops(self.movement).is_none_or(|l| l.cut_short || self.phase >= 1.0) {
+                notes.push(format!("{wanted} again: afresh from phase 0 (rule 5)"));
+                self.phase = 0.0;
+                self.wanted = None;
+            } else {
+                notes.push(format!("{wanted} again, can't be cut short: kept until it ends"));
+                self.wanted = Some(wanted);
+            }
+            return notes;
+        }
+        self.ask(wanted, loops, &mut notes);
+        notes
+    }
+
     /// Rule 6: the transition playing has ended. Its `to` starts at its
     /// `to_phase`; if something else is wanted by now, it is asked for
     /// again from there at once.
@@ -1574,6 +1604,35 @@ mod tests {
     /// `jumpend` in the data).
     fn once() -> MovementLoop {
         MovementLoop { duration: 10.0 / 15.0, step_sum: [0.0; 3], speed: 1.0, repeat: false, frames: 11, ..Default::default() }
+    }
+
+    #[test]
+    fn a_script_request_plays_once_and_holds_while_the_keys_dont_change() {
+        // anim-scripts.md rules 4-5, connor-movement.md rules 1, 4: the
+        // `portal` of `sdwtrap1.cs`, with no key held (handsOff).
+        let mut list = stop_list();
+        list.push(("portal", once()));
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(0, 0, false), &loops);
+        assert_eq!(w.movement, "stop");
+        w.script_request("portal", &loops);
+        assert_eq!((w.movement, w.phase), ("portal", 0.0), "stop can be cut short: at once");
+        let mut ended = Vec::new();
+        for _ in 0..20 {
+            ended.extend(w.update(intent(0, 0, false), &loops).ended);
+        }
+        assert_eq!((w.movement, w.phase, ended), ("portal", 1.0, vec!["portal"]), "ends once, holds its last frame");
+        // A new request for it starts it afresh (rule 5).
+        w.script_request("portal", &loops);
+        assert_eq!(w.phase, 0.0);
+        // Outside the keys' states: not done.
+        w.set_mode(Mode::Fall);
+        assert!(w.script_request("stop", &loops)[0].contains("not done"));
+        // A key pressed: the keys ask again.
+        w.set_mode(Mode::Free);
+        w.update(intent(1, 0, false), &loops);
+        assert_eq!(w.movement, "walk");
     }
 
     #[test]

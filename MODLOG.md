@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-23 Fix: the Shadow scene at the Dead City portal plays
+
+**Changed:** Core `active.rs`: `KQAnimPlayEvent` to Connor becomes a request to his walker (new `Request::ConnorAnim`); `KQCueEvent` to a character with a script runs its script. `connor.rs`: `Walker::script_request`. Viewer: `connor_view.rs` `script_anim`, `door_view.rs` applies it. New unit test. QUESTIONS Q160, Q161. Provenance.
+**Why:** The user: walking into the portal, control is taken away and nothing else happens. `sdwtrap1.cs` sends Connor `KQAnimPlayEvent portal` and the Shadow `KQCueEvent 10`; both were dropped ("object kind not implemented yet"), so `shadow.cs`, which runs the scene, never started.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 9000 --sound off --command "KQConner::setDoMode 4",3 --command "move Connor 0 234300 183200 -1 0 0 1.57",5 --hold 1,0,0,10,40`; `doors.log`, `traps.log`, `connor.log`.
+**Result:** Update 25 `portal`; 44 the Shadow's Cue 10 (camera, Connor moved into its home), 30, 32 (`Monst2.anm` list); 88-435 the 12 `CLSM1S*` movements each tell the Shadow, which cuts the camera, plays its two Special lists and has Connor speak; 435 Cue 20: back to Daventry, `rvngrvtp` loaded, +20 experience, `portalx`; 466 `portalx` ended; 474 Cue 25: `handsOff 0`.
+**Still broken / not tested:** Not looked at by eye. `setState Connor Wait` at the end does nothing (Q160): he holds `portalx`'s last frame until a key is pressed. `setHaze` unknown (Q161): the fog doesn't change. Entering the trap with a weapon out still does nothing: the trap waits for Connor's `StateChange` (weapon swap ended), which is answered (Q156) but not built; walking out and in again works.
+**Next:** Build `StateChange` (Q156) so the first entry works with a weapon out.
+
 ## 2026-10-23 Fix: the key behind the King's portrait can be taken
 
 **Changed:** Viewer `load.rs` (`object_colliders`): a plain object waiting for a script's `loadKQ` now gets its click box at the start, switched off until the load (before, only characters did). `door_view.rs`: the "came in" log line says so. Provenance.

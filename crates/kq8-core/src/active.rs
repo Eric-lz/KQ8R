@@ -124,6 +124,9 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
+    /// rules 4-5): asked of his walker.
+    ConnorAnim { movement: String, at: String },
     /// Connor straight to standing (M6 6e: after No to the Portal state's
     /// question).
     ConnorStandNow { at: String },
@@ -4598,11 +4601,30 @@ impl Active {
             self.stats_change(&e, &from);
             return;
         }
+        // anim-scripts.md rules 4-5: Connor takes the request as every
+        // animated object does; his walker is the viewer's.
+        if e.kind == "KQAnimPlayEvent" && e.target.eq_ignore_ascii_case(CONNOR) {
+            let movement = e.data.first().cloned().unwrap_or_default();
+            self.world.note(format!("KQAnimPlayEvent {movement} to Connor{from}: handed to his walker (anim-scripts.md rules 4-5)"));
+            self.world.requests.push(Request::ConnorAnim { movement, at: format!("KQAnimPlayEvent{from}") });
+            return;
+        }
         // anim-scripts.md rule 4 for the other animated objects (3i-4).
         if let Some(i) = self.world.anim_index(&e.target).filter(|_| e.kind == "KQAnimPlayEvent") {
             self.world.start_up_character(i, &format!("KQAnimPlayEvent {}", e.data.join(" ")));
             let line = anim_request(&mut self.world.anims[i].player, &e.data, &format!("object {}", e.target), &from);
             self.world.note(line);
+            return;
+        }
+        // A cue to a character (or another animated object) with a script:
+        // its own script gets `Cue …`, as for objects (anim-scripts.md
+        // rule 37: the ravens' `Cue 10`; Daventry's Shadow gets `Cue 10`
+        // from `sdwtrap1.cs`).
+        if e.kind == "KQCueEvent" && self.world.anim_index(&e.target).is_some_and(|i| self.world.anims[i].script.is_some()) {
+            let args = cue_args(&e.data);
+            self.world.note(format!("KQCueEvent {} to {}{from}", e.data.join(" "), e.target));
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            self.call_named(&e.target, &refs);
             return;
         }
         if let Some(i) = self.world.clickables.iter().position(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&e.target)) {
