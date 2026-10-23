@@ -4739,6 +4739,7 @@ pub fn load_building(
                     uvs: order.map(|k| [t.texels[k][0] / size[0], t.texels[k][1] / size[1]]),
                     material: index as i32,
                     node: t.surface,
+                    face: 0,
                     normals: [kq8_data::shape::front_normal(&t.positions); 3],
                     // Walls get point lights by their own rule (rule 16).
                     part_ball: [0.0; 4],

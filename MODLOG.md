@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Animation memory 4a: the compact data, checked (not drawn yet)
+
+**Changed:** New `kq8-data` `anim_pack.rs` (`Pack::add`: points as in the file, per node-frame normals at 16 bits and the place with the vertex frame folded in, topologies per mesh/texture frame/material with shared corners; an unpack-and-compare check against `Shape::geometry`; unit tests `normals_pack_to_within_a_hair`, `folding_the_scale_and_origin_gives_the_same_point`). `shape.rs`: `Triangle::face`. Viewer `world_build.rs`: `pack_line` packs every animation of the world after reading and logs sizes and the check in `viewer.log`. DESIGN.
+**Why:** DESIGN "Animation memory" 4a.
+**Tested how:** `cargo test --workspace`, clippy clean; all 11 worlds `--frames 20 --sound off`, `viewer.log` "animation pack".
+**Result:** Every frame of every animation in all 11 worlds unpacks to today's triangles: positions within 0.0080-0.0117 game units, normals within 0.000026, texture places and part balls exact. Daventry: 71.3 MB against 954.5 MB (13x less); Castle 16.4 MB against 217.8 MB; Ice World 66.6 MB against 873.3 MB. Packing takes 0.3-1.4 s on the reading thread (Daventry 1.4 s).
+**Still broken / not tested:** Reading a world is slower by that time until the old way goes (4g). No made-up-model test: the real data of all worlds is the check.
+**Next:** 4b: the shader and still animated objects, with a key to switch old/new.
+
 ## 2026-10-23 Plan: animation memory step 4 now (step 3 skipped)
 
 **Changed:** Docs only: DESIGN "Animation memory" (step 3 skipped; step 4 planned in full: the compact data, the shader, sub-steps 4a-4g, risks), STATUS.

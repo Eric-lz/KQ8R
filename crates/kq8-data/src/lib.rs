@@ -4,6 +4,7 @@
 //! crate writes to the game folder.
 
 pub mod action_map;
+pub mod anim_pack;
 pub mod aud;
 pub mod bitmap;
 pub mod bounds;

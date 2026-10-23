@@ -230,6 +230,7 @@ pub fn read_world(game: &GameDir, name: &str, opts: &Options, arrival: Option<lo
     part("speech, panels, map", &mut since);
     log.summary(format!("world read: {name}: {}", parts.join(", ")));
     log.summary(part_stats_line(&objects));
+    log.summary(pack_line(&objects));
     Ok(WorldRead { name: name.to_string(), lights, haze, ground, objects, animation, caption, gui, map, sound, took_ms: started.elapsed().as_millis() })
 }
 
@@ -263,6 +264,45 @@ fn part_stats_line(objects: &load::Objects) -> String {
         s.matrices_even,
         s.matrices_uneven,
         s.matrices_slanted
+    )
+}
+
+/// "Animation memory" step 4a: the world's animations packed for the
+/// graphics card and checked against today's triangles (not drawn yet).
+fn pack_line(objects: &load::Objects) -> String {
+    let started = Instant::now();
+    let mut pack = kq8_data::anim_pack::Pack::default();
+    let mut check = kq8_data::anim_pack::Check::default();
+    let (mut animations, mut frames, mut parts) = (0, 0, 0);
+    let connor = objects.connor.as_ref().map(|(_, c)| c.animations.as_slice()).unwrap_or(&[]);
+    for a in objects.object_animations.iter().chain(&objects.door_animations).chain(connor) {
+        let Some(source) = &a.source else { continue };
+        let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
+        let id = Arc::as_ptr(&source.shape) as usize;
+        let (packed, c) = pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
+        check.add(&c);
+        animations += 1;
+        frames += packed.len();
+        parts += packed.iter().map(Vec::len).sum::<usize>();
+    }
+    let [points, normals, node_frames, topologies] = pack.sizes();
+    let mb = |b: usize| b as f64 / (1 << 20) as f64;
+    format!(
+        "animation pack (step 4a, not drawn yet): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB, today's meshes {:.1} MB (48 bytes a corner); check over {} corners, largest differences: position {:.4}, normal {:.6}, texture place {:.6}, part ball {:.4}; {} ms",
+        mb(points),
+        mb(normals),
+        mb(node_frames),
+        pack.node_frames.len(),
+        mb(topologies),
+        pack.topologies.len(),
+        mb(points + normals + node_frames + topologies),
+        mb(check.corners * 48),
+        check.corners,
+        check.position,
+        check.normal,
+        check.uv,
+        check.ball,
+        started.elapsed().as_millis()
     )
 }
 

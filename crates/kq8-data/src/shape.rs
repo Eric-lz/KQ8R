@@ -292,6 +292,8 @@ pub struct Triangle {
     pub material: i32,
     /// Index of the mesh node it came from.
     pub node: usize,
+    /// Index of its face in the node's mesh (0 for building surfaces).
+    pub face: usize,
     /// The bounding ball of its model part (its mesh node) in this frame,
     /// for point lights (object-lighting.md rule 24): centre (model space)
     /// = middle of the part's vertices in this frame (the note's
@@ -577,7 +579,7 @@ impl Shape {
                     }
                 }
                 corner_vertices.push(face.corners.map(|c| c.0));
-                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index, normals: [[0.0; 3]; 3], part_ball: [0.0; 4] });
+                g.triangles.push(Triangle { positions, uvs, material: face.material, node: node_index, face: face_index, normals: [[0.0; 3]; 3], part_ball: [0.0; 4] });
             }
             // Rule 24: the part's ball in this frame.
             if let Some((lo, hi)) = bounds(&g.triangles[first_triangle..]) {

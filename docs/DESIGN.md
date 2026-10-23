@@ -2666,7 +2666,15 @@ exactly as before):**
      balls (largest difference logged; must be at rounding level).
      Log the buffers' sizes against today's 955 MB (Daventry). No
      drawing change. **Test:** all 11 worlds; unit tests on a small
-     made-up model.
+     made-up model. **Done** 2026-10-23 (`kq8_data::anim_pack`;
+     `Triangle::face`; `world_build::pack_line` in `viewer.log`; unit
+     tests on packing normals and folding the matrix instead of a
+     made-up model). All 11 worlds: positions within 0.012 game units,
+     normals within 0.00003, texture places and balls exact. Daventry
+     71 MB (points 17.5, normals 35.1, node-frames 4.9, topologies 13.9)
+     against 955 MB of meshes; other worlds 16-67 MB. Packing takes
+     0.3-1.4 s on the reading thread (it builds every frame's triangles
+     a second time; to fold into the loader when the old way goes).
    - **4b. The shader and still animated objects** (windmill, wheels,
      flags, chains: anim_view's objects that aren't characters). A
      test key switches those objects between the old and the new
