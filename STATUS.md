@@ -568,7 +568,8 @@ M6 has started with the Rope and Hook (6a).
   drawn the new way; F5 compares) and 4c (doors, chests, scripted
   objects) and 4d (characters) checked by the user. 4e built (copy
   templates and script copies; items and effects are still models, left
-  as they are), waiting for the user's look.** Smooth
+  as they are) and 4f built (Connor), waiting for the user's look; then
+  4g.** Smooth
   animation after M7. Other drawing work waits until step 4 is done.**
 - **Moving between worlds, what is missing (6e):** worlds kept in full
   (positions, chests without a variable, items dropped, bodies, terrain

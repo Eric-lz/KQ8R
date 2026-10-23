@@ -2723,7 +2723,15 @@ exactly as before):**
      inputs). Daventry: 143 of 143 animated objects; a burst barrel's
      wreck: 12 new-way parts.
    - **4f. Connor** (connor_view): late movement sets, weapon swaps, the
-     hammer throw.
+     hammer throw. **Built** 2026-10-23, waiting for the user's look (4e
+     too): his animations n are `AnimGpu::connor[n]` (`DrawnMovement::
+     anim`); two slot sets, him and the rope model (placed at the rope
+     offset); his old frames moved under the old root; the copies of his
+     materials join his face (mouth) and the potion looks
+     (`share_copies`); a weapon set loaded while playing is packed and the
+     buffers sent again (`AnimGpu::add_connor`: the Lake Sword's 43
+     animations, 94 ms), the slots grow (`Slots::extend`); his shadow
+     reads the slots while the new drawing is shown.
    - **4g. The old way removed**: frame entities, `FrameSources`'s mesh
      path, the test key. **Test:** the tour of all worlds: working set,
      frame time, buffer sizes; `cargo test`.

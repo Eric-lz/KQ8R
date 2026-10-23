@@ -313,7 +313,6 @@ pub fn setup_objects(
         &gpu,
     );
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut meshes, &mut object_materials, &light, &mut images, &balls, &mut log, &mut sources, &gpu);
-    commands.insert_resource(gpu);
     // 3l-4: doors, chests and scripted objects were added after the
     // plain objects; the sweep tests them all in load order.
     let load_index = |name: &str| objects.placed.iter().position(|(p, _, _)| p.name.eq_ignore_ascii_case(name)).unwrap_or(usize::MAX);
@@ -346,8 +345,9 @@ pub fn setup_objects(
     };
     if let Some(connor) = objects.connor.take() {
         let start = objects.camera_start;
-        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut object_materials, &light, &mut images, &mut log, &mut sources);
+        crate::connor_view::spawn_connor(&mut commands, connor, start, &mut meshes, &mut object_materials, &light, &mut images, &mut log, &mut sources, &gpu);
     }
+    commands.insert_resource(gpu);
     // One (mesh, material) list per model, shared by all its copies.
     let mut built: Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>> = Vec::new();
     // Buildings (M1 5c): their walls use the building material instead.

@@ -63,10 +63,9 @@ pub struct WorldPack {
 pub struct AnimGpu {
     pub topologies: Vec<Handle<Mesh>>,
     pub objects: Vec<Option<Vec<Vec<Part>>>>,
-    /// Doors' and Connor's, for 4c and 4f.
-    #[allow(dead_code)]
     pub doors: Vec<Option<Vec<Vec<Part>>>>,
-    #[allow(dead_code)]
+    /// Connor's: his start-up animations, then the weapon sets loaded
+    /// while playing (`add_connor`).
     pub connor: Vec<Option<Vec<Vec<Part>>>>,
     /// Kept for bounds and shadows: the node-frames (model space) and the
     /// topologies' corners.
@@ -77,7 +76,58 @@ impl AnimGpu {
     /// Sends `world` to the graphics card: the buffers' contents and one
     /// mesh per topology. Returns it and a line for the log.
     pub fn install(world: WorldPack, buffers: &AnimBuffers, assets: &mut Assets<ShaderBuffer>, meshes: &mut Assets<Mesh>) -> (AnimGpu, String) {
-        let p = &world.pack;
+        let mut gpu = AnimGpu { topologies: Vec::new(), objects: world.objects, doors: world.doors, connor: world.connor, pack: world.pack };
+        gpu.add_topologies(meshes);
+        let line = gpu.upload(buffers, assets);
+        (gpu, line)
+    }
+
+    /// A mesh for every topology that has none yet.
+    fn add_topologies(&mut self, meshes: &mut Assets<Mesh>) {
+        for t in &self.pack.topologies[self.topologies.len()..] {
+            let corners: Vec<[u32; 2]> = t.corners.iter().map(|c| [c.point, c.normal]).collect();
+            let uvs: Vec<[f32; 2]> = t.corners.iter().map(|c| c.uv).collect();
+            let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
+                .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+                .with_inserted_attribute(ATTRIBUTE_ANIM_CORNER, VertexAttributeValues::Uint32x2(corners))
+                .with_inserted_indices(Indices::U32(t.indices.clone()));
+            self.topologies.push(meshes.add(mesh));
+        }
+    }
+
+    /// Weapon sets loaded while playing (M6 6c-2): their animations packed
+    /// and the buffers sent again. Returns each animation's index in
+    /// `connor` (`None`: not packed) and a line for the log.
+    pub fn add_connor(&mut self, animations: &[crate::load::Animation], buffers: &AnimBuffers, assets: &mut Assets<ShaderBuffer>, meshes: &mut Assets<Mesh>) -> (Vec<Option<usize>>, String) {
+        let started = std::time::Instant::now();
+        let mut check = kq8_data::anim_pack::Check::default();
+        let indices = animations
+            .iter()
+            .map(|a| {
+                let source = a.source.as_ref()?;
+                let flat = |m: i32| a.looks.iter().any(|(i, _, s)| *i == m && s.lighting == kq8_data::Lighting::Flat);
+                let id = std::sync::Arc::as_ptr(&source.shape) as usize;
+                let (packed, c) = self.pack.add(&source.shape, id, source.first, a.frames.len(), &flat);
+                check.add(&c);
+                self.connor.push(Some(packed));
+                Some(self.connor.len() - 1)
+            })
+            .collect();
+        self.add_topologies(meshes);
+        let line = self.upload(buffers, assets);
+        let line = format!(
+            "{line}; {} animations added while playing, check: position {:.4}, normal {:.6}; {} ms",
+            animations.len(),
+            check.position,
+            check.normal,
+            started.elapsed().as_millis()
+        );
+        (indices, line)
+    }
+
+    /// Sends the pack's buffers to the graphics card again.
+    fn upload(&self, buffers: &AnimBuffers, assets: &mut Assets<ShaderBuffer>) -> String {
+        let p = &self.pack;
         let points: Vec<u32> = p.points.iter().map(|v| u32::from_le_bytes(*v)).collect();
         let normals: Vec<u32> = p.normals.iter().flat_map(|n| [n[0] as u16 as u32 | (n[1] as u16 as u32) << 16, n[2] as u16 as u32 | (n[3] as u16 as u32) << 16]).collect();
         // Five vec4s per node-frame: the matrix's rows (w: where its points
@@ -122,31 +172,16 @@ impl AnimGpu {
         let _ = assets.insert(&buffers.normals, ShaderBuffer::new(pad(normals), RenderAssetUsages::RENDER_WORLD));
         let nodes = if nodes.is_empty() { vec![0.0f32; 20] } else { nodes };
         let _ = assets.insert(&buffers.nodes, ShaderBuffer::new(nodes, RenderAssetUsages::RENDER_WORLD));
-        let topologies: Vec<Handle<Mesh>> = p
-            .topologies
-            .iter()
-            .map(|t| {
-                let corners: Vec<[u32; 2]> = t.corners.iter().map(|c| [c.point, c.normal]).collect();
-                let uvs: Vec<[f32; 2]> = t.corners.iter().map(|c| c.uv).collect();
-                let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
-                    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-                    .with_inserted_attribute(ATTRIBUTE_ANIM_CORNER, VertexAttributeValues::Uint32x2(corners))
-                    .with_inserted_indices(Indices::U32(t.indices.clone()));
-                meshes.add(mesh)
-            })
-            .collect();
         let [_, _, _, topology_bytes] = p.sizes();
         let mb = |b: usize| b as f64 / (1 << 20) as f64;
-        let line = format!(
+        format!(
             "animations on the graphics card (step 4): points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB, {} topology meshes {:.1} MB",
             mb(sizes.0),
             mb(sizes.1),
             mb(sizes.2),
-            topologies.len(),
+            self.topologies.len(),
             mb(topology_bytes)
-        );
-        let gpu = AnimGpu { topologies, objects: world.objects, doors: world.doors, connor: world.connor, pack: world.pack };
-        (gpu, line)
+        )
     }
 
     /// The bounds (model space, game units) of every part of `frames`.
@@ -188,6 +223,7 @@ pub fn toggle_draw(keys: Res<ButtonInput<KeyCode>>, mut mode: ResMut<DrawMode>, 
 pub enum List {
     Objects,
     Doors,
+    Connor,
 }
 
 impl AnimGpu {
@@ -196,6 +232,7 @@ impl AnimGpu {
         match list {
             List::Objects => self.objects.get(anim),
             List::Doors => self.doors.get(anim),
+            List::Connor => self.connor.get(anim),
         }
         .and_then(Option::as_ref)
     }
@@ -269,6 +306,61 @@ impl Slots {
     /// Part entities.
     pub fn len(&self) -> usize {
         self.slots.len()
+    }
+
+    /// More movements (Connor's weapon sets loaded while playing): more
+    /// slots if their frames have more parts, the box grown, animated
+    /// copies of their materials. Returns the new copies by key.
+    pub fn extend(
+        &mut self,
+        commands: &mut Commands,
+        gpu: &AnimGpu,
+        movements: Vec<(usize, Option<crate::load::FrameShape>, crate::shadow_view::ModelBall)>,
+        materials: impl IntoIterator<Item = ((usize, i32), Handle<crate::object_light::ObjectMaterial>)>,
+        assets: &mut Assets<crate::object_light::ObjectMaterial>,
+    ) -> Vec<((usize, i32), Handle<crate::object_light::ObjectMaterial>)> {
+        let frames: Vec<&Vec<Vec<Part>>> = movements.iter().filter_map(|(a, _, _)| gpu.frames(self.list, *a)).collect();
+        let count = frames.iter().flat_map(|f| f.iter()).map(Vec::len).max().unwrap_or(0);
+        if let Some((lo, hi)) = gpu.bounds(frames.iter().copied()) {
+            let (a, b) = (Vec3::from(crate::to_bevy(lo, [0.0; 3])), Vec3::from(crate::to_bevy(hi, [0.0; 3])));
+            self.aabb = Some(match self.aabb {
+                Some((l, h)) => (l.min(a.min(b)), h.max(a.max(b))),
+                None => (a.min(b), a.max(b)),
+            });
+        }
+        while self.slots.len() < count {
+            let e = commands.spawn((Transform::default(), Visibility::Hidden, bevy::mesh::MeshTag::new(0))).id();
+            commands.entity(self.new_root).add_child(e);
+            self.slots.push(e);
+        }
+        self.movements.extend(movements);
+        let added: Vec<_> = materials
+            .into_iter()
+            .filter_map(|(k, m)| assets.get(&m).map(crate::object_light::animated).map(|copy| (k, assets.add(copy))))
+            .collect();
+        self.materials.extend(added.iter().cloned());
+        self.shown = None;
+        added
+    }
+
+    /// Nothing shown (the rope model while he isn't on the rope).
+    pub fn hide(&mut self, visibility: &mut Query<&mut Visibility>) {
+        if self.shown.is_none() {
+            return;
+        }
+        for &slot in &self.slots {
+            if let Ok(mut v) = visibility.get_mut(slot) {
+                *v = Visibility::Hidden;
+            }
+        }
+        self.shown = None;
+    }
+
+    /// The new drawing's place in its body (the rope model's offset).
+    pub fn set_offset(&self, transforms: &mut Query<&mut Transform, (Without<crate::connor_view::ConnorBody>, Without<Camera3d>)>, at: Vec3) {
+        if let Ok(mut t) = transforms.get_mut(self.new_root) {
+            t.translation = at;
+        }
     }
 
     /// The entity whose children are the parts shown, while the new

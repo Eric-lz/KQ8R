@@ -1044,7 +1044,9 @@ pub fn shadow_draw(
     if let Some(c) = connor.as_ref() {
         let body = connor_body.iter().next();
         let drawn = body.is_some_and(|(_, v)| *v != Visibility::Hidden);
-        let model = match c.shown.filter(|_| drawn) {
+        // Step 4f: his new drawing's parts while they are shown.
+        let shown = c.shown.map(|f| c.slots.as_ref().and_then(|s| s.drawn_root()).unwrap_or(f));
+        let model = match shown.filter(|_| drawn) {
             Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
             None => Vec::new(),
         };
@@ -1053,7 +1055,7 @@ pub fn shadow_draw(
             [v.x * 100.0, -v.z * 100.0, v.y * 100.0]
         });
         let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let caster = c.shown.filter(|_| drawn).and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
+        let caster = shown.filter(|_| drawn).and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
         let on = crate::shadow_view::receivers(&ground.0, at, &corners, dir, caster, &active);
         let cast = shadow::cast(&model, dir, &on.triangles);
         if report && drawn {
