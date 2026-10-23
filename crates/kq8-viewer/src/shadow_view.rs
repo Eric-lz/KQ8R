@@ -175,6 +175,9 @@ pub struct AnimSlot {
     pub sequence: usize,
     pub node: usize,
     pub material: i32,
+    /// Where the slot stands in its object (Bevy units): its part's ball
+    /// centre.
+    pub offset: Vec3,
 }
 
 /// The query shadows read parts through.
@@ -259,7 +262,7 @@ fn mesh_triangles(part: Entity, parts: &PartQuery, meshes: &Assets<Mesh>, source
     // Step 4: a part drawn the new way, from its model.
     if let Some(slot) = slot {
         let Some(points) = sources.slot_points(slot) else { return };
-        let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q))).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
+        let game: Vec<shadow::V3> = points.iter().map(|&q| at.transform_point(Vec3::from(q) - slot.offset)).map(|v| [v.x * 100.0, -v.z * 100.0, v.y * 100.0]).collect();
         model.extend(game.as_chunks::<3>().0.iter().map(|t| [t[0], t[2], t[1]]));
         return;
     }

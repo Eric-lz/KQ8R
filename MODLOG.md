@@ -102,6 +102,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Not looked at. The target needs Connor within 2,350 of the door's own position (its hinge corner, `ranged-weapons.md` rule 32), not of its middle. With a real mouse not tried (`--aim` uses the same pick).
 **Next:** The user's check.
 
+## 2026-10-23 Fix (4d), second try: each part drawn at its own centre (see-through order)
+
+**Changed:** Viewer `anim_gpu.rs`: `Slots::show` puts each part entity at its part's ball centre (and moves its box the other way); `object_light.wesl`: the animated vertex step takes the point relative to that centre (the part's ball centre at 0); `shadow_view.rs`: `AnimSlot::offset`, a slot's shadow points taken back by it.
+**Why:** The first fix (material order) didn't stop the ghost knight's staff flickering (the user's look). Found in Bevy 0.20's source (`bevy_pbr` `material.rs`, `bevy_render` `mesh/mod.rs`): see-through parts are sorted by the distance to their mesh's box centre, and a mesh with no points of its own (our topology meshes) has the centre (0, 0, 0), so every part of the knight tied at his origin and the order was left to chance. The old frames' meshes had real centres.
+**Tested how:** clippy clean. Daventry `--frames 1300 --sound off --anim-draw old|new`: error output, `characters.log` (the goblin's shadow), `shadows.log`.
+**Result:** No graphics errors; the goblin's shadow the same both ways (224 model triangles, 142-152 pieces, 87 building triangles); plain objects' shadows the same (9, 559 pieces). The material order (first fix) stays: harmless.
+**Still broken / not tested:** **Not looked at**: the ghost knight. Within one material the old drawing sorted the whole material's mesh by one centre; now each part by its own (closer to what is really in front): see-through figures could differ slightly from before in where their own parts overlap.
+**Next:** The user's look at the ghost knight; if it still flickers, stop and write STATUS (two attempts).
+
 ## 2026-10-23 Fix (4d): a see-through figure's parts keep their drawing order
 
 **Changed:** `kq8-data` `anim_pack.rs`: each packed frame's parts are put in material order, then node order (the old drawing's order: one mesh per material).

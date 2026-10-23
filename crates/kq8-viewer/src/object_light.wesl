@@ -138,7 +138,9 @@ fn model_corner(v: ObjectIn) -> Corner {
 
 // Step 4: the node-frame the entity's tag names places the point read
 // from the file's numbers; the normal and ball as `model_mesh` would have
-// written them.
+// written them. The entity stands at its part's ball centre (so Bevy
+// sorts see-through parts by their own centres, as it did the old
+// frames' meshes), so the point is taken relative to it.
 @if(ANIMATED)
 fn model_corner(v: ObjectIn) -> Corner {
     let node = anim_nodes[mesh_functions::get_tag(v.instance_index)];
@@ -148,7 +150,7 @@ fn model_corner(v: ObjectIn) -> Corner {
     let packed = anim_normals[bitcast<u32>(node.row1.w) + v.corner.y];
     let n = vec3<f32>(unpack2x16snorm(packed.x), unpack2x16snorm(packed.y).x);
     let units = settings.game_units;
-    return Corner(game_to_bevy(g) / units, game_to_bevy(n), vec4<f32>(game_to_bevy(node.ball.xyz) / units, node.ball.w));
+    return Corner(game_to_bevy(g - node.ball.xyz) / units, game_to_bevy(n), vec4<f32>(0.0, 0.0, 0.0, node.ball.w));
 }
 
 struct LitVertex {

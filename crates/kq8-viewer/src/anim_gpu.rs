@@ -217,6 +217,8 @@ pub struct Slots {
     shown: Option<(usize, usize)>,
     /// The draw mode shown.
     mode: Option<DrawMode>,
+    /// The object's box over every frame (Bevy units, its own space).
+    aabb: Option<(Vec3, Vec3)>,
 }
 
 impl Slots {
@@ -241,7 +243,7 @@ impl Slots {
         // have no points of their own to measure).
         let aabb = gpu.bounds(frames.iter().copied()).map(|(lo, hi)| {
             let (a, b) = (Vec3::from(crate::to_bevy(lo, [0.0; 3])), Vec3::from(crate::to_bevy(hi, [0.0; 3])));
-            bevy::camera::primitives::Aabb::from_min_max(a.min(b), a.max(b))
+            (a.min(b), a.max(b))
         });
         let old_root = commands.spawn((Transform::default(), Visibility::Inherited)).id();
         let new_root = commands.spawn((Transform::default(), Visibility::Hidden, movements[0].2)).id();
@@ -249,8 +251,8 @@ impl Slots {
         let slots = (0..count)
             .map(|_| {
                 let mut e = commands.spawn((Transform::default(), Visibility::Hidden, bevy::mesh::MeshTag::new(0)));
-                if let Some(aabb) = aabb {
-                    e.insert(aabb);
+                if let Some((lo, hi)) = aabb {
+                    e.insert(bevy::camera::primitives::Aabb::from_min_max(lo, hi));
                 }
                 let e = e.id();
                 commands.entity(new_root).add_child(e);
@@ -261,7 +263,7 @@ impl Slots {
             .into_iter()
             .filter_map(|(k, m)| assets.get(&m).map(crate::object_light::animated).map(|copy| (k, assets.add(copy))))
             .collect();
-        Some(Slots { old_root, new_root, slots, list, movements, materials, shown: None, mode: None })
+        Some(Slots { old_root, new_root, slots, list, movements, materials, shown: None, mode: None, aabb })
     }
 
     /// Part entities.
@@ -311,12 +313,23 @@ impl Slots {
         for (k, &slot) in self.slots.iter().enumerate() {
             match parts.get(k) {
                 Some(part) => {
+                    // At its part's ball centre: Bevy sorts see-through
+                    // parts by their mesh's centre, and a topology mesh has
+                    // none of its own (the user's look: the ghost knight's
+                    // staff flickered); the shader takes the points
+                    // relative to it, the box moves the other way.
+                    let ball = gpu.pack.node_frames[part.node_frame as usize].ball;
+                    let offset = Vec3::from(crate::to_bevy([ball[0], ball[1], ball[2]], [0.0; 3]));
                     let mut e = commands.entity(slot);
                     e.insert((
                         Mesh3d(gpu.topologies[part.topology as usize].clone()),
                         bevy::mesh::MeshTag::new(part.node_frame),
-                        crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material },
+                        Transform::from_translation(offset),
+                        crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material, offset },
                     ));
+                    if let Some((lo, hi)) = self.aabb {
+                        e.insert(bevy::camera::primitives::Aabb::from_min_max(lo - offset, hi - offset));
+                    }
                     if let Some(m) = self.materials.get(&(anim, part.material)) {
                         e.insert(MeshMaterial3d(m.clone()));
                     }
