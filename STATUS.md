@@ -25,7 +25,7 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   loads while playing now get their click box (before, only
   characters). The user: works. Not yet solid for Connor.
 - **2026-10-23 (B): the Shadow scene at the Dead City portal plays**
-  (log only): scripts can now play a movement on Connor
+  (the user: works): scripts can now play a movement on Connor
   (`KQAnimPlayEvent`) and cue a character. Still: entering with a
   weapon out waits for `StateChange` (Q156, not built); Q160, Q161 new.
 
