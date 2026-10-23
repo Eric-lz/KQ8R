@@ -681,7 +681,9 @@ pub fn part_stats(shape: &Shape, first: usize, count: usize) -> PartStats {
     use std::collections::HashSet;
     let mut s = PartStats { animations: 1, frames: count, ..Default::default() };
     let mut distinct = HashSet::new();
-    let mut slots: Vec<(HashSet<(i16, i16)>, HashSet<i16>)> = Vec::new();
+    // Per part: its (mesh, vertex frame)s and texture frames.
+    type Forms = (HashSet<(i16, i16)>, HashSet<i16>);
+    let mut slots: Vec<Forms> = Vec::new();
     let mut counts = HashSet::new();
     for seq in shape.sequences.iter().skip(first).take(count) {
         let Some(sub) = usize::try_from(seq.mesh_subsequence).ok().and_then(|i| shape.subsequences.get(i)) else {
