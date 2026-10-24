@@ -3392,6 +3392,7 @@ Replaces the 5g-7 stand-in (half see-through).
 | Modes 0 none, 1 dithered, 2 justTrans, 3 stored without a material change; unknown name: "cannot find" | `objects.md` "Dithered objects" rules 1, 2 (traced, Q144) | Viewer `viewer.log` |
 | Mode 1: colour key on (black not drawn), full brightness, the texture rewritten so each row keeps every 4th texel, the next row shifted by 2; mode 2: colour key only; 0: back to its own | Rules 3-5 | Unit test `dithering_keeps_one_texel_in_four_rows_shifted_by_two`; viewer: the keep wall on and off |
 | `dithered=` in the file: chests and animated objects drawn so from the start (they apply it at every movement start) | Rule 8 | Viewer: `wizchest1` 2 parts |
+| Kept through a movement: a part whose material the drawing swaps back at a new frame is dithered again in the same drawn frame (the user's look: the chest lost it while opening) | Rule 8; the per-frame pass is **ours** | Viewer: 16 re-dithers of `wizchest1`'s 2 parts during `open` |
 | The "2 extra texels per row", shared-texture holes; doors, characters, plain objects with the key | **Not done** (rule 6 inferred; Q165) | — |
 
 ## The shield orbits' path (A-11b, Q145) — `crates/kq8-core/src/potions.rs` (`orbit_place`); viewer `potion_view.rs`

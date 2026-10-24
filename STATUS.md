@@ -9,7 +9,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 - **2026-10-24 (B): session A's 2026-10-22 answers built** (plan in
   `docs/DESIGN.md` "building session A's 2026-10-22 answers", steps A-1
-  to A-12, one commit each; **checked in the logs, not by eye**):
+  to A-12, one commit each; checked in the logs, then **by the user
+  (2026-10-24)**: the Shadow scene with fists out, the roof Choice, the
+  ravens, the experience sound, the dither, the popup on Yes and the
+  spinning mask all work; the conversation camera looks the same as the
+  original; the chest lost its dither while opening, fixed the same day):
   `StateChange` messages (the Shadow scene now starts with a weapon out),
   Connor's Choice state (the roof jump), `loadObject`, `setScript`'s
   `Init` (characters and items get `Init`), cue `sendEvent @` and
@@ -571,12 +575,9 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
-- **After A-1 to A-12 (2026-10-24):** nothing of it was looked at by eye.
-  Worth the user's look first: the roof scene on the bow spriggan (the
-  Choice: forward / back; the kill itself waits for `exist`, Q162), the
-  ravens cawing (`--begin`), the experience sound, the spinning mask
-  next to a potion icon (in any cutscene), the wizard's chest and the
-  keep wall dithered (Clarity), the portal popup on Yes. Not done:
+- **After A-1 to A-12 (2026-10-24):** the user's look passed (see
+  above); the chest keeping its dither while it opens is not yet looked
+  at by eye. Not done:
   `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
   on doors and characters (Q165), Q81 c's wrap detail. Suggested next:
   A answers Q162-Q165; B then the roof kill and the loops.

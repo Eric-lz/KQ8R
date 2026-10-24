@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The dithered chest keeps its pattern while it opens; the user's look at A-1 to A-12
+
+**Changed:** Viewer `potion_view.rs` (`dither_step`), `main.rs`: the dither pass runs every drawn frame right after the drawing (was: the fixed-rate update, before the drawing), looking only at parts whose material just changed (all parts when the dithered names change or a new world starts). Provenance.
+**Why:** The user's look (2026-10-24): the Wizard's chest lost its screen-door look while its `open` movement played and got it back once fully open. The chest drawing puts each part's own material back at every new frame, after the dither pass had run, so the dither never reached the screen until the frames stopped changing. `objects.md` "Dithered objects" rule 8: the chest applies its mode at every movement start, so it stays dithered while it opens.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --sound off --frames 900 --at 141087,203800,3.1416 --lift 6000 --command "give Clarity 1,10" --key 7,30 --click wizchest1,60`; `viewer.log`.
+**Result:** Update 60: the click plays `open`; after it, 16 lines "2 parts drawn dithered", one per new frame of the movement (before: the material swap undid each one before it was drawn).
+**Still broken / not tested:** Not looked at by eye. The user's look at the rest of A-1 to A-12 (2026-10-24): the Shadow scene with fists out, the roof Choice (the kill waits for Q162), the ravens, the experience sound, the dither, the popup on Yes and the spinning mask work; the conversation camera (A-12f) showed no visible swing but looks the same as the original, so it is left as it is.
+**Next:** A answers Q162–Q165.
+
 ## 2026-10-24 A-12f: the conversation camera swings round the talking spot's half-way point (Q126 built)
 
 **Changed:** Core `conversation.rs` (`camera_moved_by_player`): when the right button is first held in a conversation, the swing centre is half-way between the partner's feet (taken at the start) and Connor's **talking spot** (`convLocX/Y/Z` of the info object), not where he stands; the usual + 1,400 aim height as before. Test updated. Provenance, QUESTIONS Q126.

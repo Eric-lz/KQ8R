@@ -351,8 +351,13 @@ fn dithered_material(materials: &mut Assets<ObjectMaterial>, images: &mut Assets
 /// material.
 type DitherPart = (Entity, Option<&'static crate::terrain_view::ObjectName>, Option<&'static ChildOf>, &'static mut MeshMaterial3d<ObjectMaterial>);
 
-/// Every update (5g-7): objects `KQObject::dither`ed (or with `dithered=`)
-/// are drawn in their mode; `dither 0` brings their own materials back.
+/// Every drawn frame, after the drawing (5g-7): objects `KQObject::dither`ed
+/// (or with `dithered=`) are drawn in their mode; `dither 0` brings their
+/// own materials back. Rule 8: a chest's or animated object's drawing puts
+/// a part's own material back at every new frame of a movement (the user's
+/// look: the Wizard's chest lost its pattern while it opened), so the
+/// parts whose material just changed are looked at again; all of them when
+/// the dithered names change or a new world starts.
 #[allow(clippy::too_many_arguments)]
 pub fn dither_step(
     sim: Option<Res<DoorSim>>,
@@ -365,11 +370,14 @@ pub fn dither_step(
     (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
 ) {
     // A new world's objects have their own materials (M6 6e-2).
+    let mut all = false;
     if crate::world_build::new_world(&change, &mut seen) {
         *state = Dithered::default();
+        all = true;
     }
     let Some(sim) = sim else { return };
     let wanted = &sim.active.world.dithered;
+    all |= *wanted != state.names;
     // Nothing dithered and nothing to put back: nothing to look at (parts
     // that appear later, a chest shown by Reveal, are caught below).
     if wanted.is_empty() && state.parts.is_empty() {
@@ -378,6 +386,9 @@ pub fn dither_step(
     let (mut on, mut off) = (0, 0);
     let Dithered { parts: done, textures, made, .. } = &mut *state;
     for (e, own_name, parent, mut m) in &mut parts {
+        if !all && !m.is_changed() {
+            continue;
+        }
         // The part's own name, else its body's: the parent (plain objects,
         // the old drawing) or the grandparent (the compact drawing's slots
         // under their root).
