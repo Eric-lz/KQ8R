@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: `getConInventory` (Q166)
+
+**Changed:** `docs/behaviour/inventory.md` new section "Asking what Connor carries in each place", rules 20–26 and check 6; QUESTIONS Q166 answered.
+**Why:** Daventry's bell (`bell.cs`) rings only if `$ConInv::Short == 1020`; our engine lacks the command (the user's report).
+**Tested how:** Traced in `Mask.exe` (Ghidra); placeholder items and IDs read from `Invinfo.itl` and `Connor.kq`.
+**Result:** Nine variables (`Long`, `Short`, `Armor`, `FullArmor`, `UnderArmor`, `Pants`, `Gloves`, `Helmet`, `Boots`), each the ID # of the carried item of exactly that category, or 0. What he carries, not what is drawn: fists = 1280, no ranged = 1310, no armour = 2120. `$Console::Return` always 0; prints the nine values.
+**Still broken / not tested:** Nothing checked in the original game; not built.
+**Next:** B builds `getConInventory`; the bell's three hits.
+
 ## 2026-10-24 Events reach an object a `loadKQ` just brought in (the map's `Map1`)
 
 **Changed:** Core `active.rs`: names a `loadKQ` brought in are marked until the viewer hands the object over; events for them meanwhile are held, and `Active::loaded` (called by the viewer's `apply_loads` after each hand-over) handles them, then what they sent with delay 0. Viewer `door_view.rs`: the call. Unit test. Provenance.

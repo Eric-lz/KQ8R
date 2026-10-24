@@ -229,6 +229,63 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
     (`KQConner::conversation`, not studied; `talking.md` open
     question 1).
 
+## Asking what Connor carries in each place (`getConInventory`)
+
+Study session A, 2026-10-24 (Q166). Used by Daventry's bell
+(`bell.cs`), the windmill (`miltrap1.cs`, `wtrmwalk.cs`), Barren's
+weapon seller (`tw_weird.cs`, `myweapon.cs`) and Gnome's armour
+scripts.
+
+20. `getConInventory` takes no arguments. It sets **nine** script
+    variables, one per place, in this order [traced]:
+
+    | Variable | Category looked for |
+    | --- | --- |
+    | `ConInv::Long` | `LongWeapon` |
+    | `ConInv::Short` | `ShortWeapon` |
+    | `ConInv::Armor` | `Armor` |
+    | `ConInv::FullArmor` | `FullArmor` |
+    | `ConInv::UnderArmor` | `UnderArmor` |
+    | `ConInv::Pants` | `Pants` |
+    | `ConInv::Gloves` | `Gloves` |
+    | `ConInv::Helmet` | `Helmet` |
+    | `ConInv::Boots` | `FootWear` |
+
+    There is no variable for `GodArmor` or any other category.
+21. **The value** is the `ID #` column (`Invinfo.itl`) of the item
+    Connor **carries** whose category is **exactly** that category,
+    written as a whole number (for example `1020` for
+    `INVITEM_SmallAx`). If he carries none, the value is `0`
+    [traced]. The search goes through his one item list in order and
+    takes the first match; since equipment replaces whatever shares its
+    place (rule 8), there is at most one [traced].
+22. **It does not look at what is drawn.** It reads what he carries,
+    whatever the weapon mode, and whether a weapon is out or not
+    [traced]. (The bell checks the mode itself first with
+    `KQConner::getDoMode` [data].)
+23. **Placeholders count as items** [traced + data]: at the start
+    Connor carries `INVITEM_Fists` (1280, `ShortWeapon`),
+    `INVITEM_NoRanged` (1310, `LongWeapon`) and `INVITEM_NoArmor`
+    (2120, `Armor`), so with nothing picked up `Short` = 1280,
+    `Long` = 1310, `Armor` = 2120, and the other six are 0. Once a real
+    item of that place is picked up the placeholder is deleted
+    (rule 8) and the slot gives the new item's number.
+24. **Exact category, not overlap** [traced]: a full suit (2080, 2100
+    or 2130, category `FullArmor`) is reported only in `FullArmor`;
+    `Armor`, `Gloves`, `Boots` then give 0 (wearing it took those off,
+    `NoArmor` included, rule 8). The chain mail suit (2050) is reported
+    only in `UnderArmor`. No item has the `Pants` category, so `Pants`
+    is always 0 [data].
+25. **Console output** [traced]: after setting the variables it prints
+    nine lines, one per variable in the order above, as
+    `ConInv::Long:       1310` (the variable name, a colon, padding to
+    one column, the value). Nothing else changes: no stats, no panels,
+    no sound.
+26. **`$Console::Return` is always 0** [traced], also on failure. If
+    Connor is missing it prints `getConInventory:  can't find Connor`;
+    if he has no inventory, `getConInventory:  can't find Connor's
+    inventory`; in both cases the variables are left as they were.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -289,6 +346,12 @@ item closes the gap in the strip (not checked with 8 or more items).
    stays on the pointer.
 5. **In the original:** with 8 or more quest items, hold one: the strip
    closes the gap.
+6. **`getConInventory` (rules 20–26):** in our build at the Daventry
+   start, `getConInventory` from the console should log `Short` 1280,
+   `Long` 1310, `Armor` 2120, the rest 0. After `give SmallAx`:
+   `Short` 1020. Then the bell (fists put away, small axe out, three
+   hits) rings. In the original, the bell rings only with the small axe
+   [data, `bell.cs`].
 
 ## Open questions
 
