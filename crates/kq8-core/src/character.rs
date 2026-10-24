@@ -66,6 +66,43 @@ pub enum State {
     Die,
 }
 
+/// The state numbers of `StateChange` messages (rule 16), for characters
+/// and Connor.
+pub mod state_number {
+    pub const BIRTH: u32 = 1;
+    pub const WAIT: u32 = 2;
+    pub const MOVE: u32 = 4;
+    pub const DIE: u32 = 8;
+    pub const SWAP_WEAPONS: u32 = 32;
+    pub const JUMP: u32 = 64;
+    pub const PUSH: u32 = 128;
+    pub const SPECIAL: u32 = 256;
+    pub const THROW_ROCK: u32 = 512;
+    pub const TALK: u32 = 1024;
+    pub const TILE: u32 = 2048;
+    pub const ROPE: u32 = 4096;
+    pub const HAMMER_THROW: u32 = 8192;
+    pub const PORTAL: u32 = 32768;
+    pub const CHOICE: u32 = 524_288;
+}
+
+impl State {
+    /// Its number in `StateChange` messages (rule 16); `None` for no state
+    /// (rule 15), which the rule's list doesn't give.
+    pub fn number(self) -> Option<u32> {
+        use state_number::*;
+        match self {
+            State::None => None,
+            State::Birth => Some(BIRTH),
+            State::Wait => Some(WAIT),
+            State::Move => Some(MOVE),
+            State::Special => Some(SPECIAL),
+            State::Talk => Some(TALK),
+            State::Die => Some(DIE),
+        }
+    }
+}
+
 /// The state names `setState` knows that only Connor has (rule 22).
 const CONNOR_ONLY: [&str; 10] = ["SwapWeapons", "ThrowRock", "Jump", "Push", "Tile", "Tile2", "Tile3", "Scales", "Choice", "Portal"];
 

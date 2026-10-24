@@ -1026,6 +1026,9 @@ pub fn trap_step(
     let inside_from = sim.active.world.requests.len();
     sim.active.world.connor_jump = connor.jump_state();
     sim.active.world.connor_can_turn = connor.can_turn_to_listener();
+    // characters.md rule 16 (Q156): his state for StateChange messages.
+    let portal = sim.active.world.connor_portal.is_some();
+    sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
     // potions.md rule 26 (M5 5g-9): a cutscene hides him from characters.
     sim.active.world.connor_hands_off = connor.hands_off;

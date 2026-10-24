@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-1: `StateChange` messages (Q156 built)
+
+**Changed:** Core `character.rs`: the state numbers of rule 16 (`state_number`), `State::number`. `active.rs`: `WorldState::state_changes` (once per update: a watched character whose state number changed sends `StateChange <who> <old> <new>` through the queue), the `StateChange` event runs the recipient's script; new field `connor_state`. Viewer `connor_view.rs` `state_number` (a swap playing = 32, Free = Wait or Move, …), `door_view.rs` sets it each update (Portal = 32,768). Unit test. DESIGN plan "building session A's 2026-10-22 answers" (A-1 to A-12). Provenance, QUESTIONS Q156.
+**Why:** `characters.md` rules 14–17. Scripts wait for these: `sdwtrap1.cs` (the Shadow scene with a weapon out), `sprgnbow.cs` (the roof scene), 20 scripts test `$4 == 32`, 15 `$4 == 256`.
+**Tested how:** `cargo test --workspace` (all pass; new `a_watched_state_change_reaches_the_recipient_with_old_and_new`). `kq8-viewer --world Daventry --frames 9000 --sound off --command "KQConner::setDoMode 0",3 --command "move Connor 0 234300 183200 -1 0 0 1.57",60 --hold 1,0,0,61,100`; `doors.log`.
+**Result:** Update 74: the trap sees the fists out, `setDoMode 4` and registers. 75: `StateChange Connor 4 32` (ignored by the script); 82: `StateChange Connor 32 4`: Cue 1, `portal`; 102: the Shadow's Cue 10; 493: `portalx`. Before this step nothing happened after the swap.
+**Still broken / not tested:** Not looked at by eye. We look once per update, so two changes in one update are one message; changes to or from a character's "no state" are not sent (no number in rule 16). Falling and landing count as Jump, the crash as Wait (our modes the rule doesn't name; no script tests them). The roof scene still needs the Choice state (A-2).
+**Next:** A-2, Connor's Choice state.
+
 ## 2026-10-23 Fix: the Shadow scene at the Dead City portal plays
 
 **Changed:** Core `active.rs`: `KQAnimPlayEvent` to Connor becomes a request to his walker (new `Request::ConnorAnim`); `KQCueEvent` to a character with a script runs its script. `connor.rs`: `Walker::script_request`. Viewer: `connor_view.rs` `script_anim`, `door_view.rs` applies it. New unit test. QUESTIONS Q160, Q161. Provenance.

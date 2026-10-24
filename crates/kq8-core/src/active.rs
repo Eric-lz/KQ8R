@@ -838,6 +838,12 @@ pub struct WorldState {
     /// Connor's lip-sync codes 8–16 of this update (gestures,
     /// `conversation.md` rule 18; M4 4e-7), taken by the caller.
     pub connor_gestures: Vec<u16>,
+    /// Connor's state number now (`characters.md` rule 16), set by the
+    /// caller after his update; `None` = not known (no Connor).
+    pub connor_state: Option<u32>,
+    /// The state number last seen per character (lower case), for the
+    /// `StateChange` messages (rules 14-16).
+    state_seen: BTreeMap<String, u32>,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -2810,7 +2816,7 @@ impl WorldState {
                 format!("{recipient} already hears {issuer}")
             } else {
                 list.push(recipient.clone());
-                format!("{recipient} now hears {issuer}'s TalkComplete (StateChange: monsters, M5)")
+                format!("{recipient} now hears {issuer}'s TalkComplete and StateChange")
             }
         } else {
             let before = list.len();
@@ -2823,6 +2829,43 @@ impl WorldState {
         };
         self.talk_note(format!("{at}: {}: {line}", words[0]));
         "0".into()
+    }
+
+    /// `characters.md` rules 15-16 (Q156): every character whose state
+    /// number changed since the last look sends `StateChange <who> <old>
+    /// <new>` to each recipient registered for it, through the queue with
+    /// no delay. Connor's number comes from the caller. **Stand-in:** we
+    /// look once per update, so two changes in one update are one message
+    /// (old = before both); a change to or from no state is not sent (rule
+    /// 16 gives it no number).
+    pub fn state_changes(&mut self) {
+        let mut now: Vec<(String, Option<u32>)> = Vec::new();
+        if let Some(n) = self.connor_state {
+            now.push((CONNOR.to_string(), Some(n)));
+        }
+        for a in &self.anims {
+            if let Some(c) = a.character.as_deref().filter(|_| !a.gone) {
+                now.push((a.player.name.clone(), c.state.number()));
+            }
+        }
+        let t = self.now();
+        for (who, number) in now {
+            let key = who.to_ascii_lowercase();
+            let Some(new) = number else {
+                self.state_seen.remove(&key);
+                continue;
+            };
+            let Some(old) = self.state_seen.insert(key.clone(), new).filter(|&o| o != new) else { continue };
+            let recipients = self.notify.get(&key).cloned().unwrap_or_default();
+            if recipients.is_empty() {
+                continue;
+            }
+            let data = [who.clone(), old.to_string(), new.to_string()];
+            for r in &recipients {
+                self.queue.send(t, 0.0, r, "StateChange", &data, &format!("{who}'s state change"));
+            }
+            self.note(format!("{who}: state {old} -> {new}: StateChange to {} (characters.md rule 15)", recipients.join(", ")));
+        }
     }
 
     /// Connor's built-in remarks (`talking.md` rule 19): one line through
@@ -3098,6 +3141,8 @@ impl Active {
                 connor_jump: None,
                 talk: Talk::default(),
                 notify: BTreeMap::new(),
+                connor_state: None,
+                state_seen: BTreeMap::new(),
                 connor_can_turn: false,
                 connor_at: None,
                 monsters: Vec::new(),
@@ -4386,6 +4431,8 @@ impl Active {
                 self.world.fight_note(&name, "no script: ConnorAction from the hammer not called (azriel-hammer.md rule 8)");
             }
         }
+        // characters.md rule 15 (Q156): state changes, handled below.
+        self.world.state_changes();
         // Thrown items fly after the characters' movers (M5 5e-1:
         // `World::flights_step`, called with the buildings and objects).
         // Q119: nothing sent with delay 0 waits for the next update.
@@ -4559,6 +4606,18 @@ impl Active {
             let line = format!("TalkComplete {} to {}{from}: {line}", e.data.join(" "), e.target);
             self.world.talk.log.push(format!("t {:8.3}: {line}", self.world.now()));
             self.world.note(line);
+            return;
+        }
+        // characters.md rule 15 (Q156): `$3` who changed, `$4` old, `$5` new.
+        if e.kind == "StateChange" {
+            let line = if self.world.is_gone(&e.target) {
+                "deleted; dropped".to_string()
+            } else {
+                let mut args = vec!["StateChange"];
+                args.extend(e.data.iter().map(String::as_str));
+                if self.call_named(&e.target, &args) { "its script ran".to_string() } else { "no object with a script by that name; dropped".to_string() }
+            };
+            self.world.note(format!("StateChange {} to {}{from}: {line}", e.data.join(" "), e.target));
             return;
         }
         // clicking.md rule 21: reserved cue numbers.
@@ -4996,6 +5055,35 @@ mod tests {
         })]);
         a.start();
         a
+    }
+
+    #[test]
+    fn a_watched_state_change_reaches_the_recipient_with_old_and_new() {
+        // characters.md rules 14-17 (Q156): sdwtrap1.cs waits for $4 == 32.
+        let mut a = with_trap("if test $2 == StateChange
+ set L::seen $3 $4 $5
+ if test $4 == 32
+  set L::swapped 1
+ endif
+endif
+");
+        a.world.connor_state = Some(2);
+        a.update();
+        assert_eq!(a.scripts.vars.get("L::seen"), None, "not registered yet");
+        a.world.state_change_notify(&["KQMonster::stateChangeNotify".into(), "clifTrap".into(), "Connor".into()], "t");
+        a.world.connor_state = Some(32);
+        a.update();
+        assert_eq!(a.scripts.vars.get("L::seen"), Some("Connor 2 32"));
+        assert_eq!(a.scripts.vars.get("L::swapped"), None);
+        a.update();
+        assert_eq!(a.scripts.vars.get("L::seen"), Some("Connor 2 32"), "no change, no message");
+        a.world.connor_state = Some(2);
+        a.update();
+        assert_eq!(a.scripts.vars.get("L::seen"), Some("Connor 32 2"));
+        assert_eq!(a.scripts.vars.get("L::swapped"), Some("1"));
+        let log = a.take_log().join("
+");
+        assert!(log.contains("StateChange Connor 32 2 to clifTrap (sent by Connor's state change): its script ran"), "{log}");
     }
 
     fn connor_at(a: &mut Active, x: f32) -> Vec<String> {

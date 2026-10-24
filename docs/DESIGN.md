@@ -2791,3 +2791,57 @@ waiting) 5.18 -> about 2.8 s after the start; plus cargo's 0.7 s unless
 first shaders (about 0.4-0.7 s), Bevy's own; animations' other reading
 (about 0.75 s, not broken down); weapon sets added while playing packed
 on one core.
+
+### Outside the milestones: building session A's 2026-10-22 answers (planned 2026-10-24)
+
+Session A answered most of B's open questions on 2026-10-22 (MODLOG
+"Study (A)" entries). Each answer below changes or adds something we
+built from a stand-in. One step per answer, one commit each, gameplay
+blockers first. Each step: the note's rule, a unit test where the rule
+is in `kq8-core`, a viewer run checked in the logs.
+
+1. **A-1: `StateChange` messages** (Q156, `characters.md` rules 14–17):
+   every state change of a watched character (Connor included) sends
+   `StateChange <who> <old> <new>` through the queue, with the state
+   numbers of rule 16. Unblocks the Shadow scene with a weapon out and
+   the roof scene's swap.
+   **Done** 2026-10-24 (looked for once per update; the Shadow scene
+   with the fists out checked in the logs).
+2. **A-2: Connor's Choice state** (Q155, `characters.md` "Connor's
+   Choice state" rules 1–13): `setState Connor Choice <list>`,
+   `StartChoice`, forward/back picks the nearest point, `DoChoice`
+   once (Do not reproduce).
+3. **A-3: `loadObject`** (Q157, `anim-scripts.md` rule 34): a still
+   plain object (the spriggan's corpse), not solid, not clickable.
+4. **A-4: `setScript` calls `Init`** (Q154, `anim-scripts.md` rule 33),
+   also while playing.
+5. **A-5: cues with `sendEvent @`, `random`** (Q158, `anim-scripts.md`
+   rules 35–37): the ravens caw.
+6. **A-6: the experience sound** (Q159, `interface.md` rule 26a) and
+   **`setLevel` / the level-up flame on a changed level number**
+   (Q149, `interface.md` rules 26, 30, 30a).
+7. **A-7: the rest of Q153** (`objects.md` "Loops"): Connor's frames
+   cut down; a repeating wrap sets the phase to exactly 0; repeating
+   speed (N − 1)/(N × duration).
+8. **A-8: the hammer's turn-back** (Q148, `azriel-hammer.md` rules 3,
+   7, 9, 9a): put back to the start of the update, range back = the
+   full way out.
+9. **A-9: Connor hidden only in the talk state** (Q146, `potions.md`
+   rule 26).
+10. **A-10: interface answers**: the portal popup opens with Yes
+    highlighted (Q151), black only in the loading meter's slot (Q152),
+    map icons after the colour match and no mini-map blink (Q150),
+    status icons clipped and the mask shrunk to its place (Q143). One
+    commit each.
+11. **A-11: looks**: `dither 1` as a screen-door texture (Q144), the
+    orbit's path (Q145), the teleport pad solid (Q14 b), the world
+    palette for every texture index (Q42). One commit each.
+12. **A-12: Connor and fights**: the bolt's start from the frame after
+    the step (Q140 c), `loop=` start phases for Connor (Q138 e), a swap
+    while moving cuts a swing (Q138), the jump from the held keys
+    (Q112), turn keys during a conversation's approach (Q125), the
+    conversation camera round the talking spot (Q126). One commit each.
+    (Q136 needs nothing: B's fixed 2 s is right for Daventry.)
+
+Questions found on the way go to `docs/behaviour/QUESTIONS.md`, not
+guessed.

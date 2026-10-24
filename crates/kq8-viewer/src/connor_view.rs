@@ -1130,6 +1130,29 @@ impl ConnorSim {
         }
     }
 
+    /// His state's number for `StateChange` messages (`characters.md`
+    /// rules 15-16, Q156). A weapon swap is its own state (32) while it
+    /// plays; our Free mode is Wait or Move. **Stand-ins** (our modes the
+    /// rule doesn't name): falling and landing count as Jump, the crash
+    /// as Wait or Move. The Portal state is the caller's.
+    pub fn state_number(&self) -> u32 {
+        use kq8_core::character::state_number::*;
+        if self.readying {
+            return SWAP_WEAPONS;
+        }
+        match self.walker.mode {
+            Mode::Free if self.walker.moving() => MOVE,
+            Mode::Free | Mode::Crash => WAIT,
+            Mode::Fall | Mode::Land | Mode::Jump => JUMP,
+            Mode::Dying | Mode::Dead => DIE,
+            Mode::Special => SPECIAL,
+            Mode::Push => PUSH,
+            Mode::Talk => TALK,
+            Mode::Rope => ROPE,
+            Mode::Throw => HAMMER_THROW,
+        }
+    }
+
     /// The jump he is in (`jump`, `runJump`, `backJump`) for the scripts'
     /// `KQConner::JumpDir` / `endJump` (M3 3m-1), `None` outside the Jump
     /// state.

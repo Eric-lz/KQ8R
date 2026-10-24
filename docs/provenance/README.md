@@ -3265,3 +3265,12 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | A name not in his list: nothing | **Stand-in** (rule 5 gives movement 0 for objects; not checked for his list) | — |
 | Outside his keys' states (Special, jumps, …): not done | **Stand-in** (not described) | Unit test |
 | `KQCueEvent` to a character (or animated object) with a script: its script gets `Cue …` | `anim-scripts.md` rule 37 (the ravens' `Cue 10`), as for objects (`clicking.md` rule 21) | Viewer `doors.log`: the Shadow gets Cue 10, 30, 32, 300 × 13, 20, 21, 25 |
+
+## `StateChange` messages (A-1, Q156) — `crates/kq8-core/src/{character,active}.rs`; viewer `connor_view.rs` (`state_number`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every state change of a watched character (Connor too) sends `StateChange <who> <old> <new>` to each registered recipient's script, through the queue with no delay | `characters.md` rules 14-15 (traced, Q156) | Unit test `a_watched_state_change_reaches_the_recipient_with_old_and_new`; viewer `doors.log`: `StateChange Connor 32 4 to sdwtrap1` |
+| State numbers: Birth 1, Wait 2, Move 4, Die 8, SwapWeapons 32, Jump 64, Push 128, Special 256, ThrowRock 512, Talk 1,024, Tile 2,048, rope 4,096, hammer throw 8,192, Portal 32,768, Choice 524,288 | `characters.md` rule 16 | As above |
+| Connor: a weapon swap playing is SwapWeapons; Free mode is Move when the keys chose a movement, else Wait | Rule 16; `connor-movement.md` (Wait / Move by the keys' pick) | As above |
+| Falling and landing count as Jump, the crash as Wait; a character's "no state" sends nothing; changes are looked for once per update (two in one update are one message) | **Stand-in** (our modes the rule doesn't name; no script tests them) | — |
