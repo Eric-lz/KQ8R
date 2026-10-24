@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: `dithered=` on every class (Q165)
+
+**Changed:** `docs/behaviour/objects.md` "Dithered objects" rules 8–9; QUESTIONS Q165 answered.
+**Why:** The rule covered only chests and animated objects; doors, characters and plain objects in the data also have the key, and rule 9's values were wrong.
+**Tested how:** Traced in `Mask.exe` (Ghidra); values read from every `.kq` with the key.
+**Result:** Every object applies its mode when added to the world, and objects that play movements apply it again at each movement start. Only `wizchest` and `snowmane` are mode 1; the rest are 2 (colour key only).
+**Still broken / not tested:** The door's own movement start was not followed (inferred to be the shared one). Not built; not checked in the original.
+**Next:** B applies the mode to every class.
+
 ## 2026-10-24 Study A: the state number of "no state" (Q163)
 
 **Changed:** `docs/behaviour/characters.md` new rule 16a; QUESTIONS Q163 answered.

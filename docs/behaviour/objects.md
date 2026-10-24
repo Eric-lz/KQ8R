@@ -306,16 +306,30 @@ All traced in `Mask.exe` unless marked otherwise.
    0` reloads it [inferred].
 7. **Clicks and collisions don't change**: only the drawing does.
 8. **`dithered=<mode>` in an object file** is read into the same stored
-   value. Animated objects (`KQChest`, `KQAnimObject`) apply it every
-   time a movement starts (before each new movement the old model is
-   un-dithered, unless the mode is 3), so `wizchest1` is drawn
-   screen-doored once shown. Whether a plain object applies it at load
-   was not traced.
-9. Data: `dithered=1` on Daventry `arroswt1`-`3`, `wizchest`; Dead City
-   `altar_a1`; Gnome `hector`, `irnlck`, `irnlckx`, `lucreto`; Ice World
-   `chainpc`. Script uses: Daventry `keepwall` (a plain object; Clarity,
-   `potions.md` rule 31) and Dead City `fakedr1a`-`d`, always `1` then
-   `0`.
+   value, for **every class** (corrected 2026-10-24, Q165, traced):
+   - **Every object applies it when it is added to the world** (at load
+     or by `loadKQ`), if it is not 0: plain objects (`KQObject`), doors,
+     chests, animated objects, `KQAnimOnce`, characters (`KQMonster`).
+   - **Objects that play movements apply it again every time a movement
+     starts** (before each new movement the old model is un-dithered,
+     unless the mode is 3, then the new model gets the mode). This is the
+     shared movement start of all animated objects, so it covers chests,
+     `KQAnimObject`, `KQAnimOnce` and characters [traced]; doors use the
+     same movement start [inferred: a door is an animated object; its
+     own player was not followed].
+   - So `wizchest1` is drawn screen-doored once shown, and Ice World's
+     `snowmane` (a character, mode 1) is screen-doored in every
+     movement.
+9. Data (corrected 2026-10-24): **mode 1** only on Daventry `wizchest`
+   (`KQChest`) and Ice World `snowmane` (`KQMonster`). **Mode 2**
+   (colour key only, rule 4) on Daventry `arroswt1`-`3` (doors), Dead
+   City `altar_a1` (animated object), Gnome `hector`, `lucreto` (characters), `irnlck`
+   (plain object), `irnlckx` (`KQAnimOnce`), Ice World `chainpc`,
+   `cryslock` (doors), Swamp `pulchain` (door), and the temples' animated
+   `chandle1`. (The earlier list said 1 for all of them; only the two
+   above are 1.) Script uses: Daventry `keepwall` (a plain object;
+   Clarity, `potions.md` rule 31) and Dead City `fakedr1a`-`d`, always
+   `1` then `0`.
 10. B's stand-in (opacity 0.5 for every part) is the wrong look: use the
     texel pattern with the colour key.
 ## Where a world's objects come from (Q16)
