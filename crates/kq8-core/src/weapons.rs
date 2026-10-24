@@ -318,7 +318,10 @@ impl WorldState {
     /// shares a bit with `mask`: characters (their `BOUNDS.KQ` boxes),
     /// objects (`objects`: every object's box; switched-off ones left out)
     /// and buildings (`buildings`, in the world's order: their type is
-    /// `self.buildings`').
+    /// `self.buildings`'). Also the click boxes the plain click tests
+    /// (`box_hits`: doors, chests, animated objects, clickables, items),
+    /// so an object a script brought in (the bell, type 0x8021: its click
+    /// box on, no solid box yet) is met too.
     pub fn mask_pick(&self, origin: [f32; 3], dir: [f32; 3], mask: u32, objects: &[crate::collide::BoxCollider], buildings: &[crate::collide::BuildingCollider]) -> Option<MaskHit> {
         let mut best: Option<(f32, MaskHit)> = None;
         let mut keep = |t: f32, h: MaskHit| {
@@ -345,6 +348,11 @@ impl WorldState {
                 keep(t, MaskHit { name: o.name.clone(), character: None, building: false, collision_type: o.kind.collision_type, point: at(t) });
             }
         }
+        for (name, t, collision_type) in self.box_hits(origin, dir, mask) {
+            if self.character_index(&name).is_none() {
+                keep(t, MaskHit { name, character: None, building: false, collision_type, point: at(t) });
+            }
+        }
         let far = at(crate::active::CLICK_LINE_LENGTH);
         for (b, info) in buildings.iter().zip(&self.buildings) {
             if info.collision_type & mask == 0 || self.is_switched_off(&info.name) {
@@ -356,6 +364,51 @@ impl WorldState {
             }
         }
         best.map(|(_, h)| h)
+    }
+
+    /// The click boxes the ray `origin + t × dir` meets among those whose
+    /// collision type shares a bit with `mask` (`clicking.md` rule 2 with
+    /// 0x20; `ranged-weapons.md` rule 32 with 0x60): doors where they stand
+    /// now, shown chests, shown animated objects, the other clickable
+    /// objects and shown world items (type 0x21); switched-off ones left
+    /// out. Name, distance along the ray, collision type.
+    pub fn box_hits(&self, origin: [f32; 3], dir: [f32; 3], mask: u32) -> Vec<(String, f32, u32)> {
+        use crate::click::ray_box;
+        let off = |n: &str| self.is_switched_off(n);
+        let mut hits = Vec::new();
+        for d in self.doors.iter().filter(|d| d.collision_type & mask != 0 && !d.gone && !off(&d.door.name)) {
+            if let Some(t) = d.bounds.and_then(|(min, max)| ray_box(origin, dir, &d.door.placement(), min, max)) {
+                hits.push((d.door.name.clone(), t, d.collision_type));
+            }
+        }
+        // Chests (chests.md rule 4): as doors; hidden ones can't be clicked.
+        for c in self.chests.iter().filter(|c| c.collision_type & mask != 0 && !c.hidden && !c.gone && !off(&c.chest.name)) {
+            if let Some(t) = c.bounds.and_then(|(min, max)| ray_box(origin, dir, &c.chest.placement(), min, max)) {
+                hits.push((c.chest.name.clone(), t, c.collision_type));
+            }
+        }
+        for o in self.objects.iter().filter(|o| o.collision_type & mask != 0 && !o.hidden && !o.gone && !off(o.name())) {
+            if let Some(t) = o.bounds.and_then(|(min, max)| ray_box(origin, dir, &o.player.placement(), min, max)) {
+                hits.push((o.name().to_string(), t, o.collision_type));
+            }
+        }
+        for c in self.clickables.iter().filter(|c| c.collision_type & mask != 0 && !c.gone && !off(&c.name)) {
+            if let Some(t) = ray_box(origin, dir, &c.placement, c.min, c.max) {
+                hits.push((c.name.clone(), t, c.collision_type));
+            }
+        }
+        // World items (items.md rule 6): by their type's box, as clickable
+        // things (0x21); hidden ones can't be clicked.
+        const ITEM_TYPE: u32 = 0x21;
+        if ITEM_TYPE & mask != 0 {
+            let items = &self.items;
+            for o in items.objects.iter().filter(|o| !o.hidden && !off(&o.name)) {
+                if let Some(t) = items.click_box(o).and_then(|(min, max)| ray_box(origin, dir, &o.placement()?, min, max)) {
+                    hits.push((o.name.clone(), t, ITEM_TYPE));
+                }
+            }
+        }
+        hits
     }
 
     /// Rules 22–24 (M5 5f-5): Connor's bolt leaves at his `do` cue. `feet`,

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The swing reaches the bell; the bell's `getConInventory` asked (Q166)
+
+**Changed:** Core `weapons.rs`: new `box_hits` (the click boxes of doors, chests, animated objects, clickables and items whose type shares a bit with a mask); `mask_pick` (the swing, shot and talk picks) now also tests them; `active.rs` `pick` (the plain click) uses the same function with the clickable bit, so the two lists stay the same. Unit test. QUESTIONS new **Q166**. Provenance.
+**Why:** The user's report: with a weapon out, a click on the bell Connor placed outside the Wizard's house gave "the swing pick meets nothing", so he swung into the air. The swing pick only had characters, the solid boxes and buildings; the bell (type 0x8021, brought in by `belstnd.cs`'s `loadKQ`) has a click box but no solid box yet. `ranged-weapons.md` rule 32 puts clickables (0x21) in the swing pick.
+**Tested how:** `cargo test --workspace` (all pass; new `the_swing_pick_meets_a_click_box_with_no_solid_box`). `kq8-viewer --world Daventry --sound off --frames 900 --command "KQConner::setDoMode 0",3 --command "loadKQ bell.kq",5 --command "move Connor 0 147461 210166 -1 0 0 0",6 --aim bell,60`; `viewer.log`, `doors.log`.
+**Result:** Update 60: "the swing pick meets object bell (type 0x8021)", bell picked 1,964 away, his target; update 70: the fist hits it, `bell.cs bell Die Normal` runs.
+**Still broken / not tested:** **The bell still doesn't ring.** `bell.cs` rings (and counts the three hits that start the Lake Sword scene) only if `getConInventory` sets `$ConInv::Short` to 1020 (`INVITEM_SmallAx`); we don't have that command ("ERROR unknown command"), and no note describes it: **Q166** for A. Found on the way, not changed: the bell's `Init` (queued by `loadKQ`) runs only at its script's next command (here inside the `Die` call, harmless); the hit log says "no stats= line" although `BELL.KQ` has `stats=1 0 0 0 0` (it falls below 0 either way). Not looked at by eye.
+**Next:** A answers Q166; B builds `getConInventory`, then the three hits and the scene.
+
 ## 2026-10-24 The dithered chest keeps its pattern while it opens; the user's look at A-1 to A-12
 
 **Changed:** Viewer `potion_view.rs` (`dither_step`), `main.rs`: the dither pass runs every drawn frame right after the drawing (was: the fixed-rate update, before the drawing), looking only at parts whose material just changed (all parts when the dithered names change or a new world starts). Provenance.

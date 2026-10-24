@@ -579,8 +579,10 @@ M6 has started with the Rope and Hook (6a).
   above); the chest keeping its dither while it opens is not yet looked
   at by eye. Not done:
   `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
-  on doors and characters (Q165), Q81 c's wrap detail. Suggested next:
-  A answers Q162-Q165; B then the roof kill and the loops.
+  on doors and characters (Q165), Q81 c's wrap detail, `getConInventory`
+  (Q166: the bell outside the Wizard's house can now be hit but doesn't
+  ring until it is built). Suggested next:
+  A answers Q162-Q166; B then the roof kill, the bell and the loops.
 
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice

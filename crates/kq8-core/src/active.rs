@@ -3828,35 +3828,7 @@ impl Active {
     /// 10): doors where they stand now, and the other clickable objects.
     /// Only those boxes are tested (stand-in, Q45 b).
     pub fn pick(&self, origin: [f32; 3], dir: [f32; 3]) -> Option<(String, f32)> {
-        let off = |n: &str| self.world.is_switched_off(n);
-        let doors = self.world.doors.iter().filter(|d| d.collision_type & CLICKABLE != 0 && !d.gone && !off(&d.door.name)).filter_map(|d| {
-            let (min, max) = d.bounds?;
-            Some((d.door.name.clone(), ray_box(origin, dir, &d.door.placement(), min, max)?))
-        });
-        let others = self
-            .world
-            .clickables
-            .iter()
-            .filter(|c| c.collision_type & CLICKABLE != 0 && !c.gone && !off(&c.name))
-            .filter_map(|c| Some((c.name.clone(), ray_box(origin, dir, &c.placement, c.min, c.max)?)));
-        // Chests (chests.md rule 4): as doors; hidden ones can't be clicked.
-        let chests = self.world.chests.iter().filter(|c| c.collision_type & CLICKABLE != 0 && !c.hidden && !c.gone && !off(&c.chest.name)).filter_map(|c| {
-            let (min, max) = c.bounds?;
-            Some((c.chest.name.clone(), ray_box(origin, dir, &c.chest.placement(), min, max)?))
-        });
-        let objects = self.world.objects.iter().filter(|o| o.collision_type & CLICKABLE != 0 && !o.hidden && !o.gone && !off(o.name())).filter_map(|o| {
-            let (min, max) = o.bounds?;
-            Some((o.name().to_string(), ray_box(origin, dir, &o.player.placement(), min, max)?))
-        });
-        let doors = doors.chain(chests).chain(objects);
-        // World items (items.md rule 6): by their type's box; hidden ones
-        // can't be clicked.
-        let items = &self.world.items;
-        let items = items.objects.iter().filter(|o| !o.hidden && !off(&o.name)).filter_map(|o| {
-            let (min, max) = items.click_box(o)?;
-            Some((o.name.clone(), ray_box(origin, dir, &o.placement()?, min, max)?))
-        });
-        doors.chain(others).chain(items).min_by(|a, b| a.1.total_cmp(&b.1))
+        self.world.box_hits(origin, dir, CLICKABLE).into_iter().map(|(name, t, _)| (name, t)).min_by(|a, b| a.1.total_cmp(&b.1))
     }
 
     /// An attack click's target (M5 5c fix 4, **stand-in**, Q139): the
@@ -5969,6 +5941,22 @@ endif
         a.update();
         let c = a.world.clickables.iter().find(|c| c.name == "wiz").unwrap();
         assert_eq!(c.placement.position, [5000.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn the_swing_pick_meets_a_click_box_with_no_solid_box() {
+        // ranged-weapons.md rule 32: clickables (0x21) are in the swing
+        // pick; the bell a script brings in has a click box but no solid
+        // box (the user's report: the swing met nothing). Away from the test's
+        // own object at the origin.
+        let mut a = with_object("x\n", "x");
+        let at = Placement { rotation: crate::door::identity().m, position: [20000.0, 1000.0, 0.0] };
+        a.world.clickables.push(Clickable::plain("bell", "KQAnimObject", [-100.0; 3], [100.0; 3], at, 0x8021));
+        let hit = a.world.mask_pick([20000.0, 0.0, 0.0], [0.0, 1.0, 0.0], crate::weapons::SWING_PICK, &[], &[]);
+        assert_eq!(hit.as_ref().map(|h| (h.name.as_str(), h.collision_type)), Some(("bell", 0x8021)));
+        assert_eq!(hit.map(|h| h.point[1].round()), Some(900.0));
+        assert_eq!(a.world.mask_pick([20000.0, 0.0, 0.0], [0.0, 1.0, 0.0], crate::weapons::AIM_PICK, &[], &[]), None, "no 0x40 or 0x08");
+        assert_eq!(a.pick([20000.0, 0.0, 0.0], [0.0, 1.0, 0.0]).map(|(n, t)| (n, t.round())), Some(("bell".to_string(), 900.0)));
     }
 
     struct FlatGround;

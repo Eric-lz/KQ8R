@@ -2977,6 +2977,7 @@ Replaces 5c fixes 3–5's stand-ins (Q139): the fighters' boxes on the line, "a 
 | The target stays until another pick within reach replaces it; the hit test at `Do` is `fighting.md` rule 41's with it | Rule 32 | Viewer: the second swing hits goblin22 |
 | Objects get the hit only through the barrel stand-in (objects with a script) | Q139 e (not traced) | Viewer: barrel.12 bursts |
 | An item on the pointer wins over the swing click | Rule 13 (5f-5) | — |
+| Fix 2026-10-24: the swing pick (and the shot / aim picks) also test the click boxes the plain click tests (doors, chests, animated objects, clickables, items as 0x21; `box_hits`, now shared with `pick`), so an object with a click box but no solid box (Daventry's `bell`, 0x8021, brought in by `loadKQ`) is met | Rule 32 (clickables 0x21 are in the swing pick); `clicking.md` rule 2 | Unit test `the_swing_pick_meets_a_click_box_with_no_solid_box`; viewer: "the swing pick meets object bell (type 0x8021)", the fist hits it, `bell.cs` gets `Die` |
 
 ### After 5f: the axe cutscene — viewer `load.rs` (`dormant_traps`), `door_view.rs`, `connor_view.rs` (`ready_set`); `crates/kq8-core/src/active.rs` (`load_kq`, `start`)
 
