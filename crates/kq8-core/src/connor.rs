@@ -173,6 +173,10 @@ pub struct MovementLoop {
     pub frame_steps: Vec<[f32; 3]>,
     /// `loop=` 6th field: a new movement may replace it at once.
     pub cut_short: bool,
+    /// The loop starts at the first frame of its `.kqs` file: a forward
+    /// wrap into frame 0 adds the last frame's step (`objects.md` "Loops"
+    /// rule 6a).
+    pub first_in_file: bool,
     /// Its `transitionN` lines, in file order.
     pub transitions: Vec<Transition>,
     /// Its `cueN=<phase> <action>` lines, in file order (M3 3h-4).
@@ -247,9 +251,53 @@ impl MovementLoop {
     }
 
     /// Units per second along the loop's step (negative when played back).
+    /// A repeating loop with its frames: (sum + the last step, forwards
+    /// only) × (N − 1)/(N × length) (`objects.md` "Loops" rule 6a,
+    /// `connor-movement.md` "Forward speed" rules 3–4).
     pub fn ground_speed(&self) -> f32 {
-        let [x, y, _] = self.step_sum;
-        if self.duration > 0.0 { (x * x + y * y).sqrt() / self.duration * self.speed } else { 0.0 }
+        let flat = |v: [f32; 3]| (v[0] * v[0] + v[1] * v[1]).sqrt();
+        if self.frame_rule() {
+            let n = self.frames;
+            let forward = self.speed >= 0.0;
+            let mut d = self.step_sum;
+            if forward && self.first_in_file {
+                let last = self.frame_steps[n - 1];
+                d = std::array::from_fn(|i| d[i] + last[i]);
+            }
+            return flat(d) * crate::door::repeat_rate(n, self.duration) * self.speed;
+        }
+        if self.duration > 0.0 { flat(self.step_sum) / self.duration * self.speed } else { 0.0 }
+    }
+
+    /// A repeating loop played by the frame player (`objects.md` "Loops"
+    /// rules 6 and 6a, Q164): it has its frames' own steps. Loops built
+    /// without them (tests) keep the old even spread over 1/length.
+    pub fn frame_rule(&self) -> bool {
+        self.repeat && self.frames >= 2 && self.frame_steps.len() == self.frames && self.duration > 0.0
+    }
+
+    /// Phase per second at speed 1: (N − 1)/(N × length) for a repeating
+    /// loop with frames (rule 6), else 1/length.
+    pub fn phase_rate(&self) -> f32 {
+        if self.frame_rule() {
+            crate::door::repeat_rate(self.frames, self.duration)
+        } else if self.duration > 0.0 {
+            1.0 / self.duration
+        } else {
+            0.0
+        }
+    }
+
+    /// A repeating loop moved by `delta` in phase: the new phase and his
+    /// own step (model space). With frames: the frames entered, the forward
+    /// wrap to exactly 0 and the last step at frame 0 (rule 6a); without:
+    /// the step spread evenly and the phase wrapped round (Q24).
+    pub fn repeat_advance(&self, phase: f32, delta: f32) -> (f32, [f32; 3]) {
+        if self.frame_rule() {
+            crate::door::repeat_advance(phase, delta, self.frames, self.first_in_file, |k| self.frame_steps[k])
+        } else {
+            ((phase + delta).rem_euclid(1.0), self.step_sum.map(|v| v * delta))
+        }
     }
 
     /// Seconds one play takes: the stored loop length, repeating or not.
@@ -1281,8 +1329,9 @@ impl Walker {
         if time <= 0.0 {
             return finish(step, self, notes);
         }
-        // Share of one play this update (negative when played backwards).
-        let share = dt * l.speed / time;
+        // Share of one play this update (negative when played backwards);
+        // a repeating loop with frames at (N − 1)/(N × length) (Q164).
+        let share = dt * l.speed * l.phase_rate();
         // Rule 3: a chosen transition starts where the movement reaches
         // its from point; this update plays only up to there.
         let reach = self.waiting.filter(|_| l.speed > 0.0).map(|t| {
@@ -1294,8 +1343,15 @@ impl Walker {
             }
         });
         let own = if let Some(d) = reach.filter(|d| *d <= share) {
-            let own = if l.repeat { l.step_sum.map(|v| v * d) } else { l.one_shot_step(self.phase, self.phase + d) };
-            self.phase = if l.repeat { (self.phase + d).rem_euclid(1.0) } else { self.phase + d };
+            let own = if l.repeat {
+                let (to, own) = l.repeat_advance(self.phase, d);
+                self.phase = to;
+                own
+            } else {
+                let own = l.one_shot_step(self.phase, self.phase + d);
+                self.phase += d;
+                own
+            };
             step.played_to = self.phase;
             let t = self.waiting.take().expect("reach comes from waiting");
             notes.push(format!("{played} reached phase {:.4}: {} starts", self.phase, t.via));
@@ -1304,10 +1360,12 @@ impl Walker {
             self.phase = 0.0;
             own
         } else if l.repeat {
-            // Loops: the step spread evenly over the loop (Q24).
-            self.phase = (self.phase + share).rem_euclid(1.0);
+            // Loops: the frames entered (objects.md "Loops" rules 6 and
+            // 6a, Q164).
+            let (to, own) = l.repeat_advance(self.phase, share);
+            self.phase = to;
             step.played_to = self.phase;
-            l.step_sum.map(|v| v * share)
+            own
         } else {
             // One-shots run forward, frame by frame, and stop on the last
             // frame.
@@ -1790,6 +1848,54 @@ mod tests {
         assert!((walk(1.0).ground_speed() - 1126.6).abs() < 1.0);
     }
 
+    /// A repeating loop of `frames` frames with its own steps (−Y): frame 0
+    /// none, the last `last`, the rest equal, adding up to `sum`.
+    fn framed(frames: usize, duration: f32, sum: f32, last: f32, speed: f32) -> MovementLoop {
+        let mid = (sum - last) / (frames - 2) as f32;
+        let mut frame_steps = vec![[0.0, -mid, 0.0]; frames];
+        frame_steps[0] = [0.0; 3];
+        frame_steps[frames - 1] = [0.0, -last, 0.0];
+        MovementLoop { duration, step_sum: [0.0, -sum, 0.0], speed, repeat: true, frames, frame_steps, first_in_file: true, cut_short: true, ..Default::default() }
+    }
+
+    #[test]
+    fn a_framed_loop_moves_by_rule_6a() {
+        // objects.md "Loops" rules 6 and 6a (Q164); connor-movement.md
+        // "Forward speed" rule 4's table: walk 1,124, run 2,558, back 1,070.
+        let cases = [
+            ("walk", framed(20, 19.0 / 15.0, 1427.1, 71.6, 1.0), -1124.0f32),
+            ("run", framed(15, 14.0 / 15.0, 2350.2, 208.2, 1.0), -2558.4),
+            ("back", framed(20, 19.0 / 15.0, 1427.1, 71.6, -1.0), 1070.3),
+        ];
+        for (name, l, per_second) in cases {
+            assert!((l.ground_speed().abs() - per_second.abs()).abs() < 1.0, "{name}: {}", l.ground_speed());
+            let mut w = Walker::new(0.0);
+            let list = [(name, l.clone())];
+            let loops = lookup(&list);
+            let keys = if name == "back" { -1 } else { 1 };
+            let fwd = if name == "run" { intent(1, 0, true) } else { intent(keys, 0, false) };
+            // One update to start; then whole cycles of N updates (one
+            // frame per update): N cycles' worth of seconds.
+            w.update(fwd, &loops);
+            let cycle = l.frames;
+            let mut y = 0.0;
+            for _ in 0..cycle * 3 {
+                y += w.update(fwd, &loops).wanted[1];
+            }
+            let seconds = (cycle * 3) as f32 / 15.0;
+            assert!((y / seconds - per_second).abs() < 1.0, "{name}: {} per second", y / seconds);
+        }
+        // The forward wrap lands on exactly 0 and adds the last step.
+        let l = framed(20, 19.0 / 15.0, 1427.1, 71.6, 1.0);
+        let (to, own) = l.repeat_advance(0.97, 0.06);
+        assert_eq!(to, 0.0);
+        assert!((own[1] + 71.6).abs() < 0.01, "{own:?}");
+        // Backwards below 0: the last frame, phase 19/20; frame 0 and the
+        // last frame's steps taken off.
+        let (to, own) = l.repeat_advance(0.02, -0.04);
+        assert!((to - 0.95).abs() < 1e-6 && (own[1] - 71.6).abs() < 0.01, "{to} {own:?}");
+    }
+
     #[test]
     fn back_moves_the_other_way() {
         let mut w = Walker::new(0.0);
@@ -1852,6 +1958,7 @@ mod tests {
             frames: steps.len() + 1,
             frame_steps,
             cut_short: false,
+            first_in_file: true,
             transitions: Vec::new(),
             cues: Vec::new(),
         }

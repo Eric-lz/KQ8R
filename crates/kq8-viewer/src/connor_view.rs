@@ -400,7 +400,7 @@ pub(crate) fn key_code(name: &str) -> Option<KeyCode> {
 
 /// An animation's loop data (the movements add speed, flags, transitions).
 fn animation_loop(a: &crate::load::Animation) -> MovementLoop {
-    MovementLoop { duration: a.duration, step_sum: a.step_sum, frames: a.frame_count, frame_steps: a.frame_steps.clone(), ..Default::default() }
+    MovementLoop { duration: a.duration, step_sum: a.step_sum, frames: a.frame_count, frame_steps: a.frame_steps.clone(), first_in_file: a.first_in_file, ..Default::default() }
 }
 
 /// A movement drawn with its animation's loop, frames and parts.

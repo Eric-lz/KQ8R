@@ -552,6 +552,8 @@ pub fn spawn_doors(
                 cut_short: l.unknown != 0,
                 play_time: timing[*a].0,
                 frame_steps: timing[*a].1.clone(),
+                // Doors never use the frame rule's wrap step (characters only).
+                first_in_file: true,
                 frame_parts: Vec::new(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
                 transitions: l.transitions.clone(),

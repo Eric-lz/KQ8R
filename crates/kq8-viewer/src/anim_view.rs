@@ -265,6 +265,8 @@ pub fn spawn_animated(
         duration: f32,
         steps: Vec<GameTransform>,
         moves: bool,
+        /// The loop starts at the file's first frame (Q164).
+        first_in_file: bool,
         /// Each frame's lights (M1 7c, rule 26b).
         lights: std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>,
         /// Each material's texture file name (for a character's face).
@@ -292,7 +294,7 @@ pub fn spawn_animated(
             let source = a.source.clone();
             let moves = a.frame_transforms.iter().skip(1).any(|t| !is_still(t));
             let ball = crate::shadow_view::ModelBall::of(a.ball);
-            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, lights: std::sync::Arc::new(a.frame_lights), textures, ball, parts: a.frame_parts, source }
+            Built { frames, materials, duration: a.duration, steps: a.frame_transforms, moves, first_in_file: a.first_in_file, lights: std::sync::Arc::new(a.frame_lights), textures, ball, parts: a.frame_parts, source }
         })
         .collect();
     let mut rng = Rng::new(SEED);
@@ -323,6 +325,7 @@ pub fn spawn_animated(
                 cut_short: l.unknown != 0,
                 play_time: built[*i].duration,
                 frame_steps: built[*i].steps.clone(),
+                first_in_file: built[*i].first_in_file,
                 frame_parts: built[*i].parts.clone(),
                 cues: l.cues.iter().map(|(phase, action)| Cue { phase: *phase, action: action.clone() }).collect(),
                 // characters.md rule 20 (M4 4d-11).
@@ -357,6 +360,18 @@ pub fn spawn_animated(
         }
         // character-movement.md rule 1 (M5 5a-2).
         player.loops_move_base = a.character.is_some();
+        // Q164: its walk and run speeds by `objects.md` "Loops" rule 6a.
+        if player.loops_move_base {
+            let speeds: Vec<String> = player
+                .movements
+                .iter()
+                .filter(|m| m.repeat && (m.name.eq_ignore_ascii_case("walk") || m.name.eq_ignore_ascii_case("run")))
+                .map(|m| format!("{} {:.0} units/s ({} frames, {:.4} s, from the file's first frame: {})", m.name, m.loop_ground_speed(m.speed), m.frames(), m.play_time, m.first_in_file))
+                .collect();
+            if !speeds.is_empty() {
+                log.detail(format!("[{}] character speeds (objects.md \"Loops\" rule 6a): {}", p.name, speeds.join("; ")));
+            }
+        }
         let mut body = commands.spawn((bevy_transform_from(rotation, p.position), Visibility::default(), crate::terrain_view::ObjectName(p.name.clone())));
         // A character not born yet (characters.md rule 16): not drawn;
         // only with H, as hidden objects.

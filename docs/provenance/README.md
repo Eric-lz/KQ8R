@@ -3475,3 +3475,15 @@ Replaces the Q112 stand-in row (the wall block).
 | A dead character is removed right after its own `Die` script (its corpse has no name of its own): `exist` gives 1 afterwards, 0 while dying | Rule 38, `fighting.md` rule 32 | Unit test `a_character_dies_then_gives_experience_a_corpse_and_goes` |
 | Wrong word count: "usage: exist Object" and 0; prints nothing otherwise (we log every answer) | Rule 38 | Unit test |
 | A word tried as an object's internal number | Rule 38 (no data uses it): **not made** | — |
+
+## Loop speed (B-3, Q164) — `crates/kq8-core/src/door.rs` (`repeat_rate`, `repeat_advance`, `DoorMovement::step_frames`, `loop_ground_speed`), `named_anim.rs`, `character.rs` (`movement_step`), `connor.rs` (`MovementLoop::frame_rule`, `phase_rate`, `repeat_advance`, `ground_speed`); viewer `load.rs` (`Animation::first_in_file`), `anim_view.rs`, `connor_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A repeating loop of N frames moves (N − 1)/(N × length) in phase per second: one cycle = N × length/(N − 1) | `objects.md` "Loops that move the whole object" rule 6 (traced, Q153/Q164) | Unit test `a_framed_loop_moves_by_rule_6a` |
+| A forward wrap sets the phase to exactly 0 (the overshoot dropped); backwards below 0: the last frame, phase (N − 1)/N | Rule 6 | Unit test |
+| An update adds the steps of the frames it enters; entering frame 0 forwards adds the **last** frame's step when the loop starts at the file's first frame; backwards the frames' steps are taken off, no swap | Rule 6a (traced, Q164) | Unit test; viewer `anim.log` "character speeds" = `character-movement.md` rule 2's table |
+| Applies to Connor's and characters' loops | Rules 6 (every `.kqs` animation), `connor-movement.md` "Forward speed" rules 3–4, `character-movement.md` rules 1–2 | `kq8-artifacts/logs/b3-connor-speeds.log`: loaded 1,124.0 / 2,558.4 / −1,070.3; measured 1,119–1,122 / 2,562 / 1,066 |
+| "Below 0" backwards is read on the frame (floor(p × N + 0.001) < 0), so float sums a hair under 0 still show frame 0 | **Ours** (a plain p < 0 skipped frame 0 every cycle in a test: back came out 1,127) | Unit test |
+| Loops with no per-frame steps (tests only) keep the even spread over 1/length | **Ours** (test scaffolding) | Existing tests |
+| Plain animated objects, chests and doors keep the old speed and wrap | **Gap**: rule 6 covers them too; not in this step's scope (the user's B-3: Connor and characters) | — |

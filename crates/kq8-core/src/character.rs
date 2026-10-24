@@ -541,15 +541,22 @@ impl Character {
         format!("{cut}{first}state Move (from {from:?}; {why}): Stop {stop}; then {moving} (rule 4)")
     }
 
-    /// Rule 1: this update's step from a repeating movement (its frame
-    /// steps added up × the phase moved, spread evenly as Connor's loops),
-    /// turned by its rotation, for its mover. Nothing when a movement
-    /// started, ended or changed in this update, or for a play-once one.
+    /// Rule 1: this update's step from a repeating movement, turned by its
+    /// rotation, for its mover: the steps of the frames it entered
+    /// (`objects.md` "Loops" rule 6a, Q164; the player gives them); with no
+    /// frames to go by, its frame steps added up × the phase moved. Nothing
+    /// when a movement started, ended or changed in this update, or for a
+    /// play-once one.
     fn movement_step(&mut self, player: &NamedAnimPlayer, played: &Played) {
         if played.started.is_some() || played.transition.is_some() || played.finished.is_some() {
             return;
         }
         let Some(m) = player.movement().filter(|m| m.repeat) else { return };
+        if let Some(own) = played.travel {
+            let r = &player.base.rotation;
+            self.walk.step = std::array::from_fn(|j| (0..3).map(|i| own[i] * r[i][j]).sum());
+            return;
+        }
         let mut d = played.to - played.from;
         if player.speed() >= 0.0 && d < 0.0 {
             d += 1.0;
@@ -1434,11 +1441,15 @@ pub(crate) mod tests {
     }
 
     /// M5 5a-2: stop, a walk of `walk` units per second and a run of
-    /// `run` (16 frames over 1 s, each stepping forward, −Y).
+    /// `run` (16 frames over 1 s; frame 0 no step, as in the data, frames
+    /// 1–15 each speed/15 forward, −Y: by `objects.md` "Loops" rule 6a
+    /// (sum + last step) × 15/16 = speed, one frame per update).
     pub(crate) fn walker(walk: f32, run: f32) -> (Character, NamedAnimPlayer) {
         let moving = |name: &str, speed: f32| {
             let mut m = movement(name, 0.0, 1.0, true, true, vec![]);
-            m.frame_steps = vec![kq8_data::shape::Transform { flags: 0, m: crate::door::identity().m, p: [0.0, -speed / 16.0, 0.0] }; 16];
+            let step = kq8_data::shape::Transform { flags: 0, m: crate::door::identity().m, p: [0.0, -speed / 15.0, 0.0] };
+            m.frame_steps = vec![step; 16];
+            m.frame_steps[0].p = [0.0; 3];
             m
         };
         let ms = vec![movement("stop", 0.0, 1.0, true, true, vec![]), moving("walk", walk), moving("run", run)];

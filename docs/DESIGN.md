@@ -2892,6 +2892,8 @@ first. Each step: the note's rule, a unit test where the rule is in
    the phase to exactly 0, entering frame 0 forwards adds the last
    frame's step, none backwards. Connor's walk, run and back speeds
    logged (expected 1,124, 2,558, 1,070 units/s).
+   **Done** 2026-10-24 (logged and measured in the viewer; plain animated
+   objects, chests and doors still use the old speed and wrap).
 4. **B-4: `KQMonster::setState <name> Wait`** (Q160, `characters.md`
    rule 22 "`setState <name> Wait` in detail"): Wait is entered again
    and asks for `Stop`; Move at once; Special after its list. In Wait,

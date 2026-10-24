@@ -459,6 +459,9 @@ pub struct Animation {
     pub step_sum: [f32; 3],
     /// Each frame's own step (model space), frame 0 first.
     pub frame_steps: Vec<[f32; 3]>,
+    /// The loop starts at the file's first frame (`objects.md` "Loops"
+    /// rule 6a: its wrap adds the last frame's step).
+    pub first_in_file: bool,
     /// How its frames are made of parts (the parts count, 2026-10-22).
     pub part_stats: kq8_data::shape::PartStats,
     /// Each frame's whole step, turn included (doors turn by these;
@@ -688,7 +691,7 @@ pub fn load_animation_skinned(
     let part_stats = kq8_data::shape::part_stats(&shape, first, count);
     let (duration, ball) = (l.duration, (shape.radius, shape.center));
     let source = Some(FrameShape { shape: shape.clone(), first });
-    Ok(Animation { source, looks, frame_count, duration, step_sum, frame_steps, frame_transforms, frame_lights, ball, frame_parts, part_stats })
+    Ok(Animation { source, looks, frame_count, duration, step_sum, frame_steps, first_in_file: first == 0, frame_transforms, frame_lights, ball, frame_parts, part_stats })
 }
 
 /// The world's haze (object-lighting.md rules 18, 19): `hazeDistance` and

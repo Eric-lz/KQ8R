@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-3: the loop speed for Connor and characters (Q164 built)
+
+**Changed:** Core `door.rs`: `repeat_rate` ((N - 1)/(N x length)), `repeat_advance` (the frames entered; forward wrap to exactly 0 adding the last frame's step; backwards taken off), `DoorMovement::first_in_file`, `step_frames`, `loop_ground_speed`. `named_anim.rs`: a character's repeating movement steps by them and hands the travel over (`Played::travel`); `character.rs` moves by it. `connor.rs`: `MovementLoop::first_in_file`, `frame_rule`, `phase_rate`, `repeat_advance`; his loops step the same way; `ground_speed` by the new rule. Viewer `load.rs`: `Animation::first_in_file`; `anim_view.rs` passes it on and logs each character's walk/run speed; `connor_view.rs` passes it to his loops. Test walker's frame 0 now has no step (as in the data). Unit test. Provenance, QUESTIONS Q164, DESIGN B-3.
+**Why:** `objects.md` "Loops that move the whole object" rules 6 and 6a; `connor-movement.md` "Forward speed" rules 3-4; `character-movement.md` rules 1-2.
+**Tested how:** `cargo test --workspace` (all pass; new `a_framed_loop_moves_by_rule_6a`). `kq8-viewer --world Daventry --frames 4000 --sound off --no-ai --at 193000,193000,3.1416 --hold 1,0,1,90` (run), and `--frames 6000 ... --hold 1,0,0,10,70 --hold -1,0,0,170,230` (walk, back); speeds from `connor.log` positions in `kq8-artifacts/logs/b3-connor-speeds.log`. `--frames 300 --no-ai`: `anim.log` "character speeds".
+**Result:** Loaded: walk 1,124.0, run 2,558.4, back -1,070.3 units/s. Measured over 50 updates: run 2,561.8, walk 1,119.1 (110 updates: 1,121.7), back 1,066.1 (sloped ground; not whole cycles). Characters: chicken 119/947, bone goblin 926/3,106, goblin 3,106/3,040, spriggan 1,708/3,365, zombie 503, bat 1,159, pig 437: rule 2's table. Chicken's run measured 947 a second in `characters.log`.
+**Failed attempt:** "below 0" backwards tested as phase < 0: float sums landed a hair under 0, frame 0 was skipped every cycle and back came out 1,127 (the old figure). Now read on the frame with rule 6's thousandth.
+**Still broken / not tested:** Not looked at by eye or played by hand. Plain animated objects, chests and doors still use the old speed and wrap (rule 6 covers them; outside this step). The note's 1 % gap between the rule's back speed and the user's measurement stays unexplained. Running with `--hold 1,0,1` in a second `--hold` didn't run (the viewer's test option; not looked into).
+**Next:** B-4 (`setState ... Wait`).
+
 ## 2026-10-24 B-2: `exist` (Q162 built); the roof kill plays
 
 **Changed:** Core `active.rs`: the script command `exist <name>`: 0 if the name is a world object now (a name deleted in this same event still counts), 1 if not; wrong word count: usage line and 0. A dead character's name now counts as deleted right after its own `Die` script. Unit tests. Provenance, QUESTIONS Q162, DESIGN B-2.

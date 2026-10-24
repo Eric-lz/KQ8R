@@ -78,6 +78,9 @@ pub struct Played {
     /// A transition movement that started in this update (its from point
     /// was reached).
     pub transition: Option<Started>,
+    /// A character's repeating loop: the summed step of the frames this
+    /// update entered, in its own space (`objects.md` "Loops" rule 6a).
+    pub travel: Option<[f32; 3]>,
 }
 
 /// What a request did (`anim-scripts.md` rule 4), for the log.
@@ -414,11 +417,24 @@ impl NamedAnimPlayer {
         // reached in this update cuts it there (−1: the whole update
         // plays); the transition is set up at the end and first moves in
         // the next update.
+        // A character's repeating loop: the frame player's rate (`objects.md`
+        // "Loops" rules 6 and 6a, Q164).
+        let frame_rule = self.loops_move_base && m.repeat && m.step_frames(self.phase, 0.0, speed).is_some();
+        let rate = if frame_rule {
+            crate::door::repeat_rate(m.frames(), m.play_time)
+        } else if m.play_time > 0.0 {
+            1.0 / m.play_time
+        } else {
+            0.0
+        };
         if let Some(t) = self.chosen.clone() {
-            let travel = if m.play_time > 0.0 { speed * dt / m.play_time } else { 0.0 };
+            let travel = speed * dt * rate;
             if let Some(ahead) = self.reaches_from_point(&t, travel) {
-                let cut_dt = if t.from < 0.0 { dt } else { ahead * m.play_time / speed.abs() };
-                let step = m.step_with(self.phase, cut_dt, speed);
+                let cut_dt = if t.from < 0.0 || rate <= 0.0 { dt } else { ahead / (rate * speed.abs()) };
+                let step = match m.step_frames(self.phase, cut_dt, speed).filter(|_| frame_rule) {
+                    Some((step, _)) => step,
+                    None => m.step_with(self.phase, cut_dt, speed),
+                };
                 let at = if t.from < 0.0 { step.to } else { t.from };
                 out.to = at;
                 out.cues = step.cues;
@@ -436,7 +452,13 @@ impl NamedAnimPlayer {
                 return out;
             }
         }
-        let step = m.step_with(self.phase, dt, speed);
+        let step = match m.step_frames(self.phase, dt, speed).filter(|_| frame_rule) {
+            Some((step, travel)) => {
+                out.travel = Some(travel);
+                step
+            }
+            None => m.step_with(self.phase, dt, speed),
+        };
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
@@ -506,7 +528,7 @@ pub(crate) mod tests {
     /// A movement of 16 frames over 1 s (made-up numbers in the style of
     /// the chests and baskets).
     pub fn movement(name: &str, start: f32, speed: f32, repeat: bool, cut_short: bool, cues: Vec<Cue>) -> DoorMovement {
-        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], frame_parts: Vec::new(), cues, transitions: Vec::new() }
+        DoorMovement { name: name.into(), start, speed, repeat, cut_short, play_time: 1.0, frame_steps: vec![identity(); 16], first_in_file: true, frame_parts: Vec::new(), cues, transitions: Vec::new() }
     }
 
     /// `stop` still at 0, then `open` 0 -> 1 over 1 s with a cue at 0, 16

@@ -71,6 +71,10 @@ pub struct DoorMovement {
     pub play_time: f32,
     /// Each frame's own step (frame 0 first; frame 0's is zero).
     pub frame_steps: Vec<Transform>,
+    /// The loop starts at the first frame of its `.kqs` file: entering its
+    /// frame 0 forwards adds the last frame's step (`objects.md` "Loops"
+    /// rule 6a).
+    pub first_in_file: bool,
     /// Each frame's named model parts and their own places (the `arrow`
     /// part a bolt starts at, `ranged-weapons.md` rule 24; M5 5f-2);
     /// empty where not needed.
@@ -144,6 +148,42 @@ impl DoorMovement {
         Step { to, done, cues }
     }
 
+    /// Units per second along the ground of a repeating movement at
+    /// `speed` by the frame player (`objects.md` "Loops" rule 6a): (sum of
+    /// the steps + the last step, forwards from the file's first frame) ×
+    /// (N − 1)/(N × length) × |speed|. For the logs.
+    pub fn loop_ground_speed(&self, speed: f32) -> f32 {
+        let n = self.frames();
+        let mut d = self.frame_steps.iter().fold([0.0f32; 3], |a, t| [a[0] + t.p[0], a[1] + t.p[1], a[2] + t.p[2]]);
+        if speed >= 0.0 && self.first_in_file && n >= 2 {
+            let last = self.frame_steps[n - 1].p;
+            d = std::array::from_fn(|i| d[i] + last[i]);
+        }
+        (d[0] * d[0] + d[1] * d[1]).sqrt() * repeat_rate(n, self.play_time) * speed.abs()
+    }
+
+    /// A character's repeating movement played by the frame player
+    /// (`objects.md` "Loops" rules 4, 6 and 6a, Q164): the phase moves
+    /// (N − 1)/(N × length) per second; a forward wrap sets it to exactly 0;
+    /// the cue ranges as [`Self::step_with`]'s. Also the summed step of
+    /// the frames entered ([`repeat_advance`]). `None` for a play-once
+    /// movement, no length or one frame (then [`Self::step_with`]).
+    pub fn step_frames(&self, phase: f32, dt: f32, speed: f32) -> Option<(Step, [f32; 3])> {
+        let rate = repeat_rate(self.frames(), self.play_time);
+        if !self.repeat || rate <= 0.0 || self.frame_steps.len() < 2 {
+            return None;
+        }
+        let (to, own) = repeat_advance(phase, speed * dt * rate, self.frames(), self.first_in_file, |k| self.frame_steps[k].p);
+        let wrapped = if speed >= 0.0 { to < phase } else { to > phase };
+        let ranges = match (wrapped, speed >= 0.0) {
+            (true, true) => [(phase, WRAP_TOP), (0.0, to)],
+            (true, false) => [(0.0, phase), (to, WRAP_TOP)],
+            (false, _) => [(phase.min(to), phase.max(to)), (0.0, 0.0)],
+        };
+        let cues = self.cues.iter().filter(|c| ranges.iter().any(|&(lo, hi)| c.phase >= lo && c.phase < hi)).map(|c| c.action.clone()).collect();
+        Some((Step { to, done: false, cues }, own))
+    }
+
     /// The steps of frames 1…`frame` chained: each step is taken in the
     /// door's own axes as they are after the earlier steps. Frame 0 is the
     /// starting pose (no step).
@@ -158,6 +198,68 @@ impl DoorMovement {
 
 /// The top of a cue range at a wrap (`objects.md` "Loops" rule 4).
 pub const WRAP_TOP: f32 = 1.0001;
+
+/// Phase per second at speed 1 of a repeating loop of `frames` frames
+/// lasting `duration` s: (N − 1)/(N × duration), so one cycle takes
+/// N × duration/(N − 1) (`objects.md` "Loops that move the whole object"
+/// rule 6, Q164). 0 for no length or a single frame.
+pub fn repeat_rate(frames: usize, duration: f32) -> f32 {
+    if duration <= 0.0 || frames < 2 {
+        return 0.0;
+    }
+    let n = frames as f32;
+    (n - 1.0) / (n * duration)
+}
+
+/// One update of a repeating loop moved by `delta` in phase (rules 6 and
+/// 6a, Q164): the new phase and the whole-object step of the frames
+/// entered. Forwards: frames a + 1 … b are added; reaching frame N wraps to
+/// frame 0 with the phase **exactly 0** (the overshoot dropped), and
+/// entering frame 0 adds the **last** frame's step when the loop starts at
+/// the file's first frame (`first_in_file`), else frame 0's own.
+/// Backwards: frames a − 1 … b are taken off; below 0 the phase becomes
+/// (N − 1)/N on the last frame; no last-frame swap.
+pub fn repeat_advance(phase: f32, delta: f32, frames: usize, first_in_file: bool, step: impl Fn(usize) -> [f32; 3]) -> (f32, [f32; 3]) {
+    let n = frames.max(1);
+    let frame = |p: f32| kq8_data::shape::frame_at_phase(p, n, true);
+    let a = frame(phase);
+    let raw = phase + delta;
+    let mut out = [0.0f32; 3];
+    let mut add = |k: usize, sign: f32| {
+        let s = step(k);
+        for i in 0..3 {
+            out[i] += sign * s[i];
+        }
+    };
+    if delta >= 0.0 {
+        let b = (raw * n as f32 + 0.001).floor() as usize;
+        if b >= n {
+            for k in a + 1..n {
+                add(k, 1.0);
+            }
+            add(if first_in_file { n - 1 } else { 0 }, 1.0);
+            return (0.0, out);
+        }
+        for k in a + 1..=b {
+            add(k, 1.0);
+        }
+        (raw, out)
+    } else if (raw * n as f32 + 0.001).floor() < 0.0 {
+        // "Below 0" read on the frame, with rule 6's thousandth (ours: a
+        // plain `raw < 0` skips frame 0 when float sums land a hair under).
+        for k in (0..a).rev() {
+            add(k, -1.0);
+        }
+        add(n - 1, -1.0);
+        ((n - 1) as f32 / n as f32, out)
+    } else {
+        let b = frame(raw);
+        for k in (b..a).rev() {
+            add(k, -1.0);
+        }
+        (raw.max(0.0), out)
+    }
+}
 
 /// What one update of a movement does ([`DoorMovement::step`]).
 #[derive(Debug, Clone, PartialEq)]
@@ -339,6 +441,7 @@ pub(crate) mod tests {
             cut_short: true,
             play_time: 1.0,
             frame_steps: steps.clone(),
+            first_in_file: true,
             frame_parts: Vec::new(),
             cues,
             transitions: Vec::new(),
@@ -384,6 +487,7 @@ pub(crate) mod tests {
             cut_short: true,
             play_time: 1.0,
             frame_steps: vec![identity(); 16],
+            first_in_file: true,
             frame_parts: Vec::new(),
             cues: vec![Cue { phase: 1.0, action: "one".into() }, Cue { phase: 0.0, action: "zero".into() }, Cue { phase: 0.5, action: "half".into() }],
             transitions: Vec::new(),
