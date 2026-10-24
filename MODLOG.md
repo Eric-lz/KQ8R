@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-10d: the spinning mask shrunk into its own status place (Q143 built)
+
+**Changed:** Viewer `gui_view.rs` (`status_specs`): the spinning mask (57 × 57) is stretched into its own 48 × 48 status place instead of drawn at its own size from the place's bottom-right corner (which reached 9 pixels into the next place). The unused `mask_size` removed. Provenance, QUESTIONS Q143.
+**Why:** `potions.md` rule 35 "Details" (Q143 c): every status icon is drawn in its own place and clipped to it; the user saw no cut edges in the original, so the mask is shrunk. The user thought ours overlapped the next icon a little: it did, by 9 pixels.
+**Tested how:** `cargo build`, `cargo test --workspace` (all pass). Not run with the mask showing: the status picture is not logged pixel by pixel.
+**Result:** —
+**Still broken / not tested:** **Not tested** in the viewer and not looked at: the user's look at the spinning mask next to a potion icon is the check. How the original shrinks it (which rows and columns it drops) was not traced; ours stretches smoothly by nearest pixel.
+**Next:** A-11 (looks: `dither`, the orbit, the teleport pad, the world palette for textures).
+
 ## 2026-10-24 A-10c: map icons after the colour match, the removed icon's repaint, no mini-map blink (Q150 built)
 
 **Changed:** Core `magic_map.rs`: on another world's map the icons are stamped **after** its colours are matched to this world's palette, with their own indexes (`show_other`); `removeMapIcon` repaints the rectangle blank, then the full picture where the fog is cleared, testing the fog in groups of 8 columns (so a neighbour icon within the group is cut). Viewer `gui_view.rs`: the mini-map slot no longer waits for the map item's blink. Tests updated and extended. Provenance, QUESTIONS Q150.

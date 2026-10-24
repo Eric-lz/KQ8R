@@ -240,9 +240,9 @@ const LEVEL_FLAME: &str = "IDCTL_METERS_LEVELUP";
 /// frames and no duration plays at 10 frames a second).
 const MASK_FPS: f64 = 10.0;
 
-/// The status icons' picture (M5 5g-3): the layout's 336 wide, and tall
-/// enough for the spinning mask's own 57 rows (4c-8); every icon stands
-/// on its bottom.
+/// The status icons' picture (M5 5g-3): the layout's 336 wide, 57 tall
+/// (from 4c-8, when the mask was drawn at its own 57 rows; now every icon
+/// fits its 48-row place, Q143); every icon stands on its bottom.
 const STATUS_SIZE: [i32; 2] = [336, 57];
 
 /// What a status icon place shows (M5 5g-3, `potions.md` rule 35).
@@ -944,8 +944,9 @@ impl Gui {
     /// from frame 0 (each potion `.pba` has two frames: 0 is a black
     /// square with the gold outline, 1 the picture; the user saw a black
     /// background and a gold outline where it is used). The spinning mask
-    /// at its own size (4c-8), its bottom-right at its place's, at 10
-    /// frames a second.
+    /// shrunk to its own place (57 x 57 into 48 x 48; Q143 c: each icon is
+    /// clipped to its place and the user saw no cut edges), at 10 frames a
+    /// second.
     fn status_specs(&self) -> Option<([i32; 2], Vec<Spec>)> {
         let [w, h] = STATUS_SIZE;
         let mut out = Vec::new();
@@ -957,9 +958,8 @@ impl Gui {
             match shown {
                 StatusShown::Mask => {
                     let Some(file) = self.mask_file() else { continue };
-                    let [mw, mh] = self.mask_size().unwrap_or([r - l, tall]);
                     let frame = (self.panels.now_ms / (1000.0 / MASK_FPS)) as usize;
-                    out.push(Spec::Pic { rect: [r - mw, h - mh, r, h], file, frame, cut: None });
+                    out.push(Spec::Stretch { rect: [l, h - tall, r, h], file, frame });
                 }
                 StatusShown::Potion { file: Some(file), percent, .. } => {
                     let rect = [l, h - tall, r, h];
@@ -987,12 +987,6 @@ impl Gui {
             Kind::Text { pictures: Some(p), .. } => self.tags.string(p.bitmap).map(str::to_string),
             _ => None,
         }
-    }
-
-    /// The spinning mask's own picture size, once loaded.
-    fn mask_size(&self) -> Option<[i32; 2]> {
-        let frames = self.files.get(&self.mask_file()?.to_ascii_lowercase())?.as_ref()?;
-        frames.first().map(|b| [b.width as i32, b.height as i32])
     }
 
     /// How many frames a `.pba` has (0 if not loaded).

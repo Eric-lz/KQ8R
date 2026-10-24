@@ -3375,3 +3375,10 @@ Replaces the 6e popup rows' stand-ins (highlight, Escape, rows, lines).
 | `removeMapIcon`: the first icon at exactly x, y on the picture shown; the rectangle blank, then full where the fog is cleared, the fog tested in 8-column groups; other icons not redrawn (cut) | Rule 21 (traced, Q150 a) | Unit test `icons_over_the_fog_and_removed` |
 | The mini-map slot never blinks: straight from the empty picture to the live map | Rule 27, `interface.md` rule 44 (traced, Q150 d) | Viewer `gui.log` |
 | The removed icon's list slot is compacted, not left empty | **Ours** (only the saved numbering differs) | — |
+
+## Status icon places (A-10d, Q143) — viewer `gui_view.rs` (`status_specs`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Each status icon (potions, the mask, the hook) is drawn in its own place, clipped to it; the 57 × 57 mask is shrunk to its 48 × 48 place | `potions.md` rule 35 "Details" (clipping traced; shrinking from the user's check, Q143 c) | Not tested (needs the user's look) |
+| The shrink picks the nearest source pixel | **Ours** (how the original scales: not traced) | — |

@@ -2846,6 +2846,8 @@ is in `kq8-core`, a viewer run checked in the logs.
     map icons after the colour match and no mini-map blink (Q150),
     status icons clipped and the mask shrunk to its place (Q143). One
     commit each.
+    **Done** 2026-10-24 (A-10a-d; the popup, the meter and the map
+    checked in the logs; the mask's look not tested).
 11. **A-11: looks**: `dither 1` as a screen-door texture (Q144), the
     orbit's path (Q145), the teleport pad solid (Q14 b), the world
     palette for every texture index (Q42). One commit each.
