@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12b: Connor's movements start at their `loop=` start (Q138 e built)
+
+**Changed:** Core `connor.rs`: `MovementLoop::start` and `start_phase`; the walker marks a movement started from phase 0 (`fresh`) and at its next update puts it at its `loop=` start (a backwards play-once at 1 − start, as our phase runs 0 → 1 turned round); transitions still start at 0. Viewer `load.rs`, `connor_view.rs`: the start read from the `loop=` lines. Unit test. Provenance, QUESTIONS Q138.
+**Why:** `anim-scripts.md` rule 5 (Q138 e): Connor starts every movement at its `loop=` start and speed, like any animated object. `confists.anm` `undraw` (0.889, backwards) starts at frame 7 and ends after about 0.41 s; our stand-in started it at the end and played it full length.
+**Tested how:** `cargo test --workspace` (all pass; new `a_movement_starts_at_its_loop_start`). `kq8-viewer --world Daventry --frames 900 --sound off --no-ai --command "KQConner::setDoMode 0",3 --command "KQConner::setDoMode 4",30`; `connor.log`, `viewer.log`.
+**Result:** Update 31: "confists.anm/undraw starts at its loop= start 0.8889 (our phase 0.1111)"; it ends 7 updates later (0.889 × 0.4667 s = 0.415 s, whole updates). Other movements with a start other than 0: `walkend` (0.35) and the weapon lists' walking-backwards loops (about 0.95).
+**Still broken / not tested:** Not looked at by eye. For the first drawn frame after the start (before the next update) the movement still shows phase 0.
+**Next:** A-12c (a swap while moving cuts a swing, Q138).
+
 ## 2026-10-24 A-12a: a bolt's start part read from the frame after the step (Q140 c built)
 
 **Changed:** Core `fight.rs` (`character_do`): a character's `arrow` part is read from the frame its movement is on now (after the update's step), not the frame at the `do` cue's own phase. Viewer `connor_view.rs` / `door_view.rs`: the same for Connor's standing shot. Test updated. Provenance, QUESTIONS Q140.

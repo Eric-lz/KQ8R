@@ -345,6 +345,8 @@ pub struct ConnorMovement {
     /// Index into `ConnorAssets::animations`.
     pub animation: usize,
     pub speed: f32,
+    /// The `loop=` start position (`anim-scripts.md` rule 5, Q138 e).
+    pub start: f32,
     /// True = repeats; false = plays once.
     pub repeat: bool,
     /// `loop=` 6th field: can be cut short.
@@ -552,6 +554,7 @@ pub fn connor_set(
             name,
             animation,
             speed: c.speed,
+            start: c.start,
             repeat: c.repeat,
             cut_short: c.unknown != 0,
             transitions,
@@ -3607,6 +3610,7 @@ impl Placer<'_> {
                 name: kq8_core::connor::intern(&name),
                 animation,
                 speed: c.speed,
+                start: c.start,
                 repeat: c.repeat,
                 cut_short: c.unknown != 0,
                 transitions: Vec::new(),

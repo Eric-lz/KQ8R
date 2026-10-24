@@ -3415,3 +3415,11 @@ Replaces the 5g-7 stand-in (half see-through).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | The `arrow` part is read from the frame the movement is on after the update's step (the queued `do` is handled after every object moved), for Connor and for characters | `ranged-weapons.md` rule 24 (traced, Q140 c) | Unit test `a_character_s_bolt_starts_at_its_arrow_part_found_once`; viewer `fight.log`: Connor's `attack` at 0.25, frame 2 |
+
+## Connor's movements start at their `loop=` start (A-12b, Q138 e) — `crates/kq8-core/src/connor.rs` (`start_phase`, `fresh`); viewer `load.rs`, `connor_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every movement of his starts at its `loop=` start and speed (`undraw`: frame 7 of 8, backwards, about 0.41 s) | `anim-scripts.md` rule 5 (traced, Q138 e) | Unit test `a_movement_starts_at_its_loop_start`; viewer `connor.log` |
+| Transitions start at 0 | `connor-movement.md` "Starting and stopping" rule 5 | Unchanged |
+| The start applied at the update after the movement is chosen (one drawn frame at phase 0 before) | **Ours** | — |

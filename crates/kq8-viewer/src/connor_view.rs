@@ -411,6 +411,7 @@ fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frame
         anim: anims.get(m.animation).copied().unwrap_or(usize::MAX),
         movement_loop: MovementLoop {
             speed: m.speed,
+            start: m.start,
             repeat: m.repeat,
             cut_short: m.cut_short,
             transitions: m.transitions.clone(),

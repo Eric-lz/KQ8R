@@ -160,6 +160,8 @@ pub struct MovementLoop {
     pub step_sum: [f32; 3],
     /// Playback speed from `Conner.anm` (`back`: −1).
     pub speed: f32,
+    /// The `loop=` start position, 0..1 (`anim-scripts.md` rule 5).
+    pub start: f32,
     /// True = repeats; false = plays once, first to last frame
     /// (`objects.md` "Animated objects at load", loop rule 2).
     pub repeat: bool,
@@ -257,13 +259,25 @@ impl MovementLoop {
         self.duration
     }
 
+    /// The walker's phase a movement starts at: its `loop=` start; a
+    /// play-once movement played backwards runs our phase 0 → 1 turned
+    /// round ([`Self::frame_at`]), so there it is 1 − start.
+    pub fn start_phase(&self) -> f32 {
+        if self.repeat {
+            self.start.rem_euclid(1.0)
+        } else if self.speed < 0.0 {
+            1.0 - self.start.clamp(0.0, 1.0)
+        } else {
+            self.start.clamp(0.0, 1.0)
+        }
+    }
+
     /// The frame shown at `phase` (0..1 of one play): floor(phase ×
     /// frames + 0.001), cut down, as for every animated object
     /// (`objects.md` "Loops" rule 6, Q153). A one-shot with speed −1 (`undraw`,
     /// `c_shth`) shows its frames last to first (`anim-scripts.md` rule 5;
-    /// M5 5c fix). **Stand-in**: its `loop=` start phase is not used (his
-    /// walker starts every movement at 0), so its phase runs 0..1 and is
-    /// turned round here.
+    /// M5 5c fix): our phase runs 0..1 and is turned round here (it starts
+    /// at [`Self::start_phase`]).
     pub fn frame_at(&self, phase: f32) -> usize {
         let p = if self.repeat {
             phase.rem_euclid(1.0)
@@ -480,6 +494,11 @@ pub struct Walker {
     /// The climb's direction this update: +1 up (forwards), −1 down, 0
     /// frozen (rule 22).
     pub climb_dir: i8,
+    /// A movement was started from phase 0 since the last update: the
+    /// next update puts it at its `loop=` start first (`anim-scripts.md`
+    /// rule 5, Q138 e). Not for transitions (`connor-movement.md` rule 5:
+    /// from phase 0).
+    pub fresh: bool,
 }
 
 /// A movement key, for the key events that clear wall blocks.
@@ -546,6 +565,7 @@ impl Walker {
             death: None,
             rope_hang: false,
             climb_dir: 0,
+            fresh: false,
         }
     }
 
@@ -556,6 +576,7 @@ impl Walker {
         self.mode = Mode::Rope;
         self.movement = movement;
         self.phase = 0.0;
+        self.fresh = true;
         self.rope_hang = false;
         self.climb_dir = 0;
     }
@@ -575,6 +596,7 @@ impl Walker {
         self.mode = Mode::Throw;
         self.movement = movement;
         self.phase = 0.0;
+        self.fresh = true;
     }
 
     /// Rule 3: `catch` ended: back to standing (the keys choose again).
@@ -643,6 +665,7 @@ impl Walker {
         let from = self.movement;
         self.movement = name;
         self.phase = 0.0;
+        self.fresh = true;
         self.wanted = None;
         self.waiting = None;
         format!("code {code}: plays '{name}' from phase 0 (was '{from}'; rule 18)")
@@ -725,6 +748,7 @@ impl Walker {
         self.clear_transitions();
         self.movement = "stop";
         self.phase = 0.0;
+        self.fresh = true;
     }
 
     /// Rule 2.5 failed while pushing: back to Move (the keys decide).
@@ -743,6 +767,7 @@ impl Walker {
         self.mode = Mode::Free;
         self.movement = "stop";
         self.phase = 0.0;
+        self.fresh = true;
         self.wanted = None;
         self.waiting = None;
         self.playing = None;
@@ -832,6 +857,7 @@ impl Walker {
                     notes.push(format!("special: plays {written} ({name})"));
                     self.movement = name;
                     self.phase = 0.0;
+                    self.fresh = true;
                     return;
                 }
                 SpecialStep::Kill => {
@@ -911,6 +937,7 @@ impl Walker {
         self.mode = Mode::Jump;
         self.movement = kind.jump();
         self.phase = 0.0;
+        self.fresh = true;
     }
 
     /// Switch mode (from the mover's fall events, or a test lift). The new
@@ -928,6 +955,7 @@ impl Walker {
         if mode == Mode::Free {
             self.movement = "stop";
             self.phase = 0.0;
+            self.fresh = true;
         }
         self.mode = mode;
     }
@@ -970,6 +998,7 @@ impl Walker {
             notes.push(format!("no transition {} -> {wanted}: switched at once from phase 0", self.movement));
             self.movement = wanted;
             self.phase = 0.0;
+            self.fresh = true;
             self.wanted = None;
         } else {
             notes.push(format!("{} can't be cut short: {wanted} kept until it ends", self.movement));
@@ -995,6 +1024,7 @@ impl Walker {
             if loops(self.movement).is_none_or(|l| l.cut_short || self.phase >= 1.0) {
                 notes.push(format!("{wanted} again: afresh from phase 0 (rule 5)"));
                 self.phase = 0.0;
+                self.fresh = true;
                 self.wanted = None;
             } else {
                 notes.push(format!("{wanted} again, can't be cut short: kept until it ends"));
@@ -1092,6 +1122,7 @@ impl Walker {
         self.clear_transitions();
         self.movement = "stop";
         self.phase = 0.0;
+        self.fresh = true;
         Some((from, "stop"))
     }
 
@@ -1156,6 +1187,7 @@ impl Walker {
             if m != self.movement {
                 self.movement = m;
                 self.phase = 0.0;
+                self.fresh = true;
             }
         } else {
             // While a wall block is on he stands, whatever the keys ask.
@@ -1235,6 +1267,14 @@ impl Walker {
             step.missing = true;
             return finish(step, self, notes);
         };
+        // anim-scripts.md rule 5 (Q138 e): a movement starts at its `loop=`
+        // start (`undraw` at frame 7 of 8, played backwards).
+        if std::mem::take(&mut self.fresh) && self.phase == 0.0 && l.start_phase() != 0.0 {
+            self.phase = l.start_phase();
+            step.played_from = self.phase;
+            step.played_to = self.phase;
+            notes.push(format!("{played} starts at its loop= start {:.4} (our phase {:.4}; anim-scripts.md rule 5)", l.start, self.phase));
+        }
         let time = l.play_time();
         if time <= 0.0 {
             return finish(step, self, notes);
@@ -1289,6 +1329,7 @@ impl Walker {
                             notes.push(format!("{played} ended: {w} from phase 0"));
                             self.movement = w;
                             self.phase = 0.0;
+                            self.fresh = true;
                         }
                     }
                 }
@@ -1390,6 +1431,31 @@ mod tests {
         }
         w.throw_leave();
         assert_eq!((w.mode, w.movement), (Mode::Free, "stop"));
+    }
+
+    #[test]
+    fn a_movement_starts_at_its_loop_start() {
+        // anim-scripts.md rule 5 (Q138 e): confists.anm `undraw` (cf_draw
+        // 0.888889 −1.0, 8 frames) starts at frame 7 and plays backwards to
+        // frame 0 in 0.889 of its length: here 8/15 s, so from our phase
+        // 0.111 at 0.125 an update it ends in the 8th (from 0: also 8).
+        let list = [("undraw", MovementLoop { duration: 8.0 / 15.0, speed: -1.0, start: 0.888889, frames: 8, ..Default::default() })];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.start_special(vec![SpecialStep::Play("undraw", "undraw".into())]);
+        let l = loops("undraw").unwrap();
+        assert_eq!(l.frame_at(l.start_phase()), 7);
+        let mut ended = None;
+        for n in 1..=10 {
+            let s = w.update(intent(0, 0, false), &loops);
+            if n == 1 {
+                assert!((s.played_from - (1.0 - 0.888889)).abs() < 1e-5, "{}", s.played_from);
+            }
+            if s.ended.is_some() && ended.is_none() {
+                ended = Some(n);
+            }
+        }
+        assert_eq!(ended, Some(8), "0.111 + 8 × 0.125 ≥ 1");
     }
 
     #[test]
@@ -1760,6 +1826,7 @@ mod tests {
             duration: steps.len() as f32 / 15.0,
             step_sum,
             speed: 1.0,
+            start: 0.0,
             repeat: false,
             frames: steps.len() + 1,
             frame_steps,
