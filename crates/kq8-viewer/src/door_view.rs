@@ -240,6 +240,8 @@ pub fn apply_loads(
             shown += 1;
         }
         let animated = anim.as_mut().is_some_and(|a| a.bring_in(&name, &mut sim.active));
+        // Events sent to it while it came in (the Wizard's `Map1`).
+        sim.active.loaded(&name);
         // A character brought in gets its draw-distance test now (M4
         // 4d-3), so it updates while near or far (characters.md rule 11).
         if let Some((body, test)) = anim.as_mut().and_then(|a| a.take_test(&name)) {

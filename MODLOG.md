@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Events reach an object a `loadKQ` just brought in (the map's `Map1`)
+
+**Changed:** Core `active.rs`: names a `loadKQ` brought in are marked until the viewer hands the object over; events for them meanwhile are held, and `Active::loaded` (called by the viewer's `apply_loads` after each hand-over) handles them, then what they sent with delay 0. Viewer `door_view.rs`: the call. Unit test. Provenance.
+**Why:** The rest of the user's report: the map should first appear folded. `wizard.cs` runs `loadKQ magicmap.kq`, then `sendEvent 0 magicmap KQAnimPlayEvent Map1`; our core only gets the object after the update, so the event was dropped ("not handled") and the map sat on its empty first frame until `Map3`. `objects.md` "Where a world's objects come from" rule 6: the object is in the world at once; `anim-scripts.md` rule 8: nothing sent with delay 0 waits for the next update.
+**Tested how:** `cargo test --workspace` (all pass; new `an_event_to_an_object_still_coming_in_waits_for_it`). The same viewer run as the entry below; `doors.log`.
+**Result:** Update 217: "event KQAnimPlayEvent Map1 to magicmap …: held until then"; at the hand-over (logged as update 218, before drawing): "handed over now", `Map1` starts at phase 0, ends at 257 (2.6 s), then `Map3`, `Map4`, `Map5` as before.
+**Still broken / not tested:** **Not looked at by eye**: whether the map shows over the Wizard's hand, opens, floats to Connor and goes into his pack is the user's check (the positions come from the map's own animations; not checked in numbers). Our `loadKQ` hand-over itself still comes after the update (a stand-in from 3k-4); only the events are fixed.
+**Next:** The user's look at the map scene.
+
 ## 2026-10-24 The Wizard's magic map loads: a model may start on an empty frame
 
 **Changed:** Viewer `load.rs` (`load_model`): a start frame with no triangles no longer fails the model; it loads with nothing drawn in that frame and takes its box from all its frames together (no triangles anywhere still fails). Provenance. STATUS: the user confirmed the dithered chest keeps its pattern while opening.

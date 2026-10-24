@@ -1414,6 +1414,7 @@ This replaces the Q90 b and d stand-ins of 3k-4.
 | The new object's script gets `$1=<name> $2=Init` at once, during the `loadKQ` line, before the next line | `objects.md` "Where a world's objects come from" rule 6 (Q90 b) | Unit test `load_kq_while_playing_calls_init_at_once_and_refuses_a_name_in_use`; `doors.log` update 63 |
 | A name a live object still has, or deleted during the same event: error logged, load refused (the original's fatal error) | `objects.md` rule 6, `clicking.md` rule 22 (Q90 d; "for us: log and refuse") | Same unit test |
 | A world command asks the script runner to run a script at once (`take_calls`); the runner reports the end of an event's run (`event_done`) | **Our method** | — |
+| Fix 2026-10-24: an event for an object a `loadKQ` brought in, sent before the viewer hands it over (after the update), is held and handled at the hand-over, before drawing (`Active::loaded`), so `sendEvent 0` on the next line reaches it (the Wizard's `magicmap` `Map1`) | `objects.md` "Where a world's objects come from" rule 6 (added to the world at once); `anim-scripts.md` rule 8 (delay 0 never waits for the next update) | Unit test `an_event_to_an_object_still_coming_in_waits_for_it`; `doors.log`: `Map1` held at update 217, played from the hand-over at 218 |
 
 ### `KQConner::getDoMode` — `crates/kq8-core/src/active.rs`
 

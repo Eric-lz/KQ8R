@@ -618,6 +618,14 @@ pub struct WorldState {
     /// Names deleted during the event running now: free only once it has
     /// finished (`clicking.md` rule 22, 3l-7).
     deleted_this_event: BTreeSet<String>,
+    /// Names a script's `loadKQ` brought in that the viewer has not yet
+    /// handed over (it does so after the update, in `apply_loads`), lower
+    /// case; and the events for them held meanwhile. `objects.md` "Where a
+    /// world's objects come from" rule 6: the object is in the world at
+    /// once, so a `sendEvent 0` on the next line reaches it in the same
+    /// update (the Wizard's `magicmap` and its `Map1`).
+    loading: BTreeSet<String>,
+    held_for_load: Vec<Pending>,
     /// The files scripts may load while playing, by lower-case base name
     /// (M5 5d-2).
     templates: BTreeMap<String, Template>,
@@ -1858,6 +1866,7 @@ impl WorldState {
             return "1".into();
         }
         self.dormant.remove(&key);
+        self.loading.insert(lower.clone());
         self.known.insert(lower);
         // A trap: its box is in place from now on (it was off since the start).
         let trap = match self.trap_index(&name) {
@@ -3323,6 +3332,8 @@ impl Active {
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
                 deleted_this_event: BTreeSet::new(),
+                loading: BTreeSet::new(),
+                held_for_load: Vec::new(),
                 calls_out: Vec::new(),
                 templates: BTreeMap::new(),
                 first_person_locked: false,
@@ -4398,6 +4409,24 @@ impl Active {
         handled
     }
 
+    /// The viewer has handed over `name`, which a script's `loadKQ` brought
+    /// in (after the update that loaded it, before drawing): the events
+    /// held for it are handled now, in send order, then what they sent
+    /// with delay 0.
+    pub fn loaded(&mut self, name: &str) {
+        let lower = name.to_ascii_lowercase();
+        if !self.world.loading.remove(&lower) {
+            return;
+        }
+        let (held, rest): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.world.held_for_load).into_iter().partition(|e| e.target.eq_ignore_ascii_case(name));
+        self.world.held_for_load = rest;
+        for e in held {
+            self.world.note(format!("event {} {} to {name}: handed over now, the held event is handled", e.kind, e.data.join(" ")));
+            self.handle(e);
+        }
+        self.handle_due(self.world.now());
+    }
+
     /// One update (15 per second): events due, then the doors move; then
     /// the events sent meanwhile with delay 0 (the ends of movements,
     /// `EndLoop`, `Cue 300`, scripts' `sendEvent 0`), before the frame is
@@ -4850,6 +4879,11 @@ impl Active {
         }
         if self.world.is_gone(&e.target) {
             self.world.note(format!("event {} {} to {}{from}: deleted; dropped", e.kind, e.data.join(" "), e.target));
+            return;
+        }
+        if self.world.loading.contains(&e.target.to_ascii_lowercase()) {
+            self.world.note(format!("event {} {} to {}{from}: loaded by loadKQ, handed over after this update: held until then (objects.md \"Where a world's objects come from\" rule 6)", e.kind, e.data.join(" "), e.target));
+            self.world.held_for_load.push(e);
             return;
         }
         if e.kind == "KQStatsChangeRequestEvent" {
@@ -6930,6 +6964,25 @@ endif
         assert!(a.world.known.contains("waterfall2"));
         let log = a.take_log().join("\n");
         assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
+    }
+
+    #[test]
+    fn an_event_to_an_object_still_coming_in_waits_for_it() {
+        // objects.md "Where a world's objects come from" rule 6: the object
+        // is in the world at once; ours is handed over after the update, so
+        // `sendEvent 0` on the next line (the Wizard's `Map1`) is held.
+        let mut a = with_object("loadKQ magicmap.kq\nsendEvent 0 magicmap KQAnimPlayEvent open\n", "x");
+        a.set_dormant([("MAGICMAP.KQ".to_string(), "magicmap".to_string(), None)]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        a.update();
+        let log = a.take_log().join("\n");
+        assert!(log.contains("KQAnimPlayEvent open to magicmap") && log.contains("held until then"), "{log}");
+        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("magicmap"), script: None, gone: false, character: None, translucency: None }]);
+        a.loaded("magicmap");
+        let log = a.take_log().join("\n");
+        assert!(log.contains("handed over now") && log.contains("KQAnimPlayEvent open to object magicmap"), "{log}");
+        a.loaded("magicmap");
+        assert!(!a.take_log().join("\n").contains("handed over now"), "once");
     }
 
     #[test]
