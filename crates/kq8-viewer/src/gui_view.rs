@@ -129,25 +129,43 @@ const POPUP_BUTTONS: [&str; 3] = ["IDCTL_POPUP_BTN1", "IDCTL_POPUP_BTN2", "IDCTL
 
 /// `world-change.md` rule 26: Yes left, No right, 88 wide, centred at a
 /// third and two thirds of the panel's width (ours: of the 360-wide
-/// background, so they stand even on it; Q151), at the layout buttons'
-/// height. Panel coordinates: left, top, right, bottom.
-const POPUP_YES: [i32; 4] = [76, 148, 164, 183];
-const POPUP_NO: [i32; 4] = [196, 148, 284, 183];
+/// background, so they stand even on it; A inferred W = 370, Q151 c).
+/// Rows (Q151 c, traced): the highlighted button (the layout's BTN1)
+/// 145-183, the other 146-182. Panel coordinates: left, right; top,
+/// bottom.
+const POPUP_YES: [i32; 2] = [76, 164];
+const POPUP_NO: [i32; 2] = [196, 284];
+const POPUP_ROWS_HIGHLIGHTED: [i32; 2] = [145, 183];
+const POPUP_ROWS_OTHER: [i32; 2] = [146, 182];
 
-/// The question's lines (the user's look, 2026-10-22: centred across and
-/// down, a little apart): STAND-IN numbers (Q151 d): the block of lines
-/// centred in the background above the buttons (rows 0-148, 360 wide),
-/// 24 layout pixels from one line to the next (the layout's text slots
-/// are 18 apart and start at the top).
-const POPUP_TEXT_AREA: [i32; 4] = [0, 0, 360, 148];
-const POPUP_LINE_PITCH: i32 = 24;
+/// The question's lines (Q151 d, traced): 7 line boxes 360 wide, centred;
+/// line k of n has its top at base + k × pitch + `POPUP_LINE_OFFSETS`[n −
+/// 1][k] and is one pitch high (640 x 480: base 12, pitch 18).
+const POPUP_TEXT_WIDTH: i32 = 360;
+const POPUP_LINE_BASE: i32 = 12;
+const POPUP_LINE_PITCH: i32 = 18;
+const POPUP_LINE_OFFSETS: [&[i32]; 7] = [&[52], &[36, 44], &[20, 28, 36], &[4, 12, 20, 28], &[4, 8, 12, 16, 20], &[2, 4, 6, 8, 10, 12], &[0; 7]];
 
-/// The popup's buttons' looks (the user's looks at the original,
-/// 2026-10-22): plain `yesbtn.pba` frame 0; highlighted `buyhibtn.pba`
-/// (the layout's BTN1 picture, the gold outline; 88 x 25) stretched to the
-/// button (our reading: it was drawn repeated, wrapped); held down (mouse
-/// button or Enter, until let go) `yesbtn.pba` frame 1 with the label
-/// moved by `POPUP_PRESSED_SHIFT` (STAND-IN amount; Q151 d).
+/// Line `k` of `n`: its box (left, top, right, bottom) in panel
+/// coordinates (Q151 d).
+fn popup_line_box(n: usize, k: usize) -> [i32; 4] {
+    let offset = POPUP_LINE_OFFSETS.get(n.clamp(1, 7) - 1).and_then(|t| t.get(k)).copied().unwrap_or(0);
+    let top = POPUP_LINE_BASE + k as i32 * POPUP_LINE_PITCH + offset;
+    [0, top, POPUP_TEXT_WIDTH, top + POPUP_LINE_PITCH]
+}
+
+/// Button `k`'s box (0 Yes, 1 No) with `highlight` highlighted.
+fn popup_button_box(k: usize, highlight: usize) -> [i32; 4] {
+    let [l, r] = if k == 0 { POPUP_YES } else { POPUP_NO };
+    let [t, b] = if k == highlight { POPUP_ROWS_HIGHLIGHTED } else { POPUP_ROWS_OTHER };
+    [l, t, r, b]
+}
+
+/// The popup's buttons' looks (Q151 e, traced): plain `yesbtn.pba` frame
+/// 0; highlighted `buyhibtn.pba` (the layout's BTN1 picture, the gold
+/// outline; 88 x 25) stretched to the button; held down (mouse button or
+/// Enter, until let go) frame 1 of that button's own picture, the label 1
+/// right and 1 down.
 const POPUP_BUTTON_PICTURE: &str = "yesbtn.pba";
 const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
 const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
@@ -796,29 +814,26 @@ impl Gui {
         if d == Drawn::Panel(Panel::Popup) {
             if let Some(p) = &self.popup {
                 let mut buttons = Vec::new();
-                for (k, (rect, label)) in [(POPUP_YES, &p.yes), (POPUP_NO, &p.no)].into_iter().enumerate() {
+                for (k, label) in [&p.yes, &p.no].into_iter().enumerate() {
+                    let rect = popup_button_box(k, p.highlight);
                     let down = p.pressed == Some(k);
                     if let Some(font) = &popup_font {
                         let [dx, dy] = if down { POPUP_PRESSED_SHIFT } else { [0, 0] };
                         let at = [rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy];
                         buttons.push(Spec::Text { rect: at, font: font.clone(), justification: 0xC, text: label.clone() });
                     }
-                    buttons.push(if down {
+                    buttons.push(if p.highlight == k {
+                        Spec::Stretch { rect, file: POPUP_HIGHLIGHT_PICTURE.to_string(), frame: usize::from(down) }
+                    } else if down {
                         Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 1, cut: None }
-                    } else if p.highlight == k {
-                        Spec::Stretch { rect, file: POPUP_HIGHLIGHT_PICTURE.to_string(), frame: 0 }
                     } else {
                         Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 0, cut: None }
                     });
                 }
-                // The lines, centred across and down (stand-in, Q151 d).
+                // The lines (Q151 d), each centred in its box.
                 if let Some(font) = popup_text_font.clone().or_else(|| popup_font.clone()) {
-                    let [al, at, ar, ab] = POPUP_TEXT_AREA;
-                    let n = p.lines.len() as i32;
-                    let top = at + (ab - at - n * POPUP_LINE_PITCH) / 2;
                     for (k, line) in p.lines.iter().enumerate() {
-                        let y = top + k as i32 * POPUP_LINE_PITCH;
-                        buttons.push(Spec::Text { rect: [al, y, ar, y + POPUP_LINE_PITCH], font: font.clone(), justification: 0xC, text: line.clone() });
+                        buttons.push(Spec::Text { rect: popup_line_box(p.lines.len(), k), font: font.clone(), justification: 0xC, text: line.clone() });
                     }
                 }
                 out.splice(0..0, buttons);
@@ -839,16 +854,12 @@ impl Gui {
         let Some(font) = font else { return Vec::new() };
         self.load_font(&font);
         let Some(Some(f)) = self.fonts.get(&font.to_ascii_lowercase()) else { return Vec::new() };
-        let [al, at, ar, ab] = POPUP_TEXT_AREA;
-        let n = p.lines.len() as i32;
-        let top = at + (ab - at - n * POPUP_LINE_PITCH) / 2;
         p.lines
             .iter()
             .enumerate()
             .map(|(k, line)| {
-                let y = top + k as i32 * POPUP_LINE_PITCH;
                 let w = gui_draw::text_width(f, line);
-                let (x, ty) = gui_draw::text_origin([al, y, ar, y + POPUP_LINE_PITCH], 0xC, w, f.char_height, 1.0);
+                let (x, ty) = gui_draw::text_origin(popup_line_box(p.lines.len(), k), 0xC, w, f.char_height, 1.0);
                 (x, ty, w)
             })
             .collect()
@@ -862,7 +873,8 @@ impl Gui {
         // Window pixels -> layout pixels from the panel's top-left.
         let x = ((at.x - fl) / k) / self.scale - dialog.rect[0] as f32;
         let y = ((at.y - ft) / k) / self.scale - dialog.rect[1] as f32;
-        [POPUP_YES, POPUP_NO].iter().position(|r| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32)
+        let highlight = self.popup.as_ref().map_or(0, |p| p.highlight);
+        (0..2).map(|k| popup_button_box(k, highlight)).position(|r| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32)
     }
 
     /// The control under screen point (`x`, `y`) of drawn picture `d`
@@ -1924,16 +1936,16 @@ pub fn popup_step(
             lines: kq8_core::portal::popup_lines(&text),
             yes: message_500(&sim, 29).unwrap_or_else(|| "Yes".into()),
             no: message_500(&sim, 14).unwrap_or_else(|| "No".into()),
-            // STAND-IN (Q151): No highlighted when it opens.
-            highlight: 1,
+            // Q151: Yes is highlighted when it opens; nothing pressed.
+            highlight: 0,
             pressed: None,
         };
-        let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (stand-in Q151); the game pauses, the sounds go on (world-change.md rule 26)", shown.lines, shown.yes, shown.no, if shown.highlight == 0 { &shown.yes } else { &shown.no });
+        let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (Q151); the game pauses, the sounds go on (world-change.md rule 26)", shown.lines, shown.yes, shown.no, if shown.highlight == 0 { &shown.yes } else { &shown.no });
         gui.popup = Some(shown);
         gui.panels.set(kq8_core::panels::Group::Popup, true, "the Portal state's question");
         gui.note(&line);
         let places = gui.popup_text_places();
-        gui.note(format!("popup: text placed (layout px in the 360 x 148 area above the buttons): {places:?}"));
+        gui.note(format!("popup: text placed (layout px from the panel's top left; line boxes by Q151 d): {places:?}"));
         shared.log.lock().unwrap().summary(line);
     }
     let updates = sim.active.world.updates;
@@ -1964,10 +1976,11 @@ pub fn popup_step(
         if keys.any_just_pressed(enter) {
             p.pressed = Some(p.highlight);
         }
+        // Q151 e: a mouse press shows that button pressed; the highlight
+        // stays.
         if buttons.just_pressed(MouseButton::Left) {
             if let Some(k) = over {
                 p.pressed = Some(k);
-                p.highlight = k;
             }
         }
         if keys.any_just_released(enter) {
@@ -1996,6 +2009,13 @@ pub fn popup_step(
             "enter" => Some(p.highlight == 0),
             "yes" => Some(true),
             "no" => Some(false),
+            // Q151 b: nothing in handsOff; else No (the original answers the
+            // button that is not highlighted: "Do not reproduce") and the
+            // main menu.
+            "escape" if sim.active.world.connor_hands_off => {
+                gui.note("popup: Escape: nothing (handsOff; Q151 b)");
+                None
+            }
             "escape" => {
                 gui.note("popup: Escape: No, and the main menu (not built yet: not opened) (rule 26)");
                 Some(false)

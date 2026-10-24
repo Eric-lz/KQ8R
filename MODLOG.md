@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-10a: the portal popup as traced (Q151 built)
+
+**Changed:** Viewer `gui_view.rs`: the popup opens with **Yes** highlighted (was No); Escape does nothing in `handsOff` (otherwise No and the menu, as before; the original's "the other button" is not reproduced); a mouse press shows that button pressed without moving the highlight; the highlighted button pressed (Enter) shows `buyhibtn.pba` frame 1; the button rows 145–183 (highlighted) and 146–182 (the other); the text lines in the traced boxes (base 12, pitch 18, the offset table). QUESTIONS Q151. Provenance.
+**Why:** `world-change.md` rule 26 "Details" (Q151).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 1500 --sound off --command "move Connor 0 158510 307740 9925 0 0 3.1416",2 --hold 1,0,0,5,22 --key popup:right,20 --key popup:enter,20`; `gui.log`, `viewer.log`.
+**Result:** "Yes highlighted" when it opens; Right: "No highlighted"; Enter: No (Decline, Connor back at `noLoc`). The two lines at rows 49 and 75 (26 apart, as the note's 48–66 / 74–92).
+**Still broken / not tested:** Not looked at by eye. The click sound on Left / Right is not played (the note doesn't name the sound). The buttons' left edges stay ours (76 and 196 on the 360-wide background; A inferred 79 and 202 from a 370-wide dialog). Hover (frame 2) not drawn.
+**Next:** A-10b (black only in the loading meter's slot, Q152).
+
 ## 2026-10-24 A-9: Connor's talk state hides him from characters (Q146 built)
 
 **Changed:** Core `active.rs` (`connor_hidden_why`): his talk state (state number 1,024, from A-1) is the fourth reason characters are told he is 100,000 below. Viewer `door_view.rs`: the second place that copies `handsOff` to the core now also leaves out the hammer throw's (as the first did). Unit test extended. Provenance, QUESTIONS Q146.

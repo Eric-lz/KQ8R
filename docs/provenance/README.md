@@ -3347,3 +3347,16 @@ Replaces the L-2 / L-3 rows' stand-ins (DESIGN "Connor's levels checked").
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | Characters are told he is 100,000 below while: the Invisible potion runs, `handsOff` hides the pointer (scripts, `walkTo` / `runTo`; not the hammer throw's), he is in his talk state (not remarks outside a conversation), or on the rope | `potions.md` rule 26 (traced, Q146) | Unit test `invisible_reports_him_100000_below`; viewer `characters.log` with the Wizard |
+
+## The portal popup (A-10a, Q151) — viewer `gui_view.rs` (`popup_step`, `popup_line_box`, `popup_button_box`)
+
+Replaces the 6e popup rows' stand-ins (highlight, Escape, rows, lines).
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Yes is highlighted when the popup opens; Left / Right move between the two | `world-change.md` rule 26 "Details" (traced, Q151) | Viewer `gui.log`: "Yes highlighted", then "No highlighted" |
+| Enter answers on release, only if pressed while the popup was open (one answer per press) | Rule 26 (a) | As built in 6e (unchanged) |
+| Escape: nothing in `handsOff`; otherwise No and the main menu | Rule 26 (b); "Do not reproduce" (the original answers the other button) | — |
+| Rows: highlighted 145–183, the other 146–182; lines at 12 + k × 18 + the offset table, 18 high, 360 wide, centred | Rule 26 (c), (d) (traced) | Viewer: lines at 49 and 75 |
+| Pressed: frame 1 of the button's own picture (the highlighted one `buyhibtn.pba`), label 1 right and 1 down; a mouse press doesn't move the highlight | Rule 26 (e) (traced) | — |
+| Button left edges 76 / 196 (W = 360, ours); no click sound on Left / Right | **Stand-in** (A inferred W = 370; the sound not named) | — |
