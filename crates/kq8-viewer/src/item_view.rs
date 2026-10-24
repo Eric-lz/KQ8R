@@ -126,7 +126,7 @@ pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Opti
             shared.log.lock().unwrap().summary(format!("corpse of {}: shape {} not loaded; not drawn", c.name, c.shape));
             continue;
         };
-        let body = commands.spawn((bevy_transform_from(c.rotation, c.position), Visibility::Inherited, crate::terrain_view::ObjectName(format!("{}_corpse", c.name)))).id();
+        let body = commands.spawn((bevy_transform_from(c.rotation, c.position), Visibility::Inherited, crate::terrain_view::ObjectName(c.drawn_name()))).id();
         for (mesh, material) in parts {
             let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
             commands.entity(body).add_child(part);

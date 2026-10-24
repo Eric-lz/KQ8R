@@ -2024,6 +2024,24 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         }
     }
     placer.log.summary(format!("scripts for play: {} from the world, {shared} game-wide (GAME/patch, GAME/Kq)", scripts.len() - shared));
+    // anim-scripts.md rule 34 (Q157): the shapes `loadObject` makes while
+    // playing, ready as the corpses' are (drawn by `item_view`).
+    let mut object_shapes = std::collections::BTreeSet::new();
+    for (name, bytes) in &scripts {
+        for line in String::from_utf8_lossy(bytes).lines() {
+            let mut w = line.split('#').next().unwrap_or("").split_whitespace();
+            if w.next().is_some_and(|c| c.eq_ignore_ascii_case("loadObject")) {
+                if let Some(file) = w.nth(1).filter(|f| f.to_ascii_lowercase().ends_with(".kqs") || f.to_ascii_lowercase().ends_with(".dts")) {
+                    if object_shapes.insert(file.to_ascii_lowercase()) {
+                        placer.load_corpse_shape(file, &format!("loadObject in {name}"));
+                    }
+                }
+            }
+        }
+    }
+    if !object_shapes.is_empty() {
+        placer.log.summary(format!("loadObject shapes made ready (anim-scripts.md rule 34): {object_shapes:?}"));
+    }
     let (item_shapes, item_lines) = placer.item_models(&script);
     let items = std::mem::take(&mut placer.items);
     let gone_skipped = std::mem::take(&mut placer.gone_skipped);

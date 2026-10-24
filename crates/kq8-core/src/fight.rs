@@ -391,6 +391,16 @@ pub struct Corpse {
     pub shape: String,
     pub position: [f32; 3],
     pub rotation: [[f32; 3]; 3],
+    /// Made by a script's `loadObject` (`anim-scripts.md` rule 34): drawn
+    /// under its own name (so `deleteObject` finds it), not `<name>_corpse`.
+    pub loaded: bool,
+}
+
+impl Corpse {
+    /// The name its drawn object goes by.
+    pub fn drawn_name(&self) -> String {
+        if self.loaded { self.name.clone() } else { format!("{}_corpse", self.name) }
+    }
 }
 
 /// Types whose death gives no first-kill tip (rule 33, with the Do
@@ -1081,7 +1091,7 @@ impl crate::active::WorldState {
         let corpse = match shape {
             Some(shape) => {
                 let line = format!("a corpse {shape} where it stood ({:.0}, {:.0}, {:.0}), turned the same way, no shadow, not solid", position[0], position[1], position[2]);
-                self.corpses.push(Corpse { name: name.clone(), shape, position, rotation });
+                self.corpses.push(Corpse { name: name.clone(), shape, position, rotation, loaded: false });
                 line
             }
             None => format!("no corpse ({})", if kind == HitKind::Fire { "Fire: burnt away" } else { "no shape for this kind" }),

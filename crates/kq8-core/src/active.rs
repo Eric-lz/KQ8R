@@ -1870,6 +1870,45 @@ impl WorldState {
         self.templates.extend(t.into_iter().map(|(f, t)| (f.to_ascii_lowercase(), t)));
     }
 
+    /// `loadObject <name> <file> [x y z [rx ry rz]]` (`anim-scripts.md`
+    /// rule 34, Q157): `.kqs` / `.dts` make a plain object with no
+    /// animation, script or sound, not solid and not clickable: drawn as
+    /// the corpses are (`fighting.md` rule 32, made the same way). Missing
+    /// numbers are 0; `@` gives `NoName<n>`; no duplicate check; z −1 / −2:
+    /// the ground height (inferred by A).
+    fn load_object(&mut self, words: &[String], at: &str) -> String {
+        let [_, name, file, rest @ ..] = words else {
+            self.note(format!("{at}: usage: loadObject <name> <file> [x y z [rx ry rz]]; nothing"));
+            return "1".into();
+        };
+        let ext = file.rsplit_once('.').map_or(String::new(), |(_, e)| e.to_ascii_lowercase());
+        if ext != "kqs" && ext != "dts" {
+            let what = if ext == "dig" { "a building (not done)" } else { "unknown object" };
+            self.note(format!("{at}: loadObject {name} {file}: {what} '{ext}'; nothing made"));
+            return "1".into();
+        }
+        let name = if name.starts_with('@') { self.items.next_name() } else { name.clone() };
+        let n: Vec<f32> = (0..6).map(|k| rest.get(k).filter(|w| looks_like_number(w)).map_or(0.0, |w| number_value(w) as f32)).collect();
+        let mut position = [n[0], n[1], n[2]];
+        if position[2] == -1.0 || position[2] == -2.0 {
+            match self.heights.as_ref().and_then(|h| h(position[0], position[1], position[2] == -1.0)) {
+                Some(g) => position[2] = g,
+                None => self.note(format!("{at}: loadObject {name}: z {} at ({:.0}, {:.0}): no ground height known; kept", position[2], position[0], position[1])),
+            }
+        }
+        let rotation = kq8_data::objects::rotation([n[3], n[4], n[5]]);
+        self.corpses.push(crate::fight::Corpse { name: name.clone(), shape: file.clone(), position, rotation, loaded: true });
+        // A world object by that name now (`deleteObject` finds it).
+        let key = name.to_ascii_lowercase();
+        self.deleted.remove(&key);
+        self.known.insert(key);
+        self.note(format!(
+            "{at}: loadObject {name} {file}: a still plain object at ({:.0}, {:.0}, {:.0}) turned ({:.3}, {:.3}, {:.3}); no script, not solid, not clickable (anim-scripts.md rule 34)",
+            position[0], position[1], position[2], n[3], n[4], n[5]
+        ));
+        "0".into()
+    }
+
     /// `loadKQ <file> [name [x y z [rx ry rz]]]` making a new copy of a
     /// template (M5 5d-2; `objects.md` rules 2, 6; `anim-scripts.md` rule
     /// 12): the name (`same` or none: the file's; `@`: `NoName<n>` now; else
@@ -3004,6 +3043,7 @@ impl ScriptHost for WorldState {
             "setCombatLevel" => Some(self.set_combat_level(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
             "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
+            "loadObject" => Some(self.load_object(words, at)),
             "KQObject::tossItems" => Some(self.toss_items(words, at)),
             "checkDistance" => Some(self.check_distance(words, at)),
             "KQMonster::goHome" | "KQMonster::setAlarmRadius" | "KQMonster::setChaseRadius" | "KQMonster::setHomeRadius" => Some(self.monster_ai_command(words, at)),
@@ -5103,6 +5143,30 @@ endif
         let log = a.take_log().join("
 ");
         assert!(log.contains("StateChange Connor 32 2 to clifTrap (sent by Connor's state change): its script ran"), "{log}");
+    }
+
+    #[test]
+    fn load_object_makes_a_still_object_that_can_be_deleted() {
+        // anim-scripts.md rule 34 (Q157): sprgnbow.cs's corpse.
+        let mut a = with_trap("");
+        a.test_command("loadObject deadsprg sp_cadth.kqs 224700 183000 8345 0 0 -1.57", "t");
+        let c = a.world.corpses.last().unwrap().clone();
+        assert_eq!((c.name.as_str(), c.shape.as_str(), c.position, c.loaded), ("deadsprg", "sp_cadth.kqs", [224700.0, 183000.0, 8345.0], true));
+        assert_eq!(c.rotation, kq8_data::objects::rotation([0.0, 0.0, -1.57]));
+        assert_eq!(c.drawn_name(), "deadsprg");
+        // Missing numbers are 0; `@` gives an automatic name.
+        a.test_command("loadObject @ rok.kqs 5", "t");
+        let c = a.world.corpses.last().unwrap();
+        assert!(c.name.starts_with("NoName") && c.position == [5.0, 0.0, 0.0], "{c:?}");
+        // Other files make nothing.
+        let n = a.world.corpses.len();
+        a.test_command("loadObject hut hut.dig", "t");
+        a.test_command("loadObject x x.kq", "t");
+        assert_eq!(a.world.corpses.len(), n);
+        // apothgnm.cs deletes its `mortar` later.
+        a.world.requests.clear();
+        a.test_command("deleteObject deadsprg", "t");
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Delete { name, .. } if name == "deadsprg")), "{:?}", a.world.requests);
     }
 
     fn connor_at(a: &mut Active, x: f32) -> Vec<String> {

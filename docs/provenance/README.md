@@ -3288,3 +3288,12 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | After the choice any other state ends it; it never ends by itself | Rule 12 | Viewer: "leaves the Choice state" when the walk starts |
 | State number 524,288 while in it | Rule 16 | — |
 | `StartChoice` after one of his movements ends in Choice (rule 9) not done; a key held from before entering doesn't choose after `handsOff 0` (rule 13, inferred) | **Gap / stand-in** | — |
+
+## `loadObject` (A-3, Q157) — `crates/kq8-core/src/active.rs` (`load_object`), `fight.rs` (`Corpse::loaded`); viewer `load.rs`, `item_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `loadObject <name> <file> [x y z [rx ry rz]]`: up to six numbers, missing = 0; `@` → `NoName<n>`; no duplicate check | `anim-scripts.md` rule 34 (traced, Q157) | Unit test `load_object_makes_a_still_object_that_can_be_deleted` |
+| `.kqs` / `.dts` → a plain object, one still pose, no script, no sound, not solid, not clickable (drawn like `fighting.md` rule 32's corpses); `.dig` → building (not done); other → "unknown object", nothing | Rule 34 (still pose: data; not solid: inferred by A) | Unit test; viewer `viewer.log`: "corpse of deadsprg: sp_cadth.kqs drawn" |
+| z −1 / −2 → the ground height | Rule 34 (**inferred** by A, not used by any shipped line) | — |
+| The shapes are made ready at load from the world's scripts' `loadObject` lines; the object is a world object by its name (`deleteObject` hides it) | **Ours** (the original loads the file when the command runs; `apothgnm.cs` deletes its `mortar`) | Viewer: "loadObject shapes made ready"; `deleteObject deadsprg` → hidden |

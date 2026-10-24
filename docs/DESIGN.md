@@ -2815,6 +2815,7 @@ is in `kq8-core`, a viewer run checked in the logs.
    waits for `exist`, Q162).
 3. **A-3: `loadObject`** (Q157, `anim-scripts.md` rule 34): a still
    plain object (the spriggan's corpse), not solid, not clickable.
+   **Done** 2026-10-24 (shapes made ready at load; checked in the logs).
 4. **A-4: `setScript` calls `Init`** (Q154, `anim-scripts.md` rule 33),
    also while playing.
 5. **A-5: cues with `sendEvent @`, `random`** (Q158, `anim-scripts.md`

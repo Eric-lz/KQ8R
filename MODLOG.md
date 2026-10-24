@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-3: `loadObject` (Q157 built)
+
+**Changed:** Core `active.rs`: the script command `loadObject <name> <file> [x y z [rx ry rz]]` (`.kqs` / `.dts`: a still plain object, drawn as the corpses are; missing numbers 0; `@` → `NoName<n>`; other files: nothing, a log line; the name becomes a world object so `deleteObject` finds it). `fight.rs`: `Corpse::loaded`, `drawn_name`. Viewer `load.rs`: every shape a world's scripts name in `loadObject` is made ready at load; `item_view.rs` names the drawn object by `drawn_name`. Unit test. Provenance, QUESTIONS Q157.
+**Why:** `anim-scripts.md` rule 34. Used by the roof kill (`sprgnbow.cs`: the spriggan's body), Gnome's mortar, Ice World's grate and orcs.
+**Tested how:** `cargo test --workspace` (all pass; new `load_object_makes_a_still_object_that_can_be_deleted`). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai --command "loadObject deadsprg sp_cadth.kqs 226700 183000 8345 0 0 -1.57",5 --command "deleteObject deadsprg",20`; `viewer.log`.
+**Result:** At load: "loadObject shapes made ready: sp_cadth, sp_dgdth, sp_ftdth, sp_lsdth". Update 5: "corpse of deadsprg: sp_cadth.kqs drawn at (226700, 183000, 8345)"; update 21: "deadsprg deleted … hidden".
+**Still broken / not tested:** Not looked at by eye. Not run inside the roof scene (that needs `exist`, Q162). `.dig` (a building) not made. z −1 / −2 → ground height is A's inference (no shipped line uses it). Not saved (no saving yet).
+**Next:** A-4 (`setScript` calls `Init`).
+
 ## 2026-10-24 A-2: Connor's Choice state (Q155 built); `exist` asked (Q162)
 
 **Changed:** Core: new `choice.rs` (the list, the points put on one circle, the pick nearest a probe 200 ahead / behind); `active.rs`: `setState Connor Choice <list>` (exactly four words) becomes `Request::ConnorChoice`. Viewer `connor_view.rs`: `enter_choice`, `choice_step` (points measured at the next update; forward / back chooses once and sends `DoChoice <number>`; he never walks, turn keys pivot; a jump refused before the choice; any other state after the choice ends it), a swap before the choice ends in a fresh Choice, state number 524,288. `door_view.rs`: the request loop is now a queue so `StartChoice`'s requests (his `move`) are applied at once; script walks, Special lists and dying are refused before the choice. Unit tests. QUESTIONS Q155, new **Q162**. Provenance.
