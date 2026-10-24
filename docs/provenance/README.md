@@ -3430,3 +3430,12 @@ Replaces the 5g-7 stand-in (half see-through).
 | --- | --- | --- |
 | Standing: a weapon request waits for the swing's end; moving: taken at once, the swap's `away` / `out` cuts the swing (no hit before `do`) | `ranged-weapons.md` open question 1, answered in Q138 (traced) | Viewer `fight.log`: "moving: the swap cuts the swing … short" |
 | "Moving" = a movement key held (our swing is a Special list, not inside Wait / Move) | **Ours** | — |
+
+## Which jump (A-12d, Q112) — `crates/kq8-core/src/connor.rs` (`jump_kind`), `connor_update.rs` (`can_jump`)
+
+Replaces the Q112 stand-in row (the wall block).
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The jump comes from the movement the held keys ask for: back → `backJump` (at a wall, in water too), forward + running → `runJump` (water: `jump`), else `jump` | `connor-physics.md` "Jumping" rule 2 (traced, Q112) | Unit tests `a_wall_stop_blocks_until_the_key_is_released`, `movement_table`; viewer `connor.log`: `backJump` from `back` |
+| Forward at a wall with running on: `runJump` while standing | Rule 2 (**inferred** by A) | Unit test only |

@@ -301,7 +301,8 @@ pub enum JumpKind {
 }
 
 impl JumpKind {
-    /// Rule 2: `runJump` from `run`, `backJump` from `back`, otherwise `jump`.
+    /// Rule 2: `runJump` from `run`, `backJump` from `back`, otherwise `jump`
+    /// (the movement the keys ask for, Q112).
     pub fn for_movement(movement: &str) -> JumpKind {
         match movement {
             "run" => JumpKind::Run,
@@ -881,7 +882,12 @@ impl Walker {
     /// Which jump the Jump key would start now, or why none: only in the
     /// keys' control, with no start or stop animation playing, from
     /// `JUMP_FROM` (the ground conditions are the mover's, `connor_update.rs`).
-    pub fn jump_kind(&self) -> Result<JumpKind, String> {
+    /// The kind comes from the movement the held keys ask for (`intent`),
+    /// not the one playing and not a wall block (connor-physics.md
+    /// "Jumping" rule 2, Q112): back held → `backJump` (also at a wall and
+    /// in water), forward with running on → `runJump` (in water `jump`),
+    /// otherwise `jump`.
+    pub fn jump_kind(&self, intent: Intent) -> Result<JumpKind, String> {
         if self.mode != Mode::Free {
             return Err(format!("not in the keys' control (mode {})", self.mode.name()));
         }
@@ -891,14 +897,7 @@ impl Walker {
         if !JUMP_FROM.contains(&self.movement) {
             return Err(format!("not from {}", self.movement));
         }
-        // STAND-IN (Q112; the user's check in the original, 2026-10-18):
-        // stopped by a wall while stepping back, with back still held (the
-        // back block is on until back is let go), the jump is the back
-        // flip, not the standing jump that rule 2 alone would give.
-        if self.movement == "stop" && self.blocked_back {
-            return Ok(JumpKind::Back);
-        }
-        Ok(JumpKind::for_movement(self.movement))
+        Ok(JumpKind::for_movement(choose_movement(intent, self.submerged)))
     }
 
     /// A safe landing (connor-physics.md "Jumping" rule 4): the kind's
@@ -1590,10 +1589,15 @@ mod tests {
             w.update(intent(forward, 0, false), &lookup(&stop_list()));
             assert_eq!(w.head_on_at_wall(), Some((movement, "stop")));
             assert_eq!(w.blocked_name(), if forward > 0 { "fwd" } else { "back" });
-            // Q112 stand-in (the user's check): backed against the wall,
+            // Q112 (the user's check, traced): backed against the wall,
             // back held, Jump gives the back flip; forward: the standing
-            // jump.
-            assert_eq!(w.jump_kind(), Ok(if forward > 0 { JumpKind::Stand } else { JumpKind::Back }));
+            // jump (running off).
+            assert_eq!(w.jump_kind(intent(forward, 0, false)), Ok(if forward > 0 { JumpKind::Stand } else { JumpKind::Back }));
+            // Forward held at the wall with running on: `runJump` while
+            // standing (inferred in the note).
+            if forward > 0 {
+                assert_eq!(w.jump_kind(intent(1, 0, true)), Ok(JumpKind::Run));
+            }
             // Key held for 3 s: standing, the idle animation playing on.
             let mut last = w.phase;
             for n in 0..45 {
@@ -1606,7 +1610,7 @@ mod tests {
             assert_eq!(w.key_event(key, true), (false, false));
             assert_eq!(w.key_event(key, false), (forward > 0, forward < 0));
             // Back let go: standing still, the standing jump again.
-            assert_eq!(w.jump_kind(), Ok(JumpKind::Stand));
+            assert_eq!(w.jump_kind(intent(0, 0, false)), Ok(JumpKind::Stand));
             w.update(intent(0, 0, false), &lookup(&stop_list()));
             assert_eq!(w.key_event(key, true), (false, false));
             w.update(intent(forward, 0, false), &lookup(&stop_list()));
@@ -1658,11 +1662,17 @@ mod tests {
 
     #[test]
     fn movement_table() {
-        // Wading jumps are standing jumps (user's check in the original).
-        for m in ["waterwalk", "waterrun"] {
-            let w = Walker { movement: m, ..Walker::new(0.0) };
-            assert_eq!(w.jump_kind(), Ok(JumpKind::Stand), "{m}");
+        // Wading jumps are standing jumps (user's check in the original),
+        // back in water the back flip (Q112: no water form of back).
+        for (m, run) in [("waterwalk", false), ("waterrun", true)] {
+            let w = Walker { movement: m, submerged: true, ..Walker::new(0.0) };
+            assert_eq!(w.jump_kind(intent(1, 0, run)), Ok(JumpKind::Stand), "{m}");
+            assert_eq!(w.jump_kind(intent(-1, 0, run)), Ok(JumpKind::Back), "{m}");
         }
+        // Q112: the held keys, not the movement playing: back held while a
+        // walk still plays gives the back flip.
+        let w = Walker { movement: "walk", ..Walker::new(0.0) };
+        assert_eq!(w.jump_kind(intent(-1, 0, false)), Ok(JumpKind::Back));
         assert_eq!(choose_movement(intent(1, 0, true), false), "run");
         assert_eq!(choose_movement(intent(1, 1, false), false), "walk");
         assert_eq!(choose_movement(intent(-1, -1, true), false), "back");

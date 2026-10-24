@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12d: the jump picked from the held keys (Q112 built)
+
+**Changed:** Core `connor.rs` (`jump_kind`), `connor_update.rs` (`can_jump`): the jump comes from the movement the held keys ask for (`choose_movement` of the keys and the water flag): back held → `backJump` (also at a wall and in water), forward with running on → `runJump` (in water `jump`), otherwise `jump`. The wall-block stand-in is gone. Tests updated and extended. Provenance, QUESTIONS Q112.
+**Why:** `connor-physics.md` "Jumping" rule 2 (Q112, traced): not the movement playing, not a wall block. Our stand-in was right at a wall but wrong with back held in the open or a block left after the key was let go.
+**Tested how:** `cargo test --workspace` (all pass; `a_wall_stop_blocks_until_the_key_is_released`, `movement_table` extended: runJump at a wall with forward and running, back in water, back held while a walk still plays). `kq8-viewer --world Daventry --frames 900 --sound off --no-ai --command "move Connor 0 230300 183200 -1 0 0 1.57",3 --hold -1,0,0,5,30 --jump 15`; `connor.log`.
+**Result:** "jump: backJump from back at (229549, 183201, 8345)".
+**Still broken / not tested:** Not looked at by eye. Forward held at a wall with running on now gives `runJump` while standing (the note's inference, not seen in the original).
+**Next:** A-12e (turn keys during a conversation's approach, Q125).
+
 ## 2026-10-24 A-12c: a weapon swap while moving cuts a swing short (Q138 built)
 
 **Changed:** Viewer `door_view.rs`: a weapon request while a swing plays (or waits) and a movement key is held (his Move state) is taken at once: the swing is dropped (no hit if its `do` hasn't come), he stands, and the swap plays. Standing, the request still waits for the swing's end. Provenance, QUESTIONS Q138.

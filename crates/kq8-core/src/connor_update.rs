@@ -37,13 +37,14 @@ pub struct Tick {
 pub fn can_jump<'a>(
     mover: &Mover,
     walker: &Walker,
+    intent: Intent,
     world: &dyn MoverWorld,
     loops: &dyn Fn(&str) -> Option<&'a MovementLoop>,
 ) -> Result<crate::connor::JumpKind, String> {
     if mover.state != State::Normal {
         return Err(format!("mover state {}", mover.state.name()));
     }
-    let kind = walker.jump_kind()?;
+    let kind = walker.jump_kind(intent)?;
     if loops(kind.jump()).is_none() {
         return Err(format!("{} is not loaded yet", kind.jump()));
     }
@@ -130,7 +131,7 @@ pub fn tick<'a>(
         ));
     }
     if jump {
-        match can_jump(mover, walker, world, loops) {
+        match can_jump(mover, walker, intent, world, loops) {
             Ok(kind) => {
                 notes.push(format!(
                     "jump: {} from {} at ({:.0}, {:.0}, {:.0})",
@@ -502,7 +503,7 @@ mod tests {
         }
         assert_eq!(falls, 0);
         assert_eq!((w.mode, m.position[2], m.on_ground), (Mode::Free, 0.0, true));
-        assert!(can_jump(&m, &w, &ground, &loops).is_ok());
+        assert!(can_jump(&m, &w, Intent::default(), &ground, &loops).is_ok());
     }
 
     #[test]
@@ -603,13 +604,13 @@ mod tests {
         // Falling.
         let mut w = Walker::new(0.0);
         w.set_mode(Mode::Fall);
-        assert!(can_jump(&m, &w, &flat, &loops).is_err());
+        assert!(can_jump(&m, &w, Intent::default(), &flat, &loops).is_err());
         // 300 above the ground, not on it: refused; 200 above: a jump.
         let w = Walker::new(0.0);
         for (z, ok) in [(300.0, false), (200.0, true)] {
             let mut m = Mover::new([0.0, 0.0, z], true);
             m.on_ground = false;
-            assert_eq!(can_jump(&m, &w, &flat, &loops).is_ok(), ok, "{z}");
+            assert_eq!(can_jump(&m, &w, Intent::default(), &flat, &loops).is_ok(), ok, "{z}");
         }
         // Steep ground (45°, rising along +y): facing +y (heading π) is
         // facing uphill; facing −y (heading 0) is not.
@@ -618,12 +619,13 @@ mod tests {
             let mut m = Mover::new([0.0, 0.0, 100.0], true);
             m.on_ground = false;
             let w = Walker::new(heading);
-            assert_eq!(can_jump(&m, &w, &hill, &loops).is_ok(), ok, "heading {heading}");
+            assert_eq!(can_jump(&m, &w, Intent::default(), &hill, &loops).is_ok(), ok, "heading {heading}");
         }
         // From running: runJump isn't loaded here.
         let mut w = Walker::new(0.0);
         w.movement = "run";
-        assert_eq!(can_jump(&Mover::new([0.0; 3], true), &w, &flat, &loops), Err("runJump is not loaded yet".into()));
+        let running = Intent { forward: 1, turn: 0, run: true };
+        assert_eq!(can_jump(&Mover::new([0.0; 3], true), &w, running, &flat, &loops), Err("runJump is not loaded yet".into()));
         assert_eq!(JumpKind::for_movement("back"), JumpKind::Back);
     }
 
