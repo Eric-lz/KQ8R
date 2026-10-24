@@ -7,6 +7,15 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-24)
 
+- **2026-10-24 (A): Q160–Q166 and Q108 b answered**, one commit each, not
+  built: `getConInventory` (`inventory.md` rules 20–26: nine `ConInv::`
+  slots, fists 1280), `exist` (`anim-scripts.md` rule 38: 0 = there),
+  the loop speed (`objects.md` rule 6a: the wrap adds the last frame's
+  step; Connor's run 2,558, matching the user's measurement), `setState
+  … Wait` (`characters.md` rule 22), `setHaze` (`object-lighting.md`
+  rule 33a: haze n, visible 1.5 n), "no state" = 0 (`characters.md`
+  rule 16a), `dithered=` on every class (`objects.md` rules 8–9), panel
+  pictures stretched, not tiled (`interface.md` rules 20, 20a).
 - **2026-10-24 (B): session A's 2026-10-22 answers built** (plan in
   `docs/DESIGN.md` "building session A's 2026-10-22 answers", steps A-1
   to A-12, one commit each; checked in the logs, then **by the user
@@ -580,8 +589,10 @@ M6 has started with the Rope and Hook (6a).
   `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
   on doors and characters (Q165), Q81 c's wrap detail, `getConInventory`
   (Q166: the bell outside the Wizard's house can now be hit but doesn't
-  ring until it is built). Suggested next:
-  A answers Q162-Q166; B then the roof kill, the bell and the loops.
+  ring until it is built). A answered Q160–Q166 and Q108 b
+  (2026-10-24). Suggested next for B: `getConInventory` (the bell),
+  `exist` (the roof kill), then rule 6a's loop speed, `setHaze`,
+  Wait re-entry, `dithered=` on every class, stretched panel pictures.
 
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice
@@ -778,8 +789,8 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- **For A (2026-10-23, not blocking):** Q160 (`setState Connor Wait`
-  from a script), Q161 (`setHaze`), both from Daventry's Shadow scene.
+- **Answered by A 2026-10-24, not built yet:** Q160, Q161, Q162, Q163
+  (B's stand-in already right), Q164, Q165, Q166, Q108 b.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
@@ -787,13 +798,6 @@ M6 has started with the Rope and Hook (6a).
 - Inside `world-change.md`: three small points (not blocking):
   left-world variables in memory, the rope / movement list after
   arrival, `worldState.kq`'s events.
-- **For A (2026-10-24, from B's A-1 to A-12):** **Q162** (`exist <object>`
-  and how `if` reads it: Daventry's roof kill takes the `else` branch
-  until answered), **Q163** (`StateChange`'s old number when leaving "no
-  state"; B sends 0), **Q164** (`objects.md` "Loops" rule 6's repeating
-  speed and wrap disagree with `character-movement.md` and Connor's
-  measured speed; B kept the old speed), **Q165** (`dithered=` on doors,
-  characters, plain objects; and rule 9's data: `arroswt` has 2).
 - **Built 2026-10-24 (A-1 to A-12):** Q112, Q125, Q126, Q138 (e and the
   swap during a swing), Q140 c, Q143 c, Q144, Q145, Q146, Q148, Q149,
   Q150, Q151, Q152, Q153 (Connor's frames; the speed and wrap: Q164),
@@ -832,8 +836,8 @@ M6 has started with the Rope and Hook (6a).
   `interface.md` and built (4c-1); still open: index 0 in fonts, font
   flag bit 6, the picture attribute bits.
 - For A (asked 2026-10-18 by B, M4 4c): **Q108** (the 800 × 600 screen:
-  how rectangles, pictures and fonts scale; how smaller pictures fill
-  their box; the panels' animation speed), **Q109** (counts of 0 for
+  how rectangles and fonts scale; the panels' animation speed; (b) how
+  pictures fill their box answered 2026-10-24), **Q109** (counts of 0 for
   gold and rocks, the rocks picture, the blink's order, a `give`'s
   pushed-out piece, the top bar in a window; (d) the potions' clock and
   (a) the slots' count 0 answered in `potions.md` and built in M5 5g), **Q110** (the scroll's and rock's remark
