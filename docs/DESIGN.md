@@ -2863,3 +2863,52 @@ is in `kq8-core`, a viewer run checked in the logs.
 
 Questions found on the way go to `docs/behaviour/QUESTIONS.md`, not
 guessed.
+
+### Outside the milestones: building session A's 2026-10-24 answers (planned 2026-10-24)
+
+Session A answered Q160–Q166 and Q108 b on 2026-10-24 (MODLOG "Study A"
+entries; summary in `STATUS.md`). Each step below builds one answer,
+one commit each (code, MODLOG, provenance, QUESTIONS), gameplay blockers
+first. Each step: the note's rule, a unit test where the rule is in
+`kq8-core`, a viewer run checked in the logs (`kq8-artifacts/logs/`).
+
+1. **B-1: `getConInventory`** (Q166, `inventory.md` rules 20–26): nine
+   `ConInv::` variables, each the `ID #` of the carried item whose
+   category is exactly that place, or 0 (placeholders count: fists
+   1280, no ranged 1310, no armour 2120); `$Console::Return` 0; nine
+   console lines. Then Daventry's bell: three hits with the small axe
+   start the Lake Sword scene (`bell.cs`, check 6).
+2. **B-2: `exist <name>`** (Q162, `anim-scripts.md` rule 38): 0 when
+   the name is a world object (deleted ones still count until the
+   deleting event ends), 1 when not; wrong word count: usage line and 0.
+   Then the roof choice's forward key plays the spriggan kill.
+3. **B-3: loop speed** (Q164, `objects.md` "Loops that move the whole
+   object" rules 6 and 6a; `connor-movement.md` "Forward speed" rules
+   3–4; `character-movement.md` rules 1–2), for Connor and characters:
+   a repeating cycle takes N × duration/(N − 1), a forward wrap sets
+   the phase to exactly 0, entering frame 0 forwards adds the last
+   frame's step, none backwards. Connor's walk, run and back speeds
+   logged (expected 1,124, 2,558, 1,070 units/s).
+4. **B-4: `KQMonster::setState <name> Wait`** (Q160, `characters.md`
+   rule 22 "`setState <name> Wait` in detail"): Wait is entered again
+   and asks for `Stop`; Move at once; Special after its list. In Wait,
+   any other movement ending (not `Stop`, not `gesture…`) asks for
+   `Stop` (Connor too). The Shadow scene: Connor stands up after
+   `portalx`.
+5. **B-5: `setHaze`** (Q161, `object-lighting.md` rule 33a): haze n,
+   visible 1.5 n, the camera's far limit 1.5 n, at once; four console
+   lines; `$Console::Return` 0.
+6. **B-6: `dithered=` on every class** (Q165, `objects.md` "Dithered
+   objects" rules 8–9): applied when the object is added to the world,
+   and again at each movement start for objects that play movements.
+7. **B-7: panel pictures** (Q108 b, `interface.md` rules 20 and 20a):
+   modifier 0x8000 = stretched to the box, nearest pixel; otherwise
+   drawn once at its own size; the bars' empty part is `4black.pbm`;
+   attribute kind 1 = colour 0 see-through. Replaces the tiling
+   stand-in.
+8. **B-8: check Q163** (`characters.md` rule 16a): leaving "no state"
+   sends old state 0. Our stand-in should already match; change it only
+   if not; the check logged.
+
+Not part of this plan (open for a study session): Q108 a, c, d; whether
+a saved game keeps `setHaze`'s values.
