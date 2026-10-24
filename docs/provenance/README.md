@@ -3326,3 +3326,10 @@ Replaces the L-2 / L-3 rows' stand-ins (DESIGN "Connor's levels checked").
 | The flame and `LEVEL.AUD` play when the level the meters show changes (any direction), not on a level-up as such | Rule 26 (traced, Q149 b) | Viewer: level 1 → 2 |
 | `setLevel` sets only the number, sends nothing; the next stats change shows it | Rule 30a (traced, Q149 a) | Viewer Dead City: "nothing sent to the meters" |
 | Not when the screen opens; the flame 17 frames at 15 per second, once; both sounds in group 0 | **Stand-in** (not traced) | — |
+
+## Connor's frame for a phase (A-7, Q153) — `crates/kq8-core/src/connor.rs` (`MovementLoop::frame_at`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Frame = floor(phase × frames + 0.001) for his movements too (repeating or not); a play-once movement at or past the end shows its last frame; one played backwards (`undraw`) last to first | `objects.md` "Loops that move the whole object" rule 6 (traced, Q153; rule 1: the same path for Connor) | Unit test `his_frames_are_cut_down_as_every_object_s` |
+| Repeating speed (N − 1)/(N × duration) and the wrap to exactly 0: **not built** (for any loop) | Rule 6 disagrees with `character-movement.md`'s speed and Connor's measured speed: **Q164** | A build of it slowed walkers by 1/N (reverted) |

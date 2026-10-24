@@ -257,19 +257,22 @@ impl MovementLoop {
         self.duration
     }
 
-    /// The frame shown at `phase` (0..1 of one play). A one-shot with
-    /// speed −1 (`undraw`, `c_shth`) shows its frames last to first
-    /// (`anim-scripts.md` rule 5; M5 5c fix). **Stand-in**: its `loop=`
-    /// start phase is not used (his walker starts every movement at 0).
+    /// The frame shown at `phase` (0..1 of one play): floor(phase × frames
+    /// + 0.001), cut down, as for every animated object (`objects.md`
+    /// "Loops" rule 6, Q153). A one-shot with speed −1 (`undraw`,
+    /// `c_shth`) shows its frames last to first (`anim-scripts.md` rule 5;
+    /// M5 5c fix). **Stand-in**: its `loop=` start phase is not used (his
+    /// walker starts every movement at 0), so its phase runs 0..1 and is
+    /// turned round here.
     pub fn frame_at(&self, phase: f32) -> usize {
-        let n = self.frames.max(1);
-        if self.repeat {
-            ((phase.rem_euclid(1.0) * n as f32) as usize).min(n - 1)
+        let p = if self.repeat {
+            phase.rem_euclid(1.0)
+        } else if self.speed < 0.0 {
+            1.0 - phase.clamp(0.0, 1.0)
         } else {
-            let p = phase.clamp(0.0, 1.0);
-            let p = if self.speed < 0.0 { 1.0 - p } else { p };
-            (p * (n - 1) as f32).round() as usize
-        }
+            phase
+        };
+        kq8_data::shape::frame_at_phase(p, self.frames, self.repeat)
     }
 }
 
@@ -1304,6 +1307,19 @@ impl Walker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn his_frames_are_cut_down_as_every_object_s() {
+        // objects.md "Loops" rule 6 (Q153): floor(p × N + 0.001).
+        let once = MovementLoop { duration: 0.5, speed: 1.0, repeat: false, frames: 8, ..Default::default() };
+        assert_eq!((once.frame_at(0.0), once.frame_at(0.5), once.frame_at(0.99), once.frame_at(1.0)), (0, 4, 7, 7));
+        // The old round(p × 7) gave frame 1 here.
+        assert_eq!(once.frame_at(0.12), 0, "0.96 cut down");
+        let back = MovementLoop { speed: -1.0, ..once.clone() };
+        assert_eq!((back.frame_at(0.0), back.frame_at(1.0)), (7, 0));
+        let walk = MovementLoop { duration: 1.2667, speed: 1.0, repeat: true, frames: 20, ..Default::default() };
+        assert_eq!((walk.frame_at(0.999), walk.frame_at(1.0), walk.frame_at(0.04999)), (19, 0, 1));
+    }
 
     fn with_cues(repeat: bool, speed: f32, cues: &[f32]) -> MovementLoop {
         MovementLoop { repeat, speed, cues: cues.iter().map(|&c| (c, format!("at {c}"))).collect(), ..Default::default() }

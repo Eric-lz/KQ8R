@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-7: Connor's frames cut down (rest of Q153); the speed and the wrap asked (Q164)
+
+**Changed:** Core `connor.rs` (`MovementLoop::frame_at`): his frame for a phase is floor(phase × frames + 0.001), as every object's since 2026-10-23 (was: round(phase × (frames − 1)) for play-once movements). Unit test. QUESTIONS new **Q164**. Provenance.
+**Why:** `objects.md` "Loops that move the whole object" rule 6 (Q153): the same rule for every animated object.
+**Tested how:** `cargo test --workspace` (all pass; new `his_frames_are_cut_down_as_every_object_s`). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai --command "move Connor 0 234300 183200 -1 0 0 1.57",3 --hold 1,0,0,5,40`; `connor.log`: he starts and walks as before.
+**Result:** Play-once movements show at most one frame earlier (8 frames at phase 0.12: frame 0, was 1); repeating ones unchanged except the 0.001 allowance.
+**Failed attempt (reverted, not committed):** rule 6's repeating speed (N − 1)/(N × duration) and the wrap to exactly 0, built for every loop player, slowed every walking character by 1/N (a 917 units/s walk became 860; 6 tests broke). That disagrees with `character-movement.md` (traced: speed = distance per loop ÷ loop length) and with Connor's run measured in the original (2,520 ≈ the data's 2,518; the rule would give about 2,350). Not guessed: **Q164**. Until it is answered the old speed and wrap stay, so a cue at 0.0 (the ravens') still fires in the wrap's own update.
+**Still broken / not tested:** Not looked at by eye. Connor's movements still start at phase 0, not their `loop=` start (Q138 e, step A-12).
+**Next:** A-8 (the hammer's turn-back).
+
 ## 2026-10-24 A-6: the experience sound `STATS.AUD`; `setLevel`, the flame and `LEVEL.AUD` as traced (Q159, Q149 built)
 
 **Changed:** Core `stats.rs`: `EXPERIENCE_SOUND`, `experience_sound_plays`; the level-up sound no longer played by the core's three level-up places (`active.rs`, `connor_inventory.rs`, `fight.rs`); `setLevel` sends nothing to the meters. Viewer `gui_view.rs`: when the meters get an experience percent that is not 0 and at least the last one shown (kept for the whole program), `STATS.AUD` plays; when the shown level changes (up or down), the flame starts and `LEVEL.AUD` plays. Unit test. Provenance, QUESTIONS Q149, Q159.

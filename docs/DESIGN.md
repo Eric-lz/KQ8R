@@ -2831,6 +2831,9 @@ is in `kq8-core`, a viewer run checked in the logs.
 7. **A-7: the rest of Q153** (`objects.md` "Loops"): Connor's frames
    cut down; a repeating wrap sets the phase to exactly 0; repeating
    speed (N − 1)/(N × duration).
+   **Partly done** 2026-10-24: Connor's frames. The speed and the wrap
+   slowed every walker by 1/N, against `character-movement.md` and
+   Connor's measured speed: asked (Q164), reverted.
 8. **A-8: the hammer's turn-back** (Q148, `azriel-hammer.md` rules 3,
    7, 9, 9a): put back to the start of the update, range back = the
    full way out.
