@@ -347,11 +347,15 @@ fn dithered_material(materials: &mut Assets<ObjectMaterial>, images: &mut Assets
     materials.add(m)
 }
 
+/// A drawn part for `dither_step`: its own name if any, its parent, its
+/// material.
+type DitherPart = (Entity, Option<&'static crate::terrain_view::ObjectName>, Option<&'static ChildOf>, &'static mut MeshMaterial3d<ObjectMaterial>);
+
 /// Every update (5g-7): objects `KQObject::dither`ed (or with `dithered=`)
 /// are drawn in their mode; `dither 0` brings their own materials back.
 pub fn dither_step(
     sim: Option<Res<DoorSim>>,
-    mut parts: Query<(Entity, Option<&crate::terrain_view::ObjectName>, Option<&ChildOf>, &mut MeshMaterial3d<ObjectMaterial>)>,
+    mut parts: Query<DitherPart>,
     names: Query<(Option<&crate::terrain_view::ObjectName>, Option<&DitherName>, Option<&ChildOf>)>,
     mut materials: ResMut<Assets<ObjectMaterial>>,
     mut images: ResMut<Assets<Image>>,
