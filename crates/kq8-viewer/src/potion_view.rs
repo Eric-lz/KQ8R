@@ -312,11 +312,11 @@ pub struct Dithered {
 /// in 4 kept, a screen-door laid on the texture); in both modes a pure
 /// black texel is not drawn (the colour key).
 pub fn dither_rgba(rgba: &mut [u8], width: usize, mode: u8) {
-    for (k, t) in rgba.chunks_exact_mut(4).enumerate() {
+    for (k, t) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let (x, y) = (k % width.max(1), k / width.max(1));
         let screen = mode == 1 && (x + 2 * (y % 2)) % 4 != 0;
         if screen || t[..3] == [0, 0, 0] {
-            t.copy_from_slice(&[0, 0, 0, 0]);
+            *t = [0, 0, 0, 0];
         }
     }
 }
