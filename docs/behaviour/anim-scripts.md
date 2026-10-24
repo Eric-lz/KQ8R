@@ -362,8 +362,7 @@ duration 0 the same way (B's model reader has the duration).
     It does nothing else. In the data (all worlds) it is used only as
     `if eval KQMonster::testMessage …` (337 lines) and `if eval exist
     <object>` (28 lines, none in Daventry; `exist` is a game command,
-    "Console::Return is 1 if object (and Connor) exist" by its usage
-    text, not studied). The words given to it in the data are plain
+    rule 38: 0 when the object is there). The words given to it in the data are plain
     numbers and names, so the second `$` replacement never changes
     anything there. B's stand-in (run the rest as a command, keep its
     result) is right.
@@ -826,6 +825,50 @@ duration 0 the same way (B's model reader has the duration).
       ends, standing starts `Stop` at a random frame again.
     - On average a raven caws about every 15 s plus the caw's own length
       [inferred from these numbers].
+
+
+### Does an object exist: `exist` (traced 2026-10-24, Q162)
+
+38. **`exist <name>`** asks whether an object of that name is in the
+    world now (traced):
+    - **`$Console::Return` = 0 if it is found, 1 if not.** So
+      `if exist sprgnbow` takes its branch when the bow spriggan is
+      there: the same "0 means yes" as `test` (`doors.md` "`if`,
+      `else`, `endif`"). `if eval exist <name>` is the same (rule 18:
+      `eval` keeps the inner command's result).
+    - **It prints nothing** either way.
+    - **What is found:** anything in the world's one list of object
+      names (the list every object joins when it is added to the
+      world): placed objects, characters (near, far or not yet updated),
+      Connor, items lying in the world, objects brought in by `loadKQ`,
+      sound objects with a name (`WeedGarbledSound`), and items Connor
+      carries (they keep their names; scripts `deleteObject` them by
+      name, data) [traced lookup; the list's members partly inferred
+      from the data's use].
+    - **Not found:** a name nothing has, an object whose `.kq` was
+      never loaded, and an object that was deleted **once the event
+      that deleted it has finished** (`clicking.md` rule 22). Inside
+      the same event (the same script run and what it calls) a just
+      deleted object is **still found** (0) [traced].
+    - **A character that dies** is removed at the end of its die
+      movement, right after its own script got `Die <kind>`
+      (`fighting.md` rule 32). Its **corpse is a new object with no
+      name of its own** (it gets an automatic `NoName<n>`), so after
+      that event `exist <character>` gives **1**. Inside its own `Die`
+      script it still gives 0 [traced].
+    - A word that matches no name is also tried as an object's internal
+      number (the data never does this; any name that is not a number
+      reads as 0 and is not found) [traced].
+    - **Wrong number of words** (none, or two or more names): prints
+      `usage: exist Object` and leaves **0**, which an `if` reads as
+      "yes" [traced]. No script in the data does this; log it.
+    - The usage text "Console::Return is 1 if object (and Connor) exist"
+      that rule 18 quoted belongs to another command (`conClickItem`),
+      not to `exist`; it is the wrong way round for `exist`.
+    - **Daventry's roof** (`rooftrap.cs`, `DoChoice 0`): while
+      `sprgnbow` is alive, the forward choice sends it `KQCueEvent 10`
+      (the roof kill); once it is dead and removed, Connor walks down
+      instead (`KQConner::walkTo … roofTrap`) [data + this rule].
 
 ## Numbers and units
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: `exist` and `if` (Q162)
+
+**Changed:** `docs/behaviour/anim-scripts.md` new rule 38 (and rule 18's wrong quote fixed); QUESTIONS Q162 answered.
+**Why:** Daventry's roof kill (`rooftrap.cs` `if exist sprgnbow`) waits for it.
+**Tested how:** Traced in `Mask.exe` (Ghidra); uses checked in the world scripts.
+**Result:** `exist` gives 0 when the object is there, 1 when not (the opposite of the usage text rule 18 quoted, which belongs to `conClickItem`); `if` takes the branch on 0, so the roof kill runs while the spriggan lives. Deleted objects count as there until the deleting event ends; a dead character is gone after its own `Die` script.
+**Still broken / not tested:** Nothing checked in the original game; not built. Which kinds of objects are in the name list is partly inferred.
+**Next:** B builds `exist`.
+
 ## 2026-10-24 Study A: `getConInventory` (Q166)
 
 **Changed:** `docs/behaviour/inventory.md` new section "Asking what Connor carries in each place", rules 20–26 and check 6; QUESTIONS Q166 answered.
