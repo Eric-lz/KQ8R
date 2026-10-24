@@ -2840,6 +2840,7 @@ is in `kq8-core`, a viewer run checked in the logs.
    **Done** 2026-10-24 (also one waiting request; checked in the logs).
 9. **A-9: Connor hidden only in the talk state** (Q146, `potions.md`
    rule 26).
+   **Done** 2026-10-24 (checked in the logs).
 10. **A-10: interface answers**: the portal popup opens with Yes
     highlighted (Q151), black only in the loading meter's slot (Q152),
     map icons after the colour match and no mini-map blink (Q150),

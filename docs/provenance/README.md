@@ -3341,3 +3341,9 @@ Replaces the L-2 / L-3 rows' stand-ins (DESIGN "Connor's levels checked").
 | At the turn-back (touch, range, floor grid) it is put back where it was at the start of that update; range back = its count (which includes that update's step) − one step = the distance to its start point | `azriel-hammer.md` rules 7, 9 (traced, Q148 a; corrected 2026-10-22) | Unit test `the_hammer_turns_back_at_its_range_and_at_the_ground` (14,400 / 14,400 / 20 updates, the note's worked example); viewer Swamp: range back 14,000 |
 | One waiting request: a later refused one replaces it; it is tried before the new requests | "Connor's waiting request" (traced, Q148 d) | Viewer log line "kept as his waiting request" |
 | Tried again every update; the "strong states" exception not done | **Stand-in** | — |
+
+## Who sees Connor (A-9, Q146) — `crates/kq8-core/src/active.rs` (`connor_hidden_why`); viewer `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Characters are told he is 100,000 below while: the Invisible potion runs, `handsOff` hides the pointer (scripts, `walkTo` / `runTo`; not the hammer throw's), he is in his talk state (not remarks outside a conversation), or on the rope | `potions.md` rule 26 (traced, Q146) | Unit test `invisible_reports_him_100000_below`; viewer `characters.log` with the Wizard |

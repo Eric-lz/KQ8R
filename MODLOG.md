@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-9: Connor's talk state hides him from characters (Q146 built)
+
+**Changed:** Core `active.rs` (`connor_hidden_why`): his talk state (state number 1,024, from A-1) is the fourth reason characters are told he is 100,000 below. Viewer `door_view.rs`: the second place that copies `handsOff` to the core now also leaves out the hammer throw's (as the first did). Unit test extended. Provenance, QUESTIONS Q146.
+**Why:** `potions.md` rule 26 (Q146): the lowering holds while the Invisible potion runs, `handsOff` hides the pointer, Connor is in his talk state, or on the rope; his remarks outside a conversation don't count; the hammer throw's `handsOff` doesn't.
+**Tested how:** `cargo test --workspace` (all pass; `invisible_reports_him_100000_below` extended). `kq8-viewer --world Daventry --sound off --at 193000,198000,-1.7 --click Wizard,30 --frames 1500`; `characters.log`, `conversation.log`.
+**Result:** Update 31 Connor enters his talk state; update 32: "characters are told Connor is 100,000 below where he is: his talk state (a conversation)".
+**Still broken / not tested:** Not looked at by eye. Our state number is set once per update after his update, so the change reaches the characters one update later at most.
+**Next:** A-10 (interface answers: the popup, the loading meter, map icons, status icons).
+
 ## 2026-10-24 A-8: the hammer flies back to its start point; one waiting request (Q148 built)
 
 **Changed:** Core `fight.rs` (`hammer_step`): the range back is the distance flown out (the count, which includes the turn-back update's step, minus one step), so the hammer flies back to its start point, not one step short. Viewer `door_view.rs`: Connor keeps one waiting request (a later refused request replaces it). Tests updated (the old numbers). Provenance, QUESTIONS Q148.

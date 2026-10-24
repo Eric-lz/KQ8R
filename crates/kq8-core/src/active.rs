@@ -908,6 +908,9 @@ impl WorldState {
             Some("the rope state")
         } else if self.connor_hands_off {
             Some("a cutscene (handsOff)")
+        } else if self.connor_state == Some(crate::character::state_number::TALK) {
+            // potions.md rule 26 (Q146): only his talk state, not remarks.
+            Some("his talk state (a conversation)")
         } else {
             None
         }

@@ -743,6 +743,12 @@ mod tests {
         a.world.connor_hands_off = true;
         assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0 - 100_000.0]));
         assert!(!a.world.connor_invisible());
+        // potions.md rule 26 (Q146): his talk state too, not standing.
+        a.world.connor_hands_off = false;
+        a.world.connor_state = Some(crate::character::state_number::TALK);
+        assert_eq!(a.world.connor_hidden_why(), Some("his talk state (a conversation)"));
+        a.world.connor_state = Some(crate::character::state_number::WAIT);
+        assert_eq!(a.world.connor_reported(), Some([1.0, 2.0, 3.0]));
     }
 
     #[test]

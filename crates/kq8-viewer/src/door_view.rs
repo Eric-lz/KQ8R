@@ -1030,8 +1030,9 @@ pub fn trap_step(
     let portal = sim.active.world.connor_portal.is_some();
     sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
-    // potions.md rule 26 (M5 5g-9): a cutscene hides him from characters.
-    sim.active.world.connor_hands_off = connor.hands_off;
+    // potions.md rule 26 (M5 5g-9, Q146): a cutscene hides him from
+    // characters; the hammer throw's handsOff keeps the pointer and doesn't.
+    sim.active.world.connor_hands_off = connor.hands_off && connor.throw.is_none();
     sim.active.world.connor_move_key = connor.intent.forward != 0;
     sim.active.world.connor_back_key = connor.intent.forward == -1;
     let position = connor.mover.position;
