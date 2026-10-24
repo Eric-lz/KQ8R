@@ -2457,9 +2457,10 @@ pub fn connor_step(
                     "his hit test (fighting.md rule 41)".to_string()
                 }
                 // ranged-weapons.md rule 20 (M5 5f-5): the bolt leaves.
+                // Q140 c: the arrow part from the frame after this update's
+                // step (the queued `do` is handled after the update).
                 "do" if sim.shot.as_ref().is_some_and(|w| w.started && w.movement == s.played) => {
-                    let phase = sim.movement_loop(s.played).and_then(|l| l.cues.iter().find(|(p, a)| a.trim().eq_ignore_ascii_case("do") && *p >= s.played_from.min(s.played_to) - 1e-4).map(|(p, _)| *p)).unwrap_or(s.played_to);
-                    sim.shot_cues.push((s.played, phase, false));
+                    sim.shot_cues.push((s.played, s.played_to, false));
                     "his bolt leaves (ranged-weapons.md rule 23)".to_string()
                 }
                 // azriel-hammer.md rules 3, 5 (M6 6b-3): the hammer leaves.

@@ -3409,3 +3409,9 @@ Replaces the 5g-7 stand-in (half see-through).
 | A texture's own colour table is thrown away; every 8-bit texture is drawn through the world palette in use (entry 0 black) | `models-and-textures.md` "System colours" (traced, Q42) | Viewer `viewer.log`: 88 of 198 Daventry textures with their own table now differ in one colour from before |
 | The teleport pad is drawn solid (no part of it see-through) | `objects.md` "See-through objects" rule 4 (traced; the user's screenshot, Q14 b) | Nothing to change: no `translucency` key |
 | 24-bit textures as stored | **Not traced** (as before) | — |
+
+## The bolt's start frame (A-12a, Q140 c) — `crates/kq8-core/src/fight.rs` (`character_do`); viewer `connor_view.rs`, `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The `arrow` part is read from the frame the movement is on after the update's step (the queued `do` is handled after every object moved), for Connor and for characters | `ranged-weapons.md` rule 24 (traced, Q140 c) | Unit test `a_character_s_bolt_starts_at_its_arrow_part_found_once`; viewer `fight.log`: Connor's `attack` at 0.25, frame 2 |

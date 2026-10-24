@@ -1928,7 +1928,7 @@ pub fn door_step(
                 }
                 (c.moving_aim.take().unwrap_or(c.mover.position), format!("{m} at {phase:.4}, a moving shot (use sound {})", sound.as_deref().unwrap_or("none")))
             } else {
-                (aim_now.unwrap_or(c.mover.position), format!("{m} at the cue's phase {phase:.4}"))
+                (aim_now.unwrap_or(c.mover.position), format!("{m} at {phase:.4}, the phase after the update's step (Q140 c)"))
             };
             w.connor_shoot(c.mover.position, c.turn_matrix(), part, aim, &what);
         }

@@ -1136,12 +1136,11 @@ impl crate::active::WorldState {
         let (offset, found, how) = match f.shoot_offset {
             Some(o) => (o, None, "kept from an earlier shot".to_string()),
             None => {
-                // The frame at the `do` cue's own phase (the note's example:
-                // `spbattck` frame 2 of 19 at 0.125; Q140 c), not the frame
-                // one update later, where the phase is now.
-                let phase = a.player.phase;
-                let cue = a.player.movement().and_then(|m| m.cues.iter().filter(|c| c.action.trim().eq_ignore_ascii_case("do") && c.phase <= phase + 1e-4).map(|c| c.phase).reduce(f32::max));
-                let frame = a.player.movement().map_or(0, |m| m.frame_at(cue.unwrap_or(phase)));
+                // ranged-weapons.md rule 24 (Q140 c): the frame after this
+                // update's step, where the movement is now (the queued `do`
+                // is handled after every object moved): `spbattck` at
+                // 0.1667, frame 3, not frame 2 at the cue's own 0.125.
+                let frame = a.player.movement().map_or(0, |m| m.frame_at(a.player.phase));
                 let place = a.player.movement().and_then(|m| m.frame_parts.get(frame)).and_then(|parts| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part))).map(|(_, p)| *p);
                 match place {
                     Some(o) => (o, Some(o), format!("its part '{part}' in frame {frame} of '{}' (kept from now on)", a.player.movement_name())),

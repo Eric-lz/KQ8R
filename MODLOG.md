@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12a: a bolt's start part read from the frame after the step (Q140 c built)
+
+**Changed:** Core `fight.rs` (`character_do`): a character's `arrow` part is read from the frame its movement is on now (after the update's step), not the frame at the `do` cue's own phase. Viewer `connor_view.rs` / `door_view.rs`: the same for Connor's standing shot. Test updated. Provenance, QUESTIONS Q140.
+**Why:** `ranged-weapons.md` rule 24 (Q140 c, traced): the `do` cue is a queued event handled after every object has updated, so the part comes from the frame drawn in that update (`spbattck`: frame 3 at 0.1667, not frame 2 at the cue's 0.125).
+**Tested how:** `cargo test --workspace` (all pass; `a_character_s_bolt_starts_at_its_arrow_part_found_once` now expects the frame after the step). `kq8-viewer --world Daventry --sound off --frames 1500 --command "give SmCrossbow",20 --key left:IDCTL_INVBAR_LONG,30 --no-ai --god --at 289284,190300,0 --aim goblin22,70`; `fight.log`.
+**Result:** Update 79: "do (conscbow.anm/attack at 0.2500, the phase after the update's step): start offset (−231, −832, 1067): its part 'arrow' in frame 2" (the note's −200 to −231, −832, 1,062–1,067).
+**Still broken / not tested:** Not looked at by eye; a character's first shot not run in the viewer (unit test only).
+**Next:** A-12b (Connor's movements start at their `loop=` phase, Q138 e).
+
 ## 2026-10-24 A-11c: every 8-bit texture through the world palette (Q42 built); the teleport pad stays solid (Q14 b)
 
 **Changed:** Viewer `load.rs` (`to_rgba`): a texture's own colour table is no longer used; every 8-bit texture (models, buildings, ground) is coloured from the world palette in use (entry 0 black). The log line still says how many of its colours its own table would have given differently. Provenance, QUESTIONS Q42, Q14.
