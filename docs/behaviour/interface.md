@@ -293,12 +293,43 @@ uses whatever the window holds [traced].
 
 ## The meters (health, experience, level)
 
-20. Each bar is a picture cut to a width [traced]:
+20. Each bar is its picture **stretched** to a width [traced; corrected
+    2026-10-24, Q108 b: not cut]:
     - shown width = the bar's full width × **percent** / 100, cut down to
       whole pixels; a percent that isn't zero shows at least 1 pixel;
-    - the rest of the bar's width is drawn with the bar's "empty"
-      picture if it has one;
+    - the bar's picture (`4red.pbm`, `4green.pbm`) is stretched to
+      shown width × the bar's height (rule 20a), from the bar's left
+      edge;
+    - the rest of the bar's width is drawn with **`4black.pbm`** (tag
+      351; every bar uses it, it is not in the layout), stretched to the
+      remaining width × the bar's height. If either picture is missing
+      the bar draws nothing;
     - the percent is kept between 0 and 100.
+20a. **How a picture fills its box** (traced 2026-10-24, Q108 b), for
+    every picture control in the layouts:
+    - with the picture's **modifier 0x8000** (120 of the 124 pictures in
+      `Gplayscr.gui`, every gameplay panel among them): the whole
+      picture is **stretched to the box** (its width and height
+      separately), nearest pixel, no smoothing. So the 6 × 6 `4red.pbm`
+      fills its 86 × 6 bar, the 52 × 52 `2mapblnk.pbm` fills its
+      56 × 56 box, the 64 × 64 `stontran.pbm` fills the caption box;
+    - **without** 0x8000 (only the save, load and main-menu warning
+      backgrounds `sl_win2.pbm`, `gm_win2.pbm`): drawn **once at its own
+      size** from the box's top-left corner; not tiled, not stretched;
+    - not tiled in either case;
+    - the **modifier**'s two lowest bits mirror the picture (1 left to
+      right, 2 top to bottom); no layout sets them (all modifiers are
+      0x8000 or 0) [traced];
+    - the **attribute**'s lowest three bits are the drawing kind:
+      **1 = colour 0 not drawn** (see-through), 0 = every pixel drawn
+      [traced the kinds; that the layout's attribute is the number used:
+      inferred from the values]. Only the caption's `stontran.pbm` has
+      attribute 0x9 (kind 1, its colour-0 pixels let the game show
+      through); all others are 0x8 (kind 0, solid). What bit 0x8 means
+      was not traced.
+    - The caption box's stone is the caption dialog's own picture; that
+      it is drawn by this same rule (stretched, kind 1) is inferred: the
+      dialog's drawing was not followed.
     Bars: health `IDCTL_METERS_HEALTH` (14, 4)-(100, 10), 86 × 6 pixels,
     `4red.pbm`; experience `IDCTL_METERS_EXP` (156, 4)-(242, 10),
     `4green.pbm` [data]. Frame pieces `4top`, `4bottom`, `4left`,
@@ -519,8 +550,8 @@ uses whatever the window holds [traced].
     slot, from the top down [traced].
 50. **Width of the stone**: the strip covers the **whole box** (its
     picture is the dialog's background), not the text [traced that the
-    picture belongs to the box; how the picture fills it, tiled or
-    stretched, was not traced]. **Checked by the user in the original
+    picture belongs to the box; it is stretched to the box, rule 20a
+    (the caption dialog's own drawing inferred)]. **Checked by the user in the original
     (2026-10-18):** a short line ("'Tis empty.") has a strip as wide as a
     long line. So the strip is the box's width, not fitted to the text.
 51. **Where** [traced]: the box keeps its own width and height and is
@@ -666,5 +697,8 @@ uses whatever the window holds [traced].
    From the layouts: `14shdw` for normal slot numbers, `14red` for the
    boosted numbers, `14` for the health-slot counts, `sl`/`black` only
    in menus and credits.
-6. How the caption picture fills the box (tiled or stretched) and what
-   a picture's modifier 0x8000 and attribute 0x8 / 0x9 mean (Q107 d).
+6. ~~How the caption picture fills the box and what modifier 0x8000
+   and attribute 0x8 / 0x9 mean~~: rule 20a (2026-10-24): 0x8000 =
+   stretched to the box, attribute kind 1 = colour 0 see-through. Still
+   open: bit 0x8 of the attribute, and whether the caption dialog's own
+   picture is drawn by the same code (inferred).

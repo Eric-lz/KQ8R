@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: how a panel picture fills its box (Q108 b)
+
+**Changed:** `docs/behaviour/interface.md` rule 20 corrected, new rule 20a, rule 50 and open question 6 updated; QUESTIONS Q108 (b) answered.
+**Why:** B tiles smaller pictures as a stand-in (the 6 × 6 health picture in an 86 × 6 bar, the 52 × 52 map picture in 56 × 56).
+**Tested how:** Traced in `Mask.exe` (Ghidra); modifier and attribute values counted in B's `gui-verify.log` of `Gplayscr.gui`.
+**Result:** Pictures with modifier 0x8000 (120 of 124) are stretched to their box, nearest pixel; the 3 without are drawn once at their own size. Bars stretch their picture to the shown width and fill the rest with `4black.pbm`. Attribute kind 1 (only the caption's stone) makes colour 0 see-through.
+**Still broken / not tested:** Q108 (a) rectangle scaling at 800 × 600, (c) and (d) not studied. The caption dialog's own picture is assumed to follow the same rule (its draw not followed). Not built.
+**Next:** B: stretch instead of tile; `4black.pbm` for the bars' empty part.
+
 ## 2026-10-24 Study A: `dithered=` on every class (Q165)
 
 **Changed:** `docs/behaviour/objects.md` "Dithered objects" rules 8–9; QUESTIONS Q165 answered.
