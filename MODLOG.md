@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-4: `setState <name> Wait` (Q160 built); Connor stands up after `portalx`
+
+**Changed:** Core `connor.rs`: `Walker::enter_wait` (from Wait or Move: a fresh Wait asking for `stop`; from Special only with no words left, else kept waiting; other states: nothing, logged); in Wait a play-once movement other than `stop` / `gesture...` that ends asks for `stop`. `active.rs`: `KQMonster::setState Connor Wait` becomes `Request::ConnorWait`. `character.rs`: `setState Wait` during a Special list with words left is kept waiting. Viewer `connor_view.rs` (`enter_wait`), `door_view.rs` (applies the request; it counts as a state request for the jump, rope and Choice refusals). Unit tests (one old test expected the held last frame: changed). Provenance, QUESTIONS Q160, DESIGN B-4.
+**Why:** `characters.md` rule 22, "`setState <name> Wait` in detail". The Shadow scene (`shadow.cs` Cue 25) ends with `portalx` then `setState Connor Wait`; Connor held `portalx`'s last frame until a key was pressed.
+**Tested how:** `cargo test --workspace` (all pass; new `set_state_wait_re_enters_wait_and_asks_for_stop`, `a_script_request_plays_once_then_wait_asks_for_stop`, a line in `special_lists_play_in_turn_then_wait`). `kq8-viewer --world Daventry --frames 9000 --sound off --command "KQConner::setDoMode 4",3 --command "move Connor 0 234300 183200 -1 0 0 1.57",5 --hold 1,0,0,10,40`; `connor.log`, `doors.log`.
+**Result:** Update 436 `portalx` starts; update 466 "portalx ended in Wait: asks for stop": `stop` from update 466 on. Update 474 `shadow.cs line 31: KQMonster::setState Connor Wait`; 475 "from Wait: Wait entered afresh, asks for stop" (already met).
+**Still broken / not tested:** Not looked at by eye. Wait from his jump, push, rope, talk or throw states is not described (nothing done, logged).
+**Next:** B-5 (`setHaze`).
+
 ## 2026-10-24 B-3: the loop speed for Connor and characters (Q164 built)
 
 **Changed:** Core `door.rs`: `repeat_rate` ((N - 1)/(N x length)), `repeat_advance` (the frames entered; forward wrap to exactly 0 adding the last frame's step; backwards taken off), `DoorMovement::first_in_file`, `step_frames`, `loop_ground_speed`. `named_anim.rs`: a character's repeating movement steps by them and hands the travel over (`Played::travel`); `character.rs` moves by it. `connor.rs`: `MovementLoop::first_in_file`, `frame_rule`, `phase_rate`, `repeat_advance`; his loops step the same way; `ground_speed` by the new rule. Viewer `load.rs`: `Animation::first_in_file`; `anim_view.rs` passes it on and logs each character's walk/run speed; `connor_view.rs` passes it to his loops. Test walker's frame 0 now has no step (as in the data). Unit test. Provenance, QUESTIONS Q164, DESIGN B-3.

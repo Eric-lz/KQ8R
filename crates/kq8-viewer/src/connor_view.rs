@@ -1813,6 +1813,17 @@ impl ConnorSim {
         line
     }
 
+    /// `KQMonster::setState Connor Wait` (`characters.md` rule 22, Q160):
+    /// his walker enters Wait afresh and asks for `Stop`. Returns a line for
+    /// the log.
+    pub fn enter_wait(&mut self, at: &str) -> String {
+        let movements = &self.movements;
+        let loops = |n: &str| movements.iter().find(|m| m.name == n).map(|m| &m.movement_loop);
+        let notes = self.walker.enter_wait(&loops);
+        self.log.detail(format!("connor update {}: setState Wait ({at}): {}", self.updates, notes.join("; ")));
+        format!("setState Wait: {}; now '{}' phase {:.4}", notes.join("; "), self.walker.movement, self.walker.phase)
+    }
+
     /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
     /// rules 4-5): his walker asks for it by name (capitals ignored). A
     /// name not in his list: nothing (**stand-in**; rule 5 says movement 0

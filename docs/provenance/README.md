@@ -3487,3 +3487,13 @@ Replaces the Q112 stand-in row (the wall block).
 | "Below 0" backwards is read on the frame (floor(p × N + 0.001) < 0), so float sums a hair under 0 still show frame 0 | **Ours** (a plain p < 0 skipped frame 0 every cycle in a test: back came out 1,127) | Unit test |
 | Loops with no per-frame steps (tests only) keep the even spread over 1/length | **Ours** (test scaffolding) | Existing tests |
 | Plain animated objects, chests and doors keep the old speed and wrap | **Gap**: rule 6 covers them too; not in this step's scope (the user's B-3: Connor and characters) | — |
+
+## `setState <name> Wait` (B-4, Q160) — `crates/kq8-core/src/connor.rs` (`Walker::enter_wait`, the end of a movement in Wait), `character.rs` (`set_state`), `active.rs` (`Request::ConnorWait`); viewer `connor_view.rs` (`enter_wait`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| From Wait or Move the change is at once: a fresh Wait that asks for `Stop` the ordinary way, even when already in Wait (Connor and characters) | `characters.md` rule 22 "`setState <name> Wait` in detail" (traced) | Unit test `set_state_wait_re_enters_wait_and_asks_for_stop`; viewer `connor.log` "setState Wait (shadow.cs line 31): from Wait" |
+| From Special only once the list has no words left; meanwhile kept waiting and the list goes on (it ends in Wait by itself) | Rule 22 (traced) | Unit tests (Connor; character `special_lists_play_in_turn_then_wait`) |
+| In Wait, a movement other than `Stop` / `gesture…` that ends asks for `Stop` (Connor: from its start, an ordinary request) | Rule 22 (traced; characters already had it as rule 18) | Unit test `a_script_request_plays_once_then_wait_asks_for_stop`; viewer: "portalx ended in Wait: asks for stop" |
+| Connor's Wait = our Free mode with the keys' choice `stop`; a held key asks for a walk again at the next update | **Ours** (as `state_number`) | — |
+| `setState Connor Wait` from his other states (jump, push, rope, talk, throw): nothing, logged; during a jump or the rope it goes through the same refusals as `setState special`; before a Choice it is refused | **Gap / stand-in**: the rule names only Wait, Move and Special | — |

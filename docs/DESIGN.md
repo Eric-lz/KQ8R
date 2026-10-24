@@ -2900,6 +2900,7 @@ first. Each step: the note's rule, a unit test where the rule is in
    any other movement ending (not `Stop`, not `gesture…`) asks for
    `Stop` (Connor too). The Shadow scene: Connor stands up after
    `portalx`.
+   **Done** 2026-10-24 (the Shadow scene checked in the logs).
 5. **B-5: `setHaze`** (Q161, `object-lighting.md` rule 33a): haze n,
    visible 1.5 n, the camera's far limit 1.5 n, at once; four console
    lines; `$Console::Return` 0.

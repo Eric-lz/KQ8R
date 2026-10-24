@@ -1160,7 +1160,7 @@ pub fn trap_step(
         // thrown away at DoChoice: so dropped).
         let refused_by_choice = connor.choice.as_ref().is_some_and(|c| !c.made)
             && match &r {
-                Request::ConnorSpecial { .. } | Request::ConnorDies { .. } => true,
+                Request::ConnorSpecial { .. } | Request::ConnorWait { .. } | Request::ConnorDies { .. } => true,
                 Request::ConnorAuto { auto, .. } => matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. }),
                 _ => false,
             };
@@ -1176,6 +1176,7 @@ pub fn trap_step(
         // request finishes it first (handsOff on) or is refused.
         let state = match &r {
             Request::ConnorSpecial { at, .. } => Some(("setState special", at.clone())),
+            Request::ConnorWait { at } => Some(("setState Wait", at.clone())),
             // fighting.md rule 29 (M5 5c-4): his dying state is a state
             // change too (**ours**: during a jump the same rule 28 applies).
             Request::ConnorDies { at, .. } => Some(("dying state", at.clone())),
@@ -1270,6 +1271,10 @@ pub fn trap_step(
             Request::ConnorAnim { movement, at } => {
                 let line = connor.script_anim(&movement, &at);
                 format!("{at}: applied: Connor {line}")
+            }
+            Request::ConnorWait { at } => {
+                let line = connor.enter_wait(&at);
+                format!("{at}: applied{again}: Connor {line}")
             }
             Request::Move { who, flags, position, turn, at } if who.eq_ignore_ascii_case("Connor") => {
                 // The scene his update used; the objects he pushed this

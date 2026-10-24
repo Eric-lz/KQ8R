@@ -1084,6 +1084,41 @@ impl Walker {
         notes
     }
 
+    /// `KQMonster::setState Connor Wait` (`characters.md` rule 22,
+    /// "`setState <name> Wait` in detail", Q160): from Wait or Move (our
+    /// Free mode) at once: a fresh Wait that asks for `Stop` the ordinary
+    /// way (a walk's stop transitions apply), even when already in Wait.
+    /// From Special only once its list has no words left (meanwhile kept
+    /// waiting: the list ends in Wait by itself). Other states: not
+    /// described; nothing. Returns the log notes.
+    pub fn enter_wait<'a>(&mut self, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>) -> Vec<String> {
+        let mut notes = Vec::new();
+        match self.mode {
+            Mode::Free => {
+                let from = if self.moving() { "Move" } else { "Wait" };
+                notes.push(format!("from {from}: Wait entered afresh, asks for stop"));
+            }
+            Mode::Special if self.special_at + 1 < self.special.len() => {
+                notes.push(format!("in Special with {} item(s) still to read: kept waiting, the list goes on (it ends in Wait by itself)", self.special.len() - self.special_at - 1));
+                return notes;
+            }
+            Mode::Special => {
+                notes.push(format!("in Special with no words left: Wait at once ('{}' cut), asks for stop", self.movement));
+                self.special.clear();
+                self.special_at = 0;
+                self.clear_transitions();
+                self.mode = Mode::Free;
+            }
+            m => {
+                notes.push(format!("in {}: not described (rule 22 names Wait, Move and Special); nothing", m.name()));
+                return notes;
+            }
+        }
+        self.choice = "stop";
+        self.ask("stop", loops, &mut notes);
+        notes
+    }
+
     /// Rule 6: the transition playing has ended. Its `to` starts at its
     /// `to_phase`; if something else is wanted by now, it is asked for
     /// again from there at once.
@@ -1390,6 +1425,12 @@ impl Walker {
                             self.movement = w;
                             self.phase = 0.0;
                             self.fresh = true;
+                        } else if self.mode == Mode::Free && self.choice == "stop" && played != "stop" && !played.starts_with("gesture") {
+                            // characters.md rule 22 (Q160): in Wait, a
+                            // movement other than Stop or a gesture that
+                            // ends asks for Stop (a script's `portalx`).
+                            notes.push(format!("{played} ended in Wait: asks for stop (characters.md rule 22)"));
+                            self.ask("stop", loops, &mut notes);
                         }
                     }
                 }
@@ -1768,7 +1809,7 @@ mod tests {
     }
 
     #[test]
-    fn a_script_request_plays_once_and_holds_while_the_keys_dont_change() {
+    fn a_script_request_plays_once_then_wait_asks_for_stop() {
         // anim-scripts.md rules 4-5, connor-movement.md rules 1, 4: the
         // `portal` of `sdwtrap1.cs`, with no key held (handsOff).
         let mut list = stop_list();
@@ -1780,10 +1821,16 @@ mod tests {
         w.script_request("portal", &loops);
         assert_eq!((w.movement, w.phase), ("portal", 0.0), "stop can be cut short: at once");
         let mut ended = Vec::new();
-        for _ in 0..20 {
-            ended.extend(w.update(intent(0, 0, false), &loops).ended);
+        let mut notes = Vec::new();
+        while ended.is_empty() {
+            let s = w.update(intent(0, 0, false), &loops);
+            ended.extend(s.ended);
+            notes.extend(s.notes);
         }
-        assert_eq!((w.movement, w.phase, ended), ("portal", 1.0, vec!["portal"]), "ends once, holds its last frame");
+        // characters.md rule 22 (Q160): it ends in Wait, which asks for
+        // Stop: he doesn't hold its last frame.
+        assert_eq!((w.movement, w.phase, ended), ("stop", 0.0, vec!["portal"]), "{notes:?}");
+        assert!(notes.iter().any(|n| n.contains("portal ended in Wait: asks for stop")), "{notes:?}");
         // A new request for it starts it afresh (rule 5).
         w.script_request("portal", &loops);
         assert_eq!(w.phase, 0.0);
@@ -1794,6 +1841,41 @@ mod tests {
         w.set_mode(Mode::Free);
         w.update(intent(1, 0, false), &loops);
         assert_eq!(w.movement, "walk");
+    }
+
+    #[test]
+    fn set_state_wait_re_enters_wait_and_asks_for_stop() {
+        // characters.md rule 22 "setState <name> Wait in detail" (Q160).
+        let mut list = stop_list();
+        list.push(("portal", once()));
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(0, 0, false), &loops);
+        // Already in Wait: entered again; Stop already playing is met.
+        assert!(w.enter_wait(&loops)[0].contains("from Wait"));
+        assert_eq!(w.movement, "stop");
+        // A script movement playing in Wait: Stop asked for (it can't be
+        // cut short: kept until it ends).
+        w.script_request("portal", &loops);
+        let n = w.enter_wait(&loops);
+        assert_eq!((w.movement, w.wanted), ("portal", Some("stop")), "{n:?}");
+        // Move: at once, the walk's request becomes Stop.
+        let mut w = Walker::new(0.0);
+        w.update(intent(1, 0, false), &loops);
+        assert!(w.moving());
+        assert!(w.enter_wait(&loops)[0].contains("from Move"));
+        assert!(!w.moving());
+        // Special with words left: kept waiting; with none: at once.
+        w.start_special(vec![SpecialStep::Play("portal", "portal".into()), SpecialStep::Play("portal", "portal".into())]);
+        assert!(w.enter_wait(&loops)[0].contains("kept waiting"));
+        assert_eq!(w.mode, Mode::Special);
+        w.special_at = 1;
+        assert!(w.enter_wait(&loops)[0].contains("no words left"));
+        // An ordinary request: the play-once `portal` ends first.
+        assert_eq!((w.mode, w.movement, w.wanted), (Mode::Free, "portal", Some("stop")));
+        // Elsewhere: not described.
+        w.set_mode(Mode::Fall);
+        assert!(w.enter_wait(&loops)[0].contains("not described"));
     }
 
     #[test]

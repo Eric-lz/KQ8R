@@ -124,6 +124,9 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// `KQMonster::setState Connor Wait` (`characters.md` rule 22, Q160):
+    /// his walker enters Wait afresh and asks for `Stop`.
+    ConnorWait { at: String },
     /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
     /// rules 4-5): asked of his walker.
     ConnorAnim { movement: String, at: String },
@@ -2376,6 +2379,10 @@ impl WorldState {
                 let items = items.join(",");
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
+            }
+            [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Wait") => {
+                self.note(format!("{at}: KQMonster::setState Connor Wait: handed to Connor (characters.md rule 22)"));
+                self.requests.push(Request::ConnorWait { at: at.to_string() });
             }
             [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Choice") => {
                 // characters.md rules 1-2 (Q155): exactly four words.

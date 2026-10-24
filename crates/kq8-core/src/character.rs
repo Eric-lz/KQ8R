@@ -907,7 +907,14 @@ impl Character {
             return format!("{state}: it is dying: its state never changes again (fighting.md rule 30)");
         }
         let mut notes = Vec::new();
-        if state.eq_ignore_ascii_case("Wait") {
+        if state.eq_ignore_ascii_case("Wait") && self.state == State::Special && !self.special.is_empty() {
+            // Rule 22 "setState <name> Wait in detail" (Q160): Special
+            // accepts only once its list has no words left; the list goes
+            // on and ends in Wait by itself.
+            notes.push(format!("Wait kept waiting: {} item(s) of its Special list still to read, the list goes on (rule 22)", self.special.len()));
+        } else if state.eq_ignore_ascii_case("Wait") {
+            // Rule 22: at once, even from Wait (left and entered again,
+            // asking for Stop).
             notes.extend(self.attack_cut_short(now));
             self.wait_at = None;
             self.enter_wait(player, &mut notes);
@@ -1421,6 +1428,9 @@ pub(crate) mod tests {
         let line = c.set_state(&mut p, "special", &["caw,attack".to_string()], 0.0);
         assert!(line.contains("'caw' starts at once"), "{line}");
         assert_eq!(c.state, State::Special);
+        // Rule 22 (Q160): Wait kept waiting while words are left.
+        assert!(c.set_state(&mut p, "Wait", &[], 0.0).contains("kept waiting"));
+        assert_eq!((c.state, p.movement_name()), (State::Special, "caw"));
         let n = run(&mut c, &mut p, n, 17, &mut log);
         assert_eq!(p.movement_name(), "attack", "{log:?}");
         run(&mut c, &mut p, n, 17, &mut log);
