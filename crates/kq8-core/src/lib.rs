@@ -12,6 +12,7 @@ pub mod caption;
 pub mod character;
 pub mod character_ai;
 pub mod chest;
+pub mod choice;
 pub mod click;
 pub mod collide;
 pub mod connor;

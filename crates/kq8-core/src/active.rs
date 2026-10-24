@@ -127,6 +127,10 @@ pub enum Request {
     /// A script's `KQAnimPlayEvent <movement>` to Connor (`anim-scripts.md`
     /// rules 4-5): asked of his walker.
     ConnorAnim { movement: String, at: String },
+    /// `KQMonster::setState Connor Choice <list>` (`characters.md` rules
+    /// 1-5, Q155): the caller puts him into the Choice state at once and
+    /// runs the list's script with `StartChoice`.
+    ConnorChoice { list: crate::choice::ChoiceList, at: String },
     /// Connor straight to standing (M6 6e: after No to the Portal state's
     /// question).
     ConnorStandNow { at: String },
@@ -2200,6 +2204,21 @@ impl WorldState {
                 let items = items.join(",");
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
                 self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
+            }
+            [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Choice") => {
+                // characters.md rules 1-2 (Q155): exactly four words.
+                let line = match rest {
+                    [list] => match crate::choice::ChoiceList::parse(list) {
+                        Ok(list) => {
+                            let n = list.points.len();
+                            self.requests.push(Request::ConnorChoice { list, at: at.to_string() });
+                            format!("handed to Connor ({n} points; characters.md rules 3-5)")
+                        }
+                        Err(e) => format!("the list can't be read ({e}); nothing"),
+                    },
+                    _ => "Choice requires string argument; nothing (rule 1)".to_string(),
+                };
+                self.note(format!("{at}: KQMonster::setState Connor Choice {}: {line}", rest.join(" ")));
             }
             [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Portal") => {
                 // world-change.md rules 1-2, magic-map.md rule 40 (M6 6e-6).

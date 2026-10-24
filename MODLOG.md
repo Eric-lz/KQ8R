@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-2: Connor's Choice state (Q155 built); `exist` asked (Q162)
+
+**Changed:** Core: new `choice.rs` (the list, the points put on one circle, the pick nearest a probe 200 ahead / behind); `active.rs`: `setState Connor Choice <list>` (exactly four words) becomes `Request::ConnorChoice`. Viewer `connor_view.rs`: `enter_choice`, `choice_step` (points measured at the next update; forward / back chooses once and sends `DoChoice <number>`; he never walks, turn keys pivot; a jump refused before the choice; any other state after the choice ends it), a swap before the choice ends in a fresh Choice, state number 524,288. `door_view.rs`: the request loop is now a queue so `StartChoice`'s requests (his `move`) are applied at once; script walks, Special lists and dying are refused before the choice. Unit tests. QUESTIONS Q155, new **Q162**. Provenance.
+**Why:** `characters.md` "Connor's Choice state" rules 1–13. Daventry's roof jump (`rooftrap.cs`) was a stub: Connor stood on the roof with control back and nothing more.
+**Tested how:** `cargo test --workspace` (all pass; new `the_list_is_a_script_then_triples`, `daventry_s_roof_points_and_picks`). `kq8-viewer --world Daventry --frames 4000 --sound off --no-ai --command "move Connor 0 228300 183200 12500 0 0 -1.57",5 --hold 1,0,0,45,50`; again with `--command "KQConner::setDoMode 0",35 --hold 1,0,0,60,62`; `connor.log`, `doors.log`.
+**Result:** Update 31: Choice entered, `StartChoice` moves him to (228239, 183179); points 0 at (220000, 183200), 1 at (236477, 183277) (the note: R = 8,239, about (236,478, 183,277)). Update 45 forward: chooses 0, `DoChoice 0` once. With the swap: the draw plays, then "back in a fresh Choice", `StartChoice` again, points measured again; forward at 60 chooses 0.
+**Still broken / not tested:** Not looked at by eye. `rooftrap.cs` then runs `if exist sprgnbow`: **`exist` is not a command of ours and not described** (Q162), so the forward choice takes the `else` branch (the walk down) instead of the kill scene. Rule 9's `StartChoice` after one of his movements ends in Choice is not done (rare). Held keys are cleared on entering, so a key held from before doesn't choose at once after `handsOff 0` (rule 13, inferred in the note). Clicking a partner during Choice is not refused.
+**Next:** A: Q162. B: A-3 (`loadObject`).
+
 ## 2026-10-24 A-1: `StateChange` messages (Q156 built)
 
 **Changed:** Core `character.rs`: the state numbers of rule 16 (`state_number`), `State::number`. `active.rs`: `WorldState::state_changes` (once per update: a watched character whose state number changed sends `StateChange <who> <old> <new>` through the queue), the `StateChange` event runs the recipient's script; new field `connor_state`. Viewer `connor_view.rs` `state_number` (a swap playing = 32, Free = Wait or Move, …), `door_view.rs` sets it each update (Portal = 32,768). Unit test. DESIGN plan "building session A's 2026-10-22 answers" (A-1 to A-12). Provenance, QUESTIONS Q156.

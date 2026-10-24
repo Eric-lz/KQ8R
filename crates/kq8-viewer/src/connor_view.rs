@@ -171,6 +171,12 @@ pub struct ConnorSim {
     /// 28): tried again at each later update by `door_view::trap_step`
     /// (STAND-IN: when the original tries again was not traced).
     pub refused: Vec<kq8_core::active::Request>,
+    /// The Choice state (`characters.md` "Connor's Choice state", Q155),
+    /// while he is in it.
+    pub choice: Option<kq8_core::choice::Choice>,
+    /// The Choice state's script calls (`StartChoice`, `DoChoice`; its
+    /// arguments), run by `door_view::trap_step`.
+    pub choice_calls: Vec<Vec<String>>,
     /// The end of a scripted walk being watched (M3 3n-5, Q98: logs only).
     walk_end: Option<WalkEnd>,
     /// `fighting.md` rules 23, 24, 29 (M5 5c-4): when his last flinch ends
@@ -805,6 +811,8 @@ pub fn spawn_connor(
         hands_off: false,
         auto_ends: Vec::new(),
         refused: Vec::new(),
+        choice: None,
+        choice_calls: Vec::new(),
         walk_end: None,
         flinch_end: f64::NEG_INFINITY,
         last_ouch: f64::NEG_INFINITY,
@@ -1140,6 +1148,9 @@ impl ConnorSim {
         if self.readying {
             return SWAP_WEAPONS;
         }
+        if self.choosing() {
+            return CHOICE;
+        }
         match self.walker.mode {
             Mode::Free if self.walker.moving() => MOVE,
             Mode::Free | Mode::Crash => WAIT,
@@ -1451,6 +1462,13 @@ impl ConnorSim {
         }
         if self.readying && self.walker.mode != Mode::Special {
             self.readying = false;
+            // characters.md rule 11 (Q155): a swap before the choice ends in
+            // a fresh Choice: StartChoice again, the points measured again.
+            if let Some(c) = self.choice.as_mut().filter(|c| !c.made) {
+                c.circle = None;
+                self.choice_calls.push(vec!["Connor".into(), "StartChoice".into()]);
+                self.log.detail(format!("connor update {}: weapon: the swap is over: back in a fresh Choice state, StartChoice again (characters.md rule 11)", self.updates));
+            }
             // Q141: the scripted walk held during the swap starts now.
             if let Some(a) = self.held_walk.take() {
                 let line = self.walker.start_auto(a);
@@ -1931,6 +1949,85 @@ impl ConnorSim {
         if sent.is_empty() { "no movement key held".into() } else { format!("held keys sent again: {}", sent.join(", ")) }
     }
 
+    /// `characters.md` rules 3-4 (Q155): into the Choice state at once,
+    /// whatever he is doing (an unfinished jump is ended first): his held
+    /// movement and turn keys are cleared and `Stop` plays; the caller then
+    /// runs the script with `StartChoice`. The points are measured at his
+    /// next update, after that script's `move` (rule 5).
+    pub fn enter_choice(&mut self, list: kq8_core::choice::ChoiceList, at: &str) -> String {
+        let mut notes = Vec::new();
+        if self.walker.mode == Mode::Jump {
+            notes.push(self.end_jump(at));
+        }
+        let was = self.walker.mode.name();
+        self.walker.auto = None;
+        self.walker.stand_now();
+        self.intent.forward = 0;
+        self.intent.turn = 0;
+        let line = format!(
+            "enters the Choice state (was {was}{}): held keys cleared, Stop; {} gets StartChoice; {} point(s) measured at the next update (characters.md rules 3-5)",
+            if notes.is_empty() { String::new() } else { format!("; {}", notes.join("; ")) },
+            list.script,
+            list.points.len()
+        );
+        self.choice = Some(kq8_core::choice::Choice::new(list));
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
+    /// He is in the Choice state and it is his own state now (not a weapon
+    /// swap under way, rule 11).
+    pub fn choosing(&self) -> bool {
+        self.choice.is_some() && self.walker.mode == Mode::Free && !self.readying
+    }
+
+    /// `characters.md` rules 5-12 (Q155), before his update: the points
+    /// measured once (rule 6); a forward or back key makes the choice
+    /// (rule 7) once (Do not reproduce: not every update), and `DoChoice`
+    /// goes to the script with the triple's number (rule 10). After a swap
+    /// he is back in a fresh Choice (rule 11). After the choice, any other
+    /// state ends it (rule 12). Returns lines for the log.
+    fn choice_step(&mut self) -> Vec<String> {
+        let mut lines = Vec::new();
+        let Some(c) = self.choice.as_ref() else { return lines };
+        // Rule 12: the script changed his state after the choice.
+        if c.made && (self.walker.mode != Mode::Free || self.readying || self.walker.auto.is_some()) {
+            self.choice = None;
+            lines.push(format!("leaves the Choice state (mode {}{}; rule 12)", self.walker.mode.name(), if self.readying { ", a weapon swap" } else { "" }));
+            return lines;
+        }
+        if !self.choosing() {
+            return lines;
+        }
+        let at = [self.mover.position[0], self.mover.position[1]];
+        let c = self.choice.as_mut().unwrap();
+        if c.circle.is_none() {
+            let circle = kq8_core::choice::on_circle(at, &c.list.points);
+            let shown: Vec<String> = circle.iter().map(|(n, p)| format!("{n} at ({:.0}, {:.0})", p[0], p[1])).collect();
+            lines.push(format!("Choice points measured from ({:.0}, {:.0}): {} (rule 6)", at[0], at[1], shown.join(", ")));
+            c.circle = Some(circle);
+        }
+        if c.made || self.hands_off || self.intent.forward == 0 {
+            return lines;
+        }
+        let forward = self.intent.forward > 0;
+        let circle = c.circle.as_ref().unwrap();
+        if let Some(i) = kq8_core::choice::pick(at, self.walker.heading, forward, circle) {
+            let number = circle[i].0.clone();
+            c.made = true;
+            lines.push(format!(
+                "{} key: chooses {number} (heading {:.2}, the point nearest {:.0} {}; rule 7); {} gets DoChoice {number} (rule 10)",
+                if forward { "forward" } else { "back" },
+                self.walker.heading,
+                kq8_core::choice::PROBE,
+                if forward { "ahead" } else { "behind" },
+                c.list.script
+            ));
+            self.choice_calls.push(vec!["Connor".into(), "DoChoice".into(), number]);
+        }
+        lines
+    }
+
     /// `KQConner::setRun` from a script (M3 step 3d-3).
     pub fn set_run(&mut self, run: bool, at: &str) {
         let was = self.intent.run;
@@ -2113,8 +2210,24 @@ pub fn connor_step(
     }
     // handsOff (Q89 a stand-in): the keys count as let go (the run
     // switch stays as it is).
-    let intent = if sim.hands_off { Intent { forward: 0, turn: 0, ..sim.intent } } else { sim.intent };
-    let jump = std::mem::take(&mut sim.jump_pressed) && !sim.hands_off;
+    let mut intent = if sim.hands_off { Intent { forward: 0, turn: 0, ..sim.intent } } else { sim.intent };
+    let mut jump = std::mem::take(&mut sim.jump_pressed) && !sim.hands_off;
+    // characters.md rules 7-8, 11 (Q155): in the Choice state forward and
+    // back choose, he never walks; the turn keys pivot him; before the
+    // choice a jump is refused.
+    let choice_lines = sim.choice_step();
+    if sim.choosing() {
+        intent.forward = 0;
+        if jump && !sim.choice.as_ref().is_some_and(|c| c.made) {
+            jump = false;
+            sim.log.detail(format!("connor update {}: Jump refused in the Choice state (characters.md rule 11)", sim.updates));
+        }
+    }
+    for l in choice_lines {
+        let l = format!("connor update {}: {l}", sim.updates);
+        shared.log.lock().unwrap().detail(&l);
+        sim.log.detail(l);
+    }
     let z_before = sim.mover.position[2];
     let tick = {
         let ConnorSim { mover, walker, movements, weapon_set, .. } = &mut *sim;

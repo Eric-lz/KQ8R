@@ -2811,6 +2811,8 @@ is in `kq8-core`, a viewer run checked in the logs.
    Choice state" rules 1–13): `setState Connor Choice <list>`,
    `StartChoice`, forward/back picks the nearest point, `DoChoice`
    once (Do not reproduce).
+   **Done** 2026-10-24 (checked in the logs; the roof scene's kill then
+   waits for `exist`, Q162).
 3. **A-3: `loadObject`** (Q157, `anim-scripts.md` rule 34): a still
    plain object (the spriggan's corpse), not solid, not clickable.
 4. **A-4: `setScript` calls `Init`** (Q154, `anim-scripts.md` rule 33),

@@ -1115,12 +1115,40 @@ pub fn trap_step(
     sim.flush_rope(&shared);
     sim.flush_talk(&shared);
     let mut camera = camera;
-    let requests: Vec<Request> = std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).collect();
+    // characters.md rules 9-11 (Q155): the Choice state's calls from his
+    // update (DoChoice, StartChoice after a swap); what they ask is applied
+    // below with the rest.
+    let choice_script = connor.choice.as_ref().map(|c| c.list.script.clone());
+    for args in std::mem::take(&mut connor.choice_calls) {
+        if let Some(script) = &choice_script {
+            sim.active.run_script(script, &args);
+        }
+    }
+    let requests: std::collections::VecDeque<(usize, Request)> =
+        std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).enumerate().collect();
+    let mut requests = requests;
     // clicking.md rule 35 (Q105 b): a state a script asked for (and got)
     // before a click's turn decides it; otherwise his state at the click.
     let mut asked = false;
-    for (i, r) in requests.into_iter().enumerate() {
+    while let Some((i, r)) = requests.pop_front() {
         let again = if i < retried { " (tried again)" } else { "" };
+        // characters.md rules 3, 11 (Q155): before the choice, the Choice
+        // state refuses every other state (kept as his waiting request,
+        // thrown away at DoChoice: so dropped).
+        let refused_by_choice = connor.choice.as_ref().is_some_and(|c| !c.made)
+            && match &r {
+                Request::ConnorSpecial { .. } | Request::ConnorDies { .. } => true,
+                Request::ConnorAuto { auto, .. } => matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. }),
+                _ => false,
+            };
+        if refused_by_choice {
+            let line = format!("update {}: {r:?}: refused, Connor is in the Choice state before the choice; dropped (characters.md rules 3, 11)", sim.active.world.updates);
+            connor.log.detail(line.clone());
+            if let Some(log) = &mut sim.trap_log {
+                log.detail(line);
+            }
+            continue;
+        }
         // anim-scripts.md rule 28: during an unfinished jump a state
         // request finishes it first (handsOff on) or is refused.
         let state = match &r {
@@ -1167,6 +1195,21 @@ pub fn trap_step(
                 format!("{at}: applied: Connor {line}")
             }
             Request::EndJump { at } => format!("{at}: applied: {}", connor.end_jump(&at)),
+            Request::ConnorChoice { list, at } => {
+                // characters.md rules 3-5 (Q155): entered at once; the script
+                // gets StartChoice at once and what it asks (his `move`) is
+                // applied now, before his next update measures the points.
+                let script = list.script.clone();
+                let line = connor.enter_choice(list, &at);
+                let from = sim.active.world.requests.len();
+                sim.active.run_script(&script, &["Connor".into(), "StartChoice".into()]);
+                let asked_now: Vec<Request> = sim.active.world.requests.drain(from..).collect();
+                let n = asked_now.len();
+                for r in asked_now.into_iter().rev() {
+                    requests.push_front((usize::MAX, r));
+                }
+                format!("{at}: applied: Connor {line}; StartChoice asked {n} thing(s), applied next")
+            }
             Request::ConnorStandNow { at } => {
                 connor.walker.stand_now();
                 connor.intent = Default::default();

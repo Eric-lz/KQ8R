@@ -3274,3 +3274,17 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | State numbers: Birth 1, Wait 2, Move 4, Die 8, SwapWeapons 32, Jump 64, Push 128, Special 256, ThrowRock 512, Talk 1,024, Tile 2,048, rope 4,096, hammer throw 8,192, Portal 32,768, Choice 524,288 | `characters.md` rule 16 | As above |
 | Connor: a weapon swap playing is SwapWeapons; Free mode is Move when the keys chose a movement, else Wait | Rule 16; `connor-movement.md` (Wait / Move by the keys' pick) | As above |
 | Falling and landing count as Jump, the crash as Wait; a character's "no state" sends nothing; changes are looked for once per update (two in one update are one message) | **Stand-in** (our modes the rule doesn't name; no script tests them) | — |
+
+## Connor's Choice state (A-2, Q155) — `crates/kq8-core/src/choice.rs`, `active.rs` (`set_state`); viewer `connor_view.rs` (`enter_choice`, `choice_step`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `setState Connor Choice <list>` must be four words; the list is a script, then `<number>,<x>,<y>` triples | `characters.md` "Connor's Choice state" rules 1-2 | Unit test `the_list_is_a_script_then_triples` |
+| Entered at once from any state (an unfinished jump ended first); held keys cleared, `Stop`, the script gets `StartChoice` at once; points measured after it | Rules 3-5 | Viewer `doors.log` / `connor.log`: `StartChoice`'s `move` applied, then "points measured from (228239, 183179)" |
+| All points on one circle of radius = the level distance to the first point | Rule 6 | Unit test `daventry_s_roof_points_and_picks` (R 8,239; point 1 ≈ (236,478, 183,277)) |
+| Forward / back picks the point nearest a probe 200 ahead / behind (tie: the earlier); turn keys pivot; never walks; nothing drawn | Rules 7-8 | Unit test; viewer: forward at heading −1.57 chooses 0 |
+| `DoChoice <the triple's number>` once (not every update) | Rule 10; "Do not reproduce" (fired every update in the original) | Viewer: one `DoChoice 0` |
+| Before the choice: a weapon swap is taken and ends in a fresh Choice (`StartChoice` again, points again); script walks, Special lists, dying and the jump are refused and dropped | Rules 3, 11 (a death lost there: inferred by A) | Viewer: the `setDoMode 0` run |
+| After the choice any other state ends it; it never ends by itself | Rule 12 | Viewer: "leaves the Choice state" when the walk starts |
+| State number 524,288 while in it | Rule 16 | — |
+| `StartChoice` after one of his movements ends in Choice (rule 9) not done; a key held from before entering doesn't choose after `handsOff 0` (rule 13, inferred) | **Gap / stand-in** | — |
