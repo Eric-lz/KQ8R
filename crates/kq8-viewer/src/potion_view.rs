@@ -353,6 +353,7 @@ type DitherPart = (Entity, Option<&'static crate::terrain_view::ObjectName>, Opt
 
 /// Every update (5g-7): objects `KQObject::dither`ed (or with `dithered=`)
 /// are drawn in their mode; `dither 0` brings their own materials back.
+#[allow(clippy::too_many_arguments)]
 pub fn dither_step(
     sim: Option<Res<DoorSim>>,
     mut parts: Query<DitherPart>,
