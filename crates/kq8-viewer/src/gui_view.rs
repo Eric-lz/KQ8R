@@ -703,12 +703,10 @@ impl Gui {
                     };
                     // M6 6d-5 (magic-map.md rule 27): while the map is active
                     // the slot draws it at the mini-map's own size, Connor's
-                    // pixel at its middle, with his arrow; over the empty
-                    // picture, which shows while the item blinks (rule 2,
-                    // interface.md rule 44).
+                    // pixel at its middle, with his arrow, over the empty
+                    // picture; it never blinks (Q150 d, interface.md rule 44).
                     if name == MINIMAP {
-                        let blinking = self.inv.map_item.as_ref().is_some_and(|n| self.blank(n));
-                        if let Some((m, p)) = self.map.as_ref().filter(|m| m.active && m.version.is_some() && !blinking).and_then(|m| m.pixel.map(|p| (m, p))) {
+                        if let Some((m, p)) = self.map.as_ref().filter(|m| m.active && m.version.is_some()).and_then(|m| m.pixel.map(|p| (m, p))) {
                             let (w, h) = (m.mini_view[2] - m.mini_view[0], m.mini_view[3] - m.mini_view[1]);
                             let (left, top) = (-(p.0 as f64) * w / kq8_data::magic_map::MAP_SIZE as f64, -(p.1 as f64) * h / kq8_data::magic_map::MAP_SIZE as f64);
                             let view = kq8_core::magic_map::View { left, top, right: left + w, bottom: top + h };
@@ -1647,7 +1645,7 @@ pub fn gui_draw(
         // M6 6d-5: the mini-map slot showing its empty picture while the
         // map is active (the item's blink, or no pixel yet).
         if d == Drawn::Panel(Panel::BottomRight) && gui.map.as_ref().is_some_and(|m| m.active) && !specs.iter().any(|s| matches!(s, Spec::Map { .. })) {
-            let line = format!("{} drawn: the mini-map slot shows its empty picture (the item blinking, or Connor's pixel not known; magic-map.md rule 27, interface.md rule 44) at {:.0} ms", d.layout_id(), gui.panels.now_ms);
+            let line = format!("{} drawn: the mini-map slot shows its empty picture (Connor's pixel not known yet; magic-map.md rule 27) at {:.0} ms", d.layout_id(), gui.panels.now_ms);
             gui.note(line);
         }
         // M6 6d-3: each redraw of the map with its view and arrow.

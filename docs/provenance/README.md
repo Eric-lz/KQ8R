@@ -3366,3 +3366,12 @@ Replaces the 6e popup rows' stand-ins (highlight, Escape, rows, lines).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | The filled part is the meter's picture stretched to (630 × percent / 100, whole pixels, at least 1 if not 0) × 8; the unfilled rest of the slot is `4black.pbm`, stretched; the picture's painted frame stays (no full-width black bar) | `world-change.md` rule 23 (traced; the bar settled by the user's check, Q152) | Unit test `the_filled_part_is_cut_to_whole_pixels_at_least_1`; viewer `viewer.log` |
+
+## Map icons and the mini-map (A-10c, Q150) — `crates/kq8-core/src/magic_map.rs` (`show_other`, `remove_icon`); viewer `gui_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Another world's map: its colours matched to this world's palette, then the icons drawn with their own indexes (not matched) | `magic-map.md` rule 34 "Order" (traced, Q150 c) | Unit test `paging_to_visited_maps_and_back` |
+| `removeMapIcon`: the first icon at exactly x, y on the picture shown; the rectangle blank, then full where the fog is cleared, the fog tested in 8-column groups; other icons not redrawn (cut) | Rule 21 (traced, Q150 a) | Unit test `icons_over_the_fog_and_removed` |
+| The mini-map slot never blinks: straight from the empty picture to the live map | Rule 27, `interface.md` rule 44 (traced, Q150 d) | Viewer `gui.log` |
+| The removed icon's list slot is compacted, not left empty | **Ours** (only the saved numbering differs) | — |

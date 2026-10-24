@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-10c: map icons after the colour match, the removed icon's repaint, no mini-map blink (Q150 built)
+
+**Changed:** Core `magic_map.rs`: on another world's map the icons are stamped **after** its colours are matched to this world's palette, with their own indexes (`show_other`); `removeMapIcon` repaints the rectangle blank, then the full picture where the fog is cleared, testing the fog in groups of 8 columns (so a neighbour icon within the group is cut). Viewer `gui_view.rs`: the mini-map slot no longer waits for the map item's blink. Tests updated and extended. Provenance, QUESTIONS Q150.
+**Why:** `magic-map.md` rules 21, 27, 34 and `interface.md` rule 44 (Q150 a, c, d).
+**Tested how:** `cargo test --workspace` (all pass; `paging_to_visited_maps_and_back` now expects the icon's own index, `icons_over_the_fog_and_removed` checks the 8-column repaint). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai --command "give MagicMap",5`; `gui.log`.
+**Result:** Update 6: the map is active; no "the mini-map slot shows its empty picture" line (before: during the 1.25 s blink).
+**Still broken / not tested:** Not looked at by eye. A removed icon's slot is compacted out of the list, not left empty (only the saved icon numbering differs; no saving yet). Column 460 (rule 16) needs nothing: reading ignores it.
+**Next:** A-10d (status icons clipped, the mask shrunk to its place, Q143).
+
 ## 2026-10-24 A-10b: the loading meter's slot black where it isn't filled (Q152 built)
 
 **Changed:** Viewer `loading_screen.rs`: `4black.pbm`, stretched, over the meter slot's unfilled part (from the end of the filled part to x 635, rows 468–476); the filled part is 630 × percent / 100 cut to whole pixels, at least 1 if not 0 (`filled_pixels`). Still no full-width black bar. Unit test. Provenance, QUESTIONS Q152.

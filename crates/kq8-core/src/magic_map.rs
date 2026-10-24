@@ -465,9 +465,9 @@ impl MapState {
     }
 
     /// Rule 34: another world's map shown: its own picture (with its fog if
-    /// its `useFog` is on, else its full picture; its own icons), this
-    /// world's icons kept for that picture, then its colours matched to
-    /// this world's palette.
+    /// its `useFog` is on, else its full picture), its colours matched to
+    /// this world's palette, then its own icons and this world's icons kept
+    /// for that picture with their own indexes, not matched (Q150 c).
     pub fn show_other(&mut self, index: usize, file: &str, source: &str, keys: MapKeys) {
         let mut read = |name: &str| -> Option<Vec<u8>> {
             match self.reader.as_ref().map(|r| r(name)) {
@@ -498,11 +498,6 @@ impl MapState {
         };
         let own: Vec<MapIcon> = keys.icons.iter().filter(|i| i.picture.eq_ignore_ascii_case(&keys.full_map)).cloned().collect();
         let here: Vec<MapIcon> = self.icons.iter().filter(|i| i.picture.eq_ignore_ascii_case(&keys.full_map)).cloned().collect();
-        for i in own.iter().chain(&here) {
-            if let Some(pic) = self.icon_pic(&i.file) {
-                stamp_on(&mut picture, &pic, i.x, i.y);
-            }
-        }
         let pal = |k: Option<usize>| k.and_then(|k| self.palettes.get(k).copied().flatten());
         let colours = match (pal(Some(index)), pal(self.index)) {
             (Some(from), Some(to)) => {
@@ -513,6 +508,12 @@ impl MapState {
             }
             _ => "a palette is missing: colours as they are".to_string(),
         };
+        // Q150 c: the icons after the match, their indexes as they are.
+        for i in own.iter().chain(&here) {
+            if let Some(pic) = self.icon_pic(&i.file) {
+                stamp_on(&mut picture, &pic, i.x, i.y);
+            }
+        }
         self.log.push(format!(
             "shows map index {index} ({file}, {source}): {}, its {} icons and {} of this world's for {}; {colours} (rule 34)",
             if keys.use_fog { "its fog" } else { "its full picture" },
@@ -726,14 +727,21 @@ impl MapState {
             return Some(icon);
         }
         if let Some(pic) = self.icon_pic(&icon.file) {
+            // Q150 a: the rectangle blank first, then the full picture where
+            // the fog is cleared, the fog tested in groups of 8 columns (so
+            // up to 7 columns either side too); other icons there are not
+            // drawn again (cut).
+            let (x1, x2) = (x.max(0), (x + pic.width as i32).min(MAP_SIZE as i32));
+            let (g1, g2) = (x1 / 8 * 8, ((x2 + 7) / 8 * 8).min(MAP_SIZE as i32));
             for py in y.max(0)..(y + pic.height as i32).min(MAP_SIZE as i32) {
-                for px in x.max(0)..(x + pic.width as i32).min(MAP_SIZE as i32) {
+                for px in g1..g2 {
                     let k = py as usize * MAP_SIZE + px as usize;
-                    let blank = self.blank.as_ref().map_or(0, |b| b[k]);
-                    self.picture[k] = match &self.full {
-                        Some(full) if self.fog[k] => full[k],
-                        _ => blank,
-                    };
+                    if (x1..x2).contains(&px) {
+                        self.picture[k] = self.blank.as_ref().map_or(0, |b| b[k]);
+                    }
+                    if let Some(full) = self.full.as_ref().filter(|_| self.fog[k]) {
+                        self.picture[k] = full[k];
+                    }
                 }
             }
             self.version += 1;
@@ -1193,9 +1201,10 @@ mod tests {
         let m = a.world.map.as_ref().unwrap();
         assert_eq!(m.shown_index(), Some(3), "-1 from 0 wraps to 15 … 3");
         // Row 0 revealed: full (6 → 9 by colour); the rest blank (5 → 4);
-        // this world's icon for gnomap.pbm drawn (6 → 9).
+        // this world's icon for gnomap.pbm drawn after the match with its
+        // own index 6 (Q150 c).
         let p = m.shown_picture();
-        assert_eq!((p[0], p[MAP_SIZE], p[100 * MAP_SIZE]), (9, 4, 9));
+        assert_eq!((p[0], p[MAP_SIZE], p[100 * MAP_SIZE]), (9, 4, 6));
         a.world.map_page(1, "t");
         assert_eq!(a.world.map.as_ref().unwrap().shown_index(), Some(0), "+1 from 3 wraps round to 0");
         a.world.map_page(1, "t");
@@ -1291,6 +1300,14 @@ mod tests {
         assert_eq!((at(&m, 250, 98), at(&m, 251, 99)), (2, 2), "painted back: full where revealed");
         assert!(m.remove_icon(250, 98).is_none());
         assert_eq!(m.saved_keys().icons.len(), 1);
+        // Q150 a: the fog tested in groups of 8 columns: a neighbour icon
+        // within the group over cleared fog is cut; one past it stays.
+        assert!(m.add_icon("dv_telep.bmp", 252, 98, None));
+        assert!(m.add_icon("dv_telep.bmp", 256, 98, None));
+        assert!(m.add_icon("dv_telep.bmp", 249, 98, None));
+        assert_eq!((at(&m, 252, 98), at(&m, 256, 98)), (7, 7));
+        assert!(m.remove_icon(249, 98).is_some());
+        assert_eq!((at(&m, 252, 98), at(&m, 256, 98)), (2, 7), "248-255 repainted: the icon at 252 cut, the one at 256 not");
     }
 
     #[test]
