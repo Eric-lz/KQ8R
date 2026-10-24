@@ -620,6 +620,40 @@ differs.
     | Building walls (per surface, nearest corner) | 18,000 / 9,000 | ≈ 22,900 / ≈ 10,190, then not drawn |
     | Ground (per corner) | 18,000 / 9,000 | 0.99 at 27,000 / 12,000, never drawn beyond |
 
+33a. **`setHaze <distance>`** (traced 2026-10-24, Q161) changes the
+    world's haze from a script, **at once**:
+    - `hazeDistance` = the number given (game units);
+    - `visibleDistance` = **1.5 ×** the number (both are the values
+      `TERRAIN.KQ` set at the world's start; there is no separate
+      setting);
+    - the camera's far drawing limit = the same 1.5 × the number;
+    - the ground's haze and edge (rules 27–28) are reset from the new
+      pair straight away; the objects' haze (rules 19–21) and the
+      switch-off distance (rule 36) read the values every frame anyway,
+      so everything follows from the next drawn frame.
+    - `$Console::Return` is 0. After setting, it prints four console
+      lines: `Perspective = …`, `Haze = …`, `Visible = …`, `FarPlane =
+      …` (the new values). Wrong word count: `usage: setHaze hazeVal`;
+      no terrain loaded: `setHaze:  could not find environment
+      manager`; nothing changes.
+    - `perspectiveDistance` is not touched.
+    - **Data uses:** Daventry `shadow.cs`: `setHaze 5000` entering the
+      Shadow's home (haze 5,000, visible 7,500), `setHaze 18000` on the
+      way back (18,000 / 27,000, exactly Daventry's `TERRAIN.KQ`
+      values). Barren `hazetrp1`–`5.cs` (14,000, 10,500, 12,500, 15,500,
+      18,000). Dead City `azrieltp.cs` `setHaze 9000`: haze 9,000 but
+      visible **13,500**, not the file's 12,000 (the 1.5 rule; keep it).
+    - **Kept how long:** until the next `setHaze` or until a world is
+      loaded (a new `TERRAIN.KQ` sets both again) [traced for the load;
+      whether a saved game stores the changed values was **not traced**].
+      A check the user can do in the original: save inside the Shadow's
+      home, load that save, and see whether the thick fog is still
+      there.
+    - The magic map's fog of war takes its radius from `hazeDistance`
+      only when its radius is set (`magic-map.md` rule 13: at set-up, or
+      `KQMap::setFogRadius` with 0 or less), not on a `setHaze`
+      [traced].
+
 ## Rules: draw distance, objects switched off far from Connor (Q69)
 
 All traced 2026-10-16. This is separate from the haze: it decides whether

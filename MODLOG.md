@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: `setHaze` (Q161)
+
+**Changed:** `docs/behaviour/object-lighting.md` new rule 33a; QUESTIONS Q161 answered.
+**Why:** Daventry's Shadow scene runs `setHaze 5000` / `setHaze 18000`; no note described it.
+**Tested how:** Traced in `Mask.exe` (Ghidra); uses and `TERRAIN.KQ` values read in the data.
+**Result:** `hazeDistance` = n and `visibleDistance` = 1.5 × n (camera far limit too), at once. Daventry's return value 18,000 gives back exactly its own 18,000 / 27,000.
+**Still broken / not tested:** Whether a saved game keeps the changed haze was not traced (a check for the user is in the rule). Not built.
+**Next:** B builds `setHaze`.
+
 ## 2026-10-24 Study A: `KQMonster::setState … Wait` from a script (Q160)
 
 **Changed:** `docs/behaviour/characters.md` rule 22, new part "`setState <name> Wait` in detail"; QUESTIONS Q160 answered.
