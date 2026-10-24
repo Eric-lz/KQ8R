@@ -1466,6 +1466,40 @@ impl WorldState {
         }
     }
 
+    /// `getConInventory` (`inventory.md` rules 20–26, Q166): nine
+    /// `ConInv::` variables, each the `ID #` of the first carried item
+    /// whose category is exactly that place (placeholders count), else 0;
+    /// what he carries, not what is drawn. Always 0; the nine lines go to
+    /// the log (our console). Our Connor and his list always exist, so the
+    /// "can't find Connor" errors (rule 26) never happen here.
+    fn get_con_inventory(&mut self, at: &str) -> String {
+        const PLACES: [(&str, &str); 9] = [
+            ("Long", "LongWeapon"),
+            ("Short", "ShortWeapon"),
+            ("Armor", "Armor"),
+            ("FullArmor", "FullArmor"),
+            ("UnderArmor", "UnderArmor"),
+            ("Pants", "Pants"),
+            ("Gloves", "Gloves"),
+            ("Helmet", "Helmet"),
+            ("Boots", "FootWear"),
+        ];
+        for (var, category) in PLACES {
+            let id = self
+                .items
+                .objects
+                .iter()
+                .filter(|o| o.carried_by("Connor"))
+                .filter_map(|o| self.items.kind(&o.kind))
+                .find(|t| t.category.eq_ignore_ascii_case(category))
+                .map_or(0, |t| t.id.unwrap_or(0));
+            let var = format!("ConInv::{var}");
+            self.item_note(format!("{at}: getConInventory: {:<20}{id}", format!("{var}:")));
+            self.vars_out.push((var, id.to_string()));
+        }
+        "0".into()
+    }
+
     /// `KQObject::setScript <name> <script | none>` (`anim-scripts.md` rule
     /// 33, Q154): any object with a script slot (items, characters,
     /// clickables, doors, scripted objects, chests, buildings) takes the
@@ -3173,6 +3207,7 @@ impl ScriptHost for WorldState {
             "KQCamera::addCamLoc" | "KQCamera::flyToCamLoc" | "KQCamera::cutToCamLoc" => Some(self.cam_loc(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
+            "getConInventory" => Some(self.get_con_inventory(at)),
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
@@ -5531,6 +5566,47 @@ endif
         // Rule 10: 1 = found, so an `if` on it takes the else branch.
         assert_eq!((v("A"), v("Found")), (Some("yes"), Some("NoName0")));
         assert_eq!((v("B"), v("C"), v("D")), (Some("0"), Some("0"), Some("0")));
+    }
+
+    #[test]
+    fn get_con_inventory_gives_each_place_s_id() {
+        // inventory.md rules 20–26 (Q166): ID #s as in Invinfo.itl.
+        let rows = [
+            ("INVITEM_Fists", 1280, "ShortWeapon"),
+            ("INVITEM_SmallAx", 1020, "ShortWeapon"),
+            ("INVITEM_NoRanged", 1310, "LongWeapon"),
+            ("INVITEM_NoArmor", 2120, "Armor"),
+            ("INVITEM_FullArmor", 2080, "FullArmor"),
+            ("INVITEM_LeatherGloves", 2000, "Gloves"),
+        ];
+        let mut text = format!("[InventoryItemTypeList]\nnumItems={}\n", rows.len());
+        for (n, (name, id, cat)) in rows.iter().enumerate() {
+            text.push_str(&format!("item{n}=\tKQInventoryItemType\t{name}\t{id}\t0\t0\t0\t0\t0\t0\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\tx.kqs\tnone\t1\t256\n"));
+        }
+        let script = "getConInventory\nset R $Console::Return\n";
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("s.cs".to_string(), script.as_bytes().to_vec())]);
+        a.world.items = crate::item::Items::new(kq8_data::items::ItemTypes::parse(text.as_bytes()).0, []);
+        let connor = || Place::Carried("Connor".into());
+        for k in ["INVITEM_Fists", "INVITEM_NoRanged", "INVITEM_NoArmor"] {
+            a.world.items.make(k, 1, connor()).unwrap();
+        }
+        // A glove lying in the world is not carried.
+        a.world.items.make("INVITEM_LeatherGloves", 1, Place::World { position: [0.0; 3], angles: [0.0; 3] }).unwrap();
+        a.scripts.call("s.cs", &[], &mut a.world);
+        let v = |a: &Active, k: &str| a.scripts.vars.get(&format!("ConInv::{k}")).map(str::to_string);
+        // Rule 23: the placeholders; the other six 0.
+        let start: Vec<_> = ["Long", "Short", "Armor", "FullArmor", "UnderArmor", "Pants", "Gloves", "Helmet", "Boots"].iter().map(|k| v(&a, k)).collect();
+        let want: Vec<_> = ["1310", "1280", "2120", "0", "0", "0", "0", "0", "0"].iter().map(|s| Some(s.to_string())).collect();
+        assert_eq!(start, want);
+        assert_eq!(a.scripts.vars.get("R"), Some("0"));
+        assert!(a.world.item_log.iter().any(|l| l.ends_with("getConInventory: ConInv::Long:       1310")), "{:?}", a.world.item_log);
+        // The small axe in place of the fists (rule 8 deletes the
+        // placeholder): Short 1020. A full suit shows only in FullArmor.
+        a.world.items.objects.retain(|o| o.kind != "INVITEM_Fists" && o.kind != "INVITEM_NoArmor");
+        a.world.items.make("INVITEM_SmallAx", 1, connor()).unwrap();
+        a.world.items.make("INVITEM_FullArmor", 1, connor()).unwrap();
+        a.scripts.call("s.cs", &[], &mut a.world);
+        assert_eq!((v(&a, "Short"), v(&a, "FullArmor"), v(&a, "Armor"), v(&a, "Gloves")), (Some("1020".into()), Some("2080".into()), Some("0".into()), Some("0".into())));
     }
 
     #[test]

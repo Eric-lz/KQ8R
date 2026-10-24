@@ -2878,6 +2878,8 @@ first. Each step: the note's rule, a unit test where the rule is in
    1280, no ranged 1310, no armour 2120); `$Console::Return` 0; nine
    console lines. Then Daventry's bell: three hits with the small axe
    start the Lake Sword scene (`bell.cs`, check 6).
+   **Done** 2026-10-24 (the three hits and the scene's start checked in
+   the logs).
 2. **B-2: `exist <name>`** (Q162, `anim-scripts.md` rule 38): 0 when
    the name is a world object (deleted ones still count until the
    deleting event ends), 1 when not; wrong word count: usage line and 0.

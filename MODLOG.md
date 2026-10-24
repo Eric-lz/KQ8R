@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-1: `getConInventory` (Q166 built); the bell rings
+
+**Changed:** Core `active.rs`: the script command `getConInventory` sets the nine `ConInv::` variables (`Long`, `Short`, `Armor`, `FullArmor`, `UnderArmor`, `Pants`, `Gloves`, `Helmet`, `Boots`) to the `ID #` of the carried item of exactly that category, or 0; returns 0; nine lines in the log. Unit test. Provenance, QUESTIONS Q166, DESIGN B-1.
+**Why:** `inventory.md` rules 20–26. Daventry's bell (`bell.cs`) rings only if `$ConInv::Short == 1020` (the small axe).
+**Tested how:** `cargo test --workspace` (all pass; new `get_con_inventory_gives_each_place_s_id`). `kq8-viewer --world Daventry --sound off --frames 4500 --command "give SmallAx",3 --command "KQConner::setDoMode 0",5 --command "loadKQ bell.kq",6 --command "move Connor 0 147461 210166 -1 0 0 0",7 --aim bell,60 --aim bell,120 --aim bell,180`; `items.log`, `doors.log`.
+**Result:** At the start Long 1310, Short 1280, Armor 2120, the rest 0; after `give SmallAx` Short 1020. Hits at updates 72, 125, 185: `bellHits` 1, 2, 3, `ringonce` and `bell.aud` each time; the third runs `loadKQ lady.kq`, the Lake lady rises (`up`, `Ladybrth.aud`) and `lady.cs` goes on to its `EndLoop up` cue.
+**Still broken / not tested:** Not played by hand or looked at by eye; the rest of the Lake Sword scene not followed. A first `--frames 900` run was too short for three hits (only about 80 updates).
+**Next:** B-2 (`exist`).
+
 ## 2026-10-24 The user's check of the bell and the roof kill in the original
 
 **Changed:** `docs/behaviour/inventory.md` check 6 and `anim-scripts.md` rule 38: marked as checked by the user.

@@ -3456,3 +3456,12 @@ Replaces the Q112 stand-in row (the wall block).
 | --- | --- | --- |
 | The centre is half-way between the partner's feet (taken at the start) and Connor's talking spot (`convLocX/Y/Z`), + 1,400; it doesn't move when he walks within the stay area | `conversation.md` rule 14 (traced, Q126; the user's check in the original) | Unit test `camera_numbers_cut_the_camera_until_the_right_button` |
 | No info object: where Connor stands | **Ours** (never happens in the data) | — |
+
+## `getConInventory` (B-1, Q166) — `crates/kq8-core/src/active.rs` (`get_con_inventory`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Nine variables `ConInv::Long`, `Short`, `Armor`, `FullArmor`, `UnderArmor`, `Pants`, `Gloves`, `Helmet`, `Boots` (= `FootWear`), in that order | `inventory.md` rule 20 (traced) | Unit test `get_con_inventory_gives_each_place_s_id` |
+| Each = the `ID #` of the first carried item whose category is exactly that place, else 0; what he carries, not what is drawn; placeholders count (fists 1280, no ranged 1310, no armour 2120); a full suit only in `FullArmor` | Rules 21–24 (traced + data) | Unit test; viewer `items.log`: Short 1280 → 1020 after `give SmallAx` |
+| `$Console::Return` always 0; nine lines `ConInv::Long:       1310` (to our log, which is our console) | Rules 25–26 (traced) | Unit test |
+| "can't find Connor" / "…Connor's inventory" errors not made: our Connor and his list always exist | **Ours** | — |
