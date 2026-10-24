@@ -2859,6 +2859,7 @@ is in `kq8-core`, a viewer run checked in the logs.
     (Q112), turn keys during a conversation's approach (Q125), the
     conversation camera round the talking spot (Q126). One commit each.
     (Q136 needs nothing: B's fixed 2 s is right for Daventry.)
+    **Done** 2026-10-24 (A-12a-f; the camera by unit test only).
 
 Questions found on the way go to `docs/behaviour/QUESTIONS.md`, not
 guessed.

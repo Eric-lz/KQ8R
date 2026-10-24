@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12f: the conversation camera swings round the talking spot's half-way point (Q126 built)
+
+**Changed:** Core `conversation.rs` (`camera_moved_by_player`): when the right button is first held in a conversation, the swing centre is half-way between the partner's feet (taken at the start) and Connor's **talking spot** (`convLocX/Y/Z` of the info object), not where he stands; the usual + 1,400 aim height as before. Test updated. Provenance, QUESTIONS Q126.
+**Why:** `conversation.md` rule 14 (Q126, traced and settled by the user's check in the original): "B's half-way stand-in was close: use the talking spot instead of Connor's position".
+**Tested how:** `cargo test --workspace` (all pass; `camera_numbers_cut_the_camera_until_the_right_button`: with Connor 200 from his spot the centre stays half-way to the spot).
+**Result:** Unit test as above.
+**Still broken / not tested:** **Not tested in the viewer** (no test option holds the right mouse button). The user's check: talk to the Wizard, walk a little within the stay area, hold the right button: the camera should swing round a point between the Wizard and Connor's spot, not move with Connor.
+**Next:** STATUS, FEATURES, DESIGN brought up to date.
+
 ## 2026-10-24 A-12e: turn keys work during a conversation's approach (Q125 built)
 
 **Changed:** Core `connor.rs`: in the talk state the turn keys turn Connor whatever plays, the approach movements (`stopwalk`, `walkstopright`, the automatic turns) included; forward and back still do nothing there. Unit test extended. Provenance, QUESTIONS Q125.

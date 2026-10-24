@@ -3445,3 +3445,10 @@ Replaces the Q112 stand-in row (the wall block).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | In the talk state the turn keys turn him whatever movement plays (the approach too); a press cancels the automatic turn; forward / back do nothing until the stay-area test | `conversation.md` rule 13 (traced, Q125 a) | Unit test `gestures_play_only_while_he_stands`; viewer `connor.log` with the Wizard |
+
+## The conversation camera's swing centre (A-12f, Q126) — `crates/kq8-core/src/conversation.rs` (`camera_moved_by_player`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The centre is half-way between the partner's feet (taken at the start) and Connor's talking spot (`convLocX/Y/Z`), + 1,400; it doesn't move when he walks within the stay area | `conversation.md` rule 14 (traced, Q126; the user's check in the original) | Unit test `camera_numbers_cut_the_camera_until_the_right_button` |
+| No info object: where Connor stands | **Ours** (never happens in the data) | — |
