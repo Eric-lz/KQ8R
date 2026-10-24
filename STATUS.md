@@ -5,8 +5,27 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-22)
+## Where we are (2026-10-24)
 
+- **2026-10-24 (B): session A's 2026-10-22 answers built** (plan in
+  `docs/DESIGN.md` "building session A's 2026-10-22 answers", steps A-1
+  to A-12, one commit each; **checked in the logs, not by eye**):
+  `StateChange` messages (the Shadow scene now starts with a weapon out),
+  Connor's Choice state (the roof jump), `loadObject`, `setScript`'s
+  `Init` (characters and items get `Init`), cue `sendEvent @` and
+  `random` (the ravens caw), the experience sound `STATS.AUD` and the
+  level flame / `LEVEL.AUD` on a changed level number, Connor's frames
+  cut down, the hammer flying back to its start, Connor hidden from
+  characters in his talk state, the portal popup opening on Yes, black
+  only in the loading meter's slot, map icons after the colour match and
+  no mini-map blink, the spinning mask shrunk into its place, `dither` as
+  a screen-door texture, the orbits from world +y, textures through the
+  world palette, the bolt's start frame, Connor's `loop=` start phases, a
+  swap while moving cutting a swing, the jump from the held keys, turn
+  keys in a conversation's approach, the conversation camera round the
+  talking spot. New questions for A: **Q162** (`exist`: the roof scene's
+  kill waits for it), **Q163**, **Q164** (two notes disagree on a
+  repeating loop's speed: not built), **Q165**.
 - **2026-10-22 (B): fixes after the user's look at 6e** (one commit
   each). The popup: text centred with more line space; buttons plain /
   gold-highlighted / held down, answering when the mouse button or Enter
@@ -26,8 +45,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   characters). The user: works. Not yet solid for Connor.
 - **2026-10-23 (B): the Shadow scene at the Dead City portal plays**
   (the user: works): scripts can now play a movement on Connor
-  (`KQAnimPlayEvent`) and cue a character. Still: entering with a
-  weapon out waits for `StateChange` (Q156, not built); Q160, Q161 new.
+  (`KQAnimPlayEvent`) and cue a character (with a weapon out: works
+  since A-1, 2026-10-24); Q160, Q161 new.
 
 - **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
   `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
@@ -552,6 +571,16 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
+- **After A-1 to A-12 (2026-10-24):** nothing of it was looked at by eye.
+  Worth the user's look first: the roof scene on the bow spriggan (the
+  Choice: forward / back; the kill itself waits for `exist`, Q162), the
+  ravens cawing (`--begin`), the experience sound, the spinning mask
+  next to a potion icon (in any cutscene), the wizard's chest and the
+  keep wall dithered (Clarity), the portal popup on Yes. Not done:
+  `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
+  on doors and characters (Q165), Q81 c's wrap detail. Suggested next:
+  A answers Q162-Q165; B then the roof kill and the loops.
+
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice
   (`--world Daventry --frames 30000 --sound off` with one
@@ -756,31 +785,21 @@ M6 has started with the Rope and Hook (6a).
 - Inside `world-change.md`: three small points (not blocking):
   left-world variables in memory, the rope / movement list after
   arrival, `worldState.kq`'s events.
-- **For B (answered by A 2026-10-22, not built yet):** from Q153's
-  answer (`objects.md` "Loops" rule 6), still to build: Connor's frames
-  by the same rule; a repeating loop's wrap sets the phase to exactly 0;
-  repeating speed (N − 1)/(N × duration). Q154 (`setScript` calls `Init`), Q155 (Choice state)
-  and Q156 (`StateChange`) in `characters.md`, Q157 (`loadObject`),
-  Q158 (`sendEvent @`, `random`, the ravens) in `anim-scripts.md` rules
-  33–37, Q159 (`STATS.AUD`, `interface.md` rule 26a), Q149
-  (`setLevel`, the level-up flame and `LEVEL.AUD`, `interface.md` rules
-  26, 30a), Q148 (the hammer's turn-back, `azriel-hammer.md`), Q146
-  (`potions.md` rule 26). Small parts still open: the flame's speed and
-  length; whether `LEVEL.AUD` / `STATS.AUD` play at a world start.
-- **For B (answered by A 2026-10-22, not built yet), the rest:** Q150
-  (map icons after the colour match, the mini-map slot never blinks),
-  Q151 (the popup opens with Yes highlighted), Q152 (meters stretched,
-  black remainder), Q143 (icons clipped to their place), Q144 (dither =
-  screen-door texture pattern), Q145 (orbits), Q140 (the `do` frame after
-  the step), Q138 e (`loop=` start phase), Q136, Q112 (jump from the held
-  key), Q125 (turn keys during the approach), Q126 (camera round the
-  half-way between the partner and Connor's talking spot, + 1,400), Q14 b
-  (pad solid), Q42. See MODLOG.
-- **For B:** Q143 (the spinning mask is shrunk to its 48 × 48 place, no
-  overlap into the next; the user thinks ours overlaps a little: check).
-  Q126, Q152 and Q14 b were settled by the user's checks (2026-10-22): the camera swings round the point half-way
-  between the partner and Connor's talking spot; black only inside the
-  meter's slot; the pad is solid.
+- **For A (2026-10-24, from B's A-1 to A-12):** **Q162** (`exist <object>`
+  and how `if` reads it: Daventry's roof kill takes the `else` branch
+  until answered), **Q163** (`StateChange`'s old number when leaving "no
+  state"; B sends 0), **Q164** (`objects.md` "Loops" rule 6's repeating
+  speed and wrap disagree with `character-movement.md` and Connor's
+  measured speed; B kept the old speed), **Q165** (`dithered=` on doors,
+  characters, plain objects; and rule 9's data: `arroswt` has 2).
+- **Built 2026-10-24 (A-1 to A-12):** Q112, Q125, Q126, Q138 (e and the
+  swap during a swing), Q140 c, Q143 c, Q144, Q145, Q146, Q148, Q149,
+  Q150, Q151, Q152, Q153 (Connor's frames; the speed and wrap: Q164),
+  Q154, Q155, Q156, Q157, Q158 a-b, Q159, Q42; Q14 b and Q136 needed
+  nothing. Small parts left: the level flame's speed and length, whether
+  `LEVEL.AUD` / `STATS.AUD` play at a world start (not traced); Q81 c's
+  forward-wrap transition detail (cues skipped when a waiting
+  transition's phase lies in the wrap) not built.
 
 - Open points inside `object-lighting.md` (not in QUESTIONS.md): only
   the flames' 12,100 (traced and built) vs the user's ~11,000 (open

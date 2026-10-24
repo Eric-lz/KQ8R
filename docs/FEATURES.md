@@ -692,9 +692,10 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
   or using a teleporter opens the question "You are about to load a new
   region. Are you sure you want to do that?" with Yes (left) and No
   (right). The game pauses meanwhile; music and sounds go on.
-  Left / Right move the highlight (gold outline); a button goes down
-  while the mouse button or Enter is held and answers when let go;
-  Escape is No. No puts Connor a step back, standing; walking in again
+  Yes is highlighted when it opens; Left / Right move the highlight
+  (gold outline); a button goes down while the mouse button or Enter is
+  held and answers when let go; Escape is No (nothing during a
+  cutscene). No puts Connor a step back, standing; walking in again
   asks again.
 - **Yes:** Connor plays the exit's movement (`portal`, `teleportdown`,
   the elevator's, …), then the loading screen: the world's picture with
@@ -716,6 +717,37 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
   use its voices and sounds (Castle checked by ear by the user).
 - **Not yet:** the full-armour movement list on arrival; the main menu
   from Escape on the question.
+
+## Session A's 2026-10-22 answers (2026-10-24, steps A-1 to A-12)
+
+Checked in the logs and unit tests, not by eye. Details and test
+commands in `MODLOG.md`.
+
+- **Scripts:** `StateChange` messages (old and new state numbers; the
+  Shadow scene starts with a weapon out), `setScript` runs the new
+  script's `Init`, characters and items get `Init`, `loadObject` (still
+  objects such as a body), `random`, and `sendEvent` in a movement's cue
+  (the ravens caw now and then).
+- **Connor's Choice state:** forward or back picks one of the script's
+  directions (the roof jump; its kill waits for an answer about
+  `exist`).
+- **Sounds and meters:** the experience sound when the experience
+  percent goes up; the level flame and its sound when the shown level
+  changes (`setLevel` alone sends nothing).
+- **Connor:** frames cut down like every object's, movements start at
+  their `loop=` start (the fists' put-away), the jump comes from the
+  held keys (the back flip with back held), turn keys work during a
+  conversation's approach, hidden from characters while talking, a
+  weapon swap while moving cuts a swing.
+- **Fights:** a bolt starts from the frame after the update's step;
+  Azriel's Hammer flies back to its start point (Daventry: 1.33 s).
+- **Looks:** `dither` draws a screen-door pattern (the keep wall, the
+  wizard's chest), every 8-bit texture uses the world palette, the
+  shield orbits start from world north, the spinning mask fits its own
+  status place.
+- **Interface:** black only inside the loading meter's slot; map icons
+  on another world's map keep their own colours; the mini-map shows at
+  once (no blink).
 
 ## Viewer helpers (not in the original)
 
