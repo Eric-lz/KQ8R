@@ -3497,3 +3497,13 @@ Replaces the Q112 stand-in row (the wall block).
 | In Wait, a movement other than `Stop` / `gesture…` that ends asks for `Stop` (Connor: from its start, an ordinary request) | Rule 22 (traced; characters already had it as rule 18) | Unit test `a_script_request_plays_once_then_wait_asks_for_stop`; viewer: "portalx ended in Wait: asks for stop" |
 | Connor's Wait = our Free mode with the keys' choice `stop`; a held key asks for a walk again at the next update | **Ours** (as `state_number`) | — |
 | `setState Connor Wait` from his other states (jump, push, rope, talk, throw): nothing, logged; during a jump or the rope it goes through the same refusals as `setState special`; before a Choice it is refused | **Gap / stand-in**: the rule names only Wait, Move and Special | — |
+
+## `setHaze` (B-5, Q161) — `crates/kq8-core/src/active.rs` (`Request::SetHaze`); viewer `object_light.rs` (`SetHaze`, `apply_set_haze`), `door_view.rs`, `main.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `setHaze <n>`: `hazeDistance` = n, `visibleDistance` = 1.5 n, at once; `$Console::Return` 0; wrong word count: "usage: setHaze hazeVal", nothing changes | `object-lighting.md` rule 33a (traced) | Unit test `set_haze_hands_the_number_over_and_answers_0`; viewer `viewer.log`: "Haze = 5000; Visible = 7500" |
+| The ground's haze and end reset at once; objects' haze and the switch-off distance from the next frame | Rule 33a | Viewer: 2,174 object, 123 ground, 176 building materials changed; objects off nearer than 27,000 afterwards |
+| Four console lines `Perspective`, `Haze`, `Visible`, `FarPlane` (to our log); `perspectiveDistance` not kept by us, so printed as unchanged | Rule 33a; **ours** for the missing value | Viewer log |
+| The camera's far limit: our projection keeps its own far plane (2 × the terrain's size, as at load); the ground shader ends at `visibleDistance` and objects switch off there | **Ours / stand-in** (the far plane is logged, not set) | — |
+| Kept until the next `setHaze` or a world load (the new world's `TERRAIN.KQ`); saved games: not traced | Rule 33a; **open** | — |

@@ -124,6 +124,9 @@ pub enum Request {
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
     /// rule 16): the comma-separated items as written.
     ConnorSpecial { items: String, at: String },
+    /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
+    /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
+    SetHaze { haze: f32, at: String },
     /// `KQMonster::setState Connor Wait` (`characters.md` rule 22, Q160):
     /// his walker enters Wait afresh and asks for `Stop`.
     ConnorWait { at: String },
@@ -3237,6 +3240,18 @@ impl ScriptHost for WorldState {
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
             "getConInventory" => Some(self.get_con_inventory(at)),
             "exist" => Some(self.exist(words, at)),
+            "setHaze" => {
+                // object-lighting.md rule 33a (Q161): always 0.
+                match words {
+                    [_, n] => {
+                        let haze = number_value(n) as f32;
+                        self.note(format!("{at}: setHaze {n}: haze {haze:.0}, visible {:.0}: handed to the viewer (object-lighting.md rule 33a)", 1.5 * haze));
+                        self.requests.push(Request::SetHaze { haze, at: at.to_string() });
+                    }
+                    _ => self.note(format!("{at}: usage: setHaze hazeVal; nothing changes")),
+                }
+                Some("0".into())
+            }
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
@@ -5618,6 +5633,20 @@ endif
         ScriptHost::event_done(&mut a.world);
         assert_eq!(a.test_command("exist table", "t").as_deref(), Some("1"));
         assert!(a.world.log.iter().any(|l| l.contains("exist TABLE: deleted in this same event: still there: 0")), "{:?}", a.world.log);
+    }
+
+    #[test]
+    fn set_haze_hands_the_number_over_and_answers_0() {
+        // object-lighting.md rule 33a (Q161): shadow.cs `setHaze 5000`.
+        let mut a = with_trap("");
+        assert_eq!(a.test_command("setHaze 5000", "t").as_deref(), Some("0"));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::SetHaze { haze, .. } if *haze == 5000.0)), "{:?}", a.world.requests);
+        assert!(a.world.log.iter().any(|l| l.contains("setHaze 5000: haze 5000, visible 7500")), "{:?}", a.world.log);
+        // Wrong word count: the usage line, nothing changes, still 0.
+        a.world.requests.clear();
+        assert_eq!(a.test_command("setHaze", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("setHaze 1 2", "t").as_deref(), Some("0"));
+        assert!(a.world.requests.is_empty());
     }
 
     #[test]

@@ -1030,7 +1030,7 @@ pub fn trap_step(
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
-    (buttons, right_at): (Res<ButtonInput<MouseButton>>, Res<RightAt>),
+    (buttons, right_at, mut set_haze): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>),
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -1271,6 +1271,11 @@ pub fn trap_step(
             Request::ConnorAnim { movement, at } => {
                 let line = connor.script_anim(&movement, &at);
                 format!("{at}: applied: Connor {line}")
+            }
+            Request::SetHaze { haze, at } => {
+                // object-lighting.md rule 33a (Q161): applied before the next frame.
+                set_haze.0.push((haze, at.clone()));
+                format!("{at}: applied: setHaze {haze} queued for the haze")
             }
             Request::ConnorWait { at } => {
                 let line = connor.enter_wait(&at);

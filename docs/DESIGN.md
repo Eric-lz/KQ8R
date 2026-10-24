@@ -2904,6 +2904,7 @@ first. Each step: the note's rule, a unit test where the rule is in
 5. **B-5: `setHaze`** (Q161, `object-lighting.md` rule 33a): haze n,
    visible 1.5 n, the camera's far limit 1.5 n, at once; four console
    lines; `$Console::Return` 0.
+   **Done** 2026-10-24 (the Shadow scene's two calls checked in the logs).
 6. **B-6: `dithered=` on every class** (Q165, `objects.md` "Dithered
    objects" rules 8–9): applied when the object is added to the world,
    and again at each movement start for objects that play movements.

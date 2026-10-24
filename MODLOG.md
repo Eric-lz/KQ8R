@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-5: `setHaze` (Q161 built)
+
+**Changed:** Core `active.rs`: the script command `setHaze <n>` becomes `Request::SetHaze` (always 0; wrong word count: usage line). Viewer `object_light.rs`: `SetHaze` queue and `apply_set_haze` (haze n, visible 1.5 n; object, ground and building materials updated at once; four console lines to the log); `door_view.rs` queues it; `main.rs` registers it. Unit test. Provenance, QUESTIONS Q161, DESIGN B-5.
+**Why:** `object-lighting.md` rule 33a. Daventry's Shadow scene thickens the fog (`setHaze 5000`) inside the Shadow's home and puts it back (`setHaze 18000`); Barren and Dead City use it too.
+**Tested how:** `cargo test --workspace` (all pass; new `set_haze_hands_the_number_over_and_answers_0`). `kq8-viewer --world Daventry --frames 12000 --sound off --command "KQConner::setDoMode 4",3 --command "move Connor 0 234300 183200 -1 0 0 1.57",5 --hold 1,0,0,10,40`; `viewer.log`, `doors.log`.
+**Result:** Update 45: "Haze = 5000; Visible = 7500; FarPlane = 7500 ... was haze 18000, visible 27000"; 2,174 object, 123 ground, 176 building materials changed; 37 objects then switched off nearer than 27,000 (a torch at 10,958 from Connor). Update 436: back to 18,000 / 27,000.
+**Still broken / not tested:** Not looked at by eye. Our camera's projection far plane is not set (it never followed `visibleDistance`; the ground and objects stop there anyway). Whether a saved game keeps the values: not traced (and we have no saving yet).
+**Next:** B-6 (`dithered=` on every class).
+
 ## 2026-10-24 B-4: `setState <name> Wait` (Q160 built); Connor stands up after `portalx`
 
 **Changed:** Core `connor.rs`: `Walker::enter_wait` (from Wait or Move: a fresh Wait asking for `stop`; from Special only with no words left, else kept waiting; other states: nothing, logged); in Wait a play-once movement other than `stop` / `gesture...` that ends asks for `stop`. `active.rs`: `KQMonster::setState Connor Wait` becomes `Request::ConnorWait`. `character.rs`: `setState Wait` during a Special list with words left is kept waiting. Viewer `connor_view.rs` (`enter_wait`), `door_view.rs` (applies the request; it counts as a state request for the jump, rope and Choice refusals). Unit tests (one old test expected the held last frame: changed). Provenance, QUESTIONS Q160, DESIGN B-4.

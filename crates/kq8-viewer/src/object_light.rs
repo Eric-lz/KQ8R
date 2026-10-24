@@ -493,6 +493,70 @@ pub fn toggle_haze(
     shared.log.lock().unwrap().summary(format!("key F8: haze {} ({changed} materials)", if light.haze_on { "on" } else { "off" }));
 }
 
+/// The scripts' `setHaze` numbers waiting to be applied, with where they
+/// came from ([`apply_set_haze`]).
+#[derive(Resource, Default)]
+pub struct SetHaze(pub Vec<(f32, String)>);
+
+/// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): `hazeDistance` =
+/// n, `visibleDistance` = 1.5 n (the far limit the same), at once: the
+/// object, building and ground materials take the new pair now; the
+/// objects' haze and switch-off distance read it every frame. The four
+/// console lines go to the log. **Ours:** our camera's projection keeps its
+/// own far plane (twice the terrain's size, as at load); the ground ends at
+/// `visibleDistance` in its shader and objects switch off there, as before.
+pub fn apply_set_haze(
+    mut queue: ResMut<SetHaze>,
+    light: Option<ResMut<ObjectLight>>,
+    mut objects: ResMut<Assets<ObjectMaterial>>,
+    mut ground: ResMut<Assets<crate::ground_haze::GroundMaterial>>,
+    mut buildings: ResMut<Assets<crate::building_light::BuildingMaterial>>,
+    shared: Res<Shared>,
+) {
+    if queue.0.is_empty() {
+        return;
+    }
+    let mut log = shared.log.lock().unwrap();
+    let Some(mut light) = light else {
+        for (_, at) in queue.0.drain(..) {
+            log.summary(format!("{at}: setHaze:  could not find environment manager (no terrain); nothing changes"));
+        }
+        return;
+    };
+    for (n, at) in queue.0.drain(..) {
+        let background = light.haze.background;
+        let mut haze = Haze::new(n, 1.5 * n, light.haze.colour);
+        haze.background = background;
+        log.summary(format!(
+            "{at}: setHaze {n}: Perspective = (unchanged, not kept by us); Haze = {:.0}; Visible = {:.0}; FarPlane = {:.0} (object-lighting.md rule 33a); was haze {:.0}, visible {:.0}",
+            haze.start, haze.visible, haze.visible, light.haze.start, light.haze.visible
+        ));
+        light.haze = haze;
+    }
+    let h = light.haze;
+    let (mut o, mut g, mut b) = (0, 0, 0);
+    for (_, m) in objects.iter_mut() {
+        (m.settings.haze_start, m.settings.haze_end) = (h.start, h.end);
+        o += 1;
+    }
+    for (_, m) in ground.iter_mut() {
+        (m.settings.haze_start, m.settings.visible_distance) = (h.ground_start(), h.visible);
+        g += 1;
+    }
+    for (_, m) in buildings.iter_mut() {
+        (m.settings.haze_start, m.settings.haze_end) = (h.start, h.end);
+        b += 1;
+    }
+    log.summary(format!(
+        "setHaze: haze starts at {:.0}, full at {:.0}; ground haze from {:.0}, ground ends at {:.0}; objects off at {:.0} from Connor; {o} object, {g} ground, {b} building materials changed",
+        h.start,
+        h.end,
+        h.ground_start(),
+        h.visible,
+        h.visible
+    ));
+}
+
 /// The placed objects, for the haze log: name, position (game units),
 /// `b_hazeSolid`; and the buildings: `b_hazeSolid` and each wall
 /// surface's corners (world space, game units).
