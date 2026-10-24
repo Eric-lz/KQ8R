@@ -111,9 +111,8 @@ fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
     let level = c.change(d);
     let after = *c;
     w.connor_stats_events += 1;
-    let sound = if level.is_some() { w.level_up_sound(after.level) } else { String::new() };
     format!(
-        "{why}: stats {:?} level {} -> {:?} level {}{}{sound}",
+        "{why}: stats {:?} level {} -> {:?} level {}{}",
         before.stats.0,
         before.level,
         after.stats.0,

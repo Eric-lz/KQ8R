@@ -26,9 +26,20 @@ pub const FOURTH_CAP: i64 = 100;
 /// Experience needed from level 15 on.
 pub const TOP_THRESHOLD: i64 = 150_000;
 
-/// STAND-IN (Q149 c, DESIGN L-3): the level-up sound, `GAME/SOUND`'s only
-/// sound with a level name; no data file names one.
+/// The meters' level-up sound (`interface.md` rule 26; the user's check,
+/// Q149 c).
 pub const LEVEL_UP_SOUND: &str = "LEVEL.AUD";
+
+/// The experience sound (`interface.md` rule 26a; the user's check, Q159).
+pub const EXPERIENCE_SOUND: &str = "STATS.AUD";
+
+/// Rule 26a: plays when the experience percent is set and is not 0 and at
+/// least the last percent shown (`last`, which starts at 0 when the
+/// program starts and is never reset). The percent counts as 0-100.
+pub fn experience_sound_plays(percent: i64, last: i64) -> bool {
+    let p = percent.clamp(0, 100);
+    p != 0 && p >= last.clamp(0, 100)
+}
 
 /// Health of a door without a `stats=` line (`doors.md` rule 18).
 pub const DOOR_HEALTH: i64 = 10_000;
@@ -154,5 +165,15 @@ mod tests {
         assert_eq!(ConnorStats::threshold(2), 20);
         assert_eq!(ConnorStats::threshold(14), 81_920);
         assert_eq!(ConnorStats::threshold(15), 150_000);
+    }
+
+    #[test]
+    fn plays_when_not_0_and_not_lower_than_the_last() {
+        // interface.md rule 26a (Q159).
+        assert!(!experience_sound_plays(0, 0), "0 % is silent");
+        assert!(experience_sound_plays(50, 0));
+        assert!(experience_sound_plays(50, 50), "equal counts");
+        assert!(!experience_sound_plays(15, 80), "a level-up's drop: only LEVEL.AUD");
+        assert!(experience_sound_plays(200, 100), "200 % counts as 100");
     }
 }

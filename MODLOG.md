@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-6: the experience sound `STATS.AUD`; `setLevel`, the flame and `LEVEL.AUD` as traced (Q159, Q149 built)
+
+**Changed:** Core `stats.rs`: `EXPERIENCE_SOUND`, `experience_sound_plays`; the level-up sound no longer played by the core's three level-up places (`active.rs`, `connor_inventory.rs`, `fight.rs`); `setLevel` sends nothing to the meters. Viewer `gui_view.rs`: when the meters get an experience percent that is not 0 and at least the last one shown (kept for the whole program), `STATS.AUD` plays; when the shown level changes (up or down), the flame starts and `LEVEL.AUD` plays. Unit test. Provenance, QUESTIONS Q149, Q159.
+**Why:** `interface.md` rules 26, 26a, 30a. The user: the original plays a short sound whenever Connor gains experience; ours didn't.
+**Tested how:** `cargo test --workspace` (all pass; new `plays_when_not_0_and_not_lower_than_the_last`). `kq8-viewer --world Daventry --frames 900 --sound off --no-ai --command "sendEvent 0 Connor KQStatsChangeRequestEvent 0 0 0 0 5",10` and `+3` at 20, `+5` at 30, health −1 at 40; `gui.log`, `sound.log`. `kq8-viewer --world DeadCity --frames 400 --sound off --no-ai`.
+**Result:** Daventry: 0 % at the start: no sound; 50 %: `STATS.AUD`; 80 %: `STATS.AUD`; +5 → level 2, 15 %: no `STATS.AUD`, flame and `LEVEL.AUD`; the health loss: nothing. Dead City: "setLevel 8 … nothing sent to the meters"; the screen opens on level 8 (no flame, as before).
+**Still broken / not tested:** Not listened to. Not traced (kept as before): the flame's speed and length (17 frames at 15 per second, once), whether the flame and `LEVEL.AUD` play when a world starts. `STATS.AUD` when arriving in a world with experience above 0 % follows the rule (A's inference). Both play in sound group 0 like the panels' sounds.
+**Next:** A-7 (the rest of Q153: Connor's frames, the wrap, the repeating speed).
+
 ## 2026-10-24 A-5: `sendEvent` in cues, `random`: the ravens caw (Q158 a, b built)
 
 **Changed:** Core `active.rs`: `cue_event` (a movement's cue `sendEvent <target> <Event> <numbers…>`: no delay word, queued for now; `@` and everything before it → the name of the object playing the movement), used for doors, chests, scripted objects, animated objects and characters (`cue_action`); the script command `random [min] [max]` (whole numbers, min + round(u × (max − min))). Unit tests. Provenance, QUESTIONS Q158.

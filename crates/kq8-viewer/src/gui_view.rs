@@ -1067,6 +1067,11 @@ pub fn setup_gui(mut commands: Commands, gui: Option<Res<Gui>>, mut images: ResM
     }
 }
 
+/// The last experience percent the meters showed (`interface.md` rule
+/// 26a): 0 when the program starts, never reset, not even by a world
+/// change.
+static LAST_EXPERIENCE_PERCENT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
 /// One game update (15 per second), after the scripts and Connor: the
 /// stats events, handsOff, the script commands, `--key`, and what the
 /// slots show.
@@ -1413,11 +1418,28 @@ pub fn gui_step(
         let k = Slot::ALL.iter().position(|x| x == s).expect("listed");
         gui.flashes[k] = Some(now);
     }
-    // DESIGN L-2 (stand-in Q149 b): a higher level starts the flame.
-    if !first && sent.level > old_level {
+    // interface.md rule 26a (Q159): the experience sound, when the percent
+    // is set (also when the screen opens: Connor added to a world).
+    if let Some(p) = sent.experience_percent {
+        let last = LAST_EXPERIENCE_PERCENT.swap(p.clamp(0, 100), std::sync::atomic::Ordering::Relaxed);
+        let plays = kq8_core::stats::experience_sound_plays(p, last);
+        if plays {
+            sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(kq8_core::stats::EXPERIENCE_SOUND, format!("experience {p} % (was {last} %)")));
+        }
+        let line = format!("update {updates}: experience {p} % set (last shown {last} %): {} (interface.md rule 26a)", if plays { "STATS.AUD plays" } else { "no sound" });
+        gui.note(&line);
+        shared.log.lock().unwrap().detail(format!("gui: {line}"));
+    }
+    // Rule 26 (Q149 b): the shown level changed (not when the screen opens:
+    // not traced): the flame from its first frame and LEVEL.AUD.
+    if !first && sent.level != old_level {
         gui.level_flame = Some(now);
+        sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(kq8_core::stats::LEVEL_UP_SOUND, format!("the meters' level {old_level} -> {}", sent.level)));
         let frames = gui.flame_file().map_or(0, |f| gui.frames(&f));
-        let line = format!("update {updates}: level {old_level} -> {}: the level-up flame starts ({frames} frames at {ANIMATION_FPS} per second, once; stand-in Q149 b)", sent.level);
+        let line = format!(
+            "update {updates}: level {old_level} -> {}: the level-up flame starts and LEVEL.AUD plays (rule 26; {frames} frames at {ANIMATION_FPS} per second, once: stand-in, not traced)",
+            sent.level
+        );
         gui.note(&line);
         shared.log.lock().unwrap().detail(format!("gui: {line}"));
     }

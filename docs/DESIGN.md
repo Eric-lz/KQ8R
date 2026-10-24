@@ -2827,6 +2827,7 @@ is in `kq8-core`, a viewer run checked in the logs.
 6. **A-6: the experience sound** (Q159, `interface.md` rule 26a) and
    **`setLevel` / the level-up flame on a changed level number**
    (Q149, `interface.md` rules 26, 30, 30a).
+   **Done** 2026-10-24 (checked in the logs).
 7. **A-7: the rest of Q153** (`objects.md` "Loops"): Connor's frames
    cut down; a repeating wrap sets the phase to exactly 0; repeating
    speed (N − 1)/(N × duration).

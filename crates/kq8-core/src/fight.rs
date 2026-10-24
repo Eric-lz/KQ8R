@@ -1075,9 +1075,8 @@ impl crate::active::WorldState {
                 let level = c.change(crate::stats::Stats([0, 0, 0, 0, exp]));
                 let after = *c;
                 self.connor_stats_events += 1;
-                let sound = if level.is_some() { self.level_up_sound(after.level) } else { String::new() };
                 format!(
-                    "Connor gets its experience {exp}: {:?} level {} -> {:?} level {}{}{sound}",
+                    "Connor gets its experience {exp}: {:?} level {} -> {:?} level {}{}",
                     before.stats.0,
                     before.level,
                     after.stats.0,

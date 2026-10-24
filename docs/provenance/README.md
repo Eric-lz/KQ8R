@@ -3314,3 +3314,15 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | A movement's cue `sendEvent <target> <Event> <numbers…>`: no delay word, queued for now; with `@`, everything before it is dropped and `@` is the object playing the movement | `anim-scripts.md` rule 35 (traced, Q158 a) | Unit test `a_send_event_cue_with_at_goes_to_the_object_playing_it_now`; viewer `doors.log`: the raven's `Cue 10` every pass |
 | `random` 0–100, `random max` 0–max, `random min max`; whole numbers (decimals ignored); min + round(u × (max − min)); four or more words: usage, 0 | Rule 36 (traced; the 0 after the usage line inferred by A) | Unit test `random_gives_whole_numbers_with_the_ends_half_as_often` |
 | An unknown target or event type in a cue: not sent, logged | **Ours** (as the script `sendEvent`) | Unit test |
+
+## The experience sound and the level number on the meters (A-6, Q159, Q149) — `crates/kq8-core/src/stats.rs`, `active.rs` (`set_level`); viewer `gui_view.rs`
+
+Replaces the L-2 / L-3 rows' stand-ins (DESIGN "Connor's levels checked").
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `STATS.AUD` plays when the experience percent is set and is not 0 and at least the last percent shown; the last percent starts at 0 when the program starts and is never reset | `interface.md` rule 26a (traced, Q159; the file: the user's check) | Unit test `plays_when_not_0_and_not_lower_than_the_last`; viewer `gui.log`: 50 %, 80 % play, 15 % after the level-up doesn't |
+| The percent is set after a stats change that changed experience, and when Connor is added to a world (the screen opens) | Rules 22, 26a | Viewer: "experience 0 % set" at the start, silent |
+| The flame and `LEVEL.AUD` play when the level the meters show changes (any direction), not on a level-up as such | Rule 26 (traced, Q149 b) | Viewer: level 1 → 2 |
+| `setLevel` sets only the number, sends nothing; the next stats change shows it | Rule 30a (traced, Q149 a) | Viewer Dead City: "nothing sent to the meters" |
+| Not when the screen opens; the flame 17 frames at 15 per second, once; both sounds in group 0 | **Stand-in** (not traced) | — |

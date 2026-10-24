@@ -1149,13 +1149,6 @@ impl WorldState {
         self.note(line);
     }
 
-    /// DESIGN L-3: Connor went up to `level`: the level-up sound. Returns
-    /// what the log line says about it.
-    pub(crate) fn level_up_sound(&mut self, level: i64) -> String {
-        self.sounds.push(Start::plain_one_shot(crate::stats::LEVEL_UP_SOUND, format!("level up to {level}")));
-        format!("; sound {} (stand-in Q149 c)", crate::stats::LEVEL_UP_SOUND)
-    }
-
     pub fn anim_index(&self, name: &str) -> Option<usize> {
         self.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(name))
     }
@@ -1346,18 +1339,16 @@ impl WorldState {
         }
     }
 
-    /// `KQConner::setLevel <n>` (every world's `conStart.cs`). STAND-IN
-    /// (Q149 a): only the level number is set; the stats event that
-    /// follows it in every script brings health and the rest. The meters
-    /// are sent again (ours).
+    /// `KQConner::setLevel <n>` (every world's `conStart.cs`;
+    /// `interface.md` rule 30a, Q149 a): only the level number is set;
+    /// nothing is sent to the meters (the next stats change shows it).
     fn set_level(&mut self, words: &[String], at: &str) -> String {
         let level = words.get(1).filter(|w| looks_like_number(w)).map(|v| number_value(v) as i64).filter(|l| *l >= 1);
         match (level, self.connor_stats.as_mut()) {
             (Some(l), Some(c)) => {
                 let (was, stats) = (c.level, c.stats.0);
                 c.level = l;
-                self.connor_stats_events += 1;
-                self.note(format!("{at}: setLevel {l}: Connor's level {was} -> {l}; stats unchanged {stats:?} (Q149 a stand-in)"));
+                self.note(format!("{at}: setLevel {l}: Connor's level {was} -> {l}; stats unchanged {stats:?}; nothing sent to the meters (interface.md rule 30a)"));
                 "0".into()
             }
             (Some(_), None) => {
@@ -3490,9 +3481,8 @@ impl Active {
             let level = c.change(d);
             let after = *c;
             self.world.connor_stats_events += 1;
-            let sound = if level.is_some() { self.world.level_up_sound(after.level) } else { String::new() };
             self.world.note(format!(
-                "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}{sound}",
+                "{head}: Connor {:?} level {} -> {:?} level {} (health / second / third / fourth / experience){}",
                 before.stats.0,
                 before.level,
                 after.stats.0,
@@ -6721,8 +6711,10 @@ endif
         a.update();
         let log = a.take_log().join("\n");
         assert_eq!(a.world.connor_stats.map(|c| (c.stats.0, c.level)), Some(([20, 15, 2, 1, 40], 2)), "{log}");
-        // DESIGN L-3: the level-up sound, once.
-        assert_eq!(a.world.sounds.iter().filter(|s| s.name == crate::stats::LEVEL_UP_SOUND).count(), 1, "{log}");
+        // interface.md rule 26 (Q149): the level-up sound is the meters'
+        // (the viewer's), not played here.
+        assert_eq!(a.world.sounds.iter().filter(|s| s.name == crate::stats::LEVEL_UP_SOUND).count(), 0, "{log}");
+        assert_eq!(a.world.connor_stats_events, 1);
         assert_eq!(a.world.stats.get("basket1"), Some(&Stats([-1, 0, 0, 0, 0])));
         assert_eq!(a.scripts.vars.get("D::died"), Some("basket1 Normal"), "{log}");
     }
