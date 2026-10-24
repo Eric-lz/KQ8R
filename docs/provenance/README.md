@@ -3439,3 +3439,9 @@ Replaces the Q112 stand-in row (the wall block).
 | --- | --- | --- |
 | The jump comes from the movement the held keys ask for: back → `backJump` (at a wall, in water too), forward + running → `runJump` (water: `jump`), else `jump` | `connor-physics.md` "Jumping" rule 2 (traced, Q112) | Unit tests `a_wall_stop_blocks_until_the_key_is_released`, `movement_table`; viewer `connor.log`: `backJump` from `back` |
 | Forward at a wall with running on: `runJump` while standing | Rule 2 (**inferred** by A) | Unit test only |
+
+## Turn keys during the approach (A-12e, Q125) — `crates/kq8-core/src/connor.rs` (`update`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| In the talk state the turn keys turn him whatever movement plays (the approach too); a press cancels the automatic turn; forward / back do nothing until the stay-area test | `conversation.md` rule 13 (traced, Q125 a) | Unit test `gestures_play_only_while_he_stands`; viewer `connor.log` with the Wizard |

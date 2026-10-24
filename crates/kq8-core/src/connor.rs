@@ -379,9 +379,10 @@ pub enum Mode {
     /// choice; turning as when walking (Q87 d stand-in).
     Push,
     /// His talk state in a conversation (`conversation.md` rules 6–15, M4
-    /// 4e-3): the approach movement in [`Walker::talk_play`] plays (keys
-    /// ignored, Q125 stand-in), else the keys choose as in Wait and Move
-    /// (rule 13). No Jump, no Push (Q125 stand-in).
+    /// 4e-3): the approach movement in [`Walker::talk_play`] plays (forward
+    /// and back do nothing then; the turn keys turn him, rule 13, Q125),
+    /// else the keys choose as in Wait and Move (rule 13). No Jump, no
+    /// Push (rule 13, Q125 b, c).
     Talk,
     /// The rope state (`ropeandhook.md` rules 13–26; M6 6a-3): the rope
     /// sequence's movement plays (set by the caller), keys ignored, no
@@ -1258,7 +1259,9 @@ impl Walker {
         // confirmed by the user): at the normal rate, from the run crash
         // and the jump crashes alike; forward, back and run wait for its
         // end. Never from a jump's start to its landing's end (Q41).
-        let turns = ((self.keys_choose() && !self.blocked()) || self.mode == Mode::Crash) && !self.turn_by_script;
+        // The talk state turns him whatever plays, its approach movements
+        // too (conversation.md rule 13, Q125 a).
+        let turns = ((self.keys_choose() && !self.blocked()) || matches!(self.mode, Mode::Crash | Mode::Talk)) && !self.turn_by_script;
         if turns {
             self.heading += f32::from(intent.turn) * TURN_RATE * dt;
         }
@@ -1492,6 +1495,14 @@ mod tests {
         assert!(w.gesture(8, Some("gesturea")).contains("plays"));
         w.talk_play = Some("stopwalk");
         assert!(w.gesture(8, Some("gesturea")).contains("not played"));
+        // Q125 a: during the approach a turn key turns him, forward does
+        // nothing.
+        let list = [("stopwalk", MovementLoop { duration: 1.0, speed: 1.0, frames: 15, ..Default::default() })];
+        let (heading, movement) = (w.heading, w.movement);
+        w.movement = "stopwalk";
+        w.update(intent(1, 1, false), &lookup(&list));
+        assert!(w.heading > heading, "turned left: {}", w.heading);
+        assert_eq!((w.movement, w.talk_play), ("stopwalk", Some("stopwalk")), "was {movement}");
         // Walking: no.
         let mut w = Walker::new(0.0);
         w.choice = "walk";

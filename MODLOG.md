@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12e: turn keys work during a conversation's approach (Q125 built)
+
+**Changed:** Core `connor.rs`: in the talk state the turn keys turn Connor whatever plays, the approach movements (`stopwalk`, `walkstopright`, the automatic turns) included; forward and back still do nothing there. Unit test extended. Provenance, QUESTIONS Q125.
+**Why:** `conversation.md` rule 13 (Q125 a, traced): turn keys turn him at the normal rate and a press cancels the automatic turn; the end of `stopwalk` resets his facing to the spot; turning during `walkstopright` curves it. The rest of our build (forward / back stored, Jump and Push dropped) was already right.
+**Tested how:** `cargo test --workspace` (all pass; `gestures_play_only_while_he_stands` now also checks a turn during `stopwalk`). `kq8-viewer --world Daventry --sound off --at 195800,198000,3.14 --click Wizard,30 --hold 0,1,0,33,40 --frames 1500`; `connor.log`.
+**Result:** Update 32: the automatic turn (0.233 per update); from 33 the held key turns him 0.117 per update (1.75 rad/s) during `stopwalk`; at its end his facing is set to the spot (−1.479); the key keeps turning him during `walkstopright` (−1.479 → −1.363).
+**Still broken / not tested:** Not looked at by eye.
+**Next:** A-12f (the conversation camera round the talking spot, Q126).
+
 ## 2026-10-24 A-12d: the jump picked from the held keys (Q112 built)
 
 **Changed:** Core `connor.rs` (`jump_kind`), `connor_update.rs` (`can_jump`): the jump comes from the movement the held keys ask for (`choose_movement` of the keys and the water flag): back held → `backJump` (also at a wall and in water), forward with running on → `runJump` (in water `jump`), otherwise `jump`. The wall-block stand-in is gone. Tests updated and extended. Provenance, QUESTIONS Q112.
