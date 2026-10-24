@@ -74,6 +74,7 @@ come from `kq8 shape-verify` on the GOG 1.03 install
 | Textures use the world palette (`resource/daventry.ppl` for Daventry) | Measured | Neighbour colour change on `wood2`, `Hay`, `g2g1str`: 39.3 / 77.1 / 20.4 with `daventry.ppl` and `8bit/daventry.pal` (identical), 46.3 / 77.1 / 35.9 with `daventr1.pal` (question Q3) |
 | `TS::Shape` v2 in 4 Daventry tomb files | GPL notes (says unused leftovers) | Counted and skipped, not parsed |
 | Normals: we compute them from the triangles | **Deliberate difference** | The game stores a normal index per vertex into a 256-entry table. The table is in the GPL notes; we do not copy it. We do not need it while models are drawn without lighting |
+| A model whose start frame has no triangles (Daventry `Map1.KQS` frame 0, the Wizard's magic map) loads with nothing drawn in that frame; its box is every frame's together; no triangles in any frame: no model (2026-10-24) | Observed (the data); the box is **ours** | Viewer: `magicmap` loaded, "box from all 40 frames" (before: skipped) |
 
 ## Model viewer — `crates/kq8-viewer/src/{load,main}.rs`
 

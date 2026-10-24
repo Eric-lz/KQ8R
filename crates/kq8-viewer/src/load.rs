@@ -224,7 +224,19 @@ pub fn load_model(
     for p in &geometry.problems {
         log.summary(format!("  geometry problem: {p}"));
     }
-    let (min, max) = bounds(&geometry.triangles).ok_or(format!("{label}: sequence {rest} ({frame_note}) has no triangles"))?;
+    // A start frame with no triangles is drawn as nothing (the Wizard's
+    // magic map: `Map1.KQS` frame 0 is empty, the map appears as `Map1`
+    // plays); its box is then every frame's together (ours). No triangles
+    // in any frame: no model.
+    let (min, max) = match bounds(&geometry.triangles) {
+        Some(b) => b,
+        None => {
+            let all: Vec<Triangle> = (0..shape.sequences.len()).flat_map(|q| shape.geometry(q).triangles).collect();
+            let b = bounds(&all).ok_or(format!("{label}: sequence {rest} ({frame_note}) has no triangles, nor any other frame"))?;
+            log.summary(format!("{label}: sequence {rest} ({frame_note}) has no triangles: nothing drawn in it; box from all {} frames", shape.sequences.len()));
+            b
+        }
+    };
     log.summary(format!(
         "rest pose: triangles={} min=({:.1}, {:.1}, {:.1}) max=({:.1}, {:.1}, {:.1}) (game units, Z up)",
         geometry.triangles.len(),

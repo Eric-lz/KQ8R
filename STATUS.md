@@ -576,8 +576,7 @@ M6 has started with the Rope and Hook (6a).
 ## What doesn't work yet / next
 
 - **After A-1 to A-12 (2026-10-24):** the user's look passed (see
-  above); the chest keeping its dither while it opens is not yet looked
-  at by eye. Not done:
+  above), the chest keeping its dither while it opens too. Not done:
   `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
   on doors and characters (Q165), Q81 c's wrap detail, `getConInventory`
   (Q166: the bell outside the Wizard's house can now be hit but doesn't

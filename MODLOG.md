@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The Wizard's magic map loads: a model may start on an empty frame
+
+**Changed:** Viewer `load.rs` (`load_model`): a start frame with no triangles no longer fails the model; it loads with nothing drawn in that frame and takes its box from all its frames together (no triangles anywhere still fails). Provenance. STATUS: the user confirmed the dithered chest keeps its pattern while opening.
+**Why:** The user's report: in the map scene after the first talk with the Wizard the map object never appears. `magicmap.kq`'s start frame (`Map1.KQS` frame 0) is empty (the map appears as `Map1` plays), so the world load skipped the object ("model map1.kqs could not be loaded") and `loadKQ magicmap.kq` had nothing to show.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --sound off --at 193000,198000,-1.7 --command "KQConner::conversation Wizard 1000 4 14 27 13 13 0",30 --frames 9000` (only line 13, whose end starts the scene); `viewer.log`, `doors.log`.
+**Result:** "Map1.KQS: sequence 0 … has no triangles: nothing drawn in it; box from all 40 frames"; update 218 "magicmap came in: 1 drawn part(s) shown"; `Map3` (271–332), `Map4` (332–402), `Map5`, deleted at 423.
+**Still broken / not tested:** Not looked at by eye. `Map1` itself (the map appearing folded) was still lost: the next entry.
+**Next:** The `Map1` event sent before the object is handed over.
+
 ## 2026-10-24 The swing reaches the bell; the bell's `getConInventory` asked (Q166)
 
 **Changed:** Core `weapons.rs`: new `box_hits` (the click boxes of doors, chests, animated objects, clickables and items whose type shares a bit with a mask); `mask_pick` (the swing, shot and talk picks) now also tests them; `active.rs` `pick` (the plain click) uses the same function with the clickable bit, so the two lists stay the same. Unit test. QUESTIONS new **Q166**. Provenance.
