@@ -257,9 +257,9 @@ impl MovementLoop {
         self.duration
     }
 
-    /// The frame shown at `phase` (0..1 of one play): floor(phase × frames
-    /// + 0.001), cut down, as for every animated object (`objects.md`
-    /// "Loops" rule 6, Q153). A one-shot with speed −1 (`undraw`,
+    /// The frame shown at `phase` (0..1 of one play): floor(phase ×
+    /// frames + 0.001), cut down, as for every animated object
+    /// (`objects.md` "Loops" rule 6, Q153). A one-shot with speed −1 (`undraw`,
     /// `c_shth`) shows its frames last to first (`anim-scripts.md` rule 5;
     /// M5 5c fix). **Stand-in**: its `loop=` start phase is not used (his
     /// walker starts every movement at 0), so its phase runs 0..1 and is
