@@ -656,7 +656,7 @@ pub struct WorldState {
     pub reveal_calls: Vec<(String, bool)>,
     /// `KQObject::dither <name> 1` (lower case), for the viewer (M5 5g-7;
     /// STAND-IN, Q144).
-    pub dithered: BTreeSet<String>,
+    pub dithered: BTreeMap<String, u8>,
     /// Connor's handsOff is on (a cutscene), set by the caller before each
     /// update (M5 5g-9, `potions.md` rule 26).
     pub connor_hands_off: bool,
@@ -2041,18 +2041,31 @@ impl WorldState {
     /// "becomes see-through"): kept for the viewer. STAND-IN (Q144): how a
     /// dithered object is drawn is not described; the viewer draws it half
     /// see-through.
+    /// `KQObject::dither <name> <mode>` (`objects.md` "Dithered objects"
+    /// rules 1-5, Q144): 0 none, 1 dithered (a screen-door texture), 2
+    /// "justTrans" (the colour key only), 3 stored, no change to the look.
     fn dither(&mut self, words: &[String], at: &str) -> String {
-        let (Some(name), Some(v)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
-            self.note(format!("{at}: usage: KQObject::dither <name> 0|1; nothing"));
+        let [_, name, v] = words else {
+            self.note(format!("{at}: usage: KQObject::dither <name> 0|1|2; nothing"));
             return "1".into();
         };
-        let on = number_value(v) != 0.0;
-        if on {
-            self.dithered.insert(name.to_ascii_lowercase());
-        } else {
-            self.dithered.remove(&name.to_ascii_lowercase());
+        if !self.known.contains(&name.to_ascii_lowercase()) {
+            self.note(format!("{at}: KQObject::dither cannot find '{name}'"));
+            return "1".into();
         }
-        self.item_note(format!("{at}: KQObject::dither {name} {}: drawn {} (potions.md rule 31; how it looks: stand-in, Q144)", u8::from(on), if on { "dithered (half see-through, stand-in)" } else { "as before" }));
+        let mode = (number_value(v) as i64).clamp(0, 3) as u8;
+        if mode == 0 {
+            self.dithered.remove(&name.to_ascii_lowercase());
+        } else {
+            self.dithered.insert(name.to_ascii_lowercase(), mode);
+        }
+        let look = match mode {
+            0 => "as before (texture loaded again, no colour key)",
+            1 => "dithered: about 1 texel in 4 drawn, black not drawn, full brightness",
+            2 => "colour key only: black texels not drawn, full brightness",
+            _ => "mode 3 stored, the look unchanged",
+        };
+        self.item_note(format!("{at}: KQObject::dither {name} {mode}: {look} (objects.md \"Dithered objects\", Q144)"));
         "0".into()
     }
 
@@ -3301,7 +3314,7 @@ impl Active {
                 pickup_experience: Vec::new(),
                 helps_asked: BTreeSet::new(),
                 reveal_calls: Vec::new(),
-                dithered: BTreeSet::new(),
+                dithered: BTreeMap::new(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,

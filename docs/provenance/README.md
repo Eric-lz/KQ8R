@@ -3382,3 +3382,14 @@ Replaces the 6e popup rows' stand-ins (highlight, Escape, rows, lines).
 | --- | --- | --- |
 | Each status icon (potions, the mask, the hook) is drawn in its own place, clipped to it; the 57 × 57 mask is shrunk to its 48 × 48 place | `potions.md` rule 35 "Details" (clipping traced; shrinking from the user's check, Q143 c) | Not tested (needs the user's look) |
 | The shrink picks the nearest source pixel | **Ours** (how the original scales: not traced) | — |
+
+## Dithered objects (A-11a, Q144) — `crates/kq8-core/src/active.rs` (`dither`), `kq8-data/src/objects.rs` (`dithered`); viewer `potion_view.rs` (`dither_step`, `dither_rgba`), `door_view.rs`
+
+Replaces the 5g-7 stand-in (half see-through).
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Modes 0 none, 1 dithered, 2 justTrans, 3 stored without a material change; unknown name: "cannot find" | `objects.md` "Dithered objects" rules 1, 2 (traced, Q144) | Viewer `viewer.log` |
+| Mode 1: colour key on (black not drawn), full brightness, the texture rewritten so each row keeps every 4th texel, the next row shifted by 2; mode 2: colour key only; 0: back to its own | Rules 3-5 | Unit test `dithering_keeps_one_texel_in_four_rows_shifted_by_two`; viewer: the keep wall on and off |
+| `dithered=` in the file: chests and animated objects drawn so from the start (they apply it at every movement start) | Rule 8 | Viewer: `wizchest1` 2 parts |
+| The "2 extra texels per row", shared-texture holes; doors, characters, plain objects with the key | **Not done** (rule 6 inferred; Q165) | — |

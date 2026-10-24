@@ -450,9 +450,12 @@ fn spawn_body(
     lights: &[std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>],
     dyn_off: bool,
     gpu: &crate::anim_gpu::AnimGpu,
+    name: &str,
 ) -> DrawnDoor {
     let transform = bevy_transform_from(placement.rotation, placement.position);
-    let body = commands.spawn((transform, Visibility::default(), test)).id();
+    // Its name for `dither` only (Q144; not `ObjectName`, which the plain
+    // objects' `move` and hiding use).
+    let body = commands.spawn((transform, Visibility::default(), test, crate::potion_view::DitherName(name.to_string()))).id();
     // Step 4c: drawn the new way too.
     let own: Vec<((usize, i32), Handle<ObjectMaterial>)> = animations
         .iter()
@@ -520,6 +523,17 @@ pub fn spawn_doors(
     let mut collider = Vec::new();
     let (mut active_chests, mut chest_drawn, mut chest_collider) = (Vec::new(), Vec::new(), Vec::new());
     let (mut active_objects, mut object_drawn, mut object_collider) = (Vec::new(), Vec::new(), Vec::new());
+    // objects.md "Dithered objects" rule 8 (Q144): chests and animated
+    // objects apply their `dithered=` at every movement start, so they are
+    // drawn so from the start (other classes: Q165).
+    let file_dithered: Vec<(String, u8)> = objects
+        .placed
+        .iter()
+        .map(|(p, ..)| p)
+        .chain(objects.doors.iter().map(|d| &d.placement))
+        .filter(|p| p.dithered != 0 && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQChest") || c.eq_ignore_ascii_case("KQAnimObject")))
+        .map(|p| (p.name.clone(), p.dithered))
+        .collect();
     let sources = std::mem::take(&mut objects.scripts);
     for d in std::mem::take(&mut objects.doors) {
         let p = &d.placement;
@@ -578,7 +592,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name));
             active_objects.push(o);
             continue;
         }
@@ -620,14 +634,14 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu));
+            chest_drawn.push(spawn_body(commands, &c.chest.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name));
             active_chests.push(c);
             continue;
         }
         let mut door = Door::new(&p.name, movements, d.current, base);
         door.player = door.player.with_names_at_load(names.0, names.1);
         let DrawnDoor { body, frames, slots } =
-            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu);
+            spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name);
         let active = ActiveDoor {
             door,
             script: d.script.clone(),
@@ -881,6 +895,10 @@ pub fn spawn_doors(
     // carries gives his bolt file and shoot offset.
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
     active.world.set_connor_fight(objects.connor_fight.clone());
+    for (name, mode) in file_dithered {
+        active.world.dithered.insert(name.to_ascii_lowercase(), mode);
+        main_log.summary(format!("{name}: dithered={mode} from its file (objects.md \"Dithered objects\" rule 8)"));
+    }
     // DESIGN "Connor's levels checked" (L-1): what `conStart.cs` gives
     // him (items put on, his level, a stats event), in script order.
     let start = std::mem::take(&mut objects.connor_start);

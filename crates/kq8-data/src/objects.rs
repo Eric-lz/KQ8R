@@ -105,6 +105,9 @@ pub struct Placement {
     /// `shadowMask`, default 8 for plain objects (`characters.md` rule 36;
     /// characters read their own default, 2).
     pub shadow_mask: u32,
+    /// `dithered`, default 0 (objects.md "Dithered objects" rule 8: the
+    /// same value as `KQObject::dither`).
+    pub dithered: u8,
 }
 
 /// A plain object's `shadowMask` when its file sets none (`characters.md`
@@ -194,6 +197,7 @@ impl Placement {
             groups_far: s.number("groupsActive3DFar").and_then(Result::ok).map_or(0x440, |v| v as u32),
             turn_off_dyn_lighting: s.number("turnOffDynLighting").and_then(Result::ok).is_some_and(|v| v != 0.0),
             shadow_mask: s.number("shadowMask").and_then(Result::ok).map_or(PLAIN_SHADOW_MASK, |v| v as i64 as u32),
+            dithered: s.number("dithered").and_then(Result::ok).map_or(0, |v| (v as i64).clamp(0, 3) as u8),
         }
     }
 

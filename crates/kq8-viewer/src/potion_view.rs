@@ -22,8 +22,10 @@
 //! yet), the temple armour's skin (`con65.bmp`, armour skins not built).
 //!
 //! 5g-7, `KQObject::dither` (rule 31: the keep wall "becomes
-//! see-through"): STAND-IN (Q144): a dithered object's parts are drawn
-//! half see-through until `dither 0`.
+//! see-through"; the look: `objects.md` "Dithered objects", Q144): mode 1
+//! keeps 1 texel in 4 of each texture (every 4th in a row, the next row
+//! shifted by 2), mode 2 none removed; both with the colour key (black
+//! texels not drawn) and full brightness, until `dither 0`.
 
 use std::collections::BTreeMap;
 
@@ -33,6 +35,7 @@ use crate::connor_view::ConnorSim;
 use crate::door_view::DoorSim;
 use crate::item_view::Parts;
 use crate::object_light::{see_through, ObjectMaterial};
+use bevy::asset::AssetId;
 use crate::terrain_view::bevy_transform_from;
 
 /// What the potions change on Connor's model (5g-5, 5g-6).
@@ -288,22 +291,70 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     w.item_log.push(format!("update {updates}: {line}"));
 }
 
-/// The parts drawn dithered now, with their own materials (5g-7).
+/// The name of a door's, chest's or scripted object's body, for `dither`
+/// only (Q144).
+#[derive(Component)]
+pub struct DitherName(pub String);
+
+/// The parts drawn dithered now, with their own material, mode and the
+/// material put on (5g-7), and the textures made for it, by source texture
+/// and mode.
 #[derive(Default)]
 pub struct Dithered {
-    names: std::collections::BTreeSet<String>,
-    parts: BTreeMap<Entity, Handle<ObjectMaterial>>,
+    names: BTreeMap<String, u8>,
+    parts: BTreeMap<Entity, (Handle<ObjectMaterial>, u8, Handle<ObjectMaterial>)>,
+    textures: BTreeMap<(AssetId<Image>, u8), Handle<Image>>,
+    made: BTreeMap<(AssetId<ObjectMaterial>, u8), Handle<ObjectMaterial>>,
 }
 
-/// STAND-IN (Q144): how much a dithered object shows.
-const DITHER_OPACITY: f32 = 0.5;
+/// `objects.md` "Dithered objects" rules 3-4 (Q144): texel (x, y) is not
+/// drawn in `mode` 1 unless x + 2 × (y mod 2) is a multiple of 4 (about 1
+/// in 4 kept, a screen-door laid on the texture); in both modes a pure
+/// black texel is not drawn (the colour key).
+pub fn dither_rgba(rgba: &mut [u8], width: usize, mode: u8) {
+    for (k, t) in rgba.chunks_exact_mut(4).enumerate() {
+        let (x, y) = (k % width.max(1), k / width.max(1));
+        let screen = mode == 1 && (x + 2 * (y % 2)) % 4 != 0;
+        if screen || t[..3] == [0, 0, 0] {
+            t.copy_from_slice(&[0, 0, 0, 0]);
+        }
+    }
+}
 
-/// Every update (5g-7): objects `KQObject::dither`ed are drawn half
-/// see-through; `dither 0` brings their own materials back.
+/// `own` drawn in dither `mode` (1 or 2): its texture rewritten (made once
+/// per texture and mode), the colour key on (texels with no alpha cut
+/// out) and full brightness.
+fn dithered_material(materials: &mut Assets<ObjectMaterial>, images: &mut Assets<Image>, made: &mut BTreeMap<(AssetId<Image>, u8), Handle<Image>>, own: &Handle<ObjectMaterial>, mode: u8) -> Handle<ObjectMaterial> {
+    let Some(mut m) = materials.get(own).cloned() else { return own.clone() };
+    if let Some(tex) = m.texture.clone() {
+        let key = (tex.id(), mode);
+        let made_now = match made.get(&key) {
+            Some(h) => Some(h.clone()),
+            None => images.get(&tex).cloned().and_then(|mut image| {
+                let width = image.texture_descriptor.size.width as usize;
+                dither_rgba(image.data.as_mut()?, width, mode);
+                let h = images.add(image);
+                made.insert(key, h.clone());
+                Some(h)
+            }),
+        };
+        if let Some(h) = made_now {
+            m.texture = Some(h);
+        }
+    }
+    m.settings.cutout = 1;
+    m.settings.lighting = 0;
+    materials.add(m)
+}
+
+/// Every update (5g-7): objects `KQObject::dither`ed (or with `dithered=`)
+/// are drawn in their mode; `dither 0` brings their own materials back.
 pub fn dither_step(
     sim: Option<Res<DoorSim>>,
-    mut parts: Query<(Entity, &crate::terrain_view::ObjectName, &mut MeshMaterial3d<ObjectMaterial>)>,
+    mut parts: Query<(Entity, Option<&crate::terrain_view::ObjectName>, Option<&ChildOf>, &mut MeshMaterial3d<ObjectMaterial>)>,
+    names: Query<(Option<&crate::terrain_view::ObjectName>, Option<&DitherName>, Option<&ChildOf>)>,
     mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut images: ResMut<Assets<Image>>,
     mut state: Local<Dithered>,
     shared: Res<crate::Shared>,
     (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
@@ -314,28 +365,65 @@ pub fn dither_step(
     }
     let Some(sim) = sim else { return };
     let wanted = &sim.active.world.dithered;
-    if *wanted == state.names {
+    // Nothing dithered and nothing to put back: nothing to look at (parts
+    // that appear later, a chest shown by Reveal, are caught below).
+    if wanted.is_empty() && state.parts.is_empty() {
         return;
     }
     let (mut on, mut off) = (0, 0);
-    for (e, name, mut m) in &mut parts {
-        let dithered = wanted.contains(&name.0.to_ascii_lowercase());
-        match (dithered, state.parts.contains_key(&e)) {
-            (true, false) => {
-                let own = m.0.clone();
-                m.0 = see_through(&mut materials, &own, DITHER_OPACITY);
-                state.parts.insert(e, own);
-                on += 1;
-            }
-            (false, true) => {
-                if let Some(own) = state.parts.remove(&e) {
-                    m.0 = own;
-                    off += 1;
-                }
-            }
-            _ => {}
+    let Dithered { parts: done, textures, made, .. } = &mut *state;
+    for (e, own_name, parent, mut m) in &mut parts {
+        // The part's own name, else its body's: the parent (plain objects,
+        // the old drawing) or the grandparent (the compact drawing's slots
+        // under their root).
+        let named = |e: Entity| names.get(e).ok().and_then(|(o, d, _)| o.map(|o| &o.0).or(d.map(|d| &d.0)));
+        let up = |e: Entity| names.get(e).ok().and_then(|(_, _, c)| c.map(ChildOf::parent));
+        let parent = parent.map(ChildOf::parent);
+        let Some(name) = own_name.map(|o| &o.0).or_else(|| parent.and_then(named)).or_else(|| parent.and_then(up).and_then(named)) else { continue };
+        // Mode 3 changes no materials (rule 1).
+        let mode = wanted.get(&name.to_ascii_lowercase()).copied().filter(|&v| v == 1 || v == 2).unwrap_or(0);
+        // Rule 8: a new movement may put the part's own material back (the
+        // drawing swaps it): taken as its own, dithered again below.
+        if done.get(&e).is_some_and(|(_, _, put)| *put != m.0) {
+            done.remove(&e);
+        }
+        if done.get(&e).map_or(0, |(_, v, _)| *v) == mode {
+            continue;
+        }
+        if let Some((own, ..)) = done.remove(&e) {
+            m.0 = own;
+            off += 1;
+        }
+        if mode != 0 {
+            let own = m.0.clone();
+            m.0 = made.entry((own.id(), mode)).or_insert_with(|| dithered_material(&mut materials, &mut images, textures, &own, mode)).clone();
+            done.insert(e, (own, mode, m.0.clone()));
+            on += 1;
         }
     }
-    state.names = wanted.clone();
-    shared.log.lock().unwrap().summary(format!("dither: {wanted:?} now; {on} parts drawn half see-through, {off} back to their own (potions.md rule 31; stand-in, Q144)"));
+    if on + off > 0 || *wanted != state.names {
+        state.names = wanted.clone();
+        shared.log.lock().unwrap().summary(format!("dither: {wanted:?} now; {on} parts drawn dithered or colour-keyed, {off} back to their own (objects.md \"Dithered objects\", Q144)"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dithering_keeps_one_texel_in_four_rows_shifted_by_two() {
+        // objects.md "Dithered objects" rule 3 (Q144): a 4 x 2 texture,
+        // all grey but one black texel.
+        let mut t: Vec<u8> = [[9u8, 9, 9, 255]; 8].concat();
+        t[4 * 4..4 * 4 + 3].copy_from_slice(&[0, 0, 0]);
+        let mut one = t.clone();
+        dither_rgba(&mut one, 4, 1);
+        let alpha: Vec<u8> = one.chunks(4).map(|p| p[3]).collect();
+        assert_eq!(alpha, vec![255, 0, 0, 0, 0, 0, 255, 0], "row 0 keeps x 0, row 1 keeps x 2");
+        let mut two = t.clone();
+        dither_rgba(&mut two, 4, 2);
+        let alpha: Vec<u8> = two.chunks(4).map(|p| p[3]).collect();
+        assert_eq!(alpha, vec![255, 255, 255, 255, 0, 255, 255, 255], "justTrans: only the black texel");
+    }
 }

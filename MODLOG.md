@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-11a: `dither` as a screen-door texture; `dithered=` on chests and animated objects (Q144 built); Q165 asked
+
+**Changed:** Core `active.rs`: `KQObject::dither <name> <mode>` keeps the mode (0 none, 1 dithered, 2 "justTrans", 3 stored only); an unknown name writes "cannot find". `kq8-data` `objects.rs`: the `dithered` key. Viewer `potion_view.rs` (`dither_step`, `dither_rgba`): mode 1 rewrites each texture so 1 texel in 4 is kept (every 4th in a row, the next row shifted by 2), mode 2 keeps them all; in both pure-black texels are not drawn (the colour key, as a cut-out) and lighting is off (full brightness); the dithered texture and material are made once per texture / material and mode; parts found by their own name or their body's (parent or grandparent), and dithered again when the drawing swaps their material at a new movement. `door_view.rs`: chests and animated objects with `dithered=` in their file start dithered; door, chest and scripted object bodies get a `DitherName`. Unit test. QUESTIONS new **Q165**. Provenance.
+**Why:** `objects.md` "Dithered objects" rules 1–10 (Q144): B's half see-through stand-in was the wrong look.
+**Tested how:** `cargo test --workspace` (all pass; new `dithering_keeps_one_texel_in_four_rows_shifted_by_two`). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai --command "KQObject::dither keepwall 1",10 --command "KQObject::dither keepwall 0",30`; `kq8-viewer --world Daventry --sound off --frames 900 --at 141087,203800,3.1416 --lift 6000 --command "give Clarity 1,10" --key 7,30`; `viewer.log`.
+**Result:** Keep wall: 1 part dithered at update 10, back to its own at 30. Wizard's chest: "wizchest1: dithered=1 from its file", its 2 parts dithered from the start (it shows when Clarity reveals it at update 30).
+**Still broken / not tested:** **Not looked at by eye.** The rewrite's "2 extra texels blanked per row" is not done; other objects sharing the texture don't get the holes (rule 6, inferred in the note). Doors, characters and plain objects with `dithered=` are not dithered (Q165). Mode 3 (Connor's Invisible look) is drawn by the potion code as before.
+**Next:** A-11b (the orbit's path, Q145).
+
 ## 2026-10-24 A-10d: the spinning mask shrunk into its own status place (Q143 built)
 
 **Changed:** Viewer `gui_view.rs` (`status_specs`): the spinning mask (57 × 57) is stretched into its own 48 × 48 status place instead of drawn at its own size from the place's bottom-right corner (which reached 9 pixels into the next place). The unused `mask_size` removed. Provenance, QUESTIONS Q143.
