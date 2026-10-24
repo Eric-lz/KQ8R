@@ -429,6 +429,37 @@ Words used here:
       the current one allows it (Talk allows Talk, Wait, Move, Birth, Die,
       Special); otherwise the request waits and is tried again when Wait's
       movements end.
+      **`setState <name> Wait` in detail** (traced 2026-10-24, Q160;
+      Connor and characters alike):
+      - If the current state accepts Wait, the change happens **at
+        once**, inside the command: the old state ends, a **fresh** Wait
+        starts, and starting Wait **asks for `Stop`** (an ordinary
+        request, `anim-scripts.md` rule 4, so a listed transition may
+        play first). This happens **even when he is already in Wait**:
+        Wait is left and entered again.
+      - **Wait accepts** a new state (Wait included) only while the
+        movement Wait itself last asked for is `Stop`. Wait only ever
+        asks for `Stop`, and movements started from outside the state
+        (a script's `KQAnimPlayEvent`, such as `portalx`) do not change
+        that record, so in practice Wait always accepts.
+      - **Move** always accepts Wait: he stops at once (Stop asked for,
+        so the walk's stop transitions apply).
+      - **Special** accepts Wait only once its list has no words left to
+        read; while a list is still being worked through the request is
+        kept waiting and the list goes on (when the list ends, Special
+        goes to Wait by itself anyway, rule above).
+      - **Independently of `setState`**: while in Wait, whenever a
+        movement other than `Stop` (or one whose name starts with
+        `gesture`) **ends**, Wait asks for `Stop` again (for characters
+        at a random frame and speed, rule 13; for Connor from its start)
+        and then tries any waiting state request.
+      - **The Shadow scene** (`shadow.cs` Cue 25): `portalx` is a
+        play-once started by `KQAnimPlayEvent` while Connor is in Wait.
+        When it ends, Wait already asks for `Stop`, so he stands up then;
+        `setState Connor Wait` afterwards re-enters Wait and asks for
+        `Stop` once more (a `Stop` already playing is simply asked for
+        again). Holding `portalx`'s last frame until a key is pressed is
+        wrong [traced].
     - **`Special <list>`** on a character (Daventry: `Ravens/Ravenc/Raveng`
       `caw`, `fromconnor`, `fromgrave`, `fromsarah`; Shadow `'SM_P1S4,SM_P1S5'`
       and `'SM_P1S7,…,SM_P1S11'`; Henchman `laugh`, `cdhm5`; `sprdump`

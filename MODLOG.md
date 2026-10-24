@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: `KQMonster::setState … Wait` from a script (Q160)
+
+**Changed:** `docs/behaviour/characters.md` rule 22, new part "`setState <name> Wait` in detail"; QUESTIONS Q160 answered.
+**Why:** The Shadow scene ends with `KQMonster::setState Connor Wait` after `portalx`; B's Connor kept `portalx`'s last frame.
+**Tested how:** Traced in `Mask.exe` (Ghidra).
+**Result:** The change is at once when the current state accepts it; even in Wait, Wait is re-entered and asks for `Stop`. Move accepts at once; Special only after its list is used up. Separately, Wait asks for `Stop` whenever another movement ends, so Connor stands up at `portalx`'s end anyway.
+**Still broken / not tested:** Not checked in the original; not built.
+**Next:** B: Wait re-entry and the `Stop` after a script movement ends, for Connor too.
+
 ## 2026-10-24 Study A: how fast a repeating loop carries a character (Q164)
 
 **Changed:** `docs/behaviour/objects.md` "Loops that move the whole object" rule 6 (which player) and new rule 6a; `character-movement.md` rules 1–2, speed table and numbers; `connor-movement.md` "Forward speed" rules 3–4 and the measurement comparison; QUESTIONS Q164 answered.
