@@ -3401,3 +3401,11 @@ Replaces the 5g-7 stand-in (half see-through).
 | The offset is (0, `orbitRadius`, 0) turned by the angle in world axes (0 = world +y); each update the angle grows by the step; the shape faces along the offset with the angle + π | `potions.md` rule 20 (traced, Q145 c) | Unit test in `potions.rs`; viewer `items.log`: `orbit1` 500 north of the centre at angle 0 |
 | Three shields (`orbit1`-`3`) | Rule 20 (Q145 a) | As built in 5g-4 |
 | x / y step angles not applied | **Not done** (all shipped files have 0) | — |
+
+## Texture colours (A-11c, Q42) — viewer `load.rs` (`to_rgba`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A texture's own colour table is thrown away; every 8-bit texture is drawn through the world palette in use (entry 0 black) | `models-and-textures.md` "System colours" (traced, Q42) | Viewer `viewer.log`: 88 of 198 Daventry textures with their own table now differ in one colour from before |
+| The teleport pad is drawn solid (no part of it see-through) | `objects.md` "See-through objects" rule 4 (traced; the user's screenshot, Q14 b) | Nothing to change: no `translucency` key |
+| 24-bit textures as stored | **Not traced** (as before) | — |

@@ -2851,6 +2851,8 @@ is in `kq8-core`, a viewer run checked in the logs.
 11. **A-11: looks**: `dither 1` as a screen-door texture (Q144), the
     orbit's path (Q145), the teleport pad solid (Q14 b), the world
     palette for every texture index (Q42). One commit each.
+    **Done** 2026-10-24 (A-11a-c; the pad needed nothing; not looked at
+    by eye).
 12. **A-12: Connor and fights**: the bolt's start from the frame after
     the step (Q140 c), `loop=` start phases for Connor (Q138 e), a swap
     while moving cuts a swing (Q138), the jump from the held keys

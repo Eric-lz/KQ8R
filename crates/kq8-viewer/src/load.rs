@@ -946,23 +946,17 @@ fn load_ghost_texture(world: &World, name: &str, palette: &[Rgb; 256]) -> Option
     Some(Look::Texture { name: label, width: bmp.width, height: bmp.height, rgba })
 }
 
-/// Level 0 as RGBA, top row first. 8-bit images use the given palette
-/// unless they carry their own.
+/// Level 0 as RGBA, top row first. 8-bit images use the given palette,
+/// also when they carry their own (Q42).
 fn to_rgba(bmp: &Bitmap, palette: &[Rgb; 256]) -> Vec<u8> {
     match bmp.bit_count {
-        8 => {
-            let own: Option<[Rgb; 256]> = bmp.embedded_palette.as_ref().map(|e| {
-                let mut c = [[0; 3]; 256];
-                c.iter_mut().zip(e).for_each(|(d, s)| *d = *s);
-                // Entry 0 black, as for world palettes (Q22).
-                kq8_data::palette::as_shown(c)
-            });
-            let colors = own.as_ref().unwrap_or(palette);
-            bmp.pixels.iter().flat_map(|&i| {
-                let c = colors[i as usize];
-                [c[0], c[1], c[2], 255]
-            }).collect()
-        }
+        // models-and-textures.md "System colours" (Q42, traced): a
+        // texture's own colour table is thrown away; every 8-bit texture is
+        // drawn through the world palette in use.
+        8 => bmp.pixels.iter().flat_map(|&i| {
+            let c = palette[i as usize];
+            [c[0], c[1], c[2], 255]
+        }).collect(),
         _ => bmp.pixels.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
     }
 }

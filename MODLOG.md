@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-11c: every 8-bit texture through the world palette (Q42 built); the teleport pad stays solid (Q14 b)
+
+**Changed:** Viewer `load.rs` (`to_rgba`): a texture's own colour table is no longer used; every 8-bit texture (models, buildings, ground) is coloured from the world palette in use (entry 0 black). The log line still says how many of its colours its own table would have given differently. Provenance, QUESTIONS Q42, Q14.
+**Why:** `models-and-textures.md` "System colours" (Q42, traced): the renderer draws every 8-bit texture through one shared table, the world palette. `objects.md` "See-through objects" rule 4 (Q14 b): the teleport pad is drawn solid, confirmed by the user's screenshot; ours already was (no `translucency` key, nothing else sets it), so nothing changes there.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 200 --sound off --no-ai`; `viewer.log`.
+**Result:** Daventry: 198 textures carry their own table; 110 used the same colours anyway, 88 differed in one colour each (e.g. `telepad.bmp` index 17: now (4, 8, 12) from the palette, was (16, 16, 16)).
+**Still broken / not tested:** Not looked at by eye (one colour per texture, small). Not traced by A: the two other picture loaders and 24-bit BMPs (24-bit textures are drawn as stored, as before).
+**Next:** A-12 (Connor and fights: the bolt's start frame, `loop=` start phases, a swap cutting a swing, the jump from the held keys, turn keys in the approach, the conversation camera).
+
 ## 2026-10-24 A-11b: the shield orbits measured from world +y (Q145 built)
 
 **Changed:** Core `potions.rs` (`orbit_place`): an orbit's offset is (0, radius, 0) turned by its angle in world axes, so angle 0 is world +y (was +x). Viewer `potion_view.rs`: the shape is turned its angle + a half turn (`ORBIT_FACING` π); with the new zero this is exactly the turn the user checked (the old angle + a quarter turn). Test updated. Provenance, QUESTIONS Q145.
