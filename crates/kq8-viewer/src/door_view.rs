@@ -1172,10 +1172,15 @@ pub fn trap_step(
             }
             if !connor.state_request(what, &at) {
                 let why = if connor.throw.is_some() { "Connor's hammer throw goes on, azriel-hammer.md rule 3; stand-in, Q148 d" } else { "Connor's jump is not finished" };
-                let line = format!("update {}: {at}: {what}{again}: refused ({why}); tried again next update", sim.active.world.updates);
+                // azriel-hammer.md "Connor's waiting request" (Q148 d): one
+                // slot; a later refused request replaces it (the "strong
+                // states" exception not done).
+                let replaced = if connor.refused.is_empty() { "" } else { "; replaces the one waiting" };
+                let line = format!("update {}: {at}: {what}{again}: refused ({why}); kept as his waiting request{replaced}, tried again next update", sim.active.world.updates);
                 if let Some(log) = &mut sim.trap_log {
                     log.detail(line);
                 }
+                connor.refused.clear();
                 connor.refused.push(r);
                 continue;
             }

@@ -7045,8 +7045,9 @@ endif
         assert!(!log.contains("touches gob2"), "one thing only: {log}");
         // Out: 1,600 per update; the touch in update 3 (cylinder at y −1,035
         // minus the ball): put back at its place after update 2.
-        assert!(log.contains("hammer1: turns back (its touch) at (") && log.contains(", -1200, 1300), its last place before; 3200 flown out, range back 1600 (3200 - one step 1600)"), "{log}");
-        assert!(log.contains("hammer1 update 4 (back): touches Connor at") || log.contains("hammer1: the way back ends (more than its range 1600)"), "{log}");
+        assert!(log.contains("hammer1: turns back (its touch) at (") && log.contains(", -1200, 1300), its place at the start of the update; 3200 flown out, range back 3200 (its count 4800 - one step 1600: back to its start point)"), "{log}");
+        // Back to its start point, where Connor stands: he catches it.
+        assert!(log.contains("hammer1 update 6 (back): touches Connor at") && log.contains("hammer1: the way back ends (touching Connor)"), "{log}");
         assert_eq!(a.world.hammers_back.len(), 1);
         assert_eq!(a.world.hammers_back[0].0, "Connor");
         assert_eq!(a.world.anims[1].character.as_ref().unwrap().fight.as_ref().unwrap().stats.0[0], 15, "gob2 untouched");
@@ -7054,7 +7055,8 @@ endif
 
     #[test]
     fn the_hammer_turns_back_at_its_range_and_at_the_ground() {
-        // Rules 7, 9: nothing in the way: out past 15,000, back 15,000 − 1,600.
+        // Rules 7, 9: nothing in the way: out past 15,000, then back to its
+        // start point.
         let mut a = fighter();
         a.world.connor_at = Some([0.0, 1_000_000.0, 100.0]);
         a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 1300.0], [0.0, -5000.0, 1300.0], 10, "test");
@@ -7064,10 +7066,12 @@ endif
             updates += 1;
         }
         let log = a.world.fight_log.join("\n");
-        assert!(log.contains("hammer1: turns back (more than its range 15000) at (0, -14400, 1300), its last place before; 14400 flown out, range back 12800"), "{log}");
-        assert!(log.contains("hammer1: the way back ends (more than its range 12800): removed; Connor is told it came back, 19 updates after the throw"), "{log}");
-        // 12,800 back is reached at update 18; it ends on passing it.
-        assert_eq!(updates, 19, "never reaches him: caught anyway");
+        // azriel-hammer.md rule 9's worked example (Q148 a): turns at
+        // 14,400, range back 14,400, caught after 20 updates (1.33 s).
+        assert!(log.contains("hammer1: turns back (more than its range 15000) at (0, -14400, 1300), its place at the start of the update; 14400 flown out, range back 14400"), "{log}");
+        assert!(log.contains("hammer1: the way back ends (more than its range 14400): removed; Connor is told it came back, 20 updates after the throw"), "{log}");
+        // 14,400 back is reached at update 19; it ends on passing it.
+        assert_eq!(updates, 20, "never reaches him: caught anyway");
         // At the ground near him: back at once.
         a.world.hammers_back.clear();
         a.world.launch_bolt("Connor", "prhammer.kq", &prhammer(), [0.0, 0.0, 600.0], [0.0, -700.0, 0.0], 10, "test");

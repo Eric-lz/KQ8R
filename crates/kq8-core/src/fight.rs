@@ -1391,8 +1391,11 @@ impl crate::active::WorldState {
     /// `azriel-hammer.md` rules 7–9 (M6 6b-2): the hammer's update after
     /// its sweep (`best`: its first touch). Way out: a touch (its hit,
     /// rule 8), the floor grid or its range turns it back: put back at
-    /// `from` (its last position before), direction reversed, distance 0,
-    /// range = the distance flown out − one step, only Connor in its mask.
+    /// `from` (its position at the start of the update), direction
+    /// reversed, distance 0, range = the count (which includes the
+    /// turn-back update's step) − one step = the distance from its start
+    /// to `from`, so it flies back to its start point (Q148 a); only
+    /// Connor in its mask.
     /// Way back: touching Connor, passing its range or the floor grid
     /// ends it: removed, and `hammers_back` tells the thrower. Returns it
     /// while it flies.
@@ -1437,18 +1440,19 @@ impl crate::active::WorldState {
         b.pitch = direction[2].clamp(-1.0, 1.0).asin();
         b.position = from;
         b.travelled = 0.0;
-        b.max = out - step;
+        b.max = out;
         b.mask = crate::collide::CONNOR_TYPE;
         b.hammer = Some(HammerFlight { back: true, ..h });
         self.fight_note(
             &thrower,
             format!(
-                "{}: turns back ({end}) at ({:.0}, {:.0}, {:.0}), its last place before; {out:.0} flown out, range back {:.0} ({out:.0} - one step {step:.0}); heading {:.1} deg, pitch {:.1} deg; only Connor stops it now (rule 9)",
+                "{}: turns back ({end}) at ({:.0}, {:.0}, {:.0}), its place at the start of the update; {out:.0} flown out, range back {:.0} (its count {:.0} - one step {step:.0}: back to its start point); heading {:.1} deg, pitch {:.1} deg; only Connor stops it now (rule 9)",
                 b.name,
                 from[0],
                 from[1],
                 from[2],
                 b.max,
+                out + step,
                 b.heading.to_degrees(),
                 b.pitch.to_degrees()
             ),

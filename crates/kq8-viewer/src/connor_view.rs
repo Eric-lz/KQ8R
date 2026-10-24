@@ -167,9 +167,11 @@ pub struct ConnorSim {
     /// Scripted turns and walks that ended (M3 3l-2), whose cues
     /// `door_view::trap_step` sends.
     pub auto_ends: Vec<kq8_core::connor_auto::AutoEnd>,
-    /// State requests a jump refused (M3 3m-1, `anim-scripts.md` rule
-    /// 28): tried again at each later update by `door_view::trap_step`
-    /// (STAND-IN: when the original tries again was not traced).
+    /// His waiting request: the last state request refused (a jump, the
+    /// hammer throw; M3 3m-1, `anim-scripts.md` rule 28; one slot,
+    /// `azriel-hammer.md` "Connor's waiting request"): tried again at each
+    /// later update by `door_view::trap_step` (STAND-IN: the original
+    /// tries again when a movement ends while he stands, and at the catch).
     pub refused: Vec<kq8_core::active::Request>,
     /// The Choice state (`characters.md` "Connor's Choice state", Q155),
     /// while he is in it.

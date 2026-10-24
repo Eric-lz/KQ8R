@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-8: the hammer flies back to its start point; one waiting request (Q148 built)
+
+**Changed:** Core `fight.rs` (`hammer_step`): the range back is the distance flown out (the count, which includes the turn-back update's step, minus one step), so the hammer flies back to its start point, not one step short. Viewer `door_view.rs`: Connor keeps one waiting request (a later refused request replaces it). Tests updated (the old numbers). Provenance, QUESTIONS Q148.
+**Why:** `azriel-hammer.md` rules 7, 9 and "Connor's waiting request" (Q148 a, d). Daventry's worked example: turns at 14,400, back 14,400, caught after 20 updates (1.33 s); ours was 12,800 and 19.
+**Tested how:** `cargo test --workspace` (all pass; `the_hammer_turns_back_at_its_range_and_at_the_ground` now checks the worked example). `kq8-viewer --world Swamp --sound off --frames 1500 --no-ai --key left:IDCTL_INVBAR_LONG,20 --aim-point 165975,80956,6646,60` (the user's aim point); `fight.log`.
+**Result:** Unit test: turns at (0, −14400), range back 14,400, caught 20 updates after the throw. Swamp: touches something on its 8th update, turns back with range back 14,000 (was 12,000), caught 16 updates after the throw.
+**Still broken / not tested:** Not looked at by eye. The waiting request is still tried again every update (the original: when a movement ends while he stands, and at the catch); the "strong states" exception is not done.
+**Next:** A-9 (Connor hidden only in the talk state).
+
 ## 2026-10-24 A-7: Connor's frames cut down (rest of Q153); the speed and the wrap asked (Q164)
 
 **Changed:** Core `connor.rs` (`MovementLoop::frame_at`): his frame for a phase is floor(phase × frames + 0.001), as every object's since 2026-10-23 (was: round(phase × (frames − 1)) for play-once movements). Unit test. QUESTIONS new **Q164**. Provenance.

@@ -3333,3 +3333,11 @@ Replaces the L-2 / L-3 rows' stand-ins (DESIGN "Connor's levels checked").
 | --- | --- | --- |
 | Frame = floor(phase × frames + 0.001) for his movements too (repeating or not); a play-once movement at or past the end shows its last frame; one played backwards (`undraw`) last to first | `objects.md` "Loops that move the whole object" rule 6 (traced, Q153; rule 1: the same path for Connor) | Unit test `his_frames_are_cut_down_as_every_object_s` |
 | Repeating speed (N − 1)/(N × duration) and the wrap to exactly 0: **not built** (for any loop) | Rule 6 disagrees with `character-movement.md`'s speed and Connor's measured speed: **Q164** | A build of it slowed walkers by 1/N (reverted) |
+
+## The hammer's way back, Connor's waiting request (A-8, Q148) — `crates/kq8-core/src/fight.rs` (`hammer_step`); viewer `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| At the turn-back (touch, range, floor grid) it is put back where it was at the start of that update; range back = its count (which includes that update's step) − one step = the distance to its start point | `azriel-hammer.md` rules 7, 9 (traced, Q148 a; corrected 2026-10-22) | Unit test `the_hammer_turns_back_at_its_range_and_at_the_ground` (14,400 / 14,400 / 20 updates, the note's worked example); viewer Swamp: range back 14,000 |
+| One waiting request: a later refused one replaces it; it is tried before the new requests | "Connor's waiting request" (traced, Q148 d) | Viewer log line "kept as his waiting request" |
+| Tried again every update; the "strong states" exception not done | **Stand-in** | — |
