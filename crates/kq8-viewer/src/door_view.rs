@@ -1826,11 +1826,19 @@ pub fn door_step(
         }
         let mut later = Vec::new();
         for r in std::mem::take(&mut w.weapon_requests) {
-            // Open question 1 (a request during a swing: cut or wait; not
-            // traced): ours waits until the swing is over.
+            // Q138 (ranged-weapons.md open question 1, traced): moving (a
+            // movement key held: his Move state), the swap is taken at once
+            // and its away / out cuts the swing short (before `do`: no hit).
+            if c.swing.is_some() && c.intent.forward != 0 && !c.hands_off {
+                let cut = c.swing.take().map(|s| s.movement).unwrap_or_default();
+                c.walker.stand_now();
+                w.fight_note("Connor", format!("weapon request ({}): moving: the swap cuts the swing '{cut}' short (Q138)", r.how));
+            }
+            // Standing refuses every request while a swing plays: it waits
+            // for the swing's end (Q138, traced).
             if c.swing.is_some() && !matches!(r.ask, kq8_core::weapons::Ask::Script(_)) {
                 if !r.how.ends_with(" (waits for the swing)") {
-                    w.fight_note("Connor", format!("weapon request ({}): a swing plays: it waits for its end (open question 1: not traced; ours)", r.how));
+                    w.fight_note("Connor", format!("weapon request ({}): standing, a swing plays: it waits for its end (Q138)", r.how));
                 }
                 later.push(kq8_core::weapons::Request { how: if r.how.ends_with(" (waits for the swing)") { r.how } else { format!("{} (waits for the swing)", r.how) }, ..r });
                 continue;

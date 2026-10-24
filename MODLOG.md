@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-12c: a weapon swap while moving cuts a swing short (Q138 built)
+
+**Changed:** Viewer `door_view.rs`: a weapon request while a swing plays (or waits) and a movement key is held (his Move state) is taken at once: the swing is dropped (no hit if its `do` hasn't come), he stands, and the swap plays. Standing, the request still waits for the swing's end. Provenance, QUESTIONS Q138.
+**Why:** `ranged-weapons.md` open question 1, answered in Q138 (traced): standing refuses every request while a non-`Stop` movement plays; moving takes the swap at once and its `away` / `out` cuts the swing short.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --sound off --frames 1800 --no-ai --god --at 289284,190300,0 --swing goblin22,60 --hold 1,0,0,64,90 --swing goblin22,76 --key left:IDCTL_INVBAR_SHORT,78`; `fight.log`.
+**Result:** Update 76: the swing (waiting for the turn); update 78, forward held: "moving: the swap cuts the swing 'confists.anm/attack' short (Q138)", then `undraw` plays.
+**Still broken / not tested:** Not looked at by eye. "Moving" is read from the movement keys, since our swing plays as a Special list (not inside Wait / Move as in the original). A script's request (`setDoMode`) still goes through at once as before.
+**Next:** A-12d (the jump picked from the held keys, Q112).
+
 ## 2026-10-24 A-12b: Connor's movements start at their `loop=` start (Q138 e built)
 
 **Changed:** Core `connor.rs`: `MovementLoop::start` and `start_phase`; the walker marks a movement started from phase 0 (`fresh`) and at its next update puts it at its `loop=` start (a backwards play-once at 1 − start, as our phase runs 0 → 1 turned round); transitions still start at 0. Viewer `load.rs`, `connor_view.rs`: the start read from the `loop=` lines. Unit test. Provenance, QUESTIONS Q138.

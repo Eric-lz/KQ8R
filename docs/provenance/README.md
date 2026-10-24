@@ -3423,3 +3423,10 @@ Replaces the 5g-7 stand-in (half see-through).
 | Every movement of his starts at its `loop=` start and speed (`undraw`: frame 7 of 8, backwards, about 0.41 s) | `anim-scripts.md` rule 5 (traced, Q138 e) | Unit test `a_movement_starts_at_its_loop_start`; viewer `connor.log` |
 | Transitions start at 0 | `connor-movement.md` "Starting and stopping" rule 5 | Unchanged |
 | The start applied at the update after the movement is chosen (one drawn frame at phase 0 before) | **Ours** | — |
+
+## A swap during a swing (A-12c, Q138) — viewer `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Standing: a weapon request waits for the swing's end; moving: taken at once, the swap's `away` / `out` cuts the swing (no hit before `do`) | `ranged-weapons.md` open question 1, answered in Q138 (traced) | Viewer `fight.log`: "moving: the swap cuts the swing … short" |
+| "Moving" = a movement key held (our swing is a Special list, not inside Wait / Move) | **Ours** | — |
