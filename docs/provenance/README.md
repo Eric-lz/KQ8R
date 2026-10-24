@@ -3360,3 +3360,9 @@ Replaces the 6e popup rows' stand-ins (highlight, Escape, rows, lines).
 | Rows: highlighted 145–183, the other 146–182; lines at 12 + k × 18 + the offset table, 18 high, 360 wide, centred | Rule 26 (c), (d) (traced) | Viewer: lines at 49 and 75 |
 | Pressed: frame 1 of the button's own picture (the highlighted one `buyhibtn.pba`), label 1 right and 1 down; a mouse press doesn't move the highlight | Rule 26 (e) (traced) | — |
 | Button left edges 76 / 196 (W = 360, ours); no click sound on Left / Right | **Stand-in** (A inferred W = 370; the sound not named) | — |
+
+## The loading meter's slot (A-10b, Q152) — viewer `loading_screen.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The filled part is the meter's picture stretched to (630 × percent / 100, whole pixels, at least 1 if not 0) × 8; the unfilled rest of the slot is `4black.pbm`, stretched; the picture's painted frame stays (no full-width black bar) | `world-change.md` rule 23 (traced; the bar settled by the user's check, Q152) | Unit test `the_filled_part_is_cut_to_whole_pixels_at_least_1`; viewer `viewer.log` |

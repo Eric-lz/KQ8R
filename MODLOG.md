@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-10b: the loading meter's slot black where it isn't filled (Q152 built)
+
+**Changed:** Viewer `loading_screen.rs`: `4black.pbm`, stretched, over the meter slot's unfilled part (from the end of the filled part to x 635, rows 468–476); the filled part is 630 × percent / 100 cut to whole pixels, at least 1 if not 0 (`filled_pixels`). Still no full-width black bar. Unit test. Provenance, QUESTIONS Q152.
+**Why:** `world-change.md` rule 23 (Q152), settled by the user's check in the original: the painted frame stays, black only inside the slot where the meter grows.
+**Tested how:** `cargo test --workspace` (all pass; new `the_filled_part_is_cut_to_whole_pixels_at_least_1`). `kq8-viewer --world Daventry --frames 3000 --sound off --command "move Connor 0 158510 307740 9925 0 0 3.1416",2 --hold 1,0,0,5,22 --key popup:yes,20`; `viewer.log`.
+**Result:** "loading screen: GAME/8Gui/CastleD.pbm … black only over the slot's unfilled part, no full-width bar (Q152)"; the meter 0 % → 100 % in 511 ms.
+**Still broken / not tested:** Not looked at by eye (the load is half a second).
+**Next:** A-10c (map icons after the colour match, no mini-map blink, Q150).
+
 ## 2026-10-24 A-10a: the portal popup as traced (Q151 built)
 
 **Changed:** Viewer `gui_view.rs`: the popup opens with **Yes** highlighted (was No); Escape does nothing in `handsOff` (otherwise No and the menu, as before; the original's "the other button" is not reproduced); a mouse press shows that button pressed without moving the highlight; the highlighted button pressed (Enter) shows `buyhibtn.pba` frame 1; the button rows 145–183 (highlighted) and 146–182 (the other); the text lines in the traced boxes (base 12, pitch 18, the offset table). QUESTIONS Q151. Provenance.

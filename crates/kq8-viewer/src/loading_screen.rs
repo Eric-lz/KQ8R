@@ -27,12 +27,11 @@
 //! the meter's place (the original's stretch or tiling is not traced; the
 //! two look alike at 8 pixels high).
 //!
-//! **Not drawn: the black bar** `4black.pbm` at (0, 462)–(640, 480). The
-//! loading pictures have the meter's frame painted in (rows 464–479: a
-//! light border round a dark slot at x 5–635, rows 468–475, the meter's
-//! place), and the user sees that frame in the original (2026-10-22), so
-//! the bar does not cover it there. When the original shows the bar is
-//! not in the note: Q152.
+//! **Not drawn: the full-width black bar** `4black.pbm` at (0, 462)–(640,
+//! 480). Rule 23 (Q152, the user's check in the original): the picture's
+//! painted frame stays; the meter's filled part is its picture stretched
+//! to (630 × percent / 100, whole pixels, at least 1 if not 0) × 8 and the
+//! unfilled rest of the slot is `4black.pbm`, stretched.
 
 use std::sync::{Arc, Mutex};
 
@@ -53,6 +52,18 @@ pub struct LoadingBox;
 /// The meter's node.
 #[derive(Component)]
 pub struct LoadingMeter;
+
+/// The black over the meter slot's unfilled part (rule 23, Q152).
+#[derive(Component)]
+pub struct LoadingBlack;
+
+/// Rule 23 (Q152): the filled part of the 630-pixel meter at `percent`:
+/// 630 × percent / 100 cut to whole pixels, at least 1 if not 0.
+pub fn filled_pixels(percent: u32) -> u32 {
+    let p = percent.min(100);
+    let w = (METER[2] as u32 * p) / 100;
+    if p > 0 { w.max(1) } else { 0 }
+}
 
 /// Layout in 640 × 480 pixels (rule 23).
 const METER: [f32; 4] = [5.0, 468.0, 630.0, 8.0];
@@ -89,7 +100,7 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
         .and_then(|b| kq8_data::Palette::parse(&b))
         .map(|p| kq8_data::palette::as_shown(p.colors));
     let mut notes = Vec::new();
-    let (mut image, mut red) = (None, None);
+    let (mut image, mut red, mut black) = (None, None, None);
     match palette {
         Err(e) => notes.push(format!("palette {pal_file}: {e}; no pictures")),
         Ok(palette) => {
@@ -104,11 +115,15 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
                 }
                 Err(e) => notes.push(format!("4red.pbm: {e}; a plain red meter")),
             }
+            match picture(&game, "GAME/8Gui/4black.pbm", &palette) {
+                Ok(i) => black = Some(i),
+                Err(e) => notes.push(format!("4black.pbm: {e}; plain black")),
+            }
         }
     }
     let mut assets = world.resource_mut::<Assets<Image>>();
-    let (handle, red) = (image.map(|i| assets.add(i)), red.map(|i| assets.add(i)));
-    notes.push("no black bar (Q152)".into());
+    let (handle, red, black) = (image.map(|i| assets.add(i)), red.map(|i| assets.add(i)), black.map(|i| assets.add(i)));
+    notes.push("black only over the slot's unfilled part, no full-width bar (Q152)".into());
     let at = |r: [f32; 4]| Node {
         position_type: PositionType::Absolute,
         left: Val::Percent(r[0] / 6.4),
@@ -145,18 +160,34 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
             Some(h) => p.spawn((stretched(h), meter, Persistent, LoadingScreen, LoadingMeter)),
             None => p.spawn((BackgroundColor(Color::srgb(0.8, 0.0, 0.0)), meter, Persistent, LoadingScreen, LoadingMeter)),
         };
+        // At 0 % the whole slot is black.
+        let rest = at(METER);
+        match &black {
+            Some(h) => p.spawn((stretched(h), rest, Persistent, LoadingScreen, LoadingBlack)),
+            None => p.spawn((BackgroundColor(Color::BLACK), rest, Persistent, LoadingScreen, LoadingBlack)),
+        };
     });
     let mut log = log.lock().unwrap();
     log.summary(format!("loading screen: {pic_file} in {pal_file}, the red meter (world-change.md rules 22-24); {}", notes.join("; ")));
 }
 
-/// The meter at `percent` of its 630 pixels (rule 24).
+/// The meter at `percent` of its 630 pixels (rule 24), the black over the
+/// rest of the slot (rule 23, Q152).
 pub fn set_meter(world: &mut World, percent: u32) {
+    let filled = filled_pixels(percent) as f32;
     let mut q = world.query_filtered::<&mut Node, With<LoadingMeter>>();
     for mut node in q.iter_mut(world) {
-        let want = Val::Percent(METER[2] / 6.4 * percent.min(100) as f32 / 100.0);
+        let want = Val::Percent(filled / 6.4);
         if node.width != want {
             node.width = want;
+        }
+    }
+    let mut q = world.query_filtered::<&mut Node, With<LoadingBlack>>();
+    for mut node in q.iter_mut(world) {
+        let (left, width) = (Val::Percent((METER[0] + filled) / 6.4), Val::Percent((METER[2] - filled) / 6.4));
+        if node.left != left || node.width != width {
+            node.left = left;
+            node.width = width;
         }
     }
 }
@@ -177,6 +208,13 @@ pub fn close(world: &mut World) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_filled_part_is_cut_to_whole_pixels_at_least_1() {
+        // world-change.md rule 23 (Q152).
+        assert_eq!((filled_pixels(0), filled_pixels(1), filled_pixels(50), filled_pixels(100), filled_pixels(150)), (0, 6, 315, 630, 630));
+        assert_eq!(filled_pixels(99), 623, "623.7 cut down");
+    }
 
     #[test]
     fn file_names_follow_rule_22() {
