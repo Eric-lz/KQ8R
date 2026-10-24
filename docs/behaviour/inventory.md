@@ -351,7 +351,9 @@ item closes the gap in the strip (not checked with 8 or more items).
    `Long` 1310, `Armor` 2120, the rest 0. After `give SmallAx`:
    `Short` 1020. Then the bell (fists put away, small axe out, three
    hits) rings. In the original, the bell rings only with the small axe
-   [data, `bell.cs`].
+   [data, `bell.cs`]. **Checked by the user in the original
+   (2026-10-24):** with the small axe drawn, the bell rings at each hit
+   and the third starts the Lake Sword scene.
 
 ## Open questions
 

@@ -868,6 +868,8 @@ duration 0 the same way (B's model reader has the duration).
       `sprgnbow` is alive, the forward choice sends it `KQCueEvent 10`
       (the roof kill); once it is dead and removed, Connor walks down
       instead (`KQConner::walkTo … roofTrap`) [data + this rule].
+      **Checked by the user in the original (2026-10-24):** forward at
+      the roof choice plays the spriggan kill.
 
 ## Numbers and units
 

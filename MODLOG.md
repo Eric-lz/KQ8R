@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The user's check of the bell and the roof kill in the original
+
+**Changed:** `docs/behaviour/inventory.md` check 6 and `anim-scripts.md` rule 38: marked as checked by the user.
+**Why:** Confirms Q166 and Q162 against the original game.
+**Tested how:** The user played the original.
+**Result:** With the small axe drawn the bell rings at each hit and the third hit starts the Lake Sword scene; forward at the roof choice plays the spriggan kill.
+**Still broken / not tested:** Neither is built in our engine yet.
+**Next:** Session B builds the 2026-10-24 answers.
+
 ## 2026-10-24 Study A: how a panel picture fills its box (Q108 b)
 
 **Changed:** `docs/behaviour/interface.md` rule 20 corrected, new rule 20a, rule 50 and open question 6 updated; QUESTIONS Q108 (b) answered.
