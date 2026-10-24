@@ -826,7 +826,6 @@ duration 0 the same way (B's model reader has the duration).
     - On average a raven caws about every 15 s plus the caw's own length
       [inferred from these numbers].
 
-
 ### Does an object exist: `exist` (traced 2026-10-24, Q162)
 
 38. **`exist <name>`** asks whether an object of that name is in the
