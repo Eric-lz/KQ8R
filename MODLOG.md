@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-4: `setScript` gives the new script `Init` (Q154 built); Q163 asked
+
+**Changed:** Core `active.rs`: `KQObject::setScript` works on every object with a script slot (items, characters, clickables, doors, chests, scripted objects, buildings, talkers) and runs the new script's `Init` at once, inside the command; `none` removes it with no call. At the start, characters without a scripted click box and items with a script get `Init` too, and a character's click box takes the script a start-up `setScript` gave it. `StateChange`: a character still in "no state" counts as 0 (stand-in, new **Q163**). Unit test. Provenance, QUESTIONS Q154.
+**Why:** `anim-scripts.md` rule 33. `bossprig.cs` registers for its own state changes in `Init` (to change its skin when it dies); Barren's `Battleax.cs` and Gnome's `WarHammr.cs` remember their place in `Init`. None of these ever got `Init`.
+**Tested how:** `cargo test --workspace` (all pass; new `set_script_gives_the_new_script_init_at_once_and_none_calls_nothing`). `kq8-viewer --world Daventry --frames 900 --sound off --console "kill bossprig",20`; `doors.log`.
+**Result:** Update 0: `Init` for the Shadow, `sprgnbow`, `sprigan` (`sprigan2.cs`), `sprigwnd1`, `bossprig` (registers for itself), `Henchman`, `sprdump`, and the start-up items (`dagger.cs`, `lgloves.cs`, `ring.cs`, `lboots.cs`, `Farmcoin.cs` ×2, `offej.cs`). Update 20: `StateChange bossprig 0 8` reaches `bossprig.cs`, which asks for `changeBmp` (a stub: `characters.md` open question 4).
+**Still broken / not tested:** Not looked at by eye. A character given a new script at the start gets only the new script's `Init` (the original runs its type's first; no Daventry type script does anything on `Init`). Our start order (doors, chests, objects, clickables, then characters and items, then traps) is ours. `$4` for "no state" is a guess (Q163).
+**Next:** A-5 (cues with `sendEvent @`, `random`: the ravens).
+
 ## 2026-10-24 A-3: `loadObject` (Q157 built)
 
 **Changed:** Core `active.rs`: the script command `loadObject <name> <file> [x y z [rx ry rz]]` (`.kqs` / `.dts`: a still plain object, drawn as the corpses are; missing numbers 0; `@` → `NoName<n>`; other files: nothing, a log line; the name becomes a world object so `deleteObject` finds it). `fight.rs`: `Corpse::loaded`, `drawn_name`. Viewer `load.rs`: every shape a world's scripts name in `loadObject` is made ready at load; `item_view.rs` names the drawn object by `drawn_name`. Unit test. Provenance, QUESTIONS Q157.

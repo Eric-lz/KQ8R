@@ -2818,6 +2818,8 @@ is in `kq8-core`, a viewer run checked in the logs.
    **Done** 2026-10-24 (shapes made ready at load; checked in the logs).
 4. **A-4: `setScript` calls `Init`** (Q154, `anim-scripts.md` rule 33),
    also while playing.
+   **Done** 2026-10-24 (also characters and items get `Init` at the
+   start; checked in the logs).
 5. **A-5: cues with `sendEvent @`, `random`** (Q158, `anim-scripts.md`
    rules 35–37): the ravens caw.
 6. **A-6: the experience sound** (Q159, `interface.md` rule 26a) and

@@ -1462,9 +1462,74 @@ impl WorldState {
         }
     }
 
-    /// `KQObject::setScript`, `setDontLook`, `setHidden` and `deleteObject`
-    /// on an item object. `setHidden` and `deleteObject` on other objects
-    /// stay stubs (as before 3e-2); the other two are not tracked there.
+    /// `KQObject::setScript <name> <script | none>` (`anim-scripts.md` rule
+    /// 33, Q154): any object with a script slot (items, characters,
+    /// clickables, doors, scripted objects, chests, buildings) takes the
+    /// new script, which gets `Init` at once, inside the command; `none`
+    /// removes it with no call; an unknown name does nothing (the original
+    /// writes nothing; we log it).
+    fn set_script(&mut self, words: &[String], at: &str) -> String {
+        let [_, name, value] = words else {
+            self.note(format!("{at}: usage: KQObject::setScript <object> <script>; nothing"));
+            return "1".into();
+        };
+        let script = (!value.eq_ignore_ascii_case("none")).then(|| value.clone());
+        let same = |n: &str| n.eq_ignore_ascii_case(name);
+        let mut kinds = Vec::new();
+        if let Some(i) = self.items.index(name) {
+            self.items.objects[i].script = script.clone();
+            kinds.push("item");
+        }
+        for a in self.anims.iter_mut().filter(|a| same(&a.player.name)) {
+            a.script = script.clone();
+            kinds.push(if a.character.is_some() { "character" } else { "animated object" });
+        }
+        for c in self.clickables.iter_mut().filter(|c| same(&c.name)) {
+            c.script = script.clone();
+            kinds.push("clickable");
+        }
+        for m in self.monsters.iter_mut().filter(|m| same(&m.name)) {
+            m.script = script.clone();
+            kinds.push("talker");
+        }
+        for d in self.doors.iter_mut().filter(|d| same(&d.door.name)) {
+            d.script = script.clone();
+            kinds.push("door");
+        }
+        for c in self.chests.iter_mut().filter(|c| same(&c.chest.name)) {
+            c.script = script.clone();
+            kinds.push("chest");
+        }
+        for o in self.objects.iter_mut().filter(|o| same(o.name())) {
+            o.script = script.clone();
+            kinds.push("scripted object");
+        }
+        for b in self.buildings.iter_mut().filter(|b| same(&b.name)) {
+            b.script = script.clone();
+            kinds.push("building");
+        }
+        if kinds.is_empty() {
+            self.note(format!("{at}: setScript {name}: no object by that name; nothing (rule 33)"));
+            return "0".into();
+        }
+        let init = match &script {
+            Some(s) => {
+                self.calls_out.push((s.clone(), vec![name.clone(), "Init".into()]));
+                "; its Init runs now"
+            }
+            None => "; no call",
+        };
+        let line = format!("{at}: setScript {name} ({}): script {script:?}{init} (anim-scripts.md rule 33)", kinds.join(", "));
+        if kinds.contains(&"item") {
+            self.item_note(line.clone());
+        }
+        self.note(line);
+        "0".into()
+    }
+
+    /// `setDontLook`, `setHidden` and `deleteObject` on an item object.
+    /// `setHidden` and `deleteObject` on other objects stay stubs (as
+    /// before 3e-2); `setDontLook` is not tracked there.
     fn item_change(&mut self, words: &[String], at: &str) -> String {
         let command = words[0].as_str();
         let Some(name) = words.get(1) else {
@@ -1506,11 +1571,6 @@ impl WorldState {
         let flag = looks_like_number(&value).then(|| number_value(&value) != 0.0);
         let o = &mut self.items.objects[i];
         let line = match (command, flag) {
-            ("KQObject::setScript", _) if !value.is_empty() => {
-                // `none` removes it (chests.md rule 11, `Tavcoin.cs`).
-                o.script = (!value.eq_ignore_ascii_case("none")).then(|| value.clone());
-                format!("setScript {}: script {:?}", o.name, o.script)
-            }
             ("KQObject::setDontLook", Some(on)) => {
                 o.do_not_point_at = on;
                 format!("setDontLook {}: doNotPointAt {on}", o.name)
@@ -2894,8 +2954,9 @@ impl WorldState {
     /// <new>` to each recipient registered for it, through the queue with
     /// no delay. Connor's number comes from the caller. **Stand-in:** we
     /// look once per update, so two changes in one update are one message
-    /// (old = before both); a change to or from no state is not sent (rule
-    /// 16 gives it no number).
+    /// (old = before both); "no state" (before a character's start-up,
+    /// which waits for it to be near or far) counts as 0 (rule 16 gives it
+    /// no number, Q163), and a change to it is not sent.
     pub fn state_changes(&mut self) {
         let mut now: Vec<(String, Option<u32>)> = Vec::new();
         if let Some(n) = self.connor_state {
@@ -2910,7 +2971,7 @@ impl WorldState {
         for (who, number) in now {
             let key = who.to_ascii_lowercase();
             let Some(new) = number else {
-                self.state_seen.remove(&key);
+                self.state_seen.insert(key, 0);
                 continue;
             };
             let Some(old) = self.state_seen.insert(key.clone(), new).filter(|&o| o != new) else { continue };
@@ -3086,7 +3147,8 @@ impl ScriptHost for WorldState {
             "KQMonster::clearSpeak" => Some(self.clear_speak(words, at)),
             "KQMonster::testMessage" => Some(self.test_message(words, at)),
             "KQMonster::stateChangeNotify" | "KQMonster::clearStateChangeNotify" => Some(self.state_change_notify(words, at)),
-            "KQObject::setScript" | "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
+            "KQObject::setScript" => Some(self.set_script(words, at)),
+            "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
             _ => None,
         }
     }
@@ -3642,12 +3704,47 @@ impl Active {
         for i in 0..self.world.objects.len() {
             self.call_object(i, &["Init"]);
         }
+        // One object, one script slot (anim-scripts.md rule 33): a
+        // character's click box takes the script a start-up `setScript`
+        // gave the character.
+        let mut synced = Vec::new();
+        for a in self.world.anims.iter().filter(|a| a.character.is_some() && a.script.is_some()) {
+            if let Some(c) = self.world.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(&a.player.name) && c.script != a.script) {
+                synced.push(format!("{}: its click box's script {:?} -> {:?} (the character's, set by setScript)", c.name, c.script, a.script));
+                c.script = a.script.clone();
+            }
+        }
+        for line in synced {
+            self.world.note(line);
+        }
         // Other scripted clickables (3f, Q64 c stand-in).
         for i in 0..self.world.clickables.len() {
             // A character a script loads later gets its Init then (loadKQ).
             if self.world.clickables[i].script.is_some() && !self.world.clickables[i].gone {
                 self.call_clickable(i, &["Init"]);
             }
+        }
+        // anim-scripts.md rule 33 (Q154), clicking.md rule 21: characters
+        // without a scripted click box and items with a script get `Init`
+        // too (after the clickables: our order). A character's script set by
+        // a start-up `setScript` is the one called (the original called its
+        // type's `Init` first, then the new one's; no Daventry type script
+        // does anything on `Init`).
+        let mut more: Vec<(String, String)> = Vec::new();
+        for a in self.world.anims.iter().filter(|a| a.character.is_some() && !a.gone) {
+            let clicked = self.world.clickables.iter().any(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&a.player.name));
+            if let (Some(s), false) = (&a.script, clicked) {
+                more.push((s.clone(), a.player.name.clone()));
+            }
+        }
+        for o in self.world.items.objects.iter().filter(|o| o.place != Place::Gone) {
+            if let Some(s) = &o.script {
+                more.push((s.clone(), o.name.clone()));
+            }
+        }
+        for (script, name) in more {
+            self.world.note(format!("script {script} {name} Init (anim-scripts.md rule 33)"));
+            self.scripts.call(&script, &[name, "Init".into()], &mut self.world);
         }
         // traps.md rule 13 (after the doors, chests, objects: our order).
         for i in 0..self.world.traps.len() {
@@ -4891,6 +4988,40 @@ mod tests {
         let mut a = Active::new(v, vec![d], vec![], ["Connor".to_string()], [("door.cs".to_string(), script.as_bytes().to_vec())]);
         a.world.items = crate::item::tests::items();
         a
+    }
+
+    #[test]
+    fn set_script_gives_the_new_script_init_at_once_and_none_calls_nothing() {
+        // anim-scripts.md rule 33 (Q154).
+        let mut d = active("", &[]).world.doors.remove(0);
+        d.script = Some("door.cs".into());
+        let name = d.door.name.clone();
+        let scripts = [
+            ("door.cs".to_string(), b"if test $2 == Init
+ set D::init $1
+endif
+".to_vec()),
+            ("new.cs".to_string(), b"if test $2 == Init
+ set N::init $1
+endif
+".to_vec()),
+            ("cmd.cs".to_string(), format!("KQObject::setScript {name} new.cs
+set After $N::init
+").into_bytes()),
+            ("off.cs".to_string(), format!("KQObject::setScript {name} none
+KQObject::setScript nobody new.cs
+").into_bytes()),
+        ];
+        let mut a = Active::new(Vars::default(), vec![d], vec![], ["Connor".to_string()], scripts);
+        a.start();
+        assert_eq!(a.scripts.vars.get("D::init"), Some(name.as_str()));
+        a.scripts.call("cmd.cs", &[], &mut a.world);
+        // Inside the command: the next line already sees it.
+        assert_eq!(a.scripts.vars.get("After"), Some(name.as_str()));
+        assert_eq!(a.world.doors[0].script.as_deref(), Some("new.cs"));
+        a.scripts.vars.set("N::init", "x".into());
+        a.scripts.call("off.cs", &[], &mut a.world);
+        assert_eq!((a.world.doors[0].script.as_deref(), a.scripts.vars.get("N::init")), (None, Some("x")));
     }
 
     #[test]

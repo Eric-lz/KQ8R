@@ -3297,3 +3297,12 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | `.kqs` / `.dts` → a plain object, one still pose, no script, no sound, not solid, not clickable (drawn like `fighting.md` rule 32's corpses); `.dig` → building (not done); other → "unknown object", nothing | Rule 34 (still pose: data; not solid: inferred by A) | Unit test; viewer `viewer.log`: "corpse of deadsprg: sp_cadth.kqs drawn" |
 | z −1 / −2 → the ground height | Rule 34 (**inferred** by A, not used by any shipped line) | — |
 | The shapes are made ready at load from the world's scripts' `loadObject` lines; the object is a world object by its name (`deleteObject` hides it) | **Ours** (the original loads the file when the command runs; `apothgnm.cs` deletes its `mortar`) | Viewer: "loadObject shapes made ready"; `deleteObject deadsprg` → hidden |
+
+## `setScript` and `Init` (A-4, Q154) — `crates/kq8-core/src/active.rs` (`set_script`, `Active::start`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQObject::setScript <name> <script>` works on any object with a script slot; the new script gets `Init` at once, inside the command; `none` removes it with no call; an unknown name does nothing | `anim-scripts.md` rule 33 (traced, Q154) | Unit test `set_script_gives_the_new_script_init_at_once_and_none_calls_nothing` |
+| Every character and item with a script gets `Init` when it enters the world (at the start: after the clickables) | Rule 33 ("the same call an object gets when it is added to the world"); `clicking.md` rule 21; `characters.md` rule 4 | Viewer `doors.log`: `bossprig.cs bossprig Init`, the start-up items' `Init` |
+| A character given a script at the start gets only the new script's `Init`; its click box takes that script | **Stand-in** (rule 33: the type's `Init` first, then the new one's; no Daventry type script acts on `Init`) | — |
+| `StateChange` from "no state": old number 0 | **Stand-in** (Q163) | Viewer: `StateChange bossprig 0 8` |
