@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: how fast a repeating loop carries a character (Q164)
+
+**Changed:** `docs/behaviour/objects.md` "Loops that move the whole object" rule 6 (which player) and new rule 6a; `character-movement.md` rules 1–2, speed table and numbers; `connor-movement.md` "Forward speed" rules 3–4 and the measurement comparison; QUESTIONS Q164 answered.
+**Why:** `objects.md` rule 6 (cycle = N × duration/(N − 1)) and the speed tables (sum ÷ duration) disagreed; built as rule 6 says, Connor's run would drop to about 2,350 against 2,520 measured.
+**Tested how:** Traced in `Mask.exe` (Ghidra); recomputed each model's speed from its `.kqs` frame steps (a throwaway script outside the repo); compared with the user's 2026-10-12 measurements.
+**Result:** Both notes were half right: the cycle is N × duration/(N − 1), but entering frame 0 adds the **last frame's step**, so nothing is lost. Connor: walk 1,124, run 2,558, back 1,070; the measured top values are 1,131 and 2,561. Characters change by 0–7 % (spriggan walk 1,589 → 1,708).
+**Still broken / not tested:** The back speed is measured about 1 % above the rule (unexplained). The extra step for loops that don't start at the file's first frame was traced but no walk model is like that. Not built.
+**Next:** B applies rule 6a to Connor and characters.
+
 ## 2026-10-24 Study A: `exist` and `if` (Q162)
 
 **Changed:** `docs/behaviour/anim-scripts.md` new rule 38 (and rule 18's wrong quote fixed); QUESTIONS Q162 answered.

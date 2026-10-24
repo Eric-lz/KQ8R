@@ -117,8 +117,7 @@ All traced in `Mask.exe` unless marked otherwise.
    for every animated object, Connor included: it is how his walk loop
    carries him forward. Nothing recomputes the placement from the phase.
    (Traced: the composition onto the current placement and the move.
-   Which frames' steps one update includes, exactly at a wrap, was not
-   traced.)
+   Which frames' steps one update includes, wrap included: rule 6a.)
 2. So Gnome's rolling rocks (`rrock1–3`, loop `theroll`, 54 frames,
    3.53 s, repeating) **really travel** along the path their steps
    describe (up to 9,691 away) and would end each cycle about 57 units
@@ -188,6 +187,50 @@ All traced in `Mask.exe` unless marked otherwise.
      0.001) = **frame 45, the last (pushed) frame**, held there (speed
      0). Matches the user's check.
    - `checkedRoundingBug=1` in `.anm` files is never read by the game.
+   - This frame player is used for **every `.kqs` animation**: plain
+     animated objects, doors, chests, characters and Connor alike
+     (traced 2026-10-24, Q164). Only shapes of another kind (`.dts`)
+     use a different player, not studied.
+6a. **Which frames' steps one update adds** (traced 2026-10-24, Q164).
+   Every frame of a `.kqs` sequence carries a step (its frame
+   transform). An update that moves the shown frame from a to b adds the
+   steps of **every frame it enters**, in order:
+   - **Forwards:** frames a + 1, a + 2, … up to b. Several frames in one
+     update all count. Across a wrap: a + 1 … N − 1, then 0 … b.
+   - **Entering frame 0 forwards** adds the step of the sequence's
+     **last frame (N − 1)** instead of frame 0's own step, but only when
+     the loop's first frame is the **first frame of the whole file**
+     (the loop starts at frame 0 of the `.kqs`; true for every walk and
+     run model checked: Connor's and all Daventry characters'). In a
+     file with several loops, a later loop's frame 0 adds its own step.
+     Frame 0's own step is zero in these files, so without this the
+     wrap would add nothing.
+   - **Backwards** (speed below 0): the steps of frames a − 1 down to b
+     are **taken off** (each step undone); across the wrap: a − 1 … 0,
+     then N − 1 … b. There is **no** last-frame swap backwards, so frame
+     0's own (zero) step is used.
+   - The phase is **not** recomputed from distance: what goes past the
+     end at a forward wrap is dropped (rule 6), so an update that wraps
+     enters frame 0 and adds one step, however far past the end it went.
+   - **So one forward cycle of a repeating walk or run** covers the sum
+     of frames 1 … N − 1's steps **plus the last frame's step once
+     more**, and takes N × duration/(N − 1) seconds (rule 6). With the
+     game's 1/15 s updates and Connor's and Daventry's models (a frame
+     time of exactly one or half an update), no time is lost at the
+     wrap. **Speed = (sum of steps + last step) × (N − 1)/(N ×
+     duration)**, times the `loop=` speed. This is within 1–2 % of the
+     older "sum ÷ duration" for walks, but not the same: Connor's run
+     2,558 (not 2,518), walk 1,124 (not 1,127); **back** (`c_walk` at
+     −1) 1,070 (sum × (N − 1)/(N × duration), no extra step). Table
+     per character: `character-movement.md` rule 2.
+   - The user's measurement in the original (`connor-movement.md`
+     "Measured in the running original") fits this: run 2,492–2,561 (top
+     of the range = 2,558; lower values from updates longer than 1/15 s,
+     whose overshoot past a wrap is dropped), walk 1,083–1,131 (1,124),
+     back 1,079–1,085 (1,070, about 1 % under) [inferred match].
+   - Rule 2's rolling rocks: their 57-unit leftover per cycle was the
+     plain sum; with this rule it differs, but the cue at 1.0 puts them
+     back absolutely anyway, so nothing changes in play.
 7. **User's check (2026-10-13):** our viewer already shows the three
    rolling rocks correctly. B's way (steps chained from the phase, jump
    back at the wrap) and the game's way (steps added up, reset to the

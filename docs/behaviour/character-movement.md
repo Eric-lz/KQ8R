@@ -41,20 +41,26 @@ Words used here:
    character moves only by the per-frame steps of the movement it is
    playing, exactly as Connor does (`connor-movement.md` "Forward speed
    comes from the animation"). The AI never pushes it along; it only
-   picks a movement (`walk` or `run`) and steers. So **its speed is its
-   `walk` or `run` model's distance per loop divided by the loop length**,
-   times the `loop=` speed (1.0 for all of Daventry's). There is no speed
-   key per character or per type.
-2. **Daventry's speeds** (data, from the models' frame steps; the same
-   method gives Connor's 1,127 and 2,518):
+   picks a movement (`walk` or `run`) and steers. So **its speed comes
+   from its `walk` or `run` model's frame steps and loop length**, times
+   the `loop=` speed (1.0 for all of Daventry's). There is no speed key
+   per character or per type. **Corrected 2026-10-24 (Q164, traced):**
+   not "distance per loop ÷ loop length" but (sum of steps + the last
+   frame's step) × (N − 1)/(N × loop length), N = frames
+   (`objects.md` "Loops that move the whole object" rules 6 and 6a);
+   within about 1 % of the old figure for most, up to 7 % for the
+   spriggan's walk.
+2. **Daventry's speeds** (data, from the models' frame steps by the
+   corrected rule 1, which gives Connor's walk 1,124 and run 2,558;
+   the old "sum ÷ length" figure in brackets where it differs):
 
    | Character (list) | `walk` | `run` |
    | --- | --- | --- |
    | chicken (`chicken.anm`) | 119 units/s (`Chk_wlk1`) | 947 (`chk_run`) |
-   | bone goblin (`goblin2.anm`) | 917 (`g2_walk`) | 3,068 (`g2_run`) |
-   | goblin (`goblin.anm`, `gobcon1`) | 3,068 (`g-run`!) | 3,109 (`g-walk4`!) |
-   | spriggan (`sprigan.anm`) | 1,588 (`spwalk`) | 3,366 (`Sprun`) |
-   | zombie (`zombie.anm`) | 511 (`z-walk`) | no `run` |
+   | bone goblin (`goblin2.anm`) | 926 [917] (`g2_walk`) | 3,106 [3,068] (`g2_run`) |
+   | goblin (`goblin.anm`, `gobcon1`) | 3,106 [3,068] (`g-run`!) | 3,040 [3,109] (`g-walk4`!) |
+   | spriggan (`sprigan.anm`) | 1,708 [1,589] (`spwalk`) | 3,365 (`Sprun`) |
+   | zombie (`zombie.anm`) | 503 [511] (`z-walk`) | no `run` |
    | bat (`bat.anm`) | 1,159 (`batfly`) | no `run` |
    | pig (`piggy.anm`) | 437 (`pigwalk`) | 437 (same model) |
    | Knight, Henchman, bow spriggan | 0 (their `walk` is a standing model) | none |
@@ -82,7 +88,7 @@ Words used here:
    `walk` / `run` pair is all there is.
 5. **Turning** (traced): steering uses the automatic turn of
    `characters.md` rule 23: **3.5 rad/s, while the walk goes on**, so a
-   walking character turns in an arc (at 917 units/s and 3.5 rad/s a
+   walking character turns in an arc (at 926 units/s and 3.5 rad/s a
    walking bone goblin turns on a circle of about 260 radius; inferred). The turn
    aims at the point anew in every update until it faces it, then the
    character walks straight. No banking (Connor's lean needs his keys).
@@ -547,7 +553,7 @@ Words used here:
 
 | What | Value | Source |
 | --- | --- | --- |
-| speed | the `walk` / `run` model's distance per loop ÷ loop length | traced |
+| speed | (sum of the model's frame steps + its last step) × (N − 1)/(N × loop length) (rule 1, corrected 2026-10-24) | traced |
 | walk or run when alarmed | 50 / 50, tossed at each start of a chase move | traced |
 | turn rate while walking | 3.5 rad/s (automatic turn) | traced |
 | stuck check | 1 s after its walk / run really starts, then every 0.5 s; stuck if moved < 200 | traced |

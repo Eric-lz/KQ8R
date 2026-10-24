@@ -15,7 +15,7 @@ and turning on flat ground, and which animation plays for each.
 - Distances are in game units. Connor's collision box is 1,300 units tall
   (`GAME/patch/BOUNDS.KQ`, entry `Connor`; corrected 2026-10-12, Q33; the
   1,600 in `[ConnerCollider]` of `GAME/Kq/Connor.kq` is not used for it)
-  and walks about 1,127 units per second, so 1 unit is
+  and walks about 1,124 units per second, so 1 unit is
   very likely 1 mm. Treat this as the working assumption.
 - Z is up. Turning is rotation about Z. Positive turn = counter-clockwise
   seen from above = turning left.
@@ -84,15 +84,25 @@ The movement names are the `MovementN=` names in `GAME/Kq/Conner.anm`.
    whole-body offset. For walking and running this offset is a step along
    the model's −Y axis (the direction the model faces); the first frame's
    offset is zero.
-3. Connor's travel per animation cycle is the sum of those per-frame steps;
-   his speed is that distance divided by the animation's loop duration
-   (also stored in the shape file).
+3. Connor's travel per animation cycle is the sum of those per-frame steps
+   **plus the last frame's step once more** (it is added again when the
+   loop wraps into frame 0), and one cycle takes N × duration/(N − 1)
+   (N frames; the duration is stored in the shape file). **Corrected
+   2026-10-24 (Q164, traced; `objects.md` "Loops that move the whole
+   object" rules 6 and 6a).** The old "sum ÷ duration" was close but not
+   the game's rule. Stepping back takes the steps off in reverse with no
+   extra step, so it is slower than walking.
 4. Measured from the GOG 1.03 files (observed):
 
-   | Movement | Shape | Frames | Loop length | Distance per loop | Speed |
-   | --- | --- | --- | --- | --- | --- |
-   | walk | `GAME/Common/C_walk.kqs` | 20 | 1.2667 s | 1,427.1 | ≈ 1,127 units/s |
-   | run | `GAME/Common/C_run.kqs` | 15 | 0.9333 s | 2,350.2 | ≈ 2,518 units/s |
+   | Movement | Shape | Frames | Loop length | Sum of steps | Last step | One cycle | Speed |
+   | --- | --- | --- | --- | --- | --- | --- | --- |
+   | walk | `GAME/Common/C_walk.kqs` | 20 | 1.2667 s | 1,427.1 | 71.6 | 1.3333 s (20 updates) | ≈ 1,124 units/s |
+   | run | `GAME/Common/C_run.kqs` | 15 | 0.9333 s | 2,350.2 | 208.2 | 1.0 s (15 updates) | ≈ 2,558 units/s |
+   | back (walk at −1) | `GAME/Common/C_walk.kqs` | 20 | 1.2667 s | 1,427.1 | none | 1.3333 s | ≈ 1,070 units/s |
+
+   (Before 2026-10-24 this table gave 1,127 and 2,518, from sum ÷ loop
+   length.) One frame = exactly one update (1/15 s) for both, so with
+   steady updates nothing is lost at the wrap.
 
 5. `back` plays the walk animation with playback speed −1.0 (see
    `Conner.anm`), so stepping back moves backwards at walking speed.
@@ -435,6 +445,11 @@ two 1/15 s ticks each); go by the seconds.
 - Walk: 1,083–1,131 units/s over 2.4–3.1 s stretches (average about
   1,100, about 2% under the data's 1,127). Run: 2,492–2,561 (average
   about 2,520; data 2,518). Stepping back: 1,079–1,085.
+- **Compared with the traced rule (2026-10-24, Q164):** walk 1,124, run
+  2,558, back 1,070. The top of each forward range matches; lower
+  values fit updates longer than 1/15 s, whose overshoot past the wrap
+  is dropped. Back is measured about 1 % above the rule (not
+  explained; small).
 - Turning on the spot: 98–102° per second (data: 1.75 rad/s = 100°/s),
   6.7° per 1/15 s tick, the same left and right.
 
