@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-5: `sendEvent` in cues, `random`: the ravens caw (Q158 a, b built)
+
+**Changed:** Core `active.rs`: `cue_event` (a movement's cue `sendEvent <target> <Event> <numbers…>`: no delay word, queued for now; `@` and everything before it → the name of the object playing the movement), used for doors, chests, scripted objects, animated objects and characters (`cue_action`); the script command `random [min] [max]` (whole numbers, min + round(u × (max − min))). Unit tests. Provenance, QUESTIONS Q158.
+**Why:** `anim-scripts.md` rules 35–37. The ravens never cawed: their `stop` movement's cue at 0.0 sends themselves `Cue 10`, and `ravensrh.cs` rolls `random 0 5` and caws on a 1.
+**Tested how:** `cargo test --workspace` (all pass; new `random_gives_whole_numbers_with_the_ends_half_as_often`, `a_send_event_cue_with_at_goes_to_the_object_playing_it_now`). `kq8-viewer --world Daventry --begin --frames 9000 --sound off --no-ai`; `doors.log`.
+**Result:** The raven (loaded at update 256) gets `Cue 10` every 44–46 updates (about 3 s); rolls 4, 3, 4, 5, **1** (update 475: `setState Special caw`, `raven.aud` at 477), 2, 2, 4, 3, **1** (720). Daventry's other cue events now work too: the Lady's `Cue 100` (at 0.44 of her movement), the spriggan's `Cue 20` (`sprdump.anm`), the mill wheel's `KQAnimPlayEvent stop` at 0.99.
+**Still broken / not tested:** Not listened to. The 0.0 cue still fires in the wrap's own update, not one update later (that is the wrap rule of Q153, step A-7). `KQMoveEvent` (Gnome's rocks, 29 `KQMoveEvent 3` cues) is still not an event of ours: logged "unknown to us; not sent" (the rocks are moved our own way, `objects.md` "Loops that move" rule 7).
+**Next:** A-6 (the experience sound, `setLevel`, the level-up flame).
+
 ## 2026-10-24 A-4: `setScript` gives the new script `Init` (Q154 built); Q163 asked
 
 **Changed:** Core `active.rs`: `KQObject::setScript` works on every object with a script slot (items, characters, clickables, doors, chests, scripted objects, buildings, talkers) and runs the new script's `Init` at once, inside the command; `none` removes it with no call. At the start, characters without a scripted click box and items with a script get `Init` too, and a character's click box takes the script a start-up `setScript` gave it. `StateChange`: a character still in "no state" counts as 0 (stand-in, new **Q163**). Unit test. Provenance, QUESTIONS Q154.

@@ -848,6 +848,8 @@ pub struct WorldState {
     /// The state number last seen per character (lower case), for the
     /// `StateChange` messages (rules 14-16).
     state_seen: BTreeMap<String, u32>,
+    /// The script command `random`'s draws (`anim-scripts.md` rule 36).
+    script_rng: crate::emitter::Rng,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -2697,6 +2699,64 @@ impl WorldState {
         "0".into()
     }
 
+    /// `random [min] [max]` (`anim-scripts.md` rule 36, Q158 b): a whole
+    /// number in `$Console::Return`: 0-100, 0-max or min-max; the numbers
+    /// read as whole numbers; min + round(u × (max − min)), so the ends come
+    /// up half as often. Four or more words: the usage line, 0 (inferred).
+    fn random(&mut self, words: &[String], at: &str) -> String {
+        let whole = |w: &String| number_value(w).trunc() as i64;
+        let (min, max) = match words {
+            [_] => (0, 100),
+            [_, max] => (0, whole(max)),
+            [_, min, max] => (whole(min), whole(max)),
+            _ => {
+                self.note(format!("{at}: usage: random [min] [max]; 0"));
+                return "0".into();
+            }
+        };
+        let u = f64::from(self.script_rng.fraction());
+        let r = min + (u * (max - min) as f64).round() as i64;
+        self.note(format!("{at}: random {min} {max}: {r}"));
+        r.to_string()
+    }
+
+    /// `anim-scripts.md` rule 35 (Q158 a): a movement's cue `sendEvent
+    /// <target> <Event> <numbers…>`, no delay word, queued for now. With an
+    /// `@`, everything before it is dropped and the `@` is the name of the
+    /// object playing the movement (`owner`). `None`: not a `sendEvent` cue.
+    pub fn cue_event(&mut self, owner: &str, cue: &str) -> Option<String> {
+        let t = cue.trim();
+        if !t.get(..9).is_some_and(|w| w.eq_ignore_ascii_case("sendEvent")) {
+            return None;
+        }
+        let text = match t.find('@') {
+            Some(i) => format!("{owner}{}", &t[i + 1..]),
+            None => t[9..].to_string(),
+        };
+        let words: Vec<String> = text.split_whitespace().map(str::to_string).collect();
+        let [target, kind, data @ ..] = &words[..] else {
+            return Some(format!("sendEvent cue '{t}' without a target and an event; nothing"));
+        };
+        if !self.known.contains(&target.to_ascii_lowercase()) {
+            return Some(format!("sendEvent cue to unknown object '{target}'; not sent"));
+        }
+        if !EVENT_TYPES.contains(&kind.as_str()) {
+            return Some(format!("sendEvent cue: event type '{kind}' unknown to us; not sent"));
+        }
+        let now = self.now();
+        self.queue.send(now, 0.0, target, kind, data, &format!("a cue of {owner}"));
+        Some(format!("sendEvent {target} {kind} {} queued for now (anim-scripts.md rule 35)", data.join(" ")))
+    }
+
+    /// A cue's action: a `sendEvent` (rule 35), else a sound or the
+    /// cut-short switch ([`Self::cue_sound`]).
+    fn cue_action(&mut self, owner: &str, what: &str, cue: &str, position: [f32; 3]) -> String {
+        match self.cue_event(owner, cue) {
+            Some(line) => line,
+            None => self.cue_sound(what, cue, position).to_string(),
+        }
+    }
+
     /// `sendEvent <delay> <object> <type> [data…]`.
     fn send_event(&mut self, words: &[String], at: &str) -> String {
         if words.len() < 4 {
@@ -3104,6 +3164,7 @@ impl ScriptHost for WorldState {
             "setCombatLevel" => Some(self.set_combat_level(words, at)),
             "KQMonster::setHome" => Some(self.set_home(words, at)),
             "KQObject::getLoc" | "getLoc" | "getloc" => Some(self.get_loc(words, at)),
+            "random" => Some(self.random(words, at)),
             "loadObject" => Some(self.load_object(words, at)),
             "KQObject::tossItems" => Some(self.toss_items(words, at)),
             "checkDistance" => Some(self.check_distance(words, at)),
@@ -3264,6 +3325,7 @@ impl Active {
                 notify: BTreeMap::new(),
                 connor_state: None,
                 state_seen: BTreeMap::new(),
+                script_rng: crate::emitter::Rng::new(0x5C41_9700),
                 connor_can_turn: false,
                 connor_at: None,
                 monsters: Vec::new(),
@@ -4398,7 +4460,7 @@ impl Active {
             }
             let at = self.world.doors[i].door.player.base.position;
             for cue in &a.cues {
-                let what = self.world.cue_sound(&format!("door {name}"), cue, at);
+                let what = self.world.cue_action(&name, &format!("door {name}"), cue, at);
                 self.world.note(format!("door {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(st) = &a.started {
@@ -4438,7 +4500,7 @@ impl Active {
             }
             let at = self.world.chests[i].chest.placement().position;
             for cue in &a.cues {
-                let what = self.world.cue_sound(&format!("chest {name}"), cue, at);
+                let what = self.world.cue_action(&name, &format!("chest {name}"), cue, at);
                 self.world.note(format!("chest {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(st) = &a.started {
@@ -4464,7 +4526,7 @@ impl Active {
             }
             let at = self.world.objects[i].player.placement().position;
             for cue in &a.cues {
-                let what = self.world.cue_sound(&format!("object {name}"), cue, at);
+                let what = self.world.cue_action(&name, &format!("object {name}"), cue, at);
                 self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(st) = &a.started {
@@ -4534,7 +4596,7 @@ impl Active {
                     self.world.character_do(i);
                     continue;
                 }
-                let what = self.world.cue_sound(&format!("object {name}"), cue, at);
+                let what = self.world.cue_action(&name, &format!("object {name}"), cue, at);
                 self.world.note(format!("object {name}: cue '{cue}' fires ({what})"));
             }
             if let Some(st) = &a.started {
@@ -5298,6 +5360,41 @@ endif
         a.world.requests.clear();
         a.test_command("deleteObject deadsprg", "t");
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::Delete { name, .. } if name == "deadsprg")), "{:?}", a.world.requests);
+    }
+
+    #[test]
+    fn random_gives_whole_numbers_with_the_ends_half_as_often() {
+        // anim-scripts.md rule 36 (Q158 b).
+        let mut a = with_trap("");
+        let mut counts = [0u32; 6];
+        for _ in 0..12000 {
+            let r: i64 = a.test_command("random 0 5", "t").unwrap().parse().unwrap();
+            counts[r as usize] += 1;
+        }
+        assert!(counts[0] > 1000 && counts[0] < 1400 && counts[5] > 1000 && counts[5] < 1400, "{counts:?}");
+        assert!(counts[1..5].iter().all(|&c| c > 2100 && c < 2700), "{counts:?}");
+        for _ in 0..200 {
+            let r: i64 = a.test_command("random 3.9 4.7", "t").unwrap().parse().unwrap();
+            assert_eq!(r, 3 + (r - 3), "whole numbers");
+            assert!((3..=4).contains(&r));
+            let r: i64 = a.test_command("random", "t").unwrap().parse().unwrap();
+            assert!((0..=100).contains(&r));
+        }
+    }
+
+    #[test]
+    fn a_send_event_cue_with_at_goes_to_the_object_playing_it_now() {
+        // anim-scripts.md rule 35 (Q158 a): raven.anm's cue at 0.0.
+        let mut a = with_trap("if test $2 == Cue
+ set T::cue $3 $4
+endif
+");
+        let line = a.world.cue_event("clifTrap", "sendEvent @ KQCueEvent 10 0").unwrap();
+        assert!(line.contains("queued for now"), "{line}");
+        a.update();
+        assert_eq!(a.scripts.vars.get("T::cue"), Some("10 0"));
+        assert_eq!(a.world.cue_event("clifTrap", "playsound x.wav"), None);
+        assert!(a.world.cue_event("clifTrap", "sendEvent nobody KQCueEvent 1").unwrap().contains("unknown object"));
     }
 
     fn connor_at(a: &mut Active, x: f32) -> Vec<String> {

@@ -3306,3 +3306,11 @@ Replaces the round() rules in the rows above (start frame, 3c, doors, 4d).
 | Every character and item with a script gets `Init` when it enters the world (at the start: after the clickables) | Rule 33 ("the same call an object gets when it is added to the world"); `clicking.md` rule 21; `characters.md` rule 4 | Viewer `doors.log`: `bossprig.cs bossprig Init`, the start-up items' `Init` |
 | A character given a script at the start gets only the new script's `Init`; its click box takes that script | **Stand-in** (rule 33: the type's `Init` first, then the new one's; no Daventry type script acts on `Init`) | — |
 | `StateChange` from "no state": old number 0 | **Stand-in** (Q163) | Viewer: `StateChange bossprig 0 8` |
+
+## Cue events and `random` (A-5, Q158) — `crates/kq8-core/src/active.rs` (`cue_event`, `cue_action`, `random`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A movement's cue `sendEvent <target> <Event> <numbers…>`: no delay word, queued for now; with `@`, everything before it is dropped and `@` is the object playing the movement | `anim-scripts.md` rule 35 (traced, Q158 a) | Unit test `a_send_event_cue_with_at_goes_to_the_object_playing_it_now`; viewer `doors.log`: the raven's `Cue 10` every pass |
+| `random` 0–100, `random max` 0–max, `random min max`; whole numbers (decimals ignored); min + round(u × (max − min)); four or more words: usage, 0 | Rule 36 (traced; the 0 after the usage line inferred by A) | Unit test `random_gives_whole_numbers_with_the_ends_half_as_often` |
+| An unknown target or event type in a cue: not sent, logged | **Ours** (as the script `sendEvent`) | Unit test |
