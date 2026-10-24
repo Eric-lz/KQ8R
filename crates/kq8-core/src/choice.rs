@@ -24,7 +24,7 @@ impl ChoiceList {
         let mut words = list.split(',').map(str::trim);
         let script = words.next().filter(|s| !s.is_empty()).ok_or("no script name")?.to_string();
         let rest: Vec<&str> = words.collect();
-        if rest.is_empty() || rest.len() % 3 != 0 {
+        if rest.is_empty() || !rest.len().is_multiple_of(3) {
             return Err(format!("{} words after the script, not triples", rest.len()));
         }
         let mut points = Vec::new();
