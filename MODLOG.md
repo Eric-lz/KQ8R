@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study A: the state number of "no state" (Q163)
+
+**Changed:** `docs/behaviour/characters.md` new rule 16a; QUESTIONS Q163 answered.
+**Why:** `bossprig.cs` waits for `$5 == 8`; B needed the old number when a character dies before its first update.
+**Tested how:** Traced in `Mask.exe` (Ghidra).
+**Result:** "No state" is a placeholder numbered 0 that accepts everything; leaving it sends `$4` = 0 (B's stand-in is right). A change to it would send `$5` = 0, which we never do.
+**Still broken / not tested:** Not checked in the original. Nothing to build.
+**Next:** None for B.
+
 ## 2026-10-24 Study A: `setHaze` (Q161)
 
 **Changed:** `docs/behaviour/object-lighting.md` new rule 33a; QUESTIONS Q161 answered.

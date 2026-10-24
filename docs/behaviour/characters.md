@@ -923,6 +923,26 @@ directions by pressing forward or back while facing one of them.
     the comment "starting special state" next to it is wrong), `$5 == 8`
     means "started dying", `$4 == 256` (19 scripts) a Special list ended,
     `$4 == 1` Birth ended, `$4 == 4096` the rope climb ended.
+16a. **"No state" is number 0** (traced 2026-10-24, Q163). A character
+    gets an empty placeholder state, numbered **0**, when it is added to
+    the world; it keeps it until the start-up (rule 12) or a script gives
+    it a real one. The placeholder accepts **every** request at once.
+    - Leaving it is an ordinary change: each registered recipient gets
+      `StateChange` with **`$4` = 0** and `$5` = the new state. So the
+      start-up's queued Wait sends `$4` = 0, `$5` = 2; Birth `$4` = 0,
+      `$5` = 1.
+    - **Killed before its first update** (Daventry's `bossprig`, which
+      registers for itself in its `Init`; `Init` runs when it is added,
+      before any update): the Die request is accepted at once from the
+      placeholder, and the message is **`$4` = 0, `$5` = 8**, so
+      `bossprig.cs`'s dying branch runs. (In normal play a character
+      that has never been updated is off, so not solid and not hit by
+      bolts or the hammer, `object-lighting.md` rule 37; only a script
+      or a debug command can kill it then.)
+    - **A change to "no state"** (asking a character for a state it
+      doesn't have, Do not reproduce) puts in a new placeholder, also
+      numbered 0, and **does** send a message with `$5` = 0. Since we
+      ignore such requests (Do not reproduce), nothing is sent.
 17. **The roof scene with the axe** (Daventry `sprgnbow.cs`): after
     `DoChoice 0`, Cue 10 registers `sprgnbow` for Connor and runs
     `setDoMode 0`, which asks for standing (accepted: the choice is
