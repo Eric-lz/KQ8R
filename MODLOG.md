@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 A-11b: the shield orbits measured from world +y (Q145 built)
+
+**Changed:** Core `potions.rs` (`orbit_place`): an orbit's offset is (0, radius, 0) turned by its angle in world axes, so angle 0 is world +y (was +x). Viewer `potion_view.rs`: the shape is turned its angle + a half turn (`ORBIT_FACING` π); with the new zero this is exactly the turn the user checked (the old angle + a quarter turn). Test updated. Provenance, QUESTIONS Q145.
+**Why:** `potions.md` rule 20 "How an orbit moves" (Q145 c).
+**Tested how:** `cargo test --workspace` (all pass; `orbit_place` checked at 0 and a quarter turn). `kq8-viewer --world Daventry --sound off --frames 600 --command "give Invulnerable 1,10" --key 5,30`; `items.log`.
+**Result:** Update 30: three orbits; `orbit1` at angle 0 is 500 north (+y) of the centre (277744, 199757 from 277744, 199257), `orbit2` / `orbit3` a third of a turn either side; each update +0.2 rad.
+**Still broken / not tested:** Not looked at by eye (the whole ring starts a quarter turn round from before; the shields' facing is unchanged). x / y step angles (tilting the path) are not done: every shipped orbit file has 0.
+**Next:** A-11c (the teleport pad solid, Q14 b; the world palette for every texture index, Q42).
+
 ## 2026-10-24 A-11a: `dither` as a screen-door texture; `dithered=` on chests and animated objects (Q144 built); Q165 asked
 
 **Changed:** Core `active.rs`: `KQObject::dither <name> <mode>` keeps the mode (0 none, 1 dithered, 2 "justTrans", 3 stored only); an unknown name writes "cannot find". `kq8-data` `objects.rs`: the `dithered` key. Viewer `potion_view.rs` (`dither_step`, `dither_rgba`): mode 1 rewrites each texture so 1 texel in 4 is kept (every 4th in a row, the next row shifted by 2), mode 2 keeps them all; in both pure-black texels are not drawn (the colour key, as a cut-out) and lighting is off (full brightness); the dithered texture and material are made once per texture / material and mode; parts found by their own name or their body's (parent or grandparent), and dithered again when the drawing swaps their material at a new movement. `door_view.rs`: chests and animated objects with `dithered=` in their file start dithered; door, chest and scripted object bodies get a `DitherName`. Unit test. QUESTIONS new **Q165**. Provenance.

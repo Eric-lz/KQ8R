@@ -3393,3 +3393,11 @@ Replaces the 5g-7 stand-in (half see-through).
 | Mode 1: colour key on (black not drawn), full brightness, the texture rewritten so each row keeps every 4th texel, the next row shifted by 2; mode 2: colour key only; 0: back to its own | Rules 3-5 | Unit test `dithering_keeps_one_texel_in_four_rows_shifted_by_two`; viewer: the keep wall on and off |
 | `dithered=` in the file: chests and animated objects drawn so from the start (they apply it at every movement start) | Rule 8 | Viewer: `wizchest1` 2 parts |
 | The "2 extra texels per row", shared-texture holes; doors, characters, plain objects with the key | **Not done** (rule 6 inferred; Q165) | — |
+
+## The shield orbits' path (A-11b, Q145) — `crates/kq8-core/src/potions.rs` (`orbit_place`); viewer `potion_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The offset is (0, `orbitRadius`, 0) turned by the angle in world axes (0 = world +y); each update the angle grows by the step; the shape faces along the offset with the angle + π | `potions.md` rule 20 (traced, Q145 c) | Unit test in `potions.rs`; viewer `items.log`: `orbit1` 500 north of the centre at angle 0 |
+| Three shields (`orbit1`-`3`) | Rule 20 (Q145 a) | As built in 5g-4 |
+| x / y step angles not applied | **Not done** (all shipped files have 0) | — |

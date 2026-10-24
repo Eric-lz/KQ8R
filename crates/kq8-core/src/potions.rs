@@ -162,12 +162,12 @@ pub fn temple4_protection(raised: i64, added: i64) -> i64 {
     (old + added.div_euclid(2)).min(TEMPLE4_CAP)
 }
 
-/// Rule 20: the orbit's place at `angle` (radians about the vertical)
-/// around Connor's `body` part at `body`: `radius` out in the ground
-/// plane, at `body` − 820 + `z_offset` height. Angle 0 is +x (our
-/// reading: `orbitStartAngZ` 0).
+/// Rule 20 (Q145 c): the orbit's place at `angle` (radians about the
+/// vertical) around Connor's `body` part at `body`: the offset (0,
+/// `radius`, 0) turned by the angle in world axes (angle 0 = world +y),
+/// at `body` − 820 + `z_offset` height.
 pub fn orbit_place(body: [f32; 3], radius: f32, z_offset: f32, angle: f32) -> [f32; 3] {
-    [body[0] + radius * angle.cos(), body[1] + radius * angle.sin(), body[2] - ORBIT_DROP + z_offset]
+    [body[0] - radius * angle.sin(), body[1] + radius * angle.cos(), body[2] - ORBIT_DROP + z_offset]
 }
 
 /// Rule 13: the effect switches on at a potion's start. Returns what it
@@ -315,8 +315,11 @@ mod tests {
         // 80 + 10 = 90, cut to 85.
         assert_eq!(temple4_protection(60, 20), 50);
         assert_eq!(temple4_protection(100, 20), 85);
+        // Q145 c: angle 0 = world +y; a quarter turn left = −x.
         let o = orbit_place([100.0, 200.0, 1000.0], 500.0, 500.0, 0.0);
-        assert_eq!(o, [600.0, 200.0, 680.0]);
+        assert_eq!(o, [100.0, 700.0, 680.0]);
+        let o = orbit_place([100.0, 200.0, 1000.0], 500.0, 500.0, std::f32::consts::FRAC_PI_2);
+        assert!((o[0] + 400.0).abs() < 1e-3 && (o[1] - 200.0).abs() < 1e-3, "{o:?}");
     }
 
     #[test]

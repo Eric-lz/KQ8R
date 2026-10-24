@@ -144,11 +144,11 @@ pub fn spawn_orbit(commands: &mut Commands, orbits: Vec<(kq8_data::characters::O
     commands.insert_resource(OrbitDraw { orbits, drawn: Vec::new() });
 }
 
-/// The user's check (2026-10-21): the shield's flat side faces away from
-/// Connor. Its model (`invulnfx.kqs`) is wide along x and thin along y,
-/// so it is turned a quarter turn more than its orbit angle (its bulging
-/// −y side outwards).
-const ORBIT_FACING: f32 = std::f32::consts::FRAC_PI_2;
+/// Rule 20 (Q145 c): the shape faces along its offset with the angle + a
+/// half turn (as a bolt flying from the shield toward Connor's centre).
+/// With the angle from world +y this is the same turn as the user checked
+/// on 2026-10-21 (the angle from +x + a quarter turn: the flat side out).
+const ORBIT_FACING: f32 = std::f32::consts::PI;
 
 /// Every update: the orbits appear with the shield, move, and go.
 pub fn orbit_step(mut commands: Commands, sim: Option<ResMut<DoorSim>>, connor: Option<Res<ConnorSim>>, draw: Option<ResMut<OrbitDraw>>, mut transforms: Query<&mut Transform>) {
@@ -201,7 +201,7 @@ pub fn orbit_step(mut commands: Commands, sim: Option<ResMut<DoorSim>>, connor: 
     if first {
         w.item_log.push(format!("update {updates}: the shield's orbits appear: {} (potions.md rule 20)", draw.orbits.len()));
     }
-    w.item_log.push(format!("update {updates}: {}; centre {how} at ({:.0}, {:.0}, {:.0}) - 820 + z offset; each turned a quarter turn more (faces out) (potions.md rule 20)", places.join(", "), body[0], body[1], body[2]));
+    w.item_log.push(format!("update {updates}: {}; centre {how} at ({:.0}, {:.0}, {:.0}) - 820 + z offset; each turned its angle + a half turn (potions.md rule 20, Q145 c)", places.join(", "), body[0], body[1], body[2]));
 }
 
 /// Every update (5g-5, 5g-6): Connor's body skin, face set and the
