@@ -1500,6 +1500,27 @@ impl WorldState {
         "0".into()
     }
 
+    /// `exist <name>` (`anim-scripts.md` rule 38, Q162): 0 if the name is
+    /// a world object now, 1 if not; a name deleted in this same event
+    /// still counts. Prints nothing (we log it). Wrong word count: the
+    /// usage line and 0.
+    fn exist(&mut self, words: &[String], at: &str) -> String {
+        let [_, name] = words else {
+            self.note(format!("{at}: usage: exist Object; 0 (anim-scripts.md rule 38)"));
+            return "0".into();
+        };
+        let lower = name.to_ascii_lowercase();
+        let found = (self.known.contains(&lower) && !self.deleted.contains(&lower)) || self.deleted_this_event.contains(&lower);
+        let why = match (found, self.deleted.contains(&lower)) {
+            (true, true) => "deleted in this same event: still there",
+            (true, false) => "there",
+            (false, true) => "deleted",
+            (false, false) => "no such object",
+        };
+        self.note(format!("{at}: exist {name}: {why}: {}", if found { 0 } else { 1 }));
+        if found { "0" } else { "1" }.into()
+    }
+
     /// `KQObject::setScript <name> <script | none>` (`anim-scripts.md` rule
     /// 33, Q154): any object with a script slot (items, characters,
     /// clickables, doors, scripted objects, chests, buildings) takes the
@@ -3208,6 +3229,7 @@ impl ScriptHost for WorldState {
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
             "getConInventory" => Some(self.get_con_inventory(at)),
+            "exist" => Some(self.exist(words, at)),
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
@@ -4679,6 +4701,11 @@ impl Active {
             if !self.call_named(&name, &["Die", kind]) {
                 self.world.fight_note(&name, format!("no script: Die {kind} not called (rule 32)"));
             }
+            // anim-scripts.md rule 38 (Q162): a dead character is removed
+            // after its own `Die`; its corpse has no name of its own.
+            if self.world.anims.iter().any(|a| a.gone && a.character.is_some() && a.player.name.eq_ignore_ascii_case(&name)) {
+                self.world.deleted.insert(name.to_ascii_lowercase());
+            }
         }
         for name in std::mem::take(&mut self.world.immune_calls) {
             if !self.call_named(&name, &["ProjImmune"]) {
@@ -5566,6 +5593,24 @@ endif
         // Rule 10: 1 = found, so an `if` on it takes the else branch.
         assert_eq!((v("A"), v("Found")), (Some("yes"), Some("NoName0")));
         assert_eq!((v("B"), v("C"), v("D")), (Some("0"), Some("0"), Some("0")));
+    }
+
+    #[test]
+    fn exist_gives_0_when_the_object_is_there() {
+        // anim-scripts.md rule 38 (Q162): rooftrap.cs `if exist sprgnbow`.
+        let script = "if exist Connor\n set A yes\nelse\n set A no\nendif\nexist nobody\nset B $Console::Return\nexist\nset C $Console::Return\nexist a b\nset D $Console::Return\ndeleteObject table\nexist TABLE\nset E $Console::Return\n";
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string(), "table".to_string()], [("s.cs".to_string(), script.as_bytes().to_vec())]);
+        a.scripts.call("s.cs", &[], &mut a.world);
+        let v = |a: &Active, k: &str| a.scripts.vars.get(k).map(str::to_string);
+        assert_eq!(v(&a, "A").as_deref(), Some("yes"));
+        assert_eq!(v(&a, "B").as_deref(), Some("1"));
+        // Wrong word count: 0, which an `if` reads as yes.
+        assert_eq!((v(&a, "C").as_deref(), v(&a, "D").as_deref()), (Some("0"), Some("0")));
+        // Deleted: still there until the deleting event ends.
+        assert_eq!(v(&a, "E").as_deref(), Some("0"));
+        ScriptHost::event_done(&mut a.world);
+        assert_eq!(a.test_command("exist table", "t").as_deref(), Some("1"));
+        assert!(a.world.log.iter().any(|l| l.contains("exist TABLE: deleted in this same event: still there: 0")), "{:?}", a.world.log);
     }
 
     #[test]
@@ -6604,6 +6649,7 @@ endif
         assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Die);
         a.world.hit_character(0, "Connor", 10, crate::fight::HitKind::Normal);
         assert!(a.world.fight_log.join("\n").contains("it is dying: nothing else (rule 21)"));
+        assert_eq!(a.test_command("exist gob", "t").as_deref(), Some("0"), "dying: still there");
         // Experience only when the death movement ends (1 s).
         assert_eq!(a.world.connor_stats.unwrap().stats.0[4], 0);
         watch(&mut a, &[], 60);
@@ -6615,6 +6661,9 @@ endif
         assert!(a.world.anims[0].gone);
         assert!(log.contains("first kill (type goblin2)"), "{log}");
         assert!(log.contains("no script: Die Normal not called"), "{log}");
+        // anim-scripts.md rule 38 (Q162): removed after its Die; the
+        // corpse has no name of its own.
+        assert_eq!(a.test_command("exist gob", "t").as_deref(), Some("1"));
     }
 
     #[test]

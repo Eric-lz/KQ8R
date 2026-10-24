@@ -2884,6 +2884,7 @@ first. Each step: the note's rule, a unit test where the rule is in
    the name is a world object (deleted ones still count until the
    deleting event ends), 1 when not; wrong word count: usage line and 0.
    Then the roof choice's forward key plays the spriggan kill.
+   **Done** 2026-10-24 (the roof kill checked in the logs).
 3. **B-3: loop speed** (Q164, `objects.md` "Loops that move the whole
    object" rules 6 and 6a; `connor-movement.md` "Forward speed" rules
    3–4; `character-movement.md` rules 1–2), for Connor and characters:

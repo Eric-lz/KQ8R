@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-2: `exist` (Q162 built); the roof kill plays
+
+**Changed:** Core `active.rs`: the script command `exist <name>`: 0 if the name is a world object now (a name deleted in this same event still counts), 1 if not; wrong word count: usage line and 0. A dead character's name now counts as deleted right after its own `Die` script. Unit tests. Provenance, QUESTIONS Q162, DESIGN B-2.
+**Why:** `anim-scripts.md` rule 38. Daventry's roof (`rooftrap.cs`, `DoChoice 0`): `if exist sprgnbow` picks the kill; without `exist` the forward choice walked Connor down instead.
+**Tested how:** `cargo test --workspace` (all pass; new `exist_gives_0_when_the_object_is_there`, two lines added to `a_character_dies_then_gives_experience_a_corpse_and_goes`). `kq8-viewer --world Daventry --frames 4000 --sound off --no-ai --command "move Connor 0 228300 183200 12500 0 0 -1.57",5 --hold 1,0,0,45,50`; `doors.log`.
+**Result:** Update 46: "rooftrap.cs line 26: exist sprgnbow: there: 0", then `KQCueEvent 10` to `sprgnbow`: the kill list (`hdone`, `hdtwo`, `hdthree`), the corpse `deadsprg` (update 163) and `handsOff 0`.
+**Still broken / not tested:** Not looked at by eye. A word tried as an internal object number (rule 38; no data uses it) is not made.
+**Next:** B-3 (loop speed).
+
 ## 2026-10-24 B-1: `getConInventory` (Q166 built); the bell rings
 
 **Changed:** Core `active.rs`: the script command `getConInventory` sets the nine `ConInv::` variables (`Long`, `Short`, `Armor`, `FullArmor`, `UnderArmor`, `Pants`, `Gloves`, `Helmet`, `Boots`) to the `ID #` of the carried item of exactly that category, or 0; returns 0; nine lines in the log. Unit test. Provenance, QUESTIONS Q166, DESIGN B-1.

@@ -3465,3 +3465,13 @@ Replaces the Q112 stand-in row (the wall block).
 | Each = the `ID #` of the first carried item whose category is exactly that place, else 0; what he carries, not what is drawn; placeholders count (fists 1280, no ranged 1310, no armour 2120); a full suit only in `FullArmor` | Rules 21–24 (traced + data) | Unit test; viewer `items.log`: Short 1280 → 1020 after `give SmallAx` |
 | `$Console::Return` always 0; nine lines `ConInv::Long:       1310` (to our log, which is our console) | Rules 25–26 (traced) | Unit test |
 | "can't find Connor" / "…Connor's inventory" errors not made: our Connor and his list always exist | **Ours** | — |
+
+## `exist` (B-2, Q162) — `crates/kq8-core/src/active.rs` (`exist`; the dead removed after `Die`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `exist <name>`: `$Console::Return` 0 if the name is a world object now, 1 if not; `if` takes its branch on 0 (as before) | `anim-scripts.md` rule 38 (traced) | Unit test `exist_gives_0_when_the_object_is_there`; viewer `doors.log`: "exist sprgnbow: there: 0" |
+| World objects = our `known` names (placed objects, characters, Connor, items, `loadKQ` objects once loaded, named sound objects) less the deleted ones; a name deleted in the same event still counts | Rule 38 (traced; the list's members partly inferred by A) | Unit test |
+| A dead character is removed right after its own `Die` script (its corpse has no name of its own): `exist` gives 1 afterwards, 0 while dying | Rule 38, `fighting.md` rule 32 | Unit test `a_character_dies_then_gives_experience_a_corpse_and_goes` |
+| Wrong word count: "usage: exist Object" and 0; prints nothing otherwise (we log every answer) | Rule 38 | Unit test |
+| A word tried as an object's internal number | Rule 38 (no data uses it): **not made** | — |
