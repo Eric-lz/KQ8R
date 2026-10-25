@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The user's check of B-1 to B-8; dropped weapons asked (Q169)
+
+**Changed:** QUESTIONS Q167 extended, new **Q169**; STATUS. No code.
+**Why:** The user's look: B-1 to B-8 and the two fixes (the body's turn, the caption) look good. The crossbow seen falling in the roof kill is part of the movement. With an ordinary death our weapons are thrown like the other drops (Daventry's crossbow, Dead City's skeletons' swords fly up), but in the original weapons lie where the death movement leaves them; health items and coins are right. That contradicts `fighting.md` rule 31 (all drops thrown), so it is asked, not guessed.
+**Tested how:** The user, in our build and the original.
+**Result:** Questions written.
+**Still broken / not tested:** Dropped weapons fly; the roof kill leaves no crossbow.
+**Next:** A study session on Q167, Q168, Q169.
+
 ## 2026-10-24 The caption stone tiled again (B-7 undone for the caption); Q167, Q168 asked
 
 **Changed:** Core `caption.rs` back to its state before B-7 (the stone tiled from the top-left at the screen's scale), with a comment why. QUESTIONS new **Q167** (the crossbow after the roof kill), **Q168** (the caption stone). Provenance, STATUS.

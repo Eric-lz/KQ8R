@@ -470,6 +470,9 @@ M6 has started with the Rope and Hook (6a).
   **Q167** (the bow spriggan's crossbow after the roof kill: in the
   original it stays on the ground; ours vanishes), **Q168** (the caption
   stone: B-7 stretched it and it looked broken; tiled again).
+  **Q169** (dropped weapons: the user says they lie where the death
+  movement leaves them, not thrown like other items; rule 31 says thrown).
+  The user's look at B-1 to B-8 and the two fixes: all good (2026-10-24).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
