@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: with `--smooth`, Connor's put-away movement (`undraw`) played forwards
+
+**Changed:** Core `connor.rs`: `MovementLoop::drawn_frame` (the frame and how far toward the next, a backwards one-shot turned round as `frame_at` does; `loop_phase` shared by both). Viewer `smooth_view::frame_at` and `connor_view.rs` (Connor and his rope model) use it. The test `a_movement_starts_at_its_loop_start` checks the drawn frames equal `frame_at`'s, last to first.
+**Why:** The user's report: with smooth animation the put-away movement (the hand back from the holster, fists and every weapon) played as the draw movement. Connor's phase always counts up 0 to 1 and `frame_at` turns a backwards one-shot round; S-4's path for him skipped that. Characters and objects were right (their phase really runs backwards).
+**Tested how:** `cargo test --workspace` (all pass). Not run in the viewer (the game may be open).
+**Result:** `undraw` drawn frames 7 down to 0, the same as without smooth animation.
+**Still broken / not tested:** Not looked at by eye.
+**Next:** The user's look; S-5.
+
 ## 2026-10-25 `--smooth` is a plain flag
 
 **Changed:** Viewer `main.rs`: `--smooth` turns smooth animation on (was `--smooth on|off`); without it, off. Help text, `smooth_view.rs` notes, DESIGN.

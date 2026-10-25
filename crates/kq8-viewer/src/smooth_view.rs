@@ -45,12 +45,12 @@ pub fn frame_of(player: &kq8_core::named_anim::NamedAnimPlayer, ahead: f32) -> (
 
 /// [`frame_of`] for Connor's walker and his rope model: his phase already
 /// pushed on by the part of an update gone by.
-pub fn frame_at(pushed: f32, frames: usize, repeat: bool, shown: usize) -> (usize, u8) {
+pub fn frame_at(pushed: f32, movement: &kq8_core::connor::MovementLoop) -> (usize, u8) {
     if on() {
-        let (frame, toward) = kq8_core::named_anim::mixed_frame(pushed, frames, repeat);
+        let (frame, toward) = movement.drawn_frame(pushed);
         (frame, amount(toward))
     } else {
-        (shown, 0)
+        (movement.frame_at(pushed), 0)
     }
 }
 

@@ -2586,7 +2586,7 @@ pub fn connor_draw(
     let pushed = phase + sim.phase_step * a;
     let shown_at = sim.drawn(movement).and_then(|m| {
         (m.frames > 0).then(|| {
-            let (k, mix) = crate::smooth_view::frame_at(pushed, m.frames, m.movement_loop.repeat, m.movement_loop.frame_at(pushed));
+            let (k, mix) = crate::smooth_view::frame_at(pushed, &m.movement_loop);
             (m.anim, k.min(m.frames - 1), mix)
         })
     });
@@ -2607,7 +2607,7 @@ pub fn connor_draw(
         let m = sim.movements.iter().find(|m| m.name == name)?;
         let at = p0 + (p1 - p0) * a;
         (m.frames > 0).then(|| {
-            let (k, mix) = crate::smooth_view::frame_at(at, m.frames, m.movement_loop.repeat, m.movement_loop.frame_at(at));
+            let (k, mix) = crate::smooth_view::frame_at(at, &m.movement_loop);
             (m.anim, k.min(m.frames - 1), mix)
         })
     });

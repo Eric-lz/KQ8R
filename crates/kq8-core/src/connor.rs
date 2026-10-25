@@ -329,14 +329,28 @@ impl MovementLoop {
     /// M5 5c fix): our phase runs 0..1 and is turned round here (it starts
     /// at [`Self::start_phase`]).
     pub fn frame_at(&self, phase: f32) -> usize {
-        let p = if self.repeat {
+        kq8_data::shape::frame_at_phase(self.loop_phase(phase), self.frames, self.repeat)
+    }
+
+    /// Our phase as the loop's own: a backwards one-shot turned round.
+    fn loop_phase(&self, phase: f32) -> f32 {
+        if self.repeat {
             phase.rem_euclid(1.0)
         } else if self.speed < 0.0 {
             1.0 - phase.clamp(0.0, 1.0)
         } else {
             phase
-        };
-        kq8_data::shape::frame_at_phase(p, self.frames, self.repeat)
+        }
+    }
+
+    /// Smooth animation (DESIGN S-4, ours; drawing only): the frame drawn at
+    /// `phase` (pushed on past the last update) and how far (0..1) toward
+    /// the next frame of the file; a backwards one-shot is turned round as
+    /// in [`Self::frame_at`] (so `undraw` runs last frame to first). The
+    /// frame is [`Self::frame_at`]'s.
+    pub fn drawn_frame(&self, phase: f32) -> (usize, f32) {
+        let p = if self.repeat { phase } else { self.loop_phase(phase) };
+        crate::named_anim::mixed_frame(p, self.frames, self.repeat)
     }
 }
 
@@ -1560,6 +1574,13 @@ mod tests {
         w.start_special(vec![SpecialStep::Play("undraw", "undraw".into())]);
         let l = loops("undraw").unwrap();
         assert_eq!(l.frame_at(l.start_phase()), 7);
+        // Smooth animation (the user's report: with --smooth it ran
+        // forwards): drawn last frame to first too, the same frames as
+        // `frame_at`.
+        let drawn: Vec<usize> = (0..=16).map(|k| l.drawn_frame(k as f32 / 16.0).0).collect();
+        let shown: Vec<usize> = (0..=16).map(|k| l.frame_at(k as f32 / 16.0)).collect();
+        assert_eq!(drawn, shown);
+        assert_eq!((drawn[2], drawn[16]), (7, 0), "{drawn:?}");
         let mut ended = None;
         for n in 1..=10 {
             let s = w.update(intent(0, 0, false), &loops);
