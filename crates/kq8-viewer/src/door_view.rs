@@ -1075,6 +1075,13 @@ pub fn trap_step(
         };
         sim.active.connor_moved(&v);
     }
+    // anim-scripts.md rule 16 (Q167; C-3): `Inv <item>` in his Special
+    // list: real items laid where his last frame holds them.
+    for (item, on, owner, pose) in connor.take_inv_laid() {
+        let line = sim.active.world.lay_inv_item(&item, on, &owner, &pose);
+        let update = connor.updates;
+        connor.log.detail(format!("connor update {update}: {line}"));
+    }
     // His play-once movements that ended (3i-7): getEndLoop listeners.
     for m in std::mem::take(&mut connor.ended) {
         sim.active.connor_movement_ended(&m);

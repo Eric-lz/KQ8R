@@ -1509,6 +1509,25 @@ impl ConnorSim {
         std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| lean[i][k] * r[k][j]).sum()))
     }
 
+    /// `anim-scripts.md` rule 16 (Q167; C-3): the `Inv <item>` items his
+    /// Special list reached since the last call: the item as written, the
+    /// part of his pose named like it (the last frame of the movement
+    /// before it) in the world, his place and turn (from where he is
+    /// drawn), and that frame for the log.
+    pub fn take_inv_laid(&mut self) -> Vec<(String, Option<kq8_data::shape::Transform>, kq8_data::shape::Transform, String)> {
+        let laid = std::mem::take(&mut self.walker.inv_laid);
+        let owner = kq8_data::shape::Transform { flags: 0, m: self.turn_matrix(), p: self.mover.position };
+        laid.into_iter()
+            .map(|(item, movement)| {
+                let m = self.drawn(movement);
+                let frame = m.map_or(0, |m| m.frames.saturating_sub(1));
+                let key = kq8_core::fight::drop_part_name(&item);
+                let part = m.and_then(|m| m.parts.get(frame)).and_then(|p| p.iter().find(|(n, _)| n.eq_ignore_ascii_case(key))).map(|(_, t)| kq8_core::door::chain(&owner, t));
+                (item, part, owner, format!("'{movement}' frame {frame}"))
+            })
+            .collect()
+    }
+
     /// The named part `part` of `movement`'s frame at `phase` (rule 24).
     pub fn part_at(&self, movement: &str, phase: f32, part: &str) -> Option<([f32; 3], String)> {
         let m = self.drawn(movement)?;

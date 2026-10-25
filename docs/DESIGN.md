@@ -2925,7 +2925,7 @@ first. Each step: the note's rule, a unit test where the rule is in
 Not part of this plan (open for a study session): Q108 a, c, d; whether
 a saved game keeps `setHaze`'s values.
 
-### Outside the milestones: building session A's Q167 and Q169 answers (planned 2026-10-25)
+### Outside the milestones: building session A's Q167 and Q169 answers (planned 2026-10-25; done 2026-10-25, steps C-1 to C-3, checked in the logs only)
 
 Session A answered Q167, Q168 and Q169 on 2026-10-24 (MODLOG "Study (A)"
 entries). Q168 needs no code (the caption stone is already tiled). The
@@ -2980,3 +2980,5 @@ turned about Y, then X, then Z), so the turn is turned back into angles.
    set; then the next items at once. Check: the roof kill (`sprgnbow.cs`)
    leaves a `SmCrossbow` item where the movement's crossbow was, and it
    can be picked up.
+   **Done** 2026-10-25 (the fists branch checked in the logs: `NoName22`
+   on `hdthree`'s `SmCrossBow` part in frame 54; not looked at by eye).

@@ -6822,6 +6822,33 @@ endif
     }
 
     #[test]
+    fn inv_in_connors_special_list_lays_a_real_item_on_the_named_part() {
+        // anim-scripts.md rule 16 (Q167; C-3): the roof kill's
+        // `Inv,SmCrossBow`: no throw, no line test, no NewInvItem.
+        use kq8_data::shape::Transform;
+        let (mut a, _) = weapon_dropper();
+        let (flights, checks) = (a.world.flights.len(), a.world.laid_checks.len());
+        a.scripts.vars.set("NewInvItem", "before".into());
+        let owner = Transform { flags: 0, m: kq8_data::objects::rotation([0.0, 0.0, -1.57]), p: [224700.0, 183000.0, 8160.0] };
+        let part = Transform { flags: 0, m: [[-0.939, 0.270, -0.215], [-0.329, -0.888, 0.321], [-0.104, 0.372, 0.922]], p: [1990.1, 2108.3, 66.1] };
+        let on = crate::door::chain(&owner, &part);
+        let line = a.world.lay_inv_item("SmCrossBow", Some(on), &owner, "'hdthree' frame 54");
+        assert!(line.contains("its body part on part 'SmCrossBow' of 'hdthree' frame 54"), "{line}");
+        let bow = a.world.items.objects.last().unwrap().clone();
+        assert_eq!((bow.kind.as_str(), bow.quantity), ("INVITEM_SmCrossbow", 1));
+        let body_at = bow.placement().unwrap().to_world([-2.0, 214.1, 0.0]);
+        assert!((0..3).all(|k| (body_at[k] - on.p[k]).abs() < 1.0), "{body_at:?} vs {:?}", on.p);
+        assert_eq!((a.world.flights.len(), a.world.laid_checks.len()), (flights, checks), "no throw, no line test");
+        a.update();
+        assert_eq!(a.scripts.vars.get("NewInvItem"), Some("before"));
+        // No such part: his place and turn, 750 up.
+        let line = a.world.lay_inv_item("SmCrossBow", None, &owner, "'stop' frame 0");
+        assert!(line.contains("no part 'SmCrossBow' in 'stop' frame 0"), "{line}");
+        let p = a.world.items.objects.last().unwrap().placement().unwrap().position;
+        assert_eq!(p, [224700.0, 183000.0, 8910.0]);
+    }
+
+    #[test]
     fn killed_before_its_first_update_it_reports_leaving_no_state_as_0() {
         // characters.md rule 16a (Q163, B-8): `bossprig.cs` registers for
         // itself in `Init` and waits for `$5 == 8`; killed before any

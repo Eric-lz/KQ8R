@@ -4190,6 +4190,12 @@ impl Placer<'_> {
         for (_, text) in &self.all_scripts {
             for line in text.lines() {
                 let w: Vec<&str> = line.split('#').next().unwrap_or("").split_whitespace().collect();
+                // anim-scripts.md rule 16 (Q167; C-3): `Inv <item>` in a
+                // Special list (`...,hdthree,inv,smcrossbow'`).
+                let words: Vec<&str> = line.split('#').next().unwrap_or("").split([',', ' ', '\t', '\'', '"']).filter(|x| !x.is_empty()).collect();
+                if w.first().is_some_and(|c| *c == "kqmonster::setstate") {
+                    named.extend(words.windows(2).filter(|p| p[0] == "inv").map(|p| p[1].to_string()));
+                }
                 match w.first().copied() {
                     Some("kqmonster::inventory") => named.extend(w.get(2).map(|s| s.to_string())),
                     Some("give") => named.extend(w.get(1).map(|s| s.to_string())),

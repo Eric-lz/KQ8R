@@ -59,15 +59,18 @@ pub enum SpecialStep {
     Play(&'static str, String),
     /// `KillConnor`: his Die state.
     Kill,
-    /// Something only logged (`AnimList=`, `AnimListOn`/`Off`, `Inv`, a
-    /// movement that isn't loaded).
+    /// `Inv <item>` (the item as written): a real item laid on the part
+    /// of his pose named like it (rule 16, Q167; C-3).
+    Inv(String),
+    /// Something only logged (`AnimList=`, `AnimListOn`/`Off`, a movement
+    /// that isn't loaded).
     Note(String),
 }
 
 /// Works out a Special list (`AnimList=bricks.anm,AnimListOn,push`) left
 /// to right: `AnimList=<file>` loads that list, `AnimListOn` makes names
 /// come from it, `AnimListOff` from his own again, `Inv <item>` (two
-/// items) is logged only (not traced), `KillConnor` his Die state, any
+/// items) lays that item, `KillConnor` his Die state, any
 /// other word a movement. `resolve(list, word)` finds the loaded
 /// movement (`list` is `None` for his own), ignoring capitals.
 pub fn special_steps(items: &str, resolve: &dyn Fn(Option<&str>, &str) -> Option<&'static str>) -> Vec<SpecialStep> {
@@ -85,8 +88,7 @@ pub fn special_steps(items: &str, resolve: &dyn Fn(Option<&str>, &str) -> Option
             on = false;
             out.push(SpecialStep::Note("AnimListOff: names from his own list".into()));
         } else if w.eq_ignore_ascii_case("Inv") {
-            let item = words.next().unwrap_or("");
-            out.push(SpecialStep::Note(format!("Inv {item}: holds that item (not traced, not done)")));
+            out.push(SpecialStep::Inv(words.next().unwrap_or("").to_string()));
         } else if w.eq_ignore_ascii_case("KillConnor") {
             out.push(SpecialStep::Kill);
         } else {
@@ -515,6 +517,10 @@ pub struct Walker {
     /// The Special state's list and the item playing now (rule 16).
     pub special: Vec<SpecialStep>,
     pub special_at: usize,
+    /// `Inv <item>` items reached (rule 16, Q167; C-3): the item as
+    /// written and the movement whose last frame he shows (the one
+    /// before it), for the caller to lay.
+    pub inv_laid: Vec<(String, &'static str)>,
     /// Updates since the last pushing touch (`pushing.md` rule 7).
     pub push_counter: u32,
     /// Which weapon he holds: 4 = empty hands, the only one so far
@@ -606,6 +612,7 @@ impl Walker {
             lean_allowed: false,
             special: Vec::new(),
             special_at: 0,
+            inv_laid: Vec::new(),
             push_counter: 0,
             hand_mode: EMPTY_HANDS,
             auto: None,
@@ -918,6 +925,13 @@ impl Walker {
                     self.special.clear();
                     self.mode = Mode::Dead;
                     return;
+                }
+                // Rule 16 (Q167): handled when the movement before it has
+                // ended, so his pose is that movement's last frame; the
+                // next items follow at once.
+                SpecialStep::Inv(item) => {
+                    notes.push(format!("special: Inv {item}: a real item laid on the part named like it in the last frame of '{}' (rule 16)", self.movement));
+                    self.inv_laid.push((item, self.movement));
                 }
                 SpecialStep::Note(n) => notes.push(format!("special: {n}")),
             }
@@ -2567,7 +2581,7 @@ mod tests {
         let steps = special_steps("AnimList=bricks.anm,AnimListOn,PUSH,AnimListOff,kneel,Inv,SmCrossBow,push,KillConnor", &resolve);
         let plays: Vec<&str> = steps.iter().filter_map(|s| if let SpecialStep::Play(n, _) = s { Some(*n) } else { None }).collect();
         assert_eq!(plays, ["bricks.anm/push", "kneel"]);
-        assert!(steps.iter().any(|s| matches!(s, SpecialStep::Note(n) if n.starts_with("Inv SmCrossBow"))));
+        assert!(steps.contains(&SpecialStep::Inv("SmCrossBow".into())));
         // `push` after AnimListOff is looked up in his own list: not there.
         assert!(steps.iter().any(|s| matches!(s, SpecialStep::Note(n) if n.starts_with("movement push not loaded from his own list"))));
         assert_eq!(steps.last(), Some(&SpecialStep::Kill));
@@ -2581,7 +2595,7 @@ mod tests {
         let loops = lookup(&list);
         let mut w = Walker::new(0.0);
         w.update(intent(1, 0, false), &loops);
-        let notes = w.start_special(vec![SpecialStep::Play("a", "a".into()), SpecialStep::Note("x".into()), SpecialStep::Play("b", "b".into())]);
+        let notes = w.start_special(vec![SpecialStep::Play("a", "a".into()), SpecialStep::Note("x".into()), SpecialStep::Play("b", "b".into()), SpecialStep::Inv("SmCrossBow".into())]);
         assert_eq!((w.mode, w.movement, w.phase), (Mode::Special, "a", 0.0), "{notes:?}");
         let mut ended = Vec::new();
         let heading = w.heading;
@@ -2595,6 +2609,8 @@ mod tests {
             assert_eq!(w.heading, heading);
         }
         assert_eq!(ended, ["a", "b"]);
+        // Rule 16 (Q167): `Inv` after `b`: laid on `b`'s last frame.
+        assert_eq!(w.inv_laid, [("SmCrossBow".to_string(), "b")]);
         // Back to the keys (forward and run held: they ask for `run`).
         assert_eq!((w.mode, w.movement), (Mode::Free, "run"));
     }

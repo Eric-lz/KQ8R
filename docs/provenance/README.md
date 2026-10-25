@@ -3570,3 +3570,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The line test runs in the thrown items' step of the same update (it needs the collision scene) | **Ours** (timing) | `items.log`: laid at update 113, tested at 114 (the counter has moved on in that step, as for the flights) |
 | `NewInvItem` is set to the item a death made last (thrown or laid), before the `Die` calls | Rules 31, 31a ("as for them"); when it is set: **ours** | Unit test; `doors.log`: "NewInvItem = NoName22" |
 | `Die now`: the same steps with the pose shown | Rule 31a: "not sure"; **stand-in**, logged | — |
+
+## `Inv <item>` in Connor's Special list lays a real item (C-3, Q167) — `crates/kq8-core/src/connor.rs` (`SpecialStep::Inv`, `Walker::inv_laid`), `fight.rs` (`lay_inv_item`, `laid_place`); viewer `connor_view.rs` (`take_inv_laid`), `door_view.rs`, `load.rs` (models of `Inv` items)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `Inv <item>` puts a real item in the world (not in his hands, not in his inventory) | `anim-scripts.md` rule 16 (traced) | Unit test `inv_in_connors_special_list_lays_a_real_item_on_the_named_part`; viewer `items.log` |
+| Handled when the movement before it ended: his pose is that movement's last frame; the next items follow at once | Rule 16 (traced; "last frame" inferred by A) | Unit test `special_plays_each_movement_to_its_end_then_stands`; `connor.log` |
+| The item's `body` on the part named like the item (capitals ignored), from his place and turn; no such part: his place and turn, 750 up | Rule 16 (traced; the name match ignoring capitals inferred from the data) | Unit test; `items.log`: "on part 'SmCrossBow' of 'sprgnbow.anm/hdthree' frame 54 ... scale 1.000" |
+| His place and turn = where he is drawn: his position and his full turn (lean, then heading) | **Ours** (as `part_now`, the shield's orbit) | — |
+| No throw, no fall, no line test, `NewInvItem` not set | Rule 16 (traced) | Unit test |
+| An item named in a Special list's `Inv` has its model loaded | **Ours** (the loader's scan of the scripts) | — |

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 C-3: `Inv <item>` in Connor's Special list lays a real item; the roof kill's crossbow stays (Q167 built)
+
+**Changed:** Core `connor.rs`: `SpecialStep::Inv` (was a note only); the walker records each `Inv` reached with the movement whose last frame he shows (`inv_laid`). `fight.rs`: `lay_inv_item` (the item's `body` on the part named like it, no throw, no line test, `NewInvItem` untouched), `laid_place` shared with C-2. Viewer `connor_view.rs`: `take_inv_laid` (the part of his last frame in the world, from his position and full turn); `door_view.rs` hands them to the world; `load.rs` loads the models of items named by `Inv`. Unit test. QUESTIONS Q167 built. Provenance, DESIGN.
+**Why:** `anim-scripts.md` rule 16 (Q167): the user saw the crossbow stay on the ground after the roof kill in the original; ours vanished with the kill movement.
+**Tested how:** `cargo test --workspace` (all pass; new `inv_in_connors_special_list_lays_a_real_item_on_the_named_part`, `special_plays_each_movement_to_its_end_then_stands` extended). Viewer (B-2's roof run): `kq8-viewer --world Daventry --frames 4000 --sound off --no-ai --command "move Connor 0 228300 183200 12500 0 0 -1.57",5 --hold 1,0,0,45,50`; `items.log`, `connor.log`.
+**Result:** Update 164: "special: Inv SmCrossBow: a real item laid on the part named like it in the last frame of 'sprgnbow.anm/hdthree'", then "made NoName22 at (226619, 181080, 8295) turned (-0.327, -0.229, -1.924): its body part on part 'SmCrossBow' of 'sprgnbow.anm/hdthree' frame 54 ...; scale 1.000 1.000 1.000"; the list then ends (back to standing). No other crossbow is made (the spriggan is deleted, not killed).
+**Still broken / not tested:** Not looked at by eye (that it lies exactly where the movement's crossbow was, and can be picked up). Only the fists branch (`hdthree`) was run; the dagger, axe and sword branches end the same way in the data.
+**Next:** The user's look: the roof kill, a dead roof spriggan by the console, a Dead City skeleton.
+
 ## 2026-10-25 C-2: a dying character's weapon lies where the death leaves it (Q169 built)
 
 **Changed:** Core `fight.rs`: at the dying start each drop entry is compared with the part names of the pose (the die movement's first frame); one that names a part is kept, the others are thrown as before. When the die movement ends (first of the end steps) the kept item is made with its `body` on that part of the die movement's last frame (`lay_kept_drop`); its line test runs with the thrown items' step (`laid_checks_step`): blocked, it is thrown from the feet instead. `throw_made` split out of `toss`. `active.rs`: `NewInvItem` = the item a death made last, set before the `Die` calls; fields `laid_checks`, `new_inv_item`. Viewer `door_view.rs` calls the line test. Two unit tests. QUESTIONS: Q169 built, new **Q170**. Provenance, DESIGN.

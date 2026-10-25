@@ -1021,20 +1021,7 @@ impl crate::active::WorldState {
         let place = crate::collide::Placement { rotation: owner.m, position: owner.p };
         let pose = format!("'{}' frame {frame}", movement.map_or("(none)", |m| m.name.as_str()));
         let part = movement.and_then(|m| m.frame_parts.get(frame)).and_then(|p| p.iter().find(|(n, _)| n.eq_ignore_ascii_case(drop_part_name(&kind)))).map(|(_, t)| *t);
-        let body = self.items.body(&kind);
-        let (laid, how) = match part {
-            Some(t) => {
-                let on = crate::door::chain(&owner, &t);
-                let laid = crate::item::laid_on(&on, body.as_ref());
-                let what = if body.is_some() { "its body part" } else { "its own origin (its model has no body part)" };
-                (laid, format!("{what} on part '{}' of {pose} (the part at ({:.0}, {:.0}, {:.0}); scale {:.3} {:.3} {:.3})", drop_part_name(&kind), on.p[0], on.p[1], on.p[2], laid.scale[0], laid.scale[1], laid.scale[2]))
-            }
-            None => {
-                let p = place.position;
-                let laid = crate::item::Laid { position: [p[0], p[1], p[2] + LAID_FALLBACK_UP], angles: kq8_data::objects::angles_of(place.rotation), scale: [1.0; 3] };
-                (laid, format!("no part '{}' in {pose}: its place and turn, {LAID_FALLBACK_UP} up", drop_part_name(&kind)))
-            }
-        };
+        let (laid, how) = self.laid_place(&kind, part.map(|t| crate::door::chain(&owner, &t)), &owner, &pose);
         let now = if now_flag { "; Die now: whether a part is matched with no die movement is not sure (rule 31a), ours: the pose shown" } else { "" };
         let made = self.items.make(&kind, quantity, crate::item::Place::World { position: laid.position, angles: laid.angles }).map(|o| o.name.clone());
         let line = match made {
@@ -1049,6 +1036,48 @@ impl crate::active::WorldState {
         };
         self.item_note(format!("{name}: kept weapon (rule 31a): {line}"));
         self.fight_note(&name, format!("kept weapon (rule 31a): {line}"));
+    }
+
+    /// Where an item laid on a model part goes (rule 31a.1;
+    /// `anim-scripts.md` rule 16): its `body` on `on` (the part, already
+    /// in the world); no such part: the owner's place and turn, 750 up.
+    /// Also the text for the log (`pose` names the frame).
+    fn laid_place(&self, kind: &str, on: Option<kq8_data::shape::Transform>, owner: &kq8_data::shape::Transform, pose: &str) -> (crate::item::Laid, String) {
+        let name = drop_part_name(kind);
+        match on {
+            Some(on) => {
+                let body = self.items.body(kind);
+                let laid = crate::item::laid_on(&on, body.as_ref());
+                let what = if body.is_some() { "its body part" } else { "its own origin (its model has no body part)" };
+                (laid, format!("{what} on part '{name}' of {pose} (the part at ({:.0}, {:.0}, {:.0}); scale {:.3} {:.3} {:.3})", on.p[0], on.p[1], on.p[2], laid.scale[0], laid.scale[1], laid.scale[2]))
+            }
+            None => {
+                let p = owner.p;
+                let laid = crate::item::Laid { position: [p[0], p[1], p[2] + LAID_FALLBACK_UP], angles: kq8_data::objects::angles_of(owner.m), scale: [1.0; 3] };
+                (laid, format!("no part '{name}' in {pose}: the place and turn, {LAID_FALLBACK_UP} up"))
+            }
+        }
+    }
+
+    /// `anim-scripts.md` rule 16 (Q167; C-3): `Inv <item>` in Connor's
+    /// Special list: a real item put in the world (not in his hands or
+    /// inventory), its `body` on `on`, the part of his pose (the last
+    /// frame of the movement before it, already in the world) named like
+    /// the item; `None`: his place and turn (`owner`), 750 up. No throw,
+    /// no fall, no line test, `NewInvItem` not set. Returns the log line.
+    pub fn lay_inv_item(&mut self, item: &str, on: Option<kq8_data::shape::Transform>, owner: &kq8_data::shape::Transform, pose: &str) -> String {
+        let (laid, how) = self.laid_place(item, on, owner, pose);
+        let made = self.items.make(item, 1, crate::item::Place::World { position: laid.position, angles: laid.angles }).map(|o| o.name.clone());
+        let line = match made {
+            Ok(name) => {
+                self.known.insert(name.to_ascii_lowercase());
+                let (p, r) = (laid.position, laid.angles);
+                format!("Connor's Special list: Inv {item}: made {name} at ({:.0}, {:.0}, {:.0}) turned ({:.3}, {:.3}, {:.3}): {how}; no throw, no fall, no line test, NewInvItem not set (anim-scripts.md rule 16)", p[0], p[1], p[2], r[0], r[1], r[2])
+            }
+            Err(e) => format!("Connor's Special list: Inv {item}: {e}; not made (anim-scripts.md rule 16)"),
+        };
+        self.item_note(line.clone());
+        line
     }
 
     /// Rule 31a.2 (C-2): each weapon laid since the last update: the line
