@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: the dither line repeated every frame in Dead City
+
+**Changed:** Viewer `potion_view.rs` (`dither_step`): a part dithered again because its drawing put its own material back at a new frame (`objects.md` "Dithered objects" rule 8) is counted apart and not logged by itself; the count goes into the next real dither line.
+**Why:** The user's report: in Dead City "dither: {"altar_a1": 2} now; 2 parts drawn dithered ..." repeated constantly. `altar_a1` plays a looping movement, so each new frame swapped its material back and the step (rightly) re-dithered it, but logged that as a change every frame. The drawing was right; only the log was noisy.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --frames 600 --sound off --no-ai`, terminal output.
+**Result:** One dither line at the start (was one per frame).
+**Still broken / not tested:** Not looked at by eye (the altar's look is unchanged in the code).
+**Next:** —
+
 ## 2026-10-25 Fix: the level-up flame and the slot flashes were drawn with a black background (B-7); Q171 asked
 
 **Changed:** Viewer `gui_view.rs`: the level-up flame and the three slot flashes leave colour 0 undrawn by their file's own transparent flag again (B-7 had switched them to the layout attribute, which says solid). QUESTIONS new **Q171**. Provenance.

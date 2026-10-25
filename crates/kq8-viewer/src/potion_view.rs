@@ -305,6 +305,10 @@ pub struct Dithered {
     parts: BTreeMap<Entity, (Handle<ObjectMaterial>, u8, Handle<ObjectMaterial>)>,
     textures: BTreeMap<(AssetId<Image>, u8), Handle<Image>>,
     made: BTreeMap<(AssetId<ObjectMaterial>, u8), Handle<ObjectMaterial>>,
+    /// Parts dithered again after their drawing put their own material
+    /// back at a new frame (rule 8), since the last log line: counted, not
+    /// logged one by one (a looping object does it every frame).
+    again: u64,
 }
 
 /// `objects.md` "Dithered objects" rules 3-4 (Q144): texel (x, y) is not
@@ -383,7 +387,7 @@ pub fn dither_step(
     if wanted.is_empty() && state.parts.is_empty() {
         return;
     }
-    let (mut on, mut off) = (0, 0);
+    let (mut on, mut off, mut again) = (0, 0, 0);
     let Dithered { parts: done, textures, made, .. } = &mut *state;
     for (e, own_name, parent, mut m) in &mut parts {
         if !all && !m.is_changed() {
@@ -400,7 +404,8 @@ pub fn dither_step(
         let mode = wanted.get(&name.to_ascii_lowercase()).copied().filter(|&v| v == 1 || v == 2).unwrap_or(0);
         // Rule 8: a new movement may put the part's own material back (the
         // drawing swaps it): taken as its own, dithered again below.
-        if done.get(&e).is_some_and(|(_, _, put)| *put != m.0) {
+        let redrawn = done.get(&e).is_some_and(|(_, _, put)| *put != m.0);
+        if redrawn {
             done.remove(&e);
         }
         if done.get(&e).map_or(0, |(_, v, _)| *v) == mode {
@@ -414,12 +419,18 @@ pub fn dither_step(
             let own = m.0.clone();
             m.0 = made.entry((own.id(), mode)).or_insert_with(|| dithered_material(&mut materials, &mut images, textures, &own, mode)).clone();
             done.insert(e, (own, mode, m.0.clone()));
-            on += 1;
+            if redrawn {
+                again += 1;
+            } else {
+                on += 1;
+            }
         }
     }
+    state.again += again;
     if on + off > 0 || *wanted != state.names {
         state.names = wanted.clone();
-        shared.log.lock().unwrap().summary(format!("dither: {wanted:?} now; {on} parts drawn dithered or colour-keyed, {off} back to their own (objects.md \"Dithered objects\", Q144)"));
+        let again = std::mem::take(&mut state.again);
+        shared.log.lock().unwrap().summary(format!("dither: {wanted:?} now; {on} parts drawn dithered or colour-keyed, {off} back to their own; {again} re-dithered after a new frame since the last line (objects.md \"Dithered objects\" rule 8, Q144)"));
     }
 }
 
