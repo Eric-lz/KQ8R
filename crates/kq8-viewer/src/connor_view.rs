@@ -2563,7 +2563,7 @@ pub fn connor_draw(
 ) {
     let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
-    let (p0, h0, _, b0) = sim.previous;
+    let (p0, h0, phase0, b0) = sim.previous;
     let (p1, h1, phase, b1) = sim.current;
     let p: [f32; 3] = std::array::from_fn(|i| p0[i] + (p1[i] - p0[i]) * a);
     let heading = h0 + (h1 - h0) * a;
@@ -2582,8 +2582,12 @@ pub fn connor_draw(
     }
     // The frame: loop position blended forward from the last update.
     let movement = sim.walker.movement;
-    // Smooth animation (S-4): and how far toward the next frame.
-    let pushed = phase + sim.phase_step * a;
+    // Smooth animation (S-4): and how far toward the next frame. Hanging on
+    // the rope the keys move the climb (no steady rate to push it on by):
+    // with smooth animation it is drawn between its last two updates, as
+    // his place is (ours; the user's report: the climb stepped).
+    let hanging = sim.walker.mode == Mode::Rope && sim.walker.rope_hang;
+    let pushed = if hanging && crate::smooth_view::on() { phase0 + (phase - phase0) * a } else { phase + sim.phase_step * a };
     let shown_at = sim.drawn(movement).and_then(|m| {
         (m.frames > 0).then(|| {
             let (k, mix) = crate::smooth_view::frame_at(pushed, &m.movement_loop);

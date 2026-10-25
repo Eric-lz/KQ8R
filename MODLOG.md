@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Smooth animation: Connor's rope climb drawn between updates
+
+**Changed:** Viewer `connor_view.rs` (`connor_draw`): while he hangs on the rope and smooth animation is on, the climb movement's frame is drawn between its loop position at the last update and now (as his place and the climb camera are), not pushed on by a rate. Without `--smooth`: unchanged.
+**Why:** The user's report: the climb didn't look smoothed. The keys move the climb, so it has no steady rate; the push was 0 and the drawing changed only at each update.
+**Tested how:** `cargo test --workspace` (all pass). The rope climb run (as the camera fix) with `--smooth`: 77 climb updates, no errors.
+**Result:** Runs; the climb's in-between amount now follows the time since the update. Not measurable separately in the logs (the 2-second count includes every part).
+**Still broken / not tested:** Not looked at by eye.
+**Next:** The user's look.
+
 ## 2026-10-25 Fix: the camera stuttered while Connor climbs the rope
 
 **Changed:** Viewer `game_camera.rs`: `GameCam::glide_look_from` (the same place and view as `look_from`, but drawn gliding from where the camera was, between the two updates) and a line per gliding tick in `camera.log`; `rope_view.rs` (the climb, `ropeandhook.md` rule 22) uses it. Always on (not tied to `--smooth`).
