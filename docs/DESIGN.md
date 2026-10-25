@@ -2996,3 +2996,56 @@ backward one on the last frame. Only characters are moved by the steps
 One-frame loops keep the old timing (ours: the rule's rate is 0, their
 cues would never fire). Play-once movements were already right.
 **Done** 2026-10-25.
+
+### Outside the milestones: smooth animation, a switch, off by default (planned 2026-10-25)
+
+The user's wish (2026-10-25), brought forward from M7. **Drawing only**:
+the game's rules, cues, hits and logs keep the original 15 updates a
+second and the original frames. Off by default; `--smooth on` at the
+start, the console word `smooth on|off` while playing.
+
+What is already smooth (checked in the code 2026-10-25): the camera and
+Connor's place and turn are drawn between their last two updates
+(`camera_draw`, `connor_draw`), and Connor's frame is chosen from his
+phase pushed on by the part of an update gone by (whole frames only).
+
+How: the models keep about 15 frames a second. A model part that keeps
+its mesh from one frame to the next only moves its points, so it can be
+drawn part-way between the two (each point and normal mixed). The
+earlier measurement (M7 note above): 89-95 % of part steps can; the
+rest change mesh and still jump. The drawn part's tag (one 32-bit
+number per part) holds its node-frame (low 24 bits; Daventry has about
+72,000) and the mix amount (high 8 bits, 0-255); each node-frame knows
+the matching part of the next frame (the same place in the frame's
+node list, the same mesh; else itself). The amount is the loop position
+past the shown frame, worked out every drawn frame as Connor's already
+is: the phase pushed on by the movement's rate times the part of an
+update gone by. A play-once movement on its last frame, a still or
+paused one, and a change of movement are not mixed. Doors and chests
+turn by the frames' whole-object steps, so they are glided by mixing
+two frames' steps.
+
+1. **S-1: the switch.** `--smooth on|off` (default off) and the console
+   word `smooth on|off`, kept in a resource; logged. Nothing else yet.
+2. **S-2: the next-frame table.** `Pack::add` gives each node-frame its
+   match in the next frame of the same animation (the last frame's in
+   frame 0: loops wrap); sent to the graphics card in the node-frame's
+   spare number; counted and logged (share that can be mixed). Unit test.
+3. **S-3: the drawing mixes.** The shader reads the tag as node-frame +
+   amount and, above 0, mixes the point and normal with the next
+   node-frame's. `Slots` can set the amount on its shown parts. With
+   the amount always 0 nothing changes (checked by the pack check).
+4. **S-4: the amounts.** Each drawn frame, with the switch on: Connor
+   (and his rope model), characters and animated objects, doors and
+   chests: the loop position, its whole frame shown and the amount set.
+   Off: as today.
+5. **S-5: gliding places.** With the switch on: characters' place and
+   turn between their last two updates (as Connor's); doors' and
+   chests' whole-object steps mixed between two frames; thrown items
+   and bolts between their last two updates.
+6. **S-6: measured.** Frame time with the switch on and off; the share
+   of parts that still jump; FEATURES, README.
+
+Not in this plan: mixing across a change of movement (walk to stop);
+shadows keep the whole frames (they are drawn from the model on the
+processor).
