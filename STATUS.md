@@ -489,6 +489,9 @@ M6 has started with the Rope and Hook (6a).
 - **New for A (2026-10-25): Q170**: which collision types block the
   dropped weapon's line test (`fighting.md` rule 31a.2: "any solid
   object"); B uses every type as a stand-in.
+- **New for A (2026-10-25): Q171**: the level-up flame and the slot
+  flashes are see-through in the original although rule 20a says
+  attribute 0x8 is solid; B uses their files' own transparent flag.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
