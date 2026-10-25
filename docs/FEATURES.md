@@ -512,7 +512,8 @@ miss, roll, flinch, death, drop and shot is in
   leaves its wreck, and the crystal and mushroom barrels throw their
   items (objects loaded by scripts while playing, `copies_view.rs`).
 - **Dying:** its die movement; its drops fling up and land with their
-  sound; when the death ends Connor gets its experience, a body stays
+  sound, except its weapon, which lies where the death movement leaves
+  it; when the death ends Connor gets its experience, a body stays
   where it fell, and it is removed.
 - **Thrown items (M5 5e):** drops and barrel items fly in the traced arc;
   walls, roofs, floors and objects stop them (at a wall they drop to its
@@ -765,9 +766,23 @@ commands in `MODLOG.md`.
   with it (Daventry's arrow doors, Gnome's lock and characters).
 - **Interface:** panel pictures are stretched to their box; the bars'
   empty part is the game's own black picture; the caption's stone is
-  stretched.
+  tiled (Q168).
 - **State messages:** a character killed or started before it was ever
   updated reports leaving "no state" (Daventry's `bossprig`).
+
+## Session A's Q167 and Q169 answers (2026-10-25, steps C-1 to C-3)
+
+Checked in the logs and unit tests, not by eye. Details and test
+commands in `MODLOG.md`.
+
+- **Dropped weapons:** a dying character's weapon is not thrown; it
+  lies where its death movement leaves it, tilted as in the movement
+  (Daventry's roof spriggan's crossbow, Dead City's skeletons' swords);
+  coins, mushrooms and the rest still fly.
+- **Scripted movements:** `Inv <item>` in Connor's Special list lays a
+  real item where the movement holds it: the crossbow stays on the
+  ground after the roof kill, to be picked up.
+- **Tools:** `kq8 shape-parts <file>` prints a model's named parts.
 
 ## Viewer helpers (not in the original)
 

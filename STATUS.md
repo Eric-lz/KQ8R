@@ -5,23 +5,24 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-24)
+## Where we are (2026-10-25)
 
-- **2026-10-24 (A): Q169, Q167, Q168 answered** (for B to build):
-  - Q169, `fighting.md` rules 31, 31a: a drop entry named like a part of
-    the die model (the weapon: `SmCrossbow`, `BroadSword`, ...) is not
-    thrown; when the die movement ends it is laid on that part of the
-    last frame and stays (thrown only if a line test fails). Other drops
-    are thrown as before.
-  - Q167, `anim-scripts.md` rule 16: `Inv <item>` in a Special list lays
-    a real item at the part of Connor's last frame named like it; the
-    roof kill's four branches all end with the crossbow left there.
-  - Q168, `interface.md` rule 20a: the caption stone is tiled at its own
-    size from the box's top-left (B's current drawing is right).
+- **2026-10-25 (B): session A's Q167 and Q169 answers built** (plan in
+  `docs/DESIGN.md` "building session A's Q167 and Q169 answers", steps
+  C-1 to C-3, one commit each; **checked in the logs only, not played by
+  hand or looked at by eye**):
+  - C-1: model parts with their full placement; items laid on a part
+    (`body` on the part, place and turn); `kq8 shape-parts <file>`.
+  - C-2 (Q169): a dying character's weapon lies where its death movement
+    leaves it (Daventry `sprgnbow`'s crossbow, Dead City `skeleton4`'s
+    sword); its line test's blocking types are a stand-in (Q170).
+  - C-3 (Q167): `Inv <item>` in Connor's Special list lays a real item;
+    the roof kill's crossbow stays to be picked up.
+  - Q168 needed nothing (the caption stone was already tiled).
 - **2026-10-24 (B): session A's 2026-10-24 answers built** (plan in
   `docs/DESIGN.md` "building session A's 2026-10-24 answers", steps B-1
-  to B-8, one commit each; **checked in the logs only, not played by
-  hand or looked at by eye**):
+  to B-8, one commit each; **checked by the user 2026-10-24: all
+  good**):
   - B-1 `getConInventory` (Q166): the bell rings with the small axe and
     the third hit brings in the Lady of the Lake.
   - B-2 `exist` (Q162): the roof choice's forward key plays the
@@ -265,19 +266,25 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
-- **After B-1 to B-8 (2026-10-24), not checked by the user yet:** the
-  bell and the Lake Sword scene's start, the roof kill, Connor's and the
-  characters' speeds, Connor standing up after `portalx`, the Shadow
-  home's fog, the arrow doors' and Gnome's colour key, the panels'
-  stretched pictures. Left over, not built: rule 6's speed and wrap for
+- **After C-1 to C-3 (2026-10-25), not checked by the user yet:** the
+  roof kill's crossbow lying where the movement drops it (and picking it
+  up); a dead bow spriggan's crossbow (e.g. console `kill sprgnbow` with
+  Connor at the roof) and a Dead City skeleton's sword lying where the
+  death leaves them, while coins fly. Not tested in the viewer: a burnt
+  bow spriggan throws its crossbow (its fire death has no `SmCrossbow`
+  part); the line test blocked by a wall (unit test only).
+  Suggested next for B: the user's look at these; then rule 6 for the
+  other animated objects (below).
+
+- **Left over from B-1 to B-8 (the user's look: all good, 2026-10-24),
+  not built:** rule 6's speed and wrap for
   plain animated objects, chests and doors (only Connor and characters
   have it); our camera's projection far plane does not follow
   `setHaze` (the ground and objects stop at `visibleDistance` anyway);
   `setState Connor Wait` from his jump, push, rope, talk or throw states
   (not described, nothing done); the status icons and popup buttons keep
   their picture's own see-through flag; `KQObject::changeBmp` is a stub.
-  Suggested next for B: a look by the user at the list above; then rule
-  6 for the other animated objects (a small step, same player).
+  Rule 6 for the other animated objects is a small step (same player).
 
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice
@@ -477,10 +484,11 @@ M6 has started with the Rope and Hook (6a).
 - **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
   fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
   whether a saved game keeps `setHaze`'s values (we have no saving yet).
-- **Answered 2026-10-24 (A), for B to build:** Q169 (dropped weapons
-  laid, `fighting.md` 31a), Q167 (`Inv`, `anim-scripts.md` 16), Q168
-  (caption stone tiled; already built that way).
+- **Built 2026-10-25 (C-1 to C-3):** Q169, Q167; Q168 needed nothing.
   The user's look at B-1 to B-8 and the two fixes: all good (2026-10-24).
+- **New for A (2026-10-25): Q170**: which collision types block the
+  dropped weapon's line test (`fighting.md` rule 31a.2: "any solid
+  object"); B uses every type as a stand-in.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
