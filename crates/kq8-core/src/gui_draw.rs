@@ -8,18 +8,21 @@
 //!   at (left, top) and aligned by its justification (rule 5); otherwise
 //!   it is aligned inside its rectangle. Justification: horizontal 1 left,
 //!   2 right, 4 centred; vertical 0x8 centred, 0x10 from the top (rule 6).
-//! - A bar is its picture cut to a width (rule 20).
+//! - A bar is its picture stretched to the shown width, the rest
+//!   `4black.pbm` stretched over the remaining width (rule 20, Q108 b).
+//! - A picture whose layout modifier has 0x8000 is stretched to its box
+//!   (nearest pixel); without it, drawn once at its own size from the
+//!   box's top-left; never tiled (rule 20a, Q108 b).
 //!
 //! Our reading of the data, not in the note: a dialog's children are
 //! drawn **last first**, so the first one listed is on top (in
 //! `Gplayscr.gui` every panel lists its numbers before its pictures).
-//! A picture is see-through where its index is 0 only if its own flags
-//! have bit 1 (the community notes `kq8pbmp.txt`: "transparent"; only the
-//! stone strip has it among the panels' pictures).
-//! STAND-INS (Q108): rectangles are scaled with the screen (× 1.25 at
-//! 800 × 600) and rounded; pictures stretched with them (nearest pixel)
-//! and tiled from their rectangle's top-left when smaller; fonts at their
-//! own size.
+//! A picture is see-through where its index is 0 when its layout
+//! attribute's drawing kind is 1 (rule 20a); pictures not from a layout
+//! control keep their own flags' bit 1 (the community notes
+//! `kq8pbmp.txt`: "transparent").
+//! STAND-INS (Q108 a, c): rectangles are scaled with the screen (× 1.25 at
+//! 800 × 600) and rounded; fonts at their own size.
 //! 4c-9: every edge is rounded where it stands on the screen (the panel's
 //! place plus the child's), as the panel's own edges are, so a picture
 //! is exactly as many pixels as its place: the meters are 14 layout
@@ -47,15 +50,15 @@ impl<'a> Pic<'a> {
 /// One thing to draw, its rectangle in layout pixels relative to the
 /// panel.
 pub enum Piece<'a> {
-    /// A picture filling its rectangle; `cut`: only this many screen
-    /// pixels of its width, from the left (a meter, rule 20).
-    Picture { rect: [i32; 4], pic: Pic<'a>, cut: Option<u32> },
-    /// A picture stretched to its rectangle (nearest pixel), not repeated
-    /// (M6 6e fix: the popup's highlighted button, 88 x 25 on a 35-high
-    /// button).
-    Stretched { rect: [i32; 4], pic: Pic<'a> },
-    /// A picture filling its rectangle, only its lowest `rows` screen
-    /// rows (a potion's timer icon, the part left: `potions.md` rule 35).
+    /// A picture in its rectangle: stretched to it (nearest pixel), or
+    /// drawn once at its own size from the top-left (rule 20a).
+    Picture { rect: [i32; 4], pic: Pic<'a>, stretch: bool },
+    /// A meter's bar (rule 20): `pic` stretched over the first `shown`
+    /// screen pixels of the width, `black` over the rest.
+    Bar { rect: [i32; 4], pic: Pic<'a>, black: Pic<'a>, shown: u32 },
+    /// A picture stretched to its rectangle, only its lowest `rows`
+    /// screen rows (a potion's timer icon, the part left: `potions.md`
+    /// rule 35).
     Lower { rect: [i32; 4], pic: Pic<'a>, rows: u32 },
     /// A text in a font with a justification.
     Text { rect: [i32; 4], font: &'a Font, justification: u32, text: String },
@@ -140,26 +143,31 @@ impl Canvas {
         self.rgba[at..at + 4].try_into().unwrap()
     }
 
-    /// Draws `pic` filling the layout rectangle `rect` (stretched by
-    /// `scale`, tiled), only its first `cut` screen pixels if given.
-    pub fn picture(&mut self, rect: [i32; 4], pic: Pic, cut: Option<u32>, scale: f32, palette: &[Rgb; 256]) {
+    /// Draws `pic` in the layout rectangle `rect` (rule 20a): stretched
+    /// to it, or once at its own size (× `scale`) from its top-left, cut
+    /// to the rectangle; never tiled.
+    pub fn picture(&mut self, rect: [i32; 4], pic: Pic, stretch: bool, scale: f32, palette: &[Rgb; 256]) {
         let [l, t, r, b] = rect.map(|v| scaled(v, scale));
-        let right = cut.map_or(r, |w| (l + w as i32).min(r));
-        for y in t..b {
-            for x in l..right {
-                let sx = ((x - l) as f32 / scale) as u32 % pic.width;
-                let sy = ((y - t) as f32 / scale) as u32 % pic.height;
+        if stretch {
+            self.stretched([l, t, r, b], t, pic, palette);
+            return;
+        }
+        let (w, h) = (scaled(pic.width as i32, scale), scaled(pic.height as i32, scale));
+        let (right, bottom) = (l + w, t + h);
+        for y in t..bottom.min(b) {
+            for x in l..right.min(r) {
+                let sx = (((x - l) as f32 / w as f32 * pic.width as f32) as u32).min(pic.width - 1);
+                let sy = (((y - t) as f32 / h as f32 * pic.height as f32) as u32).min(pic.height - 1);
                 self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], pic.see_through, palette);
             }
         }
     }
 
-    /// Draws `pic` stretched over the layout rectangle `rect` (nearest
-    /// pixel).
-    pub fn picture_stretched(&mut self, rect: [i32; 4], pic: Pic, scale: f32, palette: &[Rgb; 256]) {
-        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+    /// `pic` stretched over the screen rectangle `[l, t, r, b]` (nearest
+    /// pixel), drawing only the rows from `from` down.
+    fn stretched(&mut self, [l, t, r, b]: [i32; 4], from: i32, pic: Pic, palette: &[Rgb; 256]) {
         let (w, h) = ((r - l).max(1) as f32, (b - t).max(1) as f32);
-        for y in t..b {
+        for y in from.max(t)..b {
             for x in l..r {
                 let sx = (((x - l) as f32 / w * pic.width as f32) as u32).min(pic.width - 1);
                 let sy = (((y - t) as f32 / h * pic.height as f32) as u32).min(pic.height - 1);
@@ -168,17 +176,24 @@ impl Canvas {
         }
     }
 
-    /// Draws `pic` as [`Canvas::picture`], only its lowest `rows` screen
-    /// rows (the rows above are left as they are).
+    /// A meter's bar (rule 20): `pic` stretched over the first `shown`
+    /// screen pixels of the width, `black` stretched over the rest.
+    pub fn bar(&mut self, rect: [i32; 4], pic: Pic, black: Pic, shown: u32, scale: f32, palette: &[Rgb; 256]) {
+        let [l, t, r, b] = rect.map(|v| scaled(v, scale));
+        let cut = (l + shown as i32).min(r);
+        if cut > l {
+            self.stretched([l, t, cut, b], t, pic, palette);
+        }
+        if r > cut {
+            self.stretched([cut, t, r, b], t, black, palette);
+        }
+    }
+
+    /// Draws `pic` stretched to the layout rectangle `rect`, only its
+    /// lowest `rows` screen rows (the rows above are left as they are).
     pub fn picture_lower(&mut self, rect: [i32; 4], pic: Pic, rows: u32, scale: f32, palette: &[Rgb; 256]) {
         let [l, t, r, b] = rect.map(|v| scaled(v, scale));
-        for y in (b - rows as i32).max(t)..b {
-            for x in l..r {
-                let sx = ((x - l) as f32 / scale) as u32 % pic.width;
-                let sy = ((y - t) as f32 / scale) as u32 % pic.height;
-                self.put(x, y, pic.pixels[(sy * pic.width + sx) as usize], pic.see_through, palette);
-            }
-        }
+        self.stretched([l, t, r, b], b - rows as i32, pic, palette);
     }
 
     /// Fills the layout rectangle `rect` with one colour.
@@ -266,9 +281,9 @@ pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], pale
     let at = |r: &[i32; 4]| [r[0] + ox, r[1] + oy, r[2] + ox, r[3] + oy];
     for piece in pieces.iter().rev() {
         match piece {
-            Piece::Picture { rect, pic, cut } => c.picture(at(rect), *pic, *cut, scale, palette),
+            Piece::Picture { rect, pic, stretch } => c.picture(at(rect), *pic, *stretch, scale, palette),
+            Piece::Bar { rect, pic, black, shown } => c.bar(at(rect), *pic, *black, *shown, scale, palette),
             Piece::Lower { rect, pic, rows } => c.picture_lower(at(rect), *pic, *rows, scale, palette),
-            Piece::Stretched { rect, pic } => c.picture_stretched(at(rect), *pic, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
             Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
             Piece::Map { rect, pixels, view, arrow } => c.map(at(rect), pixels, *view, *arrow, scale, palette),
@@ -307,7 +322,7 @@ mod tests {
         // 2 x 2: the lower row from `full`, the upper from `empty`.
         let c = draw([0, 0], [2, 2], 1.0, &[
             Piece::Lower { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &full, see_through: true }, rows: 1 },
-            Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &empty, see_through: true }, cut: None },
+            Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &empty, see_through: true }, stretch: true },
         ], &pal);
         assert_eq!((c.at(0, 0)[0], c.at(1, 1)[0]), (10, 20));
     }
@@ -319,41 +334,46 @@ mod tests {
         pal[2] = [0, 255, 0];
         // 1 x 2: red on top, green below; stretched over 1 x 4.
         let pixels = [1u8, 2];
-        let c = draw([0, 0], [1, 4], 1.0, &[Piece::Stretched { rect: [0, 0, 1, 4], pic: Pic { width: 1, height: 2, pixels: &pixels, see_through: false } }], &pal);
+        let c = draw([0, 0], [1, 4], 1.0, &[Piece::Picture { rect: [0, 0, 1, 4], pic: Pic { width: 1, height: 2, pixels: &pixels, see_through: false }, stretch: true }], &pal);
         assert_eq!([c.at(0, 0)[0], c.at(0, 1)[0], c.at(0, 2)[1], c.at(0, 3)[1]], [255, 255, 255, 255], "top half red, bottom half green");
     }
 
     #[test]
-    fn pictures_fill_their_box_bars_are_cut_and_the_first_piece_is_on_top() {
+    fn pictures_are_stretched_or_drawn_once_bars_end_in_black_and_the_first_piece_is_on_top() {
         let mut pal = [[0u8; 3]; 256];
         pal[1] = [255, 0, 0];
         pal[2] = [0, 255, 0];
+        pal[3] = [0, 0, 9];
         let red = [1u8; 4];
+        let black = [3u8; 4];
         let back = [2u8, 2, 0, 2];
         let pieces = [
-            // A bar 10 wide, 2x2 picture tiled, cut at 4 pixels.
-            Piece::Picture { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, cut: Some(4) },
-            // Under it: a background whose index 0 is drawn (not see-through).
-            Piece::Picture { rect: [0, 0, 10, 4], pic: Pic { width: 2, height: 2, pixels: &back, see_through: false }, cut: None },
+            // interface.md rule 20 (Q108 b): a bar 10 wide, its 2x2 picture
+            // stretched over the 4 pixels shown, `4black` over the other 6.
+            Piece::Bar { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, black: Pic { width: 2, height: 2, pixels: &black, see_through: false }, shown: 4 },
+            // Under it: a background stretched to its box (rule 20a).
+            Piece::Picture { rect: [0, 0, 10, 4], pic: Pic { width: 2, height: 2, pixels: &back, see_through: false }, stretch: true },
         ];
         let c = draw([0, 0], [10, 4], 1.0, &pieces, &pal);
         assert_eq!((c.width, c.height), (10, 4));
         assert_eq!(c.at(3, 1), [255, 0, 0, 255], "the bar on top");
-        assert_eq!(c.at(4, 0), [0, 255, 0, 255], "past 4 pixels: the background");
-        assert_eq!(c.at(0, 3), [0, 0, 0, 255], "index 0 of an opaque picture is drawn");
-        // See-through index 0.
-        let st = draw([0, 0], [2, 2], 1.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
+        assert_eq!(c.at(4, 0), [0, 0, 9, 255], "past 4 pixels: 4black");
+        // Stretched 2x2 over 10x4: its lower-left index 0 covers x 0-4,
+        // y 2-3 (not repeated), drawn: the picture is not see-through.
+        assert_eq!((c.at(0, 3), c.at(4, 3), c.at(5, 3)), ([0, 0, 0, 255], [0, 0, 0, 255], [0, 255, 0, 255]));
+        // See-through index 0 (attribute kind 1).
+        let st = draw([0, 0], [2, 2], 1.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, stretch: true }], &pal);
         assert_eq!(st.at(0, 1), [0, 0, 0, 0]);
         // Scaled by 2: a 2x2 picture covers 4x4.
-        let big = draw([0, 0], [2, 2], 2.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, cut: None }], &pal);
+        let big = draw([0, 0], [2, 2], 2.0, &[Piece::Picture { rect: [0, 0, 2, 2], pic: Pic { width: 2, height: 2, pixels: &back, see_through: true }, stretch: true }], &pal);
         assert_eq!((big.width, big.at(1, 1), big.at(1, 2)), (4, [0, 255, 0, 255], [0, 0, 0, 0]));
-        // 4c-8: a cut bar over black: the empty part is black, not see-through.
-        let bar = [
-            Piece::Picture { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, cut: Some(4) },
-            Piece::Fill { rect: [0, 0, 10, 2], rgb: [0, 0, 0] },
-        ];
-        let c = draw([0, 0], [10, 2], 1.0, &bar, &pal);
-        assert_eq!((c.at(3, 0), c.at(9, 1)), ([255, 0, 0, 255], [0, 0, 0, 255]));
+        // Without 0x8000: once at its own size from the top-left, the rest
+        // left as it was (not tiled).
+        let once = draw([0, 0], [6, 2], 1.0, &[Piece::Picture { rect: [0, 0, 6, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, stretch: false }], &pal);
+        assert_eq!((once.at(1, 1), once.at(2, 0)), ([255, 0, 0, 255], [0, 0, 0, 0]));
+        // An empty bar is all black; a full one all picture.
+        let empty = draw([0, 0], [10, 2], 1.0, &[Piece::Bar { rect: [0, 0, 10, 2], pic: Pic { width: 2, height: 2, pixels: &red, see_through: false }, black: Pic { width: 2, height: 2, pixels: &black, see_through: false }, shown: 0 }], &pal);
+        assert_eq!((empty.at(0, 0), empty.at(9, 1)), ([0, 0, 9, 255], [0, 0, 9, 255]));
         // 4c-9: the meters, 14 layout pixels high at 466, × 1.25: 582.5
         // to 600 on the screen, so 17 rows, and a piece filling them all.
         assert_eq!(screen_size([192, 466], [256, 14], 1.25), [320, 17]);

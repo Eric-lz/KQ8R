@@ -167,6 +167,12 @@ fn popup_button_box(k: usize, highlight: usize) -> [i32; 4] {
 /// Enter, until let go) frame 1 of that button's own picture, the label 1
 /// right and 1 down.
 const POPUP_BUTTON_PICTURE: &str = "yesbtn.pba";
+/// `interface.md` rule 20a: a picture modifier with this bit is stretched
+/// to its box.
+const STRETCHED: u32 = 0x8000;
+/// Rule 20: the bars' empty part, `4black.pbm` (tag 351, not in the
+/// layout's bars).
+const BLACK_TAG: i32 = 351;
 const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
 const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
 
@@ -259,14 +265,20 @@ enum StatusShown {
 /// One thing to draw, before its pictures and fonts are looked up.
 #[derive(Debug, Clone, PartialEq)]
 enum Spec {
-    Pic { rect: [i32; 4], file: String, frame: usize, cut: Option<u32> },
+    /// A picture (`interface.md` rule 20a): `stretch` = its modifier has
+    /// 0x8000 (else once at its own size); `see_through`: its attribute's
+    /// kind is 1 (`None`: not from a layout control, the picture's own
+    /// flag).
+    Pic { rect: [i32; 4], file: String, frame: usize, stretch: bool, see_through: Option<bool> },
+    /// A meter's bar (rule 20): `file` over `shown` screen pixels,
+    /// `black` (`4black.pbm`) over the rest.
+    Bar { rect: [i32; 4], file: String, black: String, shown: u32 },
     /// A picture stretched to its rectangle (the popup's highlighted
     /// button).
     Stretch { rect: [i32; 4], file: String, frame: usize },
     /// Only the lowest `rows` rows of a picture (a potion's part left).
     Lower { rect: [i32; 4], file: String, frame: usize, rows: u32 },
     Text { rect: [i32; 4], font: String, justification: u32, text: String },
-    Fill { rect: [i32; 4], rgb: [u8; 3] },
     /// The magic map (M6 6d-3): the picture's version, the view, the
     /// arrow (file, frame, top-left from the area's centre); `own`: this
     /// world's map (the mini-map), else the one shown (6d-6).
@@ -727,13 +739,19 @@ impl Gui {
                             out.push(Spec::Map { rect, version: m.version.unwrap_or(0), view: m.view, arrow, own: false });
                         }
                     }
-                    if let Some(file) = file {
-                        out.push(Spec::Pic { rect, file, frame: 0, cut });
-                    }
-                    // 4c-8 (the user's check in the original, Q111 d):
-                    // black behind the bars, where they are empty.
-                    if cut.is_some() {
-                        out.push(Spec::Fill { rect, rgb: [0, 0, 0] });
+                    // Rule 20 (Q108 b): a bar is its picture over the shown
+                    // width and `4black.pbm` over the rest (the black the
+                    // user saw in the original, Q111 d); nothing if either
+                    // picture is missing. Rule 20a: others by their modifier
+                    // and attribute.
+                    match (file, cut) {
+                        (Some(file), Some(shown)) => {
+                            if let Some(black) = self.tags.string(BLACK_TAG) {
+                                out.push(Spec::Bar { rect, file, black: black.to_string(), shown });
+                            }
+                        }
+                        (Some(file), None) => out.push(Spec::Pic { rect, file, frame: 0, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) }),
+                        (None, _) => {}
                     }
                 }
                 Kind::Text { text, pictures: None } => {
@@ -783,7 +801,7 @@ impl Gui {
                     // Rule 33: a slot's flash plays once over its slot.
                     if let Some(k) = slot(&SLOT_FLASHES) {
                         if let (Some(start), Some(at)) = (self.flashes[k], self.control(SLOT_PICTURES[k])) {
-                            out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
+                            out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
                         }
                     } else if MAP_BUTTONS.contains(&name.as_str()) {
                         // magic-map.md rule 5: the page arrows and the "Go"
@@ -795,12 +813,12 @@ impl Gui {
                             _ => None,
                         });
                         let file = on.filter(|_| lit).unwrap_or(file);
-                        out.push(Spec::Pic { rect, file, frame: 0, cut: None });
+                        out.push(Spec::Pic { rect, file, frame: 0, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
                     } else if name == LEVEL_FLAME {
                         // DESIGN L-2 (stand-in Q149 b): over the level
                         // number, in its own layout place.
                         if let Some(start) = self.level_flame {
-                            out.push(Spec::Pic { rect, file, frame: ((now - start) / frame_ms) as usize, cut: None });
+                            out.push(Spec::Pic { rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
                         }
                     }
                 }
@@ -823,9 +841,9 @@ impl Gui {
                     buttons.push(if p.highlight == k {
                         Spec::Stretch { rect, file: POPUP_HIGHLIGHT_PICTURE.to_string(), frame: usize::from(down) }
                     } else if down {
-                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 1, cut: None }
+                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 1, stretch: true, see_through: None }
                     } else {
-                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 0, cut: None }
+                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 0, stretch: true, see_through: None }
                     });
                 }
                 // The lines (Q151 d), each centred in its box.
@@ -897,22 +915,32 @@ impl Gui {
         for s in specs {
             match s {
                 Spec::Pic { file, .. } | Spec::Stretch { file, .. } | Spec::Lower { file, .. } | Spec::Map { arrow: Some((file, ..)), .. } => self.load_file(file),
+                Spec::Bar { file, black, .. } => {
+                    self.load_file(file);
+                    self.load_file(black);
+                }
                 Spec::Text { font, .. } => self.load_font(font),
-                Spec::Fill { .. } | Spec::Map { .. } => {}
+                Spec::Map { .. } => {}
             }
         }
         let mut pieces = Vec::new();
         for s in specs {
             match s {
-                Spec::Pic { rect, file, frame, cut } => {
+                Spec::Pic { rect, file, frame, stretch, see_through } => {
                     let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
-                    let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
-                    pieces.push(Piece::Picture { rect: *rect, pic, cut: *cut });
+                    let Some(mut pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
+                    pic.see_through = see_through.unwrap_or(pic.see_through);
+                    pieces.push(Piece::Picture { rect: *rect, pic, stretch: *stretch });
+                }
+                Spec::Bar { rect, file, black, shown } => {
+                    let first = |f: &str| self.files.get(&f.to_ascii_lowercase()).and_then(|f| f.as_ref()).and_then(|f| f.first()).and_then(Pic::of);
+                    let (Some(pic), Some(black)) = (first(file), first(black)) else { continue };
+                    pieces.push(Piece::Bar { rect: *rect, pic, black, shown: *shown });
                 }
                 Spec::Stretch { rect, file, frame } => {
                     let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
                     let Some(pic) = frames.get(*frame % frames.len().max(1)).and_then(Pic::of) else { continue };
-                    pieces.push(Piece::Stretched { rect: *rect, pic });
+                    pieces.push(Piece::Picture { rect: *rect, pic, stretch: true });
                 }
                 Spec::Lower { rect, file, frame, rows } => {
                     let Some(Some(frames)) = self.files.get(&file.to_ascii_lowercase()) else { continue };
@@ -923,7 +951,6 @@ impl Gui {
                     let Some(Some(f)) = self.fonts.get(&font.to_ascii_lowercase()) else { continue };
                     pieces.push(Piece::Text { rect: *rect, font: f, justification: *justification, text: text.clone() });
                 }
-                Spec::Fill { rect, rgb } => pieces.push(Piece::Fill { rect: *rect, rgb: *rgb }),
                 Spec::Map { rect, view, arrow, own, .. } => {
                     let Some(m) = &self.map else { continue };
                     let pixels = if *own { &m.own } else { &m.pixels };
@@ -965,7 +992,7 @@ impl Gui {
                     let rect = [l, h - tall, r, h];
                     let rows = (tall as i64 * percent / 100).clamp(0, tall as i64) as u32;
                     out.push(Spec::Lower { rect, file: file.clone(), frame: 1, rows });
-                    out.push(Spec::Pic { rect, file: file.clone(), frame: 0, cut: None });
+                    out.push(Spec::Pic { rect, file: file.clone(), frame: 0, stretch: true, see_through: None });
                 }
                 StatusShown::Potion { file: None, .. } => {}
                 // M6 6a-1: drawn whole at its place; a picture of several
@@ -973,7 +1000,7 @@ impl Gui {
                 // rule 35, last point: no duration).
                 StatusShown::Hook { file: Some(file), .. } => {
                     let frame = (self.panels.now_ms / (1000.0 / MASK_FPS)) as usize;
-                    out.push(Spec::Pic { rect: [l, h - tall, r, h], file: file.clone(), frame, cut: None });
+                    out.push(Spec::Pic { rect: [l, h - tall, r, h], file: file.clone(), frame, stretch: true, see_through: None });
                 }
                 StatusShown::Hook { file: None, .. } => {}
             }
@@ -1630,6 +1657,18 @@ pub fn gui_draw(
             let ys = (clear.iter().map(|p| p.1).min().unwrap(), clear.iter().map(|p| p.1).max().unwrap());
             let line = format!("{} drawn {}x{}: {} see-through pixels, columns {}-{}, rows {}-{}", d.layout_id(), canvas.width, canvas.height, clear.len(), xs.0, xs.1, ys.0, ys.1);
             gui.note(line);
+        }
+        // Q108 b (interface.md rule 20): each bar's two parts, with the
+        // colour drawn at the first pixel of each.
+        for s in &specs {
+            if let Spec::Bar { rect, file, black, shown } = s {
+                let x = |v: i32| (gui_draw::scaled(origin[0] + v, scale) - gui_draw::scaled(origin[0], scale)).max(0) as u32;
+                let y = ((gui_draw::scaled(origin[1] + (rect[1] + rect[3]) / 2, scale) - gui_draw::scaled(origin[1], scale)).max(0) as u32).min(canvas.height.saturating_sub(1));
+                let (l, r) = (x(rect[0]), x(rect[2]));
+                let at = |px: u32| if px < r && px < canvas.width { format!("{:?}", &canvas.at(px, y)[..3]) } else { "none".to_string() };
+                let line = format!("{} drawn: bar {file} stretched over {shown} of {} px (first pixel {}), {black} over the rest (first pixel {}) (interface.md rule 20)", d.layout_id(), r - l, at(l), at(l + shown));
+                gui.note(line);
+            }
         }
         let mut picture = Image::new(Extent3d { width: canvas.width, height: canvas.height, depth_or_array_layers: 1 }, TextureDimension::D2, canvas.rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
         picture.sampler = ImageSampler::nearest();

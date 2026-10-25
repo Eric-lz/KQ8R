@@ -2914,6 +2914,8 @@ first. Each step: the note's rule, a unit test where the rule is in
    drawn once at its own size; the bars' empty part is `4black.pbm`;
    attribute kind 1 = colour 0 see-through. Replaces the tiling
    stand-in.
+   **Done** 2026-10-24 (the bars checked in the logs; not looked at by
+   eye).
 8. **B-8: check Q163** (`characters.md` rule 16a): leaving "no state"
    sends old state 0. Our stand-in should already match; change it only
    if not; the check logged.

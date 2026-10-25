@@ -3515,3 +3515,16 @@ Replaces the Q112 stand-in row (the wall block).
 | Every class applies its file's `dithered=` when added to the world: at load (placed objects, doors, chests, animated objects, `KQAnimOnce`, characters, plain objects) and a `loadKQ` copy when it is made | `objects.md` "Dithered objects" rule 8 (traced, Q165) | Viewer: Daventry `arroswt1`-`3` (doors) 2, `wizchest1` 1; Gnome `ironlock`, `Irnlckx`, `Mystic`, `Lucreto` 2; unit test `load_kq_while_playing_makes_new_copies_by_the_name_and_place_rules` |
 | Objects that play movements apply it again at each movement start: our drawing puts the stored mode back whenever a part's material changes (A-11a's `dither_step`) | Rule 8 (traced; doors inferred) | Viewer Gnome: "7 parts drawn dithered" again as frames change |
 | The values (mode 1 only `wizchest`, `snowmane`; the rest 2) are read from the files as they are | Rule 9 (data) | Viewer log |
+
+## Panel pictures (B-7, Q108 b) — `crates/kq8-core/src/gui_draw.rs` (`Piece::Picture`, `Piece::Bar`, `Canvas::picture`, `bar`, `picture_lower`), `caption.rs` (`Strip::at`); viewer `gui_view.rs` (`Spec::Pic`, `Spec::Bar`)
+
+Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A picture whose layout modifier has 0x8000 is stretched to its box (width and height separately, nearest pixel); without it, drawn once at its own size from the top-left; never tiled | `interface.md` rule 20a (traced) | Unit test `pictures_are_stretched_or_drawn_once_bars_end_in_black_and_the_first_piece_is_on_top` |
+| A bar: its picture stretched over the shown width × the bar's height, `4black.pbm` (tag 351) stretched over the rest; nothing if either is missing | Rule 20 (traced; replaces 4c-8's plain black fill) | Unit test; viewer `gui.log`: "bar 4green.pbm stretched over 81 of 108 px (first pixel [0, 72, 0]), 4black.pbm over the rest (first pixel [0, 0, 0])" |
+| Attribute kind (lowest 3 bits) 1 = colour 0 not drawn, for pictures from layout controls; others keep their own flag's bit 1 | Rule 20a (traced kinds; the layout's attribute being the number used: inferred by A) | Unit test |
+| The caption's stone stretched to the whole caption box | Rule 20a (inferred by A for the caption dialog) | Unit test `the_stone_covers_the_whole_box_and_rows_are_centred` |
+| The status icons (potions, mask, hook) and the popup's buttons: stretched (their controls have 0x8000), see-through from the picture's own flag | **Ours** (their attribute is 0x8 in the layout; not switched, to keep the user-checked look) | — |
+| Rectangles × 1.25 at 800 × 600, fonts at their own size | **Stand-in**, Q108 a, c (open) | — |

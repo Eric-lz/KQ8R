@@ -24,8 +24,10 @@
 //!
 //! STAND-INS (Q108): the screen is 800 × 600 when `Options.cs` says
 //! `set800mode 1` and the 640 × 480 layout is scaled with it (rule 47,
-//! inferred); pictures are stretched with the layout (nearest pixel) and
-//! tiled when smaller than their box; fonts are drawn at their own size.
+//! inferred); fonts are drawn at their own size.
+//! The stone is stretched to the whole box (nearest pixel), colour 0 not
+//! drawn (`interface.md` rule 20a, Q108 b: modifier 0x8000, attribute
+//! kind 1; that the caption follows it is A's inference).
 
 use kq8_data::font::Font;
 use kq8_data::palette::Rgb;
@@ -146,11 +148,11 @@ pub struct Strip<'a> {
 }
 
 impl Strip<'_> {
-    /// The picture's index at screen pixel (x, y) of a box it fills,
-    /// stretched by `scale` and tiled (stand-in, Q108).
-    pub fn at(&self, x: u32, y: u32, scale: f32) -> u8 {
-        let sx = (x as f32 / scale) as u32 % self.width;
-        let sy = (y as f32 / scale) as u32 % self.height;
+    /// The picture's index at screen pixel (x, y) of a `w` × `h` box it
+    /// is stretched to (nearest pixel, `interface.md` rule 20a).
+    pub fn at(&self, x: u32, y: u32, w: u32, h: u32) -> u8 {
+        let sx = ((x as f32 / w.max(1) as f32 * self.width as f32) as u32).min(self.width - 1);
+        let sy = ((y as f32 / h.max(1) as f32 * self.height as f32) as u32).min(self.height - 1);
         self.pixels[(sy * self.width + sx) as usize]
     }
 }
@@ -170,7 +172,7 @@ pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], rows: &
     if let Some(s) = strip.filter(|s| s.width > 0 && s.height > 0) {
         for y in 0..h {
             for x in 0..w {
-                put(x, y, s.at(x, y, b.scale));
+                put(x, y, s.at(x, y, w, h));
             }
         }
     }
@@ -285,18 +287,21 @@ pub(crate) mod tests {
         let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &rows, b);
         assert_eq!((w, h), (100, 34));
         let at = |x: u32, y: u32| &rgba[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize];
-        assert_eq!(at(0, 0), [0, 0, 0, 0], "strip index 0: see-through");
-        assert_eq!(at(1, 0), [80, 80, 80, 255]);
+        // Rule 20a (Q108 b): the 2x2 stone stretched over 100 x 34, its
+        // see-through index 0 the top-left 50 x 17, not repeated.
+        assert_eq!((at(0, 0), at(49, 16)), (&[0u8, 0, 0, 0][..], &[0u8, 0, 0, 0][..]), "strip index 0: see-through");
+        assert_eq!((at(50, 0), at(1, 17)), (&[80u8, 80, 80, 255][..], &[80u8, 80, 80, 255][..]));
         assert_eq!(at(99, 33), [80, 80, 80, 255], "the stone reaches the box's far corner");
         // "ab" is 20 wide, centred: x 40..60, rows 2..4.
         assert_eq!(at(40, 2), [200, 150, 50, 255]);
         assert_eq!(at(59, 3), [200, 150, 50, 255]);
         // "c" on the second row: x 45..55, its slot starts at 15: y 17..19.
         assert_eq!(at(45, 17), [200, 150, 50, 255]);
-        // Stretched by 2: the 2x2 stone's see-through pixel is 2x2.
+        // With no rows (4 high) the stone still fills the box: stretched
+        // to its size, whatever the screen's scale.
         let b2 = Box { scale: 2.0, ..b };
         let (_, _, rgba2) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &[], b2);
-        assert_eq!(&rgba2[4..8], [0, 0, 0, 0]);
-        assert_eq!(&rgba2[8..12], [80, 80, 80, 255]);
+        assert_eq!(&rgba2[49 * 4..50 * 4], [0, 0, 0, 0]);
+        assert_eq!(&rgba2[50 * 4..51 * 4], [80, 80, 80, 255]);
     }
 }

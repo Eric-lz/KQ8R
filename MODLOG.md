@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-7: panel pictures stretched, the bars' rest `4black.pbm` (Q108 b built)
+
+**Changed:** Core `gui_draw.rs`: `Piece::Picture { stretch }` (stretched to its box, or once at its own size; no tiling), new `Piece::Bar` (picture over the shown width, `4black.pbm` over the rest), `picture_lower` stretched; `Piece::Stretched` folded into `Picture`. `caption.rs`: the stone stretched to the box. Viewer `gui_view.rs`: `Spec::Pic` takes the control's modifier (0x8000) and attribute (kind 1 = colour 0 see-through); the meters' bars become `Spec::Bar` with tag 351 (`4black.pbm`), replacing the black fill; a `gui.log` line per bar with sampled colours. Unit tests changed. Provenance, QUESTIONS Q108 (b), DESIGN B-7.
+**Why:** `interface.md` rules 20 and 20a: B tiled smaller pictures (stand-in); the original stretches them.
+**Tested how:** `cargo test --workspace` (all pass; new `pictures_are_stretched_or_drawn_once_bars_end_in_black_and_the_first_piece_is_on_top`, caption test changed). `kq8-viewer --world Daventry --frames 900 --sound off --no-ai --command "give Candle",5`; `gui.log`.
+**Result:** "bar 4red.pbm stretched over 107 of 107 px (first pixel [152, 8, 0])"; after the candle's experience "bar 4green.pbm stretched over 81 of 108 px (first pixel [0, 72, 0]), 4black.pbm over the rest (first pixel [0, 0, 0])"; at the start the empty experience bar is all `4black` (0, 0, 0).
+**Still broken / not tested:** Not looked at by eye (the 52 x 52 map slot picture now fills its 56 x 56 box; the 6 x 6 bar pictures are one colour, so the bars look the same). Status icons and popup buttons keep the picture's own see-through flag. Q108 a (rectangle scaling), c (fonts), d (animation speed) still open.
+**Next:** B-8 (check Q163).
+
 ## 2026-10-24 B-6: `dithered=` on every class (Q165 built)
 
 **Changed:** Viewer `door_view.rs`: the file's `dithered=` is applied for every class at load (was only `KQChest` and `KQAnimObject`); templates carry it. Core `active.rs`: `Template::dithered`; a `loadKQ` copy applies it when made. Unit test extended. Provenance, QUESTIONS Q165, DESIGN B-6.
