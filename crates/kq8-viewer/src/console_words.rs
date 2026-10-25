@@ -27,6 +27,7 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
   heal                        back to full health
   xp <n>                      add experience (he levels up as in the game)
   god                         god mode on/off (F3): no damage, no fall death
+  smooth [on|off]             smooth animation (ours; drawing only), no word: switch
   goto <name>                 jump next to a creature, object, door, chest, item
   move Connor <flags> x y z 0 0 t
                               flags 0 set place and turn, 1 add to the place,
@@ -110,6 +111,12 @@ pub fn run(line: &str, sim: &mut DoorSim, connor: Option<&ConnorSim>) -> Option<
         "xp" => match words.get(1).and_then(|w| w.parse::<i64>().ok()) {
             Some(n) => script(sim, &format!("sendEvent 0 Connor KQStatsChangeRequestEvent 0 0 0 0 {n}")),
             None => vec!["usage: xp <number>, e.g. xp 100".into()],
+        },
+        "smooth" => match arg(1).as_deref() {
+            Some("on") => vec![crate::smooth_view::set(true)],
+            Some("off") => vec![crate::smooth_view::set(false)],
+            None => vec![crate::smooth_view::set(!crate::smooth_view::on())],
+            Some(v) => vec![format!("usage: smooth [on|off], not '{v}'")],
         },
         "god" => {
             crate::door_view::flip_god(sim, "console");

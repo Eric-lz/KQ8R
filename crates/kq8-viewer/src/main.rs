@@ -74,6 +74,7 @@ mod potion_view;
 mod renderer;
 mod scene_lights;
 mod shadow_view;
+mod smooth_view;
 mod sound_view;
 mod talk_view;
 mod terrain_view;
@@ -186,6 +187,8 @@ struct Args {
     /// `--dynamic on|off`: overrides `Options.cs`'s `useDynamicLighting`
     /// (M1 7d); `None` = as `Options.cs` says.
     dynamic: Option<bool>,
+    /// `--smooth on|off` (ours; DESIGN S-1): smooth animation, default off.
+    smooth: bool,
     /// `--sound on|off`: open the sound card (default on); off still runs
     /// the sound rules and `sound.log` (M3 3h-2).
     sound: bool,
@@ -223,6 +226,7 @@ fn parse_args() -> Result<Args, String> {
         corners: false,
         renderer: renderer::Renderer::Auto,
         dynamic: None,
+        smooth: false,
         sound: true,
     };
     let mut it = std::env::args().skip(1);
@@ -357,6 +361,13 @@ fn parse_args() -> Result<Args, String> {
                     v => return Err(format!("--dynamic needs on or off, not '{v}'")),
                 })
             }
+            "--smooth" => {
+                a.smooth = match value()?.to_ascii_lowercase().as_str() {
+                    "on" | "1" => true,
+                    "off" | "0" => false,
+                    v => return Err(format!("--smooth needs on or off, not '{v}'")),
+                }
+            }
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump.push(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -434,6 +445,7 @@ Showing things:
   --sound on|off             play sound through the sound card (default on)
   --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
   --dynamic on|off           dynamic lights, instead of what Options.cs says
+  --smooth on|off            smooth animation, drawn between frames (default off; console: smooth)
   --haze on|off              distance fog at the start (default on; F8)
   --corners on|off           bottom bar's corner panels at the window's edges (default off; F6)
 
@@ -508,6 +520,7 @@ fn main() -> ExitCode {
     if let Some(on) = args.dynamic {
         load::override_dynamic_lighting(on);
     }
+    let smooth_line = smooth_view::set(args.smooth);
     let mut log = match Log::create("viewer") {
         Ok(l) => l,
         Err(e) => {
@@ -517,6 +530,7 @@ fn main() -> ExitCode {
     };
     let started = Instant::now();
     log.summary(format!("log file: {}", log.path().display()));
+    log.summary(smooth_line);
     timeline::mark(&mut log, "the program runs, its log is open (cargo's own checks come before this)");
     // Made once at start-up, so the size difference between the two
     // kinds does not matter.

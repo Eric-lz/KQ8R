@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-1: smooth animation's switch (off by default)
+
+**Changed:** New viewer `smooth_view.rs` (one on/off flag for the program). `main.rs`: `--smooth on|off` (default off), a line in `viewer.log`. Console word `smooth [on|off]` (no word: switch). DESIGN plan S-1 to S-6.
+**Why:** The user's wish: smooth animation now, as an option, off by default (DESIGN "smooth animation").
+**Tested how:** `cargo build -p kq8-viewer` (debug). Not run: the user was playing (the release build is locked while the game runs); checked with S-4.
+**Result:** Builds. Nothing drawn differently yet.
+**Still broken / not tested:** Not tested in the viewer.
+**Next:** S-2 (the next-frame table).
+
 ## 2026-10-25 Rule 6's speed and wrap for doors, chests and every animated object
 
 **Changed:** Core `door.rs`: `DoorMovement::step_with` (the step of doors, chests and scripted animated objects) uses the frame player's rule for repeating loops of 2 frames or more; `named_anim.rs`: the frame rule for every repeating movement, only characters moved by it; `anim.rs`: `LoopPlayer` (plain looping objects) the same. Six older tests updated to the rule's numbers (none loosened; two checks added: the 0.0 cue the update after a wrap, and the backward wrap onto the last frame). DESIGN, provenance.
