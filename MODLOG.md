@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-2: each node-frame knows the same part in the next frame
+
+**Changed:** `kq8-data` `anim_pack.rs`: `NodeFrame::next` (the node at the same place in the next frame's node list with the same mesh, else itself; the last frame's in frame 0), `Pack::matched` (counted), kept right by `merge`. Viewer `anim_gpu.rs`: sent in the node-frame's spare number (row 2's w); `world_build.rs`: the share in the pack's log line. Unit test `each_node_frame_knows_the_same_part_in_the_next_frame`; the merge test checks `next` too.
+**Why:** DESIGN S-2: the drawing can only mix a part with the same mesh in the next frame.
+**Tested how:** `cargo test -p kq8-data` (all pass); `cargo build -p kq8-viewer`. Not run in the viewer yet (the user was playing); the share is checked with S-4.
+**Result:** Builds; nothing drawn differently (the shader doesn't read it yet).
+**Still broken / not tested:** The share in a real world not seen yet.
+**Next:** S-3 (the shader mixes).
+
 ## 2026-10-25 S-1: smooth animation's switch (off by default)
 
 **Changed:** New viewer `smooth_view.rs` (one on/off flag for the program). `main.rs`: `--smooth on|off` (default off), a line in `viewer.log`. Console word `smooth [on|off]` (no word: switch). DESIGN plan S-1 to S-6.

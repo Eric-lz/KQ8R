@@ -133,7 +133,8 @@ impl AnimGpu {
         let points: Vec<u32> = p.points.iter().map(|v| u32::from_le_bytes(*v)).collect();
         let normals: Vec<u32> = p.normals.iter().flat_map(|n| [n[0] as u16 as u32 | (n[1] as u16 as u32) << 16, n[2] as u16 as u32 | (n[3] as u16 as u32) << 16]).collect();
         // Five vec4s per node-frame: the matrix's rows (w: where its points
-        // and its normals start), the move, the ball; game space.
+        // and its normals start, and its match in the next frame for
+        // smooth animation, S-2), the move, the ball; game space.
         let nodes: Vec<f32> = p
             .node_frames
             .iter()
@@ -151,7 +152,7 @@ impl AnimGpu {
                     m[2][0],
                     m[2][1],
                     m[2][2],
-                    0.0,
+                    f32::from_bits(n.next),
                     n.offset[0],
                     n.offset[1],
                     n.offset[2],

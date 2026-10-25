@@ -33,6 +33,12 @@ pub struct NodeFrame {
     pub points: u32,
     /// Index of its first normal in `Pack::normals`.
     pub normals: u32,
+    /// The same part in the next frame of its animation (the last
+    /// frame's: in frame 0), to draw part-way between the two (smooth
+    /// animation, DESIGN S-2; ours): the node at the same place in the
+    /// next frame's node list if it has the same mesh, else itself (that
+    /// part jumps).
+    pub next: u32,
 }
 
 /// A corner of a topology: the point's number in its vertex frame, the
@@ -95,6 +101,9 @@ pub struct Pack {
     pub normals: Vec<[i16; 4]>,
     pub node_frames: Vec<NodeFrame>,
     pub topologies: Vec<Topology>,
+    /// Smooth animation (S-2): node-frames with a match in the next frame,
+    /// and all of them.
+    pub matched: (u32, u32),
     /// (shape, mesh) -> its first point.
     mesh_points: HashMap<(usize, usize), u32>,
     /// (shape, mesh, texture frame, material, flat) -> topology.
@@ -136,8 +145,12 @@ impl Pack {
     pub fn add(&mut self, shape: &Shape, id: usize, first: usize, count: usize, flat: &dyn Fn(i32) -> bool, check_it: bool) -> (Vec<Vec<Part>>, Check) {
         let mut frames = Vec::with_capacity(count);
         let mut check = Check::default();
+        // Per frame: (place in its node list, mesh, node-frame), for the
+        // next-frame table (S-2).
+        let mut placed: Vec<Vec<(usize, usize, u32)>> = Vec::with_capacity(count);
         for seq in first..first + count {
             let mut parts = Vec::new();
+            placed.push(Vec::new());
             let sub = shape.sequences.get(seq).and_then(|s| usize::try_from(s.mesh_subsequence).ok()).and_then(|i| shape.subsequences.get(i));
             let Some(sub) = sub else {
                 frames.push(parts);
@@ -182,9 +195,13 @@ impl Pack {
                     ball: triangles[0].part_ball,
                     points: base + frame.first_vertex.max(0) as u32,
                     normals: normals_at as u32,
+                    next: self.node_frames.len() as u32,
                 };
                 let nf_index = self.node_frames.len() as u32;
                 self.node_frames.push(nf);
+                if let Some(p) = placed.last_mut() {
+                    p.push((node_index - start, mesh_index, nf_index));
+                }
                 // One topology per material, in the order they appear.
                 let mut materials: Vec<i32> = Vec::new();
                 for t in triangles {
@@ -232,7 +249,23 @@ impl Pack {
             parts.sort_by_key(|p| (p.material, p.node));
             frames.push(parts);
         }
+        self.link_next(&placed);
         (frames, check)
+    }
+
+    /// Smooth animation (S-2, ours): each node-frame's match in the next
+    /// frame (frame 0 after the last), `placed` as `add` keeps it.
+    fn link_next(&mut self, placed: &[Vec<(usize, usize, u32)>]) {
+        for (f, frame) in placed.iter().enumerate() {
+            let next = &placed[(f + 1) % placed.len()];
+            for &(k, mesh, nf) in frame {
+                self.matched.1 += 1;
+                if let Some(&(_, _, to)) = next.iter().find(|&&(k2, m2, _)| k2 == k && m2 == mesh) {
+                    self.node_frames[nf as usize].next = to;
+                    self.matched.0 += 1;
+                }
+            }
+        }
     }
 
     /// Unpacks `part` as the shader will and compares it with the
@@ -266,7 +299,8 @@ impl Pack {
         let (node_frames, topologies) = (self.node_frames.len() as u32, self.topologies.len() as u32);
         self.points.extend(other.points);
         self.normals.extend(other.normals);
-        self.node_frames.extend(other.node_frames.into_iter().map(|n| NodeFrame { points: n.points + points, normals: n.normals + normals, ..n }));
+        self.node_frames.extend(other.node_frames.into_iter().map(|n| NodeFrame { points: n.points + points, normals: n.normals + normals, next: n.next + node_frames, ..n }));
+        self.matched = (self.matched.0 + other.matched.0, self.matched.1 + other.matched.1);
         self.topologies.extend(other.topologies);
         for (k, v) in other.mesh_points {
             self.mesh_points.entry(k).or_insert(v + points);
@@ -292,7 +326,7 @@ mod tests {
 
     #[test]
     fn merging_moves_the_second_packs_numbers_along() {
-        let nf = |points, normals| NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points, normals };
+        let nf = |points, normals| NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points, normals, next: 0 };
         let mut a = Pack { points: vec![[1, 2, 3, 0]; 4], normals: vec![[0; 4]; 4], node_frames: vec![nf(0, 0)], topologies: vec![Topology::default()], ..Default::default() };
         let b = Pack { points: vec![[9, 9, 9, 0]; 3], normals: vec![[1; 4]; 3], node_frames: vec![nf(0, 0), nf(1, 2)], topologies: vec![Topology::default(); 2], ..Default::default() };
         let (topology_add, node_frame_add) = a.merge(b);
@@ -301,7 +335,21 @@ mod tests {
         assert_eq!(a.points[4], [9, 9, 9, 0]);
         assert_eq!((a.node_frames[1].points, a.node_frames[1].normals), (4, 4));
         assert_eq!((a.node_frames[2].points, a.node_frames[2].normals), (5, 6));
+        assert_eq!((a.node_frames[1].next, a.node_frames[2].next), (1, 1), "next moved along too");
         assert_eq!(a.topologies.len(), 3);
+    }
+
+    #[test]
+    fn each_node_frame_knows_the_same_part_in_the_next_frame() {
+        // Frame 0: parts at places 0 (mesh 4) and 1 (mesh 5); frame 1:
+        // place 0 has mesh 4, place 1 changed to mesh 6; frame 2: only
+        // place 0. The last frame's go to frame 0.
+        let nf = NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points: 0, normals: 0, next: 0 };
+        let mut p = Pack { node_frames: (0..5).map(|i| NodeFrame { next: i, ..nf }).collect(), ..Default::default() };
+        p.link_next(&[vec![(0, 4, 0), (1, 5, 1)], vec![(0, 4, 2), (1, 6, 3)], vec![(0, 4, 4)]]);
+        let next: Vec<u32> = p.node_frames.iter().map(|n| n.next).collect();
+        assert_eq!(next, [2, 1, 4, 3, 0]);
+        assert_eq!(p.matched, (3, 5));
     }
 
     #[test]
@@ -318,7 +366,7 @@ mod tests {
         let m = [[0.0, 1.2, 0.0], [-0.8, 0.0, 0.1], [0.0, 0.0, 1.0]];
         let p = [100.0, -20.0, 5.0];
         let (matrix, offset) = fold(scale, origin, &m, p);
-        let nf = NodeFrame { matrix, offset, ball: [0.0; 4], points: 0, normals: 0 };
+        let nf = NodeFrame { matrix, offset, ball: [0.0; 4], points: 0, normals: 0, next: 0 };
         for raw in [[0u8, 0, 0, 0], [254, 3, 77, 9], [12, 200, 254, 0]] {
             let decoded: [f32; 3] = std::array::from_fn(|i| raw[i] as f32 * scale[i] + origin[i]);
             let want: [f32; 3] = std::array::from_fn(|j| decoded[0] * m[0][j] + decoded[1] * m[1][j] + decoded[2] * m[2][j] + p[j]);

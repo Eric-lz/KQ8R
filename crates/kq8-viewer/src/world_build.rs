@@ -354,12 +354,14 @@ fn pack_world(objects: &load::Objects, check_it: bool) -> (String, crate::anim_g
     let [points, normals, node_frames, topologies] = pack.sizes();
     let mb = |b: usize| b as f64 / (1 << 20) as f64;
     let line = format!(
-        "animation pack (step 4a; {} threads): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
+        "animation pack (step 4a; {} threads): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}; {} with the same part in the next frame, {:.1} %: smooth animation can draw them part-way, S-2), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
         shares.len(),
         mb(points),
         mb(normals),
         mb(node_frames),
         pack.node_frames.len(),
+        pack.matched.0,
+        100.0 * pack.matched.0 as f64 / pack.matched.1.max(1) as f64,
         mb(topologies),
         pack.topologies.len(),
         mb(points + normals + node_frames + topologies),
