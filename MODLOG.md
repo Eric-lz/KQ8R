@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Fix: the roof's dead spriggan lay a quarter turn off (`getLoc Connor` had no turn)
+
+**Changed:** Core `active.rs`: `WorldState::connor_heading`; `place_of("Connor")` (used by `getLoc`) turns by it (was always no turn). Viewer `door_view.rs` sets it with his position. Unit test extended. Provenance.
+**Why:** The user's check of B-2: the body lay at 90 degrees to the original's. `sprgnbow.cs` lays the body with `loadObject deadsprg sp_ftdth.kqs $KQObject::loc` after `getLoc Connor`; Connor faces -1.57 there, but our `getLoc` gave turn 0.
+**Tested how:** `cargo test --workspace` (all pass). The roof run of B-2; `doors.log`.
+**Result:** "getLoc Connor: 224700 183000 8160 (turn 0.000 -0.000 -1.570)"; the body "turned (0.000, -0.000, -1.570)".
+**Still broken / not tested:** Not looked at by eye. The crossbow that should stay on the ground: asked (Q167).
+**Next:** The caption stone (B-7 broke it).
+
 ## 2026-10-24 STATUS, FEATURES, README, DESIGN: session A's 2026-10-24 answers built (B-1 to B-8)
 
 **Changed:** `STATUS.md` ("Where we are" rewritten: the B steps added, the 2026-10-20/21 entries folded into one line; "next" and "Open questions" updated), `docs/FEATURES.md` (new section), `README.md` (M6 line), `docs/DESIGN.md` (both answer plans marked done).

@@ -3537,3 +3537,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A character our once-an-update look has never seen counts as 0 (was: nothing sent) | Rule 16a; **ours** for how we look | Unit test (failed before the fix) |
 | A change **to** no state is never sent: we ignore requests for unknown states | Rule 16a, "Do not reproduce" | — |
 | Connor: unchanged (no first message); the rule speaks of characters | **Ours** | — |
+
+## `getLoc Connor` gives his turn (fix after B-2, 2026-10-24) — `crates/kq8-core/src/active.rs` (`place_of`, `connor_heading`); viewer `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `$KQObject::loc` holds all six numbers of the object's place, turn included; for Connor the turn is his heading (the number `move Connor … rz` sets) | `objects.md` "Script variables, `getLoc` and `move`" rule 1, `anim-scripts.md` (all six); heading = rz: **ours** (as `move_to` uses it) | Unit test `get_loc_while_playing_feeds_set_home`; viewer: `deadsprg` turned −1.570 |

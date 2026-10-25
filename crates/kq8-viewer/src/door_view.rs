@@ -1053,6 +1053,7 @@ pub fn trap_step(
     let portal = sim.active.world.connor_portal.is_some();
     sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
+    sim.active.world.connor_heading = connor.walker.heading;
     // potions.md rule 26 (M5 5g-9, Q146): a cutscene hides him from
     // characters; the hammer throw's handsOff keeps the pointer and doesn't.
     sim.active.world.connor_hands_off = connor.hands_off && connor.throw.is_none();
@@ -1778,6 +1779,7 @@ pub fn door_step(
     // talking.md rule 7: whether he can turn to a listener, and where.
     sim.active.world.connor_can_turn = connor.as_ref().is_some_and(|c| c.can_turn_to_listener());
     sim.active.world.connor_at = connor.as_ref().map(|c| c.mover.position);
+    sim.active.world.connor_heading = connor.as_ref().map_or(0.0, |c| c.walker.heading);
     // potions.md rule 26: a cutscene's handsOff hides the pointer; the
     // hammer throw's keeps it (azriel-hammer.md rule 3), so characters
     // still see him then (M6 6b-3).

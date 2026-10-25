@@ -751,6 +751,9 @@ pub struct WorldState {
     pub connor_can_turn: bool,
     /// Where Connor stands, set by the caller before scripts run.
     pub connor_at: Option<[f32; 3]>,
+    /// His heading (the turn about z, as `move Connor … rz` sets it), set
+    /// with `connor_at`: `getLoc Connor` gives it as his turn.
+    pub connor_heading: f32,
     /// The world's `KQMonster` objects (`talking.md` rule 6).
     pub monsters: Vec<Monster>,
     /// Characters prepared for a script's `loadKQ`: they join `monsters`
@@ -2322,7 +2325,7 @@ impl WorldState {
         } else if let Some(i) = self.door_index(who) {
             Some(self.doors[i].door.player.base)
         } else if who.eq_ignore_ascii_case("Connor") {
-            self.connor_at.map(|p| Placement { rotation: crate::door::identity().m, position: p })
+            self.connor_at.map(|p| Placement { rotation: kq8_data::objects::rotation([0.0, 0.0, self.connor_heading]), position: p })
         } else {
             // A box object (a barrel; M5 5c fix 5).
             self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
@@ -3438,6 +3441,7 @@ impl Active {
                 script_rng: crate::emitter::Rng::new(0x5C41_9700),
                 connor_can_turn: false,
                 connor_at: None,
+                connor_heading: 0.0,
                 monsters: Vec::new(),
                 dormant_monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
@@ -6855,6 +6859,13 @@ endif
         for (got, want) in loc[3..].iter().zip([0.1, -0.2, 1.3]) {
             assert!((got - want).abs() < 1e-5, "{loc:?}");
         }
+        // Connor's turn is his heading (sprgnbow.cs lays the body by it;
+        // it was always 0, so the body lay a quarter turn off).
+        (a.world.connor_at, a.world.connor_heading) = (Some([224700.0, 183000.0, 8160.0]), -1.57);
+        a.test_command("KQObject::getLoc Connor", "t");
+        let vars = std::mem::take(&mut a.world.vars_out);
+        let loc: Vec<f32> = vars[0].1.split(' ').map(|w| w.parse().unwrap()).collect();
+        assert!((loc[5] + 1.57).abs() < 1e-5 && loc[3].abs() < 1e-5 && loc[4].abs() < 1e-5, "{loc:?}");
         assert_eq!(a.test_command("getLoc nobody", "t").as_deref(), Some("1"));
     }
 
