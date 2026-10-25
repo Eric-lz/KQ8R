@@ -7,6 +7,17 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-24)
 
+- **2026-10-24 (A): Q169, Q167, Q168 answered** (for B to build):
+  - Q169, `fighting.md` rules 31, 31a: a drop entry named like a part of
+    the die model (the weapon: `SmCrossbow`, `BroadSword`, ...) is not
+    thrown; when the die movement ends it is laid on that part of the
+    last frame and stays (thrown only if a line test fails). Other drops
+    are thrown as before.
+  - Q167, `anim-scripts.md` rule 16: `Inv <item>` in a Special list lays
+    a real item at the part of Connor's last frame named like it; the
+    roof kill's four branches all end with the crossbow left there.
+  - Q168, `interface.md` rule 20a: the caption stone is tiled at its own
+    size from the box's top-left (B's current drawing is right).
 - **2026-10-24 (B): session A's 2026-10-24 answers built** (plan in
   `docs/DESIGN.md` "building session A's 2026-10-24 answers", steps B-1
   to B-8, one commit each; **checked in the logs only, not played by
@@ -24,7 +35,7 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   - B-6 `dithered=` on every class (Q165): Daventry's arrow doors,
     Gnome's lock and characters.
   - B-7 panel pictures (Q108 b): stretched to their box, the bars' empty
-    part `4black.pbm`, the caption stone stretched.
+    part `4black.pbm` (the caption stone tiled again: Q168 says tiled).
   - B-8 Q163 checked: one gap fixed (a character first seen in a real
     state now reports `0 -> new`).
 - **2026-10-24 (B): session A's 2026-10-22 answers built** (steps A-1 to
@@ -466,12 +477,9 @@ M6 has started with the Rope and Hook (6a).
 - **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
   fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
   whether a saved game keeps `setHaze`'s values (we have no saving yet).
-- **New for A (2026-10-24, from the user's check of B-1 to B-8):**
-  **Q167** (the bow spriggan's crossbow after the roof kill: in the
-  original it stays on the ground; ours vanishes), **Q168** (the caption
-  stone: B-7 stretched it and it looked broken; tiled again).
-  **Q169** (dropped weapons: the user says they lie where the death
-  movement leaves them, not thrown like other items; rule 31 says thrown).
+- **Answered 2026-10-24 (A), for B to build:** Q169 (dropped weapons
+  laid, `fighting.md` 31a), Q167 (`Inv`, `anim-scripts.md` 16), Q168
+  (caption stone tiled; already built that way).
   The user's look at B-1 to B-8 and the two fixes: all good (2026-10-24).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
