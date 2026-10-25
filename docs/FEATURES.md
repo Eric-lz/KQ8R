@@ -783,6 +783,9 @@ commands in `MODLOG.md`.
   real item where the movement holds it: the crossbow stays on the
   ground after the roof kill, to be picked up.
 - **Tools:** `kq8 shape-parts <file>` prints a model's named parts.
+- **Animation timing:** doors, chests and every looping object (the
+  windmill, torches, the well) play their loops at the traced speed and
+  wrap, as Connor and the characters already did.
 
 ## Viewer helpers (not in the original)
 
