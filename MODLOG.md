@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-6: smooth animation measured and written up
+
+**Changed:** FEATURES (launch option, the feature), README (`--smooth` in "Try it", M7's first improvements), DESIGN (S-1 to S-6 done), STATUS.
+**Why:** DESIGN S-6.
+**Tested how:** The S-4 and S-5 runs (`viewer.log`).
+**Result:** Frame time the same with and without (5.56 ms, 180 a second); 96.0 % of Daventry's node-frames can be mixed, 4 % change mesh and jump.
+**Still broken / not tested:** Gliding not looked at by eye yet.
+**Next:** The user's look at gliding.
+
 ## 2026-10-25 S-5: smooth animation glides creatures, doors, chests, objects, thrown items and bolts
 
 **Changed:** Core `door.rs`: `mix_transform` (a placement part-way between two: the place on the line, the turn mixed and made a plain turn again); `named_anim.rs`: `drawn_turn` (a frame's whole-object steps mixed toward the next frame's, not across a loop's wrap). Viewer `smooth_view.rs`: `Glide` (drawn between the place at the last update but one and now, as the camera and Connor are; a move over 2,000 units is drawn at once). `door_view.rs` (doors, chests, scripted objects), `anim_view.rs` (characters, animated objects: glided every drawn frame while on), `item_view.rs` (items, bolts) use them when the switch is on. Unit tests `mixing_two_placements_halves_the_turn_and_the_move`, `a_glide_goes_from_the_last_update_to_this_one_and_snaps_on_a_jump`.

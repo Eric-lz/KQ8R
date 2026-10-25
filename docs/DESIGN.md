@@ -2997,7 +2997,7 @@ One-frame loops keep the old timing (ours: the rule's rate is 0, their
 cues would never fire). Play-once movements were already right.
 **Done** 2026-10-25.
 
-### Outside the milestones: smooth animation, a switch, off by default (planned 2026-10-25)
+### Outside the milestones: smooth animation, a switch, off by default (planned 2026-10-25; done 2026-10-25, steps S-1 to S-6)
 
 The user's wish (2026-10-25), brought forward from M7. **Drawing only**:
 the game's rules, cues, hits and logs keep the original 15 updates a
@@ -3028,24 +3028,31 @@ two frames' steps.
 
 1. **S-1: the switch.** `--smooth on|off` (default off) and the console
    word `smooth on|off`, kept in a resource; logged. Nothing else yet.
+   **Done** (a flag for the program; `--smooth` became a plain flag).
 2. **S-2: the next-frame table.** `Pack::add` gives each node-frame its
    match in the next frame of the same animation (the last frame's in
    frame 0: loops wrap); sent to the graphics card in the node-frame's
    spare number; counted and logged (share that can be mixed). Unit test.
+   **Done** (Daventry: 96.0 % of node-frames have a match).
 3. **S-3: the drawing mixes.** The shader reads the tag as node-frame +
    amount and, above 0, mixes the point and normal with the next
    node-frame's. `Slots` can set the amount on its shown parts. With
    the amount always 0 nothing changes (checked by the pack check).
+   **Done**.
 4. **S-4: the amounts.** Each drawn frame, with the switch on: Connor
    (and his rope model), characters and animated objects, doors and
    chests: the loop position, its whole frame shown and the amount set.
    Off: as today.
+   **Done** (a fix after the user's look: Connor's backwards one-shots,
+   `undraw`, are turned round as `frame_at` does).
 5. **S-5: gliding places.** With the switch on: characters' place and
    turn between their last two updates (as Connor's); doors' and
    chests' whole-object steps mixed between two frames; thrown items
    and bolts between their last two updates.
+   **Done** (moves over 2,000 units an update are drawn at once).
 6. **S-6: measured.** Frame time with the switch on and off; the share
    of parts that still jump; FEATURES, README.
+   **Done** (same frame time on and off: 5.56 ms; 4 % of parts jump).
 
 Not in this plan: mixing across a change of movement (walk to stop);
 shadows keep the whole frames (they are drawn from the model on the

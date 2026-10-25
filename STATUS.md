@@ -7,6 +7,14 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-25)
 
+- **2026-10-25 (B): smooth animation (`--smooth`, ours, off by default)**
+  (DESIGN "smooth animation", S-1 to S-6): model parts drawn part-way
+  between frames, creatures, doors, chests, thrown items and bolts glided
+  between updates. The user's look at the limbs: good (one fix:
+  Connor's put-away movement). Gliding (S-5) checked in the logs only.
+  Not done: mixing across a change of movement; shadows keep whole
+  frames.
+
 - **2026-10-25 (B): session A's Q167 and Q169 answers built** (plan in
   `docs/DESIGN.md` "building session A's Q167 and Q169 answers", steps
   C-1 to C-3, one commit each; **checked in the logs only, not played by
