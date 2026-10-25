@@ -3620,8 +3620,8 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Connor's `back` is `walk`'s animation played backwards | Observed (`Conner.anm`: `back` = `c_walk.kqs` at speed −1) | `connor.log`: "stop -> back" |
 | `c_run.kqs`'s body is `c_walk.kqs`'s with about a dozen points numbered otherwise | Observed (scratch check of the two files' texture places) | `connor.log`: "walk -> run: 0 of 2 parts" |
 
-## Fix 2026-10-25: a character hidden by its file is drawn once shown — viewer `anim_view.rs` (`Playing::waits_to_be_shown`, `anim_draw`)
+## Fix 2026-10-25: an object hidden by its file is drawn once shown — viewer `draw_distance.rs` (`update_activity`; first in `anim_view.rs`, moved the same day)
 
 | Fact | Source | Checked by |
 | --- | --- | --- |
-| A character or animated object with `hidden=1` is drawn after a script's `setHidden <name> 0` (Daventry: `outdoor.cs` shows `sprdump`) | `objects.md` "Hidden objects" rule 3; `characters.md` rules 34 and 22 (`setHidden`, the `sprdump` example) | `characters.log`: "update 31: sprdump: shown by a script (setHidden 0): drawn"; its shadow lines start at update 33; not looked at by eye |
+| An object with `hidden=1` (character, animated or plain) is drawn after a script's `setHidden <name> 0`; hiding it again is the drawing layer's (rule 36) | `objects.md` "Hidden objects" rule 3; `characters.md` rules 34 and 22 (`setHidden`, the `sprdump` example) | `viewer.log` "shown by a script": Daventry `sprdump` (door scene; its shadow from update 33), Barren `rail1l`, Gnome `gemfuse`, temple4 `Lucreto` (console); `sprdump` hidden again: Near -> Off; not looked at by eye |

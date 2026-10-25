@@ -377,6 +377,9 @@ M6 has started with the Rope and Hook (6a).
   characters scripts load while playing (the Lady, three ravens, the
   Unicorn), a real turn in the viewer. `sprdump`'s scene (the outhouse
   door) runs and the spriggan is drawn (fixed 2026-10-25; logs only).
+- **temple4's `LucEnd` / `LucEndFar`** (class `KQLucreto`, the final
+  Lucreto) are not loaded as characters: no model, never drawn (found
+  2026-10-25).
 - **Stand-ins of 4a:** the caption panel's look. Two details of `eval` (`anim-scripts.md` rule 18) are not
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.

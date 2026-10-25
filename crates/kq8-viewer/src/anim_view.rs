@@ -98,10 +98,6 @@ struct Playing {
     /// A character loaded underground: whether its body is shown now
     /// (`character-movement.md` rules 28, 30; M5 5a-8).
     birth_shown: Option<bool>,
-    /// Hidden by its file (`hidden=1`) and not shown yet: drawn once a
-    /// script's `setHidden <name> 0` comes (`objects.md` "Hidden objects"
-    /// rule 3; Daventry's `sprdump`). Hiding again is the draw distance's.
-    waits_to_be_shown: bool,
     /// Its drawing (Animation memory step 4); `None` if its animations
     /// couldn't be packed.
     new_draw: Option<crate::anim_gpu::Slots>,
@@ -213,7 +209,6 @@ impl AnimSim {
             casts: false,
             shadow: None,
             birth_shown: None,
-            waits_to_be_shown: false,
             new_draw,
         });
         line
@@ -630,7 +625,6 @@ pub fn spawn_animated(
             casts: a.character.as_ref().is_some_and(|c| c.casts_shadow),
             shadow: None,
             birth_shown: unborn.then_some(false),
-            waits_to_be_shown: !*unused && !p.drawn() && !unborn,
             new_draw,
         });
     }
@@ -877,20 +871,6 @@ pub fn anim_draw(
                 p.birth_shown = Some(up);
                 if let Some(log) = sim.characters.as_mut() {
                     log.detail(format!("update {}: {}: {} (character-movement.md rules 28, 30)", sim.updates, p.name, if up { "risen: drawn" } else { "underground: not drawn" }));
-                }
-            }
-        }
-        // Shown by a script (objects.md "Hidden objects" rule 3): drawn from
-        // now on, and no longer one of the H key's hidden objects.
-        if let (true, Some(d)) = (p.waits_to_be_shown, doors) {
-            if !d.active.world.hidden_now(&p.name, true) {
-                if let Ok(mut v) = visibility.get_mut(p.body) {
-                    *v = Visibility::Inherited;
-                }
-                commands.entity(p.body).remove::<crate::terrain_view::ShownWithH>();
-                p.waits_to_be_shown = false;
-                if let Some(log) = sim.characters.as_mut() {
-                    log.detail(format!("update {}: {}: shown by a script (setHidden 0): drawn (objects.md \"Hidden objects\" rule 3)", sim.updates, p.name));
                 }
             }
         }

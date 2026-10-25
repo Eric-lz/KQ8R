@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: objects hidden by their file, shown by a script, in every world
+
+**Changed:** Viewer: the switch that draws an object once a script's `setHidden <name> 0` comes moved from `anim_view.rs` (characters and animated objects only) to `draw_distance.rs` `update_activity`, which already knows each object's file `hidden=` and the game's current answer; so it now covers plain placed objects too. Logged in `viewer.log` ("shown by a script"). STATUS, provenance.
+**Why:** The user asked to check the other worlds after the `sprdump` fix. Every world loaded for 30 frames; objects hidden at the start listed from `viewer.log`, the scripts' `setHidden … 0` lines read from `MASK/<world>/kq/*.cs`. Shown by scripts: Barren `Henchman`, `Archon`, `dock1`–`7`, the lava tiles (animated: already fixed), the bridge rails `rail1l`…`rail7r` (**plain objects: still invisible before this step**); Gnome `gemfuse`, `gemlite.01`–`13` (animated), `obridge*` (scripted objects: own switch, fine), `rotbrdg` (a door: never spawned switched off, fine); IceWorld `Henchman` (animated); temple4 `Lucreto` (animated), `LucEnd` (see below). CastleD, DeadCity, Swamp, temple1–3: nothing hidden at the start. Snowexit `portal4`: never shown by the data (Connor walks into it).
+**Tested how:** `cargo test --workspace` (711 pass); clippy: no new warnings. Viewer: Daventry door scene (`--at 122000,286400,1.57 --click outdoor,30`); `--command "KQObject::setHidden <name> 0",10` for Barren `rail1l`, Gnome `gemfuse`, temple4 `Lucreto`; Daventry `sprdump` shown at 10, hidden again at 40.
+**Result:** "shown by a script" for all four; `sprdump` Off -> Near (drawn), then Near -> Off (not drawn) when hidden again; its shadow as before (20 lines).
+**Found:** temple4's `LucEnd` / `LucEndFar` (class `KQLucreto`) are skipped by the loader ("no model (uses an .anm file)"): the class is not loaded as a character, so the final Lucreto is never drawn. Not fixed here (STATUS).
+**Still broken / not tested:** Not looked at by eye. The scripts that show these objects were not played through (bridge, fuse box, Henchman chests, altar), only the command.
+**Next:** The user's look at Barren's bridge rails; `KQLucreto` when temple4's boss is worked on.
+
 ## 2026-10-25 Fix: the outhouse spriggan (`sprdump`) was invisible
 
 **Changed:** Viewer `anim_view.rs`: a character or animated object that starts hidden by its file (`hidden=1`) now remembers it (`waits_to_be_shown`); each frame, once the game says it is no longer hidden (a script's `setHidden <name> 0`), its body is made visible and leaves the H key's group. Logged in `characters.log`. STATUS, provenance.

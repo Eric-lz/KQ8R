@@ -309,7 +309,7 @@ pub fn update_activity(
     camera: Query<&Transform, With<Camera3d>>,
     // Every tested entity is a root (no parent), so its own transform is
     // its place in the world, already right on the frame it is spawned.
-    tests: Query<(Entity, &DistanceTest, &Transform, Has<Propagate<RenderLayers>>)>,
+    mut tests: Query<(Entity, &DistanceTest, &Transform, Has<Propagate<RenderLayers>>, Option<&mut Visibility>, Has<crate::terrain_view::ShownWithH>)>,
     layered: Query<(), (With<Mesh3d>, With<RenderLayers>)>,
     mut point: ResMut<ActivePoint>,
     mut states: ResMut<ObjectActivity>,
@@ -344,11 +344,24 @@ pub fn update_activity(
     // is off and the farthest that is not.
     let mut nearest_off: Option<(f32, f32, String)> = None;
     let mut farthest_on: Option<(f32, f32, String)> = None;
-    for (entity, test, transform, has_layer) in &tests {
+    for (entity, test, transform, has_layer, visibility, with_h) in &mut tests {
         let centre = transform.transform_point(test.centre);
         let d = (reference - centre).length() * UNITS_PER_METRE - test.radius;
         // Rule 36: hidden = off; makeActive = near; else by distance.
         let hidden = sim.as_ref().map_or(test.hidden, |s| s.active.world.hidden_now(&test.name, test.hidden));
+        // Hidden by its file and shown by a script (objects.md "Hidden
+        // objects" rule 3; Daventry's `sprdump`, Barren's bridge rails):
+        // drawn from now on, no longer one of the H key's hidden objects.
+        // Hiding it again is the drawing layer's, below.
+        if test.hidden && !hidden && with_h {
+            if let Some(mut v) = visibility {
+                *v = Visibility::Inherited;
+            }
+            commands.entity(entity).remove::<crate::terrain_view::ShownWithH>();
+            if !seen.contains(&test.object) {
+                changes.push(format!("draw distance: [{}] shown by a script (setHidden 0): drawn from now on (objects.md \"Hidden objects\" rule 3)", test.name));
+            }
+        }
         let activity = if hidden {
             Activity::Off
         } else if rules.always_near.contains(&test.name.to_ascii_lowercase()) {
