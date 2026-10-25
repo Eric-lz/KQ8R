@@ -4,8 +4,8 @@
 //! original frames; with the switch on, model parts are drawn part-way
 //! between two frames and moving things between two updates.
 //!
-//! The switch is one flag for the whole program: `--smooth on|off` at the
-//! start, the console word `smooth [on|off]` while playing.
+//! The switch is one flag for the whole program: `--smooth` at the start
+//! turns it on, the console word `smooth [on|off]` while playing.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

@@ -187,7 +187,7 @@ struct Args {
     /// `--dynamic on|off`: overrides `Options.cs`'s `useDynamicLighting`
     /// (M1 7d); `None` = as `Options.cs` says.
     dynamic: Option<bool>,
-    /// `--smooth on|off` (ours; DESIGN S-1): smooth animation, default off.
+    /// `--smooth` (ours; DESIGN S-1): smooth animation on; without it, off.
     smooth: bool,
     /// `--sound on|off`: open the sound card (default on); off still runs
     /// the sound rules and `sound.log` (M3 3h-2).
@@ -361,13 +361,7 @@ fn parse_args() -> Result<Args, String> {
                     v => return Err(format!("--dynamic needs on or off, not '{v}'")),
                 })
             }
-            "--smooth" => {
-                a.smooth = match value()?.to_ascii_lowercase().as_str() {
-                    "on" | "1" => true,
-                    "off" | "0" => false,
-                    v => return Err(format!("--smooth needs on or off, not '{v}'")),
-                }
-            }
+            "--smooth" => a.smooth = true,
             "--lift" => a.lift = Some(value()?.parse().map_err(|_| "--lift needs a number".to_string())?),
             "--jump" => a.jump.push(value()?.parse().map_err(|_| "--jump needs an update number".to_string())?),
             "--turn" => {
@@ -445,7 +439,7 @@ Showing things:
   --sound on|off             play sound through the sound card (default on)
   --light x1|x2|off          light of the ground and objects at the start (default x1; F7)
   --dynamic on|off           dynamic lights, instead of what Options.cs says
-  --smooth on|off            smooth animation, drawn between frames (default off; console: smooth)
+  --smooth                   smooth animation, drawn between frames (default off; console: smooth)
   --haze on|off              distance fog at the start (default on; F8)
   --corners on|off           bottom bar's corner panels at the window's edges (default off; F6)
 

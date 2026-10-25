@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 `--smooth` is a plain flag
+
+**Changed:** Viewer `main.rs`: `--smooth` turns smooth animation on (was `--smooth on|off`); without it, off. Help text, `smooth_view.rs` notes, DESIGN.
+**Why:** The user's wish: the "on" was redundant.
+**Tested how:** `cargo build -p kq8-viewer`; `kq8-viewer --help` shows the option.
+**Result:** `--smooth  smooth animation, drawn between frames (default off; console: smooth)`.
+**Still broken / not tested:** The release build not rebuilt yet (the game may be open).
+**Next:** S-5.
+
 ## 2026-10-25 S-4: smooth animation's amounts: parts drawn part-way between frames
 
 **Changed:** Core `named_anim.rs`: `NamedAnimPlayer::drawn_frame` (the frame and how far toward the next, the phase pushed on by the time since the last update at the movement's rate; still, paused, ended or just started: not pushed) and `mixed_frame` (a loop goes round; a play-once movement is never mixed on its last frame); `door.rs`: `DoorMovement::rate`. Viewer `smooth_view.rs`: `ahead`, `frame_of`, `frame_at`, a count for the log; `anim_view.rs` (characters, animated objects), `door_view.rs` (doors, chests, scripted objects), `connor_view.rs` (Connor, his rope model) draw the frame with its amount when the switch is on; `anim_gpu.rs`: `show` folded into `show_mixed`. `main.rs`: the 2-second line gives the switch and the part tags set part-way. Unit test `the_drawn_frame_is_the_shown_one_plus_how_far_toward_the_next`.

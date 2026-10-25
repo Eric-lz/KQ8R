@@ -3001,8 +3001,9 @@ cues would never fire). Play-once movements were already right.
 
 The user's wish (2026-10-25), brought forward from M7. **Drawing only**:
 the game's rules, cues, hits and logs keep the original 15 updates a
-second and the original frames. Off by default; `--smooth on` at the
-start, the console word `smooth on|off` while playing.
+second and the original frames. Off by default; `--smooth` at the start
+turns it on (changed from `--smooth on|off` at the user's wish,
+2026-10-25), the console word `smooth on|off` while playing.
 
 What is already smooth (checked in the code 2026-10-25): the camera and
 Connor's place and turn are drawn between their last two updates
