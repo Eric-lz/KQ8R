@@ -3058,7 +3058,7 @@ Not in this plan: mixing across a change of movement (walk to stop);
 shadows keep the whole frames (they are drawn from the model on the
 processor).
 
-### Outside the milestones: smooth joins between movements (planned 2026-10-25; waiting for the user's go)
+### Outside the milestones: smooth joins between movements (planned 2026-10-25; the user's go 2026-10-25)
 
 The user's question (2026-10-25): can a change of movement (walk to
 run, standing to attack) be drawn smoothly too? Ours, **drawing only**,
@@ -3130,6 +3130,10 @@ Steps (one commit each):
    part's name; a function gives, for a new frame's parts, each one's
    partner in an old frame (or none). Unit tests; the world's share of
    matched parts logged once.
+   **Done** (the share is logged for Connor's movements, within each of
+   his sets; Daventry: his own set 2,653 of 3,192 changes with every
+   part paired, all 38 sets 12,997 of 17,408. Characters' joins are
+   logged one by one in J-3).
 2. **J-2: the tag and the join buffer.** Tag split 18/6/8 (a world over
    262,143 node-frames: joins off and logged), the 255-record buffer
    bound with the others, the shader mixes when a record is named.

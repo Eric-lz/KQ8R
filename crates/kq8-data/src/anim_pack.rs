@@ -39,6 +39,12 @@ pub struct NodeFrame {
     /// next frame's node list if it has the same mesh, else itself (that
     /// part jumps).
     pub next: u32,
+    /// Smooth joins (DESIGN J-1, ours; not sent to the graphics card):
+    /// its part's name (lower case, hashed) and its mesh's layout (see
+    /// [`layout`]). A part of another movement's frame with both equal can
+    /// be drawn mixed with it point by point.
+    pub name: u64,
+    pub layout: u64,
 }
 
 /// A corner of a topology: the point's number in its vertex frame, the
@@ -106,6 +112,8 @@ pub struct Pack {
     pub matched: (u32, u32),
     /// (shape, mesh) -> its first point.
     mesh_points: HashMap<(usize, usize), u32>,
+    /// (shape, mesh) -> its layout (J-1).
+    mesh_layouts: HashMap<(usize, usize), u64>,
     /// (shape, mesh, texture frame, material, flat) -> topology.
     topology_index: HashMap<(usize, usize, i16, i32, bool), u32>,
 }
@@ -131,6 +139,45 @@ pub fn fold(scale: [f32; 3], origin: [f32; 3], m: &[[f32; 3]; 3], p: [f32; 3]) -
     let matrix = std::array::from_fn(|i| std::array::from_fn(|j| scale[i] * m[i][j]));
     let offset = std::array::from_fn(|j| origin[0] * m[0][j] + origin[1] * m[1][j] + origin[2] * m[2][j] + p[j]);
     (matrix, offset)
+}
+
+/// FNV-1a over `bytes` (the same number on every run and machine).
+fn fnv(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |h, &b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3))
+}
+
+const FNV_START: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// A part name as [`NodeFrame::name`] keeps it.
+pub fn name_hash(name: &str) -> u64 {
+    fnv(FNV_START, name.to_lowercase().as_bytes())
+}
+
+/// A mesh's layout (smooth joins, DESIGN J-1, ours): its number of points
+/// per frame and its triangles as sets of point numbers, in any order.
+/// Movements are separate model files; two meshes with the same layout
+/// number their points the same way, so their poses can be mixed point
+/// by point. Meshes of the same size numbered differently (the zombies'
+/// files, measured 2026-10-25) get different layouts.
+pub fn layout(mesh: &crate::shape::Mesh) -> u64 {
+    let mut triangles: Vec<[i32; 3]> = mesh
+        .faces
+        .iter()
+        .map(|f| {
+            let mut c = f.corners.map(|c| c.0);
+            c.sort_unstable();
+            c
+        })
+        .collect();
+    triangles.sort_unstable();
+    triangles.dedup();
+    let mut h = fnv(FNV_START, &(mesh.vertices_per_frame as u64).to_le_bytes());
+    for t in triangles {
+        for c in t {
+            h = fnv(h, &c.to_le_bytes());
+        }
+    }
+    h
 }
 
 fn distance(a: &[f32], b: &[f32]) -> f32 {
@@ -189,6 +236,8 @@ impl Pack {
                     }
                 }
                 let (matrix, offset) = fold(frame.scale, frame.origin, &node.transform.m, node.transform.p);
+                let layout = *self.mesh_layouts.entry((id, mesh_index)).or_insert_with(|| layout(mesh));
+                let name = name_hash(usize::try_from(node.name).ok().and_then(|n| shape.names.get(n)).map_or("", String::as_str));
                 let nf = NodeFrame {
                     matrix,
                     offset,
@@ -196,6 +245,8 @@ impl Pack {
                     points: base + frame.first_vertex.max(0) as u32,
                     normals: normals_at as u32,
                     next: self.node_frames.len() as u32,
+                    name,
+                    layout,
                 };
                 let nf_index = self.node_frames.len() as u32;
                 self.node_frames.push(nf);
@@ -268,6 +319,56 @@ impl Pack {
         }
     }
 
+    /// Smooth joins (DESIGN J-1, ours): for each part of `new` (a frame of
+    /// the movement now shown), the node-frame of its partner in `old` (the
+    /// frame shown before the change): an old node with the same name and
+    /// layout, each old node taken once, in the order they come (a frame
+    /// may hold two swords). `None`: no partner, that part jumps. The
+    /// parts of one node (one per material) share their partner.
+    pub fn partners(&self, old: &[Part], new: &[Part]) -> Vec<Option<u32>> {
+        let key = |nf: u32| {
+            let n = &self.node_frames[nf as usize];
+            (n.name, n.layout)
+        };
+        // One entry per old node: its node-frame, still free or not.
+        let mut free: Vec<(u32, bool)> = Vec::new();
+        for p in old {
+            if !free.iter().any(|&(nf, _)| nf == p.node_frame) {
+                free.push((p.node_frame, true));
+            }
+        }
+        let mut chosen: HashMap<u32, Option<u32>> = HashMap::new();
+        new.iter()
+            .map(|p| {
+                *chosen.entry(p.node_frame).or_insert_with(|| {
+                    let slot = free.iter_mut().find(|(nf, open)| *open && key(*nf) == key(p.node_frame))?;
+                    slot.1 = false;
+                    Some(slot.0)
+                })
+            })
+            .collect()
+    }
+
+    /// Smooth joins (J-1): over every change from one of `movements` (its
+    /// last frame) to another (its first frame), the parts of the new frame
+    /// with a partner and all of them, and the changes where every part has
+    /// one and all changes.
+    pub fn join_share(&self, movements: &[&Vec<Vec<Part>>]) -> ([usize; 2], [usize; 2]) {
+        let (mut parts, mut joins) = ([0, 0], [0, 0]);
+        for (i, a) in movements.iter().enumerate() {
+            for (j, b) in movements.iter().enumerate() {
+                let (Some(old), Some(new)) = (a.last(), b.first()) else { continue };
+                if i == j || new.is_empty() {
+                    continue;
+                }
+                let found = self.partners(old, new).iter().filter(|p| p.is_some()).count();
+                parts = [parts[0] + found, parts[1] + new.len()];
+                joins = [joins[0] + usize::from(found == new.len()), joins[1] + 1];
+            }
+        }
+        (parts, joins)
+    }
+
     /// Unpacks `part` as the shader will and compares it with the
     /// triangles of its material (in the same order).
     fn check(&self, part: &Part, triangles: &[&Triangle], flat: bool) -> Check {
@@ -305,6 +406,9 @@ impl Pack {
         for (k, v) in other.mesh_points {
             self.mesh_points.entry(k).or_insert(v + points);
         }
+        for (k, v) in other.mesh_layouts {
+            self.mesh_layouts.entry(k).or_insert(v);
+        }
         for (k, v) in other.topology_index {
             self.topology_index.entry(k).or_insert(v + topologies);
         }
@@ -326,7 +430,7 @@ mod tests {
 
     #[test]
     fn merging_moves_the_second_packs_numbers_along() {
-        let nf = |points, normals| NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points, normals, next: 0 };
+        let nf = |points, normals| NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points, normals, next: 0, name: 0, layout: 0 };
         let mut a = Pack { points: vec![[1, 2, 3, 0]; 4], normals: vec![[0; 4]; 4], node_frames: vec![nf(0, 0)], topologies: vec![Topology::default()], ..Default::default() };
         let b = Pack { points: vec![[9, 9, 9, 0]; 3], normals: vec![[1; 4]; 3], node_frames: vec![nf(0, 0), nf(1, 2)], topologies: vec![Topology::default(); 2], ..Default::default() };
         let (topology_add, node_frame_add) = a.merge(b);
@@ -344,12 +448,56 @@ mod tests {
         // Frame 0: parts at places 0 (mesh 4) and 1 (mesh 5); frame 1:
         // place 0 has mesh 4, place 1 changed to mesh 6; frame 2: only
         // place 0. The last frame's go to frame 0.
-        let nf = NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points: 0, normals: 0, next: 0 };
+        let nf = NodeFrame { matrix: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], offset: [0.0; 3], ball: [0.0; 4], points: 0, normals: 0, next: 0, name: 0, layout: 0 };
         let mut p = Pack { node_frames: (0..5).map(|i| NodeFrame { next: i, ..nf }).collect(), ..Default::default() };
         p.link_next(&[vec![(0, 4, 0), (1, 5, 1)], vec![(0, 4, 2), (1, 6, 3)], vec![(0, 4, 4)]]);
         let next: Vec<u32> = p.node_frames.iter().map(|n| n.next).collect();
         assert_eq!(next, [2, 1, 4, 3, 0]);
         assert_eq!(p.matched, (3, 5));
+    }
+
+    #[test]
+    fn a_new_frames_parts_find_their_partners_by_name_and_layout() {
+        // Old frame: sword (node-frame 0), body in two materials (1), a
+        // second sword (2), an unnamed part (3). New frame: body in two
+        // materials (10), sword (11, its name in other capitals), sword
+        // (12), a third sword (13: no partner left), a "body" numbered
+        // otherwise (14), the unnamed part (15).
+        let (sword, body, none) = (name_hash("Sword"), name_hash("body"), name_hash(""));
+        let nf = |name, layout| NodeFrame { matrix: [[0.0; 3]; 3], offset: [0.0; 3], ball: [0.0; 4], points: 0, normals: 0, next: 0, name, layout };
+        let mut p = Pack { node_frames: vec![nf(sword, 7), nf(body, 1), nf(sword, 7), nf(none, 3)], ..Default::default() };
+        p.node_frames.resize(10, nf(0, 0));
+        p.node_frames.extend([nf(body, 1), nf(name_hash("SWORD"), 7), nf(sword, 7), nf(sword, 7), nf(body, 2), nf(none, 3)]);
+        let part = |node_frame| Part { topology: 0, node_frame, material: 0, node: 0 };
+        let old: Vec<Part> = [0, 1, 1, 2, 3].map(part).to_vec();
+        let new: Vec<Part> = [10, 10, 11, 12, 13, 14, 15].map(part).to_vec();
+        assert_eq!(p.partners(&old, &new), [Some(1), Some(1), Some(0), Some(2), None, None, Some(3)]);
+        assert_eq!(p.partners(&[], &new), [None; 7], "nothing shown before");
+        // Two movements of one frame each: old -> new has 5 of 7, new ->
+        // old 5 of 5 (the old frame's parts, 1 twice).
+        let (a, b) = (vec![old], vec![new]);
+        assert_eq!(p.join_share(&[&a, &b]), ([10, 12], [1, 2]));
+    }
+
+    #[test]
+    fn a_layout_ignores_the_order_of_triangles_but_not_the_point_numbers() {
+        use crate::shape::{Face, Mesh};
+        let face = |a, b, c| Face { corners: [(a, 0), (b, 0), (c, 0)], material: 0 };
+        let mesh = |faces: Vec<Face>| Mesh {
+            version: 3,
+            vertices_per_frame: 4,
+            texture_vertices_per_frame: 0,
+            radius: 1.0,
+            vertices: Vec::new(),
+            texture_vertices: Vec::new(),
+            faces,
+            frames: Vec::new(),
+            frame_was_implied: false,
+        };
+        let a = layout(&mesh(vec![face(0, 1, 2), face(1, 2, 3)]));
+        assert_eq!(a, layout(&mesh(vec![face(3, 2, 1), face(2, 0, 1)])), "order of triangles and corners");
+        assert_ne!(a, layout(&mesh(vec![face(0, 1, 3), face(1, 2, 3)])), "other point numbers");
+        assert_ne!(a, layout(&Mesh { vertices_per_frame: 5, ..mesh(vec![face(0, 1, 2), face(1, 2, 3)]) }), "another size");
     }
 
     #[test]
@@ -366,7 +514,7 @@ mod tests {
         let m = [[0.0, 1.2, 0.0], [-0.8, 0.0, 0.1], [0.0, 0.0, 1.0]];
         let p = [100.0, -20.0, 5.0];
         let (matrix, offset) = fold(scale, origin, &m, p);
-        let nf = NodeFrame { matrix, offset, ball: [0.0; 4], points: 0, normals: 0, next: 0 };
+        let nf = NodeFrame { matrix, offset, ball: [0.0; 4], points: 0, normals: 0, next: 0, name: 0, layout: 0 };
         for raw in [[0u8, 0, 0, 0], [254, 3, 77, 9], [12, 200, 254, 0]] {
             let decoded: [f32; 3] = std::array::from_fn(|i| raw[i] as f32 * scale[i] + origin[i]);
             let want: [f32; 3] = std::array::from_fn(|j| decoded[0] * m[0][j] + decoded[1] * m[1][j] + decoded[2] * m[2][j] + p[j]);

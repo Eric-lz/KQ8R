@@ -351,10 +351,28 @@ fn pack_world(objects: &load::Objects, check_it: bool) -> (String, crate::anim_g
             lists[list][k] = Some(packed);
         }
     }
+    // Smooth joins (J-1): how many of Connor's changes of movement could be
+    // drawn mixed, within each of his sets (his own, `walk`; a weapon's,
+    // `consword.anm/walk`): changes between sets don't happen.
+    let mut sets: std::collections::BTreeMap<&str, Vec<usize>> = Default::default();
+    for m in objects.connor.as_ref().map(|(_, c)| c.movements.as_slice()).unwrap_or(&[]) {
+        let set = sets.entry(m.name.rsplit_once('/').map_or("", |(set, _)| set)).or_default();
+        if !set.contains(&m.animation) {
+            set.push(m.animation);
+        }
+    }
+    let share = |set: &[usize]| pack.join_share(&set.iter().filter_map(|&k| lists[2].get(k).and_then(Option::as_ref)).collect::<Vec<_>>());
+    let own = share(sets.get("").map_or(&[][..], Vec::as_slice));
+    let (mut join_parts, mut joins) = ([0; 2], [0; 2]);
+    for set in sets.values() {
+        let (p, j) = share(set);
+        join_parts = [join_parts[0] + p[0], join_parts[1] + p[1]];
+        joins = [joins[0] + j[0], joins[1] + j[1]];
+    }
     let [points, normals, node_frames, topologies] = pack.sizes();
     let mb = |b: usize| b as f64 / (1 << 20) as f64;
     let line = format!(
-        "animation pack (step 4a; {} threads): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}; {} with the same part in the next frame, {:.1} %: smooth animation can draw them part-way, S-2), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
+        "animation pack (step 4a; {} threads): {animations} animations, {frames} frames, {parts} parts; points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB ({}; {} with the same part in the next frame, {:.1} %: smooth animation can draw them part-way, S-2; Connor's changes of movement within a set: his own {} of {} with every part ({} of {} parts with a partner), all {} sets {} of {} ({} of {} parts), J-1), topologies {:.1} MB ({}); in all {:.1} MB; {}; {} ms",
         shares.len(),
         mb(points),
         mb(normals),
@@ -362,6 +380,15 @@ fn pack_world(objects: &load::Objects, check_it: bool) -> (String, crate::anim_g
         pack.node_frames.len(),
         pack.matched.0,
         100.0 * pack.matched.0 as f64 / pack.matched.1.max(1) as f64,
+        own.1[0],
+        own.1[1],
+        own.0[0],
+        own.0[1],
+        sets.len(),
+        joins[0],
+        joins[1],
+        join_parts[0],
+        join_parts[1],
         mb(topologies),
         pack.topologies.len(),
         mb(points + normals + node_frames + topologies),

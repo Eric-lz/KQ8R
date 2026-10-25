@@ -3597,3 +3597,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | After a forward wrap a cue at 0.0 fires in the next update | Rule 4 (traced, Q158 c) | Unit test (same) |
 | A one-frame repeating loop keeps the old timing (1/length a second, wrap carrying the overshoot) | **Ours** (the rule gives rate 0, so its cues would never fire) | — |
 | Objects are not moved by their loops' steps (only characters) | **Ours** for now (rule 6a's adding up for objects waits for M6) | — |
+
+## Smooth joins: partners across a change of movement (J-1, 2026-10-25) — `crates/kq8-data/src/anim_pack.rs` (`layout`, `name_hash`, `NodeFrame::name`/`layout`, `Pack::partners`, `Pack::join_share`); viewer `world_build.rs` (the log line)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Each of Connor's and the characters' movements is its own `.kqs` file, listed by `loop=` lines in an `.anm` list | Observed (`Conner.anm`, the worlds' `.anm` files) | — |
+| Two meshes in different files can be mixed point by point only if they have the same number of points and the same triangles over the same point numbers; the order of triangles, corners and of parts in a frame doesn't matter; the part's name must match | Observed (measured 2026-10-25: Connor's `body` is one 196-point layout in 64 of 70 `Conner.anm` files; zombies' meshes have equal sizes but other point numbers) | Unit tests `a_layout_ignores_the_order_of_triangles_but_not_the_point_numbers`, `a_new_frames_parts_find_their_partners_by_name_and_layout`; `viewer.log` (Daventry): Connor's own set 2,653 of 3,192 changes with every part paired |
+| Drawing a change of movement mixed at all, partners taken in order, one old node each | **Ours** (drawing only, DESIGN "smooth joins"; the game's rules unchanged) | — |

@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 J-1: smooth joins: each new part's partner in the old frame
+
+**Changed:** `kq8-data` `anim_pack.rs`: each node-frame keeps its part's name and its mesh's layout (`layout`: the number of points and the triangles as point-number sets, in any order; `name_hash`), not sent to the graphics card; `Pack::partners` (for a new frame's parts, the old frame's node-frame with the same name and layout, each old node once) and `Pack::join_share` (the share over a set of movements). Viewer `world_build.rs`: the pack's log line gives Connor's share, within each of his movement sets. Two unit tests. DESIGN (J-1 done), provenance.
+**Why:** DESIGN "smooth joins between movements", J-1: a change of movement can only be drawn mixed for parts with a partner.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 200 --sound off --no-ai`; `viewer.log`.
+**Result:** "Connor's changes of movement within a set: his own 2653 of 3192 with every part (5306 of 6440 parts with a partner), all 38 sets 12997 of 17408 (41306 of 51443 parts)" (83 %; the throwaway measurement over all of `Conner.anm` said 86 %). No errors. Nothing drawn differently yet.
+**Mistake found on the way:** the first log line counted pairs across all of Connor's movements at once (25 %): a sword movement to an axe movement never happens in play; now counted within each set.
+**Still broken / not tested:** Characters' share not logged (their movement sets aren't known where the pack is made); J-3 logs each join.
+**Next:** J-2 (the tag split and the join buffer).
+
 ## 2026-10-25 Smooth joins between movements: measured and planned (no code)
 
 **Changed:** DESIGN "smooth joins between movements" (plan J-1 to J-4). No code.
