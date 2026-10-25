@@ -199,7 +199,8 @@ fn climb_step(cl: &mut Climb, host: &mut Host) {
     let (camera, aim) = kq8_core::rope::climb_camera(host.camera_at(), cl.aim, cl.range, dir, dt);
     cl.aim = aim;
     if let Some(c) = host.cam.as_mut() {
-        c.look_from(camera, aim);
+        // Drawn gliding between the updates (ours; was a cut each update).
+        c.glide_look_from(camera, aim);
     }
     host.w.rope_note(format!(
         "climb: {} held: {}, frame {frame} (phase {:.3}); camera z {:.0} (range {:.0}..{:.0}), aim z {:.0} (rule 22)",

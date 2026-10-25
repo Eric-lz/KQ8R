@@ -134,6 +134,10 @@ pub struct GameCam {
     /// (position, view tilt, view heading) after the last two updates.
     previous: ([f32; 3], f32, f32),
     current: ([f32; 3], f32, f32),
+    /// Where the camera was before a move that is drawn gliding, not cut
+    /// (the rope climb, [`GameCam::glide_look_from`]): the next tick's
+    /// `previous`.
+    glide_from: Option<([f32; 3], f32, f32)>,
     keys: Keys,
     /// Mouse movement (pixels) and presses gathered between updates.
     mouse: Vec2,
@@ -252,6 +256,17 @@ impl GameCam {
         }
         let (tilt, heading) = view_angles(std::array::from_fn(|k| aim[k] - spot[k]));
         self.move_to(0, spot, [tilt, 0.0, heading])
+    }
+
+    /// [`Self::look_from`] drawn gliding from where the camera was, between
+    /// the two updates, as the following camera is (ours: a script's move
+    /// is a cut; the rope climb's moves each update were drawn as cuts and
+    /// stuttered, the user's report 2026-10-25). Same place and view.
+    pub fn glide_look_from(&mut self, spot: [f32; 3], aim: [f32; 3]) -> String {
+        let before = self.glide_from.unwrap_or(self.current);
+        let line = self.look_from(spot, aim);
+        self.glide_from = Some(before);
+        line
     }
 
     /// The camera-move (right) button, if the key map gives one.
@@ -516,6 +531,7 @@ pub fn make(
     let mut g = GameCam {
         previous: (position, cam.view_tilt, cam.heading),
         current: (position, cam.view_tilt, cam.heading),
+        glide_from: None,
         cam,
         keys,
         mouse: Vec2::ZERO,
@@ -611,7 +627,16 @@ pub fn camera_step(
     let (Some(mut game), Some(sim), Some(lookup)) = (game, sim, lookup) else { return };
     let g = &mut *game;
     g.updates += 1;
-    g.previous = g.current;
+    // A gliding move since the last tick (the rope climb) is drawn from
+    // where the camera was before it.
+    g.previous = match g.glide_from.take() {
+        Some(from) => {
+            let (a, b) = (from.0, g.current.0);
+            g.log.detail(format!("camera tick {}: drawn gliding from ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}) over this update (the rope climb; ours)", g.updates, a[0], a[1], a[2], b[0], b[1], b[2]));
+            from
+        }
+        None => g.current,
+    };
     // "Connor moved" (camera.md "When the camera updates at all" item 1):
     // his position or facing changed since the last tick. Our camera runs
     // after Connor's update and this tick's scripts, so the update it

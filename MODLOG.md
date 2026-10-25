@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: the camera stuttered while Connor climbs the rope
+
+**Changed:** Viewer `game_camera.rs`: `GameCam::glide_look_from` (the same place and view as `look_from`, but drawn gliding from where the camera was, between the two updates) and a line per gliding tick in `camera.log`; `rope_view.rs` (the climb, `ropeandhook.md` rule 22) uses it. Always on (not tied to `--smooth`).
+**Why:** The user's report: the rope camera stutters. Each climb update moved the camera with `look_from`, which (like a script's camera cut) sets the place before equal to the place now, so the drawing had nothing to glide between: 15 jumps a second. The following camera already glided.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --sound off --frames 3500 --at 152500,207968,-1.5708 --command "give RopeAndHook 1,5" --hold 1,0,0,60 --key left:IDCTL_INVBAR_ROPE,80 --aim-point 150000,207968,30000,90 --hold 1,0,0,250,330`; `rope.log`, `camera.log`.
+**Result:** 77 climb updates, 77 "drawn gliding from (150148, 205088, 12600) to (150148, 205088, 12650) ..." lines (50 units an update). The rules (where the camera is each update) are unchanged.
+**Still broken / not tested:** Not looked at by eye; only the climb up run (down uses the same code).
+**Next:** The user's look.
+
 ## 2026-10-25 S-6: smooth animation measured and written up
 
 **Changed:** FEATURES (launch option, the feature), README (`--smooth` in "Try it", M7's first improvements), DESIGN (S-1 to S-6 done), STATUS.
