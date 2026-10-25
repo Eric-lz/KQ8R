@@ -2582,14 +2582,21 @@ pub fn connor_draw(
     }
     // The frame: loop position blended forward from the last update.
     let movement = sim.walker.movement;
-    let shown_at = sim.drawn(movement).and_then(|m| (m.frames > 0).then(|| (m.anim, m.movement_loop.frame_at(phase + sim.phase_step * a).min(m.frames - 1))));
+    // Smooth animation (S-4): and how far toward the next frame.
+    let pushed = phase + sim.phase_step * a;
+    let shown_at = sim.drawn(movement).and_then(|m| {
+        (m.frames > 0).then(|| {
+            let (k, mix) = crate::smooth_view::frame_at(pushed, m.frames, m.movement_loop.repeat, m.movement_loop.frame_at(pushed));
+            (m.anim, k.min(m.frames - 1), mix)
+        })
+    });
     // Animation memory step 4: his parts show it.
     let sim = &mut *sim;
     if let (Some(slots), Some(gpu)) = (sim.slots.as_mut(), gpu.as_deref()) {
         match shown_at {
-            Some((anim, k)) if slots.stale(anim, k) => slots.show(&mut commands, gpu, anim, k, &mut visibility),
+            Some((anim, k, mix)) if slots.stale(anim, k) => slots.show_mixed(&mut commands, gpu, anim, k, mix, &mut visibility),
+            Some((_, _, mix)) => slots.set_amount(&mut commands, gpu, mix),
             None => slots.hide(&mut visibility),
-            _ => {}
         }
         sim.shown = shown_at.map(|_| slots.root());
     }
@@ -2598,13 +2605,19 @@ pub fn connor_draw(
     // place and direction while it plays, so that is his own +y, his back).
     let rope_at = sim.rope_model.and_then(|(name, p0, p1)| {
         let m = sim.movements.iter().find(|m| m.name == name)?;
-        (m.frames > 0).then(|| (m.anim, m.movement_loop.frame_at(p0 + (p1 - p0) * a).min(m.frames - 1)))
+        let at = p0 + (p1 - p0) * a;
+        (m.frames > 0).then(|| {
+            let (k, mix) = crate::smooth_view::frame_at(at, m.frames, m.movement_loop.repeat, m.movement_loop.frame_at(at));
+            (m.anim, k.min(m.frames - 1), mix)
+        })
     });
     if let (Some(slots), Some(gpu)) = (sim.rope_slots.as_mut(), gpu.as_deref()) {
         match rope_at {
-            Some((anim, k)) => {
+            Some((anim, k, mix)) => {
                 if slots.stale(anim, k) {
-                    slots.show(&mut commands, gpu, anim, k, &mut visibility);
+                    slots.show_mixed(&mut commands, gpu, anim, k, mix, &mut visibility);
+                } else {
+                    slots.set_amount(&mut commands, gpu, mix);
                 }
                 slots.set_offset(&mut frames, Vec3::from(crate::to_bevy(kq8_core::rope::ROPE_MODEL_OFFSET, [0.0; 3])));
             }

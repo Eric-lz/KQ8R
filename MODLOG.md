@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-4: smooth animation's amounts: parts drawn part-way between frames
+
+**Changed:** Core `named_anim.rs`: `NamedAnimPlayer::drawn_frame` (the frame and how far toward the next, the phase pushed on by the time since the last update at the movement's rate; still, paused, ended or just started: not pushed) and `mixed_frame` (a loop goes round; a play-once movement is never mixed on its last frame); `door.rs`: `DoorMovement::rate`. Viewer `smooth_view.rs`: `ahead`, `frame_of`, `frame_at`, a count for the log; `anim_view.rs` (characters, animated objects), `door_view.rs` (doors, chests, scripted objects), `connor_view.rs` (Connor, his rope model) draw the frame with its amount when the switch is on; `anim_gpu.rs`: `show` folded into `show_mixed`. `main.rs`: the 2-second line gives the switch and the part tags set part-way. Unit test `the_drawn_frame_is_the_shown_one_plus_how_far_toward_the_next`.
+**Why:** DESIGN S-4.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 1500 --sound off --smooth on|off`, twice each; `viewer.log`.
+**Result:** The shader change compiles and runs (no errors). Pack: "72255; 69336 with the same part in the next frame, 96.0 %" (S-2). On: about 160,000 part tags set part-way per 2 s at 180 frames a second (about 450 a frame). Frame time the same on and off: 5.56 ms (180 a second, the screen's rate), both dropping to 60 a second at times when the window is not in front.
+**Still broken / not tested:** Not looked at by eye. Characters', doors' and chests' places still move at 15 a second (S-5). A change of movement still jumps.
+**Next:** The user's look at the limbs; S-5.
+
 ## 2026-10-25 S-3: the drawing can mix a part with the next frame's
 
 **Changed:** Viewer `object_light.wesl`: the animated parts' tag is read as the node-frame (low 24 bits) and an amount (high 8 bits); above 0 the corner's point and normal are mixed with the same part in the next frame (S-2's table). `anim_gpu.rs`: `tag()`, `Slots::show_mixed` and `set_amount` (through `commands`, so a new frame and an amount set in the same system don't undo each other); `show` keeps amount 0. Unit test `a_tag_holds_the_node_frame_and_the_amount`.

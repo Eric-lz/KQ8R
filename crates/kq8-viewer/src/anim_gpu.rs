@@ -386,13 +386,6 @@ impl Slots {
         self.shown = None;
     }
 
-    /// The slots show `frame` of `movement`: each part's topology mesh,
-    /// its animated material and its node-frame tag; slots beyond the
-    /// frame's parts are hidden.
-    pub fn show(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, visibility: &mut Query<&mut Visibility>) {
-        self.show_mixed(commands, gpu, movement, frame, 0, visibility);
-    }
-
     /// The parts of the frame shown and their node-frames.
     fn shown_parts<'a>(&self, gpu: &'a AnimGpu) -> &'a [Part] {
         let Some((movement, frame)) = self.shown else { return &[] };
@@ -407,14 +400,21 @@ impl Slots {
         if amount == self.amount || self.shown.is_none() {
             return;
         }
-        for (part, &slot) in self.shown_parts(gpu).iter().zip(&self.slots) {
+        let parts = self.shown_parts(gpu);
+        for (part, &slot) in parts.iter().zip(&self.slots) {
             commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount)));
+        }
+        if amount > 0 {
+            crate::smooth_view::count_mixed(parts.len().min(self.slots.len()));
         }
         self.amount = amount;
     }
 
-    /// [`Slots::show`] with the parts drawn `amount` (0-255) toward the next
-    /// frame (S-3).
+    /// The slots show `frame` of `movement`: each part's topology mesh,
+    /// its animated material and its node-frame tag; slots beyond the
+    /// frame's parts are hidden. The parts are drawn `amount` (0-255) of
+    /// the way toward the next frame (smooth animation, S-3; 0: the frame
+    /// itself).
     pub fn show_mixed(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, amount: u8, visibility: &mut Query<&mut Visibility>) {
         let Some((anim, source, ball)) = self.movements.get(movement).cloned() else { return };
         let parts = gpu.frames(self.list, anim).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice);
@@ -457,6 +457,9 @@ impl Slots {
         }
         commands.entity(self.new_root).insert(ball);
         self.shown = Some((movement, frame));
+        if amount > 0 {
+            crate::smooth_view::count_mixed(parts.len().min(self.slots.len()));
+        }
         self.amount = amount;
     }
 }

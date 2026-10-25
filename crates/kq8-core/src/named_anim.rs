@@ -501,6 +501,18 @@ impl NamedAnimPlayer {
         self.movement().map_or(0, |m| m.frame_at(self.phase))
     }
 
+    /// Smooth animation (DESIGN S-4, ours; drawing only): the frame to
+    /// draw `ahead` seconds after the last update and how far (0..1)
+    /// toward the next one, the phase pushed on at the movement's rate (as
+    /// Connor's drawing does). A still, paused, ended or just started
+    /// movement is not pushed on. At `ahead` 0 the frame is [`Self::frame`].
+    pub fn drawn_frame(&self, ahead: f32) -> (usize, f32) {
+        let Some(m) = self.movement() else { return (0, 0.0) };
+        let moving = self.playing && !self.paused && !self.started_this_update;
+        let speed = if moving { self.random_speed.unwrap_or(m.speed) } else { 0.0 };
+        mixed_frame(self.phase + speed * m.rate() * ahead, m.frames(), m.repeat)
+    }
+
     /// The turn the shown frame's steps give it (own space).
     pub fn turn(&self) -> Transform {
         let mut t = self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()));
@@ -518,6 +530,28 @@ impl NamedAnimPlayer {
         let w = chain(&base, &t);
         Placement { rotation: w.m, position: w.p }
     }
+}
+
+/// Smooth animation (S-4, ours): for a phase (pushed on, so it may be past
+/// the ends) of a loop of `frames` frames, the frame drawn (rule 6's
+/// floor(p × N + 0.001)) and how far (0..1) toward the next. A repeating
+/// loop goes on round (the last frame toward frame 0); a play-once one is
+/// never mixed on its last frame or before its first.
+pub fn mixed_frame(phase: f32, frames: usize, repeat: bool) -> (usize, f32) {
+    if frames < 2 {
+        return (kq8_data::shape::frame_at_phase(phase, frames, repeat), 0.0);
+    }
+    let n = frames as f32;
+    let x = phase * n + 0.001;
+    let x = if repeat { x.rem_euclid(n) } else { x };
+    if !repeat && x >= n - 1.0 {
+        return (frames - 1, 0.0);
+    }
+    if x < 0.0 {
+        return (0, 0.0);
+    }
+    let k = (x.floor() as usize).min(frames - 1);
+    (k, (x - k as f32).clamp(0.0, 1.0))
 }
 
 #[cfg(test)]
@@ -833,6 +867,41 @@ pub(crate) mod tests {
         let mut c = NamedAnimPlayer::new("x", still_then_open("x").movements, 0, Placement::at([0.0; 3])).with_stop_names(None, None);
         assert!(matches!(c.request("open"), Request::AtOnce(_)));
         assert_eq!(c.waiting, None);
+    }
+
+    #[test]
+    fn the_drawn_frame_is_the_shown_one_plus_how_far_toward_the_next() {
+        // At no time ahead: the same frame as `frame()`, for every phase.
+        for repeat in [true, false] {
+            for k in 0..200 {
+                let p = k as f32 / 200.0;
+                let (f, _) = mixed_frame(p, 16, repeat);
+                assert_eq!(f, kq8_data::shape::frame_at_phase(p, 16, repeat), "{p} {repeat}");
+            }
+        }
+        // Half a frame past frame 3.
+        let (f, w) = mixed_frame(3.5 / 16.0, 16, true);
+        assert!(f == 3 && (w - 0.501).abs() < 1e-3, "{f} {w}");
+        // A loop goes round: past the last frame, toward frame 0.
+        let (f, w) = mixed_frame(15.5 / 16.0, 16, true);
+        assert!(f == 15 && (w - 0.501).abs() < 1e-3);
+        assert_eq!(mixed_frame(16.25 / 16.0, 16, true).0, 0);
+        // Play-once: the last frame is never mixed, nor past it.
+        assert_eq!(mixed_frame(15.5 / 16.0, 16, false), (15, 0.0));
+        assert_eq!(mixed_frame(1.2, 16, false), (15, 0.0));
+        let (f, w) = mixed_frame(14.25 / 16.0, 16, false);
+        assert!(f == 14 && (w - 0.251).abs() < 1e-3);
+        // A player: a repeating 16-frame loop over 1 s moves 15/16 a
+        // second, so half an update (1/30 s) ahead of phase 0 is half a
+        // frame on; a still one stays.
+        let mut p = object();
+        p.start("spin");
+        p.started_this_update = false;
+        assert!(p.playing && p.phase == 0.0);
+        let (f, w) = p.drawn_frame(1.0 / 30.0);
+        assert!(f == 0 && (w - (16.0 * LOOP16 / 30.0 + 0.001)).abs() < 1e-3, "{f} {w}");
+        p.paused = true;
+        assert_eq!(p.drawn_frame(1.0 / 30.0).1, 0.001);
     }
 
     #[test]

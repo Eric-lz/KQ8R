@@ -904,11 +904,12 @@ fn frame_stats(
         // reader holds the log; this line is skipped then.
         if let Ok(mut log) = shared.log.try_lock() {
             log.detail(format!(
-                "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2} last_2s: {} frames, slowest {:.2} ms{}",
+                "frames={} last_frame_ms={ms:.2} worst_frame_ms={:.2} last_2s: {} frames, slowest {:.2} ms; {}{}",
                 s.frames,
                 s.worst_frame_ms,
                 s.window_frames,
                 s.window_worst_ms,
+                smooth_view::report(),
                 orbit.map_or(String::new(), |o| format!(" camera yaw={:.2} pitch={:.2} distance={:.2}", o.yaw, o.pitch, o.distance))
             ));
         }

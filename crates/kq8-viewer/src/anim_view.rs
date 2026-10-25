@@ -763,10 +763,12 @@ pub fn anim_draw(
     mut materials: ResMut<Assets<ObjectMaterial>>,
     mut part_materials: Query<&mut MeshMaterial3d<ObjectMaterial>>,
     gpu: Option<Res<crate::anim_gpu::AnimGpu>>,
+    fixed: Res<Time<Fixed>>,
 ) {
     let Some(mut sim) = sim else { return };
     let doors = doors.as_deref();
     let sim = &mut *sim;
+    let ahead = crate::smooth_view::ahead(&fixed);
     for p in &mut sim.playing {
         // makeTranslucent (characters.md rule 22, M4): every material of
         // every part at n / 255, at once (objects.md "See-through
@@ -869,7 +871,9 @@ pub fn anim_draw(
         let Some(player) = player(p, doors) else { continue };
         let movement = player.current.min(p.movements.len().saturating_sub(1));
         let Some(drawn) = p.movements.get(movement) else { continue };
-        let frame = player.frame().min(drawn.frames.saturating_sub(1));
+        // Smooth animation (S-4): the frame and how far toward the next.
+        let (frame, mix) = crate::smooth_view::frame_of(player, ahead);
+        let frame = frame.min(drawn.frames.saturating_sub(1));
         // A character's repeating movement moves its place, not the
         // drawing (character-movement.md rule 1; M5 5a-2).
         let loop_moves_base = player.loops_move_base && player.movement().is_some_and(|m| m.repeat);
@@ -881,6 +885,9 @@ pub fn anim_draw(
             (p.rotation, p.position) = (base.rotation, base.position);
         }
         if p.shown == Some((movement, frame)) && !moved && p.new_draw.as_ref().is_none_or(|nd| !nd.stale(movement, frame)) {
+            if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
+                nd.set_amount(&mut commands, gpu, mix);
+            }
             continue;
         }
         if let Ok(mut c) = carried.get_mut(p.body) {
@@ -888,7 +895,7 @@ pub fn anim_draw(
         }
         p.shown = Some((movement, frame));
         if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
-            nd.show(&mut commands, gpu, movement, frame, &mut visibility);
+            nd.show_mixed(&mut commands, gpu, movement, frame, mix, &mut visibility);
         }
         let mut pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
         if loop_moves_base {

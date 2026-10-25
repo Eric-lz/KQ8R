@@ -92,6 +92,19 @@ impl DoorMovement {
         self.frame_steps.len().max(1)
     }
 
+    /// Phase a second at speed 1: rule 6's (N − 1)/(N × length) for a
+    /// repeating loop of 2 frames or more ([`Self::step_with`]), else
+    /// 1/length; 0 with no length.
+    pub fn rate(&self) -> f32 {
+        if self.play_time <= 0.0 {
+            0.0
+        } else if self.repeat && self.frame_steps.len() >= 2 {
+            repeat_rate(self.frames(), self.play_time)
+        } else {
+            1.0 / self.play_time
+        }
+    }
+
     /// The frame shown at `phase`: floor(phase × frames + 0.001), repeating
     /// or not ([`kq8_data::shape::frame_at_phase`], `objects.md` "Loops"
     /// rule 6, Q153).

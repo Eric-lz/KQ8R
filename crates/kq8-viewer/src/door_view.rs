@@ -2087,7 +2087,7 @@ fn show_frame(
     drawn: &mut DrawnDoor,
     placement: &Placement,
     current: usize,
-    frame: usize,
+    (frame, mix): (usize, u8),
     transforms: &mut Query<&mut Transform>,
     visibility: &mut Query<&mut Visibility>,
     (commands, gpu): (&mut Commands, Option<&crate::anim_gpu::AnimGpu>),
@@ -2100,7 +2100,10 @@ fn show_frame(
         let frames = drawn.frames.get(current).copied().unwrap_or(0);
         let frame = frame.min(frames.saturating_sub(1));
         if slots.stale(current, frame) {
-            slots.show(commands, gpu, current, frame, visibility);
+            slots.show_mixed(commands, gpu, current, frame, mix, visibility);
+        } else {
+            // Smooth animation (S-4): the same frame, further toward the next.
+            slots.set_amount(commands, gpu, mix);
         }
     }
 }
@@ -2114,10 +2117,12 @@ pub fn door_draw(
     mut visibility: Query<&mut Visibility>,
     mut carried: Query<&mut crate::scene_lights::CarriedLights>,
     gpu: Option<Res<crate::anim_gpu::AnimGpu>>,
+    fixed: Res<Time<Fixed>>,
 ) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     let gpu = gpu.as_deref();
+    let ahead = crate::smooth_view::ahead(&fixed);
     // The frame whose lights shine (M1 7c).
     let mut lit = |body: Entity, movement: usize, frame: usize| {
         if let Ok(mut c) = carried.get_mut(body) {
@@ -2129,7 +2134,7 @@ pub fn door_draw(
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
         lit(drawn.body, d.player.current, d.frame());
-        show_frame(drawn, &d.placement(), d.player.current, d.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
+        show_frame(drawn, &d.placement(), d.player.current, crate::smooth_view::frame_of(&d.player, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
         // Deleted (3g-5): not drawn.
         if door.gone {
             if let Ok(mut v) = visibility.get_mut(drawn.body) {
@@ -2142,7 +2147,7 @@ pub fn door_draw(
     for (object, drawn) in sim.active.world.objects.iter().zip(sim.object_drawn.iter_mut()) {
         let p = &object.player;
         lit(drawn.body, p.current, p.frame());
-        show_frame(drawn, &p.placement(), p.current, p.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
+        show_frame(drawn, &p.placement(), p.current, crate::smooth_view::frame_of(p, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if object.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {
@@ -2153,7 +2158,7 @@ pub fn door_draw(
     for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
         let c = &chest.chest;
         lit(drawn.body, c.player.current, c.frame());
-        show_frame(drawn, &c.placement(), c.player.current, c.frame(), &mut transforms, &mut visibility, (&mut commands, gpu));
+        show_frame(drawn, &c.placement(), c.player.current, crate::smooth_view::frame_of(&c.player, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {
