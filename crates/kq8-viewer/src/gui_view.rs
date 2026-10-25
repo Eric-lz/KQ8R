@@ -799,9 +799,13 @@ impl Gui {
                 Kind::Text { pictures: Some(p), .. } => {
                     let Some(file) = self.tags.string(p.bitmap).map(str::to_string) else { continue };
                     // Rule 33: a slot's flash plays once over its slot.
+                    // Its colour 0 by the file's own transparent flag, not
+                    // the attribute (0x8, "solid" by rule 20a): drawn
+                    // solid they were black boxes, see-through in the
+                    // original (the user's check 2026-10-25; asked: Q171).
                     if let Some(k) = slot(&SLOT_FLASHES) {
                         if let (Some(start), Some(at)) = (self.flashes[k], self.control(SLOT_PICTURES[k])) {
-                            out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
+                            out.push(Spec::Pic { rect: at.rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: None });
                         }
                     } else if MAP_BUTTONS.contains(&name.as_str()) {
                         // magic-map.md rule 5: the page arrows and the "Go"
@@ -816,9 +820,10 @@ impl Gui {
                         out.push(Spec::Pic { rect, file, frame: 0, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
                     } else if name == LEVEL_FLAME {
                         // DESIGN L-2 (stand-in Q149 b): over the level
-                        // number, in its own layout place.
+                        // number, in its own layout place; see-through by
+                        // the file's own flag, as the flashes (Q171).
                         if let Some(start) = self.level_flame {
-                            out.push(Spec::Pic { rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: Some(p.attribute & 7 == 1) });
+                            out.push(Spec::Pic { rect, file, frame: ((now - start) / frame_ms) as usize, stretch: p.modifier & STRETCHED != 0, see_through: None });
                         }
                     }
                 }

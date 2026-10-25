@@ -3581,3 +3581,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | His place and turn = where he is drawn: his position and his full turn (lean, then heading) | **Ours** (as `part_now`, the shield's orbit) | — |
 | No throw, no fall, no line test, `NewInvItem` not set | Rule 16 (traced) | Unit test |
 | An item named in a Special list's `Inv` has its model loaded | **Ours** (the loader's scan of the scripts) | — |
+
+## The level-up flame and the slot flashes see-through again (fix after B-7, 2026-10-25) — viewer `gui_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The flame (`flame14.pba`) and the flashes (`fx.pba`) leave colour 0 undrawn by their file's transparent flag (flags 0x9), not by the attribute's kind (0x8, solid by `interface.md` rule 20a) | **The user's check in the original** (see-through; ours were black); file flags observed (`kq8 bitmap-png`); asked: Q171 | `gui.log`: the flame and three flashes play at a level-up; not looked at by eye |

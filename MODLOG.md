@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: the level-up flame and the slot flashes were drawn with a black background (B-7); Q171 asked
+
+**Changed:** Viewer `gui_view.rs`: the level-up flame and the three slot flashes leave colour 0 undrawn by their file's own transparent flag again (B-7 had switched them to the layout attribute, which says solid). QUESTIONS new **Q171**. Provenance.
+**Why:** The user's report: at a level-up the flame over the level number had a black background, and the armour, melee and ranged slots went black while their flashes played; in the original both are see-through. `flame14.pba` and `fx.pba` both carry the transparent flag (flags 0x9), and colour 0 is their background. Rule 20a (attribute 0x8 = solid) seems not to hold for them, so A is asked.
+**Tested how:** `cargo test --workspace` (all pass). `kq8 bitmap-png daventry/8gui/flame14.pba` and `fx.pba` (flags). `kq8-viewer --world Daventry --frames 1500 --sound off --no-ai --command "move Connor 0 228300 183200 12500 0 0 -1.57",5 --console "kill sprgnbow",20`; `gui.log`.
+**Result:** Update 114: level 1 -> 2, the flame and the three flashes start and play out (17 frames each). The see-through itself is not visible in the logs.
+**Still broken / not tested:** Not looked at by eye. The still panel pictures keep rule 20a (solid unless kind 1).
+**Next:** The user's look at a level-up.
+
 ## 2026-10-25 C-3: `Inv <item>` in Connor's Special list lays a real item; the roof kill's crossbow stays (Q167 built)
 
 **Changed:** Core `connor.rs`: `SpecialStep::Inv` (was a note only); the walker records each `Inv` reached with the movement whose last frame he shows (`inv_laid`). `fight.rs`: `lay_inv_item` (the item's `body` on the part named like it, no throw, no line test, `NewInvItem` untouched), `laid_place` shared with C-2. Viewer `connor_view.rs`: `take_inv_laid` (the part of his last frame in the world, from his position and full turn); `door_view.rs` hands them to the world; `load.rs` loads the models of items named by `Inv`. Unit test. QUESTIONS Q167 built. Provenance, DESIGN.
