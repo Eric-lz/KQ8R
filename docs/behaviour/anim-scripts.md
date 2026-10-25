@@ -311,8 +311,35 @@ duration 0 the same way (B's model reader has the duration).
       `Conner.anm`, e.g. `bricks.anm`, `elevator.anm`, `voice1.anm`).
     - `AnimListOn`: from now on, movement names are looked up in that
       list instead of Connor's own. `AnimListOff`: back to his own list.
-    - `Inv` followed by an item name (the next item): Connor holds a
-      model of that item. Not traced further.
+    - `Inv` followed by an item name (the next item) (traced 2026-10-24,
+      Q167; this bullet first said "Connor holds a model of that item",
+      which was wrong): a **real item is put in the world**, not in
+      Connor's hands nor in his inventory. Like every item, it is handled
+      when the movement before it has ended, so Connor's pose is that
+      movement's **last frame**. The item's own model's part `body` is
+      laid **exactly on the part of Connor's pose named like the item**
+      (ignoring capitals): place and full turn, taken from Connor's
+      place and turn. If his pose has no such part: Connor's place and
+      turn, 750 units up. There is **no throw, no fall and no line
+      test** (unlike a dying character's weapon, `fighting.md` rule
+      31a), and the script variable `NewInvItem` is not set. The item
+      then lies there like any placed item until it is picked up. The
+      name is the item's name without `INVITEM_` (the script writes
+      `SmCrossBow`, the item list `INVITEM_SmCrossbow`: matched
+      ignoring capitals, inferred from the data). The next items of the
+      list follow at once (at the list's end: back to Wait).
+      **Daventry (data):** only `sprgnbow.cs`, the roof kill: the last
+      movement of each of the four ways to kill the bow spriggan ends
+      with `Inv,SmCrossBow` (`axsix` `ca_spsc6.kqs`, `dgfour`
+      `cd_spsc4.kqs`, `lsfour` `cls_sps4.kqs`, `hdthree`
+      `cf_spsc3.kqs`), and each of those four models has a part
+      `SmCrossBow` (the crossbow seen falling in the movement). The
+      earlier movements (`axone`, `dgone`, ...) have no `Inv`. So when
+      the kill movement ends, its own crossbow goes away with it and a
+      real `SmCrossbow` item is already lying in the same place, turned
+      the same way, to be picked up. The bow spriggan itself is
+      deleted by the script, not killed, so its own drop list
+      (`fighting.md` rule 31) is never used here.
     - `KillConnor`: Connor dies (his Die state).
     - **Any other word is a movement**: it starts at once, and handling
       **stops until that movement ends** (compared by name, ignoring
@@ -961,6 +988,15 @@ duration 0 the same way (B's model reader has the duration).
   movement that ended, the waiting movement that started (if any), then
   `EndLoop` / listener `Cue 300` / `KQAnimOnce` `Die` and deletion, with
   the update number.
+- **`Inv` (rule 16), the roof kill in `sprgnbow.cs`:** our log should
+  show, in the update where the last kill movement ends, a new
+  `SmCrossbow` item with its place and turn (equal to the movement's
+  `SmCrossBow` part in its last frame, moved by Connor's place and
+  turn), no throw, and Connor back to Wait. In the original (user, by
+  eye): after the kill, the crossbow lies where the movement dropped it,
+  tilted as in the movement, does not bounce or fall further, and can be
+  picked up; check one fists kill and one weapon kill (the four
+  branches all end this way).
 - **Daventry, by script (no fighting needed):** `bricks.cs` `Cue 300 …
   push` sends `KQAnimPlayEvent down` to `Bricks` (current `stop`, a
   `1 1` loop, so it starts at once at phase 1.0, speed 0, and stays) and
@@ -1007,8 +1043,9 @@ duration 0 the same way (B's model reader has the duration).
 2. When a movement starts, the object's collision type bit 0x400 is
    switched on or off depending on something about the new movement;
    what it means was not traced.
-3. `Inv <item>` in Connor's Special list (rule 16): which hand, which
-   model, and how long he holds it.
+3. ~~`Inv <item>` in Connor's Special list (rule 16)~~: answered
+   2026-10-24 (Q167): he never holds it; a real item is laid at the
+   part of his last frame named like it.
 4. `KQMoveEvent` with flags 1 and 3 on objects (Barren's tiles, one Dead
    City box; not Daventry): not traced for objects (`objects.md` gives
    the camera's meaning).

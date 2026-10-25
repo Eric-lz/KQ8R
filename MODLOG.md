@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study (A): Q167 answered, `Inv <item>` in a Special list lays a real item
+
+**Changed:** `docs/behaviour/anim-scripts.md` rule 16 (`Inv`), How to check, open question 3 closed; QUESTIONS Q167 answered. No code.
+**Why:** In the original the roof kill's crossbow stays on the ground; ours vanished with the kill movement.
+**Tested how:** Traced in `Mask.exe` (Ghidra); data: `sprgnbow.cs` (four `Inv,SmCrossBow` lines), the four kill models each have a part `SmCrossBow`.
+**Result:** `Inv <item>` is handled when the movement before it ends; it makes a real world item whose `body` part sits on the part of Connor's last frame named like the item (place and turn), with no throw, fall or line test. Rule 16's old "Connor holds a model" was wrong.
+**Still broken / not tested:** That the last frame is the pose at that moment is inferred (the same as for the die movement). The item-name match ignoring capitals is inferred from the data.
+**Next:** Q168 (the caption stone).
+
 ## 2026-10-24 Study (A): Q169 answered, dropped weapons lie where the death leaves them
 
 **Changed:** `docs/behaviour/fighting.md` rule 31 corrected, new rule 31a, table row, edge case, data list, check 6a, open question 4; `thrown-items.md` rule 1 (the exception); QUESTIONS Q169 answered. No code.
