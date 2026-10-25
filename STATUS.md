@@ -10,8 +10,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 - **2026-10-25 (B): smooth animation (`--smooth`, ours, off by default)**
   (DESIGN "smooth animation", S-1 to S-6): model parts drawn part-way
   between frames, creatures, doors, chests, thrown items and bolts glided
-  between updates. The user's look at the limbs: good (one fix:
-  Connor's put-away movement). Gliding (S-5) checked in the logs only.
+  between updates, Connor's rope climb too. The user's look: all good
+  (one fix: Connor's put-away movement). The rope climb's camera now
+  glides between updates (always on; user-checked).
   Not done: mixing across a change of movement; shadows keep whole
   frames.
 

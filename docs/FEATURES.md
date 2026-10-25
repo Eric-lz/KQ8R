@@ -788,7 +788,11 @@ commands in `MODLOG.md`.
   frames (96 % of parts in Daventry; the rest still jump), and creatures,
   doors, chests, thrown items and bolts glide between the game's 15
   updates a second. A change of movement (walk to stop) still jumps.
-  Same frame time on and off (logs). The user's look: limbs good.
+  Same frame time on and off (logs). Connor's rope climb too. The
+  user's look (2026-10-25): limbs, gliding and the climb good.
+- **Rope camera:** while Connor climbs, the camera glides along its path
+  between updates (always, not only with `--smooth`; the user's look:
+  good).
 - **Animation timing:** doors, chests and every looping object (the
   windmill, torches, the well) play their loops at the traced speed and
   wrap, as Connor and the characters already did.

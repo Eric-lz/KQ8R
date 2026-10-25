@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 The user's check of smooth animation and the rope camera
+
+**Changed:** FEATURES, STATUS. No code.
+**Why:** The user looked at S-5's gliding, the rope camera fix and the smooth rope climb.
+**Tested how:** The user, by eye.
+**Result:** All good ("exactly what I expected"; the rope climb "perfect").
+**Still broken / not tested:** A change of movement still jumps; shadows keep whole frames (not planned yet).
+**Next:** Open for the user's choice; Q170 and Q171 wait for a study session.
+
 ## 2026-10-25 Smooth animation: Connor's rope climb drawn between updates
 
 **Changed:** Viewer `connor_view.rs` (`connor_draw`): while he hangs on the rope and smooth animation is on, the climb movement's frame is drawn between its loop position at the last update and now (as his place and the climb camera are), not pushed on by a rate. Without `--smooth`: unchanged.
