@@ -3555,3 +3555,18 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The part and the item's `body` have the same scale in the data (crossbow 1 and 1, broadsword 0.885 and 0.885), so the laid turn is a plain one | Observed (`kq8 shape-parts` on `spbdie.kqs`, `scbow.kqs`, `skbsdie.kqs`, `bsword.kqs`) | Unit test (scale within 1 %) |
 | An item is drawn with its model's rest frame, so `body` is read from that frame | **Ours** (as the item drawing) | `items.log`: "part body read for 23 shapes" |
 | A model without a `body` part (`pouch.kqs`): its own origin goes on the part | **Ours** (no data case for a laid item) | — |
+
+## A dying character's weapon is laid, not thrown (C-2, Q169) — `crates/kq8-core/src/fight.rs` (`drop_items`, `lay_kept_drop`, `laid_checks_step`, `throw_made`); `active.rs` (`NewInvItem` after a death); viewer `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Each drop entry (quotes and `INVITEM_` off, capitals ignored) is compared with the named parts of the pose at the dying start; one that names a part is kept, the last one wins, earlier ones are lost | `fighting.md` rule 31 (traced) | Unit test `a_dying_characters_weapon_is_laid_where_the_death_leaves_it`; viewer `items.log` |
+| That pose is the die movement's first frame | Rule 31 (inferred by A; matches the user's check) | `items.log`: "parts of 'Die' frame 0: [body, SmCrossbow, arrow, blood]" |
+| The other entries are thrown as before (`tossItems`) | Rule 31 (traced, user-checked) | `items.log`: `skeleton4`'s coins thrown, its sword kept |
+| At the die movement's end, first of the end steps: the item's `body` on the same-named part of the **die movement's** last frame, from the character's place and turn; no such part: its place and turn, 750 up | Rule 31a.1 (traced) | Unit tests (with a waiting movement started at the end); `items.log` |
+| The die movement's last frame even when a waiting movement (`Stop`) has just started in its place | Rule 31a.1 ("the character's last frame"); reading it as the die movement's: **ours** (found in Dead City, where `Stop` had started) | Unit test (fails with the shown pose) |
+| Line test from 1,000 above the item to 1,000 above the feet; blocked: thrown from the feet instead; free: stays, no fall | Rule 31a.2, 31a.3 (traced; "never falls later" inferred by A) | Unit tests `a_dying_characters_weapon_is_laid_where_the_death_leaves_it`, `a_laid_weapon_behind_a_wall_is_thrown_instead` |
+| What blocks: terrain, buildings, objects and characters of any collision type, not the dying one | Rule 31a.2 says "any solid object"; the types: **stand-in** (asked: Q170) | — |
+| The line test runs in the thrown items' step of the same update (it needs the collision scene) | **Ours** (timing) | `items.log`: laid at update 113, tested at 114 (the counter has moved on in that step, as for the flights) |
+| `NewInvItem` is set to the item a death made last (thrown or laid), before the `Die` calls | Rules 31, 31a ("as for them"); when it is set: **ours** | Unit test; `doors.log`: "NewInvItem = NoName22" |
+| `Die now`: the same steps with the pose shown | Rule 31a: "not sure"; **stand-in**, logged | — |

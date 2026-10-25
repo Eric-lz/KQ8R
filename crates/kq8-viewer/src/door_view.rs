@@ -1528,8 +1528,10 @@ pub fn character_gravity(
     // M5 5a-4: sight and the active list, then the movers.
     sim.active.world.characters_ai(&lookup.0, b, o);
     sim.active.world.characters_gravity(&lookup.0, b, o);
-    // thrown-items.md (M5 5e-1): thrown items, with the same buildings
-    // and objects.
+    // fighting.md rule 31a (C-2): the line tests of the weapons laid by a
+    // death this update, then thrown-items.md (M5 5e-1): thrown items,
+    // with the same buildings and objects.
+    sim.active.world.laid_checks_step(&lookup.0, b, o);
     sim.active.world.flights_step(&lookup.0, b, o);
     // M4 4d-12-3: the characters solid for Connor where they stand now,
     // for his scene; his hits on them since the last update to the log.

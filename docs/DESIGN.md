@@ -2948,6 +2948,7 @@ turned about Y, then X, then Z), so the turn is turned back into angles.
    into the three angles) and `kq8_core::item::laid_on` (the formula
    above), with unit tests; `kq8 shape-parts <file>` prints a model's
    parts.
+   **Done** 2026-10-25 (23 item models have a `body`; `pouch.kqs` none).
 2. **C-2: a dying character's weapon is laid, not thrown** (Q169,
    `fighting.md` rules 31, 31a): at the dying start each drop entry
    (quotes and `INVITEM_` off) is compared, ignoring capitals, with the
@@ -2964,8 +2965,13 @@ turned about Y, then X, then Z), so the turn is turned back into angles.
    (no die movement): the same with the pose shown then (rule 31a says
    "not sure"; logged as a stand-in). `NewInvItem` is set to the item
    made last (rule 31a; the thrown ones too).
-   Check: `kill sprigwnd1` (console) with fists: the crossbow lies at
-   the die model's `SmCrossbow` part, no flight, in `items.log`.
+   Check: `kill sprgnbow` (console; `sprigwnd1` drops nothing): the
+   crossbow lies at the die model's `SmCrossbow` part, no flight, in
+   `items.log`.
+   **Done** 2026-10-25 (Daventry's crossbow and a Dead City skeleton's
+   sword checked in the logs; the die movement's own last frame is used
+   even when a waiting `Stop` has started; the blocking types are a
+   stand-in, Q170).
 3. **C-3: `Inv <item>` in Connor's Special list** (Q167,
    `anim-scripts.md` rule 16): handled when the movement before it
    ended (his pose is its last frame): a real item laid on the part of

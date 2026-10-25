@@ -841,6 +841,12 @@ pub struct WorldState {
     pub kill_tip: bool,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
     pub flights: Vec<crate::item::Flight>,
+    /// Weapons laid where a death left them, waiting for their line test
+    /// (`fighting.md` rule 31a; C-2): done with the thrown items' step.
+    pub laid_checks: Vec<crate::fight::LaidCheck>,
+    /// The item a death made last (`fighting.md` rules 31, 31a: the
+    /// script variable `NewInvItem`), set before the next `Die` calls.
+    pub new_inv_item: Option<String>,
     /// Projectile files by lower-case name (`fighting.md` rule 36; M5
     /// 5c-9), set by the caller.
     pub projectiles: std::collections::BTreeMap<String, kq8_data::characters::ProjectileKeys>,
@@ -3474,6 +3480,8 @@ impl Active {
                 hammers_back: Vec::new(),
                 kill_tip: false,
                 flights: Vec::new(),
+                laid_checks: Vec::new(),
+                new_inv_item: None,
                 projectiles: Default::default(),
                 bolts: Vec::new(),
                 bolts_shot: 0,
@@ -4734,6 +4742,12 @@ impl Active {
                     self.world.death_ended(i, now);
                 }
             }
+        }
+        // fighting.md rules 31, 31a: `NewInvItem` is the item a death made
+        // last (before the `Die` calls that may read it).
+        if let Some(item) = self.world.new_inv_item.take() {
+            self.world.note(format!("NewInvItem = {item} (made by a death, fighting.md rules 31, 31a)"));
+            self.scripts.vars.set("NewInvItem", item);
         }
         // Rule 32.3: the dead's scripts get `Die <kind>`.
         for (name, kind) in std::mem::take(&mut self.world.die_calls) {
@@ -6721,6 +6735,90 @@ endif
         // anim-scripts.md rule 38 (Q162): removed after its Die; the
         // corpse has no name of its own.
         assert_eq!(a.test_command("exist gob", "t").as_deref(), Some("1"));
+    }
+
+    /// fighting.md rules 31, 31a (C-2): a goblin dropping a crossbow
+    /// (named like a part of its die movement) and coins; dies, runs to
+    /// the death's end. Returns it and the part's place in the last frame.
+    fn weapon_dropper() -> (Active, kq8_data::shape::Transform) {
+        use kq8_data::shape::Transform;
+        let mut a = fighter();
+        let rows = [("INVITEM_SmCrossbow", "LongWeapon", "scbow.kqs"), ("INVITEM_SilverCoins", "Money", "coin.kqs")];
+        let mut text = format!("[InventoryItemTypeList]\nnumItems={}\n", rows.len());
+        for (n, (name, cat, shape)) in rows.iter().enumerate() {
+            text.push_str(&format!("item{n}=\tKQInventoryItemType\t{name}\t{n}\t0\t0\t0\t0\t0\t0\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\t{shape}\tnone\t1\t256\n"));
+        }
+        a.world.items = crate::item::Items::new(kq8_data::items::ItemTypes::parse(text.as_bytes()).0, []);
+        // `scbow.kqs`'s body (kq8 shape-parts): half a turn about z.
+        a.world.items.set_bodies([("SCBOW.kqs".to_string(), Transform { flags: 0, m: [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], p: [-2.0, 214.1, 0.0] })]);
+        // The die movement: the crossbow part falls from the hand to the
+        // ground, a quarter turn about z in the last frame.
+        let start = Transform { flags: 0, m: crate::door::identity().m, p: [-565.0, -20.0, 478.0] };
+        let last = Transform { flags: 0, m: [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], p: [-550.0, -415.0, -48.0] };
+        let mut die = crate::named_anim::tests::movement("die", 0.0, 1.0, false, false, vec![]);
+        die.frame_parts = (0..16).map(|k| vec![("body".to_string(), start), ("SmCrossbow".to_string(), if k == 15 { last } else { start })]).collect();
+        let o = &mut a.world.anims[0];
+        o.player.movements.push(die);
+        let f = o.character.as_mut().unwrap().fight.as_mut().unwrap();
+        f.settings.drops = vec![kq8_data::characters::ItemEntry { name: "INVITEM_SmCrossbow".into(), quantity: 1 }, kq8_data::characters::ItemEntry { name: "INVITEM_SilverCoins".into(), quantity: 3 }];
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.world.connor_at = Some([0.0, -1400.0, 100.0]);
+        watch(&mut a, &[], 40);
+        a.world.hit_character(0, "Connor", 100, crate::fight::HitKind::Normal);
+        // Rule 31: the coins fly at once; the crossbow is not made yet.
+        let log = a.world.item_log.join("\n");
+        assert!(log.contains("INVITEM_SmCrossbow x1: names a part of 'Die' frame 0: kept for the die movement's end, not thrown (rule 31a)"), "{log}");
+        assert_eq!(a.world.flights.len(), 1, "{log}");
+        assert_eq!(a.world.items.objects.iter().map(|o| o.kind.as_str()).collect::<Vec<_>>(), ["INVITEM_SilverCoins"]);
+        // A movement waiting starts when the death ends (as `Stop` does
+        // in Dead City): the weapon still goes on the die movement's last
+        // frame.
+        a.world.anims[0].player.waiting = Some("attack".into());
+        watch(&mut a, &[], 60);
+        assert_eq!(a.world.anims[0].player.movement_name(), "attack");
+        let base = a.world.anims[0].player.base;
+        let owner = Transform { flags: 0, m: base.rotation, p: base.position };
+        (a, crate::door::chain(&owner, &last))
+    }
+
+    #[test]
+    fn a_dying_characters_weapon_is_laid_where_the_death_leaves_it() {
+        let (mut a, part) = weapon_dropper();
+        // Rule 31a.1: made at the end, its body on the part.
+        let bow = a.world.items.objects.iter().find(|o| o.kind == "INVITEM_SmCrossbow").cloned().expect("made at the end");
+        let at = bow.placement().unwrap();
+        let body_at = at.to_world([-2.0, 214.1, 0.0]);
+        assert!((0..3).all(|k| (body_at[k] - part.p[k]).abs() < 0.5), "{body_at:?} vs {:?}", part.p);
+        // Its x axis: the body's (−x) turned by the part's quarter turn.
+        let x = at.direction_to_world([-1.0, 0.0, 0.0]);
+        let want = std::array::from_fn::<f32, 3, _>(|k| part.m[0][k]);
+        assert!((0..3).all(|k| (x[k] - want[k]).abs() < 1e-4), "{x:?} vs {want:?}");
+        assert_eq!(a.world.flights.iter().filter(|f| f.item == bow.name).count(), 0, "not thrown");
+        assert_eq!(a.scripts.vars.get("NewInvItem"), Some(bow.name.as_str()));
+        // Rule 31a.2, 31a.3: the line is free: it stays exactly there.
+        assert_eq!(a.world.laid_checks.len(), 1);
+        a.world.laid_checks_step(&FlatGround, &[], &[]);
+        let log = a.world.item_log.join("\n");
+        assert!(log.contains("it stays there, no throw, no fall (rule 31a.3)"), "{log}");
+        assert_eq!(a.world.items.get(&bow.name).unwrap().placement(), Some(at));
+        assert!(a.world.laid_checks.is_empty() && a.world.flights.iter().all(|f| f.item != bow.name));
+    }
+
+    #[test]
+    fn a_laid_weapon_behind_a_wall_is_thrown_instead() {
+        let (mut a, _) = weapon_dropper();
+        let feet = a.world.anims[0].player.placement().position;
+        let bow = a.world.items.objects.iter().find(|o| o.kind == "INVITEM_SmCrossbow").unwrap().name.clone();
+        let lying = a.world.items.get(&bow).unwrap().placement().unwrap().position;
+        // A wall halfway between the item and the feet, 1,000 up.
+        let mid: [f32; 3] = std::array::from_fn(|k| (lying[k] + feet[k]) / 2.0);
+        let mut kind = crate::collide::ColliderKind::default();
+        kind.collision_type = 1;
+        let wall = crate::collide::BoxCollider { name: "wall".into(), min: [-30.0, -30.0, 0.0], max: [30.0, 30.0, 3000.0], placement: Placement { rotation: crate::door::identity().m, position: [mid[0], mid[1], feet[2]] }, kind };
+        a.world.laid_checks_step(&FlatGround, &[], &[wall]);
+        let log = a.world.item_log.join("\n");
+        assert!(log.contains("line test blocked by object wall: thrown instead (rule 31a.2)"), "{log}");
+        assert_eq!(a.world.flights.iter().filter(|f| f.item == bow).map(|f| f.from).collect::<Vec<_>>(), [feet], "thrown from the feet");
     }
 
     #[test]

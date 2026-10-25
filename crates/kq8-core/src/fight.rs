@@ -246,6 +246,45 @@ pub struct Fight {
     /// Where its bolts start, in its own space: the bolt's model part found
     /// at a shot, then kept (`ranged-weapons.md` rule 24; M5 5f-2).
     pub shoot_offset: Option<[f32; 3]>,
+    /// The drop entry named like a part of its pose at the dying start
+    /// (its weapon), kept for the die movement's end (rules 31, 31a; C-2):
+    /// the type as written and the quantity.
+    pub kept_drop: Option<(String, i64)>,
+}
+
+/// A weapon laid where a death left it (rule 31a.2; C-2), waiting for
+/// its line test, which needs the collision scene.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaidCheck {
+    pub item: String,
+    pub kind: String,
+    pub quantity: i64,
+    /// The dying character: its feet (where a blocked item is thrown
+    /// from) and its name (never tested).
+    pub feet: [f32; 3],
+    pub owner: String,
+}
+
+/// Rule 31a.1: with no part of that name in the last frame, the item is
+/// put at the character's place and turn, this much higher.
+pub const LAID_FALLBACK_UP: f32 = 750.0;
+/// Rule 31a.2: the line test runs from this far above the item to this
+/// far above the character's feet.
+pub const LAID_LINE_UP: f32 = 1000.0;
+/// Rule 31a.2: what blocks the line: the terrain and "any solid object
+/// other than the dying character". Which collision types count as
+/// solid was not given: **stand-in**, every type (asked: QUESTIONS
+/// Q170).
+pub const LAID_LINE_MASK: u32 = u32::MAX;
+
+/// A drop entry as compared with the model's part names (rule 31): the
+/// quotes and an `INVITEM_` prefix taken off.
+pub fn drop_part_name(entry: &str) -> &str {
+    let e = entry.trim().trim_matches('"');
+    match e.get(..8) {
+        Some(p) if p.eq_ignore_ascii_case("INVITEM_") => &e[8..],
+        _ => e,
+    }
 }
 
 /// `setCombatLevel 1|2|3` (rule 3): the factor.
@@ -413,7 +452,7 @@ impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
         let must_flee = settings.must_flee;
-        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false, shoot_offset: None }
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false, shoot_offset: None, kept_drop: None }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -914,9 +953,14 @@ impl crate::active::WorldState {
         Ok(name)
     }
 
-    /// Rule 31 (M5 5c-8): its drops, when the dying starts: the line's
-    /// `invDrop`, then the type's; each a new item at its feet (offset 0
-    /// in Daventry), thrown as `KQObject::tossItems` (`items.md` rule 12).
+    /// Rule 31 (M5 5c-8; C-2): its drops, when the dying starts: the
+    /// line's `invDrop`, then the type's. Each entry is compared (quotes
+    /// and `INVITEM_` off, capitals ignored) with the part names of the
+    /// pose shown now (the die movement's first frame): one that names a
+    /// part is kept for the end of the die movement (rule 31a; the last
+    /// such wins, earlier ones are lost); every other one is a new item at
+    /// its feet (offset 0 in Daventry), thrown as `KQObject::tossItems`
+    /// (`items.md` rule 12).
     pub(crate) fn drop_items(&mut self, j: usize) {
         let a = &self.anims[j];
         let name = a.player.name.clone();
@@ -927,10 +971,120 @@ impl crate::active::WorldState {
             self.fight_note(&name, "drops: nothing (rule 31)");
             return;
         }
-        let lines: Vec<String> = drops.iter().map(|d| self.toss(&d.name, d.quantity, at)).collect();
-        let line = format!("drops (rule 31, thrown as tossItems, items.md rule 12): {}", lines.join("; "));
+        let frame = a.player.frame();
+        let parts: Vec<String> = a.player.movement().and_then(|m| m.frame_parts.get(frame)).map(|p| p.iter().map(|(n, _)| n.clone()).collect()).unwrap_or_default();
+        let pose = format!("'{}' frame {frame}", a.player.movement_name());
+        let mut kept: Option<(String, i64)> = None;
+        let mut lines = Vec::new();
+        for d in &drops {
+            let key = drop_part_name(&d.name);
+            if parts.iter().any(|p| p.eq_ignore_ascii_case(key)) {
+                if let Some((lost, _)) = kept.replace((d.name.clone(), d.quantity)) {
+                    lines.push(format!("{lost}: also names a part, replaced by {}: lost (rule 31)", d.name));
+                }
+                lines.push(format!("{} x{}: names a part of {pose}: kept for the die movement's end, not thrown (rule 31a)", d.name, d.quantity));
+            } else {
+                let before = self.items.objects.len();
+                lines.push(self.toss(&d.name, d.quantity, at));
+                if self.items.objects.len() > before {
+                    self.new_inv_item = self.items.objects.last().map(|o| o.name.clone());
+                }
+            }
+        }
+        if let Some(f) = self.anims[j].character.as_deref_mut().and_then(|c| c.fight.as_mut()) {
+            f.kept_drop = kept;
+        }
+        let line = format!("drops (rule 31; parts of {pose}: {parts:?}): {}", lines.join("; "));
         self.item_note(format!("{name}: {line}"));
         self.fight_note(&name, line);
+    }
+
+    /// Rule 31a (C-2), first of the die movement's end steps: the kept
+    /// weapon made with its `body` part on the part of the same name in
+    /// the last frame (no such part: its place and turn, 750 up); its line
+    /// test waits for the collision scene ([`Self::laid_checks_step`]).
+    fn lay_kept_drop(&mut self, j: usize) {
+        let a = &mut self.anims[j];
+        let dying = a.character.as_deref().and_then(|c| c.fight.as_ref()).and_then(|f| f.dying.clone());
+        let now_flag = dying == Some(None);
+        let Some((kind, quantity)) = a.character.as_deref_mut().and_then(|c| c.fight.as_mut()).and_then(|f| f.kept_drop.take()) else { return };
+        let name = a.player.name.clone();
+        // The die movement's last frame, even when a waiting movement has
+        // just started in its place (rule 8.1); `Die now`: the pose shown.
+        let die = dying.flatten().and_then(|d| a.player.movements.iter().find(|m| m.name.eq_ignore_ascii_case(&d)));
+        let (movement, frame) = match die {
+            Some(m) => (Some(m), m.frames() - 1),
+            None => (a.player.movement(), a.player.frame()),
+        };
+        let base = kq8_data::shape::Transform { flags: 0, m: a.player.base.rotation, p: a.player.base.position };
+        let owner = crate::door::chain(&base, &movement.map_or_else(crate::door::identity, |m| m.turn_at_frame(frame)));
+        let place = crate::collide::Placement { rotation: owner.m, position: owner.p };
+        let pose = format!("'{}' frame {frame}", movement.map_or("(none)", |m| m.name.as_str()));
+        let part = movement.and_then(|m| m.frame_parts.get(frame)).and_then(|p| p.iter().find(|(n, _)| n.eq_ignore_ascii_case(drop_part_name(&kind)))).map(|(_, t)| *t);
+        let body = self.items.body(&kind);
+        let (laid, how) = match part {
+            Some(t) => {
+                let on = crate::door::chain(&owner, &t);
+                let laid = crate::item::laid_on(&on, body.as_ref());
+                let what = if body.is_some() { "its body part" } else { "its own origin (its model has no body part)" };
+                (laid, format!("{what} on part '{}' of {pose} (the part at ({:.0}, {:.0}, {:.0}); scale {:.3} {:.3} {:.3})", drop_part_name(&kind), on.p[0], on.p[1], on.p[2], laid.scale[0], laid.scale[1], laid.scale[2]))
+            }
+            None => {
+                let p = place.position;
+                let laid = crate::item::Laid { position: [p[0], p[1], p[2] + LAID_FALLBACK_UP], angles: kq8_data::objects::angles_of(place.rotation), scale: [1.0; 3] };
+                (laid, format!("no part '{}' in {pose}: its place and turn, {LAID_FALLBACK_UP} up", drop_part_name(&kind)))
+            }
+        };
+        let now = if now_flag { "; Die now: whether a part is matched with no die movement is not sure (rule 31a), ours: the pose shown" } else { "" };
+        let made = self.items.make(&kind, quantity, crate::item::Place::World { position: laid.position, angles: laid.angles }).map(|o| o.name.clone());
+        let line = match made {
+            Ok(item) => {
+                self.known.insert(item.to_ascii_lowercase());
+                self.new_inv_item = Some(item.clone());
+                self.laid_checks.push(LaidCheck { item: item.clone(), kind: kind.clone(), quantity, feet: place.position, owner: name.clone() });
+                let (p, r) = (laid.position, laid.angles);
+                format!("{item} ({kind} x{quantity}) laid at ({:.0}, {:.0}, {:.0}) turned ({:.3}, {:.3}, {:.3}): {how}; not thrown; line test next (rule 31a){now}", p[0], p[1], p[2], r[0], r[1], r[2])
+            }
+            Err(e) => format!("{kind}: {e}; not made"),
+        };
+        self.item_note(format!("{name}: kept weapon (rule 31a): {line}"));
+        self.fight_note(&name, format!("kept weapon (rule 31a): {line}"));
+    }
+
+    /// Rule 31a.2 (C-2): each weapon laid since the last update: the line
+    /// from 1,000 above it to 1,000 above the dying character's feet. If
+    /// the terrain or a solid object other than that character cuts it,
+    /// the item is thrown from the feet instead, like the rule 31 items;
+    /// otherwise it stays exactly there (no throw, no fall). Called with
+    /// the thrown items' scene, before their step.
+    pub fn laid_checks_step(&mut self, ground: &dyn crate::connor_mover::GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) {
+        if self.laid_checks.is_empty() {
+            return;
+        }
+        use crate::connor_mover::MoverWorld;
+        let characters = self.character_colliders.clone();
+        let mut scene = crate::connor_mover::Scene::new(ground, buildings, objects);
+        scene.characters = &characters;
+        for c in std::mem::take(&mut self.laid_checks) {
+            let Some(at) = self.items.get(&c.item).and_then(|o| o.placement()).map(|p| p.position) else {
+                self.item_note(format!("{}: {} no longer in the world: no line test (rule 31a)", c.owner, c.item));
+                continue;
+            };
+            let from = [at[0], at[1], at[2] + LAID_LINE_UP];
+            let to = [c.feet[0], c.feet[1], c.feet[2] + LAID_LINE_UP];
+            let line = match scene.line_blocked(from, to, LAID_LINE_MASK, &c.owner.to_ascii_lowercase()) {
+                None => format!("line test free ({:.0}, {:.0}, {:.0}) to ({:.0}, {:.0}, {:.0}): it stays there, no throw, no fall (rule 31a.3)", from[0], from[1], from[2], to[0], to[1], to[2]),
+                Some(what) => {
+                    if let Some(i) = self.items.index(&c.item) {
+                        self.items.objects[i].place = crate::item::Place::World { position: c.feet, angles: [0.0; 3] };
+                    }
+                    let thrown = self.throw_made(&c.item, &c.kind, c.quantity, c.feet);
+                    format!("line test blocked by {what}: thrown instead (rule 31a.2): {thrown}")
+                }
+            };
+            self.item_note(format!("{}: {}: {line}", c.owner, c.item));
+            self.fight_note(&c.owner, format!("kept weapon {}: {line}", c.item));
+        }
     }
 
     /// `items.md` rule 12: makes one item of `kind` x `quantity` at `at`
@@ -941,28 +1095,35 @@ impl crate::active::WorldState {
         match made {
             Ok(item) => {
                 self.known.insert(item.to_ascii_lowercase());
-                let rng = &mut self.fight_rng;
-                let r = [rng.fraction(), rng.fraction(), rng.fraction()];
-                let spin = rng.fraction();
-                let shape = self.items.get(&item).and_then(|o| self.items.click_box(o));
-                let fl = crate::item::Flight::launch(&item, at, r, shape).with_tumble(spin);
-                let v = fl.velocity;
-                self.flights.push(fl);
-                format!(
-                    "{item} ({kind} x{quantity}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
-                    at[0],
-                    at[1],
-                    at[2],
-                    v[0],
-                    v[1],
-                    v[2],
-                    r[0] * 360.0,
-                    crate::item::TOSS_ELEVATION.0 + r[1] * (crate::item::TOSS_ELEVATION.1 - crate::item::TOSS_ELEVATION.0),
-                    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
-                )
+                self.throw_made(&item, kind, quantity, at)
             }
             Err(e) => format!("{kind}: {e}; not made"),
         }
+    }
+
+    /// Throws item `item` (already made, lying at `at`) as [`Self::toss`]
+    /// does; also a laid weapon whose line test is blocked (rule 31a.2).
+    /// Returns the log text.
+    fn throw_made(&mut self, item: &str, kind: &str, quantity: i64, at: [f32; 3]) -> String {
+        let rng = &mut self.fight_rng;
+        let r = [rng.fraction(), rng.fraction(), rng.fraction()];
+        let spin = rng.fraction();
+        let shape = self.items.get(item).and_then(|o| self.items.click_box(o));
+        let fl = crate::item::Flight::launch(item, at, r, shape).with_tumble(spin);
+        let v = fl.velocity;
+        self.flights.push(fl);
+        format!(
+            "{item} ({kind} x{quantity}) thrown from ({:.0}, {:.0}, {:.0}): velocity ({:.0}, {:.0}, {:.0}), heading {:.0} deg, {:.1} deg up, {:.0} units/s",
+            at[0],
+            at[1],
+            at[2],
+            v[0],
+            v[1],
+            v[2],
+            r[0] * 360.0,
+            crate::item::TOSS_ELEVATION.0 + r[1] * (crate::item::TOSS_ELEVATION.1 - crate::item::TOSS_ELEVATION.0),
+            (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+        )
     }
 
     /// `thrown-items.md` (M5 5e-1): each thrown item flies one update,
@@ -1053,6 +1214,9 @@ impl crate::active::WorldState {
     /// (queued for the caller, which runs scripts); it is removed. Rule 33:
     /// the first-kill tip (logged only).
     pub(crate) fn death_ended(&mut self, j: usize, now: f64) {
+        // Rule 31a: the kept weapon first, before the experience and the
+        // corpse.
+        self.lay_kept_drop(j);
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let (position, rotation) = (a.player.base.position, a.player.base.rotation);
