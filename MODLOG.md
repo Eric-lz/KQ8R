@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 C-1: model parts with their full placement (plumbing for Q167, Q169)
+
+**Changed:** `kq8-data` `shape.rs`: `Shape::part_transforms` (each named part's matrix and place; replaces `part_places`), type `FrameParts`; `objects.rs`: `angles_of` (a turn back into the three angles). Core `item.rs`: `laid_on` (an item's `body` laid on a part), `Items::set_bodies` / `body`; the movements' `frame_parts` carry the full placement (the bolt still uses the place only). Viewer `load.rs`: each item model's `body` part read at load. New CLI command `kq8 shape-parts <file>`. DESIGN (plan C-1 to C-3), provenance.
+**Why:** Both answers (`fighting.md` rule 31a, `anim-scripts.md` rule 16) lay an item's `body` part exactly on a named part of a model's last frame, place and full turn; we only had the parts' places.
+**Tested how:** `cargo test --workspace` (all pass; new `angles_of_gives_back_the_angles`, `a_laid_items_body_sits_exactly_on_the_part` with the real numbers below). `kq8 shape-parts` on the models. `kq8-viewer --world Daventry --frames 60 --sound off --no-ai`; `items.log`.
+**Result:** `spbdie.kqs` last frame: part `SmCrossbow` scale 1; `scbow.kqs` (the crossbow item) `body` scale 1, half a turn about z; `skbsdie.kqs` `BroadSword` and `bsword.kqs` `body` both scale 0.885, so laying gives a plain turn (no size change). `items.log`: "item models: part body read for 23 shapes; none in [pouch.kqs]". No behaviour change yet.
+**Still broken / not tested:** Nothing laid yet (C-2, C-3).
+**Next:** C-2 (a dying character's weapon laid, Q169).
+
 ## 2026-10-24 Study (A): Q168 answered, the caption stone is tiled
 
 **Changed:** `docs/behaviour/interface.md` rule 20a (last point and the stretched list), rule 50, open question 6; QUESTIONS Q168 answered. No code.

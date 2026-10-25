@@ -43,9 +43,10 @@ pub struct DrawnMovement {
     /// Its animation's number for the new drawing (Animation memory 4f):
     /// the index in `AnimGpu::connor` and in his slots' movements.
     pub anim: usize,
-    /// Each frame's named model parts and their places (the `arrow` part
-    /// his bolt starts at, `ranged-weapons.md` rule 24; M5 5f-5).
-    pub parts: Vec<Vec<(String, [f32; 3])>>,
+    /// Each frame's named model parts and their placements (the `arrow`
+    /// part his bolt starts at, `ranged-weapons.md` rule 24; M5 5f-5; the
+    /// part an `Inv` item is laid on, `anim-scripts.md` rule 16).
+    pub parts: Vec<kq8_data::shape::FrameParts>,
 }
 
 /// Keys from `Connor.sae`, and which of them are held, oldest first.
@@ -405,7 +406,7 @@ fn animation_loop(a: &crate::load::Animation) -> MovementLoop {
 
 /// A movement drawn with its animation's loop, frames and parts.
 #[allow(clippy::type_complexity)]
-fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frames: &[usize], parts: &[Vec<Vec<(String, [f32; 3])>>], anims: &[usize]) -> DrawnMovement {
+fn drawn_movement(m: &crate::load::ConnorMovement, loops: &[MovementLoop], frames: &[usize], parts: &[Vec<kq8_data::shape::FrameParts>], anims: &[usize]) -> DrawnMovement {
     DrawnMovement {
         name: m.name,
         anim: anims.get(m.animation).copied().unwrap_or(usize::MAX),
@@ -1512,7 +1513,7 @@ impl ConnorSim {
     pub fn part_at(&self, movement: &str, phase: f32, part: &str) -> Option<([f32; 3], String)> {
         let m = self.drawn(movement)?;
         let frame = m.movement_loop.frame_at(phase);
-        let place = m.parts.get(frame)?.iter().find(|(n, _)| n.eq_ignore_ascii_case(part))?.1;
+        let place = m.parts.get(frame)?.iter().find(|(n, _)| n.eq_ignore_ascii_case(part))?.1.p;
         Some((place, format!("its part '{part}' in frame {frame} of '{movement}'")))
     }
 

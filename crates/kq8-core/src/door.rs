@@ -75,10 +75,11 @@ pub struct DoorMovement {
     /// frame 0 forwards adds the last frame's step (`objects.md` "Loops"
     /// rule 6a).
     pub first_in_file: bool,
-    /// Each frame's named model parts and their own places (the `arrow`
-    /// part a bolt starts at, `ranged-weapons.md` rule 24; M5 5f-2);
-    /// empty where not needed.
-    pub frame_parts: Vec<Vec<(String, [f32; 3])>>,
+    /// Each frame's named model parts and their own placements (the
+    /// `arrow` part a bolt starts at, `ranged-weapons.md` rule 24; M5
+    /// 5f-2; the part a dropped weapon is laid on, `fighting.md` rule
+    /// 31a); empty where not needed.
+    pub frame_parts: Vec<kq8_data::shape::FrameParts>,
     pub cues: Vec<Cue>,
     /// Its `transitionN` lines (`connor-movement.md` "Starting and
     /// stopping"; played for characters from M4 4d-11).

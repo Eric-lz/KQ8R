@@ -7447,7 +7447,7 @@ endif
         {
             let o = &mut a.world.anims[0];
             let attack = o.player.movements.iter_mut().find(|m| m.name == "attack").unwrap();
-            attack.frame_parts = (0..16).map(|k| if k == 9 { vec![("arrow".to_string(), [-55.0, -1367.0, 954.0])] } else { vec![] }).collect();
+            attack.frame_parts = (0..16).map(|k| if k == 9 { vec![("arrow".to_string(), kq8_data::shape::Transform { flags: 0, m: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], p: [-55.0, -1367.0, 954.0] })] } else { vec![] }).collect();
             o.player.start("attack");
             // The update that passed its `do` cue (0.5, frame 8) ends at
             // 0.6: frame 9, shown now, counts (Q140 c).

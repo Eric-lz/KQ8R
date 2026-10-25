@@ -1141,7 +1141,7 @@ impl crate::active::WorldState {
                 // is handled after every object moved): `spbattck` at
                 // 0.1667, frame 3, not frame 2 at the cue's own 0.125.
                 let frame = a.player.movement().map_or(0, |m| m.frame_at(a.player.phase));
-                let place = a.player.movement().and_then(|m| m.frame_parts.get(frame)).and_then(|parts| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part))).map(|(_, p)| *p);
+                let place = a.player.movement().and_then(|m| m.frame_parts.get(frame)).and_then(|parts| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part))).map(|(_, p)| p.p);
                 match place {
                     Some(o) => (o, Some(o), format!("its part '{part}' in frame {frame} of '{}' (kept from now on)", a.player.movement_name())),
                     None => ([0.0; 3], None, format!("no part '{part}' in frame {frame} of '{}': its shootOffsets (none read, none in Daventry: 0, 0, 0)", a.player.movement_name())),

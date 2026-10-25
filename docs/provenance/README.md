@@ -3543,3 +3543,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | `$KQObject::loc` holds all six numbers of the object's place, turn included; for Connor the turn is his heading (the number `move Connor … rz` sets) | `objects.md` "Script variables, `getLoc` and `move`" rule 1, `anim-scripts.md` (all six); heading = rz: **ours** (as `move_to` uses it) | Unit test `get_loc_while_playing_feeds_set_home`; viewer: `deadsprg` turned −1.570 |
+
+## Laying an item on a model part (C-1) — `crates/kq8-data/src/shape.rs` (`part_transforms`), `objects.rs` (`angles_of`); `crates/kq8-core/src/item.rs` (`laid_on`, `Items::body`); viewer `load.rs` (item bodies); CLI `shape_parts.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A laid item's own model part `body` is put exactly on the named part (place and full turn) | `fighting.md` rule 31a, `anim-scripts.md` rule 16 (traced) | Unit test `a_laid_items_body_sits_exactly_on_the_part` |
+| Row vectors; combining "first A, then B" = A.M × B.M, A.p × B.M + B.p | `models-and-textures.md` Q1 a (confirmed) | (same test) |
+| A model part's placement is its mesh node's matrix and translation | `models-and-textures.md` Q1 b; layout: libkq8fpc `kq8kqs.txt` (facts only) | `kq8 shape-parts` |
+| An item's three angles: turned about Y, then X, then Z; `angles_of` turns a plain turn back into them | `objects.md` Q9 rule 4; the inverse is **ours** (maths) | Unit test `angles_of_gives_back_the_angles` |
+| The part and the item's `body` have the same scale in the data (crossbow 1 and 1, broadsword 0.885 and 0.885), so the laid turn is a plain one | Observed (`kq8 shape-parts` on `spbdie.kqs`, `scbow.kqs`, `skbsdie.kqs`, `bsword.kqs`) | Unit test (scale within 1 %) |
+| An item is drawn with its model's rest frame, so `body` is read from that frame | **Ours** (as the item drawing) | `items.log`: "part body read for 23 shapes" |
+| A model without a `body` part (`pouch.kqs`): its own origin goes on the part | **Ours** (no data case for a laid item) | — |

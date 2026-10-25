@@ -274,7 +274,7 @@ pub fn spawn_animated(
         /// Its `.kqs` ball (rule 37 (2), M4 4d-7b-5b).
         ball: crate::shadow_view::ModelBall,
         /// Each frame's named parts (`ranged-weapons.md` rule 24, M5 5f-2).
-        parts: Vec<Vec<(String, [f32; 3])>>,
+        parts: Vec<kq8_data::shape::FrameParts>,
         /// Its model (step 4).
         source: Option<crate::load::FrameShape>,
     }
@@ -339,7 +339,7 @@ pub fn spawn_animated(
                 .frame_parts
                 .iter()
                 .enumerate()
-                .filter_map(|(k, parts)| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case("arrow")).map(|(_, q)| format!("{k}: ({:.0}, {:.0}, {:.0})", q[0], q[1], q[2])))
+                .filter_map(|(k, parts)| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case("arrow")).map(|(_, q)| format!("{k}: ({:.0}, {:.0}, {:.0})", q.p[0], q.p[1], q.p[2])))
                 .collect();
             if !arrow.is_empty() {
                 log.detail(format!("[{}] '{}' ({} frames) part arrow by frame: {}", p.name, m.name, m.frames(), arrow.join(", ")));

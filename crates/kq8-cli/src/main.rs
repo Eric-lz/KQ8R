@@ -6,6 +6,7 @@
 //!   kq8 bitmap-verify [--game DIR]
 //!   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
 //!   kq8 shape-verify [--game DIR]
+//!   kq8 shape-parts <file> [--game DIR]   (a model's named parts per loop)
 //!   kq8 terrain-verify [--game DIR]
 //!   kq8 lightmap-verify [--game DIR]
 //!   kq8 lighting-verify [--game DIR]
@@ -38,6 +39,7 @@ mod lightmap_verify;
 mod log;
 mod map_verify;
 mod msg_verify;
+mod shape_parts;
 mod shape_verify;
 mod source;
 mod terrain_verify;
@@ -54,6 +56,7 @@ const USAGE: &str = "usage:
   kq8 bitmap-verify [--game DIR]
   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
   kq8 shape-verify [--game DIR]
+  kq8 shape-parts <file> [--game DIR]
   kq8 terrain-verify [--game DIR]
   kq8 lightmap-verify [--game DIR]
   kq8 lighting-verify [--game DIR]
@@ -105,6 +108,7 @@ fn main() -> ExitCode {
         (Some("bitmap-verify"), []) => bitmap_verify::run(&game),
         (Some("bitmap-png"), [image]) => bitmap_png::run(&game, image, palette.as_deref()),
         (Some("shape-verify"), []) => shape_verify::run(&game),
+        (Some("shape-parts"), [file]) => shape_parts::run(&game, file),
         (Some("terrain-verify"), []) => terrain_verify::run(&game),
         (Some("lightmap-verify"), []) => lightmap_verify::run(&game),
         (Some("lighting-verify"), []) => lighting_verify::run(&game),

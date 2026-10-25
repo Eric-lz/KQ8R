@@ -198,6 +198,10 @@ pub struct Items {
     pub types: ItemTypes,
     /// Each shape's click box (own space) by lower-case shape name.
     boxes: BTreeMap<String, ([f32; 3], [f32; 3])>,
+    /// Each shape's part `body` in the frame it is drawn with, by
+    /// lower-case shape name: what is laid on a model part
+    /// ([`laid_on`]); set by the loader.
+    bodies: BTreeMap<String, kq8_data::shape::Transform>,
     /// Every item object made so far, also carried and gone ones.
     pub objects: Vec<ItemObject>,
     /// The next `NoName<n>` number (rule 9).
@@ -210,7 +214,18 @@ impl Items {
     /// `boxes`: (shape name, min, max) from `BOUNDS.KQ`.
     pub fn new(types: ItemTypes, boxes: impl IntoIterator<Item = (String, [f32; 3], [f32; 3])>) -> Self {
         let boxes = boxes.into_iter().map(|(s, a, b)| (s.to_ascii_lowercase(), (a, b))).collect();
-        Items { types, boxes, objects: Vec::new(), next_no_name: 0, last_added: 0 }
+        Items { types, boxes, bodies: BTreeMap::new(), objects: Vec::new(), next_no_name: 0, last_added: 0 }
+    }
+
+    /// The item models' `body` parts: (shape name, its placement).
+    pub fn set_bodies(&mut self, bodies: impl IntoIterator<Item = (String, kq8_data::shape::Transform)>) {
+        self.bodies = bodies.into_iter().map(|(s, t)| (s.to_ascii_lowercase(), t)).collect();
+    }
+
+    /// The part `body` of type `kind`'s model, if read.
+    pub fn body(&self, kind: &str) -> Option<kq8_data::shape::Transform> {
+        let t = self.types.find(kind)?;
+        self.bodies.get(&t.shape.to_ascii_lowercase()).copied()
     }
 
     /// The next order number for an item made carried (0 if not).
@@ -329,6 +344,48 @@ impl Items {
     pub fn count(&self, who: &str, kind: &str) -> i64 {
         self.objects.iter().filter(|o| o.kind.eq_ignore_ascii_case(kind) && o.carried_by(who)).map(|o| o.quantity).sum()
     }
+}
+
+/// An item laid on a model part ([`laid_on`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Laid {
+    pub position: [f32; 3],
+    pub angles: [f32; 3],
+    /// How much the part's size differs from the item's `body` (the row
+    /// lengths of the turn before it is made a plain one; 1 when they
+    /// agree, as in the data), for the log.
+    pub scale: [f32; 3],
+}
+
+/// `fighting.md` rule 31a, `anim-scripts.md` rule 16: the item's own
+/// model part `body` laid exactly on `part` (already in the world: the
+/// model's part, then its owner's place and turn), place and full turn.
+/// With row vectors: the item's turn = body⁻¹ × part; its place = the
+/// part's place − body's place × that turn. Items keep three angles, so
+/// the turn is made a plain one (rows of length 1) first. `body` `None`
+/// (not read): the item's own origin goes on the part.
+pub fn laid_on(part: &kq8_data::shape::Transform, body: Option<&kq8_data::shape::Transform>) -> Laid {
+    let raw = match body.and_then(|b| inverse(&b.m)) {
+        Some(inv) => std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| inv[i][k] * part.m[k][j]).sum())),
+        None => part.m,
+    };
+    let scale: [f32; 3] = std::array::from_fn(|i| raw[i].iter().map(|v| v * v).sum::<f32>().sqrt());
+    let plain: [[f32; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| if scale[i] > 0.0 { raw[i][j] / scale[i] } else { 0.0 }));
+    let angles = kq8_data::objects::angles_of(plain);
+    let turn = kq8_data::objects::rotation(angles);
+    let from = body.map_or([0.0; 3], |b| b.p);
+    let position = std::array::from_fn(|j| part.p[j] - (0..3).map(|k| from[k] * turn[k][j]).sum::<f32>());
+    Laid { position, angles, scale }
+}
+
+/// The inverse of a 3 × 3 matrix (`None` if it has none).
+fn inverse(m: &[[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
+    let c = |i: usize, j: usize| m[(i + 1) % 3][(j + 1) % 3] * m[(i + 2) % 3][(j + 2) % 3] - m[(i + 1) % 3][(j + 2) % 3] * m[(i + 2) % 3][(j + 1) % 3];
+    let det: f32 = (0..3).map(|j| m[0][j] * c(0, j)).sum();
+    if det.abs() < 1e-9 {
+        return None;
+    }
+    Some(std::array::from_fn(|i| std::array::from_fn(|j| c(j, i) / det)))
 }
 
 /// `items.md` rule 12 (`KQObject::tossItems`; `fighting.md` rule 31 for
@@ -773,6 +830,41 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         b.read("SilverCoins", &types);
         b.read("none", &types);
         assert_eq!(b.types, ["INVITEM_Crystal", "INVITEM_SilverCoins"]);
+    }
+
+    /// A point through `t` (row vectors).
+    fn through(t: &kq8_data::shape::Transform, v: [f32; 3]) -> [f32; 3] {
+        std::array::from_fn(|j| (0..3).map(|k| v[k] * t.m[k][j]).sum::<f32>() + t.p[j])
+    }
+
+    #[test]
+    fn a_laid_items_body_sits_exactly_on_the_part() {
+        use kq8_data::shape::Transform;
+        // `spbdie.kqs`'s last frame, part `SmCrossbow`, and `scbow.kqs`'s
+        // `body` (`kq8 shape-parts`); `skbsdie.kqs`'s `BroadSword` and
+        // `bsword.kqs`'s `body`, both scaled 0.885.
+        let cases = [
+            (
+                Transform { flags: 0, m: [[0.785, -0.532, 0.318], [0.477, 0.846, 0.239], [-0.396, -0.036, 0.918]], p: [-550.6, -414.7, -47.7] },
+                Transform { flags: 0, m: [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], p: [-2.0, 214.1, 0.0] },
+            ),
+            (
+                Transform { flags: 0, m: [[0.054, -0.879, -0.089], [0.010, 0.090, -0.880], [0.883, 0.052, 0.015]], p: [-838.5, -187.6, 7.0] },
+                Transform { flags: 0, m: [[0.885, 0.0, 0.0], [0.0, 0.0, -0.885], [0.0, 0.885, 0.0]], p: [0.3, 31.1, 12.8] },
+            ),
+        ];
+        for (part, body) in cases {
+            let l = laid_on(&part, Some(&body));
+            assert!(l.scale.iter().all(|s| (s - 1.0).abs() < 0.01), "{:?}", l.scale);
+            let item = Transform { flags: 0, m: kq8_data::objects::rotation(l.angles), p: l.position };
+            for v in [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0], [0.0, 250.0, -40.0]] {
+                let (a, b) = (through(&item, through(&body, v)), through(&part, v));
+                assert!((0..3).all(|k| (a[k] - b[k]).abs() < 4.0), "{v:?}: {a:?} vs {b:?}");
+            }
+        }
+        // No body read: the item's origin on the part.
+        let part = cases[0].0;
+        assert_eq!(laid_on(&part, None).position, part.p);
     }
 
     #[test]

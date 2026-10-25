@@ -25,6 +25,10 @@ use crate::pers::{read_block, ReadError, Reader};
 pub const CLASS: &str = "KQ8::Shape";
 pub const MESH_CLASS: &str = "TS::CelAnimMesh";
 
+/// Each named model part of one frame and its placement
+/// ([`Shape::part_transforms`]).
+pub type FrameParts = Vec<(String, Transform)>;
+
 /// A placement: 3x3 matrix plus translation.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform {
@@ -459,13 +463,13 @@ impl Shape {
         self.lights.iter().skip(first).take(count).map(LightNode::model_light).collect()
     }
 
-    /// The sequence the model shows when it is not animating: the first
-    /// sequence of the first loop (or sequence 0 if there are no loops).
     /// The named model parts shown in `sequence` (its mesh nodes with a
-    /// name) and each one's own place in that frame: the node's
-    /// translation, before any frame step (`ranged-weapons.md` rule 24:
-    /// the `arrow` part a bolt starts at).
-    pub fn part_places(&self, sequence: usize) -> Vec<(String, [f32; 3])> {
+    /// name) and each one's own placement in that frame: the node's
+    /// matrix and translation, before any frame step. Its place is where
+    /// a bolt starts (`ranged-weapons.md` rule 24: the `arrow` part); the
+    /// whole placement is where a dropped weapon or an `Inv` item is laid
+    /// (`fighting.md` rule 31a, `anim-scripts.md` rule 16).
+    pub fn part_transforms(&self, sequence: usize) -> FrameParts {
         let Some(sub) = self.sequences.get(sequence).and_then(|s| usize::try_from(s.mesh_subsequence).ok()).and_then(|k| self.subsequences.get(k)) else {
             return Vec::new();
         };
@@ -474,11 +478,13 @@ impl Shape {
             .iter()
             .skip(first)
             .take(sub.node_count.max(0) as usize)
-            .filter_map(|n| Some((self.names.get(usize::try_from(n.name).ok()?)?.clone(), n.transform.p)))
+            .filter_map(|n| Some((self.names.get(usize::try_from(n.name).ok()?)?.clone(), n.transform)))
             .filter(|(name, _)| !name.is_empty())
             .collect()
     }
 
+    /// The sequence the model shows when it is not animating: the first
+    /// sequence of the first loop (or sequence 0 if there are no loops).
     pub fn rest_sequence(&self) -> usize {
         self.loops
             .first()

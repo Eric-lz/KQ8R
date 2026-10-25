@@ -473,6 +473,23 @@ pub fn rotation(angles: [f32; 3]) -> [[f32; 3]; 3] {
     mul(mul(ry, rx), rz)
 }
 
+/// The angles `[x, y, z]` that [`rotation`] turns into `m` (a plain
+/// turn, rows of length 1): x in −π/2..π/2. Used to give an item laid on
+/// a model part (`fighting.md` rule 31a, `anim-scripts.md` rule 16) the
+/// three angles every object keeps. Straight up or down (x = ±π/2, only
+/// y + z or y − z is fixed): z is 0.
+pub fn angles_of(m: [[f32; 3]; 3]) -> [f32; 3] {
+    // rotation(): row 0 = (cy·cz − sy·sx·sz, cy·sz + sy·sx·cz, −sy·cx),
+    // row 1 = (−cx·sz, cx·cz, sx), row 2's last = cy·cx.
+    let x = m[1][2].clamp(-1.0, 1.0).asin();
+    if x.cos() > 1e-5 {
+        [x, (-m[0][2]).atan2(m[2][2]), (-m[1][0]).atan2(m[1][1])]
+    } else {
+        // z = 0: row 0 = (cy, sy·sx, 0).
+        [x, (m[0][1] * x.sin().signum()).atan2(m[0][0]), 0.0]
+    }
+}
+
 fn mul(a: [[f32; 3]; 3], b: [[f32; 3]; 3]) -> [[f32; 3]; 3] {
     std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| a[i][k] * b[k][j]).sum()))
 }
@@ -504,6 +521,21 @@ mod tests {
         assert_eq!(turn([FRAC_PI_2, FRAC_PI_2, FRAC_PI_2], [1.0, 0.0, 0.0]), [-1.0, 0.0, 0.0]);
         // +Z: Y -> +X; X leaves +X; Z -> +Y.
         assert_eq!(turn([FRAC_PI_2, FRAC_PI_2, FRAC_PI_2], [0.0, 0.0, 1.0]), [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn angles_of_gives_back_the_angles() {
+        for a in [[0.3, -1.2, 2.5], [-0.7, 2.9, -0.4], [0.0, 0.0, -1.57], [1.0, 0.5, 3.0]] {
+            let back = angles_of(rotation(a));
+            let (m, n) = (rotation(a), rotation(back));
+            assert!((0..3).all(|i| (0..3).all(|j| (m[i][j] - n[i][j]).abs() < 1e-5)), "{a:?} -> {back:?}");
+            assert!((0..3).all(|k| (a[k] - back[k]).abs() < 1e-4), "{a:?} -> {back:?}");
+        }
+        // Straight up: the same turn, z 0.
+        for a in [[FRAC_PI_2, 0.4, 0.0], [-FRAC_PI_2, -1.1, 0.0]] {
+            let (m, n) = (rotation(a), rotation(angles_of(rotation(a))));
+            assert!((0..3).all(|i| (0..3).all(|j| (m[i][j] - n[i][j]).abs() < 1e-4)), "{a:?}: {m:?} vs {n:?}");
+        }
     }
 
     #[test]

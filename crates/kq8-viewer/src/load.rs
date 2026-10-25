@@ -475,7 +475,7 @@ pub struct Animation {
     pub ball: (f32, [f32; 3]),
     /// Each frame's named model parts and their own places
     /// (`ranged-weapons.md` rule 24; M5 5f-2).
-    pub frame_parts: Vec<Vec<(String, [f32; 3])>>,
+    pub frame_parts: Vec<kq8_data::shape::FrameParts>,
 }
 
 /// One movement set's own versions of Connor's movements (M2; the
@@ -644,7 +644,7 @@ pub fn load_animation_skinned(
         frame_steps.push(s.transform.p);
         frame_transforms.push(s.transform);
         frame_lights.push(shape.sequence_lights(seq));
-        frame_parts.push(shape.part_places(seq));
+        frame_parts.push(shape.part_transforms(seq));
     }
     let frame_count = count;
     let list = shape.materials.as_ref().map(|m| m.materials.as_slice()).unwrap_or(&[]);
@@ -4282,6 +4282,25 @@ impl Placer<'_> {
                 None => failed.push(failure),
             }
         }
+        // fighting.md rule 31a, anim-scripts.md rule 16 (C-1): each item
+        // model's part `body` in the frame it is drawn with, for laying
+        // the item on a model part.
+        let mut bodies = Vec::new();
+        let mut no_body = Vec::new();
+        for kind in shapes.keys() {
+            let Some(t) = self.items.kind(kind) else { continue };
+            let found = model_shape(self.game, self.world, &t.shape).ok().and_then(|(_, shape, _)| shape.part_transforms(shape.rest_sequence()).into_iter().find(|(n, _)| n.eq_ignore_ascii_case("body")));
+            match found {
+                Some((_, b)) => bodies.push((t.shape.clone(), b)),
+                None => no_body.push(t.shape.clone()),
+            }
+        }
+        bodies.sort_by(|a, b| a.0.cmp(&b.0));
+        bodies.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
+        no_body.sort();
+        no_body.dedup();
+        self.item_lines.push(format!("item models: part body read for {} shapes; none in {no_body:?} (their own origin is laid instead; fighting.md rule 31a, anim-scripts.md rule 16)", bodies.len()));
+        self.items.set_bodies(bodies);
         let it = &self.items.objects;
         let mut lines = std::mem::take(&mut self.item_lines);
         let summary = format!(
