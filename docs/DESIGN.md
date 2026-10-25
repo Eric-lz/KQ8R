@@ -2792,7 +2792,7 @@ first shaders (about 0.4-0.7 s), Bevy's own; animations' other reading
 (about 0.75 s, not broken down); weapon sets added while playing packed
 on one core.
 
-### Outside the milestones: building session A's 2026-10-22 answers (planned 2026-10-24)
+### Outside the milestones: building session A's 2026-10-22 answers (planned 2026-10-24; done 2026-10-24, steps A-1 to A-12)
 
 Session A answered most of B's open questions on 2026-10-22 (MODLOG
 "Study (A)" entries). Each answer below changes or adds something we
@@ -2864,7 +2864,7 @@ is in `kq8-core`, a viewer run checked in the logs.
 Questions found on the way go to `docs/behaviour/QUESTIONS.md`, not
 guessed.
 
-### Outside the milestones: building session A's 2026-10-24 answers (planned 2026-10-24)
+### Outside the milestones: building session A's 2026-10-24 answers (planned 2026-10-24; done 2026-10-24, steps B-1 to B-8, checked in the logs only)
 
 Session A answered Q160–Q166 and Q108 b on 2026-10-24 (MODLOG "Study A"
 entries; summary in `STATUS.md`). Each step below builds one answer,

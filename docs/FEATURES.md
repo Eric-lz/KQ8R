@@ -749,6 +749,26 @@ commands in `MODLOG.md`.
   on another world's map keep their own colours; the mini-map shows at
   once (no blink).
 
+## Session A's 2026-10-24 answers (2026-10-24, steps B-1 to B-8)
+
+Checked in the logs and unit tests, not by eye. Details and test
+commands in `MODLOG.md`.
+
+- **Scripts:** `getConInventory` (what Connor carries in each place: the
+  bell outside the Wizard's house rings with the small axe, the third
+  hit brings the Lady of the Lake), `exist` (the roof's forward choice
+  kills the bow spriggan), `setHaze` (the Shadow's home is thick with
+  fog), `setState … Wait` (Connor stands up after a script's movement).
+- **Movement:** Connor's and the characters' walking and running loops
+  move as traced (Connor: walk 1,124, run 2,558, back 1,070 units/s).
+- **Looks:** every kind of object with `dithered=` in its file is drawn
+  with it (Daventry's arrow doors, Gnome's lock and characters).
+- **Interface:** panel pictures are stretched to their box; the bars'
+  empty part is the game's own black picture; the caption's stone is
+  stretched.
+- **State messages:** a character killed or started before it was ever
+  updated reports leaving "no state" (Daventry's `bossprig`).
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,

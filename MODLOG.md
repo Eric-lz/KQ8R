@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 STATUS, FEATURES, README, DESIGN: session A's 2026-10-24 answers built (B-1 to B-8)
+
+**Changed:** `STATUS.md` ("Where we are" rewritten: the B steps added, the 2026-10-20/21 entries folded into one line; "next" and "Open questions" updated), `docs/FEATURES.md` (new section), `README.md` (M6 line), `docs/DESIGN.md` (both answer plans marked done).
+**Why:** `docs/SESSIONS.md`, end of a B session.
+**Tested how:** Read through; no code changed.
+**Result:** Q160-Q166 and Q108 b marked built in QUESTIONS (B-1 to B-8 commits); open for A: Q108 a, c, d and whether a save keeps `setHaze`.
+**Still broken / not tested:** Nothing of B-1 to B-8 was played by hand or looked at by eye.
+**Next:** The user's look at B-1 to B-8; rule 6's speed and wrap for the other animated objects.
+
 ## 2026-10-24 B-8: Q163 checked: leaving "no state" is sent as 0 (one gap fixed)
 
 **Changed:** Core `active.rs` (`state_changes`): a character our once-an-update look has never seen counts as being in "no state" (0), so its first real state is sent as `0 -> new`. Unit test. Provenance, QUESTIONS Q163, DESIGN B-8.

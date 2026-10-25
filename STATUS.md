@@ -7,374 +7,44 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-24)
 
-- **2026-10-24 (A): Q160–Q166 and Q108 b answered**, one commit each, not
-  built: `getConInventory` (`inventory.md` rules 20–26: nine `ConInv::`
-  slots, fists 1280), `exist` (`anim-scripts.md` rule 38: 0 = there),
-  the loop speed (`objects.md` rule 6a: the wrap adds the last frame's
-  step; Connor's run 2,558, matching the user's measurement), `setState
-  … Wait` (`characters.md` rule 22), `setHaze` (`object-lighting.md`
-  rule 33a: haze n, visible 1.5 n), "no state" = 0 (`characters.md`
-  rule 16a), `dithered=` on every class (`objects.md` rules 8–9), panel
-  pictures stretched, not tiled (`interface.md` rules 20, 20a).
-- **2026-10-24 (B): session A's 2026-10-22 answers built** (plan in
-  `docs/DESIGN.md` "building session A's 2026-10-22 answers", steps A-1
-  to A-12, one commit each; checked in the logs, then **by the user
-  (2026-10-24)**: the Shadow scene with fists out, the roof Choice, the
-  ravens, the experience sound, the dither, the popup on Yes and the
-  spinning mask all work; the conversation camera looks the same as the
-  original; the chest lost its dither while opening, fixed the same day):
-  `StateChange` messages (the Shadow scene now starts with a weapon out),
-  Connor's Choice state (the roof jump), `loadObject`, `setScript`'s
-  `Init` (characters and items get `Init`), cue `sendEvent @` and
-  `random` (the ravens caw), the experience sound `STATS.AUD` and the
-  level flame / `LEVEL.AUD` on a changed level number, Connor's frames
-  cut down, the hammer flying back to its start, Connor hidden from
-  characters in his talk state, the portal popup opening on Yes, black
-  only in the loading meter's slot, map icons after the colour match and
-  no mini-map blink, the spinning mask shrunk into its place, `dither` as
-  a screen-door texture, the orbits from world +y, textures through the
-  world palette, the bolt's start frame, Connor's `loop=` start phases, a
-  swap while moving cutting a swing, the jump from the held keys, turn
-  keys in a conversation's approach, the conversation camera round the
-  talking spot. New questions for A: **Q162** (`exist`: the roof scene's
-  kill waits for it), **Q163**, **Q164** (two notes disagree on a
-  repeating loop's speed: not built), **Q165**.
-- **2026-10-22 (B): fixes after the user's look at 6e** (one commit
-  each). The popup: text centred with more line space; buttons plain /
-  gold-highlighted / held down, answering when the mouse button or Enter
-  is let go (the user: "good enough", exact look for A: Q151 d, e).
-  After No: a key let go during the question no longer sticks; Connor
-  stands at once. Worlds with a parent (Castle Daventry, Snow exit,
-  Temples 2–4) take voices and sounds from it (the user: Castle voices
-  work). Characters loaded by a script can speak (the Castle's mirror
-  scene with Lucreto works, user-checked).
-- **2026-10-23 (B): Q153 built**: the frame for a phase is cut down
-  (floor(p × frames + 0.001)), not rounded, for objects, doors, chests
-  and start frames. The King's portrait now holds its pushed frame (45)
-  in the log (the user: it stays pushed). Connor's own frames still use
-  the old rule (next step).
-- **2026-10-23 (B): the key behind it can be taken**: objects a script
-  loads while playing now get their click box (before, only
-  characters). The user: works. Not yet solid for Connor.
-- **2026-10-23 (B): the Shadow scene at the Dead City portal plays**
-  (the user: works): scripts can now play a movement on Connor
-  (`KQAnimPlayEvent`) and cue a character (with a weapon out: works
-  since A-1, 2026-10-24); Q160, Q161 new.
-
-- **2026-10-22 (B, M6 6e-1 to 6e-8): moving between worlds built** from
-  `world-change.md` (plan in `docs/DESIGN.md` "6e", one commit per step;
-  **the loading screen checked by the user by eye, the rest in the logs
-  only**). One world is taken down and the next built in the same
-  program (`world_build.rs`; entity, asset and memory counts logged; a
-  world takes about 3.4 GB, so left worlds are not kept alive). The next
-  world is read on a thread behind the loading screen (picture, red
-  meter in the picture's own frame, 4:3). Connor's journey (stats,
-  items, potions with their time, flags, map marks) goes along. The
-  Portal state: the "load a new region?" popup (game paused, keys,
-  clicks), No (`noLoc`), Yes (`enterAnim`, hand-over), the arrival
-  (places, `exitAnim`, `exitScript Exit`); walking exits and teleporters
-  both work (Daventry ↔ Castle Daventry, the gate to Dead City, Barren's
-  elevator, the keep's pad to Barren). `world.cs Begin` runs on every
-  arrival (at launch with `--begin`). Kept worlds, first stage: the map,
-  the world's variables and the objects that left it. Console words
-  `reload`, `goworld <World> [x y turn]`, `goworld portal <file>`; test
-  option `--console "WORDS",N`. New **Q151**, **Q152** (not blocking).
-  A decision for the user: reading a world gets slower with each change
-  (the Windows allocator; `mimalloc` keeps it steady but holds ~1 GB
-  more).
-
-- **2026-10-21 (A, 6e-0): the world change and loading studied**
-  (`docs/behaviour/world-change.md`, ready for B; **the user checked
-  1–10 in the original, 2026-10-22**: all as described except Yes is
-  left / No right; everything in a world is kept; potion timers carry
-  over; the popup's keys and the two loading phases added). The original saves
-  the world it leaves exactly like a saved game (`MASK/cur/<World>.vol`:
-  every object with its state, `WorldVar.cs` with the variables named
-  after that world, a generated `newWorld.cs` that also puts the world's
-  clock back) and loads the next as if loading a save; Connor crosses as
-  his whole saved object (`cur/Connor.kq`: stats, items, flags, map
-  marks, his Portal state), with the counter for unnamed objects and
-  the difficulty. Arrival: `KQPortal::ConLoc` / `CamLoc` replace the
-  place on the new world's first load of Connor and the camera; he plays
-  `exitAnim`, then `exitScript Exit`, `handsOff 0`. Walking exits are
-  all started by scripts (traps or the portal's `ConnorCollision`). The
-  loading screen: the world's picture and a 3-colour meter driven by
-  `setLoadProgress`. The Yes/No popup pauses the game but not the
-  sounds; Yes left, No right (user's check). Arriving in Temple 1 deletes every kept
-  world. Answers `magic-map.md` open questions 4 and 5; corrects its
-  rule 40 step 4 (the full-armour list swap is for the arrival).
-
-- **2026-10-21 (B, M6 6d-1 to 6d-7): the magic map built** from
-  `magic-map.md` (A, checked by the user in the original; plan in
-  `docs/DESIGN.md` "6d", one commit per step; **checked in the logs
-  only by B; **the user checked it by eye, 2026-10-21: works as
-  expected**; `kq8-artifacts/logs/map.log`). `kq8 map-verify`
-  reads every map and portal file and all 22 of the user's saves (29
-  saved maps, every fog written back the same). The world's
-  `<x>map.kq` comes from `GAME/Kq`; `MagicMap` arriving switches it on;
-  each new map pixel reveals the fog disc (Daventry 24 px, 46 new pixels
-  per row walking); the 16-frame arrow; icons and the `KQMap::` commands.
-  The window: Tab / a mini-map click (also during handsOff), the name
-  plate, left-drag pan, right-drag zoom, the follow (stand-in: 20 px
-  inside every edge). The bottom-right slot is the live mini-map (own
-  size, blinks on arrival). The page arrows show other visited worlds'
-  maps with matched colours and snap back when Connor moves; for now
-  other worlds' maps come only from an original save (`--kept-maps`).
-  On a pad with an earned world shown the "Go" button lights and runs
-  the teleport script. **Not built:** the Portal state (the question,
-  `teleportdown`, the world change): it needs moving between worlds.
-  New **Q150** (not blocking).
-
-- **2026-10-21 (A): the main menu studied** (`docs/behaviour/main-menu.md`,
-  ready for B). The items and when each can be chosen, the keys (Up/Down
-  wrap, Enter, Escape = Back to Game, Left/Right in popups), the popups
-  (new game, quit, corrupt save, Combat difficulty Easy 0.66 / Normal
-  1.0 / Hard 1.5), the pause and theme music, the save thumbnail, and
-  Connor's death opening the menu with Save and Back off. **The user
-  checked all 7 points in the original (2026-10-21):** right; items that
-  are off are greyed (dithered); hover doesn't move the mask; the theme
-  starts without a fade. Still open: combat level in saves, the
-  `handsOff` seconds after Connor's death.
-
-- **2026-10-21 (B): Connor's levels checked; level-up flame and sound**
-  (DESIGN "Connor's levels checked", steps L-1 to L-3, one commit each;
-  **checked in the logs only, not by eye or ear**). Experience
-  thresholds, level-ups, health, hand / ranged / armour numbers and
-  equipment all match the notes. Fixed: a world started directly now
-  gets its `conStart.cs` level and stats (Dead City level 8, health 80,
-  hand 60, ranged 19, armour 11; was level 1 with 10 / 10 / 0 / 0). New:
-  the level-up flame (`flame14.pba`) over the level number and the
-  level-up sound (`LEVEL.AUD`). **The user checked in the original:**
-  the experience per level, the sound and the flame are right (the
-  flame's speed not compared). **Q149** a, b (speed), d, e still open.
-
-- **2026-10-21 (B, M6 6b-1 to 6b-3): Azriel's Hammer built** from
-  `azriel-hammer.md` (plan in `docs/DESIGN.md` "6b", one commit per step;
-  **checked in the logs only, not by eye**). The user had seen it fire an
-  arrow in Swamp: the `KQHammer` file was not read, and Connor's ranged
-  weapon was looked for before `constart.cs`'s items arrived. Now: the
-  click throws (turn at once, handsOff, `attack`); the hammer leaves at
-  the `do` cue from (−41, −605, 1,226), hits one thing (modifier + ranged
-  damage, capped), turns back at a touch, its range or the ground, flies
-  back along its line and is caught (`catch`), even if it falls short.
-  Run in Swamp and Daventry (`give AzrielHammer`). New **Q148** (a–e, not
-  blocking).
-
-- **2026-10-21 (B): `checkDistance` built** (`anim-scripts.md` rule 31,
-  Q142): the Wizard now says "Come closer, lad!" when Connor is in his
-  area but more than 5,000 away (on entry, then every 8 s); the
-  windmill's axe can no longer be taken from the floor. Checked in the
-  logs only; the axe from the hay bale not run.
-
-- **2026-10-21 (A): Q142 and Q141 answered** in `anim-scripts.md` rules
-  31–32. `checkDistance`: straight 3D distance between positions
-  (Connor's feet, an object's placed point); 1 if at most the max, else
-  0 (also 0 on any error). This decides the axe: never from the floor,
-  from the hay bale within about 830 sideways. Q141: a script's walk
-  waits for any weapon swap to end (B's build is right).
-
-- **2026-10-21 (B): Q147's answers built** (one commit each): the rope
-  model drawn 2,000 behind Connor (it was inside the wall: the user saw
-  no rope fly), the throw camera as traced, the grab's tie takes the +
-  spot, a rope placing runs only the traps' stay test, the top camera
-  skips his first move. Also fixed after the user's look: the snaps at
-  each rope animation's start. Checked in the logs only.
-
-- **2026-10-21 (A): Q147 answered** in `ropeandhook.md` (traced, and
-  measured in the running original at the church rope). The camera after
-  the throw from below is at the rope's place + (0, 2,250, 350) in the
-  rope's frame, tilted up 1.27, heading = rope + 3.14 (rule 15). Connor's
-  jump to the rope's place happens in the same update as that camera
-  cut. Changes for B's stand-ins: the rope's `handsOff` is a plain
-  `handsOff 1` (no "pointer kept"); the top camera skips following his
-  first move, which also gives first person back (rule 9). Confirmed:
-  first free icon place; `taway` 405 forward; trap order `Off` then `On`.
-
-- **2026-10-21 (B, M5 5g-1 to 5g-8): health items and potions built**
-  from `docs/behaviour/potions.md` (plan in `docs/DESIGN.md` "5g", one
-  commit per step; **checked in the logs only, not by eye**). Keys 1–8
-  refused only in handsOff or dying; a running potion can't be taken
-  again; whole-second timers on game time. Timer icons drain in the
-  status places (from the top, black and gold) and the red numbers.
-  Shield: protection + half (50–100), the `orbit1` shape circles him,
-  the end takes off only what it added ("Do not reproduce" 1);
-  `setConnorFlag InTemple4`. Strength: hand + half, iron skin, potion
-  faces. Invisible: characters lose him (a chasing goblin gives up after
-  3 s), `I_` and mesh textures. Clarity: `Reveal True/False` (Daventry:
-  the keep wall, the wizard's hidden chest, which now shows and opens).
-  Candle +25 at pickup and the other built-in pickup experience. New
-  questions **Q143** (the mask's icon place), **Q144** (`dither`), **Q145**
-  (three shield orbits, not one: the user's check, fixed). The user
-  checked Invisible, Clarity and the shield's orbits by eye. **5g-9:**
-  characters also lose Connor during cutscenes (handsOff). Q146 asked.
-
-- **2026-10-21 (B, M6 6a-1 to 6a-6): the Rope and Hook built** from
-  `ropeandhook.md` (plan in `docs/DESIGN.md` "6a", one commit per step;
-  **checked in the logs only, not by eye**; everything in
-  `kq8-artifacts/logs/rope.log`). Rope places set the status only with
-  the rope carried, `HookUp` / `HookDown` icons; the rope button (the
-  remark away from a place, held at one, the top's camera); any world
-  click starts the sequence (`away`, `draw` / `drawdown`, `btoss` and
-  the separate rope model / `ttoss`, `bon` / `ton`), the camera spots,
-  the 5,000 lift, the half turn; forward / back scrub the climb, the
-  camera 750 a second in its range; off at either end (the 1,000 / 4,900
-  drop), the weapon drawn only if he held one. On the rope: no damage, no
-  state changes, characters lose him, weapons ignored, items can be
-  picked up. Run in Daventry at the wizard's house (`ropetrp1/2`), up and
-  down. New **Q147** (a–e, not blocking). Saved games don't exist yet, so
-  the rope isn't saved (kept as plain records for later).
-
-- **2026-10-21 (A): the Rope and Hook**, `docs/behaviour/ropeandhook.md`
-  (27 rope places in 7 worlds; Daventry has 4). A pair of trap boxes
-  sets "rope at the foot / at the top" (only if Connor carries the rope;
-  `HookUp` / `HookDown` icon). The rope from the inventory goes on the
-  pointer; any click in the world starts a fixed sequence (weapon away,
-  rope out, throw, grab), then forward / back scrub the 78-frame climb
-  up or down, the camera rising or falling 50 per update; off at
-  either end, weapon back out. No damage and monsters lose him the
-  whole time. Q110 (b) and the rope part of (a) answered; corrections
-  in `inventory.md` rule 9, `talking.md`, `connor-movement.md`,
-  `interface.md`. **Checked by the user in the original** (2026-10-21):
-  all matches; the weapon is drawn at the end only if he held one; only
-  forward / back climb; clicks pick items up; rock throws on the rope
-  are ignored (the original is buggy there); mid-climb saves load fine.
-  Built by B the same day (above); one open question left (the camera
-  during the throw from below).
-
-- **2026-10-20 (A): Azriel's Hammer**, `docs/behaviour/azriel-hammer.md`
-  (not needed in Daventry): thrown from standing with `handsOff` until
-  caught; hits one thing, flies back along its line, always caught. Checked
-  by the user in the original. The 0-damage worlds are not reachable
-  with the hammer; a default base damage per weapon is an M7 idea.
-
-- **2026-10-20 (B, M5 5f-1 to 5f-7): Connor's ranged weapons built**
-  from `docs/behaviour/ranged-weapons.md` (plan and steps in
-  `docs/DESIGN.md` "5f"; one commit each; everything in `fight.log`).
-  Bolts (the spriggans' and his) fly as traced: turned once to the aim
-  (pitch too), 533 units per update, no gravity, swept with their box
-  against what their mask covers, gone at the first touch, the floor
-  grid or their range; they start at the shooter's `arrow` model part.
-  Weapon modes hand / ranged / none: slot clicks, **Delete** (swap),
-  **Alt** (put away), `KQConner::setDoMode`; taken only while he stands
-  or moves; the swap plays `draw` / `undraw` (fists) or `away` → `out`;
-  pointer sword / bow / play. The Small Crossbow can be readied and
-  shoots: standing (`attack`, bolt at its `do`) and moving (at once,
-  ≤ 2 a second, run → walk for 1 s); the aim pick, the 33° limit, the
-  turn and its wait; the Wizard / Knight get the plain click. The swing
-  click picks its target as traced (within 2,350, kept). Q140 (the
-  bolt's shape; aim height 975 vs 1,200; which frame at the cue) and
-  Q141 (a script's walk during the swap) asked, not blocking. **Checked
-  by the user against the original (2026-10-21): "just like the
-  original".** Found then: the windmill's axe can be taken from the floor
-  because `checkDistance` is not built (an unknown command leaves 1):
-  **Q142**, for A.
-
-- **2026-10-20 (A): Q137 answered**, `docs/behaviour/thrown-items.md`
-  (`items.md` rule 12 points there): a thrown item follows the exact arc
-  (8,085 units/s²) from its launch point, 15 updates a second; it is
-  stopped by the floor grid, buildings and most objects (characters and
-  Connor are flown through), slides off walls and drops at their foot,
-  is flung up again by barrels (scripted or animated objects), tumbles
-  about one axis at a fixed angle per update, and rests with no turn.
-  Built by B in M5 5e and checked by the user ("pretty much exactly like
-  the original").
-
-- **2026-10-20 (B, after the user's fight check): fixes 1–7 and 5d.**
-  Readying the fists plays `draw` and switches Connor to the weapon's
-  movement set, sword pointer (Ctrl: the play pointer); no readying in a
-  jump, its landing or a stumble; `conversation.md` rule 7 (weapon away
-  first); attack clicks find creatures and scripted objects (stand-in,
-  Q139); drops drawn where they land and tumbling (stand-in rates,
-  Q137 e); **5d**: objects loaded by scripts while playing (templates,
-  `copies_view.rs`), `KQAnimOnce` ends, `tossItems`: the barrels burst,
-  leave their wreck and throw their items. Q138, Q139 open (partly
-  answered by the user). One commit each; see MODLOG.
-
-- **2026-10-20 (B, M5 5c-1 to 5c-10): the fight built** from
-  `fighting.md` (plan and steps in `docs/DESIGN.md` "5c"; one commit
-  each; every attack, hit, miss, roll, flinch, death, drop and shot in
-  `kq8-artifacts/logs/fight.log`). Characters attack at once on
-  arriving, then every swing + `attackDelay` (no swallowed swing: the
-  user's decision); hits at the `Do` cue (reach, × 1.25 with his back
-  key, front half); rolls and protection; Connor flinches, says ouch,
-  dies (he stays dead: game over is another study). Connor hits back
-  with his fists: click the hand-weapon slot to ready them, then left
-  click a creature (Shift: the big swing; Ctrl: the plain click) — the
-  **input is a stand-in** from the manual. Hit characters flinch or say
-  ouch, run after him, die with their die movement, throw their drops,
-  leave a corpse and give experience when the death ends. The bow
-  spriggans shoot bolts (**stand-in flight**). Combat level
-  (`--combat-level 1|2|3`, stand-in for the menu). All checked in the
-  logs only; **not looked at by eye, not compared with the original.**
-
-- **2026-10-20 (B, M4 4d-7b-3): shadows fall on buildings** (walls and
-  floors of the near and far buildings around the caster: characters,
-  Connor, plain objects). **2026-10-21 (B, 4d-7b-5): A's answer to Q135
-  built** (`characters.md` rule 37 (2): s = 0.287 × the shown model's
-  stored ball radius, the band from the ball's centre, the area turned
-  with the caster); checked in the logs (Connor standing: box 505 ×
-  1,800, 687 below to 1,079 above his feet, as A's numbers). After the
-  user's look (2026-10-21): darker (sRGB 0.5), and the area reaches the
-  whole shadow so it climbs walls at once (4d-7b-5c, -5d); **checked by
-  the user: "looks a lot better"**. **Checked by the user against the original
-  (2026-10-20): works as expected**, shadows also show inside a
-  building when Connor stands outside, as in the original. The
-  original cuts some shadows off; by the user's decision we don't.
-
-- **2026-10-20 (A): the fight studied**, in new
-  **`docs/behaviour/fighting.md`** (M5's next part; not yet checked in
-  the original). In short: a character's first attack is due at once,
-  then every swing length + `attackDelay`; it starts only when its
-  running movement can be cut short, and it stands still while swinging.
-  The hit is decided at the attack's `Do` cue: within reach (× 1.25 if
-  Connor walks backward) and Connor in its front half. Damage is rolled
-  (25–100 % on Connor, 75–125 % on characters), then protection; dead
-  below 0. A hit makes it flinch (`react`) if the roll is high and its
-  last flinch ended over 2 s ago, and alarms everyone who sees Connor
-  "with run". Dying: items drop at its feet at once, the die movement by
-  the hit's kind, then experience to Connor, a corpse, `Die <kind>` to its
-  script. Bow spriggans are ranged (they hold a crossbow), never move.
-  Daventry's fighters' numbers are tabled in its rule 5.
-- **Done 2026-10-20: characters moving on their own (M5 5a, 5b),
-  checked by the user against the original** (the chase, the leash, the
-  follow, the zombies sinking and rising again: "both match exactly").
-- **2026-10-20 (B, M5 5b-1 to 5b-5): A's answers Q131–Q134 built**
-  (one commit each; plan in `docs/DESIGN.md` "5b"): the exact character cylinder (goblin 0–1,600) and the one-ball
-  vertical test; landing on a character's top pushes Connor 250 off; the
-  stuck escape's world diagonals NE → NW → SW → SE, north when all are
-  blocked, the check on only once the walk plays; **a goblin now follows
-  a walking Connor at reach** and stops only when he has no forward /
-  back key (the user's check in the original; no more stop-and-go); the
-  way-home re-take keeps `run` (the leash can't take it home while he
-  stays within reach: the original's, A); zombies sink with `hide`, go
-  underground on their home point and rise again only from there.
-  Earlier the same day (B, after the user's check of 5a): `getLoc`
-  while playing (the graveyard zombies got no home).
-- **2026-10-20 (A): Q131–Q134 answered** (`character-movement.md`,
-  `connor-collision.md` rule 18, `connor-physics.md`), and the user
-  checked the leash and the follow in the original.
-
-- **2026-10-20 (B, M5 5a-1 to 5a-9): characters move on their own**,
-  from `character-movement.md` (one commit per step; plan in
-  `docs/DESIGN.md` "5a"; **checked in the logs only, not by eye, not
-  against the original**). New core module `character_ai.rs`. Walking by
-  the walk / run steps (goblin22 917 / 3,068), steering, sliding, the
-  stuck escape (chicken1 stuck at once and running at 947, as the note
-  predicts); its own moves meet objects, characters and Connor (Q128
-  built); sight every second and the active list (6); wandering
-  (`loop`, `patrol`); fidgets (goblin22 `react` / `attack`); alarm,
-  telling the team (the windmill spriggans), chase up to the attack
-  distance (**stand-in for the fight: it stops there**), losing sight,
-  the leash, the way home; `goHome`, `setHome`, the radius commands; the
-  road zombies rise (RoadZ2–4 at once, RoadZ1 after 3 s) and sink back;
-  bats on the lake's surface (Q129 built). New questions **Q132** (the
-  stuck escape's diagonals and line height; Connor's shape for a
-  character), **Q133** (the leash loops while Connor is within reach),
-  **Q134** (does the chase wait for `birth`?).
-
-- **Earlier (2026-10-18 to 2026-10-19):** M2 and M3 done; M4's speech,
-  interface, inventory, characters and conversations built and checked
-  by the user. Details: `docs/FEATURES.md` and `MODLOG.md`.
+- **2026-10-24 (B): session A's 2026-10-24 answers built** (plan in
+  `docs/DESIGN.md` "building session A's 2026-10-24 answers", steps B-1
+  to B-8, one commit each; **checked in the logs only, not played by
+  hand or looked at by eye**):
+  - B-1 `getConInventory` (Q166): the bell rings with the small axe and
+    the third hit brings in the Lady of the Lake.
+  - B-2 `exist` (Q162): the roof choice's forward key plays the
+    spriggan kill.
+  - B-3 the loop speed (Q164) for Connor and characters: walk 1,124,
+    run 2,558, back 1,070 units/s (measured 1,119–1,122 / 2,562 /
+    1,066); character speeds as `character-movement.md`'s table.
+  - B-4 `setState … Wait` (Q160): Connor stands up after `portalx` in
+    the Shadow scene.
+  - B-5 `setHaze` (Q161): the thick fog in the Shadow's home.
+  - B-6 `dithered=` on every class (Q165): Daventry's arrow doors,
+    Gnome's lock and characters.
+  - B-7 panel pictures (Q108 b): stretched to their box, the bars' empty
+    part `4black.pbm`, the caption stone stretched.
+  - B-8 Q163 checked: one gap fixed (a character first seen in a real
+    state now reports `0 -> new`).
+- **2026-10-24 (B): session A's 2026-10-22 answers built** (steps A-1 to
+  A-12; **checked by the user 2026-10-24**: the Shadow scene with fists
+  out, the roof Choice, the ravens, the experience sound, the dither, the
+  popup on Yes and the spinning mask work; the conversation camera looks
+  the same as the original).
+- **2026-10-23 (B):** the frame for a phase is cut down (Q153; the
+  King's portrait stays pushed, user-checked); objects a script loads
+  while playing get their click box (the key behind the portrait, user:
+  works); the Shadow scene at the Dead City portal plays (user: works).
+- **2026-10-22 (B, M6 6e): moving between worlds built** (the loading
+  screen checked by the user, the rest in the logs; the popup's look
+  "good enough"; Castle voices and the mirror scene user-checked).
+  Console words `reload`, `goworld <World> [x y turn]`, `goworld portal
+  <file>`. A world takes about 3.4 GB, so left worlds are not kept alive.
+- **Earlier (2026-10-18 to 2026-10-21):** M2 and M3 done; M4's speech,
+  interface, inventory, characters and conversations; M5's fight, ranged
+  weapons, potions; M6's rope, hammer and magic map. Details:
+  `docs/FEATURES.md` and `MODLOG.md`.
 - **Later for A:** Dead City's flames (11,000 vs 12,100, open
   question 9); Connor against monsters.
 
@@ -584,15 +254,19 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
-- **After A-1 to A-12 (2026-10-24):** the user's look passed (see
-  above), the chest keeping its dither while it opens too. Not done:
-  `exist` (Q162), a repeating loop's speed and wrap (Q164), `dithered=`
-  on doors and characters (Q165), Q81 c's wrap detail, `getConInventory`
-  (Q166: the bell outside the Wizard's house can now be hit but doesn't
-  ring until it is built). A answered Q160–Q166 and Q108 b
-  (2026-10-24). Suggested next for B: `getConInventory` (the bell),
-  `exist` (the roof kill), then rule 6a's loop speed, `setHaze`,
-  Wait re-entry, `dithered=` on every class, stretched panel pictures.
+- **After B-1 to B-8 (2026-10-24), not checked by the user yet:** the
+  bell and the Lake Sword scene's start, the roof kill, Connor's and the
+  characters' speeds, Connor standing up after `portalx`, the Shadow
+  home's fog, the arrow doors' and Gnome's colour key, the panels'
+  stretched pictures. Left over, not built: rule 6's speed and wrap for
+  plain animated objects, chests and doors (only Connor and characters
+  have it); our camera's projection far plane does not follow
+  `setHaze` (the ground and objects stop at `visibleDistance` anyway);
+  `setState Connor Wait` from his jump, push, rope, talk or throw states
+  (not described, nothing done); the status icons and popup buttons keep
+  their picture's own see-through flag; `KQObject::changeBmp` is a stub.
+  Suggested next for B: a look by the user at the list above; then rule
+  6 for the other animated objects (a small step, same player).
 
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice
@@ -674,8 +348,8 @@ M6 has started with the Rope and Hook (6a).
   built, as no data uses them: `eval` alone gives 1 (the note: 0), and
   its words are not read again as a new line.
 - **Stand-ins of 4c** (Q108–Q111): the 800 × 600 screen and how the
-  layout's pictures scale with it (× 1.25, nearest pixel, tiled when
-  smaller); the panels' animations at 15 frames per second; counts of 0
+  layout's rectangles scale with it (× 1.25; pictures stretched to them
+  since B-7); the panels' animations at 15 frames per second; counts of 0
   not written; the rocks picture; the blink's order; a `give`'s
   pushed-out piece at Connor's feet; the
   pointer's click point at its top-left. Not built: the map (M6), the
@@ -789,8 +463,9 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- **Answered by A 2026-10-24, not built yet:** Q160, Q161, Q162, Q163
-  (B's stand-in already right), Q164, Q165, Q166, Q108 b.
+- **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
+  fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
+  whether a saved game keeps `setHaze`'s values (we have no saving yet).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
@@ -837,7 +512,7 @@ M6 has started with the Rope and Hook (6a).
   flag bit 6, the picture attribute bits.
 - For A (asked 2026-10-18 by B, M4 4c): **Q108** (the 800 × 600 screen:
   how rectangles and fonts scale; the panels' animation speed; (b) how
-  pictures fill their box answered 2026-10-24), **Q109** (counts of 0 for
+  pictures fill their box answered and built 2026-10-24), **Q109** (counts of 0 for
   gold and rocks, the rocks picture, the blink's order, a `give`'s
   pushed-out piece, the top bar in a window; (d) the potions' clock and
   (a) the slots' count 0 answered in `potions.md` and built in M5 5g), **Q110** (the scroll's and rock's remark
