@@ -2919,6 +2919,8 @@ first. Each step: the note's rule, a unit test where the rule is in
 8. **B-8: check Q163** (`characters.md` rule 16a): leaving "no state"
    sends old state 0. Our stand-in should already match; change it only
    if not; the check logged.
+   **Done** 2026-10-24 (it did not fully match: a character first seen
+   in a real state sent nothing; fixed).
 
 Not part of this plan (open for a study session): Q108 a, c, d; whether
 a saved game keeps `setHaze`'s values.

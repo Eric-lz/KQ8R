@@ -3106,27 +3106,29 @@ impl WorldState {
     /// <new>` to each recipient registered for it, through the queue with
     /// no delay. Connor's number comes from the caller. **Stand-in:** we
     /// look once per update, so two changes in one update are one message
-    /// (old = before both); "no state" (before a character's start-up,
-    /// which waits for it to be near or far) counts as 0 (rule 16 gives it
-    /// no number, Q163), and a change to it is not sent.
+    /// (old = before both). Rule 16a (Q163): "no state" is 0, every
+    /// character starts in it, and leaving it is sent with `$4` = 0, also
+    /// when the first look already finds a real state (killed or started
+    /// before it); a change to it is not sent (we never make one).
     pub fn state_changes(&mut self) {
-        let mut now: Vec<(String, Option<u32>)> = Vec::new();
+        let mut now: Vec<(String, Option<u32>, bool)> = Vec::new();
         if let Some(n) = self.connor_state {
-            now.push((CONNOR.to_string(), Some(n)));
+            now.push((CONNOR.to_string(), Some(n), false));
         }
         for a in &self.anims {
             if let Some(c) = a.character.as_deref().filter(|_| !a.gone) {
-                now.push((a.player.name.clone(), c.state.number()));
+                now.push((a.player.name.clone(), c.state.number(), true));
             }
         }
         let t = self.now();
-        for (who, number) in now {
+        for (who, number, character) in now {
             let key = who.to_ascii_lowercase();
             let Some(new) = number else {
                 self.state_seen.insert(key, 0);
                 continue;
             };
-            let Some(old) = self.state_seen.insert(key.clone(), new).filter(|&o| o != new) else { continue };
+            let seen = self.state_seen.insert(key.clone(), new);
+            let Some(old) = seen.or(character.then_some(0)).filter(|&o| o != new) else { continue };
             let recipients = self.notify.get(&key).cloned().unwrap_or_default();
             if recipients.is_empty() {
                 continue;
@@ -6715,6 +6717,21 @@ endif
         // anim-scripts.md rule 38 (Q162): removed after its Die; the
         // corpse has no name of its own.
         assert_eq!(a.test_command("exist gob", "t").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn killed_before_its_first_update_it_reports_leaving_no_state_as_0() {
+        // characters.md rule 16a (Q163, B-8): `bossprig.cs` registers for
+        // itself in `Init` and waits for `$5 == 8`; killed before any
+        // update, the message is 0 -> 8.
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::None);
+        a.world.state_change_notify(&["KQMonster::stateChangeNotify".into(), "gob".into(), "gob".into()], "t");
+        assert!(a.world.console_kill("gob").is_ok());
+        a.world.state_changes();
+        let log = a.take_log().join("\n");
+        assert!(log.contains("gob: state 0 -> 8: StateChange to gob"), "{log}");
     }
 
     #[test]

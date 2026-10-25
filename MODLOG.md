@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-8: Q163 checked: leaving "no state" is sent as 0 (one gap fixed)
+
+**Changed:** Core `active.rs` (`state_changes`): a character our once-an-update look has never seen counts as being in "no state" (0), so its first real state is sent as `0 -> new`. Unit test. Provenance, QUESTIONS Q163, DESIGN B-8.
+**Why:** `characters.md` rule 16a: every character starts in a placeholder state numbered 0, and leaving it sends `$4` = 0 (Daventry's `bossprig.cs` waits for `$5 == 8`).
+**Tested how:** `cargo test --workspace` (all pass; new `killed_before_its_first_update_it_reports_leaving_no_state_as_0`, which **failed before the fix**: no message at all). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai --console "kill bossprig",3`; `doors.log`.
+**Result:** Our stand-in matched when the first look found the character in no state (the usual case: we look from update 1), not when a character reached a real state before it was ever looked at (killed or started in the update it was added). Now: unit test "gob: state 0 -> 8"; viewer update 3 "StateChange bossprig 0 8", `bossprig.cs` runs its dying branch.
+**Still broken / not tested:** Connor keeps the old way (no first message; the rule is about characters). `KQObject::changeBmp` in `bossprig.cs` is still a stub (not part of this task).
+**Next:** Update STATUS, FEATURES, README.
+
 ## 2026-10-24 B-7: panel pictures stretched, the bars' rest `4black.pbm` (Q108 b built)
 
 **Changed:** Core `gui_draw.rs`: `Piece::Picture { stretch }` (stretched to its box, or once at its own size; no tiling), new `Piece::Bar` (picture over the shown width, `4black.pbm` over the rest), `picture_lower` stretched; `Piece::Stretched` folded into `Picture`. `caption.rs`: the stone stretched to the box. Viewer `gui_view.rs`: `Spec::Pic` takes the control's modifier (0x8000) and attribute (kind 1 = colour 0 see-through); the meters' bars become `Spec::Bar` with tag 351 (`4black.pbm`), replacing the black fill; a `gui.log` line per bar with sampled colours. Unit tests changed. Provenance, QUESTIONS Q108 (b), DESIGN B-7.

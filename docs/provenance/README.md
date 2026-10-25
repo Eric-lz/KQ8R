@@ -3528,3 +3528,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The caption's stone stretched to the whole caption box | Rule 20a (inferred by A for the caption dialog) | Unit test `the_stone_covers_the_whole_box_and_rows_are_centred` |
 | The status icons (potions, mask, hook) and the popup's buttons: stretched (their controls have 0x8000), see-through from the picture's own flag | **Ours** (their attribute is 0x8 in the layout; not switched, to keep the user-checked look) | — |
 | Rectangles × 1.25 at 800 × 600, fonts at their own size | **Stand-in**, Q108 a, c (open) | — |
+
+## "No state" is 0 (B-8, Q163) — `crates/kq8-core/src/active.rs` (`state_changes`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every character starts in "no state", numbered 0; leaving it sends `$4` = 0 (start-up Wait 0 → 2; killed before its first update 0 → 8) | `characters.md` rule 16a (traced) | Unit test `killed_before_its_first_update_it_reports_leaving_no_state_as_0`; viewer `doors.log`: "StateChange bossprig 0 8" |
+| A character our once-an-update look has never seen counts as 0 (was: nothing sent) | Rule 16a; **ours** for how we look | Unit test (failed before the fix) |
+| A change **to** no state is never sent: we ignore requests for unknown states | Rule 16a, "Do not reproduce" | — |
+| Connor: unchanged (no first message); the rule speaks of characters | **Ours** | — |
