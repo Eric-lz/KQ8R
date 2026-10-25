@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study (A): Q169 answered, dropped weapons lie where the death leaves them
+
+**Changed:** `docs/behaviour/fighting.md` rule 31 corrected, new rule 31a, table row, edge case, data list, check 6a, open question 4; `thrown-items.md` rule 1 (the exception); QUESTIONS Q169 answered. No code.
+**Why:** The user saw weapons lie still in the original while rule 31 said every drop is thrown.
+**Tested how:** Traced in `Mask.exe` (Ghidra); checked the data: the die models' part names (`spbdie.kqs` has `SmCrossbow`, `skbsdie.kqs` `BroadSword`, `skcmdie.kqs` `Mace`; walk/attack models have none; the bow spriggan's fire death `Spbfdie.kqs` has only `crossbow`).
+**Result:** A drop entry named like a part of the die model is not thrown; when the die movement ends, the item's `body` part is laid on that part of the last frame and stays (thrown only if a 1,000-up line test to the character is blocked). All other drops are thrown as before. `invHold` items are never dropped. Rule 31's old "object already in the world" reading was wrong.
+**Still broken / not tested:** That the die movement's first frame is the pose seen at the dying start is inferred (it matches the user's check). That the laid item never falls later is inferred. `Die now` from a script: not sure.
+**Next:** Q167 (the roof kill's crossbow).
+
 ## 2026-10-24 The user's check of B-1 to B-8; dropped weapons asked (Q169)
 
 **Changed:** QUESTIONS Q167 extended, new **Q169**; STATUS. No code.

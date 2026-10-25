@@ -410,10 +410,24 @@ Words used here:
 31. **Drops** (traced): its drop list is the monster list's `invDrop`
     (`@` or `none` = nothing) followed by the type's `invDrop` (unless
     `none`), comma separated, quotes and an `INVITEM_` prefix allowed,
-    `SilverCoins(3)` = 3 coins. Each entry becomes a new item, started at
-    the character's position (its feet, plus an offset that is 0 for
-    Daventry's characters; which key sets it: not sure), and **thrown
-    exactly like `KQObject::tossItems`** (`items.md` rule 12): its item
+    `SilverCoins(3)` = 3 coins. Each entry is first **compared with the
+    named parts of the character's current pose** (traced 2026-10-24,
+    Q169): a `.kqs` model is made of named parts, and the die models
+    carry the character's weapon as a part named exactly like its drop
+    entry (`spbdie.kqs` has a part `SmCrossbow`, `skbsdie.kqs` a part
+    `BroadSword`, `skcmdie.kqs` `Mace`, `sk_die3.kqs` `SkelKingSword`;
+    the walk, stop and attack models have no such part). The comparison
+    ignores case and is made after the quotes and the `INVITEM_` prefix
+    are taken off.
+    - **An entry that names a part** is **not made now and not thrown**:
+      it is kept for the end of the die movement (rule 31a). Only one
+      entry is kept: if several entries name parts, the last one wins and
+      the earlier ones are lost (made neither now nor later) [traced; no
+      data entry has two].
+    - **Every other entry** becomes a new item, started at
+      the character's position (its feet, plus an offset that is 0 for
+      Daventry's characters; which key sets it: not sure), and **thrown
+      exactly like `KQObject::tossItems`** (`items.md` rule 12): its item
     mover picks, when it starts, a random direction all round, 75°–85°
     up, 5,000–6,500 units/s, and the whole flight (arc, what stops it,
     bounces, tumble, settling, land sound) is the same: see
@@ -422,11 +436,48 @@ Words used here:
     item mover's own start, which the first reading missed. The user saw
     it in the original: the items fling upward and land with a sound.)
     They can be clicked and picked up while still in the air (the user's
-    check; items are clickable wherever they are, `items.md` rule 4). An
-    entry that names an object already in the world is
-    handled differently (it is moved to the character; not followed, no
-    Daventry entry does this).
-32. **When the die movement ends** (traced):
+    check; items are clickable wherever they are, `items.md` rule 4).
+    (Corrected 2026-10-24, Q169: this rule first said every entry is
+    thrown, and called the kept entry "an object already in the world";
+    it is the part-named entry above. The user saw it in the original:
+    coins, potions, mushrooms and crystals fly; the weapons don't.)
+    Which pose is "current" at the dying start: the die movement's first
+    frame (inferred: the weapon parts exist only in the die models, and
+    the user saw the weapons kept, not thrown). So a death whose movement
+    has no such part throws the weapon like the rest: the bow spriggans'
+    **fire** death `Spbfdie.kqs` has only a part `crossbow`, not
+    `SmCrossbow`, so a burnt bow spriggan's crossbow is thrown [data].
+    The items held (`invHold`) are not items in the world: they only add
+    to the character's numbers (rule 2) and are never dropped; a held
+    weapon is dropped only if it is also in `invDrop` [traced].
+31a. **The kept weapon, when the die movement ends** (traced 2026-10-24,
+    Q169), first of all the end steps (before rule 32's experience and
+    corpse):
+    1. the item is made and its **own model's part `body` is laid exactly
+       on the part of the same name in the character's last frame**:
+       place and full turn (it can lie on its side, tilted, as the
+       weapon lies in the die movement), taken from the character's place
+       and turn. If the pose has no such part by then: the character's
+       place and turn, 750 units up (a fallback; no data case);
+    2. **a line test**: from 1,000 units above the item's place to
+       1,000 units above the character's feet. If the terrain, or any
+       solid object other than the dying character, cuts that line, the
+       item is **thrown instead**, like the rule 31 items, from the
+       character's feet. (This keeps a weapon from being left inside a
+       wall or under the floor.)
+    3. otherwise it **stays exactly there**: no throw, no fall, no
+       landing sound [traced: it is placed, not given the falling mover;
+       that nothing later makes it fall is inferred]. It can be clicked
+       and picked up at once.
+    The item is a new world item like the thrown ones (the script
+    variable `NewInvItem` is set to it, as for them). In the die movement
+    the character's own model shows the weapon falling; when the movement
+    ends the model is replaced by the corpse (rule 32), and the real item
+    is already lying where the model's weapon was, so the swap is not
+    visible. With a script's `Die now` (rule 30) these end steps come at
+    once; whether a part was matched at that dying start (no die
+    movement is played): not sure.
+32. **When the die movement ends** (traced), after rule 31a:
     1. Connor gets its **experience** (rule 2) as a stats event (fifth
        number only; `anim-scripts.md` rule 19 then applies his levels),
        whoever killed it;
@@ -566,7 +617,8 @@ Words used here:
 | hit while not alarmed | runs to ~30° beside Connor; gives up beyond 4 × alarm radius | traced |
 | ranged | holds a `LongWeapon`; stop 0.75 ×, shoot 1.25 × (standing) / 1 × (moving) reach | traced |
 | flee | once a second, chance `likelyToFlee` 0.5 within `attackTooClose` 0.25 × reach; stop beyond `attackFarEnough` 0.75 × reach; must flee if `likelyToFlee` > 0.5 and hit | traced |
-| drops | thrown as `tossItems`: random heading, 75°–85° up, 5,000–6,500 units/s | traced, user-checked |
+| drops | thrown as `tossItems` at the dying start: random heading, 75°–85° up, 5,000–6,500 units/s | traced, user-checked |
+| dropped weapon (entry named like a part of the die model) | not thrown; at the die movement's end its `body` part laid on that part of the last frame (place and turn), stays there; thrown instead if the line 1,000 above it to 1,000 above the feet is blocked | traced, user-checked (kept, not thrown) |
 | bolt (Daventry `Prscbolt.kq`) | speed 8,000, `maxDistance` 18,000 | data |
 | big swing | × 0.75 to 4 (`Connor.kq`) | traced, data |
 | first-kill tip | 1.5 s after | traced |
@@ -586,6 +638,9 @@ Words used here:
 - `.anm`: `attack` (with `interruptable` and `Do` cues), `react`, `die`,
   `projdie`, `firedie`, `icedie`; Connor's `attack`, `attackb`,
   `attack2`, `react`, `dropweapon`.
+- The die movements' `.kqs` models: the names of their parts (a part
+  named like a drop entry, rule 31); the dropped item's own model: its
+  part `body` (rule 31a).
 - `GAME/Kq/Connor.kq`: `stats`, `level`, `attackDist`, `minDamageFactor`,
   `maxDamageFactor`, `shootOffsets`.
 - `<world>/kq/newworld.cs` (`applyCombatLevel 1`); projectile files
@@ -606,7 +661,8 @@ Words used here:
 - A kill by a `Fire` hit leaves no corpse; an `Ice` kill leaves one only
   if `idedKqs` is set (all Daventry fighters set it).
 - Drops happen when the dying starts, before the die movement; experience
-  only when it ends.
+  only when it ends. The exception is the weapon named like a part of
+  the die model: it appears when the movement ends (rule 31a).
 - Chickens, the pig and bats can be hit and killed like the others (5
   health, 3 protection; 0 experience). Being hit doesn't make them flee
   (rule 28).
@@ -680,6 +736,18 @@ experience sent, corpse shape, the `Die` line to the script.
    makes the attack sound with no swing and then attacks normally; while
    Connor walks or runs away it attacks at once on reaching him
    (explained in rule 11b).
+6a. **Dropped weapon** (rule 31a): kill a bow spriggan with the fists
+   or a sword (not fire): its crossbow should not fly; when the death
+   ends it should lie where the dying model let it fall, tilted as in
+   the model, and stay there (no bounce, no land sound). In Dead City,
+   a skeleton with a `BroadSword` drop: the coins and mushrooms fly at
+   once, the sword appears only at the end, where the death left it.
+   If a skeleton dies against a wall or a pillar, the sword may be
+   thrown instead (the line test). A bow spriggan burnt to death
+   should throw its crossbow (its fire death has no `SmCrossbow` part).
+   **Checked by the user in the original (2026-10-24):** the weapons
+   are not thrown and lie where the death movement leaves them; the
+   other items fly.
 7. **Bow spriggan** at the windmill (`sprigwnd1`): it never leaves its
    spot, shoots about every 1.7 s while Connor is in view and within
    about 7,500, and leads its shot when he runs across.
@@ -701,7 +769,8 @@ experience sent, corpse shape, the `Die` line to the script.
    added, once when it enters the world) (rule 3). Daventry's monsters all
    come from `monsters.kq` (once).
 4. ~~Whether the dropped items are spread out~~: answered, they are
-   thrown (rule 31, corrected after the user's check).
+   thrown (rule 31, corrected after the user's check), except the
+   weapon named like a part of the die model (rule 31a, Q169).
 5. Connor's death and game over (rule 29), and the tips' texts (rules
    29, 33): other studies.
 6. What "tied to another object" is (rules 28, 37); it is never set for a

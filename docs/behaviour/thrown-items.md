@@ -20,7 +20,9 @@ item lies still and is an ordinary item again.
    gets its own **thrower** (a special mover) for the flight. Both use the
    same thrower, with the same numbers. Items placed by
    `KQMonster::inventory world`, `dropItem` or a chest do not fly
-   (`items.md` rule 5).
+   (`items.md` rule 5). Nor does a dying character's weapon whose name is
+   a part of its die model: it is laid where the death leaves it
+   (`fighting.md` rule 31a; thrown only if that spot fails a line test).
 2. The item starts at the throw point (`tossItems`: the object's position
    raised by `offsetZ`; drops: `fighting.md` rule 31) with **no turn at
    all** (all three angles 0). This placement is an instant move, with no
