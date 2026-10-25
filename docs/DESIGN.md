@@ -2924,3 +2924,53 @@ first. Each step: the note's rule, a unit test where the rule is in
 
 Not part of this plan (open for a study session): Q108 a, c, d; whether
 a saved game keeps `setHaze`'s values.
+
+### Outside the milestones: building session A's Q167 and Q169 answers (planned 2026-10-25)
+
+Session A answered Q167, Q168 and Q169 on 2026-10-24 (MODLOG "Study (A)"
+entries). Q168 needs no code (the caption stone is already tiled). The
+other two share one new piece: **laying an item on a named part of a
+model's frame**: the item's own model's part `body` is put exactly on
+that part, place and full turn. With row vectors (`models-and-textures.md`
+Q1 a): item turn = (body's matrix)⁻¹ × part's matrix × the character's
+turn; item place = the part's world place − body's place × item turn.
+The data agrees that this is a plain turn (no size change): the die
+model's `SmCrossbow` part and `scbow.kqs`'s `body` both have scale 1,
+`skbsdie.kqs`'s `BroadSword` part and `bsword.kqs`'s `body` both 0.885
+(`kq8 shape-parts`). Our items keep three angles (`objects.md` Q9:
+turned about Y, then X, then Z), so the turn is turned back into angles.
+
+1. **C-1: model parts with their full placement** (plumbing, no
+   behaviour change): `Shape::part_transforms` (each named part's matrix
+   and place in a frame); the movements' `frame_parts` carry the full
+   placement (the bolt keeps using only the place); the item models'
+   `body` parts read at load; `kq8_data::objects::angles_of` (a turn back
+   into the three angles) and `kq8_core::item::laid_on` (the formula
+   above), with unit tests; `kq8 shape-parts <file>` prints a model's
+   parts.
+2. **C-2: a dying character's weapon is laid, not thrown** (Q169,
+   `fighting.md` rules 31, 31a): at the dying start each drop entry
+   (quotes and `INVITEM_` off) is compared, ignoring capitals, with the
+   part names of the pose shown (the die movement's first frame); one
+   that names a part is kept (the last such wins), the rest are thrown
+   as before. When the die movement ends, before the experience and the
+   corpse, the kept item is made with its `body` on that part of the
+   last frame (no such part: the character's place and turn, 750 up);
+   then a line test from 1,000 above it to 1,000 above the feet
+   (terrain, buildings, objects, other characters; not the dying one):
+   blocked, it is thrown from the feet instead. The line test needs the
+   collision scene, so it runs in the same update with the thrown items'
+   step (ours: the item already exists for those few moments). `Die now`
+   (no die movement): the same with the pose shown then (rule 31a says
+   "not sure"; logged as a stand-in). `NewInvItem` is set to the item
+   made last (rule 31a; the thrown ones too).
+   Check: `kill sprigwnd1` (console) with fists: the crossbow lies at
+   the die model's `SmCrossbow` part, no flight, in `items.log`.
+3. **C-3: `Inv <item>` in Connor's Special list** (Q167,
+   `anim-scripts.md` rule 16): handled when the movement before it
+   ended (his pose is its last frame): a real item laid on the part of
+   that frame named like the item (ignoring capitals; no part: his place
+   and turn, 750 up); no throw, no fall, no line test, `NewInvItem` not
+   set; then the next items at once. Check: the roof kill (`sprgnbow.cs`)
+   leaves a `SmCrossbow` item where the movement's crossbow was, and it
+   can be picked up.
