@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 J-4: smooth joins written up
+
+**Changed:** FEATURES (the feature, the launch option's text), README (`--smooth` and `smooth join 0`), DESIGN (J-4), STATUS.
+**Why:** DESIGN J-4.
+**Tested how:** The J-2 and J-3 runs (`viewer.log`, `connor.log`, `characters.log`).
+**Result:** Frame time 5.5 ms (180 a second) with and without `--smooth`; Connor's own list: 2,653 of 3,192 changes with every part paired (83 %); Daventry run: 22 character joins, all parts mixed; at most 3 records in use.
+**Still broken / not tested:** Not looked at by eye. Walk <-> run still jumps.
+**Next:** The user's look; the user's choice on a renumbering table for walk <-> run.
+
 ## 2026-10-25 J-3: smooth joins: a change of movement drawn mixed
 
 **Changed:** Viewer `anim_gpu.rs` `Slots`: at a change of movement with smooth animation on, each new part with a partner (J-1) gets a join record holding the old part's pose (the shown frame, or its next if drawn more than half way); the records are matched to the new movement's later frames by part name and layout; the join ends after its length (or when smooth animation is switched off), the records given back (also when the parts are hidden or dropped). `show_mixed` returns a `JoinReport` for the log. `smooth_view.rs`: the record table, the join length (default 0.15 s), the eased mix (starts and ends gently), `write_joins` (the buffer written every frame while a join runs), the joins in the 2-second report. Console word `smooth join <seconds>` (0: off). `connor_view.rs`: Connor's joins in `connor.log`, named by the movements drawn (`back` is `walk` played backwards); `anim_view.rs`: characters' joins in `characters.log`. `main.rs`: the system. Two unit tests.

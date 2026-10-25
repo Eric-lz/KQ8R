@@ -787,9 +787,15 @@ commands in `MODLOG.md`.
   creatures and objects move their parts smoothly between the stored
   frames (96 % of parts in Daventry; the rest still jump), and creatures,
   doors, chests, thrown items and bolts glide between the game's 15
-  updates a second. A change of movement (walk to stop) still jumps.
-  Same frame time on and off (logs). Connor's rope climb too. The
-  user's look (2026-10-25): limbs, gliding and the climb good.
+  updates a second. Connor's rope climb too. The user's look
+  (2026-10-25): limbs, gliding and the climb good.
+- **Smooth joins (with `--smooth`, ours):** a change of movement is
+  drawn mixed from the old pose to the new over 0.15 s (console `smooth
+  join <seconds>`, 0 = off) where both movements' files share the part
+  (Connor's own list: 83 % of changes; characters vary). Still jumps:
+  Connor's walk ↔ run, and characters whose files are numbered
+  differently (zombies, spriggans, the wizard, skeletons, orcs). Same
+  frame time (logs); **not looked at by eye yet**.
 - **Rope camera:** while Connor climbs, the camera glides along its path
   between updates (always, not only with `--smooth`; the user's look:
   good).
@@ -866,9 +872,10 @@ repeated and checked in the logs. They do not change the game's rules.
   the window is open.
 - `--smooth`: smooth animation (ours; off without it): models drawn
   part-way between their frames, creatures, doors, chests, thrown items
-  and bolts between the game's updates. The console word `smooth
-  [on|off]` changes it while playing. Drawing only: the game keeps its
-  15 updates a second.
+  and bolts between the game's updates, and a change of movement mixed
+  over 0.15 s. The console words `smooth [on|off]` and `smooth join
+  <seconds>` change them while playing. Drawing only: the game keeps
+  its 15 updates a second.
 - `--dynamic on|off`: dynamic lighting (point lights painting the
   ground and building surfaces), instead of what `Options.cs` says. The
   game's own files are not changed.

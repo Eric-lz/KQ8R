@@ -116,8 +116,10 @@ Other worlds:
 `Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
 temple1–temple4, CastleD`
 
-For smoother animation (drawn between the original's 15 frames a second),
-add `--smooth`; type `smooth` in the console to switch it while playing.
+For smoother animation (drawn between the original's 15 frames a second,
+and blended across a change of movement), add `--smooth`; type `smooth` in
+the console to switch it while playing (`smooth join 0` turns the blending
+off).
 
 There are other launch options, mostly for debugging.
 You can find them in

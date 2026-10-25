@@ -7,14 +7,22 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-25)
 
+- **2026-10-25 (B): smooth joins (with `--smooth`, ours)** (DESIGN
+  "smooth joins", J-1 to J-4): a change of movement is drawn mixed over
+  0.15 s (`smooth join <s>`, 0 = off) where both files share the part.
+  Checked in the logs only (Connor's stand/walk/stop/back/turn joins,
+  goblins, the wizard); **not looked at by eye**. Still jumps: Connor's
+  walk ↔ run (run's body is numbered differently: a tolerant
+  renumbering would be a further step), and zombies, spriggans, the
+  wizard's other files, skeletons, orcs.
+
 - **2026-10-25 (B): smooth animation (`--smooth`, ours, off by default)**
   (DESIGN "smooth animation", S-1 to S-6): model parts drawn part-way
   between frames, creatures, doors, chests, thrown items and bolts glided
   between updates, Connor's rope climb too. The user's look: all good
   (one fix: Connor's put-away movement). The rope climb's camera now
   glides between updates (always on; user-checked).
-  Not done: mixing across a change of movement; shadows keep whole
-  frames.
+  Not done: shadows keep whole frames.
 
 - **2026-10-25 (B): session A's Q167 and Q169 answers built** (plan in
   `docs/DESIGN.md` "building session A's Q167 and Q169 answers", steps

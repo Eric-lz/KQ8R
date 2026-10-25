@@ -3058,7 +3058,7 @@ Not in this plan: mixing across a change of movement (walk to stop);
 shadows keep the whole frames (they are drawn from the model on the
 processor).
 
-### Outside the milestones: smooth joins between movements (planned 2026-10-25; the user's go 2026-10-25)
+### Outside the milestones: smooth joins between movements (planned 2026-10-25; J-1 to J-4 done 2026-10-25, not looked at by eye)
 
 The user's question (2026-10-25): can a change of movement (walk to
 run, standing to attack) be drawn smoothly too? Ours, **drawing only**,
@@ -3170,6 +3170,8 @@ Steps (one commit each):
    of joins mixed in a Daventry run; FEATURES, README, STATUS; the
    user's look (walk ↔ run, turning on the spot, an attack, a
    character starting and stopping to walk).
+   **Written up** (frame time 5.5 ms with and without; Connor's own
+   list 83 % of changes fully paired). The user's look still to come.
 
 Not in this plan: joins for characters whose files don't share a layout
 (zombies, spriggans, the wizard, skeletons, orcs); shadows (whole
