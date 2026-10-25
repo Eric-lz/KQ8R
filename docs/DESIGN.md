@@ -3057,3 +3057,97 @@ two frames' steps.
 Not in this plan: mixing across a change of movement (walk to stop);
 shadows keep the whole frames (they are drawn from the model on the
 processor).
+
+### Outside the milestones: smooth joins between movements (planned 2026-10-25; waiting for the user's go)
+
+The user's question (2026-10-25): can a change of movement (walk to
+run, standing to attack) be drawn smoothly too? Ours, **drawing only**,
+under the same `--smooth` switch: the game still changes movement at the
+same update, with the same frames, cues and steps; only what is drawn
+for a short time after the change is a mix of the old pose and the new.
+No behaviour note is needed (nothing the original does changes).
+
+**Where it jumps today.** Within a movement S-1 to S-6 mix frames. At a
+change the new movement's first frame replaces the old one's at once.
+The original's own in-between movements (`connor-movement.md`
+"Starting and stopping") cover Connor's stand ↔ walk and stand ↔ run
+only; walk ↔ run, anything ↔ back / turn left / turn right, attacks,
+reactions and gestures switch directly. Characters have no in-between
+movements at all (`character-movement.md` rule 4): even stand ↔ walk
+jumps.
+
+**What can be mixed (measured 2026-10-25, a throwaway program over the
+`.anm` lists' model files, not kept).** A part can be mixed with a part
+of another movement's frame only if both are the same mesh *layout*
+(same number of points, the same triangles over the same point numbers;
+the order of triangles and of parts in a frame doesn't matter, the
+part's name must match). Each movement is its own `.kqs` file, so this
+is per file:
+
+- Connor: 64 of the 70 files in `Conner.anm` share one `body` (196
+  points); the weapons match across their set too (the sword in 45 of
+  60 `Consword.anm` files). Of all old-movement-last-frame →
+  new-movement-first-frame pairs in `Conner.anm`, **86 % have every
+  part matched**; the misses are one-off files (burning, the basilisk
+  death, the portal twist). Weapon lists 60-77 %.
+- Characters, all worlds: **54 %** of pairs fully matched, very uneven:
+  100 % for e.g. the Reaper, Weeper, gnome sage, Snow Queen; 80-95 %
+  for the armour and weapon gnomes, the Dragon Queen, Azriel, the girl;
+  only 10-35 % for zombies, spriggans, the wizard, most skeletons, orcs.
+  Their files have meshes of the same size whose points are numbered
+  differently (saved separately), so mixing point by point would tear
+  them; those keep jumping. Matching their points some other way (for
+  example by texture places) is not planned and not checked.
+- Pose difference at a join (Connor's `body`, model space): walk → run
+  frame 0 is on average 212 units per point (a foot up to 1,260),
+  against 43 (up to 140) between two walk frames. So a join is a larger
+  move than a frame step; drawn as a straight line over a short time it
+  should read as a quick blend, but limbs swinging far can look briefly
+  shorter (the usual weakness of mixing points rather than joints). Only
+  the user's look can tell; the join length is a single number to tune.
+
+**How.** At a change of movement (the `Slots` of an object are told to
+show a frame of another movement), each part of the new frame that has a
+partner in the old frame shown (same name and layout) is drawn as
+`mix(old pose, new pose, w)`, `w` going 0 → 1 over the join length
+(first guess 0.15 s, about 2 updates); the new pose itself keeps its
+mixing toward its next frame (S-4). Parts without a partner jump as
+today. A change during a join starts a new join from the old movement's
+shown frame (a small jump; not worth more).
+
+The drawn part's tag (32 bits) is full (24 bits node-frame, 8 bits
+amount). Largest world: about 80,000 node-frames (5.5 MB in the logs),
+which fits 18 bits. New split: node-frame 18 bits, amount toward the
+next frame 6 bits (64 steps), join record 8 bits (0 = none). A new small
+storage buffer holds 255 join records (the old part's node-frame, the
+join's start time and length, in the shader's clock), written only when
+a join starts; the shader works out `w` from the time, so nothing is
+sent every frame.
+
+Steps (one commit each):
+
+1. **J-1: partners.** The pack keeps each mesh's layout number and each
+   part's name; a function gives, for a new frame's parts, each one's
+   partner in an old frame (or none). Unit tests; the world's share of
+   matched parts logged once.
+2. **J-2: the tag and the join buffer.** Tag split 18/6/8 (a world over
+   262,143 node-frames: joins off and logged), the 255-record buffer
+   bound with the others, the shader mixes when a record is named.
+   Nothing names one yet, so the look is unchanged (amount now in 64
+   steps instead of 256: checked by eye with S-4's runs).
+   **Risk to check first:** the buffer is replaced at each join; if
+   that costs a frame-time spike (it makes every model material bind
+   again), write into the existing buffer instead.
+3. **J-3: joins.** `Slots` start a join at a change of movement with the
+   switch on, free records when done. Log per join (`anim.log` for
+   characters, `connor.log` for Connor): object, old → new movement,
+   parts mixed / all parts, length. Console word `smooth join <s>`
+   (0 = off) to tune the length by eye.
+4. **J-4: measured and written up.** Frame time with and without; share
+   of joins mixed in a Daventry run; FEATURES, README, STATUS; the
+   user's look (walk ↔ run, turning on the spot, an attack, a
+   character starting and stopping to walk).
+
+Not in this plan: joins for characters whose files don't share a layout
+(zombies, spriggans, the wizard, skeletons, orcs); shadows (whole
+frames, as now).

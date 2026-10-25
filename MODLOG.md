@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Smooth joins between movements: measured and planned (no code)
+
+**Changed:** DESIGN "smooth joins between movements" (plan J-1 to J-4). No code.
+**Why:** The user asked whether a change of movement (walk to run, standing to attack) can be drawn smoothly, and whether it would look good.
+**Tested how:** A throwaway program (scratchpad, not kept) read every `.anm` list's model files: for each old movement's last frame and new movement's first frame, which parts have a partner with the same name and the same point numbering; and Connor's `body` point distances at a join.
+**Result:** Connor `Conner.anm`: 86 % of movement changes have every part matched (64 of 70 files share one 196-point `body`); weapon lists 60-77 %. World characters: 54 % overall, from 100 % (Reaper, Weeper, Snow Queen) down to 10-35 % (zombies, spriggans, wizard, skeletons, orcs: same-size meshes numbered differently, so not mixable point by point). Walk -> run: 212 units a point on average at the join (a foot up to 1,260), against 43 between two walk frames. Largest world about 80,000 node-frames, so the tag can be split 18/6/8 to name a join record.
+**Still broken / not tested:** Nothing built. Whether a quick straight-line mix looks good (limbs briefly shorter on big swings) is not known until seen.
+**Next:** The user's go for J-1.
+
 ## 2026-10-25 The user's check of smooth animation and the rope camera
 
 **Changed:** FEATURES, STATUS. No code.
