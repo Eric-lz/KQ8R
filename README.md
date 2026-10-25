@@ -77,8 +77,9 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 - **M7 – Match the original, then improve.** Play the original side by
   side with ours and fix every difference. After that, the improvements
   this project was started for: better controls, better graphics and
-  gameplay fixes. (A first one is already in: the bottom bar's corner
-  panels can sit at the window's edges on wide screens.)
+  gameplay fixes. (First ones are already in: the bottom bar's corner
+  panels can sit at the window's edges on wide screens, and smooth
+  animation with `--smooth`.)
 
 ## What you need
 
@@ -114,6 +115,9 @@ cargo play --world swamp
 Other worlds:
 `Swamp, DeadCity, Gnome, Barren, IceWorld, Snowexit,
 temple1–temple4, CastleD`
+
+For smoother animation (drawn between the original's 15 frames a second),
+add `--smooth`; type `smooth` in the console to switch it while playing.
 
 There are other launch options, mostly for debugging.
 You can find them in

@@ -783,6 +783,12 @@ commands in `MODLOG.md`.
   real item where the movement holds it: the crossbow stays on the
   ground after the roof kill, to be picked up.
 - **Tools:** `kq8 shape-parts <file>` prints a model's named parts.
+- **Smooth animation (`--smooth`, ours, off by default):** Connor,
+  creatures and objects move their parts smoothly between the stored
+  frames (96 % of parts in Daventry; the rest still jump), and creatures,
+  doors, chests, thrown items and bolts glide between the game's 15
+  updates a second. A change of movement (walk to stop) still jumps.
+  Same frame time on and off (logs). The user's look: limbs good.
 - **Animation timing:** doors, chests and every looping object (the
   windmill, torches, the well) play their loops at the traced speed and
   wrap, as Connor and the characters already did.
@@ -854,6 +860,11 @@ repeated and checked in the logs. They do not change the game's rules.
   changes it while the window is open.
 - `--haze on|off`: haze at the start (default `on`). F8 changes it while
   the window is open.
+- `--smooth`: smooth animation (ours; off without it): models drawn
+  part-way between their frames, creatures, doors, chests, thrown items
+  and bolts between the game's updates. The console word `smooth
+  [on|off]` changes it while playing. Drawing only: the game keeps its
+  15 updates a second.
 - `--dynamic on|off`: dynamic lighting (point lights painting the
   ground and building surfaces), instead of what `Options.cs` says. The
   game's own files are not changed.
