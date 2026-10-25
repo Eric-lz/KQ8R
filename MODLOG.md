@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 B-6: `dithered=` on every class (Q165 built)
+
+**Changed:** Viewer `door_view.rs`: the file's `dithered=` is applied for every class at load (was only `KQChest` and `KQAnimObject`); templates carry it. Core `active.rs`: `Template::dithered`; a `loadKQ` copy applies it when made. Unit test extended. Provenance, QUESTIONS Q165, DESIGN B-6.
+**Why:** `objects.md` "Dithered objects" rules 8-9: every object applies its mode when added to the world, and objects that play movements again at each movement start (our `dither_step` already puts the mode back when a part's material changes).
+**Tested how:** `cargo test --workspace` (all pass; `load_kq_while_playing_makes_new_copies_by_the_name_and_place_rules` checks the copies). `kq8-viewer --world Daventry --frames 600 --sound off --no-ai` and `--world Gnome`; `viewer.log`.
+**Result:** Daventry: `wizchest1` 1, `arroswt1`-`3` 2 (doors, new): 11 parts drawn dithered or colour-keyed. Gnome: `ironlock` (plain object), `Irnlckx` (`KQAnimOnce` template), `Mystic` and `Lucreto` (characters, waiting for `loadKQ`) all 2.
+**Still broken / not tested:** Not looked at by eye. Ice World's `snowmane` (mode 1) not run. In Gnome the "dither: ... 7 parts" line repeats (15 times in 600 frames): an animated object's drawing puts its own material back at each new frame and the mode is put on again; works, but noisy in the log.
+**Next:** B-7 (panel pictures).
+
 ## 2026-10-24 B-5: `setHaze` (Q161 built)
 
 **Changed:** Core `active.rs`: the script command `setHaze <n>` becomes `Request::SetHaze` (always 0; wrong word count: usage line). Viewer `object_light.rs`: `SetHaze` queue and `apply_set_haze` (haze n, visible 1.5 n; object, ground and building materials updated at once; four console lines to the log); `door_view.rs` queues it; `main.rs` registers it. Unit test. Provenance, QUESTIONS Q161, DESIGN B-5.

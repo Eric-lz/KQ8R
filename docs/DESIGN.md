@@ -2908,6 +2908,7 @@ first. Each step: the note's rule, a unit test where the rule is in
 6. **B-6: `dithered=` on every class** (Q165, `objects.md` "Dithered
    objects" rules 8–9): applied when the object is added to the world,
    and again at each movement start for objects that play movements.
+   **Done** 2026-10-24 (Daventry and Gnome checked in the logs).
 7. **B-7: panel pictures** (Q108 b, `interface.md` rules 20 and 20a):
    modifier 0x8000 = stretched to the box, nearest pixel; otherwise
    drawn once at its own size; the bars' empty part is `4black.pbm`;

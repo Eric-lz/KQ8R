@@ -469,6 +469,9 @@ pub struct Template {
     /// The file's own place (used when the line gives none).
     pub placement: Placement,
     pub kind: TemplateKind,
+    /// Its file's `dithered=` (`objects.md` "Dithered objects" rule 8:
+    /// applied when a copy is added to the world).
+    pub dithered: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -2071,6 +2074,14 @@ impl WorldState {
             _ => t.placement,
         };
         self.deleted.remove(&lower);
+        // objects.md "Dithered objects" rule 8 (Q165): every class applies
+        // its file's `dithered=` when it is added to the world.
+        if t.dithered != 0 {
+            self.dithered.insert(lower.clone(), t.dithered);
+            self.note(format!("{at}: loadKQ {key}: {name} dithered={} from its file (objects.md \"Dithered objects\" rule 8)", t.dithered));
+        } else {
+            self.dithered.remove(&lower);
+        }
         self.known.insert(lower);
         let what = match &t.kind {
             TemplateKind::Anim(p) => {
@@ -6040,8 +6051,8 @@ endif
         let player = crate::named_anim::tests::still_then_open("barrelsm");
         let at = Placement::at([0.0; 3]);
         a.world.set_templates([
-            ("BURST.KQ".to_string(), Template { name: "barrelsm".into(), script: None, placement: at, kind: TemplateKind::Anim(Box::new(player)) }),
-            ("wreck.kq".to_string(), Template { name: "barelded".into(), script: None, placement: Placement::at([7.0, 8.0, 9.0]), kind: TemplateKind::Still { bounds: Some(([-1.0; 3], [1.0; 3])), collision_type: 0x41 } }),
+            ("BURST.KQ".to_string(), Template { name: "barrelsm".into(), script: None, placement: at, kind: TemplateKind::Anim(Box::new(player)), dithered: 2 }),
+            ("wreck.kq".to_string(), Template { name: "barelded".into(), script: None, placement: Placement::at([7.0, 8.0, 9.0]), kind: TemplateKind::Still { bounds: Some(([-1.0; 3], [1.0; 3])), collision_type: 0x41 }, dithered: 0 }),
         ]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let log = a.take_log().join("\n");
@@ -6058,6 +6069,10 @@ endif
         assert!(a.world.clickables.iter().any(|c| c.name == "other"));
         let spawns = a.world.requests.iter().filter(|r| matches!(r, Request::Spawn { .. })).count();
         assert_eq!(spawns, 4);
+        // objects.md "Dithered objects" rule 8 (Q165): a copy applies its
+        // file's `dithered=` when added; one with 0 has none.
+        assert_eq!((a.world.dithered.get("noname0"), a.world.dithered.get("noname1")), (Some(&2), Some(&2)));
+        assert!(!a.world.dithered.contains_key("barelded"));
     }
 
     #[test]

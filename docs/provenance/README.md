@@ -3507,3 +3507,11 @@ Replaces the Q112 stand-in row (the wall block).
 | Four console lines `Perspective`, `Haze`, `Visible`, `FarPlane` (to our log); `perspectiveDistance` not kept by us, so printed as unchanged | Rule 33a; **ours** for the missing value | Viewer log |
 | The camera's far limit: our projection keeps its own far plane (2 × the terrain's size, as at load); the ground shader ends at `visibleDistance` and objects switch off there | **Ours / stand-in** (the far plane is logged, not set) | — |
 | Kept until the next `setHaze` or a world load (the new world's `TERRAIN.KQ`); saved games: not traced | Rule 33a; **open** | — |
+
+## `dithered=` on every class (B-6, Q165) — viewer `door_view.rs` (the file values at load, the templates); `crates/kq8-core/src/active.rs` (`Template::dithered`, `load_copy`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every class applies its file's `dithered=` when added to the world: at load (placed objects, doors, chests, animated objects, `KQAnimOnce`, characters, plain objects) and a `loadKQ` copy when it is made | `objects.md` "Dithered objects" rule 8 (traced, Q165) | Viewer: Daventry `arroswt1`-`3` (doors) 2, `wizchest1` 1; Gnome `ironlock`, `Irnlckx`, `Mystic`, `Lucreto` 2; unit test `load_kq_while_playing_makes_new_copies_by_the_name_and_place_rules` |
+| Objects that play movements apply it again at each movement start: our drawing puts the stored mode back whenever a part's material changes (A-11a's `dither_step`) | Rule 8 (traced; doors inferred) | Viewer Gnome: "7 parts drawn dithered" again as frames change |
+| The values (mode 1 only `wizchest`, `snowmane`; the rest 2) are read from the files as they are | Rule 9 (data) | Viewer log |

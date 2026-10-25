@@ -525,15 +525,16 @@ pub fn spawn_doors(
     let mut collider = Vec::new();
     let (mut active_chests, mut chest_drawn, mut chest_collider) = (Vec::new(), Vec::new(), Vec::new());
     let (mut active_objects, mut object_drawn, mut object_collider) = (Vec::new(), Vec::new(), Vec::new());
-    // objects.md "Dithered objects" rule 8 (Q144): chests and animated
-    // objects apply their `dithered=` at every movement start, so they are
-    // drawn so from the start (other classes: Q165).
+    // objects.md "Dithered objects" rule 8 (Q144, Q165): every class
+    // applies its `dithered=` when it is added to the world, and objects
+    // that play movements again at each movement start (dither_step puts
+    // the mode back whenever a part's material changes).
     let file_dithered: Vec<(String, u8)> = objects
         .placed
         .iter()
         .map(|(p, ..)| p)
         .chain(objects.doors.iter().map(|d| &d.placement))
-        .filter(|p| p.dithered != 0 && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQChest") || c.eq_ignore_ascii_case("KQAnimObject")))
+        .filter(|p| p.dithered != 0)
         .map(|p| (p.name.clone(), p.dithered))
         .collect();
     let sources = std::mem::take(&mut objects.scripts);
@@ -793,7 +794,7 @@ pub fn spawn_doors(
             } else {
                 kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type }
             };
-            Some((t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind }))
+            Some((t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind, dithered: p.dithered }))
         })
         .collect();
     let animated = templates.iter().filter(|(_, t)| matches!(t.kind, kq8_core::active::TemplateKind::Anim(_))).count();
