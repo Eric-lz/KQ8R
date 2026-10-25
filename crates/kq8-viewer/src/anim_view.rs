@@ -66,6 +66,8 @@ struct Playing {
     /// The object's placement (rotation, position).
     rotation: [[f32; 3]; 3],
     position: [f32; 3],
+    /// Smooth animation (S-5): its place between the last two updates.
+    glide: crate::smooth_view::Glide,
     movements: Vec<DrawnMovement>,
     body: Entity,
     /// (movement, frame) shown.
@@ -188,6 +190,7 @@ impl AnimSim {
             name: name.to_string(),
             source: Source::Core(index),
             script: r.script.clone(),
+            glide: Default::default(),
             rotation: placement.rotation,
             position: placement.position,
             movements,
@@ -603,6 +606,7 @@ pub fn spawn_animated(
             name: p.name.clone(),
             source,
             script: a.script.clone(),
+            glide: Default::default(),
             rotation,
             position: p.position,
             movements: drawn,
@@ -769,6 +773,8 @@ pub fn anim_draw(
     let doors = doors.as_deref();
     let sim = &mut *sim;
     let ahead = crate::smooth_view::ahead(&fixed);
+    let smooth = crate::smooth_view::on();
+    let (update, a) = (doors.map_or(sim.updates, |d| d.active.world.updates), fixed.overstep_fraction());
     for p in &mut sim.playing {
         // makeTranslucent (characters.md rule 22, M4): every material of
         // every part at n / 255, at once (objects.md "See-through
@@ -884,26 +890,37 @@ pub fn anim_draw(
         if moved {
             (p.rotation, p.position) = (base.rotation, base.position);
         }
-        if p.shown == Some((movement, frame)) && !moved && p.new_draw.as_ref().is_none_or(|nd| !nd.stale(movement, frame)) {
+        let same = p.shown == Some((movement, frame)) && !moved && p.new_draw.as_ref().is_none_or(|nd| !nd.stale(movement, frame));
+        if same {
             if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
                 nd.set_amount(&mut commands, gpu, mix);
             }
-            continue;
-        }
-        if let Ok(mut c) = carried.get_mut(p.body) {
-            (c.movement, c.frame) = (movement, frame);
-        }
-        p.shown = Some((movement, frame));
-        if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
-            nd.show_mixed(&mut commands, gpu, movement, frame, mix, &mut visibility);
+            // Smooth animation (S-5) glides its place every drawn frame.
+            if !smooth {
+                continue;
+            }
+        } else {
+            if let Ok(mut c) = carried.get_mut(p.body) {
+                (c.movement, c.frame) = (movement, frame);
+            }
+            p.shown = Some((movement, frame));
+            if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
+                nd.show_mixed(&mut commands, gpu, movement, frame, mix, &mut visibility);
+            }
         }
         let mut pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };
+        // Smooth animation (S-5): the frame's steps mixed toward the next
+        // frame's (not across a loop's wrap).
+        if smooth && mix > 0 && frame + 1 < drawn.steps.len() {
+            pose = kq8_core::door::mix_transform(&pose, &pose_at_frame(&drawn.steps, frame + 1), mix as f32 / 255.0);
+        }
         if loop_moves_base {
             pose.p = [0.0; 3];
         }
         // Only bodies that move or just stopped moving need a new pose.
-        if moved || !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
-            let (m, at) = combine(&pose, &p.rotation, p.position);
+        if moved || smooth || !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
+            let place = p.glide.drawn(update, kq8_core::collide::Placement { rotation: p.rotation, position: p.position }, a);
+            let (m, at) = combine(&pose, &place.rotation, place.position);
             if let Ok(mut t) = transforms.get_mut(p.body) {
                 *t = bevy_transform_from(m, at);
             }

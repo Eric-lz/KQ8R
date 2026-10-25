@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-5: smooth animation glides creatures, doors, chests, objects, thrown items and bolts
+
+**Changed:** Core `door.rs`: `mix_transform` (a placement part-way between two: the place on the line, the turn mixed and made a plain turn again); `named_anim.rs`: `drawn_turn` (a frame's whole-object steps mixed toward the next frame's, not across a loop's wrap). Viewer `smooth_view.rs`: `Glide` (drawn between the place at the last update but one and now, as the camera and Connor are; a move over 2,000 units is drawn at once). `door_view.rs` (doors, chests, scripted objects), `anim_view.rs` (characters, animated objects: glided every drawn frame while on), `item_view.rs` (items, bolts) use them when the switch is on. Unit tests `mixing_two_placements_halves_the_turn_and_the_move`, `a_glide_goes_from_the_last_update_to_this_one_and_snaps_on_a_jump`.
+**Why:** DESIGN S-5: places still moved 15 times a second.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 1500 --sound off [--smooth] --command "move Connor 0 228300 183200 12500 0 0 -1.57",5 --console "kill sprgnbow",20`; `viewer.log`, `items.log`.
+**Result:** No errors either way; frame time the same with and without (5.56 ms, 180 a second); the roof spriggan's crossbow still laid (C-2).
+**Still broken / not tested:** Not looked at by eye. A change of movement still jumps; shadows keep whole frames; 4 % of parts change mesh between frames and still jump.
+**Next:** S-6 (documents), the user's look.
+
 ## 2026-10-25 Fix: with `--smooth`, Connor's put-away movement (`undraw`) played forwards
 
 **Changed:** Core `connor.rs`: `MovementLoop::drawn_frame` (the frame and how far toward the next, a backwards one-shot turned round as `frame_at` does; `loop_phase` shared by both). Viewer `smooth_view::frame_at` and `connor_view.rs` (Connor and his rope model) use it. The test `a_movement_starts_at_its_loop_start` checks the drawn frames equal `frame_at`'s, last to first.

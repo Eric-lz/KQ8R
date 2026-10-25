@@ -306,6 +306,27 @@ pub fn chain(outer: &Transform, step: &Transform) -> Transform {
     Transform { flags: 0, m, p }
 }
 
+/// Smooth animation (DESIGN S-5, ours; drawing only): a placement `w`
+/// (0..1) of the way from `a` to `b`: the place on the straight line, the
+/// turn by mixing the two matrices and making the mix a plain turn again
+/// (rows of length 1 at right angles, the first row kept in its direction).
+/// Good for the small turns between two updates or two frames.
+pub fn mix_transform(a: &Transform, b: &Transform, w: f32) -> Transform {
+    let lerp = |x: f32, y: f32| x + (y - x) * w;
+    let p = std::array::from_fn(|j| lerp(a.p[j], b.p[j]));
+    let m: [[f32; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| lerp(a.m[i][j], b.m[i][j])));
+    let len = |v: [f32; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let dot = |u: [f32; 3], v: [f32; 3]| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    let unit = |v: [f32; 3], fallback: [f32; 3]| {
+        let l = len(v);
+        if l > 1e-6 { v.map(|x| x / l) } else { fallback }
+    };
+    let x = unit(m[0], a.m[0]);
+    let y = unit(std::array::from_fn(|k| m[1][k] - dot(m[1], x) * x[k]), a.m[1]);
+    let z = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+    Transform { flags: 0, m: [x, y, z], p }
+}
+
 /// The angle a transform turns about Z, in degrees (for the log).
 pub fn turn_degrees(t: &Transform) -> f32 {
     t.m[0][1].atan2(t.m[0][0]).to_degrees()
@@ -498,6 +519,24 @@ pub(crate) mod tests {
             }
         }
         (all.iter().filter(|a| a.from != a.to).count(), all)
+    }
+
+    #[test]
+    fn mixing_two_placements_halves_the_turn_and_the_move() {
+        // A door step of 12 degrees about z with a hinge move.
+        let turn = |deg: f32, p: [f32; 3]| {
+            let (s, c) = deg.to_radians().sin_cos();
+            Transform { flags: 0, m: [[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]], p }
+        };
+        let (a, b) = (turn(0.0, [0.0; 3]), turn(12.0, [100.0, -20.0, 0.0]));
+        let h = mix_transform(&a, &b, 0.5);
+        assert!((turn_degrees(&h) - 6.0).abs() < 0.01, "{}", turn_degrees(&h));
+        assert_eq!(h.p, [50.0, -10.0, 0.0]);
+        // Rows of length 1 at right angles; the ends are the two placements.
+        let dot = |u: [f32; 3], v: [f32; 3]| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+        assert!((dot(h.m[0], h.m[0]) - 1.0).abs() < 1e-5 && dot(h.m[0], h.m[1]).abs() < 1e-5);
+        assert!((turn_degrees(&mix_transform(&a, &b, 1.0)) - 12.0).abs() < 1e-3);
+        assert_eq!(mix_transform(&a, &b, 0.0).p, a.p);
     }
 
     #[test]

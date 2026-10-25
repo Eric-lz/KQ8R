@@ -58,6 +58,8 @@ struct DrawnDoor {
     frames: Vec<usize>,
     /// Its drawing (Animation memory step 4).
     slots: Option<crate::anim_gpu::Slots>,
+    /// Smooth animation (S-5): its place between the last two updates.
+    glide: crate::smooth_view::Glide,
 }
 
 /// One door animation built: its ball, its number of frames, its
@@ -471,7 +473,7 @@ fn spawn_body(
         commands.entity(body).insert(c);
     }
     let frames = animations.iter().map(|a| built[*a].1).collect();
-    DrawnDoor { body, frames, slots }
+    DrawnDoor { body, frames, slots, glide: Default::default() }
 }
 
 /// Builds the doors from the loaded objects: their entities, their game
@@ -645,7 +647,7 @@ pub fn spawn_doors(
         }
         let mut door = Door::new(&p.name, movements, d.current, base);
         door.player = door.player.with_names_at_load(names.0, names.1);
-        let DrawnDoor { body, frames, slots } =
+        let DrawnDoor { body, frames, slots, .. } =
             spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name);
         let active = ActiveDoor {
             door,
@@ -708,7 +710,7 @@ pub fn spawn_doors(
             main_log.summary(format!("doors: [{}] does not collide with Connor (no box, or type and mask)", p.name));
             None
         });
-        drawn.push(DrawnDoor { body, frames, slots });
+        drawn.push(DrawnDoor { body, frames, slots, glide: Default::default() });
         active_doors.push(active);
     }
     let test_item = item;
@@ -2108,6 +2110,19 @@ fn show_frame(
     }
 }
 
+/// Where a door, chest or object is drawn: as the game places it; with
+/// smooth animation (S-5) its place glided between the last two updates
+/// and its frame's steps mixed toward the next frame's by `mix`.
+fn drawn_place(player: &kq8_core::named_anim::NamedAnimPlayer, glide: &mut crate::smooth_view::Glide, (frame, mix): (usize, u8), update: u64, a: f32) -> Placement {
+    if !crate::smooth_view::on() {
+        return player.placement();
+    }
+    let base = glide.drawn(update, player.base, a);
+    let base = kq8_data::shape::Transform { flags: 0, m: base.rotation, p: base.position };
+    let w = kq8_core::door::chain(&base, &player.drawn_turn(frame, mix as f32 / 255.0));
+    Placement { rotation: w.m, position: w.p }
+}
+
 /// Each door and chest where it stands, showing the frame of its
 /// movement; hidden chests are not drawn.
 pub fn door_draw(
@@ -2123,6 +2138,7 @@ pub fn door_draw(
     let sim = &mut *sim;
     let gpu = gpu.as_deref();
     let ahead = crate::smooth_view::ahead(&fixed);
+    let (update, a) = (sim.active.world.updates, fixed.overstep_fraction());
     // The frame whose lights shine (M1 7c).
     let mut lit = |body: Entity, movement: usize, frame: usize| {
         if let Ok(mut c) = carried.get_mut(body) {
@@ -2134,7 +2150,9 @@ pub fn door_draw(
     for (door, drawn) in sim.active.world.doors.iter().zip(sim.drawn.iter_mut()) {
         let d = &door.door;
         lit(drawn.body, d.player.current, d.frame());
-        show_frame(drawn, &d.placement(), d.player.current, crate::smooth_view::frame_of(&d.player, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
+        let fm = crate::smooth_view::frame_of(&d.player, ahead);
+        let place = drawn_place(&d.player, &mut drawn.glide, fm, update, a);
+        show_frame(drawn, &place, d.player.current, fm, &mut transforms, &mut visibility, (&mut commands, gpu));
         // Deleted (3g-5): not drawn.
         if door.gone {
             if let Ok(mut v) = visibility.get_mut(drawn.body) {
@@ -2147,7 +2165,9 @@ pub fn door_draw(
     for (object, drawn) in sim.active.world.objects.iter().zip(sim.object_drawn.iter_mut()) {
         let p = &object.player;
         lit(drawn.body, p.current, p.frame());
-        show_frame(drawn, &p.placement(), p.current, crate::smooth_view::frame_of(p, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
+        let fm = crate::smooth_view::frame_of(p, ahead);
+        let place = drawn_place(p, &mut drawn.glide, fm, update, a);
+        show_frame(drawn, &place, p.current, fm, &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if object.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {
@@ -2158,7 +2178,9 @@ pub fn door_draw(
     for (chest, drawn) in sim.active.world.chests.iter().zip(sim.chest_drawn.iter_mut()) {
         let c = &chest.chest;
         lit(drawn.body, c.player.current, c.frame());
-        show_frame(drawn, &c.placement(), c.player.current, crate::smooth_view::frame_of(&c.player, ahead), &mut transforms, &mut visibility, (&mut commands, gpu));
+        let fm = crate::smooth_view::frame_of(&c.player, ahead);
+        let place = drawn_place(&c.player, &mut drawn.glide, fm, update, a);
+        show_frame(drawn, &place, c.player.current, fm, &mut transforms, &mut visibility, (&mut commands, gpu));
         let want = if chest.hidden { Visibility::Hidden } else { Visibility::Inherited };
         if let Ok(mut v) = visibility.get_mut(drawn.body) {
             if *v != want {

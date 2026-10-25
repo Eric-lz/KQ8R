@@ -523,6 +523,20 @@ impl NamedAnimPlayer {
         t
     }
 
+    /// Smooth animation (DESIGN S-5, ours; drawing only): the turn the
+    /// steps give it at `frame`, `toward` (0..1) of the way to the next
+    /// frame's (not across a loop's wrap, where the steps start again), as
+    /// [`Self::turn`] keeps a looping character's steps out.
+    pub fn drawn_turn(&self, frame: usize, toward: f32) -> Transform {
+        let Some(m) = self.movement() else { return identity() };
+        let here = m.turn_at_frame(frame);
+        let mut t = if toward > 0.0 && frame + 1 < m.frames() { crate::door::mix_transform(&here, &m.turn_at_frame(frame + 1), toward) } else { here };
+        if self.loops_move_base && m.repeat {
+            t.p = [0.0; 3];
+        }
+        t
+    }
+
     /// Where it stands now: the steps of the shown frame, then its place.
     pub fn placement(&self) -> Placement {
         let t = self.turn();

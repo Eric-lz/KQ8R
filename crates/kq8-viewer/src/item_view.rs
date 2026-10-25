@@ -29,6 +29,9 @@ pub struct ItemDraw {
     drawn: BTreeMap<String, (Entity, kq8_core::collide::Placement)>,
     /// Each item type's draw distance test (M1 6h).
     tests: BTreeMap<String, DistanceTest>,
+    /// Smooth animation (S-5): each item's place between the last two
+    /// updates (a thrown one flies smoothly).
+    glides: BTreeMap<String, crate::smooth_view::Glide>,
 }
 
 /// `looks`: (`IDName`, index into `built`, opacity) per type.
@@ -47,15 +50,25 @@ pub fn spawn_items(commands: &mut Commands, looks: Vec<(String, usize, f32, Stri
             .collect();
         parts.insert(kind, p);
     }
-    commands.insert_resource(ItemDraw { parts, drawn: BTreeMap::new(), tests });
+    commands.insert_resource(ItemDraw { parts, drawn: BTreeMap::new(), tests, glides: BTreeMap::new() });
 }
 
 /// Shows the items lying in the world, hides the others.
-pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<ItemDraw>>, mut visibility: Query<&mut Visibility>, mut transforms: Query<&mut Transform>) {
+pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<ItemDraw>>, mut visibility: Query<&mut Visibility>, mut transforms: Query<&mut Transform>, fixed: Res<Time<Fixed>>) {
     let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
     let draw = &mut *draw;
+    let (update, a) = (sim.active.world.updates, fixed.overstep_fraction());
     for o in &sim.active.world.items.objects {
         let at = o.placement().filter(|_| !o.hidden);
+        // Smooth animation (S-5): between the last two updates; out of the
+        // world (carried, hidden) its last place is forgotten.
+        let at = match at {
+            Some(p) => Some(draw.glides.entry(o.name.clone()).or_default().drawn(update, p, a)),
+            None => {
+                draw.glides.remove(&o.name);
+                None
+            }
+        };
         match (draw.drawn.get(&o.name), at) {
             (Some(&(e, shown)), at) => {
                 // M5 5c-8: a thrown item moves while it flies; fix 6: also
@@ -102,8 +115,9 @@ pub struct CorpseDraw {
     parts: BTreeMap<String, Parts>,
     /// How many of the world's corpses have their entity.
     drawn: usize,
-    /// The bolts in the air drawn now (M5 5c-9), by name.
-    bolts: BTreeMap<String, Entity>,
+    /// The bolts in the air drawn now (M5 5c-9), by name, and their places
+    /// between the last two updates (smooth animation, S-5).
+    bolts: BTreeMap<String, (Entity, crate::smooth_view::Glide)>,
 }
 
 /// `shapes`: lower-case shape name -> index into `built`.
@@ -139,11 +153,12 @@ pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Opti
 /// its shape where it is, turned to its heading and pitch with its
 /// model's front (+y) along its flight (`ranged-weapons.md` rule 27; M5
 /// 5f-1); removed when it is gone.
-pub fn bolt_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<CorpseDraw>>, mut transforms: Query<&mut Transform>) {
+pub fn bolt_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<CorpseDraw>>, mut transforms: Query<&mut Transform>, fixed: Res<Time<Fixed>>) {
     let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
     let draw = &mut *draw;
+    let (update, a) = (sim.active.world.updates, fixed.overstep_fraction());
     let bolts = &sim.active.world.bolts;
-    draw.bolts.retain(|name, e| {
+    draw.bolts.retain(|name, (e, _)| {
         let alive = bolts.iter().any(|b| &b.name == name);
         if !alive {
             commands.entity(*e).despawn();
@@ -151,21 +166,24 @@ pub fn bolt_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
         alive
     });
     for b in bolts {
-        let t = bevy_transform_from(b.rotation(), b.position);
-        match draw.bolts.get(&b.name) {
-            Some(&e) => {
-                if let Ok(mut tr) = transforms.get_mut(e) {
-                    *tr = t;
+        let place = kq8_core::collide::Placement { rotation: b.rotation(), position: b.position };
+        match draw.bolts.get_mut(&b.name) {
+            Some((e, glide)) => {
+                let p = glide.drawn(update, place, a);
+                if let Ok(mut tr) = transforms.get_mut(*e) {
+                    *tr = bevy_transform_from(p.rotation, p.position);
                 }
             }
             None => {
                 let Some(parts) = b.shape.as_ref().and_then(|s| draw.parts.get(&s.to_ascii_lowercase())) else { continue };
-                let body = commands.spawn((t, Visibility::Inherited)).id();
+                let body = commands.spawn((bevy_transform_from(place.rotation, place.position), Visibility::Inherited)).id();
                 for (mesh, material) in parts {
                     let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
                     commands.entity(body).add_child(part);
                 }
-                draw.bolts.insert(b.name.clone(), body);
+                let mut glide = crate::smooth_view::Glide::default();
+                glide.drawn(update, place, a);
+                draw.bolts.insert(b.name.clone(), (body, glide));
             }
         }
     }
