@@ -795,7 +795,8 @@ commands in `MODLOG.md`.
   (Connor's own list: 83 % of changes; characters vary). Still jumps:
   Connor's walk ↔ run, and characters whose files are numbered
   differently (zombies, spriggans, the wizard, skeletons, orcs). Same
-  frame time (logs); **not looked at by eye yet**.
+  frame time (logs). The user's look (2026-10-25): good; the length is
+  left to tune with the console word.
 - **Rope camera:** while Connor climbs, the camera glides along its path
   between updates (always, not only with `--smooth`; the user's look:
   good).

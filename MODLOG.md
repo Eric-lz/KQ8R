@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 The user's check of smooth joins
+
+**Changed:** FEATURES, STATUS, DESIGN. No code.
+**Why:** The user looked at the joins with `--smooth`.
+**Tested how:** The user, by eye.
+**Result:** "It looks good." The length stays tunable with the console word `smooth join <seconds>` (default 0.15 s); the user will fine-tune it later.
+**Still broken / not tested:** Walk <-> run still jumps (run's body numbered differently).
+**Next:** Open for the user's choice.
+
 ## 2026-10-25 J-4: smooth joins written up
 
 **Changed:** FEATURES (the feature, the launch option's text), README (`--smooth` and `smooth join 0`), DESIGN (J-4), STATUS.

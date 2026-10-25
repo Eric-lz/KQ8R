@@ -10,8 +10,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 - **2026-10-25 (B): smooth joins (with `--smooth`, ours)** (DESIGN
   "smooth joins", J-1 to J-4): a change of movement is drawn mixed over
   0.15 s (`smooth join <s>`, 0 = off) where both files share the part.
-  Checked in the logs only (Connor's stand/walk/stop/back/turn joins,
-  goblins, the wizard); **not looked at by eye**. Still jumps: Connor's
+  The user's look: good; the length stays tunable (`smooth join`), the
+  user will fine-tune it later. Still jumps: Connor's
   walk ↔ run (run's body is numbered differently: a tolerant
   renumbering would be a further step), and zombies, spriggans, the
   wizard's other files, skeletons, orcs.
