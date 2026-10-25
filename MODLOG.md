@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 Study (A): Q168 answered, the caption stone is tiled
+
+**Changed:** `docs/behaviour/interface.md` rule 20a (last point and the stretched list), rule 50, open question 6; QUESTIONS Q168 answered. No code.
+**Why:** Built stretched (B-7), the caption looked broken and checkered to the user; the tiled stone had matched the original.
+**Tested how:** Traced in `Mask.exe` (Ghidra): the caption dialog is the only dialog that asks for a tiled background.
+**Result:** The 64 x 64 `stontran.pbm` is drawn at its own size from the box's top-left, row by row, cut at the box's right and bottom edges. B's current tiled drawing (put back after B-7) agrees.
+**Still broken / not tested:** The scale at 800 x 600 (interface open question 1) and whether colour 0 stays see-through when tiled: not traced.
+**Next:** STATUS (end of session A).
+
 ## 2026-10-24 Study (A): Q167 answered, `Inv <item>` in a Special list lays a real item
 
 **Changed:** `docs/behaviour/anim-scripts.md` rule 16 (`Inv`), How to check, open question 3 closed; QUESTIONS Q167 answered. No code.
