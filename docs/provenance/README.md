@@ -3619,3 +3619,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A change of movement drawn mixed from the old pose over 0.15 s, eased; the old pose frozen at the change; a change during a join starts a new one | **Ours** (drawing only; the game's movements, frames, cues and steps unchanged) | `connor.log` / `characters.log` join lines (Daventry); not looked at by eye |
 | Connor's `back` is `walk`'s animation played backwards | Observed (`Conner.anm`: `back` = `c_walk.kqs` at speed −1) | `connor.log`: "stop -> back" |
 | `c_run.kqs`'s body is `c_walk.kqs`'s with about a dozen points numbered otherwise | Observed (scratch check of the two files' texture places) | `connor.log`: "walk -> run: 0 of 2 parts" |
+
+## Fix 2026-10-25: a character hidden by its file is drawn once shown — viewer `anim_view.rs` (`Playing::waits_to_be_shown`, `anim_draw`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A character or animated object with `hidden=1` is drawn after a script's `setHidden <name> 0` (Daventry: `outdoor.cs` shows `sprdump`) | `objects.md` "Hidden objects" rule 3; `characters.md` rules 34 and 22 (`setHidden`, the `sprdump` example) | `characters.log`: "update 31: sprdump: shown by a script (setHidden 0): drawn"; its shadow lines start at update 33; not looked at by eye |

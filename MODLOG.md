@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Fix: the outhouse spriggan (`sprdump`) was invisible
+
+**Changed:** Viewer `anim_view.rs`: a character or animated object that starts hidden by its file (`hidden=1`) now remembers it (`waits_to_be_shown`); each frame, once the game says it is no longer hidden (a script's `setHidden <name> 0`), its body is made visible and leaves the H key's group. Logged in `characters.log`. STATUS, provenance.
+**Why:** The user saw the spriggan jump out of the outhouse invisibly. The game side was right (shown at the click, `dump` played, `EndLoop dump`, then it fought Connor), and the draw distance took it off the hidden layer, but its body had been created with Bevy's `Visibility::Hidden` (the H key's "hidden objects") and nothing switched that back. Doors, chests and scripted objects already had such a switch; characters did not. `objects.md` "Hidden objects" rule 3: drawn after `setHidden 0`.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 2500 --sound off --at 122000,286400,1.57 --click outdoor,30`; `characters.log`, `doors.log`, `viewer.log`.
+**Result:** "update 31: sprdump: shown by a script (setHidden 0): drawn"; its shadow is now made from update 33 (before the fix: no shadow lines for it); `Cue 20` at update 88, `EndLoop dump` at 110, then it attacks. In Daventry it is the only object this concerns (the other `hidden=1` object, `wizchest1`, is a chest, already handled).
+**Still broken / not tested:** Not looked at by eye. Plain placed objects (no script, no animation) that start hidden and are shown by `setHidden 0` have the same spawn pattern; none in Daventry, other worlds not checked.
+**Next:** The user's look at the scene.
+
 ## 2026-10-25 The user's check of smooth joins
 
 **Changed:** FEATURES, STATUS, DESIGN. No code.
