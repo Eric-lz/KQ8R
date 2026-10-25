@@ -3611,3 +3611,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | Tag split 18/6/8 bits; 255 join records written every frame; a joined pose drawn as a straight-line mix from the old part's pose | **Ours** (how we draw; DESIGN "smooth joins") | Unit tests `a_tag_holds_the_node_frame_the_amount_and_the_join`, `the_join_buffer_keeps_its_size_and_record_0_is_none`; `viewer.log` Daventry: 72,255 node-frames, frame time unchanged |
+
+## Smooth joins: a change of movement drawn mixed (J-3, 2026-10-25) — viewer `anim_gpu.rs` (`Slots::start_join`, `join_over`, `end_join`, `join_tags`, `JoinReport`), `smooth_view.rs` (records, `join_length`, `eased`, `write_joins`), `console_words.rs` (`smooth join`), `connor_view.rs`, `anim_view.rs` (logs)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A change of movement drawn mixed from the old pose over 0.15 s, eased; the old pose frozen at the change; a change during a join starts a new one | **Ours** (drawing only; the game's movements, frames, cues and steps unchanged) | `connor.log` / `characters.log` join lines (Daventry); not looked at by eye |
+| Connor's `back` is `walk`'s animation played backwards | Observed (`Conner.anm`: `back` = `c_walk.kqs` at speed −1) | `connor.log`: "stop -> back" |
+| `c_run.kqs`'s body is `c_walk.kqs`'s with about a dozen points numbered otherwise | Observed (scratch check of the two files' texture places) | `connor.log`: "walk -> run: 0 of 2 parts" |

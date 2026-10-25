@@ -3155,6 +3155,17 @@ Steps (one commit each):
    characters, `connor.log` for Connor): object, old → new movement,
    parts mixed / all parts, length. Console word `smooth join <s>`
    (0 = off) to tune the length by eye.
+   **Done** (in `Slots`, so Connor, characters, doors and chests all
+   join; one record per old part, the mix eased to start and end
+   gently; the join follows the new movement's frames by part name and
+   layout). Daventry runs: Connor's stand ↔ start-walk ↔ walk, the stop
+   movements, back, turning on the spot, the goblins' walk / stop /
+   react / attack and the wizard's gestures all joined with every part.
+   **Found:** Connor's **walk ↔ run** finds no partner: `c_run.kqs`'s
+   body is walk's body with about a dozen points numbered otherwise
+   (194 of 196 points can be told apart by their texture places, 370 of
+   384 triangles the same after renumbering). A tolerant renumbering
+   table would be a further step (not planned yet; the user's choice).
 4. **J-4: measured and written up.** Frame time with and without; share
    of joins mixed in a Daventry run; FEATURES, README, STATUS; the
    user's look (walk ↔ run, turning on the spot, an attack, a

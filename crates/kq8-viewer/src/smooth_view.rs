@@ -6,8 +6,16 @@
 //!
 //! The switch is one flag for the whole program: `--smooth` at the start
 //! turns it on, the console word `smooth [on|off]` while playing.
+//!
+//! Smooth joins (DESIGN "smooth joins", J-1 to J-4): with the switch on, a
+//! change of movement is drawn mixed from the old pose to the new over a
+//! short time (`smooth join <seconds>`); the join records the drawn parts'
+//! tags name are kept here and written to the graphics card every frame
+//! ([`write_joins`]).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Mutex;
+use std::time::Instant;
 
 static ON: AtomicBool = AtomicBool::new(false);
 
@@ -58,15 +66,130 @@ pub fn frame_at(pushed: f32, movement: &kq8_core::connor::MovementLoop) -> (usiz
 /// report (for the log: `frame_stats`).
 static MIXED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// Smooth joins (J-3): how long a change of movement is drawn mixed, in
+/// milliseconds (0: joins off). First guess 0.15 s (about 2 updates).
+static JOIN_MS: AtomicU32 = AtomicU32::new(150);
+
+/// The join length in seconds.
+pub fn join_length() -> f32 {
+    JOIN_MS.load(Ordering::Relaxed) as f32 / 1000.0
+}
+
+/// Sets the join length (seconds, 0 to 2); returns a line for the console
+/// and the log.
+pub fn set_join(seconds: f32) -> String {
+    let ms = (seconds.clamp(0.0, 2.0) * 1000.0).round() as u32;
+    JOIN_MS.store(ms, Ordering::Relaxed);
+    if ms == 0 {
+        "smooth joins off (a change of movement jumps)".to_string()
+    } else {
+        format!("smooth joins: a change of movement drawn mixed over {:.2} s (ours; with smooth animation on)", ms as f32 / 1000.0)
+    }
+}
+
+/// A join record in use: the old part's node-frame (its pose at the
+/// change), when the join started and how long it lasts.
+#[derive(Clone, Copy)]
+struct Record {
+    from: u32,
+    started: Instant,
+    length: f32,
+}
+
+/// The records a tag can name (1-255; index 0 here is record 1).
+static RECORDS: Mutex<Vec<Option<Record>>> = Mutex::new(Vec::new());
+
+/// Joins started, parts drawn mixed in them and all their parts, since the
+/// last report.
+static JOINS: Mutex<[u64; 3]> = Mutex::new([0; 3]);
+
+/// A free record for a join from node-frame `from`: its number (1-255),
+/// or `None` if all are in use (that part then jumps).
+pub fn take_record(from: u32, started: Instant, length: f32) -> Option<u8> {
+    let mut records = RECORDS.lock().unwrap();
+    if records.is_empty() {
+        records.resize(crate::anim_gpu::JOIN_RECORDS - 1, None);
+    }
+    let k = records.iter().position(Option::is_none)?;
+    records[k] = Some(Record { from, started, length });
+    Some(k as u8 + 1)
+}
+
+/// Gives record `record` (1-255) back.
+pub fn free_record(record: u8) {
+    if let Some(r) = RECORDS.lock().unwrap().get_mut((record as usize).wrapping_sub(1)) {
+        *r = None;
+    }
+}
+
+/// Records in use.
+pub fn records_in_use() -> usize {
+    RECORDS.lock().unwrap().iter().flatten().count()
+}
+
+/// A join started: `mixed` of its new frame's `parts` drawn mixed.
+pub fn count_join(mixed: usize, parts: usize) {
+    let mut j = JOINS.lock().unwrap();
+    *j = [j[0] + 1, j[1] + mixed as u64, j[2] + parts as u64];
+}
+
+/// How far a join has gone from the old pose to the new (0-1), `t` the
+/// part of its length gone by: starting and ending gently.
+pub fn eased(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Each record's node-frame and how far its join has gone at `now` (a
+/// free record: done, so it can't move anything).
+fn records_at(now: Instant) -> Vec<(u32, f32)> {
+    RECORDS
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| match r {
+            Some(r) if r.length > 0.0 => (r.from, eased(now.duration_since(r.started).as_secs_f32() / r.length)),
+            _ => (0, 1.0),
+        })
+        .collect()
+}
+
+/// Writes the join records to the graphics card (every frame while any is
+/// in use, and once more after the last ends), as the scene's lights are.
+pub fn write_joins(
+    mut buffers: bevy::prelude::ResMut<bevy::prelude::Assets<bevy::render::storage::ShaderBuffer>>,
+    anim: Option<bevy::prelude::Res<crate::anim_gpu::AnimBuffers>>,
+    mut was_active: bevy::prelude::Local<bool>,
+) {
+    let active = records_in_use() > 0;
+    if !active && !*was_active {
+        return;
+    }
+    *was_active = active;
+    let Some(anim) = anim else { return };
+    if let Some(mut b) = buffers.get_mut(&anim.joins) {
+        *b = bevy::render::storage::ShaderBuffer::new(crate::anim_gpu::join_data(&records_at(Instant::now())), bevy::asset::RenderAssetUsages::default());
+    }
+}
+
 /// `parts` tags were set part-way (amount above 0).
 pub fn count_mixed(parts: usize) {
     MIXED.fetch_add(parts as u64, Ordering::Relaxed);
 }
 
 /// The 2-second report's words: the switch and the parts set part-way
-/// since the last report.
+/// since the last report; the joins started (J-3) and their parts.
 pub fn report() -> String {
-    format!("smooth {} ({} part tags set part-way)", if on() { "on" } else { "off" }, MIXED.swap(0, Ordering::Relaxed))
+    let j = std::mem::take(&mut *JOINS.lock().unwrap());
+    format!(
+        "smooth {} ({} part tags set part-way; {} joins, {} of {} parts mixed, {} records in use)",
+        if on() { "on" } else { "off" },
+        MIXED.swap(0, Ordering::Relaxed),
+        j[0],
+        j[1],
+        j[2],
+        records_in_use()
+    )
 }
 
 /// A move between two updates longer than this (game units) is drawn at
@@ -108,6 +231,24 @@ impl Glide {
 mod tests {
     use super::*;
     use kq8_core::collide::Placement;
+
+    #[test]
+    fn a_join_starts_and_ends_gently() {
+        assert_eq!((eased(-1.0), eased(0.0), eased(0.5), eased(1.0), eased(2.0)), (0.0, 0.0, 0.5, 1.0, 1.0));
+        assert!(eased(0.1) < 0.1 && eased(0.9) > 0.9);
+    }
+
+    #[test]
+    fn join_records_are_numbered_from_1_and_given_back() {
+        let now = Instant::now();
+        let a = take_record(7, now, 0.15).unwrap();
+        let b = take_record(8, now, 0.15).unwrap();
+        assert!(a >= 1 && b >= 1 && a != b);
+        free_record(a);
+        assert_eq!(take_record(9, now, 0.15), Some(a), "a free record is used again");
+        free_record(a);
+        free_record(b);
+    }
 
     #[test]
     fn a_glide_goes_from_the_last_update_to_this_one_and_snaps_on_a_jump() {

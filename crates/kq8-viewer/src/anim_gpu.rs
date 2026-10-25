@@ -298,6 +298,8 @@ pub struct Slots {
     /// Smooth animation (S-3, ours): how far (0-255) the shown parts are
     /// drawn toward the next frame.
     amount: u8,
+    /// Smooth joins (J-3, ours): a change of movement being drawn mixed.
+    join: Option<Join>,
     /// The object's box over every frame (Bevy units, its own space).
     aabb: Option<(Vec3, Vec3)>,
 }
@@ -342,7 +344,7 @@ impl Slots {
             })
             .collect();
         let materials = copies_of(materials, assets, cache).into_iter().collect();
-        Some(Slots { new_root, slots, list, movements, materials, shown: None, amount: 0, aabb })
+        Some(Slots { new_root, slots, list, movements, materials, shown: None, amount: 0, join: None, aabb })
     }
 
     /// Part entities.
@@ -385,6 +387,7 @@ impl Slots {
 
     /// Nothing shown (the rope model while he isn't on the rope).
     pub fn hide(&mut self, visibility: &mut Query<&mut Visibility>) {
+        self.end_join();
         if self.shown.is_none() {
             return;
         }
@@ -430,12 +433,14 @@ impl Slots {
     /// (0-255) of the way toward the same parts in the next frame (the
     /// tag's high 8 bits; parts with no match there don't move).
     pub fn set_amount(&mut self, commands: &mut Commands, gpu: &AnimGpu, amount: u8) {
-        if amount == self.amount || self.shown.is_none() {
+        let ended = self.join_over();
+        if (amount == self.amount && !ended) || self.shown.is_none() {
             return;
         }
         let parts = self.shown_parts(gpu);
-        for (part, &slot) in parts.iter().zip(&self.slots) {
-            commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount, 0)));
+        let joins = self.join_tags(gpu, parts);
+        for ((part, &slot), join) in parts.iter().zip(&self.slots).zip(joins) {
+            commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount, join)));
         }
         if amount > 0 {
             crate::smooth_view::count_mixed(parts.len().min(self.slots.len()));
@@ -447,10 +452,17 @@ impl Slots {
     /// its animated material and its node-frame tag; slots beyond the
     /// frame's parts are hidden. The parts are drawn `amount` (0-255) of
     /// the way toward the next frame (smooth animation, S-3; 0: the frame
-    /// itself).
-    pub fn show_mixed(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, amount: u8, visibility: &mut Query<&mut Visibility>) {
-        let Some((anim, source, ball)) = self.movements.get(movement).cloned() else { return };
+    /// itself). A change of movement with smooth animation on starts a
+    /// join (J-3): returned, for the caller's log.
+    pub fn show_mixed(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, amount: u8, visibility: &mut Query<&mut Visibility>) -> Option<JoinReport> {
+        let (anim, source, ball) = self.movements.get(movement).cloned()?;
         let parts = gpu.frames(self.list, anim).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice);
+        let report = match self.shown {
+            Some((old, _)) if old != movement => self.start_join(gpu, parts).map(|(mixed, length)| JoinReport { from: old, to: movement, mixed, parts: parts.len(), length }),
+            _ => None,
+        };
+        self.join_over();
+        let joins = self.join_tags(gpu, parts);
         let sequence = source.as_ref().map_or(0, |s| s.first + frame);
         for (k, &slot) in self.slots.iter().enumerate() {
             match parts.get(k) {
@@ -465,7 +477,7 @@ impl Slots {
                     let mut e = commands.entity(slot);
                     e.insert((
                         Mesh3d(gpu.topologies[part.topology as usize].clone()),
-                        bevy::mesh::MeshTag::new(tag(part.node_frame, amount, 0)),
+                        bevy::mesh::MeshTag::new(tag(part.node_frame, amount, joins[k])),
                         Transform::from_translation(offset),
                         crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material, offset },
                     ));
@@ -494,7 +506,123 @@ impl Slots {
             crate::smooth_view::count_mixed(parts.len().min(self.slots.len()));
         }
         self.amount = amount;
+        report
     }
+
+    /// Smooth joins (J-3): a join from the frame shown now to `new` (the
+    /// new movement's frame): each new part with a partner (J-1) gets a
+    /// record holding the old part's pose (the shown frame, or its next
+    /// if drawn more than half way there). Returns how many parts of `new`
+    /// are mixed and the length; `None` if joins are off. A join still
+    /// going is ended first (its mixing is lost: a small jump).
+    fn start_join(&mut self, gpu: &AnimGpu, new: &[Part]) -> Option<(usize, f32)> {
+        self.end_join();
+        let length = crate::smooth_view::join_length();
+        if !crate::smooth_view::on() || length <= 0.0 {
+            return None;
+        }
+        let partners = gpu.pack.partners(self.shown_parts(gpu), new);
+        let started = std::time::Instant::now();
+        let mut join = Join { records: Vec::new(), started, length };
+        let mut done: std::collections::HashMap<u32, bool> = Default::default();
+        for (p, partner) in new.iter().zip(&partners) {
+            let Some(old) = *partner else { continue };
+            if done.contains_key(&p.node_frame) {
+                continue;
+            }
+            let from = if self.amount >= 128 { gpu.pack.node_frames[old as usize].next } else { old };
+            let record = crate::smooth_view::take_record(from, started, length);
+            done.insert(p.node_frame, record.is_some());
+            if let Some(r) = record {
+                join.records.push((key(gpu, p.node_frame), r));
+            }
+        }
+        let mixed = new.iter().filter(|p| done.get(&p.node_frame) == Some(&true)).count();
+        crate::smooth_view::count_join(mixed, new.len());
+        if !join.records.is_empty() {
+            self.join = Some(join);
+        }
+        Some((mixed, length))
+    }
+
+    /// Ends the join if its time is up or smooth animation was switched
+    /// off; true if it ended now (the tags must be set again).
+    fn join_over(&mut self) -> bool {
+        let over = self.join.as_ref().is_some_and(|j| !crate::smooth_view::on() || j.started.elapsed().as_secs_f32() >= j.length);
+        if over {
+            self.end_join();
+        }
+        over
+    }
+
+    /// The join's records given back.
+    fn end_join(&mut self) {
+        for (_, r) in self.join.take().map(|j| j.records).unwrap_or_default() {
+            crate::smooth_view::free_record(r);
+        }
+    }
+
+    /// Each of `parts`' join record (0: none): matched to the join's parts
+    /// by name and layout, in order, the parts of one node sharing it (as
+    /// `Pack::partners`), so the join follows the new movement's frames.
+    fn join_tags(&self, gpu: &AnimGpu, parts: &[Part]) -> Vec<u8> {
+        let Some(join) = &self.join else { return vec![0; parts.len()] };
+        let mut free = vec![true; join.records.len()];
+        let mut chosen: std::collections::HashMap<u32, u8> = Default::default();
+        parts
+            .iter()
+            .map(|p| {
+                *chosen.entry(p.node_frame).or_insert_with(|| {
+                    let k = key(gpu, p.node_frame);
+                    match join.records.iter().enumerate().find(|(i, (kk, _))| free[*i] && *kk == k) {
+                        Some((i, &(_, r))) => {
+                            free[i] = false;
+                            r
+                        }
+                        None => 0,
+                    }
+                })
+            })
+            .collect()
+    }
+}
+
+impl Drop for Slots {
+    fn drop(&mut self) {
+        self.end_join();
+    }
+}
+
+/// Smooth joins (J-3, ours): a change of movement being drawn mixed: per
+/// new part kept, its (name, layout) and its record.
+struct Join {
+    records: Vec<((u64, u64), u8)>,
+    started: std::time::Instant,
+    length: f32,
+}
+
+/// A join started (J-3), for the caller's log: the movements (as the
+/// caller numbers them), the new frame's parts mixed and all, the length.
+#[derive(Debug, Clone, Copy)]
+pub struct JoinReport {
+    pub from: usize,
+    pub to: usize,
+    pub mixed: usize,
+    pub parts: usize,
+    pub length: f32,
+}
+
+impl JoinReport {
+    /// The log's words, with the movements' names.
+    pub fn line(&self, from: &str, to: &str) -> String {
+        format!("smooth join: {from} -> {to}: {} of {} parts drawn mixed over {:.2} s (J-3, ours)", self.mixed, self.parts, self.length)
+    }
+}
+
+/// A node-frame's part name and mesh layout (J-1).
+fn key(gpu: &AnimGpu, node_frame: u32) -> (u64, u64) {
+    let n = &gpu.pack.node_frames[node_frame as usize];
+    (n.name, n.layout)
 }
 
 /// A drawn part's tag: its node-frame (low 18 bits), how far toward the

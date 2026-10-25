@@ -2560,6 +2560,8 @@ pub fn connor_draw(
     mut visibility: Query<&mut Visibility>,
     mut frames: Query<&mut Transform, (Without<ConnorBody>, Without<Camera3d>)>,
     gpu: Option<Res<crate::anim_gpu::AnimGpu>>,
+    // Smooth joins (J-3): the movement drawn last, for the log.
+    mut drawn_name: Local<&'static str>,
 ) {
     let Some(mut sim) = sim else { return };
     let a = fixed.overstep_fraction();
@@ -2597,12 +2599,28 @@ pub fn connor_draw(
     // Animation memory step 4: his parts show it.
     let sim = &mut *sim;
     if let (Some(slots), Some(gpu)) = (sim.slots.as_mut(), gpu.as_deref()) {
-        match shown_at {
+        let join = match shown_at {
             Some((anim, k, mix)) if slots.stale(anim, k) => slots.show_mixed(&mut commands, gpu, anim, k, mix, &mut visibility),
-            Some((_, _, mix)) => slots.set_amount(&mut commands, gpu, mix),
-            None => slots.hide(&mut visibility),
-        }
+            Some((_, _, mix)) => {
+                slots.set_amount(&mut commands, gpu, mix);
+                None
+            }
+            None => {
+                slots.hide(&mut visibility);
+                None
+            }
+        };
         sim.shown = shown_at.map(|_| slots.root());
+        // Smooth joins (J-3): a change of movement drawn mixed (named as
+        // drawn: `back` is `walk`'s animation played backwards).
+        let now = sim.drawn(movement).map_or("?", |m| m.name);
+        if let Some(j) = join {
+            let line = j.line(&drawn_name, now);
+            sim.log.detail(format!("connor update {}: {line}", sim.updates));
+        }
+        if shown_at.is_some() {
+            *drawn_name = now;
+        }
     }
     // M6 6a-3 (ropeandhook.md rule 15, Q147 f): the separate rope model,
     // 2,000 along the rope's +y from his place (he stands at the rope's

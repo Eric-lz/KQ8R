@@ -904,8 +904,14 @@ pub fn anim_draw(
                 (c.movement, c.frame) = (movement, frame);
             }
             p.shown = Some((movement, frame));
-            if let (Some(nd), Some(gpu)) = (p.new_draw.as_mut(), gpu.as_deref()) {
-                nd.show_mixed(&mut commands, gpu, movement, frame, mix, &mut visibility);
+            let join = match (p.new_draw.as_mut(), gpu.as_deref()) {
+                (Some(nd), Some(gpu)) => nd.show_mixed(&mut commands, gpu, movement, frame, mix, &mut visibility),
+                _ => None,
+            };
+            // Smooth joins (J-3): a change of movement drawn mixed.
+            if let (Some(j), Some(now), Some(log)) = (join, self::player(p, doors), sim.characters.as_mut()) {
+                let name = |k: usize| now.movements.get(k).map_or("?", |m| m.name.as_str());
+                log.detail(format!("update {}: {}: {}", sim.updates, p.name, j.line(name(j.from), name(j.to))));
             }
         }
         let mut pose = if drawn.steps.is_empty() { kq8_core::door::identity() } else { pose_at_frame(&drawn.steps, frame) };

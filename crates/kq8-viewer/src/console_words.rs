@@ -28,6 +28,7 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
   xp <n>                      add experience (he levels up as in the game)
   god                         god mode on/off (F3): no damage, no fall death
   smooth [on|off]             smooth animation (ours; drawing only), no word: switch
+  smooth join <seconds>       how long a change of movement is drawn mixed (0: off)
   goto <name>                 jump next to a creature, object, door, chest, item
   move Connor <flags> x y z 0 0 t
                               flags 0 set place and turn, 1 add to the place,
@@ -115,6 +116,10 @@ pub fn run(line: &str, sim: &mut DoorSim, connor: Option<&ConnorSim>) -> Option<
         "smooth" => match arg(1).as_deref() {
             Some("on") => vec![crate::smooth_view::set(true)],
             Some("off") => vec![crate::smooth_view::set(false)],
+            Some("join") => match arg(2).and_then(|v| v.parse::<f32>().ok()) {
+                Some(s) => vec![crate::smooth_view::set_join(s)],
+                None => vec![format!("smooth join is {:.2} s; usage: smooth join <seconds> (0: off)", crate::smooth_view::join_length())],
+            },
             None => vec![crate::smooth_view::set(!crate::smooth_view::on())],
             Some(v) => vec![format!("usage: smooth [on|off], not '{v}'")],
         },
