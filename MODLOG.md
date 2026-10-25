@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 Rule 6's speed and wrap for doors, chests and every animated object
+
+**Changed:** Core `door.rs`: `DoorMovement::step_with` (the step of doors, chests and scripted animated objects) uses the frame player's rule for repeating loops of 2 frames or more; `named_anim.rs`: the frame rule for every repeating movement, only characters moved by it; `anim.rs`: `LoopPlayer` (plain looping objects) the same. Six older tests updated to the rule's numbers (none loosened; two checks added: the 0.0 cue the update after a wrap, and the backward wrap onto the last frame). DESIGN, provenance.
+**Why:** `objects.md` "Loops" rule 6 (Q164): one frame player for every `.kqs` animation; B-3 had built it for Connor and characters only (STATUS "left over").
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 400 --sound off --no-ai`; `anim.log`.
+**Result:** `windprop` (61 frames, 4 s): 0.0164 a phase per update, one frame each (was 0.0167, a frame skipped each cycle). `Davtorch.01` (33 frames, 1.0667 s, random speed 0.966): 0.0586 per update, and at update 31 "phase 0.0000 frame 0" (exactly 0 at the wrap).
+**Still broken / not tested:** Not looked at by eye (the change is about 1 to 6 % slower loops). Objects are still not moved by their loops' steps (Gnome's rolling rocks, M6). One-frame loops keep the old timing (ours).
+**Next:** —
+
 ## 2026-10-25 Fix: the dither line repeated every frame in Dead City
 
 **Changed:** Viewer `potion_view.rs` (`dither_step`): a part dithered again because its drawing put its own material back at a new frame (`objects.md` "Dithered objects" rule 8) is counted apart and not logged by itself; the count goes into the next real dither line.

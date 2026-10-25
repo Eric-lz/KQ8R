@@ -112,6 +112,15 @@ impl DoorMovement {
     /// 4), so a cue at exactly 1.0 fires once per cycle. Shared by doors,
     /// chests and animated objects.
     pub fn step_with(&self, phase: f32, dt: f32, speed: f32) -> Step {
+        // `objects.md` "Loops" rule 6 (Q164): a repeating loop of N ≥ 2
+        // frames moves (N − 1)/(N × length) a second and a forward wrap
+        // lands on exactly 0, for every `.kqs` animation (doors, chests,
+        // animated objects; characters through `step_frames` too). One
+        // frame: the old way (ours: the rule's rate would be 0 and its
+        // cues would never fire).
+        if let Some((step, _)) = self.step_frames(phase, dt, speed) {
+            return step;
+        }
         if self.play_time <= 0.0 {
             // `anim-scripts.md` rule 10a (Q120): a model loop that lasts 0
             // s never moves and never ends, loop or play-once (the
@@ -493,13 +502,17 @@ pub(crate) mod tests {
             cues: vec![Cue { phase: 1.0, action: "one".into() }, Cue { phase: 0.0, action: "zero".into() }, Cue { phase: 0.5, action: "half".into() }],
             transitions: Vec::new(),
         };
-        // Forwards over the wrap: 1.0 (old..1.0001) and 0.0 (0..new).
+        // Forwards over the wrap: 1.0 (old..1.0001); the wrap lands on
+        // exactly 0 (rule 6), so the 0.0 cue fires in the next update
+        // (rule 4, Q158 c).
         let s = mv(1.0).step(0.95, 0.1);
-        assert!((s.to - 0.05).abs() < 1e-5 && !s.done);
-        assert_eq!(s.cues, ["one", "zero"]);
-        // Backwards over the wrap: 0 (0..old) and 1.0 (new..1.0001).
+        assert!(s.to == 0.0 && !s.done);
+        assert_eq!(s.cues, ["one"]);
+        assert_eq!(mv(1.0).step(0.0, 0.1).cues, ["zero"]);
+        // Backwards over the wrap: 0 (0..old) and 1.0 (new..1.0001); below
+        // 0 lands on the last frame, 15/16.
         let s = mv(-1.0).step(0.05, 0.1);
-        assert!((s.to - 0.95).abs() < 1e-5);
+        assert!((s.to - 15.0 / 16.0).abs() < 1e-5, "{}", s.to);
         assert_eq!(s.cues, ["one", "zero"]);
         // No wrap: the plain range.
         assert_eq!(mv(1.0).step(0.45, 0.1).cues, ["half"]);

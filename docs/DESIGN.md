@@ -2982,3 +2982,17 @@ turned about Y, then X, then Z), so the turn is turned back into angles.
    can be picked up.
    **Done** 2026-10-25 (the fists branch checked in the logs: `NoName22`
    on `hdthree`'s `SmCrossBow` part in frame 54; not looked at by eye).
+
+### Outside the milestones: rule 6's speed and wrap for every animated object (planned and done 2026-10-25, checked in the logs only)
+
+`objects.md` "Loops" rule 6 (Q164) says one frame player serves every
+`.kqs` animation; B-3 gave its speed and wrap to Connor and characters
+only. One step: the shared step of doors, chests and scripted animated
+objects (`DoorMovement::step_with`) and the plain looping objects'
+`LoopPlayer` move a repeating loop of N ≥ 2 frames by
+(N − 1)/(N × length) a second, land a forward wrap on exactly 0 and a
+backward one on the last frame. Only characters are moved by the steps
+(rule 6a's adding up for objects, Gnome's rolling rocks, stays for M6).
+One-frame loops keep the old timing (ours: the rule's rate is 0, their
+cues would never fire). Play-once movements were already right.
+**Done** 2026-10-25.

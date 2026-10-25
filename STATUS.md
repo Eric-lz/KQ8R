@@ -273,18 +273,15 @@ M6 has started with the Rope and Hook (6a).
   death leaves them, while coins fly. Not tested in the viewer: a burnt
   bow spriggan throws its crossbow (its fire death has no `SmCrossbow`
   part); the line test blocked by a wall (unit test only).
-  Suggested next for B: the user's look at these; then rule 6 for the
-  other animated objects (below).
+  Rule 6's speed and wrap now also for doors, chests and every animated
+  object (2026-10-25, logs only).
 
 - **Left over from B-1 to B-8 (the user's look: all good, 2026-10-24),
-  not built:** rule 6's speed and wrap for
-  plain animated objects, chests and doors (only Connor and characters
-  have it); our camera's projection far plane does not follow
+  not built:** our camera's projection far plane does not follow
   `setHaze` (the ground and objects stop at `visibleDistance` anyway);
   `setState Connor Wait` from his jump, push, rope, talk or throw states
   (not described, nothing done); the status icons and popup buttons keep
   their picture's own see-through flag; `KQObject::changeBmp` is a stub.
-  Rule 6 for the other animated objects is a small step (same player).
 
 - **Allocator: `mimalloc`, purge delay 0 (chosen by the user
   2026-10-22).** Tour of all 10 worlds, then Daventry ↔ Castle twice

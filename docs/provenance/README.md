@@ -3587,3 +3587,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | The flame (`flame14.pba`) and the flashes (`fx.pba`) leave colour 0 undrawn by their file's transparent flag (flags 0x9), not by the attribute's kind (0x8, solid by `interface.md` rule 20a) | **The user's check in the original** (see-through; ours were black); file flags observed (`kq8 bitmap-png`); asked: Q171 | `gui.log`: the flame and three flashes play at a level-up; not looked at by eye |
+
+## Rule 6's speed and wrap for every animated object (2026-10-25) — `crates/kq8-core/src/door.rs` (`step_with`), `named_anim.rs`, `anim.rs` (`LoopPlayer::advance`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The same frame player for every `.kqs` animation: doors, chests, plain animated objects, characters, Connor | `objects.md` "Loops" rule 6 (traced, Q164) | — |
+| A repeating loop moves (N − 1)/(N × length) a second; a forward wrap lands on exactly 0; backwards below 0 on the last frame, phase (N − 1)/N | Rule 6 (traced) | Unit tests `a_repeating_loop_shows_every_frame_and_wraps_to_exactly_0`, `cues_at_a_wrap_fire_once_including_one_at_exactly_1`; `anim.log`: `windprop` 0.0164 a frame per update, `Davtorch.01` wraps to 0.0000 |
+| After a forward wrap a cue at 0.0 fires in the next update | Rule 4 (traced, Q158 c) | Unit test (same) |
+| A one-frame repeating loop keeps the old timing (1/length a second, wrap carrying the overshoot) | **Ours** (the rule gives rate 0, so its cues would never fire) | — |
+| Objects are not moved by their loops' steps (only characters) | **Ours** for now (rule 6a's adding up for objects waits for M6) | — |

@@ -417,9 +417,9 @@ impl NamedAnimPlayer {
         // reached in this update cuts it there (−1: the whole update
         // plays); the transition is set up at the end and first moves in
         // the next update.
-        // A character's repeating loop: the frame player's rate (`objects.md`
-        // "Loops" rules 6 and 6a, Q164).
-        let frame_rule = self.loops_move_base && m.repeat && m.step_frames(self.phase, 0.0, speed).is_some();
+        // A repeating loop: the frame player's rate (`objects.md` "Loops"
+        // rules 6 and 6a, Q164); only a character is moved by its steps.
+        let frame_rule = m.repeat && m.step_frames(self.phase, 0.0, speed).is_some();
         let rate = if frame_rule {
             crate::door::repeat_rate(m.frames(), m.play_time)
         } else if m.play_time > 0.0 {
@@ -454,7 +454,9 @@ impl NamedAnimPlayer {
         }
         let step = match m.step_frames(self.phase, dt, speed).filter(|_| frame_rule) {
             Some((step, travel)) => {
-                out.travel = Some(travel);
+                if self.loops_move_base {
+                    out.travel = Some(travel);
+                }
                 step
             }
             None => m.step_with(self.phase, dt, speed),
@@ -524,6 +526,9 @@ pub(crate) mod tests {
     use crate::door::Cue;
 
     const DT: f32 = 1.0 / 15.0;
+    /// A repeating loop of 16 frames over 1 s moves 15/16 a second
+    /// (`objects.md` "Loops" rule 6, Q164).
+    const LOOP16: f32 = 15.0 / 16.0;
 
     /// A movement of 16 frames over 1 s (made-up numbers in the style of
     /// the chests and baskets).
@@ -723,7 +728,7 @@ pub(crate) mod tests {
         assert_eq!(a.started.as_ref().map(|s| (s.index, s.start)), Some((3, 0.0)));
         assert_eq!(p.random_speed, None);
         // The phase moved on in that same update, at speed 1.
-        assert!((p.phase - DT).abs() < 1e-6, "{}", p.phase);
+        assert!((p.phase - DT * LOOP16).abs() < 1e-6, "{}", p.phase);
     }
 
     #[test]
@@ -738,7 +743,7 @@ pub(crate) mod tests {
         assert!((frames - frames.round()).abs() < 1e-4 && p.phase < 1.0, "{}", p.phase);
         let before = p.phase;
         p.advance(DT);
-        assert!(((p.phase - before).rem_euclid(1.0) - DT * speed).abs() < 1e-5, "moved in the first update");
+        assert!(((p.phase - before).rem_euclid(1.0) - DT * speed * LOOP16).abs() < 1e-5, "moved in the first update");
         // A movement started later runs at its own speed.
         p.cut_short = true;
         p.request("spin");
@@ -839,7 +844,7 @@ pub(crate) mod tests {
         assert_eq!(a.started.map(|s| s.index), Some(3));
         // It moves in that same update (refined Q85).
         assert_eq!(p.movement_name(), "spin");
-        assert!((p.phase - DT).abs() < 1e-6, "{}", p.phase);
+        assert!((p.phase - DT * LOOP16).abs() < 1e-6, "{}", p.phase);
         // With a currAnimName the waiting one waits as usual.
         let mut q = object().with_names_at_load(Some("stop"), Some("spin"));
         assert_eq!(q.advance(DT).started, None);

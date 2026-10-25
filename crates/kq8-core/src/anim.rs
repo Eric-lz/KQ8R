@@ -56,7 +56,13 @@ impl LoopPlayer {
             return;
         }
         let p = self.phase + self.speed * dt / self.play_time;
-        if self.repeat {
+        if self.repeat && self.frames >= 2 {
+            // `objects.md` "Loops" rule 6 (Q164): (N − 1)/(N × length) a
+            // second; a forward wrap lands on exactly 0, backwards below
+            // 0 on the last frame.
+            let delta = self.speed * dt * crate::door::repeat_rate(self.frames, self.play_time);
+            self.phase = crate::door::repeat_advance(self.phase, delta, self.frames, false, |_| [0.0; 3]).0;
+        } else if self.repeat {
             self.phase = p.rem_euclid(1.0);
         } else if p >= 1.0 || p <= 0.0 {
             // Played once: stays on its last (or, backwards, first) frame.
@@ -90,20 +96,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_repeating_loop_wraps_once_per_stored_length() {
-        // 16 frames, stored length 15/15 = 1.0 s: 15 updates per cycle, so
-        // each update moves 16/15 of a frame and one frame per cycle is
-        // never shown (true for any rounding).
+    fn a_repeating_loop_shows_every_frame_and_wraps_to_exactly_0() {
+        // objects.md "Loops" rule 6 (Q164): 16 frames, stored length 1.0 s
+        // move 15/16 a second: one frame per update at 15 a second, so a
+        // cycle takes 16 updates (16 × 1.0/15 s) and every frame is shown;
+        // the wrap lands on exactly 0.
         let mut p = LoopPlayer::new(0.0, 1.0, true, 16, 1.0, None);
         let mut shown = [0u32; 16];
-        for _ in 0..15 * 4 {
+        for _ in 0..16 * 4 {
             p.advance(1.0 / 15.0);
             shown[p.frame()] += 1;
         }
-        // Back at the start after whole cycles.
-        assert!(p.phase.min(1.0 - p.phase) < 1e-4, "phase {}", p.phase);
-        assert_eq!(shown.iter().filter(|&&n| n == 4).count(), 15, "{shown:?}");
-        assert_eq!(shown.iter().filter(|&&n| n == 0).count(), 1, "{shown:?}");
+        assert_eq!(p.phase, 0.0);
+        assert_eq!(shown, [4; 16]);
     }
 
     #[test]
@@ -124,9 +129,14 @@ mod tests {
             p.advance(1.0 / 15.0);
         }
         assert!(p.finished && p.phase == 1.0 && p.frame() == 7);
+        // Backwards, repeating: 9/10 of the phase a second (rule 6).
         let mut b = LoopPlayer::new(0.5, -1.0, true, 10, 1.0, None);
         b.advance(0.1);
-        assert!((b.phase - 0.4).abs() < 1e-6);
+        assert!((b.phase - 0.41).abs() < 1e-6, "{}", b.phase);
+        // Below 0: the last frame, phase 9/10.
+        let mut w = LoopPlayer::new(0.05, -1.0, true, 10, 1.0, None);
+        w.advance(0.1);
+        assert!((w.phase - 0.9).abs() < 1e-6 && w.frame() == 9, "{}", w.phase);
     }
 
     #[test]
