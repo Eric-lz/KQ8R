@@ -91,8 +91,9 @@ struct SceneLights {
 // Animations on the graphics card (Animation memory step 4, `anim_gpu.rs`):
 // each point as in the model file (x, y, z 0..254 in its low three bytes),
 // each node-frame's normals (16-bit, two per u32), and per node-frame its
-// matrix rows (w: where its points and normals start), its move and its
-// part's ball, in game space.
+// matrix rows (w: where its points and normals start, and the same part in
+// the next frame, smooth animation S-2), its move and its part's ball, in
+// game space.
 struct NodeFrame {
     row0: vec4<f32>,
     row1: vec4<f32>,
@@ -141,14 +142,35 @@ fn model_corner(v: ObjectIn) -> Corner {
 // written them. The entity stands at its part's ball centre (so Bevy
 // sorts see-through parts by their own centres, as it did the old
 // frames' meshes), so the point is taken relative to it.
+// A corner's point and normal as node-frame `node` places them (game
+// space).
 @if(ANIMATED)
-fn model_corner(v: ObjectIn) -> Corner {
-    let node = anim_nodes[mesh_functions::get_tag(v.instance_index)];
-    let raw = anim_points[bitcast<u32>(node.row0.w) + v.corner.x];
+fn node_corner(node: NodeFrame, corner: vec2<u32>) -> array<vec3<f32>, 2> {
+    let raw = anim_points[bitcast<u32>(node.row0.w) + corner.x];
     let r = vec3<f32>(f32(raw & 255u), f32((raw >> 8u) & 255u), f32((raw >> 16u) & 255u));
     let g = r.x * node.row0.xyz + r.y * node.row1.xyz + r.z * node.row2.xyz + node.offset.xyz;
-    let packed = anim_normals[bitcast<u32>(node.row1.w) + v.corner.y];
+    let packed = anim_normals[bitcast<u32>(node.row1.w) + corner.y];
     let n = vec3<f32>(unpack2x16snorm(packed.x), unpack2x16snorm(packed.y).x);
+    return array<vec3<f32>, 2>(g, n);
+}
+
+// The tag: the node-frame in its low 24 bits; smooth animation (S-3,
+// ours) puts in its high 8 bits how far (0-255) toward the same part in
+// the next frame the corner is drawn: point and normal mixed.
+@if(ANIMATED)
+fn model_corner(v: ObjectIn) -> Corner {
+    let tag = mesh_functions::get_tag(v.instance_index);
+    let node = anim_nodes[tag & 0xFFFFFFu];
+    let here = node_corner(node, v.corner);
+    var g = here[0];
+    var n = here[1];
+    let amount = f32(tag >> 24u) / 255.0;
+    if amount > 0.0 {
+        let there = node_corner(anim_nodes[bitcast<u32>(node.row2.w)], v.corner);
+        g = mix(g, there[0], amount);
+        let mixed = mix(n, there[1], amount);
+        n = select(n, normalize(mixed), dot(mixed, mixed) > 1e-8);
+    }
     let units = settings.game_units;
     return Corner(game_to_bevy(g - node.ball.xyz) / units, game_to_bevy(n), vec4<f32>(0.0, 0.0, 0.0, node.ball.w));
 }

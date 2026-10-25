@@ -262,6 +262,9 @@ pub struct Slots {
     pub materials: std::collections::HashMap<(usize, i32), Handle<crate::object_light::ObjectMaterial>>,
     /// (movement, frame) the slots show.
     shown: Option<(usize, usize)>,
+    /// Smooth animation (S-3, ours): how far (0-255) the shown parts are
+    /// drawn toward the next frame.
+    amount: u8,
     /// The object's box over every frame (Bevy units, its own space).
     aabb: Option<(Vec3, Vec3)>,
 }
@@ -306,7 +309,7 @@ impl Slots {
             })
             .collect();
         let materials = copies_of(materials, assets, cache).into_iter().collect();
-        Some(Slots { new_root, slots, list, movements, materials, shown: None, aabb })
+        Some(Slots { new_root, slots, list, movements, materials, shown: None, amount: 0, aabb })
     }
 
     /// Part entities.
@@ -387,6 +390,32 @@ impl Slots {
     /// its animated material and its node-frame tag; slots beyond the
     /// frame's parts are hidden.
     pub fn show(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, visibility: &mut Query<&mut Visibility>) {
+        self.show_mixed(commands, gpu, movement, frame, 0, visibility);
+    }
+
+    /// The parts of the frame shown and their node-frames.
+    fn shown_parts<'a>(&self, gpu: &'a AnimGpu) -> &'a [Part] {
+        let Some((movement, frame)) = self.shown else { return &[] };
+        let Some((anim, _, _)) = self.movements.get(movement) else { return &[] };
+        gpu.frames(self.list, *anim).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice)
+    }
+
+    /// Smooth animation (S-3, ours): the parts shown drawn `amount`
+    /// (0-255) of the way toward the same parts in the next frame (the
+    /// tag's high 8 bits; parts with no match there don't move).
+    pub fn set_amount(&mut self, commands: &mut Commands, gpu: &AnimGpu, amount: u8) {
+        if amount == self.amount || self.shown.is_none() {
+            return;
+        }
+        for (part, &slot) in self.shown_parts(gpu).iter().zip(&self.slots) {
+            commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount)));
+        }
+        self.amount = amount;
+    }
+
+    /// [`Slots::show`] with the parts drawn `amount` (0-255) toward the next
+    /// frame (S-3).
+    pub fn show_mixed(&mut self, commands: &mut Commands, gpu: &AnimGpu, movement: usize, frame: usize, amount: u8, visibility: &mut Query<&mut Visibility>) {
         let Some((anim, source, ball)) = self.movements.get(movement).cloned() else { return };
         let parts = gpu.frames(self.list, anim).and_then(|f| f.get(frame)).map_or(&[][..], Vec::as_slice);
         let sequence = source.as_ref().map_or(0, |s| s.first + frame);
@@ -403,7 +432,7 @@ impl Slots {
                     let mut e = commands.entity(slot);
                     e.insert((
                         Mesh3d(gpu.topologies[part.topology as usize].clone()),
-                        bevy::mesh::MeshTag::new(part.node_frame),
+                        bevy::mesh::MeshTag::new(tag(part.node_frame, amount)),
                         Transform::from_translation(offset),
                         crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material, offset },
                     ));
@@ -428,5 +457,22 @@ impl Slots {
         }
         commands.entity(self.new_root).insert(ball);
         self.shown = Some((movement, frame));
+        self.amount = amount;
+    }
+}
+
+/// A drawn part's tag: its node-frame (low 24 bits) and how far toward the
+/// next frame it is drawn (high 8 bits; smooth animation S-3).
+pub fn tag(node_frame: u32, amount: u8) -> u32 {
+    (node_frame & 0xFF_FFFF) | (amount as u32) << 24
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_tag_holds_the_node_frame_and_the_amount() {
+        assert_eq!(super::tag(72_255, 0), 72_255);
+        let t = super::tag(72_255, 200);
+        assert_eq!((t & 0xFF_FFFF, t >> 24), (72_255, 200));
     }
 }

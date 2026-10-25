@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 S-3: the drawing can mix a part with the next frame's
+
+**Changed:** Viewer `object_light.wesl`: the animated parts' tag is read as the node-frame (low 24 bits) and an amount (high 8 bits); above 0 the corner's point and normal are mixed with the same part in the next frame (S-2's table). `anim_gpu.rs`: `tag()`, `Slots::show_mixed` and `set_amount` (through `commands`, so a new frame and an amount set in the same system don't undo each other); `show` keeps amount 0. Unit test `a_tag_holds_the_node_frame_and_the_amount`.
+**Why:** DESIGN S-3.
+**Tested how:** `cargo test -p kq8-viewer` (the new test passes). The shader is compiled when the game starts: **not run yet** (the user was playing); checked with S-4.
+**Result:** Builds; nothing sets an amount yet, and amount 0 draws as before.
+**Still broken / not tested:** The shader change not yet compiled by the graphics driver.
+**Next:** S-4 (the amounts).
+
 ## 2026-10-25 S-2: each node-frame knows the same part in the next frame
 
 **Changed:** `kq8-data` `anim_pack.rs`: `NodeFrame::next` (the node at the same place in the next frame's node list with the same mesh, else itself; the last frame's in frame 0), `Pack::matched` (counted), kept right by `merge`. Viewer `anim_gpu.rs`: sent in the node-frame's spare number (row 2's w); `world_build.rs`: the share in the pack's log line. Unit test `each_node_frame_knows_the_same_part_in_the_next_frame`; the merge test checks `next` too.
