@@ -3605,3 +3605,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Each of Connor's and the characters' movements is its own `.kqs` file, listed by `loop=` lines in an `.anm` list | Observed (`Conner.anm`, the worlds' `.anm` files) | — |
 | Two meshes in different files can be mixed point by point only if they have the same number of points and the same triangles over the same point numbers; the order of triangles, corners and of parts in a frame doesn't matter; the part's name must match | Observed (measured 2026-10-25: Connor's `body` is one 196-point layout in 64 of 70 `Conner.anm` files; zombies' meshes have equal sizes but other point numbers) | Unit tests `a_layout_ignores_the_order_of_triangles_but_not_the_point_numbers`, `a_new_frames_parts_find_their_partners_by_name_and_layout`; `viewer.log` (Daventry): Connor's own set 2,653 of 3,192 changes with every part paired |
 | Drawing a change of movement mixed at all, partners taken in order, one old node each | **Ours** (drawing only, DESIGN "smooth joins"; the game's rules unchanged) | — |
+
+## Smooth joins: the tag and the join buffer (J-2, 2026-10-25) — viewer `anim_gpu.rs` (`tag`, `join_data`, `AnimBuffers::joins`), `object_light.rs` (binding 7), `object_light.wesl` (`model_corner`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Tag split 18/6/8 bits; 255 join records written every frame; a joined pose drawn as a straight-line mix from the old part's pose | **Ours** (how we draw; DESIGN "smooth joins") | Unit tests `a_tag_holds_the_node_frame_the_amount_and_the_join`, `the_join_buffer_keeps_its_size_and_record_0_is_none`; `viewer.log` Daventry: 72,255 node-frames, frame time unchanged |

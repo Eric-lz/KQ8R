@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-25 J-2: smooth joins: the tag names a join record; the join buffer
+
+**Changed:** Viewer `anim_gpu.rs`: the tag is now node-frame 18 bits, amount toward the next frame 6 bits (64 steps, was 256), join record 8 bits (`tag(node_frame, amount, join)`); `AnimBuffers::joins` (255 records: the old part's node-frame and how far the drawing has gone from it, `join_data`); the upload line says how many node-frames of the 262,144 a tag can name (an error if more). `object_light.rs`: binding 7. `object_light.wesl`: with a record named, the pose is drawn mixed from the old part's pose. Two unit tests. DESIGN.
+**Why:** DESIGN J-2. The plan's risk (replacing a shared buffer makes every material bind again) was already answered: the scene's lights buffer is replaced every frame at no cost, so the records are written every frame with the amount from the processor instead of a shader clock (simpler).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --frames 1500 --sound off [--smooth] --command "move Connor 0 228300 183200 12500 0 0 -1.57",5`; `viewer.log`.
+**Result:** The shader compiles and runs (no errors either way). "72255 node-frames of the 262144 a tag can name". Frame time 5.5 ms (180 a second) with and without `--smooth`; about 162,000 part tags set part-way per 2 s with it (as S-4).
+**Still broken / not tested:** Nothing names a join record yet (J-3), so the join path in the shader is not exercised. Amount in 64 steps not looked at by eye.
+**Next:** J-3 (joins started at a change of movement).
+
 ## 2026-10-25 J-1: smooth joins: each new part's partner in the old frame
 
 **Changed:** `kq8-data` `anim_pack.rs`: each node-frame keeps its part's name and its mesh's layout (`layout`: the number of points and the triangles as point-number sets, in any order; `name_hash`), not sent to the graphics card; `Pack::partners` (for a new frame's parts, the old frame's node-frame with the same name and layout, each old node once) and `Pack::join_share` (the share over a set of movements). Viewer `world_build.rs`: the pack's log line gives Connor's share, within each of his movement sets. Two unit tests. DESIGN (J-1 done), provenance.

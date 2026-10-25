@@ -104,6 +104,9 @@ struct NodeFrame {
 @group(constants::MATERIAL_BIND_GROUP) @binding(4) var<storage, read> anim_points: array<u32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(5) var<storage, read> anim_normals: array<vec2<u32>>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(6) var<storage, read> anim_nodes: array<NodeFrame>;
+// Smooth joins (J-2, ours): per record the old part's node-frame (x, its
+// bits) and how far from it to the new pose the drawing has gone (y, 0-1).
+@group(constants::MATERIAL_BIND_GROUP) @binding(7) var<storage, read> anim_joins: array<vec4<f32>>;
 
 struct ObjectIn {
     @builtin(instance_index) instance_index: u32,
@@ -154,22 +157,33 @@ fn node_corner(node: NodeFrame, corner: vec2<u32>) -> array<vec3<f32>, 2> {
     return array<vec3<f32>, 2>(g, n);
 }
 
-// The tag: the node-frame in its low 24 bits; smooth animation (S-3,
-// ours) puts in its high 8 bits how far (0-255) toward the same part in
-// the next frame the corner is drawn: point and normal mixed.
+// The tag: the node-frame in its low 18 bits; smooth animation (S-3,
+// ours) puts in bits 18-23 how far (0-63) toward the same part in the next
+// frame the corner is drawn: point and normal mixed. Smooth joins (J-2,
+// ours): bits 24-31 name a join record; the pose so far is then drawn
+// mixed from the old part's pose (a change of movement).
 @if(ANIMATED)
 fn model_corner(v: ObjectIn) -> Corner {
     let tag = mesh_functions::get_tag(v.instance_index);
-    let node = anim_nodes[tag & 0xFFFFFFu];
+    let node = anim_nodes[tag & 0x3FFFFu];
     let here = node_corner(node, v.corner);
     var g = here[0];
     var n = here[1];
-    let amount = f32(tag >> 24u) / 255.0;
+    let amount = f32((tag >> 18u) & 63u) / 63.0;
     if amount > 0.0 {
         let there = node_corner(anim_nodes[bitcast<u32>(node.row2.w)], v.corner);
         g = mix(g, there[0], amount);
-        let mixed = mix(n, there[1], amount);
-        n = select(n, normalize(mixed), dot(mixed, mixed) > 1e-8);
+        n = mix(n, there[1], amount);
+    }
+    let join = tag >> 24u;
+    if join > 0u {
+        let record = anim_joins[join];
+        let old = node_corner(anim_nodes[bitcast<u32>(record.x)], v.corner);
+        g = mix(old[0], g, record.y);
+        n = mix(old[1], n, record.y);
+    }
+    if amount > 0.0 || join > 0u {
+        n = select(here[1], normalize(n), dot(n, n) > 1e-8);
     }
     let units = settings.game_units;
     return Corner(game_to_bevy(g - node.ball.xyz) / units, game_to_bevy(n), vec4<f32>(0.0, 0.0, 0.0, node.ball.w));

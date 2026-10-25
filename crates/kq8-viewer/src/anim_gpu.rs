@@ -26,14 +26,35 @@ use kq8_data::anim_pack::{Pack, Part};
 /// Each corner's (point, normal's point) in its vertex frame.
 pub const ATTRIBUTE_ANIM_CORNER: MeshVertexAttribute = MeshVertexAttribute::new("Anim_Corner", 0x4B51_3809, VertexFormat::Uint32x2);
 
-/// The three buffers every object material binds (kept across worlds;
-/// their contents are the current world's).
+/// The buffers every object material binds (kept across worlds; their
+/// contents are the current world's): points, normals, node-frames, and
+/// the join records (smooth joins, J-2: rewritten every frame, as the
+/// scene's lights are).
 #[derive(Resource, Clone)]
 pub struct AnimBuffers {
     pub points: Handle<ShaderBuffer>,
     pub normals: Handle<ShaderBuffer>,
     pub nodes: Handle<ShaderBuffer>,
+    pub joins: Handle<ShaderBuffer>,
 }
+
+/// Smooth joins (DESIGN J-2, ours): how many join records a tag can name
+/// (8 bits; record 0 = no join).
+pub const JOIN_RECORDS: usize = 256;
+
+/// The join buffer's contents, always [`JOIN_RECORDS`] long: per record
+/// the old part's node-frame (its bits) and how far the drawing has gone
+/// from it to the new pose (0-1). `records[k]` is record `k + 1`.
+pub fn join_data(records: &[(u32, f32)]) -> Vec<[f32; 4]> {
+    let mut data = vec![[0.0f32; 4]; JOIN_RECORDS];
+    for (k, &(node_frame, w)) in records.iter().take(JOIN_RECORDS - 1).enumerate() {
+        data[k + 1] = [f32::from_bits(node_frame), w, 0.0, 0.0];
+    }
+    data
+}
+
+/// Node-frames a tag can name (18 bits).
+pub const TAG_NODE_FRAMES: usize = 1 << 18;
 
 /// A buffer for before any world (a storage buffer can't be empty).
 fn placeholder() -> ShaderBuffer {
@@ -42,7 +63,12 @@ fn placeholder() -> ShaderBuffer {
 
 impl AnimBuffers {
     pub fn new(buffers: &mut Assets<ShaderBuffer>) -> Self {
-        AnimBuffers { points: buffers.add(placeholder()), normals: buffers.add(placeholder()), nodes: buffers.add(placeholder()) }
+        AnimBuffers {
+            points: buffers.add(placeholder()),
+            normals: buffers.add(placeholder()),
+            nodes: buffers.add(placeholder()),
+            joins: buffers.add(ShaderBuffer::new(join_data(&[]), RenderAssetUsages::default())),
+        }
     }
 }
 
@@ -177,8 +203,15 @@ impl AnimGpu {
         let _ = assets.insert(&buffers.nodes, ShaderBuffer::new(nodes, RenderAssetUsages::RENDER_WORLD));
         let [_, _, _, topology_bytes] = p.sizes();
         let mb = |b: usize| b as f64 / (1 << 20) as f64;
+        // The tag names a node-frame in 18 bits (J-2); 2026-10-25 the
+        // largest world had about 80,000.
+        let room = if p.node_frames.len() > TAG_NODE_FRAMES {
+            format!("; ERROR: {} node-frames, more than a tag can name ({TAG_NODE_FRAMES}): parts will be drawn wrong", p.node_frames.len())
+        } else {
+            format!("; {} node-frames of the {TAG_NODE_FRAMES} a tag can name", p.node_frames.len())
+        };
         format!(
-            "animations on the graphics card (step 4): points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB, {} topology meshes {:.1} MB",
+            "animations on the graphics card (step 4): points {:.1} MB, normals {:.1} MB, node-frames {:.1} MB, {} topology meshes {:.1} MB{room}",
             mb(sizes.0),
             mb(sizes.1),
             mb(sizes.2),
@@ -402,7 +435,7 @@ impl Slots {
         }
         let parts = self.shown_parts(gpu);
         for (part, &slot) in parts.iter().zip(&self.slots) {
-            commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount)));
+            commands.entity(slot).insert(bevy::mesh::MeshTag::new(tag(part.node_frame, amount, 0)));
         }
         if amount > 0 {
             crate::smooth_view::count_mixed(parts.len().min(self.slots.len()));
@@ -432,7 +465,7 @@ impl Slots {
                     let mut e = commands.entity(slot);
                     e.insert((
                         Mesh3d(gpu.topologies[part.topology as usize].clone()),
-                        bevy::mesh::MeshTag::new(tag(part.node_frame, amount)),
+                        bevy::mesh::MeshTag::new(tag(part.node_frame, amount, 0)),
                         Transform::from_translation(offset),
                         crate::shadow_view::AnimSlot { source: source.clone(), sequence, node: part.node as usize, material: part.material, offset },
                     ));
@@ -464,18 +497,32 @@ impl Slots {
     }
 }
 
-/// A drawn part's tag: its node-frame (low 24 bits) and how far toward the
-/// next frame it is drawn (high 8 bits; smooth animation S-3).
-pub fn tag(node_frame: u32, amount: u8) -> u32 {
-    (node_frame & 0xFF_FFFF) | (amount as u32) << 24
+/// A drawn part's tag: its node-frame (low 18 bits), how far toward the
+/// next frame it is drawn (smooth animation S-3; `amount` 0-255 kept in 6
+/// bits, 18-23) and its join record (smooth joins J-2; 8 bits, 24-31; 0:
+/// none).
+pub fn tag(node_frame: u32, amount: u8, join: u8) -> u32 {
+    let amount = (amount as u32 * 63 + 127) / 255;
+    (node_frame & 0x3_FFFF) | amount << 18 | (join as u32) << 24
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn a_tag_holds_the_node_frame_and_the_amount() {
-        assert_eq!(super::tag(72_255, 0), 72_255);
-        let t = super::tag(72_255, 200);
-        assert_eq!((t & 0xFF_FFFF, t >> 24), (72_255, 200));
+    fn a_tag_holds_the_node_frame_the_amount_and_the_join() {
+        assert_eq!(super::tag(72_255, 0, 0), 72_255);
+        let t = super::tag(262_143, 200, 255);
+        assert_eq!((t & 0x3_FFFF, (t >> 18) & 63, t >> 24), (262_143, 49, 255), "200 of 255 is 49 of 63");
+        assert_eq!((super::tag(5, 255, 1) >> 18) & 63, 63, "all the way stays all the way");
+        assert_eq!((super::tag(5, 2, 1) >> 18) & 63, 0, "a hair is none");
+    }
+
+    #[test]
+    fn the_join_buffer_keeps_its_size_and_record_0_is_none() {
+        let data = super::join_data(&[(72_255, 0.25)]);
+        assert_eq!(data.len(), super::JOIN_RECORDS);
+        assert_eq!(data[0], [0.0; 4]);
+        assert_eq!((data[1][0].to_bits(), data[1][1]), (72_255, 0.25));
+        assert_eq!(super::join_data(&vec![(1, 1.0); 300]).len(), super::JOIN_RECORDS, "never longer");
     }
 }

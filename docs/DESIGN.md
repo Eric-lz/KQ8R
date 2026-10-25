@@ -3142,6 +3142,14 @@ Steps (one commit each):
    **Risk to check first:** the buffer is replaced at each join; if
    that costs a frame-time spike (it makes every model material bind
    again), write into the existing buffer instead.
+   **Done.** The risk was already answered by the code: the scene's
+   light list is a buffer every model material shares and is replaced
+   every frame at no measurable cost. So the join records are written
+   every frame too, with how far each join has gone worked out on the
+   processor (no shader clock): a record is the old part's node-frame
+   and that amount. Frame time with `--smooth` the same as without
+   (5.5 ms, 180 a second); Daventry 72,255 of the 262,144 node-frames
+   a tag can name (more is logged as an error).
 3. **J-3: joins.** `Slots` start a join at a change of movement with the
    switch on, free records when done. Log per join (`anim.log` for
    characters, `connor.log` for Connor): object, old → new movement,

@@ -129,6 +129,9 @@ pub struct ObjectMaterial {
     pub anim_normals: Handle<ShaderBuffer>,
     #[storage(6, read_only)]
     pub anim_nodes: Handle<ShaderBuffer>,
+    /// Smooth joins (J-2): the join records.
+    #[storage(7, read_only)]
+    pub anim_joins: Handle<ShaderBuffer>,
     /// Drawn from the animation buffers (a topology mesh and a `MeshTag`)
     /// instead of a finished mesh.
     pub animated: bool,
@@ -367,6 +370,7 @@ pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images
         anim_points: anim(|a| &a.points),
         anim_normals: anim(|a| &a.normals),
         anim_nodes: anim(|a| &a.nodes),
+        anim_joins: anim(|a| &a.joins),
         animated: false,
     }
 }
