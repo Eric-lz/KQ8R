@@ -466,6 +466,10 @@ M6 has started with the Rope and Hook (6a).
 - **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
   fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
   whether a saved game keeps `setHaze`'s values (we have no saving yet).
+- **New for A (2026-10-24, from the user's check of B-1 to B-8):**
+  **Q167** (the bow spriggan's crossbow after the roof kill: in the
+  original it stays on the ground; ours vanishes), **Q168** (the caption
+  stone: B-7 stretched it and it looked broken; tiled again).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

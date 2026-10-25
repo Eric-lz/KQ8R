@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-24 The caption stone tiled again (B-7 undone for the caption); Q167, Q168 asked
+
+**Changed:** Core `caption.rs` back to its state before B-7 (the stone tiled from the top-left at the screen's scale), with a comment why. QUESTIONS new **Q167** (the crossbow after the roof kill), **Q168** (the caption stone). Provenance, STATUS.
+**Why:** The user's check of B-7: the caption's background looked broken and checkered. B-7 stretched the 64 x 64 stone over the whole caption box (about 400 x 20), which blows its see-through specks up into blocks. Rule 20a's caption part is A's inference ("the dialog's drawing was not followed"); the tiled stone had matched the original by the user's eye. The panels' pictures stay as B-7 built them.
+**Tested how:** `cargo test --workspace` (all pass; the caption test is the old one again). Not looked at by eye.
+**Result:** The caption is drawn as before B-7.
+**Still broken / not tested:** The crossbow still vanishes (Q167: `Inv <item>` was never traced).
+**Next:** A: Q167, Q168.
+
 ## 2026-10-24 Fix: the roof's dead spriggan lay a quarter turn off (`getLoc Connor` had no turn)
 
 **Changed:** Core `active.rs`: `WorldState::connor_heading`; `place_of("Connor")` (used by `getLoc`) turns by it (was always no turn). Viewer `door_view.rs` sets it with his position. Unit test extended. Provenance.
