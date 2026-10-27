@@ -459,12 +459,33 @@ Words used here:
        weapon lies in the die movement), taken from the character's place
        and turn. If the pose has no such part by then: the character's
        place and turn, 750 units up (a fallback; no data case);
-    2. **a line test**: from 1,000 units above the item's place to
-       1,000 units above the character's feet. If the terrain, or any
+    2. **a line test**: from 1,000 units above the character's feet to
+       1,000 units above the item's place. If the terrain, or any
        solid object other than the dying character, cuts that line, the
        item is **thrown instead**, like the rule 31 items, from the
        character's feet. (This keeps a weapon from being left inside a
-       wall or under the floor.)
+       wall or under the floor.) **What blocks it (traced 2026-10-27,
+       Q170)**: the same test as a character's sight line to Connor
+       (`character-movement.md` rule 20):
+       - first the **drawn ground** (the visible surface, water surface
+         included; not the floor grid), tested exactly as the camera's
+         line (`camera.md` "Obstacles" 1). A hit there: thrown;
+       - then objects whose **collision type** (`colliderType`, not the
+         item's own mask) has **bit 0x1 or bit 0x8**: plain objects
+         (default 0x41), animated objects, doors (1, 0x1021, 0x5021, …),
+         every building (0x28, 0x88, 0xA8), and the few characters whose
+         file sets such a bit (see "Do not reproduce"). **Not**:
+         characters with the default type (0x42), Connor (4), items lying in the world (type 0x220), objects with
+         `colliderType=0`. Objects already deleted don't count; hidden
+         ones do. An object with `collisionShape=0` is skipped; box and
+         ball-stack objects are tested by their collision box (turned and
+         moved with the object), buildings by their BSP, the same shapes
+         as the camera's line;
+       - only the **nearest** object hit, counted from the character's
+         end, matters. If that nearest one is the dying character itself
+         (possible when its file gives it bit 0x1 or 0x8) the line
+         counts as free, even if another object farther along also cuts
+         it (see "Do not reproduce").
     3. otherwise it **stays exactly there**: no throw, no fall, no
        landing sound [traced: it is placed, not given the falling mover;
        that nothing later makes it fall is inferred]. It can be clicked
@@ -697,6 +718,16 @@ Words used here:
   when its attack is due **always swings in full at once**, whether
   Connor stands or walks. Everything else in rules 7–11 stays (a state
   change for any other reason still cuts the attack, rule 11).
+- **The dropped weapon's line test ignores everything past the dying
+  character** (rule 31a.2): only the nearest object hit is kept, and the
+  dying character is ruled out only after that, so if it were the
+  nearest hit a wall behind it would be missed. Data: most characters
+  are 0x42 (default), but some files give bit 0x1: fighters such as
+  Barren's `basilisk` (0x4021), Daventry's and Gnome's `sprigan2` (0x41)
+  and Daventry's `shadow` (1), and many talking characters (0xC021).
+  Whether any of them drops a weapon laid by rule 31a: not checked. Do
+  instead: leave the dying character out of the test and take the
+  nearest of the others.
 - Keep the rest, including the asymmetric rolls (25–100 % on Connor,
   75–125 % on characters), the first attack being due at once, and the
   1.25 × reach against a Connor walking backward.

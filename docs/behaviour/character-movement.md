@@ -267,7 +267,10 @@ Words used here:
       included), **plain objects** and **buildings**, but **not by other
       characters or Connor** (the test looks for types 1 and 8; characters
       are 0x42, Connor 4). The character itself never blocks it. **No
-      distance limit.** `canAlwaysSeeConner=1` skips the test (always
+      distance limit.** (Correction 2026-10-27, from the data, Q170:
+      characters whose file sets `colliderType` with bit 0x1, such as
+      `basilisk`, `sprigan2`, `shadow` and the 0xC021 talking
+      characters, **do** block other characters' lines.) `canAlwaysSeeConner=1` skips the test (always
       sees him).
     - In Wait, a character that is not active and can see Connor joins
       the **active list**, if there is room: at most

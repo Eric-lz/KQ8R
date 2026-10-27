@@ -327,8 +327,31 @@ uses whatever the window holds [traced].
       [traced the kinds; that the layout's attribute is the number used:
       inferred from the values]. Only the caption's `stontran.pbm` has
       attribute 0x9 (kind 1, its colour-0 pixels let the game show
-      through); all others are 0x8 (kind 0, solid). What bit 0x8 means
-      was not traced.
+      through); all others are 0x8 (kind 0, solid). **Only still picture
+      controls and dialog backgrounds drawn by this rule use the
+      attribute** (traced 2026-10-27, Q171): they copy it onto the
+      picture at every draw. Bit 0x8 (in the attribute and in the
+      picture files' own flags) only says "the picture owns its pixel
+      memory"; it changes nothing on screen.
+    - **Everything else follows the picture file's own flag** (traced
+      2026-10-27, Q171): a `.pbm` header carries the same flags word
+      (low three bits = drawing kind, 1 = colour 0 see-through), and
+      each frame of a `.pba` is a whole `.pbm` with its own. Buttons,
+      the panels' **animations** (rule 26a), the status-bar timer icons
+      and the caption's tiled stone draw with the kind the file gave,
+      and never use the layout's attribute. Data: every still `.pbm`
+      has flag 8 except `stontran.pbm` (9), so for stills file and
+      attribute always agree. See-through (flag 9): `flame14`, `fx`,
+      `mskicn`, `Mskicng`, `Mskcur`, `Clar`, `Inv`, `Str`, `vul`,
+      `hookup`, `hookdown`, `lvlup`, `maparrow`, every item cursor.
+      Solid (flag 8): the magic map's buttons (`maplft`, `maprit`,
+      `goon`, `gooff`), the yes / buy buttons and their highlights,
+      `sl_hilite`, `slider`, `savebar`. So **"use each file's own
+      flag" is right for every picture**. How the mouse and item
+      cursors are drawn was not traced (their files are all flag 9).
+      If a still control and an animation shared one loaded picture,
+      the still's attribute could overwrite the file's kind (inferred;
+      no data case seen).
     - **The caption box's stone is the exception: it is tiled, not
       stretched** (traced 2026-10-24, Q168; this point first inferred
       "stretched like the others", which was wrong and looked broken and
@@ -351,8 +374,9 @@ uses whatever the window holds [traced].
       when the box grows upward (rule 48). How the 64-pixel tile is
       scaled at 800 × 600 follows open question 1 (not traced); the
       tiled build at × 1.25, nearest pixel, looked right to the user
-      against the original. Whether colour 0 stays see-through in the
-      tiled drawing (attribute kind 1): not traced (not sure).
+      against the original. Colour 0 **stays see-through** in the tiled
+      drawing: it uses the file's own flag, 9 for `stontran.pbm`
+      (traced 2026-10-27, Q171).
     Bars: health `IDCTL_METERS_HEALTH` (14, 4)-(100, 10), 86 × 6 pixels,
     `4red.pbm`; experience `IDCTL_METERS_EXP` (156, 4)-(242, 10),
     `4green.pbm` [data]. Frame pieces `4top`, `4bottom`, `4left`,
@@ -481,7 +505,33 @@ uses whatever the window holds [traced].
     number; the ranged one is never used].
 33. **A changed slot number flashes**: when the armour, hand or ranged
     number differs from the last one shown, the slot's `fx.pba`
-    animation plays once over it [traced].
+    animation plays once over it [traced]. Speed, length and
+    see-through: rule 26a.
+26a. **The panels' animations** (traced 2026-10-27, Q171, Q108 d). The
+    level-up flame and the three slot flashes are **button** controls
+    in the layout, not pictures; at set-up each gets a small animation
+    player that draws it from then on:
+    - the current frame is **stretched to the control's box**, nearest
+      pixel, mirrored by the modifier's two low bits; colour 0 is
+      see-through by the file's flag (both `flame14.pba` and `fx.pba`
+      are 9), never by the attribute (rule 20a);
+    - **10 frames per second** (100 ms a frame) for every animated GUI
+      picture, timed on the real-time clock (the frame is the time
+      since the start ÷ 100 ms, so frames are skipped, not slowed, if
+      the game lags); no panel changes the rate;
+    - **once**: the flame and the flashes start at frame 0 when
+      triggered, play through, then are hidden. `flame14.pba` and
+      `fx.pba` both have **17 frames** (30 × 14 and 64 × 64), so the
+      last frame ends at 1.7 s. The original's end check lets one more
+      step through, so frame 0 shows again for 100 ms (visible 1.8 s
+      in all; see "Do not reproduce");
+    - **looping**: the spinning masks of the menus (main menu, options,
+      graphics, key remap; `mskicn` / `Mskicng` / `Mskcur`, 16 frames
+      of 57 × 57) start when the screen opens and loop. The status
+      bar's timer icons with several frames and no duration pick their
+      frame from the clock, so they loop too (`mskicn.pba` in
+      `IDCTL_TIMER_7`). The bottom bar's mask `IDCTL_INVBAR_MASK` is a
+      still `2msk*.pbm`, solid.
 
 ## The bottom-left slots (armour, weapons)
 
@@ -641,6 +691,11 @@ uses whatever the window holds [traced].
 - Slides and pop-up timers count **real** milliseconds; ours may use
   real time too (they are interface, not game rules), but pause them
   when the game is paused.
+- **The extra frame at the end of a play-once animation** (rule 26a):
+  the end check lets one step past the last frame through, so frame 0
+  shows again for 100 ms before the flame or flash hides. Do instead:
+  hide it when the last frame's 100 ms are over (1.7 s for `flame14` /
+  `fx`).
 - The caption's off-centre position with the map closed (rule 51) is a
   side effect of the layout; reproduce it only if the user's check says
   the original does it.
@@ -709,8 +764,9 @@ uses whatever the window holds [traced].
 2. ~~Whether the world clock stops behind the main menu.~~ It does
    (the user's check; rule 14).
 3. ~~When the level-up flame plays (rule 26)~~: answered 2026-10-22
-   (whenever the shown level changes); still open: its speed, repeats,
-   when it hides, and whether it plays at a world start or load. (~~What the status icons'
+   (whenever the shown level changes); speed, repeats and hiding:
+   rule 26a (2026-10-27). Still open: whether it plays at a world start
+   or load. (~~What the status icons'
    hook-up / hook-down mean~~: answered in `ropeandhook.md` rule 7:
    `HookUp` at the foot of a rope, `HookDown` at the top, only with the
    rope carried and not while on the rope.)
@@ -725,6 +781,7 @@ uses whatever the window holds [traced].
    and attribute 0x8 / 0x9 mean~~: rule 20a (2026-10-24): 0x8000 =
    stretched to the box, attribute kind 1 = colour 0 see-through. The
    caption dialog's own picture is **not** drawn that way: it is tiled
-   (rule 20a, traced 2026-10-24, Q168). Still open: bit 0x8 of the
-   attribute, and whether colour 0 stays see-through in the tiled
-   drawing.
+   (rule 20a, traced 2026-10-24, Q168). ~~Bit 0x8, colour 0 in the
+   tiled drawing~~: rule 20a (2026-10-27, Q171): 0x8 = the picture owns
+   its pixels (no visible effect); the tiled stone uses its file's flag,
+   so colour 0 stays see-through.

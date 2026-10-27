@@ -705,8 +705,10 @@ view toward what is followed). `follow <object>` switches both on
      The same holds for a cut's one update. Avoidance is off,
      so no obstacle pull-in or swing. **So the camera can jump at the
      end of a flight** (watermill: about 1,227 units, rule 7).
-   - **After the flight** it stays where that last update put it: it
-     follows nothing, so it isn't updated again until a `move
+   - **After the flight** "places" **stays on** (even after a `follow
+     none`; "aims" stays as it was), so a later cut is pulled onto the
+     range and given the height rule (rule 3). It stays where that last
+     update put it: it follows nothing, so it isn't updated again until a `move
      KQCamera`, `follow`, cut, flight or shake (the mouse look is off
      during `handsOff`).
    - Connor is told when the flight ends (an internal message used by
@@ -742,6 +744,37 @@ view toward what is followed). `follow <object>` switches both on
    - `follow none` during a flight: the view stops turning; the position
      keeps flying, and at update N it is pulled onto the range around
      the aim point (rule 4).
+   - **`cutToCamLoc` during a flight** (traced 2026-10-27, Q172): the
+     cut does **not** end the flight. The cut is done as in rule 3 (put
+     on its spot, the cut's aim point becomes the new aim point, heading
+     toward it, its roll; with "places" off, which a flight has, its one
+     update leaves it exactly on the spot). The flight's count of
+     updates and its step stay as they were, so on each of its
+     remaining updates the **old step is still added**, now from the
+     cut's spot, and the old roll step is added to the cut's roll. On
+     the flight's last update (update N, counted from the flight's
+     start) "places" is switched on and the camera is pulled onto the
+     range around the **cut's** aim point + 1,400, then the height
+     rule, exactly as rule 4's last update. "Places" then stays on, so
+     every later cut is pulled onto the range too. A second
+     `addCamLoc … 1` does not touch the running flight either.
+   - **Dead City's Shadow fight (`ShadBat.cs`), what follows from this**
+     (rules applied to B's log, not seen in the original): the flight
+     started at the end of `C_P2SM8` (N = 20) is still running when
+     `C_P2SM9` ends 13 updates later. The cut there to (182221, 45750,
+     2000) is followed by the 7 remaining steps of the old flight
+     (toward the old spot (184500, 47750, 1500)), and at its last
+     update the camera is pulled onto the range around (182221, 49000,
+     2,264) with the height rule. At `C_P2SM10`'s end the cut puts it
+     back on (182221, 45750, 2000), but "places" is now on: the spot is
+     795 from the looked-at point (182221, 45000, 2,264), less than the
+     range's minimum, so it is **pushed out to minimum + 1 along that
+     line, then the height rule**, the same as the earlier cuts of the
+     scene that were made while following (B saw about 961 and 2,264).
+     That is the farther last shot the user saw in the original. The
+     exact count of remaining steps (7) assumes the flight's first step
+     comes on the update after the `flyToCamLoc`; B's own count of
+     update numbers decides it.
    - `follow Connor` after a flight or cut works as in "`follow Connor`
      after a cutscene".
 7. **Daventry's numbers (data + rules above), to check in `camera.log`:**

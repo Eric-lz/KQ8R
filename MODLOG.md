@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 Study (A): Q170–Q173 and Q108 (d) answered
+
+**Changed:** Behaviour notes only, no code. `pushing.md` rules 11a–11h (the Paddle, `KQPaddleObject`); `camera.md` "Camera flights and cuts" rules 4 and 6 (a cut during a flight); `fighting.md` rule 31a.2 and "Do not reproduce" (the dropped weapon's line test); `character-movement.md` rule 20 (a data correction); `interface.md` rules 20a, 26a, 33, "Do not reproduce", open questions 3 and 6 (animated panel pictures). QUESTIONS Q170–Q173 answered, Q108 (d) answered. Scratch notes in `re/` (not committed).
+**Why:** The four open questions were blocking B: the Paddle puzzle (Q173), the Shadow fight's last shot (Q172), the black level-up flame and slot flashes (Q171), the drop line test's stand-in (Q170).
+**Tested how:** Traced in Mask.exe with Ghidra. Q171 and Q173 were traced by two study helpers, and I re-checked their key points in the code: the animation player's timing and drawing kind, and the Paddle's side test, x split and movement strings. Collider types checked in the `.kq` files.
+**Result:** Q173: the class replaces the push. Connor is placed by side and pedestal and plays one `padpush.anm` movement; `padpush.cs` / `padpush2.cs` run with `$1` = the paddle. Q172: a cut does not end a flight, and "places" stays on afterwards, so the last shot is pushed out to the range's minimum. Q171: buttons and animations use the file's own see-through flag; 10 frames per second. Q170: the line test uses collision-type bits 0x1 or 0x8, so characters with the default type and items don't block. Correction found on the way: some characters' files set bit 0x1 (`basilisk`, `sprigan2`, `shadow`, the talking characters), so those do block lines.
+**Still broken / not tested:** Nothing was checked against the running original. Q173: one engine flag's meaning, and when an `AnimOnce` reports its end. Q172: Dead City's camera range values were not traced. Q171: the mouse and item cursor drawing was not traced. Q170: whether any 0x1-type character drops a laid weapon was not checked. Q108 (a) and (c) are still open.
+**Next:** Session B builds the Paddle push (Q173), the cut-during-flight rule (Q172) and the line-test types (Q170); the flame and flashes already follow the file flag.
+
 ## 2026-10-27 Fix: Dead City's Paddle shows on its pedestal; Q173 (pushing it)
 
 **Changed:** Viewer `load.rs`: "no place of its own" for a script-loaded file is tested before the ground raise, so `paddle2.kq` (no `locX/Y/Z`, raised from 0 to 912) is kept as a template. `door_view.rs`: a `move` of a copy loaded earlier in the same update (not drawn yet) moves the queued copy. Core `active.rs`: `move` of a box object also moves its click box. QUESTIONS Q173. Provenance, STATUS.
