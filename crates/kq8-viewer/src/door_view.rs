@@ -1443,8 +1443,18 @@ pub fn trap_step(
                 // A plain placed object (3k-1): its colliders and drawn
                 // parts. Its old place is its collider's.
                 let old = colliders.as_ref().and_then(|c| c.0.iter().find(|b| b.name.eq_ignore_ascii_case(&who))).map(|b| b.placement);
-                match old {
-                    Some(old) => {
+                // A copy loaded earlier in this same update and not drawn
+                // yet (`scary.cs`: `loadKQ paddle2.kq`, then `move paddle2`
+                // onto the pedestal): it is drawn at the moved place.
+                let queued = sim.spawns.iter_mut().find(|(_, n, _)| n.eq_ignore_ascii_case(&who)).map(|(_, _, p)| p);
+                match (old, queued) {
+                    (None, Some(placement)) => {
+                        let (new, note) = kq8_core::active::moved_placement(*placement, flags, position, turn);
+                        *placement = new;
+                        let p = new.position;
+                        format!("{at}: applied: moved {who} (a new copy, not drawn yet) to ({:.0}, {:.0}, {:.0}){}", p[0], p[1], p[2], note.map_or(String::new(), |n| format!("; {n}")))
+                    }
+                    (Some(old), _) => {
                         let (new, note) = kq8_core::active::moved_placement(old, flags, position, turn);
                         let d: [f32; 3] = std::array::from_fn(|k| new.position[k] - old.position[k]);
                         let mut boxes = 0;
@@ -1469,7 +1479,7 @@ pub fn trap_step(
                             note.map_or(String::new(), |n| format!("; {n}"))
                         )
                     }
-                    None => format!("{at}: move {who}: no collider to know its place; not moved (not done)"),
+                    (None, None) => format!("{at}: move {who}: no collider to know its place; not moved (not done)"),
                 }
             }
             Request::Delete { name, at } => {

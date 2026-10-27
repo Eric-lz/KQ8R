@@ -2453,7 +2453,18 @@ impl WorldState {
             self.note(format!("{at}: move: unknown object '{who}'; not moved"));
             return "1".into();
         }
-        self.note(format!("{at}: move {who} {flags} {position:?} {turn:?}: handed to the viewer"));
+        // A box object (a barrel, a script's copy such as Dead City's
+        // `paddle2`): its click box moves here; its drawing and collider
+        // in the viewer.
+        let click_box = match self.clickables.iter_mut().find(|c| !c.gone && c.name.eq_ignore_ascii_case(&who)) {
+            Some(c) => {
+                c.placement = moved_placement(c.placement, flags, position, turn).0;
+                let p = c.placement.position;
+                format!("; its click box now at ({:.0}, {:.0}, {:.0})", p[0], p[1], p[2])
+            }
+            None => String::new(),
+        };
+        self.note(format!("{at}: move {who} {flags} {position:?} {turn:?}: handed to the viewer{click_box}"));
         self.requests.push(Request::Move { who, flags, position, turn, at: at.to_string() });
         "0".into()
     }

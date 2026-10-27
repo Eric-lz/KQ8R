@@ -3152,7 +3152,11 @@ impl Placer<'_> {
         // A copy prepared for a script's `loadKQ <file>` while playing
         // (M3 3k-4): the file is named by such a line and has a place of
         // its own.
-        let dormant = unused && p.position != [0.0; 3] && self.load_targets.contains(&base.to_ascii_lowercase());
+        // No place of its own: (0, 0, 0) before the ground raise below
+        // (objects.md Q19 rules 2-3: Dead City's `paddle2`, lifted to 912,
+        // is still a template).
+        let no_place = p.position == [0.0; 3];
+        let dormant = unused && !no_place && self.load_targets.contains(&base.to_ascii_lowercase());
         if dormant {
             let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
             self.dormant.push((base.to_ascii_lowercase(), p.name.clone(), script));
@@ -3457,7 +3461,7 @@ impl Placer<'_> {
         });
         let flags = p.flags.clone();
         // M5 5d-3: a file a script loads, with no place of its own.
-        if unused && p.position == [0.0; 3] && self.load_targets.contains(&base.to_ascii_lowercase()) && !self.template_files.iter().any(|(f, _)| f.eq_ignore_ascii_case(base)) {
+        if unused && no_place && self.load_targets.contains(&base.to_ascii_lowercase()) && !self.template_files.iter().any(|(f, _)| f.eq_ignore_ascii_case(base)) {
             self.template_files.push((base.to_ascii_lowercase(), self.placed.len()));
             self.log.summary(format!("template {label}[{}]: kept for a script's loadKQ while playing (M5 5d-3)", p.name));
         }

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 Fix: Dead City's Paddle shows on its pedestal; Q173 (pushing it)
+
+**Changed:** Viewer `load.rs`: "no place of its own" for a script-loaded file is tested before the ground raise, so `paddle2.kq` (no `locX/Y/Z`, raised from 0 to 912) is kept as a template. `door_view.rs`: a `move` of a copy loaded earlier in the same update (not drawn yet) moves the queued copy. Core `active.rs`: `move` of a box object also moves its click box. QUESTIONS Q173. Provenance, STATUS.
+**Why:** The user's report: after slotting the Paddle into a pedestal it isn't shown; clicking the pedestal takes it back; it can't be pushed. `scary.cs` Cue 50 does `loadKQ paddle2.kq` then `move paddle2 0 $KQObject::loc`. The load did nothing ("no copy prepared at the start"): the file fell between our two kinds of prepared copies (`objects.md` rule 6 and Q19 say it loads like any other). Once loaded, the move came before the copy was drawn ("no collider to know its place"), and the core's click box stayed at (0, 0, 912).
+**Tested how:** `cargo test --workspace` (all pass); clippy: same 2 warnings as before. `kq8-viewer --world DeadCity --at 175000,56300,0 --item INVITEM_Paddle --click Scary2,30 --hold 1,0,0,90,200 --frames 6000 --sound off`; the same with `--click paddle2,90` instead of `--hold`. `doors.log`, `traps.log`, `viewer.log`.
+**Result:** "copy paddle2 of paddle2.kq drawn at (175006, 58451, 1177), 1 part(s); collider (… type 0x10121)"; click box "now at (175006, 58451, 1177)". Clicking it: `paddle2.cs` gives the Paddle back and deletes it (collider off, hidden). Walking into it: update 111 "paddle2: pushed by Connor: its script gets Push", but `paddle2.cs` has no `Push` part, so nothing more happens.
+**Still broken / not tested:** **Not looked at by eye.** Pushing the Paddle (the puzzle's next step) is what the `KQPaddleObject` class does itself, and no note describes it: Q173 for session A. `paddle3.kq` (the last pedestal, `tikidead.cs`) is kept as a template the same way; not tested. The copy's drawn turn: `move` angles 0 here, so not exercised.
+**Next:** Session A studies `KQPaddleObject` (Q173); then B builds the push.
+
 ## 2026-10-27 `makeTranslucent Connor`: the Shadow see-through in the Dead City fight; Q172 (the last shot)
 
 **Changed:** Core `active.rs`: `makeTranslucent Connor <n>` is stored (`connor_translucency`) instead of "not done"; unit test extended. Viewer `potion_view.rs`: `translucent_step` puts every material of Connor's model at n / 255 (blended), back to its own alpha and blending at 256. QUESTIONS Q172. Provenance, STATUS.

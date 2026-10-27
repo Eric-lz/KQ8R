@@ -3645,3 +3645,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `makeTranslucent <name> <n>` sets the see-through value at once, no fade; 256 = solid; every material of every part at n / 255 | `characters.md` rule 22, `objects.md` "See-through objects" rule 2 | unit test `make_translucent_sets_the_value_on_an_animated_object`; `connor.log` "makeTranslucent 180: opacity 1.000 -> 0.706" |
 | In Dead City's fight the Shadow is part of Connor's model (`bodyshadow`, `shadowbody`, `shadow`, `pixibody` in `c_p2sm*.kqs`), so `makeTranslucent Connor` makes it see-through too | Observed (`kq8 shape-parts deadcity/resource/c_p2sm<n>.kqs`, `ShadBat.cs`) | — |
 | Connor's value is not carried to another world; the haze fade of rule 2 is not applied to Connor | **Ours** (not traced; the scene ends solid) | — |
+
+## Fix 2026-10-27: Dead City's Paddle shows on its pedestal — viewer `load.rs` (`no_place`), `door_view.rs` (`Request::Move` of a copy not drawn yet); core `active.rs` (`move_command`: a box object's click box)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A file with no `locX/Y/Z` starts at (0, 0, 0), then the `keepOnGround` raise | `objects.md` "Missing locX / locY / locZ" rules 1–3 | `viewer.log` "template vol:DeadCity/kq/paddle2.kq[paddle2]: kept" |
+| `loadKQ` while playing runs the same steps as at the start, whatever the file's position | `objects.md` "Where a world's objects come from" rule 6 | `doors.log` "loadKQ paddle2.kq: a new copy paddle2" |
+| `move` sets an object's place directly; a copy loaded in the same update is drawn at the moved place, and a box object's click box moves with it | `objects.md` "(d)" (`move`); the split between core and viewer is **ours** | `traps.log` "moved paddle2 (a new copy, not drawn yet) to (175006, 58451, 1177)"; `doors.log` "distance to its box 1223.1" |
+| What pushing a `KQPaddleObject` does | **Not built**: Q173 (`pushing.md` open question 1) | — |
