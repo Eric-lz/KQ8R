@@ -3186,3 +3186,47 @@ Steps (one commit each):
 Not in this plan: joins for characters whose files don't share a layout
 (zombies, spriggans, the wizard, skeletons, orcs); shadows (whole
 frames, as now).
+
+### Outside the milestones: kept worlds keep animated objects' state (planned 2026-10-26)
+
+**The user's report:** after the bricks puzzle, Daventry → Castle →
+Daventry: the bricks are back up in their old place and the stream
+(`water`) flows again instead of `blocked`. The kept world (6e-8) keeps
+no object state (a known gap there).
+
+**What the original keeps** (`world-change.md` rule 12: each object in
+its `.kq` text form with its whole current state; rule 15: loaded again
+with those values). Checked in the user's `save10.vol`, whose kept
+`Daventry.vol` was made after the bricks [data]:
+- `water`: `currAnimName=blocked`, `animPos=0.0625` (file: none, so `stop`);
+- `Bricks`: `currAnimName=down`, `animPos=1.0`, place (156652, 303400,
+  14562) (file: 303600, 14862: `bricks.cs`' `move Bricks 3 0 -200 -300`),
+  `colliderType=65537` (file: 65825, `collisionType Bricks -288`).
+On loading, `currAnimName` picks the movement and `animPos` jumps into it
+when past the `loop=` start (`objects.md` "Animated objects at load"
+rules 3, 4). Our loader does not read `animPos` yet.
+
+**Plan.** Kept in memory as the rest of 6e-8.
+- **K-1 (core):** for animated objects (`anims`, not characters) and
+  scripted objects (`objects`), remember each one's movement name,
+  placement and (scripted objects) collision type when added; a
+  `kept_states()` gives, for those still in the world whose movement
+  name, place or collision type changed since, their movement name,
+  phase, place, turn angles and collision type. **Ours:** only changed
+  objects are kept (the original keeps every one); an unchanged object
+  loads as on a first visit, so nothing else can change by this step (a
+  looping object's phase starting again is not something one can see).
+  Unit test.
+- **K-2 (viewer):** `KeptWorld` and `Arrival` carry them; the loader puts
+  them into the object's section before reading it (`currAnimName`,
+  `animPos`, `colliderType`) and its place and turn into the placement
+  (no ground rule applied again: the kept place is already the final
+  one); `animPos` read for animated and scripted objects (rule 4: a
+  value past the movement's start becomes its phase). Test: the bricks
+  run, Daventry → Castle → Daventry: logs show `water` on `blocked`,
+  `Bricks` on `down` at (156652, 303400, 14562).
+- **K-3:** docs (FEATURES, STATUS, provenance), the user's look.
+
+Not in this plan: doors, chests (their open/closed state and contents),
+characters, hidden switches, items on the ground. They stay fresh on
+return, as before.

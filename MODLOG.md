@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-26 K-1: core knows which animated and scripted objects changed
+
+**Changed:** `kq8-core` `active.rs`: `KeptState` (movement name, phase, place, collision type); each animated object (not characters) and scripted object's movement name, place and collision type are noted when added; `WorldState::kept_states()` gives those still in the world where one of them changed. 1 unit test. DESIGN "kept worlds keep animated objects' state" (plan K-1 to K-3), provenance.
+**Why:** The user's report: after a return to Daventry the bricks were back up and the stream flowed again. The user's `save10.vol` (kept Daventry after the bricks) holds `water` `currAnimName=blocked animPos=0.0625` and `Bricks` `currAnimName=down animPos=1.0`, moved by (0, -200, -300), `colliderType=65537` (`world-change.md` rules 12, 15).
+**Tested how:** `cargo test -p kq8-core` (542 pass), the new `only_objects_whose_movement_place_or_collision_changed_are_kept`: a `move $1 3 0 -200 -300` and `collisionType $1 -32` as `bricks.cs` does.
+**Result:** Nothing kept before the click; one state after (place moved by (0, -200, -300), collision 33 -> 1); a new movement and phase show; a deleted object is not kept.
+**Still broken / not tested:** Nothing uses it yet (K-2). Not run in the viewer.
+**Next:** K-2 (carried with the kept world, put back at load, `animPos` read).
+
 ## 2026-10-26 Fix: Daventry's small waterfall was missing after coming back from Castle Daventry
 
 **Changed:** `kq8-core` `active.rs`: the prepared files a script's `loadKQ <file>` brings in while playing are remembered in order (`came_in`); `came_in_files` gives those whose object is still in the world. Viewer `world_build.rs`: `KeptWorld::came_in`, filled when Connor leaves, carried in `load::Arrival`; `load.rs`: on return each is loaded again right after the start script, as an object placed at the start (its `Init` with the others). 1 new unit test, 1 extended. DESIGN (kept worlds, item 4), FEATURES, STATUS, provenance.

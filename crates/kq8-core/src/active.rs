@@ -367,6 +367,24 @@ pub struct AnimObject {
     pub translucency: Option<f32>,
 }
 
+/// What a kept world keeps of an animated or scripted object whose state
+/// changed while Connor was there (`world-change.md` rules 12, 15; DESIGN
+/// "kept worlds keep animated objects' state", K-1): put back into its
+/// `.kq` values (`currAnimName`, `animPos`, its place, `colliderType`)
+/// when it loads on a return.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeptState {
+    pub name: String,
+    /// The current movement's name.
+    pub movement: String,
+    /// Where in that movement, 0–1 (`animPos`).
+    pub phase: f32,
+    pub placement: Placement,
+    /// Scripted objects only (`objects`); animated objects' collision
+    /// type is not tracked.
+    pub collision_type: Option<u32>,
+}
+
 /// A `KQCueEvent`'s script arguments (`doors.md` rule 23): `Cue`, its first
 /// two numbers, and the third only if it is not zero. A word there (the
 /// movement name of a `getEndLoop` relay, `clicking.md` rule 21) counts as
@@ -627,6 +645,9 @@ pub struct WorldState {
     /// The prepared files a script's `loadKQ` brought in, in order: file
     /// and object name (`world-change.md` rule 12: kept with the world).
     came_in: Vec<(String, String)>,
+    /// Each animated (not a character) and scripted object as added, by
+    /// lower-case name: movement name, place, collision type (K-1).
+    start_states: BTreeMap<String, (String, Placement, Option<u32>)>,
     /// Names deleted during the event running now: free only once it has
     /// finished (`clicking.md` rule 22, 3l-7).
     deleted_this_event: BTreeSet<String>,
@@ -912,6 +933,25 @@ impl WorldState {
             }
         }
         out.into_iter().collect()
+    }
+
+    /// The animated (not characters) and scripted objects still here whose
+    /// movement, place or collision type changed since they were added
+    /// (K-1, `world-change.md` rule 12). **Ours:** unchanged ones are
+    /// left out (the original keeps every object): they load as on a
+    /// first visit.
+    pub fn kept_states(&self) -> Vec<KeptState> {
+        let anims = self.anims.iter().filter(|a| !a.gone && a.character.is_none()).map(|a| (&a.player, None));
+        let objects = self.objects.iter().filter(|o| !o.gone).map(|o| (&o.player, Some(o.collision_type)));
+        anims
+            .chain(objects)
+            .filter(|(p, collision_type)| {
+                self.start_states.get(&p.name.to_ascii_lowercase()).is_some_and(|(movement, placement, start_type)| {
+                    !p.movement_name().eq_ignore_ascii_case(movement) || p.base != *placement || collision_type != start_type
+                })
+            })
+            .map(|(p, collision_type)| KeptState { name: p.name.clone(), movement: p.movement_name().to_string(), phase: p.phase, placement: p.base, collision_type })
+            .collect()
     }
 
     /// The prepared files a script's `loadKQ` brought into this world
@@ -3447,6 +3487,7 @@ impl Active {
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
                 came_in: Vec::new(),
+                start_states: BTreeMap::new(),
                 deleted_this_event: BTreeSet::new(),
                 loading: BTreeSet::new(),
                 held_for_load: Vec::new(),
@@ -3660,6 +3701,10 @@ impl Active {
     pub fn add_anims(&mut self, anims: impl IntoIterator<Item = AnimObject>) {
         for a in anims {
             self.world.known.insert(a.player.name.to_ascii_lowercase());
+            if a.character.is_none() {
+                let p = &a.player;
+                self.world.start_states.insert(p.name.to_ascii_lowercase(), (p.movement_name().to_string(), p.base, None));
+            }
             // fighting.md rule 2 (M5 5c-1): what it brings to the fight.
             let mut a = a;
             // fighting.md rule 34 (M5 5c-9): holding a LongWeapon, doMode 1.
@@ -3695,6 +3740,8 @@ impl Active {
     pub fn add_objects(&mut self, objects: impl IntoIterator<Item = ActiveObject>) {
         for o in objects {
             self.world.known.insert(o.name().to_ascii_lowercase());
+            let p = &o.player;
+            self.world.start_states.insert(p.name.to_ascii_lowercase(), (p.movement_name().to_string(), p.base, Some(o.collision_type)));
             self.world.objects.push(o);
         }
     }
@@ -7309,6 +7356,34 @@ endif
         assert_eq!(a.world.came_in_files(), vec!["waterfa2.kq".to_string()]);
         let log = a.take_log().join("\n");
         assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
+    }
+
+    #[test]
+    fn only_objects_whose_movement_place_or_collision_changed_are_kept() {
+        // K-1 (world-change.md rule 12), as `bricks.cs`: a move and a
+        // collision type change; then a new movement.
+        let mut a = with_object("if test $2 == ConnorAction
+ move $1 3 0 -200 -300
+ KQObject::collisionType $1 -32
+endif
+", "x");
+        assert!(a.world.kept_states().is_empty(), "nothing changed yet");
+        let start = a.world.objects[0].player.base.position;
+        let movement = a.world.objects[0].player.movement_name().to_string();
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        let kept = a.world.kept_states();
+        assert_eq!(kept.len(), 1, "{kept:?}");
+        assert_eq!(kept[0].name, "basket1");
+        assert_eq!(kept[0].placement.position, [start[0], start[1] - 200.0, start[2] - 300.0]);
+        assert_eq!(kept[0].collision_type, Some(1));
+        assert_eq!(kept[0].movement, movement, "same movement: kept for its place");
+        a.world.objects[0].player.start("open");
+        a.world.objects[0].player.phase = 0.5;
+        let kept = a.world.kept_states();
+        assert_eq!((kept[0].movement.as_str(), kept[0].phase), ("open", 0.5));
+        // Deleted: not kept.
+        a.world.objects[0].gone = true;
+        assert!(a.world.kept_states().is_empty());
     }
 
     #[test]
