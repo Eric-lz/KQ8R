@@ -7,6 +7,14 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-27)
 
+- **2026-10-27 (B): fix: the Shadow fight on the first arrival in
+  Dead City** (the user's report: Connor only played `portalx`). The
+  gate's script cues the object `ShadBat`, which our loader had dropped
+  (no collision, so no box); scripted objects without a box are now kept
+  for their script (`clicking.md` rule 21). The whole scene runs in the
+  logs and plays only once; **not looked at by eye**. Connor's
+  `makeTranslucent` in the fight is not done yet.
+
 - **2026-10-27 (B): fix: the caption stone looked checkered** (the
   user's report). `stontran.pbm` is a one-pixel checkerboard of
   see-through pixels; stretched by uneven amounts (the 800 × 600 layout

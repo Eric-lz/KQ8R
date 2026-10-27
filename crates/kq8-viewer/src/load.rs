@@ -4769,9 +4769,32 @@ fn object_colliders(
             }
             continue;
         }
+        // clicking.md rule 21: every object with a script gets its calls
+        // (`Init`, `Cue`), whatever it collides with. One that has no box
+        // to use (Dead City's `ShadBat`, the Shadow fight on arrival) is
+        // kept for its script only: an empty box, so it is never clicked,
+        // hit or picked as a target.
+        let script_only = |c: &mut Vec<kq8_core::active::Clickable>| {
+            let mut k = kq8_core::active::Clickable::plain(
+                &p.name,
+                class,
+                [0.0; 3],
+                [0.0; 3],
+                Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                info.collider_type,
+            );
+            k.script = info.script.clone();
+            k.gone = waiting;
+            c.push(k);
+        };
         if info.collider_type == 0 && info.collider_mask == 0 {
             *left_out.entry("type 0 and mask 0").or_default() += 1;
-            log.detail(format!("collision: {what}: type 0 and mask 0: never collides"));
+            if info.script.is_some() {
+                log.detail(format!("collision: {what}: type 0 and mask 0: never collides; kept for its script {:?} (clicking.md rule 21)", info.script));
+                script_only(&mut clickables);
+            } else {
+                log.detail(format!("collision: {what}: type 0 and mask 0: never collides"));
+            }
             continue;
         }
         let shape_lc = info.shape.to_ascii_lowercase();
@@ -4788,7 +4811,12 @@ fn object_colliders(
             } else {
                 *left_out.entry("not in BOUNDS.KQ").or_default() += 1;
             }
-            log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides"));
+            if info.script.is_some() {
+                log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides; kept for its script {:?} (clicking.md rule 21)", info.script));
+                script_only(&mut clickables);
+            } else {
+                log.detail(format!("collision: {what}: no box in BOUNDS.KQ: never collides"));
+            }
             clickable_without_box += usize::from(info.collider_type & kq8_core::click::CLICKABLE != 0);
             continue;
         };

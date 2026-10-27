@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 Fix: the Shadow fight plays on the first arrival in Dead City
+
+**Changed:** Viewer `load.rs` (the collision loader): an object with a script but collision type 0 and mask 0, or with no box in `BOUNDS.KQ`, is now kept for its script (empty box: never clicked, hit or picked as an attack target). Before, it was dropped, so it got no `Init` and every cue to it was lost. Provenance, STATUS, FEATURES.
+**Why:** The user's report: arriving in Dead City from Daventry's gate after getting the Ring of Life, Connor only plays `portalx`; the fight with the Shadow should play. `shadbat.cs` (the gate's exit script) sends `KQCueEvent 10` to the object `ShadBat` (`shadbat.kq`: `KQObject`, `clicker.kqs`, `colliderType=0`), whose script runs the scene; the log said "event KQCueEvent 10 to ShadBat: not handled (object kind not implemented yet)". `clicking.md` rule 21: every object with a script gets its calls.
+**Tested how:** clippy: same 2 warnings as before; viewer tests pass. `kq8-viewer --world Daventry --frames 9000 --sound off --console "goworld portal davgate4.kq",30`; and arriving twice (`--frames 20000 ... --console "goworld Daventry",500 --console "goworld portal davgate4.kq",900`). `doors.log`, `talk.log`.
+**Result:** Update 0: "script ShadBat.cs ShadBat Init". Update 32: `portalx` ends, `shadbat.cs davgate4 Exit`, `DeadCity::Shadow::Alive 1 -> 0`, Cue 10: `handsOff 1`, the camera cut, Connor's `C_P2SM1`..`C_P2SM10` (ending at updates 61, 86, 129, 159, 186, 201, 216, 226, 239, 269), each with its camera cut or flight; Connor's two lines (2000 0 0 25, then 31 after 1.5 s); update 407: `handsOff 0`, the camera follows Connor. Second arrival: `Alive 0`, no scene. Also kept now (their scripts react only to `Cue`): Dead City's `skultrap`/`firetrap`/`firetrp2` objects, Barren's `dockfall`, `dockup`, `gsetup`.
+**Still broken / not tested:** **Not looked at by eye, not played by hand.** `makeTranslucent Connor 180/256` (Connor half see-through in parts of the fight) is not done for Connor ("not an animated object or character of ours"). `checkInventory Connor RingOfLight` found none in the console test (no ring given), so the ring's removal is not exercised. Barren's gong bridge cues now reach their scripts: not tested.
+**Next:** The user's look at the scene.
+
 ## 2026-10-27 The user's check of the caption stone fix
 
 **Changed:** STATUS, FEATURES. No code.

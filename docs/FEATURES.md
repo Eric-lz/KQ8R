@@ -707,7 +707,8 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
 - **Arriving:** Connor and the camera at the exit's places, his arrival
   movement (`out`, `portalx`, `teleportup`, …), then the exit's own
   script; then control comes back. The world's `Begin` script runs on
-  every arrival.
+  every arrival. The first arrival in Dead City plays Connor's fight
+  with the Shadow (2026-10-27, logs only).
 - **What Connor brings:** his stats, level, items (with what is worn
   and readied), running potions with their time left, flags and the
   map's marks.

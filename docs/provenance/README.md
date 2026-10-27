@@ -3629,3 +3629,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | An object with `hidden=1` (character, animated or plain) is drawn after a script's `setHidden <name> 0`; hiding it again is the drawing layer's (rule 36) | `objects.md` "Hidden objects" rule 3; `characters.md` rules 34 and 22 (`setHidden`, the `sprdump` example) | `viewer.log` "shown by a script": Daventry `sprdump` (door scene; its shadow from update 33), Barren `rail1l`, Gnome `gemfuse`, temple4 `Lucreto` (console); `sprdump` hidden again: Near -> Off; not looked at by eye |
+
+## Fix 2026-10-27: a scripted object with no box keeps its script (the Shadow fight in Dead City) — viewer `load.rs` (the collision loader's `script_only`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every object with a script gets `Init` and its `Cue` calls, whatever it collides with | `clicking.md` rule 21 | `doors.log`: "script ShadBat.cs ShadBat Init"; "KQCueEvent 10 to ShadBat" |
+| A portal's `exitScript` runs when the `exitAnim` ends, `$1` = the portal, `$2` = `Exit` (`shadbat.cs`) | `world-change.md` rule 20.4 (already built in 6e-4b) | `doors.log` "script shadbat.cs davgate4 Exit" |
+| Such an object (type 0 and mask 0, or no `BOUNDS.KQ` box) is kept with an empty box, so it is never clicked, hit or picked as an attack target | **Ours** (the note gives it no box; the click and attack picks test the box) | — |
