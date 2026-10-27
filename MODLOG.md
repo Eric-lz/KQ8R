@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 The user's check of the caption stone fix
+
+**Changed:** STATUS, FEATURES. No code.
+**Why:** The user looked at a caption after the fix.
+**Tested how:** The user, by eye, also resizing the window.
+**Result:** "Looks great, it adapts as I stretch the window."
+**Still broken / not tested:** How the original scales the tile at 800 × 600 is still open (`interface.md` open question 1); not needed for the look.
+**Next:** Open for the user's choice.
+
 ## 2026-10-27 Fix: the caption stone looked checkered (an uneven stretch of a checkerboard)
 
 **Changed:** Core `caption.rs`: `picture` takes `out` (window pixels per pixel of the 800 × 600 screen) and makes the picture at that size: letters drawn at the box's size and enlarged nearest pixel (as before), the stone tiled from the top-left with each of its pixels `stone_step` = round(1.25 × `out`), at least 1, window pixels square; `Strip::at` takes that whole step. Viewer `talk_view.rs`: `out` = the 4:3 frame's width ÷ 800 × the window's scale factor; the picture is made again when it changes (window resized); it is shown at its own size at a whole window pixel; the log gives both. 1 new unit test. Provenance, FEATURES, STATUS.

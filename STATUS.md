@@ -12,7 +12,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   see-through pixels; stretched by uneven amounts (the 800 × 600 layout
   × 1.25, then the window) it broke into stripes and blocks. The caption
   picture is now made at window pixels with each stone pixel a whole
-  number of window pixels. Logs and unit test only, not looked at by eye.
+  number of window pixels. The user's look (2026-10-27): looks great, and
+  it adapts as the window is resized.
 
 - **2026-10-26 (B): fix: Daventry's small waterfall was missing after a
   return** (the user's report): a kept world now also keeps the files

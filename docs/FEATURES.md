@@ -351,7 +351,8 @@ doesn't take it gives "This will not work."
   gold font on its stone strip, centred, the strip growing upwards one
   line at a time (M4 4b-3). Checked by the user: colours right. Since
   2026-10-27: the stone's fine see-through pattern stays even at any
-  window size (it was stretched unevenly into stripes). 4c-1 the stone covers the whole caption box (400 pixels of an
+  window size (it was stretched unevenly into stripes); checked by the
+  user, also while resizing the window. 4c-1 the stone covers the whole caption box (400 pixels of an
   800 × 600 screen), rows break as the original's rule says, and the
   box sits a little left of the middle (the map is closed).
 - **Mouth:** Connor's face texture follows the lip-sync file (`CF0`–`CF7`).
