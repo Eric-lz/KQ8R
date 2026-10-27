@@ -3654,3 +3654,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `loadKQ` while playing runs the same steps as at the start, whatever the file's position | `objects.md` "Where a world's objects come from" rule 6 | `doors.log` "loadKQ paddle2.kq: a new copy paddle2" |
 | `move` sets an object's place directly; a copy loaded in the same update is drawn at the moved place, and a box object's click box moves with it | `objects.md` "(d)" (`move`); the split between core and viewer is **ours** | `traps.log` "moved paddle2 (a new copy, not drawn yet) to (175006, 58451, 1177)"; `doors.log` "distance to its box 1223.1" |
 | What pushing a `KQPaddleObject` does | **Not built**: Q173 (`pushing.md` open question 1) | — |
+
+## P-1 2026-10-27: a cut during a camera flight — viewer `game_camera.rs` (`cut_to`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A `cutToCamLoc` does not end a running flight: its remaining steps (and roll steps) are added from the cut's spot; its last update switches "places" on and pulls the camera onto the range around the cut's aim point + 1,400, then the height rule; "places" then stays on | `camera.md` "Camera flights and cuts" rules 4 and 6 (Q172) | `camera.log` "flight 13/20" … "flight 20/20"; `traps.log` "cut to the spot (182221, 45750, 2000), pulled onto the range from 795.1" |

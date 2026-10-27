@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing was checked against the running original. Q173: one engine flag's meaning, and when an `AnimOnce` reports its end. Q172: Dead City's camera range values were not traced. Q171: the mouse and item cursor drawing was not traced. Q170: whether any 0x1-type character drops a laid weapon was not checked. Q108 (a) and (c) are still open.
 **Next:** Session B builds the Paddle push (Q173), the cut-during-flight rule (Q172) and the line-test types (Q170); the flame and flashes already follow the file flag.
 
+## 2026-10-27 P-1: a cut during a camera flight (Q172 built): the Shadow fight's last shot
+
+**Changed:** Viewer `game_camera.rs`: `cutToCamLoc` no longer ends a running flight; the flight goes on from the cut's spot with its old step and count, aiming at the cut's point, and its last update switches "places" on (as before). DESIGN (P-1, P-2 planned), provenance, STATUS.
+**Why:** `camera.md` rules 4 and 6 (session A's answer to Q172). The user saw the fight's last shot (Connor's lines after the Shadow is gone) closer than in the original.
+**Tested how:** `cargo test --workspace` (all pass); clippy: same 2 warnings as before. `kq8-viewer --world Daventry --frames 9000 --sound off --console "goworld portal davgate4.kq",30`; `camera.log`, `traps.log`.
+**Result:** Update 240 (end of `C_P2SM9`): the cut puts the camera on (182221, 45750, 2000), "the flight goes on (12 of 20 updates done)"; flight 13/20 to 20/20 add (0, 137.5, −46.5) each; at 20/20 "places on: within the range: stays", lifted to 2,264. Update 270 (end of `C_P2SM10`): "pulled onto the range from 795.1; at (182221.0, 46415.8, 2264.0)": 1,416 from Connor across (was 750), the same 1,501 along the line as the scene's earlier cuts (they aim 336 higher, so 961 across).
+**Still broken / not tested:** **Not looked at by eye.** Session A's count of remaining steps was 7; ours is 8 (the flight's first step comes in the update after `flyToCamLoc`; A said B's count decides it). For 7 frames after update 240 the camera drifts along the old flight's line (as the note says).
+**Next:** P-2, the Paddle's push.
+
 ## 2026-10-27 Fix: Dead City's Paddle shows on its pedestal; Q173 (pushing it)
 
 **Changed:** Viewer `load.rs`: "no place of its own" for a script-loaded file is tested before the ground raise, so `paddle2.kq` (no `locX/Y/Z`, raised from 0 to 912) is kept as a template. `door_view.rs`: a `move` of a copy loaded earlier in the same update (not drawn yet) moves the queued copy. Core `active.rs`: `move` of a box object also moves its click box. QUESTIONS Q173. Provenance, STATUS.

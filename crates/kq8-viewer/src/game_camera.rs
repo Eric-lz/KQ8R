@@ -357,7 +357,16 @@ impl GameCam {
             return line;
         };
         self.view = self.start_view();
-        self.flight = None;
+        // Rule 6 (Q172): a running flight goes on from the cut's spot (its
+        // count and steps kept); its last update pulls the camera onto the
+        // range around the cut's aim point.
+        let flying = match self.flight.as_mut() {
+            Some(f) => {
+                f.aim = aim;
+                format!("; the flight goes on ({} of {} updates done), now aiming at the cut's point", f.k, f.n)
+            }
+            None => String::new(),
+        };
         self.following = false;
         self.cam.avoid = false;
         self.cam.tilt = DEFAULT_TILT;
@@ -368,7 +377,7 @@ impl GameCam {
         self.previous = self.current;
         let height = c.height.map_or(String::new(), height_note);
         let line = format!(
-            "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3} (not drawn); places {}, aims {}{height}",
+            "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3} (not drawn); places {}, aims {}{height}{flying}",
             spot[0], spot[1], spot[2],
             from.map_or(String::new(), |d| format!(", pulled onto the range from {d:.1}")),
             p[0], p[1], p[2], self.view.heading, self.view.tilt, self.view.roll, self.places, self.aims

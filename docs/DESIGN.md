@@ -3232,3 +3232,41 @@ rules 3, 4). Our loader does not read `animPos` yet.
 Not in this plan: doors, chests (their open/closed state and contents),
 characters, hidden switches, items on the ground. They stay fresh on
 return, as before.
+
+### Outside the milestones: building session A's Q172 and Q173 answers (planned 2026-10-27)
+
+Session A answered both on 2026-10-27. One commit per step.
+
+1. **P-1: a cut during a camera flight** (Q172, `camera.md` "Camera
+   flights and cuts" rules 4 and 6). Today `cutToCamLoc` ends a running
+   flight. Instead: the cut is done as now (with the switches as they
+   are; a flight has "places" off), but the flight is kept: its count
+   and step stay, so its remaining updates add the old step from the
+   cut's spot (and the roll step to the cut's roll), and its last update
+   switches "places" on and pulls the camera onto the range around the
+   **cut's** aim point + 1,400 with the height rule. "Places" then stays
+   on, even after a `follow none` during the flight. Check: Dead City's
+   Shadow fight (`ShadBat.cs`): the cut at `C_P2SM9`'s end is followed
+   by the flight's remaining steps; at `C_P2SM10`'s end the cut is
+   pulled out to the range's minimum + 1 with the height rule
+   (`traps.log`, `camera.log`).
+   **Done** 2026-10-27 (logs only: the last cut is pulled from 795 to
+   1,501 along the line, 1,416 across; the flight's 8 remaining steps
+   follow the cut at update 240).
+2. **P-2: the Paddle's push** (Q173, `pushing.md` rules 11a–11h). A
+   template copy keeps its file's class (`KQPaddleObject`). On its
+   pushing touch, instead of `Push` to its script, the core runs the
+   class's steps as the matching script commands, in the rule's order:
+   `handsOff 1`, `setThirdPerson`, Connor to Wait; side A or B (the
+   plain side-of-line test along the paddle's facing, "Do not
+   reproduce"); `move Connor` to the table's offset (west/east split at
+   x = 182,000), turned the paddle's turn ± 1.5708, at the paddle's
+   height; `addCamLoc <spot> 1`, `cutToCamLoc <Connor's place> 0`,
+   `follow Connor` (ours: `follow` sets both switches on; in normal play
+   they are on already); the paddle's type to 0x21 and every live
+   `Scary2`–`Scary5` to 0; Connor's Special `padpush.anm` with
+   `pushccw` / `pushcw` (or `pushoff` / `pushoff2` when
+   `$DeadCity::Paddle::Used` = 3); then `padpush.cs` / `padpush2.cs`
+   with `$1` = the paddle's name. Check: put the Paddle on `Scary2`,
+   walk into it: Connor placed, the push movement, the tiki sequence of
+   rule 11h, and at the end `give paddle`, `handsOff 0`.
