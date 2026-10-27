@@ -796,7 +796,7 @@ pub fn spawn_doors(
             } else {
                 kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type }
             };
-            Some((t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind, dithered: p.dithered }))
+            Some((t.file.clone(), kq8_core::active::Template { name: t.name.clone(), script: t.script.clone(), placement, kind, dithered: p.dithered, class: p.class.clone().unwrap_or_else(|| "KQObject".into()) }))
         })
         .collect();
     let animated = templates.iter().filter(|(_, t)| matches!(t.kind, kq8_core::active::TemplateKind::Anim(_))).count();

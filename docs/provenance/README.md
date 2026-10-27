@@ -3660,3 +3660,16 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | A `cutToCamLoc` does not end a running flight: its remaining steps (and roll steps) are added from the cut's spot; its last update switches "places" on and pulls the camera onto the range around the cut's aim point + 1,400, then the height rule; "places" then stays on | `camera.md` "Camera flights and cuts" rules 4 and 6 (Q172) | `camera.log` "flight 13/20" … "flight 20/20"; `traps.log` "cut to the spot (182221, 45750, 2000), pulled onto the range from 795.1" |
+
+## P-2 2026-10-27: the Paddle's push — core `active.rs` (`paddle_push`, `PADDLE_*`, `Template::class`); viewer `load.rs` (`padpush.anm` preloaded), `door_view.rs` (the template's class); `console_words.rs` (`set`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A `KQPaddleObject`'s pushing touch sends no `Push`; the class runs its own push at once | `pushing.md` rule 11a | unit test `a_paddle_runs_its_own_push_by_connors_side`; `doors.log` "paddle2 (KQPaddleObject push …)" |
+| `handsOff` on, third person locked, Connor to Wait | rule 11b | `traps.log` (our Push state refuses Wait: logged; the Special right after is taken) |
+| Side A / B by the side of the line through the paddle along its facing (plain test); fixed world offsets by side and west/east (x < 182,000); turn ± 1.5708; the paddle's height | rules 11c, 11d, "Do not reproduce" | unit test; `doors.log` side A (174406, 57881), side B (175576, 57941) |
+| Camera: `addCamLoc` spot ±2,000 on x, `cutToCamLoc` at Connor's new place, roll 0, follow Connor | rule 11e; `follow Connor` setting both switches on is **ours** | `traps.log` "cut to the spot (173006, 58451, 1177)" |
+| The paddle's type to 0x21, `Scary2`–`Scary5` to 0 (stored type too) | rule 11f, "Do not reproduce" | `doors.log` "collisionType paddle2 -65792: 0x10121 -> 0x21" |
+| Special `padpush.anm` with `pushccw` / `pushcw`, or `pushoff` / `pushoff2` when `DeadCity::Paddle::Used` = 3; then `padpush.cs` / `padpush2.cs` with `$1` = the paddle | rule 11g | unit test; `doors.log` |
+| `padpush.anm`'s four movements preloaded when a script-loaded file of the world has `classType=KQPaddleObject` (no script line names them) | **Ours** (how we load; rule 11g says the class asks for them) | `viewer.log` "special padpush.anm/pushccw" |
+| Console `set <variable> <value>` | **Ours** (a test helper) | `console.log` "DeadCity::Paddle::Used = '3' (was '0')" |

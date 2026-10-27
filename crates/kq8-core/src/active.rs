@@ -103,6 +103,20 @@ pub const EVENT_TYPES: [&str; 4] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEven
 /// hit by a weapon yet (fighting is M5), so always `Normal`.
 pub const DIE_KIND: &str = "Normal";
 
+/// The class with its own push (`pushing.md` rule 11a: Dead City's
+/// `paddle2`).
+pub const PADDLE_CLASS: &str = "KQPaddleObject";
+/// Rule 11d: the pedestal pairs are split at this x (west below).
+const PADDLE_WEST_OF: f32 = 182_000.0;
+/// Rule 11f: the paddle's type after its push, and the pedestals put to
+/// type 0.
+const PADDLE_TYPE_AFTER: u32 = 0x21;
+const PADDLE_PEDESTALS: [&str; 4] = ["Scary2", "Scary3", "Scary4", "Scary5"];
+/// Rule 11d: Connor's turn is the paddle's ± this (the original's own
+/// 1.5708, kept as given).
+#[allow(clippy::approx_constant)]
+const PADDLE_QUARTER: f32 = 1.5708;
+
 /// What a script asked of Connor or the camera, for the caller to apply
 /// (M3 step 3d-3). `at` is where in which script.
 #[derive(Debug, Clone, PartialEq)]
@@ -492,6 +506,9 @@ pub struct Template {
     /// Its file's `dithered=` (`objects.md` "Dithered objects" rule 8:
     /// applied when a copy is added to the world).
     pub dithered: u8,
+    /// Its file's `classType` (a still copy's class: Dead City's
+    /// `paddle2` is a `KQPaddleObject`, `pushing.md` rule 11a).
+    pub class: String,
 }
 
 #[derive(Debug, Clone)]
@@ -2168,7 +2185,7 @@ impl WorldState {
                 "animated"
             }
             TemplateKind::Still { bounds: Some((min, max)), collision_type } => {
-                let mut c = Clickable::plain(&name, "KQObject", *min, *max, placement, *collision_type);
+                let mut c = Clickable::plain(&name, &t.class, *min, *max, placement, *collision_type);
                 c.script = t.script.clone();
                 self.clickables.push(c);
                 "still, with its box"
@@ -3622,6 +3639,11 @@ impl Active {
     /// control, or it has none): the caller makes its later touches wall
     /// hits ("Do not reproduce").
     pub fn push_call(&mut self, name: &str) -> bool {
+        // pushing.md rule 11a: a `KQPaddleObject` runs its own push.
+        if self.world.clickables.iter().any(|c| !c.gone && c.class.eq_ignore_ascii_case(PADDLE_CLASS) && c.name.eq_ignore_ascii_case(name)) {
+            self.paddle_push(name);
+            return true;
+        }
         self.world.note(format!("{name}: pushed by Connor: its script gets Push (pushing.md rule 3)"));
         if !self.call_named(name, &["Push"]) {
             self.world.note(format!("{name}: no object with a script by that name: Push not called"));
@@ -3631,6 +3653,91 @@ impl Active {
             self.world.note(format!("{name}: still a pushable after its Push call: from now on a wall for Connor (pushing.md \"Do not reproduce\")"));
         }
         !still
+    }
+
+    /// A `KQPaddleObject`'s push (`pushing.md` rules 11a–11g, Q173): no
+    /// `Push` call; at once, in the rule's order, the steps the class
+    /// takes, run as the matching script commands: controls and view,
+    /// Connor put beside the paddle by his side of it, the camera, the
+    /// collision types, his push movement, then `padpush.cs` /
+    /// `padpush2.cs` with `$1` = the paddle.
+    fn paddle_push(&mut self, name: &str) {
+        let Some(paddle) = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.placement) else { return };
+        let at = format!("{name} ({PADDLE_CLASS} push, pushing.md rule 11)");
+        let Some(connor) = self.world.connor_at else {
+            self.world.note(format!("{at}: Connor's place not known; nothing"));
+            return;
+        };
+        let p = paddle.position;
+        let turn = kq8_data::objects::angles_of(paddle.rotation)[2];
+        // Rule 11c, plainly ("Do not reproduce"): which side of the line
+        // through the paddle along its facing (turn 0 looks along +y);
+        // exactly on it is side A.
+        let facing = [-turn.sin(), turn.cos()];
+        let to = [connor[0] - p[0], connor[1] - p[1]];
+        let side_a = facing[0] * to[1] - facing[1] * to[0] >= 0.0;
+        // Rule 11d's table: fixed world offsets by side and pedestal pair.
+        let west = p[0] < PADDLE_WEST_OF;
+        let ((dx, dy), cam_dx, quarter) = match (side_a, west) {
+            (true, true) => ((-600.0, -570.0), 2000.0, PADDLE_QUARTER),
+            (true, false) => ((600.0, 570.0), -2000.0, PADDLE_QUARTER),
+            (false, true) => ((570.0, -510.0), -2000.0, -PADDLE_QUARTER),
+            (false, false) => ((-570.0, 510.0), 2000.0, -PADDLE_QUARTER),
+        };
+        let place = [p[0] + dx, p[1] + dy, p[2]];
+        // Rule 11g: the movement by side and `Used`.
+        let used = self.scripts.vars.get("DeadCity::Paddle::Used").map_or(0.0, number_value);
+        let last = used == 3.0;
+        let (movement, script) = match (side_a, last) {
+            (true, false) => ("pushccw", "padpush.cs"),
+            (true, true) => ("pushoff", "padpush.cs"),
+            (false, false) => ("pushcw", "padpush2.cs"),
+            (false, true) => ("pushoff2", "padpush2.cs"),
+        };
+        self.world.note(format!(
+            "{at}: Connor at ({:.0}, {:.0}), the paddle at ({:.0}, {:.0}, {:.0}) turned {turn:.3}: side {} (11c), {} pedestal; DeadCity::Paddle::Used {used}: {movement}, then {script} (11g)",
+            connor[0],
+            connor[1],
+            p[0],
+            p[1],
+            p[2],
+            if side_a { "A" } else { "B" },
+            if west { "west" } else { "east" }
+        ));
+        // Rule 11f: the paddle's type to 0x21, every live pedestal's to 0
+        // (as `collisionType` takes bits away).
+        let mut types = Vec::new();
+        if let Some(t) = self.world.collision_type_of(name).filter(|t| t & !PADDLE_TYPE_AFTER != 0) {
+            types.push(format!("KQObject::collisionType {name} -{}", t & !PADDLE_TYPE_AFTER));
+        }
+        for pedestal in PADDLE_PEDESTALS {
+            if let Some(t) = self.world.collision_type_of(pedestal).filter(|t| *t != 0) {
+                types.push(format!("KQObject::collisionType {pedestal} -{t}"));
+            }
+        }
+        let mut lines = vec![
+            // Rule 11b.
+            "handsOff 1".to_string(),
+            "setThirdPerson".to_string(),
+            "KQMonster::setState Connor Wait".to_string(),
+            // Rule 11d.
+            format!("move Connor 0 {} {} {} 0 0 {}", place[0], place[1], place[2], turn + quarter),
+            // Rule 11e (ours: `follow Connor` sets both switches on; in
+            // normal play they are on already).
+            format!("KQCamera::addCamLoc {} {} {} 1", p[0] + cam_dx, p[1], p[2]),
+            format!("KQCamera::cutToCamLoc {} {} {} 0", place[0], place[1], place[2]),
+            "KQCamera::follow Connor".to_string(),
+        ];
+        lines.extend(types);
+        // Rule 11g.
+        lines.push(format!("KQMonster::setState Connor Special AnimList=padpush.anm,AnimListOn,{movement}"));
+        for line in lines {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
+                self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
+            }
+        }
+        self.run_script(script, &[name.to_string()]);
     }
 
     /// One of Connor's play-once movements ended (`plain` name, e.g.
@@ -6163,8 +6270,8 @@ endif
         let player = crate::named_anim::tests::still_then_open("barrelsm");
         let at = Placement::at([0.0; 3]);
         a.world.set_templates([
-            ("BURST.KQ".to_string(), Template { name: "barrelsm".into(), script: None, placement: at, kind: TemplateKind::Anim(Box::new(player)), dithered: 2 }),
-            ("wreck.kq".to_string(), Template { name: "barelded".into(), script: None, placement: Placement::at([7.0, 8.0, 9.0]), kind: TemplateKind::Still { bounds: Some(([-1.0; 3], [1.0; 3])), collision_type: 0x41 }, dithered: 0 }),
+            ("BURST.KQ".to_string(), Template { name: "barrelsm".into(), script: None, placement: at, kind: TemplateKind::Anim(Box::new(player)), dithered: 2, class: "KQAnimOnce".into() }),
+            ("wreck.kq".to_string(), Template { name: "barelded".into(), script: None, placement: Placement::at([7.0, 8.0, 9.0]), kind: TemplateKind::Still { bounds: Some(([-1.0; 3], [1.0; 3])), collision_type: 0x41 }, dithered: 0, class: "KQObject".into() }),
         ]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         let log = a.take_log().join("\n");
@@ -7218,6 +7325,42 @@ getGuiStatus
         a.connor_movement_ended("push");
         a.update();
         assert_eq!(a.scripts.vars.get("C::heard"), Some("push"));
+    }
+
+    #[test]
+    fn a_paddle_runs_its_own_push_by_connors_side() {
+        // pushing.md rules 11a-11g with Dead City's numbers.
+        let run = |connor: [f32; 3], turn: f32, used: &str| {
+            let sources = [("padpush.cs".to_string(), b"set P::a $1\n".to_vec()), ("padpush2.cs".to_string(), b"set P::b $1\n".to_vec())];
+            let mut v = Vars::default();
+            v.set("DeadCity::Paddle::Used", used.into());
+            let mut a = Active::new(v, vec![], vec![], ["Connor".to_string()], sources);
+            let at = Placement { rotation: kq8_data::objects::rotation([0.0, 0.0, turn]), position: [175006.0, 58451.0, 1177.0] };
+            let mut c = Clickable::plain("paddle2", PADDLE_CLASS, [-50.0, -940.0, 0.0], [20.0, 0.0, 900.0], at, 0x10121);
+            c.script = Some("paddle2.cs".into());
+            a.world.clickables.push(c);
+            a.world.known.insert("paddle2".into());
+            a.world.connor_at = Some(connor);
+            assert!(a.push_call("paddle2"));
+            let moved = a.world.requests.iter().find_map(|r| match r {
+                Request::Move { who, position, turn, .. } if who == "Connor" => Some((*position, turn[2])),
+                _ => None,
+            });
+            let special = a.world.requests.iter().find_map(|r| match r {
+                Request::ConnorSpecial { items, .. } => Some(items.clone()),
+                _ => None,
+            });
+            let ran = [("padpush.cs", "P::a"), ("padpush2.cs", "P::b")].iter().find_map(|(s, v)| a.scripts.vars.get(v).map(|n| format!("{s} {n}")));
+            (moved.unwrap(), special.unwrap(), ran, a.world.collision_type_of("paddle2"))
+        };
+        // Side A (x smaller on a turn-0, west pedestal): pushccw, padpush.cs.
+        let ((p, t), items, ran, ty) = run([174952.0, 57370.0, 1152.0], 0.0, "0");
+        assert_eq!((p, t), ([174406.0, 57881.0, 1177.0], PADDLE_QUARTER));
+        assert_eq!((items.as_str(), ran.as_deref(), ty), ("AnimList=padpush.anm,AnimListOn,pushccw", Some("padpush.cs paddle2"), Some(0x21)));
+        // Side B, the last pedestal: pushoff2, padpush2.cs.
+        let ((p, t), items, ran, _) = run([175206.0, 57649.0, 1152.0], 0.0, "3");
+        assert_eq!((p, t), ([175576.0, 57941.0, 1177.0], -PADDLE_QUARTER));
+        assert_eq!((items.as_str(), ran.as_deref()), ("AnimList=padpush.anm,AnimListOn,pushoff2", Some("padpush2.cs paddle2")));
     }
 
     #[test]

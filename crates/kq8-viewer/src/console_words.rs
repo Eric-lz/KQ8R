@@ -35,6 +35,7 @@ Console commands (not case-sensitive; Up/Down on the typing line recalls earlier
                               2 add to the turn, 3 both; t = turn in radians
                               e.g. move Connor 3 0 0 2000 (2,000 higher)
  World
+  set <variable> <value>      a script variable, e.g. set DeadCity::Paddle::Used 3
   reload                      take this world down and build it again, Connor where he stands
   goworld <world> [x y turn]  to another world (Connor's things go along), e.g. goworld Swamp
   goworld portal <file>       through a portal file, e.g. goworld portal Davtele.kq
@@ -109,6 +110,16 @@ pub fn run(line: &str, sim: &mut DoorSim, connor: Option<&ConnorSim>) -> Option<
                 script(sim, &format!("sendEvent 0 Connor KQStatsChangeRequestEvent {missing} 0 0 0 0"))
             }
         }
+        // A script variable, as a script's `set` would (for tests).
+        "set" => match (words.get(1), words.get(2)) {
+            (Some(name), Some(_)) => {
+                let value = words[2..].join(" ");
+                let was = sim.active.scripts.vars.get(name).map(str::to_string);
+                sim.active.scripts.vars.set(name, value.clone());
+                vec![format!("{name} = '{value}' (was {})", was.map_or("not set".to_string(), |w| format!("'{w}'")))]
+            }
+            _ => vec!["usage: set <variable> <value>, e.g. set DeadCity::Paddle::Used 3".into()],
+        },
         "xp" => match words.get(1).and_then(|w| w.parse::<i64>().ok()) {
             Some(n) => script(sim, &format!("sendEvent 0 Connor KQStatsChangeRequestEvent 0 0 0 0 {n}")),
             None => vec!["usage: xp <number>, e.g. xp 100".into()],

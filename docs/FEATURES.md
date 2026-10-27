@@ -809,6 +809,16 @@ commands in `MODLOG.md`.
   windmill, torches, the well) play their loops at the traced speed and
   wrap, as Connor and the characters already did.
 
+## Session A's Q172 and Q173 answers (2026-10-27, steps P-1, P-2)
+
+Checked in the logs and unit tests, not by eye.
+
+- **Camera cuts during a flight:** the flight goes on to its end, so
+  later cuts keep their distance (Dead City's Shadow fight's last shot).
+- **Dead City's Paddle puzzle:** the Paddle shows on its pedestal;
+  walking into it plays Connor's push from his side, the pedestal turns
+  and sinks, the Paddle comes back; the fourth one starts the laser.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,

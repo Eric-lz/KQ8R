@@ -7,10 +7,12 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-27)
 
-- **2026-10-27 (B): fix: Dead City's Paddle shows on its pedestal**
-  (the user's report) and can be clicked back; pushing it (the puzzle's
-  next step) waits for **Q173** (`KQPaddleObject` not studied). Logs
-  only.
+- **2026-10-27 (B): Dead City's Paddle puzzle** (the user's report):
+  the Paddle shows on its pedestal and can be clicked back; pushing it
+  (Q173 built, P-2) plays Connor's push from his side, the tiki sinks,
+  the Paddle comes back; the fourth starts the laser. Logs only. Seen on
+  the way, not done: the tiki lights' cue to `Terrain`,
+  `KQCamera::setCamRelConner` (laser scene).
 
 - **2026-10-27 (B): fix: the Shadow fight on the first arrival in
   Dead City** (the user's report: Connor only played `portalx`). The
@@ -548,9 +550,7 @@ M6 has started with the Rope and Hook (6a).
   flashes are see-through in the original although rule 20a says
   attribute 0x8 is solid; B uses their files' own transparent flag.
 - **Built 2026-10-27 (P-1): Q172** (a cut during a running flight).
-- **New for A (2026-10-27): Q173**: what pushing a `KQPaddleObject`
-  does (Dead City's Paddle puzzle: Connor's `padpush.anm` movements,
-  `padpush.cs` / `padpush2.cs`). Blocks the puzzle.
+- **Built 2026-10-27 (P-2): Q173** (the Paddle's push).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

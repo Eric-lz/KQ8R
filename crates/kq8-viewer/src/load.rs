@@ -3575,6 +3575,19 @@ impl Placer<'_> {
                 wanted.extend(record.into_inner());
             }
         }
+        // pushing.md rule 11g (Q173): a `KQPaddleObject` (Dead City's
+        // `paddle2`, loaded by a script) plays these itself; no script
+        // line names them.
+        let paddle = self.load_targets.iter().any(|f| {
+            self.world.load(f).and_then(Result::ok).is_some_and(|(_, bytes)| {
+                kq_text::parse(&bytes).first().and_then(|s| s.get("classType")).is_some_and(|c| c.trim().eq_ignore_ascii_case(kq8_core::active::PADDLE_CLASS))
+            })
+        });
+        if paddle {
+            for m in ["pushccw", "pushcw", "pushoff", "pushoff2"] {
+                wanted.insert((Some("padpush.anm".to_string()), m.to_string()));
+            }
+        }
         // fighting.md rules 39-40 (M5 5c-5): the swings of each hand
         // weapon's list (Connor.kq's ShortAnimList); **stand-in**: only
         // these come from the weapon's list, the rest stays Conner.anm.

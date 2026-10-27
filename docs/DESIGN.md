@@ -3233,7 +3233,7 @@ Not in this plan: doors, chests (their open/closed state and contents),
 characters, hidden switches, items on the ground. They stay fresh on
 return, as before.
 
-### Outside the milestones: building session A's Q172 and Q173 answers (planned 2026-10-27)
+### Outside the milestones: building session A's Q172 and Q173 answers (planned 2026-10-27; done 2026-10-27, steps P-1, P-2, checked in the logs only)
 
 Session A answered both on 2026-10-27. One commit per step.
 
@@ -3270,3 +3270,6 @@ Session A answered both on 2026-10-27. One commit per step.
    with `$1` = the paddle's name. Check: put the Paddle on `Scary2`,
    walk into it: Connor placed, the push movement, the tiki sequence of
    rule 11h, and at the end `give paddle`, `handsOff 0`.
+   **Done** 2026-10-27 (logs and a unit test: both sides, the last
+   pedestal and the laser; `padpush.anm`'s four movements are preloaded
+   when the world has a `KQPaddleObject`, since no script names them).
