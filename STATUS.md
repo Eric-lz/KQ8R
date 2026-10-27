@@ -13,7 +13,7 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   (`world-change.md` rules 12, 14.5). **Then (K-1 to K-3):** animated and scripted objects that
   changed keep their movement, phase, place and collision type (the
   bricks stay down, the stream stays blocked; values as in the user's
-  `save10.vol`). Logs only, not looked at by eye.
+  `save10.vol`). The user checked it in play (2026-10-27): working.
 
 - **2026-10-25 (B): smooth joins (with `--smooth`, ours)** (DESIGN
   "smooth joins", J-1 to J-4): a change of movement is drawn mixed over
@@ -294,8 +294,7 @@ M6 has started with the Rope and Hook (6a).
 - **Kept worlds after K-1 to K-3 (2026-10-26):** still fresh on a
   return: doors and chests opened without a variable (and what was taken
   from chests), characters' place and health, hidden switches, items on
-  the ground, copies a `loadKQ` made with a name or place. Not looked at
-  by eye: the bricks and the stream after a return.
+  the ground, copies a `loadKQ` made with a name or place.
 
 - **After C-1 to C-3 (2026-10-25), not checked by the user yet:** the
   roof kill's crossbow lying where the movement drops it (and picking it

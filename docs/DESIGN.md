@@ -3189,7 +3189,7 @@ Not in this plan: joins for characters whose files don't share a layout
 (zombies, spriggans, the wizard, skeletons, orcs); shadows (whole
 frames, as now).
 
-### Outside the milestones: kept worlds keep animated objects' state (planned 2026-10-26; done 2026-10-26, steps K-1 to K-3, checked in the logs only)
+### Outside the milestones: kept worlds keep animated objects' state (planned 2026-10-26; done 2026-10-26, steps K-1 to K-3, user-checked 2026-10-27)
 
 **The user's report:** after the bricks puzzle, Daventry → Castle →
 Daventry: the bricks are back up in their old place and the stream
@@ -3227,7 +3227,7 @@ rules 3, 4). Our loader does not read `animPos` yet.
   value past the movement's start becomes its phase). Test: the bricks
   run, Daventry → Castle → Daventry: logs show `water` on `blocked`,
   `Bricks` on `down` at (156652, 303400, 14562).
-- **K-3** (**done**, but the user's look): docs (FEATURES, STATUS, provenance), the user's look.
+- **K-3** (**done**, user-checked 2026-10-27): docs (FEATURES, STATUS, provenance), the user's look.
 
 Not in this plan: doors, chests (their open/closed state and contents),
 characters, hidden switches, items on the ground. They stay fresh on

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 The user's check of the kept world fixes
+
+**Changed:** STATUS, DESIGN. No code.
+**Why:** The user played Daventry → Castle Daventry → Daventry after the bricks puzzle.
+**Tested how:** The user, in play.
+**Result:** "It appears to be working": the small waterfall, the bricks (down) and the blocked stream come back as left.
+**Still broken / not tested:** Still fresh on a return: doors and chests opened without a variable, characters, hidden switches, items on the ground (STATUS).
+**Next:** Open for the user's choice.
+
 ## 2026-10-26 K-2, K-3: the bricks stay down and the stream stays blocked after a return
 
 **Changed:** `kq8-core`: `KeptState` also keeps the waiting movement; `NamedAnimPlayer::with_anim_pos` (`objects.md` rule 4) and a unit test. Viewer: `KeptWorld::states` (filled when Connor leaves, listed in the log), carried in `Arrival::states`; the loader (`apply_kept`) puts a kept object's `currAnimName`, `nextAnimName`, `animPos`, `colliderType` into its section and its kept place and turn into the placement before reading it; `animPos` read for animated and scripted objects (`anim_view.rs`, `door_view.rs`). DESIGN (K-1 to K-3 done), FEATURES, STATUS, provenance.
