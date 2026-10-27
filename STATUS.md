@@ -5,7 +5,15 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-25)
+## Where we are (2026-10-26)
+
+- **2026-10-26 (B): fix: Daventry's small waterfall was missing after a
+  return** (the user's report): a kept world now also keeps the files
+  scripts loaded while playing and loads them again on return
+  (`world-change.md` rules 12, 14.5). Logs only, not looked at by eye.
+  Still fresh on return: animated objects' movement (the stream's
+  `water` flows again instead of `blocked`; the bricks' `down` and moved
+  place), see "next".
 
 - **2026-10-25 (B): smooth joins (with `--smooth`, ours)** (DESIGN
   "smooth joins", J-1 to J-4): a change of movement is drawn mixed over
@@ -282,6 +290,13 @@ M6 has started with the Rope and Hook (6a).
 - Tests: 618 unit tests pass (131 + 482 + 5), 2026-10-21.
 
 ## What doesn't work yet / next
+
+- **Kept worlds, after the waterfall fix (2026-10-26):** objects come
+  back as in their files, not as left (rule 12's whole state). Daventry
+  after the bricks: `water` plays its start movement again, not
+  `blocked`; the `Bricks` object is back up in its file's place. Not
+  checked by eye whether this shows; the next step if it does: keep
+  animated objects' current movement (and scripted moves) with the world.
 
 - **After C-1 to C-3 (2026-10-25), not checked by the user yet:** the
   roof kill's crossbow lying where the movement drops it (and picking it

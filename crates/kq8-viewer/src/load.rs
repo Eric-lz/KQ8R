@@ -1795,6 +1795,10 @@ pub struct Arrival {
     /// not loaded again), lower case.
     pub kept_vars: Vec<(String, String)>,
     pub gone: std::collections::BTreeSet<String>,
+    /// Files a script's `loadKQ` brought in on an earlier visit (rule 12),
+    /// lower case, in order: loaded again after the start script (rule
+    /// 14.5), as objects in the world from the start.
+    pub came_in: Vec<String>,
     /// The kept maps by map index (rule 16): this world's own, when it was
     /// visited before, replaces its shipped file.
     pub kept_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
@@ -1957,7 +1961,26 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     // (objects.md "Where a world's objects come from", Q16), placed while
     // the scripts run so `getLoc` and `move` see them (Q20).
     phase("scripts scanned, portal files read", &mut since);
-    let script = kq8_data::world_script::run("newWorld.cs", &mut placer);
+    let mut script = kq8_data::world_script::run("newWorld.cs", &mut placer);
+    // M6 6e-8 (world-change.md rules 12, 14.5): a kept world's objects
+    // that scripts loaded while playing (Daventry's `waterfa2.kq`) are
+    // loaded again after the start script, so they are in the world from
+    // the start and get their `Init` with the others (rule 15).
+    for file in arrival.as_ref().map(|a| a.came_in.as_slice()).unwrap_or_default() {
+        let load = LoadKq {
+            file: file.clone(),
+            name: LoadName::Keep,
+            position: None,
+            angles: None,
+            ignored_numbers: 0,
+            from: "kept world (world-change.md rule 14.5)".into(),
+            line: 0,
+            inside_if: false,
+        };
+        placer.log.summary(format!("world change: kept world: loadKQ {file} again (loaded while playing on an earlier visit; rules 12, 14.5)"));
+        placer.place(&load, None, false, &script.vars);
+        script.loads.push(load);
+    }
     phase("start-up scripts run (objects placed and loaded)", &mut since);
     let log = &mut *placer.log;
     log.summary(format!(

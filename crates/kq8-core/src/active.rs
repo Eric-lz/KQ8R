@@ -624,6 +624,9 @@ pub struct WorldState {
     /// Objects prepared for a script's `loadKQ` (3k-4): lower-case file
     /// name → the object's name and script.
     dormant: BTreeMap<String, (String, Option<String>)>,
+    /// The prepared files a script's `loadKQ` brought in, in order: file
+    /// and object name (`world-change.md` rule 12: kept with the world).
+    came_in: Vec<(String, String)>,
     /// Names deleted during the event running now: free only once it has
     /// finished (`clicking.md` rule 22, 3l-7).
     deleted_this_event: BTreeSet<String>,
@@ -909,6 +912,16 @@ impl WorldState {
             }
         }
         out.into_iter().collect()
+    }
+
+    /// The prepared files a script's `loadKQ` brought into this world
+    /// while playing whose object is still here, in the order they came
+    /// (M6 6e-8, `world-change.md` rules 12, 14.5: kept with the world and
+    /// loaded again on a return; Daventry's `waterfa2.kq` from `bricks.cs`).
+    /// Lower-case file names.
+    pub fn came_in_files(&self) -> Vec<String> {
+        let gone: BTreeSet<String> = self.gone_names().into_iter().collect();
+        self.came_in.iter().filter(|(_, name)| !gone.contains(&name.to_ascii_lowercase())).map(|(file, _)| file.clone()).collect()
     }
 
     pub fn now(&self) -> f64 {
@@ -1939,6 +1952,7 @@ impl WorldState {
             return "1".into();
         }
         self.dormant.remove(&key);
+        self.came_in.push((key.clone(), name.clone()));
         self.loading.insert(lower.clone());
         self.known.insert(lower);
         // A trap: its box is in place from now on (it was off since the start).
@@ -3432,6 +3446,7 @@ impl Active {
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
+                came_in: Vec::new(),
                 deleted_this_event: BTreeSet::new(),
                 loading: BTreeSet::new(),
                 held_for_load: Vec::new(),
@@ -7291,8 +7306,24 @@ endif
         let loads: Vec<&Request> = a.world.requests.iter().filter(|r| matches!(r, Request::Load { .. })).collect();
         assert_eq!(loads.len(), 1);
         assert!(a.world.known.contains("waterfall2"));
+        assert_eq!(a.world.came_in_files(), vec!["waterfa2.kq".to_string()]);
         let log = a.take_log().join("\n");
         assert!(log.contains("loadKQ waterfa2.kq: no copy prepared") && log.contains("loadKQ other.kq: no copy prepared") && log.contains("a name or position while playing"), "{log}");
+    }
+
+    #[test]
+    fn a_copy_brought_in_then_deleted_is_not_kept_with_the_world() {
+        // world-change.md rule 12: deleted objects are not in the kept world.
+        let mut a = with_object("loadKQ waterfa2.kq
+loadKQ watrfsn2.kq
+deleteObject waterfall2
+", "x");
+        a.set_dormant([
+            ("waterfa2.kq".to_string(), "waterfall2".to_string(), None),
+            ("watrfsn2.kq".to_string(), "Waterfall2Sound".to_string(), None),
+        ]);
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.world.came_in_files(), vec!["watrfsn2.kq".to_string()]);
     }
 
     #[test]

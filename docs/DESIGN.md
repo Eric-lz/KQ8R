@@ -2168,11 +2168,20 @@ marked **new**):
      there (rule 12: they are "simply not in it"); on return they are
      not loaded again (no second copy of a taken item, a killed
      creature does not come back; its body does not come back either:
-     a known gap).
+     a known gap);
+  4. its **files brought in while playing** (rules 12, 14.5; added
+     2026-10-26 after the user found Daventry's small waterfall missing
+     on a return): the prepared files a script's `loadKQ <file>` brought
+     in (Daventry's `waterfa2.kq`, `watrfsn2.kq` from `bricks.cs`), whose
+     object is still there; on return they are loaded again right after
+     the start script, as objects in the world from the start, from
+     their files (not their state).
   Everything else of a world (positions, health, doors and chests opened
-  without a variable, items dropped on the ground, objects loaded while
-  playing, terrain changes, the world clock) comes back **fresh**: a
-  known gap, logged at each arrival with counts.
+  without a variable, animated objects' current movement, e.g.
+  Daventry's `water` in `blocked`, items dropped on the ground, new
+  copies a `loadKQ` made with a name or place, terrain changes, the
+  world clock) comes back **fresh**: a known gap, logged at each arrival
+  with counts.
 - **Why not full kept worlds now** (the note now says exactly what one
   holds, rules 11–16): two ways were weighed.
   - *Keep the left world alive* (its entities hidden with Bevy's

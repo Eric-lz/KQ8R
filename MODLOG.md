@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-26 Fix: Daventry's small waterfall was missing after coming back from Castle Daventry
+
+**Changed:** `kq8-core` `active.rs`: the prepared files a script's `loadKQ <file>` brings in while playing are remembered in order (`came_in`); `came_in_files` gives those whose object is still in the world. Viewer `world_build.rs`: `KeptWorld::came_in`, filled when Connor leaves, carried in `load::Arrival`; `load.rs`: on return each is loaded again right after the start script, as an object placed at the start (its `Init` with the others). 1 new unit test, 1 extended. DESIGN (kept worlds, item 4), FEATURES, STATUS, provenance.
+**Why:** The user's report: after the bricks puzzle, Daventry → Castle → Daventry showed neither waterfall. The kept world (6e-8, first stage) kept only variables and deleted names, so `waterfall`/`WaterfallSound` (deleted by `bricks.cs`) correctly stayed away, but `waterfa2.kq`/`watrfsn2.kq` (loaded by `bricks.cs` lines 34–35) were never loaded again. `world-change.md` rule 12: objects loaded by scripts while playing are in the kept world; rule 14.5: loaded again on return.
+**Tested how:** `cargo test --workspace` (all pass); clippy: same output as before the change. Viewer: `kq8-viewer --world Daventry --frames 10000 --sound off --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --console "goworld CastleD",120 --console "goworld Daventry",150 --command "move Connor 0 156625 303748 -1 0 0 1.57",170`; `viewer.log`, `sound.log`.
+**Result:** "Daventry kept: 91 variables, 7 objects gone, 2 loaded while playing ["waterfa2.kq", "watrfsn2.kq"]"; on return "loadKQ waterfa2.kq again", "loadKQ watrfsn2.kq again", "2 objects that left it not loaded again: ["waterfall", "WaterfallSound"]". After the move beside the falls: "[waterfall2] Off -> Near (drawn)", `watrfal2.aud` starts (distance 2,215).
+**Mistakes on the way:** my first two runs never reached Castle (a `--console` update number smaller than the first one fires in Daventry; 3,000 frames end before update 300, about 11 frames an update). `goworld Daventry <x> <y> <heading>` put Connor at the falls for one frame, then at the castle exit (not looked into; a script `move` used instead).
+**Still broken / not tested:** Not looked at by eye or listened to. The objects come back as in their files, not as left: the stream's `water` flows again instead of `blocked`, the `Bricks` object is back in its file's place (STATUS). New copies a `loadKQ` made with a name or place (dropped items, barrels) are still not kept.
+**Next:** The user's look at the falls after a return, and whether the stream and the bricks look wrong.
+
 ## 2026-10-25 Fix: objects hidden by their file, shown by a script, in every world
 
 **Changed:** Viewer: the switch that draws an object once a script's `setHidden <name> 0` comes moved from `anim_view.rs` (characters and animated objects only) to `draw_distance.rs` `update_activity`, which already knows each object's file `hidden=` and the game's current answer; so it now covers plain placed objects too. Logged in `viewer.log` ("shown by a script"). STATUS, provenance.

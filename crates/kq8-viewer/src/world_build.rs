@@ -148,6 +148,9 @@ pub struct KeptWorld {
     pub vars: Vec<(String, String)>,
     /// Objects that left it (rule 12), lower case.
     pub gone: std::collections::BTreeSet<String>,
+    /// Files a script's `loadKQ` brought in while playing, still there
+    /// (rules 12, 14.5), lower case, in order.
+    pub came_in: Vec<String>,
 }
 
 impl WorldChange {
@@ -609,9 +612,16 @@ pub fn world_change_step(world: &mut World) {
             let kept = world.get_resource::<crate::door_view::DoorSim>().map(|sim| KeptWorld {
                 vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
                 gone: sim.active.world.gone_names().into_iter().collect(),
+                came_in: sim.active.world.came_in_files(),
             });
             if let Some(k) = kept {
-                log.lock().unwrap().summary(format!("world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), its map (rule 16)", k.vars.len(), k.gone.len()));
+                log.lock().unwrap().summary(format!(
+                    "world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), {} loaded while playing {:?} (rule 12), its map (rule 16)",
+                    k.vars.len(),
+                    k.gone.len(),
+                    k.came_in.len(),
+                    k.came_in
+                ));
                 world.resource_mut::<WorldChange>().kept.insert(from.to_ascii_lowercase(), k);
             }
             let (_, removed) = take_down(world);
@@ -669,6 +679,7 @@ pub fn world_change_step(world: &mut World) {
                 exit_movement,
                 kept_vars: kept.vars.clone(),
                 gone: kept.gone.clone(),
+                came_in: kept.came_in.clone(),
                 kept_maps: j.other_maps.clone(),
             });
             let percent = Arc::new(AtomicU32::new(0));
