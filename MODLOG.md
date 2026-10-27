@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 Fix: the caption stone looked checkered (an uneven stretch of a checkerboard)
+
+**Changed:** Core `caption.rs`: `picture` takes `out` (window pixels per pixel of the 800 × 600 screen) and makes the picture at that size: letters drawn at the box's size and enlarged nearest pixel (as before), the stone tiled from the top-left with each of its pixels `stone_step` = round(1.25 × `out`), at least 1, window pixels square; `Strip::at` takes that whole step. Viewer `talk_view.rs`: `out` = the 4:3 frame's width ÷ 800 × the window's scale factor; the picture is made again when it changes (window resized); it is shown at its own size at a whole window pixel; the log gives both. 1 new unit test. Provenance, FEATURES, STATUS.
+**Why:** The user's report: with tiling and no stretching the caption background still had checker patterns. `stontran.pbm` is a one-pixel checkerboard: 2,048 of its 4,096 pixels are colour 0 (see-through), so it reads as an even half-see-through stone only pixel for pixel. Since 4c-1 it was stretched × 1.25 (the 800 × 600 layout) and since 4c-6 the whole picture again to the window (× 1.2 at 1280 × 720, × 1.8 at 1920 × 1080), both nearest pixel: × 1.5 together gives columns of 1, 2, 1, 2 pixels, i.e. stripes and blocks (a printed simulation showed the patterns). `caption.rs` had not changed since 4c-1; the user's good look at 4b-3 was pixel for pixel. B-7's stretch to the box made it far worse.
+**Tested how:** `cargo test --workspace` (all pass; new `a_checkerboard_stone_stays_even_at_any_window_size` checks the 800 × 600, 1280 × 720 and 1920 × 1080 cases pixel by pixel); clippy: same output as before. Viewer: `kq8-viewer --world Daventry --at 245000,255000,0 --click alcmsign,30 --frames 1500 --sound off`; `viewer.log`.
+**Result:** "box 400x34 made at 480x41 window pixels (x 1.200); the stone tiled, each of its pixels 2 window pixel(s) square"; "in the window at (363.00, 583.00) size 480x41 window pixels". Line breaks and widths unchanged ([371, 104] px).
+**Still broken / not tested:** Not looked at by eye. The stone's pixels are bigger than the true scale where it rounds up (2 for 1.5 at 1280 × 720) and smaller where it rounds down. How the original scales the tile at 800 × 600 is still open (`interface.md` open question 1). Other panel pictures are still stretched unevenly, but none has this pattern: a scan of every 8-bit `.pbm` in `daventry/8gui` and `GAME/8Gui` found the checkerboard only in `stontran.pbm`.
+**Next:** The user's look at a caption.
+
 ## 2026-10-27 The user's check of the kept world fixes
 
 **Changed:** STATUS, DESIGN. No code.

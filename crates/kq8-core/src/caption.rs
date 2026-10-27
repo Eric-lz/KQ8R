@@ -149,34 +149,42 @@ pub struct Strip<'a> {
 }
 
 impl Strip<'_> {
-    /// The picture's index at screen pixel (x, y) of a box it fills,
-    /// stretched by `scale` and tiled (stand-in, Q108).
-    pub fn at(&self, x: u32, y: u32, scale: f32) -> u8 {
-        let sx = (x as f32 / scale) as u32 % self.width;
-        let sy = (y as f32 / scale) as u32 % self.height;
+    /// The picture's index at pixel (x, y) of a box it fills, tiled from
+    /// the top-left (rule 20a), each of its pixels `step` pixels square.
+    pub fn at(&self, x: u32, y: u32, step: u32) -> u8 {
+        let step = step.max(1);
+        let sx = (x / step) % self.width;
+        let sy = (y / step) % self.height;
         self.pixels[(sy * self.width + sx) as usize]
     }
 }
 
-/// The caption's picture, the size of the box: RGBA, see-through where
-/// neither the strip nor a letter has ink.
-pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], rows: &[String], b: Box) -> (u32, u32, Vec<u8>) {
+/// How many whole output pixels one stone pixel covers: the true scale
+/// (`b.scale` × `out`) rounded, at least 1. **Ours** (2026-10-27, the
+/// user's report of a checkered stone): `stontran.pbm` is a one-pixel
+/// checkerboard of see-through pixels (2,048 of 4,096), which only reads
+/// as an even half-see-through stone when every stone pixel is the same
+/// whole number of screen pixels; stretched by an uneven amount (× 1.25,
+/// then by the window) it turns into stripes and blocks.
+pub fn stone_step(scale: f32, out: f32) -> u32 {
+    ((scale * out).round() as u32).max(1)
+}
+
+/// The caption's picture: RGBA, see-through where neither the strip nor
+/// a letter has ink. `out`: output pixels per screen pixel (the window's
+/// pixels per pixel of the game's 800 × 600 screen); the picture is the
+/// box's size × `out`. The letters are drawn at the box's size and
+/// enlarged by `out` (nearest pixel); the stone is tiled in whole pixels
+/// ([`stone_step`]).
+pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], rows: &[String], b: Box, out: f32) -> (u32, u32, Vec<u8>) {
     let (w, h) = (b.width, b.height(rows.len()));
-    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    // The letters, at the box's size (palette indices, 0 = no ink).
+    let mut ink = vec![0u8; (w * h) as usize];
     let mut put = |x: u32, y: u32, index: u8| {
         if index != 0 && x < w && y < h {
-            let at = ((y * w + x) * 4) as usize;
-            let [r, g, bl] = palette[index as usize];
-            rgba[at..at + 4].copy_from_slice(&[r, g, bl, 255]);
+            ink[(y * w + x) as usize] = index;
         }
     };
-    if let Some(s) = strip.filter(|s| s.width > 0 && s.height > 0) {
-        for y in 0..h {
-            for x in 0..w {
-                put(x, y, s.at(x, y, b.scale));
-            }
-        }
-    }
     for (k, row) in rows.iter().enumerate() {
         let top = k as u32 * b.row_height + b.text_y;
         let mut x = ((w as f32 - text_width(font, row)) / 2.0).max(0.0);
@@ -193,7 +201,26 @@ pub fn picture(font: &Font, strip: Option<&Strip>, palette: &[Rgb; 256], rows: &
             x += glyph_width(font, c) + font.char_spacing as f32;
         }
     }
-    (w, h, rgba)
+    let out = if out > 0.0 { out } else { 1.0 };
+    let (ow, oh) = (((w as f32 * out).round() as u32).max(1), ((h as f32 * out).round() as u32).max(1));
+    let step = stone_step(b.scale, out);
+    let strip = strip.filter(|s| s.width > 0 && s.height > 0);
+    let mut rgba = vec![0u8; (ow * oh * 4) as usize];
+    for y in 0..oh {
+        for x in 0..ow {
+            let (bx, by) = (((x as f32 / out) as u32).min(w - 1), ((y as f32 / out) as u32).min(h - 1));
+            let index = match ink[(by * w + bx) as usize] {
+                0 => strip.map_or(0, |s| s.at(x, y, step)),
+                i => i,
+            };
+            if index != 0 {
+                let at = ((y * ow + x) * 4) as usize;
+                let [r, g, bl] = palette[index as usize];
+                rgba[at..at + 4].copy_from_slice(&[r, g, bl, 255]);
+            }
+        }
+    }
+    (ow, oh, rgba)
 }
 
 #[cfg(test)]
@@ -285,7 +312,7 @@ pub(crate) mod tests {
         let strip = [0u8, 3, 3, 3];
         let rows = vec!["ab".to_string(), "c".to_string()];
         let b = Box { width: 100, row_height: 15, text_y: 2, scale: 1.0 };
-        let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &rows, b);
+        let (w, h, rgba) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &rows, b, 1.0);
         assert_eq!((w, h), (100, 34));
         let at = |x: u32, y: u32| &rgba[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize];
         assert_eq!(at(0, 0), [0, 0, 0, 0], "strip index 0: see-through");
@@ -298,8 +325,31 @@ pub(crate) mod tests {
         assert_eq!(at(45, 17), [200, 150, 50, 255]);
         // Stretched by 2: the 2x2 stone's see-through pixel is 2x2.
         let b2 = Box { scale: 2.0, ..b };
-        let (_, _, rgba2) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &[], b2);
+        let (_, _, rgba2) = picture(&f, Some(&Strip { width: 2, height: 2, pixels: &strip }), &pal, &[], b2, 1.0);
         assert_eq!(&rgba2[4..8], [0, 0, 0, 0]);
         assert_eq!(&rgba2[8..12], [80, 80, 80, 255]);
+    }
+
+    #[test]
+    fn a_checkerboard_stone_stays_even_at_any_window_size() {
+        // stontran.pbm is a one-pixel checkerboard (index 0 see-through).
+        let f = font();
+        let mut pal = [[0u8; 3]; 256];
+        pal[3] = [80, 80, 80];
+        let stone: Vec<u8> = (0..64u32 * 64).map(|i| if (i % 64 + i / 64) % 2 == 0 { 0 } else { 3 }).collect();
+        let s = Strip { width: 64, height: 64, pixels: &stone };
+        let b = Box { width: 400, row_height: 15, text_y: 2, scale: 1.25 };
+        // 800x600, a 1280x720 window (x 1.2) and a 1920x1080 one (x 1.8).
+        for (out, step) in [(1.0, 1), (1.2, 2), (1.8, 2)] {
+            assert_eq!(stone_step(b.scale, out), step);
+            let (w, h, rgba) = picture(&f, Some(&s), &pal, &[], b, out);
+            assert_eq!(w, (400.0 * out).round() as u32);
+            let ink = |x: u32, y: u32| rgba[((y * w + x) * 4 + 3) as usize] != 0;
+            for y in 0..h.min(20) {
+                for x in 0..w.min(200) {
+                    assert_eq!(ink(x, y), (x / step + y / step) % 2 == 1, "out {out}: pixel ({x}, {y})");
+                }
+            }
+        }
     }
 }

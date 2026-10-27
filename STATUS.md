@@ -5,7 +5,14 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-26)
+## Where we are (2026-10-27)
+
+- **2026-10-27 (B): fix: the caption stone looked checkered** (the
+  user's report). `stontran.pbm` is a one-pixel checkerboard of
+  see-through pixels; stretched by uneven amounts (the 800 × 600 layout
+  × 1.25, then the window) it broke into stripes and blocks. The caption
+  picture is now made at window pixels with each stone pixel a whole
+  number of window pixels. Logs and unit test only, not looked at by eye.
 
 - **2026-10-26 (B): fix: Daventry's small waterfall was missing after a
   return** (the user's report): a kept world now also keeps the files

@@ -341,6 +341,15 @@ pub fn setup_caption_picture(mut commands: Commands, style: Option<Res<CaptionSt
 /// in `viewer.log` with its rows and their widths. 4c-2: placed every
 /// frame on the highest bottom panel as it slides (`interface.md` rule 51).
 #[allow(clippy::too_many_arguments)]
+/// The caption picture as last made: window pixels per screen pixel, and
+/// its size in window pixels (2026-10-27).
+#[derive(Default)]
+pub struct CaptionMade {
+    out: f32,
+    size: [u32; 2],
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn caption_picture_draw(
     speech: Res<Speech>,
     style: Option<Res<CaptionStyle>>,
@@ -353,6 +362,8 @@ pub fn caption_picture_draw(
     shared: Res<crate::Shared>,
     frame: Res<crate::gui_view::ScreenFrame>,
     (change, mut seen): (Res<crate::world_build::WorldChange>, Local<u64>),
+    window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut made: Local<CaptionMade>,
 ) {
     // A new world's caption picture is drawn again (M6 6e-2).
     if crate::world_build::new_world(&change, &mut seen) {
@@ -371,10 +382,18 @@ pub fn caption_picture_draw(
     // and the screen's right edge.
     let bottom = place.bottom.unwrap_or(sh);
     let map_right = place.map_right.unwrap_or_else(|| caption::map_away_right(sw));
+    // The window's real pixels per pixel of the game's screen (the 4:3
+    // frame is in logical pixels; Windows' display scaling on top): the
+    // picture is made at that size so the stone's checkerboard stays even
+    // (2026-10-27, `caption::stone_step`).
+    let [_, _, fw, _] = frame.0;
+    let scale_factor = window.single().map_or(1.0, |w| w.scale_factor());
+    let out = fw / sw * scale_factor;
     // The speech changes every frame (the mouths): only a new caption
-    // text makes a new picture.
+    // text, or a new window size, makes a new picture.
     let shown = speech.caption.as_ref().map(|(_, t)| t.clone());
-    if *last != shown {
+    if *last != shown || (made.out - out).abs() > 1e-3 {
+        made.out = out;
         *last = shown;
         *last_place = None;
         match speech.caption.as_ref().map(|(_, t)| t.as_str()) {
@@ -393,13 +412,20 @@ pub fn caption_picture_draw(
                     shared.log.lock().unwrap().detail(format!("caption {text:?}: no rows; hidden"));
                 } else {
                     let strip = style.strip.as_ref().map(|(w, h, p)| caption::Strip { width: *w, height: *h, pixels: p });
-                    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &rows, b);
+                    let (w, h, rgba) = caption::picture(&style.font, strip.as_ref(), &style.palette, &rows, b, out);
+                    made.size = [w, h];
                     let mut picture = Image::new(Extent3d { width: w, height: h, depth_or_array_layers: 1 }, TextureDimension::D2, rgba, TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::default());
                     picture.sampler = ImageSampler::nearest();
                     image.image = images.add(picture);
                     *vis = Visibility::Inherited;
                     let widths: Vec<f32> = rows.iter().map(|l| caption::text_width(&style.font, l)).collect();
-                    shared.log.lock().unwrap().detail(format!("caption picture shown: {} row(s) {rows:?}, widths {widths:?} px; box {w}x{h} (the stone covers it all; interface.md rules 47-50)", rows.len()));
+                    shared.log.lock().unwrap().detail(format!(
+                        "caption picture shown: {} row(s) {rows:?}, widths {widths:?} px; box {}x{} made at {w}x{h} window pixels (x {out:.3}); the stone tiled, each of its pixels {} window pixel(s) square (interface.md rules 20a, 47-50)",
+                        rows.len(),
+                        b.width,
+                        b.height(rows.len()),
+                        caption::stone_step(b.scale, out)
+                    ));
                 }
             }
         }
@@ -408,20 +434,26 @@ pub fn caption_picture_draw(
         return;
     }
     let (left, top) = caption::place(sw, &b, *rows_shown, bottom, map_right);
-    let h = b.height(*rows_shown) as f32;
-    // 4c-6: on the 4:3 screen in the middle of the window.
+    // 4c-6: on the 4:3 screen in the middle of the window. Shown at the
+    // picture's own size in window pixels, at a whole window pixel, so
+    // no row or column of the stone is dropped or doubled (2026-10-27).
     let [fl, ft, fw, _] = frame.0;
     let k = fw / sw;
-    n.left = Val::Px(fl + left * k);
-    n.top = Val::Px(ft + top * k);
-    n.width = Val::Px(b.width as f32 * k);
-    n.height = Val::Px(h * k);
+    let whole = |v: f32| (v * scale_factor).round() / scale_factor;
+    n.left = Val::Px(whole(fl + left * k));
+    n.top = Val::Px(whole(ft + top * k));
+    n.width = Val::Px(made.size[0] as f32 / scale_factor);
+    n.height = Val::Px(made.size[1] as f32 / scale_factor);
     let at = (left.round() as i32, top.round() as i32);
     if *last_place != Some(at) {
         *last_place = Some(at);
         shared.log.lock().unwrap().detail(format!(
-            "caption box at left {left:.2} top {top:.2} bottom {bottom:.2} of {sw}x{sh}; centre {:.2} (map's right edge {map_right:.2}; interface.md rule 51)",
-            left + b.width as f32 / 2.0
+            "caption box at left {left:.2} top {top:.2} bottom {bottom:.2} of {sw}x{sh}; centre {:.2} (map's right edge {map_right:.2}; interface.md rule 51); in the window at ({:.2}, {:.2}) size {}x{} window pixels",
+            left + b.width as f32 / 2.0,
+            whole(fl + left * k) * scale_factor,
+            whole(ft + top * k) * scale_factor,
+            made.size[0],
+            made.size[1]
         ));
     }
 }
