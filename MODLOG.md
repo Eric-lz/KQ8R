@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-26 K-2, K-3: the bricks stay down and the stream stays blocked after a return
+
+**Changed:** `kq8-core`: `KeptState` also keeps the waiting movement; `NamedAnimPlayer::with_anim_pos` (`objects.md` rule 4) and a unit test. Viewer: `KeptWorld::states` (filled when Connor leaves, listed in the log), carried in `Arrival::states`; the loader (`apply_kept`) puts a kept object's `currAnimName`, `nextAnimName`, `animPos`, `colliderType` into its section and its kept place and turn into the placement before reading it; `animPos` read for animated and scripted objects (`anim_view.rs`, `door_view.rs`). DESIGN (K-1 to K-3 done), FEATURES, STATUS, provenance.
+**Why:** The user's report (bricks back up, stream flowing after a return). DESIGN "kept worlds keep animated objects' state".
+**Tested how:** `cargo test --workspace` (all pass); clippy: same output as before. Viewer: `kq8-viewer --world Daventry --frames 10000 --sound off --at 156625,303748,1.57 --lift 6000 --hold 1,0,0,200 --console "goworld CastleD",120 --console "goworld Daventry",150 --command "move Connor 0 156625 303748 -1 0 0 1.57",170`; `viewer.log`, `anim.log`.
+**Result:** Leaving: "2 object states (K-2): water 'blocked' 0.5625 at (158442, 306165, 14230); Bricks 'down' 1.0000 at (156652, 303400, 14562) type 0x10001" (no other Daventry object changed). Castle: 0. Return: "2 of 2 kept object states put back"; `water` "movement 1 loop=water2.kqs" at phase 0.5625 (frame 9), no waiting movement started; `Bricks` "frame 50 of 51", at (156652, 303400, 14562), its box there with type 0x10001; both drawn once Connor is near. The values match the user's `save10.vol`.
+**Mistakes on the way:** my first inline edit script broke on shell quoting before changing anything; run from a scratch file instead.
+**Still broken / not tested:** Not looked at by eye. After the push `Bricks` is no longer clickable, so it loads as a plain animated object (not a scripted one); its script still gets events. Still fresh on return: doors, chests, characters, hidden switches, items on the ground (STATUS).
+**Next:** The user's look at the bricks and the stream after a return.
+
 ## 2026-10-26 K-1: core knows which animated and scripted objects changed
 
 **Changed:** `kq8-core` `active.rs`: `KeptState` (movement name, phase, place, collision type); each animated object (not characters) and scripted object's movement name, place and collision type are noted when added; `WorldState::kept_states()` gives those still in the world where one of them changed. 1 unit test. DESIGN "kept worlds keep animated objects' state" (plan K-1 to K-3), provenance.

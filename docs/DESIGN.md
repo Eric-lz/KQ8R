@@ -2176,9 +2176,11 @@ marked **new**):
      object is still there; on return they are loaded again right after
      the start script, as objects in the world from the start, from
      their files (not their state).
-  Everything else of a world (positions, health, doors and chests opened
-  without a variable, animated objects' current movement, e.g.
-  Daventry's `water` in `blocked`, items dropped on the ground, new
+  5. its **animated and scripted objects' state** where it changed
+     (2026-10-26, "kept worlds keep animated objects' state", K-1 to
+     K-3): movement, phase, place, collision type.
+  Everything else of a world (positions and health of characters, doors
+  and chests opened without a variable, items dropped on the ground, new
   copies a `loadKQ` made with a name or place, terrain changes, the
   world clock) comes back **fresh**: a known gap, logged at each arrival
   with counts.
@@ -3187,7 +3189,7 @@ Not in this plan: joins for characters whose files don't share a layout
 (zombies, spriggans, the wizard, skeletons, orcs); shadows (whole
 frames, as now).
 
-### Outside the milestones: kept worlds keep animated objects' state (planned 2026-10-26)
+### Outside the milestones: kept worlds keep animated objects' state (planned 2026-10-26; done 2026-10-26, steps K-1 to K-3, checked in the logs only)
 
 **The user's report:** after the bricks puzzle, Daventry → Castle →
 Daventry: the bricks are back up in their old place and the stream
@@ -3207,7 +3209,7 @@ when past the `loop=` start (`objects.md` "Animated objects at load"
 rules 3, 4). Our loader does not read `animPos` yet.
 
 **Plan.** Kept in memory as the rest of 6e-8.
-- **K-1 (core):** for animated objects (`anims`, not characters) and
+- **K-1 (core)** (**done**): for animated objects (`anims`, not characters) and
   scripted objects (`objects`), remember each one's movement name,
   placement and (scripted objects) collision type when added; a
   `kept_states()` gives, for those still in the world whose movement
@@ -3217,7 +3219,7 @@ rules 3, 4). Our loader does not read `animPos` yet.
   loads as on a first visit, so nothing else can change by this step (a
   looping object's phase starting again is not something one can see).
   Unit test.
-- **K-2 (viewer):** `KeptWorld` and `Arrival` carry them; the loader puts
+- **K-2 (viewer)** (**done**): `KeptWorld` and `Arrival` carry them; the loader puts
   them into the object's section before reading it (`currAnimName`,
   `animPos`, `colliderType`) and its place and turn into the placement
   (no ground rule applied again: the kept place is already the final
@@ -3225,7 +3227,7 @@ rules 3, 4). Our loader does not read `animPos` yet.
   value past the movement's start becomes its phase). Test: the bricks
   run, Daventry → Castle → Daventry: logs show `water` on `blocked`,
   `Bricks` on `down` at (156652, 303400, 14562).
-- **K-3:** docs (FEATURES, STATUS, provenance), the user's look.
+- **K-3** (**done**, but the user's look): docs (FEATURES, STATUS, provenance), the user's look.
 
 Not in this plan: doors, chests (their open/closed state and contents),
 characters, hidden switches, items on the ground. They stay fresh on

@@ -351,7 +351,7 @@ pub fn spawn_animated(
         let names = (a.anim_names.0.as_deref(), a.anim_names.1.as_deref());
         // anim-scripts.md rule 3 as corrected 2026-10-19 (M4 4d-8): both
         // names start as `Stop`, the keys replace them.
-        let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_stop_names(names.0, names.1);
+        let mut player = NamedAnimPlayer::new(&p.name, movements, a.current, Placement { rotation, position: p.position }).with_stop_names(names.0, names.1).with_anim_pos(a.anim_pos);
         // anim-scripts.md rule 11 (M5 5d-1).
         player.once = a.once;
         if player.current != a.current {

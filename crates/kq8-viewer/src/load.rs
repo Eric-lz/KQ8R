@@ -1622,6 +1622,8 @@ pub struct AnimatedAssets {
     /// `currAnimName` and `nextAnimName` as written (`anim-scripts.md`
     /// rule 3).
     pub anim_names: (Option<String>, Option<String>),
+    /// `animPos` (`objects.md` "Animated objects at load" rule 4).
+    pub anim_pos: Option<f32>,
     /// `flags` bit 8: random start and speed.
     pub random: bool,
     /// `script=`, if any.
@@ -1689,6 +1691,8 @@ pub struct DoorAssets {
     /// `currAnimName` and `nextAnimName` as written (`anim-scripts.md`
     /// rule 3).
     pub anim_names: (Option<String>, Option<String>),
+    /// `animPos` (`objects.md` "Animated objects at load" rule 4).
+    pub anim_pos: Option<f32>,
     /// Shape of that movement (for the box lookup).
     pub shape: String,
     pub script: Option<String>,
@@ -1799,6 +1803,9 @@ pub struct Arrival {
     /// lower case, in order: loaded again after the start script (rule
     /// 14.5), as objects in the world from the start.
     pub came_in: Vec<String>,
+    /// Kept animated and scripted objects' state by lower-case name (DESIGN
+    /// K-2, rules 12, 15): put into their `.kq` values when they load.
+    pub states: BTreeMap<String, kq8_core::active::KeptState>,
     /// The kept maps by map index (rule 16): this world's own, when it was
     /// visited before, replaces its shipped file.
     pub kept_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
@@ -1868,6 +1875,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut placer = Placer {
         gone: arrival.as_ref().map(|a| a.gone.clone()).unwrap_or_default(),
         gone_skipped: Vec::new(),
+        kept_states: arrival.as_ref().map(|a| a.states.clone()).unwrap_or_default(),
+        kept_applied: Vec::new(),
         portal_movements,
         skip_con_start: arrival.is_some(),
         progress,
@@ -2080,12 +2089,16 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let (item_shapes, item_lines) = placer.item_models(&script);
     let items = std::mem::take(&mut placer.items);
     let gone_skipped = std::mem::take(&mut placer.gone_skipped);
-    if let Some(a) = arrival.as_ref().filter(|a| !a.kept_vars.is_empty() || !a.gone.is_empty()) {
+    let kept_applied = std::mem::take(&mut placer.kept_applied);
+    if let Some(a) = arrival.as_ref().filter(|a| !a.kept_vars.is_empty() || !a.gone.is_empty() || !a.states.is_empty()) {
         placer.log.summary(format!(
-            "world change: kept world: {} variables set over the start values (rules 13-14); {} objects that left it not loaded again: {:?} (rule 12)",
+            "world change: kept world: {} variables set over the start values (rules 13-14); {} objects that left it not loaded again: {:?} (rule 12); {} of {} kept object states put back: {:?} (K-2)",
             a.kept_vars.len(),
             gone_skipped.len(),
-            gone_skipped
+            gone_skipped,
+            kept_applied.len(),
+            a.states.len(),
+            kept_applied
         ));
     }
     phase("scripts for play read, item models", &mut since);
@@ -2169,6 +2182,9 @@ struct Placer<'a> {
     /// case, and those skipped.
     gone: std::collections::BTreeSet<String>,
     gone_skipped: Vec<String>,
+    /// A kept world's object states (K-2), and the names they were put on.
+    kept_states: BTreeMap<String, kq8_core::active::KeptState>,
+    kept_applied: Vec<String>,
     /// Portals' own lists' movements for the Special state (M6 6e-7).
     portal_movements: Vec<(String, String)>,
     /// A world change (M6 6e-3): `conStart.cs` is not run.
@@ -2877,6 +2893,43 @@ impl Placer<'_> {
         }
     }
 
+    /// A kept object's state put into its section and placement (DESIGN
+    /// K-2): `currAnimName`, `nextAnimName`, `animPos`, `colliderType` (a
+    /// scripted object's) replace the file's; its place and turn as kept,
+    /// with no ground rule applied again (the kept place is the final one).
+    fn apply_kept(&mut self, label: &str, s: &mut kq8_data::kq_text::Section, p: &mut kq8_data::objects::Placement, k: &kq8_core::active::KeptState) {
+        let mut set = |key: &str, value: String| {
+            s.entries.retain(|(k, _)| !k.eq_ignore_ascii_case(key));
+            s.entries.push((key.to_string(), value));
+        };
+        set("currAnimName", k.movement.clone());
+        set("nextAnimName", k.waiting.clone().unwrap_or_default());
+        set("animPos", k.phase.to_string());
+        if let Some(t) = k.collision_type {
+            set("colliderType", t.to_string());
+        }
+        p.position = k.placement.position;
+        p.angles = kq8_data::objects::angles_of(k.placement.rotation);
+        p.keep_on_ground = kq8_data::objects::KeepOnGround::Off;
+        p.z_on_ground = None;
+        p.missing_loc = [false; 3];
+        self.log.summary(format!(
+            "world change: kept world: {label}[{}] loads as left (rules 12, 15): currAnimName={} nextAnimName={} animPos={:.4} at ({:.0}, {:.0}, {:.0}) angles ({:.3}, {:.3}, {:.3}){}",
+            p.name,
+            k.movement,
+            k.waiting.as_deref().unwrap_or(""),
+            k.phase,
+            p.position[0],
+            p.position[1],
+            p.position[2],
+            p.angles[0],
+            p.angles[1],
+            p.angles[2],
+            k.collision_type.map_or(String::new(), |t| format!(" colliderType={t} ({t:#x})"))
+        ));
+        self.kept_applied.push(p.name.clone());
+    }
+
     /// One object from a `loadKQ` line (or an unused `.kq` file).
     fn place(
         &mut self,
@@ -2960,8 +3013,10 @@ impl Placer<'_> {
         }
         // The object is the file's first section; the other sections
         // (animation lists, movements) belong to it.
-        let Some(s) = file.first() else { return };
-        let mut p = Placement::from_load(s, load);
+        if file.is_empty() {
+            return;
+        }
+        let mut p = Placement::from_load(&file[0], load);
         // A monster-list line (rule 4): renamed, its position and heading
         // replace the file's; z −1 = on the ground (the floor grid, as a
         // `loadKQ` −1); any other z as written, then `keepOnGround`.
@@ -2979,6 +3034,12 @@ impl Placer<'_> {
             self.gone_skipped.push(p.name.clone());
             return;
         }
+        // DESIGN K-2 (world-change.md rules 12, 15): a kept world's object
+        // loads with the values it had when Connor left.
+        if let Some(k) = self.kept_states.get(&p.name.to_ascii_lowercase()).filter(|_| !unused).cloned() {
+            self.apply_kept(&label, &mut file[0], &mut p, &k);
+        }
+        let s = &file[0];
         let mut character = character_keys.zip(character_list).map(|(keys, list)| {
             let lips = match kq8_data::characters::Lips::of(&file, &keys) {
                 Some(Ok(l)) => Some(l),
@@ -3761,6 +3822,7 @@ impl Placer<'_> {
             movements: with_index,
             current,
             anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
+            anim_pos: s.number("animPos").and_then(Result::ok).map(|v| v as f32),
             shape,
             script: text("script").filter(|v| !v.is_empty()),
             collider_type,
@@ -4074,6 +4136,7 @@ impl Placer<'_> {
             movements,
             current: c.movement,
             anim_names: (name_key("currAnimName"), name_key("nextAnimName")),
+            anim_pos: s.number("animPos").and_then(Result::ok).map(|v| v as f32),
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
             script: text("script"),
             once: s.get("classType").is_some_and(|c| c.trim().eq_ignore_ascii_case("KQAnimOnce")),

@@ -379,6 +379,8 @@ pub struct KeptState {
     pub movement: String,
     /// Where in that movement, 0–1 (`animPos`).
     pub phase: f32,
+    /// The waiting movement (`nextAnimName`), if any.
+    pub waiting: Option<String>,
     pub placement: Placement,
     /// Scripted objects only (`objects`); animated objects' collision
     /// type is not tracked.
@@ -950,7 +952,14 @@ impl WorldState {
                     !p.movement_name().eq_ignore_ascii_case(movement) || p.base != *placement || collision_type != start_type
                 })
             })
-            .map(|(p, collision_type)| KeptState { name: p.name.clone(), movement: p.movement_name().to_string(), phase: p.phase, placement: p.base, collision_type })
+            .map(|(p, collision_type)| KeptState {
+                name: p.name.clone(),
+                movement: p.movement_name().to_string(),
+                phase: p.phase,
+                waiting: p.waiting.clone(),
+                placement: p.base,
+                collision_type,
+            })
             .collect()
     }
 

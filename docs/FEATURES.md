@@ -712,7 +712,8 @@ checked in the logs only (`viewer.log`, `world.log`, `doors.log`,
 - **A world you come back to:** its map with its fog, its story's
   variables (scenes that played don't play again) and the objects taken
   or killed there stay gone; objects scripts brought in come back
-  (Daventry's small waterfall). Other things (positions, opened chests
+  (Daventry's small waterfall); animated objects keep their movement and
+  place (the bricks stay down, the stream stays blocked). Other things (positions, opened chests
   without a variable, items dropped there, bodies) start fresh for now:
   full kept worlds come with saved games. Temple 1 drops kept worlds.
 - **Worlds with a parent** (Castle Daventry, Snow exit, Temples 2–4)

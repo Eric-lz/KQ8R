@@ -230,6 +230,17 @@ impl NamedAnimPlayer {
         self
     }
 
+    /// `animPos` (`objects.md` "Animated objects at load" rule 4): a
+    /// value past the current movement's `loop=` start becomes its phase
+    /// (the animation jumps there); otherwise nothing changes. Read for a
+    /// kept world's objects (DESIGN K-2); no shipped Daventry file has one.
+    pub fn with_anim_pos(mut self, pos: Option<f32>) -> Self {
+        if let Some(pos) = pos.filter(|p| self.movement().is_some_and(|m| *p > m.start)) {
+            self.phase = pos;
+        }
+        self
+    }
+
     /// `flags` bit 8 (`anim-scripts.md` rule 3, `objects.md` rule 4, Q85),
     /// given to the current movement as it starts: start frame =
     /// round(random × (frames − 1)), phase = that frame ÷ frames; speed =
@@ -597,6 +608,15 @@ pub(crate) mod tests {
             0,
             Placement::at([0.0; 3]),
         )
+    }
+
+    #[test]
+    fn anim_pos_past_the_start_becomes_the_phase() {
+        // objects.md rule 4; the user's save: Bricks `down` animPos=1.0.
+        let down = || NamedAnimPlayer::new("Bricks", vec![movement("stop", 0.0, 0.0, true, true, vec![]), movement("down", 0.5, 0.0, false, false, vec![])], 0, Placement::at([0.0; 3])).with_stop_names(Some("down"), None);
+        assert_eq!(down().with_anim_pos(Some(1.0)).phase, 1.0);
+        assert_eq!(down().with_anim_pos(Some(0.25)).phase, 0.5, "not past the start: the loop= start stays");
+        assert_eq!(down().with_anim_pos(None).phase, 0.5);
     }
 
     /// Updates until something finishes: (updates, the advance).

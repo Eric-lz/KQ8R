@@ -151,6 +151,8 @@ pub struct KeptWorld {
     /// Files a script's `loadKQ` brought in while playing, still there
     /// (rules 12, 14.5), lower case, in order.
     pub came_in: Vec<String>,
+    /// Animated and scripted objects whose state changed (DESIGN K-2).
+    pub states: Vec<kq8_core::active::KeptState>,
 }
 
 impl WorldChange {
@@ -613,14 +615,30 @@ pub fn world_change_step(world: &mut World) {
                 vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
                 gone: sim.active.world.gone_names().into_iter().collect(),
                 came_in: sim.active.world.came_in_files(),
+                states: sim.active.world.kept_states(),
             });
             if let Some(k) = kept {
                 log.lock().unwrap().summary(format!(
-                    "world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), {} loaded while playing {:?} (rule 12), its map (rule 16)",
+                    "world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), {} loaded while playing {:?} (rule 12), {} object states (K-2): {}; its map (rule 16)",
                     k.vars.len(),
                     k.gone.len(),
                     k.came_in.len(),
-                    k.came_in
+                    k.came_in,
+                    k.states.len(),
+                    k.states
+                        .iter()
+                        .map(|s| format!(
+                            "{} '{}' {:.4} at ({:.0}, {:.0}, {:.0}){}",
+                            s.name,
+                            s.movement,
+                            s.phase,
+                            s.placement.position[0],
+                            s.placement.position[1],
+                            s.placement.position[2],
+                            s.collision_type.map_or(String::new(), |t| format!(" type {t:#x}"))
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 ));
                 world.resource_mut::<WorldChange>().kept.insert(from.to_ascii_lowercase(), k);
             }
@@ -680,6 +698,7 @@ pub fn world_change_step(world: &mut World) {
                 kept_vars: kept.vars.clone(),
                 gone: kept.gone.clone(),
                 came_in: kept.came_in.clone(),
+                states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
                 kept_maps: j.other_maps.clone(),
             });
             let percent = Arc::new(AtomicU32::new(0));
