@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 `makeTranslucent Connor`: the Shadow see-through in the Dead City fight; Q172 (the last shot)
+
+**Changed:** Core `active.rs`: `makeTranslucent Connor <n>` is stored (`connor_translucency`) instead of "not done"; unit test extended. Viewer `potion_view.rs`: `translucent_step` puts every material of Connor's model at n / 255 (blended), back to its own alpha and blending at 256. QUESTIONS Q172. Provenance, STATUS.
+**Why:** The user's check of the fight: the Shadow should be slightly see-through. The fight's movements (`c_p2sm*.kqs`) hold Connor's `body` and the Shadow's parts (`bodyshadow`, `shadowbody`, `shadow`, `pixibody`) in one model, and `ShadBat.cs` runs `makeTranslucent Connor 180` / `256`; we skipped it for Connor (`characters.md` rule 22). The user also saw the last shot closer than in the original: the notes don't say what a cut does to a running flight (Q172).
+**Tested how:** `cargo test --workspace` (all pass); clippy: same 2 warnings as before. `kq8-viewer --world Daventry --frames 9000 --sound off --console "goworld portal davgate4.kq",30`; `connor.log`, `doors.log`, `traps.log`.
+**Result:** "makeTranslucent 180: opacity 1.000 -> 0.706 on 27 material(s)" at updates 87, 160, 202 (movements 3, 5, 7: the ones with `bodyshadow`), solid again at 130, 187, 217. Movements 1, 2, 4, 6, 8–10 stay solid, as the script says. Last shot: the cut at update 240 ends the flight started at 227 (13 of 20 updates), so "places" stays off and the camera stands on (182221, 45750, 2000), 750 from Connor; earlier cuts were pushed to about 961 and lifted to 2,264.
+**Still broken / not tested:** **Not looked at by eye.** That the 27 materials include the Shadow's is inferred (they are all of his model's materials). Whether the Shadow parts in movements 1, 9, 10 should also be see-through (by a material flag rather than the script) is not checked. The last shot waits for Q172 (session A).
+**Next:** The user's look; session A answers Q172.
+
 ## 2026-10-27 Fix: the Shadow fight plays on the first arrival in Dead City
 
 **Changed:** Viewer `load.rs` (the collision loader): an object with a script but collision type 0 and mask 0, or with no box in `BOUNDS.KQ`, is now kept for its script (empty box: never clicked, hit or picked as an attack target). Before, it was dropped, so it got no `Init` and every cue to it was lost. Provenance, STATUS, FEATURES.

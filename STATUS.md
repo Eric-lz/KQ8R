@@ -12,8 +12,10 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   gate's script cues the object `ShadBat`, which our loader had dropped
   (no collision, so no box); scripted objects without a box are now kept
   for their script (`clicking.md` rule 21). The whole scene runs in the
-  logs and plays only once; **not looked at by eye**. Connor's
-  `makeTranslucent` in the fight is not done yet.
+  logs and plays only once; the user's look: it works. Then
+  `makeTranslucent Connor` (the Shadow is part of his model there): see-
+  through in movements 3, 5, 7 (logs only). The last shot is too close
+  (user): waits for **Q172** (a cut during a running flight).
 
 - **2026-10-27 (B): fix: the caption stone looked checkered** (the
   user's report). `stontran.pbm` is a one-pixel checkerboard of
@@ -539,6 +541,9 @@ M6 has started with the Rope and Hook (6a).
 - **New for A (2026-10-25): Q171**: the level-up flame and the slot
   flashes are see-through in the original although rule 20a says
   attribute 0x8 is solid; B uses their files' own transparent flag.
+- **New for A (2026-10-27): Q172**: what a `cutToCamLoc` does to a
+  flight still running (Dead City's Shadow fight, last shot too close;
+  B ends the flight, so the cut is not pulled onto the range).
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

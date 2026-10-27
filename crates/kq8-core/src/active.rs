@@ -703,6 +703,10 @@ pub struct WorldState {
     /// Connor's handsOff is on (a cutscene), set by the caller before each
     /// update (M5 5g-9, `potions.md` rule 26).
     pub connor_hands_off: bool,
+    /// `makeTranslucent Connor <n>` (characters.md rule 22): his see-through
+    /// value (256 = solid), for the viewer; `None` = never set. Dead City's
+    /// Shadow fight (`ShadBat.cs`) uses it: the Shadow is part of his model.
+    pub connor_translucency: Option<f32>,
     /// The reason last logged by [`WorldState::note_connor_report`].
     connor_hidden_logged: Option<&'static str>,
     /// `setConnorFlag InTemple4 1` (M5 5g-4, `potions.md` rule 19).
@@ -2513,20 +2517,25 @@ impl WorldState {
 
     /// `makeTranslucent <name> <0–256>` (`characters.md` rule 22): the
     /// see-through value, at once, no fade; 256 = solid (`objects.md`
-    /// "See-through objects" rule 2). Built for animated objects and
-    /// characters (the only Daventry use is the Wizard).
+    /// "See-through objects" rule 2). Built for animated objects,
+    /// characters (the only Daventry use is the Wizard) and Connor.
     fn make_translucent(&mut self, words: &[String], at: &str) -> String {
         let (Some(who), Some(value)) = (words.get(1), words.get(2).filter(|v| looks_like_number(v))) else {
             self.note(format!("{at}: usage: makeTranslucent <name> <0-256>; nothing"));
             return "1".into();
         };
         let n = number_value(value) as f32;
+        let what = |n: f32| if n >= 256.0 { "solid".to_string() } else { format!("opacity {:.3}", (n / 255.0).clamp(0.0, 1.0)) };
+        if who.eq_ignore_ascii_case(crate::talk::CONNOR) {
+            self.connor_translucency = Some(n);
+            self.note(format!("{at}: makeTranslucent Connor {n}: {}, at once, every part of his model (rule 22)", what(n)));
+            return "0".into();
+        }
         match self.anims.iter_mut().position(|a| !a.gone && a.player.name.eq_ignore_ascii_case(who)) {
             Some(i) => {
                 self.anims[i].translucency = Some(n);
                 let name = self.anims[i].player.name.clone();
-                let what = if n >= 256.0 { "solid".to_string() } else { format!("opacity {:.3}", (n / 255.0).clamp(0.0, 1.0)) };
-                let line = format!("{at}: makeTranslucent {name} {n}: {what}, at once (rule 22)");
+                let line = format!("{at}: makeTranslucent {name} {n}: {}, at once (rule 22)", what(n));
                 if self.anims[i].character.is_some() {
                     self.character_note(&name, line);
                 } else {
@@ -3482,6 +3491,7 @@ impl Active {
                 connor_in_temple4: false,
                 connor_flags: BTreeMap::new(),
                 connor_hands_off: false,
+                connor_translucency: None,
                 connor_hidden_logged: None,
                 reveal_objects: Vec::new(),
                 pickup_experience: Vec::new(),
@@ -7131,12 +7141,15 @@ endif
 
     #[test]
     fn make_translucent_sets_the_value_on_an_animated_object() {
-        let mut a = with_object("makeTranslucent water 150\nmakeTranslucent nobody 150\n", "x");
+        let mut a = with_object("makeTranslucent water 150\nmakeTranslucent nobody 150\nmakeTranslucent Connor 180\n", "x");
         a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert_eq!(a.world.anims[0].translucency, Some(150.0));
         let log = a.take_log().join("\n");
         assert!(log.contains("opacity 0.588, at once") && log.contains("makeTranslucent nobody 150: not an animated object"), "{log}");
+        // Connor (Dead City's Shadow fight): kept for the viewer.
+        assert_eq!(a.world.connor_translucency, Some(180.0));
+        assert!(log.contains("makeTranslucent Connor 180: opacity 0.706"), "{log}");
     }
 
     #[test]

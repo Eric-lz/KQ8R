@@ -667,7 +667,7 @@ fn main() -> ExitCode {
                 .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::running))
-                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step).after(gui_view::gui_step).run_if(world_build::running))
+                .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::translucent_step).after(gui_view::gui_step).run_if(world_build::running))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
                 .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate).run_if(world_build::running))
                 .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().run_if(world_build::playing))

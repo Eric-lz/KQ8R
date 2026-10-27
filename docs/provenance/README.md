@@ -3637,3 +3637,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Every object with a script gets `Init` and its `Cue` calls, whatever it collides with | `clicking.md` rule 21 | `doors.log`: "script ShadBat.cs ShadBat Init"; "KQCueEvent 10 to ShadBat" |
 | A portal's `exitScript` runs when the `exitAnim` ends, `$1` = the portal, `$2` = `Exit` (`shadbat.cs`) | `world-change.md` rule 20.4 (already built in 6e-4b) | `doors.log` "script shadbat.cs davgate4 Exit" |
 | Such an object (type 0 and mask 0, or no `BOUNDS.KQ` box) is kept with an empty box, so it is never clicked, hit or picked as an attack target | **Ours** (the note gives it no box; the click and attack picks test the box) | — |
+
+## 2026-10-27: `makeTranslucent Connor` (the Shadow fight) — core `active.rs` (`make_translucent`, `connor_translucency`); viewer `potion_view.rs` (`translucent_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `makeTranslucent <name> <n>` sets the see-through value at once, no fade; 256 = solid; every material of every part at n / 255 | `characters.md` rule 22, `objects.md` "See-through objects" rule 2 | unit test `make_translucent_sets_the_value_on_an_animated_object`; `connor.log` "makeTranslucent 180: opacity 1.000 -> 0.706" |
+| In Dead City's fight the Shadow is part of Connor's model (`bodyshadow`, `shadowbody`, `shadow`, `pixibody` in `c_p2sm*.kqs`), so `makeTranslucent Connor` makes it see-through too | Observed (`kq8 shape-parts deadcity/resource/c_p2sm<n>.kqs`, `ShadBat.cs`) | — |
+| Connor's value is not carried to another world; the haze fade of rule 2 is not applied to Connor | **Ours** (not traced; the scene ends solid) | — |

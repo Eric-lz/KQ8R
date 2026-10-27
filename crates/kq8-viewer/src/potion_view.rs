@@ -60,6 +60,10 @@ pub struct ConnorLooks {
     invisible: bool,
     /// Materials were added (M6 6c-2): the next look step redoes them all.
     redo: bool,
+    /// `makeTranslucent Connor` (characters.md rule 22): the opacity drawn
+    /// now, and each material's alpha and blending at opacity 1.
+    opacity_shown: f32,
+    full: std::collections::HashMap<AssetId<ObjectMaterial>, (f32, AlphaMode)>,
 }
 
 impl ConnorLooks {
@@ -84,6 +88,8 @@ impl ConnorLooks {
             face_shown: None,
             invisible: false,
             redo: false,
+            opacity_shown: 1.0,
+            full: Default::default(),
         }
     }
 
@@ -289,6 +295,32 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     let line = format!("{}; mouth {mouth} shown", lines.join("; "));
     c.log.detail(format!("connor update {}: {line}", c.updates));
     w.item_log.push(format!("update {updates}: {line}"));
+}
+
+/// Every update: `makeTranslucent Connor <n>` (`characters.md` rule 22):
+/// every material of his model at n / 255, at once (`objects.md`
+/// "See-through objects" rule 2), as for characters. Dead City's Shadow
+/// fight (`ShadBat.cs`) uses it: the Shadow is part of his model there.
+/// Materials added later (a weapon set) get it on the next change.
+pub fn translucent_step(sim: Option<Res<DoorSim>>, connor: Option<ResMut<ConnorSim>>, mut materials: ResMut<Assets<ObjectMaterial>>) {
+    let (Some(sim), Some(mut c)) = (sim, connor) else { return };
+    let Some(n) = sim.active.world.connor_translucency else { return };
+    let opacity = if n >= 256.0 { 1.0 } else { (n / 255.0).clamp(0.0, 1.0) };
+    let c = &mut *c;
+    let added = c.looks.materials.iter().any(|(h, _, _)| !c.looks.full.contains_key(&h.id()));
+    if opacity == c.looks.opacity_shown && !added {
+        return;
+    }
+    let mut changed = 0;
+    for (h, _, _) in &c.looks.materials {
+        let Some(mut m) = materials.get_mut(h) else { continue };
+        let (alpha, mode) = *c.looks.full.entry(h.id()).or_insert((m.settings.base_colour.w, m.alpha_mode));
+        m.settings.base_colour.w = alpha * opacity;
+        m.alpha_mode = if opacity < 1.0 { AlphaMode::Blend } else { mode };
+        changed += 1;
+    }
+    c.log.detail(format!("connor update {}: makeTranslucent {n}: opacity {:.3} -> {opacity:.3} on {changed} material(s) (characters.md rule 22)", c.updates, c.looks.opacity_shown));
+    c.looks.opacity_shown = opacity;
 }
 
 /// The name of a door's, chest's or scripted object's body, for `dither`
