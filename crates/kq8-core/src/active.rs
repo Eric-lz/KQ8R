@@ -1261,12 +1261,18 @@ impl WorldState {
         self.note(line);
     }
 
+    /// The animated object `name`: the live one when a deleted copy of
+    /// the same name is still listed (Dead City's `tikip3.kq` loaded as
+    /// `UniqueTikiName2` on every push), else the listed one.
     pub fn anim_index(&self, name: &str) -> Option<usize> {
-        self.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(name))
+        let same = |a: &AnimObject| a.player.name.eq_ignore_ascii_case(name);
+        self.anims.iter().position(|a| !a.gone && same(a)).or_else(|| self.anims.iter().position(same))
     }
 
+    /// The scripted object `name`, the live one first (as `anim_index`).
     pub fn object_index(&self, name: &str) -> Option<usize> {
-        self.objects.iter().position(|o| o.name().eq_ignore_ascii_case(name))
+        let same = |o: &ActiveObject| o.name().eq_ignore_ascii_case(name);
+        self.objects.iter().position(|o| !o.gone && same(o)).or_else(|| self.objects.iter().position(same))
     }
 
     pub fn chest_index(&self, name: &str) -> Option<usize> {
@@ -1412,7 +1418,7 @@ impl WorldState {
             let old = c.collision_type;
             c.collision_type = change(old);
             (old, c.collision_type)
-        } else if let Some(c) = self.clickables.iter_mut().find(|c| c.name.eq_ignore_ascii_case(name)) {
+        } else if let Some(c) = self.live_clickable(name).map(|i| &mut self.clickables[i]) {
             let old = c.collision_type;
             c.collision_type = change(old);
             (old, c.collision_type)
@@ -2612,6 +2618,14 @@ impl WorldState {
 
     /// The current `colliderType` of a door, chest, scripted object or
     /// clickable object.
+    /// The box object `name`: the live one when a deleted copy of the
+    /// same name is still listed (Dead City's second `paddle2`), else the
+    /// listed one.
+    pub(crate) fn live_clickable(&self, name: &str) -> Option<usize> {
+        let same = |c: &Clickable| c.name.eq_ignore_ascii_case(name);
+        self.clickables.iter().position(|c| !c.gone && same(c)).or_else(|| self.clickables.iter().position(same))
+    }
+
     pub fn collision_type_of(&self, name: &str) -> Option<u32> {
         if let Some(i) = self.object_index(name) {
             return Some(self.objects[i].collision_type);
@@ -2622,7 +2636,7 @@ impl WorldState {
         if let Some(i) = self.chest_index(name) {
             return Some(self.chests[i].collision_type);
         }
-        self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.collision_type)
+        self.live_clickable(name).map(|i| self.clickables[i].collision_type)
     }
 
     /// The movement player of the door, chest or scripted object `name`
@@ -3033,7 +3047,7 @@ impl WorldState {
         if let Some(o) = self.items.get(name) {
             return o.placement().map(|p| p.position);
         }
-        self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.placement.position)
+        self.live_clickable(name).map(|i| self.clickables[i].placement.position)
     }
 
     /// `KQMonster::speak <issuer> <to> <file> <noun> <verb> <case> <first>
@@ -3662,7 +3676,7 @@ impl Active {
     /// collision types, his push movement, then `padpush.cs` /
     /// `padpush2.cs` with `$1` = the paddle.
     fn paddle_push(&mut self, name: &str) {
-        let Some(paddle) = self.world.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.placement) else { return };
+        let Some(paddle) = self.world.live_clickable(name).map(|i| self.world.clickables[i].placement) else { return };
         let at = format!("{name} ({PADDLE_CLASS} push, pushing.md rule 11)");
         let Some(connor) = self.world.connor_at else {
             self.world.note(format!("{at}: Connor's place not known; nothing"));
@@ -4204,7 +4218,7 @@ impl Active {
         if let Some(o) = w.items.get(name) {
             return Some(mid(&o.placement()?, w.items.click_box(o)?));
         }
-        w.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| mid(&c.placement, (c.min, c.max)))
+        w.live_clickable(name).map(|i| &w.clickables[i]).map(|c| mid(&c.placement, (c.min, c.max)))
     }
 
     /// The click line from `origin` (the camera's eye) along `dir` (length

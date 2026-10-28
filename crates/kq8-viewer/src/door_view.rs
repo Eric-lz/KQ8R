@@ -1007,6 +1007,11 @@ impl kq8_core::connor_mover::GroundLookup for NoGround {
     }
 }
 
+/// A collider switched off by [`switch_off`] (a deleted object's).
+fn is_switched_off(c: &BoxCollider) -> bool {
+    c.min == [0.0; 3] && c.max == [0.0; 3] && c.placement.position == [0.0, 0.0, -1.0e7]
+}
+
 pub fn switch_off(c: &mut BoxCollider) {
     c.min = [0.0; 3];
     c.max = [0.0; 3];
@@ -1442,13 +1447,18 @@ pub fn trap_step(
             Request::Move { who, flags, position, turn, at } => {
                 // A plain placed object (3k-1): its colliders and drawn
                 // parts. Its old place is its collider's.
-                let old = colliders.as_ref().and_then(|c| c.0.iter().find(|b| b.name.eq_ignore_ascii_case(&who))).map(|b| b.placement);
+                // A deleted object of the same name (an earlier copy, e.g.
+                // the first `paddle2`) keeps its switched-off collider: not
+                // this object.
+                let live = |b: &BoxCollider| b.name.eq_ignore_ascii_case(&who) && !is_switched_off(b);
+                let old = colliders.as_ref().and_then(|c| c.0.iter().find(|b| live(b))).map(|b| b.placement);
                 // A copy loaded earlier in this same update and not drawn
                 // yet (`scary.cs`: `loadKQ paddle2.kq`, then `move paddle2`
-                // onto the pedestal): it is drawn at the moved place.
+                // onto the pedestal): it is drawn at the moved place. It
+                // comes first: an older live object can't share its name.
                 let queued = sim.spawns.iter_mut().find(|(_, n, _)| n.eq_ignore_ascii_case(&who)).map(|(_, _, p)| p);
                 match (old, queued) {
-                    (None, Some(placement)) => {
+                    (_, Some(placement)) => {
                         let (new, note) = kq8_core::active::moved_placement(*placement, flags, position, turn);
                         *placement = new;
                         let p = new.position;
@@ -1459,7 +1469,7 @@ pub fn trap_step(
                         let d: [f32; 3] = std::array::from_fn(|k| new.position[k] - old.position[k]);
                         let mut boxes = 0;
                         for list in [colliders.as_mut().map(|c| &mut c.0), view.as_mut().map(|v| &mut v.boxes)].into_iter().flatten() {
-                            for b in list.iter_mut().filter(|b| b.name.eq_ignore_ascii_case(&who)) {
+                            for b in list.iter_mut().filter(|b| live(b)) {
                                 b.placement = new;
                                 boxes += 1;
                             }

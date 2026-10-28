@@ -3673,3 +3673,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Special `padpush.anm` with `pushccw` / `pushcw`, or `pushoff` / `pushoff2` when `DeadCity::Paddle::Used` = 3; then `padpush.cs` / `padpush2.cs` with `$1` = the paddle | rule 11g | unit test; `doors.log` |
 | `padpush.anm`'s four movements preloaded when a script-loaded file of the world has `classType=KQPaddleObject` (no script line names them) | **Ours** (how we load; rule 11g says the class asks for them) | `viewer.log` "special padpush.anm/pushccw" |
 | Console `set <variable> <value>` | **Ours** (a test helper) | `console.log` "DeadCity::Paddle::Used = '3' (was '0')" |
+
+## Fix 2026-10-27: a reloaded name finds the live object (the 2nd–4th Paddle) — viewer `door_view.rs` (`Request::Move`, `is_switched_off`); core `active.rs` (`live_clickable`, `anim_index`, `object_index`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A deleted object's name is free again once its event has finished; a later `loadKQ` makes a new object of that name | `objects.md` "Where a world's objects come from" rule 6, `clicking.md` rule 22 | `doors.log` "copy paddle2 of paddle2.kq drawn at (175006, 66474, 1177)" |
+| Commands naming it act on the new, live object (not a deleted one still in our lists) | Follows from the rules above; how we keep deleted objects listed is **ours** | `doors.log` "getLoc UniqueTikiName2: 175006 66474 1177"; "the paddle at (175006, 66474, 1177)" |

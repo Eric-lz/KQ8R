@@ -10,7 +10,9 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 - **2026-10-27 (B): Dead City's Paddle puzzle** (the user's report):
   the Paddle shows on its pedestal and can be clicked back; pushing it
   (Q173 built, P-2) plays Connor's push from his side, the tiki sinks,
-  the Paddle comes back; the fourth starts the laser. Logs only. Seen on
+  the Paddle comes back; the fourth starts the laser (user: the first
+  pedestal works). Fix: the 2nd–4th Paddle showed nothing (a reused
+  name found the deleted first one). Logs only. Seen on
   the way, not done: the tiki lights' cue to `Terrain`,
   `KQCamera::setCamRelConner` (laser scene).
 
