@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 SC-2: the script coverage checklist and study batches
+
+**Changed:** New `docs/SCRIPT-COVERAGE.md` (written by `kq8 script-coverage --out docs/SCRIPT-COVERAGE.md`); DESIGN (SC-2 done, the batches for session A); STATUS, README.
+**Why:** The user's request (study the scripting in batches instead of one cutscene at a time).
+**Tested how:** Read the output; numbers below from it.
+**Result:** Of the commands used during play, still missing per world (distinct, uses; loading hints left out): Daventry 12 (17), Castle 4 (6), Dead City 19 (70), Swamp 13 (40), Gnome 12 (62), Barren 13 (45), IceWorld 10 (31), Snowexit 6 (7), temples 7–16 each. Connor's states not built: `Tile`, `Tile2`, `Tile3`, `Scales`, `ThrowRock` (by script), `Die`. Not in our code: events `KQMoveEvent`, `KQAttackEvent`, `KQPuzzleCommand`; calls `Load`, `ConnorCollision`, `Lookup`, `Preload`; about 35 classes (some are only menus or are read under other names).
+**Still broken / not tested:** As SC-1: "built" can be partial.
+**Next:** Session A, batch 1 (or batch 2 for Dead City first).
+
 ## 2026-10-27 SC-1: `kq8 script-coverage`, what the scripts ask of the program
 
 **Changed:** New `crates/kq8-cli/src/script_coverage.rs`; `kq8-cli` now uses `kq8-core`; `kq8 script-coverage [--out FILE]`. DESIGN (plan SC-1, SC-2), README, FEATURES, provenance.

@@ -7,6 +7,13 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-27)
 
+- **2026-10-27 (B): script coverage checklist** (the user's
+  request): `kq8 script-coverage` writes `docs/SCRIPT-COVERAGE.md`,
+  every command, Connor state, event, script call and class the game's
+  files use, per world, and whether we have it. Study batches for A in
+  `docs/DESIGN.md` "script coverage checklist" (batch 1: everywhere;
+  batch 2: Dead City, with Q174).
+
 - **2026-10-27 (B): Dead City's Paddle puzzle** (the user's report):
   the Paddle shows on its pedestal and can be clicked back; pushing it
   (Q173 built, P-2) plays Connor's push from his side, the tiki sinks,

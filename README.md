@@ -240,5 +240,7 @@ lists what the game's scripts ask of the program and what we have built;
 - [docs/RESEARCH.md](docs/RESEARCH.md): existing tools and documentation
 - [docs/behaviour/QUESTIONS.md](docs/behaviour/QUESTIONS.md): open
   questions about the original's behaviour
+- [docs/SCRIPT-COVERAGE.md](docs/SCRIPT-COVERAGE.md): what the game's
+  scripts use, and what we have built (generated)
 - [docs/provenance/README.md](docs/provenance/README.md): where each rule
   comes from and how it was checked

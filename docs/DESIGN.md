@@ -3305,3 +3305,32 @@ batches instead of one cutscene at a time (the user's request,
 2. **SC-2: `docs/SCRIPT-COVERAGE.md`**, the tool's output, plus a short
    hand-written proposal of study batches for session A (by world in
    game order, and by kind).
+   **Done** 2026-10-27. The batches (each one session A prompt; A
+   first checks which items a note already covers; B builds a batch
+   in one go and runs the tool again):
+   - **Batch 1, everywhere:** the script language's gaps (`inc`,
+     `setcat`; are command names case-blind, e.g.
+     `KQMonster::clearstateChangeNotify`; what an unknown word or a
+     `;` line does), the loading hints (`lockShape`, `preloadShape`,
+     `purgeResource(s)`, `lockInterior`, `preloadResource(s)`,
+     `loadAnim`, `activatePersistMgr`, `KQGame::letCatchUp`,
+     `stopHelp`: anything visible?), and every world's `world.cs`
+     (`newSky`, `resetHazeColor`, `blackOut`, `loadPalette`,
+     `KQGame::selectScreen`, `allowShadows`, the `Load` / `Preload`
+     calls; classes `KQEnvInfo`, `KQCamMover`, `KQHazer`).
+   - **Batch 2, Dead City** (where the user plays now): Q174 (the
+     death hall: `Tile`, `tileExit`, `deadHallTeleport`), `Scales`
+     and `matchHeights`, `KQMoveEvent` and `KQAttackEvent` on
+     objects, `KQObject::changeBmp`, `lightOnFire`, `terAnimSwitch`,
+     `KQMonster::add`, `walkSlope`, `setReactPercent`,
+     `setSpecialReact`, `KQConner::setRequiredWeaponMode`,
+     `KQCamera::setCamRelConner`, `invClick`, `ConnorCollision`,
+     `Lookup`; classes `KQCollider`, `KQSpiriTrap`, `RiverControl`,
+     `KQDeath`, `KQTowerSkeleton`, `KQWeepBolt`; Connor's
+     `ThrowRock`.
+   - **Then one batch per world in game order** (Swamp, Gnome,
+     Barren, IceWorld and Snowexit, the temples), each the world's
+     rows not yet built in the checklist, run again first.
+   - **Last:** the end game and screens (`playAvi`, `doCredits`,
+     `killGame`, `checkSave`, Connor's `Die` state, the menu screen
+     classes), with the menus and saving (postponed).
