@@ -146,6 +146,29 @@ filled from the material map `terrm.dib`; not traced). What uses it is not
 traced yet; terrain sounds and ground damage (`KQWorld::PoisonTime`,
 `SwampTime` in `world.cs`) are likely users.
 
+### `matchHeights` (draining a liquid; traced 2026-10-28, batch 2)
+
+`matchHeights <minX> <minY> <maxX> <maxY> <frames>` lowers (or raises)
+the **surface** height points (`terrh.dib`, the water / blood surface)
+inside a rectangle until they equal the **floor** points
+(`floorBMPName`, `water.md`): the liquid drains to its bed.
+
+- The five words are read as whole numbers. The rectangle is in world
+  units, turned into corner columns and rows by the square size
+  (2^`groundScale`): columns from minX's up to but **not including**
+  maxX's, rows likewise.
+- The change is spread evenly over `frames` steps, one step every
+  1/15 s; after the last step the surface equals the floor there.
+- Up to 32 can run at once. While any runs, the animated height cycle
+  (`heightBMP2`–`4`) is paused.
+- Each call is also remembered on the terrain (probably so a saved
+  game keeps the drained surface; not sure).
+- Used only in Dead City (data): `scale.cs` Cue 1, five rectangles with
+  `frames` 1, together with `terAnimSwitch Blood1`–`Blood5`, after the
+  scales puzzle (`tile-puzzle.md` rule 27).
+- How to check: log the surface height at a point inside one rectangle
+  before and 0.1 s after `scale.cs` Cue 1: it should equal the floor.
+
 ## Data used
 
 - `<world>/kq/Terrain/TERRAIN.KQ`

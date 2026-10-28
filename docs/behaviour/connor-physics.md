@@ -249,6 +249,10 @@ banking, already in `connor-movement.md`). Values it uses:
   (`active3DFlag`, `isFar`, `tooFar`, `translucency`, `hazeMultiplier`,
   `hazeSolid`, `hidden`). The words `sphereRadius`, `sphereX/Y/Z` don't
   appear anywhere in `Mask.exe`.
+  The class **`KQCollider`** (34 sections in the data, 27 in Dead City,
+  e.g. `davgate1.KQ`'s `[Collider]`) is exactly such a section: they
+  hold only `sphereRadius`, so they **change nothing**; boxes still come
+  from `BOUNDS.KQ` (checked 2026-10-28, batch 2).
 - The other keys in `[ConnerCollider]` (`collisionDetail=4`, `mask=65535`,
   `type=4`) are **not read from that section either**. Connor's real type
   and mask come from his constructor (table above). An object's type and

@@ -5,7 +5,24 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-27)
+## Where we are (2026-10-28)
+
+- **2026-10-28 (A): script coverage batch 2 (Dead City) studied, Q174
+  answered.** New note `docs/behaviour/tile-puzzle.md`: the death-hall
+  stones (jump one stone per key press toward Connor's facing, the
+  target stone lit; D-E-A-T-H fixed in the program; a right letter
+  teleports him next to the next one, a wrong stone back to the start,
+  no damage; `tileExit`, `deadHallTeleport`) and the scales. The other
+  batch items went into their notes (see MODLOG 2026-10-28): rock
+  throwing, the weeper's bolt, spirit traps, river boxes, Death's lips,
+  the tower skeleton, `KQMoveEvent` flags on objects, `changeBmp`,
+  `matchHeights`, `terAnimSwitch`, `setCamRelConner`, `Lookup`, and more.
+  Corrections: Connor's flinch value is 0.5, not 0.9 (`fighting.md`
+  rule 29); the "unlit" switch is used (`object-lighting.md` rule 10).
+  For the user to decide: spirit traps may drain on every entry once a
+  spirit has passed (`traps.md`, possible original bug); Dead City's
+  rats, snakes and spirits probably don't patrol in the original
+  (`characters.md`, a data quirk). Next: B builds batch 2.
 
 - **2026-10-27 (B): script coverage checklist** (the user's
   request): `kq8 script-coverage` writes `docs/SCRIPT-COVERAGE.md`,
@@ -562,10 +579,8 @@ M6 has started with the Rope and Hook (6a).
   attribute 0x8 is solid; B uses their files' own transparent flag.
 - **Built 2026-10-27 (P-1): Q172** (a cut during a running flight).
 - **Built 2026-10-27 (P-2): Q173** (the Paddle's push).
-- **New for A (2026-10-27): Q174**: Dead City's death-hall stone
-  puzzle (Connor's `Tile` state, `deadHallTeleport`, `tileExit`,
-  `KQMoveEvent` on objects, `changeBmp`; also whether Swamp's `Tile2`
-  and Barren's `Tile3` are the same). Blocks the puzzle.
+- **New for A (2026-10-28): Q175** (not blocking): the Dead City tower
+  skeleton's own standing / moving / dying states.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

@@ -110,6 +110,31 @@ Words used here:
      none; a z of −1 in a point is the ground. Wandering itself is M5.
    - The other columns are fighting values (M5).
    - Then it enters the world like any `loadKQ` object.
+   - **The script command `KQMonster::add`** (traced 2026-10-28,
+     batch 2) takes either all 20 fields (its words are joined with tabs
+     and read as one monster-list line, so commas inside a word do not
+     split it) or just `name type`, everything else default. **Data
+     quirk:** Dead City's scripts (`ratkarma.cs`, `skarma.cs`,
+     `snkarma.cs`, `weeper.cs`, `weeperup.cs`) put their
+     `patrol,2,…` text in field 12 (**dependents**) and `@` in field 13
+     (movement). `@` takes the type's movement from `Monstats.mtl`, which
+     is `none` for the rat, snake and spirit, so those monsters
+     **probably do not patrol** in the original (not checked in play).
+     Read the fields as the original does and log it.
+4a. **`KQObject::changeBmp <obj> <oldBmp> <newBmp>`** and
+   **`KQObject::changeBmp <obj> normal`** (traced 2026-10-28, batch 2;
+   answers open question 4's first half):
+   - The object gets its **own copy** of its model's texture list, so
+     other objects using the same model don't change.
+   - Every texture whose **original** name is `oldBmp` (capitals
+     ignored) is drawn as `newBmp`. The match is always against the
+     model's original names, so `changeBmp tile21 tilea.bmp tilea.bmp`
+     puts the original back (`tileshow.cs`, `tile-puzzle.md` rule 17).
+   - `normal` drops the copy: back to the model's own textures.
+   - Only the last pair is remembered (the same pair as the `.kq` keys
+     `originalBmp` / `alternateBmp`); whether a saved game keeps more
+     than the last swap is not known.
+   - Unknown object: a console message, nothing else.
 5. **Daventry's two script-placed actors start out of sight** (data):
    the monster list puts the **Knight** and the **Henchman** at (0, 0, on
    the ground), and their scripts move them later (`knight.cs` cue 10,
@@ -1152,4 +1177,5 @@ directions by pressing forward or back while facing one of them.
    `character-movement.md` (up to the first swing; the fight itself is
    the next study). Its findings differ from rules 8 and 29–31 here in
    the points marked "corrected" / "refined" there.
-4. `KQObject::changeBmp` and `changeAnmFile` in detail.
+4. `changeAnmFile` in detail. (`KQObject::changeBmp`: answered
+   2026-10-28, rule 4a.)

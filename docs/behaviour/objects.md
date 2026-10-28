@@ -134,8 +134,26 @@ All traced in `Mask.exe` unless marked otherwise.
    read from the same event's handler on the camera: flag value 1 = the
    position is added to the current one, 2 = the turn is added, 3 = both;
    the last number non-zero = don't refresh the object at once. That is
-   the camera's handler; for objects only the 0 case (absolute) is used
-   by this data. Treat the other values as "not checked" for objects.
+   the camera's handler.
+   **For objects (traced 2026-10-28, batch 2):** the text is
+   `<flags> x y z rx ry rz <extra>`; only 7 numbers are read after the
+   flags, so the data's 8th number is ignored, and `<extra>` is unused
+   for objects. Flag bit 1: x y z are **added** to the position along
+   the **world** axes (not the object's own); without it the position is
+   **set**. Flag bit 2: the turn rx ry rz (radians, built as for `move`)
+   is **combined with** the current turn; without it the turn is **set**.
+   So 0 = place absolutely, 1 = move relatively and set the turn,
+   2 = set the position and turn relatively, 3 = both relative (the
+   order in which the two turns combine: not sure). Traps accept it too
+   (the trap and its box move). Data: flags 3 ×85, 0 ×5, 1 ×4.
+   Examples: the death-hall stones' `3 0 0 -2.3575 …` / `… 2.374 …`
+   lower / raise the stone by about 2.4 units each cycle, cancelling
+   their bob's leftover (`tile-puzzle.md` rule 16).
+   **Do not reproduce (unless matching exactly):** Dead City's
+   `boxbgmr.cs` (crates that jiggle after 25 clicks) sends
+   `KQMoveEvent 1 0 0 0 0 0 0 0` each second, which **sets the turn to
+   zero**: a crate placed at heading 0.54 snaps to 0. How to check: log
+   a crate's heading before and after its 25th click.
 4. **A cue at exactly 1.0 fires on a repeating loop.** At a wrap the cue
    range checked is from the old phase up to just above 1 (1.0001), then
    from 0 to the new phase. So `cue1=1.0` fires once per cycle, when the
@@ -535,3 +553,27 @@ All traced in `Mask.exe` unless marked "scripts" (read in the world's
    numbers are **ignored** and the angles are 0 0 0. (Traced: angles need
    at least 9 words.) So Swamp's `grass.kq swmp.01 166759 68128 -2 -1` is
    at (166759, 68128, ground), not turned.
+
+## River controls (`RiverControl`, traced 2026-10-28, batch 2)
+
+Dead City has four (`rivercn2.kq` …): invisible boxes on the bank of the
+River of Death where Connor dips an item. They run no script; the
+program does it all.
+
+1. `acceptsInventory=INVITEM_BrokenShield,INVITEM_IronLock` (data).
+   Reach **1,300** from the box (traced).
+2. **Clicking it**: with no item, Connor says 2000.msg noun 13 verb 14
+   condition 0; with any other item, nothing; too far (1,300 or more):
+   his generic "too far" remark (file 0, condition 14); otherwise he says
+   2000/8/7/16, part 1.
+3. **When that line ends**: he turns to face a point 1,300 toward the
+   river, controls go off, the camera goes to his position +
+   (200, 3,700, 1,400). After 0.5 s he plays a `Special` list from
+   `river.anm`: `away`, `dipShield` (or `dipLock`), `out`. After 3 s he
+   says part 2. The item becomes `INVITEM_RustedBrokenShield` (4100) or
+   `INVITEM_RustedLock` (4490), and he gets **+2,000 experience** the
+   first time for each river box. When `out` ends, controls come back.
+4. Its collision is the fourth collision kind, used by nothing else
+   (`connor-physics.md`, "Collision shape"); only its click and reach
+   matter for play.
+5. How to check: log the item swap and the experience (once per box).

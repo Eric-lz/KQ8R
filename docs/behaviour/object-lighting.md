@@ -105,11 +105,14 @@ all three channels anyway.
    texture colour × light (per channel, 0–1). Nothing doubles it.
 10. **A per-object "unlit" switch** exists: when it is on, smooth materials
     draw at full brightness. It is off by default and is **not** a key in any
-    object file (the object reader doesn't read it). **Nothing in the game
-    turns it on** (2026-10-17): no file key, no script command (`dither`
-    changes the drawing style, `objects.md` "Dithered objects", `lightOnFire` sets group bit 0x1000; neither
-    touches it), and a scan of the program for code that stores 1 into it
-    found only unrelated objects. Treat it as always off.
+    object file (the object reader doesn't read it), and no script command
+    sets it (`dither` changes the drawing style, `objects.md` "Dithered
+    objects", `lightOnFire` sets group bit 0x1000; neither touches it).
+    **Corrected 2026-10-28 (Q174):** one thing does turn it on: Connor's
+    death-hall `Tile` state lights the stone he would jump to this way
+    and turns the previous one off (`tile-puzzle.md` rule 10). The
+    2026-10-17 scan looked only for code storing the number 1 and missed
+    it. Everywhere else treat it as off.
 11. **Haze on models**, see rules 19–23.
 
 ### What this gives in Daventry (hardware)
@@ -719,6 +722,13 @@ an object takes part in the game at all.
     `tsLightPosition`. 0x1000 is only a flag ("on fire", set by
     `KQObject::lightOnFire`), not a list. The other bits put the object in
     lists not studied here.
+    **`KQObject::lightOnFire <obj> <0|1>`** (traced 2026-10-28, batch 2)
+    sets or clears that bit and does nothing else; nothing was found that
+    reads it (not a full search). In Dead City it never runs
+    (`coaltrap.kq` is commented out in `newWorld.cs`); only Temple 4's
+    `fireTRAP.kq` (loaded by `altar.cs`) uses it. For B: accept it, log
+    it, no visible effect. (Open: whether Temple 4 shows a fire on
+    Connor some other way.)
 38. **Dead City's flames** (`flame.kq`, `flame_nd.kq`): no shape name, so
     radius 100; `groupsActive3DFar = 1089` (0x441) keeps them drawn when
     far. So they disappear when their position is more than

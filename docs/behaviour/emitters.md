@@ -229,7 +229,7 @@ so: "How many cycles (1/15th of sec) does a particle live".
 | `repeatflag` | 1 = loop the cycle; 0 = play it once and keep the last one |
 | `startNow` | 1 = start when loaded |
 | `frameCount` | saved-game state: where in the cycle it is (0 = start) |
-| `numMaterialIndexII`, `materialIndexII0…` | a second cycle, used only by the unused command `terAnimSwitch` |
+| `numMaterialIndexII`, `materialIndexII0…` | a second cycle, used by the script command `terAnimSwitch` (below) |
 
 Square coordinates are the same as in `terrain.md`: column = x index,
 row = y index (bottom row of the image = row 0). Checked: all excluded
@@ -300,6 +300,24 @@ and listed squares of Daventry's animators have material 15 in
 (The counts are all squares with those materials; only
 `AnimatedRiver3` has excluded squares among them, so it animates 57.)
 
+### `terAnimSwitch <animator> [repeatFlag]` (traced 2026-10-28, batch 2)
+
+- Swaps the animator's two material cycles (the list and list II). The
+  swap happens only if both are non-empty. If the current step is past
+  the new cycle's end, it goes to step 0.
+- With **one argument** that is all: it does not start or stop the
+  animator.
+- **With a second argument** the original converts the *animator name*
+  (not the flag) to a number, which is 0 for every real name: step 0,
+  repeat off, so the new cycle plays once and stays on its last
+  material. **Do not reproduce:** read the flag. The data's only
+  two-argument use (Daventry `milltree.cs` `MillTree … 0`) gives the
+  same result either way.
+- Data: Dead City `scale.cs` switches `Blood1`–`Blood5` to their
+  one-material second cycle (material 161, the drained river) after the
+  scales (`tile-puzzle.md` rule 27); Swamp `kettle.cs` ×10; Daventry
+  `milltree.cs`.
+
 ## Numbers and units
 
 | Thing | Value | Source |
@@ -366,5 +384,6 @@ and listed squares of Daventry's animators have material 15 in
 4. Script commands, unused by the data: `KQEmitter::setLoc`, `setRadius`,
    `setForceMin`, `setForceMax`, `setGravity`, `setRotMin`, `setRotMax`,
    `setMaxSinPeriod`, `setMaxParticles`, `setMaxLife`, `setFollowObject`,
-   `setFollowOffset`, `reinit`, and `terAnimSwitch <animator> [n]`
-   (swaps the two cycles). Not studied further.
+   `setFollowOffset`, `reinit`. Not studied further.
+   (`terAnimSwitch` is used and was traced 2026-10-28: see
+   "`terAnimSwitch`" above.)

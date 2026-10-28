@@ -277,6 +277,13 @@ script changes it.
     (e.g. `[WizardLips]` `WF0`–`WF7`). With a helmet or armour his face
     texture comes from `lipsList=ConnerLipsList` (`cf`, `chf`, …, not
     traced further; M5). In first person his mouth isn't changed.
+18a. **Death (`KQDeath`, Dead City `DEATH.KQ`; traced 2026-10-28,
+    batch 2)** has no mouth textures: his mouth shapes 0–7 play the
+    **movements** `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e` instead
+    (all eight are in `Death.anm`, data). Otherwise he is an ordinary
+    character run by `death.cs`. (A movement started for each mouth
+    change; whether a shape equal to the current one restarts it: not
+    traced.)
 
 ### Connor's built-in remarks (traced; text from the data)
 

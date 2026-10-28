@@ -818,6 +818,23 @@ view toward what is followed). `follow <object>` switches both on
      stays exactly at each moved spot (rule 1 of "What the camera looks
      at").
 
+### `KQCamera::setCamRelConner` and `setCamRelObj` (traced 2026-10-28, batch 2)
+
+- `KQCamera::setCamRelConner <dist> <zDir>` **does not move the
+  camera.** It works out a point `dist` from Connor's position in the
+  direction of his heading + `zDir` (0 = in front of him, 3.14 =
+  behind) and stores it in the script variable `$KQCamera::newLoc`,
+  and Connor's position in `$KQCamera::pointAt`, each as the text
+  "x y z". It also prints two console lines. The scripts then run
+  `KQCamera::addCamLoc $KQCamera::newLoc 1` and
+  `KQCamera::cutToCamLoc $KQCamera::pointAt`.
+- `KQCamera::setCamRelObj <obj> <dist> <zDir>` (Barren) is the same
+  around an object.
+- Not sure: the point's height (probably Connor's own z, flat) and the
+  exact base direction of "heading" (log both and compare with the
+  laser scene). Data: Dead City `laserctr.cs` `1500 0`, Daventry
+  `ravencnr.cs`.
+
 ## Data used
 
 - `MASK/Connor.sae`, `MASK/Camera.sae`: bindings.

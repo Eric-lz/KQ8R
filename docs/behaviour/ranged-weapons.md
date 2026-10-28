@@ -127,6 +127,16 @@ Words used here:
    `girl.cs`, `knight.cs` (data). `KQConner::setRequiredWeaponMode`
    makes a swap that ends in another mode tell a script `WrongWeapon`
    and swap again to the required one (no Daventry script uses it).
+   **Details (traced 2026-10-28, batch 2):** `KQConner::setRequiredWeaponMode
+   <mode> [script]`: if `mode` is not −1 and differs from his current
+   mode, he **swaps to it at once** (the same swap as `setDoMode`); then
+   the mode is remembered (−1 = no requirement). The optional second word
+   is a **script name**: when a later swap ends in another mode (not
+   mode 4, empty hands), that script runs with `Connor WrongWeapon` and
+   he swaps back (the swap-back's details were not traced). Data: Dead
+   City's tower (`towSklTp.cs`) uses `0` (sword) on `On` and `-1` on
+   `Off`, with no script, so on the tower he is made to hold his hand
+   weapon and no script is told.
 
 ### 3. The ranged movement list and pointer
 
@@ -407,6 +417,54 @@ Words used here:
       still uses it.
     - which swing plays (`Attack` / `AttackB`, Shift `Attack2`) is
       `fighting.md` rule 40.
+
+### 8. Throwing a rock (Connor's `ThrowRock` state, traced 2026-10-28, batch 2)
+
+Scripts set it (`KQMonster::setState Connor ThrowRock`; Dead City
+`rockme.cs`, Swamp six times, Gnome and Temple 1 once).
+
+- **On entry**: forced third person; his weapon mode is remembered;
+  `away` plays; his projectile file becomes the rock item's
+  (`prrock.kq`) for now.
+- After `away` he plays **`throw`** (`Conner.anm` movement 41,
+  `c_rktoss`, 36 frames). Its cue at phase 0.7778 is `do`, which
+  launches the projectile by the ordinary ranged "do" path (section 6;
+  aim not traced, probably the same as a bow shot at the clicked
+  object).
+- After `throw`: his own projectile file is put back; if a weapon was
+  out, the old mode returns and `out` plays; then `Stop`, he may use
+  first person again, and he goes to `Wait`.
+- He cannot leave the state before that; afterwards only to Wait, Move,
+  Special or Die.
+- **The rock** (data, `prrock.kq`): speed 2,500, maximum distance 2,500,
+  a parabola with `peakHeightOffset` 500 and `upVelocity` 2,500. A rock
+  hitting a character counts as kind 4, so a target it kills reports
+  `Die` with `Normal` (traced). Its damage: not traced.
+- **When it lands** (data): `rockHit.cs` runs on `Die` and drops
+  `INVITEM_Rock` at the landing spot (`KQMonster::dropItem Connor
+  INVITEM_Rock`), so the rock can be picked up again. Dead City's
+  targets are the pressure plates `trip2`–`trip15`
+  (`acceptsInventory=INVITEM_Rock`, script `rockme.cs`).
+
+### 9. The weeper's draining bolt (`KQWeepBolt`, traced 2026-10-28, batch 2)
+
+A projectile class (Dead City `PRweeper.kq`). Keys besides the ordinary
+projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
+`fireAnim`, `hurtAnim`, `doneAnim`, `shootOffset`, `hitOffset`.
+
+- When it touches a character other than its shooter it stops and
+  starts **draining**, unless the target is in a `Special` state (then
+  the bolt just vanishes).
+- It lays a chain of `suckFile` objects about every 250 units on the
+  line from the shooter (z + `shootOffset`) to the target
+  (z + `hitOffset`), the last one being `suckEnd`, and starts
+  `suckSound`. The shooter plays `fireAnim`, the target `hurtAnim`.
+- Every 0.25 s the target loses 1 health, for `duration` seconds
+  (data: 3 s, so about 12 health).
+- Then the sound stops, the chain goes, the shooter plays `doneAnim`
+  and waits a full `attackDelay` before its next attack; the target
+  goes back to `Wait`.
+- Not sure: the exact spacing rule that sets the number of chain pieces.
 
 ## Numbers and units
 

@@ -311,6 +311,12 @@ world (Daventry's waterfall, mill, windmill and fountain).
     (not traced what kind 4 is). A hit from the environment (poison
     ground and the like) on Connor plays no ouch sound; instead, when the
     game asks for it, a plain `poison<n>.aud`.
+    **Objects too** (traced 2026-10-28, batch 2): an ordinary object
+    (not a character) hit by a damaging `KQAttackEvent` plays its
+    `ouchSound` by the same rule (placed, 5,000 / 25,000, at most once a
+    second, not for kind 4); the kind is remembered and reported by its
+    `Die` call (`doors.md` rules 18–21). Dead City's five uses send it to
+    Connor from trap scripts (`connor-collision.md` rule 16).
 
 ### Items
 

@@ -1046,9 +1046,8 @@ duration 0 the same way (B's model reader has the duration).
 3. ~~`Inv <item>` in Connor's Special list (rule 16)~~: answered
    2026-10-24 (Q167): he never holds it; a real item is laid at the
    part of his last frame named like it.
-4. `KQMoveEvent` with flags 1 and 3 on objects (Barren's tiles, one Dead
-   City box; not Daventry): not traced for objects (`objects.md` gives
-   the camera's meaning).
+4. (Answered 2026-10-28: `KQMoveEvent` flags on objects, `objects.md`
+   "Loops that move the whole object" rule 3.)
 5. The `endLoop` cue on monsters (rule 9) and monsters' own movement
    requests: M5.
 6. **The watermill walk's end (Q98, 2026-10-18):** the traced rules

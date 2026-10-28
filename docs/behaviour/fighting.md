@@ -319,7 +319,16 @@ Words used here:
     A **special** flinch replaces it when the character's
     `specialReactAnim` is set and *R* is more than `specialReactPercent` ×
     *D* (no Daventry file has them). `KQMonster::setReactPercent` and
-    `KQMonster::setSpecialReact` set these from scripts. The flinch is an
+    `KQMonster::setSpecialReact` set these from scripts (traced
+    2026-10-28): `setReactPercent <who> <p>` replaces
+    `normalReactPercent` (`-1` = back to the default: 0.9, or 0.5 for
+    Connor, rule 29); `setSpecialReact <who> <movement> <p>` sets
+    `specialReactAnim` and `specialReactPercent`, and the movement words
+    `none` or `null` clear it. Dead City's tower (`towSklTp.cs`) uses them
+    **on Connor**: 0.21 and `reactback` 0.48 on `On`, `-1` and `none` on
+    `Off`, so on the tower he flinches far more often and sometimes
+    staggers back. (Do not reproduce: the original checks one argument
+    too few and then reads past the end; refuse short lines.) The flinch is an
     ordinary movement in its current state (standing or moving): when it
     ends, the chase timer is set to 5 s and the 2 s pause starts
     (`character-movement.md` rule 18), and the standing / moving state goes
@@ -374,9 +383,13 @@ Words used here:
 29. Traced, Connor's side only as far as the fight needs:
     - hits are ignored while he is dying;
     - the roll is 25–100 % (rule 16), then his protection;
-    - he **flinches** by the same rule 23 (his `react`, `normalReactPercent`
-      0.9): with his 25–100 % roll that is only about **13 %** of hits
-      (when *R* rounds to more than 0.9 *D*), and only when his running
+    - he **flinches** by the same rule 23 (his `react`). **Corrected
+      2026-10-28 (batch 2, traced):** Connor's `normalReactPercent` is
+      **0.5**, not 0.9: his own starting value is 0.5, `Connor.kq` has no
+      key for it, and `KQMonster::setReactPercent Connor -1` resets it to
+      0.5 (other characters reset to 0.9). With his 25–100 % roll that is
+      about **two thirds** of hits (when *R* rounds to more than 0.5 *D*;
+      the old text said about 13 %), and only when his running
       movement can be cut short and his last flinch ended over 2 s ago;
       else his `ouchSound` (`conrow3.aud`) at most once a second;
     - his health is kept at most 10 × level;
@@ -521,6 +534,25 @@ Words used here:
     whose type is not `bat`, `chicken` or `checken2` (sic: so `chicken2`
     does count), Connor gets a one-off cue 1.5 s later (a help tip; not
     followed further).
+
+### 7a. The tower skeleton (`KQTowerSkeleton`, traced 2026-10-28, batch 2)
+
+Dead City `SKELTOWR.KQ`; its flinch is rule 23. Extra keys: `realAlarm`,
+`moveTime`, `timeToRun`, and save-only `bGreetedConnor`, `oldCamPos`,
+`bReactingBack`, `bScreamed`. It has its own standing, moving and dying
+states (**too large for this session**, see `QUESTIONS.md`).
+
+- It hears Connor's state changes (`towSklTp.cs` asks for them):
+  - the **first time Connor starts climbing a rope**: a greeting scene,
+    controls off, camera on the skeleton, line 2000.msg noun 16 verb 0
+    condition 18; when it ends the camera goes back and the music
+    `mtower.aud` starts;
+  - Connor **readies a ranged weapon**: line 2000/16/0/102.
+- Its movement cues: **Cue 50** says 2000/16/12/22 the first time; the
+  second time the camera goes behind Connor (0, −5,000, +1,000 from
+  him) and the fight starts. **Cue 201** sets its alarm radius to
+  `realAlarm` (data 5,000).
+- The chain mail it drops when killed gets the script `chainmal.cs`.
 
 ### 8. Ranged characters (`doMode=1`)
 

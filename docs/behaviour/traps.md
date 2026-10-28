@@ -157,6 +157,15 @@ never blocks anything.
     about) to their script. Those belong to M4/M5. `StateChange`'s
     arguments (`$4` old state, `$5` new state) and the state numbers:
     `characters.md` rules 14–17.
+15a. **`Lookup`** (traced 2026-10-28, batch 2): when a trap enters the
+    world it runs `Init`, then posts **itself** a "lookup" notice through
+    the event queue, so it arrives after the current load or script step
+    (the exact moment: not sure). When it arrives, a trap with
+    `lookupCall=1` and a script runs `<trap> Lookup`. The same notice is
+    posted after a saved game is restored (from earlier study, not
+    re-checked). Data: Dead City `trptrp12`–`15` (the Sylph's plates) use
+    it to `makeActive` their objects and to sort out the Sylph's position
+    once every object of the world exists.
 16. Scripts commonly turn a trap off for good with
     `KQObject::collision <trap> -4` (removes bit 4 from its mask, so
     Connor no longer counts; `clifTrap.cs` does it on its first `On`).
@@ -170,6 +179,28 @@ never blocks anything.
     later leaves, the trap still sends its `Off` (or `Cue 302`). Only new
     entries need the bit. (`clifTrap.cs` has no `Off` branch, so for it
     this changes nothing.)
+
+### Spirit traps (`KQSpiriTrap`, traced 2026-10-28, batch 2)
+
+A `KQTrap` with a box (Dead City `spirtp1.kq` … four of them) that drains
+Connor when a spirit is passing. Extra key: `damage` (a fraction; data
+`.2`), plus save-only `spiritState` and `trapStatus`.
+
+- Cue 1 (sent by the spirits' movements, `spiritst.KQ`, `spirits2.kq`)
+  = a spirit is in the area; Cue 0 = it has left. Cue 2 (also sent by
+  the spirits) is ignored.
+- When Connor **enters** (as the first object inside) while a spirit is
+  there, or Cue 1 arrives while he is inside, he loses `damage` × his
+  **maximum** health (20%), never below 1% of maximum (if it would go
+  lower, it is set to 1%), and takes a 1-point hit that makes him flinch.
+  Leaving clears "Connor inside".
+- **Possible original bug** (traced): since Cue 2 is ignored and only
+  Cue 0 clears the spirit, once a spirit has passed every later entry
+  may drain him. Not checked in play; the user should decide whether to
+  keep it. Log it in our build.
+- `ALTAR_A1.CS` deletes all four traps (data).
+- How to check: log health on each entry and Cue: −20% of maximum,
+  floor 1%.
 
 ## Numbers and units
 

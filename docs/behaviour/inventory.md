@@ -140,6 +140,15 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
 10. **Right click** on a slot: Connor describes the item
     (`talking.md` rule 20, built as sound only). Right click on an empty
     slot does nothing [traced].
+    **`invClick <itemType> <N> <V> <C> <S>`** (traced 2026-10-28, batch
+    2) changes the message numbers (noun, verb, condition, sequence,
+    each kept as 0–255) Connor uses for that right click. **The original
+    ignores the type word and always changes `INVITEM_Feather`** (the
+    word appears only in its error text). Do instead: look the item up
+    by name; the data's only use, Dead City `reaper.cs`
+    `invClick INVITEM_Feather 76 0 0 1`, gives the same result (and
+    those are already the Feather's numbers in `Invinfo.itl`, so nothing
+    visible changes).
 11. Keys 1–8 act as a left click on the 8 health/potion slots
     (`interface.md` rule 40).
 
