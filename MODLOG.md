@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 SESSIONS: the checklist workflow and its prompts
+
+**Changed:** `docs/SESSIONS.md`: new section "Working through the script coverage checklist" (how the checklist is made and kept, the batch order's place, ready prompts for A and B on a batch; B's prompt also reads `STATUS.md` and ends by running the tool again). No code.
+**Why:** The user asked whether a new session would know about the checklist; only DESIGN, STATUS and MODLOG mentioned it, and the standard B prompt does not read STATUS.
+**Tested how:** Read only.
+**Result:** —
+**Still broken / not tested:** —
+**Next:** Session A, batch 2 (Dead City, with Q174) or batch 1.
+
 ## 2026-10-27 SC-2: the script coverage checklist and study batches
 
 **Changed:** New `docs/SCRIPT-COVERAGE.md` (written by `kq8 script-coverage --out docs/SCRIPT-COVERAGE.md`); DESIGN (SC-2 done, the batches for session A); STATUS, README.
