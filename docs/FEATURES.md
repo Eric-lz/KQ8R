@@ -788,6 +788,9 @@ commands in `MODLOG.md`.
   real item where the movement holds it: the crossbow stays on the
   ground after the roof kill, to be picked up.
 - **Tools:** `kq8 shape-parts <file>` prints a model's named parts.
+  `kq8 script-coverage` lists every command, Connor state, event,
+  script call and object class the game's files use, and whether we
+  have built it (2026-10-27).
 - **Smooth animation (`--smooth`, ours, off by default):** Connor,
   creatures and objects move their parts smoothly between the stored
   frames (96 % of parts in Daventry; the rest still jump), and creatures,

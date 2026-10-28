@@ -3484,6 +3484,7 @@ dependencies = [
 name = "kq8-cli"
 version = "0.1.0"
 dependencies = [
+ "kq8-core",
  "kq8-data",
  "png",
 ]

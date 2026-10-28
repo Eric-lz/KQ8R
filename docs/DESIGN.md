@@ -3273,3 +3273,35 @@ Session A answered both on 2026-10-27. One commit per step.
    **Done** 2026-10-27 (logs and a unit test: both sides, the last
    pedestal and the laser; `padpush.anm`'s four movements are preloaded
    when the world has a `KQPaddleObject`, since no script names them).
+
+### Outside the milestones: script coverage checklist (planned 2026-10-27)
+
+Goal: a list of everything the game's scripts and object files ask of
+the program, and whether we have it, so session A can study it in
+batches instead of one cutscene at a time (the user's request,
+2026-10-27). Ours (a tool); reads only the game's data and our code.
+
+1. **SC-1: `kq8 script-coverage [--game DIR] [--out FILE]`** (kq8-cli,
+   now also using kq8-core). For every world's `kq.vol` (and
+   `GAME/Kq`): every `.cs` line's command (the first word; after `if` /
+   `else if`, the word after `eval`; control words, `set`, `echo`,
+   `test`, `$` words and calls of other scripts left out), the states
+   asked of Connor (`KQMonster::setState Connor <state>`), the event
+   kinds sent (`sendEvent … <kind>`, also in `.kq` movement cues), the
+   calls a script expects from the program (`test $2 == <word>`), and
+   the `classType` of every `.kq` section; with counts per world and one
+   example file each. **Status** of commands and Connor's states: each
+   is run once, as a one-line script with a real line from the data, in
+   an empty `Active`; the log says `ERROR unknown command` → *missing*,
+   `stub (later milestone` → *stub*, otherwise *built* (built can still
+   be partial or a stand-in). Classes, event kinds and script calls:
+   *named in our code* if the exact word appears quoted in `crates/`,
+   else *not named* (a hint only). Commands that look like loading
+   hints are marked "loading hint? (to confirm by A)".
+   Start-up scripts (`newWorld.cs` and the scripts it names) are read
+   by our world loader, which acts on a few commands and counts the
+   rest: a command used only there is marked *start-up only*.
+   **Done** 2026-10-27 (0.4 s for all 12 worlds and `GAME/Kq`).
+2. **SC-2: `docs/SCRIPT-COVERAGE.md`**, the tool's output, plus a short
+   hand-written proposal of study batches for session A (by world in
+   game order, and by kind).

@@ -3680,3 +3680,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | A deleted object's name is free again once its event has finished; a later `loadKQ` makes a new object of that name | `objects.md` "Where a world's objects come from" rule 6, `clicking.md` rule 22 | `doors.log` "copy paddle2 of paddle2.kq drawn at (175006, 66474, 1177)" |
 | Commands naming it act on the new, live object (not a deleted one still in our lists) | Follows from the rules above; how we keep deleted objects listed is **ours** | `doors.log` "getLoc UniqueTikiName2: 175006 66474 1177"; "the paddle at (175006, 66474, 1177)" |
+
+## SC-1 2026-10-27: `kq8 script-coverage` — `crates/kq8-cli/src/script_coverage.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| What the scripts use: commands, Connor's states, event kinds, `$2` calls, classes; start-up scripts = `newWorld.cs` and the scripts it names | Observed (the game's `kq.vol` archives and `GAME/Kq`); the start-up rule from `objects.md` "Where a world's objects come from" rule 1 | Its output, `docs/SCRIPT-COVERAGE.md` |
+| Built / stub / missing: one probe line per command in an empty world, read from our own log | **Ours** (a tool; says nothing about how the original behaves) | — |

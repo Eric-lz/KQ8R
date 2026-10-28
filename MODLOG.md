@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-27 SC-1: `kq8 script-coverage`, what the scripts ask of the program
+
+**Changed:** New `crates/kq8-cli/src/script_coverage.rs`; `kq8-cli` now uses `kq8-core`; `kq8 script-coverage [--out FILE]`. DESIGN (plan SC-1, SC-2), README, FEATURES, provenance.
+**Why:** The user's request: instead of finding missing script features one cutscene at a time, a full list that session A can study in batches.
+**Tested how:** `cargo build`, clippy (no new warnings); `kq8 script-coverage --out <scratch>`, read by hand; spot checks against what I know is built or missing (`deadHallTeleport`, `tileExit` missing; `makeTranslucent`, `KQMonster::speak` built; `KQObject::changeBmp` a stub; Connor `Tile` not built).
+**Result:** 0.4 s for 12 worlds and `GAME/Kq`: 167 command words. First version marked `setLoadProgress` and `alias` missing although the world loader reads start-up scripts itself; fixed by following `newWorld.cs` and the scripts it names and judging start-up-only commands by the loader's own list.
+**Still broken / not tested:** "Built" means our command handler knows the word, not that it is complete. Classes, event kinds and `$2` calls are judged only by whether the word appears quoted in our code (e.g. `KQAnimLoopList` shows "not named" though we read those sections).
+**Next:** SC-2, the checklist and the study batches.
+
 ## 2026-10-27 Study (A): Q170–Q173 and Q108 (d) answered
 
 **Changed:** Behaviour notes only, no code. `pushing.md` rules 11a–11h (the Paddle, `KQPaddleObject`); `camera.md` "Camera flights and cuts" rules 4 and 6 (a cut during a flight); `fighting.md` rule 31a.2 and "Do not reproduce" (the dropped weapon's line test); `character-movement.md` rule 20 (a data correction); `interface.md` rules 20a, 26a, 33, "Do not reproduce", open questions 3 and 6 (animated panel pictures). QUESTIONS Q170–Q173 answered, Q108 (d) answered. Scratch notes in `re/` (not committed).

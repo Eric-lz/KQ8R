@@ -224,7 +224,9 @@ cargo run --release -- map-verify
 
 Other debugging tools: `cargo run --release -- text <file>` prints one of the
 game's text files; `cargo run --release -- shape-parts <file>` prints a model's
-named parts; `cargo play --model smlchest.KQS` shows one model on its own.
+named parts; `cargo run --release -- script-coverage --out docs/SCRIPT-COVERAGE.md`
+lists what the game's scripts ask of the program and what we have built;
+`cargo play --model smlchest.KQS` shows one model on its own.
 
 ## More
 

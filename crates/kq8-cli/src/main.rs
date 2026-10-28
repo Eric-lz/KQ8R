@@ -19,6 +19,7 @@
 //!   kq8 conv-verify [--game DIR]
 //!   kq8 map-verify [--game DIR]
 //!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
+//!   kq8 script-coverage [--out FILE] [--game DIR]   (what the scripts ask of the program)
 //!
 //! `<file>` is a path in the game folder (`GAME/8Gui/daventry.pbm`) or an
 //! archive entry (`vol:Daventry/8bit/NAME.BMP`).
@@ -39,6 +40,7 @@ mod lightmap_verify;
 mod log;
 mod map_verify;
 mod msg_verify;
+mod script_coverage;
 mod shape_parts;
 mod shape_verify;
 mod source;
@@ -68,7 +70,8 @@ const USAGE: &str = "usage:
   kq8 character-verify [--game DIR]
   kq8 conv-verify [--game DIR]
   kq8 map-verify [--game DIR]
-  kq8 text <file> [--game DIR]";
+  kq8 text <file> [--game DIR]
+  kq8 script-coverage [--out FILE] [--game DIR]";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -76,12 +79,14 @@ fn main() -> ExitCode {
     let mut game: Option<PathBuf> = None;
     let mut palette: Option<String> = None;
     let mut wav: Option<String> = None;
+    let mut out: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--game" => game = args.next().map(PathBuf::from),
             "--palette" => palette = args.next(),
             "--wav" => wav = args.next(),
+            "--out" => out = args.next(),
             a if a.starts_with("--") => {
                 eprintln!("unknown option: {a}");
                 return usage();
@@ -120,6 +125,7 @@ fn main() -> ExitCode {
         (Some("character-verify"), []) => character_verify::run(&game),
         (Some("conv-verify"), []) => conv_verify::run(&game),
         (Some("map-verify"), []) => map_verify::run(&game),
+        (Some("script-coverage"), []) => script_coverage::run(&game, out.as_deref()),
         (Some("text"), [file]) => match source::load(&game, file) {
             // Printed only (never written into the repo), with line numbers.
             Ok(bytes) => {
