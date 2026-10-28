@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing was checked against the running original. Q173: one engine flag's meaning, and when an `AnimOnce` reports its end. Q172: Dead City's camera range values were not traced. Q171: the mouse and item cursor drawing was not traced. Q170: whether any 0x1-type character drops a laid weapon was not checked. Q108 (a) and (c) are still open.
 **Next:** Session B builds the Paddle push (Q173), the cut-during-flight rule (Q172) and the line-test types (Q170); the flame and flashes already follow the file flag.
 
+## 2026-10-27 Q174 asked: Dead City's death-hall stone puzzle needs a study
+
+**Changed:** QUESTIONS Q174, STATUS. No code.
+**Why:** The user asked for the floating-stone puzzle (jump on stones in order, teleporting). The scripts (`dhalltrp.cs`, `ddoor4.cs`, `tileshow.cs`, the `tile_*.kq` / `notile*.kq` stones) only set it up; the puzzle is run by the program: Connor's `Tile` state, `deadHallTeleport`, `tileExit`, `KQMoveEvent` on objects, `changeBmp`. No behaviour note describes them (`characters.md` only names the state).
+**Tested how:** Read the scripts and notes only.
+**Result:** The data shows an 8 × 8 grid of stones at rising heights; the Reveal potion lights D, E, A, T, H. Swamp (`Tile2`) and Barren (`Tile3`) use the same kind of state.
+**Still broken / not tested:** Not built; nothing run.
+**Next:** Session A studies Q174; then B builds the puzzle.
+
 ## 2026-10-27 The user's check of the Shadow fight and the Paddle puzzle
 
 **Changed:** MODLOG, STATUS, FEATURES. No code.

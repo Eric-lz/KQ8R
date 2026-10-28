@@ -555,6 +555,10 @@ M6 has started with the Rope and Hook (6a).
   attribute 0x8 is solid; B uses their files' own transparent flag.
 - **Built 2026-10-27 (P-1): Q172** (a cut during a running flight).
 - **Built 2026-10-27 (P-2): Q173** (the Paddle's push).
+- **New for A (2026-10-27): Q174**: Dead City's death-hall stone
+  puzzle (Connor's `Tile` state, `deadHallTeleport`, `tileExit`,
+  `KQMoveEvent` on objects, `changeBmp`; also whether Swamp's `Tile2`
+  and Barren's `Tile3` are the same). Blocks the puzzle.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`
