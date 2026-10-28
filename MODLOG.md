@@ -12,6 +12,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** Nothing was checked against the running original. Q173: one engine flag's meaning, and when an `AnimOnce` reports its end. Q172: Dead City's camera range values were not traced. Q171: the mouse and item cursor drawing was not traced. Q170: whether any 0x1-type character drops a laid weapon was not checked. Q108 (a) and (c) are still open.
 **Next:** Session B builds the Paddle push (Q173), the cut-during-flight rule (Q172) and the line-test types (Q170); the flame and flashes already follow the file flag.
 
+## 2026-10-27 The user's check of the Shadow fight and the Paddle puzzle
+
+**Changed:** MODLOG, STATUS, FEATURES. No code.
+**Why:** The user played the Shadow fight after P-1 and the Paddle puzzle after the reused-name fix.
+**Tested how:** The user, in play.
+**Result:** The Shadow fight "working perfectly" (see-through Shadow, last shot); the pedestals "working perfectly now from what I tested".
+**Still broken / not tested:** Seen in the logs, not done: the tiki lights' cue to `Terrain`, `KQCamera::setCamRelConner` (laser scene); `pushccw` / `pushcw` length (79 / 80 frames vs the note's 67).
+**Next:** Open for the user's choice.
+
 ## 2026-10-27 Fix: the 2nd to 4th Paddle shows on its pedestal (a reused name found the deleted object)
 
 **Changed:** Viewer `door_view.rs`: a `move` goes to a copy loaded earlier in the same update first, and skips switched-off (deleted) colliders of the same name. Core `active.rs`: `live_clickable`; `collisionType`, `collision_type_of`, an object's place, the click turn point, the Paddle push, `anim_index` and `object_index` take the live object of a name before a deleted one. MODLOG, STATUS, provenance.

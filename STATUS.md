@@ -12,7 +12,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   (Q173 built, P-2) plays Connor's push from his side, the tiki sinks,
   the Paddle comes back; the fourth starts the laser (user: the first
   pedestal works). Fix: the 2nd–4th Paddle showed nothing (a reused
-  name found the deleted first one). Logs only. Seen on
+  name found the deleted first one). The user's check (2026-10-27):
+  working. Seen on
   the way, not done: the tiki lights' cue to `Terrain`,
   `KQCamera::setCamRelConner` (laser scene).
 
@@ -25,7 +26,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   `makeTranslucent Connor` (the Shadow is part of his model there): see-
   through in movements 3, 5, 7 (logs only). The last shot (too close,
   user): Q172 built (P-1): a cut no longer ends a running flight, so it
-  is pushed out like the scene's other cuts (logs only).
+  is pushed out like the scene's other cuts. The user's check
+  (2026-10-27): the fight works perfectly.
 
 - **2026-10-27 (B): fix: the caption stone looked checkered** (the
   user's report). `stontran.pbm` is a one-pixel checkerboard of

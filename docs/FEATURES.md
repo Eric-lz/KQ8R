@@ -811,7 +811,8 @@ commands in `MODLOG.md`.
 
 ## Session A's Q172 and Q173 answers (2026-10-27, steps P-1, P-2)
 
-Checked in the logs and unit tests, not by eye.
+Checked in the logs and unit tests; played by the user (2026-10-27):
+working.
 
 - **Camera cuts during a flight:** the flight goes on to its end, so
   later cuts keep their distance (Dead City's Shadow fight's last shot).
