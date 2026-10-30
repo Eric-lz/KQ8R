@@ -5,7 +5,26 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-28)
+## Where we are (2026-10-30)
+
+- **2026-10-30 (B): script coverage batch 2 (Dead City), first part
+  built** (DESIGN "script coverage batch 2", D-1 to D-5 and D-7; logs and
+  unit tests only, **not played by hand**): the death-hall stone puzzle
+  runs from start to finish in a scripted test (jumps, lit stone, right
+  and wrong stones, teleports, lines, the way out by the door);
+  `KQMoveEvent` on objects; copies a script loads are solid; the small
+  commands (react percents, Connor's flinch 0.5, required weapon mode,
+  `invClick`, `lightOnFire`, `setCamRelConner`, `walkSlope`). Dead City
+  now misses 10 commands (40 uses), was 19 (70).
+  **Open for A:** Q176 (the stones' bob correction has the same sign as
+  their leftover; a stand-in keeps them level), Q177 (north jumps can't
+  climb the 500 between rows: Connor hits the stone's side and drops to
+  the hall floor; the puzzle still resolves because the landing is judged
+  by x and y). **Left in batch 2 for B:** D-6 `changeBmp` (Reveal
+  letters), D-8 `matchHeights` / `terAnimSwitch`, D-9 `Lookup` and
+  spirit traps, D-10 `ConnorCollision` and `Scales`, D-11 `ThrowRock`,
+  `KQWeepBolt`, `RiverControl`, `KQDeath`, `KQAttackEvent` on objects,
+  `KQMonster::add`; `KQTowerSkeleton` waits for Q175.
 
 - **2026-10-28 (A): script coverage batch 2 (Dead City) studied, Q174
   answered.** New note `docs/behaviour/tile-puzzle.md`: the death-hall

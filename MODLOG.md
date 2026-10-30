@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 Batch 2 (B), end of session: the coverage list, STATUS, FEATURES, README
+
+**Changed:** `docs/SCRIPT-COVERAGE.md` written again (`cargo run --release -- script-coverage --out docs/SCRIPT-COVERAGE.md`, its own commit); STATUS "Where we are", FEATURES (new section), README (one line). No code.
+**Why:** SESSIONS "Starting B on a batch": run the tool again after building, and the end-of-session updates.
+**Tested how:** Read the new list.
+**Result:** Dead City: 10 commands missing (40 uses), was 19 (70); Connor's states not built there: `Scales`, `ThrowRock` (was also `Tile`); `KQMoveEvent` now named. Swamp 13 → 12 missing (`tileExit`), Barren 13 → 12 (`setCamRelObj`), temple4 16 → 13, Daventry 12 → 11.
+**Still broken / not tested:** Left in batch 2: D-6 `changeBmp`, D-8 `matchHeights` / `terAnimSwitch`, D-9 `Lookup` and `KQSpiriTrap`, D-10 `ConnorCollision` and `Scales`, D-11 `ThrowRock`, `KQWeepBolt`, `RiverControl`, `KQDeath`, `KQAttackEvent` on objects, `KQMonster::add`, `KQTowerSkeleton` (Q175). Open questions for A: Q175, Q176, Q177.
+**Next:** The user's play of the death hall; session A on Q176 and Q177; then B continues batch 2 from D-6.
+
 ## 2026-10-30 D-7: the small commands of batch 2 (Dead City)
 
 **Changed:** Core `active.rs`: `KQMonster::setReactPercent`, `KQMonster::setSpecialReact` (Connor and fighting characters), `KQConner::setRequiredWeaponMode`, `invClick`, `KQObject::lightOnFire`, `KQCamera::setCamRelConner` / `setCamRelObj`, `KQMonster::walkSlope`; `Request::ConnorHurt` carries a special react. `fight.rs`: Connor's own flinch percent 0.5 (`CONNOR_REACT_PERCENT`, the corrected rule 29) or the script's, and his special react tried first. `character.rs`: `walk_slope` (kept only). Viewer `connor_view.rs` `hurt`: plays the special react movement when it rolled. 1 unit test. DESIGN, provenance.
