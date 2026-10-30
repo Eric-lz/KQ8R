@@ -2009,6 +2009,14 @@ impl ConnorSim {
         line
     }
 
+    /// `tileExit 0|1` (`tile-puzzle.md` rule 21): in any state but a tile
+    /// state it does nothing.
+    pub fn tile_exit(&mut self, can_exit: bool, at: &str) -> String {
+        let line = format!("tileExit {}: not in a tile state; nothing (rule 21)", u8::from(can_exit));
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
     /// He is in the Choice state and it is his own state now (not a weapon
     /// swap under way, rule 11).
     pub fn choosing(&self) -> bool {

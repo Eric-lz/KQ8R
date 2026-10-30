@@ -141,6 +141,12 @@ pub enum Request {
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
     SetHaze { haze: f32, at: String },
+    /// `tileExit 0|1` (`tile-puzzle.md` rule 21): the tile state's exit
+    /// switch; with 1 Connor goes to Wait at once. Nothing outside it.
+    TileExit { can_exit: bool, at: String },
+    /// `deadHallTeleport <from> <to>` (`tile-puzzle.md` rule 22): Connor
+    /// and the camera moved by the two buildings' offset.
+    HallTeleport { from: String, to: String, at: String },
     /// `KQMonster::setState Connor Wait` (`characters.md` rule 22, Q160):
     /// his walker enters Wait afresh and asks for `Stop`.
     ConnorWait { at: String },
@@ -2492,6 +2498,27 @@ impl WorldState {
         "0".into()
     }
 
+    /// `tileExit <0|1>` and `deadHallTeleport <from> <to>`
+    /// (`tile-puzzle.md` rules 21, 22): handed to the caller, which has
+    /// Connor's tile state, the buildings and the camera. The usage lines
+    /// are the original's.
+    fn tile_command(&mut self, words: &[String], at: &str) -> String {
+        match words {
+            [w, flag] if w == "tileExit" => {
+                let can_exit = number_value(flag) != 0.0;
+                self.note(format!("{at}: tileExit {}: handed to Connor's tile state (rule 21)", u8::from(can_exit)));
+                self.requests.push(Request::TileExit { can_exit, at: at.to_string() });
+            }
+            [w, ..] if w == "tileExit" => self.note(format!("{at}: usage:  tileExit <1 = can exit | 0 = cannot exit>")),
+            [_, from, to] => {
+                self.note(format!("{at}: deadHallTeleport {from} {to}: handed to the viewer (rule 22)"));
+                self.requests.push(Request::HallTeleport { from: from.clone(), to: to.clone(), at: at.to_string() });
+            }
+            _ => self.note(format!("{at}: usage:  DeadHallTeleport fromHallName toHallName")),
+        }
+        "0".into()
+    }
+
     /// `KQMonster::setState <who> <state> [list]`: Connor's Special state
     /// is handed to the caller (`anim-scripts.md` rule 16); other states
     /// and other characters are later milestones (logged only, `0` as the
@@ -3405,6 +3432,7 @@ impl ScriptHost for WorldState {
                 Some(self.character_switch(words, at))
             }
             "move" => Some(self.move_command(words, at)),
+            "tileExit" | "deadHallTeleport" => Some(self.tile_command(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),

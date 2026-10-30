@@ -3357,6 +3357,8 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    and works out near/far again at once; the 0.5 s notice is not done
    (open question 2). Check: `dhalltrp.cs` Cue 1 and `ddoor4.cs` Cue 5
    move Connor by the halls' offset (`connor.log`, `camera.log`).
+   **Done** 2026-10-30 (logs: offset (55,043, 39,207, 1,920) for
+   Connor and the camera; `tileExit` waits for D-4's state).
 3. **D-3: the `Tile` state's rules, core** (`tile-puzzle.md` rules
    3–15, kept as data per "Do not reproduce"): new
    `kq8-core/src/tile_puzzle.rs`: the stone table (looked up by name,

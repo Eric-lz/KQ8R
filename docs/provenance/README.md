@@ -3694,3 +3694,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | `KQMoveEvent <flags> x y z rx ry rz [extra]` to an object = `move` with the same flags (bit 1 add the position on world axes, bit 2 combine the turn); only 7 numbers read | `objects.md` "Loops that move the whole object" rule 3 (batch 2) | unit test `a_move_event_to_an_object_moves_it_with_the_move_flags`; `doors.log` |
 | A relative `KQMoveEvent` sent by an object's own movement cue is not applied | **Ours (stand-in, Q176)**: we draw a loop's pose from its phase, so the leftover the cue cancels does not exist here | `doors.log` "not applied, our loops leave no leftover" |
+
+## Batch 2, D-2 2026-10-30: `tileExit`, `deadHallTeleport` — core `active.rs` (`tile_command`, `Request::TileExit`, `Request::HallTeleport`); viewer `door_view.rs`, `connor_view.rs` (`tile_exit`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `tileExit 0|1` sets the tile state's exit switch (1: Wait at once); nothing in other states; the usage line | `tile-puzzle.md` rule 21 | `traps.log` |
+| `deadHallTeleport <from> <to>`: Connor and the camera moved by `to` − `from` (positions only, heading and aim kept); the "cannot find object" and usage lines | `tile-puzzle.md` rule 22 | `traps.log`, `connor.log` "offset (55043, 39207, 1920)" |
+| The newest building of a name is used (a hall loaded again by a script) | **Ours** (how we keep buildings) | — |
+| Near/far worked out again at the next frame (ours does it every frame); the 0.5 s notice not done | rule 22; open question 2 | — |

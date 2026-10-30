@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 D-2: `tileExit` and `deadHallTeleport` (batch 2, Dead City)
+
+**Changed:** Core `active.rs`: commands `tileExit` and `deadHallTeleport` (`tile_command`), handed to the viewer as `Request::TileExit` / `Request::HallTeleport`, with the original's usage lines. Viewer `door_view.rs`: the teleport moves Connor (a relative `move` with no turn) and the camera by the two buildings' offset; `connor_view.rs` `tile_exit` (does nothing until the Tile state exists, D-4). DESIGN, provenance.
+**Why:** `tile-puzzle.md` rules 21, 22. Both were "unknown command".
+**Tested how:** `cargo build`; `kq8-viewer --world DeadCity --at 182290,74690,0 --sound off --no-ai --frames 900 --command "deadHallTeleport DeadHall DeadHal2",20 --command "deadHallTeleport Nobody DeadHal2",25 --command "tileExit 1",26 --command "tileExit",27`; `traps.log`, `connor.log`.
+**Result:** Update 21: offset (55043, 39207, 1920); Connor (182290, 74690, 1145) → (237333, 113897, 3065), heading kept; camera (179271, 70152, 2872) → (234314, 109359, 4792), tilt and heading kept. `Nobody`: "DeadHallTeleport:  cannot find object Nobody". `tileExit` with no argument: the usage line; `tileExit 1`: "not in a tile state; nothing". The start spot is inside `dhalltrp`, so the hall's own scene ran too: update 77 `dhalltrp.cs` line 87 Cue 1 teleported him by the same offset.
+**Still broken / not tested:** Not looked at by eye. The 0.5 s notice after the teleport (open question 2). `ddoor4.cs`'s way back (`deadHal2` loaded again) not run yet.
+**Next:** D-3, the Tile state's rules in core.
+
 ## 2026-10-30 D-1: `KQMoveEvent` on objects (batch 2, Dead City)
 
 **Changed:** Core `active.rs`: `KQMoveEvent` is a known event kind; sent to an object it runs as `move <object> <flags> x y z rx ry rz` (the 8th number ignored). A relative one sent by the object's own movement cue is not applied (stand-in, Q176). 1 unit test. DESIGN: the batch 2 plan (D-1 to D-11). QUESTIONS Q176. Provenance.

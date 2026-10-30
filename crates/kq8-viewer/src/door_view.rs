@@ -1293,6 +1293,36 @@ pub fn trap_step(
                 set_haze.0.push((haze, at.clone()));
                 format!("{at}: applied: setHaze {haze} queued for the haze")
             }
+            Request::TileExit { can_exit, at } => {
+                let line = connor.tile_exit(can_exit, &at);
+                format!("{at}: applied: Connor {line}")
+            }
+            Request::HallTeleport { from, to, at } => {
+                // tile-puzzle.md rule 22: positions only; the newest
+                // building of a name (a hall loaded again by a script).
+                let find = |name: &str| buildings.as_ref().and_then(|b| b.0.iter().rev().find(|c| c.name.eq_ignore_ascii_case(name)).map(|c| c.placement.position));
+                match (find(&from), find(&to)) {
+                    (Some(a), Some(b)) => {
+                        let offset: [f32; 3] = std::array::from_fn(|k| b[k] - a[k]);
+                        let objects = colliders.as_ref().map_or(&[][..], |c| &c.0[..]);
+                        let moved = match &lookup {
+                            Some(lookup) => {
+                                let mut scene = kq8_core::connor_mover::Scene::new(&lookup.0, buildings.as_ref().map_or(&[][..], |b| &b.0[..]), objects);
+                                scene.order = order.as_ref().map(|o| &o.0[..]);
+                                connor.move_to(3, offset, [0.0; 3], &at, &scene, false)
+                            }
+                            None => connor.move_to(3, offset, [0.0; 3], &at, &NoGround, false),
+                        };
+                        let cam = camera.as_mut().map_or("no game camera".to_string(), |c| c.move_to(3, offset, [0.0; 3]));
+                        sim.connor_checked_at = Some(connor.mover.position);
+                        format!(
+                            "{at}: applied: deadHallTeleport {from} -> {to}: offset ({:.0}, {:.0}, {:.0}); Connor {moved}; camera {cam}; near/far worked out again at the next frame; the 0.5 s notice not done (open question 2)",
+                            offset[0], offset[1], offset[2]
+                        )
+                    }
+                    (a, _) => format!("{at}: DeadHallTeleport:  cannot find object {}; nothing (rule 22)", if a.is_none() { &from } else { &to }),
+                }
+            }
             Request::ConnorWait { at } => {
                 let line = connor.enter_wait(&at);
                 format!("{at}: applied{again}: Connor {line}")
