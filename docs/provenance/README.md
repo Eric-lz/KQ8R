@@ -3703,3 +3703,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `deadHallTeleport <from> <to>`: Connor and the camera moved by `to` − `from` (positions only, heading and aim kept); the "cannot find object" and usage lines | `tile-puzzle.md` rule 22 | `traps.log`, `connor.log` "offset (55043, 39207, 1920)" |
 | The newest building of a name is used (a hall loaded again by a script) | **Ours** (how we keep buildings) | — |
 | Near/far worked out again at the next frame (ours does it every frame); the 0.5 s notice not done | rule 22; open question 2 | — |
+
+## Batch 2, D-3 2026-10-30: the death-hall stones' rules — core `tile_puzzle.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Grid: `tile<r><c>` at x 230,333 + 2,000 c, y 124,297 + 2,000 r, z 2,871 + 500 r; extra spot rows −2, −1, 8 with the nearest stone row's z | `tile-puzzle.md` rules 3, 5 | unit tests |
+| Connor's spot: area x 229,333–245,333, y 119,297–139,297; column and row by whole 2,000s; else south / north / west / east | rule 6 | unit test `spots_by_rule_6` |
+| Stones read by name when the state starts; a missing one skipped and named (the original crashes) | rule 2, "Do not reproduce" | unit test |
+| Jump target: the neighbour nearest his facing (or straight behind), columns clamped, not his own spot, no back diagonals from the start strip; straight / diagonal movements | rules 9, 11 | unit test |
+| Order D `tile07`, E `tile63`, A `tile21`, T `tile56`, H `tile10`; put-on stones and camera points; start and its camera point; +1,000 / +2,000 | rules 4, 13, 14 (kept as a table: "Do not reproduce") | unit test |
+| Landing: right / door (row −2) / start strip / wrong | rule 12 | unit test |
+| Lines: condition 3 on the first teleport, 133 the first time sent back after a right stone | rule 15 | unit test |

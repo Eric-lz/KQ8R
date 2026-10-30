@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 D-3: the death-hall stones' rules in core (batch 2, Dead City)
+
+**Changed:** New core `tile_puzzle.rs`: the stone table (read by name, missing stones skipped and named), Connor's spot, the jump target (8 neighbours, nearest his facing or straight behind), straight / diagonal jump movements, the landing outcome, the D-E-A-T-H table with put-on stones and camera points, the lines. 5 unit tests. Nothing uses it yet (D-4). DESIGN, provenance.
+**Why:** `tile-puzzle.md` rules 2–15 (session A, Q174).
+**Tested how:** `cargo test -p kq8-core` (the 5 new tests pass); clippy: nothing new.
+**Result:** The start (238,340, 122,300) is column 4, row −1; facing north the jump goes to `tile04`, facing 45° toward +x to `tile05` (`tilejump2`); back from the strip only straight back (row −2, the door). D puts him on `tile73` + 1,000 = (236,333, 138,297, 7,371), the camera above `tile76`; each put-on stone is a neighbour of the next letter.
+**Mistakes on the way:** I first made the area include the row-8 spot; rule 6 ends it at y 139,297, so a jump north off row 7 lands "north" (wrong either way, rule 12).
+**Still broken / not tested:** Not run in the viewer.
+**Next:** D-4, the Tile state in the viewer.
+
 ## 2026-10-30 D-2: `tileExit` and `deadHallTeleport` (batch 2, Dead City)
 
 **Changed:** Core `active.rs`: commands `tileExit` and `deadHallTeleport` (`tile_command`), handed to the viewer as `Request::TileExit` / `Request::HallTeleport`, with the original's usage lines. Viewer `door_view.rs`: the teleport moves Connor (a relative `move` with no turn) and the camera by the two buildings' offset; `connor_view.rs` `tile_exit` (does nothing until the Tile state exists, D-4). DESIGN, provenance.

@@ -3365,6 +3365,7 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    missing ones skipped and logged), Connor's spot (rule 6), the jump
    target (rule 9), straight / diagonal, the landing outcome (rule 12),
    the order table (rule 13). Unit tests.
+   **Done** 2026-10-30 (5 unit tests).
 4. **D-4: the `Tile` state in the viewer** (rules 7–15, 18–20):
    entering (`away` / `stop`), the keys (turn on the spot; one jump per
    press of forward or back; walking only south of the area), the turn
