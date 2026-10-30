@@ -241,11 +241,10 @@ impl ConnorSim {
                     self.tile_calls.push(TileCall::Line("KQCamera::follow Connor".into()));
                     let said = said.map_or("no line".to_string(), |c| format!("says {}/{}/0/{c} (rule 15)", tp::LINE_FILE, tp::LINE_NOUN));
                     if solved {
-                        // Rule 13, H: exit allowed, Death's trap armed, Wait.
-                        self.tile.as_mut().unwrap().can_exit = true;
-                        self.tile_calls.push(TileCall::Set("DeadCity::Azriel::TrapOn", "true"));
+                        // Rule 13, H: Wait after `teleportup` (the exit
+                        // switch and Death's trap were set at the landing).
                         let wait = self.leave_tile();
-                        lines.push(format!("Tile: teleportup ended: {said}; SOLVED: exit switch on, DeadCity::Azriel::TrapOn true, {wait} (rule 13)"));
+                        lines.push(format!("Tile: teleportup ended: {said}; SOLVED: {wait} (rule 13)"));
                     } else {
                         self.tile.as_mut().unwrap().stage = Stage::Keys;
                         lines.push(format!("Tile: teleportup ended: {said}; the camera follows him again (stand-in, open question 1); keys"));
@@ -278,6 +277,15 @@ impl ConnorSim {
                 let right = landing == Landing::Right;
                 let (put, camera) = tp::teleport_places(&t.stones, landing, expected);
                 t.expected = if right { expected + 1 } else { 0 };
+                // Rule 13, H: at the landing, before `teleportdown`, the
+                // exit is allowed and Death's trap armed, so its `On` when
+                // he is put inside it finds the variable true (F-2).
+                let solved = right && t.expected >= tp::ORDER.len();
+                if solved {
+                    t.can_exit = true;
+                    self.tile_calls.push(TileCall::Set("DeadCity::Azriel::TrapOn", "true"));
+                    lines.push("Tile: H: exit switch on, DeadCity::Azriel::TrapOn true (rule 13)".to_string());
+                }
                 if !right {
                     self.tile_light(None, lines);
                 }

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-2: Death's trap armed at the landing on H
+
+**Changed:** Viewer `connor_tile.rs`: on the landing on H the exit switch goes on and `DeadCity::Azriel::TrapOn` is set to true at once (before `teleportdown`); after `teleportup` only the change to Wait is left. DESIGN, provenance.
+**Why:** The user's check: after the puzzle, Death's scene did not start until Connor walked out of the spot and back in. `tile-puzzle.md` rule 13 sets the variable on the landing; we set it after `teleportup`, 22 updates after he was put inside `azrieltp` (its `On` at update 855 found the variable false).
+**Tested how:** `cargo build`; the full solve run of D-4 (`kq8-viewer --world DeadCity --at 182290,74000,3.1416 --frames 16000 --sound off --no-ai` with the same `--command` / `--hold` list as D-4); `connor.log`, `traps.log`.
+**Result:** Update 832: "Tile: H: exit switch on, DeadCity::Azriel::TrapOn true (rule 13)"; 855: "trap azrieltp: On Connor at (237333, 140000, 6864)", `azrieltp.cs` runs (handsOff, Death and his chair loaded, the far doors open, Cue 1 walks Connor through them to (237,327, 146,334), the 64 stones deleted, Cue 2, Cue 3); 876: Wait.
+**Still broken / not tested:** **Not looked at by eye.** Found in the same run, not fixed here: (1) Death's first line (`KQMonster::speak Death …`, Cue 3) is refused, "'Death' is not KQMonster" (Death is a `KQDeath`, D-11); (2) `KQCamera::flyToCamLoc` with a 5th number (`… 2.5 -.6`, Cue 2) is refused as a usage error; (3) the six torches and flames `azrieltp.cs` loads with a name and place while playing are not made ("no template"). `WasFirstPerson` (rule 13) is not set: we do not track first person yet.
+**Next:** F-3 (gravity off during a tile jump).
+
 ## 2026-10-30 F-1: the death halls' doors stand where the start-up script moves them
 
 **Changed:** Viewer `load.rs`: a door, chest or scripted object now records its index (`Drawn::Door`), so a start-up script's `move` changes its placement (before, the move changed only the name's remembered place). DESIGN (fix list after the user's check), provenance.

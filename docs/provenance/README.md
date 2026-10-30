@@ -3758,3 +3758,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | A start-up script's `move` of a door, chest or scripted object changes where it stands and its heading, as for any other model | `objects.md` Q20 d (`move` moves the object); the data: `newWorld.cs` lines 850–872 | `viewer.log` "doors: [ltddoor4] at (240510, 117979, 3044) dirZ 3.14" |
+
+## Batch 2, F-2 2026-10-30: Death's trap armed at the landing on H — viewer `connor_tile.rs` (`tile_land`, `tile_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| On H the exit switch and `DeadCity::Azriel::TrapOn` are set at the landing, before `teleportdown`; Wait only after `teleportup` | `tile-puzzle.md` rule 13 (corrects D-4, which set both after `teleportup`) | `connor.log` update 832; `traps.log` "trap azrieltp: On Connor" at update 855 |
