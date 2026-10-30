@@ -3764,3 +3764,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | On H the exit switch and `DeadCity::Azriel::TrapOn` are set at the landing, before `teleportdown`; Wait only after `teleportup` | `tile-puzzle.md` rule 13 (corrects D-4, which set both after `teleportup`) | `connor.log` update 832; `traps.log` "trap azrieltp: On Connor" at update 855 |
+
+## Batch 2, F-3 2026-10-30: gravity off while a tile jump plays — core `connor_mover.rs` (`start_tile_jump`, `end_tile_jump`); viewer `connor_tile.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| While a tile jump movement plays: gravity off, step up and down 0; when it ends: gravity on, steps 325 | `connor-physics.md` "Jumping" rules 3 and 5 (rule 5 names the tile jumps); **a reading**, not said in `tile-puzzle.md`: Q177 asks to confirm | `connor.log` solve run: z rises during `tilejump1`, landings on top of the stones |
+| No Jump state for a tile jump (no Fall after it, no crash) | `tile-puzzle.md` rule 12 (`stop` at the end); `connor-physics.md` crash list (tile jumps not in it) | `connor.log` |

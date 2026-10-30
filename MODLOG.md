@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-3: gravity off while a tile jump plays
+
+**Changed:** Core `connor_mover.rs`: `start_tile_jump` (gravity off, step up and down 0) and `end_tile_jump` (gravity on, steps back to 325), without the Jump state. Viewer `connor_tile.rs`: called when the jump movement starts and when it ends (also if the state is left mid-jump). QUESTIONS Q177 (added to), Q178 (new: the camera flight). DESIGN, provenance.
+**Why:** The user's check: the jump animation is right but Connor gets no height. With gravity on, his own up-steps were cancelled at once (+90 at most, then the step-down snap put him back on the stone every other update). `connor-physics.md` "Jumping" rules 3 and 5: during a jump gravity is off and the steps 0, and rule 5 names the tile jumps among the jumps that end with "gravity on, steps back to 325". `tile-puzzle.md` does not say it outright, so it is a reading (Q177 asks to confirm).
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The full solve run of D-4 (`--frames 16000`); `connor.log`.
+**Result:** A straight jump on the strip now rises and comes down on the stone; D lands at z 3,143 (stone 2,871), E 6,146, A 4,146, H 3,646: on top of each stone. The north jump `tile46` → `tile56`: z 5,136 → 5,646 (+510) by y 133,180, then it meets the stone's side at y 133,342 (z 5,624, box top 5,621), slides down and falls to the floor once gravity is back on (update 733). T still counts (the fall ends inside its spot).
+**Still broken / not tested:** **Not looked at by eye.** North jumps are still about 25 units short of the next row (Q177). The camera flight after a teleport is still the 0.5 s stand-in, which the user finds too fast (Q178).
+**Next:** D-6 `changeBmp` (the Reveal potion on the letters); Death's line (`KQDeath`), the 5-number `flyToCamLoc` and the named torch copies in `azrieltp.cs`.
+
 ## 2026-10-30 F-2: Death's trap armed at the landing on H
 
 **Changed:** Viewer `connor_tile.rs`: on the landing on H the exit switch goes on and `DeadCity::Azriel::TrapOn` is set to true at once (before `teleportdown`); after `teleportup` only the change to Wait is left. DESIGN, provenance.

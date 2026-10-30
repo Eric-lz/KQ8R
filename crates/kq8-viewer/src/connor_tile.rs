@@ -112,6 +112,9 @@ impl ConnorSim {
 
     /// Out of the state into Wait.
     fn leave_tile(&mut self) -> String {
+        if self.tile.as_ref().is_some_and(|t| matches!(t.stage, Stage::Jumping { .. })) {
+            self.mover.end_tile_jump();
+        }
         let lit = self.tile.take().and_then(|t| t.lit);
         if lit.is_some() {
             self.tile_lit_changed = Some(None);
@@ -185,8 +188,9 @@ impl ConnorSim {
                     match self.drawn(name).map(|m| m.name) {
                         Some(m) => {
                             self.walker.start_special(vec![SpecialStep::Play(m, name.to_string())]);
+                            self.mover.start_tile_jump();
                             self.tile.as_mut().unwrap().stage = Stage::Jumping { from, to };
-                            lines.push(format!("Tile: turned (heading {:.3}); {name} plays (rule 11)", self.walker.heading));
+                            lines.push(format!("Tile: turned (heading {:.3}); {name} plays, gravity off and steps 0 while it plays (rule 11; connor-physics.md Jumping rules 3, 5; F-3)", self.walker.heading));
                         }
                         None => {
                             self.tile.as_mut().unwrap().stage = Stage::Keys;
@@ -199,6 +203,7 @@ impl ConnorSim {
                 intent.forward = 0;
                 intent.turn = 0;
                 if special_over {
+                    self.mover.end_tile_jump();
                     self.walker.stand_now();
                     self.tile_land(from, to, spot, &mut lines);
                 }
