@@ -327,3 +327,92 @@ fn show(w: Where) -> String {
         other => format!("{other:?}").to_lowercase(),
     }
 }
+
+/// The lit stone's parts drawn with their own material copies (rule 10,
+/// D-5): the part entity, its own material and the copy put on.
+#[derive(Default)]
+pub struct Unlit {
+    name: Option<String>,
+    parts: std::collections::BTreeMap<bevy::prelude::Entity, (bevy::prelude::Handle<crate::object_light::ObjectMaterial>, bevy::prelude::Handle<crate::object_light::ObjectMaterial>)>,
+    made: std::collections::BTreeMap<bevy::prelude::AssetId<crate::object_light::ObjectMaterial>, bevy::prelude::Handle<crate::object_light::ObjectMaterial>>,
+    /// Copies put on again after the drawing put the own material back,
+    /// since the last log line (counted, not logged one by one).
+    again: u64,
+}
+
+/// Every drawn frame, after the drawing (as `dither_step`): the stone the
+/// Tile state lit is drawn with its smooth materials at full brightness
+/// (`object-lighting.md` rule 10: the per-object "unlit" switch); the
+/// one before gets its own materials back. A part whose drawing put its
+/// own material back (a new frame) gets the copy again.
+#[allow(clippy::type_complexity)]
+pub fn unlit_step(
+    connor: Option<bevy::prelude::Res<ConnorSim>>,
+    mut parts: bevy::prelude::Query<(bevy::prelude::Entity, Option<&crate::terrain_view::ObjectName>, Option<&bevy::prelude::ChildOf>, &mut bevy::prelude::MeshMaterial3d<crate::object_light::ObjectMaterial>)>,
+    names: bevy::prelude::Query<(Option<&crate::terrain_view::ObjectName>, Option<&bevy::prelude::ChildOf>)>,
+    mut materials: bevy::prelude::ResMut<bevy::prelude::Assets<crate::object_light::ObjectMaterial>>,
+    mut state: bevy::prelude::Local<Unlit>,
+    shared: bevy::prelude::Res<crate::Shared>,
+) {
+    use bevy::prelude::{ChildOf, DetectChanges};
+    let wanted = connor.as_ref().and_then(|c| c.tile.as_ref()).and_then(|t| t.lit).map(|c| c.name());
+    if wanted.is_none() && state.parts.is_empty() {
+        return;
+    }
+    let all = wanted != state.name;
+    let (mut on, mut off, mut again) = (0, 0, 0);
+    let mut kinds = Vec::new();
+    let Unlit { parts: done, made, .. } = &mut *state;
+    for (e, own_name, parent, mut m) in &mut parts {
+        if !all && !m.is_changed() {
+            continue;
+        }
+        let named = |e: bevy::prelude::Entity| names.get(e).ok().and_then(|(o, _)| o.map(|o| &o.0));
+        let up = |e: bevy::prelude::Entity| names.get(e).ok().and_then(|(_, c)| c.map(ChildOf::parent));
+        let parent = parent.map(ChildOf::parent);
+        let Some(name) = own_name.map(|o| &o.0).or_else(|| parent.and_then(named)).or_else(|| parent.and_then(up).and_then(named)) else { continue };
+        let lit = wanted.as_ref().is_some_and(|w| w.eq_ignore_ascii_case(name));
+        let redrawn = done.get(&e).is_some_and(|(_, put)| *put != m.0);
+        if redrawn {
+            done.remove(&e);
+        }
+        if done.contains_key(&e) == lit {
+            continue;
+        }
+        if let Some((own, _)) = done.remove(&e) {
+            m.0 = own;
+            off += 1;
+        }
+        if lit {
+            let own = m.0.clone();
+            let copy = made
+                .entry(own.id())
+                .or_insert_with(|| {
+                    let mut c = materials.get(&own).cloned().expect("a drawn part's material");
+                    kinds.push(c.settings.lighting);
+                    // Rule 10: smooth materials at full brightness.
+                    if c.settings.lighting == 2 {
+                        c.settings.lighting = 0;
+                    }
+                    materials.add(c)
+                })
+                .clone();
+            m.0 = copy.clone();
+            done.insert(e, (own, copy));
+            if redrawn {
+                again += 1;
+            } else {
+                on += 1;
+            }
+        }
+    }
+    state.again += again;
+    if on + off > 0 || all {
+        let again = std::mem::take(&mut state.again);
+        shared.log.lock().unwrap().detail(format!(
+            "unlit: {:?} -> {wanted:?}: {on} part(s) at full brightness (new copies of lighting kinds {kinds:?}; 2 = smooth -> none), {off} back to their own; {again} put on again after a new frame since the last line (object-lighting.md rule 10, tile-puzzle.md rule 10)",
+            state.name
+        ));
+        state.name = wanted;
+    }
+}

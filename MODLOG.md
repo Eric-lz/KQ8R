@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 D-5: the lit stone in the death hall (batch 2, Dead City)
+
+**Changed:** Viewer `connor_tile.rs`: `unlit_step` (every drawn frame, after `dither_step`): the stone the Tile state lit gets copies of its part materials with smooth lighting switched to none (full brightness); the drawing's own material comes back when it's no longer lit. Re-applications after a new frame are counted, not logged one by one. `main.rs` schedules it. DESIGN, provenance.
+**Why:** `tile-puzzle.md` rule 10 and `object-lighting.md` rule 10 (the per-object "unlit" switch).
+**Tested how:** `cargo build`, clippy: the same 2 warnings as before. `kq8-viewer --world DeadCity --at 182290,74000,3.1416 --sound off --no-ai --frames 5800 --command "move Connor 0 238340 122000 3065 0 0 1.5708",280 --hold 1,0,0,290,380 --command "move Connor 3 0 0 0 0 0 1.5708",392 --hold 1,0,0,400,405`; `viewer.log`, `connor.log`.
+**Result:** "unlit: None -> Some("tile04"): 1 part(s) at full brightness (lighting kinds [2])"; when he turns away (update 281) back to none; `tile07` lit from update 389 to the teleport (87 re-applications in between). First version logged every frame (121 lines): the drawing puts the stone's own material back each frame.
+**Still broken / not tested:** **Not looked at by eye**: whether a full-brightness stone stands out as in the original is for the user to see.
+**Next:** D-6, `KQObject::changeBmp`.
+
 ## 2026-10-30 D-4: Connor's `Tile` state, the death-hall stones (batch 2, Dead City)
 
 **Changed:** Viewer: new `connor_tile.rs` (a child of `connor_view`): `enter_tile`, `tile_step` before his update (keys, turn to the target, jump movement, landing, teleports, lines), `tile_exit`, `tile_holds`; its script lines, the door's `ConnorAction` and the variable go out as `TileCall`s, run in `door_view::trap_step`. `connor_view.rs`: the fields, his state number 2048 in the state, the refusal of other states (rule 20). `door_view.rs`: `Request::ConnorTile`, other states refused and dropped while the exit switch is off, the weapon swap refused with his line (rule 18). `load.rs`: the four stone jumps always loaded with Connor. `copies_view.rs`: animated copies a script loads get a solid box (the stones). Core: `setState Connor Tile` → `Request::ConnorTile`; `place_of` and `call_named` public. QUESTIONS Q177. Provenance, DESIGN.

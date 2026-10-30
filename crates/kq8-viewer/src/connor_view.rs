@@ -37,7 +37,7 @@ use crate::Shared;
 
 #[path = "connor_tile.rs"]
 mod tile;
-pub use tile::TileCall;
+pub use tile::{unlit_step, TileCall};
 
 /// One drawable movement: its loop for the walker and its number of frames.
 pub struct DrawnMovement {

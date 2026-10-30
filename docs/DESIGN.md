@@ -3378,6 +3378,8 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    rows, Q177). Also: script-loaded animated copies now get a solid box.
 5. **D-5: the lit stone** (rule 10, `object-lighting.md` rule 10): the
    target stone drawn at full brightness.
+   **Done** 2026-10-30 (logs only: per-part material copies with smooth
+   lighting switched to none).
 6. **D-6: `KQObject::changeBmp`** (`characters.md` rule 4a): the object's
    own copy of its textures, swapped by original name; `normal` back.
    Check: the Reveal potion in the hall swaps the five letters.

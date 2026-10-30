@@ -3733,3 +3733,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The Jump key is ignored in the state | **Ours** (rule 8 lists no Jump) | — |
 | `tilejump1`, `tilejump2`, `tilebackjump`, `tilebackjump2` always loaded with Connor | **Ours** (how we load) | `connor.log` |
 | A copy a script loads while playing that is animated gets a solid box when its type collides with Connor (as still copies did) | **Ours**, from the pair rule (`connor-physics.md`) and `objects.md` rule 6 (a loaded object is like any other) | `viewer.log` "copy tile07 … collider (…, type 0x41)" |
+
+## Batch 2, D-5 2026-10-30: the lit stone — viewer `connor_tile.rs` (`unlit_step`), `main.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The stone a forward jump would reach (and a back jump's target while it starts) is drawn with the per-object "unlit" switch on: smooth materials at full brightness | `tile-puzzle.md` rule 10, `object-lighting.md` rule 10 | `viewer.log` "unlit: None -> Some(\"tile04\"): 1 part(s) at full brightness (… lighting kinds [2] …)" |
+| Done with per-part material copies, put on again when the drawing puts the own material back (as `dither`) | **Ours** (how we draw) | `viewer.log` "30 put on again after a new frame" |
