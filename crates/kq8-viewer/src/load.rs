@@ -286,7 +286,7 @@ pub fn load_model(
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped. M4 4e-7
 /// adds his gestures; M5 5c-4 his flinch and deaths from a hit.
-pub const CONNOR_MOVEMENTS: [&str; 56] = [
+pub const CONNOR_MOVEMENTS: [&str; 60] = [
     "stop",
     "walk",
     "run",
@@ -349,6 +349,12 @@ pub const CONNOR_MOVEMENTS: [&str; 56] = [
     "portal",
     "portalx",
     "walkend",
+    // The stone jumps of the tile states (batch 2 D-4, tile-puzzle.md
+    // rule 11; Dead City, Swamp, Barren).
+    "tilejump1",
+    "tilejump2",
+    "tilebackjump",
+    "tilebackjump2",
 ];
 
 /// One of Connor's movements: its animation and playback speed.

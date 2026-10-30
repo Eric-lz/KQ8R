@@ -1,0 +1,329 @@
+//! Connor's `Tile` state: Dead City's death-hall stones
+//! (`docs/behaviour/tile-puzzle.md` rules 7-20; batch 2, D-4). The rules
+//! that need no viewer are in `kq8_core::tile_puzzle`.
+//!
+//! Run by [`ConnorSim::tile_step`] before his update, like the Choice
+//! state. A jump is our scripted turn to the target (`pointAndCue`'s
+//! turn) and then the jump movement as a one-item Special list, whose
+//! own steps carry him; a teleport is `teleportdown`, a place, a short
+//! camera flight and `teleportup`. What the state asks of the scripts
+//! (lines, the camera, a variable, the door click) goes out as
+//! [`TileCall`]s, run by `door_view::trap_step`.
+
+use kq8_core::connor::{Intent, Mode, SpecialStep};
+use kq8_core::connor_auto::{AutoKind, AutoMove};
+use kq8_core::tile_puzzle::{self as tp, Cell, Landing, Lines, Stones, Where};
+use kq8_core::weapons::WeaponMode;
+
+use super::ConnorSim;
+
+/// The door the start strip's back row clicks (rule 12).
+pub const DOOR: &str = "ltddoor4";
+/// The camera flight after a teleport, seconds (open question 4: a short
+/// flight as a stand-in).
+const FLIGHT: f32 = 0.5;
+
+/// What the state asks of the world.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TileCall {
+    /// A script line, run as a command.
+    Line(String),
+    /// A click on this object, as if the player clicked it (rule 12).
+    Click(&'static str),
+    /// A script variable set (rule 13, H).
+    Set(&'static str, &'static str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Stage {
+    /// The keys: turning on the spot, a jump on a press (rule 8).
+    Keys,
+    /// The turn to the target before the jump (rule 11).
+    Turning { from: Cell, to: Cell, back: bool },
+    /// The jump movement playing.
+    Jumping { from: Cell, to: Cell },
+    /// `teleportdown` playing; then Connor goes to `put` (rules 13, 14).
+    Down { right: bool, put: [f32; 3], camera: [f32; 3] },
+    /// `teleportup` playing.
+    Up { right: bool },
+}
+
+/// The state while Connor is in it.
+#[derive(Debug, Clone)]
+pub struct TileRun {
+    stones: Stones,
+    /// The letter expected next (index into [`tp::ORDER`]).
+    expected: usize,
+    /// The exit switch (rules 20, 21).
+    pub can_exit: bool,
+    lines: Lines,
+    stage: Stage,
+    /// The stone lit now (rule 10; drawn in D-5).
+    pub lit: Option<Cell>,
+    /// The remembered wanted movement (rule 8): a jump starts when it
+    /// changes; cleared at each landing.
+    remembered: i8,
+}
+
+impl ConnorSim {
+    /// Rule 7: into the `Tile` state. `place_of` finds a stone by name.
+    pub fn enter_tile(&mut self, place_of: &dyn Fn(&str) -> Option<[f32; 3]>, at: &str) -> String {
+        let (stones, missing) = Stones::read(place_of);
+        let found = 64 - missing.len();
+        let missing = if missing.is_empty() { String::new() } else { format!("; not found, skipped (Do not reproduce: the original crashes): {}", missing.join(" ")) };
+        self.walker.auto = None;
+        self.intent.forward = 0;
+        let start = if self.set_mode != WeaponMode::None {
+            let l = self.ready_set(None, WeaponMode::None, None, false, false, true);
+            format!("a weapon was out: away, empty hands ({l})")
+        } else {
+            self.walker.stand_now();
+            "stop".to_string()
+        };
+        self.tile = Some(TileRun { stones, expected: 0, can_exit: false, lines: Lines::default(), stage: Stage::Keys, lit: None, remembered: 0 });
+        let spot = self.tile_where();
+        let line = format!("enters the Tile state: {found} of 64 stones{missing}; at {}; expects D (tile07); exit switch off; {start} (tile-puzzle.md rules 2, 7)", show(spot));
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
+    fn tile_where(&self) -> Where {
+        tp::where_is(self.mover.position[0], self.mover.position[1])
+    }
+
+    /// `tileExit 0|1` (rule 21): the exit switch; with 1 he goes to Wait
+    /// at once. Nothing outside the state.
+    pub fn tile_exit(&mut self, can_exit: bool, at: &str) -> String {
+        let line = match self.tile.as_mut() {
+            None => format!("tileExit {}: not in a tile state; nothing (rule 21)", u8::from(can_exit)),
+            Some(t) => {
+                t.can_exit = can_exit;
+                if can_exit {
+                    let wait = self.leave_tile();
+                    format!("tileExit 1: the exit switch on; {wait} (rule 21)")
+                } else {
+                    "tileExit 0: the exit switch off (rule 21)".to_string()
+                }
+            }
+        };
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
+    /// Out of the state into Wait.
+    fn leave_tile(&mut self) -> String {
+        let lit = self.tile.take().and_then(|t| t.lit);
+        if lit.is_some() {
+            self.tile_lit_changed = Some(None);
+        }
+        self.walker.auto = None;
+        self.walker.stand_now();
+        "leaves the Tile state: Wait".to_string()
+    }
+
+    /// Rule 20: while the exit switch is off every other state is refused.
+    pub fn tile_holds(&self) -> bool {
+        self.tile.as_ref().is_some_and(|t| !t.can_exit)
+    }
+
+    /// Before his update (rules 8-15): the keys, the jump, the landing,
+    /// the teleports. `intent` is changed for his update (no walking on
+    /// the stones). Returns lines for `connor.log`.
+    pub fn tile_step(&mut self, intent: &mut Intent) -> Vec<String> {
+        let mut lines = Vec::new();
+        let Some(stage) = self.tile.as_ref().map(|t| t.stage) else { return lines };
+        let spot = self.tile_where();
+        let special_over = self.walker.mode == Mode::Free;
+        match stage {
+            Stage::Keys => {
+                // Rule 8: south of the area he walks and runs as usual.
+                if spot == Where::South {
+                    self.tile.as_mut().unwrap().remembered = intent.forward;
+                    self.tile_light(None, &mut lines);
+                    return lines;
+                }
+                let f = std::mem::replace(&mut intent.forward, 0);
+                let t = self.tile.as_mut().unwrap();
+                let pressed = f != 0 && f != t.remembered;
+                t.remembered = f;
+                let Where::Spot(from) = spot else {
+                    self.tile_light(None, &mut lines);
+                    return lines;
+                };
+                let ahead = tp::jump_target(from, self.walker.heading, false);
+                self.tile_light(ahead.filter(|c| self.tile.as_ref().unwrap().stones.found(*c)), &mut lines);
+                if pressed && self.walker.mode == Mode::Free && self.walker.auto.is_none() {
+                    let back = f < 0;
+                    if let Some(to) = tp::jump_target(from, self.walker.heading, back) {
+                        if back {
+                            self.tile_light(Some(to).filter(|c| self.tile.as_ref().unwrap().stones.found(*c)), &mut lines);
+                        }
+                        // Rule 11: face the target, or its mirror image
+                        // through him for a back jump.
+                        let p = self.mover.position;
+                        let target = self.tile.as_ref().unwrap().stones.place(to);
+                        let face = if back { [2.0 * p[0] - target[0], 2.0 * p[1] - target[1]] } else { [target[0], target[1]] };
+                        self.walker.auto = Some(AutoMove::new(AutoKind::Point, face, None));
+                        intent.turn = 0;
+                        self.tile.as_mut().unwrap().stage = Stage::Turning { from, to, back };
+                        lines.push(format!(
+                            "Tile: {} jump from {from} toward {to} (heading {:.3}, {}): turns to ({:.0}, {:.0}) first (rules 9, 11)",
+                            if back { "back" } else { "forward" },
+                            self.walker.heading,
+                            if tp::straight(from, to) { "straight" } else { "diagonal" },
+                            face[0],
+                            face[1]
+                        ));
+                    }
+                }
+            }
+            Stage::Turning { from, to, back } => {
+                intent.forward = 0;
+                intent.turn = 0;
+                if self.walker.auto.is_none() {
+                    let name = tp::jump_movement(from, to, back);
+                    match self.drawn(name).map(|m| m.name) {
+                        Some(m) => {
+                            self.walker.start_special(vec![SpecialStep::Play(m, name.to_string())]);
+                            self.tile.as_mut().unwrap().stage = Stage::Jumping { from, to };
+                            lines.push(format!("Tile: turned (heading {:.3}); {name} plays (rule 11)", self.walker.heading));
+                        }
+                        None => {
+                            self.tile.as_mut().unwrap().stage = Stage::Keys;
+                            lines.push(format!("Tile: {name} is not loaded; no jump"));
+                        }
+                    }
+                }
+            }
+            Stage::Jumping { from, to } => {
+                intent.forward = 0;
+                intent.turn = 0;
+                if special_over {
+                    self.walker.stand_now();
+                    self.tile_land(from, to, spot, &mut lines);
+                }
+            }
+            Stage::Down { right, put, camera } => {
+                intent.forward = 0;
+                intent.turn = 0;
+                if special_over {
+                    // Rules 13, 14: put there keeping his heading; the
+                    // camera flies to the point, looking at him; held keys
+                    // cleared; `teleportup`.
+                    let heading = self.walker.heading;
+                    self.put(put, heading);
+                    self.intent.forward = 0;
+                    self.intent.turn = 0;
+                    self.tile.as_mut().unwrap().remembered = 0;
+                    self.tile_calls.push(TileCall::Line(format!("KQCamera::addCamLoc {:.0} {:.0} {:.0} 1", camera[0], camera[1], camera[2])));
+                    self.tile_calls.push(TileCall::Line(format!("KQCamera::flyToCamLoc {:.0} {:.0} {:.0} {FLIGHT}", put[0], put[1], put[2])));
+                    let up = self.tile_play("teleportup");
+                    self.tile.as_mut().unwrap().stage = Stage::Up { right };
+                    lines.push(format!(
+                        "Tile: teleportdown ended: put at ({:.0}, {:.0}, {:.0}), heading {heading:.3}; the camera flies to ({:.0}, {:.0}, {:.0}) in {FLIGHT} s (stand-in, open question 4); {up}",
+                        put[0], put[1], put[2], camera[0], camera[1], camera[2]
+                    ));
+                }
+            }
+            Stage::Up { right } => {
+                intent.forward = 0;
+                intent.turn = 0;
+                if special_over {
+                    self.walker.stand_now();
+                    let t = self.tile.as_mut().unwrap();
+                    let said = t.lines.after_teleport(right);
+                    let solved = right && t.expected >= tp::ORDER.len();
+                    if let Some(c) = said {
+                        self.tile_calls.push(TileCall::Line(format!("KQMonster::speak Connor Connor {} {} 0 {c} 1 1", tp::LINE_FILE, tp::LINE_NOUN)));
+                    }
+                    // Open question 1 (the camera's hold switch): ours
+                    // follows him again (stand-in).
+                    self.tile_calls.push(TileCall::Line("KQCamera::follow Connor".into()));
+                    let said = said.map_or("no line".to_string(), |c| format!("says {}/{}/0/{c} (rule 15)", tp::LINE_FILE, tp::LINE_NOUN));
+                    if solved {
+                        // Rule 13, H: exit allowed, Death's trap armed, Wait.
+                        self.tile.as_mut().unwrap().can_exit = true;
+                        self.tile_calls.push(TileCall::Set("DeadCity::Azriel::TrapOn", "true"));
+                        let wait = self.leave_tile();
+                        lines.push(format!("Tile: teleportup ended: {said}; SOLVED: exit switch on, DeadCity::Azriel::TrapOn true, {wait} (rule 13)"));
+                    } else {
+                        self.tile.as_mut().unwrap().stage = Stage::Keys;
+                        lines.push(format!("Tile: teleportup ended: {said}; the camera follows him again (stand-in, open question 1); keys"));
+                    }
+                }
+            }
+        }
+        lines
+    }
+
+    /// Rule 12: what the landing means.
+    fn tile_land(&mut self, from: Cell, to: Cell, spot: Where, lines: &mut Vec<String>) {
+        let t = self.tile.as_mut().unwrap();
+        t.remembered = 0;
+        t.stage = Stage::Keys;
+        let expected = t.expected;
+        let landing = tp::landing(spot, expected);
+        let p = self.mover.position;
+        let head = format!(
+            "Tile: landed from {from} (aimed at {to}) at ({:.0}, {:.0}, {:.0}) = {}; expected {} {}",
+            p[0],
+            p[1],
+            p[2],
+            show(spot),
+            tp::ORDER[expected].letter,
+            tp::ORDER[expected].stone
+        );
+        match landing {
+            Landing::Right | Landing::Wrong => {
+                let right = landing == Landing::Right;
+                let (put, camera) = tp::teleport_places(&t.stones, landing, expected);
+                t.expected = if right { expected + 1 } else { 0 };
+                if !right {
+                    self.tile_light(None, lines);
+                }
+                self.tile_calls.push(TileCall::Line("setThirdPerson".into()));
+                let down = self.tile_play("teleportdown");
+                self.tile.as_mut().unwrap().stage = Stage::Down { right, put, camera };
+                lines.push(format!(
+                    "{head}: {} (rule {}); third person; {down}",
+                    if right { "RIGHT" } else { "WRONG: back to the start, expects D again, no damage" },
+                    if right { 13 } else { 14 }
+                ));
+            }
+            Landing::Door => {
+                self.tile_calls.push(TileCall::Click(DOOR));
+                lines.push(format!("{head}: the row behind the start strip: {DOOR} gets a click (rules 12, 19)"));
+            }
+            Landing::StartStrip => lines.push(format!("{head}: the start strip: nothing (rule 12)")),
+        }
+    }
+
+    /// One movement of his own as a one-item Special list.
+    fn tile_play(&mut self, name: &str) -> String {
+        match self.drawn(name).map(|m| m.name) {
+            Some(m) => {
+                self.walker.start_special(vec![SpecialStep::Play(m, name.to_string())]);
+                format!("{name} plays")
+            }
+            None => format!("{name} is not loaded; skipped"),
+        }
+    }
+
+    /// Rule 10: the lit stone; a change is logged and left for the
+    /// drawing (D-5).
+    fn tile_light(&mut self, cell: Option<Cell>, lines: &mut Vec<String>) {
+        let Some(t) = self.tile.as_mut() else { return };
+        if t.lit != cell {
+            lines.push(format!("Tile: lit stone {} -> {} (rule 10)", t.lit.map_or("none".into(), |c| c.to_string()), cell.map_or("none".into(), |c| c.to_string())));
+            t.lit = cell;
+            self.tile_lit_changed = Some(cell);
+        }
+    }
+}
+
+fn show(w: Where) -> String {
+    match w {
+        Where::Spot(c) => c.to_string(),
+        other => format!("{other:?}").to_lowercase(),
+    }
+}

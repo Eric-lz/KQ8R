@@ -1163,6 +1163,29 @@ pub fn trap_step(
             sim.active.run_script(script, &args);
         }
     }
+    // tile-puzzle.md (D-4): what the Tile state asked this update.
+    for call in std::mem::take(&mut connor.tile_calls) {
+        match call {
+            crate::connor_view::TileCall::Line(line) => {
+                let r = sim.active.test_command(&line, "Tile state");
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: Tile state: {line}: {r:?}"));
+            }
+            crate::connor_view::TileCall::Set(name, value) => {
+                sim.active.scripts.vars.set(name, value.to_string());
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: Tile state: {name} = {value} (rule 13)"));
+            }
+            crate::connor_view::TileCall::Click(name) => {
+                // Rule 12: "as if the player clicked it", read as its
+                // script's ConnorAction with no item, without the reach
+                // test (ours: he is 6,000 from the door then).
+                let ran = sim.active.call_named(name, &["ConnorAction", "do", "do"]);
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: Tile state: {name} gets ConnorAction do do (rule 12): {}", if ran { "its script ran" } else { "no object with a script by that name" }));
+            }
+        }
+    }
     let requests: std::collections::VecDeque<(usize, Request)> =
         std::mem::take(&mut connor.refused).into_iter().chain(std::mem::take(&mut sim.active.world.requests)).enumerate().collect();
     let mut requests = requests;
@@ -1200,6 +1223,15 @@ pub fn trap_step(
             _ => None,
         };
         if let Some((what, at)) = state {
+            // tile-puzzle.md rule 20 (D-4): refused and dropped while the
+            // exit switch is off.
+            if connor.tile_holds() {
+                connor.state_request(what, &at);
+                if let Some(log) = &mut sim.trap_log {
+                    log.detail(format!("update {}: {at}: {what}{again}: refused, Connor is in the Tile state (exit switch off); dropped (tile-puzzle.md rule 20)", sim.active.world.updates));
+                }
+                continue;
+            }
             // ropeandhook.md rule 28 (M6 6a-6): refused and dropped.
             if connor.roping() {
                 connor.state_request(what, &at);
@@ -1292,6 +1324,11 @@ pub fn trap_step(
                 // object-lighting.md rule 33a (Q161): applied before the next frame.
                 set_haze.0.push((haze, at.clone()));
                 format!("{at}: applied: setHaze {haze} queued for the haze")
+            }
+            Request::ConnorTile { at } => {
+                let world = &sim.active.world;
+                let line = connor.enter_tile(&|name| world.place_of(name).map(|p| p.position), &at);
+                format!("{at}: applied: Connor {line}")
             }
             Request::TileExit { can_exit, at } => {
                 let line = connor.tile_exit(can_exit, &at);
@@ -1898,6 +1935,14 @@ pub fn door_step(
         // ranged-weapons.md rules 1-9 (M5 5f-3): Delete, Alt, slot clicks
         // and setDoMode ask for a mode; taken only while he stands or
         // moves (rule 5), then the swap (rule 6).
+        // tile-puzzle.md rule 18 (D-4): in the Tile state the swap is
+        // refused with his common line.
+        if c.tile.is_some() {
+            for (_, how) in std::mem::take(&mut c.weapon_keys) {
+                let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
+                sim.log.detail(format!("update {updates}: {how}: weapon swap refused in the Tile state; Connor says 0/0/37/23 ({said:?}) (tile-puzzle.md rule 18)"));
+            }
+        }
         let w = &mut sim.active.world;
         for (ask, how) in std::mem::take(&mut c.weapon_keys) {
             w.ask_weapon(ask, &format!("update {updates}: {how}"));

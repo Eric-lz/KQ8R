@@ -144,6 +144,8 @@ pub enum Request {
     /// `tileExit 0|1` (`tile-puzzle.md` rule 21): the tile state's exit
     /// switch; with 1 Connor goes to Wait at once. Nothing outside it.
     TileExit { can_exit: bool, at: String },
+    /// `KQMonster::setState Connor Tile` (`tile-puzzle.md` rule 7).
+    ConnorTile { at: String },
     /// `deadHallTeleport <from> <to>` (`tile-puzzle.md` rule 22): Connor
     /// and the camera moved by the two buildings' offset.
     HallTeleport { from: String, to: String, at: String },
@@ -2417,7 +2419,7 @@ impl WorldState {
     }
 
     /// Where an object stands, for `getLoc` and `tossItems`.
-    fn place_of(&self, who: &str) -> Option<Placement> {
+    pub fn place_of(&self, who: &str) -> Option<Placement> {
         if let Some(i) = self.object_index(who) {
             Some(self.objects[i].player.base)
         } else if let Some(i) = self.anim_index(who) {
@@ -2549,6 +2551,11 @@ impl WorldState {
                     _ => "Choice requires string argument; nothing (rule 1)".to_string(),
                 };
                 self.note(format!("{at}: KQMonster::setState Connor Choice {}: {line}", rest.join(" ")));
+            }
+            [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Tile") => {
+                // tile-puzzle.md rule 7 (batch 2, D-4).
+                self.note(format!("{at}: KQMonster::setState Connor Tile: handed to Connor (tile-puzzle.md rule 7)"));
+                self.requests.push(Request::ConnorTile { at: at.to_string() });
             }
             [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Portal") => {
                 // world-change.md rules 1-2, magic-map.md rule 40 (M6 6e-6).
@@ -4047,7 +4054,7 @@ impl Active {
     /// Runs the script of the object called `name` (door, chest, scripted
     /// object, clickable, building or trap) with `args`. `false`: no such
     /// object with a script.
-    pub(crate) fn call_named(&mut self, name: &str, args: &[&str]) -> bool {
+    pub fn call_named(&mut self, name: &str, args: &[&str]) -> bool {
         let w = &self.world;
         if let Some(i) = w.door_index(name).filter(|&i| w.doors[i].script.is_some()) {
             self.call_door(i, args);

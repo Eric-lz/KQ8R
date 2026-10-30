@@ -3715,3 +3715,21 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Order D `tile07`, E `tile63`, A `tile21`, T `tile56`, H `tile10`; put-on stones and camera points; start and its camera point; +1,000 / +2,000 | rules 4, 13, 14 (kept as a table: "Do not reproduce") | unit test |
 | Landing: right / door (row −2) / start strip / wrong | rule 12 | unit test |
 | Lines: condition 3 on the first teleport, 133 the first time sent back after a right stone | rule 15 | unit test |
+
+## Batch 2, D-4 2026-10-30: Connor's `Tile` state — viewer `connor_tile.rs` (`ConnorSim::enter_tile`, `tile_step`, `tile_exit`); `connor_view.rs`, `door_view.rs`, `copies_view.rs`, `load.rs`; core `active.rs` (`Request::ConnorTile`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Entering: stones read, expects D, exit switch off, a drawn weapon put away (`away`) else `stop` | `tile-puzzle.md` rule 7 | `connor.log` "enters the Tile state: 64 of 64 stones" |
+| Keys: turn on the spot; a jump on a change of the wanted movement, cleared at each landing (holding forward keeps jumping); keys ignored during a jump or teleport; walking south of the area | rule 8 | `connor.log` (three strip jumps from one held key) |
+| The turn to the target (or its mirror for a back jump) before the jump movement | rule 11 | `connor.log` "turns to (…) first" |
+| The turn is our scripted turn (`pointAndCue`'s); the jump and teleport movements are one-item Special lists | **Ours** (how we play them) | — |
+| Landing: right → `teleportdown`, put on the next stone keeping his heading, camera point and flight, `teleportup`; wrong → the start, D again, no damage; row −2 → the door; the start strip → nothing | rules 12–14 | `connor.log` solve run (`d4-tile-solve-connor.log`) |
+| The door: its script's `ConnorAction do do`, **without the reach test** | rule 12 says "as if the player clicked it"; the reach test left out is **ours** (he is about 6,000 from the door) | `connor.log` "ltddoor4 gets ConnorAction do do: its script ran", then `tileExit 1` |
+| The camera flight after a teleport: 0.5 s; following again after `teleportup` | **Stand-ins**, open questions 4 and 1 | — |
+| Lines 2000/2/0/3 and /133 after `teleportup` | rule 15 | `connor.log` |
+| H: exit switch on, `DeadCity::Azriel::TrapOn` true, Wait | rule 13 | `connor.log` "SOLVED" |
+| Other states refused and dropped while the exit switch is off; the weapon swap refused with 0/0/37/23 | rules 18, 20 | not run |
+| The Jump key is ignored in the state | **Ours** (rule 8 lists no Jump) | — |
+| `tilejump1`, `tilejump2`, `tilebackjump`, `tilebackjump2` always loaded with Connor | **Ours** (how we load) | `connor.log` |
+| A copy a script loads while playing that is animated gets a solid box when its type collides with Connor (as still copies did) | **Ours**, from the pair rule (`connor-physics.md`) and `objects.md` rule 6 (a loaded object is like any other) | `viewer.log` "copy tile07 … collider (…, type 0x41)" |

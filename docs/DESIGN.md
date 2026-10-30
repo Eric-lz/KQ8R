@@ -3373,6 +3373,9 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    teleports (`teleportdown`, the move, a short camera flight,
    `teleportup`), the start-strip door click, the lines, the refusal of
    other states and of the weapon swap while the exit switch is off.
+   **Done** 2026-10-30 (logs: a full D-E-A-T-H solve, a wrong stone and
+   the way out run by script; north jumps can't climb the 500 between
+   rows, Q177). Also: script-loaded animated copies now get a solid box.
 5. **D-5: the lit stone** (rule 10, `object-lighting.md` rule 10): the
    target stone drawn at full brightness.
 6. **D-6: `KQObject::changeBmp`** (`characters.md` rule 4a): the object's

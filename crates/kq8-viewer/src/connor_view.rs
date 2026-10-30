@@ -35,6 +35,10 @@ use crate::terrain_view::{bevy_transform, bevy_transform_from, Buildings, Ground
 use crate::object_light::{object_material, ObjectLight, ObjectMaterial};
 use crate::Shared;
 
+#[path = "connor_tile.rs"]
+mod tile;
+pub use tile::TileCall;
+
 /// One drawable movement: its loop for the walker and its number of frames.
 pub struct DrawnMovement {
     pub name: &'static str,
@@ -180,6 +184,12 @@ pub struct ConnorSim {
     /// The Choice state's script calls (`StartChoice`, `DoChoice`; its
     /// arguments), run by `door_view::trap_step`.
     pub choice_calls: Vec<Vec<String>>,
+    /// The death hall's `Tile` state (`tile-puzzle.md`; batch 2, D-4),
+    /// while he is in it, and what it asks of the world this update.
+    pub tile: Option<tile::TileRun>,
+    pub tile_calls: Vec<TileCall>,
+    /// The lit stone changed (rule 10): the new one, for the drawing.
+    pub tile_lit_changed: Option<Option<kq8_core::tile_puzzle::Cell>>,
     /// The end of a scripted walk being watched (M3 3n-5, Q98: logs only).
     walk_end: Option<WalkEnd>,
     /// `fighting.md` rules 23, 24, 29 (M5 5c-4): when his last flinch ends
@@ -817,6 +827,9 @@ pub fn spawn_connor(
         refused: Vec::new(),
         choice: None,
         choice_calls: Vec::new(),
+        tile: None,
+        tile_calls: Vec::new(),
+        tile_lit_changed: None,
         walk_end: None,
         flinch_end: f64::NEG_INFINITY,
         last_ouch: f64::NEG_INFINITY,
@@ -1155,6 +1168,9 @@ impl ConnorSim {
         if self.choosing() {
             return CHOICE;
         }
+        if self.tile.is_some() {
+            return TILE;
+        }
         match self.walker.mode {
             Mode::Free if self.walker.moving() => MOVE,
             Mode::Free | Mode::Crash => WAIT,
@@ -1190,6 +1206,11 @@ impl ConnorSim {
     pub fn state_request(&mut self, what: &str, at: &str) -> bool {
         // ropeandhook.md rule 28 (M6 6a-6): the rope state refuses every
         // other state; the caller drops the request (`roping`).
+        // tile-puzzle.md rule 20 (D-4): refused while the exit switch is off.
+        if self.tile_holds() {
+            self.log.detail(format!("connor update {}: {what}: refused, he is in the Tile state and its exit switch is off (tile-puzzle.md rule 20); dropped ({at})", self.updates));
+            return false;
+        }
         if self.roping() {
             self.log.detail(format!("connor update {}: {what}: refused, he is in the rope state (ropeandhook.md rule 28); dropped ({at})", self.updates));
             return false;
@@ -2009,14 +2030,6 @@ impl ConnorSim {
         line
     }
 
-    /// `tileExit 0|1` (`tile-puzzle.md` rule 21): in any state but a tile
-    /// state it does nothing.
-    pub fn tile_exit(&mut self, can_exit: bool, at: &str) -> String {
-        let line = format!("tileExit {}: not in a tile state; nothing (rule 21)", u8::from(can_exit));
-        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
-        line
-    }
-
     /// He is in the Choice state and it is his own state now (not a weapon
     /// swap under way, rule 11).
     pub fn choosing(&self) -> bool {
@@ -2265,7 +2278,12 @@ pub fn connor_step(
             sim.log.detail(format!("connor update {}: Jump refused in the Choice state (characters.md rule 11)", sim.updates));
         }
     }
-    for l in choice_lines {
+    // tile-puzzle.md rules 8-15 (D-4): the death-hall stones.
+    let tile_lines = sim.tile_step(&mut intent);
+    if sim.tile.is_some() && jump {
+        jump = false;
+    }
+    for l in choice_lines.into_iter().chain(tile_lines) {
         let l = format!("connor update {}: {l}", sim.updates);
         shared.log.lock().unwrap().detail(&l);
         sim.log.detail(l);
