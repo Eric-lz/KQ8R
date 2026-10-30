@@ -3431,3 +3431,19 @@ each, before D-6:
 - **Not built, asked:** the camera flight after a teleport looks too
   fast to the user (0.5 s stand-in, `tile-puzzle.md` open question 4):
   Q178.
+
+F-1 to F-3 **done** 2026-10-30. Found while checking F-2 (Death's room,
+`azrieltp.cs`), planned next:
+
+- **F-4: Death as a character** (`talking.md` rule 18a: "otherwise an
+  ordinary character"): `classType=KQDeath` loaded like `KQMonster`
+  (he is skipped now: "no model (uses an .anm file)"), so he is drawn
+  and `KQMonster::speak Death …` works; his mouth shapes 0–7 play the
+  movements `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e`. (Was D-11.)
+- **F-5: `flyToCamLoc x y z seconds endRoll`** (`camera.md` rule 4): the
+  fifth number accepted (`azrieltp.cs` Cue 2 is refused now).
+- **F-6: named copies loaded while playing** (`azrieltp.cs`: six
+  torches and flames, `loadKQ trch04ns.kq torchrd.1a x y z`): "no
+  template", not made. Look at why these files are not kept as
+  templates.
+- Then D-6 (`changeBmp`: the Reveal potion on the letters).

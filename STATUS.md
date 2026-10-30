@@ -7,6 +7,18 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-30)
 
+- **2026-10-30 (B): fixes after the user's check of the death hall**
+  (DESIGN "Fixes after the user's check", F-1 to F-3; logs only, **not
+  looked at by eye**): the halls' doors now stand where `newWorld.cs`
+  moves them (they were all in the hall's middle, blocking Connor);
+  Death's trap is armed at the landing on H, so his scene starts at
+  once; gravity is off while a tile jump plays, so Connor rises. Still
+  wrong: north jumps are about 25 short of the next row (Q177); the
+  camera flight after a teleport is too fast (Q178). **Next for B:** F-4
+  Death as a character (he is not loaded, so his talk never starts),
+  F-5 `flyToCamLoc` with a roll, F-6 the torches `azrieltp.cs` loads,
+  then D-6 (the Reveal potion on the letters).
+
 - **2026-10-30 (B): script coverage batch 2 (Dead City), first part
   built** (DESIGN "script coverage batch 2", D-1 to D-5 and D-7; logs and
   unit tests only, **not played by hand**): the death-hall stone puzzle
