@@ -401,6 +401,7 @@ pub fn spawn_animated(
         if let (Some(ch), Some(c)) = (character.as_deref_mut(), &a.character) {
             let k = &c.keys;
             ch.flying = k.flying;
+            ch.mouth_moves = k.class == kq8_data::characters::Class::Death;
             ch.hits_buildings = k.collider_mask & 0x8 != 0;
             // M4 4d-12-3: what Connor's scene needs to make it solid.
             (ch.collision_type, ch.collision_mask) = (k.collider_type, k.collider_mask);

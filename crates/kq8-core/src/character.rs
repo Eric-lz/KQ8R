@@ -118,6 +118,9 @@ pub const TALK_TURN_EVERY: u64 = 4;
 pub struct Character {
     /// `KQGeometryTalker` (rule 27; used from 4d-5).
     pub geometry: bool,
+    /// `KQDeath` (`talking.md` rule 18a, F-4): mouth shapes 0–7 play
+    /// movements; otherwise an ordinary character.
+    pub mouth_moves: bool,
     /// `flags` bit 0x10 (rule 13).
     pub random_stop: bool,
     /// Seconds from the first update to Wait (rule 12).
@@ -259,6 +262,7 @@ impl Character {
     pub fn new(geometry: bool, flags: u32, birth_delay: f32, has_birth: bool, no_turn: bool, gravity: bool, seed: u64) -> Self {
         Character {
             geometry,
+            mouth_moves: false,
             random_stop: flags & kq8_data::characters::RANDOM_STOP != 0,
             birth_delay,
             has_birth,
@@ -649,6 +653,16 @@ impl Character {
             return format!("code {code}: mouth movement '{name}' starts at once{unknown} (rule 27)");
         }
         let gesture = match code {
+            0..=7 if self.mouth_moves => {
+                // talking.md rule 18a: Death's shapes are movements, one
+                // started for each code (whether an equal shape restarts
+                // it is not traced: ours does, as rule 27).
+                self.mouth = code;
+                let name = GEOMETRY_MOUTH[code as usize];
+                let st = player.start(name);
+                let unknown = if st.unknown { " (not in its list: movement 0)" } else { "" };
+                return format!("code {code}: mouth shape {code}: movement '{name}' starts at once{unknown} (talking.md rule 18a)");
+            }
             0..=7 => {
                 self.mouth = code;
                 return format!("code {code}: mouth shape {code} (rule 25)");
@@ -1144,6 +1158,20 @@ pub(crate) mod tests {
         assert_eq!(p.movement_name(), "rest");
         assert!(c.mouth_code(&mut p, 9).contains("ignored"));
         assert_eq!(c.mouth, 0);
+    }
+
+    #[test]
+    fn death_plays_his_mouth_shapes_as_movements() {
+        // talking.md rule 18a (F-4): shapes 0–7 start movements; codes
+        // above 7 are an ordinary character's (rule 28), not rule 27's.
+        let mut c = Character::new(false, 0x20, 0.0, false, true, true, 1);
+        c.mouth_moves = true;
+        let mut p = player(0, None, None);
+        let line = c.mouth_code(&mut p, 2);
+        assert!(line.contains("'m' starts at once") && line.contains("18a"), "{line}");
+        assert_eq!((p.movement_name(), c.mouth), ("m", 2));
+        let line = c.mouth_code(&mut p, 16);
+        assert!(!line.contains("ignored") && !line.contains("rest"), "{line}");
     }
 
     #[test]

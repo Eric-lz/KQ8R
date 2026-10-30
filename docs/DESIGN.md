@@ -3440,6 +3440,8 @@ F-1 to F-3 **done** 2026-10-30. Found while checking F-2 (Death's room,
   (he is skipped now: "no model (uses an .anm file)"), so he is drawn
   and `KQMonster::speak Death …` works; his mouth shapes 0–7 play the
   movements `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e`. (Was D-11.)
+  **Done** 2026-10-30 (logs and a unit test: the whole scene runs to
+  Connor's teleport out; the end of a line and codes above 7: Q179).
 - **F-5: `flyToCamLoc x y z seconds endRoll`** (`camera.md` rule 4): the
   fifth number accepted (`azrieltp.cs` Cue 2 is refused now).
 - **F-6: named copies loaded while playing** (`azrieltp.cs`: six

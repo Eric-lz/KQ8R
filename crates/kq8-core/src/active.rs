@@ -5245,7 +5245,8 @@ impl Active {
                         let c = self.world.anims[i].character.as_mut().unwrap();
                         if !c.geometry && c.mouth != 0 {
                             c.mouth = 0;
-                            self.world.character_note(speaker, "line ended: mouth shape 0 (rule 25)");
+                            let note = if c.mouth_moves { "line ended: mouth shape 0; no movement started (talking.md rule 18a: not traced, Q179)" } else { "line ended: mouth shape 0 (rule 25)" };
+                            self.world.character_note(speaker, note);
                         }
                     }
                 }

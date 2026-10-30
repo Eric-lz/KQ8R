@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-4: Death is a character, and speaks
+
+**Changed:** Data `characters.rs`: `classType=KQDeath` is a character class (`Class::Death`). Core `character.rs`: `mouth_moves` (Death): lip-sync codes 0–7 start his mouth movements `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e` at once; codes above 7 as for any character (rule 28). `active.rs`: at the end of a line his shape goes to 0 and no movement starts (logged, Q179). Viewer `anim_view.rs`: sets `mouth_moves` for a `KQDeath`. 1 unit test. QUESTIONS Q179. DESIGN, provenance.
+**Why:** The user's check: Death's talk never started. Death was skipped at load ("no model (uses an .anm file)"), so `azrieltp.cs`'s `KQMonster::speak Death …` was refused ("'Death' is not KQMonster"). `talking.md` rule 18a: he is an ordinary character whose mouth shapes play movements.
+**Tested how:** `cargo test --workspace` (all pass, 1 new); clippy: the same 2 warnings as before; `cargo run --release -- character-verify` (Dead City: 1 `KQDeath`, its problems unchanged at 4, none about Death). The full solve run of D-4 with `--frames 42000`; `characters.log`, `doors.log`.
+**Result:** Update 855: Death loaded by `azrieltp.cs`, start-up, Wait, `Stop`. 1022: his first line, "code 7: mouth shape 7: movement 'e' starts at once (talking.md rule 18a)", one movement per code. `Death.cs` runs all twelve lines (TalkComplete 2000 3 0 2 1 … 12, the camera cuts between them), `givekey` (1939–2039), the key `keycycle` appears, then Cue 6: Connor +300 experience, `teleportdown`, moved to (182,200, 65,000), `teleportup`, handsOff off (update 2886). His status says Connor is about 100,000 away during the scene: that is the cutscene rule (`potions.md` rule 26, handsOff tells characters Connor is far below), not a bug.
+**Still broken / not tested:** **Not looked at or heard by the user.** The end of a line, codes above 7, a repeated code and whether his mouth poses hold: Q179. Still from F-2: the 5-number `flyToCamLoc` (F-5), the torches (F-6).
+**Next:** F-5.
+
 ## 2026-10-30 F-3: gravity off while a tile jump plays
 
 **Changed:** Core `connor_mover.rs`: `start_tile_jump` (gravity off, step up and down 0) and `end_tile_jump` (gravity on, steps back to 325), without the Jump state. Viewer `connor_tile.rs`: called when the jump movement starts and when it ends (also if the state is left mid-jump). QUESTIONS Q177 (added to), Q178 (new: the camera flight). DESIGN, provenance.

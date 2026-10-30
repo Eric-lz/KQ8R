@@ -74,11 +74,14 @@ pub fn casts_shadow(world_mask: u32, own_mask: u32, allowed: bool, translucency:
     world_mask & own_mask != 0 && allowed && translucency >= 256.0
 }
 
-/// The two character classes (rule 1).
+/// The character classes (rule 1), and Dead City's Death
+/// (`talking.md` rule 18a: an ordinary character whose mouth shapes play
+/// movements).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Class {
     Monster,
     GeometryTalker,
+    Death,
 }
 
 impl Class {
@@ -90,6 +93,8 @@ impl Class {
             Some(Class::Monster)
         } else if c.eq_ignore_ascii_case("KQGeometryTalker") {
             Some(Class::GeometryTalker)
+        } else if c.eq_ignore_ascii_case("KQDeath") {
+            Some(Class::Death)
         } else {
             None
         }
@@ -99,6 +104,7 @@ impl Class {
         match self {
             Class::Monster => "KQMonster",
             Class::GeometryTalker => "KQGeometryTalker",
+            Class::Death => "KQDeath",
         }
     }
 }

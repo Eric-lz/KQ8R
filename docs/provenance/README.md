@@ -3771,3 +3771,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | While a tile jump movement plays: gravity off, step up and down 0; when it ends: gravity on, steps 325 | `connor-physics.md` "Jumping" rules 3 and 5 (rule 5 names the tile jumps); **a reading**, not said in `tile-puzzle.md`: Q177 asks to confirm | `connor.log` solve run: z rises during `tilejump1`, landings on top of the stones |
 | No Jump state for a tile jump (no Fall after it, no crash) | `tile-puzzle.md` rule 12 (`stop` at the end); `connor-physics.md` crash list (tile jumps not in it) | `connor.log` |
+
+## Batch 2, F-4 2026-10-30: Death as a character — data `characters.rs` (`Class::Death`); core `character.rs` (`mouth_moves`, `mouth_code`), `active.rs`; viewer `anim_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQDeath` is loaded and run as an ordinary character (drawn, his script, `speak`) | `talking.md` rule 18a ("otherwise he is an ordinary character run by `death.cs`") | `characters.log` "Death: start-up"; `doors.log` TalkComplete 1–12 |
+| His lip-sync codes 0–7 start `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e` | `talking.md` rule 18a; the names in `Death.anm` (data) | unit test `death_plays_his_mouth_shapes_as_movements`; `characters.log` "movement 'e' starts at once" |
+| Started at once for every code, even the same shape | **Stand-in**, as `characters.md` rule 27 (18a: not traced); Q179 (c) | unit test |
+| Codes above 7 as for an ordinary character (rule 28) | `talking.md` rule 18a, `characters.md` rule 28; Q179 (b) | unit test |
+| End of a line: shape 0, no movement started | **Stand-in** (not traced), Q179 (a) | `characters.log` |
