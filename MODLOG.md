@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-1: the death halls' doors stand where the start-up script moves them
+
+**Changed:** Viewer `load.rs`: a door, chest or scripted object now records its index (`Drawn::Door`), so a start-up script's `move` changes its placement (before, the move changed only the name's remembered place). DESIGN (fix list after the user's check), provenance.
+**Why:** The user's check of the death hall: after the doors open, two copies of the doors (one closed, one opening) stood in the middle of the second hall, blocking Connor; the same after the puzzle, before Death's room. `newWorld.cs` lines 850–872 load `ltddoor3/4`, `rtddoor3/4` (and `ltddoor5/6`, `rtddoor5/6`) at the hall's place and then `move` them by (±3,177, ±4,082, 260), some turned by 3.14; every door kept the hall's centre.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. `kq8-viewer --world DeadCity --at 182290,74000,3.1416 --frames 4000 --sound off --no-ai`; `viewer.log`, `connor.log`, `doors.log`.
+**Result:** `viewer.log` before: "doors: [ltddoor4] at (237333, 113897, 2784) dirZ 0.00" (and `ltddoor3` at the same spot: the user's two copies). After: `ltddoor4` (240510, 117979, 3044) dirZ 3.14, `rtddoor4` (234156, 117979, 3044) dirZ 3.14, `ltddoor3` (234156, 109815, 3044), `rtddoor3` (240510, 109815, 3044); `ltddoor6`/`rtddoor6` at y 152,913 dirZ 3.14, `ltddoor5`/`rtddoor5` at y 144,481. After the teleport Connor's `walkTo 238100 121500` goes straight through (y 117,037 at update 135, 121,514 at 195), then `dhalltrp.cs` Cue 3 puts him on the start strip.
+**Still broken / not tested:** **Not looked at by eye.** Whether the doors swing the right way when opened (the 3.14 turn) is for the user to see. `KQObject::setHidden` on a door still says "no model" (unchanged; no script does it yet).
+**Next:** F-2 (Death's trap armed at the landing on H).
+
 ## 2026-10-30 Batch 2 (B), end of session: the coverage list, STATUS, FEATURES, README
 
 **Changed:** `docs/SCRIPT-COVERAGE.md` written again (`cargo run --release -- script-coverage --out docs/SCRIPT-COVERAGE.md`, its own commit); STATUS "Where we are", FEATURES (new section), README (one line). No code.

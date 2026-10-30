@@ -2170,6 +2170,8 @@ fn item_types(game: &GameDir, log: &mut Log) -> kq8_core::item::Items {
 enum Drawn {
     Model(usize),
     Marker(usize),
+    /// A door, chest or scripted object: its index in `doors`.
+    Door(usize),
     Nothing,
 }
 
@@ -2529,6 +2531,10 @@ impl kq8_data::world_script::Host for Placer<'_> {
                 self.placed[i].0.angles = angles;
             }
             Drawn::Marker(i) => self.markers[i].position = position,
+            Drawn::Door(i) => {
+                self.doors[i].placement.position = position;
+                self.doors[i].placement.angles = angles;
+            }
             Drawn::Nothing => {}
         }
     }
@@ -3868,6 +3874,11 @@ impl Placer<'_> {
             Mover::Object => "KQAnimObject (scripted, clickable, M3 3e-5)",
         };
         *self.by_class.entry(class.into()).or_default() += 1;
+        // So a later `move` reaches the door (F-1: newWorld.cs moves the
+        // death halls' doors after loading them).
+        if let Some(l) = self.located.get_mut(&door.placement.name.to_ascii_lowercase()) {
+            l.drawn = Drawn::Door(self.doors.len());
+        }
         self.doors.push(door);
     }
 

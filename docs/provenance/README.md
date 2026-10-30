@@ -3752,3 +3752,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `lightOnFire <obj> <0|1>`: the group bit kept, nothing visible | `object-lighting.md` rule 37 | unit test |
 | `setCamRelConner <dist> <zDir>` / `setCamRelObj <obj> <dist> <zDir>`: `$KQCamera::newLoc` and `$KQCamera::pointAt`; the camera does not move; the point at his own height | `camera.md` "setCamRelConner"; the height is the note's "probably" | unit test; `doors.log` |
 | `walkSlope <name> <degrees>`: degrees converted properly, 90 = every surface; kept only (our characters' mover has no slope limit) | `character-movement.md` "Do not reproduce" | — |
+
+## Batch 2, F-1 2026-10-30: doors moved by a start-up script — viewer `load.rs` (`Drawn::Door`, `move_object`, `place_door`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A start-up script's `move` of a door, chest or scripted object changes where it stands and its heading, as for any other model | `objects.md` Q20 d (`move` moves the object); the data: `newWorld.cs` lines 850–872 | `viewer.log` "doors: [ltddoor4] at (240510, 117979, 3044) dirZ 3.14" |

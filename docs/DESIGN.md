@@ -3403,3 +3403,31 @@ each step logs its numbers to `kq8-artifacts/logs/`.
     `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
     movements (`talking.md` 18a), `KQAttackEvent` on objects
     (`sound.md` 41). `KQTowerSkeleton` waits for Q175.
+
+**Fixes after the user's check of D-1 to D-5 (2026-10-30)**, one commit
+each, before D-6:
+
+- **F-1: doors moved by a start-up script.** `newWorld.cs` loads the
+  second hall's doors (`ltddoor3/4`, `rtddoor3/4`, and the far hall's
+  `ltddoor5/6`, `rtddoor5/6`) at the hall's place and then `move`s them
+  by fixed offsets. The move changed only the name's remembered place,
+  not the door, so every pair stood in the hall's middle. A door now
+  records its index so a `move` reaches its placement (`objects.md`
+  Q20 d, as for other models). Check: `viewer.log` "doors: [ltddoor4]
+  at (240510, 117979, …) dirZ 3.14".
+- **F-2: Death's trap armed at the landing on H** (`tile-puzzle.md`
+  rule 13): the exit switch and `DeadCity::Azriel::TrapOn` are set when
+  he lands on H, before `teleportdown`; only `Wait` waits for
+  `teleportup`. They were set after `teleportup`, so `azrieltp`'s `On`
+  (when he is put inside it) found the variable still false. Check:
+  `traps.log` "azrieltp On", and `azrieltp.cs` runs.
+- **F-3: gravity off during a tile jump** (`connor-physics.md` "Jumping"
+  rules 3 and 5: the tile jumps end like a jump, gravity back on and
+  the steps back to 325). Gravity off and steps 0 while the jump
+  movement plays, back on when it ends; no Jump state (a tile jump
+  ends in `stop`, not a fall). A reading, not said outright in
+  `tile-puzzle.md`: added to Q177. Check: `connor.log` z rises during
+  `tilejump1`, and a north jump lands on the stone.
+- **Not built, asked:** the camera flight after a teleport looks too
+  fast to the user (0.5 s stand-in, `tile-puzzle.md` open question 4):
+  Q178.
