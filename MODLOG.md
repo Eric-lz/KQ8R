@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-6: the torches and flames of Death's room are made
+
+**Changed:** Viewer `load.rs`: `playing_templates` (after the start-up run): a file the start-up scripts load with no place of its own (no `locX/Y/Z` in the file) that a script run while playing also loads gets its first placement as a template (M5 5d-3); the placer remembers those placements (`used_no_place`). `door_view.rs`: an animated template from a start-up placement takes its live object's player. `anim_view.rs` / `terrain_view.rs`: such a template keeps its drawing recipe too. DESIGN, provenance.
+**Why:** Found in F-2's run: `azrieltp.cs` loads six torches (`trch04ns.kq`, `trchns.kq`, `trch03ns.kq`) and six flames (`flame_nd.kq`) with a name and place while playing; all were refused, "no template". Templates were only kept from unused placements, and `permwrld.cs` already loads these files at the start (the lighthouse's torches), so they were never unused.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The D-4 solve run (`--frames 17000`); `viewer.log`, `traps.log`, `doors.log`, `camera.log`. Daventry `--frames 600`: `viewer.log`.
+**Result:** Dead City: 6 new templates (`trch04ns.kq`, `flame_nd.kq`, `trchns.kq`, `trch03ns.kq`, `bskull.kq`, `gskull.kq`); 87 templates in all. Update 855: "copy torchrd.1a of trch04ns.kq drawn at (234833, 149697, 6655) … collider", "copy flamerd.1a of flamelh.1a: drawn, 1 movement(s), 12 part entities", each flame moved up by its `move` (2,000 / 1,750 / 1,500); all six pairs. A first try made every start-up file with no place a template (about 80 more in Dead City): narrowed to files a script loads while playing. Daventry: 7 templates as before, none new. Also checked here (F-5): `flyToCamLoc … 2.5 -.6`: "N = 38 updates … roll 0.000 -> -0.600".
+**Still broken / not tested:** **Not looked at by eye.** Whether the flames sit on the torches as in the original is for the user to see.
+**Next:** D-6 (`changeBmp`: the Reveal potion on the letters).
+
 ## 2026-10-30 F-5: `flyToCamLoc … 2.5 -.6` is read (the end roll −0.6)
 
 **Changed:** Core `active.rs` `cam_loc`: the camera's spot, fly and cut commands accept a word that reads as a whole number (`-.6`) besides `test`'s "looks like a number". The unit test's end-roll line now uses `-.6`. QUESTIONS Q180. DESIGN, provenance.

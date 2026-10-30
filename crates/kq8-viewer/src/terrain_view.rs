@@ -301,6 +301,7 @@ pub fn setup_objects(
         std::mem::take(&mut objects.animated),
         std::mem::take(&mut objects.object_animations),
         &objects.placed,
+        &objects.templates.iter().map(|t| t.placed).collect(),
         &mut object_materials,
         &light,
         &mut images,

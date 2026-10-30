@@ -3788,3 +3788,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | `flyToCamLoc x y z seconds endRoll` | `camera.md` rule 4 (already built) | unit test `cam_loc_fly_and_cut_become_requests` |
 | A word such as `-.6` counts as a number (−0.6) for `addCamLoc`, `flyToCamLoc`, `cutToCamLoc` | **Ours** (the notes do not say how these commands read numbers); Q180 | unit test |
+
+## Batch 2, F-6 2026-10-30: templates from start-up placements — viewer `load.rs` (`playing_templates`, `used_no_place`), `door_view.rs`, `anim_view.rs`, `terrain_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A `loadKQ <file> <name> x y z` while playing makes a new copy of the file | `objects.md` "Where a world's objects come from" rules 2, 6 (as built in M5 5d-3) | `traps.log` "a new copy torchrd.1a" |
+| The copy's template may come from a placement made at the start, when the file has no place of its own and a script run while playing loads it | **Ours** (how we keep templates; the original reads the file again) | `viewer.log` "(F-6)"; `doors.log` "copy flamerd.1a … drawn" |

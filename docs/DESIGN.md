@@ -3451,4 +3451,11 @@ F-1 to F-3 **done** 2026-10-30. Found while checking F-2 (Death's room,
   torches and flames, `loadKQ trch04ns.kq torchrd.1a x y z`): "no
   template", not made. Look at why these files are not kept as
   templates.
+  **Done** 2026-10-30: `permwrld.cs` loads the same files at the start
+  (the lighthouse torches), so they never reached the unused pass that
+  keeps templates. Now a file the start-up scripts load with no place
+  of its own, and that a script run while playing also loads, gets its
+  first placement as the template (6 files in Dead City, none in
+  Daventry); an animated one takes the player and recipe its live object
+  was built with.
 - Then D-6 (`changeBmp`: the Reveal potion on the letters).

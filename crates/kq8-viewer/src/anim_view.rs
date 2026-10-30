@@ -245,6 +245,7 @@ pub fn spawn_animated(
     animated: Vec<AnimatedAssets>,
     animations: Vec<Animation>,
     placed: &[(kq8_data::objects::Placement, usize, bool)],
+    templates: &std::collections::BTreeSet<usize>,
     materials: &mut Assets<ObjectMaterial>,
     light: &ObjectLight,
     images: &mut Assets<Image>,
@@ -313,6 +314,8 @@ pub fn spawn_animated(
     let mut stop_starts: Vec<String> = Vec::new();
     for a in animated {
         let (p, shape_index, unused) = &placed[a.placed];
+        // F-6: a template from a start-up placement needs its recipe too.
+        let template = templates.contains(&a.placed);
         random += usize::from(a.random);
         let opacity = p.opacity();
         let rotation = kq8_data::objects::rotation(p.angles);
@@ -543,7 +546,7 @@ pub fn spawn_animated(
             .map(|(_, _, i)| DrawnMovement { frames: built[*i].frames, steps: if built[*i].moves { built[*i].steps.clone() } else { Vec::new() } })
             .collect();
         let recipe: Vec<(usize, Vec<GameTransform>)> = drawn.iter().map(|d| (d.frames, d.steps.clone())).collect();
-        if *unused && a.character.is_none() {
+        if (*unused || template) && a.character.is_none() {
             recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone(), slots: (slot_movements, own) });
         }
         // Whole-object steps of the movement shown at load: how far the

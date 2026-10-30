@@ -791,7 +791,12 @@ pub fn spawn_doors(
             let p = &objects.placed[t.placed].0;
             let placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position };
             let kind = if t.animated {
-                let player = own_players.iter().find(|o| o.name.eq_ignore_ascii_case(&t.name))?;
+                // F-6: a template from a start-up placement takes the
+                // player its live object was built with.
+                let player = own_players
+                    .iter()
+                    .find(|o| o.name.eq_ignore_ascii_case(&t.name))
+                    .or_else(|| active.world.anims.iter().map(|a| &a.player).find(|o| o.name.eq_ignore_ascii_case(&t.name)))?;
                 kq8_core::active::TemplateKind::Anim(Box::new(player.clone()))
             } else {
                 kq8_core::active::TemplateKind::Still { bounds: t.bounds, collision_type: t.collider_type }

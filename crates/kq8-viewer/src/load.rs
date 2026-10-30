@@ -1891,6 +1891,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         dormant: Vec::new(),
         dormant_traps: Vec::new(),
         template_files: Vec::new(),
+        used_no_place: Vec::new(),
         game,
         world,
         terrain,
@@ -2032,6 +2033,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .iter()
         .map(|l| l.file.rsplit(['/', '\\']).next().unwrap_or(&l.file).to_ascii_lowercase())
         .collect();
+    playing_templates(&mut placer, &script.loads);
     for (name, label, bytes) in world.entries_ending(".kq") {
         if loaded_files.contains(&name.to_ascii_lowercase()) || placer.list_files.contains(&name.to_ascii_lowercase()) {
             continue;
@@ -2241,6 +2243,9 @@ struct Placer<'a> {
     dormant_traps: Vec<String>,
     /// (file, index into `placed`) of each template (M5 5d-3).
     template_files: Vec<(String, usize)>,
+    /// (file, index into `placed`): the first start-up placement of each
+    /// file with no place of its own (F-6, `playing_templates`).
+    used_no_place: Vec<(String, usize)>,
     music: Option<kq8_core::music::Music>,
     point_lights: Vec<(String, kq8_data::lights::PointLight)>,
     animators: Vec<(String, kq8_data::effects::AnimatorSettings)>,
@@ -2537,6 +2542,33 @@ impl kq8_data::world_script::Host for Placer<'_> {
             }
             Drawn::Nothing => {}
         }
+    }
+}
+
+/// F-6: after the start-up run, a file the start-up scripts loaded with
+/// no place of its own, and that a script run while playing loads too,
+/// gets its first placement as a template (M5 5d-3), so the copy can be
+/// made (`azrieltp.cs`'s torches and flames, placed at the start by
+/// `permwrld.cs`). Files only the start-up scripts load are left alone.
+fn playing_templates(placer: &mut Placer, start_up: &[kq8_data::world_script::LoadKq]) {
+    let start_up_scripts: std::collections::BTreeSet<String> = start_up.iter().map(|l| l.from.to_ascii_lowercase()).collect();
+    let playing: std::collections::BTreeSet<String> = placer
+        .all_scripts
+        .iter()
+        .filter(|(n, _)| !start_up_scripts.contains(&n.to_ascii_lowercase()))
+        .flat_map(|(_, t)| t.lines())
+        .filter_map(|l| {
+            let mut w = l.split('#').next().unwrap_or("").split_whitespace();
+            (w.next() == Some("loadkq")).then(|| w.next()).flatten().map(|f| f.rsplit(['/', '\\']).next().unwrap_or(f).to_string())
+        })
+        .collect();
+    for (file, k) in std::mem::take(&mut placer.used_no_place) {
+        if !playing.contains(&file) || placer.template_files.iter().any(|(f, _)| *f == file) {
+            continue;
+        }
+        let name = placer.placed[k].0.name.clone();
+        placer.template_files.push((file.clone(), k));
+        placer.log.summary(format!("template {file}[{name}]: loaded at the start with no place of its own and loaded again while playing: its first placement kept as the template (F-6)"));
     }
 }
 
@@ -3472,6 +3504,14 @@ impl Placer<'_> {
             character_box: character.as_ref().map(|c| c.box_type.clone()),
         });
         let flags = p.flags.clone();
+        // F-6: a file the start-up scripts load with no place of its own
+        // may still be copied by a script while playing (`permwrld.cs`'s
+        // torches, `azrieltp.cs`): its first placement is remembered and
+        // made a template after the start-up run (`playing_templates`).
+        let base_lc = base.to_ascii_lowercase();
+        if !unused && ["locX", "locY", "locZ"].iter().all(|k| file[0].get(k).is_none()) && !self.used_no_place.iter().any(|(f, _)| *f == base_lc) {
+            self.used_no_place.push((base_lc, self.placed.len()));
+        }
         // M5 5d-3: a file a script loads, with no place of its own.
         if unused && no_place && self.load_targets.contains(&base.to_ascii_lowercase()) && !self.template_files.iter().any(|(f, _)| f.eq_ignore_ascii_case(base)) {
             self.template_files.push((base.to_ascii_lowercase(), self.placed.len()));
