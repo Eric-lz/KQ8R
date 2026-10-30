@@ -3740,3 +3740,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | The stone a forward jump would reach (and a back jump's target while it starts) is drawn with the per-object "unlit" switch on: smooth materials at full brightness | `tile-puzzle.md` rule 10, `object-lighting.md` rule 10 | `viewer.log` "unlit: None -> Some(\"tile04\"): 1 part(s) at full brightness (… lighting kinds [2] …)" |
 | Done with per-part material copies, put on again when the drawing puts the own material back (as `dither`) | **Ours** (how we draw) | `viewer.log` "30 put on again after a new frame" |
+
+## Batch 2, D-7 2026-10-30: the small commands — core `active.rs` (`react_command`, `required_weapon_mode_command`, `inv_click`, `light_on_fire`, `cam_rel`, `walk_slope`), `fight.rs`, `character.rs`; viewer `connor_view.rs` (`hurt`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Connor's `normalReactPercent` is 0.5 (not 0.9) | `fighting.md` rule 29 (corrected 2026-10-28) | unit test `batch_2_small_commands` |
+| `setReactPercent <who> <p>` (−1 = default), `setSpecialReact <who> <movement> <p>` (`none` / `null` clear); short lines refused; a special react that rolls plays instead of `react` | `fighting.md` rule 23, "Do not reproduce" | unit test; `fight.log` |
+| `setRequiredWeaponMode <mode> [script]`: a different mode is swapped to at once (as `setDoMode`); remembered; the wrong-swap script kept only | `ranged-weapons.md` rule 9 (its swap-back not traced) | `fight.log` "setDoMode 0 (rule 9): taken" |
+| `invClick <type> N V C S`: the item's right-click message, each 0–255, the item looked up by name | `inventory.md` rule 10, "Do instead" | `items.log` "'76 0 0 1' -> '76 0 0 1'" |
+| `lightOnFire <obj> <0|1>`: the group bit kept, nothing visible | `object-lighting.md` rule 37 | unit test |
+| `setCamRelConner <dist> <zDir>` / `setCamRelObj <obj> <dist> <zDir>`: `$KQCamera::newLoc` and `$KQCamera::pointAt`; the camera does not move; the point at his own height | `camera.md` "setCamRelConner"; the height is the note's "probably" | unit test; `doors.log` |
+| `walkSlope <name> <degrees>`: degrees converted properly, 90 = every surface; kept only (our characters' mover has no slope limit) | `character-movement.md` "Do not reproduce" | — |

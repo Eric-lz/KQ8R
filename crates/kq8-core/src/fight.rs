@@ -98,8 +98,10 @@ pub const ROLL_ON_CHARACTER_EASY: (f32, f32) = (0.85, 0.4);
 pub const PROTECTION_ROLL: (f32, f32) = (0.75, 0.5);
 /// The reach against a Connor holding his back key (rule 13).
 pub const BACK_KEY_REACH: f32 = 1.25;
-/// `normalReactPercent`'s default (rule 23; Connor's too, rule 29).
+/// `normalReactPercent`'s default (rule 23).
 pub const REACT_PERCENT: f32 = 0.9;
+/// Connor's own (rule 29, corrected 2026-10-28: 0.5, not 0.9).
+pub const CONNOR_REACT_PERCENT: f32 = 0.5;
 /// No flinch until the last one ended this long ago (rule 23), seconds.
 pub const FLINCH_PAUSE: f64 = 2.0;
 /// The ouch sound at most this often (rule 24), seconds.
@@ -566,7 +568,11 @@ impl crate::active::WorldState {
             self.fight_note("Connor", format!("health {after} is below 0: his dying state, kind {} (rules 18, 29); game over is another study", kind.name()));
             self.requests.push(crate::active::Request::ConnorDies { kind, at });
         } else {
-            self.requests.push(crate::active::Request::ConnorHurt { roll_over: dmg.flinch_roll(REACT_PERCENT), at });
+            // Rules 23, 29 (batch 2 D-7): his own percent, and a special
+            // react a script set (Dead City's tower) tried first.
+            let percent = self.connor_react.0.unwrap_or(CONNOR_REACT_PERCENT);
+            let special = self.connor_react.1.clone().filter(|(_, p)| dmg.flinch_roll(*p)).map(|(m, _)| m);
+            self.requests.push(crate::active::Request::ConnorHurt { roll_over: dmg.flinch_roll(percent), special, at });
         }
     }
 }

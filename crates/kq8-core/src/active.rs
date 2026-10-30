@@ -167,7 +167,7 @@ pub enum Request {
     /// can be cut short and his last flinch ended over 2 s ago, else his
     /// ouch sound plays (at most once a second). The caller decides: it
     /// has his movement.
-    ConnorHurt { roll_over: bool, at: String },
+    ConnorHurt { roll_over: bool, special: Option<String>, at: String },
     /// Connor's health fell below 0 (rules 18, 29): his dying state, by
     /// the hit's kind.
     ConnorDies { kind: crate::fight::HitKind, at: String },
@@ -809,6 +809,16 @@ pub struct WorldState {
     /// His heading (the turn about z, as `move Connor … rz` sets it), set
     /// with `connor_at`: `getLoc Connor` gives it as his turn.
     pub connor_heading: f32,
+    /// Connor's flinch settings from scripts (`fighting.md` rules 23, 29;
+    /// batch 2 D-7): `normalReactPercent` (`None`: his own 0.5) and the
+    /// special react movement with its percent.
+    pub connor_react: (Option<f32>, Option<(String, f32)>),
+    /// `KQConner::setRequiredWeaponMode` (`ranged-weapons.md` rule 9):
+    /// the mode required (-1 none) and the script named.
+    pub required_weapon_mode: (i64, Option<String>),
+    /// Objects `KQObject::lightOnFire` set on fire (`object-lighting.md`
+    /// rule 37: the group bit 0x1000; nothing reads it).
+    pub on_fire: BTreeSet<String>,
     /// The world's `KQMonster` objects (`talking.md` rule 6).
     pub monsters: Vec<Monster>,
     /// Characters prepared for a script's `loadKQ`: they join `monsters`
@@ -2521,6 +2531,167 @@ impl WorldState {
         "0".into()
     }
 
+    /// `KQMonster::setReactPercent <who> <p>` and `KQMonster::setSpecialReact
+    /// <who> <movement> <p>` (`fighting.md` rule 23, batch 2): `-1` puts
+    /// the normal percent back to the default (0.9, Connor 0.5); `none` or
+    /// `null` clears the special react. Short lines are refused (Do not
+    /// reproduce: the original reads past the end).
+    fn react_command(&mut self, words: &[String], at: &str) -> String {
+        let special = words[0] == "KQMonster::setSpecialReact";
+        let need = if special { 4 } else { 3 };
+        if words.len() < need || !looks_like_number(&words[need - 1]) {
+            self.note(format!("{at}: usage: {} <name> {}<percent>; nothing (fighting.md rule 23)", words[0], if special { "<movement> " } else { "" }));
+            return "1".into();
+        }
+        let who = words[1].clone();
+        let p = number_value(&words[need - 1]) as f32;
+        let movement = special.then(|| words[2].clone()).filter(|m| !m.eq_ignore_ascii_case("none") && !m.eq_ignore_ascii_case("null"));
+        let shown = |v: Option<f32>, default: f32| v.map_or(format!("default {default}"), |v| v.to_string());
+        let line = if who.eq_ignore_ascii_case(CONNOR) {
+            if special {
+                self.connor_react.1 = movement.clone().map(|m| (m, p));
+                format!("Connor's special react now {:?}", self.connor_react.1)
+            } else {
+                self.connor_react.0 = (p != -1.0).then_some(p);
+                format!("Connor's normalReactPercent now {}", shown(self.connor_react.0, crate::fight::CONNOR_REACT_PERCENT))
+            }
+        } else {
+            let Some(f) = self.character_index(&who).and_then(|i| self.anims[i].character.as_mut()).and_then(|c| c.fight.as_mut()) else {
+                self.note(format!("{at}: {} {who}: not a fighting character; nothing", words[0]));
+                return "1".into();
+            };
+            if special {
+                f.settings.special_react_anim = movement.clone();
+                f.settings.special_react_percent = movement.is_some().then_some(p);
+                format!("{who}'s special react now {:?} {:?}", f.settings.special_react_anim, f.settings.special_react_percent)
+            } else {
+                f.settings.normal_react_percent = (p != -1.0).then_some(p);
+                format!("{who}'s normalReactPercent now {}", shown(f.settings.normal_react_percent, crate::fight::REACT_PERCENT))
+            }
+        };
+        self.fight_note(&who, format!("{at}: {}: {line} (fighting.md rule 23)", words.join(" ")));
+        "0".into()
+    }
+
+    /// `KQConner::setRequiredWeaponMode <mode> [script]` (`ranged-weapons.md`
+    /// rule 9, batch 2): a mode other than -1 that differs from his own is
+    /// swapped to at once (as `setDoMode`); the mode is remembered. The
+    /// script for a later wrong swap is kept and logged only (its swap-back
+    /// was not traced; the data never names one).
+    fn required_weapon_mode_command(&mut self, words: &[String], at: &str) -> String {
+        let Some(mode) = words.get(1).and_then(|w| w.parse::<i64>().ok()) else {
+            self.note(format!("{at}: usage: KQConner::setRequiredWeaponMode <mode> [script]; nothing"));
+            return "1".into();
+        };
+        let script = words.get(2).cloned();
+        let swap = match crate::weapons::WeaponMode::from_number(mode) {
+            Some(m) if m != self.weapon_mode => {
+                self.ask_weapon(crate::weapons::Ask::Script(m), &format!("{at}: setRequiredWeaponMode"));
+                format!("swaps to {m:?} at once (as setDoMode)")
+            }
+            _ => "no swap".to_string(),
+        };
+        self.required_weapon_mode = (mode, script.clone());
+        let script = script.map_or(String::new(), |s| format!("; script {s} for a wrong swap kept, not run (its swap-back not traced)"));
+        self.note(format!("{at}: KQConner::setRequiredWeaponMode {mode}: {swap}; required mode {mode}{script} (ranged-weapons.md rule 9)"));
+        "0".into()
+    }
+
+    /// `invClick <itemType> <N> <V> <C> <S>` (`inventory.md` rule 10, batch
+    /// 2): the item's right-click message numbers, each kept 0-255. Do not
+    /// reproduce: the original always changes `INVITEM_Feather`; ours looks
+    /// the item up by name.
+    fn inv_click(&mut self, words: &[String], at: &str) -> String {
+        let numbers: Vec<i64> = words.iter().skip(2).filter_map(|w| w.parse::<i64>().ok()).collect();
+        let (Some(kind), &[n, v, c, s]) = (words.get(1), &numbers[..]) else {
+            self.note(format!("{at}: usage: invClick <itemType> <noun> <verb> <condition> <sequence>; nothing"));
+            return "1".into();
+        };
+        let message = [n, v, c, s].iter().map(|x| (x & 0xFF).to_string()).collect::<Vec<_>>().join(" ");
+        match self.items.types.types.iter_mut().find(|t| t.name.eq_ignore_ascii_case(kind)) {
+            Some(t) => {
+                let was = std::mem::replace(&mut t.message, message.clone());
+                self.item_note(format!("{at}: invClick {kind}: right-click message '{was}' -> '{message}' (inventory.md rule 10)"));
+                "0".into()
+            }
+            None => {
+                self.note(format!("{at}: invClick: no item type {kind}; nothing"));
+                "1".into()
+            }
+        }
+    }
+
+    /// `KQObject::lightOnFire <obj> <0|1>` (`object-lighting.md` rule 37,
+    /// batch 2): sets or clears the group bit 0x1000; nothing reads it, so
+    /// nothing visible.
+    fn light_on_fire(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(v)) = (words.get(1), words.get(2)) else {
+            self.note(format!("{at}: usage: KQObject::lightOnFire <object> <0|1>; nothing"));
+            return "1".into();
+        };
+        let on = number_value(v) != 0.0;
+        let key = who.to_ascii_lowercase();
+        if on {
+            self.on_fire.insert(key);
+        } else {
+            self.on_fire.remove(&key);
+        }
+        self.note(format!("{at}: KQObject::lightOnFire {who} {}: group bit 0x1000 {}; nothing reads it, nothing visible (object-lighting.md rule 37)", u8::from(on), if on { "set" } else { "cleared" }));
+        "0".into()
+    }
+
+    /// `KQCamera::setCamRelConner <dist> <zDir>` and `KQCamera::setCamRelObj
+    /// <obj> <dist> <zDir>` (`camera.md`, batch 2): the camera does not
+    /// move; a point `dist` from Connor (or the object) in the direction of
+    /// his heading + `zDir` goes to `$KQCamera::newLoc`, his place to
+    /// `$KQCamera::pointAt`, as "x y z". Its height: his own (the note's
+    /// "probably"; logged).
+    fn cam_rel(&mut self, words: &[String], at: &str) -> String {
+        let obj = words[0] == "KQCamera::setCamRelObj";
+        let rest = &words[1 + usize::from(obj)..];
+        let (Some(dist), Some(dir)) = (rest.first().filter(|w| looks_like_number(w)), rest.get(1).filter(|w| looks_like_number(w))) else {
+            self.note(format!("{at}: usage: {} {}<dist> <zDir>; nothing", words[0], if obj { "<object> " } else { "" }));
+            return "1".into();
+        };
+        let place = if obj { self.place_of(&words[1]) } else { self.place_of(CONNOR) };
+        let Some(place) = place else {
+            self.note(format!("{at}: {}: can't find {}; nothing", words[0], if obj { words[1].as_str() } else { CONNOR }));
+            return "1".into();
+        };
+        let p = place.position;
+        // The heading as `move` sets it: the turn about z (0 faces -Y).
+        let heading = if obj { place.rotation[0][1].atan2(place.rotation[0][0]) } else { self.connor_heading };
+        let a = heading + number_value(dir) as f32;
+        let d = number_value(dist) as f32;
+        let new = [p[0] + d * a.sin(), p[1] - d * a.cos(), p[2]];
+        let text = |v: [f32; 3]| format!("{:.0} {:.0} {:.0}", v[0], v[1], v[2]);
+        self.vars_out.push(("KQCamera::newLoc".into(), text(new)));
+        self.vars_out.push(("KQCamera::pointAt".into(), text(p)));
+        self.note(format!("{at}: {}: heading {heading:.3} + {}: newLoc ({}), pointAt ({}); the camera does not move (camera.md; the height is the note's \"probably\")", words.join(" "), number_value(dir), text(new), text(p)));
+        "0".into()
+    }
+
+    /// `KQMonster::walkSlope <name> <degrees>` (`character-movement.md`,
+    /// Do not reproduce: degrees converted properly, 90 = every surface).
+    /// Kept on the character; our characters' mover has no slope limit
+    /// yet, so nothing changes in play.
+    fn walk_slope(&mut self, words: &[String], at: &str) -> String {
+        let (Some(who), Some(deg)) = (words.get(1), words.get(2).filter(|w| looks_like_number(w))) else {
+            self.note(format!("{at}: usage: KQMonster::walkSlope <name> <degrees>; nothing"));
+            return "1".into();
+        };
+        let Some(i) = self.character_index(who) else {
+            self.note(format!("{at}: KQMonster::walkSlope {who}: not a character; nothing"));
+            return "1".into();
+        };
+        let deg = number_value(deg) as f32;
+        let limit = if deg >= 90.0 { -1.0 } else { deg.to_radians().cos() };
+        self.anims[i].character.as_mut().unwrap().walk_slope = Some(limit);
+        let name = self.anims[i].player.name.clone();
+        self.character_note(&name, format!("{at}: KQMonster::walkSlope {deg}: walkable when the surface faces up more than {limit:.3} (90 = everything); kept, our characters' mover has no slope limit yet"));
+        "0".into()
+    }
+
     /// `KQMonster::setState <who> <state> [list]`: Connor's Special state
     /// is handed to the caller (`anim-scripts.md` rule 16); other states
     /// and other characters are later milestones (logged only, `0` as the
@@ -3440,6 +3611,12 @@ impl ScriptHost for WorldState {
             }
             "move" => Some(self.move_command(words, at)),
             "tileExit" | "deadHallTeleport" => Some(self.tile_command(words, at)),
+            "KQMonster::setReactPercent" | "KQMonster::setSpecialReact" => Some(self.react_command(words, at)),
+            "KQConner::setRequiredWeaponMode" => Some(self.required_weapon_mode_command(words, at)),
+            "invClick" => Some(self.inv_click(words, at)),
+            "KQObject::lightOnFire" => Some(self.light_on_fire(words, at)),
+            "KQCamera::setCamRelConner" | "KQCamera::setCamRelObj" => Some(self.cam_rel(words, at)),
+            "KQMonster::walkSlope" => Some(self.walk_slope(words, at)),
             "KQCamera::follow" => Some(self.camera_follow(words, at)),
             "handsOff" => Some(self.hands_off(words, at)),
             "setLowerGui" | "setUpperGui" | "setMapGui" | "getGuiStatus" => Some(self.gui_command(words, at)),
@@ -3600,6 +3777,9 @@ impl Active {
                 connor_can_turn: false,
                 connor_at: None,
                 connor_heading: 0.0,
+                connor_react: (None, None),
+                required_weapon_mode: (-1, None),
+                on_fire: BTreeSet::new(),
                 monsters: Vec::new(),
                 dormant_monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
@@ -7650,6 +7830,29 @@ endif
         a.update();
         assert_eq!(a.world.objects[0].player.base.position[2], start[2] - 2.5);
         assert!(a.take_log().join("\n").contains("not applied, our loops leave no leftover"));
+    }
+
+    #[test]
+    fn batch_2_small_commands() {
+        // D-7: fighting.md rule 23 (the tower's lines), camera.md
+        // setCamRelConner, object-lighting.md rule 37.
+        let mut a = with_object("", "x");
+        a.test_command("KQMonster::setReactPercent Connor 0.21", "t");
+        a.test_command("KQMonster::setSpecialReact Connor reactback 0.48", "t");
+        assert_eq!(a.world.connor_react, (Some(0.21), Some(("reactback".to_string(), 0.48))));
+        a.test_command("KQMonster::setReactPercent Connor -1", "t");
+        a.test_command("KQMonster::setSpecialReact Connor none -1", "t");
+        assert_eq!(a.world.connor_react, (None, None), "back to his own 0.5");
+        assert_eq!(a.test_command("KQMonster::setSpecialReact Connor reactback", "t").as_deref(), Some("1"), "a short line is refused");
+        a.world.connor_at = Some([1000.0, 2000.0, 300.0]);
+        a.world.connor_heading = 0.0;
+        a.test_command("KQCamera::setCamRelConner 1500 0", "t");
+        let vars = std::mem::take(&mut a.world.vars_out);
+        assert_eq!(vars, vec![("KQCamera::newLoc".to_string(), "1000 500 300".to_string()), ("KQCamera::pointAt".to_string(), "1000 2000 300".to_string())]);
+        a.test_command("KQObject::lightOnFire basket1 1", "t");
+        assert!(a.world.on_fire.contains("basket1"));
+        a.test_command("KQObject::lightOnFire basket1 0", "t");
+        assert!(a.world.on_fire.is_empty());
     }
 
     #[test]

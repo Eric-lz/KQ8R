@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 D-7: the small commands of batch 2 (Dead City)
+
+**Changed:** Core `active.rs`: `KQMonster::setReactPercent`, `KQMonster::setSpecialReact` (Connor and fighting characters), `KQConner::setRequiredWeaponMode`, `invClick`, `KQObject::lightOnFire`, `KQCamera::setCamRelConner` / `setCamRelObj`, `KQMonster::walkSlope`; `Request::ConnorHurt` carries a special react. `fight.rs`: Connor's own flinch percent 0.5 (`CONNOR_REACT_PERCENT`, the corrected rule 29) or the script's, and his special react tried first. `character.rs`: `walk_slope` (kept only). Viewer `connor_view.rs` `hurt`: plays the special react movement when it rolled. 1 unit test. DESIGN, provenance.
+**Why:** `fighting.md` rules 23, 29; `ranged-weapons.md` rule 9; `inventory.md` rule 10; `object-lighting.md` rule 37; `camera.md`; `character-movement.md` (session A, batch 2). All were "unknown command".
+**Tested how:** `cargo test --workspace` (all pass, 1 new); clippy: the same 2 warnings as before. `kq8-viewer --world DeadCity --at 182290,70000,0 --sound off --no-ai --frames 600 --command "KQMonster::setReactPercent Connor 0.21",10 --command "KQMonster::setSpecialReact Connor reactback 0.48",10 --command "KQConner::setRequiredWeaponMode 0",12 --command "invClick INVITEM_Feather 76 0 0 1",14 --command "KQCamera::setCamRelConner 1500 0",16 --command "KQConner::setRequiredWeaponMode -1",30`; `fight.log`, `items.log`, `doors.log`.
+**Result:** "Connor's normalReactPercent now 0.21", "special react now (reactback, 0.48)"; `setRequiredWeaponMode 0`: "setDoMode 0 (rule 9): taken, none -> hand (INVITEM_SmallAx)", `away`, `conaxe.anm/out`; `-1`: no swap. `invClick`: "'76 0 0 1' -> '76 0 0 1'" (as the note says, no visible change). `setCamRelConner 1500 0` at heading 0: newLoc (182290, 68500, 864), pointAt (182290, 70000, 864).
+**Still broken / not tested:** Not played: the tower (`towSklTp.cs`) with a real hit on Connor; the special react's roll is not seen in a log yet. The wrong-swap script of `setRequiredWeaponMode` is not run (not traced). `walkSlope` changes nothing in play. `setCamRelConner`'s height and heading base are the note's "probably": not checked against the laser scene by eye.
+**Next:** Run the coverage tool; the rest of batch 2 (D-6 and D-8 to D-11) in a later session.
+
 ## 2026-10-30 D-5: the lit stone in the death hall (batch 2, Dead City)
 
 **Changed:** Viewer `connor_tile.rs`: `unlit_step` (every drawn frame, after `dither_step`): the stone the Tile state lit gets copies of its part materials with smooth lighting switched to none (full brightness); the drawing's own material comes back when it's no longer lit. Re-applications after a new frame are counted, not logged one by one. `main.rs` schedules it. DESIGN, provenance.

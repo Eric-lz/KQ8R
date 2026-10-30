@@ -1242,25 +1242,28 @@ impl ConnorSim {
     /// its `loop=` line says so or it has ended) and his last flinch ended
     /// over 2 s ago; otherwise his ouch sound, at most once a second (a
     /// flinch also starts that second). Returns the line for `fight.log`.
-    pub fn hurt(&mut self, roll_over: bool, ouch: &str, now: f64) -> String {
+    pub fn hurt(&mut self, roll_over: bool, special: Option<&str>, ouch: &str, now: f64) -> String {
         use kq8_core::fight::{FLINCH_PAUSE, OUCH_EVERY};
         let can_cut = self.can_be_cut_short();
         let w = &self.walker;
-        let react = self.drawn("react").map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
-        let why_not = if !roll_over {
-            Some("the roll is not above 0.9 x D".to_string())
+        // fighting.md rule 23 (batch 2 D-7): a special react a script set
+        // (its own roll passed) plays instead of `react`.
+        let wanted = special.unwrap_or("react");
+        let react = self.drawn(wanted).map(|m| (m.name, m.movement_loop.duration / m.movement_loop.speed.abs().max(1e-3)));
+        let why_not = if special.is_none() && !roll_over {
+            Some("the roll is not above his normalReactPercent x D".to_string())
         } else if !can_cut {
             Some(format!("'{}' can't be cut short now (mode {})", w.movement, w.mode.name()))
         } else if now < self.flinch_end + FLINCH_PAUSE {
             Some(format!("his last flinch ended {:.2} s ago (2 s pause)", now - self.flinch_end))
         } else if react.is_none() {
-            Some("no react in his list".to_string())
+            Some(format!("no {wanted} in his list"))
         } else {
             None
         };
         let line = match (why_not, react) {
             (None, Some((name, length))) => {
-                self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(name, "react".into())]);
+                self.walker.start_special(vec![kq8_core::connor::SpecialStep::Play(name, wanted.into())]);
                 self.flinch_end = now + f64::from(length);
                 self.last_ouch = now;
                 format!("flinches: '{name}' ({length:.2} s, keys ignored meanwhile; rules 23, 29)")

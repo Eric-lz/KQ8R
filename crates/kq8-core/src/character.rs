@@ -126,6 +126,9 @@ pub struct Character {
     pub has_birth: bool,
     /// `noTurn` / `setCanTurn` (rule 23; used from 4d-4).
     pub no_turn: bool,
+    /// `KQMonster::walkSlope`: the walkable limit (cosine; -1 = every
+    /// surface). Kept only (batch 2 D-7).
+    pub walk_slope: Option<f32>,
     /// Gravity on (rule 8; used from 4d-6).
     pub gravity: bool,
     pub state: State,
@@ -260,6 +263,7 @@ impl Character {
             birth_delay,
             has_birth,
             no_turn,
+            walk_slope: None,
             gravity,
             state: State::None,
             in_range: false,

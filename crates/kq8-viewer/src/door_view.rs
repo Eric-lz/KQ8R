@@ -1259,10 +1259,10 @@ pub fn trap_step(
             asked = true;
         }
         let line = match r {
-            Request::ConnorHurt { roll_over, at } => {
+            Request::ConnorHurt { roll_over, special, at } => {
                 let ouch = sim.active.world.connor_fight.as_ref().map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |f| f.ouch_sound.clone());
                 let now = sim.active.world.now();
-                let line = connor.hurt(roll_over, &ouch, now);
+                let line = connor.hurt(roll_over, special.as_deref(), &ouch, now);
                 sim.active.world.fight_note("Connor", format!("{at}: {line}"));
                 format!("{at}: applied: Connor {line}")
             }

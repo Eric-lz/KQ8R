@@ -3390,6 +3390,9 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    `KQCamera::setCamRelConner` / `setCamRelObj` (`camera.md`),
    `KQMonster::walkSlope` (`character-movement.md`), `KQMonster::add`
    (`characters.md` 4: logged as read).
+   **Done** 2026-10-30 except `KQMonster::add` (it adds monsters while
+   playing: its own step later). Also Connor's own flinch percent 0.5.
+   Logs and a unit test.
 8. **D-8: `matchHeights` and `terAnimSwitch`** (`terrain.md`,
    `emitters.md`): the blood drains after the scales.
 9. **D-9: the `Lookup` call and spirit traps** (`traps.md` 15a,
