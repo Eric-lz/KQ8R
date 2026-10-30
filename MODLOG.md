@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 F-5: `flyToCamLoc … 2.5 -.6` is read (the end roll −0.6)
+
+**Changed:** Core `active.rs` `cam_loc`: the camera's spot, fly and cut commands accept a word that reads as a whole number (`-.6`) besides `test`'s "looks like a number". The unit test's end-roll line now uses `-.6`. QUESTIONS Q180. DESIGN, provenance.
+**Why:** Found in F-2's run: `azrieltp.cs` Cue 2's `KQCamera::flyToCamLoc 237333 150000 8000 2.5 -.6` was refused as a usage error. The five-number form (`camera.md` rule 4) was already built; `-.6` failed the number check we borrowed from `test` (`doors.md` Q45 f, where `-.5` really is text). How the camera commands read numbers is not in the notes: ours, Q180.
+**Tested how:** `cargo test --workspace` (all pass; `cam_loc_fly_and_cut_become_requests` gives end roll −0.6); clippy: the same 2 warnings as before. Not run in the viewer in this step (checked with F-6's run).
+**Result:** As above.
+**Still broken / not tested:** Whether the original reads `-.6` as −0.6: Q180.
+**Next:** F-6 (the torches `azrieltp.cs` loads).
+
 ## 2026-10-30 F-4: Death is a character, and speaks
 
 **Changed:** Data `characters.rs`: `classType=KQDeath` is a character class (`Class::Death`). Core `character.rs`: `mouth_moves` (Death): lip-sync codes 0–7 start his mouth movements `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e` at once; codes above 7 as for any character (rule 28). `active.rs`: at the end of a line his shape goes to 0 and no movement starts (logged, Q179). Viewer `anim_view.rs`: sets `mouth_moves` for a `KQDeath`. 1 unit test. QUESTIONS Q179. DESIGN, provenance.

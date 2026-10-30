@@ -1908,7 +1908,10 @@ impl WorldState {
     /// `cutToCamLoc x y z [roll]`.
     fn cam_loc(&mut self, words: &[String], at: &str) -> String {
         let n = words.len() - 1;
-        if n < 3 || !words[1..].iter().all(|w| looks_like_number(w)) {
+        // Ours (F-5, Q180): a whole number word like `-.6` counts too
+        // (`test`'s rule, `doors.md` Q45 f, would refuse it).
+        let number = |w: &String| looks_like_number(w) || w.parse::<f64>().is_ok();
+        if n < 3 || !words[1..].iter().all(number) {
             self.note(format!("{at}: usage: {} x y z …: '{}'", words[0], words.join(" ")));
             return "1".into();
         }
@@ -7737,9 +7740,10 @@ endif
 
     #[test]
     fn cam_loc_fly_and_cut_become_requests() {
-        // wtrmwalk.cs and wheeltp1.cs lines, and the end roll rule.
+        // wtrmwalk.cs and wheeltp1.cs lines, and the end roll rule
+        // (written `-.6` as in azrieltp.cs, F-5).
         let mut a = with_object(
-            "KQCamera::addCamLoc 190000 230000 10600 1\nKQCamera::flyToCamLoc 186960 228000 10000 2\nKQCamera::flyToCamLoc 1 2 3 4 0.5\nKQCamera::flyToCamLoc 1 2 3\nKQCamera::cutToCamLoc 1 2 3 0.25\nKQCamera::addCamLoc 5 6\n",
+            "KQCamera::addCamLoc 190000 230000 10600 1\nKQCamera::flyToCamLoc 186960 228000 10000 2\nKQCamera::flyToCamLoc 1 2 3 4 -.6\nKQCamera::flyToCamLoc 1 2 3\nKQCamera::cutToCamLoc 1 2 3 0.25\nKQCamera::addCamLoc 5 6\n",
             "x",
         );
         a.world.requests.clear();
@@ -7751,7 +7755,7 @@ endif
         assert!(matches!(&r[5], Request::ClickTurn { name, .. } if name == "basket1"));
         assert!(matches!(&r[0], Request::CamSpot { spot, newlist: true, .. } if *spot == [190000.0, 230000.0, 10600.0]));
         assert!(matches!(&r[1], Request::CamFly { seconds: Some(s), end_roll: None, .. } if *s == 2.0));
-        assert!(matches!(&r[2], Request::CamFly { end_roll: Some(e), .. } if *e == 0.5));
+        assert!(matches!(&r[2], Request::CamFly { end_roll: Some(e), .. } if (*e + 0.6).abs() < 1e-6));
         assert!(matches!(&r[3], Request::CamFly { seconds: None, end_roll: None, .. }));
         assert!(matches!(&r[4], Request::CamCut { roll, .. } if *roll == 0.25));
         assert!(a.take_log().join("\n").contains("usage: KQCamera::addCamLoc x y z"));

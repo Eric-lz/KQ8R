@@ -3781,3 +3781,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Started at once for every code, even the same shape | **Stand-in**, as `characters.md` rule 27 (18a: not traced); Q179 (c) | unit test |
 | Codes above 7 as for an ordinary character (rule 28) | `talking.md` rule 18a, `characters.md` rule 28; Q179 (b) | unit test |
 | End of a line: shape 0, no movement started | **Stand-in** (not traced), Q179 (a) | `characters.log` |
+
+## Batch 2, F-5 2026-10-30: camera command numbers — core `active.rs` (`cam_loc`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `flyToCamLoc x y z seconds endRoll` | `camera.md` rule 4 (already built) | unit test `cam_loc_fly_and_cut_become_requests` |
+| A word such as `-.6` counts as a number (−0.6) for `addCamLoc`, `flyToCamLoc`, `cutToCamLoc` | **Ours** (the notes do not say how these commands read numbers); Q180 | unit test |
