@@ -58,7 +58,7 @@ use kq8_data::world_script::Vars;
 /// `checkSave`, ...) are not stubs: they stay unknown (error line,
 /// result 1) until they are studied; `getloc` and `checkDistance` are
 /// handled by the world.
-pub const STUBS: [&str; 6] = [
+pub const STUBS: [&str; 5] = [
     "doPopup",
     // `addMapIcon` was here until M6 6d-2; `earnTeleport`,
     // `teleportersEarned`, `onTeleport`, `offTeleport` until 6d-7.
@@ -66,9 +66,9 @@ pub const STUBS: [&str; 6] = [
     // Daventry's trap scripts (3d-3). `KQMusic::push` / `pop` were here
     // until M3 3h-5, the `KQConner::setRope*` commands until M6 6a-1.
     "KQGame::letCatchUp",
-    // Item commands of later milestones (3e-2).
+    // Item commands of later milestones (3e-2). `KQObject::changeBmp` was
+    // here until batch 2 D-6.
     "KQMonster::dropItem",
-    "KQObject::changeBmp",
     "KQObject::setGroupsAlways",
 ];
 

@@ -3795,3 +3795,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | A `loadKQ <file> <name> x y z` while playing makes a new copy of the file | `objects.md` "Where a world's objects come from" rules 2, 6 (as built in M5 5d-3) | `traps.log` "a new copy torchrd.1a" |
 | The copy's template may come from a placement made at the start, when the file has no place of its own and a script run while playing loads it | **Ours** (how we keep templates; the original reads the file again) | `viewer.log` "(F-6)"; `doors.log` "copy flamerd.1a … drawn" |
+
+## Batch 2, D-6 2026-10-30: `changeBmp` and the Reveal letters — core `active.rs` (`change_bmp`, `bmp_swaps`, `reveal_objects_here`), `potions.rs`, `script.rs`; viewer `load.rs` (`swap_looks`), `anim_view.rs`, `connor_tile.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `changeBmp <obj> <old> <new>`: the object's own copy; textures whose original name is `old` drawn as `new`; matched against the original names (so `old old` puts it back); `normal` drops it; only the last pair kept; unknown object: a console message | `characters.md` rule 4a | unit test `change_bmp_keeps_the_last_pair_and_normal_drops_it`; `anim.log` "tile07: changeBmp: tiled.bmp -> tiledcl.bmp on 1 material(s)" |
+| The `new` pictures read at load from the scripts' lines; drawn on animated objects only for now | **Ours** (how we draw) | `viewer.log` "changeBmp: 10 picture(s) … 10 read" |
+| `tileshow.kq` gets `Reveal True` / `False`; `tileshow.cs` swaps the five letters | `tile-puzzle.md` rule 17, `potions.md` rule 31 | `doors.log` "tileshow.cs line 3: KQObject::changeBmp tile21" |
+| A reveal object prepared for a script's `loadKQ` is called once it is in the world; not before it comes in | `potions.md` rules 31, 32 (every reveal object in the world at the start and the end) | unit test `clarity_tells_the_reveal_objects_at_start_and_end` |
+| The lit stone's bright copy shows the swapped picture | `tile-puzzle.md` rule 10 with rule 17 (both at once) | not checked by eye |

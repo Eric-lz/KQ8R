@@ -754,7 +754,10 @@ mod tests {
     #[test]
     fn clarity_tells_the_reveal_objects_at_start_and_end() {
         let mut a = active();
-        a.world.reveal_objects = vec!["keepwall".into(), "wizchest1".into()];
+        // D-6: `tileshow` is prepared for a loadKQ and not loaded yet: not
+        // called (rules 31, 32).
+        a.world.reveal_objects = vec!["keepwall".into(), "wizchest1".into(), "Tileshow".into()];
+        a.world.known.extend(["keepwall".to_string(), "wizchest1".to_string()]);
         let p = carry(&mut a, "Clarity", 1);
         bar_click(&mut a.world, &p, true, false, "key 7");
         assert_eq!(std::mem::take(&mut a.world.reveal_calls), vec![("keepwall".to_string(), true), ("wizchest1".to_string(), true)]);

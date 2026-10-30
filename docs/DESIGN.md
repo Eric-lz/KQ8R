@@ -3383,6 +3383,17 @@ each step logs its numbers to `kq8-artifacts/logs/`.
 6. **D-6: `KQObject::changeBmp`** (`characters.md` rule 4a): the object's
    own copy of its textures, swapped by original name; `normal` back.
    Check: the Reveal potion in the hall swaps the five letters.
+   How (2026-10-30): core keeps each object's one remembered pair (rule
+   4a: only the last pair), as `dither` keeps its mode; the viewer's
+   animated objects (the stones are animated copies) keep their
+   materials' original texture names, put their own pictures back when
+   the pair changes, then show `new` wherever the original name is
+   `old`. The `new` pictures are read at load from the world's
+   `changeBmp` lines. Still objects, doors and characters: logged, not
+   drawn yet (no world needs them for the death hall).
+   **Done** 2026-10-30 (logs and unit tests). Also: a reveal object
+   prepared for a script's `loadKQ` (`tileshow`) now gets Clarity's
+   calls once it is in the world.
 7. **D-7: the small commands**: `KQMonster::setReactPercent`,
    `setSpecialReact` (`fighting.md` rule 23), `KQConner::setRequiredWeaponMode`
    (`ranged-weapons.md` rule 9), `invClick` (`inventory.md` rule 10),

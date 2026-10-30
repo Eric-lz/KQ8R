@@ -101,6 +101,12 @@ struct Playing {
     /// Its drawing (Animation memory step 4); `None` if its animations
     /// couldn't be packed.
     new_draw: Option<crate::anim_gpu::Slots>,
+    /// `changeBmp` (batch 2 D-6, `characters.md` rule 4a): its materials'
+    /// original texture names, the pair drawn now, and the pictures the
+    /// pair replaced (put back when it changes).
+    texture_names: Vec<((usize, i32), String)>,
+    bmp_shown: Option<(String, String)>,
+    bmp_saved: Vec<(Handle<ObjectMaterial>, Option<Handle<Image>>)>,
 }
 
 /// What a new copy of an unused object needs (M5 5d-4): each movement's
@@ -112,6 +118,8 @@ struct Recipe {
     /// What `Slots::spawn` needs for a copy drawn the new way (step 4e):
     /// per movement its animation, model and ball; its materials.
     slots: (Vec<SlotMovement>, SlotMaterials),
+    /// Its materials' original texture names (batch 2 D-6).
+    textures: Vec<((usize, i32), String)>,
 }
 
 /// A copy's materials for `Slots::spawn`: (animation, material index).
@@ -125,6 +133,8 @@ pub struct AnimSim {
     playing: Vec<Playing>,
     /// The unused objects' recipes, by lower-case name (M5 5d-4).
     recipes: std::collections::BTreeMap<String, Recipe>,
+    /// The pictures `changeBmp` swaps in, by lower-case name (batch 2 D-6).
+    swap_images: std::collections::BTreeMap<String, Handle<Image>>,
     updates: u64,
     log: Log,
     /// `characters.log` (M4 4d), if it could be made.
@@ -210,6 +220,9 @@ impl AnimSim {
             shadow: None,
             birth_shown: None,
             new_draw,
+            texture_names: r.textures.clone(),
+            bmp_shown: None,
+            bmp_saved: Vec::new(),
         });
         line
     }
@@ -253,6 +266,7 @@ pub fn spawn_animated(
     character_lines: &[String],
     main_log: &mut Log,
     gpu: &crate::anim_gpu::AnimGpu,
+    swap_looks: &[(String, crate::load::Look)],
 ) -> (Vec<AnimObject>, Vec<NamedAnimPlayer>) {
     let mut log = match Log::create("anim") {
         Ok(l) => l,
@@ -546,8 +560,12 @@ pub fn spawn_animated(
             .map(|(_, _, i)| DrawnMovement { frames: built[*i].frames, steps: if built[*i].moves { built[*i].steps.clone() } else { Vec::new() } })
             .collect();
         let recipe: Vec<(usize, Vec<GameTransform>)> = drawn.iter().map(|d| (d.frames, d.steps.clone())).collect();
+        // Batch 2 D-6: each material's original texture name, keyed as
+        // its drawing's materials are.
+        let texture_names: Vec<((usize, i32), String)> =
+            a.movements.iter().flat_map(|(_, _, i)| built[*i].textures.iter().filter_map(move |(m, t)| t.as_ref().map(|t| ((*i, *m), t.clone())))).collect();
         if (*unused || template) && a.character.is_none() {
-            recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone(), slots: (slot_movements, own) });
+            recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone(), slots: (slot_movements, own), textures: texture_names.clone() });
         }
         // Whole-object steps of the movement shown at load: how far the
         // chained pose goes over the loop.
@@ -630,6 +648,9 @@ pub fn spawn_animated(
             shadow: None,
             birth_shown: unborn.then_some(false),
             new_draw,
+            texture_names,
+            bmp_shown: None,
+            bmp_saved: Vec::new(),
         });
     }
     let new_way = playing.iter().filter(|p| p.new_draw.is_some()).count();
@@ -669,7 +690,15 @@ pub fn spawn_animated(
     if let Some(f) = fight.as_ref() {
         main_log.summary(format!("fight: log in {}", f.path().display()));
     }
-    commands.insert_resource(AnimSim { playing, recipes, updates: 0, log, characters: clog, fight });
+    // Batch 2 D-6: the pictures `changeBmp` swaps in.
+    let swap_images = swap_looks
+        .iter()
+        .filter_map(|(n, l)| match l {
+            crate::load::Look::Texture { width, height, rgba, .. } => Some((n.to_ascii_lowercase(), images.add(crate::object_light::texture_image(*width, *height, rgba.clone(), bevy::image::ImageAddressMode::Repeat)))),
+            _ => None,
+        })
+        .collect();
+    commands.insert_resource(AnimSim { playing, recipes, swap_images, updates: 0, log, characters: clog, fight });
     (core, own_players)
 }
 
@@ -864,6 +893,42 @@ pub fn anim_draw(
             if let Some(log) = sim.characters.as_mut() {
                 log.detail(format!("update {}: {}: mouth shape {shape}: {what} (rule 25)", sim.updates, p.name));
             }
+        }
+        // Batch 2 D-6 (`characters.md` rule 4a): the object's changeBmp
+        // pair. When it changes, its own pictures go back, then every
+        // material whose original texture is `old` shows `new`.
+        let wanted = doors.and_then(|d| d.active.world.bmp_swaps.get(&p.name.to_ascii_lowercase()).cloned());
+        if wanted != p.bmp_shown {
+            for (h, image) in p.bmp_saved.drain(..) {
+                if let Some(mut m) = materials.get_mut(&h) {
+                    m.texture = image;
+                }
+            }
+            let what = match (&wanted, &p.new_draw) {
+                (None, _) => "its own textures again".to_string(),
+                (Some(_), None) => "not drawn: its animations are not packed".to_string(),
+                (Some((old, new)), Some(nd)) => {
+                    let image = sim.swap_images.get(&new.to_ascii_lowercase()).cloned();
+                    let mut changed = 0;
+                    for (k, original) in p.texture_names.iter().filter(|(_, t)| t.eq_ignore_ascii_case(old)) {
+                        let Some(h) = nd.materials.get(k) else { continue };
+                        // The original name again: its own picture (put back above).
+                        if new.eq_ignore_ascii_case(original) {
+                            continue;
+                        }
+                        let Some(image) = image.clone() else { continue };
+                        if let Some(mut m) = materials.get_mut(h) {
+                            p.bmp_saved.push((h.clone(), m.texture.clone()));
+                            m.texture = Some(image);
+                            changed += 1;
+                        }
+                    }
+                    let note = if new.eq_ignore_ascii_case(old) { "; the same name: its own picture".to_string() } else if image.is_none() { format!("; {new} was not read at load: unchanged") } else { String::new() };
+                    format!("{old} -> {new} on {changed} material(s){note}")
+                }
+            };
+            sim.log.detail(format!("update {}: {}: changeBmp: {what} (characters.md rule 4a)", sim.updates, p.name));
+            p.bmp_shown = wanted;
         }
         // M5 5a-8: a zombie rises (shown) or goes back underground.
         if let (Some(shown), Source::Core(i), Some(d)) = (p.birth_shown, &p.source, doors) {

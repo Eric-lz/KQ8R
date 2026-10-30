@@ -309,6 +309,7 @@ pub fn setup_objects(
         &std::mem::take(&mut objects.character_lines),
         &mut log,
         &gpu,
+        &std::mem::take(&mut objects.swap_looks),
     );
     crate::door_view::spawn_doors(&mut commands, &mut objects, &mut colliders, (held.0.clone(), held.1), (anims, own_players), &mut object_materials, &light, &mut images, &balls, &mut log, &gpu);
     // 3l-4: doors, chests and scripted objects were added after the

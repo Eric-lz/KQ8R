@@ -1592,6 +1592,9 @@ pub struct Objects {
     pub projectiles: BTreeMap<String, kq8_data::characters::ProjectileKeys>,
     /// The objects whose `groupsAlways` has bit 2048 (M5 5g-7).
     pub reveal_objects: Vec<String>,
+    /// The pictures the world's `KQObject::changeBmp` lines swap in, by
+    /// lower-case name (`characters.md` rule 4a; batch 2 D-6).
+    pub swap_looks: Vec<(String, Look)>,
     /// The world's placed portals' keys (M6 6e-6).
     pub portals: Vec<kq8_data::magic_map::PortalKeys>,
     /// The `KQPortal` files in `GAME/Kq` (the teleporters'), by file name
@@ -3349,7 +3352,9 @@ impl Placer<'_> {
         // A particle catcher: no model; its names are looked up once all
         // start-up scripts have run (emitters.md "Particle catchers" rule 2).
         // potions.md rule 31 (M5 5g-7): an object Clarity reveals.
-        if !unused && p.groups_always & kq8_core::potions::REVEAL_BIT != 0 && !self.reveal_objects.iter().any(|n| n.eq_ignore_ascii_case(&p.name)) {
+        // Batch 2 D-6: a copy prepared for a script's loadKQ too (Dead
+        // City's `tileshow`); core calls it only once it is in the world.
+        if (!unused || dormant) && p.groups_always & kq8_core::potions::REVEAL_BIT != 0 && !self.reveal_objects.iter().any(|n| n.eq_ignore_ascii_case(&p.name)) {
             self.reveal_objects.push(p.name.clone());
         }
         // M6 6e-6: a portal's keys, under its placed name, for the Portal
@@ -4114,6 +4119,28 @@ impl Placer<'_> {
     }
 
     /// The object palette, loaded once.
+    /// Batch 2 D-6 (`characters.md` rule 4a): the `newBmp` of every
+    /// `KQObject::changeBmp <obj> <old> <new>` line in the world's scripts,
+    /// read now so the swap can be drawn while playing.
+    fn swap_looks(&mut self) -> Vec<(String, Look)> {
+        let names: std::collections::BTreeSet<String> = self
+            .all_scripts
+            .iter()
+            .flat_map(|(_, t)| t.lines())
+            .filter_map(|l| {
+                let w: Vec<&str> = l.split('#').next().unwrap_or("").split_whitespace().collect();
+                (w.len() == 4 && w[0] == "kqobject::changebmp").then(|| w[3].to_string())
+            })
+            .collect();
+        let Ok(palette) = self.object_palette() else { return Vec::new() };
+        self.log.quiet = true;
+        let looks: Vec<(String, Look)> = names.iter().map(|n| (n.clone(), load_texture(self.world, self.game, n, &palette, self.log))).collect();
+        self.log.quiet = false;
+        let read = looks.iter().filter(|(_, l)| matches!(l, Look::Texture { .. })).count();
+        self.log.summary(format!("changeBmp: {} picture(s) named by the scripts, {read} read: {:?} (characters.md rule 4a)", names.len(), names));
+        looks
+    }
+
     fn object_palette(&mut self) -> Result<[Rgb; 256], String> {
         let (game, world) = (self.game, self.world);
         let palette_name = self.palette_name.clone();
@@ -4485,7 +4512,8 @@ impl Placer<'_> {
         (shapes, lines)
     }
 
-    fn finish(self) -> Objects {
+    fn finish(mut self) -> Objects {
+        let swap_looks = self.swap_looks();
         let log = self.log;
         // Check from the numbers: lowest point of each placed model vs ground.
         let mut gaps = Vec::new();
@@ -4739,6 +4767,7 @@ impl Placer<'_> {
             projectiles: self.projectiles,
             orbit: self.orbit,
             reveal_objects: self.reveal_objects,
+            swap_looks,
             portals: self.portals,
             portal_files: self.portal_files,
             item_lines: Vec::new(),

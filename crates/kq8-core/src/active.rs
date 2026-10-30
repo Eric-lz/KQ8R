@@ -725,6 +725,10 @@ pub struct WorldState {
     /// `KQObject::dither <name> 1` (lower case), for the viewer (M5 5g-7;
     /// STAND-IN, Q144).
     pub dithered: BTreeMap<String, u8>,
+    /// `KQObject::changeBmp <name> <old> <new>` (lower-case name): the one
+    /// pair remembered per object, for the viewer (`characters.md` rule
+    /// 4a; batch 2 D-6). `normal` removes it.
+    pub bmp_swaps: BTreeMap<String, (String, String)>,
     /// Connor's handsOff is on (a cutscene), set by the caller before each
     /// update (M5 5g-9, `potions.md` rule 26).
     pub connor_hands_off: bool,
@@ -1020,6 +1024,13 @@ impl WorldState {
     /// told Connor is: 100,000 below his place while Invisible runs, he is
     /// in the rope state (`ropeandhook.md` rule 29, M6 6a-6) or a cutscene
     /// has handsOff on.
+    /// `potions.md` rules 31, 32: the reveal objects in the world now (a
+    /// copy prepared for a script's `loadKQ` only once it came in; not
+    /// one deleted). Batch 2 D-6: Dead City's `tileshow`.
+    pub fn reveal_objects_here(&self) -> Vec<String> {
+        self.reveal_objects.iter().filter(|n| self.known.contains(&n.to_ascii_lowercase()) && !self.deleted.contains(&n.to_ascii_lowercase())).cloned().collect()
+    }
+
     pub fn connor_reported(&self) -> Option<[f32; 3]> {
         let p = self.connor_at?;
         Some(if self.connor_hidden_why().is_some() { [p[0], p[1], p[2] - crate::potions::HIDDEN_DROP] } else { p })
@@ -2267,6 +2278,38 @@ impl WorldState {
             _ => "mode 3 stored, the look unchanged",
         };
         self.item_note(format!("{at}: KQObject::dither {name} {mode}: {look} (objects.md \"Dithered objects\", Q144)"));
+        "0".into()
+    }
+
+    /// `KQObject::changeBmp <obj> <oldBmp> <newBmp>` / `<obj> normal`
+    /// (`characters.md` rule 4a): the object's one remembered pair, drawn
+    /// by the viewer; `normal` drops it. Unknown object: a console line.
+    fn change_bmp(&mut self, words: &[String], at: &str) -> String {
+        let (name, pair) = match words {
+            [_, name, n] if n.eq_ignore_ascii_case("normal") => (name, None),
+            [_, name, old, new] => (name, Some((old.clone(), new.clone()))),
+            _ => {
+                self.note(format!("{at}: usage: KQObject::changeBmp <obj> <oldBmp> <newBmp> | <obj> normal; nothing"));
+                return "1".into();
+            }
+        };
+        let key = name.to_ascii_lowercase();
+        if !self.known.contains(&key) || self.deleted.contains(&key) {
+            self.note(format!("{at}: KQObject::changeBmp cannot find '{name}' (characters.md rule 4a)"));
+            return "1".into();
+        }
+        let line = match pair {
+            Some((old, new)) => {
+                let l = format!("{name}: textures first named {old} drawn as {new}");
+                self.bmp_swaps.insert(key, (old, new));
+                l
+            }
+            None => {
+                self.bmp_swaps.remove(&key);
+                format!("{name}: normal: its model's own textures again")
+            }
+        };
+        self.item_note(format!("{at}: KQObject::changeBmp {line} (characters.md rule 4a)"));
         "0".into()
     }
 
@@ -3628,6 +3671,7 @@ impl ScriptHost for WorldState {
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
             "KQObject::dither" => Some(self.dither(words, at)),
+            "KQObject::changeBmp" => Some(self.change_bmp(words, at)),
             "KQConner::checkInvisible" => {
                 let v = u8::from(self.connor_invisible());
                 self.note(format!("{at}: KQConner::checkInvisible: {v} (potions.md rule 28)"));
@@ -3755,6 +3799,7 @@ impl Active {
                 helps_asked: BTreeSet::new(),
                 reveal_calls: Vec::new(),
                 dithered: BTreeMap::new(),
+                bmp_swaps: BTreeMap::new(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,
@@ -7759,6 +7804,21 @@ endif
         assert!(matches!(&r[3], Request::CamFly { seconds: None, end_roll: None, .. }));
         assert!(matches!(&r[4], Request::CamCut { roll, .. } if *roll == 0.25));
         assert!(a.take_log().join("\n").contains("usage: KQCamera::addCamLoc x y z"));
+    }
+
+    #[test]
+    fn change_bmp_keeps_the_last_pair_and_normal_drops_it() {
+        // characters.md rule 4a; tileshow.cs's lines (batch 2 D-6).
+        let mut a = with_object("KQObject::changeBmp tile21 tilea.bmp tileacl.bmp\nKQObject::changeBmp nosuch a.bmp b.bmp\nKQObject::changeBmp tile21\n", "x");
+        a.world.known.insert("tile21".into());
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert_eq!(a.world.bmp_swaps.get("tile21"), Some(&("tilea.bmp".to_string(), "tileacl.bmp".to_string())));
+        let log = a.take_log().join("\n");
+        assert!(log.contains("cannot find 'nosuch'") && log.contains("usage: KQObject::changeBmp"), "{log}");
+        let mut b = with_object("KQObject::changeBmp tile21 tilea.bmp tileacl.bmp\nKQObject::changeBmp tile21 tilea.bmp tilea.bmp\nKQObject::changeBmp Tile21 Normal\n", "x");
+        b.world.known.insert("tile21".into());
+        b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        assert!(b.world.bmp_swaps.is_empty());
     }
 
     #[test]

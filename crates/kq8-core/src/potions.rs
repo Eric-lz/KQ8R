@@ -188,7 +188,7 @@ pub fn effect_on(w: &mut crate::active::WorldState, effect: Effect) -> (i64, Str
             (half, format!("strength: hand number {h} -> {} (+ half, remembered; ranged unchanged; potions.md rule 21)", c.stats.0[1]))
         }
         Effect::Clarity => {
-            let names = w.reveal_objects.clone();
+            let names = w.reveal_objects_here();
             w.reveal_calls.extend(names.iter().map(|n| (n.clone(), true)));
             (0, format!("clarity: Reveal True queued for {} objects with groupsAlways bit 2048: {names:?} (potions.md rule 31)", names.len()))
         }
@@ -212,7 +212,7 @@ pub fn effect_off(w: &mut crate::active::WorldState, r: &Running) -> String {
             format!("strength ends: hand number {h} -> {} (the remembered {} taken off; potions.md rule 22)", c.stats.0[1], r.added)
         }
         Effect::Clarity => {
-            let names = w.reveal_objects.clone();
+            let names = w.reveal_objects_here();
             w.reveal_calls.extend(names.iter().map(|n| (n.clone(), false)));
             format!("clarity ends: Reveal False queued for {} objects (potions.md rule 31)", names.len())
         }

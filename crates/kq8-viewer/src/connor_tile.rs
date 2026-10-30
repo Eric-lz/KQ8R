@@ -410,6 +410,14 @@ pub fn unlit_step(
                     materials.add(c)
                 })
                 .clone();
+            // D-6: a changeBmp on the stone (the Reveal potion) changes its
+            // own material's picture; the bright copy follows it.
+            let own_texture = materials.get(&own).and_then(|o| o.texture.clone());
+            if materials.get(&copy).is_some_and(|c| c.texture != own_texture) {
+                if let Some(mut c) = materials.get_mut(&copy) {
+                    c.texture = own_texture;
+                }
+            }
             m.0 = copy.clone();
             done.insert(e, (own, copy));
             if redrawn {
