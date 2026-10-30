@@ -823,21 +823,28 @@ working.
   walking into it plays Connor's push from his side, the pedestal turns
   and sinks, the Paddle comes back; the fourth one starts the laser.
 
-## Script coverage batch 2, Dead City (2026-10-30, steps D-1 to D-5, D-7)
+## Script coverage batch 2, Dead City (2026-10-30, steps D-1 to D-7, fixes F-1 to F-6)
 
-Checked in the logs and unit tests only; **not played by hand**.
+Checked in the logs and unit tests; the hall and the jumps (F-1 to F-3)
+also played by the user.
 
 - **The death-hall stones:** Connor jumps from stone to stone, one jump
-  per press toward his facing (or back); the stone he would land on is
-  lit; D-E-A-T-H in order teleports him on, a wrong stone back to the
-  start; jumping back off the start strip leaves through the door.
-  Not yet: climbing onto a stone 500 higher (Q177).
+  per press toward his facing (or back), with the jump's own arc; the
+  stone he would land on is lit; D-E-A-T-H in order teleports him on,
+  a wrong stone back to the start; jumping back off the start strip
+  leaves through the door. The Clarity potion shows the five right
+  letters. Not yet: climbing onto a stone 500 higher (Q177); the camera
+  flight after a teleport is too fast (Q178).
+- **Death's room:** after H, Death's scene starts at once: the far doors
+  open, the torches light, Death talks (his mouth movements), gives the
+  key and sends Connor back outside.
+- **The halls' doors** stand where the start-up script moves them.
 - **Objects moved by events** (`KQMoveEvent`), and copies a script
   loads while playing are solid when their type says so.
 - **Script commands:** `tileExit`, `deadHallTeleport`, the react
   percents (Connor flinches on about two thirds of hits), the required
   weapon mode, `invClick`, `lightOnFire`, `setCamRelConner`, `walkSlope`
-  (kept only).
+  (kept only), `changeBmp` (drawn on animated objects).
 
 ## Viewer helpers (not in the original)
 

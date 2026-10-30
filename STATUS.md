@@ -7,6 +7,19 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-30)
 
+- **2026-10-30 (B): F-4 to F-6 and D-6** (logs and unit tests, **not
+  looked at by eye**): Death is a character (`KQDeath`): his whole scene
+  runs, his lines with mouth movements, the key, Connor sent outside;
+  `flyToCamLoc … -.6` read (Q180); the torches and flames of his room
+  are made; `changeBmp`, so the Clarity potion shows the five letters
+  (and `tileshow`, loaded while playing, now gets the potion's calls).
+  **Open for A:** Q177, Q178, Q179 (Death's mouth details), Q180.
+  **Left in batch 2 for B:** D-8 `matchHeights` / `terAnimSwitch`, D-9
+  `Lookup` and spirit traps, D-10 `ConnorCollision` and `Scales`, D-11
+  `ThrowRock`, `KQWeepBolt`, `RiverControl`, `KQAttackEvent` on objects,
+  `KQMonster::add`; `KQTowerSkeleton` waits for Q175. `changeBmp` on still
+  objects, doors and characters is logged, not drawn.
+
 - **2026-10-30 (B): fixes after the user's check of the death hall**
   (DESIGN "Fixes after the user's check", F-1 to F-3; logs only, **not
   looked at by eye**): the halls' doors now stand where `newWorld.cs`
