@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 D-1: `KQMoveEvent` on objects (batch 2, Dead City)
+
+**Changed:** Core `active.rs`: `KQMoveEvent` is a known event kind; sent to an object it runs as `move <object> <flags> x y z rx ry rz` (the 8th number ignored). A relative one sent by the object's own movement cue is not applied (stand-in, Q176). 1 unit test. DESIGN: the batch 2 plan (D-1 to D-11). QUESTIONS Q176. Provenance.
+**Why:** `objects.md` "Loops that move the whole object" rule 3 (session A, batch 2). Before, every `KQMoveEvent` was refused ("event type unknown to us; not sent"): 91 uses, 86 in Dead City.
+**Tested how:** `cargo test -p kq8-core` (the new test passes). `kq8-viewer --world DeadCity --at 238340,122300,3.14 --sound off --no-ai --frames 2500 --command "loadKQ tile_d.kq tile07 244333 124297 2871",10 --command "loadKQ notile.kq tile06 242333 124297 2871",10`; `doors.log`, `viewer.log`.
+**Result:** First try (all moves applied): `tile07` 2871 → 2869 → 2866 → 2864 → 2862 (one cue every 31 updates), `tile06` 2871 → 2873 → 2876 → 2878 → 2880: the stones drift. Our loader's sums of their own steps: letters (0, 0, −1.3), blank (0, 0, +1.3), the same sign as their cues (−2.3575 / +2.374), so in the original they would drift too unless something else cancels it: Q176. With the stand-in: "a relative move from its own loop's cue: not applied" 12 times, the stones stay at 2871.
+**Still broken / not tested:** Not looked at by eye. Dead City's other uses (the jiggling crates `boxbgmr.cs`, flags 1 from a script: applied) not run. `KQMoveEvent` to the camera or Connor is still not handled (logged).
+**Next:** D-2, `tileExit` and `deadHallTeleport`.
+
 ## 2026-10-28 Study (A): script coverage batch 2 (Dead City) and Q174
 
 **Changed:** Behaviour notes only, no code. New `docs/behaviour/tile-puzzle.md`: the death-hall stones (Connor's `Tile` state, `tileExit`, `deadHallTeleport`) and the scales (`Scales` state). Additions: `terrain.md` (`matchHeights`), `ranged-weapons.md` sections 8–9 (`ThrowRock`, `KQWeepBolt`) and rule 9 (`setRequiredWeaponMode`), `traps.md` (`KQSpiriTrap`, the `Lookup` call), `talking.md` 18a (`KQDeath`), `fighting.md` 7a (`KQTowerSkeleton`) and rule 23 (`setReactPercent` / `setSpecialReact`), `objects.md` rule 3 (`KQMoveEvent` flags on objects) and "River controls" (`RiverControl`), `characters.md` 4a (`changeBmp`) and the script form of `KQMonster::add`, `sound.md` 41 (`KQAttackEvent` on objects), `object-lighting.md` 37 (`lightOnFire`), `emitters.md` (`terAnimSwitch`), `camera.md` (`setCamRelConner` / `setCamRelObj`), `inventory.md` 10 (`invClick`), `connor-physics.md` (`KQCollider`). QUESTIONS: Q174 answered, Q175 new. Scratch notes in `re/` (not committed).

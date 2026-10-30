@@ -3334,3 +3334,61 @@ batches instead of one cutscene at a time (the user's request,
    - **Last:** the end game and screens (`playAvi`, `doCredits`,
      `killGame`, `checkSave`, Connor's `Die` state, the menu screen
      classes), with the menus and saving (postponed).
+
+### Outside the milestones: script coverage batch 2, Dead City (planned 2026-10-30)
+
+Built from session A's 2026-10-28 notes (MODLOG "Study (A): script
+coverage batch 2"). The death hall first (the user is blocked on it),
+then the smaller commands, then the larger classes. One commit per step;
+each step logs its numbers to `kq8-artifacts/logs/`.
+
+1. **D-1: `KQMoveEvent` on objects** (`objects.md` "Loops that move the
+   whole object" rule 3). An event `KQMoveEvent <flags> x y z rx ry rz
+   [extra]` to an object is run as `move <object> <flags> x y z rx ry
+   rz` (the same flag bits: 1 = add the position on world axes, 2 =
+   combine the turn); the 8th number is ignored. Check: a death-hall
+   stone's height stays level over many bob cycles (`doors.log`).
+   **Done** 2026-10-30 (logs and a unit test; a relative move from the
+   object's own cue is not applied, a stand-in: Q176).
+2. **D-2: `tileExit` and `deadHallTeleport`** (`tile-puzzle.md` rules
+   21, 22). `tileExit 0|1` sets the tile state's exit switch (1 also
+   puts Connor in Wait); usage line otherwise. `deadHallTeleport <from>
+   <to>` moves Connor and the camera by `to` − `from` (positions only)
+   and works out near/far again at once; the 0.5 s notice is not done
+   (open question 2). Check: `dhalltrp.cs` Cue 1 and `ddoor4.cs` Cue 5
+   move Connor by the halls' offset (`connor.log`, `camera.log`).
+3. **D-3: the `Tile` state's rules, core** (`tile-puzzle.md` rules
+   3–15, kept as data per "Do not reproduce"): new
+   `kq8-core/src/tile_puzzle.rs`: the stone table (looked up by name,
+   missing ones skipped and logged), Connor's spot (rule 6), the jump
+   target (rule 9), straight / diagonal, the landing outcome (rule 12),
+   the order table (rule 13). Unit tests.
+4. **D-4: the `Tile` state in the viewer** (rules 7–15, 18–20):
+   entering (`away` / `stop`), the keys (turn on the spot; one jump per
+   press of forward or back; walking only south of the area), the turn
+   to the target then the jump movement, the landing check, the
+   teleports (`teleportdown`, the move, a short camera flight,
+   `teleportup`), the start-strip door click, the lines, the refusal of
+   other states and of the weapon swap while the exit switch is off.
+5. **D-5: the lit stone** (rule 10, `object-lighting.md` rule 10): the
+   target stone drawn at full brightness.
+6. **D-6: `KQObject::changeBmp`** (`characters.md` rule 4a): the object's
+   own copy of its textures, swapped by original name; `normal` back.
+   Check: the Reveal potion in the hall swaps the five letters.
+7. **D-7: the small commands**: `KQMonster::setReactPercent`,
+   `setSpecialReact` (`fighting.md` rule 23), `KQConner::setRequiredWeaponMode`
+   (`ranged-weapons.md` rule 9), `invClick` (`inventory.md` rule 10),
+   `KQObject::lightOnFire` (`object-lighting.md` rule 37: kept, logged),
+   `KQCamera::setCamRelConner` / `setCamRelObj` (`camera.md`),
+   `KQMonster::walkSlope` (`character-movement.md`), `KQMonster::add`
+   (`characters.md` 4: logged as read).
+8. **D-8: `matchHeights` and `terAnimSwitch`** (`terrain.md`,
+   `emitters.md`): the blood drains after the scales.
+9. **D-9: the `Lookup` call and spirit traps** (`traps.md` 15a,
+   "Spirit traps").
+10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the
+    `Scales` state** (`tile-puzzle.md` rules 23–27).
+11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
+    `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
+    movements (`talking.md` 18a), `KQAttackEvent` on objects
+    (`sound.md` 41). `KQTowerSkeleton` waits for Q175.

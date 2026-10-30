@@ -3687,3 +3687,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | What the scripts use: commands, Connor's states, event kinds, `$2` calls, classes; start-up scripts = `newWorld.cs` and the scripts it names | Observed (the game's `kq.vol` archives and `GAME/Kq`); the start-up rule from `objects.md` "Where a world's objects come from" rule 1 | Its output, `docs/SCRIPT-COVERAGE.md` |
 | Built / stub / missing: one probe line per command in an empty world, read from our own log | **Ours** (a tool; says nothing about how the original behaves) | — |
+
+## Batch 2 (Dead City), D-1 2026-10-30: `KQMoveEvent` on objects — core `active.rs` (event delivery, `EVENT_TYPES`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQMoveEvent <flags> x y z rx ry rz [extra]` to an object = `move` with the same flags (bit 1 add the position on world axes, bit 2 combine the turn); only 7 numbers read | `objects.md` "Loops that move the whole object" rule 3 (batch 2) | unit test `a_move_event_to_an_object_moves_it_with_the_move_flags`; `doors.log` |
+| A relative `KQMoveEvent` sent by an object's own movement cue is not applied | **Ours (stand-in, Q176)**: we draw a loop's pose from its phase, so the leftover the cue cancels does not exist here | `doors.log` "not applied, our loops leave no leftover" |

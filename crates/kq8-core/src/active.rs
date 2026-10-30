@@ -96,7 +96,7 @@ pub const MUSIC_DELAY: f64 = 0.2;
 /// The event queue's target for them (our name; no object is called this).
 const MUSIC_TARGET: &str = "<KQMusic>";
 
-pub const EVENT_TYPES: [&str; 4] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent"];
+pub const EVENT_TYPES: [&str; 5] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent", "KQMoveEvent"];
 
 /// `Die`'s `$3` (`anim-scripts.md` rule 20, Q86 e): the kind of the last
 /// weapon hit the object took, `Normal` if it was never hit. Nothing is
@@ -5218,6 +5218,26 @@ impl Active {
             self.stats_change(&e, &from);
             return;
         }
+        // objects.md "Loops that move the whole object" rule 3 (batch 2,
+        // D-1): on an object it is a `move` with the same flag bits; only
+        // 7 numbers are read after the flags (the 8th is ignored).
+        if e.kind == "KQMoveEvent" && !e.target.eq_ignore_ascii_case(CONNOR) && !e.target.eq_ignore_ascii_case("KQCamera") {
+            // STAND-IN (Q176): a relative move from the object's own cue
+            // cancels its loop's leftover in the original (rule 1: the
+            // steps are added up). We draw a loop's pose from its phase,
+            // so there is no leftover and the move would make it drift
+            // (the death-hall stones: 2.4 units every 2 s).
+            let own_cue = e.from.eq_ignore_ascii_case(&format!("a cue of {}", e.target));
+            if own_cue && e.data.first().is_some_and(|f| number_value(f) as u32 & 1 != 0) {
+                self.world.note(format!("KQMoveEvent {} to {}{from}: a relative move from its own loop's cue: not applied, our loops leave no leftover (stand-in, Q176)", e.data.join(" "), e.target));
+                return;
+            }
+            let mut words = vec!["move".to_string(), e.target.clone()];
+            words.extend(e.data.iter().take(7).cloned());
+            let at = format!("KQMoveEvent{from}");
+            self.world.move_command(&words, &at);
+            return;
+        }
         // anim-scripts.md rules 4-5: Connor takes the request as every
         // animated object does; his walker is the viewer's.
         if e.kind == "KQAnimPlayEvent" && e.target.eq_ignore_ascii_case(CONNOR) {
@@ -7574,6 +7594,27 @@ endif
         // Deleted: not kept.
         a.world.objects[0].gone = true;
         assert!(a.world.kept_states().is_empty());
+    }
+
+    #[test]
+    fn a_move_event_to_an_object_moves_it_with_the_move_flags() {
+        // objects.md "Loops that move the whole object" rule 3 (D-1): flags
+        // 1 add the position, the 8th number is ignored; 0 places it.
+        let mut a = with_object("if test $2 == ConnorAction
+ sendEvent 0 $1 KQMoveEvent 3 0 0 -2.5 0 0 0 9
+ sendEvent 0 $1 KQMoveEvent 1 10 0 0 0 0 0 0
+endif
+", "x");
+        let start = a.world.objects[0].player.base.position;
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        a.update();
+        let moved = a.world.objects[0].player.base.position;
+        assert_eq!(moved, [start[0] + 10.0, start[1], start[2] - 2.5], "{:?}", a.take_log());
+        // From its own cue, a relative move is not applied (Q176 stand-in).
+        a.world.queue.send(a.world.now(), 0.0, "basket1", "KQMoveEvent", &["3".into(), "0".into(), "0".into(), "5".into()], "a cue of basket1");
+        a.update();
+        assert_eq!(a.world.objects[0].player.base.position[2], start[2] - 2.5);
+        assert!(a.take_log().join("\n").contains("not applied, our loops leave no leftover"));
     }
 
     #[test]
