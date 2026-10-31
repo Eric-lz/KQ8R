@@ -5494,11 +5494,12 @@ impl Active {
         // D-1): on an object it is a `move` with the same flag bits; only
         // 7 numbers are read after the flags (the 8th is ignored).
         if e.kind == "KQMoveEvent" && !e.target.eq_ignore_ascii_case(CONNOR) && !e.target.eq_ignore_ascii_case("KQCamera") {
-            // STAND-IN (Q176): a relative move from the object's own cue
-            // cancels its loop's leftover in the original (rule 1: the
-            // steps are added up). We draw a loop's pose from its phase,
-            // so there is no leftover and the move would make it drift
-            // (the death-hall stones: 2.4 units every 2 s).
+            // Q176 (answered; I-2 not built, the user's choice
+            // 2026-10-31): in the original a relative move from the
+            // object's own cue nearly cancels its loop's leftover (the
+            // death-hall stones keep +0.011 a cycle, about 18 units an
+            // hour). We draw a loop's pose from its phase, so there is no
+            // leftover and the stones stay level; the move is not applied.
             let own_cue = e.from.eq_ignore_ascii_case(&format!("a cue of {}", e.target));
             if own_cue && e.data.first().is_some_and(|f| number_value(f) as u32 & 1 != 0) {
                 self.world.note(format!("KQMoveEvent {} to {}{from}: a relative move from its own loop's cue: not applied, our loops leave no leftover (stand-in, Q176)", e.data.join(" "), e.target));

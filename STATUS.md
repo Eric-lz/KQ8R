@@ -13,8 +13,8 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   with the hold switch; scripts' weapon requests on the stones say the
   line, the Jump key jumps; Death's mouth codes; the camera commands read
   numbers as C's `atof`. **Not done:** I-2 (the stones' bob drift of
-  +0.011 per cycle: needs the loops to add their steps up, a change for
-  every animated object; waits for the user's choice) and Q175 (the
+  +0.011 per cycle: left out by the user's choice, the stones stay
+  level) and Q175 (the
   tower skeleton, a new feature). Also H-1 (armour skins), H-2 (deep
   water run-out) done; **open for A:** Q184 (armour skins), Q185
   (`gobcon1` put back home over and over).

@@ -3555,6 +3555,11 @@ skeleton's own states) is a new feature, left for its own step.
   (letters) / −2.368 (blank) and the end-of-cycle cue cancels it to
   +0.011 / +0.006. Find where our loader's sum leaves it out. Check: a
   stone's z at the same point of its bob, cycle after cycle.
+  **Not built, the user's choice (2026-10-31):** the drift (about 18
+  units an hour) is irrelevant and most likely unintended; copying it
+  would mean every animated object adding its steps up across cycles.
+  Ours draws a loop's pose from its phase, so the stones stay level and
+  their own relative `KQMoveEvent` cue is not applied (`active.rs`).
 - **I-3 (Q178): the teleport camera flight.** Rule 13: a `flyToCamLoc`
   with no time (distance ÷ 5,000 per second), started when
   `teleportdown` ends (as now), replacing our 0.5 s stand-in. Check:

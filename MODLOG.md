@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-2: the stones' slow drift: not built (the user's choice)
+
+**Changed:** DESIGN (I-2 marked not built), the comment in core `active.rs` where a stone's own relative `KQMoveEvent` is skipped. No behaviour change.
+**Why:** Q176's answer: in the original each death-hall stone rises about 0.011 units per 2-second bob (about 18 an hour). The user: irrelevant and most likely unintended; keep ours level. Copying it would mean every animated object adding its steps up across cycles.
+**Tested how:** Not tested (comment and docs only; the code is unchanged).
+**Result:** —
+**Still broken / not tested:** Nothing new.
+**Next:** The user's check of I-1 to I-7; Q175 (the tower skeleton).
+
 ## 2026-10-31 I-7: the camera commands read numbers as C's `atof`
 
 **Changed:** Core `active.rs`: `c_atof` (leading spaces, sign, digits with an optional point, optional exponent; stops at the first character that doesn't fit; no number = 0); `cam_loc` uses it for every word (was: refused a word that wasn't a number); `addCamLoc` takes exactly 3 or 4 numbers, its list word as a whole number; `cutToCamLoc` reads the roll only with exactly 4 numbers; `flyToCamLoc` counts seconds below 0 as 0 and reads the end roll only with exactly 5. 1 new unit test. Provenance.
