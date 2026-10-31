@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 The user's second check of D-8: footsteps and clicks on the drained bed
+
+**Changed:** QUESTIONS (new Q192), STATUS. No code.
+**Why:** The user: the rivers drain, but on the drained bed Connor's footsteps still wade, and clicks on the items that lay in the blood hit "the blood".
+**Tested how:** Data and logs. `deadcity/kq/pool1.kq`–`pool5.kq`, `Pool.cs`; `kq8-viewer --world DeadCity --sound off --no-ai --frames 300 --command "deleteObject Pool1",30` … `Pool5`; `doors.log`. `envinfo.kq` read as `water.md` says.
+**Result:** Clicks: `Pool1`–`5` are invisible click boxes (type 0x20) over the blood whose script says Connor's blood remark; `scale.cs` Cue 1 deletes them right after the drain, and my test command left that out. The deletes work ("clickable object deleted"). Footsteps: the blood materials 132–134 carry `poison` (a liquid), the drained 161 `rock`; we fix the flags at load from the starting material, and whether the original follows the new material is not traced (`emitters.md` open question 3): Q192.
+**Still broken / not tested:** The wading footsteps on the drained bed, until Q192.
+**Next:** A study session: Q191 (liquid damage) and Q192 together.
+
 ## 2026-10-31 The user's check of D-8 to D-11a; J-1 tried and written up
 
 **Changed:** DESIGN ("Fixes after the user's check of D-8 to D-11a"), QUESTIONS (new Q191), STATUS. No code (J-1's two tries were undone).

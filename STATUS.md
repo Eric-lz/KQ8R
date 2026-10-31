@@ -28,6 +28,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   **Not fixed (J-1, written up in DESIGN):** `move Sylph 0 0 0 0` does
   nothing, so the Sylph stands at the well at the start; she is a
   still-model `KQMonster` that neither path of `move` finds.
+- **The user's second check of D-8:** the rivers drain. Clicks on the
+  drained bed hit the pools' click boxes only because the test didn't
+  delete them (`scale.cs` does). Wading footsteps stay: the squares'
+  ground flags are fixed at load (blood = poison, drained 161 = rock):
+  **Q192 for A**, best studied together with Q191 (liquid damage).
 
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport
