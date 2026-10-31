@@ -184,9 +184,32 @@ pub struct GameCam {
     /// tells `rope_view` it happened (the first-person lock goes then).
     pub skip_next_move: bool,
     pub move_skipped: bool,
+    /// `tile-puzzle.md` rules 7a, 13 (Q178, I-4): when the flight under
+    /// way ends, follow Connor again with the hold switch set to this;
+    /// `follow_due` carries it from the flight's last update to the tick.
+    after_flight: Option<bool>,
+    follow_due: Option<bool>,
 }
 
 impl GameCam {
+    /// `tile-puzzle.md` rule 7a (I-4): the hold switch.
+    pub fn set_hold(&mut self, on: bool) -> String {
+        let was = std::mem::replace(&mut self.cam.hold, on);
+        let line = format!("camera update {}: hold switch {} -> {} (tile-puzzle.md rule 7a)", self.updates, onoff(was), onoff(on));
+        self.log.detail(line.clone());
+        line
+    }
+
+    /// `tile-puzzle.md` rule 13 (I-4): when the flight under way (or the
+    /// one asked for this update) ends, follow Connor again, the hold
+    /// switch then `hold`.
+    pub fn follow_after_flight(&mut self, hold: bool) -> String {
+        self.after_flight = Some(hold);
+        let line = format!("camera update {}: when the flight ends: follow Connor again, hold switch {} (tile-puzzle.md rule 13)", self.updates, onoff(hold));
+        self.log.detail(line.clone());
+        line
+    }
+
     /// The view drawn now as (tilt, heading).
     fn view_now(&self) -> (f32, f32) {
         (self.cam.view_tilt, self.cam.heading)
@@ -418,6 +441,10 @@ impl GameCam {
                 s.height.map_or(String::new(), height_note)
             );
             self.flight = None;
+            if let Some(hold) = self.after_flight.take() {
+                self.follow_due = Some(hold);
+                line += "; Connor is followed again (tile-puzzle.md rule 13)";
+            }
         }
         self.log.detail(line);
     }
@@ -570,6 +597,8 @@ pub fn make(
         around: None,
         skip_next_move: false,
         move_skipped: false,
+        after_flight: None,
+        follow_due: None,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
@@ -675,6 +704,10 @@ pub fn camera_step(
         g.pending.clear();
         let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
         g.flight_step(&ground, &surface_line(&lookup.0));
+        if let Some(hold) = g.follow_due.take() {
+            g.follow(true, sim.mover.position);
+            g.set_hold(hold);
+        }
         return;
     }
     // One range for walking and running: the user saw no difference in
@@ -822,5 +855,13 @@ pub fn camera_draw(
     let roll = game.roll_before + (game.view.roll - game.roll_before) * a;
     if roll != 0.0 {
         t.rotate_local_z(-roll);
+    }
+}
+
+fn onoff(on: bool) -> &'static str {
+    if on {
+        "on"
+    } else {
+        "off"
     }
 }

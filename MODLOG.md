@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-3, I-4: the teleport camera flight and the camera's hold switch
+
+**Changed:** Viewer `connor_tile.rs`: after a teleport the camera flies with `flyToCamLoc` and no time (5,000 units a second; the 0.5 s stand-in is gone); the Tile state switches the camera's hold switch on when he enters, off before each teleport flight and when he leaves, and asks the camera to follow him again when the flight ends (hold on again, except after H); the "follow Connor" at the end of `teleportup` is gone (it cut the flight short). Core `camera.rs`: `Camera::hold` (the follow update keeps the height, no height rule; the view's tilt is the player's only). Viewer `game_camera.rs`: `set_hold`, `follow_after_flight` (followed at the flight's last update). `door_view.rs`: the two new Tile calls. Done together: the flight could not run its length without the follow moved to its end. Provenance.
+**Why:** Session A's answer to Q178 (`tile-puzzle.md` rules 7a and 13). The user's check: the flight after a teleport was too fast.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. The D-4 solve run; `camera.log`, `connor.log`.
+**Result:** D: 17,883 from the spot → N = 54 updates (3.6 s), 454–509, all 54 run (before: 0.5 s, and with 0.5 s removed it was still cut at 21 of 54 by the old follow); E 26, A 8, T 13, H 26 updates. Hold: on at 250 (entering), off at each `teleportdown`'s end, on at each flight's end; after H off. While held, the camera stays at z 4,465 during the strip jumps (no height step) and the view tilt is −0.200 (the player's).
+**Still broken / not tested:** **Not looked at by eye.** The first person lifted only after both `teleportup` and the flight (rule 13): not built (we don't force third person off at all yet).
+**Next:** I-5 (the weapon line from scripts, the Jump key).
+
 ## 2026-10-31 I-1: tile jumps keep step up / down 325 (the north jump lands)
 
 **Changed:** Core `connor_mover.rs`: `start_tile_jump` switches gravity and keep-on-ground off and leaves step up / down at 325 (was: steps 0); `end_tile_jump` switches both back on. Viewer `connor_tile.rs`: the log line. DESIGN (plan I-1 to I-7), provenance.

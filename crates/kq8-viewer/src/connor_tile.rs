@@ -5,8 +5,8 @@
 //! Run by [`ConnorSim::tile_step`] before his update, like the Choice
 //! state. A jump is our scripted turn to the target (`pointAndCue`'s
 //! turn) and then the jump movement as a one-item Special list, whose
-//! own steps carry him; a teleport is `teleportdown`, a place, a short
-//! camera flight and `teleportup`. What the state asks of the scripts
+//! own steps carry him; a teleport is `teleportdown`, a place, the
+//! camera's flight (5,000 units a second, rule 13, Q178) and `teleportup`. What the state asks of the scripts
 //! (lines, the camera, a variable, the door click) goes out as
 //! [`TileCall`]s, run by `door_view::trap_step`.
 
@@ -19,10 +19,6 @@ use super::ConnorSim;
 
 /// The door the start strip's back row clicks (rule 12).
 pub const DOOR: &str = "ltddoor4";
-/// The camera flight after a teleport, seconds (open question 4: a short
-/// flight as a stand-in).
-const FLIGHT: f32 = 0.5;
-
 /// What the state asks of the world.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TileCall {
@@ -32,6 +28,11 @@ pub enum TileCall {
     Click(&'static str),
     /// A script variable set (rule 13, H).
     Set(&'static str, &'static str),
+    /// The camera's hold switch (rule 7a, I-4).
+    Hold(bool),
+    /// Follow Connor again when the camera's flight ends, the hold switch
+    /// then this (rule 13, I-4).
+    FollowAfterFlight(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,6 +82,7 @@ impl ConnorSim {
             "stop".to_string()
         };
         self.tile = Some(TileRun { stones, expected: 0, can_exit: false, lines: Lines::default(), stage: Stage::Keys, lit: None, remembered: 0 });
+        self.tile_calls.push(TileCall::Hold(true));
         let spot = self.tile_where();
         let line = format!("enters the Tile state: {found} of 64 stones{missing}; at {}; expects D (tile07); exit switch off; {start} (tile-puzzle.md rules 2, 7)", show(spot));
         self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
@@ -115,6 +117,7 @@ impl ConnorSim {
         if self.tile.as_ref().is_some_and(|t| matches!(t.stage, Stage::Jumping { .. })) {
             self.mover.end_tile_jump();
         }
+        self.tile_calls.push(TileCall::Hold(false));
         let lit = self.tile.take().and_then(|t| t.lit);
         if lit.is_some() {
             self.tile_lit_changed = Some(None);
@@ -220,12 +223,21 @@ impl ConnorSim {
                     self.intent.forward = 0;
                     self.intent.turn = 0;
                     self.tile.as_mut().unwrap().remembered = 0;
+                    // Rules 7a, 13: the hold switch off for the flight;
+                    // when it ends the camera follows him, held again
+                    // (not after H).
+                    let t = self.tile.as_ref().unwrap();
+                    let solved = right && t.expected >= tp::ORDER.len();
+                    self.tile_calls.push(TileCall::Hold(false));
                     self.tile_calls.push(TileCall::Line(format!("KQCamera::addCamLoc {:.0} {:.0} {:.0} 1", camera[0], camera[1], camera[2])));
-                    self.tile_calls.push(TileCall::Line(format!("KQCamera::flyToCamLoc {:.0} {:.0} {:.0} {FLIGHT}", put[0], put[1], put[2])));
+                    // Rule 13 (Q178): a `flyToCamLoc` with no time:
+                    // distance ÷ 5,000 a second, rolling to 0.
+                    self.tile_calls.push(TileCall::Line(format!("KQCamera::flyToCamLoc {:.0} {:.0} {:.0}", put[0], put[1], put[2])));
+                    self.tile_calls.push(TileCall::FollowAfterFlight(!solved));
                     let up = self.tile_play("teleportup");
                     self.tile.as_mut().unwrap().stage = Stage::Up { right };
                     lines.push(format!(
-                        "Tile: teleportdown ended: put at ({:.0}, {:.0}, {:.0}), heading {heading:.3}; the camera flies to ({:.0}, {:.0}, {:.0}) in {FLIGHT} s (stand-in, open question 4); {up}",
+                        "Tile: teleportdown ended: put at ({:.0}, {:.0}, {:.0}), heading {heading:.3}; the camera flies to ({:.0}, {:.0}, {:.0}) at 5,000 a second (rule 13); {up}",
                         put[0], put[1], put[2], camera[0], camera[1], camera[2]
                     ));
                 }
@@ -241,9 +253,9 @@ impl ConnorSim {
                     if let Some(c) = said {
                         self.tile_calls.push(TileCall::Line(format!("KQMonster::speak Connor Connor {} {} 0 {c} 1 1", tp::LINE_FILE, tp::LINE_NOUN)));
                     }
-                    // Open question 1 (the camera's hold switch): ours
-                    // follows him again (stand-in).
-                    self.tile_calls.push(TileCall::Line("KQCamera::follow Connor".into()));
+                    // Rule 13: the keys work again now, even if the
+                    // camera is still flying (it follows him when the
+                    // flight ends).
                     let said = said.map_or("no line".to_string(), |c| format!("says {}/{}/0/{c} (rule 15)", tp::LINE_FILE, tp::LINE_NOUN));
                     if solved {
                         // Rule 13, H: Wait after `teleportup` (the exit
@@ -252,7 +264,7 @@ impl ConnorSim {
                         lines.push(format!("Tile: teleportup ended: {said}; SOLVED: {wait} (rule 13)"));
                     } else {
                         self.tile.as_mut().unwrap().stage = Stage::Keys;
-                        lines.push(format!("Tile: teleportup ended: {said}; the camera follows him again (stand-in, open question 1); keys"));
+                        lines.push(format!("Tile: teleportup ended: {said}; keys (the camera follows when its flight ends, rule 13)"));
                     }
                 }
             }

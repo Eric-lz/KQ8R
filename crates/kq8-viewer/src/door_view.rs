@@ -1181,6 +1181,16 @@ pub fn trap_step(
                 let n = connor.updates;
                 connor.log.detail(format!("connor update {n}: Tile state: {name} = {value} (rule 13)"));
             }
+            crate::connor_view::TileCall::Hold(on) => {
+                let r = camera.as_mut().map_or("no game camera".to_string(), |c| c.set_hold(on));
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: Tile state: {r}"));
+            }
+            crate::connor_view::TileCall::FollowAfterFlight(hold) => {
+                let r = camera.as_mut().map_or("no game camera".to_string(), |c| c.follow_after_flight(hold));
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: Tile state: {r}"));
+            }
             crate::connor_view::TileCall::Click(name) => {
                 // Rule 12: "as if the player clicked it", read as its
                 // script's ConnorAction with no item, without the reach

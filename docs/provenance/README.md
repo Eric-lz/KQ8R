@@ -3866,3 +3866,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | A tile jump switches gravity and keep-on-ground off, leaves step up / down at 325, and switches both back on when it ends | `tile-puzzle.md` rule 11 (Q177) | `connor.log`: the north jump onto `tile56` |
+
+## Fixes I-3, I-4 2026-10-31: the teleport flight, the hold switch — viewer `connor_tile.rs`, `game_camera.rs`, `door_view.rs`; core `camera.rs` (`Camera::hold`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The flight after a teleport is a `flyToCamLoc` with no time (distance ÷ 5,000 a second), starting when `teleportdown` ends | `tile-puzzle.md` rule 13 "The camera flight" (Q178); `camera.md` "Camera flights and cuts" rule 4 | `camera.log` N = 54 for 17,883 |
+| When the flight ends the camera follows Connor again, the hold switch on again (not after H); the keys work from `teleportup`'s end | `tile-puzzle.md` rule 13 | `camera.log` "Connor is followed again" |
+| The hold switch: on entering, off for each flight, on at its end; while on the follow keeps its height and the tilt isn't aimed at Connor | `tile-puzzle.md` rule 7a (Q178) | `camera.log` updates 291–305: z 4,465, tilt −0.200 |

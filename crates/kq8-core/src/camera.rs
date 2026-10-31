@@ -436,6 +436,10 @@ pub struct Camera {
     /// drag in the previous update, and the last "backward" measured.
     pub heading_state: HeadingState,
     pub turn_back: bool,
+    /// The hold switch (`tile-puzzle.md` rule 7a, Q178; I-4): while on,
+    /// the follow update keeps the camera's height (no height rule) and
+    /// the view's tilt is only the player's, not aimed at Connor.
+    pub hold: bool,
     mouse_offset: f32,
     last_error: f32,
     dragging: bool,
@@ -584,6 +588,7 @@ impl Camera {
             view_tilt: 0.0,
             heading_state: HeadingState::Idle,
             turn_back: false,
+            hold: false,
             mouse_offset: 0.0,
             last_error: 0.0,
             dragging: false,
@@ -760,15 +765,21 @@ impl Camera {
         let sum = self.prev_aim.map_or(0.0, |p| (0..3).map(|k| (aim[k] - p[k]).abs()).sum());
         let floor = |x: f32, y: f32| ground.ground(x, y).map(|g| g.0);
         let surface = |a: [f32; 3], b: [f32; 3]| view.and_then(|v| v.surface_hit(a, b));
-        let (p, h) = height_rule(start, self.position, base[2], max, sum, height_share(UPDATE_SECONDS), mx != 0.0, self.lifted, &floor, &surface);
-        self.position = p;
-        if h.lift != Lift::No {
-            self.lifted = true;
+        if self.hold {
+            // tile-puzzle.md rule 7a: the hold switch keeps its height.
+            self.position[2] = start[2];
+            report.events.push("hold: height kept (tile-puzzle.md rule 7a)".into());
+        } else {
+            let (p, h) = height_rule(start, self.position, base[2], max, sum, height_share(UPDATE_SECONDS), mx != 0.0, self.lifted, &floor, &surface);
+            self.position = p;
+            if h.lift != Lift::No {
+                self.lifted = true;
+            }
+            if h.then == HeightThen::Eased {
+                self.lifted = false;
+            }
+            report.height = Some(h);
         }
-        if h.then == HeightThen::Eased {
-            self.lifted = false;
-        }
-        report.height = Some(h);
 
         // Step 5: pushed out to the minimum.
         if matches!(self.mode, Mode::Normal) && length(sub(self.position, aim)) < min {
@@ -810,7 +821,9 @@ impl Camera {
     /// angle up from the camera to the aim point (rule 3, Q27 b).
     fn aim_view(&mut self, aim: [f32; 3], followed: Followed, dragging: bool, moving: bool, towards_start: f32) -> HeadingStep {
         let (up, towards) = view_angles(sub(aim, self.position));
-        self.view_tilt = self.tilt + up;
+        // tile-puzzle.md rule 7a: with the hold switch on, the player's
+        // tilt only, not aimed up or down at Connor.
+        self.view_tilt = if self.hold { self.tilt } else { self.tilt + up };
         let error = |c: &Camera| wrap(towards + c.mouse_offset - c.heading);
         let before = self.heading_state;
         let start = error(self);
