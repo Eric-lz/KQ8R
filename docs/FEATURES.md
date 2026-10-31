@@ -556,7 +556,8 @@ miss, roll, flinch, death, drop and shot is in
   counts; keys **1–8** or a click use one (health added, capped; potions:
   see "Health items and potions"). Picked-up stacks join (one gold entry);
   a new weapon or armour piece pushes out the old one, which drops
-  where the new one lay, and its numbers change the bar. New items and
+  where the new one lay, and its numbers change the bar; Connor's
+  clothes show the armour he wears (H-1, logs only). New items and
   higher counts blink. A right click on an item: Connor describes it
   (voice only). Logged in `gui.log` and `items.log`. Checked by the
   user 2026-10-18.
