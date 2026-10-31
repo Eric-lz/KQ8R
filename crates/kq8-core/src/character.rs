@@ -652,17 +652,23 @@ impl Character {
             let unknown = if st.unknown { " (not in its list: movement 0)" } else { "" };
             return format!("code {code}: mouth movement '{name}' starts at once{unknown} (rule 27)");
         }
+        if self.mouth_moves {
+            // talking.md rule 18a (Q179, I-6): Death's shapes are
+            // movements started at once, an equal one again too; 16 is
+            // `rest` (not `stop`); 8–15 and above 16 do nothing ("Do not
+            // reproduce": the original passes an unfilled name).
+            let shape = match code {
+                0..=7 => code,
+                16 => 0,
+                _ => return format!("code {code}: nothing for Death, his pose stays (talking.md rule 18a, Do not reproduce)"),
+            };
+            self.mouth = shape;
+            let name = GEOMETRY_MOUTH[shape as usize];
+            let st = player.start(name);
+            let unknown = if st.unknown { " (not in its list: movement 0)" } else { "" };
+            return format!("code {code}: mouth shape {shape}: movement '{name}' starts at once{unknown} (talking.md rule 18a)");
+        }
         let gesture = match code {
-            0..=7 if self.mouth_moves => {
-                // talking.md rule 18a: Death's shapes are movements, one
-                // started for each code (whether an equal shape restarts
-                // it is not traced: ours does, as rule 27).
-                self.mouth = code;
-                let name = GEOMETRY_MOUTH[code as usize];
-                let st = player.start(name);
-                let unknown = if st.unknown { " (not in its list: movement 0)" } else { "" };
-                return format!("code {code}: mouth shape {code}: movement '{name}' starts at once{unknown} (talking.md rule 18a)");
-            }
             0..=7 => {
                 self.mouth = code;
                 return format!("code {code}: mouth shape {code} (rule 25)");
@@ -1170,8 +1176,16 @@ pub(crate) mod tests {
         let line = c.mouth_code(&mut p, 2);
         assert!(line.contains("'m' starts at once") && line.contains("18a"), "{line}");
         assert_eq!((p.movement_name(), c.mouth), ("m", 2));
+        // Q179 (I-6): 16 starts `rest`; 8–15 and above 16 keep the pose.
         let line = c.mouth_code(&mut p, 16);
-        assert!(!line.contains("ignored") && !line.contains("rest"), "{line}");
+        assert!(line.contains("'rest' starts at once"), "{line}");
+        assert_eq!((p.movement_name(), c.mouth), ("rest", 0));
+        c.mouth_code(&mut p, 3);
+        for code in [8, 15, 17] {
+            let line = c.mouth_code(&mut p, code);
+            assert!(line.contains("nothing for Death"), "{line}");
+            assert_eq!((p.movement_name(), c.mouth), ("r", 3));
+        }
     }
 
     #[test]

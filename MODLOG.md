@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-6: Death's mouth codes
+
+**Changed:** Core `character.rs` (`mouth_code`): for Death (`mouth_moves`) codes 0–7 start their movement at once (an equal one again too), **16 starts `rest`** (was: the ordinary character's `stop` gesture path), 8–15 and above 16 do nothing and are logged. `active.rs`: at the end of a line nothing happens to his pose (was: shape set to 0, logged as not traced). Unit test extended. Provenance.
+**Why:** Session A's answer to Q179 (`talking.md` rule 18a).
+**Tested how:** `cargo test --workspace` (all pass). The D-4 solve run with `--frames 42000` (Death's scene); `characters.log`.
+**Result:** 484 mouth codes for Death, 0–7 only, each starting its movement ('rest', 'f', 'm', 'r', 'w', 'ih', 'ah', 'e'); 7 line ends "nothing, the last pose stays". The key still reaches Connor (update 2095). Codes 16 and 8–15 don't occur in his lines here: checked by the unit test only.
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** I-7 (how the camera commands read numbers).
+
 ## 2026-10-31 I-5: the stones: a script's weapon request says the line; the Jump key jumps
 
 **Changed:** Viewer `door_view.rs`: in the Tile state a script's weapon request (`setDoMode`, `setRequiredWeaponMode`) is refused **with** the line 0/0/37/23 like the keys and slots (was silent); Alt with empty hands does nothing, silently. `connor_tile.rs`, `connor_view.rs`: the Jump key starts a forward jump while the state waits for keys (ignored during a jump, landing or teleport). Provenance.

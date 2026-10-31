@@ -3881,3 +3881,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | Every weapon change in the Tile state is refused with 0/0/37/23, scripts' too; Alt with empty hands does nothing | `tile-puzzle.md` rule 18 (Q181) | `fight.log` update 330 (script); Alt not tested |
 | The Jump key starts a forward jump; ignored while a jump, landing or teleport is under way | `tile-puzzle.md` rule 8 and its "Do not reproduce" (Q181) | `connor.log` update 290 |
+
+## Fixes I-6 2026-10-31: Death's mouth — core `character.rs` (`mouth_code`), `active.rs` (line end)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Death's codes 0–7 start their movements at once, an equal code again; 16 starts `rest`; 8–15 and above 16 do nothing | `talking.md` rule 18a (Q179) and its "Do not reproduce" | unit test `death_plays_his_mouth_shapes_as_movements`; `characters.log` |
+| At the end of a line nothing happens to his pose | `talking.md` rule 18a (Q179) | `characters.log` "line ended: nothing" |

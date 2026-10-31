@@ -5291,10 +5291,13 @@ impl Active {
                 crate::talk::TalkEvent::End { speaker, .. } => {
                     if let Some(i) = self.world.character_index(speaker) {
                         let c = self.world.anims[i].character.as_mut().unwrap();
-                        if !c.geometry && c.mouth != 0 {
+                        if c.mouth_moves {
+                            // talking.md rule 18a (Q179): the shape back
+                            // to 0 is the texture mouth, which he hasn't.
+                            self.world.character_note(speaker, "line ended: nothing, the last pose stays (talking.md rule 18a)");
+                        } else if !c.geometry && c.mouth != 0 {
                             c.mouth = 0;
-                            let note = if c.mouth_moves { "line ended: mouth shape 0; no movement started (talking.md rule 18a: not traced, Q179)" } else { "line ended: mouth shape 0 (rule 25)" };
-                            self.world.character_note(speaker, note);
+                            self.world.character_note(speaker, "line ended: mouth shape 0 (rule 25)");
                         }
                     }
                 }
