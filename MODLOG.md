@@ -3,6 +3,22 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 Study (A): Q175 to Q183 (death hall, camera roll, Death, tower skeleton)
+
+**Changed:** Behaviour notes only (no code): `tile-puzzle.md` rules 7, 7a (new), 8, 11, 13, 16, 18, edge cases, open questions 1 and 4 closed, How to check; `camera.md` "Camera flights and cuts" rules 4a (roll) and 4b (number words), new; `talking.md` rule 18a; `fighting.md` rule 23 (corrected) and section 7a (the skeleton's states); `anim-scripts.md` rule 3 (Death's key); `objects.md` rule 3; `connor-physics.md` (tile-jump note). `QUESTIONS.md`: Q175–Q182 answered, Q183 added and answered. STATUS. Scratch notes in `re/` (not committed).
+**Why:** The open questions from batch 2's B sessions and the user's checks in the original (north jump short, camera flight too fast, roll, weapon line).
+**Tested how:** Traced in `Mask.exe` (Ghidra). Data checks: the stone models' frame steps read from Dead City `resource.vol` (extracted to the scratch folder with the game's own `kqmoevol.exe`), `BOUNDS.KQ` against every stone file, `Death.anm` and the `d_*.kqs` loop lengths, `keycycle.kq` / `.cs`, `death.cs`, `skeltowr.kq`.
+**Result:**
+- Q177: the Tile state turns gravity and keep-on-ground off for a jump but **keeps step up / down at 325**; that is what climbs the stone's edge. 29 stones have no box in the original too.
+- Q176: counting the wrap step, a cycle leaves +2.368 / −2.368 and the cues cancel it to +0.011 / +0.006 per cycle.
+- Q178: the teleport flight is a `flyToCamLoc` with no time (distance ÷ 5,000 per second), from the end of `teleportdown`; the hold switch keeps the camera's height and tilt.
+- Q181: the line on entering comes from the state's own refusal of the weapon change it asks for; scripts' `setDoMode` gets the line too.
+- Q182: negative roll = picture clockwise (G-5 is right), no scale, about the line of sight. Q180: `atof`.
+- Q179: code 16 → `rest`; poses hold; end of line does nothing. Q183: the key spins twice (B is right).
+- Q175: the skeleton's states described; `timeToRun` is never used; the stagger probe is behind it (rule 23 said ahead).
+**Still broken / not tested:** Nothing built or played. Not traced: that the screen isn't mirrored (the roll's on-screen sense is inferred from that); number keys and mouse wheel for weapons; the skeleton fall's exact heights (as read, "not sure" in the note); one object switch at the end of `fallend`. The user's first roll description ("anticlockwise") disagrees with the trace; their G-2 check agrees.
+**Next:** B: step up 325 in tile jumps, the bob wrap step, the teleport flight time, `setDoMode`'s line, Death's code 16, then the tower skeleton (batch 2 list).
+
 ## 2026-10-30 G-5: the camera's roll turns the other way
 
 **Changed:** Viewer `game_camera.rs` (`camera_draw`): the drawn camera turns about its line of sight by minus the roll (G-2 used plus). DESIGN (G-5), QUESTIONS Q182 and Q177 (notes), provenance.

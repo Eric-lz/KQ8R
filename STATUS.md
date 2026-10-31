@@ -7,6 +7,35 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-30)
 
+- **2026-10-30 (A): Q175 to Q183 answered** (traced; nothing built yet).
+  No question is open any more. What B should change:
+  - **North tile jump (Q177):** keep step up / down at **325** during a
+    tile jump (only gravity and keep-on-ground go off, back on when the
+    jump movement ends); the step-up climbs the stone's edge.
+    `tile-puzzle.md` rule 11. The 29 box-less stones are right.
+  - **Stones' bob (Q176):** count the wrap step (`objects.md` rule 6a);
+    then the cues cancel the leftover and B's stand-in can go.
+    `tile-puzzle.md` rule 16.
+  - **Teleport camera (Q178):** a `flyToCamLoc` with no time (distance
+    ÷ 5,000 per second), starting when `teleportdown` ends; the hold
+    switch keeps the camera's height and tilt. `tile-puzzle.md` rules 7a,
+    13.
+  - **Weapon line (Q181):** said on entering only with a weapon out (as
+    built); also for scripts' `setDoMode` / `setRequiredWeaponMode`
+    (B's are silent). The Jump key jumps too. `tile-puzzle.md` rules 7,
+    8, 18.
+  - **Camera roll (Q182, Q180):** G-5's sign is right (negative =
+    picture clockwise); no scaling; numbers read with `atof`.
+    `camera.md` rules 4a, 4b.
+  - **Death's mouth (Q179):** code 16 starts `rest` (not `stop`); the
+    poses hold; end of line does nothing. `talking.md` rule 18a.
+  - **Death's key (Q183):** the spin twice is right. `anim-scripts.md`
+    rule 3.
+  - **Tower skeleton (Q175):** its standing, moving and falling states
+    are in `fighting.md` section 7a (the stagger's ground probe is
+    behind it: rule 23 corrected). The fall's camera and move offsets
+    are as read, not checked in play.
+
 - **2026-10-30 (B): G-1 to G-4, fixes after the user's check of F-4 to
   D-6** (logs and unit tests, **not looked at by eye**): on the stones
   the weapon is put away for good and every swap is refused with "A
@@ -633,8 +662,6 @@ M6 has started with the Rope and Hook (6a).
   attribute 0x8 is solid; B uses their files' own transparent flag.
 - **Built 2026-10-27 (P-1): Q172** (a cut during a running flight).
 - **Built 2026-10-27 (P-2): Q173** (the Paddle's push).
-- **New for A (2026-10-28): Q175** (not blocking): the Dead City tower
-  skeleton's own standing / moving / dying states.
 
 - Inside `magic-map.md` (not in QUESTIONS.md): 2 and 3 answered by the
   user's check (2026-10-21); 4 and 5 answered in `world-change.md`

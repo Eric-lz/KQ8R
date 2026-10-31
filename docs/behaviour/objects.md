@@ -148,7 +148,10 @@ All traced in `Mask.exe` unless marked otherwise.
    (the trap and its box move). Data: flags 3 ×85, 0 ×5, 1 ×4.
    Examples: the death-hall stones' `3 0 0 -2.3575 …` / `… 2.374 …`
    lower / raise the stone by about 2.4 units each cycle, cancelling
-   their bob's leftover (`tile-puzzle.md` rule 16).
+   their bob's leftover, which is +2.368 / −2.368 **only when the wrap
+   step of rule 6a is counted** (without it the leftover has the same
+   sign as the cue and the stones drift; `tile-puzzle.md` rule 16,
+   checked 2026-10-30, Q176).
    **Do not reproduce (unless matching exactly):** Dead City's
    `boxbgmr.cs` (crates that jiggle after 25 clicks) sends
    `KQMoveEvent 1 0 0 0 0 0 0 0` each second, which **sets the turn to

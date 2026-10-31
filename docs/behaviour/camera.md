@@ -551,7 +551,8 @@ starts a swing (not checked in the game).
     they replace them). 0 = both absolute, 3 = both relative. Missing
     numbers count as 0.
   - Angles in radians: **rx = tilt** (positive looks up, negative looks
-    down), **ry = roll**, **rz = heading**: 0 looks along world **+Y**,
+    down), **ry = roll** (which way it turns the picture: "Camera
+    flights and cuts" rule 4a), **rz = heading**: 0 looks along world **+Y**,
     positive turns anticlockwise seen from above (π/2 looks along −X),
     the right-hand rule round Z as for objects. The view direction is
     (−sin rz × cos rx, cos rz × cos rx, sin rx). (The angle order is
@@ -713,7 +714,53 @@ view toward what is followed). `follow <object>` switches both on
      during `handsOff`).
    - Connor is told when the flight ends (an internal message used by
      some of his special states; scripts don't see it). The end is not
-     a cue: scripts time what follows with `sendEvent`.
+     a cue: scripts time what follows with `sendEvent`. (The death-hall
+     stones' state uses it: `tile-puzzle.md` rule 13.)
+4a. **The roll** (traced 2026-10-30, Q182):
+   - **Axis:** the roll turns the camera about **its own line of sight**
+     (the direction it looks in), after the heading and tilt; the
+     camera's place and the point it looks at don't change.
+   - **Size:** the number is used **as it is, in radians**: no scaling.
+     −0.6 is 34.4°. (The user's "about 45°, not sure" is an estimate by
+     eye; the program does not make it bigger.)
+   - **Sign:** a **positive** roll leans the camera's "up" toward its
+     right, as if the camera were turned **clockwise** seen from behind
+     it, so the **picture turns anticlockwise** on screen (the horizon
+     goes down on the right). A **negative** roll turns the **picture
+     clockwise** (the horizon goes down on the left). So `azrieltp.cs`'s
+     `flyToCamLoc … 2.5 -.6` ends with the picture turned 34° clockwise.
+     Traced: the camera's turn is built from its three angles exactly as
+     an object's turn (rule "`move KQCamera`" above), and with the roll
+     alone its right-hand side tips downward for a positive value.
+     Inferred, not traced: that the screen shows the camera's own right
+     as right (no mirror); that is what makes the heading and tilt come
+     out right in our build already. This agrees with the user's check
+     of B's G-2 (B's first sign was opposite to the original's) and so
+     with G-5; it disagrees with the user's first description
+     ("anticlockwise"), which may have described the camera's turn
+     rather than the picture's. **How to check:** in that flight, watch
+     which side of the horizon drops.
+   - The roll is set by `cutToCamLoc` (rule 3), changed in N equal steps
+     by `flyToCamLoc` (rule 4) and set or added by `move KQCamera`; the
+     follow rules never change it.
+4b. **How the camera commands read their words** (traced 2026-10-30,
+   Q180): every number is read with the standard C text-to-number
+   reading (`atof`): leading spaces skipped, an optional sign, digits
+   with an optional decimal point (a leading `.` is fine: `-.6` is
+   −0.6, `5.` is 5) and an optional exponent; reading stops at the first
+   character that doesn't fit, and a word with no number at its start
+   counts as **0** (no error, no message). This is not `test`'s
+   number rule (`doors.md` Q45 f); script variables (`$…`) are already
+   replaced before the command sees the words.
+   - `addCamLoc x y z [newlist]`: exactly 3 or 4 numbers (else the
+     usage text); `newlist` is read as a whole number (C `atoi`: `1.9`
+     is 1, `abc` is 0).
+   - `cutToCamLoc x y z [roll]`: at least 3 numbers (else the usage
+     text); the roll is read only when there are **exactly 4**; with 5
+     or more the roll is 0 and the rest is ignored.
+   - `flyToCamLoc x y z [seconds [endRoll]]`: at least 3 numbers (else
+     the usage text); `seconds` when there are 4 or more (below 0 → 0);
+     `endRoll` only when there are **exactly 5**; with 6 or more it is 0.
 5. **What the camera looks at during and after a flight or cut**, when
    "aims" is on: the point **1,400 above the aim point**, from the
    camera's position, every update:

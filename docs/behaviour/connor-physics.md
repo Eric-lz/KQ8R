@@ -662,6 +662,11 @@ Consequences:
      Swamp, probably all with the same logic, and all in wide open
      spaces, so hitting something during a tile jump can't happen. No
      need to build this case.
+     **Corrected 2026-10-30 (Q177):** the tile jumps are not played in
+     the Jump state at all but by the puzzle's own state, which switches
+     gravity and keep-on-ground off for the jump but **leaves step up /
+     down at 325**, and never crashes on a hit (it slides).
+     `tile-puzzle.md` rule 11.
 
 ### Walls (traced)
 

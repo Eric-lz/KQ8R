@@ -70,6 +70,19 @@ Words used here:
        of all worlds: in Daventry only `tombdoor` (starts on a play-once
        `stop`, so it plays it twice); elsewhere 16 objects in Dead City,
        Gnome and Swamp (traps' `up`/`down`, `flower1`, …).
+       **Death's key (`keycycle.kq`, checked 2026-10-30, Q183)** is one
+       of them, and it holds for an object loaded by a script while
+       playing too: `death.cs` loads it when Death's `givekey` ends (the
+       `KQAnimPlayEvent stop` on the next line goes to Death, not the
+       key). Its `stop` (`d_kecycl`, 16 frames, 1 s, play-once) ends;
+       by rule 8.1 the waiting `Stop` starts `stop` again **first**, and
+       only then does `keycycle.cs` get `EndLoop stop` and ask for
+       `gone`, which has to wait (the new `stop` can't be cut short). So
+       **the spin plays twice** (2 s), then `gone` (1.6 s,
+       `dkeygone.aud`). The second `EndLoop stop` asks for `gone` again,
+       so when `gone` ends it restarts, but in the same pass `EndLoop
+       gone` gives the key and deletes the object, before anything is
+       drawn or a second sound starts.
      - **Doors, chests and other starts (traced 2026-10-19, Q127):**
        (a) **doors (`KQDoor`) and chests (`KQChest`) are animated objects
        and also start with `Stop` / `Stop`** (`tombdoor` above is a

@@ -281,9 +281,28 @@ script changes it.
     batch 2)** has no mouth textures: his mouth shapes 0–7 play the
     **movements** `rest`, `f`, `m`, `r`, `w`, `ih`, `ah`, `e` instead
     (all eight are in `Death.anm`, data). Otherwise he is an ordinary
-    character run by `death.cs`. (A movement started for each mouth
-    change; whether a shape equal to the current one restarts it: not
-    traced.)
+    character run by `death.cs`.
+    **Details (traced 2026-10-30, Q179):**
+    - Each lip-sync code **starts its movement at once**, replacing what
+      plays (as the Uglybeast, `characters.md` rule 27): 0 and **16** →
+      `rest` (16 is not `stop` for him), 1 `f`, 2 `m`, 3 `r`, 4 `w`, 5
+      `ih`, 6 `ah`, 7 `e`.
+    - **A code equal to the current shape starts it again** (from its
+      start; there is no "same movement" check). Since the poses are one
+      held frame, that looks the same.
+    - **The poses hold**: all of them, `d_rest` too, have a loop
+      duration of 0 in their models (data), so they never end and never
+      go back to `stop` by themselves (`anim-scripts.md` rule 10a).
+    - **At the end of a line** the "shape back to 0" of `characters.md`
+      rule 25 is the texture mouth, which Death doesn't have: **nothing
+      happens**; the last code's pose stays until a script or the next
+      line's code changes it.
+    - **Codes 8–15 and above 16**: he never gestures. The original
+      passes a movement name it never filled in (a bug): the result is
+      whatever text was left there, which may restart the previous pose
+      or fall back to his list's first movement (`ah`). **Do not
+      reproduce:** do nothing for these codes (keep the pose), and log
+      them.
 
 ### Connor's built-in remarks (traced; text from the data)
 

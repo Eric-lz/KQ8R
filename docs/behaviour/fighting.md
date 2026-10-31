@@ -311,9 +311,12 @@ Words used here:
       skeleton: when its `reactback` ends while **moving**, the gap
       before its next flinch is `reactPause`; while **standing**, the
       fixed 2 s; either way it is then stunned for `stunPause`, its chase
-      timer is set to 5 s, and the ground 400 ahead of it is probed:
-      nothing under that point and it **dies** (that is how it falls off
-      the tower), otherwise it goes back to standing. Lucreto: after its
+      timer is set to 5 s, and the ground **400 behind it** (the way
+      `reactback` staggers it; corrected 2026-10-30, Q175: not ahead) is
+      probed down to 1,000 below its feet: nothing there and it **dies**
+      (that is how it falls off the tower), otherwise it goes back to
+      standing. The same probe runs in every update **while** `reactback`
+      plays (section 7a). Lucreto: after its
       `reactback` it stands for a random `reactPause` − 1 to `reactPause`
       seconds (1 to 2 s) before moving again.
     A **special** flinch replaces it when the character's
@@ -540,7 +543,93 @@ Words used here:
 Dead City `SKELTOWR.KQ`; its flinch is rule 23. Extra keys: `realAlarm`,
 `moveTime`, `timeToRun`, and save-only `bGreetedConnor`, `oldCamPos`,
 `bReactingBack`, `bScreamed`. It has its own standing, moving and dying
-states (**too large for this session**, see `QUESTIONS.md`).
+states (traced 2026-10-30, Q175, below).
+
+**Keys** (traced; `skeltowr.kq` sets only `realAlarm` 5,000,
+`stunPause` 1.5 and `reactPause` 1.2):
+- `stunPause` (default 3 s), `reactPause` (default 2 s): rule 23.
+- `moveTime`: **a time of day, not a length**: the skeleton doesn't
+  start moving after Connor before it. Starts at 0; set to now +
+  `stunPause` after each stagger (rule 23). It is in the file format so
+  saved games keep it; no data file sets it.
+- `timeToRun`: also a time; set to 5 s after the skeleton enters the
+  world, and **never used** for anything else (saved only). Build it
+  as a saved number with no effect.
+- On entering the world its **alarm radius is set to 0**, so it is
+  never alarmed before Cue 201 gives it `realAlarm` (below).
+
+**Standing (its Wait)**, compared with an ordinary character
+(`character-movement.md` rules 23–28):
+- While `reactback` plays (the stagger), every update: `moveTime` is
+  pushed to now + `stunPause`, and if there is no ground within 1,000
+  below the point 400 behind it, it dies (the fall, below).
+- **No target**: if it has been hit, or is "on its way home", it runs
+  after Connor (`run`, Move) with none of the ordinary conditions; if
+  it is not active it becomes active; if active and Connor is closer
+  than its alarm radius it is **alarmed at once** (no sight test, no
+  `goHome` test, no 0–1 s delay); otherwise it fidgets or wanders as
+  usual.
+- **With a target**: after 45 updates out of sight it gives up (no team
+  exception); it turns to him as usual. Farther than its attack
+  distance: it starts moving after him (walk, never the coin's run)
+  only when `moveTime` has passed, its chase radius is above 0, **and
+  there is ground within 1,000 below the point 1,000 ahead of it** (so
+  it won't step off the tower toward Connor on his rope). Within its
+  attack distance: it attacks when its attack time has come **unless
+  Connor is climbing a rope** (Rope state); then it just waits.
+  There is **no leash** (it never gives up for distance or chase
+  timer) and no ranged or flee behaviour.
+
+**Moving (its Move)**:
+- The stagger probe as above.
+- **With a target**: gives up after 45 updates unseen; steers at him;
+  if there is **no ground within 1,000 below the point 1,000 ahead**, it
+  stops (Wait); within its attack distance it attacks if its attack
+  time has come and Connor is not on a rope, and **stops (Wait) either
+  way**: it doesn't follow a walking Connor at reach like ordinary
+  characters (`character-movement.md` rule 25). No leash.
+- **No target**: on its way home, it is alarmed again only when it is
+  within its home radius of home and Connor is within its alarm radius,
+  else it keeps steering home; if it has been hit, it is alarmed (with
+  `run`) when Connor is within its alarm radius, else it steers toward
+  a point near Connor computed oddly (a turn of the line to him; not
+  worth copying: steer at Connor); otherwise it is alarmed within its
+  alarm radius, or follows its wander points and goes to Wait when an
+  idle fidget is due.
+- When `reactback` ends while moving: rule 23 (gap `reactPause`), then
+  Wait if there is ground behind it. Other movements ending: it asks
+  for its walk / run again, as usual. It may leave Move for the same
+  states as an ordinary character.
+
+**Dying (its Die): the fall off the tower.** Its death is a short
+scripted fall, not the ordinary `die`:
+1. Entering: its gravity goes off; Connor is forced into third person,
+   his movement is cut short and he is put in Wait with the controls
+   off; the skeleton says 2000.msg noun 16 verb 12 condition 22 (the
+   scream, sequence 1) and plays **`teeter`** (`skcmrcfl.kqs`).
+2. `teeter` ends: the camera cuts to a spot **2,000 behind it and
+   5,000 below**, looking at the point 0.9 of the way there (a view from
+   below); **Cue 50** is sent to it 2.18 s later; it plays **`die`**.
+   (Cue 50's first time says the scream's sequence 2, section 7a above.)
+3. `die` ends: the camera cuts to a spot 3,000 to its side and 2,000 up
+   from the ground point 2,000 behind it, looking at that ground point;
+   the skeleton is moved (position only) 600 back, high above that
+   point (the height as read: about 5,000 above the ground; not sure);
+   it plays **`die2`** (`skcmdiex.kqs`).
+4. `die2` ends: it is put on the ground 1,400 behind where it was
+   (position only), **drops what it carries** (the chain mail, so the
+   item is in the world from here), and plays **`fallend`**.
+5. `fallend` ends: one switch on the object changes and the near/far
+   lists are worked out again (effect not traced); **Cue 50** is sent
+   to it 3 s later. That second Cue 50 brings the camera back behind
+   Connor with the controls on (above) and then **finishes the death**
+   the ordinary way (experience to Connor, its script's `Die`, removed;
+   rule 32's finish and corpse) and gives the dropped item
+   `chainmal.cs`.
+   (Camera and move offsets are as read and in its own frame, with
+   "behind" = its +Y; not checked in play.)
+- **Do not reproduce:** a hurt line it would say when hit (keys it
+  doesn't have, so never in the data) and the odd steering point above.
 
 - It hears Connor's state changes (`towSklTp.cs` asks for them):
   - the **first time Connor starts climbing a rope**: a greeting scene,
