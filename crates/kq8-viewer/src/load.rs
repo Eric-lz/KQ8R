@@ -1363,10 +1363,11 @@ pub fn prepare_ground_animation(
             // animation frames are stored unturned). Stand-in until Q50;
             // emitters.md rules 2 and 6 read as "the new material's turn".
             let code = ground.orientation.get(own as usize).copied().unwrap_or(0);
-            if a.cycle.iter().any(|&m| ground.orientation.get(m as usize).copied().unwrap_or(0) != code) {
+            if a.cycle.iter().chain(&a.cycle2).any(|&m| ground.orientation.get(m as usize).copied().unwrap_or(0) != code) {
                 kept_turn.push(a.name.clone());
             }
-            for m in std::iter::once(own).chain(a.cycle.iter().copied()) {
+            // The second cycle too (`terAnimSwitch`, D-8a).
+            for m in std::iter::once(own).chain(a.cycle.iter().copied()).chain(a.cycle2.iter().copied()) {
                 needed.insert(m);
                 // Cut into the light map's cells, like the rest of the ground (M1 step 4c).
                 let cells = 1usize << terrain.settings.light_scale;

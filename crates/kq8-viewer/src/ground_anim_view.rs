@@ -36,6 +36,13 @@ const SURFACE_SEE_THROUGH: f32 = 0.35;
 #[derive(Resource)]
 pub struct LoadedGroundAnim(pub Option<GroundAnimAssets>);
 
+/// What scripts asked of the ground, waiting for the next drawn frame:
+/// `terAnimSwitch` (animator name, flag, where it came from; D-8a).
+#[derive(Resource, Default)]
+pub struct GroundAsks {
+    pub switches: Vec<(String, Option<bool>, String)>,
+}
+
 /// A material's (opaque, see-through) look.
 type SquareLook = (Handle<GroundMaterial>, Handle<GroundMaterial>);
 
@@ -180,10 +187,27 @@ impl std::fmt::Display for Gaps {
 
 /// Every drawn frame: every animator's change due by now (Q49). Game time
 /// = the fixed clock's time + the time run since its last update.
-pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, shared: Res<Shared>, fixed: Res<Time<Fixed>>) {
-    let Some(mut sim) = sim else { return };
+pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, mut asks: ResMut<GroundAsks>, shared: Res<Shared>, fixed: Res<Time<Fixed>>) {
+    let Some(mut sim) = sim else {
+        for (name, _, at) in asks.switches.drain(..) {
+            shared.log.lock().unwrap().summary(format!("{at}: terAnimSwitch {name}: no ground animators in this world; nothing"));
+        }
+        return;
+    };
     let sim = &mut *sim;
     let now = fixed.elapsed_secs_f64() + fixed.overstep().as_secs_f64();
+    // terAnimSwitch (emitters.md, D-8a): before this frame's changes.
+    for (name, flag, at) in asks.switches.drain(..) {
+        let line = match sim.animators.iter_mut().find(|a| a.name.eq_ignore_ascii_case(&name)) {
+            Some(a) => {
+                let done = a.switch(flag);
+                format!("game time {now:.4} s: {at}: terAnimSwitch [{}]{}: {done}", a.name, flag.map_or(String::new(), |f| format!(" flag {f}")))
+            }
+            None => format!("game time {now:.4} s: {at}: terAnimSwitch {name}: no such ground animator; nothing"),
+        };
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
     for (k, a) in sim.animators.iter_mut().enumerate() {
         let Some(c) = a.update(now, &mut sim.materials) else { continue };
         let gap = sim.last_change[k].map(|last| c.time - last);

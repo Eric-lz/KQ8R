@@ -141,6 +141,10 @@ pub enum Request {
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
     SetHaze { haze: f32, at: String },
+    /// `terAnimSwitch <animator> [flag]` (`emitters.md` "`terAnimSwitch`",
+    /// D-8a): the named ground animator swaps its cycles; `flag` = the
+    /// second word read as a number, not 0 (ours, not the original's).
+    TerAnimSwitch { name: String, flag: Option<bool>, at: String },
     /// `tileExit 0|1` (`tile-puzzle.md` rule 21): the tile state's exit
     /// switch; with 1 Connor goes to Wait at once. Nothing outside it.
     TileExit { can_exit: bool, at: String },
@@ -3644,6 +3648,17 @@ impl ScriptHost for WorldState {
                 }
                 Some("0".into())
             }
+            "terAnimSwitch" => {
+                match words {
+                    [_, name] | [_, name, _] => {
+                        let flag = words.get(2).map(|w| number_value(w) != 0.0);
+                        self.note(format!("{at}: terAnimSwitch {name}{}: handed to the viewer (emitters.md \"terAnimSwitch\")", flag.map_or(String::new(), |f| format!(" repeat {f}"))));
+                        self.requests.push(Request::TerAnimSwitch { name: name.to_string(), flag, at: at.to_string() });
+                    }
+                    _ => self.note(format!("{at}: usage: terAnimSwitch <animator> [repeatFlag]; nothing")),
+                }
+                Some("0".into())
+            }
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
@@ -6218,6 +6233,26 @@ endif
         ScriptHost::event_done(&mut a.world);
         assert_eq!(a.test_command("exist table", "t").as_deref(), Some("1"));
         assert!(a.world.log.iter().any(|l| l.contains("exist TABLE: deleted in this same event: still there: 0")), "{:?}", a.world.log);
+    }
+
+    #[test]
+    fn ter_anim_switch_hands_the_animator_and_flag_over() {
+        // emitters.md "terAnimSwitch": Dead City scale.cs, Daventry milltree.cs.
+        let mut a = with_trap("");
+        assert_eq!(a.test_command("terAnimSwitch Blood1", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("terAnimSwitch FullStream 0", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("terAnimSwitch", "t").as_deref(), Some("0"));
+        let got: Vec<(String, Option<bool>)> = a
+            .world
+            .requests
+            .iter()
+            .filter_map(|r| match r {
+                Request::TerAnimSwitch { name, flag, .. } => Some((name.clone(), *flag)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(got, vec![("Blood1".to_string(), None), ("FullStream".to_string(), Some(false))]);
+        assert!(a.world.log.iter().any(|l| l.contains("usage: terAnimSwitch")), "{:?}", a.world.log);
     }
 
     #[test]

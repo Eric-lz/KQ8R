@@ -1043,7 +1043,7 @@ pub fn trap_step(
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
-    (buttons, right_at, mut set_haze): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>),
+    (buttons, right_at, mut set_haze, mut ground_asks): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>, ResMut<crate::ground_anim_view::GroundAsks>),
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -1339,6 +1339,12 @@ pub fn trap_step(
                 // object-lighting.md rule 33a (Q161): applied before the next frame.
                 set_haze.0.push((haze, at.clone()));
                 format!("{at}: applied: setHaze {haze} queued for the haze")
+            }
+            Request::TerAnimSwitch { name, flag, at } => {
+                // emitters.md "terAnimSwitch" (D-8a): the ground animators
+                // run on the drawn frames; applied there before the next.
+                ground_asks.switches.push((name.clone(), flag, at.clone()));
+                format!("{at}: applied: terAnimSwitch {name} queued for the ground animators")
             }
             Request::ConnorTile { at } => {
                 // tile-puzzle.md rule 7 (G-1): a drawn weapon is put away

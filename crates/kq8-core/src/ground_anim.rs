@@ -10,9 +10,12 @@
 //! happened** (not after the previous due time), so each gap is `delay`
 //! plus however late that check came.
 //!
+//! `terAnimSwitch` (batch 2 D-8a, `emitters.md` "`terAnimSwitch`",
+//! traced): [`GroundAnimator::switch`].
+//!
 //! Not done: the envInfo flags of a changed square (open question 3; no
 //! difference in Daventry), `frameCount` (saved games; no file sets it),
-//! starting later and `terAnimSwitch` (script commands no script uses).
+//! starting later (no script does).
 
 use kq8_data::effects::AnimatorSettings;
 use kq8_data::terrain::Grid;
@@ -58,6 +61,9 @@ pub struct GroundAnimator {
     pub squares: Vec<(usize, usize)>,
     /// The materials shown one after another.
     pub cycle: Vec<u8>,
+    /// The second cycle (`materialIndexII…`), swapped with `cycle` by
+    /// `terAnimSwitch`.
+    pub cycle2: Vec<u8>,
     pub delay: f64,
     pub repeat: bool,
     /// Counting down to changes.
@@ -86,17 +92,20 @@ impl GroundAnimator {
     /// not material numbers (0–255) are left out, with a note.
     pub fn new(name: &str, settings: &AnimatorSettings, squares: Vec<(usize, usize)>, now: f64) -> (Self, Vec<String>) {
         let mut notes = Vec::new();
-        let cycle: Vec<u8> = settings
-            .cycle
-            .iter()
-            .filter_map(|&m| {
-                let ok = u8::try_from(m).ok();
-                if ok.is_none() {
-                    notes.push(format!("cycle value {m} is not a material number; left out"));
-                }
-                ok
-            })
-            .collect();
+        let mut materials = |values: &[i64], which: &str| -> Vec<u8> {
+            values
+                .iter()
+                .filter_map(|&m| {
+                    let ok = u8::try_from(m).ok();
+                    if ok.is_none() {
+                        notes.push(format!("{which} value {m} is not a material number; left out"));
+                    }
+                    ok
+                })
+                .collect()
+        };
+        let cycle = materials(&settings.cycle, "cycle");
+        let cycle2 = materials(&settings.cycle2, "second cycle");
         let why_not = if !settings.start_now {
             Some("startNow is not set: not started (nothing in the scripts starts it)")
         } else if cycle.is_empty() {
@@ -114,6 +123,7 @@ impl GroundAnimator {
             name: name.to_string(),
             squares,
             cycle,
+            cycle2,
             delay: settings.delay,
             repeat: settings.repeat,
             running: why_not.is_none(),
@@ -147,6 +157,36 @@ impl GroundAnimator {
         }
         Some(change)
     }
+
+    /// `terAnimSwitch <name> [flag]` (`emitters.md` "`terAnimSwitch`"):
+    /// swaps the two cycles if both have materials; a next step past the
+    /// new cycle's end goes to 0. With a flag: step 0 and repeat = flag
+    /// (the original reads the name as the flag, i.e. always 0; "Do not
+    /// reproduce"). Never starts or stops the animator. Returns what was
+    /// done, for the log.
+    pub fn switch(&mut self, flag: Option<bool>) -> String {
+        if self.cycle.is_empty() || self.cycle2.is_empty() {
+            return format!("not switched: cycle {:?}, second cycle {:?} (both must have materials)", self.cycle, self.cycle2);
+        }
+        std::mem::swap(&mut self.cycle, &mut self.cycle2);
+        // Our "next entry" is read as the note's "current step" (Q187).
+        if self.next_entry >= self.cycle.len() {
+            self.next_entry = 0;
+        }
+        if let Some(repeat) = flag {
+            self.next_entry = 0;
+            self.repeat = repeat;
+        }
+        format!(
+            "switched to cycle {:?} (the other now {:?}); next entry {}, repeat {}, running {}{}",
+            self.cycle,
+            self.cycle2,
+            self.next_entry,
+            self.repeat,
+            self.running,
+            if self.running { format!(", next change due at {:.3} s", self.due) } else { String::new() }
+        )
+    }
 }
 
 #[cfg(test)]
@@ -170,7 +210,7 @@ mod tests {
             exclude: vec![(1, 0)],
             grid_blocks: None,
             cycle: vec![12, 30, 31, 30],
-            cycle2: Vec::new(),
+            cycle2: vec![161],
             delay: 0.3,
             repeat: true,
             start_now: true,
@@ -238,5 +278,42 @@ mod tests {
         assert_eq!(notes.len(), 1);
         assert!(a.update(100.0, &mut g).is_none());
         assert_eq!(g.get(0, 0), Some(10));
+    }
+
+    #[test]
+    fn ter_anim_switch_swaps_the_cycles_and_keeps_the_clock() {
+        let mut g = grid();
+        let (sq, _) = choose_squares(&settings(), &g);
+        let (mut a, _) = GroundAnimator::new("a", &settings(), sq, 0.0);
+        a.update(0.31, &mut g);
+        a.update(0.62, &mut g);
+        // Next entry 2 is past the one-material second cycle: back to 0.
+        let line = a.switch(None);
+        assert!(line.contains("switched"), "{line}");
+        assert_eq!((a.cycle.clone(), a.cycle2.clone(), a.next_entry), (vec![161], vec![12, 30, 31, 30], 0));
+        // The clock is untouched: nothing before 0.92, then 161 on every change.
+        assert!(a.update(0.9, &mut g).is_none());
+        assert_eq!(a.update(0.93, &mut g).map(|c| c.material), Some(161));
+        assert_eq!(a.update(1.3, &mut g).map(|c| c.material), Some(161));
+        assert_eq!(g.get(2, 0), Some(161));
+        // Switching back keeps a next entry that fits.
+        a.switch(None);
+        assert_eq!((a.cycle.len(), a.next_entry, a.repeat), (4, 0, true));
+    }
+
+    #[test]
+    fn ter_anim_switch_with_a_flag_restarts_and_sets_repeat_but_not_running() {
+        let mut s = settings();
+        s.start_now = false;
+        let (mut a, _) = GroundAnimator::new("a", &s, vec![(0, 0)], 0.0);
+        a.next_entry = 3;
+        a.cycle2 = vec![5, 6, 7, 8];
+        a.switch(Some(false));
+        assert_eq!((a.next_entry, a.repeat, a.running), (0, false, false));
+        // An empty second cycle: nothing changes.
+        let (mut b, _) = GroundAnimator::new("b", &settings(), vec![(0, 0)], 0.0);
+        b.cycle2.clear();
+        assert!(b.switch(Some(false)).starts_with("not switched"));
+        assert_eq!((b.cycle.len(), b.repeat), (4, true));
     }
 }

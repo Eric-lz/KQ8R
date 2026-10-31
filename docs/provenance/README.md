@@ -3907,3 +3907,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | A movement started at once starts at its phase 0 (its `loop=` start) | `anim-scripts.md` rules 4–5; **ours**: the drawing takes that phase in the same update | `connor.log` "drawn from phase 0.0000" at 2819, 2864 |
+
+## Batch 2 D-8a 2026-10-31: `terAnimSwitch` — core `ground_anim.rs` (`switch`), `active.rs`; viewer `ground_anim_view.rs` (`GroundAsks`), `door_view.rs`, `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Swaps the animator's cycle and second cycle (`materialIndexII…`) only when both have materials | `emitters.md` "`terAnimSwitch`" | unit tests `ter_anim_switch_*`; `ground_anim.log` "switched to cycle [161]" |
+| A step past the new cycle's end goes to 0; one word does not start or stop it; the change clock is kept | `emitters.md` "`terAnimSwitch`"; **ours**: "current step" read as our next entry (Q187) | `ground_anim.log`: Blood1 161 at 2.2075 s, 0.3055 s after its last change |
+| With a second word: step 0, repeat = that word read as a number (not the original's misread) | `emitters.md` "`terAnimSwitch`", "Do not reproduce" | unit test |
+| The second cycle's textures are loaded for the animated squares | **ours** (needed to draw it) | viewer.log: no MISSING |

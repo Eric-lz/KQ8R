@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-8a: `terAnimSwitch` (the blood rivers' animation switch)
+
+**Changed:** Core `ground_anim.rs`: an animator keeps its second cycle and `switch` swaps them (`emitters.md` "`terAnimSwitch`"); `active.rs`: the command becomes the request `TerAnimSwitch`. Viewer: `ground_anim_view.rs` (`GroundAsks`, applied before the frame's changes), `door_view.rs`, `load.rs` (second-cycle textures loaded), `main.rs`. 3 unit tests. DESIGN step 8 split into D-8a / D-8b. Provenance. New low-priority Q187.
+**Why:** Batch 2 D-8: after the scales, `scale.cs` Cue 1 switches `Blood1`–`Blood5` to the drained river (material 161).
+**Tested how:** `cargo test --workspace` (all pass, 560 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 900 --command "terAnimSwitch Blood1",30 --command "terAnimSwitch Blood5",30 --command "terAnimSwitch NoSuch",30`; `ground_anim.log`. (Sending `scale` its Cue 1 does nothing yet: the scales object is D-10.)
+**Result:** "terAnimSwitch [Blood1]: switched to cycle [161] … next change due at 2.202 s"; from 2.2075 s Blood1 (46 squares) and Blood5 (24) show 161 every 0.3 s, Blood2 keeps its cycle; "NoSuch: no such ground animator". No missing texture.
+**Still broken / not tested:** **Not looked at by eye.** Q187 (which step counts as "current"; no difference here).
+**Next:** D-8b `matchHeights`.
+
 ## 2026-10-31 Rock throw onto pressure plates: needs a study session (Q186)
 
 **Changed:** `docs/behaviour/QUESTIONS.md` (new Q186), STATUS open questions. No code.

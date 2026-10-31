@@ -3405,7 +3405,32 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    playing: its own step later). Also Connor's own flinch percent 0.5.
    Logs and a unit test.
 8. **D-8: `matchHeights` and `terAnimSwitch`** (`terrain.md`,
-   `emitters.md`): the blood drains after the scales.
+   `emitters.md`): the blood drains after the scales. Two commits
+   (planned 2026-10-31):
+   - **D-8a: `terAnimSwitch <animator> [flag]`** (`emitters.md`
+     "`terAnimSwitch`"). Core: a ground animator keeps its second cycle
+     (`materialIndexII…`) and swaps the two when both are non-empty; a
+     next step past the new cycle's end goes to 0; with a flag, step 0
+     and repeat = the flag (the original's misread flag is not copied);
+     it never starts or stops the animator. The script command becomes a
+     request; the viewer swaps the named animator and preloads the
+     second cycle's textures for its squares. Check: Dead City
+     `ground_anim.log`, `Blood1`–`5` show material 161 from their next
+     change after `scale.cs` Cue 1.
+   - **D-8b: `matchHeights minX minY maxX maxY frames`** (`terrain.md`
+     "`matchHeights`"). Core: a drain over the grid corners of the
+     rectangle (column = x ÷ square size, whole numbers, max not
+     included), spread evenly over `frames` updates, ending exactly on
+     the floor grid; at most 32 at once. The viewer steps the drains on
+     the 15-per-second update, writes the live terrain (`GroundLookup`,
+     so water depth and the camera see it) and lowers the drawn ground
+     and animated squares there in place. Check: `ground_drain.log`, the
+     surface height at a point in each rectangle before and one update
+     after the call equals the floor.
+     Not built: pausing the animated height cycle (`heightBMP2`–`4`, not
+     drawn by us and not used in Dead City); remembering drains for
+     saved games (no saving yet). Steps of more than one update round
+     to whole pixel values (only `frames` 1 is used in the data).
 9. **D-9: the `Lookup` call and spirit traps** (`traps.md` 15a,
    "Spirit traps").
 10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the
