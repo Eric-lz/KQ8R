@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-9b: spirit traps (Dead City)
+
+**Changed:** Core `trap.rs` (`spirit_damage`, `spirit_here`), `active.rs` (Connor entering, the cues), `fight.rs` (`spirit_drain`); viewer `load.rs` loads `KQSpiriTrap` as a trap with its `damage`. 1 unit test. Provenance. New Q188 (whole numbers of the drain).
+**Why:** Batch 2 D-9 (`traps.md` "Spirit traps"): the four zones the spirits fly through drain Connor while a spirit passes.
+**The user's choice (2026-10-31):** the original ignores Cue 2 and the data never sends Cue 0, so after one pass a zone would drain him on every entry for good. We count **Cue 2 as "the spirit has left"**, so a zone only hurts while a spirit is in it. Logged on every Cue 2.
+**Tested how:** `cargo test --workspace` (all pass, 566 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 1500 --at 62000,140800,3.1416 --hold 0,1,0,20,24 --command "sendEvent 0 spirits2 KQAnimPlayEvent birth",30 --command "sendEvent 0 spiritst KQAnimPlayEvent birth",30`; `traps.log`, `fight.log`.
+**Result:** Update 1: "Connor came in, no spirit passing: nothing". Update 45, Cue 1 with him inside: "drains 0.2 x maximum 80 = 16 … health 80 -> 64", then the hit 64 → 63 and `react`. Again at 58 (→ 46) and 67 (→ 29): standing in a zone, a spirit passes about every 0.9 s. Walking north from (62000, 139700) he stops at y 140,072 (the altar's edge), short of the zone.
+**Still broken / not tested:** **Not played by hand.** Stand-in until Q188: the shares are rounded, and the 1-point hit is an ordinary hit, so it costs 1 more and can kill him right after the 1 % floor.
+**Next:** D-10 `ConnorCollision`, then the scales.
+
 ## 2026-10-31 D-9a: the trap `Lookup` call
 
 **Changed:** Core `trap.rs` (`lookup_call`), `active.rs`: a trap posts itself an internal lookup notice when it enters the world (after its `Init` at the start, or at its `loadKQ`); on arrival a trap with `lookupCall=1` and a script runs `Lookup`. Viewer `load.rs` reads `lookupCall`. 1 unit test. DESIGN step 9 split into D-9a / D-9b. Provenance.

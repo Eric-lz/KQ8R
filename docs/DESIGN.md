@@ -3446,8 +3446,10 @@ each step logs its numbers to `kq8-artifacts/logs/`.
      `damage`; Cue 1 = a spirit is there, Cue 0 = gone, Cue 2 ignored;
      Connor entering first while a spirit is there, or Cue 1 while he
      is inside: health − damage × maximum, not below 1 % of maximum,
-     and a 1-point flinch hit. Waits for the user's choice on the
-     "possible original bug" (the data never sends Cue 0).
+     and a 1-point flinch hit. The user's choice on the "possible
+     original bug" (the data never sends Cue 0): Cue 2 counts as left.
+   **Done** 2026-10-31, D-9a and D-9b (logs and unit tests; the drain's
+   whole numbers are a stand-in until Q188).
 10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the
     `Scales` state** (`tile-puzzle.md` rules 23–27).
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),

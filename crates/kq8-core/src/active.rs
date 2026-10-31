@@ -4314,8 +4314,26 @@ impl Active {
             calls.push(format!("{name} {}", args.join(" ")));
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             self.call_trap(i, &refs);
+            // traps.md "Spirit traps" (D-9b): Connor coming in first while
+            // a spirit is passing.
+            let t = &self.world.traps[i];
+            if let (Some(damage), Some("On")) = (t.settings.spirit_damage, args.first().map(String::as_str)) {
+                if v.name.eq_ignore_ascii_case(CONNOR) {
+                    if t.spirit_here {
+                        self.world.spirit_drain(&name, damage, "Connor came in while a spirit is passing");
+                    } else {
+                        self.trap_note(format!("spirit trap {name}: Connor came in, no spirit passing: nothing"));
+                    }
+                }
+            }
         }
         calls
+    }
+
+    fn trap_note(&mut self, line: String) {
+        let was = std::mem::replace(&mut self.world.in_trap, true);
+        self.world.note(line);
+        self.world.in_trap = was;
     }
 
     /// Runs the script of the object called `name` (door, chest, scripted
@@ -5518,6 +5536,29 @@ impl Active {
                     self.world.note(format!("trap {}: lookup notice{from}: {}; nothing", e.target, if t.lookup_call { "no script" } else { "no lookupCall" }));
                 }
             } else if e.kind == "KQCueEvent" {
+                // traps.md "Spirit traps" (D-9b): Cue 1 a spirit is passing,
+                // Cue 0 it has left; Cue 2 also counts as left (the user's
+                // choice 2026-10-31: the data never sends 0).
+                if let Some(damage) = self.world.traps[i].settings.spirit_damage {
+                    let cue = e.data.first().map(String::as_str).unwrap_or("");
+                    let t = &mut self.world.traps[i];
+                    let connor_in = t.inside.iter().any(|n| n.eq_ignore_ascii_case(CONNOR));
+                    match cue {
+                        "1" => {
+                            t.spirit_here = true;
+                            self.world.note(format!("spirit trap {}: Cue 1: a spirit is passing; Connor inside: {connor_in}", e.target));
+                            if connor_in {
+                                self.world.spirit_drain(&e.target, damage, "a spirit came while Connor is inside");
+                            }
+                        }
+                        "0" | "2" => {
+                            t.spirit_here = false;
+                            let ours = if cue == "2" { " (Cue 2 counted as left: the user's choice, not the original)" } else { "" };
+                            self.world.note(format!("spirit trap {}: Cue {cue}: the spirit has left{ours}", e.target));
+                        }
+                        _ => self.world.note(format!("spirit trap {}: Cue {cue}: not a spirit cue; nothing", e.target)),
+                    }
+                }
                 // traps.md rule 14, as doors (rule 23).
                 let args = cue_args(&e.data);
                 self.world.note(format!("KQCueEvent {} to trap {}{from}", e.data.join(" "), e.target));
@@ -6038,6 +6079,7 @@ KQObject::setScript nobody new.cs
             trap_type: 0,
             inner_percent: None,
             lookup_call: false,
+            spirit_damage: None,
         })]);
         a.start();
         a
@@ -6144,7 +6186,7 @@ endif
         // `henchtp.kq` when Connor takes the axe; its box counts from then.
         use crate::trap::TrapSettings;
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), TRAP.as_bytes().to_vec())]);
-        let settings = TrapSettings { name: "Henchtp".into(), position: [0.0; 3], min: [-500.0, -500.0, 0.0], max: [500.0, 500.0, 500.0], script: Some("trap.cs".into()), mask: 4, trap_type: 0, inner_percent: None, lookup_call: false };
+        let settings = TrapSettings { name: "Henchtp".into(), position: [0.0; 3], min: [-500.0, -500.0, 0.0], max: [500.0, 500.0, 500.0], script: Some("trap.cs".into()), mask: 4, trap_type: 0, inner_percent: None, lookup_call: false, spirit_damage: None };
         a.add_traps([Trap { gone: true, ..Trap::new(settings) }]);
         a.set_dormant([("henchtp.kq".to_string(), "Henchtp".to_string(), Some("trap.cs".to_string()))]);
         a.start();
@@ -6156,6 +6198,49 @@ endif
         assert!(a.take_log().join("
 ").contains("its trap box is in place now"));
         assert_eq!(connor_at(&mut a, 0.0), vec!["Henchtp On Connor".to_string()]);
+    }
+
+    #[test]
+    fn a_spirit_trap_drains_connor_only_while_a_spirit_passes() {
+        // traps.md "Spirit traps" (D-9b): Dead City spirtp1-4, damage .2;
+        // Cue 2 counts as "left" (the user's choice).
+        use crate::trap::TrapSettings;
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], std::iter::empty::<(String, Vec<u8>)>());
+        a.add_traps([Trap::new(TrapSettings {
+            name: "spirtp1".into(),
+            position: [0.0; 3],
+            min: [-250.0, -400.0, 0.0],
+            max: [250.0, 400.0, 3000.0],
+            script: None,
+            mask: 4,
+            trap_type: 0,
+            inner_percent: None,
+            lookup_call: false,
+            spirit_damage: Some(0.2),
+        })]);
+        a.start();
+        // Level 5 (maximum 50); protection 100, so the 1-point hit costs nothing (fighting.md rule 16).
+        a.set_connor_stats(ConnorStats { stats: Stats([50, 10, 0, 100, 0]), level: 5 });
+        let health = |a: &Active| a.world.connor_stats.unwrap().stats.0[0];
+        let cue = |a: &mut Active, n: &str| {
+            a.test_command(&format!("sendEvent 0 spirtp1 KQCueEvent {n} 0"), "t");
+            a.update();
+        };
+        connor_at(&mut a, 0.0);
+        assert_eq!(health(&a), 50, "no spirit: nothing");
+        cue(&mut a, "1");
+        assert_eq!(health(&a), 40, "a spirit comes while he is inside: 20 % of 50");
+        cue(&mut a, "2");
+        connor_at(&mut a, 2000.0);
+        connor_at(&mut a, 0.0);
+        assert_eq!(health(&a), 40, "Cue 2: the spirit has left");
+        connor_at(&mut a, 2000.0);
+        cue(&mut a, "1");
+        a.set_connor_stats(ConnorStats { stats: Stats([3, 10, 0, 100, 0]), level: 5 });
+        connor_at(&mut a, 0.0);
+        assert_eq!(health(&a), 1, "entering while a spirit passes; not below 1 % of 50 (rounded: stand-in, Q188)");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): drains 0.2 x maximum 50 = 10, not below 1 % = 1: health 3 -> 1"), "{log}");
     }
 
     #[test]
@@ -6173,6 +6258,7 @@ endif
             trap_type: 0,
             inner_percent: None,
             lookup_call,
+            spirit_damage: None,
         };
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), script.as_bytes().to_vec())]);
         a.add_traps([Trap::new(settings("trptrp12", true)), Trap::new(settings("plain", false))]);

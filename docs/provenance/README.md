@@ -3935,3 +3935,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A trap entering the world (start, after its `Init`; or `loadKQ`) posts itself a lookup notice through the event queue; on arrival `lookupCall=1` with a script runs `<trap> Lookup` | `traps.md` rule 15a | unit test `a_trap_with_lookup_call_gets_lookup_after_init_through_the_queue`; `traps.log` `trptrp12`–`15` Lookup at update 0, Cue 1 at update 2 |
 | Delay 0 (handled with the first update's events); a trap being loaded gets it when it is handed over (held as any event) | **ours**: the note says "after the current load or script step (the exact moment: not sure)" | — |
 | Not done: the same notice after a saved game is restored | `traps.md` rule 15a (no saving yet) | — |
+
+## Batch 2 D-9b 2026-10-31: spirit traps — core `trap.rs` (`spirit_damage`, `spirit_here`), `active.rs`, `fight.rs` (`spirit_drain`); viewer `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQSpiriTrap` is a trap with a box and a `damage` share | `traps.md` "Spirit traps" | `viewer.log`: `spirtp1`–`4` "spirit damage Some(0.2)" |
+| Cue 1 = a spirit is passing, Cue 0 = it has left | `traps.md` "Spirit traps" | `traps.log` |
+| **Cue 2 also = it has left** | **the user's choice 2026-10-31** (the note: Cue 2 is ignored, a possible original bug; the data never sends Cue 0) | unit test `a_spirit_trap_drains_connor_only_while_a_spirit_passes`; `traps.log` "Cue 2 counted as left" |
+| Connor entering first while a spirit passes, or Cue 1 while he is inside: health − damage × maximum, not below 1 % of maximum, then a 1-point hit that makes him flinch | `traps.md` "Spirit traps" | `fight.log`: 80 → 64, then the hit 64 → 63, `react` |
+| Shares rounded to whole health; the hit is the ordinary one (rule 16, so it costs at least 1 and can kill); nothing while dying, on the rope or in god mode | **ours, stand-in** (Q188) | unit test |

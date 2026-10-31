@@ -513,6 +513,44 @@ impl crate::active::WorldState {
         self.hit_connor(&name, d, kind);
     }
 
+    /// A spirit trap drains Connor (traps.md "Spirit traps", D-9b): he
+    /// loses `damage` × his maximum health, never below 1 % of it, then
+    /// takes a 1-point hit that makes him flinch. In whole numbers by
+    /// **our stand-in** (Q188): both shares rounded, the hit the ordinary
+    /// one of rule 16; nothing while dying, on the rope or in god mode.
+    pub(crate) fn spirit_drain(&mut self, trap: &str, damage: f32, why: &str) {
+        let skip = if self.god_mode {
+            Some("god mode is on (test switch, ours)")
+        } else if self.connor_dying {
+            Some("he is dying (ours, Q188 c)")
+        } else if self.connor_roping {
+            Some("he is on the rope (ours, Q188 c)")
+        } else {
+            None
+        };
+        if let Some(skip) = skip {
+            self.fight_note("Connor", format!("spirit trap {trap} ({why}): nothing, {skip}"));
+            return;
+        }
+        let Some(mut c) = self.connor_stats else {
+            self.fight_note("Connor", format!("spirit trap {trap} ({why}): his stats are unknown (no Connor.kq); nothing"));
+            return;
+        };
+        let max = c.max_health();
+        let loss = (damage as f64 * max as f64).round() as i64;
+        let floor = (0.01 * max as f64).round() as i64;
+        let before = c.stats.0[0];
+        c.stats.0[0] = (before - loss).max(floor);
+        let after = c.stats.0[0];
+        self.connor_stats = Some(c);
+        self.connor_stats_events += 1;
+        self.fight_note(
+            "Connor",
+            format!("spirit trap {trap} ({why}): drains {damage} x maximum {max} = {loss}, not below 1 % = {floor}: health {before} -> {after}; then a 1-point hit (traps.md \"Spirit traps\"; whole numbers: stand-in, Q188)"),
+        );
+        self.hit_connor(trap, 1, HitKind::Normal);
+    }
+
     /// Rules 16–18, 29: a hit of damage `d` on Connor from `from`.
     pub(crate) fn hit_connor(&mut self, from: &str, d: i64, kind: HitKind) {
         if self.god_mode {

@@ -61,6 +61,9 @@ pub struct TrapSettings {
     /// `lookupCall=1`: the script gets `Lookup` after the trap enters the
     /// world (traps.md rule 15a).
     pub lookup_call: bool,
+    /// A spirit trap (`KQSpiriTrap`, traps.md "Spirit traps"): its
+    /// `damage`, a share of Connor's maximum health.
+    pub spirit_damage: Option<f32>,
 }
 
 /// A trap in the world.
@@ -73,6 +76,9 @@ pub struct Trap {
     pub shrunk: bool,
     /// A one-shot trap that has fired: it no longer exists.
     pub gone: bool,
+    /// A spirit trap: a spirit is passing now (Cue 1; cleared by Cue 0,
+    /// and by Cue 2, the user's choice: traps.md "Spirit traps").
+    pub spirit_here: bool,
 }
 
 /// An object that has just moved, as a trap sees it.
@@ -108,7 +114,7 @@ impl Trap {
     /// The trap as it enters the world: sticky ones start shrunk (rule 10).
     pub fn new(settings: TrapSettings) -> Self {
         let shrunk = settings.trap_type & STICKY != 0 && settings.inner_percent.is_some();
-        Trap { settings, inside: Vec::new(), shrunk, gone: false }
+        Trap { settings, inside: Vec::new(), shrunk, gone: false, spirit_here: false }
     }
 
     /// The box in use now, world space.
@@ -238,6 +244,7 @@ mod tests {
             trap_type,
             inner_percent: inner,
             lookup_call: false,
+            spirit_damage: None,
         })
     }
 

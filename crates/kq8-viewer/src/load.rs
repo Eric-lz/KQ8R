@@ -3186,7 +3186,9 @@ impl Placer<'_> {
         // A trap (M3 step 3d-2, traps.md rules 1 and 2): no model, its
         // position as written (keepOnGround ignored), a z of -1 on the
         // floor grid; it stays an invisible-object marker.
-        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap")) {
+        // Spirit traps are traps with a `damage` (traps.md "Spirit traps").
+        let is_trap = p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap") || c.eq_ignore_ascii_case("KQSpiriTrap"));
+        if !unused && is_trap {
             self.place_trap(&label, s, p);
             return;
         }
@@ -3230,7 +3232,7 @@ impl Placer<'_> {
         // A trap a script loads while playing (`ax.cs`'s `henchtp.kq`): its
         // box built as at the start (`objects.md` rule 6), switched off
         // until the `loadKQ` (traps.md rules 1, 2).
-        if dormant && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQTrap")) {
+        if dormant && is_trap {
             self.dormant_traps.push(p.name.to_ascii_lowercase());
             self.place_trap(&label, s, p);
             return;
@@ -3974,10 +3976,11 @@ impl Placer<'_> {
             trap_type,
             inner_percent: num("innerPercent"),
             lookup_call: num("lookupCall").is_some_and(|v| v != 0.0),
+            spirit_damage: p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQSpiriTrap")).then(|| num("damage").unwrap_or(0.0)),
         };
         self.log.detail(format!(
-            "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, lookupCall {}, script {:?}",
-            p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.lookup_call, settings.script
+            "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, lookupCall {}, spirit damage {:?}, script {:?}",
+            p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.lookup_call, settings.spirit_damage, settings.script
         ));
         self.traps.push(settings);
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
