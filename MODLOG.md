@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 H-3: monsters put back home again and again: asked (no code)
+
+**Changed:** QUESTIONS Q185.
+**Why:** The user's check: a monster that runs off reappears at its home point, runs off again, forever; the original doesn't (the user's guess, not sure: it stops where it is and wakes when Connor comes back). Ours follows `character-movement.md` rule 21 as written (put back home when it goes off and Connor is more than twice its alarm radius away), so the notes have to say what the original does differently.
+**Tested how:** Not tested (no code). Which monster the user saw is not known yet.
+**Result:** Q185 open for session A.
+**Still broken / not tested:** The loop itself, until Q185 is answered.
+**Next:** Session A for Q184 and Q185; B applies the answers to Q175–Q183.
+
 ## 2026-10-30 H-1: Connor wears the armour he picked up
 
 **Changed:** Viewer `load.rs`: every `ConnerSkinList` picture this world has is loaded at the start (`PotionLooks::armour`; 36 in Daventry). `potion_view.rs` (`look_step`): his body skin (`con0.bmp`) is drawn as the skin list's entry for the bits of the armour applied to him; a missing combination takes the entry with most of the bits; Strength's `coniron.bmp` wins over any armour, also over an armour picture of the list a model carries itself. QUESTIONS Q184, provenance.
