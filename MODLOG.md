@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 K: `KQMonster::add` tried and undone (they are respawns)
+
+**Changed:** DESIGN (K: the dead end and what it needs). No code (the try was undone).
+**Why:** Next in the agreed order. `characters.md` rules 3–4 describe the command fully.
+**Tested how:** Built and ran: `kq8-viewer --world DeadCity --sound off --no-ai --frames 600 --command "exist rat1",30 --command "KQMonster::add rat1 rat @ … @",32 …`; `doors.log`, `viewer.log`. Then read `ratkarma.cs` and `monsters.kq`.
+**Result:** The try (one hidden copy per name, prepared at the start like a `loadKQ` object) brought `rat1` in at update 32 (drawn, fighting values, can speak). **But** every use is a respawn ("if `rat1` no longer exists, add it"), and the world's monster list already places `rat1`–`rat8` and `spiritW` at the start; the try took those names off the known list, so the real `rat1` stopped counting as there (`exist rat1` → "no such object" at update 30), and it allows only one respawn. Undone.
+**Still broken / not tested:** `KQMonster::add` not built. It needs characters made while playing from a per-type template (DESIGN K), a bigger addition than our copies of still and animated objects.
+**Next:** The user's choice: build characters made while playing (K), or the tower skeleton first.
+
 ## 2026-10-31 River controls and the weeper's bolt: questions before building (Q193, Q194)
 
 **Changed:** QUESTIONS (new Q193, Q194), STATUS. No code.

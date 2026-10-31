@@ -3494,6 +3494,26 @@ each step logs its numbers to `kq8-artifacts/logs/`.
 - **Asked (Q191):** the River of Death's liquid damage (only the trap
   boxes kill now).
 
+**K: `KQMonster::add` while playing (2026-10-31; first try undone,
+waiting for the user).** All 16 uses are in Dead City's scripts
+(`ratkarma`, `skarma`, `snkarma`, `weeper`, `weeperup`) and all are
+**respawns**: "if `rat1` no longer exists, `KQMonster::add rat1 …`".
+The same names (`rat1`–`rat8`, `spiritW`, …) are already placed by the
+world's monster list at the start, and a script can run again after each
+kill.
+- **Dead end (tried, undone):** preparing one hidden copy per name at the
+  start (as a `loadKQ` object) and taking the name off the known list.
+  It hid the real `rat1` of the monster list (`exist rat1` said no at the
+  start) and allows only one respawn.
+- **What it needs:** a character template per monster type (model,
+  movement list, character keys), built at the start for the types the
+  scripts add; each add makes a **new** character from it with the line's
+  values (`characters.md` rule 4: renamed, position and heading of the
+  line, `@` = the type's value), as a monster-list line does; the viewer
+  draws it and gives it its cylinder and click box. Our copies loaded
+  while playing (M5 5d-3) only cover still and plain animated objects,
+  so this is a new kind of copy: characters made while playing.
+
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
     `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
     movements (`talking.md` 18a), `KQAttackEvent` on objects
