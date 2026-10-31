@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 H-3b: the monster loop reproduced (no code)
+
+**Changed:** QUESTIONS Q185 (what the loop is, from the logs).
+**Why:** The user gave the spot (X 280000, Y 210000, looking toward +Y; "goblin22" seen in the console).
+**Tested how:** `kq8-viewer --world Daventry --sound off --at 280000,210000,0 --frames 9000` (AI on); `characters.log`.
+**Result:** It is `gobcon1`, not `goblin22` (`goblin22` stays at home behind the cottage, 19,786 away, never active). `gobcon1` walks its points toward point 2 (19,600 north of its home), goes off at 28,312 from Connor (update 77), is put home (rule 21), joins the active list again the next update and walks off again: every 57 updates (3.8 s), as the user saw. It is never alarmed. Ours follows `character-movement.md` rule 21 as written.
+**Still broken / not tested:** The loop, until Q185 is answered.
+**Next:** Session A for Q184, Q185.
+
 ## 2026-10-30 H-3: monsters put back home again and again: asked (no code)
 
 **Changed:** QUESTIONS Q185.
