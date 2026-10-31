@@ -717,7 +717,7 @@ impl crate::active::WorldState {
     /// stats (`stats=`, all 0 without one), the damage rolled as on a
     /// character (75-125 %, its protection the 4th stat); below 0 its
     /// script gets `Die <kind>`. Returns the log text.
-    fn object_takes(&mut self, name: &str, d: i64, kind: HitKind) -> String {
+    pub(crate) fn object_takes(&mut self, name: &str, d: i64, kind: HitKind) -> String {
         let key = name.to_ascii_lowercase();
         let known = self.stats.contains_key(&key);
         let s = *self.stats.entry(key.clone()).or_default();

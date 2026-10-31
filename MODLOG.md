@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-11a: `KQAttackEvent` (traps that hurt Connor)
+
+**Changed:** Core `active.rs`: `KQAttackEvent` is a known event; `attack_event` hurts Connor by the shared hurt rule (`hit_connor`), an ordinary object by its stats (`object_takes`, now shared); on a character only a log line (Q190). 1 unit test. Provenance. New Q190.
+**Why:** Batch 2 D-11 (`connor-collision.md` rules 16–17, `sound.md` rule 41). Every use but the lever's sends it to Connor: Dead City's river and bridge traps (5,000: the River of Death kills), Daventry's mill stone (8), Gnome and Barren traps (50, 100), the rolling rocks.
+**Tested how:** `cargo test --workspace` (all pass, 569 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 600 --at 47573,199640,0 --hold 0,1,0,20,24` (on `rivrtrap.03`); `traps.log`, `fight.log`.
+**Result:** "rivrtrap.03 On Connor" → "KQAttackEvent rivrtrap.03 0 5000 1 to Connor … hit by rivrtrap.03, Normal: D 5000, R 1532 … loss 1378; health 80 -> -1298" → "dies (Normal): plays [\"die\"]". Before, the event was refused ("event type 'KQAttackEvent' unknown to us").
+**Still broken / not tested:** **Not played by hand.** On an object: not tested (no data uses it), no ouch sound. On a character (the lever and the Skeleton King): nothing (Q190). Game over after dying: another study.
+**Next:** `RiverControl`, `KQWeepBolt`, `KQMonster::add`, the tower skeleton.
+
 ## 2026-10-31 D-10a: `ConnorCollision` (Connor walking or falling into an object)
 
 **Changed:** Core `connor_mover.rs` (`Scene::touched`: every object contact as it is tested), `active.rs` (`connor_touch`, `direction_number`, the six 0.2 s clocks per object). Viewer: `load.rs` reads `conCollisionAction`, `connor_view.rs` keeps his move's touches, `door_view.rs` runs them after his move (where the scripted `Push` runs). 2 unit tests. DESIGN step 10 split into D-10a / D-10b. Provenance. New Q189.

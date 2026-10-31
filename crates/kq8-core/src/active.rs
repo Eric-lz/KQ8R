@@ -99,7 +99,7 @@ pub const MUSIC_DELAY: f64 = 0.2;
 /// The event queue's target for them (our name; no object is called this).
 const MUSIC_TARGET: &str = "<KQMusic>";
 
-pub const EVENT_TYPES: [&str; 5] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent", "KQMoveEvent"];
+pub const EVENT_TYPES: [&str; 6] = ["KQDoorEvent", "KQAnimPlayEvent", "KQCueEvent", "KQStatsChangeRequestEvent", "KQMoveEvent", "KQAttackEvent"];
 
 /// `Die`'s `$3` (`anim-scripts.md` rule 20, Q86 e): the kind of the last
 /// weapon hit the object took, `Normal` if it was never hit. Nothing is
@@ -4016,6 +4016,35 @@ impl Active {
         Some(line)
     }
 
+    /// `KQAttackEvent <attacker> <kind> <damage> <flag>` (batch 2 D-11):
+    /// on Connor the shared hurt rule (`connor-collision.md` rules 16-17,
+    /// `fighting.md` rules 16-18); on an ordinary object its hit
+    /// (`sound.md` rule 41, `doors.md` rules 19-20; its ouch sound is not
+    /// played yet, no data sends one to an object). Kind 0 normal, 1
+    /// projectile, 2 fire, 3 ice; the flag is not used. On a character:
+    /// not in the notes (Q190), logged only.
+    fn attack_event(&mut self, e: &Pending, from: &str) {
+        let word = |k: usize| e.data.get(k).map(String::as_str).unwrap_or("");
+        let attacker = word(0).to_string();
+        let damage = number_value(word(2)) as i64;
+        let kind = match number_value(word(1)) as i64 {
+            1 => crate::fight::HitKind::Projectile,
+            2 => crate::fight::HitKind::Fire,
+            3 => crate::fight::HitKind::Ice,
+            _ => crate::fight::HitKind::Normal,
+        };
+        let at = format!("KQAttackEvent {} to {}{from}", e.data.join(" "), e.target);
+        if e.target.eq_ignore_ascii_case(CONNOR) {
+            self.world.fight_note("Connor", format!("{at}: kind {} damage {damage} (connor-collision.md rules 16-17)", kind.name()));
+            self.world.hit_connor(&attacker, damage, kind);
+        } else if self.world.anims.iter().any(|a| a.character.is_some() && a.player.name.eq_ignore_ascii_case(&e.target)) {
+            self.world.note(format!("{at}: on a character: not in the notes (Q190); nothing"));
+        } else {
+            let line = self.world.object_takes(&e.target, damage, kind);
+            self.world.note(format!("{at}: kind {} damage {damage}: {line} (sound.md rule 41; its ouch sound: not built)", kind.name()));
+        }
+    }
+
     pub fn push_call(&mut self, name: &str) -> bool {
         // pushing.md rule 11a: a `KQPaddleObject` runs its own push.
         if self.world.clickables.iter().any(|c| !c.gone && c.class.eq_ignore_ascii_case(PADDLE_CLASS) && c.name.eq_ignore_ascii_case(name)) {
@@ -5645,6 +5674,10 @@ impl Active {
             self.stats_change(&e, &from);
             return;
         }
+        if e.kind == "KQAttackEvent" {
+            self.attack_event(&e, &from);
+            return;
+        }
         // objects.md "Loops that move the whole object" rule 3 (batch 2,
         // D-1): on an object it is a `move` with the same flag bits; only
         // 7 numbers are read after the flags (the 8th is ignored).
@@ -6260,6 +6293,18 @@ endif
         assert!(a.take_log().join("
 ").contains("its trap box is in place now"));
         assert_eq!(connor_at(&mut a, 0.0), vec!["Henchtp On Connor".to_string()]);
+    }
+
+    #[test]
+    fn an_attack_event_hurts_connor_by_the_shared_rule() {
+        // connor-collision.md rules 16-17: Dead City's rivrtrap.cs sends 5000.
+        let mut a = with_trap("");
+        a.set_connor_stats(ConnorStats { stats: Stats([10, 10, 0, 0, 0]), level: 1 });
+        a.test_command("sendEvent 0 Connor KQAttackEvent rivrtrap 0 5000 1", "t");
+        a.update();
+        let c = a.world.connor_stats.unwrap();
+        assert!(c.stats.0[0] < 0, "health {}", c.stats.0[0]);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorDies { .. })), "{:?}", a.world.requests);
     }
 
     #[test]
