@@ -37,10 +37,12 @@ const SURFACE_SEE_THROUGH: f32 = 0.35;
 pub struct LoadedGroundAnim(pub Option<GroundAnimAssets>);
 
 /// What scripts asked of the ground, waiting for the next drawn frame:
-/// `terAnimSwitch` (animator name, flag, where it came from; D-8a).
+/// `terAnimSwitch` (animator name, flag, where it came from; D-8a) and
+/// `matchHeights` (its five numbers, where; D-8b, `ground_drain_view`).
 #[derive(Resource, Default)]
 pub struct GroundAsks {
     pub switches: Vec<(String, Option<bool>, String)>,
+    pub drains: Vec<([i64; 5], String)>,
 }
 
 /// A material's (opaque, see-through) look.
@@ -157,6 +159,14 @@ pub fn setup_ground_anim(
         gaps: vec![Gaps::default(); n],
         log,
     });
+}
+
+impl GroundAnimSim {
+    /// The meshes of the animated squares in columns `i0..i1`, rows
+    /// `j0..j1` (every material each may show), for `matchHeights`.
+    pub fn meshes_in(&self, (i0, i1): (usize, usize), (j0, j1): (usize, usize)) -> Vec<Handle<Mesh>> {
+        self.meshes.iter().filter(|(((i, j), _), _)| (i0..i1).contains(i) && (j0..j1).contains(j)).map(|(_, h)| h.clone()).collect()
+    }
 }
 
 /// Seconds between one animator's changes: smallest, largest, average.

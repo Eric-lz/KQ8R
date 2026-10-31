@@ -3916,3 +3916,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A step past the new cycle's end goes to 0; one word does not start or stop it; the change clock is kept | `emitters.md` "`terAnimSwitch`"; **ours**: "current step" read as our next entry (Q187) | `ground_anim.log`: Blood1 161 at 2.2075 s, 0.3055 s after its last change |
 | With a second word: step 0, repeat = that word read as a number (not the original's misread) | `emitters.md` "`terAnimSwitch`", "Do not reproduce" | unit test |
 | The second cycle's textures are loaded for the animated squares | **ours** (needed to draw it) | viewer.log: no MISSING |
+
+## Batch 2 D-8b 2026-10-31: `matchHeights` — core `terrain_drain.rs`, `active.rs`; viewer `ground_drain_view.rs`, `ground_anim_view.rs` (`meshes_in`), `door_view.rs`, `main.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Five whole numbers; corner column/row = coordinate ÷ square size, the max one not included | `terrain.md` "`matchHeights`" | unit test `the_rectangle_leaves_out_the_max_corner…`; `ground_drain.log` columns (89, 93) for 184000–190500 |
+| The surface corners move to the floor corners in `frames` even steps, one per update; after the last they equal the floor | `terrain.md` "`matchHeights`" | unit tests; `ground_drain.log`: all five middles surface = floor at the step |
+| Up to 32 at once | `terrain.md` "`matchHeights`"; **ours**: a 33rd is refused with a log line (not in the note) | — |
+| First step in the update after the call | **ours** (the note gives only one step every 1/15 s) | `ground_drain.log` updates 31 → 32 |
+| In-between steps rounded to whole pixel values; `frames` below 1 does nothing; no floor grid does nothing | **ours** (the grids are whole values; not in the data) | unit tests |
+| The live terrain is changed (water depth, camera, shadows read it) and the drawn surface and animated squares are put back on it | **ours** (drawing) | `ground_drain.log` "39704 vertices moved" |

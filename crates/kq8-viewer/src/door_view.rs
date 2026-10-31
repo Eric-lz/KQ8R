@@ -1346,6 +1346,12 @@ pub fn trap_step(
                 ground_asks.switches.push((name.clone(), flag, at.clone()));
                 format!("{at}: applied: terAnimSwitch {name} queued for the ground animators")
             }
+            Request::MatchHeights { words, at } => {
+                // terrain.md "matchHeights" (D-8b): ground_drain_view, later
+                // in this update; its first step comes in the next one.
+                ground_asks.drains.push((words, at.clone()));
+                format!("{at}: applied: matchHeights {words:?} queued for the ground")
+            }
             Request::ConnorTile { at } => {
                 // tile-puzzle.md rule 7 (G-1): a drawn weapon is put away
                 // by the state itself, so the bottom bar's ready weapon

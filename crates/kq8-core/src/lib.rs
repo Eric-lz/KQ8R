@@ -44,6 +44,7 @@ pub mod shadow;
 pub mod sound;
 pub mod stats;
 pub mod talk;
+pub mod terrain_drain;
 pub mod trap;
 pub mod tile_puzzle;
 pub mod turn_keys;

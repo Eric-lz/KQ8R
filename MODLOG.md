@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-8b: `matchHeights` (the blood drains)
+
+**Changed:** New core `terrain_drain.rs` (`Drain`: the rectangle's corners, even steps to the floor grid, at most 32); `active.rs`: the command becomes the request `MatchHeights`. New viewer `ground_drain_view.rs`: on the 15-per-second update after the scripts, steps the drains, writes the live terrain and puts the drawn surface (normal ground meshes and animated squares) back on it; `ground_anim_view.rs` (`meshes_in`), `door_view.rs`, `main.rs`. 4 unit tests. Provenance.
+**Why:** Batch 2 D-8 (`terrain.md` "`matchHeights`"): after the scales, `scale.cs` Cue 1 drains five blood rivers to their beds.
+**Tested how:** `cargo test --workspace` (all pass, 564 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 900` with the five `matchHeights` lines of `scale.cs` and one bad line as `--command …,30`; `ground_drain.log`, `doors.log`.
+**Result:** Asked at update 31, done at 32: e.g. the upper-right river's middle (167750, 185000) surface 864 → 287 = floor; the four others to their floors (0, 135, 0, 0); 60 corners changed in all; "39704 vertices moved in 480 meshes" (all in the animated blood squares). The bad line gives the usage text.
+**Still broken / not tested:** **Not looked at by eye.** Not built: pausing the animated height cycle (no Dead City data), remembering drains for saved games. The whole scene (the scales' Cue 1) needs D-10's scales object.
+**Next:** D-9 (the `Lookup` call and spirit traps).
+
 ## 2026-10-31 D-8a: `terAnimSwitch` (the blood rivers' animation switch)
 
 **Changed:** Core `ground_anim.rs`: an animator keeps its second cycle and `switch` swaps them (`emitters.md` "`terAnimSwitch`"); `active.rs`: the command becomes the request `TerAnimSwitch`. Viewer: `ground_anim_view.rs` (`GroundAsks`, applied before the frame's changes), `door_view.rs`, `load.rs` (second-cycle textures loaded), `main.rs`. 3 unit tests. DESIGN step 8 split into D-8a / D-8b. Provenance. New low-priority Q187.

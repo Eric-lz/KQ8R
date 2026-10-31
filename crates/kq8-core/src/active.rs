@@ -145,6 +145,9 @@ pub enum Request {
     /// D-8a): the named ground animator swaps its cycles; `flag` = the
     /// second word read as a number, not 0 (ours, not the original's).
     TerAnimSwitch { name: String, flag: Option<bool>, at: String },
+    /// `matchHeights minX minY maxX maxY frames` (`terrain.md`
+    /// "`matchHeights`", D-8b): the five words as whole numbers.
+    MatchHeights { words: [i64; 5], at: String },
     /// `tileExit 0|1` (`tile-puzzle.md` rule 21): the tile state's exit
     /// switch; with 1 Connor goes to Wait at once. Nothing outside it.
     TileExit { can_exit: bool, at: String },
@@ -3659,6 +3662,16 @@ impl ScriptHost for WorldState {
                 }
                 Some("0".into())
             }
+            "matchHeights" => {
+                if words.len() == 6 {
+                    let n: [i64; 5] = std::array::from_fn(|k| number_value(&words[k + 1]) as i64);
+                    self.note(format!("{at}: matchHeights {n:?}: handed to the viewer (terrain.md \"matchHeights\")"));
+                    self.requests.push(Request::MatchHeights { words: n, at: at.to_string() });
+                } else {
+                    self.note(format!("{at}: usage: matchHeights minX minY maxX maxY frames; nothing"));
+                }
+                Some("0".into())
+            }
             "KQObject::setAccepts" => Some(self.set_accepts(words, at)),
             "getEndLoop" => Some(self.get_end_loop(words, at)),
             "setDeleteWhenDone" => Some(self.set_delete_when_done(words, at)),
@@ -6253,6 +6266,20 @@ endif
             .collect();
         assert_eq!(got, vec![("Blood1".to_string(), None), ("FullStream".to_string(), Some(false))]);
         assert!(a.world.log.iter().any(|l| l.contains("usage: terAnimSwitch")), "{:?}", a.world.log);
+    }
+
+    #[test]
+    fn match_heights_hands_five_whole_numbers_over() {
+        // terrain.md "matchHeights": Dead City scale.cs Cue 1.
+        let mut a = with_trap("");
+        assert_eq!(a.test_command("matchHeights 184000 170000 190500 178500 1", "t").as_deref(), Some("0"));
+        assert_eq!(a.test_command("matchHeights 1 2 3", "t").as_deref(), Some("0"));
+        let got: Vec<[i64; 5]> = a.world.requests.iter().filter_map(|r| match r {
+            Request::MatchHeights { words, .. } => Some(*words),
+            _ => None,
+        }).collect();
+        assert_eq!(got, vec![[184000, 170000, 190500, 178500, 1]]);
+        assert!(a.world.log.iter().any(|l| l.contains("usage: matchHeights")), "{:?}", a.world.log);
     }
 
     #[test]

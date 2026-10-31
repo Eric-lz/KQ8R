@@ -3431,6 +3431,8 @@ each step logs its numbers to `kq8-artifacts/logs/`.
      drawn by us and not used in Dead City); remembering drains for
      saved games (no saving yet). Steps of more than one update round
      to whole pixel values (only `frames` 1 is used in the data).
+   **Done** 2026-10-31, D-8a and D-8b (logs and unit tests; run with the
+   script lines as `--command`, since the scales object is D-10).
 9. **D-9: the `Lookup` call and spirit traps** (`traps.md` 15a,
    "Spirit traps").
 10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the

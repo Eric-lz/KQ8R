@@ -61,6 +61,7 @@ mod effects_view;
 mod game_camera;
 mod ground_haze;
 mod ground_anim_view;
+mod ground_drain_view;
 mod gui_view;
 mod item_view;
 mod light_view;
@@ -632,6 +633,7 @@ fn main() -> ExitCode {
                 .insert_resource(door_view::RightAt(args.right))
                 .init_resource::<object_light::SetHaze>()
                 .init_resource::<ground_anim_view::GroundAsks>()
+                .init_resource::<ground_drain_view::DrainSim>()
                 .insert_resource(door_view::AimAt(args.aim))
                 .insert_resource(door_view::SwingAt(args.swing))
                 .insert_resource(door_view::HeldItem(args.item, args.combat_level))
@@ -666,6 +668,7 @@ fn main() -> ExitCode {
                 .add_systems(FixedUpdate, portal_view::leave_step.after(door_view::door_step).before(door_view::trap_step).run_if(world_build::running))
                 // world.cs Begin on a new world's first update (M6 6e-5).
                 .add_systems(FixedUpdate, world_build::begin_step.after(console::console_step).before(portal_view::arrival_step).run_if(world_build::running))
+                .add_systems(FixedUpdate, ground_drain_view::ground_drain_step.after(door_view::trap_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, map_view::map_step.after(door_view::trap_step).before(gui_view::gui_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, gui_view::gui_step.after(talk_view::talk_step).run_if(world_build::running))
                 .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::translucent_step).after(gui_view::gui_step).run_if(world_build::running))
