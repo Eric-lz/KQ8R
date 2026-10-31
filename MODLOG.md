@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 Rock throw onto pressure plates: needs a study session (Q186)
+
+**Changed:** `docs/behaviour/QUESTIONS.md` (new Q186), STATUS open questions. No code.
+**Why:** The user asked for Connor throwing rocks onto pressure plates (D-11 `ThrowRock`). `ranged-weapons.md` section 8 covers the state and movements but leaves out the aim, the arc of a `parabola=1` projectile, and what actually presses the plate: the trap (`triptrp*.kq`, mask 519) only reacts to moving things (`traps.md` rule 5), while `rockHit.cs` puts the rock back with `dropItem`, which does not fly. Building it now would mean guessing the parts that make the plate go down and stay down.
+**Tested how:** Not tested (docs only). Read the data: `deadcity/kq/rockme.cs`, `trip2.kq`, `triptrp2.kq`/`.cs`, `trptrp12.kq`/`.cs`, `prrock.kq`, `GAME/Kq/rockHit.cs`; the code: traps take only Connor as a visitor, bolts fly only straight.
+**Result:** Q186 lists (a) walking up first, (b) aim and start point, (c) the arc and what ends it, (d) what presses and holds the plate (and picking the rock up), (e) when the rock leaves the inventory, (f) the Swamp's throw from `Tile2`.
+**Still broken / not tested:** Rock throwing and the pressure plates are not built.
+**Next:** A study session on Q186, then B builds D-11 `ThrowRock`.
+
 ## 2026-10-31 I-9: a movement a script starts on Connor is drawn from its own start
 
 **Changed:** Viewer `connor_view.rs` (`script_anim`): when a script's `KQAnimPlayEvent` switches his movement at once, the phase the drawing uses is set to the new movement's at once (was: the old movement's until his next update); its log line gives the drawn phase.

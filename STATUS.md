@@ -661,6 +661,9 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
+- **New for A (2026-10-31): Q186**: Connor's rock throw onto pressure
+  plates (aim, the arc of `prrock.kq`, what presses the plate and keeps
+  it down, when the rock leaves the inventory). Blocks D-11 `ThrowRock`.
 - **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
   fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
   whether a saved game keeps `setHaze`'s values (we have no saving yet).
