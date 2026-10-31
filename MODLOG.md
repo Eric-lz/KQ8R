@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 G-3: copies loaded while playing move their collider (Connor rides the stones)
+
+**Changed:** Viewer `anim_view.rs`: a copy made by a script's `loadKQ` while playing looks up its collider by name like the others (it was switched off from M5 5d-4, when copies had none), so its whole-object steps move it; the collider is placed from core's place for the object (`player.base`, which a `move` or `KQMoveEvent` changes), as the drawing does. DESIGN (G-3), provenance.
+**Why:** The user's check: Connor doesn't bob up and down with the stones as in the original. The stones (copies made by `dhalltrp.cs`) bobbed in the drawing, but their boxes stood still. `objects.md` "Loops that move the whole object" rule 1: the steps move the object through its mover, "so its collision box goes with it".
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The D-4 solve run cut after the first jump (`--frames 10000`, up to `--hold 1,0,0,400,405`): Connor stands on `tile73` from update 478; `connor.log` (z), `anim.log`.
+**Result:** `anim.log`: "[tile73] its collider moves with it". Connor's z on `tile73`: 6,751.5 (update 482) → 6,636.0 (498) → 6,750.0 (513) → 6,636.0 (529) …, 115.5 units every 31 updates (2 s), as the stone's `stop` (`tile-puzzle.md` rule 16). Before: flat. 31 stones say "has no collider": their shapes (`notile2.kqs`, `tilem.kqs`, `tilen.kqs`, …) have no `BOUNDS.KQ` entry, so they have no box in the original either (`connor-physics.md` "Where every object's box comes from"); the five letters and the stones he is put on have one.
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** G-4, the key.
+
 ## 2026-10-30 G-2: the camera's roll is drawn
 
 **Changed:** Viewer `game_camera.rs`: the drawn camera turns about its line of sight by the view's roll, blended from the roll at the start of the update to the roll now (`roll_before`), like its place; a `move KQCamera` sets it at once. The log lines lose "(not drawn)". DESIGN (G-2), QUESTIONS Q182 (with G-1), provenance.

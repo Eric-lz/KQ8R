@@ -207,7 +207,9 @@ impl AnimSim {
             body,
             shown: None,
             tracked: false,
-            collider: Some(None),
+            // Its collider (`copies_view::add_collider`) is found by name
+            // and moves with its steps (G-3; the death-hall stones).
+            collider: None,
             character: None,
             test: None,
             face: Vec::new(),
@@ -745,6 +747,9 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
         }
         let Some(player) = player(p, doors) else { continue };
         let (movement, frame) = (player.current, player.frame());
+        // From the place core keeps (a `move` or `KQMoveEvent` changes it;
+        // G-3), as the drawing does.
+        let base = player.base;
         if p.tracked && n <= TRACK_UPDATES {
             sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, player.phase, frame, if player.has_ended() { " finished" } else { "" }));
         }
@@ -776,7 +781,7 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
             continue;
         }
         let frame = frame.min(drawn.frames.saturating_sub(1));
-        let (rotation, position) = combine(&pose_at_frame(&drawn.steps, frame), &p.rotation, p.position);
+        let (rotation, position) = combine(&pose_at_frame(&drawn.steps, frame), &base.rotation, base.position);
         colliders.0[i].placement = kq8_core::collide::Placement { rotation, position };
         if n % 15 == 0 && n <= 150 {
             sim.log.detail(format!(

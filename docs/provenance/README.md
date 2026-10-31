@@ -3822,3 +3822,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The roll (radians) turns the view about its line of sight; a flight steps it evenly to its end roll | `camera.md` "`move KQCamera`" (ry = roll), "Camera flights and cuts" rules 3–4 | `camera.log` "roll … -0.600" |
 | A negative roll turns the picture anticlockwise | **The user's check in the original** (`azrieltp.cs` Cue 2); asked in Q182 | not checked by eye |
 | Drawn blended between updates; a `move KQCamera` sets it at once | **Ours** (as the camera's place is drawn) | not checked by eye |
+
+## Fixes G-3 2026-10-30: copies move their collider — viewer `anim_view.rs` (`spawn_copy`, `anim_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| An animated object's whole-object steps move it through its mover, its collision box with it; copies loaded while playing too | `objects.md` "Loops that move the whole object" rule 1 | `connor.log`: Connor's z on `tile73` 6,636–6,751, every 31 updates |
+| The box is placed from the object's current place (after a `move` or `KQMoveEvent`) | `objects.md` same rule 1 ("onto the object's current placement"), rule 3 (the stones' relative move) | as above |
+| A stone whose shape has no `BOUNDS.KQ` entry has no box | `connor-physics.md` "Where every object's box comes from" | `anim.log` "[tile70] has no collider" (`tilem.kqs` not in the table) |
