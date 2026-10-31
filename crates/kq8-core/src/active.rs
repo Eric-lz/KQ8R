@@ -1919,23 +1919,27 @@ impl WorldState {
     /// `cutToCamLoc x y z [roll]`.
     fn cam_loc(&mut self, words: &[String], at: &str) -> String {
         let n = words.len() - 1;
-        // Ours (F-5, Q180): a whole number word like `-.6` counts too
-        // (`test`'s rule, `doors.md` Q45 f, would refuse it).
-        let number = |w: &String| looks_like_number(w) || w.parse::<f64>().is_ok();
-        if n < 3 || !words[1..].iter().all(number) {
+        // camera.md rule 4b (Q180, I-7): at least 3 numbers (`addCamLoc`
+        // exactly 3 or 4); every word read as C's `atof` (`-.6`, `5.`; no
+        // number at its start = 0, no message).
+        let add = words[0] == "KQCamera::addCamLoc";
+        if n < 3 || (add && n > 4) {
             self.note(format!("{at}: usage: {} x y z …: '{}'", words[0], words.join(" ")));
             return "1".into();
         }
-        let v = |i: usize| words.get(i).map(|w| number_value(w) as f32);
+        let v = |i: usize| words.get(i).map(|w| c_atof(w) as f32);
         let p = [v(1).unwrap_or(0.0), v(2).unwrap_or(0.0), v(3).unwrap_or(0.0)];
         let at_s = at.to_string();
         let (line, request) = match words[0].as_str() {
             "KQCamera::addCamLoc" => {
-                let newlist = v(4).is_some_and(|x| x != 0.0);
+                // `newlist` as a whole number (C `atoi`: `1.9` is 1).
+                let newlist = words.get(4).is_some_and(|w| c_atof(w).trunc() != 0.0);
                 (format!("spot ({:.0}, {:.0}, {:.0}){}", p[0], p[1], p[2], if newlist { ", a new list" } else { " added to the list" }), Request::CamSpot { spot: p, newlist, at: at_s })
             }
             "KQCamera::flyToCamLoc" => {
-                let seconds = v(4);
+                // Rule 4b: seconds below 0 count as 0; the end roll only
+                // with exactly 5 numbers.
+                let seconds = v(4).map(|s| s.max(0.0));
                 let end_roll = if n == 5 { v(5) } else { None };
                 (
                     format!("fly to the nearest spot, aiming at ({:.0}, {:.0}, {:.0}), {}, end roll {:.3}", p[0], p[1], p[2], seconds.map_or("no seconds (5,000 per second)".into(), |s| format!("{s} s")), end_roll.unwrap_or(0.0)),
@@ -1943,7 +1947,8 @@ impl WorldState {
                 )
             }
             _ => {
-                let roll = v(4).unwrap_or(0.0);
+                // Rule 4b: the roll only with exactly 4 numbers.
+                let roll = if n == 4 { v(4).unwrap_or(0.0) } else { 0.0 };
                 (format!("cut to the nearest spot, aiming at ({:.0}, {:.0}, {:.0}), roll {roll:.3}", p[0], p[1], p[2]), Request::CamCut { aim: p, roll, at: at_s })
             }
         };
@@ -5640,8 +5645,56 @@ pub fn angles_of(r: &[[f32; 3]; 3]) -> [f32; 3] {
     [x, y, z]
 }
 
+/// A word read as C's `atof` (`camera.md` rule 4b, Q180): leading spaces
+/// skipped, an optional sign, digits with an optional decimal point (a
+/// leading `.` and a trailing one are fine) and an optional exponent;
+/// reading stops at the first character that doesn't fit; no number at
+/// the start gives 0. (C's `inf`, `nan` and hex forms: not read, ours.)
+pub fn c_atof(word: &str) -> f64 {
+    let s = word.trim_start().as_bytes();
+    let mut i = 0;
+    if i < s.len() && (s[i] == b'+' || s[i] == b'-') {
+        i += 1;
+    }
+    let digits = |i: &mut usize| {
+        let from = *i;
+        while *i < s.len() && s[*i].is_ascii_digit() {
+            *i += 1;
+        }
+        *i - from
+    };
+    let mut seen = digits(&mut i);
+    if i < s.len() && s[i] == b'.' {
+        i += 1;
+        seen += digits(&mut i);
+    }
+    if seen == 0 {
+        return 0.0;
+    }
+    let mantissa = i;
+    if i < s.len() && (s[i] == b'e' || s[i] == b'E') {
+        let mut j = i + 1;
+        if j < s.len() && (s[j] == b'+' || s[j] == b'-') {
+            j += 1;
+        }
+        if digits(&mut j) > 0 {
+            i = j;
+        }
+    }
+    let text = std::str::from_utf8(&s[..i]).unwrap_or("0");
+    text.parse::<f64>().or_else(|_| std::str::from_utf8(&s[..mantissa]).unwrap_or("0").parse::<f64>()).unwrap_or(0.0)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn camera_numbers_are_read_as_c_atof() {
+        // camera.md rule 4b (Q180).
+        for (w, v) in [("-.6", -0.6), ("5.", 5.0), (".5", 0.5), ("  12abc", 12.0), ("abc", 0.0), ("-", 0.0), ("1e3", 1000.0), ("2e", 2.0), ("+7", 7.0), ("1.5e-1x", 0.15)] {
+            assert!((c_atof(w) - v).abs() < 1e-9, "{w}: {}", c_atof(w));
+        }
+    }
+
     use super::*;
     use crate::door::{tests::test_door, DoorState};
 

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-7: the camera commands read numbers as C's `atof`
+
+**Changed:** Core `active.rs`: `c_atof` (leading spaces, sign, digits with an optional point, optional exponent; stops at the first character that doesn't fit; no number = 0); `cam_loc` uses it for every word (was: refused a word that wasn't a number); `addCamLoc` takes exactly 3 or 4 numbers, its list word as a whole number; `cutToCamLoc` reads the roll only with exactly 4 numbers; `flyToCamLoc` counts seconds below 0 as 0 and reads the end roll only with exactly 5. 1 new unit test. Provenance.
+**Why:** Session A's answer to Q180 (`camera.md` "Camera flights and cuts" rule 4b).
+**Tested how:** `cargo test --workspace` (all pass, 557 in core); clippy: the same 2 warnings. The D-4 solve run with `--frames 42000`; `camera.log`, every log searched for the usage text.
+**Result:** Death's flight (`azrieltp.cs` `… 2.5 -.6`): "roll 0.000 -> -0.600", N = 38 as before; no camera command refused in the run.
+**Still broken / not tested:** C's `inf`, `nan` and hex number forms are not read (no script uses them).
+**Next:** The user's check; Q175 (the tower skeleton) as its own step; I-2 waits for the user's choice.
+
 ## 2026-10-31 I-6: Death's mouth codes
 
 **Changed:** Core `character.rs` (`mouth_code`): for Death (`mouth_moves`) codes 0–7 start their movement at once (an equal one again too), **16 starts `rest`** (was: the ordinary character's `stop` gesture path), 8–15 and above 16 do nothing and are logged. `active.rs`: at the end of a line nothing happens to his pose (was: shape set to 0, logged as not traced). Unit test extended. Provenance.

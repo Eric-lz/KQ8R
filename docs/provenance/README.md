@@ -3888,3 +3888,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | Death's codes 0–7 start their movements at once, an equal code again; 16 starts `rest`; 8–15 and above 16 do nothing | `talking.md` rule 18a (Q179) and its "Do not reproduce" | unit test `death_plays_his_mouth_shapes_as_movements`; `characters.log` |
 | At the end of a line nothing happens to his pose | `talking.md` rule 18a (Q179) | `characters.log` "line ended: nothing" |
+
+## Fixes I-7 2026-10-31: camera command numbers — core `active.rs` (`c_atof`, `cam_loc`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every number of `addCamLoc`, `cutToCamLoc`, `flyToCamLoc` is read as C's `atof`; no number = 0, no message | `camera.md` rule 4b (Q180) | unit test `camera_numbers_are_read_as_c_atof` |
+| `addCamLoc` exactly 3 or 4 numbers, the list word whole; cut's roll only with 4, fly's end roll only with 5; seconds below 0 = 0 | `camera.md` rule 4b | `camera.log`: Death's flight "roll 0.000 -> -0.600" |
